@@ -16,11 +16,12 @@ import {
 import { AddressSelector } from "./AddressSelector";
 import { ClientSelector } from "./ClientSelector";
 import { TimeDatePicker } from "./TimeDatePicker";
+import { FONT_SIZE } from "../../../../design/responsive/typographyTokens";
 
 const ROW_RADIUS = 12;
 const FIELD_ICON_SIZE = 18;
 const COMPACT_CONTROL_RADIUS = 11;
-const COMPACT_CHIP_HEIGHT = 42;
+const COMPACT_CHIP_HEIGHT = 32;
 const COMPACT_MULTILINE_MEDIUM_HEIGHT = 72;
 const COMPACT_MULTILINE_MEDIUM_INPUT_HEIGHT = 56;
 
@@ -62,13 +63,13 @@ const s = StyleSheet.create({
   form: { gap: 12 },
   sectionBlock: { gap: 6 },
   sectionLabel: {
-    fontSize: 13,
+    fontSize: FONT_SIZE.px13,
     fontWeight: "600" as const,
     color: E.TEXT,
     marginBottom: 2,
   },
   sectionHelper: {
-    fontSize: 12,
+    fontSize: FONT_SIZE.px12,
     color: E.TEXT_MUTED,
     lineHeight: 17,
   },
@@ -89,19 +90,26 @@ const s = StyleSheet.create({
   pickupDropoffRow: {
     flexDirection: "row" as const,
     alignItems: "flex-start" as const,
-    columnGap: 10,
+    columnGap: 4,
   },
   addressFieldsColumn: {
-    flex: 1,
+    width: "82%",
+    minWidth: 0,
     gap: 10,
   },
   swapColumn: {
-    alignSelf: "center" as const,
+    width: "18%",
+    minWidth: 52,
+    maxWidth: 64,
+    alignItems: "center" as const,
+    justifyContent: "flex-start" as const,
+    paddingTop: 50,
+    marginLeft: 0,
   },
   swapBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+    width: 32,
+    height: 32,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: "rgba(0, 121, 107, 0.28)",
     backgroundColor: "#FFFFFF",
@@ -119,13 +127,13 @@ const s = StyleSheet.create({
   },
   headerCenter: { flex: 1, gap: 4 },
   headerTitle: {
-    fontSize: 18,
+    fontSize: FONT_SIZE.px18,
     fontWeight: "700" as const,
     color: E.TEXT,
     letterSpacing: 0.15,
   },
   headerClientLine: {
-    fontSize: 13,
+    fontSize: FONT_SIZE.px13,
     lineHeight: 18,
     fontWeight: "600" as const,
     color: E.TEXT,
@@ -137,13 +145,13 @@ const s = StyleSheet.create({
     borderTopColor: "rgba(148, 163, 184, 0.28)",
   },
   footerSummary: {
-    fontSize: 12,
+    fontSize: FONT_SIZE.px12,
     lineHeight: 16,
     color: E.TEXT_MUTED,
     fontWeight: "600" as const,
   },
   footerHint: {
-    fontSize: 12,
+    fontSize: FONT_SIZE.px12,
     color: E.TEXT_MUTED,
     textAlign: "left" as const,
   },
@@ -169,8 +177,8 @@ const s = StyleSheet.create({
     flexDirection: "row" as const,
     alignItems: "center" as const,
     gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     borderRadius: COMPACT_CONTROL_RADIUS,
     borderWidth: StyleSheet.hairlineWidth,
     minHeight: COMPACT_CHIP_HEIGHT,
@@ -183,11 +191,11 @@ const s = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderColor: "rgba(0, 121, 107, 0.28)",
   },
-  chipLabelOn: { color: E.BRAND, fontWeight: "700" as const, fontSize: 13, lineHeight: 16 },
+  chipLabelOn: { color: E.BRAND, fontWeight: "700" as const, fontSize: FONT_SIZE.px13, lineHeight: 16 },
   chipLabelOff: {
     color: E.TEXT_SEC,
     fontWeight: "600" as const,
-    fontSize: 13,
+    fontSize: FONT_SIZE.px13,
     lineHeight: 16,
   },
   footerBtn: {
@@ -197,13 +205,15 @@ const s = StyleSheet.create({
   },
   compactAddressContainer: { gap: 8 },
   compactAddressShell: {
-    minHeight: 48,
+    minHeight: 32,
+    paddingHorizontal: 4,
     borderRadius: 12,
     borderColor: "rgba(145, 165, 157, 0.38)",
   },
   compactAddressInput: {
-    fontSize: 16,
-    lineHeight: 20,
+    fontSize: FONT_SIZE.px13,
+    lineHeight: 16,
+    paddingVertical: 2,
   },
 });
 
@@ -477,7 +487,7 @@ export function RideEditModal({
                   onChange={form.setPickup}
                   onSelectAddress={form.selectPickupAddress}
                   placeholder="Adresse de prise en charge"
-                  leftSlot={<Ionicons name="navigate-outline" size={18} color={E.TEXT_SEC} />}
+                  leftSlot={<Ionicons name="navigate-outline" size={16} color={E.TEXT_SEC} />}
                   containerStyle={s.compactAddressContainer}
                   shellStyle={s.compactAddressShell}
                   inputStyle={s.compactAddressInput}
@@ -491,7 +501,7 @@ export function RideEditModal({
                   onChange={form.setDropoff}
                   onSelectAddress={form.selectDropoffAddress}
                   placeholder="Adresse de destination"
-                  leftSlot={<Ionicons name="location-outline" size={18} color={E.TEXT_SEC} />}
+                  leftSlot={<Ionicons name="location-outline" size={16} color={E.TEXT_SEC} />}
                   containerStyle={s.compactAddressContainer}
                   shellStyle={s.compactAddressShell}
                   inputStyle={s.compactAddressInput}
@@ -505,7 +515,7 @@ export function RideEditModal({
                 accessibilityRole="button"
                 accessibilityLabel="Inverser prise en charge et destination"
               >
-                <Ionicons name="swap-vertical-outline" size={20} color={E.BRAND} />
+                <Ionicons name="swap-vertical-outline" size={16} color={E.BRAND} />
               </Pressable>
             </View>
           </View>

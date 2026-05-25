@@ -334,3 +334,80 @@ def track_escalation_event(
             from_order,
             to_order,
         )
+
+
+def track_offer_unavailable_emitted(
+    *,
+    company_id: int,
+    offer_id: int,
+    transport_request_id: int,
+    reason: str = "accepted_by_peer",
+) -> None:
+    """KPI: offre devenue indisponible pour une entreprise (broadcast concurrent)."""
+    logger.info(
+        "offer_unavailable_emitted company_id=%s offer_id=%s request_id=%s reason=%s",
+        company_id,
+        offer_id,
+        transport_request_id,
+        reason,
+    )
+
+
+def track_institution_client_auto_created(
+    *,
+    institution_id: int,
+    client_id: int,
+    company_id: int,
+) -> None:
+    """KPI: client institution créé automatiquement à l'acceptation d'offre."""
+    logger.info(
+        "institution_client_auto_created institution_id=%s client_id=%s company_id=%s",
+        institution_id,
+        client_id,
+        company_id,
+    )
+
+
+def track_transport_request_duplicate_blocked(
+    *,
+    transport_request_id: int,
+    institution_id: int,
+) -> None:
+    """KPI: envoi institution bloqué (offres PENDING déjà existantes)."""
+    logger.info(
+        "transport_request_duplicate_blocked request_id=%s institution_id=%s",
+        transport_request_id,
+        institution_id,
+    )
+
+
+def track_offer_accept_conflict_409(
+    *,
+    offer_id: int,
+    company_id: int,
+    transport_request_id: int | None = None,
+    reason: str = "",
+) -> None:
+    """KPI: conflit d'acceptation (second acteur ou offre déjà traitée)."""
+    logger.info(
+        "offer_accept_conflict_409 offer_id=%s company_id=%s request_id=%s reason=%s",
+        offer_id,
+        company_id,
+        transport_request_id,
+        reason,
+    )
+
+
+def track_proposed_pickup_time_validation_failed(
+    *,
+    company_id: int,
+    offer_id: int,
+    reason: str,
+) -> None:
+    """KPI: horaire proposé refusé par validation backend."""
+    logger.info(
+        "proposed_pickup_time_validation_failed company_id=%s offer_id=%s reason=%s",
+        company_id,
+        offer_id,
+        reason,
+    )

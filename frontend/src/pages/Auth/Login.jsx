@@ -5,7 +5,7 @@ import apiClient, { cleanLocalSession, setCurrentAuthEnv } from '../../utils/api
 import { jwtDecode } from 'jwt-decode';
 import { queryClient } from '../../App';
 import { buildSafeAppPath, pathFromNextQueryParam } from '../../utils/safeReturnPath';
-import { hasActiveSession, writeAuthSession } from '../../utils/webAuthSession';
+import { hasActiveSession, normalizeAuthRole, writeAuthSession } from '../../utils/webAuthSession';
 import { linkMobilityProfileToUser, saveMobilityProfileForEmail } from '../../utils/clientMobilityProfile';
 import {
   getPendingActivationByEmail,
@@ -280,9 +280,9 @@ const Login = () => {
       let roleSegment;
       if (token && typeof token === 'string') {
         const decodedToken = jwtDecode(token);
-        roleSegment = String(decodedToken.role || user.role || '').toLowerCase();
+        roleSegment = normalizeAuthRole(decodedToken.role || user.role);
       } else {
-        roleSegment = String(user.role || '').toLowerCase();
+        roleSegment = normalizeAuthRole(user.role);
       }
 
       writeAuthSession({

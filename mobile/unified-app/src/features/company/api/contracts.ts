@@ -17,9 +17,21 @@ export type CompanyDispatchMission = {
   client_name?: string | null;
   pickup_label?: string | null;
   dropoff_label?: string | null;
+  pickup_lat?: number | null;
+  pickup_lon?: number | null;
+  dropoff_lat?: number | null;
+  dropoff_lon?: number | null;
+  /** Distance planifiée (km) — résumé dispatch mobile. */
+  route_distance_km?: number | null;
+  /** Durée planifiée (minutes) — résumé dispatch mobile. */
+  route_duration_min?: number | null;
   /** Nom d’affichage chauffeur (API) pour pastilles type operations-app. */
   driver_name?: string | null;
   driver_id?: number | null;
+  /** Partenaire exécutant (course transférée) — affichage carte / fiche. */
+  partner_company_name?: string | null;
+  /** Type chauffeur (ex. REGULAR, EMERGENCY) — résumé dispatch. */
+  driver_type?: string | null;
   company_id?: number | null;
   updated_at?: string | null;
   /**
@@ -36,6 +48,10 @@ export type CompanyDispatchMissionListResponse = {
 
 export type CompanyDriverLiveLocation = {
   driver_id: number;
+  driver_name?: string | null;
+  full_name?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
   mission_id?: number | null;
   latitude: number;
   longitude: number;

@@ -570,6 +570,27 @@
   margin-top: 2px;
 }
 
+.institutionChangeBadge {
+  margin-left: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #b45309;
+  background: #fef3c7;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.ackBtn {
+  margin-left: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--brand, #00796b);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
 .timelineItemCancel::after {
   background: var(--danger-primary, #d32f2f) !important;
   box-shadow: 0 0 0 2px rgba(211, 47, 47, 0.12) !important;

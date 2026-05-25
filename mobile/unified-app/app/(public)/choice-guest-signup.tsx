@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { ResponsiveContainer, Screen } from "../../src/design/responsive";
+import { FONT_SIZE } from "../../src/design/responsive/typographyTokens";
 
 export default function ChoiceGuestOrSignupScreen() {
   const router = useRouter();
@@ -65,7 +66,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
   },
   title: {
-    fontSize: 26,
+    fontSize: FONT_SIZE.px26,
     fontWeight: "800",
     color: "#163A34",
   },
@@ -109,7 +110,7 @@ const styles = StyleSheet.create({
   primaryBtnText: {
     color: "#FFFFFF",
     fontWeight: "700",
-    fontSize: 16,
+    fontSize: FONT_SIZE.px16,
   },
   outlineBtn: {
     borderWidth: 1.5,
@@ -122,7 +123,7 @@ const styles = StyleSheet.create({
   outlineBtnText: {
     color: "#0A8F7A",
     fontWeight: "700",
-    fontSize: 16,
+    fontSize: FONT_SIZE.px16,
   },
   linkWrap: {
     alignItems: "center",
@@ -131,6 +132,6 @@ const styles = StyleSheet.create({
   link: {
     color: "#0A8F7A",
     fontWeight: "600",
-    fontSize: 15,
+    fontSize: FONT_SIZE.px15,
   },
 });

@@ -143,7 +143,7 @@ function pressPalette(
       };
     case "ghost":
       return {
-        bg: pressed ? "rgba(10, 143, 122, 0.1)" : "transparent",
+        bg: pressed ? "rgba(0, 121, 107, 0.1)" : "transparent",
         border: "transparent",
         opacity: 1,
       };

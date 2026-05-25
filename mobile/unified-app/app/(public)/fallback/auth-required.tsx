@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { ResponsiveContainer, Screen } from "../../../src/design/responsive";
+import { FONT_SIZE } from "../../../src/design/responsive/typographyTokens";
 
 export default function AuthRequiredScreen() {
   const router = useRouter();
@@ -43,12 +44,12 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   title: {
-    fontSize: 24,
+    fontSize: FONT_SIZE.px24,
     fontWeight: "800",
     color: "#163A34",
   },
   body: {
-    fontSize: 15,
+    fontSize: FONT_SIZE.px15,
     lineHeight: 22,
     color: "#475569",
   },
@@ -59,7 +60,7 @@ const styles = StyleSheet.create({
   link: {
     color: "#0A8F7A",
     fontWeight: "700",
-    fontSize: 15,
+    fontSize: FONT_SIZE.px15,
     textDecorationLine: "underline",
   },
 });

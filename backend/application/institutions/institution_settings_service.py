@@ -12,7 +12,8 @@ import logging
 from datetime import datetime
 
 import pytz
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError, ProgrammingError
 
 from ext import db
 from models.institution_settings import (
@@ -26,6 +27,53 @@ logger = logging.getLogger(__name__)
 
 # Timezone par défaut pour calcul same-day
 _DEFAULT_TZ = pytz.timezone(DEFAULT_TIMEZONE)
+_OFFER_DISPATCH_MODE_CHECKED = False
+
+
+def _ensure_offer_dispatch_mode_column() -> None:
+    """Garantit la présence de la colonne offer_dispatch_mode.
+
+    Compatibilité montante: évite un crash si le code est déployé avant la migration.
+    """
+    global _OFFER_DISPATCH_MODE_CHECKED
+    if _OFFER_DISPATCH_MODE_CHECKED:
+        return
+
+    try:
+        exists = db.session.execute(
+            text(
+                """
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_name = 'institution_settings'
+                  AND column_name = 'offer_dispatch_mode'
+                LIMIT 1
+                """
+            )
+        ).scalar()
+
+        if not exists:
+            logger.warning(
+                "[InstitutionSettings] Colonne offer_dispatch_mode absente, auto-heal en cours"
+            )
+            db.session.execute(
+                text(
+                    """
+                    ALTER TABLE institution_settings
+                    ADD COLUMN IF NOT EXISTS offer_dispatch_mode VARCHAR(20)
+                    NOT NULL DEFAULT 'sequential'
+                    """
+                )
+            )
+            db.session.commit()
+            logger.info(
+                "[InstitutionSettings] Colonne offer_dispatch_mode ajoutée automatiquement"
+            )
+
+        _OFFER_DISPATCH_MODE_CHECKED = True
+    except Exception:
+        db.session.rollback()
+        raise
 
 
 def get_or_create_settings(institution_id: int) -> InstitutionSettings:
@@ -35,9 +83,21 @@ def get_or_create_settings(institution_id: int) -> InstitutionSettings:
     si deux requêtes concurrentes tentent de créer, la seconde lèvera
     IntegrityError et on re-query.
     """
-    settings = InstitutionSettings.query.filter_by(
-        institution_id=institution_id
-    ).first()
+    _ensure_offer_dispatch_mode_column()
+    try:
+        settings = InstitutionSettings.query.filter_by(
+            institution_id=institution_id
+        ).first()
+    except ProgrammingError as exc:
+        # Double sécurité si une instance legacy a été servie entre-temps.
+        if "offer_dispatch_mode" in str(exc):
+            db.session.rollback()
+            _ensure_offer_dispatch_mode_column()
+            settings = InstitutionSettings.query.filter_by(
+                institution_id=institution_id
+            ).first()
+        else:
+            raise
 
     if settings is not None:
         return settings
@@ -69,6 +129,7 @@ def get_offer_timeouts(institution_id: int) -> tuple[int, int]:
     Fallback sur les constantes par défaut si settings absent.
     Ne crée PAS les settings (lecture seule, utilisé dans les tasks Celery).
     """
+    _ensure_offer_dispatch_mode_column()
     settings = InstitutionSettings.query.filter_by(
         institution_id=institution_id
     ).first()

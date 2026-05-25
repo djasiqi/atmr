@@ -1,6 +1,24 @@
 import { io, Socket } from "socket.io-client";
+import { isFeatureEnabled } from "../featureFlags/registry";
+import { mobileReconnectCircuitBreaker } from "./reconnectCircuitBreaker";
+import { resolveDriverSocketUrl } from "./resolveDriverSocketUrl";
 import { emitDriverTelemetry } from "../observability/driverTelemetry";
+import {
+  recordDriverSocketConnected,
+  recordSocketReconnect,
+} from "../observability/perfKpi";
+import {
+  recordRealtimeNotify,
+  recordSocketEventByChannel,
+  type SocketPerfChannel,
+} from "../observability/perfInstrumentation";
 import { appendSessionJournalEvent } from "../observability/sessionJournal";
+import {
+  recordSocketConnectTotal,
+  recordSocketDisconnectTotal,
+  recordSocketReconnectFailedTotal,
+  recordSocketReconnectTotal,
+} from "../observability/runtimeStabilityMetrics";
 
 const MAX_AUTH_REFRESH_ATTEMPTS = 5;
 const MAX_RECONNECT_BACKOFF_MS = 30_000;
@@ -41,6 +59,8 @@ type RealtimeState = {
 
 type RealtimeLifecycleListener = (state: RealtimeState) => void;
 type DriverEventListener = (event: unknown) => void;
+type TeamChatEvent = { type: "team_chat_message" | "team_chat_typing"; payload: unknown };
+type TeamChatEventListener = (event: TeamChatEvent) => void;
 type AuthExhaustedCallback = (reason: "exhausted" | "terminal", code?: string) => void;
 
 class RealtimeManager {
@@ -65,10 +85,51 @@ class RealtimeManager {
   };
   private listeners = new Set<RealtimeLifecycleListener>();
   private driverEventListeners = new Set<DriverEventListener>();
+  private teamChatEventListeners = new Set<TeamChatEventListener>();
   private authExhaustedCallbacks = new Set<AuthExhaustedCallback>();
   private socket: Socket | null = null;
+  /** Incrémenté à chaque teardown pour invalider les callbacks d'un socket obsolète. */
+  private socketGeneration = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private degradedHysteresisTimer: ReturnType<typeof setTimeout> | null = null;
+  private hasSocketConnectedOnce = false;
+
+  private isCurrentSocket(socket: Socket | null, generation: number): boolean {
+    return socket !== null && this.socket === socket && this.socketGeneration === generation;
+  }
+
+  private disposeSocketInstance(socket: Socket): void {
+    socket.removeAllListeners();
+    socket.io.removeAllListeners?.();
+    socket.disconnect();
+  }
+
+  private teardownActiveSocket(): void {
+    if (this.socket) {
+      this.disposeSocketInstance(this.socket);
+      this.socket = null;
+    }
+    this.socketGeneration += 1;
+  }
+
+  /** Évite qu'un refresh token async réécrive l'auth d'un socket déjà remplacé (logout/reconnect). */
+  private applyFreshAuthToken(socket: Socket, generation: number): boolean {
+    if (!this.isCurrentSocket(socket, generation)) return false;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { getAuthAccessToken } = require("../api/client") as {
+        getAuthAccessToken: () => string | null;
+      };
+      const token = getAuthAccessToken();
+      if (!token) return false;
+      if (socket.auth && typeof socket.auth === "object") {
+        (socket.auth as { token?: string }).token = token;
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }
 
   private clearDegradedHysteresisTimer() {
     if (this.degradedHysteresisTimer) {
@@ -87,10 +148,22 @@ class RealtimeManager {
   }
 
   private notify() {
+    const started = Date.now();
     const snapshot = this.getSnapshot();
+    const listenerCount = this.listeners.size;
     this.listeners.forEach((listener) => {
       listener(snapshot);
     });
+    recordRealtimeNotify(Date.now() - started, listenerCount);
+  }
+
+  private touchLastEventAtSilent() {
+    this.state.lastEventAt = new Date().toISOString();
+  }
+
+  private onSocketPayload(channel: SocketPerfChannel, handler: () => void) {
+    recordSocketEventByChannel(channel);
+    handler();
   }
 
   private setState(next: Partial<RealtimeState>) {
@@ -206,11 +279,10 @@ class RealtimeManager {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
-    if (this.socket) {
-      this.socket.removeAllListeners();
-      this.socket.disconnect();
-      this.socket = null;
-    }
+    this.teardownActiveSocket();
+    const prevDesiredTransport = this.state.desiredTransport;
+    const prevActualTransport = this.state.actualTransport;
+    const prevContextId = this.state.activeContextId;
     const shouldNotify =
       this.state.connected || this.state.activeContextId !== null || this.state.mode !== "idle";
     this.state = {
@@ -234,22 +306,67 @@ class RealtimeManager {
     };
     if (shouldNotify) {
       void appendSessionJournalEvent("realtime.disconnect", {
-        desired_transport: this.state.desiredTransport,
-        actual_transport: this.state.actualTransport,
-      }, this.state.activeContextId);
+        desired_transport: prevDesiredTransport,
+        actual_transport: prevActualTransport,
+      }, prevContextId);
       this.notify();
     }
   }
 
   onContextSwitch(nextContextId: string | null, options?: { enableSocket?: boolean }) {
+    if (!nextContextId) {
+      this.disconnect();
+      return;
+    }
+    const desiredTransport =
+      typeof options?.enableSocket === "boolean"
+        ? options.enableSocket
+          ? "socket"
+          : "polling"
+        : this.state.desiredTransport;
+
+    if (
+      this.socket?.connected &&
+      desiredTransport === "socket" &&
+      this.state.desiredTransport === "socket" &&
+      !this.state.authExhausted &&
+      this.state.activeContextId !== nextContextId
+    ) {
+      const prevContextId = this.state.activeContextId;
+      this.state.activeContextId = nextContextId;
+      if (this.socket.io.opts?.query && typeof this.socket.io.opts.query === "object") {
+        (this.socket.io.opts.query as Record<string, string>).context_id = nextContextId;
+      }
+      try {
+        this.socket.emit("join_driver_room", {});
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { recordJoinRoomCount } = require("../observability/perfInstrumentation") as {
+          recordJoinRoomCount: () => void;
+        };
+        recordJoinRoomCount();
+      } catch {
+        // ignore
+      }
+      void appendSessionJournalEvent(
+        "realtime.connect.keepalive",
+        {
+          previous_context_id: prevContextId,
+          next_context_id: nextContextId,
+        },
+        nextContextId
+      );
+      this.notify();
+      return;
+    }
+
+    const previousDesiredTransport = this.state.desiredTransport;
     this.disconnect();
-    if (!nextContextId) return;
     if (typeof options?.enableSocket === "boolean") {
       this.connect(nextContextId, options);
       return;
     }
     this.connect(nextContextId, {
-      enableSocket: this.state.desiredTransport === "socket",
+      enableSocket: previousDesiredTransport === "socket",
     });
   }
 
@@ -272,8 +389,82 @@ class RealtimeManager {
     };
   }
 
+  subscribeTeamChatEvents(listener: TeamChatEventListener) {
+    this.teamChatEventListeners.add(listener);
+    return () => {
+      this.teamChatEventListeners.delete(listener);
+    };
+  }
+
+  /** Force le transport socket pour le contexte actif (ex. ouverture écran chat). */
+  ensureDriverSocket(contextId: string) {
+    void this.ensureDriverSocketAsync(contextId);
+  }
+
+  private async ensureDriverSocketAsync(contextId: string) {
+    if (!contextId) return;
+    const snap = this.getSnapshot();
+    if (snap.authExhausted) return;
+
+    if (snap.activeContextId !== contextId || snap.desiredTransport !== "socket") {
+      this.connect(contextId, { enableSocket: true });
+      return;
+    }
+
+    if (!this.socket) {
+      this.connectSocket(contextId);
+      return;
+    }
+
+    if (this.socket.connected) return;
+
+    const socketBeforeAwait = this.socket;
+    const generationBeforeAwait = this.socketGeneration;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { refreshAuthTokenNow, getAuthAccessToken } = require("../api/client") as {
+        refreshAuthTokenNow: () => Promise<boolean>;
+        getAuthAccessToken: () => string | null;
+      };
+      await refreshAuthTokenNow().catch(() => false);
+
+      // disconnect() / connect() concurrent peuvent annuler this.socket pendant l'await
+      if (!this.isCurrentSocket(socketBeforeAwait, generationBeforeAwait)) {
+        if (!this.socket && this.state.activeContextId === contextId) {
+          this.connectSocket(contextId);
+        }
+        return;
+      }
+
+      if (!this.applyFreshAuthToken(socketBeforeAwait, generationBeforeAwait)) return;
+      if (!socketBeforeAwait.connected) {
+        socketBeforeAwait.connect();
+      }
+    } catch {
+      if (!this.isCurrentSocket(socketBeforeAwait, generationBeforeAwait) && !this.socket) {
+        this.connectSocket(contextId);
+      }
+    }
+  }
+
+  emitTeamChatMessage(payload: Record<string, unknown>): boolean {
+    if (!this.isDriverSocketReady() || !this.socket) return false;
+    this.socket.emit("team_chat_message", payload);
+    return true;
+  }
+
+  emitTeamChatTyping(payload: Record<string, unknown> = { surface: "driver" }): boolean {
+    if (!this.isDriverSocketReady() || !this.socket) return false;
+    this.socket.emit("team_chat_typing", payload);
+    return true;
+  }
+
   isDriverSocketReady() {
-    return Boolean(this.socket?.connected) && this.state.actualTransport === "socket";
+    return (
+      Boolean(this.socket?.connected) &&
+      this.state.desiredTransport === "socket" &&
+      !this.state.authExhausted
+    );
   }
 
   setTransportAuthority(authority: RealtimeState["transportAuthority"], reason?: string) {
@@ -331,29 +522,43 @@ class RealtimeManager {
     });
   }
 
+  private emitTeamChatEvent(event: TeamChatEvent) {
+    this.teamChatEventListeners.forEach((listener) => {
+      listener(event);
+    });
+  }
+
   private connectSocket(contextId: string) {
-    const socketUrl = process.env.EXPO_PUBLIC_DRIVER_SOCKET_URL;
+    if (this.state.activeContextId && this.state.activeContextId !== contextId) {
+      return;
+    }
+    this.teardownActiveSocket();
+    const generation = this.socketGeneration;
+
+    const socketUrl = resolveDriverSocketUrl();
     if (!socketUrl) {
       this.setState({
         mode: "polling",
-        lastError: "EXPO_PUBLIC_DRIVER_SOCKET_URL not configured",
+        lastError: "Driver socket URL not configured",
       });
       return;
     }
 
     let accessToken: string | null = null;
+    const handshakeAuth = { token: "" };
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { getAuthAccessToken } = require("../api/client") as {
+      const { refreshAuthTokenNow, getAuthAccessToken } = require("../api/client") as {
+        refreshAuthTokenNow: () => Promise<boolean>;
         getAuthAccessToken: () => string | null;
       };
       accessToken = getAuthAccessToken();
+      handshakeAuth.token = accessToken ?? "";
     } catch {
       accessToken = null;
     }
-    const handshakeAuth = { token: accessToken ?? "" };
     const socketOptions: NonNullable<Parameters<typeof io>[1]> = {
-      transports: ["websocket"],
+      transports: ["websocket", "polling"],
       reconnection: false, // géré manuellement pour contrôler l'auth recovery
       timeout: 10000,
       path: "/socket.io",
@@ -361,21 +566,14 @@ class RealtimeManager {
       auth: handshakeAuth,
     };
 
-    let hasAccessToken = false;
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { getAuthAccessToken } = require("../api/client") as {
-        getAuthAccessToken: () => string | null;
-      };
-      hasAccessToken = Boolean(getAuthAccessToken());
-    } catch {
-      hasAccessToken = false;
-    }
+    const hasAccessToken = Boolean(accessToken);
 
     if (typeof __DEV__ !== "undefined" && __DEV__) {
       console.log("[DriverSocket]", {
         socketUrl,
-        urlEnvSource: "EXPO_PUBLIC_DRIVER_SOCKET_URL",
+        urlEnvSource: process.env.EXPO_PUBLIC_DRIVER_SOCKET_URL?.trim()
+          ? "EXPO_PUBLIC_DRIVER_SOCKET_URL"
+          : "api_origin_fallback",
         transports: socketOptions.transports,
         path: socketOptions.path,
         contextId,
@@ -384,8 +582,26 @@ class RealtimeManager {
       });
     }
 
-    this.socket = io(socketUrl, socketOptions);
-    this.socket.io.on("reconnect_attempt", () => {
+    const socket = io(socketUrl, socketOptions);
+    this.socket = socket;
+
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { refreshAuthTokenNow } = require("../api/client") as {
+        refreshAuthTokenNow: () => Promise<boolean>;
+      };
+      void refreshAuthTokenNow()
+        .then(() => {
+          if (!this.isCurrentSocket(socket, generation)) return;
+          this.applyFreshAuthToken(socket, generation);
+        })
+        .catch(() => undefined);
+    } catch {
+      // ignore: handshake utilise déjà le token courant
+    }
+
+    socket.io.on("reconnect_attempt", () => {
+      if (!this.isCurrentSocket(socket, generation)) return;
       void (async () => {
         try {
           // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -394,14 +610,41 @@ class RealtimeManager {
             getAuthAccessToken: () => string | null;
           };
           await refreshAuthTokenNow();
-          handshakeAuth.token = getAuthAccessToken() ?? handshakeAuth.token;
+          if (!this.isCurrentSocket(socket, generation)) return;
+          this.applyFreshAuthToken(socket, generation);
         } catch {
           // ignore: reconnect continuera en mode degrade/polling
         }
       })();
     });
 
-    this.socket.on("connect", () => {
+    socket.on("connect", () => {
+      if (!this.isCurrentSocket(socket, generation)) return;
+      recordDriverSocketConnected(true);
+      recordSocketConnectTotal({ context_id: contextId });
+      if (this.hasSocketConnectedOnce) {
+        recordSocketReconnectTotal({ context_id: contextId });
+        recordSocketReconnect("driver_socket_reconnect", "driver");
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { recordSocketReconnectCount } = require("../observability/perfInstrumentation") as {
+          recordSocketReconnectCount: () => void;
+        };
+        recordSocketReconnectCount();
+      }
+      this.hasSocketConnectedOnce = true;
+      try {
+        socket.emit("join_driver_room", {});
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { recordJoinRoomCount } = require("../observability/perfInstrumentation") as {
+          recordJoinRoomCount: () => void;
+        };
+        recordJoinRoomCount();
+      } catch {
+        // ignore: rooms déjà jointes côté serveur au connect
+      }
+      if (isFeatureEnabled("realtime_reconnect_circuit_breaker_enabled")) {
+        mobileReconnectCircuitBreaker.recordSuccess();
+      }
       this.setState({
         connected: true,
         mode: "socket",
@@ -421,7 +664,10 @@ class RealtimeManager {
       void appendSessionJournalEvent("realtime.socket.connected", undefined, contextId);
     });
 
-    this.socket.on("disconnect", () => {
+    socket.on("disconnect", () => {
+      if (!this.isCurrentSocket(socket, generation)) return;
+      recordDriverSocketConnected(false);
+      recordSocketDisconnectTotal({ context_id: contextId });
       this.setState({
         connected: false,
         mode: "polling",
@@ -439,7 +685,9 @@ class RealtimeManager {
       }
     });
 
-    this.socket.on("connect_error", (error) => {
+    socket.on("connect_error", (error) => {
+      if (!this.isCurrentSocket(socket, generation)) return;
+      recordSocketReconnectFailedTotal({ context_id: contextId });
       const errMessage = error.message ?? "";
       const errData = (error as unknown as { data?: { code?: string } }).data;
       const errCode = errData?.code ?? "";
@@ -500,35 +748,74 @@ class RealtimeManager {
         this.setState({ authAttempts: nextAuthAttempts });
       }
 
+      if (isFeatureEnabled("realtime_reconnect_circuit_breaker_enabled")) {
+        mobileReconnectCircuitBreaker.recordFailure(socket);
+      }
       this.scheduleReconnect(contextId);
     });
 
-    this.socket.on("driver_mission_event", (event: unknown) => {
-      this.setState({ lastEventAt: new Date().toISOString() });
-      this.emitDriverEvent(event);
+    socket.on("driver_mission_event", (event: unknown) => {
+      this.onSocketPayload("driver_mission_event", () => {
+        this.touchLastEventAtSilent();
+        this.emitDriverEvent(event);
+      });
     });
 
-    this.socket.on("eta_changed", (event: unknown) => {
-      this.setState({ lastEventAt: new Date().toISOString() });
-      this.emitDriverEvent(event);
+    socket.on("eta_changed", (event: unknown) => {
+      this.onSocketPayload("eta_changed", () => {
+        this.touchLastEventAtSilent();
+        this.emitDriverEvent(event);
+      });
     });
 
-    this.socket.on("driver_location_batch_ack", (event: unknown) => {
-      this.setState({ lastEventAt: new Date().toISOString() });
-      this.emitDriverEvent({
-        event_type: "driver_location_batch_ack",
-        payload: event,
+    socket.on("driver_location_batch_ack", (event: unknown) => {
+      this.onSocketPayload("driver_location_batch_ack", () => {
+        this.touchLastEventAtSilent();
+        this.emitDriverEvent({
+          event_type: "driver_location_batch_ack",
+          payload: event,
+        });
+      });
+    });
+
+    socket.on("team_chat_message", (payload: unknown) => {
+      this.onSocketPayload("team_chat_message", () => {
+        this.touchLastEventAtSilent();
+        this.emitTeamChatEvent({ type: "team_chat_message", payload });
+      });
+    });
+
+    socket.on("conversation_message", (payload: unknown) => {
+      this.onSocketPayload("conversation_message", () => {
+        this.touchLastEventAtSilent();
+        this.emitTeamChatEvent({ type: "team_chat_message", payload });
+      });
+    });
+
+    socket.on("team_chat_typing", (payload: unknown) => {
+      this.onSocketPayload("other", () => {
+        this.emitTeamChatEvent({ type: "team_chat_typing", payload });
       });
     });
   }
 
   private scheduleReconnect(contextId: string) {
     if (this.reconnectTimer) return;
+    if (
+      isFeatureEnabled("realtime_reconnect_circuit_breaker_enabled") &&
+      !mobileReconnectCircuitBreaker.shouldAllowReconnectAttempt()
+    ) {
+      emitDriverTelemetry("realtime.reconnect.circuit_breaker_blocked", {
+        source: "core.realtime.manager",
+        context_id: contextId,
+      });
+      return;
+    }
     const now = Date.now();
-    const windowStart = this.state.reconnectWindowStartedAtMs ?? now;
-    const inSameWindow = now - windowStart <= RECONNECT_WINDOW_MS;
+    const windowStart = this.state.reconnectWindowStartedAtMs;
+    const inSameWindow = windowStart !== null && now - windowStart <= RECONNECT_WINDOW_MS;
     const windowAttempts = inSameWindow ? this.state.reconnectWindowAttempts + 1 : 1;
-    const nextWindowStart = inSameWindow ? windowStart : now;
+    const nextWindowStart = inSameWindow && windowStart !== null ? windowStart : now;
     if (windowAttempts > reconnectWindowCap()) {
       this.setState({
         reconnectWindowStartedAtMs: nextWindowStart,
@@ -558,7 +845,10 @@ class RealtimeManager {
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
       if (!this.state.activeContextId || this.state.authExhausted) return;
+      if (this.state.activeContextId !== contextId) return;
+      if (this.socket?.connected) return;
       void (async () => {
+        const reconnectGeneration = this.socketGeneration;
         try {
           // eslint-disable-next-line @typescript-eslint/no-require-imports
           const { refreshAuthTokenNow } = require("../api/client") as {
@@ -568,6 +858,8 @@ class RealtimeManager {
         } catch {
           // ignore: reconnect attempt still proceeds
         }
+        if (this.state.activeContextId !== contextId || this.state.authExhausted) return;
+        if (this.socketGeneration !== reconnectGeneration && this.socket?.connected) return;
         this.connectSocket(contextId);
       })();
     }, backoffMs);

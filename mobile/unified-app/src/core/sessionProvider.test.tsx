@@ -20,11 +20,15 @@ const mockLogin = jest.fn() as jest.MockedFunction<typeof login>;
 const mockLogoutSession = jest.fn() as jest.MockedFunction<typeof logoutSession>;
 const mockRefreshAuthTokenNow = jest.fn() as jest.MockedFunction<typeof refreshAuthTokenNow>;
 const mockSwitchContext = jest.fn() as jest.MockedFunction<typeof switchContext>;
+const mockSetActiveContextIdForApi = jest.fn() as jest.MockedFunction<(contextId: string | null) => void>;
 const mockOnContextSwitch = jest.fn() as jest.MockedFunction<(nextContextId: string | null) => void>;
 const mockDisconnect = jest.fn() as jest.MockedFunction<() => void>;
 const mockOnAuthExhausted = jest.fn().mockReturnValue(() => undefined);
-const mockClearContextScopedCache = jest.fn() as jest.MockedFunction<
+const mockApplyContextCachePolicyOnSwitch = jest.fn() as jest.MockedFunction<
   (queryClient: QueryClient, contextId: string | null) => void
+>;
+const mockRestoreContextCache = jest.fn().mockReturnValue(false) as jest.MockedFunction<
+  (queryClient: QueryClient, contextId: string | null) => boolean
 >;
 const mockClearAllContextCache = jest.fn() as jest.MockedFunction<(queryClient: QueryClient) => void>;
 const mockPurgeDriverProfileCache = jest.fn() as jest.Mock<any>;
@@ -37,7 +41,7 @@ jest.mock("./api/client", () => ({
   logoutSession: () => mockLogoutSession(),
   refreshAuthTokenNow: () => mockRefreshAuthTokenNow(),
   switchContext: (targetContextId: string) => mockSwitchContext(targetContextId),
-  setActiveContextIdForApi: jest.fn(),
+  setActiveContextIdForApi: (contextId: string | null) => mockSetActiveContextIdForApi(contextId),
 }));
 
 jest.mock("./realtime/realtimeManager", () => ({
@@ -51,9 +55,15 @@ jest.mock("./realtime/realtimeManager", () => ({
 }));
 
 jest.mock("./cache/contextCache", () => ({
-  clearContextScopedCache: (queryClient: QueryClient, contextId: string | null) =>
-    mockClearContextScopedCache(queryClient, contextId),
+  applyContextCachePolicyOnSwitch: (queryClient: QueryClient, contextId: string | null) =>
+    mockApplyContextCachePolicyOnSwitch(queryClient, contextId),
+  restoreContextCache: (queryClient: QueryClient, contextId: string | null) =>
+    mockRestoreContextCache(queryClient, contextId),
   clearAllContextCache: (queryClient: QueryClient) => mockClearAllContextCache(queryClient),
+}));
+
+jest.mock("./cache/prefetchContextTarget", () => ({
+  prefetchContextTarget: jest.fn(),
 }));
 
 jest.mock("../features/driver/services/driverProfileCache", () => ({
@@ -132,9 +142,12 @@ describe("session provider gates", () => {
     mockLogoutSession.mockReset();
     mockRefreshAuthTokenNow.mockReset();
     mockSwitchContext.mockReset();
+    mockSetActiveContextIdForApi.mockReset();
     mockOnContextSwitch.mockReset();
     mockDisconnect.mockReset();
-    mockClearContextScopedCache.mockReset();
+    mockApplyContextCachePolicyOnSwitch.mockReset();
+    mockRestoreContextCache.mockReset();
+    mockRestoreContextCache.mockReturnValue(false);
     mockClearAllContextCache.mockReset();
     mockPurgeDriverProfileCache.mockReset();
     mockPurgeDriverProfileCache.mockResolvedValue(undefined);
@@ -155,6 +168,7 @@ describe("session provider gates", () => {
     expect(mockFetchBootstrap).toHaveBeenCalledWith(null);
     expect(handle.current?.status).toBe("ready");
     expect(handle.current?.activeContext?.context_id).toBe("driver:42");
+    expect(mockSetActiveContextIdForApi).toHaveBeenCalledWith("driver:42");
     expect(mockOnContextSwitch).toHaveBeenCalledWith("driver:42");
     await act(async () => {
       renderer.unmount();
@@ -268,7 +282,7 @@ describe("session provider gates", () => {
     });
 
     expect(mockSwitchContext).toHaveBeenCalledWith("client:self");
-    expect(mockClearContextScopedCache).toHaveBeenCalledWith(queryClient, "driver:42");
+    expect(mockApplyContextCachePolicyOnSwitch).toHaveBeenCalledWith(queryClient, "driver:42");
     expect(handle.current?.activeContext?.context_id).toBe("client:self");
     expect(mockOnContextSwitch).toHaveBeenLastCalledWith("client:self");
     await act(async () => {

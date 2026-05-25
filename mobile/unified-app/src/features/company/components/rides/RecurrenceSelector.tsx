@@ -3,6 +3,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useResponsiveTokens } from "../../../../design/responsive";
 import { AppText } from "../../../../design/ui/AppText";
 import { E } from "../../theme/enterpriseOpsTheme";
+import { FONT_SIZE } from "../../../../design/responsive/typographyTokens";
 
 export type RecurrenceFrequency = "daily" | "weekly" | "custom";
 
@@ -74,7 +75,7 @@ const styles = StyleSheet.create({
   labelOn: {
     color: E.BRAND,
     fontWeight: "700" as const,
-    fontSize: 12,
+    fontSize: FONT_SIZE.px12,
     lineHeight: 15,
     letterSpacing: 0.15,
     flexShrink: 1,
@@ -82,7 +83,7 @@ const styles = StyleSheet.create({
   labelOff: {
     color: E.TEXT_SEC,
     fontWeight: "600" as const,
-    fontSize: 12,
+    fontSize: FONT_SIZE.px12,
     lineHeight: 15,
     flexShrink: 1,
   },

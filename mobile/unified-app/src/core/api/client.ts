@@ -22,6 +22,31 @@ function extractHostFromUrl(value: string | null | undefined): string | null {
   return match?.[1] ?? null;
 }
 
+/** Hôte API qu’on peut réaligner sur l’hôte Metro en dev (IP LAN, loopback, émulateur). Pas les domaines de prod. */
+function isDevAlignableApiHost(hostname: string): boolean {
+  const h = hostname.trim().toLowerCase();
+  if (h === "localhost" || h === "127.0.0.1" || h === "[::1]" || h === "::1") return true;
+  if (h === "10.0.2.2") return true;
+  if (/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(h)) return true;
+  if (/^192\.168\.\d{1,3}\.\d{1,3}$/.test(h)) return true;
+  const m = /^172\.(\d{1,3})\.\d{1,3}\.\d{1,3}$/.exec(h);
+  if (m) {
+    const second = Number(m[1]);
+    if (second >= 16 && second <= 31) return true;
+  }
+  return false;
+}
+
+function isLoopbackStyleHost(hostname: string): boolean {
+  const h = hostname.trim().toLowerCase();
+  return h === "localhost" || h === "127.0.0.1" || h === "[::1]" || h === "::1";
+}
+
+/** Cible dev non-loopback (LAN, 10.0.2.2, etc.) : ne pas la réécrire vers localhost Metro. */
+function isNonLoopbackDevApiHost(hostname: string): boolean {
+  return isDevAlignableApiHost(hostname) && !isLoopbackStyleHost(hostname);
+}
+
 function deriveBundleHostForDev(): string | null {
   if (Platform?.OS === "web") {
     const webHost = globalThis?.location?.hostname;
@@ -43,11 +68,31 @@ function resolveBaseUrl(): string {
   const defaultUrl = "https://api.lirie.ch/api/v1";
   const chosen = envUrl ?? configUrl ?? defaultUrl;
 
-  // Dev safety: if LAN IP changed, align API host on current Metro host.
+  // Web dev : suivre l’hôte de la page (localhost/IP LAN) pour éviter qu’une ancienne
+  // IP compilée dans le bundle continue d’être utilisée après changement de réseau.
+  if (__DEV__ && Platform?.OS === "web") {
+    const webHost = globalThis?.location?.hostname;
+    const chosenHost = extractHostFromUrl(chosen);
+    if (
+      typeof webHost === "string" &&
+      webHost.length > 0 &&
+      chosenHost &&
+      webHost !== chosenHost &&
+      isDevAlignableApiHost(chosenHost)
+    ) {
+      return chosen.replace(chosenHost, webHost);
+    }
+  }
+
+  // Dev : si l’IP LAN du PC change, réaligner une base **locale** sur l’hôte Metro.
+  // Ne pas remplacer api.lirie.ch (ou autre prod) par localhost — sinon le mobile appelle https://localhost/...
   if (__DEV__) {
     const bundleHost = deriveBundleHostForDev();
     const chosenHost = extractHostFromUrl(chosen);
-    if (bundleHost && chosenHost && bundleHost !== chosenHost) {
+    if (bundleHost && chosenHost && bundleHost !== chosenHost && isDevAlignableApiHost(chosenHost)) {
+      if (isLoopbackStyleHost(bundleHost) && isNonLoopbackDevApiHost(chosenHost)) {
+        return chosen;
+      }
       return chosen.replace(chosenHost, bundleHost);
     }
   }
@@ -284,6 +329,15 @@ export async function refreshAuthTokenNow(): Promise<boolean> {
 }
 
 apiClient.interceptors.request.use(async (config) => {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { recordHttpRequest } = require("../observability/perfInstrumentation") as {
+      recordHttpRequest: (url: string) => void;
+    };
+    recordHttpRequest(String(config.url ?? ""));
+  } catch {
+    // optional perf instrumentation
+  }
   const requestUrl = String(config.url ?? "");
   const effectiveTimeoutMs = resolveAdaptiveTimeoutMs(requestUrl, Number(config.timeout ?? 15000));
   config.timeout = effectiveTimeoutMs;
@@ -402,6 +456,24 @@ export type ApiCallError = {
   details?: Record<string, unknown>;
 };
 
+/** Aucun objet `response` Axios : la requête n’a pas reçu de réponse HTTP (coupure, TLS, DNS, timeout, etc.). */
+function buildNoHttpResponseHint(requestUrl: string, error: AxiosError): string {
+  const axiosCode = typeof error.code === "string" ? error.code : "";
+  const codePart = axiosCode ? ` code=${axiosCode}` : "";
+  const msg = (error.message ?? "").toLowerCase();
+  const host = extractHostFromUrl(requestUrl);
+  const isLanStyle = host != null && isDevAlignableApiHost(host);
+  const timeoutish = axiosCode === "ECONNABORTED" || msg.includes("timeout");
+
+  if (timeoutish) {
+    return ` | URL=${requestUrl}${codePart} | Aucune réponse (délai ou coupure avant la fin de la requête).`;
+  }
+  const tail = isLanStyle
+    ? "En dev sur IP locale : même Wi‑Fi que le PC, bon port, HTTP vs HTTPS."
+    : "Pas de trame HTTP reçue : vérifie Internet, VPN / pare-feu / proxy, DNS, et la date-heure de l’appareil (souvent lié aux échecs TLS).";
+  return ` | URL=${requestUrl}${codePart} | ${tail}`;
+}
+
 function toApiError(error: unknown): ApiCallError {
   const e = error as AxiosError<{
     message?: string;
@@ -419,10 +491,8 @@ function toApiError(error: unknown): ApiCallError {
   }>;
   const endpoint = e.config?.url ?? "";
   const requestUrl = `${e.config?.baseURL ?? ""}${endpoint}`;
-  const isNetworkError = !e.response && e.message?.toLowerCase().includes("network");
-  const networkHint = isNetworkError
-    ? ` | URL=${requestUrl} | Vérifie accès mobile -> API (même Wi-Fi, IP/port, HTTP/HTTPS).`
-    : "";
+  const noHttpResponse = e.response == null && e.code !== "ERR_CANCELED";
+  const transportHint = noHttpResponse ? buildNoHttpResponseHint(requestUrl, e) : "";
   return {
     status: e.response?.status ?? null,
     code: e.response?.data?.error_code ?? "UNKNOWN_ERROR",
@@ -431,7 +501,7 @@ function toApiError(error: unknown): ApiCallError {
         e.response?.data?.error ??
         e.response?.data?.message ??
         e.message) +
-      networkHint,
+      transportHint,
     reason: e.response?.data?.reason,
     outcome_class: e.response?.data?.outcome_class,
     retryable: e.response?.data?.retryable,
@@ -509,6 +579,7 @@ export async function fetchBootstrap(activeContextId?: string | null): Promise<B
       context_id: activeContextId ?? null,
       reason: err.message,
       status: err.response?.status ?? null,
+      axios_code: err.code ?? null,
     });
     throw toApiError(error);
   }
@@ -537,9 +608,11 @@ export async function switchContext(targetContextId: string): Promise<SwitchCont
     return switchContextResponseSchema.parse(buildMockSwitchContext(targetContextId));
   }
   try {
-    const { data } = await apiClient.post<Record<string, unknown>>("/auth/switch-context", {
-      target_context_id: targetContextId,
-    });
+    const { data } = await apiClient.post<Record<string, unknown>>(
+      "/auth/switch-context",
+      { target_context_id: targetContextId },
+      { timeout: 12_000, headers: { "X-Allow-Offline-Attempt": "1" } }
+    );
     // Jetons explicites si le serveur en émet (futur) ; sinon refresh pour réhydrater le header (web/HMR, perte in-memory).
     const inlineAccess = extractToken(data);
     if (inlineAccess) {
@@ -549,8 +622,9 @@ export async function switchContext(targetContextId: string): Promise<SwitchCont
     if (inlineRefresh) {
       await writeRefreshToken(inlineRefresh);
     }
-    await refreshAuthTokenNow();
-    return switchContextResponseSchema.parse(data);
+    const parsed = switchContextResponseSchema.parse(data);
+    void refreshAuthTokenNow().catch(() => false);
+    return parsed;
   } catch (error) {
     throw toApiError(error);
   }

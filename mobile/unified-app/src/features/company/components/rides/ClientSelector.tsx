@@ -73,7 +73,27 @@ export function ClientSelector({
         }}
         placeholder={placeholder}
         leftSlot={leftSlot}
-        shellStyle={{ borderRadius: ROW_RADIUS, minHeight: Math.max(t.fieldShellMinHeight, 48) }}
+        rightSlot={
+          <View
+            style={{ width: 16, alignItems: "center", justifyContent: "center" }}
+            accessibilityElementsHidden={value != null}
+          >
+            {value == null ? (
+              <AppText
+                variant="label"
+                accessibilityLabel="Champ obligatoire"
+                style={{ color: "#DC2626", fontWeight: "700", fontSize: 16, lineHeight: 18 }}
+              >
+                *
+              </AppText>
+            ) : null}
+          </View>
+        }
+        shellStyle={{
+          borderRadius: ROW_RADIUS,
+          minHeight: Math.max(t.fieldShellMinHeight, 48),
+          paddingHorizontal: 10,
+        }}
         helperText={helperText}
       />
       {shouldShowResults ? (

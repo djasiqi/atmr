@@ -10,6 +10,7 @@ import {
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { apiClient } from "../../src/core/api/client";
 import { ResponsiveContainer, Screen, useAppViewport } from "../../src/design/responsive";
+import { FONT_SIZE } from "../../src/design/responsive/typographyTokens";
 
 export default function MfaScreen() {
   const params = useLocalSearchParams<{ email?: string }>();
@@ -115,18 +116,18 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   title: {
-    fontSize: 24,
+    fontSize: FONT_SIZE.px24,
     fontWeight: "700",
     color: "#163A34",
   },
   intro: {
-    fontSize: 15,
+    fontSize: FONT_SIZE.px15,
     lineHeight: 22,
     color: "#5F7369",
     marginBottom: 4,
   },
   label: {
-    fontSize: 13,
+    fontSize: FONT_SIZE.px13,
     fontWeight: "600",
     color: "#5F7369",
   },
@@ -136,7 +137,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 12,
     paddingHorizontal: 14,
-    fontSize: 16,
+    fontSize: FONT_SIZE.px16,
     color: "#163A34",
     backgroundColor: "#F7FBFA",
   },
@@ -157,15 +158,15 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     color: "#FFFFFF",
-    fontSize: 16,
+    fontSize: FONT_SIZE.px16,
     fontWeight: "700",
   },
   success: {
     color: "#166534",
-    fontSize: 14,
+    fontSize: FONT_SIZE.px14,
   },
   error: {
     color: "#B42318",
-    fontSize: 14,
+    fontSize: FONT_SIZE.px14,
   },
 });

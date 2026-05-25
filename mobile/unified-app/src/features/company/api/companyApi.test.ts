@@ -73,9 +73,31 @@ describe("company api normalization", () => {
         status: "assigned",
         client_name: "Dupont",
         driver_id: 7,
+        partner_company_name: null,
       }),
     ]);
     expect(mockGet.mock.calls[0][0]).toEqual("/company_mobile/dispatch/v1/rides");
+  });
+
+  it("normalizes partner_company_name from transfer payload", async () => {
+    mockGet.mockResolvedValueOnce({
+      data: {
+        items: [
+          {
+            booking_id: 202,
+            status: "assigned",
+            transfer: { partner_company_name: "Emmenez-moi" },
+          },
+        ],
+      },
+    });
+
+    const result = await getDispatchMissions({
+      contextId: "company:42",
+      date: "2026-01-01",
+    });
+
+    expect(result.missions[0]?.partner_company_name).toBe("Emmenez-moi");
   });
 
   it("priorise booking_id sur mission_id pour l’alignement retards `/company_dispatch/delays`", async () => {

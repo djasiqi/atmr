@@ -32,6 +32,10 @@ type ChatListProps = {
   loadingMore?: boolean;
   onOpenImage?: (url: string) => void;
   onOpenPdf?: (url: string) => void;
+  /** Identifiant utilisateur courant; priorité sur le rôle pour déterminer "mes messages". */
+  ownSenderId?: string | number | null;
+  /** Rôles considérés comme "mes messages" pour l'alignement des bulles. */
+  ownSenderRoles?: string[];
   /**
    * Incrémenté à chaque focus d’écran (ex. onglet chat) pour réappliquer l’ancre.
    */
@@ -55,6 +59,8 @@ export function ChatList({
   loadingMore = false,
   onOpenImage,
   onOpenPdf,
+  ownSenderId,
+  ownSenderRoles = ["COMPANY"],
   listAnchorKey = 0,
   initialScroll = { type: "last" },
   bleedOverParentPadding = 24,
@@ -174,10 +180,10 @@ export function ChatList({
     if (requestId === 0 || satisfiedScrollToEndRequestRef.current >= requestId) return;
     const list = listRef.current;
     if (!list) return;
+    // Marque la requête comme satisfaite avant le scroll pour éviter les boucles
+    // de ré-entrée lorsque VirtualizedList notifie plusieurs changements de taille.
+    satisfiedScrollToEndRequestRef.current = requestId;
     list.scrollToEnd({ animated: false });
-    requestAnimationFrame(() => {
-      list.scrollToEnd({ animated: false });
-    });
     if (scrollEndSettleTimerRef.current) {
       clearTimeout(scrollEndSettleTimerRef.current);
     }
@@ -185,17 +191,21 @@ export function ChatList({
       scrollEndSettleTimerRef.current = null;
       const l = listRef.current;
       if (!l || scrollToEndRequestRef.current !== requestId) return;
-      if (satisfiedScrollToEndRequestRef.current >= requestId) return;
       l.scrollToEnd({ animated: false });
-      satisfiedScrollToEndRequestRef.current = requestId;
     }, 140);
   }, [initialScroll.type, messages.length, loading]);
 
   const renderItem: ListRenderItem<SharedChatMessage> = useCallback(
     ({ item }) => (
-      <MessageBubble message={item} onOpenImage={onOpenImage} onOpenPdf={onOpenPdf} />
+      <MessageBubble
+        message={item}
+        ownSenderId={ownSenderId}
+        ownSenderRoles={ownSenderRoles}
+        onOpenImage={onOpenImage}
+        onOpenPdf={onOpenPdf}
+      />
     ),
-    [onOpenImage, onOpenPdf]
+    [onOpenImage, onOpenPdf, ownSenderId, ownSenderRoles]
   );
 
   const keyExtractor = useCallback((item: SharedChatMessage) => String(item.id), []);
@@ -255,9 +265,8 @@ export function ChatList({
           if (requestId === 0 || satisfiedScrollToEndRequestRef.current >= requestId) return;
           const list = listRef.current;
           if (!list) return;
-          requestAnimationFrame(() => {
-            list.scrollToEnd({ animated: false });
-          });
+          satisfiedScrollToEndRequestRef.current = requestId;
+          list.scrollToEnd({ animated: false });
         }}
         onContentSizeChange={onContentSizeChange}
         onScrollToIndexFailed={onScrollToIndexFailed}

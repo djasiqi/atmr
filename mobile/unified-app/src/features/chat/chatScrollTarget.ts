@@ -46,12 +46,37 @@ export function getDriverFirstUnreadIndex<T extends DriverLike>(messages: T[], l
 }
 
 /**
- * Ancre de scroll à l’ouverture / refocus : toujours le **dernier** message (style WhatsApp).
- * Les compteurs / badges « non lu » restent côté hooks ; un futur mode « premier non lu »
- * pourra réintroduire `{ type: "index" }` avec une intention produit explicite.
+ * Retourne l'index du dernier message lu (<= lastReadAt), sinon:
+ * - si aucune lecture connue: dernier message
+ * - si lastReadAt est antérieur à tout le fil: premier message
  */
 export function getChatListInitialScroll(
-  _options: { kind: "company"; messages: SharedChatMessage[]; lastReadAt: string | null } | { kind: "driver"; messages: DriverLike[]; lastReadAt: string | null }
+  options:
+    | { kind: "company"; messages: SharedChatMessage[]; lastReadAt: string | null }
+    | { kind: "driver"; messages: DriverLike[]; lastReadAt: string | null }
 ): { type: "last" } | { type: "index"; index: number } {
-  return { type: "last" };
+  const { messages, lastReadAt } = options;
+  if (!messages || messages.length === 0) return { type: "last" };
+  if (!lastReadAt || !lastReadAt.trim()) {
+    return { type: "index", index: messages.length - 1 };
+  }
+
+  const lastReadEpoch = toEpoch(lastReadAt);
+  if (lastReadEpoch <= 0) {
+    return { type: "index", index: messages.length - 1 };
+  }
+
+  let lastReadIndex = -1;
+  for (let i = 0; i < messages.length; i += 1) {
+    if (toEpoch(messages[i]!.timestamp) <= lastReadEpoch) {
+      lastReadIndex = i;
+    } else {
+      break;
+    }
+  }
+
+  if (lastReadIndex >= 0) {
+    return { type: "index", index: lastReadIndex };
+  }
+  return { type: "index", index: 0 };
 }

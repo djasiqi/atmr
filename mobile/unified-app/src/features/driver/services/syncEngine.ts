@@ -7,6 +7,7 @@ import { scheduleDriverMissionSync } from "./missionSyncOrchestrator";
 import { AppState, AppStateStatus } from "react-native";
 import { isFeatureEnabled } from "../../../core/featureFlags/registry";
 import { realtimeManager } from "../../../core/realtime/realtimeManager";
+import { shouldSkipMissionPolling } from "../../../core/realtime/transportAuthority";
 
 type RuntimeEngine = {
   timer: ReturnType<typeof setInterval> | null;
@@ -175,8 +176,10 @@ function startHeartbeat(
         reason: "queue_empty_or_tracking_idle",
       });
     }
-    scheduleDriverMissionSync(queryClient, contextId, "manual");
-    realtimeManager.setTransportAuthority("reconcile", "sync_engine_tick");
+    if (!shouldSkipMissionPolling(realtime)) {
+      scheduleDriverMissionSync(queryClient, contextId, "manual");
+      realtimeManager.setTransportAuthority("reconcile", "sync_engine_tick");
+    }
     if (engine.noMissionSinceMs && missionPresence.hasRelevantMission) {
       emitDriverTelemetry("driver.network.tick", {
         source: "driver.sync_engine",

@@ -5,10 +5,18 @@ import { getResolvedApiBaseUrl } from "../../../core/api/client";
 import { contextRealtimeRouter } from "../../../core/realtime/contextRealtimeRouter";
 import { getRealtimeChannelsForSurface } from "../../../core/realtime/contextRegistry";
 import { normalizeCompanyEventType } from "../../../core/realtime/eventContracts";
+import { mobileReconnectCircuitBreaker } from "../../../core/realtime/reconnectCircuitBreaker";
+import { recordReconnectAttempt } from "../../../core/observability/realtimeMetrics";
+import {
+  recordCompanySocketConnected,
+  recordSocketReconnect,
+} from "../../../core/observability/perfKpi";
 import {
   CompanyRealtimeSnapshot,
-  CompanyRealtimeStatus,
-  reduceCompanyRealtimeStatus,
+  CompanyTransportStatus,
+  computeCompanyDataFreshness,
+  normalizeCompanyRealtimeSnapshot,
+  reduceCompanyTransportStatus,
 } from "./companyRealtimeState";
 
 type CompanyRealtimeListener = (snapshot: CompanyRealtimeSnapshot) => void;
@@ -71,7 +79,8 @@ export function getCompanyNumericIdFromContextId(contextId: string): string {
   return m?.[1]?.trim() ?? "";
 }
 
-const MAP_SILENCE_RESYNC_MS = 120_000;
+/** Recalcule la fraîcheur métier pendant qu’une session socket est ouverte. */
+const DATA_FRESHNESS_TICK_MS = 30_000;
 
 /** Marge avant l’exp JWT : on rafraîchit le refresh pour réaligner Axios + auth Socket.IO. */
 const PROACTIVE_ACCESS_REFRESH_BEFORE_EXP_MS = 90_000;
@@ -82,6 +91,23 @@ const TOKEN_WAIT_MS = 350;
 const TOKEN_WAIT_FIRST_MS = 80;
 
 const CONNECT_ERROR_DEV_LOG_COOLDOWN_MS = 8_000;
+
+/** Handshake Socket.IO (ms) — un peu plus long sur réseau mobile / LAN instable. */
+const SOCKET_HANDSHAKE_TIMEOUT_MS = 20_000;
+
+function isNativeTransportHandshakeFailure(msg: string): boolean {
+  const lower = msg.toLowerCase();
+  return (
+    lower.includes("xhr poll") ||
+    lower.includes("xhr post") ||
+    lower.includes("websocket") ||
+    lower.includes("timeout") ||
+    lower.includes("timed out") ||
+    lower.includes("network request failed") ||
+    lower.includes("econnrefused") ||
+    lower.includes("connection refused")
+  );
+}
 
 /** Champs utiles pour Metro / DevTools (sans jeton). Engine.IO renvoie souvent un message générique seul. */
 /** `exp` JWT (ms) sans vérifier la signature — uniquement pour planifier un refresh avant coupure WS. */
@@ -144,11 +170,14 @@ function describeConnectErrorForDev(error: unknown): Record<string, unknown> {
 class CompanyRealtimeBridge {
   private socket: Socket | null = null;
   private listeners = new Set<CompanyRealtimeListener>();
-  private silenceTimer: ReturnType<typeof setInterval> | null = null;
+  private silenceTimeout: ReturnType<typeof setTimeout> | null = null;
+  private lastNotifiedSnapshot: CompanyRealtimeSnapshot | null = null;
   private proactiveAccessRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+  private dataFreshnessInterval: ReturnType<typeof setInterval> | null = null;
   private tokenWaitTimer: ReturnType<typeof setTimeout> | null = null;
   private tokenWaitAttempt = 0;
   private hasConnectedOnce = false;
+  private hasDispatchedStaleResync = false;
   /** iOS/Android : index dans `NATIVE_SOCKET_TRANSPORT_STEPS`. */
   private nativeTransportEscalation = 0;
 
@@ -161,16 +190,51 @@ class CompanyRealtimeBridge {
   /** Limite le spam `console.warn` en dev lors de reconnexions en boucle. */
   private lastConnectErrorDevLogAt = 0;
   private lastConnectErrorDevLogMsg: string | null = null;
-  private snapshot: CompanyRealtimeSnapshot = {
+  private snapshot: CompanyRealtimeSnapshot = normalizeCompanyRealtimeSnapshot({
     status: "idle",
     connected: false,
     contextId: null,
     lastEventAt: null,
+    lastConnectedAt: null,
     lastError: null,
-  };
+  });
 
-  private notify() {
+  private isStructuralSnapshotEqual(
+    a: CompanyRealtimeSnapshot,
+    b: CompanyRealtimeSnapshot
+  ): boolean {
+    return (
+      a.transportStatus === b.transportStatus &&
+      a.dataFreshness === b.dataFreshness &&
+      a.connected === b.connected &&
+      a.contextId === b.contextId &&
+      a.lastError === b.lastError
+    );
+  }
+
+  private patchSnapshot(
+    partial: Partial<CompanyRealtimeSnapshot> & {
+      status?: CompanyTransportStatus;
+      transportStatus?: CompanyTransportStatus;
+    }
+  ) {
+    this.snapshot = normalizeCompanyRealtimeSnapshot({
+      ...this.snapshot,
+      ...partial,
+      transportStatus: partial.transportStatus ?? partial.status ?? this.snapshot.transportStatus,
+    });
+  }
+
+  private notify(force = false) {
     const current = this.getSnapshot();
+    if (
+      !force &&
+      this.lastNotifiedSnapshot &&
+      this.isStructuralSnapshotEqual(this.lastNotifiedSnapshot, current)
+    ) {
+      return;
+    }
+    this.lastNotifiedSnapshot = { ...current };
     this.listeners.forEach((listener) => listener(current));
   }
 
@@ -240,10 +304,7 @@ class CompanyRealtimeBridge {
   private softDisconnectSocket() {
     this.clearTokenWait();
     this.clearProactiveAccessRefreshTimer();
-    if (this.silenceTimer) {
-      clearInterval(this.silenceTimer);
-      this.silenceTimer = null;
-    }
+    this.clearDataFreshnessInterval();
     if (this.socket) {
       this.socket.removeAllListeners();
       this.socket.disconnect();
@@ -276,7 +337,7 @@ class CompanyRealtimeBridge {
         this.tokenWaitAttempt += 1;
         if (this.tokenWaitAttempt >= TOKEN_WAIT_MAX) {
           this.tokenWaitAttempt = 0;
-          this.setStatus(
+          this.setTransportStatus(
             "failed",
             "Jeton d’authentification absent pour le WebSocket. Reconnectez-vous ou rechargez l’app."
           );
@@ -305,50 +366,91 @@ class CompanyRealtimeBridge {
     this.tokenWaitTimer = setTimeout(tick, this.tokenWaitAttempt === 0 ? TOKEN_WAIT_FIRST_MS : TOKEN_WAIT_MS);
   }
 
-  private setStatus(nextStatus: CompanyRealtimeStatus, error?: string | null) {
-    this.snapshot = {
-      ...this.snapshot,
-      status: reduceCompanyRealtimeStatus(this.snapshot.status, nextStatus),
-      connected: nextStatus === "healthy",
+  private setTransportStatus(nextStatus: CompanyTransportStatus, error?: string | null) {
+    const transport = reduceCompanyTransportStatus(this.snapshot.transportStatus, nextStatus);
+    this.patchSnapshot({
+      transportStatus: transport,
+      connected: transport === "healthy",
       lastError: error ?? this.snapshot.lastError,
-    };
+    });
     this.notify();
   }
 
   private updateEventTimestamp() {
-    this.snapshot = {
-      ...this.snapshot,
-      lastEventAt: new Date().toISOString(),
+    const prevFreshness = this.snapshot.dataFreshness;
+    const now = new Date().toISOString();
+    const transport = reduceCompanyTransportStatus(this.snapshot.transportStatus, "healthy");
+    this.patchSnapshot({
+      transportStatus: transport,
       connected: true,
-      status: reduceCompanyRealtimeStatus(this.snapshot.status, "healthy"),
+      lastEventAt: now,
       lastError: null,
-    };
-    this.notify();
-  }
-
-  private resetSilenceTimer() {
-    if (this.silenceTimer) {
-      clearInterval(this.silenceTimer);
-      this.silenceTimer = null;
+      dataFreshness: "fresh",
+    });
+    this.hasDispatchedStaleResync = false;
+    if (prevFreshness !== "fresh") {
+      this.notify();
     }
-    this.silenceTimer = setInterval(() => {
-      if (!this.snapshot.lastEventAt) return;
-      const silenceMs = Date.now() - Date.parse(this.snapshot.lastEventAt);
-      if (silenceMs >= MAP_SILENCE_RESYNC_MS) {
-        this.setStatus("degraded", "socket_silence_resync_required");
-      }
-    }, 5_000);
   }
 
-  private bindDispatchEvents(contextId: string, socket: Socket) {
+  private clearDataFreshnessInterval() {
+    if (this.dataFreshnessInterval) {
+      clearInterval(this.dataFreshnessInterval);
+      this.dataFreshnessInterval = null;
+    }
+  }
+
+  private refreshDataFreshness(forceNotify = false) {
+    if (this.snapshot.transportStatus !== "healthy") return;
+
+    const nextFreshness = computeCompanyDataFreshness(this.snapshot.lastEventAt);
+    const prevFreshness = this.snapshot.dataFreshness;
+    if (prevFreshness === nextFreshness && !forceNotify) return;
+
+    this.patchSnapshot({ dataFreshness: nextFreshness });
+
+    if (
+      nextFreshness === "stale" &&
+      prevFreshness !== "stale" &&
+      !this.hasDispatchedStaleResync &&
+      this.snapshot.contextId
+    ) {
+      this.hasDispatchedStaleResync = true;
+      contextRealtimeRouter.dispatch(
+        this.snapshot.contextId,
+        {
+          event_type: "company_data_stale_resync",
+          context_type: "company",
+          stale_since: this.snapshot.lastEventAt,
+        },
+        { contextType: "company" }
+      );
+    }
+
+    this.notify(forceNotify);
+  }
+
+  private startDataFreshnessMonitor() {
+    this.clearDataFreshnessInterval();
+    this.refreshDataFreshness(true);
+    this.dataFreshnessInterval = setInterval(() => {
+      this.refreshDataFreshness(false);
+    }, DATA_FRESHNESS_TICK_MS);
+  }
+
+  private bindDispatchEvents(_contextId: string, socket: Socket) {
     SOCKET_EVENTS.forEach((eventName) => {
       socket.on(eventName, (payload: unknown) => {
         if (!payload || typeof payload !== "object") {
           return;
         }
+        const currentContextId = this.snapshot.contextId;
+        if (!currentContextId) {
+          return;
+        }
         this.updateEventTimestamp();
         contextRealtimeRouter.dispatch(
-          contextId,
+          currentContextId,
           {
             ...payload,
             event_type: normalizeCompanyEventType(eventName) ?? eventName,
@@ -362,13 +464,15 @@ class CompanyRealtimeBridge {
 
   connect(contextId: string) {
     if (!isFeatureEnabled("company_realtime_enabled")) {
-      this.snapshot = {
-        ...this.snapshot,
+      this.softDisconnectSocket();
+      this.hasDispatchedStaleResync = false;
+      this.patchSnapshot({
         contextId,
-        status: "idle",
+        transportStatus: "failed",
         connected: false,
-        lastError: "company realtime disabled by feature flag",
-      };
+        dataFreshness: "idle",
+        lastError: "company_realtime_disabled",
+      });
       this.notify();
       return;
     }
@@ -379,18 +483,19 @@ class CompanyRealtimeBridge {
     }
 
     this.softDisconnectSocket();
-    this.snapshot = {
-      ...this.snapshot,
+    this.hasDispatchedStaleResync = false;
+    this.patchSnapshot({
       contextId,
-      status: "connecting",
+      transportStatus: "connecting",
       connected: false,
+      dataFreshness: "idle",
       lastError: null,
-    };
+    });
     this.notify();
 
     const socketUrl = getResolvedCompanySocketUrl();
     if (!socketUrl) {
-      this.setStatus(
+      this.setTransportStatus(
         "failed",
         "Aucune URL socket : définir EXPO_PUBLIC_COMPANY_SOCKET_URL ou EXPO_PUBLIC_API_BASE_URL (origine utilisée pour /socket.io)"
       );
@@ -438,11 +543,11 @@ class CompanyRealtimeBridge {
     const socketOptions: NonNullable<Parameters<typeof io>[1]> = {
       transports,
       reconnection: true,
-      reconnectionAttempts: 25,
-      reconnectionDelay: 500,
-      reconnectionDelayMax: 12_000,
+      reconnectionAttempts: 20,
+      reconnectionDelay: 300,
+      reconnectionDelayMax: 8_000,
       randomizationFactor: 0.5,
-      timeout: 20_000,
+      timeout: SOCKET_HANDSHAKE_TIMEOUT_MS,
       path: "/socket.io",
       query: socketQuery,
       // `_extract_token` côté Flask : auth (token) et/ou header Bearer (natif en complément)
@@ -478,28 +583,45 @@ class CompanyRealtimeBridge {
     this.scheduleProactiveAccessRefresh(token, handshakeAuth);
 
     socket.io.on("reconnect_attempt", () => {
+      if (
+        isFeatureEnabled("realtime_reconnect_circuit_breaker_enabled") &&
+        !mobileReconnectCircuitBreaker.shouldAllowReconnectAttempt()
+      ) {
+        if (socket.io.opts) {
+          socket.io.opts.reconnection = false;
+        }
+        return;
+      }
+      recordReconnectAttempt();
       this.syncHandshakeAuthFromSession(handshakeAuth);
       if (!handshakeAuth.token?.trim()) {
         this.patchHandshakeAuthAfterRefresh(handshakeAuth);
       }
+      this.setTransportStatus("reconnecting");
     });
 
     socket.on("connect", () => {
+      recordCompanySocketConnected(true);
+      if (this.hasConnectedOnce) {
+        recordSocketReconnect("company_socket_reconnect", "company");
+      }
       this.lastConnectErrorDevLogMsg = null;
       this.nativeTransportEscalation = 0;
       const isReconnect = this.hasConnectedOnce;
       this.hasConnectedOnce = true;
-      this.snapshot = {
-        ...this.snapshot,
-        status: "healthy",
+      const now = new Date().toISOString();
+      this.patchSnapshot({
+        transportStatus: "healthy",
         connected: true,
-        lastEventAt: new Date().toISOString(),
+        lastConnectedAt: now,
+        lastEventAt: now,
+        dataFreshness: "fresh",
         lastError: null,
-      };
+      });
       this.notify();
       socket.emit("join_company");
       this.syncHandshakeAuthFromSession(handshakeAuth);
-      this.resetSilenceTimer();
+      this.startDataFreshnessMonitor();
       if (isReconnect) {
         contextRealtimeRouter.dispatch(
           contextId,
@@ -514,7 +636,9 @@ class CompanyRealtimeBridge {
     });
 
     socket.on("disconnect", () => {
-      this.setStatus("reconnecting");
+      recordCompanySocketConnected(false);
+      this.clearDataFreshnessInterval();
+      this.setTransportStatus("reconnecting");
     });
 
     socket.on("connect_error", (error) => {
@@ -528,10 +652,7 @@ class CompanyRealtimeBridge {
             ? String((error as { message: unknown }).message)
             : String(error);
       const lower = msg.toLowerCase();
-      const looksLikeTransportLayerIssue =
-        lower.includes("xhr poll") ||
-        lower.includes("xhr post") ||
-        lower.includes("websocket");
+      const looksLikeTransportLayerIssue = isNativeTransportHandshakeFailure(msg);
       const fatalAuth = /\b401\b|\b403\b|unauthorized|forbidden/i.test(lower);
 
       if (
@@ -542,13 +663,13 @@ class CompanyRealtimeBridge {
       ) {
         this.nativeTransportEscalation += 1;
         this.softDisconnectSocket();
-        this.snapshot = {
-          ...this.snapshot,
+        this.patchSnapshot({
           contextId,
-          status: "connecting",
+          transportStatus: "connecting",
           connected: false,
+          dataFreshness: "idle",
           lastError: null,
-        };
+        });
         this.notify();
         setTimeout(() => this.connect(contextId), 0);
         return;
@@ -565,19 +686,26 @@ class CompanyRealtimeBridge {
           if (Object.keys(detail).length > 0) {
             console.warn("[CompanySocket] connect_error detail", detail);
           }
+          if (msg.toLowerCase().includes("timeout")) {
+            console.warn(
+              "[CompanySocket] timeout handshake — vérifiez que l’API est joignable sur",
+              getResolvedCompanySocketUrl(),
+              "(curl …/socket.io/?EIO=4&transport=polling). Bascule polling si possible."
+            );
+          }
           this.lastConnectErrorDevLogAt = now;
           this.lastConnectErrorDevLogMsg = msg;
         }
       }
-      this.setStatus("reconnecting", msg);
-    });
-
-    socket.io.on("reconnect_attempt", () => {
-      this.setStatus("reconnecting");
+      this.setTransportStatus("reconnecting", msg);
     });
 
     socket.io.on("reconnect_failed", () => {
-      this.setStatus("failed", "reconnect_failed");
+      if (isFeatureEnabled("realtime_reconnect_circuit_breaker_enabled")) {
+        mobileReconnectCircuitBreaker.recordFailure(socket);
+      }
+      this.clearDataFreshnessInterval();
+      this.setTransportStatus("failed", "reconnect_failed");
     });
 
     this.bindDispatchEvents(contextId, socket);
@@ -591,14 +719,16 @@ class CompanyRealtimeBridge {
 
   disconnect() {
     this.nativeTransportEscalation = 0;
+    this.hasDispatchedStaleResync = false;
     this.softDisconnectSocket();
-    this.snapshot = {
-      ...this.snapshot,
-      status: "idle",
+    this.patchSnapshot({
+      transportStatus: "idle",
       connected: false,
       lastError: null,
       lastEventAt: null,
-    };
+      lastConnectedAt: null,
+      dataFreshness: "idle",
+    });
     this.notify();
   }
 

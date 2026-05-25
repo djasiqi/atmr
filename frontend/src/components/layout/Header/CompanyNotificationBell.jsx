@@ -24,6 +24,8 @@ import {
 import useCompanySocket from '../../../hooks/useCompanySocket';
 import { getCurrentAuthEnv } from '../../../utils/apiClient';
 import { hasCompanyScopedAccessToken } from '../../../utils/webAuthSession';
+import { recordDashboardApiCall } from '../../../utils/companyDashboardDuplicationReport';
+import { isCompanyDashboardPerfEnabled } from '../../../utils/companyDashboardPerfInstrumentation';
 import styles from './CompanyNotificationBell.module.css';
 
 const hasCompanyToken = () => hasCompanyScopedAccessToken(getCurrentAuthEnv());
@@ -86,6 +88,14 @@ const CompanyNotificationBell = () => {
     }
     try {
       setIsLoading(true);
+      if (isCompanyDashboardPerfEnabled()) {
+        recordDashboardApiCall({
+          key: 'alerts',
+          url: '/companies/notifications',
+          componentId: 'CompanyNotificationBell',
+          callerStack: new Error().stack,
+        });
+      }
       const data = await fetchCompanyNotifications({ limit: 30 });
       const list = data.notifications || [];
       setNotifications(list);

@@ -1,18 +1,23 @@
 // src/pages/company/Dashboard/CompanyDashboard.jsx
-import React, { useCallback, useState, useEffect, useMemo, useTransition } from 'react';
+import React, {
+  useCallback,
+  useState,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useTransition,
+  lazy,
+  Suspense,
+} from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { FiZap, FiPlus, FiBarChart2 } from 'react-icons/fi';
-import useCompanySocket from '../../../hooks/useCompanySocket';
+import { FiZap, FiPlus, FiBarChart2, FiMessageSquare } from 'react-icons/fi';
+import useCompanySocket, { useSocketConnected } from '../../../hooks/useCompanySocket';
 import useDispatchStatus from '../../../hooks/useDispatchStatus';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import CompanySidebar from '../../../components/layout/Sidebar/CompanySidebar/CompanySidebar';
 import OverviewCards from './components/OverviewCards';
-import ReservationChart from './components/ReservationChart';
 import ReservationTable from './components/ReservationTable';
 import DriverTable from '../../driver/components/Dashboard/DriverTable';
-import ReservationModals from '../../../components/reservations/ReservationModals';
-import TransferBookingModal from '../../../components/reservations/TransferBookingModal';
-import DriverLiveMap from './components/DriverLiveMap';
 import OpportunitiesSection from './components/OpportunitiesSection';
 import DispatchModeStatusBar from './components/DispatchModeStatusBar';
 import InstitutionOffersTable from './components/InstitutionOffersTable';
@@ -34,26 +39,53 @@ import {
   acceptRequestOffer,
   rejectRequestOffer,
   fetchCompanyReservationsPaginated,
+  fetchCompanyReservations,
 } from '../../../services/companyService';
 import useCompanyData from '../../../hooks/useCompanyData';
+import useCompanyDriversForMap from '../../../hooks/useCompanyDriversForMap';
 import useRealtimeDashboard from '../../../hooks/useRealtimeDashboard';
 import { useDispatchMode } from '../../../hooks/useDispatchMode';
+import {
+  recordCompanyDashboardRender,
+  recordReactCommitMs,
+  startCompanyDashboardPerfBaseline,
+  isCompanyDashboardPerfEnabled,
+} from '../../../utils/companyDashboardPerfInstrumentation';
+import {
+  perfMark,
+  startCompanyDashboardWebVitals,
+} from '../../../utils/companyDashboardWebPerf';
+import {
+  publishAuditReports,
+  scheduleAuditReportPublish,
+} from '../../../utils/companyDashboardAuditReports';
+import { resetCompanyDashboardApiTiming } from '../../../utils/companyDashboardApiTiming';
+import {
+  bootstrapCompanyDashboardPerf,
+  teardownCompanyDashboardPerfBootstrap,
+} from '../../../utils/companyDashboardPerfBootstrap';
+import { resetDuplicationReport } from '../../../utils/companyDashboardDuplicationReport';
 import styles from './CompanyDashboard.module.css';
-import ManualBookingForm from './components/ManualBookingForm';
-import ChatWidget from '../../../components/widgets/ChatWidget';
-import EditDriverForm from '../components/EditDriverForm';
 import Modal from '../../../components/common/Modal';
 import CompanyHeader from '../../../components/layout/Header/CompanyHeader';
 import DataFreshnessBadge from '../../../components/common/DataFreshnessBadge';
 import InlineDatePicker from '../../../components/ui/InlineDatePicker';
 import { toast } from 'sonner';
-import DemoInteractiveGuide from '../../../components/demo/DemoInteractiveGuide';
-import { lirieKeys, LIRIE_QK_PREFIX, lirieInvalidateCompanyReservationLists } from '../../../queryKeys/lirie';
+import { lirieKeys, LIRIE_QK_PREFIX, lirieInvalidateCompanyReservationLists, listScopeHash } from '../../../queryKeys/lirie';
 import {
   canonicalRealtimeTimeMs,
   shouldAcceptRealtimeEvent,
 } from '../../../utils/realtimeEventGuard';
 import { getAuthEnv } from '../../../utils/webAuthSession';
+
+const DriverLiveMap = lazy(() => import('./components/DriverLiveMap'));
+const ReservationChart = lazy(() => import('./components/ReservationChart'));
+const ManualBookingForm = lazy(() => import('./components/ManualBookingForm'));
+const EditDriverForm = lazy(() => import('../components/EditDriverForm'));
+const ChatWidget = lazy(() => import('../../../components/widgets/ChatWidget'));
+const DemoInteractiveGuide = lazy(() => import('../../../components/demo/DemoInteractiveGuide'));
+const ReservationModals = lazy(() => import('../../../components/reservations/ReservationModals'));
+const TransferBookingModal = lazy(() => import('../../../components/reservations/TransferBookingModal'));
 
 function makeToday() {
   const d = new Date();
@@ -68,7 +100,49 @@ function offsetCalendarYmd(dayOffset) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+const RESERVATIONS_DASHBOARD_SCOPE_HASH = listScopeHash({ flat: true, include_stats: false });
+const REALTIME_MOUNT_GRACE_MS = 3000;
+
 const CompanyDashboard = () => {
+  recordCompanyDashboardRender();
+
+  const dashMountCountRef = React.useRef(0);
+  const dashStartMarkedRef = React.useRef(false);
+  const shellVisibleMarkedRef = React.useRef(false);
+  const criticalReadyMarkedRef = React.useRef(false);
+  const queriesLoadedMarkedRef = React.useRef(false);
+  const liveMapPerfMarkedRef = React.useRef(false);
+
+  useLayoutEffect(() => {
+    if (!isCompanyDashboardPerfEnabled()) return undefined;
+    dashMountCountRef.current += 1;
+    const source = dashMountCountRef.current === 1 ? 'mount' : 'remount';
+    if (typeof window !== 'undefined') {
+      window.__companyDashboardDashStartSource = source;
+    }
+    if (!dashStartMarkedRef.current) {
+      dashStartMarkedRef.current = true;
+      perfMark('dashboard_start');
+      bootstrapCompanyDashboardPerf();
+      resetCompanyDashboardApiTiming();
+      resetDuplicationReport();
+      startCompanyDashboardWebVitals();
+    }
+    return undefined;
+  }, []);
+
+  useEffect(() => {
+    if (!isCompanyDashboardPerfEnabled()) return undefined;
+    const cancelPublish = scheduleAuditReportPublish(10_000);
+    return () => {
+      cancelPublish();
+      publishAuditReports(
+        typeof window !== 'undefined' ? window.__companyDashboardSqlPerf : {}
+      );
+      teardownCompanyDashboardPerfBootstrap();
+    };
+  }, []);
+
   const location = useLocation();
   const navigate = useNavigate();
   const isDemoEnv = getAuthEnv() === 'demo';
@@ -92,6 +166,7 @@ const CompanyDashboard = () => {
     [location.search, fallbackDemoMission]
   );
   const [dispatchDay, setDispatchDay] = useState(makeToday());
+  const [reservationTab, setReservationTab] = useState('pending');
 
   const {
     company,
@@ -103,6 +178,9 @@ const CompanyDashboard = () => {
     reloadDriver,
     upsertReservation,
   } = useCompanyData({ day: dispatchDay });
+
+  const { driversForMap } = useCompanyDriversForMap(company?.id);
+  const socketConnected = useSocketConnected();
 
   /** Demandes PENDING visibles pour l'entreprise sur une fenêtre de dates (repère les courses hors jour sélectionné). */
   const pendingWindowStart = useMemo(() => offsetCalendarYmd(-2), []);
@@ -125,8 +203,8 @@ const CompanyDashboard = () => {
         excludeCanceled: true,
       }),
     staleTime: 20_000,
-    refetchInterval: 30_000,
-    enabled: Boolean(company?.id),
+    refetchInterval: socketConnected ? false : 30_000,
+    enabled: Boolean(company?.id) && reservationTab === 'pending',
   });
   const pendingWindowReservations = useMemo(
     () => (Array.isArray(pendingWindowPayload?.reservations) ? pendingWindowPayload.reservations : []),
@@ -158,11 +236,19 @@ const CompanyDashboard = () => {
     return () => window.removeEventListener('socket_connection_rejected', handler);
   }, []);
 
+  const criticalDataReady =
+    Boolean(company?.id) &&
+    !loadingReservations &&
+    !loadingDriver &&
+    Array.isArray(reservations);
+
   const {
     loading: loadingRealtimeDashboard,
     qualityMetrics,
     opportunities,
-  } = useRealtimeDashboard(dispatchDay, 120000);
+  } = useRealtimeDashboard(dispatchDay, socketConnected ? 0 : 120000, {
+    enabled: criticalDataReady,
+  });
 
   const queryClient = useQueryClient();
   const useUnifiedDispatchWs =
@@ -176,7 +262,7 @@ const CompanyDashboard = () => {
   const [driverToEdit, setDriverToEdit] = useState(null);
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [showPerformance, setShowPerformance] = useState(false);
-  const [reservationTab, setReservationTab] = useState('pending');
+  const [chatWidgetActive, setChatWidgetActive] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [urgenceMode, setUrgenceMode] = useState(false);
   const [delaysOnly, setDelaysOnly] = useState(false);
@@ -194,6 +280,63 @@ const CompanyDashboard = () => {
     if (params.get('live_map') === '1') return true;
     return localStorage.getItem('company_dashboard_live_map') === '1';
   });
+
+  useEffect(() => {
+    if (isCompanyDashboardPerfEnabled()) {
+      startCompanyDashboardPerfBaseline();
+      perfMark('dashboard_first_render');
+    }
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!isCompanyDashboardPerfEnabled()) return undefined;
+    const started = performance.now();
+    return () => {
+      recordReactCommitMs(performance.now() - started);
+    };
+  });
+
+  useEffect(() => {
+    if (!isCompanyDashboardPerfEnabled() || shellVisibleMarkedRef.current) return undefined;
+    const frameId = requestAnimationFrame(() => {
+      if (shellVisibleMarkedRef.current) return;
+      shellVisibleMarkedRef.current = true;
+      perfMark('dashboard_shell_visible');
+    });
+    return () => cancelAnimationFrame(frameId);
+  }, []);
+
+  useEffect(() => {
+    if (!isCompanyDashboardPerfEnabled() || !criticalDataReady || criticalReadyMarkedRef.current) {
+      return undefined;
+    }
+    const frameId = requestAnimationFrame(() => {
+      if (criticalReadyMarkedRef.current) return;
+      criticalReadyMarkedRef.current = true;
+      perfMark('dashboard_critical_ready');
+    });
+    return () => cancelAnimationFrame(frameId);
+  }, [criticalDataReady]);
+
+  useEffect(() => {
+    if (!isCompanyDashboardPerfEnabled() || !company?.id) return;
+    if (queriesLoadedMarkedRef.current) return;
+    if (!loadingReservations && !loadingDriver && !loadingRealtimeDashboard) {
+      queriesLoadedMarkedRef.current = true;
+      perfMark('dashboard_queries_loaded');
+    }
+  }, [
+    company?.id,
+    loadingReservations,
+    loadingDriver,
+    loadingRealtimeDashboard,
+  ]);
+
+  useEffect(() => {
+    if (!isCompanyDashboardPerfEnabled() || !liveMapEnabled || liveMapPerfMarkedRef.current) return;
+    liveMapPerfMarkedRef.current = true;
+    perfMark('dashboard_live_map_enabled');
+  }, [liveMapEnabled]);
 
   useEffect(() => {
     if ((reservations || []).length > 0 || (driver || []).length > 0) {
@@ -376,9 +519,26 @@ const CompanyDashboard = () => {
     }
   };
 
+  const reservationsCacheKey = useMemo(
+    () => lirieKeys.companyReservations(dispatchDay, RESERVATIONS_DASHBOARD_SCOPE_HASH),
+    [dispatchDay]
+  );
+
   const { data: dispatchedReservations = [], refetch: refetchAssigned } = useQuery({
     queryKey: lirieKeys.assignedReservations(dispatchDay),
-    queryFn: () => fetchAssignedReservations(dispatchDay),
+    queryFn: async () => {
+      const reservations = await queryClient.ensureQueryData({
+        queryKey: reservationsCacheKey,
+        queryFn: async () => {
+          const data = await fetchCompanyReservations(dispatchDay, { fields: 'dashboard' });
+          return Array.isArray(data) ? data : (data?.reservations ?? []);
+        },
+        staleTime: 30_000,
+      });
+      return fetchAssignedReservations(dispatchDay, {
+        reservations: Array.isArray(reservations) ? reservations : undefined,
+      });
+    },
     staleTime: 30_000,
     enabled: !!company?.id,
   });
@@ -403,7 +563,7 @@ const CompanyDashboard = () => {
     queryKey: lirieKeys.institutionOffers(),
     queryFn: () => fetchRequestOffers('PENDING'),
     staleTime: 15_000,
-    refetchInterval: 30_000,
+    refetchInterval: socketConnected ? false : 30_000,
     enabled: !!company?.id,
   });
   const institutionOffers = institutionOffersData?.offers || [];
@@ -415,6 +575,40 @@ const CompanyDashboard = () => {
     return () => socket.off('new_reservation', handleNewReservation);
   }, [socket, handleNewReservation]);
 
+  const handleOfferUnavailable = useCallback(
+    (payload) => {
+      const offerId = payload?.offer_id ?? payload?.metadata?.offer_id;
+      queryClient.setQueryData(lirieKeys.institutionOffers(), (old) => {
+        if (!old?.offers) return old;
+        const filtered = offerId
+          ? old.offers.filter((o) => o.id !== offerId)
+          : old.offers;
+        return {
+          ...old,
+          offers: filtered,
+          total: filtered.length,
+        };
+      });
+      refetchInstitutionOffers();
+      const institutionName =
+        payload?.institution_name || payload?.metadata?.institution_name;
+      toast.info(
+        institutionName
+          ? `Demande ${institutionName} — plus disponible`
+          : 'Une demande institution n\'est plus disponible'
+      );
+    },
+    [queryClient, refetchInstitutionOffers]
+  );
+
+  useEffect(() => {
+    if (!socket) return;
+    socket.on('offer_unavailable', handleOfferUnavailable);
+    return () => socket.off('offer_unavailable', handleOfferUnavailable);
+  }, [socket, handleOfferUnavailable]);
+
+  const dashboardMountAtRef = React.useRef(Date.now());
+
   useEffect(() => {
     if (!socket) return;
     const acceptRealtime = (payload, entityKey = null) =>
@@ -424,6 +618,9 @@ const CompanyDashboard = () => {
         canonicalTimeMs: canonicalRealtimeTimeMs(payload),
       });
     const refetchAll = () => {
+      if (Date.now() - dashboardMountAtRef.current < REALTIME_MOUNT_GRACE_MS) {
+        return;
+      }
       startTransition(() => {
         refetchAssigned?.();
         reloadReservations?.();
@@ -979,12 +1176,29 @@ const CompanyDashboard = () => {
       refetchAssigned?.();
       refetchDelays?.();
       refetchInstitutionOffers?.();
-      queryClient.invalidateQueries({
-        queryKey: [LIRIE_QK_PREFIX, 'company-pending-window'],
-        exact: false,
-      });
+      if (company?.id) {
+        queryClient.invalidateQueries({
+          queryKey: [
+            LIRIE_QK_PREFIX,
+            'company-pending-window',
+            company.id,
+            pendingWindowStart,
+            pendingWindowEnd,
+          ],
+          exact: true,
+        });
+      }
     });
-  }, [reloadReservations, refetchAssigned, refetchDelays, refetchInstitutionOffers, queryClient]);
+  }, [
+    reloadReservations,
+    refetchAssigned,
+    refetchDelays,
+    refetchInstitutionOffers,
+    queryClient,
+    company?.id,
+    pendingWindowStart,
+    pendingWindowEnd,
+  ]);
 
   const handleOpportunityAction = useCallback((opp) => {
     setQuickAssignOpportunity(opp);
@@ -1019,7 +1233,11 @@ const CompanyDashboard = () => {
       <div className={styles.dashboard}>
         <CompanySidebar />
         <main className={styles.content}>
-          {demoMission === 'transporteur' && <DemoInteractiveGuide role="transporteur" />}
+          {demoMission === 'transporteur' && (
+            <Suspense fallback={null}>
+              <DemoInteractiveGuide role="transporteur" />
+            </Suspense>
+          )}
 
           {/* ============ 1. HEADER CONTEXTUALISÉ ============ */}
           <header className={styles.dashboardHeader}>
@@ -1099,13 +1317,21 @@ const CompanyDashboard = () => {
             <div className={isManualMode ? styles.fullColumn : styles.leftColumn}>
               <section className={styles.mapSection} data-tour-id="dispatch-assign">
                 {liveMapEnabled ? (
-                  <DriverLiveMap
-                    date={dispatchDay}
-                    drivers={driver || []}
-                    bookings={activeBookings}
-                    assignments={assignmentsForMap}
-                    delays={delaysByBooking}
-                  />
+                  <Suspense
+                    fallback={
+                      <div className={styles.mapDeferred}>
+                        <p className={styles.mapDeferredTitle}>Chargement de la carte en cours</p>
+                      </div>
+                    }
+                  >
+                    <DriverLiveMap
+                      date={dispatchDay}
+                      drivers={driversForMap}
+                      bookings={activeBookings}
+                      assignments={assignmentsForMap}
+                      delays={delaysByBooking}
+                    />
+                  </Suspense>
                 ) : (
                   <div className={styles.mapDeferred}>
                     <p className={styles.mapDeferredTitle}>Chargement de la carte en cours</p>
@@ -1351,7 +1577,9 @@ const CompanyDashboard = () => {
               <div className={styles.performanceContent}>
                 <div className={styles.performanceGrid}>
                   <div className={styles.performanceChart}>
-                    <ReservationChart reservations={reservations} />
+                    <Suspense fallback={<div className={styles.mapDeferred}>Chargement du graphique…</div>}>
+                      <ReservationChart reservations={reservations} />
+                    </Suspense>
                   </div>
                   <div className={styles.performanceDrivers}>
                     <DriverTable
@@ -1373,13 +1601,15 @@ const CompanyDashboard = () => {
         {/* Modal réservation manuelle */}
         {showBookingModal && (
           <Modal onClose={() => setShowBookingModal(false)} size="xl" className="modal-booking">
-            <ManualBookingForm
-              onSubmitStart={() => setShowBookingModal(false)}
-              onSuccess={(booking) => {
-                handleManualBookingSuccess(booking);
-              }}
-              onClose={() => setShowBookingModal(false)}
-            />
+            <Suspense fallback={<div>Chargement du formulaire…</div>}>
+              <ManualBookingForm
+                onSubmitStart={() => setShowBookingModal(false)}
+                onSuccess={(booking) => {
+                  handleManualBookingSuccess(booking);
+                }}
+                onClose={() => setShowBookingModal(false)}
+              />
+            </Suspense>
           </Modal>
         )}
 
@@ -1387,49 +1617,71 @@ const CompanyDashboard = () => {
         {showEditModal && driverToEdit && (
           <Modal onClose={handleCloseModal}>
             <h3>Modifier le chauffeur {driverToEdit.username}</h3>
-            <EditDriverForm driver={driverToEdit} onClose={handleCloseModal} />
+            <Suspense fallback={<div>Chargement…</div>}>
+              <EditDriverForm driver={driverToEdit} onClose={handleCloseModal} />
+            </Suspense>
           </Modal>
         )}
       </div>
 
-      {company?.id && <ChatWidget companyId={company.id} />}
+      {company?.id && !chatWidgetActive && (
+        <button
+          type="button"
+          className="chat-widget-button"
+          onClick={() => setChatWidgetActive(true)}
+          aria-label="Ouvrir le chat équipe"
+        >
+          <FiMessageSquare size={24} />
+        </button>
+      )}
+      {company?.id && chatWidgetActive && (
+        <Suspense fallback={null}>
+          <ChatWidget companyId={company.id} startOpen />
+        </Suspense>
+      )}
 
-      {/* Modales centralisées */}
-      <ReservationModals
-        scheduleModalOpen={scheduleModalOpen}
-        scheduleModalReservation={scheduleModalReservation}
-        onScheduleConfirm={handleConfirmReturnTime}
-        onScheduleClose={() => {
-          setScheduleModalOpen(false);
-          setScheduleModalReservation(null);
-        }}
-        assignModalOpen={assignModalOpen}
-        assignModalReservation={assignModalReservation}
-        assignModalDrivers={(driver || []).filter((d) => d.is_active)}
-        onAssignConfirm={handleAssignDriver}
-        onAssignClose={() => {
-          setAssignModalOpen(false);
-          setAssignModalReservation(null);
-        }}
-        deleteModalOpen={deleteModalOpen}
-        deleteModalReservation={deleteModalReservation}
-        onDeleteConfirm={handleConfirmDelete}
-        onDeleteClose={() => {
-          setDeleteModalOpen(false);
-          setDeleteModalReservation(null);
-        }}
-      />
+      {(scheduleModalOpen || assignModalOpen || deleteModalOpen) && (
+        <Suspense fallback={null}>
+          <ReservationModals
+            scheduleModalOpen={scheduleModalOpen}
+            scheduleModalReservation={scheduleModalReservation}
+            onScheduleConfirm={handleConfirmReturnTime}
+            onScheduleClose={() => {
+              setScheduleModalOpen(false);
+              setScheduleModalReservation(null);
+            }}
+            assignModalOpen={assignModalOpen}
+            assignModalReservation={assignModalReservation}
+            assignModalDrivers={(driver || []).filter((d) => d.is_active)}
+            onAssignConfirm={handleAssignDriver}
+            onAssignClose={() => {
+              setAssignModalOpen(false);
+              setAssignModalReservation(null);
+            }}
+            deleteModalOpen={deleteModalOpen}
+            deleteModalReservation={deleteModalReservation}
+            onDeleteConfirm={handleConfirmDelete}
+            onDeleteClose={() => {
+              setDeleteModalOpen(false);
+              setDeleteModalReservation(null);
+            }}
+          />
+        </Suspense>
+      )}
 
-      {/* Modal de transfert */}
-      <TransferBookingModal
-        isOpen={transferModalOpen}
-        onClose={() => {
-          setTransferModalOpen(false);
-          setTransferModalReservation(null);
-        }}
-        reservation={transferModalReservation}
-        onSuccess={handleTransferSuccess}
-      />
+      {transferModalOpen && (
+        <Suspense fallback={null}>
+          <TransferBookingModal
+            isOpen={transferModalOpen}
+            onClose={() => {
+              setTransferModalOpen(false);
+              setTransferModalReservation(null);
+            }}
+            reservation={transferModalReservation}
+            onSuccess={handleTransferSuccess}
+          />
+        </Suspense>
+      )}
 
       {/* Panel assignation rapide (Intelligence Dispatch) */}
       <QuickAssignPanel

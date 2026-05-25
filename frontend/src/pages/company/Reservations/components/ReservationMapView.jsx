@@ -17,8 +17,12 @@ const CONTAINER_STYLE = { width: '100%', height: '100%' };
 const DEFAULT_CENTER = { lat: 46.2044, lng: 6.1432 };
 
 const ReservationMapView = ({ reservations }) => {
-  const { isLoaded: gmLoaded } = useGoogleMapsLoaded();
+  const { isLoaded: gmLoaded, ensureLoaded } = useGoogleMapsLoaded();
   const mapRef = useRef(null);
+
+  useEffect(() => {
+    ensureLoaded();
+  }, [ensureLoaded]);
   const [geocodingStatus, setGeocodingStatus] = useState('idle');
   const [markerData, setMarkerData] = useState([]);
   const [activeRoute, setActiveRoute] = useState(null);

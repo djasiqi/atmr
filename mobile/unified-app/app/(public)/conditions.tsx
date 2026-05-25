@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { ResponsiveContainer, Screen } from "../../src/design/responsive";
+import { FONT_SIZE } from "../../src/design/responsive/typographyTokens";
 
 export default function ConditionsScreen() {
   const router = useRouter();
@@ -46,10 +47,10 @@ const styles = StyleSheet.create({
   backText: {
     color: "#0A8F7A",
     fontWeight: "700",
-    fontSize: 16,
+    fontSize: FONT_SIZE.px16,
   },
   title: {
-    fontSize: 28,
+    fontSize: FONT_SIZE.px28,
     lineHeight: 34,
     color: "#163A34",
     fontWeight: "700",
@@ -61,6 +62,6 @@ const styles = StyleSheet.create({
   p: {
     color: "#45655D",
     lineHeight: 22,
-    fontSize: 15,
+    fontSize: FONT_SIZE.px15,
   },
 });

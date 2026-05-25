@@ -12,6 +12,7 @@ import {
   ResponsiveContainer,
   Screen,
 } from "../../src/design/responsive";
+import { FONT_SIZE } from "../../src/design/responsive/typographyTokens";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const ReactRuntime: any = require("react");
 
@@ -120,13 +121,13 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   heading: {
-    fontSize: 22,
+    fontSize: FONT_SIZE.px22,
     fontWeight: "700",
     color: "#163A34",
     marginBottom: 4,
   },
   activeLabel: {
-    fontSize: 15,
+    fontSize: FONT_SIZE.px15,
     color: "#5F7369",
     marginBottom: 8,
   },
@@ -147,23 +148,23 @@ const styles = StyleSheet.create({
   },
   rowTitle: {
     fontWeight: "600",
-    fontSize: 16,
+    fontSize: FONT_SIZE.px16,
     color: "#163A34",
   },
   rowMeta: {
     marginTop: 4,
-    fontSize: 13,
+    fontSize: FONT_SIZE.px13,
     color: "#64748b",
   },
   rowHint: {
     color: "#64748b",
     marginTop: 8,
-    fontSize: 12,
+    fontSize: FONT_SIZE.px12,
     lineHeight: 17,
   },
   error: {
     color: "#B42318",
     marginTop: 8,
-    fontSize: 14,
+    fontSize: FONT_SIZE.px14,
   },
 });

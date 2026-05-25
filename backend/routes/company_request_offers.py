@@ -277,15 +277,21 @@ class AcceptOffer(Resource):
             proposed_pickup_time = None
             raw_time = data.get("proposed_pickup_time")
             if raw_time:
-                from datetime import datetime as dt
+                from shared.time_utils import validate_proposed_pickup_time
+                from services.metrics.institution_metrics import (
+                    track_proposed_pickup_time_validation_failed,
+                )
 
-                try:
-                    # Accepter ISO8601 avec ou sans timezone
-                    proposed_pickup_time = dt.fromisoformat(
-                        raw_time.replace("Z", "+00:00")
+                proposed_pickup_time, validation_error = validate_proposed_pickup_time(
+                    raw_time
+                )
+                if validation_error:
+                    track_proposed_pickup_time_validation_failed(
+                        company_id=company_id,
+                        offer_id=offer_id,
+                        reason=validation_error,
                     )
-                except (ValueError, AttributeError):
-                    return {"error": "Format d'horaire invalide (ISO8601 attendu)"}, 400
+                    return {"error": validation_error}, 400
 
             use_case = AcceptOfferUseCase()
             result = use_case.execute(

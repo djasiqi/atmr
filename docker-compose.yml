@@ -113,7 +113,7 @@ services:
         exec gunicorn wsgi:app \
           --bind 0.0.0.0:5000 \
           --worker-class $${GUNICORN_WORKER_CLASS:-gevent} \
-          --workers $${GUNICORN_WORKERS:-2} \
+          --workers $${GUNICORN_WORKERS:-1} \
           --timeout 120 \
           --access-logfile - \
           --error-logfile - \
@@ -127,7 +127,9 @@ services:
       - backend/.env
     environment:
       - PYTHONPATH=/app
-      - GUNICORN_WORKERS=${GUNICORN_WORKERS:-2}
+      # Dev : 1 worker évite « Invalid session » si Redis/message_queue indisponible.
+      # Prod multi-workers : garder REDIS_URL + message_queue (voir socketio_runtime_check).
+      - GUNICORN_WORKERS=${GUNICORN_WORKERS:-1}
       - DATABASE_URL=postgresql+psycopg://${POSTGRES_USER:-atmr}:${POSTGRES_PASSWORD:-atmr}@pgbouncer:6432/${POSTGRES_DB:-atmr}
       # GOOGLE_MAPS_API_KEY : défini dans backend/.env (env_file ci-dessus). Ne pas réinjecter ${GOOGLE_MAPS_API_KEY}
       # depuis l’hôte ici : une variable vide écraserait la valeur du fichier.
@@ -141,8 +143,8 @@ services:
       - DISPATCH_AUTORUN_INTERVAL_SEC=${DISPATCH_AUTORUN_INTERVAL_SEC:-300}
       - DISPATCH_AUTORUN_ENABLED=${DISPATCH_AUTORUN_ENABLED:-true}
       - UD_OSRM_URL=${UD_OSRM_URL:-http://osrm:5000}
-      # Socket.IO : ajoutez http://<votre-IP-LAN>:8081 si vous ouvrez Expo Web via l’IP (QR / autre machine).
-      - SOCKETIO_CORS_ORIGINS=${SOCKETIO_CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000,http://localhost:8081,http://127.0.0.1:8081}
+      # Socket.IO : ajoutez http://<votre-IP-LAN>:8081 si Expo Web / QR utilise l’IP (pas localhost).
+      - SOCKETIO_CORS_ORIGINS=${SOCKETIO_CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000,http://localhost:8081,http://127.0.0.1:8081,http://192.168.1.146:8081}
       - FLASK_CONFIG=${FLASK_CONFIG:-development}
       - DEBUG_LOG_PATH=/app/.cursor/debug.log
       - FLASK_ENV=${FLASK_ENV:-development}

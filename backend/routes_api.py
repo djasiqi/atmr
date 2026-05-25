@@ -209,6 +209,9 @@ def init_namespaces(app):
     from routes.institution_billing import (
         institution_billing_ns,
     )  # ✅ ÉTAPE 5: Facturation institution
+    from routes.institution_bookings import (
+        institution_bookings_ns,
+    )  # ✅ RBAC audit trail bookings institution
     from routes.institution_teams import institution_teams_ns  # ✅ Curatelle: équipes
     from routes.institution_notifications import (
         institution_notifications_ns,
@@ -338,6 +341,9 @@ def init_namespaces(app):
     )  # ✅ ÉTAPE 4
     api_v1.add_namespace(
         institution_billing_ns, path="/institutions/billing"
+    )
+    api_v1.add_namespace(
+        institution_bookings_ns, path="/institutions/bookings"
     )  # ✅ ÉTAPE 5
     api_v1.add_namespace(
         institution_notifications_ns, path="/institutions/notifications"
@@ -449,6 +455,11 @@ def init_namespaces(app):
         )  # ✅ Portail institutionnel
         api_legacy.add_namespace(institution_patients_ns, path="/institutions/patients")
         api_legacy.add_namespace(institution_requests_ns, path="/institutions/requests")
+        api_legacy.add_namespace(institution_settings_ns, path="/institutions/settings")
+        api_legacy.add_namespace(institution_billing_ns, path="/institutions/billing")
+        api_legacy.add_namespace(institution_bookings_ns, path="/institutions/bookings")
+        api_legacy.add_namespace(institution_notifications_ns, path="/institutions/notifications")
+        api_legacy.add_namespace(institution_teams_ns, path="/institutions/teams")
         api_legacy.add_namespace(planning_ns, path="/planning")
         api_legacy.add_namespace(pricing_ns, path="/pricing")
         api_legacy.add_namespace(osrm_ns, path="/osrm")

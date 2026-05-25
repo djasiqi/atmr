@@ -14,6 +14,7 @@ export type CanonicalCompanyEventType =
   | "delay_invalidated"
   | "booking_message_sent"
   | "team_chat_message"
+  | "urgent_alert"
   | "company_dispatch_update";
 
 const DRIVER_EVENT_ALIASES: Record<string, CanonicalDriverEventType> = {
@@ -45,6 +46,7 @@ const COMPANY_EVENT_ALIASES: Record<string, CanonicalCompanyEventType> = {
   booking_message: "booking_message_sent",
   booking_message_sent: "booking_message_sent",
   team_chat_message: "team_chat_message",
+  urgent_alert: "urgent_alert",
   company_dispatch_update: "company_dispatch_update",
 };
 

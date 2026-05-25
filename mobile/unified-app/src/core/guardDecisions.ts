@@ -21,6 +21,7 @@ export function resolveCompanyContextGuardRedirect(
   activeContext: AuthContext | null
 ): string | null {
   if (!activeContext) return "/(app)/context-selector";
+  if (activeContext.context_type === "driver") return "/(app)/(driver)";
   if (activeContext.context_type !== "company") return "/(app)/unauthorized";
   return null;
 }

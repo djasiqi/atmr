@@ -4,6 +4,7 @@ import { useAppViewport } from "../../design/responsive/useAppViewport";
 import { useSession } from "../sessionProvider";
 import { BOOT_LOTTIE_FIRST_LAUNCH_ONLY } from "./bootSplashConfig";
 import { getBootLottieIntroSeen, setBootLottieIntroSeen } from "./bootSplashStorage";
+import { computeBootLottieDisplaySize } from "./bootLottieLayout";
 import { resolveBootLottieSource } from "./resolveBootLottieSource";
 import type { BootLottieAsset } from "./bootLottieAssets";
 
@@ -38,6 +39,7 @@ export function useBootSplashGate(): {
   /** Insets alignés sur `useAppViewport` (safe top/bottom ≥ 16) pour cohérence avec le reste de l’UI. */
   insets: { top: number; bottom: number; left: number; right: number };
   styles: typeof styles;
+  lottieStyle: { width: number; height: number; backgroundColor: string; alignSelf: "stretch" };
 } {
   const { width, height, topInset, bottomInset, safeLeft, safeRight } = useAppViewport();
   const [animFinished, setAnimFinished] = useState(false);
@@ -50,6 +52,16 @@ export function useBootSplashGate(): {
   const lottieOpacity = useRef(new Animated.Value(1)).current;
 
   const source = useMemo(() => resolveBootLottieSource(width, height), [width, height]);
+
+  const lottieStyle = useMemo(() => {
+    const { width: lottieWidth, height: lottieHeight } = computeBootLottieDisplaySize(width, height, source);
+    return {
+      width: lottieWidth,
+      height: lottieHeight,
+      backgroundColor: SPLASH_BACKGROUND_COLOR,
+      alignSelf: "stretch" as const,
+    };
+  }, [height, source, width]);
 
   useEffect(() => {
     if (!BOOT_LOTTIE_FIRST_LAUNCH_ONLY) {
@@ -185,6 +197,7 @@ export function useBootSplashGate(): {
     onLottieFinish,
     insets,
     styles,
+    lottieStyle,
   };
 }
 
@@ -194,15 +207,9 @@ const styles = StyleSheet.create({
     zIndex: 100000,
     elevation: 100000,
     backgroundColor: SPLASH_BACKGROUND_COLOR,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  lottie: {
-    width: "100%",
-    height: "100%",
   },
   lottieLayer: {
-    width: "100%",
-    height: "100%",
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "transparent",
   },
 });

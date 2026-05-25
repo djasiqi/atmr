@@ -31,6 +31,7 @@ from .base import _iso
 # Valeurs par défaut (aussi utilisées comme fallback)
 DEFAULT_TIMEOUT_SAME_DAY_MINUTES = 5
 DEFAULT_TIMEOUT_DEFAULT_MINUTES = 60
+DEFAULT_OFFER_DISPATCH_MODE = "sequential"
 DEFAULT_BILLING_INTENT = "patient"
 DEFAULT_PAYMENT_TERMS_DAYS = 30
 DEFAULT_TIMEZONE = "Europe/Zurich"
@@ -56,6 +57,13 @@ class InstitutionSettings(db.Model):
     )
     timeout_default_minutes: Mapped[int] = mapped_column(
         Integer, nullable=False, default=DEFAULT_TIMEOUT_DEFAULT_MINUTES
+    )
+    offer_dispatch_mode: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default=DEFAULT_OFFER_DISPATCH_MODE,
+        server_default=DEFAULT_OFFER_DISPATCH_MODE,
+        comment="Mode d'envoi des demandes: sequential | broadcast",
     )
 
     # ── Facturation par défaut ─────────────────────────────────────────
@@ -128,6 +136,7 @@ class InstitutionSettings(db.Model):
             "institution_id": self.institution_id,
             "timeout_same_day_minutes": self.timeout_same_day_minutes,
             "timeout_default_minutes": self.timeout_default_minutes,
+            "offer_dispatch_mode": self.offer_dispatch_mode,
             "default_billing_intent": self.default_billing_intent,
             "default_vat_rate": float(self.default_vat_rate)
             if self.default_vat_rate is not None

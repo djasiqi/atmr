@@ -43,9 +43,10 @@
 
 /* ── Popover ── */
 .popover {
-  position: absolute;
+  position: fixed;
   z-index: var(--z-modal-popover);
   width: 180px;
+  box-sizing: border-box;
   background: var(--bg-primary, #fff);
   border: 1px solid var(--border-primary, #e5e7eb);
   border-radius: 10px;

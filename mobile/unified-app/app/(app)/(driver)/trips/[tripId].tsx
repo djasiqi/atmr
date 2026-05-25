@@ -15,6 +15,8 @@ export default function DriverTripDetailScreen() {
     status?: string;
     scheduled?: string;
     source?: string;
+    client?: string;
+    driver?: string;
   }>();
 
   const tripId = useMemo(() => {
@@ -23,7 +25,7 @@ export default function DriverTripDetailScreen() {
   }, [params.tripId]);
 
   const missionDetail = useDriverMissionDetailQuery(tripId);
-  const mergedStatus = String(missionDetail.data?.status ?? params.status ?? "UNKNOWN");
+  const mergedStatus = missionDetail.data?.status ?? params.status;
   const ux = getDriverStatusUx(mergedStatus);
 
   return (
@@ -42,13 +44,27 @@ export default function DriverTripDetailScreen() {
           {missionDetail.isLoading ? <AppSpinner size="small" /> : null}
           {missionDetail.error ? (
             <AppText variant="error" style={styles.error}>
-              {missionDetail.error instanceof Error ? missionDetail.error.message : "Détail indisponible"}
+              {params.source === "company_day"
+                ? "Détail API limité sur cette course entreprise : affichage des données du planning."
+                : missionDetail.error instanceof Error
+                  ? missionDetail.error.message
+                  : "Détail indisponible"}
             </AppText>
           ) : null}
           <AppCard>
             <AppText variant="label" style={styles.cardTitle}>
               Course #{params.tripId ?? "N/A"}
             </AppText>
+            {String(missionDetail.data?.client_name ?? params.client ?? "").trim().length > 0 ? (
+              <AppText variant="body" style={styles.body}>
+                Client : {String(missionDetail.data?.client_name ?? params.client ?? "N/A")}
+              </AppText>
+            ) : null}
+            {String(params.driver ?? "").trim().length > 0 ? (
+              <AppText variant="body" style={styles.body}>
+                Chauffeur assigné : {String(params.driver)}
+              </AppText>
+            ) : null}
             <AppText variant="body" style={styles.body}>
               Source : {params.source ?? "unknown"}
             </AppText>

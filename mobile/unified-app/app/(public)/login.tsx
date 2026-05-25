@@ -2,7 +2,6 @@ import {
   ActivityIndicator,
   Image,
   ImageBackground,
-  Keyboard,
   Platform,
   Pressable,
   ScrollView,
@@ -26,7 +25,9 @@ import {
   Screen,
   scrollAnchorAboveKeyboard,
   useAppViewport,
+  useKeyboardHeight,
 } from "../../src/design/responsive";
+import { FONT_SIZE } from "../../src/design/responsive/typographyTokens";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const ReactRuntime: any = require("react");
 
@@ -67,29 +68,14 @@ export default function LoginScreen() {
   const passwordFieldAnchorRef = ReactRuntime.useRef(null as View | null);
   const updateGate = useRuntimeUpdateGate();
   const { topInset } = useAppViewport();
-  /** Natif : padding scroll supplémentaire + layout « clavier ouvert » uniquement quand le clavier est visible. */
-  const [keyboardVisible, setKeyboardVisible] = ReactRuntime.useState(false);
-  const [keyboardScrollPaddingBottom, setKeyboardScrollPaddingBottom] = ReactRuntime.useState(0);
+  /** Clavier dual : `useKeyboardHeight` remplace le doublon listeners + magic numbers (cf. plan Sprint 1). */
+  const { keyboardVisible, scrollPaddingBottom: keyboardScrollPaddingBottom } = useKeyboardHeight();
 
   ReactRuntime.useEffect(() => {
-    if (Platform.OS === "web") return;
-    const show = Keyboard.addListener("keyboardDidShow", (e) => {
-      const h = e.endCoordinates?.height ?? 0;
-      const computed = h > 0 ? Math.round(h + 48) : 300;
-      setKeyboardScrollPaddingBottom(Math.max(260, computed));
-      setKeyboardVisible(true);
-    });
-    const hide = Keyboard.addListener("keyboardDidHide", () => {
-      setKeyboardVisible(false);
-      setKeyboardScrollPaddingBottom(0);
-      loginScrollRef.current?.scrollTo({ y: 0, animated: true });
-      loginScrollOffsetYRef.current = 0;
-    });
-    return () => {
-      show.remove();
-      hide.remove();
-    };
-  }, []);
+    if (keyboardVisible) return;
+    loginScrollRef.current?.scrollTo({ y: 0, animated: true });
+    loginScrollOffsetYRef.current = 0;
+  }, [keyboardVisible]);
 
   if (bootstrap?.is_authenticated) {
     return <Redirect href={resolveInitialRoute(bootstrap) as any} />;
@@ -426,7 +412,7 @@ const styles = StyleSheet.create({
   },
   kicker: {
     color: BRAND,
-    fontSize: 13,
+    fontSize: FONT_SIZE.px13,
     fontWeight: "500",
     letterSpacing: 0.5,
     textTransform: "uppercase",
@@ -435,7 +421,7 @@ const styles = StyleSheet.create({
   },
   title: {
     color: UI_TEXT,
-    fontSize: 30,
+    fontSize: FONT_SIZE.px30,
     lineHeight: 34,
     fontWeight: "700",
     textAlign: "center",
@@ -444,7 +430,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     color: UI_MUTED,
-    fontSize: 15,
+    fontSize: FONT_SIZE.px15,
     lineHeight: 21,
     marginTop: 10,
     textAlign: "center",
@@ -452,7 +438,7 @@ const styles = StyleSheet.create({
   resumeHint: {
     marginTop: 14,
     color: "#45655D",
-    fontSize: 14,
+    fontSize: FONT_SIZE.px14,
     lineHeight: 20,
     textAlign: "center",
   },
@@ -460,7 +446,7 @@ const styles = StyleSheet.create({
     marginTop: 18,
   },
   fieldLabel: {
-    fontSize: 13,
+    fontSize: FONT_SIZE.px13,
     lineHeight: 16,
     fontWeight: "600",
     color: UI_TEXT,
@@ -474,7 +460,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     paddingHorizontal: 14,
     color: UI_TEXT,
-    fontSize: 16,
+    fontSize: FONT_SIZE.px16,
   },
   passwordShell: {
     flexDirection: "row",
@@ -491,7 +477,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 48,
     paddingVertical: Platform.OS === "ios" ? 12 : 10,
-    fontSize: 16,
+    fontSize: FONT_SIZE.px16,
     color: UI_TEXT,
     borderWidth: 0,
     ...Platform.select({
@@ -510,7 +496,7 @@ const styles = StyleSheet.create({
   rememberLabel: {
     lineHeight: 20,
     color: UI_MUTED,
-    fontSize: 13,
+    fontSize: FONT_SIZE.px13,
     fontWeight: "500",
   },
   submitButton: {
@@ -548,7 +534,7 @@ const styles = StyleSheet.create({
   },
   linksDot: {
     color: UI_MUTED,
-    fontSize: 13,
+    fontSize: FONT_SIZE.px13,
     fontWeight: "700",
     opacity: 0.65,
     paddingHorizontal: 2,

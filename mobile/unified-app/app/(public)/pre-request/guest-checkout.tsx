@@ -32,6 +32,7 @@ import {
   setGuestSaferpayPending,
 } from "../../../src/core/public/guestSaferpayPending";
 import * as SecureStore from "../../../src/core/storage/secureStoreCompat";
+import { FONT_SIZE } from "../../../src/design/responsive/typographyTokens";
 
 const LANDING_BACKGROUND = require("../../../assets/images/landing-background.png");
 
@@ -663,7 +664,7 @@ const styles = StyleSheet.create({
   },
   stepPill: {
     alignSelf: "flex-start",
-    fontSize: 12,
+    fontSize: FONT_SIZE.px12,
     fontWeight: "700",
     letterSpacing: 0.4,
     textTransform: "uppercase",
@@ -677,13 +678,13 @@ const styles = StyleSheet.create({
   },
   title: {
     color: "#163A34",
-    fontSize: 28,
+    fontSize: FONT_SIZE.px28,
     lineHeight: 32,
     fontWeight: "700",
   },
   subtitle: {
     color: "#5F7369",
-    fontSize: 15,
+    fontSize: FONT_SIZE.px15,
     lineHeight: 22,
     marginTop: 10,
   },
@@ -706,33 +707,33 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   trackingRefLabel: {
-    fontSize: 12,
+    fontSize: FONT_SIZE.px12,
     fontWeight: "700",
     color: "#5F7369",
     textTransform: "uppercase",
     letterSpacing: 0.3,
   },
   trackingRefLabelSmall: {
-    fontSize: 11,
+    fontSize: FONT_SIZE.px11,
     fontWeight: "600",
     color: "#64748b",
     textTransform: "uppercase",
     letterSpacing: 0.2,
   },
   trackingRefValue: {
-    fontSize: 22,
+    fontSize: FONT_SIZE.px22,
     fontWeight: "800",
     color: "#0a5c4a",
     letterSpacing: 0.5,
   },
   trackingHint: {
     marginTop: 4,
-    fontSize: 13,
+    fontSize: FONT_SIZE.px13,
     lineHeight: 18,
     color: "#5F7369",
   },
   trackingCodeValue: {
-    fontSize: 12,
+    fontSize: FONT_SIZE.px12,
     lineHeight: 16,
     fontWeight: "500",
     color: "#475569",
@@ -743,7 +744,7 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
   },
   trackingCodeMissing: {
-    fontSize: 13,
+    fontSize: FONT_SIZE.px13,
     lineHeight: 19,
     color: "#64748b",
   },
@@ -756,12 +757,12 @@ const styles = StyleSheet.create({
     borderColor: "rgba(10,143,122,0.25)",
   },
   immediateSub: {
-    fontSize: 14,
+    fontSize: FONT_SIZE.px14,
     lineHeight: 20,
     color: "#5F7369",
   },
   loadingBlock: { marginTop: 20, alignItems: "center", gap: 12, paddingVertical: 20 },
-  loadingHint: { color: "#5F7369", fontSize: 14 },
+  loadingHint: { color: "#5F7369", fontSize: FONT_SIZE.px14 },
   statusBanner: {
     marginTop: 16,
     flexDirection: "row",
@@ -779,13 +780,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   statusBannerTitle: {
-    fontSize: 13,
+    fontSize: FONT_SIZE.px13,
     fontWeight: "700",
     color: "#163A34",
     marginBottom: 4,
   },
   statusBannerMessage: {
-    fontSize: 14,
+    fontSize: FONT_SIZE.px14,
     lineHeight: 20,
     color: "#5F7369",
   },
@@ -799,7 +800,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   sectionHeadingInCard: {
-    fontSize: 13,
+    fontSize: FONT_SIZE.px13,
     fontWeight: "700",
     color: "#5F7369",
     textTransform: "uppercase",
@@ -810,14 +811,14 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   routeSummaryLabel: {
-    fontSize: 12,
+    fontSize: FONT_SIZE.px12,
     fontWeight: "700",
     color: "#5F7369",
     textTransform: "uppercase",
     letterSpacing: 0.4,
   },
   routeSummaryValue: {
-    fontSize: 16,
+    fontSize: FONT_SIZE.px16,
     fontWeight: "600",
     color: "#163A34",
     lineHeight: 22,
@@ -830,13 +831,13 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   amountValue: {
-    fontSize: 26,
+    fontSize: FONT_SIZE.px26,
     fontWeight: "800",
     color: "#163A34",
     letterSpacing: -0.4,
   },
   amountNote: {
-    fontSize: 12,
+    fontSize: FONT_SIZE.px12,
     lineHeight: 16,
     color: "#5F7369",
   },
@@ -858,7 +859,7 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     color: "#FFFFFF",
-    fontSize: 16,
+    fontSize: FONT_SIZE.px16,
     fontWeight: "700",
     letterSpacing: 0.2,
   },
@@ -880,7 +881,7 @@ const styles = StyleSheet.create({
   },
   outlineButtonText: {
     color: "#0A8F7A",
-    fontSize: 16,
+    fontSize: FONT_SIZE.px16,
     fontWeight: "700",
   },
   postPayModalRoot: {
@@ -918,13 +919,13 @@ const styles = StyleSheet.create({
     }),
   },
   postPayTitle: {
-    fontSize: 20,
+    fontSize: FONT_SIZE.px20,
     fontWeight: "700",
     color: "#163A34",
     marginBottom: 12,
   },
   postPayDossierLabel: {
-    fontSize: 12,
+    fontSize: FONT_SIZE.px12,
     fontWeight: "700",
     color: "#5F7369",
     textTransform: "uppercase",
@@ -940,7 +941,7 @@ const styles = StyleSheet.create({
   postPayDossierValue: {
     flex: 1,
     minWidth: 0,
-    fontSize: 22,
+    fontSize: FONT_SIZE.px22,
     fontWeight: "800",
     color: "#0a5c4a",
   },
@@ -956,18 +957,18 @@ const styles = StyleSheet.create({
     opacity: 0.88,
   },
   postPayCopyBtnText: {
-    fontSize: 14,
+    fontSize: FONT_SIZE.px14,
     fontWeight: "700",
     color: "#0A8F7A",
   },
   postPayBody: {
-    fontSize: 14,
+    fontSize: FONT_SIZE.px14,
     lineHeight: 20,
     color: "#5F7369",
     marginBottom: 12,
   },
   postPaySubLabel: {
-    fontSize: 12,
+    fontSize: FONT_SIZE.px12,
     fontWeight: "600",
     color: "#64748b",
     marginBottom: 6,
@@ -977,7 +978,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   postPayTokenScroll: {
-    maxHeight: 100,
+    maxHeight: 100, // MAGIC-NUMBER:allow widget debug token JWT (fenêtre scroll fixe volontaire)
     padding: 10,
     borderRadius: 10,
     backgroundColor: "rgba(15, 23, 42, 0.06)",
@@ -986,13 +987,13 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   postPayTokenText: {
-    fontSize: 11,
+    fontSize: FONT_SIZE.px11,
     lineHeight: 16,
     color: "#334155",
     fontFamily: Platform.select({ web: "monospace" as const, default: "monospace" as const }),
   },
   postPayTokenEmpty: {
-    fontSize: 13,
+    fontSize: FONT_SIZE.px13,
     lineHeight: 19,
     color: "#64748b",
     marginBottom: 8,
@@ -1011,12 +1012,12 @@ const styles = StyleSheet.create({
     borderColor: "rgba(10,143,122,0.4)",
   },
   postPayCopyWideText: {
-    fontSize: 15,
+    fontSize: FONT_SIZE.px15,
     fontWeight: "700",
     color: "#0A8F7A",
   },
   postPayWarn: {
-    fontSize: 13,
+    fontSize: FONT_SIZE.px13,
     lineHeight: 18,
     color: "#92400e",
     backgroundColor: "rgba(234, 179, 8, 0.12)",
@@ -1025,7 +1026,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   postPayCopyHint: {
-    fontSize: 13,
+    fontSize: FONT_SIZE.px13,
     fontWeight: "600",
     color: "#0A8F7A",
     textAlign: "center",
@@ -1047,7 +1048,7 @@ const styles = StyleSheet.create({
   },
   postPayComprisText: {
     color: "#FFFFFF",
-    fontSize: 16,
+    fontSize: FONT_SIZE.px16,
     fontWeight: "700",
     letterSpacing: 0.3,
     textTransform: "uppercase",

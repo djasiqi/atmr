@@ -104,6 +104,7 @@ from .enums import (
 )
 from .billing_profile import CompanyBillingProfile
 from .billing_audit_log import BillingAuditLog
+from .booking_change_event import BookingChangeAcknowledgement, BookingChangeEvent
 from .billing_party import BillingParty, ClientBillingParty
 from .contact_request import ContactRequest
 from .curator_team import CuratorTeam, CuratorTeamMember
@@ -211,6 +212,8 @@ __all__ = [
     "BillingParty",
     "BillingPartyType",
     "BillingAuditLog",
+    "BookingChangeAcknowledgement",
+    "BookingChangeEvent",
     "BillingReviewStatus",
     "BillingSource",
     "ClientBillingParty",

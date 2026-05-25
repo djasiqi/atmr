@@ -32,7 +32,11 @@ const ZoneSetReadonlyMap = ({
   const [mapWarning, setMapWarning] = useState('');
   const [hoveredZoneKey, setHoveredZoneKey] = useState('');
   const [selectedZoneKey, setSelectedZoneKey] = useState('');
-  const { isLoaded, loadError } = useGoogleMapsLoaded();
+  const { isLoaded, loadError, ensureLoaded } = useGoogleMapsLoaded();
+
+  useEffect(() => {
+    ensureLoaded();
+  }, [ensureLoaded]);
   const sourceDetails =
     Array.isArray(zoneSetDetails) && zoneSetDetails.length > 0
       ? zoneSetDetails

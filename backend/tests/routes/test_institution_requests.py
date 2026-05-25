@@ -147,6 +147,26 @@ class TestTransportRequestsCRUD:
         data = response.get_json()
         assert data["external_reference"] == "REQ-API-001"
 
+    def test_create_request_without_external_reference(
+        self, client, db, admin_auth_headers
+    ):
+        """Test: création sans external_reference -> 201 (champ optionnel)."""
+        response = client.post(
+            "/api/v1/institutions/requests",
+            json={
+                "scheduled_time": self._get_scheduled_time(),
+                "pickup_location": "123 rue A",
+                "dropoff_location": "456 rue B",
+                "mission_type": "patient_transport",
+            },
+            headers=admin_auth_headers,
+        )
+
+        assert response.status_code == 201
+        data = response.get_json()
+        assert "external_reference" in data
+        assert data["external_reference"] is None
+
     def test_create_request_material_delivery(
         self, client, db, admin_auth_headers, sample_institution
     ):

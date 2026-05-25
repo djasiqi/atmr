@@ -140,8 +140,14 @@ function resolveBackgroundTrackingMode(
 
 function defineTaskIfNeeded() {
   if (taskDefined) return;
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const TaskManager = require("expo-task-manager");
+  if (!canUseBackgroundLocation()) return;
+  let TaskManager: { defineTask?: unknown };
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    TaskManager = require("expo-task-manager");
+  } catch {
+    return;
+  }
   if (typeof TaskManager?.defineTask !== "function") return;
   TaskManager.defineTask(
     BACKGROUND_LOCATION_TASK_NAME,
@@ -235,6 +241,7 @@ function defineTaskIfNeeded() {
       const flushResult = await driverTrackingQueue.flush({
         ackStaleMs: cadence.ackStaleMs,
         networkProfile: cadence.networkProfile,
+        forceHttpFallback: true,
       });
       emitDriverTelemetry("tracking.background.task.flush", {
         source: "driver.services.backgroundLocationTask",

@@ -8,12 +8,26 @@ describe("shouldIgnoreNotification", () => {
     companyId: 9,
   };
 
+  const companyContext = {
+    contextType: "company",
+    userId: 11,
+    companyId: 9,
+  };
+
   it("ignores invalid payload for driver context", () => {
     const result = shouldIgnoreNotification(null, driverContext);
     expect(result).toEqual({ ignore: true, reason: "invalid_payload" });
   });
 
-  it("ignores recipient role mismatch", () => {
+  it("ignores when no active context (fail-closed)", () => {
+    const result = shouldIgnoreNotification(
+      { recipient_role: "driver" },
+      { contextType: null, userId: 42, companyId: 9 }
+    );
+    expect(result).toEqual({ ignore: true, reason: "no_active_context" });
+  });
+
+  it("ignores recipient role mismatch for driver", () => {
     const result = shouldIgnoreNotification({ recipient_role: "company" }, driverContext);
     expect(result).toEqual({ ignore: true, reason: "recipient_role_mismatch" });
   });
@@ -42,12 +56,24 @@ describe("shouldIgnoreNotification", () => {
     expect(result).toEqual({ ignore: false });
   });
 
-  it("does not force filtering for non-driver context", () => {
-    const result = shouldIgnoreNotification(null, {
-      contextType: "company",
-      userId: null,
-      companyId: 9,
-    });
+  it("ignores driver-targeted payload in company context", () => {
+    const result = shouldIgnoreNotification({ recipient_role: "driver", company_id: 9 }, companyContext);
+    expect(result).toEqual({ ignore: true, reason: "recipient_role_mismatch" });
+  });
+
+  it("ignores company mismatch in company context", () => {
+    const result = shouldIgnoreNotification(
+      { recipient_role: "company", company_id: "11" },
+      companyContext
+    );
+    expect(result).toEqual({ ignore: true, reason: "company_mismatch" });
+  });
+
+  it("keeps valid company payload", () => {
+    const result = shouldIgnoreNotification(
+      { recipient_role: "company", company_id: 9 },
+      companyContext
+    );
     expect(result).toEqual({ ignore: false });
   });
 });

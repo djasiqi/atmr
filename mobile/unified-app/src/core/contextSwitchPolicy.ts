@@ -31,7 +31,7 @@ export function isTransportContextSwitchContext(
 }
 
 function isCompanyAccountRole(role: string | null | undefined): boolean {
-  if (role == null || String(role).trim() === "") return true;
+  if (role == null || String(role).trim() === "") return false;
   return String(role).toUpperCase() === "COMPANY";
 }
 
@@ -46,9 +46,22 @@ export function isCompanyDriverSwitchAllowedForRequest(
   bootstrapUserRole: string | null | undefined
 ): boolean {
   if (!isCompanyDriverCrossContextSwitch(fromCtx, toCtx)) return true;
-  if (!isCompanyAccountRole(bootstrapUserRole)) return false;
   if (!isContextSwitchClientSupported()) return false;
-  return isTransportContextSwitchContext(fromCtx) && isTransportContextSwitchContext(toCtx);
+  if (!isTransportContextSwitchContext(fromCtx) || !isTransportContextSwitchContext(toCtx)) {
+    return false;
+  }
+  return isCompanyAccountRole(bootstrapUserRole);
+}
+
+/** Afficher le bouton de bascule dans le menu radial (même règles que l’API). */
+export function shouldShowCompanyDriverContextSwitch(
+  fromCtx: AuthContext | null,
+  toCtx: AuthContext | null,
+  bootstrapUserRole: string | null | undefined
+): boolean {
+  if (!fromCtx || !toCtx) return false;
+  if (!isCompanyDriverCrossContextSwitch(fromCtx, toCtx)) return false;
+  return isCompanyDriverSwitchAllowedForRequest(fromCtx, toCtx, bootstrapUserRole);
 }
 
 export function companyDriverSwitchBlockedReason(

@@ -78,6 +78,7 @@ import {
   clearPublicPreRequestDraft,
   loadPublicPreRequestDraft,
 } from "../../../../src/core/public/preRequestDraft";
+import { FONT_SIZE } from "../../../../src/design/responsive/typographyTokens";
 
 /** Aligné `BookingCreateSchema.hospital_service` (colonne SQL 100). */
 const MAX_HOSPITAL_SERVICE_LEN = 100;
@@ -295,14 +296,14 @@ const styles = StyleSheet.create({
     }),
   },
   title: {
-    fontSize: 20,
+    fontSize: FONT_SIZE.px20,
     fontWeight: "700",
     color: "#0f172a",
     letterSpacing: -0.35,
     lineHeight: 26,
   },
   lead: {
-    fontSize: 13,
+    fontSize: FONT_SIZE.px13,
     lineHeight: 18,
     color: "#64748b",
     fontWeight: "500",
@@ -335,7 +336,7 @@ const styles = StyleSheet.create({
     marginVertical: 2,
   },
   cardEyebrow: {
-    fontSize: 11,
+    fontSize: FONT_SIZE.px11,
     fontWeight: "600",
     color: "#64748b",
     textTransform: "uppercase",
@@ -343,13 +344,13 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   sectionLabel: {
-    fontSize: 15,
+    fontSize: FONT_SIZE.px15,
     fontWeight: "600",
     color: "#0f172a",
     letterSpacing: -0.12,
   },
   sectionHint: {
-    fontSize: 13,
+    fontSize: FONT_SIZE.px13,
     color: "#64748b",
     lineHeight: 19,
     marginTop: 2,
@@ -383,7 +384,7 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   swapBtnText: {
-    fontSize: 13,
+    fontSize: FONT_SIZE.px13,
     fontWeight: "600",
     color: "#475569",
   },
@@ -420,7 +421,7 @@ const styles = StyleSheet.create({
   locationBtnText: {
     color: ACCENT,
     fontWeight: "600",
-    fontSize: 13,
+    fontSize: FONT_SIZE.px13,
   },
   input: {
     borderWidth: 1,
@@ -428,7 +429,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    fontSize: 16,
+    fontSize: FONT_SIZE.px16,
     color: "#0f172a",
     backgroundColor: "#fafbfc",
     minHeight: 48,
@@ -448,7 +449,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   addressFieldStatusText: {
-    fontSize: 12,
+    fontSize: FONT_SIZE.px12,
     lineHeight: 17,
   },
   addressFieldStatusTextOk: {
@@ -486,7 +487,7 @@ const styles = StyleSheet.create({
   },
   suggestionText: {
     color: "#0f172a",
-    fontSize: 14,
+    fontSize: FONT_SIZE.px14,
     fontWeight: "500",
     lineHeight: 20,
   },
@@ -496,7 +497,7 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   suggestionSub: {
-    fontSize: 11,
+    fontSize: FONT_SIZE.px11,
     fontWeight: "500",
     color: "#94a3b8",
   },
@@ -509,11 +510,11 @@ const styles = StyleSheet.create({
   instructionsCharCount: {
     color: "#64748b",
     textAlign: "right",
-    fontSize: 13,
+    fontSize: FONT_SIZE.px13,
     fontWeight: "500",
   },
   instructionsNoteFooterHint: {
-    fontSize: 12,
+    fontSize: FONT_SIZE.px12,
     color: "#94a3b8",
     lineHeight: 17,
     marginTop: 2,
@@ -536,7 +537,7 @@ const styles = StyleSheet.create({
     marginVertical: 14,
   },
   planningMicroHint: {
-    fontSize: 12,
+    fontSize: FONT_SIZE.px12,
     color: "#94a3b8",
     lineHeight: 17,
     marginTop: -2,
@@ -563,7 +564,7 @@ const styles = StyleSheet.create({
   segmentText: {
     textAlign: "center",
     fontWeight: "600",
-    fontSize: 14,
+    fontSize: FONT_SIZE.px14,
     color: "#475569",
   },
   segmentTextActive: {
@@ -601,7 +602,7 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   dateTileLabel: {
-    fontSize: 10,
+    fontSize: FONT_SIZE.px10,
     fontWeight: "700",
     color: "#94a3b8",
     textTransform: "uppercase",
@@ -609,7 +610,7 @@ const styles = StyleSheet.create({
     marginBottom: 3,
   },
   dateTileValue: {
-    fontSize: 15,
+    fontSize: FONT_SIZE.px15,
     fontWeight: "600",
     color: "#0f172a",
   },
@@ -634,7 +635,7 @@ const styles = StyleSheet.create({
   },
   recurrenceToggleText: {
     fontWeight: "600",
-    fontSize: 13,
+    fontSize: FONT_SIZE.px13,
     color: "#334155",
   },
   recurrenceToggleTextOn: {
@@ -659,7 +660,7 @@ const styles = StyleSheet.create({
   },
   recurrenceTypeText: {
     textAlign: "center",
-    fontSize: 11,
+    fontSize: FONT_SIZE.px11,
     fontWeight: "600",
     color: "#475569",
   },
@@ -678,7 +679,7 @@ const styles = StyleSheet.create({
   dayChipText: {
     textAlign: "center",
     fontWeight: "700",
-    fontSize: 13,
+    fontSize: FONT_SIZE.px13,
     color: "#475569",
   },
   primaryButton: {
@@ -707,7 +708,7 @@ const styles = StyleSheet.create({
   primaryButtonText: {
     color: "#fff",
     fontWeight: "600",
-    fontSize: 15,
+    fontSize: FONT_SIZE.px15,
     letterSpacing: 0.2,
   },
   cancelButton: {
@@ -718,7 +719,7 @@ const styles = StyleSheet.create({
   cancelButtonText: {
     color: "#64748b",
     fontWeight: "500",
-    fontSize: 14,
+    fontSize: FONT_SIZE.px14,
   },
   errorBanner: {
     backgroundColor: "#fef2f2",
@@ -730,7 +731,7 @@ const styles = StyleSheet.create({
   },
   errorText: {
     color: "#991b1b",
-    fontSize: 14,
+    fontSize: FONT_SIZE.px14,
     lineHeight: 20,
   },
   warnBanner: {
@@ -743,7 +744,7 @@ const styles = StyleSheet.create({
   },
   warnText: {
     color: "#92400e",
-    fontSize: 14,
+    fontSize: FONT_SIZE.px14,
     lineHeight: 20,
   },
   indicativeCard: {
@@ -769,23 +770,23 @@ const styles = StyleSheet.create({
   },
   indicativeTitle: {
     fontWeight: "600",
-    fontSize: 11,
+    fontSize: FONT_SIZE.px11,
     color: "#64748b",
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
   indicativeAmount: {
-    fontSize: 20,
+    fontSize: FONT_SIZE.px20,
     fontWeight: "700",
     color: "#0f172a",
     letterSpacing: -0.3,
   },
   indicativeMeta: {
-    fontSize: 13,
+    fontSize: FONT_SIZE.px13,
     color: "#475569",
   },
   indicativeFoot: {
-    fontSize: 12,
+    fontSize: FONT_SIZE.px12,
     color: "#64748b",
     lineHeight: 17,
   },
@@ -797,13 +798,13 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   stepPill: {
-    fontSize: 12,
+    fontSize: FONT_SIZE.px12,
     fontWeight: "600",
     color: "#64748b",
     letterSpacing: 0.2,
   },
   summaryLegal: {
-    fontSize: 14,
+    fontSize: FONT_SIZE.px14,
     lineHeight: 20,
     color: "#0f172a",
     fontWeight: "600",
@@ -817,7 +818,7 @@ const styles = StyleSheet.create({
   },
   summaryLabel: {
     width: 100,
-    fontSize: 12,
+    fontSize: FONT_SIZE.px12,
     fontWeight: "600",
     color: "#94a3b8",
     textTransform: "uppercase",
@@ -826,7 +827,7 @@ const styles = StyleSheet.create({
   },
   summaryValue: {
     flex: 1,
-    fontSize: 15,
+    fontSize: FONT_SIZE.px15,
     color: "#0f172a",
     lineHeight: 22,
     fontWeight: "500",
@@ -838,7 +839,7 @@ const styles = StyleSheet.create({
   linkButtonText: {
     color: ACCENT,
     fontWeight: "600",
-    fontSize: 15,
+    fontSize: FONT_SIZE.px15,
   },
   pickupActionRow: {
     flexDirection: "row",
@@ -846,12 +847,12 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   recurrenceCompactLabel: {
-    fontSize: 13,
+    fontSize: FONT_SIZE.px13,
     fontWeight: "600",
     color: "#475569",
   },
   recurrenceCompactHint: {
-    fontSize: 11,
+    fontSize: FONT_SIZE.px11,
     color: "#94a3b8",
     lineHeight: 15,
   },
@@ -866,7 +867,7 @@ const styles = StyleSheet.create({
     borderColor: "rgba(10, 126, 164, 0.15)",
   },
   carrierSubLabel: {
-    fontSize: 12,
+    fontSize: FONT_SIZE.px12,
     fontWeight: "600",
     color: "#64748b",
     marginTop: 4,
@@ -3280,7 +3281,7 @@ export default function ClientBookingCreateScreen(
                   <Text
                     style={[
                       styles.recurrenceToggleText,
-                      { fontSize: 12 },
+                      { fontSize: FONT_SIZE.px12 },
                       isRecurring && styles.recurrenceToggleTextOn,
                     ]}
                   >

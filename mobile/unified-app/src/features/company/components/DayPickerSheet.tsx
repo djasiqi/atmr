@@ -3,6 +3,7 @@ import dayjs from "dayjs";
 import "dayjs/locale/fr";
 import { EnterpriseBottomSheet } from "./EnterpriseBottomSheet";
 import { E } from "../theme/enterpriseOpsTheme";
+import { FONT_SIZE } from "../../../design/responsive/typographyTokens";
 
 dayjs.locale("fr");
 
@@ -104,14 +105,14 @@ const s = StyleSheet.create({
   },
   /** Réf. « Aujourd'hui » / « Demain » — 13px, accent marque. */
   badge: {
-    fontSize: 13,
+    fontSize: FONT_SIZE.px13,
     lineHeight: 16,
     fontWeight: "600" as const,
     color: BADGE_COLOR,
   },
   /** Réf. ligne principale — 16px / 20 lh (vw87k0 / 1djweci). */
   datePrimary: {
-    fontSize: 16,
+    fontSize: FONT_SIZE.px16,
     lineHeight: 20,
     fontWeight: "600" as const,
     color: E.TEXT,

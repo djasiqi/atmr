@@ -6,6 +6,7 @@ import { createShadow } from "../../../styles/shadowStyles";
 import { E } from "../../company/theme/enterpriseOpsTheme";
 import type { DriverMissionStatus, DriverTransitionStatus } from "../types";
 import { getDriverStatusUx } from "../statusDictionary";
+import { FONT_SIZE } from "../../../design/responsive/typographyTokens";
 
 type Props = {
   mode: "availability" | "mission";
@@ -132,7 +133,7 @@ const styles = StyleSheet.create({
   },
   title: {
     color: C.text,
-    fontSize: 16,
+    fontSize: FONT_SIZE.px16,
     fontWeight: "700",
     flex: 1,
     minWidth: 0,

@@ -2,6 +2,9 @@ import React, { useEffect, Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom';
 import CompanyEnterpriseLayout from './components/layout/CompanyEnterpriseLayout';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { wrapInvalidateQueries } from './utils/companyDashboardPerfInstrumentation';
+import { installCompanyDashboardApiTiming } from './utils/companyDashboardApiTiming';
+import { startCompanyDashboardWebVitals } from './utils/companyDashboardWebPerf';
 // ✅ P1-1: apiClient n'est plus utilisé directement (cookies httpOnly gèrent l'authentification)
 
 import DefaultLayout from './store/layouts/DefaultLayout';
@@ -68,30 +71,27 @@ function LegacySignupRedirect() {
   return <Navigate to={`/login?${params.toString()}`} replace />;
 }
 
+/** Routes entreprise qui rendent réellement une carte Google (pas factures/planning/dispatch). */
+const COMPANY_MAP_ROUTE_PATTERNS = [
+  /^\/(?:demo\/)?dashboard\/company\/[^/]+\/?$/,
+  /^\/(?:demo\/)?dashboard\/company\/[^/]+\/(reservations|drivers|settings)(?:\/|$)/,
+];
+
 const MAP_ROUTE_PATTERNS = [
   /^\/dashboard\/client\/.+/,
-  /^\/dashboard\/company\/[^/]+\/.+/,
-  /^\/demo\/dashboard\/company\/[^/]+\/.+/,
   /^\/driver\/map(?:\/|$)/,
+  ...COMPANY_MAP_ROUTE_PATTERNS,
 ];
 
 function GoogleMapsRouteScope({ children }) {
   const location = useLocation();
-  // Tout le périmètre « dashboard entreprise » (index + sous-routes) a besoin du contexte
-  // Google Maps pour DriverLiveMap, cartes paramètres, etc. Avant : seul l’index avec
-  // ?live_map=1 ou les sous-chemins du type .../company/:id/xxx étaient couverts ;
-  // l’index seul n’avait pas de GoogleMapsProvider → isLoaded restait false (défaut
-  // du context) et la carte restait en « Chargement de la carte... » au retour sur la page.
-  const isCompanyEnterpriseArea = /^\/(?:demo\/)?dashboard\/company\/[^/]+/.test(
-    location.pathname
-  );
-  const needsGoogleMaps =
-    isCompanyEnterpriseArea ||
-    MAP_ROUTE_PATTERNS.some((pattern) => pattern.test(location.pathname));
+  const pathname = location.pathname;
+  const needsGoogleMaps = MAP_ROUTE_PATTERNS.some((pattern) => pattern.test(pathname));
+  const isCompanyMapRoute = COMPANY_MAP_ROUTE_PATTERNS.some((pattern) => pattern.test(pathname));
   if (!needsGoogleMaps) {
     return children;
   }
-  return <GoogleMapsProvider>{children}</GoogleMapsProvider>;
+  return <GoogleMapsProvider autoLoad={!isCompanyMapRoute}>{children}</GoogleMapsProvider>;
 }
 const AdminSettings = lazy(() => import('./pages/admin/Settings/AdminSettings'));
 const AdminDemoRequests = lazy(() => import('./pages/admin/DemoRequests/AdminDemoRequests'));
@@ -121,18 +121,12 @@ const DriverSchedulePage = lazy(() => import('./pages/driver/DriverSchedulePage'
 const DriverMapPage = lazy(() => import('./pages/driver/Map/DriverMapPage'));
 const DriverHistoryPage = lazy(() => import('./pages/driver/History/DriverHistoryPage'));
 const DriverSettingsPage = lazy(() => import('./pages/driver/Settings/DriverSettingsPage'));
-const CompanyDashboard = lazy(() =>
-  import(/* webpackPrefetch: true */ './pages/company/Dashboard/CompanyDashboard')
-);
+const CompanyDashboard = lazy(() => import('./pages/company/Dashboard/CompanyDashboard'));
 const CompanyReservations = lazy(() => import('./pages/company/Reservations/CompanyReservations'));
 const CompanyDriver = lazy(() => import('./pages/company/Driver/CompanyDriver'));
 const CompanyDriverPlanning = lazy(() => import('./pages/company/Driver/CompanyDriverPlanning'));
-const CompanyInvoices = lazy(() =>
-  import(/* webpackPrefetch: true */ './pages/company/Invoices/CompanyInvoices')
-);
-const ClientInvoices = lazy(() =>
-  import(/* webpackPrefetch: true */ './pages/company/Invoices/ClientInvoices')
-);
+const CompanyInvoices = lazy(() => import('./pages/company/Invoices/CompanyInvoices'));
+const ClientInvoices = lazy(() => import('./pages/company/Invoices/ClientInvoices'));
 const CompanyPlanning = lazy(() => import('./pages/company/Planning/CompanyPlanning'));
 const CompanySettings = lazy(() => import('./pages/company/Settings/CompanySettings'));
 const CompanyClients = lazy(() => import('./pages/company/Clients/CompanyClients'));
@@ -180,6 +174,11 @@ const InstitutionSettings = lazy(() => import('./pages/institution/Settings/Inst
 // Query Client (déclaré hors composant pour éviter recréation)
 // Exporté pour permettre le nettoyage du cache au logout
 export const queryClient = new QueryClient();
+wrapInvalidateQueries(queryClient);
+if (typeof window !== 'undefined') {
+  installCompanyDashboardApiTiming();
+  startCompanyDashboardWebVitals();
+}
 
 // Keep-alive user activity
 let lastActivity = Date.now();

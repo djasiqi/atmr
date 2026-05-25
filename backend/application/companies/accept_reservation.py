@@ -43,6 +43,16 @@ class AcceptReservationUseCase:
     def execute(
         self, booking: _BookingLike, *, company_id: int
     ) -> AcceptReservationResult:
+        from models import Company
+
+        company = Company.query.get(company_id)
+        if not company or not company.is_approved:
+            return AcceptReservationResult(
+                ok=False,
+                error={"error": "Entreprise non approuvée"},
+                status_code=403,
+            )
+
         status_str = _status_value(getattr(booking, "status", None))
         if status_str.upper() != "PENDING":
             return AcceptReservationResult(

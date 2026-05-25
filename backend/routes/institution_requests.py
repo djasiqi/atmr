@@ -314,7 +314,7 @@ class TransportRequestList(Resource):
 
         Auth: JWT (institution_admin/requester) ou API Key (scope requests:write)
 
-        Idempotence: Si external_reference existe déjà, retourne 409.
+        Idempotence: Si external_reference est fournie et existe déjà, retourne 409.
         """
         try:
             institution_id, user_id = get_institution_context()
@@ -327,18 +327,20 @@ class TransportRequestList(Resource):
             except ValidationError as err:
                 return {"error": "Données invalides", "details": err.messages}, 400
 
-            # Vérifier unicité external_reference
-            ext_ref = validated["external_reference"]
-            existing = TransportRequest.find_by_external_reference(
-                institution_id, ext_ref
-            )
-            if existing:
-                return {
-                    "error": f"Demande avec external_reference '{ext_ref}' existe déjà",
-                    "existing_request_id": existing.id,
-                    "existing_request_public_id": existing.public_id,
-                    "existing_request_status": existing.status,
-                }, 409
+            # Vérifier unicité external_reference (si fournie)
+            ext_ref_raw = validated.get("external_reference")
+            ext_ref = ext_ref_raw.strip() if isinstance(ext_ref_raw, str) else None
+            if ext_ref:
+                existing = TransportRequest.find_by_external_reference(
+                    institution_id, ext_ref
+                )
+                if existing:
+                    return {
+                        "error": f"Demande avec external_reference '{ext_ref}' existe déjà",
+                        "existing_request_id": existing.id,
+                        "existing_request_public_id": existing.public_id,
+                        "existing_request_status": existing.status,
+                    }, 409
 
             # Résoudre patient
             try:
@@ -501,7 +503,18 @@ class TransportRequestDetail(Resource):
                     ):
                         return {"error": "Demande non trouvée"}, 404
 
-            return transport_req.serialize, 200
+            from flask import g
+            from flask_jwt_extended import get_jwt
+            from services.institutions.booking_change_service import (
+                mask_financial_fields,
+            )
+
+            role = None
+            if getattr(g, "auth_method", None) == "api_key":
+                role = InstitutionRole.ADMIN.value
+            else:
+                role = get_jwt().get("institution_role")
+            return mask_financial_fields(transport_req.serialize, role), 200
 
         except Exception as e:
             sentry_sdk.capture_exception(e)

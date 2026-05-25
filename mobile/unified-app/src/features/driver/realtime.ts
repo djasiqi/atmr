@@ -4,6 +4,7 @@ import { driverQueryKeys } from "./queryKeys";
 import { DriverMission, DriverSocketEvent } from "./types";
 import { missionRuntimeManager } from "./services/missionRuntimeManager";
 import { emitDriverTelemetry } from "../../core/observability/driverTelemetry";
+import { emitPerfKpi } from "../../core/observability/perfKpi";
 import { scheduleDriverMissionSync } from "./services/missionSyncOrchestrator";
 import { mapDriverMission } from "./domain/missionMappers";
 import { resolveMissionReassignConvergence } from "./services/missionReassignConvergence";
@@ -198,6 +199,15 @@ export function applyDriverSocketEvent(
     );
     missionRuntimeManager.registerSnapshot(canonicalEvent.mission_id, canonicalEvent.updated_at ?? null);
     emitMissionFreshnessMetric("driver.realtime.socket", contextId, "socket", canonicalEvent.updated_at);
+    if (process.env.EXPO_PUBLIC_BOOKING_SOCKET_FIELD_LOG === "1") {
+      const payload = canonicalEvent.payload ?? {};
+      emitPerfKpi("perf.mission_received_to_ui", {
+        source: "driver.realtime.socket",
+        context_id: contextId,
+        mission_id: canonicalEvent.mission_id,
+        payload_keys: Object.keys(payload).slice(0, 40).join(","),
+      });
+    }
     return missions;
   });
 }

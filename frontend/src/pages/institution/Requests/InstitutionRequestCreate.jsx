@@ -164,7 +164,7 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
       return [];
     }
   }, [formatPatientOption, defaultPatientOptions]);
-  const [sendAfterCreate, setSendAfterCreate] = useState(false);
+  const [sendAfterCreate, setSendAfterCreate] = useState(true);
   const [patientPrefilled, setPatientPrefilled] = useState(false);
 
   // Selected patient object
@@ -279,6 +279,9 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
         if (accessParts.length > 0 && !prev.floor_elevator_info) {
           updates.floor_elevator_info = accessParts.join(' — ');
         }
+      }
+      if (!prev.external_reference && patient.external_reference) {
+        updates.external_reference = patient.external_reference;
       }
 
       if (Object.keys(updates).length > 0) {
@@ -422,10 +425,11 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
 
   // ── Build payload for backend ──
   const buildPayload = () => {
+    // Convention métier retour : sans return_hour → 00:00 = « heure retour à définir » (sentinelle)
+    const returnHourPart = formData.return_hour?.trim() || '00:00';
     const payload = {
       mission_type: formData.mission_type,
       patient_id: formData.patient_id ? Number(formData.patient_id) : null,
-      external_reference: formData.external_reference || `REQ-${Date.now()}`,
       scheduled_time: new Date(formData.scheduled_time).toISOString(),
       scheduled_time_type: formData.scheduled_time_type || 'departure',
       pickup_location: formData.pickup_location || (formData.pickup_type === 'institution' ? institutionAddress : ''),
@@ -433,11 +437,14 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
       is_round_trip: formData.round_trip,
       is_urgent: formData.is_urgent || false,
       return_time: formData.round_trip && formData.return_date
-        ? new Date(`${formData.return_date}T${formData.return_hour || '00:00'}`).toISOString()
+        ? new Date(`${formData.return_date}T${returnHourPart}`).toISOString()
         : null,
       billing_intent: formData.billing_intent,
       notes: formData.notes || null,
     };
+    if (formData.external_reference?.trim()) {
+      payload.external_reference = formData.external_reference.trim();
+    }
 
     // Logistics pickup
     if (formData.pickup_floor) payload.pickup_floor = formData.pickup_floor;
@@ -508,6 +515,10 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    if (createMutation.isPending || sendMutation.isPending) {
+      return;
+    }
 
     // Validation
     if (!formData.scheduled_time) {
@@ -834,6 +845,20 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
                     dropoff_location: prev.pickup_location,
                     pickup_type: prev.dropoff_type,
                     dropoff_type: prev.pickup_type,
+                    pickup_entry_point: prev.dropoff_entry_point,
+                    dropoff_entry_point: prev.pickup_entry_point,
+                    pickup_instructions: prev.dropoff_instructions,
+                    dropoff_instructions: prev.pickup_instructions,
+                    pickup_floor: prev.dropoff_floor,
+                    dropoff_floor: prev.pickup_floor,
+                    pickup_door_code: prev.dropoff_door_code,
+                    dropoff_door_code: prev.pickup_door_code,
+                    pickup_establishment: prev.dropoff_establishment,
+                    dropoff_establishment: prev.pickup_establishment,
+                    pickup_service: prev.dropoff_service,
+                    dropoff_service: prev.pickup_service,
+                    pickup_doctor: prev.dropoff_doctor,
+                    dropoff_doctor: prev.pickup_doctor,
                   }));
                 }}>↕</button>
             </div>
@@ -897,6 +922,9 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
           {formData.round_trip && (
             <div className={styles.formGroup}>
               <label className={styles.formLabel}>Retour</label>
+              <p className={styles.billingHint} style={{ marginBottom: 6 }}>
+                L&apos;heure de retour est facultative. Sans heure, le retour sera enregistré comme « à définir ».
+              </p>
               <div style={{ display: 'flex', gap: 8 }}>
                 <InlineDatePicker
                   value={formData.return_date}

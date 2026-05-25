@@ -57,12 +57,10 @@ export function mergeDriverLiveUpdate(driver, update, fromLiveState) {
 
   const latitude = pickLatitude(update, driver);
   const longitude = pickLongitude(update, driver);
-  const locationStatus = fromLiveState
-    ? update.location_status ?? driver.location_status ?? null
-    : driver.location_status ?? update.location_status ?? null;
-  const presenceStatus = fromLiveState
-    ? update.presence_status ?? driver.presence_status ?? null
-    : driver.presence_status ?? update.presence_status ?? null;
+  // `driver_location_update` peut porter un statut de fraîcheur plus récent que le snapshot
+  // HTTP initial (souvent "offline"). Prioriser systématiquement la valeur socket si fournie.
+  const locationStatus = update.location_status ?? driver.location_status ?? null;
+  const presenceStatus = update.presence_status ?? driver.presence_status ?? null;
   const status = fromLiveState ? update.status ?? driver.status : driver.status ?? update.status;
 
   return {

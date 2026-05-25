@@ -2,6 +2,7 @@ export type SharedChatMessage = {
   id: string | number;
   content: string;
   type?: "text" | "image" | "pdf" | "system" | "audio";
+  senderId?: string | number | null;
   senderRole?: string;
   senderName?: string | null;
   timestamp: string;

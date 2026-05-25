@@ -1,7 +1,12 @@
 export type RealtimeSurface = "driver" | "company" | "client" | "institution";
 
 export const CONTEXT_REALTIME_CHANNELS: Record<RealtimeSurface, string[]> = {
-  driver: ["driver_mission_event"],
+  driver: [
+    "driver_mission_event",
+    "team_chat_message",
+    "team_chat_typing",
+    "conversation_message",
+  ],
   company: [
     "company_dispatch_update",
     "new_booking",
@@ -10,6 +15,8 @@ export const CONTEXT_REALTIME_CHANNELS: Record<RealtimeSurface, string[]> = {
     "booking_message",
     "booking_message_sent",
     "team_chat_message",
+    "conversation_message",
+    "urgent_alert",
     "driver_location_update",
     "driver_live_state_update",
     "optimizer_status_changed",

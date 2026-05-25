@@ -88,6 +88,54 @@
   margin: 0;
 }
 
+.allocationModeCard {
+  background: linear-gradient(180deg, var(--bg-muted) 0%, var(--bg-surface) 100%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  margin-bottom: 20px;
+}
+
+.allocationModeTitle {
+  margin: 0 0 6px 0;
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.allocationModeDescription {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
+
+.allocationModeBadges {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.allocationBadge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background-color: var(--bg-surface);
+  color: var(--text-primary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1;
+  padding: 6px 10px;
+}
+
+.allocationBadgePrimary {
+  border-color: color-mix(in srgb, var(--brand) 28%, var(--border) 72%);
+  background-color: var(--brand-light);
+  color: var(--brand);
+}
+
 .emptyState {
   text-align: center;
   padding: 40px;

@@ -7,6 +7,7 @@ import {
   shouldAcceptRealtimeEvent,
 } from '../../utils/realtimeEventGuard';
 import { lirieKeys } from '../../queryKeys/lirie';
+import { recordGpsEvent } from '../../utils/companyDashboardPerfInstrumentation';
 
 /** Si le snapshot TanStack est encore frais, pas d’invalidate complet (réduit pics en flapping WS). */
 const RECONNECT_MIN_FULL_REFETCH_MS = 60000;
@@ -78,10 +79,12 @@ export function useCompanyDriversLiveOverlay(companyId) {
 
     const onLiveState = (payload) => {
       lastSocketEventAt = Date.now();
+      recordGpsEvent();
       applyDelta(payload, true);
     };
     const onLocationUpdate = (payload) => {
       lastSocketEventAt = Date.now();
+      recordGpsEvent();
       applyDelta(payload, false);
     };
     /** Reconnect : invalider seulement si pas de données récentes (overlay socket a déjà mis à jour le cache). */

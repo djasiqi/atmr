@@ -13,7 +13,10 @@ import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
-from application.institutions.institution_settings_service import calculate_timeout
+from application.institutions.institution_settings_service import (
+    calculate_timeout,
+    get_or_create_settings,
+)
 from ext import db
 from models import (
     Company,
@@ -149,6 +152,14 @@ class SendTransportRequestUseCase:
                     )
 
                 # Sinon (DRAFT avec offres pending = état incohérent)
+                from services.metrics.institution_metrics import (
+                    track_transport_request_duplicate_blocked,
+                )
+
+                track_transport_request_duplicate_blocked(
+                    transport_request_id=transport_request.id,
+                    institution_id=input_data.institution_id,
+                )
                 return SendTransportRequestResult(
                     success=False,
                     transport_request_id=input_data.transport_request_id,
@@ -156,7 +167,8 @@ class SendTransportRequestUseCase:
                     status_code=409,
                 )
 
-            # 5. Calculer le timeout (depuis InstitutionSettings)
+            # 5. Charger les settings institution + calculer le timeout
+            settings = get_or_create_settings(input_data.institution_id)
             timeout_minutes = calculate_timeout(
                 input_data.institution_id,
                 transport_request.scheduled_time,
@@ -164,12 +176,23 @@ class SendTransportRequestUseCase:
             now = datetime.now(UTC)
             expires_at = now + timedelta(minutes=timeout_minutes)
 
-            # 6. Déterminer le mode (séquentiel ou broadcast)
+            # 6. Déterminer le mode (configurable par institution)
             preferences = InstitutionTransportPreference.get_ordered_preferences(
                 input_data.institution_id
             )
+            configured_mode = str(
+                getattr(settings, "offer_dispatch_mode", OfferMode.SEQUENTIAL.value)
+                or OfferMode.SEQUENTIAL.value
+            ).lower()
 
-            if preferences:
+            if configured_mode == OfferMode.BROADCAST.value:
+                mode = OfferMode.BROADCAST.value
+                offers_created = self._create_broadcast_offers(
+                    transport_request=transport_request,
+                    expires_at=None,
+                    excluded_company_ids=[],
+                )
+            elif preferences:
                 # Mode séquentiel: envoyer uniquement à la première préférence
                 # Si institution démo: ignorer les préférences vers entreprises réelles
                 from services.demo.soft_delete_guard import (
@@ -195,7 +218,7 @@ class SendTransportRequestUseCase:
                 else:
                     offers_created = 0
             else:
-                # Mode broadcast: envoyer à toutes les entreprises éligibles
+                # Pas de préférence: fallback broadcast
                 mode = OfferMode.BROADCAST.value
                 offers_created = self._create_broadcast_offers(
                     transport_request=transport_request,

@@ -30,6 +30,7 @@ import {
 import { E } from "../../../src/features/company/theme/enterpriseOpsTheme";
 import { getEnterpriseStatusColors } from "../../../src/features/company/theme/enterpriseStatusColors";
 import { createShadow } from "../../../src/styles/shadowStyles";
+import { FONT_SIZE } from "../../../src/design/responsive/typographyTokens";
 dayjs.locale("fr");
 
 function resolveMissionIdFromEvent(payload: {
@@ -713,8 +714,8 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   headerCenter: { flex: 1, minWidth: 0 },
-  headerTitle: { color: E.TEXT, fontSize: 16, fontWeight: "700" as const },
-  headerSub: { color: E.TEXT_MUTED, fontSize: 12, marginTop: 2 },
+  headerTitle: { color: E.TEXT, fontSize: FONT_SIZE.px16, fontWeight: "700" as const },
+  headerSub: { color: E.TEXT_MUTED, fontSize: FONT_SIZE.px12, marginTop: 2 },
   headerStatusBadge: {
     flexDirection: "row",
     alignItems: "center",
@@ -766,7 +767,7 @@ const styles = StyleSheet.create({
   routeText: {
     flex: 1,
     color: E.TEXT_SEC,
-    fontSize: 13,
+    fontSize: FONT_SIZE.px13,
     lineHeight: 19,
   },
   routeDivider: {
@@ -784,8 +785,8 @@ const styles = StyleSheet.create({
     borderBottomColor: E.BORDER,
   },
   infoRowLast: { marginBottom: 0, paddingBottom: 0, borderBottomWidth: 0 },
-  infoLabel: { color: E.TEXT_SEC, fontSize: 13, flex: 1, paddingRight: 8 },
-  infoValue: { color: E.TEXT, fontSize: 13, flex: 1, textAlign: "right", fontWeight: "500" as const },
+  infoLabel: { color: E.TEXT_SEC, fontSize: FONT_SIZE.px13, flex: 1, paddingRight: 8 },
+  infoValue: { color: E.TEXT, fontSize: FONT_SIZE.px13, flex: 1, textAlign: "right", fontWeight: "500" as const },
   mutationErr: { marginHorizontal: 16, marginTop: 8, fontWeight: "600" },
   backCta: {
     flexDirection: "row",
@@ -800,9 +801,9 @@ const styles = StyleSheet.create({
     ...backBtnShadow,
   },
   backIcon: { marginRight: 8 },
-  backCtaText: { color: "#FFFFFF", fontSize: 15, fontWeight: "600" as const },
+  backCtaText: { color: "#FFFFFF", fontSize: FONT_SIZE.px15, fontWeight: "600" as const },
   emptyState: { alignItems: "center", padding: 32 },
-  emptyText: { color: E.TEXT_SEC, fontSize: 15, textAlign: "center" },
+  emptyText: { color: E.TEXT_SEC, fontSize: FONT_SIZE.px15, textAlign: "center" },
   retryPill: {
     marginTop: 16,
     paddingHorizontal: 20,

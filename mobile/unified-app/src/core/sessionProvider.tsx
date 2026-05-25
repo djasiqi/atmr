@@ -1,5 +1,12 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { clearAllContextCache, clearContextScopedCache } from "./cache/contextCache";
+import {
+  applyContextCachePolicyOnSwitch,
+  clearAllContextCache,
+  restoreContextCache,
+} from "./cache/contextCache";
+import { prefetchContextTarget } from "./cache/prefetchContextTarget";
+import { emitContextSwitchKpi } from "./observability/perfKpi";
+import { recordContextSwitchPhase } from "./observability/perfInstrumentation";
 import {
   AuthContext,
   BootstrapResponse,
@@ -23,11 +30,15 @@ import {
 import { realtimeManager } from "./realtime/realtimeManager";
 import { contextRealtimeRouter } from "./realtime/contextRealtimeRouter";
 import { isFeatureEnabled, setRuntimeFeatureFlagOverrides } from "./featureFlags/registry";
+import { QUERY_STALE_TIME_MS } from "./queryStaleTimes";
+import { getDriverMissions } from "../features/driver/api/driverHttp";
+import { driverQueryKeys } from "../features/driver/queryKeys";
 import { emitDriverTelemetry } from "./observability/driverTelemetry";
 import { appendSessionJournalEvent, clearSessionJournal, hydrateSessionJournal } from "./observability/sessionJournal";
 import { purgeDriverProfileCache } from "../features/driver/services/driverProfileCache";
 import {
   companyDriverSwitchBlockedMessage,
+  isCompanyDriverCrossContextSwitch,
   isCompanyDriverSwitchAllowedForRequest,
 } from "./contextSwitchPolicy";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -261,6 +272,9 @@ export function SessionProvider({ children }: PropsWithChildren) {
       setBootstrap(data);
       setRuntimeFeatureFlagOverrides(data.feature_flags ?? {});
       setActiveContext(resolved);
+      // Évite une fenêtre de course: certains appels peuvent partir avant useLayoutEffect.
+      // On aligne l'en-tête API immédiatement dès que le contexte bootstrap est connu.
+      setActiveContextIdForApi(resolved?.context_id ?? null);
       contextRealtimeRouter.setActiveContext(resolved?.context_type ?? null);
       setStatus("ready");
       void appendSessionJournalEvent(
@@ -300,6 +314,8 @@ export function SessionProvider({ children }: PropsWithChildren) {
 
   const changeContext = ReactRuntime.useCallback(async (targetContextId: string) => {
     const previousContextId = activeContext?.context_id ?? null;
+    const previousContext = activeContext;
+    const previousBootstrap = bootstrap;
     setError(null);
     const toCtx = bootstrap?.available_contexts.find(
       (c: AuthContext) => c.context_id === targetContextId
@@ -312,26 +328,56 @@ export function SessionProvider({ children }: PropsWithChildren) {
         bootstrap?.user?.role
       )
     ) {
-      setError(
+      const message =
         companyDriverSwitchBlockedMessage(
           activeContext,
           toCtx,
           bootstrap?.user?.role
-        ) ?? "Changement de contexte refuse."
-      );
-      return;
+        ) ?? "Changement de contexte refuse.";
+      setError(message);
+      throw new Error(message);
     }
+
+    const rollbackOptimistic = () => {
+      setActiveContext(previousContext);
+      setActiveContextIdForApi(previousContext?.context_id ?? null);
+      contextRealtimeRouter.setActiveContext(previousContext?.context_type ?? null);
+      setBootstrap(previousBootstrap);
+      setRuntimeFeatureFlagOverrides(previousBootstrap?.feature_flags ?? {});
+    };
+
+    const crossWorkspaceSwitch = isCompanyDriverCrossContextSwitch(
+      previousContext,
+      toCtx ?? null
+    );
+
+    const applyOptimisticContext = (ctx: AuthContext) => {
+      assertContextRuntimeInvariants(ctx);
+      setActiveContext(ctx);
+      setActiveContextIdForApi(ctx.context_id);
+      contextRealtimeRouter.setActiveContext(ctx.context_type);
+      if (previousBootstrap) {
+        setBootstrap({
+          ...previousBootstrap,
+          active_context_id: ctx.context_id,
+        });
+      }
+    };
+
+    const switchStartedAt = Date.now();
+    if (toCtx) {
+      applyOptimisticContext(toCtx);
+      prefetchContextTarget(queryClient, toCtx);
+    }
+
     try {
       const response = await switchContext(targetContextId);
-      if (previousContextId) {
-        clearContextScopedCache(queryClient, previousContextId);
-      }
       const nextAvailableContexts: AuthContext[] =
         response.available_contexts ?? bootstrap?.available_contexts ?? [];
       const nextContext =
         nextAvailableContexts.find(
           (ctx: AuthContext) => ctx.context_id === response.active_context_id
-        ) ?? null;
+        ) ?? toCtx ?? null;
       assertContextRuntimeInvariants(nextContext);
       setBootstrap((prev: BootstrapResponse | null) =>
         prev
@@ -344,19 +390,81 @@ export function SessionProvider({ children }: PropsWithChildren) {
           : prev
       );
       setRuntimeFeatureFlagOverrides(response.feature_flags ?? {});
-      setActiveContext(nextContext);
-      setActiveContextIdForApi(nextContext?.context_id ?? null);
+      if (nextContext) {
+        setActiveContext(nextContext);
+        setActiveContextIdForApi(nextContext.context_id);
+        contextRealtimeRouter.setActiveContext(nextContext.context_type);
+      }
       void appendSessionJournalEvent("session.context.switch", {
         previous_context_id: previousContextId,
         next_context_id: nextContext?.context_id ?? null,
       }, nextContext?.context_id ?? null);
-      contextRealtimeRouter.setActiveContext(nextContext?.context_type ?? null);
-      realtimeManager.onContextSwitch(response.active_context_id, {
-        enableSocket: isFeatureEnabled("realtime_socket_enabled"),
-      });
+
+      const runPostSwitchSideEffects = () => {
+        if (previousContextId) {
+          applyContextCachePolicyOnSwitch(queryClient, previousContextId);
+        }
+        const cacheHit =
+          nextContext?.context_id != null
+            ? restoreContextCache(queryClient, nextContext.context_id)
+            : false;
+        const socketPhaseStarted = Date.now();
+        realtimeManager.onContextSwitch(response.active_context_id, {
+          enableSocket: isFeatureEnabled("realtime_socket_enabled"),
+        });
+        const socketMs = Date.now() - socketPhaseStarted;
+        recordContextSwitchPhase("socket", socketMs, { cache_hit: cacheHit });
+
+        const prefetchPhaseStarted = Date.now();
+        if (
+          nextContext?.context_id &&
+          !cacheHit &&
+          nextContext.context_type === "driver"
+        ) {
+          void queryClient
+            .prefetchQuery({
+              queryKey: driverQueryKeys.missions(nextContext.context_id),
+              queryFn: getDriverMissions,
+              staleTime: QUERY_STALE_TIME_MS.default,
+            })
+            .catch(() => undefined);
+        }
+        const prefetchMs = Date.now() - prefetchPhaseStarted;
+        recordContextSwitchPhase("prefetch", prefetchMs, { cache_hit: cacheHit });
+
+        const totalMs = Date.now() - switchStartedAt;
+        recordContextSwitchPhase("total", totalMs, {
+          cache_hit: cacheHit,
+          previous_context_id: previousContextId,
+          next_context_id: nextContext?.context_id ?? null,
+        });
+        emitContextSwitchKpi({
+          source: "sessionProvider.changeContext",
+          duration_ms: totalMs,
+          cache_hit: cacheHit,
+          previous_context_id: previousContextId,
+          next_context_id: nextContext?.context_id ?? null,
+          context_switch_socket_ms: socketMs,
+          context_switch_prefetch_ms: prefetchMs,
+        });
+        const renderPhaseStarted = Date.now();
+        requestAnimationFrame(() => {
+          recordContextSwitchPhase("render", Date.now() - renderPhaseStarted, {
+            cache_hit: cacheHit,
+          });
+        });
+      };
+
+      if (crossWorkspaceSwitch) {
+        queueMicrotask(runPostSwitchSideEffects);
+      } else {
+        runPostSwitchSideEffects();
+      }
     } catch (e) {
+      rollbackOptimistic();
       const message = toUiErrorMessage(e, "Context switch failed");
       setError(message);
+      throw new Error(message);
     }
   }, [activeContext, queryClient, bootstrap]);
 

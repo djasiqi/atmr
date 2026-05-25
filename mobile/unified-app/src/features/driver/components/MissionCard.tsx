@@ -1,11 +1,11 @@
 import { Platform, Pressable, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { AppText } from "../../../design/ui/AppText";
-import { semanticDanger } from "../../../design/responsive/colors";
 import { createShadow } from "../../../styles/shadowStyles";
 import { E } from "../../company/theme/enterpriseOpsTheme";
 import { resolveDriverStatusForUx, getDriverStatusUx } from "../statusDictionary";
 import type { DriverMission, DriverMissionStatus, DriverTransitionStatus } from "../types";
+import { getClientBirthDateDisplay } from "../domain/missionDisplay";
 import {
   getCallablePhoneFromMission,
   openNavigation,
@@ -18,6 +18,7 @@ import {
   type MissionHintLike,
 } from "../domain/missionHints";
 import { useSession } from "../../../core/sessionProvider";
+import { FONT_SIZE } from "../../../design/responsive/typographyTokens";
 
 type Props = {
   mission: DriverMission;
@@ -173,26 +174,6 @@ function getClientCivilityLabel(mission: DriverMission): string | null {
   if (g === "FEMME" || g === "FEMALE" || g === "F") return "MADAME";
   if (g === "HOMME" || g === "MALE" || g === "M") return "MONSIEUR";
   return null;
-}
-
-/**
- * Date de naissance client → `dd/MM/yyyy` (parité `operations-app/MissionCard.tsx:307`).
- * Accepte ISO `YYYY-MM-DD` ainsi que tout format que `Date` sait parser. Retourne
- * `null` si vide / invalide / placeholder backend.
- */
-function getClientBirthDateDisplay(mission: DriverMission): string | null {
-  const nest = mission.client as { birth_date?: unknown } | null | undefined;
-  const raw = nest?.birth_date;
-  if (raw == null) return null;
-  const s = String(raw).trim();
-  if (!s) return null;
-  const d = new Date(s);
-  if (!Number.isFinite(d.getTime())) return null;
-  return d.toLocaleDateString("fr-FR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
 }
 
 function transitionLabel(target: DriverTransitionStatus): string {
@@ -446,7 +427,7 @@ export function MissionCard({
                 accessibilityRole="button"
                 accessibilityLabel="Appeler le client"
               >
-                <Ionicons name="call-outline" size={14} color="#FFFFFF" />
+                <Ionicons name="call-outline" size={13} color="#FFFFFF" />
                 <AppText variant="caption" style={styles.actionPillLabel}>
                   Appeler
                 </AppText>
@@ -467,7 +448,7 @@ export function MissionCard({
                 accessibilityRole="button"
                 accessibilityLabel="Ouvrir la navigation vers l’étape en cours"
               >
-                <Ionicons name="navigate-outline" size={14} color="#FFFFFF" />
+                <Ionicons name="navigate-outline" size={13} color="#FFFFFF" />
                 <AppText variant="caption" style={styles.actionPillLabel}>
                   GPS
                 </AppText>
@@ -488,7 +469,7 @@ export function MissionCard({
                 accessibilityRole="button"
                 accessibilityLabel={transitionLabel(forwardTransition)}
               >
-                <Ionicons name={transitionIcon(forwardTransition)} size={14} color="#FFFFFF" />
+                <Ionicons name={transitionIcon(forwardTransition)} size={13} color="#FFFFFF" />
                 <AppText variant="caption" style={styles.actionPillLabel}>
                   {transitionLabel(forwardTransition)}
                 </AppText>
@@ -511,7 +492,7 @@ export function MissionCard({
                 accessibilityRole="button"
                 accessibilityLabel="Libérer la mission (sera réassignée)"
               >
-                <Ionicons name="refresh-outline" size={14} color="#FFFFFF" />
+                <Ionicons name="refresh-outline" size={13} color="#FFFFFF" />
                 <AppText variant="caption" style={styles.actionPillLabel}>
                   Libérer
                 </AppText>
@@ -529,7 +510,7 @@ export function MissionCard({
                 accessibilityRole="button"
                 accessibilityLabel="Annuler la mission avec justification"
               >
-                <Ionicons name="close-circle-outline" size={14} color="#FFFFFF" />
+                <Ionicons name="close-circle-outline" size={13} color="#FFFFFF" />
                 <AppText variant="caption" style={styles.actionPillLabel}>
                   Annuler
                 </AppText>
@@ -542,6 +523,7 @@ export function MissionCard({
               style={({ pressed }) => [
                 styles.actionPill,
                 styles.actionPillRelease,
+                styles.actionPillSingleRow,
                 styles.actionPillSelfEnd,
                 pending && styles.disabledOpacity,
                 pressed && styles.pressed,
@@ -549,7 +531,7 @@ export function MissionCard({
               accessibilityRole="button"
               accessibilityLabel="Libérer la mission (sera réassignée)"
             >
-              <Ionicons name="refresh-outline" size={14} color="#FFFFFF" />
+              <Ionicons name="refresh-outline" size={13} color="#FFFFFF" />
               <AppText variant="caption" style={styles.actionPillLabel}>
                 Libérer
               </AppText>
@@ -561,6 +543,7 @@ export function MissionCard({
               style={({ pressed }) => [
                 styles.actionPill,
                 styles.actionPillDanger,
+                styles.actionPillSingleRow,
                 styles.actionPillSelfEnd,
                 pending && styles.disabledOpacity,
                 pressed && styles.pressed,
@@ -568,7 +551,7 @@ export function MissionCard({
               accessibilityRole="button"
               accessibilityLabel="Annuler la mission avec justification"
             >
-              <Ionicons name="close-circle-outline" size={14} color="#FFFFFF" />
+              <Ionicons name="close-circle-outline" size={13} color="#FFFFFF" />
               <AppText variant="caption" style={styles.actionPillLabel}>
                 Annuler
               </AppText>
@@ -629,7 +612,7 @@ const styles = StyleSheet.create({
   },
   statusBadgeText: {
     color: C.brand,
-    fontSize: 11,
+    fontSize: FONT_SIZE.px11,
     fontWeight: "700",
     letterSpacing: 0.2,
     lineHeight: 14,
@@ -645,13 +628,13 @@ const styles = StyleSheet.create({
   },
   title: {
     color: C.text,
-    fontSize: 16,
+    fontSize: FONT_SIZE.px16,
     fontWeight: "700",
     lineHeight: 22,
   },
   missionIdRef: {
     color: C.textMuted,
-    fontSize: 12,
+    fontSize: FONT_SIZE.px12,
     fontWeight: "600",
     lineHeight: 16,
     marginTop: 2,
@@ -662,7 +645,7 @@ const styles = StyleSheet.create({
    */
   civilityLabel: {
     color: C.textMuted,
-    fontSize: 11,
+    fontSize: FONT_SIZE.px11,
     fontWeight: "700",
     letterSpacing: 0.6,
     lineHeight: 14,
@@ -672,7 +655,7 @@ const styles = StyleSheet.create({
   /** Date de naissance client — sans icône, 13px secondaire, gap col 2. */
   birthDateText: {
     color: C.textSub,
-    fontSize: 13,
+    fontSize: FONT_SIZE.px13,
     fontWeight: "500",
     lineHeight: 16,
     marginTop: 2,
@@ -706,7 +689,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     letterSpacing: 0.5,
     textTransform: "uppercase",
-    fontSize: 12,
+    fontSize: FONT_SIZE.px12,
     lineHeight: 16,
   },
   /** Valeur statut 13px comme le snapshot web. */
@@ -715,7 +698,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     flex: 1,
     minWidth: "45%",
-    fontSize: 13,
+    fontSize: FONT_SIZE.px13,
     lineHeight: 16,
     ...(Platform.OS === "android" ? { includeFontPadding: false } : {}),
   },
@@ -724,14 +707,14 @@ const styles = StyleSheet.create({
   },
   addressLine: {
     color: C.textSub,
-    fontSize: 13,
+    fontSize: FONT_SIZE.px13,
     lineHeight: 18,
     fontWeight: "500",
   },
   addressKey: {
     color: C.textMuted,
     fontWeight: "700",
-    fontSize: 13,
+    fontSize: FONT_SIZE.px13,
     lineHeight: 16,
   },
   /**
@@ -749,7 +732,7 @@ const styles = StyleSheet.create({
   },
   hintsHeader: {
     color: C.brand,
-    fontSize: 11,
+    fontSize: FONT_SIZE.px11,
     fontWeight: "700",
     letterSpacing: 0.4,
     lineHeight: 14,
@@ -772,7 +755,7 @@ const styles = StyleSheet.create({
   },
   hintText: {
     color: C.textSub,
-    fontSize: 13,
+    fontSize: FONT_SIZE.px13,
     lineHeight: 18,
     fontWeight: "500",
     flex: 1,
@@ -781,7 +764,7 @@ const styles = StyleSheet.create({
   hintKey: {
     color: C.text,
     fontWeight: "700",
-    fontSize: 13,
+    fontSize: FONT_SIZE.px13,
     lineHeight: 18,
   },
   /**
@@ -802,16 +785,16 @@ const styles = StyleSheet.create({
     gap: 6,
     alignItems: "stretch",
   },
-  /** Pills resserrées (32 px de hauteur, padding 6/10) tout en restant tactiles. */
+  /** Pills compactes premium : lisibles, tactiles, mais plus sobres. */
   actionPill: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 5,
-    minHeight: 32,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 10,
+    gap: 6,
+    minHeight: 34,
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+    borderRadius: 12,
   },
   /**
    * Étirement uniforme des 3 pills primaires (Appeler / GPS / Forward) :
@@ -826,9 +809,9 @@ const styles = StyleSheet.create({
     minWidth: 80,
   },
   actionPillBrand: {
-    backgroundColor: C.brand,
+    backgroundColor: "#0A6A61",
     borderWidth: 1,
-    borderColor: C.brand,
+    borderColor: "#095B53",
   },
   /**
    * Rangée secondaire compacte — Libérer + Annuler étirés sur **toute la largeur**
@@ -855,25 +838,31 @@ const styles = StyleSheet.create({
    * comme `r-alignSelf-173mn98` d'un snapshot antérieur. Largeur naturelle.
    */
   actionPillSelfEnd: {
-    alignSelf: "flex-end",
+    alignSelf: "stretch",
+  },
+  /** Bouton seul: occupe toute la largeur pour éviter un CTA "perdu" dans un coin. */
+  actionPillSingleRow: {
+    width: "100%",
+    justifyContent: "center",
   },
   /** Bouton « Libérer » : variante slate-500 (cf. `C.releaseBg`). */
   actionPillRelease: {
-    backgroundColor: C.releaseBg,
+    backgroundColor: "#5C6B7D",
     borderWidth: 1,
-    borderColor: C.releaseBg,
+    borderColor: "#4B5868",
   },
   actionPillDanger: {
-    backgroundColor: semanticDanger.ctaBg,
+    backgroundColor: "#B42318",
     borderWidth: 1,
-    borderColor: semanticDanger.ctaBg,
+    borderColor: "#9A1F16",
   },
   actionPillLabel: {
     color: "#FFFFFF",
-    fontWeight: "600",
-    fontSize: 12,
+    fontWeight: "700",
+    fontSize: FONT_SIZE.px11_5,
     lineHeight: 14,
+    letterSpacing: 0.15,
   },
   disabledOpacity: { opacity: 0.55 },
-  pressed: { opacity: 0.88 },
+  pressed: { opacity: 0.9, transform: [{ scale: 0.985 }] },
 });

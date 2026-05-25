@@ -36,20 +36,14 @@ import { normalizeCompanyEventType } from "../../../src/core/realtime/eventContr
 import { isFeatureEnabled } from "../../../src/core/featureFlags/registry";
 import { RideCreateModal } from "../../../src/features/company/components/rides/RideCreateModal";
 import { RideEditModal } from "../../../src/features/company/components/rides/RideEditModal";
-import {
-  EnterpriseActionChip,
-  EnterpriseFooterActionRow,
-  EnterpriseRoundIconAction,
-} from "../../../src/features/company/components/EnterpriseActionChip";
 import { EnterpriseHeader } from "../../../src/features/company/components/EnterpriseHeader";
 import { DayPickerSheet } from "../../../src/features/company/components/DayPickerSheet";
 import {
   DispatchModeSheet,
   type DispatchModeValue,
 } from "../../../src/features/company/components/DispatchModeSheet";
-import { DispatchRideListCard } from "../../../src/features/company/components/DispatchRideListCard";
+import { CompanyRidesMissionFlatList } from "../../../src/features/company/components/rides/CompanyRidesMissionFlatList";
 import { E } from "../../../src/features/company/theme/enterpriseOpsTheme";
-import { isDispatchCompleted, isDispatchCancelled } from "../../../src/features/company/utils/companyDispatchStatus";
 import { filterMissionsByDispatchListChip } from "../../../src/features/company/utils/rideListStatusFilter";
 import {
   flattenCompanyDispatchDelays,
@@ -72,6 +66,7 @@ import {
 } from "../../../src/features/company/api/companyApi";
 import type { CompanyDispatchMission } from "../../../src/features/company/api/contracts";
 import { createShadow } from "../../../src/styles/shadowStyles";
+import { FONT_SIZE } from "../../../src/design/responsive/typographyTokens";
 
 const searchBarShadowOps = createShadow({
   shadowColor: "#000000",
@@ -209,7 +204,7 @@ const rideStyles = StyleSheet.create({
     color: E.TEXT,
     paddingVertical: Platform.OS === "ios" ? 10 : 8,
     paddingHorizontal: 8,
-    fontSize: 15,
+    fontSize: FONT_SIZE.px15,
     outlineStyle: Platform.OS === "web" ? ("none" as const) : undefined,
   },
   /** Carte actions dispatch — même langage que recherche / filtres. */
@@ -276,7 +271,7 @@ const rideStyles = StyleSheet.create({
     borderColor: "rgba(0, 121, 107, 0.28)",
   },
   tabCount: {
-    fontSize: 11,
+    fontSize: FONT_SIZE.px11,
     fontWeight: "600" as const,
     color: E.TEXT_SEC,
     fontVariant: ["tabular-nums"] as const,
@@ -295,7 +290,7 @@ const rideStyles = StyleSheet.create({
   },
   exceptionsRouteHint: {
     color: E.TEXT_SEC,
-    fontSize: 12,
+    fontSize: FONT_SIZE.px12,
     lineHeight: 17,
     marginBottom: 0,
     padding: 14,
@@ -313,7 +308,7 @@ const rideStyles = StyleSheet.create({
     paddingVertical: 48,
     gap: 10,
   },
-  loadingText: { color: E.TEXT_MUTED, fontSize: 13 },
+  loadingText: { color: E.TEXT_MUTED, fontSize: FONT_SIZE.px13 },
   emptyState: {
     alignItems: "center",
     paddingVertical: 56,
@@ -331,11 +326,11 @@ const rideStyles = StyleSheet.create({
   emptyTitle: {
     color: E.TEXT,
     fontWeight: "600",
-    fontSize: 15,
+    fontSize: FONT_SIZE.px15,
   },
   emptySubtitle: {
     color: E.TEXT_MUTED,
-    fontSize: 13,
+    fontSize: FONT_SIZE.px13,
     textAlign: "center",
     marginTop: 6,
     lineHeight: 19,
@@ -369,14 +364,14 @@ const rideStyles = StyleSheet.create({
   },
   opsAlertTitle: {
     color: E.TEXT,
-    fontSize: 14,
+    fontSize: FONT_SIZE.px14,
     fontWeight: "600",
     letterSpacing: 0.1,
     lineHeight: 19,
   },
   opsAlertMessage: {
     color: E.TEXT_SEC,
-    fontSize: 13,
+    fontSize: FONT_SIZE.px13,
     fontWeight: "500",
     lineHeight: 18,
   },
@@ -393,7 +388,7 @@ const rideStyles = StyleSheet.create({
   opsAlertRetryDisabled: { opacity: 0.55 },
   opsAlertRetryLabel: {
     color: E.BRAND_DARK,
-    fontSize: 13,
+    fontSize: FONT_SIZE.px13,
     fontWeight: "700",
     letterSpacing: 0.2,
   },
@@ -460,7 +455,10 @@ export default function CompanyRidesScreen() {
   const allMissionsRefetch = allMissionsForCountsQuery.refetch;
   const { invalidate } = useCompanyRealtimeInvalidation();
   const realtimeStatus = useCompanyRealtimeStatus();
-  const lastOpenedTelemetryAtRef = useRef(0);
+  const lastOpenedTelemetryKeyRef = useRef<string | null>(null);
+  const lastFocusRefreshAtRef = useRef(0);
+  const FOCUS_REFRESH_THROTTLE_MS = 3000;
+  const STALE_DATA_MS = 60_000;
 
   const createParam = firstSearchParam(params.create);
   useEffect(() => {
@@ -473,6 +471,25 @@ export default function CompanyRidesScreen() {
   const refresh = useCallback(async () => {
     await Promise.all([missionsRefetch(), allMissionsRefetch(), delaysRefetch()]);
   }, [missionsRefetch, allMissionsRefetch, delaysRefetch]);
+
+  const refreshStaleOnly = useCallback(async () => {
+    const now = Date.now();
+    const tasks: Promise<unknown>[] = [];
+    if (now - missionsQuery.dataUpdatedAt > STALE_DATA_MS) tasks.push(missionsRefetch());
+    if (now - allMissionsForCountsQuery.dataUpdatedAt > STALE_DATA_MS) {
+      tasks.push(allMissionsRefetch());
+    }
+    if (now - dispatchDelaysQuery.dataUpdatedAt > STALE_DATA_MS) tasks.push(delaysRefetch());
+    if (tasks.length === 0) return;
+    await Promise.all(tasks);
+  }, [
+    allMissionsForCountsQuery.dataUpdatedAt,
+    allMissionsRefetch,
+    delaysRefetch,
+    dispatchDelaysQuery.dataUpdatedAt,
+    missionsQuery.dataUpdatedAt,
+    missionsRefetch,
+  ]);
 
   const clearRouteFilterOverride = useCallback(() => {
     if (filterNorm === "exceptions" || filterNorm === "delayed" || filterNorm === "urgent") {
@@ -495,9 +512,9 @@ export default function CompanyRidesScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      const now = Date.now();
-      if (now - lastOpenedTelemetryAtRef.current >= 1500) {
-        lastOpenedTelemetryAtRef.current = now;
+      const focusKey = String(activeContext?.context_id ?? "none");
+      if (lastOpenedTelemetryKeyRef.current !== focusKey) {
+        lastOpenedTelemetryKeyRef.current = focusKey;
         emitCompanyDispatchTelemetry(
           "company.dispatch.opened",
           {
@@ -508,43 +525,51 @@ export default function CompanyRidesScreen() {
           { allowWhenDisabled: true }
         );
       }
-      void refresh();
-    }, [activeContext?.context_id, refresh])
+      const now = Date.now();
+      if (now - lastFocusRefreshAtRef.current < FOCUS_REFRESH_THROTTLE_MS) return;
+      lastFocusRefreshAtRef.current = now;
+      void refreshStaleOnly();
+      return () => {
+        lastOpenedTelemetryKeyRef.current = null;
+      };
+    }, [activeContext?.context_id, refreshStaleOnly])
   );
 
-  useEffect(() => {
-    if (!activeContext || activeContext.context_type !== "company") return;
-    return contextRealtimeRouter.subscribe(activeContext.context_id, (event) => {
-      if (!event || typeof event !== "object") return;
-      const payload = event as {
-        event_type?: string;
-        booking_id?: unknown;
-        mission_id?: unknown;
-        id?: unknown;
-      };
-      const missionId = resolveMissionIdFromEvent(payload);
-      const eventType = normalizeCompanyEventType(payload.event_type);
-      if (eventType === "booking_updated") {
-        invalidate("booking_updated", missionId);
-      } else if (eventType === "booking_cancelled") {
-        invalidate("booking_cancelled", missionId);
-      } else if (eventType === "company_dispatch_update") {
-        void refresh();
-      } else if (eventType === "delay_invalidated") {
-        emitCompanyDispatchTelemetry(
-          "company.dispatch.delay_invalidated",
-          {
-            source: "company.rides.realtime",
-            context_id: activeContext.context_id,
-            mission_id: missionId ?? null,
-            context_type: "company",
-          },
-          { allowWhenDisabled: true }
-        );
-        invalidate("delay_invalidated", missionId);
-      }
-    });
-  }, [activeContext, invalidate, refresh]);
+  useFocusEffect(
+    useCallback(() => {
+      if (!activeContext || activeContext.context_type !== "company") return undefined;
+      return contextRealtimeRouter.subscribe(activeContext.context_id, (event) => {
+        if (!event || typeof event !== "object") return;
+        const payload = event as {
+          event_type?: string;
+          booking_id?: unknown;
+          mission_id?: unknown;
+          id?: unknown;
+        };
+        const missionId = resolveMissionIdFromEvent(payload);
+        const eventType = normalizeCompanyEventType(payload.event_type);
+        if (eventType === "booking_updated") {
+          invalidate("booking_updated", missionId);
+        } else if (eventType === "booking_cancelled") {
+          invalidate("booking_cancelled", missionId);
+        } else if (eventType === "company_dispatch_update") {
+          void refresh();
+        } else if (eventType === "delay_invalidated") {
+          emitCompanyDispatchTelemetry(
+            "company.dispatch.delay_invalidated",
+            {
+              source: "company.rides.realtime",
+              context_id: activeContext.context_id,
+              mission_id: missionId ?? null,
+              context_type: "company",
+            },
+            { allowWhenDisabled: true }
+          );
+          invalidate("delay_invalidated", missionId);
+        }
+      });
+    }, [activeContext, invalidate, refresh])
+  );
 
   const missions = useMemo(() => missionsQuery.data?.missions ?? [], [missionsQuery.data?.missions]);
   const delayPickupByBookingId = useMemo(() => {
@@ -867,6 +892,10 @@ export default function CompanyRidesScreen() {
     }, [loadDispatchMode])
   );
 
+  const handleToggleMissionExpand = useCallback((missionId: number) => {
+    setExpandedMissionId((prev) => (prev === missionId ? null : missionId));
+  }, []);
+
   const goRideDetails = useCallback(
     (mission: CompanyDispatchMission) => {
       emitCompanyDispatchTelemetry(
@@ -891,8 +920,9 @@ export default function CompanyRidesScreen() {
   return (
     <PermissionGuard permission="company:rides:read">
       <Screen
-        scroll
+        scroll={false}
         backgroundColor={E.BG}
+        pageTransition={false}
         withHorizontalPadding
         stickyHeader={
           <EnterpriseHeader
@@ -906,14 +936,32 @@ export default function CompanyRidesScreen() {
         }
         extraScrollBottomPadding={100}
         contentContainerStyle={rideStyles.page}
-        refreshControl={
-          <RefreshControl
-            refreshing={missionsQuery.isFetching && !missionsQuery.isLoading}
-            onRefresh={() => void refresh()}
-            tintColor={E.BRAND}
-          />
-        }
       >
+        <CompanyRidesMissionFlatList
+          missions={filteredMissions}
+          isLoading={missionsQuery.isLoading}
+          expandedMissionId={expandedMissionId}
+          missionActionPendingId={missionActionPendingId}
+          contextId={contextId}
+          dispatchDelaysFetched={dispatchDelaysQuery.isFetched}
+          delayPickupByBookingId={delayPickupByBookingId}
+          pickupEtaByBookingId={pickupEtaByBookingId}
+          canAssignRide={canAssignRide}
+          canEditRide={canEditRide}
+          canTransferRide={canTransferRide}
+          canUrgentRide={canUrgentRide}
+          canCancelRide={canCancelRide}
+          canScheduleRide={canScheduleRide}
+          contentContainerStyle={[rideStyles.page, rideStyles.listTop]}
+          refreshControl={
+            <RefreshControl
+              refreshing={missionsQuery.isFetching && !missionsQuery.isLoading}
+              onRefresh={() => void refresh()}
+              tintColor={E.BRAND}
+            />
+          }
+          listHeaderComponent={
+            <>
         {showRealtimeFluxAlert ? (
           <View style={rideStyles.opsAlert} accessibilityRole="alert">
             <View style={rideStyles.opsAlertIconWell}>
@@ -1052,144 +1100,18 @@ export default function CompanyRidesScreen() {
             })}
           </ScrollView>
         </View>
-
-        {missionsQuery.isLoading ? (
-          <View style={rideStyles.loadingBox} accessibilityRole="progressbar" accessibilityLabel="Chargement">
-            <ActivityIndicator color={E.BRAND} />
-            <AppText variant="bodyMuted" style={rideStyles.loadingText}>
-              Chargement…
-            </AppText>
-          </View>
-        ) : filteredMissions.length === 0 ? (
-          <View style={rideStyles.emptyState} accessibilityRole="text">
-            <View style={rideStyles.emptyIcon} accessibilityElementsHidden>
-              <Ionicons name="car-outline" size={28} color={E.BRAND} />
-            </View>
-            <AppText variant="body" style={rideStyles.emptyTitle}>
-              Aucune course
-            </AppText>
-            <AppText variant="caption" style={rideStyles.emptySubtitle}>
-              Aucune course pour ce filtre ou cette date. Utilisez le bouton + pour en créer une.
-            </AppText>
-          </View>
-        ) : (
-          <View style={rideStyles.listTop}>
-          {filteredMissions.map((mission) => {
-            const isExpanded = expandedMissionId === mission.mission_id;
-            const thisBusy = missionActionPendingId === mission.mission_id;
-            const completed = isDispatchCompleted(mission);
-            const cancelled = isDispatchCancelled(mission);
-            const showUrgent = isPickupSentinel(mission.scheduled_at);
-            const unassigned = mission.driver_id == null;
-            /** Sous l’en-tête : seulement Urgence (heure TBD) et Assigner (non assigné). « Détails » = dans le bloc déplié uniquement. */
-            const timeSentinelAction =
-              !completed && !cancelled && showUrgent ? (
-                <EnterpriseRoundIconAction
-                  icon="flash"
-                  variant="urgent"
-                  accessibilityLabel="Urgence"
-                  onPress={() => void markUrgentNow(mission.mission_id)}
-                  disabled={!contextId || thisBusy || !canUrgentRide}
-                  showSpinner={thisBusy}
-                  spinnerColor="#FFFFFF"
-                />
-              ) : undefined;
-            return (
-              <View key={mission.mission_id}>
-                <DispatchRideListCard
-                  mission={mission}
-                  bookingDelayPickupMinutes={(() => {
-                    const fromAssignment =
-                      mission.assignment_pickup_delay_minutes != null &&
-                      mission.assignment_pickup_delay_minutes > 0
-                        ? Math.round(mission.assignment_pickup_delay_minutes)
-                        : null;
-                    if (!dispatchDelaysQuery.isFetched) {
-                      return fromAssignment ?? undefined;
-                    }
-                    const fromDelays =
-                      delayPickupByBookingId.get(mission.mission_id) ??
-                      delayPickupByBookingId.get(Number(mission.mission_id)) ??
-                      null;
-                    const etaPositive = typeof fromDelays === "number" && fromDelays > 0 ? fromDelays : null;
-                    return etaPositive ?? (fromAssignment ?? null);
-                  })()}
-                  bookingPickupEtaIso={
-                    dispatchDelaysQuery.isFetched
-                      ? pickupEtaByBookingId.get(mission.mission_id) ??
-                        pickupEtaByBookingId.get(Number(mission.mission_id)) ??
-                        null
-                      : null
-                  }
-                  expanded={isExpanded}
-                  onToggleExpand={() =>
-                    setExpandedMissionId((prev) => (prev === mission.mission_id ? null : mission.mission_id))
-                  }
-                  timeSentinelAction={timeSentinelAction}
-                  onUnassignedPress={
-                    !completed && !cancelled && unassigned ? () => void openAssignModal(mission.mission_id) : undefined
-                  }
-                  unassignedPressDisabled={!contextId || !canAssignRide}
-                  footer={
-                    isExpanded ? (
-                      <EnterpriseFooterActionRow>
-                        <EnterpriseActionChip
-                          icon="open-outline"
-                          label="Détails"
-                          tone="details"
-                          onPress={() => goRideDetails(mission)}
-                        />
-                        {!completed && !cancelled ? (
-                          <>
-                            {mission.driver_id != null ? (
-                              <EnterpriseActionChip
-                                icon="person-add-outline"
-                                label="Réassigner"
-                                onPress={() => void openAssignModal(mission.mission_id)}
-                                disabled={!contextId || !canAssignRide}
-                              />
-                            ) : null}
-                            <EnterpriseActionChip
-                              icon="create-outline"
-                              label="Éditer"
-                              onPress={() => setEditMissionId(mission.mission_id)}
-                              disabled={!contextId || !canEditRide}
-                            />
-                            <EnterpriseActionChip
-                              icon="time-outline"
-                              label={thisBusy ? "Planif…" : "Planifier"}
-                              onPress={() => void scheduleRideNow(mission.mission_id)}
-                              disabled={!contextId || thisBusy || !canScheduleRide}
-                              showSpinner={thisBusy}
-                              spinnerColor={E.BRAND}
-                            />
-                            <EnterpriseActionChip
-                              icon="swap-horizontal-outline"
-                              label="Transférer"
-                              tone="transfer"
-                              onPress={() => void openTransferModal(mission.mission_id)}
-                              disabled={!contextId || !canTransferRide}
-                            />
-                            <EnterpriseActionChip
-                              icon="close-circle-outline"
-                              label={thisBusy ? "Annulation…" : "Annuler"}
-                              tone="danger"
-                              onPress={() => void cancelRideNow(mission.mission_id)}
-                              disabled={!contextId || thisBusy || !canCancelRide}
-                            />
-                          </>
-                        ) : null}
-                      </EnterpriseFooterActionRow>
-                    ) : null
-                  }
-                />
-              </View>
-            );
-          })}
-          </View>
-        )}
-
-        {missionsQuery.error ? (
+            </>
+          }
+          onToggleExpand={handleToggleMissionExpand}
+          onOpenAssign={openAssignModal}
+          onGoDetails={goRideDetails}
+          onEdit={setEditMissionId}
+          onSchedule={scheduleRideNow}
+          onTransfer={openTransferModal}
+          onCancel={cancelRideNow}
+          onMarkUrgent={markUrgentNow}
+          listFooterComponent={
+            missionsQuery.error ? (
           <View style={rideStyles.opsAlert} accessibilityRole="alert">
             <View style={rideStyles.opsAlertIconWell}>
               <Ionicons name="alert-circle" size={20} color="#B91C1C" />
@@ -1203,7 +1125,10 @@ export default function CompanyRidesScreen() {
               </Text>
             </View>
           </View>
-        ) : null}
+            ) : null
+          }
+        />
+
       </Screen>
       <Modal
         visible={assignModalMissionId != null}

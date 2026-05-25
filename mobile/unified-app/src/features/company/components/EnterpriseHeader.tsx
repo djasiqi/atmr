@@ -5,8 +5,11 @@ import { Ionicons } from "@expo/vector-icons";
 import dayjs from "dayjs";
 import "dayjs/locale/fr";
 import { E } from "../theme/enterpriseOpsTheme";
+import { realtimeStatusA11yLabel } from "../utils/companyRealtimeFluxStatus";
+import { CompanyInboxButton } from "./CompanyInboxButton";
 import { createShadow } from "../../../styles/shadowStyles";
 import { useAppViewport } from "../../../design/responsive/useAppViewport";
+import { FONT_SIZE } from "../../../design/responsive/typographyTokens";
 
 dayjs.locale("fr");
 
@@ -68,6 +71,8 @@ export type EnterpriseHeaderProps = {
   metaDetail?: "full" | "networkOnly";
   /** Icône cloche / autre, à droite (ex. boîte entreprise). */
   trailing?: ReactNode;
+  /** Pill statut temps réel (ex. Hors ligne / Connecté) rendu dans la rangée header. */
+  liveStatusPill?: ReactNode;
   /** Titre court optionnel (ex. « Dispatch ») — masqué si absent. */
   title?: string;
   /** Jour précédent / suivant ; sans callback, les chevrons sont désactivés (sauf si `onOpenDatePicker` masque les chevrons). */
@@ -81,6 +86,8 @@ export type EnterpriseHeaderProps = {
    * Le fond de la bande (`E.CARD`) remplit cette zone ; le contenu reste en dessous.
    */
   topSafeAreaPx?: number;
+  /** `floating` : bandeau glass au-dessus de la carte cockpit (sans fond pleine largeur). */
+  variant?: "sticky" | "floating";
 };
 
 function formatMode(mode: string | null): string {
@@ -89,26 +96,6 @@ function formatMode(mode: string | null): string {
   if (mode === "fully_auto") return "Plein auto";
   if (mode == null || mode === "") return "—";
   return mode;
-}
-
-/** Pastille à côté du mode : état flux WS (plus de ligne texte « Réseau … »). */
-function realtimeSocketDotColor(status: string): string {
-  const s = status.toLowerCase().trim();
-  if (s === "healthy") return E.BRAND;
-  if (s === "degraded" || s === "connecting" || s === "reconnecting") return "#F59E0B";
-  return E.DANGER;
-}
-
-/** Libellé accessibilité pour la pastille flux. */
-function realtimeStatusA11yLabel(status: string): string {
-  const s = status.toLowerCase().trim();
-  if (s === "healthy") return "Flux temps réel connecté";
-  if (s === "connecting") return "Flux temps réel connexion en cours";
-  if (s === "reconnecting") return "Flux temps réel reconnexion";
-  if (s === "degraded") return "Flux temps réel dégradé";
-  if (s === "failed") return "Flux temps réel indisponible";
-  if (s === "idle") return "Flux temps réel déconnecté";
-  return `Flux temps réel ${status}`;
 }
 
 /** Réf. dashboard / Courses web : `mar. 5 mai` (`r-color-121wj93`, `r-fontSize-1b43r93`). */
@@ -124,11 +111,13 @@ export function EnterpriseHeader({
   realtimeStatus,
   metaDetail = "full",
   trailing,
+  liveStatusPill,
   title,
   onShiftDay,
   onOpenDatePicker,
   onOpenModePicker,
   topSafeAreaPx: topSafeAreaPxProp,
+  variant = "sticky",
 }: EnterpriseHeaderProps) {
   const { horizontalPadding, safeLeft, safeRight, topInset } = useAppViewport();
   const topSafe = topSafeAreaPxProp !== undefined ? topSafeAreaPxProp : topInset;
@@ -136,13 +125,13 @@ export function EnterpriseHeader({
   const stripContentPadRight = Math.max(horizontalPadding, safeRight);
 
   const dayLine = formatDayLineHeader(date);
+  const isFloating = variant === "floating";
   const sheetDate = typeof onOpenDatePicker === "function";
   const canShift = typeof onShiftDay === "function" && !sheetDate;
 
   /** Sans statut réseau : la pastille du chip mode porte l’état WS. */
   const fullMetaLine = `Journée ${date} · ${formatMode(mode)}`;
   const socketA11y = realtimeStatusA11yLabel(realtimeStatus);
-  const dotFill = realtimeSocketDotColor(realtimeStatus);
 
   const iconColor = sheetDate || canShift ? E.TEXT_SEC : E.TEXT_MUTED;
   const chevronLeftSize = 18;
@@ -156,6 +145,7 @@ export function EnterpriseHeader({
       style={({ pressed }) => [
         s.datePillWrap,
         s.datePillWrapSheet,
+        isFloating ? s.datePillWrapFloating : null,
         headerKpiTileShadow,
         pressableTransitionWeb,
         pressed && s.pressed,
@@ -226,6 +216,7 @@ export function EnterpriseHeader({
         onPress={onOpenModePicker}
         style={({ pressed }) => [
           s.modeChip,
+          isFloating ? s.modeChipFloating : null,
           headerKpiTileShadow,
           pressableTransitionWeb,
           pressed && s.pressed,
@@ -234,9 +225,6 @@ export function EnterpriseHeader({
         accessibilityRole="button"
         accessibilityLabel={`Mode de dispatch. Actuel : ${formatMode(mode)}. ${socketA11y}. Appuyer pour choisir Manuel, Semi-auto ou Auto.`}
       >
-        <View style={s.socketStatusWell} accessibilityLabel={socketA11y}>
-          <View style={[s.modeStatusDot, { backgroundColor: dotFill }]} />
-        </View>
         <Text
           maxFontSizeMultiplier={HEADER_MAX_FONT_MULTIPLIER}
           style={[s.modeChipText, s.modeChipTextEmphasis]}
@@ -251,9 +239,6 @@ export function EnterpriseHeader({
         style={[s.modeChip, headerKpiTileShadow]}
         accessibilityLabel={`Mode ${formatMode(mode)}. ${socketA11y}`}
       >
-        <View style={s.socketStatusWell} accessibilityLabel={socketA11y}>
-          <View style={[s.modeStatusDot, { backgroundColor: dotFill }]} />
-        </View>
         <Text
           maxFontSizeMultiplier={HEADER_MAX_FONT_MULTIPLIER}
           style={[s.modeChipText, s.modeChipTextEmphasis]}
@@ -265,36 +250,78 @@ export function EnterpriseHeader({
       </View>
     );
 
+  const resolvedPadLeft = isFloating ? Math.max(4, safeLeft) : stripContentPadLeft;
+  const resolvedPadRight = isFloating ? Math.max(6, safeRight + 2) : stripContentPadRight;
+
   return (
-    <View style={[s.strip, { paddingTop: topSafe }]}>
+    <View
+      style={[
+        s.stripBase,
+        isFloating ? s.stripFloating : s.strip,
+        { paddingTop: isFloating ? 0 : topSafe },
+      ]}
+    >
       <View
         style={[
           s.stripInner,
-          { paddingLeft: stripContentPadLeft, paddingRight: stripContentPadRight },
+          isFloating ? s.stripInnerFloating : null,
+          { paddingLeft: resolvedPadLeft, paddingRight: resolvedPadRight },
         ]}
       >
-        <View style={s.row}>
-          <View style={s.leftCluster}>
-            {title ? (
-              <View style={s.titleColumn}>
-                <Text
-                  maxFontSizeMultiplier={HEADER_MAX_FONT_MULTIPLIER}
-                  style={s.inlineTitle}
-                  numberOfLines={1}
-                  accessibilityRole="header"
-                  {...(Platform.OS === "android" ? { includeFontPadding: false } : {})}
-                >
-                  {title}
-                </Text>
+        {isFloating ? (
+          <View style={[s.row, s.rowFloating]}>
+            <View style={[s.rightCluster, s.rightClusterFloating, s.floatingUnifiedControls]}>
+              <View style={s.floatingDateSlot}>{dateBlock}</View>
+              {liveStatusPill ? <View style={s.floatingLiveSlot}>{liveStatusPill}</View> : null}
+              <View style={s.floatingModeSlot}>{modeBlock}</View>
+              <View
+                style={[
+                  s.inboxWell,
+                  headerKpiTileShadow,
+                  Platform.OS === "web" ? s.inboxWellWeb : null,
+                  s.floatingTrailingSlot,
+                ]}
+              >
+                <CompanyInboxButton />
               </View>
-            ) : null}
-            {dateBlock}
+              {trailing != null ? <View style={s.floatingTrailingSlot}>{trailing}</View> : null}
+            </View>
           </View>
-          <View style={s.rightCluster}>
-            {modeBlock}
-            {trailing != null ? trailing : null}
+        ) : (
+          <View style={s.row}>
+            <View style={s.leftCluster}>
+              {title ? (
+                <View style={s.titleColumn}>
+                  <Text
+                    maxFontSizeMultiplier={HEADER_MAX_FONT_MULTIPLIER}
+                    style={s.inlineTitle}
+                    numberOfLines={1}
+                    accessibilityRole="header"
+                    {...(Platform.OS === "android" ? { includeFontPadding: false } : {})}
+                  >
+                    {title}
+                  </Text>
+                </View>
+              ) : null}
+              {dateBlock}
+            </View>
+            <View style={s.rightCluster}>
+              {liveStatusPill ? <View style={s.rightLeadGap}>{liveStatusPill}</View> : null}
+              <View style={[liveStatusPill ? s.rightItemGap : s.rightLeadGap]}>{modeBlock}</View>
+              <View
+                style={[
+                  s.inboxWell,
+                  headerKpiTileShadow,
+                  Platform.OS === "web" ? s.inboxWellWeb : null,
+                  s.rightItemGap,
+                ]}
+              >
+                <CompanyInboxButton />
+              </View>
+              {trailing != null ? <View style={s.rightItemGap}>{trailing}</View> : null}
+            </View>
           </View>
-        </View>
+        )}
         {metaDetail === "full" ? (
           <Text maxFontSizeMultiplier={HEADER_MAX_FONT_MULTIPLIER} style={s.metaLine} numberOfLines={2}>
             {fullMetaLine}
@@ -306,30 +333,54 @@ export function EnterpriseHeader({
 }
 
 const s = StyleSheet.create({
+  stripBase: {
+    alignSelf: "stretch",
+    width: "100%",
+  },
   /**
    * Fond + ombre + bordure en pleine largeur.
    * `paddingTop` dynamique (safe area) est appliqué en inline : le fond blanc monte sous la barre système.
    */
   strip: {
-    alignSelf: "stretch",
-    width: "100%",
     backgroundColor: E.CARD,
     paddingBottom: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: STRIP_BORDER_SLATE,
     ...stripShadowResolved,
   },
+  stripFloating: {
+    backgroundColor: "transparent",
+    paddingBottom: 0,
+    borderBottomWidth: 0,
+    shadowOpacity: 0,
+    elevation: 0,
+    position: "relative",
+    zIndex: 1,
+    ...Platform.select({
+      web: { boxShadow: "none" } as ViewStyle,
+      default: {},
+    }),
+  },
   /** Même décalage vertical qu’avant sous la zone encoche (réf. ~14px `paddingTop-5t7p9m`). */
   stripInner: {
     width: "100%",
     paddingTop: 14,
   },
+  stripInnerFloating: {
+    paddingTop: 8,
+  },
   row: {
     flexDirection: "row",
+    flexWrap: "nowrap",
     alignItems: "center",
     justifyContent: "space-between",
     width: "100%",
     minHeight: HEADER_ROW_MIN_HEIGHT,
+  },
+  rowFloating: {
+    justifyContent: "flex-start",
+    width: "100%",
+    minWidth: 0,
   },
   /** Bloc gauche : titre optionnel + pilule date (réf. Courses / justify-between). */
   leftCluster: {
@@ -339,12 +390,75 @@ const s = StyleSheet.create({
     flex: 1,
     minWidth: 0,
   },
-  /** Bloc droit : chip mode + trailing. */
+  /** Bloc droit : chip mode + cloche + trailing. */
   rightCluster: {
     flexDirection: "row",
+    flexWrap: "nowrap",
     alignItems: "center",
-    gap: 6,
+    gap: 0,
     flexShrink: 0,
+  },
+  rightClusterFloating: {
+    marginLeft: 0,
+    paddingLeft: 0,
+    flex: 1,
+    minWidth: 0,
+    flexWrap: "nowrap",
+  },
+  floatingUnifiedControls: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-start",
+    overflow: "visible",
+  },
+  rightLeadGap: { marginLeft: 6 },
+  rightItemGap: { marginLeft: 6 },
+  rightItemGapFloating: { marginLeft: 12 },
+  floatingDateSlot: {
+    flexShrink: 0,
+    flexGrow: 0,
+    minWidth: 0,
+    maxWidth: 148,
+  },
+  floatingLiveSlot: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 0,
+    minWidth: 52,
+    marginLeft: 12,
+    overflow: "hidden",
+    justifyContent: "center",
+  },
+  floatingModeSlot: {
+    flexShrink: 0,
+    flexGrow: 0,
+    marginLeft: 12,
+  },
+  floatingTrailingSlot: {
+    flexShrink: 0,
+    flexGrow: 0,
+    marginLeft: 12,
+  },
+  /** Aligne la cloche sur la hauteur du chip mode (39px). */
+  inboxWell: {
+    flexDirection: "row",
+    height: 39,
+    minHeight: 39,
+    minWidth: 44,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: E.BORDER,
+    backgroundColor: E.CARD,
+    paddingHorizontal: 10,
+    justifyContent: "center",
+    alignItems: "center",
+    overflow: "visible",
+  },
+  inboxWellWeb: {
+    cursor: "pointer" as const,
+    ...(Platform.OS === "web" ? ({ WebkitTapHighlightColor: "transparent" } as const) : {}),
   },
   /** Colonne titre : même axe vertical que la pilule date / chip (rétrécit avant la pilule). */
   titleColumn: {
@@ -354,7 +468,7 @@ const s = StyleSheet.create({
   },
   inlineTitle: {
     color: E.TEXT,
-    fontSize: 16,
+    fontSize: FONT_SIZE.px16,
     fontWeight: "600" as const,
     letterSpacing: 0.15,
     lineHeight: HEADER_ROW_LINE_HEIGHT,
@@ -391,9 +505,15 @@ const s = StyleSheet.create({
     justifyContent: "center",
     overflow: "hidden",
   },
+  datePillWrapFloating: {
+    minWidth: 136,
+    maxWidth: 158,
+    paddingHorizontal: 9,
+    gap: 6,
+  },
   /** Texte sur une ligne dans la pilule 39px. */
   datePillTextSheet: {
-    fontSize: 14,
+    fontSize: FONT_SIZE.px14,
     lineHeight: 18,
     letterSpacing: 0.08,
   },
@@ -412,13 +532,6 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  /** Emplacement du point WS : même cible 28×28 que l’icône KPI, sans fond. */
-  socketStatusWell: {
-    width: 28,
-    height: 28,
-    alignItems: "center",
-    justifyContent: "center",
-  },
   /** Chevron cliquable sans zone paddée supplémentaire (hitSlop gère la cible). */
   chevronHit: {
     justifyContent: "center",
@@ -430,7 +543,7 @@ const s = StyleSheet.create({
   datePillText: {
     flexShrink: 1,
     minWidth: 0,
-    fontSize: 15,
+    fontSize: FONT_SIZE.px15,
     fontWeight: "600" as const,
     textTransform: "capitalize" as const,
     letterSpacing: 0.2,
@@ -466,14 +579,14 @@ const s = StyleSheet.create({
     maxWidth: 220,
     overflow: "hidden",
   },
-  /** Point WS : seule touche de couleur vive du contrôle. */
-  modeStatusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+  modeChipFloating: {
+    maxWidth: 120,
+    minWidth: 0,
+    flexShrink: 1,
+    paddingHorizontal: 10,
   },
   modeChipText: {
-    fontSize: 14,
+    fontSize: FONT_SIZE.px14,
     fontWeight: "500" as const,
     flexShrink: 1,
     minWidth: 0,
@@ -488,7 +601,7 @@ const s = StyleSheet.create({
   metaLine: {
     marginTop: 9,
     color: HEADER_SLATE_FG,
-    fontSize: 12,
+    fontSize: FONT_SIZE.px12,
     fontWeight: "500" as const,
     letterSpacing: 0.1,
     lineHeight: 16,

@@ -1,6 +1,7 @@
 import { AppState, Platform } from "react-native";
 import { useRouter } from "expo-router";
 import { useCallback, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { emitDriverTelemetry } from "../observability/driverTelemetry";
 import { isFeatureEnabled } from "../featureFlags/registry";
 import { PropsWithChildren, useEffect } from "../reactCompat";
@@ -12,6 +13,11 @@ import { ensureDriverNotificationActions } from "../../features/driver/notificat
 import { ensureDriverNotificationGrouping } from "../../features/driver/notificationGrouping";
 import { handleSilentPushPayload, isSilentPayload } from "../../features/driver/silentNotifications";
 import {
+  configureDriverRealtimeSync,
+  requestChatRefresh,
+  requestMissionRefresh,
+} from "../../features/driver/driverRealtimeSync";
+import {
   disposeDriverFirebaseMessaging,
   initDriverFirebaseMessaging,
 } from "../../features/driver/firebaseMessaging";
@@ -21,26 +27,183 @@ import { registerMissionBarBackgroundHandlers } from "../../features/driver/miss
 import { appendSessionJournalEvent } from "../observability/sessionJournal";
 import { shouldIgnoreNotification } from "../notifications/shouldIgnoreNotification";
 import { getExpoNotificationsModule } from "../notifications/expoNotificationsCompat";
+import {
+  buildNotificationDedupKey,
+  markNotificationHandled,
+} from "../notifications/notificationDedupStore";
+import {
+  computeNotificationAgeMs,
+  emitNotificationDedupHit,
+  emitNotificationDuplicateDropped,
+  emitNotificationFiltered,
+  emitNotificationNavigation,
+  emitNotificationProcessingMs,
+  emitNotificationReceived,
+  emitNotificationSoundPlayed,
+  emitNotificationSuppressed,
+} from "../notifications/notificationTelemetry";
+import {
+  recordContextSwitchDurationMs,
+  recordContextSwitchTotal,
+  recordNotificationDuplicateDroppedTotal,
+  recordNotificationDeduplicatedTotal,
+  recordNotificationFilteredTotal,
+  recordNotificationNavigationTotal,
+  recordNotificationProcessingMs,
+  recordNotificationReceivedTotal,
+} from "../observability/runtimeStabilityMetrics";
+import {
+  resolveForegroundPresentation,
+  shouldSkipNavigationForActiveScreen,
+} from "../notifications/notificationPolicy";
+
+function extractThreadId(data: Record<string, unknown>): string | null {
+  const raw =
+    data.thread_id ??
+    data.threadId ??
+    (typeof data.thread === "object" && data.thread != null
+      ? (data.thread as Record<string, unknown>).id
+      : null);
+  if (typeof raw === "string" && raw.length > 0) return raw;
+  if (typeof raw === "number" && Number.isFinite(raw)) return String(raw);
+  return null;
+}
+
+function extractRawType(data: unknown): string | null {
+  if (!data || typeof data !== "object") return null;
+  const value = data as Record<string, unknown>;
+  return typeof value.type === "string" ? value.type : null;
+}
+
+function extractEventId(data: unknown): string | null {
+  if (!data || typeof data !== "object") return null;
+  const value = data as Record<string, unknown>;
+  return typeof value.event_id === "string" ? value.event_id : null;
+}
+
+function shouldDedupSkip(data: unknown, notificationId?: string | null): boolean {
+  if (!data || typeof data !== "object") return false;
+  const record = data as Record<string, unknown>;
+  const missionIdRaw = record.mission_id ?? record.missionId ?? record.booking_id;
+  const missionId = Number(missionIdRaw);
+  const key = buildNotificationDedupKey({
+    eventId: extractEventId(data),
+    notificationId: notificationId ?? null,
+    missionId: Number.isFinite(missionId) ? missionId : null,
+    type: extractRawType(data),
+  });
+  if (markNotificationHandled(key)) {
+    recordNotificationDeduplicatedTotal({ dedup_key: key });
+    recordNotificationDuplicateDroppedTotal({
+      dedup_key: key,
+      notification_id: notificationId ?? null,
+    });
+    emitNotificationDedupHit({
+      dedup_key: key,
+      notification_id: notificationId ?? null,
+    });
+    emitNotificationDuplicateDropped({
+      dedup_key: key,
+      notification_id: notificationId ?? null,
+    });
+    return true;
+  }
+  return false;
+}
 
 export function NotificationsProvider({ children }: PropsWithChildren) {
   const Notifications = getExpoNotificationsModule();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { status, activeContext, bootstrap } = useSession();
   const pendingPayloadRef = useRef<DriverPushPayload | null>(null);
   const pendingPayloadTimedOutRef = useRef(false);
   const pendingPayloadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const initialResponseConsumedRef = useRef(false);
+  const filterContextRef = useRef({
+    contextType: null as string | null,
+    userId: null as string | number | null,
+    companyId: null as string | number | null,
+  });
+  const lastStableFilterContextRef = useRef({
+    contextType: null as string | null,
+    userId: null as string | number | null,
+    companyId: null as string | number | null,
+  });
+  const sessionRef = useRef({
+    status,
+    contextType: activeContext?.context_type ?? null,
+  });
+  const previousContextKeyRef = useRef<string | null>(null);
+  const contextSwitchStartedAtRef = useRef<number | null>(null);
   const DEEPLINK_BOOTSTRAP_TIMEOUT_MS = Number(
     process.env.EXPO_PUBLIC_DRIVER_DEEPLINK_BOOTSTRAP_TIMEOUT_MS ?? "8000"
   );
 
+  filterContextRef.current = {
+    contextType: activeContext?.context_type ?? null,
+    userId: bootstrap?.user?.id ?? null,
+    companyId: activeContext?.organization_id ?? null,
+  };
+  if (activeContext?.context_type) {
+    lastStableFilterContextRef.current = {
+      contextType: activeContext.context_type,
+      userId: bootstrap?.user?.id ?? null,
+      companyId: activeContext.organization_id ?? null,
+    };
+  }
+  sessionRef.current = {
+    status,
+    contextType: activeContext?.context_type ?? null,
+  };
+
+  const resolveFilterContext = useCallback(() => {
+    const live = filterContextRef.current;
+    if (live.contextType) return live;
+    return lastStableFilterContextRef.current;
+  }, []);
+
+  const shouldApplyNotificationFilter = useCallback(() => {
+    const session = sessionRef.current;
+    const filterContext = resolveFilterContext();
+    return session.status === "ready" && Boolean(filterContext.contextType);
+  }, [resolveFilterContext]);
+
+  useEffect(() => {
+    const nextKey =
+      activeContext?.context_id != null
+        ? `${activeContext.context_type ?? "?"}:${activeContext.context_id}`
+        : null;
+    if (previousContextKeyRef.current === nextKey) return;
+    if (contextSwitchStartedAtRef.current != null) {
+      const durationMs = Date.now() - contextSwitchStartedAtRef.current;
+      recordContextSwitchDurationMs(durationMs, {
+        from_context: previousContextKeyRef.current,
+        to_context: nextKey,
+      });
+    }
+    recordContextSwitchTotal({
+      from_context: previousContextKeyRef.current,
+      to_context: nextKey,
+    });
+    previousContextKeyRef.current = nextKey;
+    contextSwitchStartedAtRef.current = Date.now();
+  }, [activeContext?.context_id, activeContext?.context_type]);
+
+  useEffect(() => {
+    configureDriverRealtimeSync({
+      queryClient,
+      getContextId: () =>
+        activeContext?.context_type === "driver" ? activeContext.context_id : null,
+    });
+    return () => {
+      configureDriverRealtimeSync(null);
+    };
+  }, [activeContext?.context_id, activeContext?.context_type, queryClient]);
+
   const evaluateNotificationFilter = useCallback(
-    (input: unknown) =>
-      shouldIgnoreNotification(input, {
-        contextType: activeContext?.context_type ?? null,
-        userId: bootstrap?.user?.id ?? null,
-        companyId: activeContext?.organization_id ?? null,
-      }),
-    [activeContext?.context_type, activeContext?.organization_id, bootstrap?.user?.id]
+    (input: unknown) => shouldIgnoreNotification(input, resolveFilterContext()),
+    [resolveFilterContext]
   );
 
   const normalizePushType = useCallback((raw: string): DriverPushPayload["type"] | null => {
@@ -49,7 +212,8 @@ export function NotificationsProvider({ children }: PropsWithChildren) {
     if (raw === "mission_cancelled" || raw === "booking_cancelled") return "mission_cancelled";
     if (raw === "mission_reassigned" || raw === "booking_reassigned") return "mission_reassigned";
     if (raw === "reminder_action") return "reminder_action";
-    if (raw === "informative" || raw === "delay") return "informative";
+    if (raw === "informative") return "informative";
+    if (raw === "delay") return null;
     return null;
   }, []);
 
@@ -71,44 +235,45 @@ export function NotificationsProvider({ children }: PropsWithChildren) {
     []
   );
 
-  const parsePayload = useCallback((input: unknown, actionIdentifier?: string): DriverPushPayload | null => {
-    if (!input || typeof input !== "object") return null;
-    const value = input as Record<string, unknown>;
-    const missionIdRaw =
-      value.mission_id ??
-      value.missionId ??
-      value.booking_id ??
-      value.bookingId;
-    const missionId = Number(missionIdRaw);
-    const deepLink =
-      typeof value.deepLink === "string"
-        ? value.deepLink
-        : typeof value.deep_link === "string"
-          ? value.deep_link
-          : undefined;
-    const deepLinkTarget = parseDeepLinkTarget(deepLink);
-    const resolvedMissionId = Number.isFinite(missionId) ? missionId : deepLinkTarget?.missionId ?? null;
-    if (!Number.isFinite(resolvedMissionId)) return null;
-    const rawType = String(value.type ?? "mission_updated");
-    const type = normalizePushType(rawType);
-    if (!type) return null;
-    const schema =
-      value.mission_id != null || value.missionId != null
-        ? "mission_v2"
-        : value.booking_id != null || value.bookingId != null
-          ? "booking_v1"
-          : "unknown";
-    return {
-      mission_id: resolvedMissionId as number,
-      type,
-      event_id: typeof value.event_id === "string" ? value.event_id : undefined,
-      action:
-        normalizeQuickAction(value.action) ??
-        normalizeQuickAction(actionIdentifier),
-      deep_link: deepLink,
-      payload_schema: schema,
-    };
-  }, [normalizePushType, parseDeepLinkTarget, normalizeQuickAction]);
+  const parsePayload = useCallback(
+    (input: unknown, actionIdentifier?: string): DriverPushPayload | null => {
+      if (!input || typeof input !== "object") return null;
+      const value = input as Record<string, unknown>;
+      const missionIdRaw =
+        value.mission_id ?? value.missionId ?? value.booking_id ?? value.bookingId;
+      const missionId = Number(missionIdRaw);
+      const deepLink =
+        typeof value.deepLink === "string"
+          ? value.deepLink
+          : typeof value.deep_link === "string"
+            ? value.deep_link
+            : undefined;
+      const deepLinkTarget = parseDeepLinkTarget(deepLink);
+      const resolvedMissionId = Number.isFinite(missionId) ? missionId : deepLinkTarget?.missionId ?? null;
+      if (!Number.isFinite(resolvedMissionId)) return null;
+      const rawType = String(value.type ?? "mission_updated");
+      const type = normalizePushType(rawType);
+      if (!type) return null;
+      const schema =
+        value.mission_id != null || value.missionId != null
+          ? "mission_v2"
+          : value.booking_id != null || value.bookingId != null
+            ? "booking_v1"
+            : "unknown";
+      const threadId = extractThreadId(value);
+      return {
+        mission_id: resolvedMissionId as number,
+        type,
+        event_id: typeof value.event_id === "string" ? value.event_id : undefined,
+        action:
+          normalizeQuickAction(value.action) ?? normalizeQuickAction(actionIdentifier),
+        deep_link: deepLink,
+        payload_schema: schema,
+        thread_id: threadId ?? undefined,
+      };
+    },
+    [normalizePushType, parseDeepLinkTarget, normalizeQuickAction]
+  );
 
   const triggerDriverResync = useCallback(
     async (reason: "push_update" | "push_route_fallback", missionId: number | null) => {
@@ -120,6 +285,7 @@ export function NotificationsProvider({ children }: PropsWithChildren) {
           context_id: activeContext.context_id,
           mission_id: missionId,
         });
+        requestMissionRefresh(reason, missionId);
       } catch (error) {
         emitDriverTelemetry("driver.runtime.resync", {
           source: "core.notifications.provider",
@@ -133,70 +299,113 @@ export function NotificationsProvider({ children }: PropsWithChildren) {
     [activeContext, status]
   );
 
-  const routePayload = useCallback(async (payload: DriverPushPayload) => {
-    void appendSessionJournalEvent("push.route.start", {
-      mission_id: payload.mission_id,
-      type: payload.type,
-      action: payload.action ?? null,
-    }, activeContext?.context_id ?? null);
-    if (payload.action) {
-      emitDriverTelemetry("push.quick_action.dispatch", {
-        source: "core.notifications.provider",
-        mission_id: payload.mission_id,
-        action: payload.action,
-      });
-    }
-    await handleDriverPushQuickAction(payload);
-    if (payload.action) {
-      emitDriverTelemetry("push.quick_action.success", {
-        source: "core.notifications.provider",
-        mission_id: payload.mission_id,
-        action: payload.action,
-      });
-    }
-    if (
-      payload.type === "mission_updated" ||
-      payload.type === "mission_reassigned" ||
-      payload.type === "mission_cancelled"
-    ) {
-      await triggerDriverResync("push_update", payload.mission_id);
-    }
-    if (payload.type === "informative") {
-      const deepLinkTarget = parseDeepLinkTarget(payload.deep_link);
-      if (deepLinkTarget) {
-        router.push(deepLinkTarget.route as any);
+  const routePayload = useCallback(
+    async (payload: DriverPushPayload) => {
+      void appendSessionJournalEvent(
+        "push.route.start",
+        {
+          mission_id: payload.mission_id,
+          type: payload.type,
+          action: payload.action ?? null,
+        },
+        activeContext?.context_id ?? null
+      );
+      if (payload.action) {
+        emitDriverTelemetry("push.quick_action.dispatch", {
+          source: "core.notifications.provider",
+          mission_id: payload.mission_id,
+          action: payload.action,
+        });
       }
-      return;
-    }
-    const deepLinkTarget = parseDeepLinkTarget(payload.deep_link);
-    if (deepLinkTarget?.route) {
-      router.push(deepLinkTarget.route as any);
-    } else {
-      router.push(`/(app)/(driver)/missions/${payload.mission_id}` as any);
-    }
-  }, [activeContext?.context_id, parseDeepLinkTarget, router, triggerDriverResync]);
+      await handleDriverPushQuickAction(payload);
+      if (payload.action) {
+        emitDriverTelemetry("push.quick_action.success", {
+          source: "core.notifications.provider",
+          mission_id: payload.mission_id,
+          action: payload.action,
+        });
+      }
+      if (
+        payload.type === "mission_updated" ||
+        payload.type === "mission_reassigned" ||
+        payload.type === "mission_cancelled"
+      ) {
+        await triggerDriverResync("push_update", payload.mission_id);
+      }
+      if (payload.thread_id) {
+        requestChatRefresh(payload.thread_id, "push_chat");
+      }
 
-  const queuePendingPayload = useCallback((payload: DriverPushPayload) => {
-    pendingPayloadRef.current = payload;
-    pendingPayloadTimedOutRef.current = false;
-    if (pendingPayloadTimerRef.current) {
-      clearTimeout(pendingPayloadTimerRef.current);
-      pendingPayloadTimerRef.current = null;
-    }
-    pendingPayloadTimerRef.current = setTimeout(() => {
-      pendingPayloadTimedOutRef.current = true;
-      emitDriverTelemetry("push.notification.route_timeout", {
-        source: "core.notifications.provider",
-        mission_id: payload.mission_id,
-        timeout_ms: DEEPLINK_BOOTSTRAP_TIMEOUT_MS,
-        reason: "route_timeout",
-      });
-      if (status === "ready" && activeContext?.context_type === "driver") {
-        void triggerDriverResync("push_route_fallback", payload.mission_id);
-        router.push("/(app)/(driver)/missions" as any);
+      if (shouldSkipNavigationForActiveScreen({ payload, threadId: payload.thread_id })) {
+        recordNotificationNavigationTotal({ skipped: true, reason: "active_screen" });
+        emitNotificationNavigation({
+          mission_id: payload.mission_id,
+          skipped: true,
+          reason: "active_screen",
+        });
+        return;
       }
-    }, DEEPLINK_BOOTSTRAP_TIMEOUT_MS);
-  }, [DEEPLINK_BOOTSTRAP_TIMEOUT_MS, activeContext?.context_type, router, status, triggerDriverResync]);
+
+      if (payload.type === "informative") {
+        const deepLinkTarget = parseDeepLinkTarget(payload.deep_link);
+        if (deepLinkTarget) {
+          recordNotificationNavigationTotal({ route: deepLinkTarget.route });
+          emitNotificationNavigation({
+            mission_id: payload.mission_id,
+            route: deepLinkTarget.route,
+          });
+          router.push(deepLinkTarget.route as any);
+        }
+        return;
+      }
+
+      const deepLinkTarget = parseDeepLinkTarget(payload.deep_link);
+      if (deepLinkTarget?.route) {
+        recordNotificationNavigationTotal({ route: deepLinkTarget.route });
+        emitNotificationNavigation({
+          mission_id: payload.mission_id,
+          route: deepLinkTarget.route,
+        });
+        router.push(deepLinkTarget.route as any);
+      } else if (
+        payload.type === "mission_assigned" ||
+        payload.type === "mission_cancelled" ||
+        payload.type === "reminder_action" ||
+        payload.action
+      ) {
+        const route = `/(app)/(driver)/missions/${payload.mission_id}`;
+        recordNotificationNavigationTotal({ route });
+        emitNotificationNavigation({ mission_id: payload.mission_id, route });
+        router.push(route as any);
+      }
+    },
+    [activeContext?.context_id, parseDeepLinkTarget, router, triggerDriverResync]
+  );
+
+  const queuePendingPayload = useCallback(
+    (payload: DriverPushPayload) => {
+      pendingPayloadRef.current = payload;
+      pendingPayloadTimedOutRef.current = false;
+      if (pendingPayloadTimerRef.current) {
+        clearTimeout(pendingPayloadTimerRef.current);
+        pendingPayloadTimerRef.current = null;
+      }
+      pendingPayloadTimerRef.current = setTimeout(() => {
+        pendingPayloadTimedOutRef.current = true;
+        emitDriverTelemetry("push.notification.route_timeout", {
+          source: "core.notifications.provider",
+          mission_id: payload.mission_id,
+          timeout_ms: DEEPLINK_BOOTSTRAP_TIMEOUT_MS,
+          reason: "route_timeout",
+        });
+        if (status === "ready" && activeContext?.context_type === "driver") {
+          void triggerDriverResync("push_route_fallback", payload.mission_id);
+          router.push("/(app)/(driver)/missions" as any);
+        }
+      }, DEEPLINK_BOOTSTRAP_TIMEOUT_MS);
+    },
+    [DEEPLINK_BOOTSTRAP_TIMEOUT_MS, activeContext?.context_type, router, status, triggerDriverResync]
+  );
 
   const clearPendingPayload = useCallback(() => {
     pendingPayloadRef.current = null;
@@ -207,38 +416,106 @@ export function NotificationsProvider({ children }: PropsWithChildren) {
     }
   }, []);
 
-  const navigateFromPayload = useCallback(async (payload: DriverPushPayload | null) => {
-    if (!payload) return;
-    if (status !== "ready" || activeContext?.context_type !== "driver") {
-      queuePendingPayload(payload);
-      return;
-    }
-    try {
-      await routePayload(payload);
-    } catch (error) {
-      if (payload.action) {
-        emitDriverTelemetry("push.quick_action.failure", {
+  const navigateFromPayload = useCallback(
+    async (payload: DriverPushPayload | null) => {
+      if (!payload) return;
+      if (status !== "ready" || activeContext?.context_type !== "driver") {
+        queuePendingPayload(payload);
+        return;
+      }
+      try {
+        await routePayload(payload);
+      } catch (error) {
+        if (payload.action) {
+          emitDriverTelemetry("push.quick_action.failure", {
+            source: "core.notifications.provider",
+            mission_id: payload.mission_id,
+            action: payload.action,
+            reason: error instanceof Error ? error.message : "quick_action_failed",
+          });
+        }
+        emitDriverTelemetry("push.notification.route_failed", {
           source: "core.notifications.provider",
           mission_id: payload.mission_id,
-          action: payload.action,
-          reason: error instanceof Error ? error.message : "quick_action_failed",
+          payload_schema: payload.payload_schema ?? "unknown",
+          reason: error instanceof Error ? error.message : "route_failed",
         });
       }
-      emitDriverTelemetry("push.notification.route_failed", {
-        source: "core.notifications.provider",
-        mission_id: payload.mission_id,
-        payload_schema: payload.payload_schema ?? "unknown",
-        reason: error instanceof Error ? error.message : "route_failed",
+    },
+    [activeContext?.context_type, queuePendingPayload, routePayload, status]
+  );
+
+  const processSilentPayload = useCallback(
+    async (data: unknown) => {
+      await handleSilentPushPayload(data, async (missionId) => {
+        await triggerDriverResync("push_update", missionId);
       });
-    }
-  }, [activeContext?.context_type, queuePendingPayload, routePayload, status]);
+    },
+    [triggerDriverResync]
+  );
 
   useEffect(() => {
     if (!Notifications) return;
     Notifications.setNotificationHandler({
       handleNotification: async (notification) => {
-        const filter = evaluateNotificationFilter(notification.request.content.data);
+        const pipelineStartedAt = Date.now();
+        const data = notification.request.content.data;
+        const notificationId = notification.request.identifier;
+        const receivedAt = Date.now();
+        const notificationAgeMs = computeNotificationAgeMs(data, receivedAt);
+        recordNotificationReceivedTotal({
+          stage: "foreground_handler",
+          notification_id: notificationId,
+        });
+
+        if (shouldDedupSkip(data, notificationId)) {
+          emitNotificationProcessingMs(Date.now() - pipelineStartedAt, {
+            stage: "foreground_handler",
+            outcome: "dedup_skip",
+          });
+          recordNotificationProcessingMs(Date.now() - pipelineStartedAt, {
+            stage: "foreground_handler",
+            outcome: "dedup_skip",
+          });
+          return {
+            shouldShowBanner: false,
+            shouldShowList: false,
+            shouldPlaySound: false,
+            shouldSetBadge: false,
+          };
+        }
+
+        if (isSilentPayload(data)) {
+          emitNotificationSuppressed("silent", {
+            stage: "foreground_handler",
+            notification_id: notificationId,
+          });
+          void processSilentPayload(data);
+          return {
+            shouldShowBanner: false,
+            shouldShowList: false,
+            shouldPlaySound: false,
+            shouldSetBadge: false,
+          };
+        }
+
+        if (!shouldApplyNotificationFilter()) {
+          return {
+            shouldShowBanner: false,
+            shouldShowList: false,
+            shouldPlaySound: false,
+            shouldSetBadge: false,
+          };
+        }
+
+        const filter = evaluateNotificationFilter(data);
         if (filter.ignore) {
+          recordNotificationFilteredTotal({ reason: filter.reason ?? "filtered" });
+          emitNotificationFiltered(filter.reason ?? "filtered", {
+            stage: "foreground_handler",
+            notification_id: notificationId,
+            notification_age_ms: notificationAgeMs,
+          });
           emitDriverTelemetry("push.notification.ignored", {
             source: "core.notifications.provider",
             stage: "foreground_handler",
@@ -251,15 +528,64 @@ export function NotificationsProvider({ children }: PropsWithChildren) {
             shouldSetBadge: false,
           };
         }
+
+        const parsed = parsePayload(data);
+        const threadId = data && typeof data === "object" ? extractThreadId(data as Record<string, unknown>) : null;
+        const presentation = resolveForegroundPresentation({
+          rawType: extractRawType(data),
+          payload: parsed,
+          threadId,
+          silent: false,
+        });
+
+        if (presentation.suppressReason === "active_screen") {
+          emitNotificationSuppressed("active_screen", {
+            stage: "foreground_handler",
+            notification_id: notificationId,
+            mission_id: parsed?.mission_id,
+          });
+          if (parsed) {
+            void triggerDriverResync("push_update", parsed.mission_id);
+          }
+        }
+
+        if (!presentation.shouldShowBanner && presentation.suppressReason === "silent") {
+          void processSilentPayload(data);
+        }
+
+        if (presentation.shouldPlaySound) {
+          emitNotificationSoundPlayed({
+            notification_id: notificationId,
+            type: parsed?.type ?? extractRawType(data),
+          });
+        }
+
+        const processingMs = Date.now() - pipelineStartedAt;
+        emitNotificationProcessingMs(processingMs, {
+          stage: "foreground_handler",
+          outcome: presentation.shouldShowBanner ? "shown" : "suppressed",
+        });
+        recordNotificationProcessingMs(processingMs, {
+          stage: "foreground_handler",
+          outcome: presentation.shouldShowBanner ? "shown" : "suppressed",
+        });
+
         return {
-          shouldShowBanner: true,
-          shouldShowList: true,
-          shouldPlaySound: false,
-          shouldSetBadge: false,
+          shouldShowBanner: presentation.shouldShowBanner,
+          shouldShowList: presentation.shouldShowList,
+          shouldPlaySound: presentation.shouldPlaySound,
+          shouldSetBadge: presentation.shouldSetBadge,
         };
       },
     });
-  }, [Notifications, evaluateNotificationFilter]);
+  }, [
+    Notifications,
+    evaluateNotificationFilter,
+    parsePayload,
+    processSilentPayload,
+    shouldApplyNotificationFilter,
+    triggerDriverResync,
+  ]);
 
   useEffect(() => {
     if (status !== "ready" || activeContext?.context_type !== "driver") return;
@@ -297,47 +623,67 @@ export function NotificationsProvider({ children }: PropsWithChildren) {
     void Notifications.requestPermissionsAsync().catch(() => undefined);
     const received = Notifications.addNotificationReceivedListener((notification) => {
       const data = notification.request.content.data;
-      const filter = evaluateNotificationFilter(data);
-      if (filter.ignore) {
-        emitDriverTelemetry("push.notification.ignored", {
-          source: "core.notifications.provider",
-          stage: "received_listener",
-          notification_id: notification.request.identifier,
-          reason: filter.reason ?? "ignored",
-        });
-        return;
+      const notificationId = notification.request.identifier;
+      if (shouldDedupSkip(data, notificationId)) return;
+
+      if (shouldApplyNotificationFilter()) {
+        const filter = evaluateNotificationFilter(data);
+        if (filter.ignore) {
+          recordNotificationFilteredTotal({ reason: filter.reason ?? "filtered" });
+          emitNotificationFiltered(filter.reason ?? "filtered", {
+            stage: "received_listener",
+            notification_id: notificationId,
+          });
+          emitDriverTelemetry("push.notification.ignored", {
+            source: "core.notifications.provider",
+            stage: "received_listener",
+            notification_id: notificationId,
+            reason: filter.reason ?? "ignored",
+          });
+          return;
+        }
       }
-      void handleSilentPushPayload(data, async (missionId) => {
-        await triggerDriverResync("push_update", missionId);
+      void processSilentPayload(data);
+      recordNotificationReceivedTotal({
+        stage: "received_listener",
+        notification_id: notificationId,
       });
-      emitDriverTelemetry("push.notification.received", {
-        source: "core.notifications.provider",
+      emitNotificationReceived({
         app_state: AppState.currentState,
-        notification_id: notification.request.identifier,
+        notification_id: notificationId,
+        notification_age_ms: computeNotificationAgeMs(data),
       });
     });
     const opened = Notifications.addNotificationResponseReceivedListener((response) => {
       const data = response.notification.request.content.data;
-      const filter = evaluateNotificationFilter(data);
-      if (filter.ignore) {
-        emitDriverTelemetry("push.notification.ignored", {
-          source: "core.notifications.provider",
-          stage: "response_listener",
-          notification_id: response.notification.request.identifier,
-          reason: filter.reason ?? "ignored",
-        });
-        return;
+      const notificationId = response.notification.request.identifier;
+      if (shouldDedupSkip(data, notificationId)) return;
+
+      if (shouldApplyNotificationFilter()) {
+        const filter = evaluateNotificationFilter(data);
+        if (filter.ignore) {
+          recordNotificationFilteredTotal({ reason: filter.reason ?? "filtered" });
+          emitNotificationFiltered(filter.reason ?? "filtered", {
+            stage: "response_listener",
+            notification_id: notificationId,
+          });
+          emitDriverTelemetry("push.notification.ignored", {
+            source: "core.notifications.provider",
+            stage: "response_listener",
+            notification_id: notificationId,
+            reason: filter.reason ?? "ignored",
+          });
+          return;
+        }
       }
       const payload = parsePayload(data, response.actionIdentifier);
       if (isSilentPayload(data)) {
-        void handleSilentPushPayload(data, async (missionId) => {
-          await triggerDriverResync("push_update", missionId);
-        });
+        void processSilentPayload(data);
         return;
       }
       emitDriverTelemetry("push.notification.opened", {
         source: "core.notifications.provider",
-        notification_id: response.notification.request.identifier,
+        notification_id: notificationId,
         payload_schema: payload?.payload_schema ?? "unknown",
       });
       void navigateFromPayload(payload);
@@ -359,34 +705,50 @@ export function NotificationsProvider({ children }: PropsWithChildren) {
     evaluateNotificationFilter,
     navigateFromPayload,
     parsePayload,
-    triggerDriverResync,
+    processSilentPayload,
+    shouldApplyNotificationFilter,
   ]);
 
   useEffect(() => {
     if (!isFeatureEnabled("driver_fcm_native_enabled")) return;
     void initDriverFirebaseMessaging(async (payload) => {
+      if (shouldDedupSkip(payload)) return;
+
       if (isSilentPayload(payload)) {
-        await handleSilentPushPayload(payload, async (missionId) => {
-          await triggerDriverResync("push_update", missionId);
-        });
+        await processSilentPayload(payload);
         return;
       }
-      const filter = evaluateNotificationFilter(payload);
-      if (filter.ignore) {
-        emitDriverTelemetry("push.notification.ignored", {
-          source: "core.notifications.provider",
-          stage: "fcm_listener",
-          reason: filter.reason ?? "ignored",
-        });
-        return;
+      if (shouldApplyNotificationFilter()) {
+        const filter = evaluateNotificationFilter(payload);
+        if (filter.ignore) {
+          recordNotificationFilteredTotal({ reason: filter.reason ?? "filtered" });
+          emitNotificationFiltered(filter.reason ?? "filtered", { stage: "fcm_listener" });
+          emitDriverTelemetry("push.notification.ignored", {
+            source: "core.notifications.provider",
+            stage: "fcm_listener",
+            reason: filter.reason ?? "ignored",
+          });
+          return;
+        }
       }
       const parsed = parsePayload(payload);
-      await navigateFromPayload(parsed);
+      if (parsed) {
+        await triggerDriverResync("push_update", parsed.mission_id);
+        if (parsed.thread_id) {
+          requestChatRefresh(parsed.thread_id, "push_fcm");
+        }
+      }
     });
     return () => {
       disposeDriverFirebaseMessaging();
     };
-  }, [evaluateNotificationFilter, navigateFromPayload, parsePayload, triggerDriverResync]);
+  }, [
+    evaluateNotificationFilter,
+    parsePayload,
+    processSilentPayload,
+    shouldApplyNotificationFilter,
+    triggerDriverResync,
+  ]);
 
   useEffect(() => {
     if (!isFeatureEnabled("driver_push_enabled")) return;
@@ -409,33 +771,58 @@ export function NotificationsProvider({ children }: PropsWithChildren) {
         source: "core.notifications.provider",
         driver_id: String(driverId),
       });
+    })();
+  }, [Notifications, status, activeContext?.context_type, bootstrap?.user?.id]);
+
+  useEffect(() => {
+    if (!isFeatureEnabled("driver_push_enabled")) return;
+    if (!Notifications) return;
+    if (Platform.OS === "web") return;
+    if (status !== "ready") return;
+    if (activeContext?.context_type !== "driver") return;
+    if (initialResponseConsumedRef.current) return;
+    initialResponseConsumedRef.current = true;
+
+    void (async () => {
       const initialResponse = await Notifications.getLastNotificationResponseAsync().catch(() => null);
-      if (initialResponse?.notification) {
-        const filter = evaluateNotificationFilter(initialResponse.notification.request.content.data);
+      if (!initialResponse?.notification) return;
+      const data = initialResponse.notification.request.content.data;
+      const notificationId = initialResponse.notification.request.identifier;
+      if (shouldDedupSkip(data, notificationId)) return;
+
+      if (shouldApplyNotificationFilter()) {
+        const filter = evaluateNotificationFilter(data);
         if (filter.ignore) {
+          recordNotificationFilteredTotal({ reason: filter.reason ?? "filtered" });
+          emitNotificationFiltered(filter.reason ?? "filtered", {
+            stage: "initial_response",
+            notification_id: notificationId,
+          });
           emitDriverTelemetry("push.notification.ignored", {
             source: "core.notifications.provider",
             stage: "initial_response",
-            notification_id: initialResponse.notification.request.identifier,
+            notification_id: notificationId,
             reason: filter.reason ?? "ignored",
           });
           return;
         }
-        const payload = parsePayload(
-          initialResponse.notification.request.content.data,
-          initialResponse.actionIdentifier
-        );
-        await navigateFromPayload(payload);
       }
+      const payload = parsePayload(data, initialResponse.actionIdentifier);
+      if (isSilentPayload(data)) {
+        await processSilentPayload(data);
+        return;
+      }
+      await navigateFromPayload(payload);
     })();
   }, [
     Notifications,
     status,
     activeContext?.context_type,
-    bootstrap?.user?.id,
+    evaluateNotificationFilter,
     navigateFromPayload,
     parsePayload,
-    evaluateNotificationFilter,
+    processSilentPayload,
+    shouldApplyNotificationFilter,
   ]);
 
   useEffect(() => {

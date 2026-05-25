@@ -289,6 +289,40 @@ export function useUpdateBookingBilling() {
   });
 }
 
+export function usePatchInstitutionBooking() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ bookingId, data }) => institutionService.patchInstitutionBooking(bookingId, data),
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({ queryKey: institutionQueryKeys.requests() });
+      if (vars.requestId) {
+        queryClient.invalidateQueries({
+          queryKey: institutionQueryKeys.requestDetail(vars.requestId),
+        });
+      }
+    },
+  });
+}
+
+export function useCancelInstitutionBooking() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ bookingId, data }) => institutionService.cancelInstitutionBooking(bookingId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: institutionQueryKeys.requests() });
+    },
+  });
+}
+
+export function useBookingChangeEvents(bookingId, enabled = true) {
+  return useQuery({
+    queryKey: [...institutionQueryKeys.requests(), 'change-events', bookingId],
+    queryFn: () => institutionService.fetchBookingChangeEvents(bookingId),
+    enabled: Boolean(bookingId) && enabled,
+    staleTime: 30 * 1000,
+  });
+}
+
 // ============================================================================
 // Users Management
 // ============================================================================

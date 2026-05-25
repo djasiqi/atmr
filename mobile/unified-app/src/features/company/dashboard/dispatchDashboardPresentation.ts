@@ -268,7 +268,12 @@ function automationCaution(
 ): boolean {
   if (mode !== "fully_auto") return false;
   if (!input.connected) return true;
-  if (input.socketStatus === "degraded" || input.socketStatus === "failed" || input.socketStatus === "idle")
+  if (
+    input.socketStatus === "reconnecting" ||
+    input.socketStatus === "connecting" ||
+    input.socketStatus === "failed" ||
+    input.socketStatus === "idle"
+  )
     return true;
   if (input.isPotentiallyStale) return true;
   if (!input.optimizer.optimizerEnabled) return true;
@@ -281,7 +286,12 @@ function automationCaution(
 function anyFluxConcern(input: { connected: boolean; isPotentiallyStale: boolean; socketStatus: CompanyRealtimeStatus }): boolean {
   if (!input.connected) return true;
   if (input.isPotentiallyStale) return true;
-  if (input.socketStatus === "degraded" || input.socketStatus === "failed" || input.socketStatus === "idle")
+  if (
+    input.socketStatus === "reconnecting" ||
+    input.socketStatus === "connecting" ||
+    input.socketStatus === "failed" ||
+    input.socketStatus === "idle"
+  )
     return true;
   return false;
 }

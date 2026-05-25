@@ -11,6 +11,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppText } from "./AppText";
 import { AppButton } from "./AppButton";
+import { FONT_SIZE } from "../responsive/typographyTokens";
 
 const SHEET_TEXT = "#1E293B";
 const SHEET_TEXT_SEC = "#64748B";
@@ -27,8 +28,12 @@ export type LegacyModalProps = PropsWithChildren<{
   presentation?: LegacyModalPresentation;
   /** Remplace le bloc titre / sous-titre par un en-tête personnalisé. */
   renderHeader?: () => ReactNode;
-  /** Pied d’actions ; si défini, remplace le bouton « Fermer » par défaut. */
-  footer?: ReactNode;
+  /**
+   * Pied d’actions ; si défini, remplace le bouton « Fermer » par défaut.
+   * Passez explicitement `null` pour supprimer entièrement la zone footer
+   * (utile pour les bottom-sheets gérant leurs actions dans le corps).
+   */
+  footer?: ReactNode | null;
   /** Affiche la poignée (presentation bottomSheet). */
   showDragHandle?: boolean;
   /** Hauteur max du corps en mode bottomSheet (ratio de la hauteur écran). */
@@ -38,9 +43,9 @@ export type LegacyModalProps = PropsWithChildren<{
 /** Aligné sur les cartes dispatch (teinte marque légère). */
 const MODAL_CARD_BORDER = "rgba(0, 121, 107, 0.1)";
 const TITLE_COLOR = "#163A34";
-const CTA_H = 48;
-const CTA_R = 12;
-const SECONDARY_CTA_BORDER = "rgba(0, 121, 107, 0.28)";
+const CTA_H = 44;
+const CTA_R = 10;
+const SECONDARY_CTA_BORDER = "rgba(148, 163, 184, 0.35)";
 const MAX_BODY_H_CENTERED = Math.min(Dimensions.get("window").height * 0.62, 540);
 
 const s = StyleSheet.create({
@@ -119,7 +124,7 @@ const s = StyleSheet.create({
   },
   title: {
     color: TITLE_COLOR,
-    fontSize: 17,
+    fontSize: FONT_SIZE.px17,
     fontWeight: "700" as const,
     letterSpacing: 0.1,
     paddingBottom: 12,
@@ -135,13 +140,13 @@ const s = StyleSheet.create({
   },
   sheetTitle: {
     color: SHEET_TEXT,
-    fontSize: 18,
+    fontSize: FONT_SIZE.px18,
     fontWeight: "700" as const,
     letterSpacing: 0.15,
   },
   sheetSubtitle: {
     color: SHEET_TEXT_SEC,
-    fontSize: 13,
+    fontSize: FONT_SIZE.px13,
     fontWeight: "500" as const,
     marginTop: 6,
     lineHeight: 18,
@@ -230,6 +235,9 @@ export function Modal({
     </ScrollView>
   );
 
+  const footerNode =
+    footer === null ? null : <View style={s.footer}>{footer ?? defaultFooter}</View>;
+
   if (isSheet) {
     return (
       <NativeModal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -239,7 +247,7 @@ export function Modal({
             {showDragHandle ? <View style={s.dragHandle} /> : null}
             {headerNode}
             {scrollBody}
-            <View style={s.footer}>{footer ?? defaultFooter}</View>
+            {footerNode}
           </View>
         </View>
       </NativeModal>
@@ -252,7 +260,7 @@ export function Modal({
         <View style={s.card}>
           {headerNode}
           {scrollBody}
-          <View style={s.footer}>{footer ?? defaultFooter}</View>
+          {footerNode}
         </View>
       </View>
     </NativeModal>

@@ -21,6 +21,7 @@ import {
 } from "../../../src/design/responsive";
 import { E } from "../../../src/features/company/theme/enterpriseOpsTheme";
 import { createShadow } from "../../../src/styles/shadowStyles";
+import { FONT_SIZE } from "../../../src/design/responsive/typographyTokens";
 
 const cardShadow = createShadow({
   shadowColor: "#000000",
@@ -1506,11 +1507,11 @@ const styles = StyleSheet.create({
   disabledMiniLabel: {
     color: E.TEXT_SEC,
     fontWeight: "600",
-    fontSize: 11,
+    fontSize: FONT_SIZE.px11,
   },
   disabledHeroText: { flex: 1, minWidth: 0, gap: 8 },
   disabledTitle: {
-    fontSize: 21,
+    fontSize: FONT_SIZE.px21,
     fontWeight: "700",
     color: E.TEXT,
     letterSpacing: 0.15,
@@ -1518,7 +1519,7 @@ const styles = StyleSheet.create({
   disabledSubtitle: {
     color: E.TEXT_SEC,
     lineHeight: 21,
-    fontSize: 14,
+    fontSize: FONT_SIZE.px14,
   },
   disabledUnifiedChip: {
     flexDirection: "row",
@@ -1536,7 +1537,7 @@ const styles = StyleSheet.create({
   disabledUnifiedChipText: {
     color: E.BRAND_DARK,
     fontWeight: "600",
-    fontSize: 12,
+    fontSize: FONT_SIZE.px12,
   },
   disabledCard: {
     backgroundColor: E.CARD,
@@ -1560,7 +1561,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  disabledCardTitle: { fontWeight: "700", color: E.TEXT, fontSize: 16 },
+  disabledCardTitle: { fontWeight: "700", color: E.TEXT, fontSize: FONT_SIZE.px16 },
   disabledCardIntro: {
     color: E.TEXT_SEC,
     lineHeight: 19,
@@ -1586,11 +1587,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  disabledPreviewTileTitle: { fontWeight: "700", color: E.TEXT, fontSize: 15 },
+  disabledPreviewTileTitle: { fontWeight: "700", color: E.TEXT, fontSize: FONT_SIZE.px15 },
   disabledPreviewTileHint: {
     color: E.TEXT_MUTED,
     lineHeight: 18,
-    fontSize: 12,
+    fontSize: FONT_SIZE.px12,
   },
   disabledPillSoft: {
     paddingHorizontal: 8,
@@ -1601,7 +1602,7 @@ const styles = StyleSheet.create({
     borderColor: "rgba(148, 163, 184, 0.3)",
   },
   disabledPillSoftText: {
-    fontSize: 10,
+    fontSize: FONT_SIZE.px10,
     fontWeight: "800",
     color: E.TEXT_SEC,
     letterSpacing: 0.3,
@@ -1609,7 +1610,7 @@ const styles = StyleSheet.create({
   },
   disabledFlagKey: {
     fontFamily: Platform.select({ ios: "Menlo", android: "monospace", default: "monospace" }),
-    fontSize: 10,
+    fontSize: FONT_SIZE.px10,
     color: E.TEXT_MUTED,
     marginTop: 4,
     lineHeight: 14,
@@ -1635,7 +1636,7 @@ const styles = StyleSheet.create({
   disabledInfoLead: {
     fontWeight: "700",
     color: E.BRAND_DARK,
-    fontSize: 14,
+    fontSize: FONT_SIZE.px14,
   },
   disabledInfoText: {
     color: E.TEXT_SEC,
@@ -1661,7 +1662,7 @@ const styles = StyleSheet.create({
   },
   enabledHeroCol: { flex: 1, minWidth: 0, gap: 6 },
   enabledTitle: {
-    fontSize: 20,
+    fontSize: FONT_SIZE.px20,
     fontWeight: "700",
     color: E.TEXT,
     letterSpacing: 0.2,
@@ -1697,7 +1698,7 @@ const styles = StyleSheet.create({
     borderColor: "rgba(0, 121, 107, 0.22)",
   },
   segmentPressed: { opacity: 0.88 },
-  segmentLabel: { fontWeight: "700", fontSize: 14 },
+  segmentLabel: { fontWeight: "700", fontSize: FONT_SIZE.px14 },
   segmentLabelOn: { color: E.BRAND_DARK },
   segmentLabelOff: { color: brandTextMuted },
   invoiceKpiRow: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
@@ -1722,12 +1723,12 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFBEB",
     borderColor: "rgba(245, 158, 11, 0.35)",
   },
-  invoiceKpiLabel: { color: E.TEXT_SEC, fontWeight: "600", fontSize: 12 },
-  invoiceKpiLabelAlert: { color: "#B42318", fontWeight: "600", fontSize: 12 },
-  invoiceKpiLabelCaution: { color: "#B45309", fontWeight: "600", fontSize: 12 },
-  invoiceKpiValue: { marginTop: 4, color: E.TEXT, fontSize: 18, fontWeight: "700" },
-  invoiceKpiValueAlert: { marginTop: 4, color: "#B42318", fontSize: 18, fontWeight: "700" },
-  invoiceKpiValueCaution: { marginTop: 4, color: "#B45309", fontSize: 18, fontWeight: "700" },
+  invoiceKpiLabel: { color: E.TEXT_SEC, fontWeight: "600", fontSize: FONT_SIZE.px12 },
+  invoiceKpiLabelAlert: { color: "#B42318", fontWeight: "600", fontSize: FONT_SIZE.px12 },
+  invoiceKpiLabelCaution: { color: "#B45309", fontWeight: "600", fontSize: FONT_SIZE.px12 },
+  invoiceKpiValue: { marginTop: 4, color: E.TEXT, fontSize: FONT_SIZE.px18, fontWeight: "700" },
+  invoiceKpiValueAlert: { marginTop: 4, color: "#B42318", fontSize: FONT_SIZE.px18, fontWeight: "700" },
+  invoiceKpiValueCaution: { marginTop: 4, color: "#B45309", fontSize: FONT_SIZE.px18, fontWeight: "700" },
   invoiceKpiCellSelected: {
     borderColor: E.BRAND,
     borderWidth: 2,
@@ -1769,11 +1770,11 @@ const styles = StyleSheet.create({
   invoiceRefBadgeLabelPaid: {
     color: "#15803d",
   },
-  invoiceMetaLine: { color: E.TEXT_SEC, fontSize: 13, lineHeight: 18, fontWeight: "400" },
+  invoiceMetaLine: { color: E.TEXT_SEC, fontSize: FONT_SIZE.px13, lineHeight: 18, fontWeight: "400" },
   invoiceUnpaidHint: {
     marginTop: 8,
     marginLeft: 41,
-    fontSize: 12,
+    fontSize: FONT_SIZE.px12,
     fontWeight: "700",
     color: E.DANGER,
   },
@@ -1804,7 +1805,7 @@ const styles = StyleSheet.create({
     opacity: 0.55,
   },
   clientLoadMoreLabel: {
-    fontSize: 14,
+    fontSize: FONT_SIZE.px14,
     fontWeight: "500",
     letterSpacing: 0.15,
     color: E.TEXT_SEC,
@@ -1837,7 +1838,7 @@ const styles = StyleSheet.create({
   dispatchTimeText: {
     color: E.BRAND,
     fontWeight: "700",
-    fontSize: 15,
+    fontSize: FONT_SIZE.px15,
     letterSpacing: 0.2,
     lineHeight: 20,
   },
@@ -1859,7 +1860,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     fontWeight: "600",
-    fontSize: 14,
+    fontSize: FONT_SIZE.px14,
     color: E.TEXT,
     marginRight: 6,
     lineHeight: 20,
@@ -1887,7 +1888,7 @@ const styles = StyleSheet.create({
   /** Aligné sur `badgeLabel` dispatch (statut gris). */
   dispatchRefBadgeLabel: {
     width: "100%",
-    fontSize: 10,
+    fontSize: FONT_SIZE.px10,
     lineHeight: 16,
     fontWeight: "700",
     letterSpacing: 0.3,
@@ -1909,7 +1910,7 @@ const styles = StyleSheet.create({
   dispatchSubtitle: {
     marginTop: 6,
     marginLeft: 41,
-    fontSize: 12,
+    fontSize: FONT_SIZE.px12,
     fontWeight: "500",
     color: E.TEXT_SEC,
     lineHeight: 16,
@@ -1940,13 +1941,13 @@ const styles = StyleSheet.create({
   clientExpandLineBlock: { marginBottom: 6 },
   clientExpandLabel: {
     color: E.TEXT_MUTED,
-    fontSize: 11,
+    fontSize: FONT_SIZE.px11,
     fontWeight: "600",
     marginBottom: 2,
   },
   clientExpandValue: {
     color: E.TEXT_SEC,
-    fontSize: 13,
+    fontSize: FONT_SIZE.px13,
     lineHeight: 18,
     fontWeight: "400",
   },

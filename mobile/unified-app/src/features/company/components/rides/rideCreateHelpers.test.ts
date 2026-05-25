@@ -1,6 +1,7 @@
 import { describe, expect, it } from "@jest/globals";
 import {
   buildRideCreatePayload,
+  computeRecurrencePreview,
   parseMedicalHintsFromAddress,
   parseSimulationAmount,
 } from "./rideCreateHelpers";
@@ -291,6 +292,132 @@ describe("rideCreateHelpers", () => {
       expect(payload.return_date).toBe("2026-05-07");
       expect(payload.return_time).toBeUndefined();
       expect(payload.is_return).toBe(true);
+    });
+  });
+
+  describe("computeRecurrencePreview", () => {
+    it("retourne vide quand recurrence === none", () => {
+      const r = computeRecurrencePreview({
+        scheduledAt: "2026-05-21T10:00:00",
+        recurrence: "none",
+      });
+      expect(r).toEqual({ total: 0, dates: [] });
+    });
+
+    it("quotidien avec date de fin: génère un trajet par jour inclus", () => {
+      const r = computeRecurrencePreview({
+        scheduledAt: "2026-05-21T10:00:00",
+        recurrence: "daily",
+        endDate: "2026-05-30",
+      });
+      expect(r.total).toBe(10);
+      expect(r.dates).toHaveLength(10);
+      expect(r.dates[0].getDate()).toBe(21);
+      expect(r.dates[r.dates.length - 1].getDate()).toBe(30);
+    });
+
+    it("hebdomadaire avec date de fin: génère un trajet par semaine (legacy)", () => {
+      const r = computeRecurrencePreview({
+        scheduledAt: "2026-05-21T10:00:00",
+        recurrence: "weekly",
+        endDate: "2026-06-30",
+      });
+      expect(r.total).toBe(6);
+      expect(r.dates[0].getDate()).toBe(21);
+      expect(r.dates[1].getDate()).toBe(28);
+    });
+
+    it("hebdomadaire avec jours sélectionnés: lun + mer + ven", () => {
+      const r = computeRecurrencePreview({
+        scheduledAt: "2026-05-18T10:00:00",
+        recurrence: "weekly",
+        days: [0, 2, 4],
+        endDate: "2026-05-29",
+      });
+      expect(r.total).toBeGreaterThan(0);
+      const weekdays = r.dates.map((d) => (d.getDay() + 6) % 7);
+      expect(weekdays.every((w) => [0, 2, 4].includes(w))).toBe(true);
+    });
+
+    it("custom: ne garde que les jours sélectionnés (lun, mer, ven)", () => {
+      const r = computeRecurrencePreview({
+        scheduledAt: "2026-05-18T10:00:00",
+        recurrence: "custom",
+        days: [0, 2, 4],
+        endDate: "2026-05-29",
+      });
+      expect(r.total).toBeGreaterThan(0);
+      const weekdays = r.dates.map((d) => (d.getDay() + 6) % 7);
+      expect(weekdays.every((w) => [0, 2, 4].includes(w))).toBe(true);
+    });
+
+    it("custom: intervalle 2 semaines, ne garde que les blocs « actifs » (lun, ven)", () => {
+      const r = computeRecurrencePreview({
+        scheduledAt: "2026-05-18T10:00:00",
+        recurrence: "custom",
+        days: [0, 4],
+        endDate: "2026-06-30",
+        intervalWeeks: 2,
+      });
+      expect(r.total).toBeGreaterThan(0);
+      const weekdays = r.dates.map((d) => (d.getDay() + 6) % 7);
+      expect(weekdays.every((w) => [0, 4].includes(w))).toBe(true);
+      const startWeekStart = new Date(2026, 4, 18); // lun 18 mai 2026
+      const weekMs = 7 * 86_400_000;
+      for (const d of r.dates) {
+        const w = new Date(d);
+        const dayIdx = (w.getDay() + 6) % 7;
+        const monday = new Date(w.getTime() - dayIdx * 86_400_000);
+        monday.setHours(0, 0, 0, 0);
+        const delta = Math.round((monday.getTime() - startWeekStart.getTime()) / weekMs);
+        expect(delta % 2).toBe(0);
+      }
+    });
+
+    it("custom: intervalle 1 semaine équivaut au comportement par défaut", () => {
+      const a = computeRecurrencePreview({
+        scheduledAt: "2026-05-18T10:00:00",
+        recurrence: "custom",
+        days: [0, 2, 4],
+        endDate: "2026-05-29",
+      });
+      const b = computeRecurrencePreview({
+        scheduledAt: "2026-05-18T10:00:00",
+        recurrence: "custom",
+        days: [0, 2, 4],
+        endDate: "2026-05-29",
+        intervalWeeks: 1,
+      });
+      expect(b.total).toBe(a.total);
+    });
+
+    it("custom: retourne vide si aucun jour sélectionné", () => {
+      const r = computeRecurrencePreview({
+        scheduledAt: "2026-05-18T10:00:00",
+        recurrence: "custom",
+        days: [],
+        endDate: "2026-05-29",
+      });
+      expect(r).toEqual({ total: 0, dates: [] });
+    });
+
+    it("respecte maxDates pour éviter une boucle infinie", () => {
+      const r = computeRecurrencePreview({
+        scheduledAt: "2026-05-21T10:00:00",
+        recurrence: "daily",
+        endDate: "2030-01-01",
+        maxDates: 5,
+      });
+      expect(r.total).toBe(5);
+    });
+
+    it("daily sans date de fin: borne sur defaultDailyDays", () => {
+      const r = computeRecurrencePreview({
+        scheduledAt: "2026-05-21T10:00:00",
+        recurrence: "daily",
+        defaultDailyDays: 7,
+      });
+      expect(r.total).toBe(8);
     });
   });
 });

@@ -9,6 +9,7 @@ import {
 } from "../src/core/public/guestSaferpayPending";
 import * as SecureStore from "../src/core/storage/secureStoreCompat";
 import { brandPrimary, ResponsiveContainer, Screen } from "../src/design/responsive";
+import { FONT_SIZE } from "../src/design/responsive/typographyTokens";
 
 const PUBLIC_BOOKING_TOKEN_KEY = "public_booking_status_token_v1";
 const PUBLIC_BOOKING_ID_KEY = "public_booking_id_v1";
@@ -198,7 +199,7 @@ const styles = StyleSheet.create({
   msg: {
     textAlign: "center",
     color: "#334155",
-    fontSize: 15,
+    fontSize: FONT_SIZE.px15,
     lineHeight: 22,
   },
 });

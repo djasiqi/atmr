@@ -644,6 +644,17 @@ def create_app(config_name: str | None = None):
     except Exception as e:
         app.logger.warning("[P0] Échec initialisation trace_id middleware: %s", e)
 
+    try:
+        from services.monitoring.company_dashboard_sql_perf import (
+            init_company_dashboard_sql_perf,
+        )
+
+        init_company_dashboard_sql_perf(app)
+    except Exception as e:
+        app.logger.warning(
+            "[CompanyDashboardSQLPerf] Échec initialisation: %s", e
+        )
+
     # Prometheus middleware pour métriques HTTP (latence p50/p95/p99)
     try:
         from middleware.metrics import prom_middleware

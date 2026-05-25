@@ -36,15 +36,15 @@ const PRESETS: Record<
     },
   },
   company: {
-    barBg: surfaceCard,
-    border: COMPANY_BAR_BORDER,
-    webShadow: "0 4px 20px rgba(15, 23, 42, 0.08)",
+    barBg: "#FFFFFF",
+    border: "rgba(148, 163, 184, 0.22)",
+    webShadow: "0 8px 28px rgba(15, 23, 42, 0.1)",
     nativeShadow: {
       shadowColor: "#0F172A",
-      shadowOpacity: 0.1,
-      shadowOffset: { width: 0, height: 4 },
-      shadowRadius: 12,
-      elevation: 6,
+      shadowOpacity: 0.12,
+      shadowOffset: { width: 0, height: 6 },
+      shadowRadius: 18,
+      elevation: 10,
     },
   },
 };
@@ -141,4 +141,19 @@ export function computeClientFloatingBottomPad(bottomInset: number): number {
 /** Padding bas sous la pilule — barre entreprise. */
 export function computeCompanyFloatingBottomPad(bottomInset: number): number {
   return Math.max(12, bottomInset + 4);
+}
+
+/**
+ * Réserve verticale pour un pied de page fixe (ex. composeur de fil) afin qu’il
+ * reste au-dessus de la pilule d’onglets flottante (contenu pleine hauteur + tab bar overlay).
+ */
+export function computeFloatingTabBarClearance(bottomInset: number): number {
+  return 64 + computeCompanyFloatingBottomPad(bottomInset);
+}
+
+/** Hauteur pilule + padding bas du slot — juste au-dessus du menu visible. */
+const FLOATING_TAB_PILL_HEIGHT = 56;
+
+export function computeFloatingTabComposerClearance(bottomInset: number): number {
+  return FLOATING_TAB_PILL_HEIGHT + computeCompanyFloatingBottomPad(bottomInset);
 }

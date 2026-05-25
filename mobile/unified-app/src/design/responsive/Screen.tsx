@@ -1,5 +1,6 @@
-import React, { type ReactNode, type ReactElement, type RefObject } from "react";
+import React, { useEffect, useMemo, useRef, type ReactNode, type ReactElement, type RefObject } from "react";
 import {
+  Animated,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -10,8 +11,12 @@ import {
   type StyleProp,
   type ViewStyle,
 } from "react-native";
+import { usePathname } from "expo-router";
 import { useResponsiveTokens } from "./useResponsiveTokens";
 import { useAppViewport } from "./useAppViewport";
+import { Motion, MotionEasing } from "../navigation/navigationMotion";
+import { resolveMotionDuration } from "../navigation/applyNavigationMotion";
+import { useReduceMotion } from "../navigation/useReduceMotion";
 
 export type ScreenProps = {
   children: ReactNode;
@@ -58,7 +63,42 @@ export type ScreenProps = {
   /** Uniquement si `scroll` : propagé au `ScrollView`. */
   onScroll?: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
   scrollEventThrottle?: number;
+  /**
+   * Animation de transition de page interne (fade + slide 8 px, 180 ms).
+   * Désactivée par défaut depuis le contrat LIRIE :
+   *   - écrans sous tabs → animation portée par `floatingTabScreenOptions`
+   *   - écrans dans un stack → animation portée par `stackScreenOptions`
+   * À n'activer (true) que pour un écran isolé hors tabs/stack.
+   */
+  pageTransition?: boolean;
 };
+
+const TAB_ORDER = [
+  "dashboard",
+  "rides",
+  "chat",
+  "clients-facturation",
+  "settings",
+  "index",
+  "trips",
+  "missions",
+  "schedule",
+  "profile",
+] as const;
+let lastRouteLeaf: string | null = null;
+
+function extractRouteLeaf(pathname: string): string {
+  const parts = pathname.split("/").filter(Boolean);
+  return parts.at(-1) ?? "";
+}
+
+function computeSlideDirection(previousLeaf: string | null, nextLeaf: string): 1 | -1 {
+  if (!previousLeaf) return 1;
+  const prevIdx = TAB_ORDER.indexOf(previousLeaf as (typeof TAB_ORDER)[number]);
+  const nextIdx = TAB_ORDER.indexOf(nextLeaf as (typeof TAB_ORDER)[number]);
+  if (prevIdx < 0 || nextIdx < 0) return 1;
+  return nextIdx >= prevIdx ? 1 : -1;
+}
 
 /**
  * Enveloppe standard : flex 1, insets (safe area min 16 via useAppViewport).
@@ -87,9 +127,48 @@ export function Screen({
   onScroll,
   scrollEventThrottle,
   stickyHeader,
+  pageTransition = false,
 }: ScreenProps) {
   const { topInset, bottomInset, horizontalPadding } = useAppViewport();
   const { scrollExtraBottomPadding, effectiveFontScale, fontScale } = useResponsiveTokens();
+  const pathname = usePathname();
+  const routeLeaf = useMemo(() => extractRouteLeaf(pathname), [pathname]);
+  const transitionProgress = useRef(new Animated.Value(pageTransition ? 0 : 1)).current;
+  const reduceMotion = useReduceMotion();
+
+  useEffect(() => {
+    if (!pageTransition) {
+      transitionProgress.setValue(1);
+      lastRouteLeaf = routeLeaf;
+      return;
+    }
+    transitionProgress.setValue(0);
+    Animated.timing(transitionProgress, {
+      toValue: 1,
+      duration: resolveMotionDuration(Motion.page, reduceMotion),
+      easing: MotionEasing,
+      useNativeDriver: true,
+    }).start();
+    lastRouteLeaf = routeLeaf;
+  }, [pageTransition, routeLeaf, transitionProgress, reduceMotion]);
+
+  const direction = computeSlideDirection(lastRouteLeaf, routeLeaf);
+  const transitionStyle = pageTransition
+    ? {
+        opacity: transitionProgress.interpolate({
+          inputRange: [0, 1],
+          outputRange: [0.96, 1],
+        }),
+        transform: [
+          {
+            translateX: transitionProgress.interpolate({
+              inputRange: [0, 1],
+              outputRange: [direction > 0 ? 8 : -8, 0],
+            }),
+          },
+        ],
+      }
+    : undefined;
 
   /** Avec sticky header, la safe area haute est gérée dans le bandeau (fond pleine largeur sous la barre système). */
   const shellPaddingTop =
@@ -171,7 +250,11 @@ export function Screen({
         },
       ]}
     >
-      {inner}
+      {pageTransition ? (
+        <Animated.View style={[styles.flex, transitionStyle]}>{inner}</Animated.View>
+      ) : (
+        inner
+      )}
     </View>
   );
 

@@ -84,7 +84,7 @@ describe("company realtime bridge", () => {
     delete process.env.EXPO_PUBLIC_API_BASE_URL;
   });
 
-  it("stays idle when company realtime feature is disabled", () => {
+  it("marks failed when company realtime feature is disabled", () => {
     mockIsFeatureEnabled.mockImplementation((key: unknown) =>
       key === "company_realtime_enabled" ? false : true
     );
@@ -95,7 +95,7 @@ describe("company realtime bridge", () => {
 
     expect(companyRealtimeBridge.getSnapshot()).toEqual(
       expect.objectContaining({
-        status: "idle",
+        status: "failed",
         connected: false,
         contextId: "company:42",
       })
@@ -204,7 +204,38 @@ describe("company realtime bridge", () => {
     expect(mockDispatch).toHaveBeenCalledTimes(1);
   });
 
-  it("degrades after realtime silence and transitions on reconnect errors", () => {
+  it("registers a single reconnect_attempt handler", () => {
+    mockIsFeatureEnabled.mockReturnValue(true);
+    process.env.EXPO_PUBLIC_COMPANY_SOCKET_URL = "wss://company.example.test";
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { companyRealtimeBridge } = require("./companyRealtimeBridge");
+
+    companyRealtimeBridge.connect("company:42");
+    expect(mockReconnectHandlers.get("reconnect_attempt")?.length).toBe(1);
+  });
+
+  it("does not notify listeners on high-frequency lastEventAt-only updates", () => {
+    mockIsFeatureEnabled.mockReturnValue(true);
+    process.env.EXPO_PUBLIC_COMPANY_SOCKET_URL = "wss://company.example.test";
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { companyRealtimeBridge } = require("./companyRealtimeBridge");
+
+    const listener = jest.fn();
+    companyRealtimeBridge.subscribe(listener);
+    listener.mockClear();
+
+    companyRealtimeBridge.connect("company:42");
+    mockHandlers.get("connect")?.[0]?.();
+    const callsAfterConnect = listener.mock.calls.length;
+
+    const bookingUpdatedHandler = mockHandlers.get("booking_updated")?.[0];
+    bookingUpdatedHandler?.({ mission_id: 1 });
+    bookingUpdatedHandler?.({ mission_id: 2 });
+
+    expect(listener.mock.calls.length).toBe(callsAfterConnect);
+  });
+
+  it("keeps transport healthy during silence but marks data freshness idle then failed on reconnect exhaustion", () => {
     mockIsFeatureEnabled.mockReturnValue(true);
     process.env.EXPO_PUBLIC_COMPANY_SOCKET_URL = "wss://company.example.test";
     // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -212,15 +243,39 @@ describe("company realtime bridge", () => {
 
     companyRealtimeBridge.connect("company:42");
     mockHandlers.get("connect")?.[0]?.();
-    expect(companyRealtimeBridge.getSnapshot().status).toBe("healthy");
+    expect(companyRealtimeBridge.getSnapshot().transportStatus).toBe("healthy");
 
     jest.advanceTimersByTime(125_000);
-    expect(companyRealtimeBridge.getSnapshot().status).toBe("degraded");
+    const afterSilence = companyRealtimeBridge.getSnapshot();
+    expect(afterSilence.transportStatus).toBe("healthy");
+    expect(afterSilence.dataFreshness).toBe("idle");
 
     mockHandlers.get("connect_error")?.[0]?.({ message: "network down" });
-    expect(companyRealtimeBridge.getSnapshot().status).toBe("reconnecting");
+    expect(companyRealtimeBridge.getSnapshot().transportStatus).toBe("reconnecting");
     mockReconnectHandlers.get("reconnect_failed")?.[0]?.();
-    expect(companyRealtimeBridge.getSnapshot().status).toBe("failed");
+    expect(companyRealtimeBridge.getSnapshot().transportStatus).toBe("failed");
+  });
+
+  it("falls back to polling-only after a handshake timeout", () => {
+    mockIsFeatureEnabled.mockReturnValue(true);
+    process.env.EXPO_PUBLIC_COMPANY_SOCKET_URL = "http://company.example.test/socket";
+    const { companyRealtimeBridge } = require("./companyRealtimeBridge");
+
+    companyRealtimeBridge.connect("company:42");
+
+    expect(mockIo).toHaveBeenCalledTimes(1);
+    expect(mockIo.mock.calls[0]?.[1]).toMatchObject({
+      transports: ["websocket"],
+    });
+
+    mockHandlers.get("connect_error")?.[0]?.({ message: "timeout" });
+    jest.runOnlyPendingTimers();
+
+    expect(mockIo).toHaveBeenCalledTimes(2);
+    expect(mockIo.mock.calls[1]?.[1]).toMatchObject({
+      transports: ["polling"],
+      upgrade: false,
+    });
   });
 
   it("falls back to polling-only after a websocket handshake error", () => {

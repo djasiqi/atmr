@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Image,
   ImageBackground,
-  Keyboard,
   Platform,
   Pressable,
   ScrollView,
@@ -26,7 +25,10 @@ import {
   Screen,
   scrollAnchorAboveKeyboard,
   useAppViewport,
+  useKeyboardHeight,
+  useResponsiveTokens,
 } from "../../src/design/responsive";
+import { FONT_SIZE } from "../../src/design/responsive/typographyTokens";
 
 const LANDING_BACKGROUND = require("../../assets/images/landing-background.png");
 const LIRIE_LOGO = require("../../assets/images/lirie-logo-color.png");
@@ -94,7 +96,7 @@ const INPUT_SHELL = {
   paddingHorizontal: 14,
 } as const;
 
-const INPUT_TEXT = { fontSize: 16, minHeight: 44 } as const;
+const INPUT_TEXT = { fontSize: FONT_SIZE.px16, minHeight: 44 } as const;
 
 function normalizeBirthDateInput(value: string): string | null {
   const raw = value.trim();
@@ -275,28 +277,14 @@ export default function SignupScreen() {
   const signupIntercomAnchorRef = useRef<View | null>(null);
   const signupAccessAnchorRef = useRef<View | null>(null);
   const addressBlurTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [keyboardVisible, setKeyboardVisible] = useState(false);
-  const [keyboardScrollPaddingBottom, setKeyboardScrollPaddingBottom] = useState(0);
+  const { keyboardVisible, scrollPaddingBottom: keyboardScrollPaddingBottom } = useKeyboardHeight();
+  const responsiveTokens = useResponsiveTokens();
 
   useEffect(() => {
-    if (Platform.OS === "web") return;
-    const show = Keyboard.addListener("keyboardDidShow", (e) => {
-      const h = e.endCoordinates?.height ?? 0;
-      const computed = h > 0 ? Math.round(h + 48) : 300;
-      setKeyboardScrollPaddingBottom(Math.max(260, computed));
-      setKeyboardVisible(true);
-    });
-    const hide = Keyboard.addListener("keyboardDidHide", () => {
-      setKeyboardVisible(false);
-      setKeyboardScrollPaddingBottom(0);
-      signupScrollRef.current?.scrollTo({ y: 0, animated: true });
-      signupScrollOffsetYRef.current = 0;
-    });
-    return () => {
-      show.remove();
-      hide.remove();
-    };
-  }, []);
+    if (keyboardVisible) return;
+    signupScrollRef.current?.scrollTo({ y: 0, animated: true });
+    signupScrollOffsetYRef.current = 0;
+  }, [keyboardVisible]);
 
   const civilityLabel =
     gender === "male" ? "Homme" : gender === "female" ? "Femme" : gender === "other" ? "Autre" : "Civilité";
@@ -704,7 +692,12 @@ export default function SignupScreen() {
                     </View>
 
                     {phoneCountryOpen ? (
-                      <View style={styles.phoneCountryList}>
+                      <View
+                        style={[
+                          styles.phoneCountryList,
+                          { maxHeight: responsiveTokens.dropdownListMaxHeight },
+                        ]}
+                      >
                         {PHONE_COUNTRIES.map((country, index) => (
                           <Pressable
                             key={country.code}
@@ -1104,7 +1097,12 @@ export default function SignupScreen() {
                     ) : null}
 
                     {addressAutocompleteOpen && addressSuggestions.length > 0 ? (
-                      <View style={styles.addressSuggestionList}>
+                      <View
+                        style={[
+                          styles.addressSuggestionList,
+                          { maxHeight: responsiveTokens.dropdownListMaxHeight },
+                        ]}
+                      >
                         {addressSuggestions.map((item, index) => {
                           const label = item.address ?? item.label;
                           const { primary, secondary } = splitSuggestionLabel(label);
@@ -1385,7 +1383,7 @@ const styles = StyleSheet.create({
   },
   kicker: {
     color: "#0A8F7A",
-    fontSize: 13,
+    fontSize: FONT_SIZE.px13,
     fontWeight: "500",
     letterSpacing: 0.5,
     textTransform: "uppercase",
@@ -1463,7 +1461,7 @@ const styles = StyleSheet.create({
   },
   stepDotText: {
     color: "#5F7369",
-    fontSize: 11,
+    fontSize: FONT_SIZE.px11,
     fontWeight: "700",
   },
   stepDotTextActive: {
@@ -1471,7 +1469,7 @@ const styles = StyleSheet.create({
   },
   stepLabel: {
     color: "#5F7369",
-    fontSize: 12,
+    fontSize: FONT_SIZE.px12,
     fontWeight: "600",
   },
   stepLabelActive: {
@@ -1507,7 +1505,7 @@ const styles = StyleSheet.create({
   googleButtonText: {
     color: "#163A34",
     fontWeight: "600",
-    fontSize: 14,
+    fontSize: FONT_SIZE.px14,
     letterSpacing: 0.15,
   },
   googleDivider: {
@@ -1523,7 +1521,7 @@ const styles = StyleSheet.create({
   },
   googleDividerText: {
     color: "#7A8D86",
-    fontSize: 12,
+    fontSize: FONT_SIZE.px12,
     fontWeight: "600",
     textTransform: "uppercase",
   },
@@ -1551,7 +1549,7 @@ const styles = StyleSheet.create({
   },
   mobilityTriggerText: {
     color: "#45655D",
-    fontSize: 14,
+    fontSize: FONT_SIZE.px14,
     fontWeight: "600",
   },
   mobilityTriggerPlaceholder: {
@@ -1591,7 +1589,7 @@ const styles = StyleSheet.create({
   mobilityOptionText: {
     color: "#45655D",
     fontWeight: "600",
-    fontSize: 13.5,
+    fontSize: FONT_SIZE.px13_5,
   },
   mobilityOptionTextActive: {
     color: "#0A8F7A",
@@ -1610,7 +1608,7 @@ const styles = StyleSheet.create({
   },
   fieldLabel: {
     color: "#5F7369",
-    fontSize: 12,
+    fontSize: FONT_SIZE.px12,
     fontWeight: "700",
     letterSpacing: 0.2,
   },
@@ -1622,7 +1620,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     paddingHorizontal: 14,
     color: brandText,
-    fontSize: 16,
+    fontSize: FONT_SIZE.px16,
   },
   fieldInputActive: {
     borderColor: "#0A8F7A",
@@ -1646,7 +1644,7 @@ const styles = StyleSheet.create({
   },
   addressSuggestionMetaText: {
     color: "#6F857E",
-    fontSize: 12.5,
+    fontSize: FONT_SIZE.px12_5,
     fontWeight: "500",
   },
   addressSuggestionList: {
@@ -1656,7 +1654,6 @@ const styles = StyleSheet.create({
     borderColor: "rgba(145,165,157,0.58)",
     backgroundColor: "#F8FBFA",
     overflow: "hidden",
-    maxHeight: 196,
   },
   addressSuggestionItem: {
     paddingVertical: 9,
@@ -1672,14 +1669,14 @@ const styles = StyleSheet.create({
   },
   addressSuggestionPrimary: {
     color: "#163A34",
-    fontSize: 13.5,
+    fontSize: FONT_SIZE.px13_5,
     lineHeight: 18,
     fontWeight: "600",
   },
   addressSuggestionSecondary: {
     marginTop: 2,
     color: "#5F7369",
-    fontSize: 12,
+    fontSize: FONT_SIZE.px12,
     lineHeight: 16,
   },
   dateWrap: {
@@ -1711,7 +1708,7 @@ const styles = StyleSheet.create({
   },
   optionalToggleText: {
     color: "#5F7369",
-    fontSize: 13.5,
+    fontSize: FONT_SIZE.px13_5,
     fontWeight: "600",
   },
   phoneWrap: {
@@ -1749,12 +1746,12 @@ const styles = StyleSheet.create({
   phoneCountryCode: {
     color: brandText,
     fontWeight: "700",
-    fontSize: 12,
+    fontSize: FONT_SIZE.px12,
   },
   phoneCountryDial: {
     color: "#5F7369",
     fontWeight: "600",
-    fontSize: 12,
+    fontSize: FONT_SIZE.px12,
   },
   phoneInput: {
     flex: 1,
@@ -1763,7 +1760,7 @@ const styles = StyleSheet.create({
     minHeight: Platform.OS === "web" ? 44 : 46,
     paddingVertical: Platform.OS === "web" ? 10 : 12,
     paddingHorizontal: 10,
-    fontSize: 16,
+    fontSize: FONT_SIZE.px16,
     color: brandText,
     backgroundColor: "#FFFFFF",
   },
@@ -1774,7 +1771,6 @@ const styles = StyleSheet.create({
     borderColor: "#B7C7C2",
     backgroundColor: "#FFFFFF",
     overflow: "hidden",
-    maxHeight: 240,
     ...Platform.select({
       web: { boxShadow: "0 8px 20px rgba(22,58,52,0.10)" },
       default: {
@@ -1801,14 +1797,14 @@ const styles = StyleSheet.create({
   phoneCountryItemText: {
     color: "#45655D",
     fontWeight: "600",
-    fontSize: 13.5,
+    fontSize: FONT_SIZE.px13_5,
   },
   phoneCountryItemTextActive: {
     color: "#0A8F7A",
   },
   phoneCountryItemDial: {
     color: "#6F857E",
-    fontSize: 13,
+    fontSize: FONT_SIZE.px13,
     fontWeight: "600",
   },
   phoneCountryItemDialActive: {
@@ -1837,7 +1833,7 @@ const styles = StyleSheet.create({
   civilityValue: {
     color: "#5F7369",
     fontWeight: "600",
-    fontSize: 14,
+    fontSize: FONT_SIZE.px14,
   },
   civilityPlaceholder: {
     color: "#7A8D86",
@@ -1876,7 +1872,7 @@ const styles = StyleSheet.create({
   civilityOptionText: {
     color: "#45655D",
     fontWeight: "600",
-    fontSize: 14,
+    fontSize: FONT_SIZE.px14,
   },
   civilityOptionTextActive: {
     color: "#0A8F7A",
@@ -1905,7 +1901,7 @@ const styles = StyleSheet.create({
   termsText: {
     flex: 1,
     color: "#45655D",
-    fontSize: 14,
+    fontSize: FONT_SIZE.px14,
     lineHeight: 20,
   },
   termsLink: {
@@ -1937,7 +1933,7 @@ const styles = StyleSheet.create({
   secondaryActionText: {
     color: "#0A8F7A",
     fontWeight: "600",
-    fontSize: 14,
+    fontSize: FONT_SIZE.px14,
     letterSpacing: 0.15,
   },
   feedbackAfterCta: {

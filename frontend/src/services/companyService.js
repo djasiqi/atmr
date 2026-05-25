@@ -54,10 +54,16 @@ export const fetchCompanyReservationsSummary = async (date) => {
   }
 };
 
-export const fetchCompanyReservations = async (date) => {
+export const fetchCompanyReservations = async (date, { fields } = {}) => {
   try {
+    const params = {
+      flat: true,
+      include_stats: false,
+      ...(date ? { date } : {}),
+      ...(fields === 'dashboard' ? { fields: 'dashboard' } : {}),
+    };
     const { data } = await apiClient.get('/companies/me/reservations', {
-      params: { flat: true, include_stats: false, ...(date ? { date } : {}) },
+      params,
       // Désactiver le cache pour forcer un rechargement
       headers: {
         'Cache-Control': 'no-cache',
@@ -175,6 +181,20 @@ export const completeReservation = async (reservationId, options = null) => {
   const { data } = await apiClient.post(
     `/companies/me/reservations/${reservationId}/complete`,
     body,
+  );
+  return data;
+};
+
+export const fetchBookingChangeEvents = async (bookingId) => {
+  const { data } = await apiClient.get(
+    `/companies/me/reservations/${bookingId}/change-events`
+  );
+  return data;
+};
+
+export const acknowledgeBookingChangeEvent = async (bookingId, eventId) => {
+  const { data } = await apiClient.post(
+    `/companies/me/reservations/${bookingId}/change-events/${eventId}/ack`
   );
   return data;
 };
@@ -1033,30 +1053,38 @@ const toYMD = (isoString) => {
  * pour une date donnée (YYYY-MM-DD).
  * Si forDate est omis, récupère pour aujourd’hui.
  */
-export const fetchAssignedReservations = async (forDate) => {
+export const fetchAssignedReservations = async (forDate, { reservations: prefetchedReservations } = {}) => {
   console.log(`[Dispatch] Fetching assigned reservations for date: ${forDate}`);
 
   try {
-    // Use separate try/catch blocks to handle each request independently
-    let reservations = [];
+    const hasPrefetched = Array.isArray(prefetchedReservations);
+    let reservations = hasPrefetched ? prefetchedReservations : [];
     let assignments = [];
 
-    try {
-      const reservationsRes = await apiClient.get('/companies/me/reservations/', {
-        params: { flat: true, ...(forDate ? { date: forDate } : {}) },
-      });
+    if (!hasPrefetched) {
+      try {
+        const reservationsRes = await apiClient.get('/companies/me/reservations/', {
+          params: {
+            flat: true,
+            fields: 'dashboard',
+            ...(forDate ? { date: forDate } : {}),
+          },
+        });
 
-      // Normalise la charge utile en tableau
-      const payload = reservationsRes.data;
-      reservations = Array.isArray(payload)
-        ? payload
-        : Array.isArray(payload?.reservations)
-          ? payload.reservations
-          : [];
-      console.log(`[Dispatch] Received ${reservations.length} reservations for date=${forDate}`);
-    } catch (error) {
-      console.error('[Dispatch] Error fetching reservations:', error?.response?.data || error);
-      // Continue with empty reservations array
+        const payload = reservationsRes.data;
+        reservations = Array.isArray(payload)
+          ? payload
+          : Array.isArray(payload?.reservations)
+            ? payload.reservations
+            : [];
+        console.log(`[Dispatch] Received ${reservations.length} reservations for date=${forDate}`);
+      } catch (error) {
+        console.error('[Dispatch] Error fetching reservations:', error?.response?.data || error);
+      }
+    } else if (process.env.NODE_ENV === 'development') {
+      console.log(
+        `[Dispatch] Using ${reservations.length} cached reservations for date=${forDate} (skip duplicate GET)`
+      );
     }
 
     try {

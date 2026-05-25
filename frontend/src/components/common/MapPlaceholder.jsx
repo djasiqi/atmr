@@ -54,8 +54,12 @@ const errorLabel = {
  * quand le SDK est déjà en cache).
  */
 export default function MapPlaceholder({ style, /** ms avant d’afficher le texte */ delayLabelMs = 400 }) {
-  const { isLoaded, loadError } = useGoogleMapsLoaded();
+  const { isLoaded, loadError, ensureLoaded } = useGoogleMapsLoaded();
   const [showLabel, setShowLabel] = useState(false);
+
+  useEffect(() => {
+    ensureLoaded();
+  }, [ensureLoaded]);
 
   useEffect(() => {
     if (isLoaded && !loadError) {

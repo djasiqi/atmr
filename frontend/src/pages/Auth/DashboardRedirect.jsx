@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useAuthToken from '../../hooks/useAuthToken';
-import { getAuthEnv } from '../../utils/webAuthSession';
+import { getAuthEnv, normalizeAuthRole } from '../../utils/webAuthSession';
 
 const DashboardRedirect = ({ forceDemoNamespace = false }) => {
   const user = useAuthToken();
@@ -16,7 +16,7 @@ const DashboardRedirect = ({ forceDemoNamespace = false }) => {
         return;
       }
 
-      const role = (user.role || '').toLowerCase();
+      const role = normalizeAuthRole(user.role);
 
       // Admin: toujours vers le dashboard admin (pas de namespace demo)
       if (role === 'admin') {

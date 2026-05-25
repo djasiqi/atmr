@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, TextInput, View, Platform } from "react-native";
 import { AppText } from "../../../design/ui/AppText";
-import { Audio } from "expo-av";
 import { Ionicons } from "@expo/vector-icons";
+import { useChatVoiceRecorder } from "../services/audioAdapter";
 import {
   C_BRAND,
   C_FIELD_ICON,
@@ -16,12 +16,11 @@ import {
   webFieldShellFocusOutline,
 } from "./chatComposerStyles";
 
-type ExpoAudioRecording = InstanceType<typeof Audio.Recording>;
-
 type ChatComposerProps = {
   value: string;
   onChangeText: (value: string) => void;
   onSend: () => void;
+  onInputFocus?: () => void;
   onTypingStateChange?: (typing: boolean) => void;
   onPickImage?: () => void;
   onPickPdf?: () => void;
@@ -33,10 +32,11 @@ type ChatComposerProps = {
 
 const MIN_VOICE_MS = 450;
 
-export function ChatComposer({
+export const ChatComposer = memo(function ChatComposer({
   value,
   onChangeText,
   onSend,
+  onInputFocus,
   onTypingStateChange,
   onPickImage,
   onPickPdf,
@@ -49,8 +49,10 @@ export function ChatComposer({
   const [dialOpen, setDialOpen] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
 
-  const recordingRef = useRef<ExpoAudioRecording | null>(null);
-  const cancelStartRef = useRef(false);
+  const { startRecording: startVoiceSession, stopRecording: stopVoiceSession, abortRecording } =
+    useChatVoiceRecorder();
+  /** Incrémenté à chaque pression / relâchement pour annuler un démarrage d’enregistrement encore en cours. */
+  const voiceInteractionEpochRef = useRef(0);
   const pressStartMsRef = useRef(0);
 
   const closeDial = useCallback(() => setDialOpen(false), []);
@@ -67,68 +69,55 @@ export function ChatComposer({
   const voiceAllowed = Boolean(onVoiceMessage) && Platform.OS !== "web";
 
   const finalizeRecording = useCallback(async () => {
-    const rec = recordingRef.current;
-    recordingRef.current = null;
     setIsRecording(false);
-    if (!rec) return;
-    try {
-      await rec.stopAndUnloadAsync();
-      const uri = rec.getURI();
-      const elapsed = Date.now() - pressStartMsRef.current;
-      if (uri && elapsed >= MIN_VOICE_MS && onVoiceMessage) {
-        onVoiceMessage(uri);
-      }
-    } catch {
-      /* ignore */
+    const elapsed = Date.now() - pressStartMsRef.current;
+    const result = await stopVoiceSession();
+    if (result.ok && result.data && elapsed >= MIN_VOICE_MS && onVoiceMessage) {
+      onVoiceMessage(result.data);
     }
-  }, [onVoiceMessage]);
+  }, [onVoiceMessage, stopVoiceSession]);
 
-  const startRecording = useCallback(async () => {
-    if (!onVoiceMessage) return;
-    cancelStartRef.current = false;
-    pressStartMsRef.current = Date.now();
-    try {
-      const perm = await Audio.requestPermissionsAsync();
-      if (!perm.granted || cancelStartRef.current) return;
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-      });
-      if (cancelStartRef.current) return;
-      const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-      if (cancelStartRef.current) {
-        await recording.stopAndUnloadAsync();
-        return;
+  const startRecording = useCallback(
+    async (attemptEpoch: number) => {
+      if (!onVoiceMessage) return;
+      pressStartMsRef.current = Date.now();
+      try {
+        const started = await startVoiceSession({
+          isAborted: () => voiceInteractionEpochRef.current !== attemptEpoch,
+        });
+        if (!started.ok) {
+          setIsRecording(false);
+          return;
+        }
+        setIsRecording(true);
+      } catch {
+        await abortRecording();
+        setIsRecording(false);
       }
-      recordingRef.current = recording;
-      setIsRecording(true);
-    } catch {
-      recordingRef.current = null;
-      setIsRecording(false);
-    }
-  }, [onVoiceMessage]);
+    },
+    [abortRecording, onVoiceMessage, startVoiceSession]
+  );
 
   const onVoicePressIn = useCallback(() => {
     closeDial();
-    void startRecording();
+    voiceInteractionEpochRef.current += 1;
+    const attemptEpoch = voiceInteractionEpochRef.current;
+    void startRecording(attemptEpoch);
   }, [closeDial, startRecording]);
 
   const onVoicePressOut = useCallback(() => {
-    cancelStartRef.current = true;
+    voiceInteractionEpochRef.current += 1;
     void finalizeRecording();
   }, [finalizeRecording]);
 
   useEffect(() => {
     return () => {
-      cancelStartRef.current = true;
-      const rec = recordingRef.current;
-      recordingRef.current = null;
-      if (rec) void rec.stopAndUnloadAsync();
+      voiceInteractionEpochRef.current += 1;
+      void abortRecording();
     };
-  }, []);
+  }, [abortRecording]);
 
   const sendCircleBg = isRecording ? C_RECORDING : C_BRAND;
-  const sendCircleBorder = isRecording ? C_RECORDING : C_BRAND;
 
   const a11yPrimary = hasText
     ? sendLabel
@@ -182,7 +171,10 @@ export function ChatComposer({
               onChangeText(next);
               onTypingStateChange?.(next.trim().length > 0);
             }}
-            onFocus={() => setInputFocused(true)}
+            onFocus={() => {
+              setInputFocused(true);
+              onInputFocus?.();
+            }}
             onBlur={() => setInputFocused(false)}
             placeholder={placeholder}
             placeholderTextColor={C_FIELD_PLACEHOLDER}
@@ -217,7 +209,7 @@ export function ChatComposer({
             onPress={onSend}
             style={({ pressed }) => [
               styles.sendCircle,
-              { backgroundColor: C_BRAND, borderColor: C_BRAND },
+              { backgroundColor: C_BRAND },
               pressed && styles.sendCirclePressed,
             ]}
             accessibilityRole="button"
@@ -231,7 +223,7 @@ export function ChatComposer({
             onPressOut={onVoicePressOut}
             style={({ pressed }) => [
               styles.sendCircle,
-              { backgroundColor: sendCircleBg, borderColor: sendCircleBorder },
+              { backgroundColor: sendCircleBg },
               pressed && !isRecording && styles.sendCirclePressed,
             ]}
             accessibilityRole="button"
@@ -251,4 +243,4 @@ export function ChatComposer({
       </View>
     </View>
   );
-}
+});

@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { ResponsiveContainer, Screen } from "../../src/design/responsive";
+import { FONT_SIZE } from "../../src/design/responsive/typographyTokens";
 
 export default function HowItWorksScreen() {
   const router = useRouter();
@@ -58,7 +59,7 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   title: {
-    fontSize: 24,
+    fontSize: FONT_SIZE.px24,
     fontWeight: "800",
     color: "#163A34",
   },
@@ -88,6 +89,6 @@ const styles = StyleSheet.create({
   ctaText: {
     color: "#FFFFFF",
     fontWeight: "700",
-    fontSize: 16,
+    fontSize: FONT_SIZE.px16,
   },
 });

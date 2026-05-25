@@ -1,14 +1,16 @@
 // hooks/useInstitutionSocket.js
 /**
  * ÉTAPE 6: Hook React pour Socket.IO Institution
- * 
+ *
  * Gère la connexion et l'invalidation automatique des queries React Query
  */
 
 import { useEffect, useRef, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import {
   ensureInstitutionSocket,
+  getInstitutionSocket,
   joinInstitutionRoom,
   leaveInstitutionRoom,
   on,
@@ -17,6 +19,12 @@ import {
 } from '../services/institutionSocket';
 import { institutionQueryKeys } from './useInstitutionData';
 
+const CHAT_ACTIVE_STATUSES = new Set([
+  'ASSIGNED',
+  'EN_ROUTE',
+  'IN_PROGRESS',
+]);
+
 /**
  * Hook pour gérer la connexion Socket.IO et les invalidations
  * @param {number|string} institutionId - ID de l'institution
@@ -24,82 +32,113 @@ import { institutionQueryKeys } from './useInstitutionData';
 export function useInstitutionSocket(institutionId) {
   const queryClient = useQueryClient();
   const mountedRef = useRef(true);
+  const lastNotifToastRef = useRef(null);
 
-  // Handler pour request_sent
   const handleRequestSent = useCallback((data) => {
     console.log('[InstitutionSocket] request_sent:', data);
     if (!mountedRef.current) return;
     queryClient.invalidateQueries({ queryKey: institutionQueryKeys.requests() });
   }, [queryClient]);
 
-  // Handler pour offer_accepted
   const handleOfferAccepted = useCallback((data) => {
     console.log('[InstitutionSocket] offer_accepted:', data);
     if (!mountedRef.current) return;
     queryClient.invalidateQueries({ queryKey: institutionQueryKeys.requests() });
     if (data?.request_id) {
-      queryClient.invalidateQueries({ queryKey: institutionQueryKeys.requestDetail(data.request_id) });
+      queryClient.invalidateQueries({
+        queryKey: institutionQueryKeys.requestDetail(data.request_id),
+      });
     }
+    const companyName = data?.company_name || data?.payload?.company_name;
+    toast.success(
+      companyName
+        ? `${companyName} a accepté votre demande de transport.`
+        : 'Une entreprise a accepté votre demande de transport.'
+    );
   }, [queryClient]);
 
-  // Handler pour request_converted
   const handleRequestConverted = useCallback((data) => {
     console.log('[InstitutionSocket] request_converted:', data);
     if (!mountedRef.current) return;
     queryClient.invalidateQueries({ queryKey: institutionQueryKeys.requests() });
     if (data?.request_id) {
-      queryClient.invalidateQueries({ queryKey: institutionQueryKeys.requestDetail(data.request_id) });
+      queryClient.invalidateQueries({
+        queryKey: institutionQueryKeys.requestDetail(data.request_id),
+      });
     }
   }, [queryClient]);
 
-  // Handler pour booking_status_updated
   const handleBookingStatusUpdated = useCallback((data) => {
     console.log('[InstitutionSocket] booking_status_updated:', data);
     if (!mountedRef.current) return;
     queryClient.invalidateQueries({ queryKey: institutionQueryKeys.requests() });
     if (data?.request_id) {
-      queryClient.invalidateQueries({ queryKey: institutionQueryKeys.requestDetail(data.request_id) });
+      queryClient.invalidateQueries({
+        queryKey: institutionQueryKeys.requestDetail(data.request_id),
+      });
     }
   }, [queryClient]);
 
-  // Handler pour request_cancelled
   const handleRequestCancelled = useCallback((data) => {
     console.log('[InstitutionSocket] request_cancelled:', data);
     if (!mountedRef.current) return;
     queryClient.invalidateQueries({ queryKey: institutionQueryKeys.requests() });
     if (data?.request_id) {
-      queryClient.invalidateQueries({ queryKey: institutionQueryKeys.requestDetail(data.request_id) });
+      queryClient.invalidateQueries({
+        queryKey: institutionQueryKeys.requestDetail(data.request_id),
+      });
     }
   }, [queryClient]);
 
-  // Handler pour booking_cancelled
   const handleBookingCancelled = useCallback((data) => {
     console.log('[InstitutionSocket] booking_cancelled:', data);
     if (!mountedRef.current) return;
     queryClient.invalidateQueries({ queryKey: institutionQueryKeys.requests() });
     if (data?.request_id) {
-      queryClient.invalidateQueries({ queryKey: institutionQueryKeys.requestDetail(data.request_id) });
+      queryClient.invalidateQueries({
+        queryKey: institutionQueryKeys.requestDetail(data.request_id),
+      });
     }
   }, [queryClient]);
 
-  // Handler pour new_notification (invalidation du cache notifications)
   const handleNewNotification = useCallback((data) => {
     console.log('[InstitutionSocket] new_notification:', data);
     if (!mountedRef.current) return;
     queryClient.invalidateQueries({ queryKey: institutionQueryKeys.notifications() });
+
+    const eventType = data?.event_type || data?.payload?.event_type;
+    if (eventType === 'offer_accepted') {
+      return;
+    }
+
+    const dedupeKey = data?.id || data?.dedupe_key || data?.message;
+    if (dedupeKey && lastNotifToastRef.current === dedupeKey) {
+      return;
+    }
+    if (dedupeKey) {
+      lastNotifToastRef.current = dedupeKey;
+    }
+
+    const title = data?.title || data?.payload?.title;
+    const message = data?.message || data?.payload?.message;
+    if (title || message) {
+      toast.info(message || title);
+    }
   }, [queryClient]);
 
   useEffect(() => {
     mountedRef.current = true;
+    let cancelled = false;
 
-    if (!institutionId) return;
+    if (!institutionId) return undefined;
 
     const setupSocket = async () => {
       try {
         await ensureInstitutionSocket();
+        if (cancelled || !mountedRef.current) return;
+
         await joinInstitutionRoom(institutionId);
 
-        // Écouter les événements
         await on('request_sent', handleRequestSent);
         await on('offer_accepted', handleOfferAccepted);
         await on('request_converted', handleRequestConverted);
@@ -117,9 +156,20 @@ export function useInstitutionSocket(institutionId) {
     setupSocket();
 
     return () => {
+      cancelled = true;
       mountedRef.current = false;
-      
-      // Cleanup listeners
+
+      const s = getInstitutionSocket();
+      if (s) {
+        s.off('request_sent', handleRequestSent);
+        s.off('offer_accepted', handleOfferAccepted);
+        s.off('request_converted', handleRequestConverted);
+        s.off('booking_status_updated', handleBookingStatusUpdated);
+        s.off('request_cancelled', handleRequestCancelled);
+        s.off('booking_cancelled', handleBookingCancelled);
+        s.off('new_notification', handleNewNotification);
+      }
+
       off('request_sent');
       off('offer_accepted');
       off('request_converted');
@@ -127,8 +177,7 @@ export function useInstitutionSocket(institutionId) {
       off('request_cancelled');
       off('booking_cancelled');
       off('new_notification');
-      
-      // Quitter la room
+
       if (institutionId) {
         leaveInstitutionRoom(institutionId);
       }
@@ -146,6 +195,7 @@ export function useInstitutionSocket(institutionId) {
 
   return {
     disconnect: disconnectInstitutionSocket,
+    chatActiveStatuses: CHAT_ACTIVE_STATUSES,
   };
 }
 

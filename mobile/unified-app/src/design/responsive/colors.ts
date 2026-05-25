@@ -4,12 +4,12 @@
  */
 
 /** Marque */
-export const brandPrimary = "#0A8F7A";
+export const brandPrimary = "#00796B";
 /**
  * Fond bulle chat « envoyé » (MessageBubble) / surfaces pleines alignées (ex. pilule barre onglets entreprise).
  * Équivalent Flowbite / Tailwind `teal-600`.
  */
-export const chatOutgoingBubbleFill = "#0d9488";
+export const chatOutgoingBubbleFill = "#00796B";
 export const brandPrimaryDisabled = "#84B7AE";
 export const brandSurfacePage = "#EAF3F1";
 export const brandSurfaceSoft = "#F7FBFA";
@@ -40,7 +40,7 @@ export const semanticWarning = {
   fg: "#6A5320",
   bg: "#FFF7E6",
   border: "#E0B86C",
-  ctaBg: "#0A8F7A",
+  ctaBg: "#00796B",
   ctaFg: "#FFFFFF",
 } as const;
 

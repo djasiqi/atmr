@@ -1,13 +1,18 @@
 import { Stack } from "expo-router";
 import { AppVersionGuard, AuthGuard, ContextGuard, OnboardingGuard } from "../../src/core/guards";
+import { stackFadeOptions } from "../../src/design/navigation/stackScreenOptions";
 
+/**
+ * Couche authentifiée — changement de « monde » (driver / company / client / institution)
+ * = fade contexte LIRIE (280 ms), pas de slide latéral pour signaler la bascule de rôle.
+ */
 export default function AuthenticatedLayout() {
   return (
     <AppVersionGuard>
       <AuthGuard>
         <OnboardingGuard>
           <ContextGuard>
-            <Stack screenOptions={{ headerShown: false }}>
+            <Stack screenOptions={{ headerShown: false, ...stackFadeOptions }}>
               <Stack.Screen name="context-selector" />
               <Stack.Screen name="onboarding" />
               <Stack.Screen name="unauthorized" />

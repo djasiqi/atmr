@@ -1,10 +1,12 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { realtimeManager } from "../../../src/core/realtime/realtimeManager";
 import { Tabs } from "expo-router";
 import { View } from "react-native";
 import { DriverUnifiedGateGuard } from "../../../src/core/guards";
 import { DriverFloatingTabBar } from "../../../src/features/driver/navigation/DriverFloatingTabBar";
 import {
   useDriverMissionsQuery,
+  useDriverRealtimeSync,
   useDriverTracking,
 } from "../../../src/features/driver/hooks";
 import { filterNextMissionsOnly } from "../../../src/features/driver/domain/missionGrouping";
@@ -12,7 +14,19 @@ import { getDriverStatusUx } from "../../../src/features/driver/statusDictionary
 import type { DriverMission } from "../../../src/features/driver/types";
 import { isFeatureEnabled } from "../../../src/core/featureFlags/registry";
 import { useTrackingWindowState } from "../../../src/features/driver/services/trackingWindow";
+import {
+  getDriverAvailabilityActive,
+  subscribeDriverAvailability,
+} from "../../../src/features/driver/services/driverAvailabilityBridge";
 import { setDriverPresenceWindowActive } from "../../../src/features/driver/tracking";
+import {
+  buildFloatingTabScreenOptions,
+  FLOATING_TAB_IMPLEMENTATION,
+  FLOATING_TAB_PAGE_BG,
+} from "../../../src/navigation/floatingTabScreenOptions";
+import { useAppViewport } from "../../../src/design/responsive";
+import { useReduceMotion } from "../../../src/design/navigation/useReduceMotion";
+import { usePerfRouteTracking } from "../../../src/core/observability/usePerfRouteTracking";
 
 /**
  * Sélectionne la mission active sur laquelle le tracking GPS doit être
@@ -58,31 +72,61 @@ function DriverTrackingHost() {
 
   const window = useTrackingWindowState();
   const workWindowEnabled = isFeatureEnabled("driver_tracking_work_window_enabled");
-  useEffect(() => {
-    setDriverPresenceWindowActive(workWindowEnabled && window.isOpen);
-  }, [workWindowEnabled, window.isOpen]);
+  const [driverAvailable, setDriverAvailable] = useState(() => getDriverAvailabilityActive());
 
+  useEffect(() => subscribeDriverAvailability(() => {
+    setDriverAvailable(getDriverAvailabilityActive());
+  }), []);
+
+  useEffect(() => {
+    setDriverPresenceWindowActive(
+      driverAvailable && workWindowEnabled && window.isOpen
+    );
+  }, [driverAvailable, workWindowEnabled, window.isOpen]);
+
+  return null;
+}
+
+/** Socket + polling missions : ancré au layout pour ne pas couper le socket en changeant d’onglet. */
+function DriverRealtimeSyncHost() {
+  useDriverRealtimeSync();
+  useEffect(() => {
+    return () => {
+      realtimeManager.disconnect();
+    };
+  }, []);
   return null;
 }
 
 /** Fond identique à `app/(app)/(company)/_layout.tsx`. */
 export default function DriverLayout() {
+  usePerfRouteTracking("driver");
+  const { width } = useAppViewport();
+  const reduceMotion = useReduceMotion();
+  const tabScreenOptions = useMemo(
+    () => buildFloatingTabScreenOptions(FLOATING_TAB_PAGE_BG.driver, width, reduceMotion),
+    [width, reduceMotion]
+  );
+
   return (
     <DriverUnifiedGateGuard>
-      <View style={{ flex: 1, backgroundColor: "#F5F7F6" }}>
+      <View style={{ flex: 1, backgroundColor: FLOATING_TAB_PAGE_BG.driver }}>
         <DriverTrackingHost />
+        <DriverRealtimeSyncHost />
         <Tabs
+          implementation={FLOATING_TAB_IMPLEMENTATION}
           screenOptions={{
-            headerShown: false,
+            ...tabScreenOptions,
             tabBarActiveTintColor: "#0A8F7A",
             tabBarInactiveTintColor: "#7A808A",
           }}
           tabBar={(props) => <DriverFloatingTabBar {...props} />}
         >
           <Tabs.Screen name="index" options={{ title: "Accueil" }} />
-          <Tabs.Screen name="trips" options={{ title: "Courses" }} />
+          <Tabs.Screen name="trips" options={{ title: "Courses du jour" }} />
           <Tabs.Screen name="missions" options={{ title: "Missions", href: null }} />
-          <Tabs.Screen name="chat" options={{ title: "Chat" }} />
+          <Tabs.Screen name="messages" options={{ title: "Messages" }} />
+          <Tabs.Screen name="chat" options={{ title: "Chat", href: null }} />
           <Tabs.Screen name="schedule" options={{ title: "Planning", href: null }} />
           <Tabs.Screen name="profile" options={{ title: "Profil", href: null }} />
           <Tabs.Screen name="missions/[missionId]" options={{ href: null }} />

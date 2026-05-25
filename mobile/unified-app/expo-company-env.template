@@ -6,6 +6,7 @@
 #   définir). Peut être surchargé à la connexion (feature_flags / MOBILE_FEATURE_FLAGS).
 # Blocage 2 — company_realtime_enabled
 #   Active le bridge côté app ; EXPO_PUBLIC_ENABLE_COMPANY_REALTIME=1
+#   En __DEV__, si DISPATCH=1 et REALTIME absent, le realtime est activé automatiquement.
 # Blocage 3 — URL Socket.IO (flux company uniquement ; pas de repli sur DRIVER_SOCKET_URL)
 #   EXPO_PUBLIC_COMPANY_SOCKET_URL en priorité ; sinon origine de EXPO_PUBLIC_API_BASE_URL
 #   (même hôte:port que l’API, ex. http://IP:5000). Le realtime driver utilise DRIVER_SOCKET_URL séparément.
@@ -38,6 +39,13 @@
 # Optionnel (chat) — EXPO_PUBLIC_ENABLE_COMPANY_MOBILE_CHAT_SOCKET=1
 #   Active l’exigence d’un WebSocket sain sur l’écran chat. Absent/0 = chat en
 #   requêtes périodiques, sans bandeau « connexion directe » lié au bridge.
+#
+# Checklist staging chat temps réel (Sprint A/B) :
+#   EXPO_PUBLIC_ENABLE_COMPANY_REALTIME=1
+#   EXPO_PUBLIC_ENABLE_COMPANY_MOBILE_CHAT_SOCKET=1
+#   EXPO_PUBLIC_COMPANY_SOCKET_URL=http://<IP-LAN>:5000  (si différent de l’API)
+#   Backend : REDIS_URL + message_queue Socket.IO + Gunicorn ≥2 workers
+#   Grafana : chat_sid_lookup_failed_total == 0, chat_messages_duplicate_total stable
 
 # ——— Développement local (décommenter les 2 lignes) ———
 # EXPO_PUBLIC_ENABLE_COMPANY_DISPATCH=1

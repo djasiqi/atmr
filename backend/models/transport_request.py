@@ -131,8 +131,8 @@ class TransportRequest(db.Model):
         nullable=True,
     )
 
-    # Référence externe DPI (OBLIGATOIRE et UNIQUE par institution)
-    external_reference: Mapped[str] = mapped_column(String(100), nullable=False)
+    # Référence externe DPI (optionnelle, UNIQUE par institution si renseignée)
+    external_reference: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     # Patient (optionnel, null pour livraisons)
     patient_id: Mapped[int | None] = mapped_column(
@@ -426,6 +426,8 @@ class TransportRequest(db.Model):
         return {
             "id": company.id,
             "name": company.name,
+            "contact_phone": getattr(company, "contact_phone", None),
+            "contact_email": getattr(company, "contact_email", None),
         }
 
     def _serialize_booking_summary(self) -> dict[str, Any] | None:
@@ -488,8 +490,30 @@ class TransportRequest(db.Model):
             "id": booking.id,
             "status": status_str,
             "scheduled_time": _iso(booking.scheduled_time),
+            "edit_version": int(getattr(booking, "edit_version", None) or 1),
             "amount": float(booking.amount) if booking.amount else None,
             "customer_name": booking.customer_name,
+            "pickup_location": booking.pickup_location,
+            "dropoff_location": booking.dropoff_location,
+            "pickup_lat": getattr(booking, "pickup_lat", None),
+            "pickup_lon": getattr(booking, "pickup_lon", None),
+            "dropoff_lat": getattr(booking, "dropoff_lat", None),
+            "dropoff_lon": getattr(booking, "dropoff_lon", None),
+            "medical_facility": getattr(booking, "medical_facility", None),
+            "hospital_service": getattr(booking, "hospital_service", None),
+            "doctor_name": getattr(booking, "doctor_name", None),
+            "notes_medical": getattr(booking, "notes_medical", None),
+            "pickup_access_notes": getattr(booking, "pickup_access_notes", None),
+            "dropoff_access_notes": getattr(booking, "dropoff_access_notes", None),
+            "pickup_floor": getattr(booking, "pickup_floor", None),
+            "pickup_door_code": getattr(booking, "pickup_door_code", None),
+            "dropoff_floor": getattr(booking, "dropoff_floor", None),
+            "dropoff_door_code": getattr(booking, "dropoff_door_code", None),
+            "wheelchair_need": bool(getattr(booking, "wheelchair_need", False)),
+            "wheelchair_client_has": bool(getattr(booking, "wheelchair_client_has", False)),
+            "mission_type": getattr(booking, "mission_type", None),
+            "delivery_description": getattr(booking, "delivery_description", None),
+            "is_return": bool(getattr(booking, "is_return", False)),
             "billed_to_type": billed_str,
             "is_invoiced": is_invoiced,
             "boarded_at": _iso(getattr(booking, "boarded_at", None)),

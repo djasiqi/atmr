@@ -64,8 +64,12 @@ class RequestStatus(str, PyEnum):
 
     @classmethod
     def editable_statuses(cls) -> list["RequestStatus"]:
-        """Statuts permettant la modification de la demande."""
-        return [cls.DRAFT, cls.SENT]
+        """Statuts permettant la modification de la demande.
+
+        DRAFT/SENT/ACCEPTED : pas encore convertie en booking, édition autorisée.
+        Une fois CONVERTED, l'édition passe par l'endpoint booking institution.
+        """
+        return [cls.DRAFT, cls.SENT, cls.ACCEPTED]
 
     @classmethod
     def cancellable_statuses(cls) -> list["RequestStatus"]:

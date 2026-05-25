@@ -21,6 +21,7 @@ import type { CompanyInboxNotification } from "../api/companyInboxApi";
 import { E } from "../theme/enterpriseOpsTheme";
 import { AppButton } from "../../../design/responsive";
 import { AppText } from "../../../design/ui/AppText";
+import { FONT_SIZE } from "../../../design/responsive/typographyTokens";
 
 dayjs.extend(relativeTime);
 dayjs.locale("fr");
@@ -64,7 +65,7 @@ export function CompanyInboxButton() {
         style={({ pressed }) => [s.bellWrap, pressed && s.pressed]}
         accessibilityRole="button"
         accessibilityLabel="Ouvrir les notifications"
-        hitSlop={8}
+        hitSlop={12}
         testID="company-inbox-bell"
       >
         <Ionicons name="notifications-outline" size={22} color={E.BRAND} />
@@ -154,8 +155,8 @@ const s = StyleSheet.create({
   pressed: { opacity: 0.8 },
   badge: {
     position: "absolute",
-    top: -4,
-    right: -6,
+    top: -2,
+    right: -2,
     minWidth: 18,
     paddingHorizontal: 5,
     paddingVertical: 1,
@@ -164,7 +165,7 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  badgeText: { fontSize: 10, fontWeight: "800" as const, color: E.CARD, lineHeight: 12 },
+  badgeText: { fontSize: FONT_SIZE.px10, fontWeight: "800" as const, color: E.CARD, lineHeight: 12 },
   modalBackdrop: { flex: 1, justifyContent: "flex-end" },
   modalBackdropTap: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.4)" },
   modalCard: {

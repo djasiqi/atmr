@@ -1,4 +1,6 @@
+import { useEffect } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
+import { endPageLoad, startPageLoad } from "../../../src/core/observability/perfKpi";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { PermissionGuard } from "../../../src/core/guards";
@@ -19,6 +21,10 @@ export default function CompanyDispatchProposalsScreen() {
   const router = useRouter();
   const { horizontalPadding } = useAppViewport();
   const t = useResponsiveTokens();
+  useEffect(() => {
+    startPageLoad("company.dispatch");
+    endPageLoad("company.dispatch", "company.dispatch.mounted");
+  }, []);
   return (
     <PermissionGuard permission="company:rides:read">
       <Screen

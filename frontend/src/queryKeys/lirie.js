@@ -79,6 +79,8 @@ export const lirieKeys = {
 
   institutionOffers: () => [LIRIE_QK_PREFIX, 'institution-offers'],
 
+  dispatchMode: () => [LIRIE_QK_PREFIX, 'dispatch-mode'],
+
   /** @deprecated Utiliser companyInvoices — conservé si des imports legacy pointent ici. */
   invoices: (filtersHash) => [LIRIE_QK_PREFIX, 'invoices', filtersHash],
 

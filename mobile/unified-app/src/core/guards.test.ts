@@ -61,7 +61,7 @@ describe("guard decision helpers", () => {
         permissions: [],
         is_default: true,
       } as any)
-    ).toBe("/(app)/unauthorized");
+    ).toBe("/(app)/(driver)");
     expect(
       resolveCompanyContextGuardRedirect({
         context_id: "company:42",

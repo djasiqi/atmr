@@ -1,0 +1,151 @@
+{
+  "label": "after_A1",
+  "generated_at": "2026-05-23T11:23:34.150Z",
+  "latencies": {
+    "context_switch_total": {
+      "p50_ms": 3096,
+      "p95_ms": 3096,
+      "max_ms": 3096,
+      "count": 1
+    }
+  },
+  "memory": {
+    "gc_events": 4972
+  },
+  "network": {
+    "http_requests_per_min": 252,
+    "invalidate_booking_updated_per_min": 0,
+    "invalidate_driver_location_per_min": 0
+  },
+  "fleet": {
+    "enrich_fleet_drivers_duration_ms": {
+      "p50_ms": 0,
+      "p95_ms": 0,
+      "max_ms": 0,
+      "count": 3
+    }
+  },
+  "instrumentation_row_count": 160,
+  "top_by_sum_ms": [
+    {
+      "category": "js_long_task",
+      "sub_key": "frame_budget",
+      "role": "driver",
+      "screen": "/",
+      "count": 3049,
+      "sum_ms": 134644.39916574955,
+      "avg_ms": 44.160183393161546,
+      "p50_ms": 41.747812032699585,
+      "p95_ms": 75.26411402225494,
+      "max_ms": 1963.0704159736633
+    },
+    {
+      "category": "js_long_task",
+      "sub_key": "frame_budget",
+      "role": "driver",
+      "screen": "/messages",
+      "count": 745,
+      "sum_ms": 32826.94368493557,
+      "avg_ms": 44.063011657631634,
+      "p50_ms": 41.7663539648056,
+      "p95_ms": 76.61755204200745,
+      "max_ms": 146.9438019990921
+    },
+    {
+      "category": "js_long_task",
+      "sub_key": "frame_budget",
+      "role": "company",
+      "screen": "/rides",
+      "count": 703,
+      "sum_ms": 20477.246143579483,
+      "avg_ms": 29.128372892716193,
+      "p50_ms": 17.07411503791809,
+      "p95_ms": 56.5696359872818,
+      "max_ms": 1017.3724999427795
+    },
+    {
+      "category": "js_long_task",
+      "sub_key": "frame_budget",
+      "role": "driver",
+      "screen": "/trips",
+      "count": 255,
+      "sum_ms": 11812.298379778862,
+      "avg_ms": 46.32273874423083,
+      "p50_ms": 41.86630201339722,
+      "p95_ms": 83.26182305812836,
+      "max_ms": 131.85312497615814
+    },
+    {
+      "category": "js_long_task",
+      "sub_key": "frame_budget",
+      "role": "company",
+      "screen": "/dashboard",
+      "count": 66,
+      "sum_ms": 4379.032760381699,
+      "avg_ms": 66.34898121790452,
+      "p50_ms": 46.780624985694885,
+      "p95_ms": 164.72328197956085,
+      "max_ms": 512.7921360731125
+    },
+    {
+      "category": "page_load",
+      "sub_key": "company.fleet_map",
+      "role": "company",
+      "screen": "/dashboard",
+      "count": 1,
+      "sum_ms": 3913,
+      "avg_ms": 3913,
+      "p50_ms": 3913,
+      "p95_ms": 3913,
+      "max_ms": 3913
+    },
+    {
+      "category": "context_switch",
+      "sub_key": "total",
+      "role": "company",
+      "screen": "/dashboard",
+      "count": 1,
+      "sum_ms": 3096,
+      "avg_ms": 3096,
+      "p50_ms": 3096,
+      "p95_ms": 3096,
+      "max_ms": 3096
+    },
+    {
+      "category": "page_load",
+      "sub_key": "company.inbox",
+      "role": "company",
+      "screen": "/dashboard",
+      "count": 1,
+      "sum_ms": 3066,
+      "avg_ms": 3066,
+      "p50_ms": 3066,
+      "p95_ms": 3066,
+      "max_ms": 3066
+    },
+    {
+      "category": "invalidate",
+      "sub_key": "ctx.company:1.company:query_client",
+      "role": "company",
+      "screen": "/rides",
+      "count": 5,
+      "sum_ms": 2013,
+      "avg_ms": 402.6,
+      "p50_ms": 405,
+      "p95_ms": 1093,
+      "max_ms": 1093
+    },
+    {
+      "category": "js_long_task",
+      "sub_key": "frame_budget",
+      "role": "company",
+      "screen": "/messages",
+      "count": 28,
+      "sum_ms": 1703.4010387659073,
+      "avg_ms": 60.83575138449669,
+      "p50_ms": 30.916980028152466,
+      "p95_ms": 148.38635396957397,
+      "max_ms": 155.45864593982697
+    }
+  ]
+}

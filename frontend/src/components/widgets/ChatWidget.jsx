@@ -1,7 +1,7 @@
 // src/components/widgets/ChatWidget.jsx
 // ✅ Version alignée avec le chat mobile (WhatsApp-like)
 
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
 import { FiMessageSquare, FiX, FiPaperclip, FiSend, FiImage, FiFileText } from 'react-icons/fi';
 import useCompanySocket from '../../hooks/useCompanySocket';
 import apiClient from '../../utils/apiClient';
@@ -9,9 +9,9 @@ import { getActiveUser } from '../../utils/webAuthSession';
 import { v4 as uuidv4 } from 'uuid';
 import './ChatWidget.css';
 
-export default function ChatWidget({ companyId }) {
+function ChatWidget({ companyId, startOpen = false }) {
   const socket = useCompanySocket();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(Boolean(startOpen));
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState([]);
   const [hasMore, setHasMore] = useState(true);
@@ -594,3 +594,5 @@ export default function ChatWidget({ companyId }) {
     </>
   );
 }
+
+export default memo(ChatWidget);

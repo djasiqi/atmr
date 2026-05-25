@@ -7,9 +7,11 @@ import { emitDriverTelemetry } from "../../core/observability/driverTelemetry";
 import { getRuntimeFlagsVersion, isFeatureEnabled } from "../../core/featureFlags/registry";
 import { QUERY_STALE_TIME_MS } from "../../core/queryStaleTimes";
 import {
+  getDriverCompanyBookingsToday,
   getDriverMissionEta,
   getDriverMissionDetail,
   getDriverMissions,
+  getDriverMissionsSince,
   registerDriverPushToken,
   updateDriverAvailability,
   updateDriverMissionStatus,
@@ -24,6 +26,12 @@ import {
   markDriverArrivedAtPickupMilestone,
   unmarkDriverArrivedAtPickupMilestone,
 } from "./domain/missionMilestoneOverlay";
+import {
+  clearAllStepperApproachBaselines,
+  clearPickupApproachForMission,
+  resetPickupApproachBaseline,
+  resetStepperApproachBaseline,
+} from "./domain/missionStepperApproach";
 import { scheduleDriverMissionSync } from "./services/missionSyncOrchestrator";
 import { reconcileTrackingRuntime } from "./services/trackingReconcile";
 import {
@@ -53,6 +61,38 @@ export function useDriverMissionsQuery() {
   });
 }
 
+function getLocalDayStartIso(): string {
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  return now.toISOString();
+}
+
+/** Missions modifiées depuis le début de journée locale (inclut statuts terminaux). */
+export function useDriverTodayMissionsQuery() {
+  const contextId = useActiveDriverContextId();
+  return useQuery({
+    queryKey: contextId
+      ? [...driverQueryKeys.missions(contextId), "today-since-local-day-start"]
+      : ["driver-missions-today", "disabled"],
+    queryFn: () => getDriverMissionsSince(getLocalDayStartIso()),
+    enabled: Boolean(contextId),
+    staleTime: QUERY_STALE_TIME_MS.default,
+  });
+}
+
+/** Transports de l’entreprise prévus aujourd’hui (collègues inclus) — `/driver/me/company-bookings/today`. */
+export function useDriverCompanyBookingsTodayQuery() {
+  const contextId = useActiveDriverContextId();
+  return useQuery({
+    queryKey: contextId
+      ? driverQueryKeys.companyBookingsToday(contextId)
+      : ["driver-company-bookings-today", "disabled"],
+    queryFn: getDriverCompanyBookingsToday,
+    enabled: Boolean(contextId),
+    staleTime: QUERY_STALE_TIME_MS.default,
+  });
+}
+
 export function useDriverMissionDetailQuery(missionId: number | null) {
   const contextId = useActiveDriverContextId();
   return useQuery({
@@ -66,13 +106,36 @@ export function useDriverMissionDetailQuery(missionId: number | null) {
   });
 }
 
-export function useDynamicEtaQuery(missionId: number | null) {
+export function useDynamicEtaQuery(
+  missionId: number | null,
+  options?: { missionStatus?: string | null }
+) {
   const contextId = useActiveDriverContextId();
   return useQuery({
-    queryKey: contextId && missionId ? ["driver-mission-eta", contextId, missionId] : ["driver-mission-eta", "disabled"],
-    queryFn: () => getDriverMissionEta(missionId as number),
+    queryKey:
+      contextId && missionId
+        ? ["driver-mission-eta", contextId, missionId, options?.missionStatus ?? "unknown"]
+        : ["driver-mission-eta", "disabled"],
+    queryFn: () =>
+      getDriverMissionEta(missionId as number, {
+        missionStatus: options?.missionStatus ?? null,
+      }),
     enabled: Boolean(contextId && missionId),
-    refetchInterval: 30_000,
+    refetchInterval: () => {
+      const status = String(options?.missionStatus ?? "").toUpperCase();
+      if (
+        status === "COMPLETED" ||
+        status === "CANCELLED" ||
+        status === "RELEASED" ||
+        status === "NO_SHOW"
+      ) {
+        return 60_000;
+      }
+      if (status === "EN_ROUTE" || status === "IN_PROGRESS" || status === "ARRIVED") {
+        return 30_000;
+      }
+      return 60_000;
+    },
     staleTime: QUERY_STALE_TIME_MS.default,
   });
 }
@@ -130,6 +193,16 @@ export function useDriverStatusTransition() {
       const previousMissions = queryClient.getQueryData<DriverMission[] | undefined>(listKey);
       if (targetStatus === "ARRIVED") {
         markDriverArrivedAtPickupMilestone(missionId);
+        clearPickupApproachForMission(missionId);
+      }
+      if (targetStatus === "EN_ROUTE") {
+        resetPickupApproachBaseline(missionId);
+      }
+      if (targetStatus === "IN_PROGRESS") {
+        resetStepperApproachBaseline(missionId, "dropoff");
+      }
+      if (targetStatus === "COMPLETED") {
+        clearAllStepperApproachBaselines(missionId);
       }
       const nextStatus: DriverMissionStatus = targetStatus === "ARRIVED" ? "ARRIVED" : (targetStatus as DriverMissionStatus);
       queryClient.setQueryData<DriverMission | undefined>(detailKey, (old) => {
@@ -279,15 +352,28 @@ export function useDriverTracking(missionId: number | null, missionStatus: strin
  * revient sur l'écran, même si le socket realtime est gated par feature flag
  * ou si l'event a été perdu (reconnexion réseau, app en background, etc.).
  */
+const CONTEXT_SWITCH_RESYNC_GRACE_MS = 3000;
+
 export function useDriverMissionsListFocusResync() {
   const queryClient = useQueryClient();
   const contextId = useActiveDriverContextId();
   const lastResyncAtRef = useRef(0);
+  const contextSwitchGraceUntilRef = useRef(0);
+  const previousContextIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!contextId) return;
+    if (previousContextIdRef.current !== contextId) {
+      previousContextIdRef.current = contextId;
+      contextSwitchGraceUntilRef.current = Date.now() + CONTEXT_SWITCH_RESYNC_GRACE_MS;
+    }
+  }, [contextId]);
 
   useFocusEffect(
     useCallback(() => {
       if (!contextId) return;
       const now = Date.now();
+      if (now < contextSwitchGraceUntilRef.current) return;
       // Anti-doublon : si on a déjà resync il y a < 1.5 s, on saute
       // (évite les boucles avec d'autres useEffect au mount).
       if (now - lastResyncAtRef.current < 1500) return;
@@ -346,6 +432,7 @@ export function useDriverAvailabilityMutation() {
   });
 }
 
+export { useDriverAvailability } from "./hooks/useDriverAvailability";
 export { useTrackingState } from "./hooks/useTrackingState";
 export { useSocketStatus } from "./hooks/useSocketStatus";
 export { useNotifications } from "./hooks/useNotifications";

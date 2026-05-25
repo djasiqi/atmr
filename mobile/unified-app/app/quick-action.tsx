@@ -15,6 +15,7 @@ import {
   ResponsiveContainer,
   Screen,
 } from "../src/design/responsive";
+import { FONT_SIZE } from "../src/design/responsive/typographyTokens";
 
 type QuickAction = "accept" | "reject" | "start" | "complete";
 
@@ -108,18 +109,18 @@ const styles = StyleSheet.create({
     paddingVertical: 24,
   },
   title: {
-    fontSize: 20,
+    fontSize: FONT_SIZE.px20,
     fontWeight: "700",
     color: "#163A34",
     marginBottom: 8,
   },
   line: {
-    fontSize: 15,
+    fontSize: FONT_SIZE.px15,
     color: "#475569",
     marginBottom: 4,
   },
   message: {
-    fontSize: 14,
+    fontSize: FONT_SIZE.px14,
     color: "#334155",
     marginBottom: 8,
   },

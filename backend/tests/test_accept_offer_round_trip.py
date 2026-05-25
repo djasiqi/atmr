@@ -44,6 +44,8 @@ class _Client:
     id: int = 10
     preferential_rate: Decimal | None = Decimal("50.00")
     default_billed_to_type: str = "clinic"
+    institution_name: str | None = "Clinique Test"
+    linked_institution_id: int | None = None
 
 
 @dataclass
@@ -63,10 +65,14 @@ class _Booking:
     pickup_lat: float | None = None
     pickup_lon: float | None = None
     pickup_access_notes: str | None = None
+    pickup_floor: str | None = None
+    pickup_door_code: str | None = None
     dropoff_location: str = ""
     dropoff_lat: float | None = None
     dropoff_lon: float | None = None
     dropoff_access_notes: str | None = None
+    dropoff_floor: str | None = None
+    dropoff_door_code: str | None = None
     hospital_service: str | None = None
     wheelchair_client_has: bool = False
     wheelchair_need: bool = False
@@ -78,6 +84,7 @@ class _Booking:
     amount: Decimal = Decimal("50.00")
     return_trip: _Booking | None = None
     invoice_line_id: int | None = None
+    time_confirmed: bool = True
 
 
 @dataclass
@@ -167,6 +174,18 @@ class TestTransportRequestSchemaRoundTrip:
         result = schema.load(data)
         assert result["is_round_trip"] is False
 
+    def test_schema_accepts_simple_trip_without_external_reference(self):
+        schema = TransportRequestCreateSchema()
+        data = {
+            "scheduled_time": "2026-03-01T10:00:00+01:00",
+            "pickup_location": "A",
+            "dropoff_location": "B",
+            "is_round_trip": False,
+        }
+        result = schema.load(data)
+        assert result["is_round_trip"] is False
+        assert "external_reference" not in result
+
 
 # ── Use-case unit tests (mocked DB) ──
 
@@ -177,11 +196,45 @@ class TestAcceptOfferRoundTrip:
     def _make_uc(self) -> AcceptOfferUseCase:
         return AcceptOfferUseCase()
 
+    @patch("application.institutions.accept_offer.Client")
+    def test_get_or_create_institution_client_fallback_by_name_keeps_rate(
+        self, mock_client_cls: MagicMock
+    ):
+        """Si le lien FK manque, fallback par nom réutilise le client tarifé."""
+        uc = self._make_uc()
+        tr = _TransportRequest(
+            institution=_Institution(id=42, name="Clinique Les Hauts d’Anières")
+        )
+        existing_client = _Client(
+            id=99,
+            preferential_rate=Decimal("88.00"),
+            institution_name="Clinique Les Hauts d'Anieres",
+            linked_institution_id=None,
+        )
+
+        fk_lookup = MagicMock()
+        fk_lookup.first.return_value = None
+        name_lookup = MagicMock()
+        name_lookup.all.return_value = [existing_client]
+        mock_client_cls.query.filter.side_effect = [fk_lookup, name_lookup]
+
+        uc._create_institution_client = MagicMock(return_value=None)  # type: ignore[assignment]
+
+        resolved = uc._get_or_create_institution_client(
+            transport_request=tr,  # type: ignore[arg-type]
+            company_id=5,
+        )
+
+        assert resolved is existing_client
+        assert resolved.preferential_rate == Decimal("88.00")
+        assert resolved.linked_institution_id == 42
+        uc._create_institution_client.assert_not_called()
+
     @patch("application.institutions.accept_offer.db")
     def test_round_trip_creates_two_bookings(self, mock_db: MagicMock):
         """A/R avec return_time → 2 bookings (aller + retour)."""
         uc = self._make_uc()
-        uc._find_institution_client = MagicMock(return_value=_Client())  # type: ignore[assignment]
+        uc._get_or_create_institution_client = MagicMock(return_value=_Client())  # type: ignore[assignment]
         uc._resolve_billing_party = MagicMock()  # type: ignore[assignment]
 
         return_dt = datetime.now(UTC) + timedelta(hours=6)
@@ -210,20 +263,17 @@ class TestAcceptOfferRoundTrip:
         assert return_booking.is_return is True
         assert return_booking.is_round_trip is False
         assert return_booking.parent_booking_id == outbound.id
-        # Booking may strip timezone; compare naive datetimes
-        expected_naive = return_dt.replace(tzinfo=None)
-        actual_naive = (
-            return_booking.scheduled_time.replace(tzinfo=None)
-            if return_booking.scheduled_time
-            else None
-        )
+        from shared.time_utils import api_scheduled_iso_to_naive_geneva
+
+        expected_naive = api_scheduled_iso_to_naive_geneva(return_dt)
+        actual_naive = return_booking.scheduled_time
         assert actual_naive == expected_naive
 
     @patch("application.institutions.accept_offer.db")
     def test_round_trip_inverts_pickup_dropoff(self, mock_db: MagicMock):
         """Retour inverse pickup ↔ dropoff (y compris access_notes)."""
         uc = self._make_uc()
-        uc._find_institution_client = MagicMock(return_value=_Client())  # type: ignore[assignment]
+        uc._get_or_create_institution_client = MagicMock(return_value=_Client())  # type: ignore[assignment]
         uc._resolve_billing_party = MagicMock()  # type: ignore[assignment]
 
         return_dt = datetime.now(UTC) + timedelta(hours=6)
@@ -263,12 +313,16 @@ class TestAcceptOfferRoundTrip:
         assert return_booking.dropoff_lon == outbound.pickup_lon
         assert return_booking.pickup_access_notes == outbound.dropoff_access_notes
         assert return_booking.dropoff_access_notes == outbound.pickup_access_notes
+        assert return_booking.pickup_floor == outbound.dropoff_floor
+        assert return_booking.pickup_door_code == outbound.dropoff_door_code
+        assert return_booking.dropoff_floor == outbound.pickup_floor
+        assert return_booking.dropoff_door_code == outbound.pickup_door_code
 
     @patch("application.institutions.accept_offer.db")
     def test_simple_trip_creates_one_booking(self, mock_db: MagicMock):
         """Trajet simple (pas A/R) → 1 seul booking, pas de retour."""
         uc = self._make_uc()
-        uc._find_institution_client = MagicMock(return_value=_Client())  # type: ignore[assignment]
+        uc._get_or_create_institution_client = MagicMock(return_value=_Client())  # type: ignore[assignment]
         uc._resolve_billing_party = MagicMock()  # type: ignore[assignment]
 
         tr = _TransportRequest(is_round_trip=False, return_time=None)
@@ -299,7 +353,7 @@ class TestAcceptOfferRoundTrip:
         client = _Client(
             preferential_rate=Decimal("75.00"), default_billed_to_type="clinic"
         )
-        uc._find_institution_client = MagicMock(return_value=client)  # type: ignore[assignment]
+        uc._get_or_create_institution_client = MagicMock(return_value=client)  # type: ignore[assignment]
         uc._resolve_billing_party = MagicMock()  # type: ignore[assignment]
 
         return_dt = datetime.now(UTC) + timedelta(hours=6)
@@ -325,6 +379,102 @@ class TestAcceptOfferRoundTrip:
         assert return_booking.amount == outbound.amount
         assert return_booking.billed_to_type == outbound.billed_to_type
         assert return_booking.billed_to_company_id == outbound.billed_to_company_id
+
+    @patch("application.institutions.accept_offer.db")
+    def test_billing_intent_institution_sets_clinic_and_company(self, mock_db: MagicMock):
+        """billing_intent=institution -> billed_to_type=clinic, company_id accepté."""
+        uc = self._make_uc()
+        client = _Client(preferential_rate=Decimal("75.00"), default_billed_to_type="clinic")
+        uc._get_or_create_institution_client = MagicMock(return_value=client)  # type: ignore[assignment]
+        uc._resolve_billing_party = MagicMock()  # type: ignore[assignment]
+
+        tr = _TransportRequest(
+            is_round_trip=False,
+            return_time=None,
+            billing_intent="institution",
+        )
+
+        _next_id = iter(range(1, 100))
+
+        def _flush_side_effect():
+            for call_args in mock_db.session.add.call_args_list:
+                b = call_args[0][0]
+                if getattr(b, "id", 0) == 0:
+                    b.id = next(_next_id)
+
+        mock_db.session.flush.side_effect = _flush_side_effect
+
+        outbound, _return_booking = uc._create_booking_from_request(
+            transport_request=tr,  # type: ignore[arg-type]
+            company_id=5,
+            user_id=1,
+        )
+
+        assert outbound.billed_to_type == "clinic"
+        assert outbound.billed_to_company_id == 5
+
+    @patch("application.institutions.accept_offer.db")
+    def test_billing_intent_patient_keeps_patient_billing(self, mock_db: MagicMock):
+        """billing_intent=patient -> billed_to_type=patient sans company_id."""
+        uc = self._make_uc()
+        client = _Client(preferential_rate=Decimal("75.00"), default_billed_to_type="clinic")
+        uc._get_or_create_institution_client = MagicMock(return_value=client)  # type: ignore[assignment]
+        uc._resolve_billing_party = MagicMock()  # type: ignore[assignment]
+
+        tr = _TransportRequest(
+            is_round_trip=False,
+            return_time=None,
+            billing_intent="patient",
+        )
+        _next_id = iter(range(1, 100))
+
+        def _flush_side_effect():
+            for call_args in mock_db.session.add.call_args_list:
+                b = call_args[0][0]
+                if getattr(b, "id", 0) == 0:
+                    b.id = next(_next_id)
+
+        mock_db.session.flush.side_effect = _flush_side_effect
+
+        outbound, _return_booking = uc._create_booking_from_request(
+            transport_request=tr,  # type: ignore[arg-type]
+            company_id=5,
+            user_id=1,
+        )
+
+        assert outbound.billed_to_type == "patient"
+        assert outbound.billed_to_company_id is None
+
+    @patch("application.institutions.accept_offer.db")
+    def test_round_trip_sentinel_midnight_time_not_confirmed(self, mock_db: MagicMock):
+        """00:00 = retour à définir → time_confirmed=False, exclu du dispatch."""
+        uc = self._make_uc()
+        uc._get_or_create_institution_client = MagicMock(return_value=_Client())  # type: ignore[assignment]
+        uc._resolve_billing_party = MagicMock()  # type: ignore[assignment]
+
+        return_dt = datetime(2026, 5, 25, 0, 0, 0)
+        tr = _TransportRequest(is_round_trip=True, return_time=return_dt)
+
+        _next_id = iter(range(1, 100))
+
+        def _flush_side_effect():
+            for call_args in mock_db.session.add.call_args_list:
+                b = call_args[0][0]
+                if getattr(b, "id", 0) == 0:
+                    b.id = next(_next_id)
+
+        mock_db.session.flush.side_effect = _flush_side_effect
+
+        _outbound, return_booking = uc._create_booking_from_request(
+            transport_request=tr,  # type: ignore[arg-type]
+            company_id=5,
+            user_id=1,
+        )
+
+        assert return_booking is not None
+        assert return_booking.time_confirmed is False
+        assert return_booking.scheduled_time.hour == 0
+        assert return_booking.scheduled_time.minute == 0
 
 
 # ── booking_summary aggregation ──

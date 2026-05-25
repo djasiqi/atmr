@@ -14,7 +14,7 @@ export function AssignFab({ onPress, label = "Assigner" }: AssignFabProps) {
         position: "absolute",
         right: 20,
         bottom: 20,
-        backgroundColor: "#0A8F7A",
+        backgroundColor: "#00796B",
         borderRadius: 24,
         paddingHorizontal: 16,
         paddingVertical: 12,

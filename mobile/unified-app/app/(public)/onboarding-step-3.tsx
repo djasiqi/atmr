@@ -9,6 +9,7 @@ import {
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen, useAppViewport } from "../../src/design/responsive";
+import { FONT_SIZE } from "../../src/design/responsive/typographyTokens";
 
 const LANDING_BACKGROUND = require("../../assets/images/landing-background.png");
 
@@ -144,7 +145,7 @@ const styles = StyleSheet.create({
   },
   stepPill: {
     alignSelf: "flex-start",
-    fontSize: 12,
+    fontSize: FONT_SIZE.px12,
     fontWeight: "700",
     letterSpacing: 0.6,
     textTransform: "uppercase",
@@ -158,14 +159,14 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: "Philosopher_700Bold",
-    fontSize: 28,
+    fontSize: FONT_SIZE.px28,
     lineHeight: 34,
     color: "#163A34",
     letterSpacing: -0.2,
   },
   subtitle: {
     marginTop: 12,
-    fontSize: 16,
+    fontSize: FONT_SIZE.px16,
     lineHeight: 24,
     color: "#5F7369",
   },
@@ -195,13 +196,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   optionTitle: {
-    fontSize: 16,
+    fontSize: FONT_SIZE.px16,
     fontWeight: "700",
     color: "#163A34",
     marginBottom: 4,
   },
   optionDesc: {
-    fontSize: 14,
+    fontSize: FONT_SIZE.px14,
     lineHeight: 20,
     color: "#5F7369",
   },
@@ -218,7 +219,7 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     color: "#FFFFFF",
-    fontSize: 16,
+    fontSize: FONT_SIZE.px16,
     fontWeight: "700",
     letterSpacing: 0.2,
   },
@@ -237,7 +238,7 @@ const styles = StyleSheet.create({
   },
   secondaryButtonText: {
     color: "#0A8F7A",
-    fontSize: 16,
+    fontSize: FONT_SIZE.px16,
     fontWeight: "700",
     letterSpacing: 0.2,
   },
@@ -253,7 +254,7 @@ const styles = StyleSheet.create({
   },
   tertiaryText: {
     color: "#0A8F7A",
-    fontSize: 15,
+    fontSize: FONT_SIZE.px15,
     fontWeight: "600",
     textAlign: "center",
   },

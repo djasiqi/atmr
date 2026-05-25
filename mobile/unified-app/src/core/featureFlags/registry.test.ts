@@ -50,6 +50,18 @@ describe("feature flags registry", () => {
     expect(registry!.isFeatureEnabled("company_dispatch_enabled")).toBe(true);
   });
 
+  it("enables company realtime in __DEV__ when dispatch is enabled", () => {
+    process.env.EXPO_PUBLIC_ENABLE_COMPANY_DISPATCH = "1";
+    delete process.env.EXPO_PUBLIC_ENABLE_COMPANY_REALTIME;
+    let registry: typeof import("./registry");
+    jest.isolateModules(() => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      registry = require("./registry");
+    });
+    expect(registry!.isFeatureEnabled("company_realtime_enabled")).toBe(true);
+    expect(registry!.isCompanyRealtimeSocketExpected()).toBe(true);
+  });
+
   it("enables company dispatch screen when EXPO_PUBLIC_ENABLE_COMPANY_DISPATCH_SCREEN=1", () => {
     process.env.EXPO_PUBLIC_ENABLE_COMPANY_DISPATCH_SCREEN = "1";
     let registry: typeof import("./registry");

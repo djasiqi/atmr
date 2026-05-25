@@ -61,15 +61,21 @@ const ScheduleReturnTimeModal = ({ isOpen, onClose, reservation, onConfirm }) =>
   const [selectedTime, setSelectedTime] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const parseValidDate = (value) => {
+    if (!value) return null;
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
+    return date;
+  };
+
   useEffect(() => {
     if (isOpen) {
-      let dateObj;
-
-      if (reservation?.scheduled_time) {
-        dateObj = new Date(reservation.scheduled_time);
-      } else {
-        dateObj = new Date(Date.now() + 60 * 60 * 1000);
-      }
+      // Priorité: date retour existante > date aller (original_booking) > now+1h.
+      const dateObj =
+        parseValidDate(reservation?.scheduled_time)
+        || parseValidDate(reservation?.original_booking?.scheduled_time)
+        || parseValidDate(reservation?.pickup_time)
+        || new Date(Date.now() + 60 * 60 * 1000);
 
       const year = dateObj.getFullYear();
       const month = String(dateObj.getMonth() + 1).padStart(2, '0');
@@ -115,7 +121,8 @@ const ScheduleReturnTimeModal = ({ isOpen, onClose, reservation, onConfirm }) =>
   const clientName = reservation?.client_name || reservation?.client?.full_name || '';
   const formatAllerTime = (isoStr) => {
     if (!isoStr) return null;
-    const d = new Date(isoStr);
+    const d = parseValidDate(isoStr);
+    if (!d) return null;
     const datePart = d.toLocaleDateString('fr-CH', { day: '2-digit', month: '2-digit', year: 'numeric' });
     if (d.getHours() === 0 && d.getMinutes() === 0) return datePart;
     const timePart = d.toLocaleTimeString('fr-CH', { hour: '2-digit', minute: '2-digit' });

@@ -4439,28 +4439,50 @@ class InstitutionsList(Resource):
                 company_id, is_institution=True, is_active=True
             )
 
-            return {
-                "institutions": [
-                    {
-                        "id": inst.id,
-                        "institution_name": inst.institution_name
-                        or "Institution sans nom",
-                        "clinic_company_id": inst.default_billed_to_company_id
-                        or inst.company_id,
-                        "contact_email": inst.contact_email,
-                        "contact_phone": inst.contact_phone,
-                        "billing_address": inst.billing_address,
-                        "user": {
-                            "first_name": inst.user.first_name if inst.user else "",
-                            "last_name": inst.user.last_name if inst.user else "",
-                            "username": inst.user.username if inst.user else "",
-                        }
-                        if inst.user
-                        else None,
+            # Déduplication défensive: certaines bases contiennent plusieurs fiches institution
+            # avec le même nom (migration/historique), ce qui duplique le sélecteur côté UI.
+            # Règle: 1 ligne par nom normalisé, en privilégiant la fiche avec mapping S2 explicite.
+            dedup_by_name: dict[str, dict[str, Any]] = {}
+            for inst in institutions:
+                institution_name = inst.institution_name or "Institution sans nom"
+                clinic_company_id = (
+                    inst.default_billed_to_company_id
+                    if inst.default_billed_to_company_id is not None
+                    else inst.company_id
+                )
+                row: dict[str, Any] = {
+                    "id": inst.id,
+                    "institution_name": institution_name,
+                    "clinic_company_id": clinic_company_id,
+                    "contact_email": inst.contact_email,
+                    "contact_phone": inst.contact_phone,
+                    "billing_address": inst.billing_address,
+                    "user": {
+                        "first_name": inst.user.first_name if inst.user else "",
+                        "last_name": inst.user.last_name if inst.user else "",
+                        "username": inst.user.username if inst.user else "",
                     }
-                    for inst in institutions
-                ]
-            }
+                    if inst.user
+                    else None,
+                    "_priority": (
+                        1 if inst.default_billed_to_company_id is not None else 0,
+                        1 if clinic_company_id is not None else 0,
+                        int(inst.id or 0),
+                    ),
+                }
+                key = str(institution_name).strip().lower()
+                current = dedup_by_name.get(key)
+                if current is None or row["_priority"] > current["_priority"]:
+                    dedup_by_name[key] = row
+
+            institutions_out = []
+            for row in dedup_by_name.values():
+                clean = dict(row)
+                clean.pop("_priority", None)
+                institutions_out.append(clean)
+            institutions_out.sort(key=lambda item: str(item.get("institution_name") or "").lower())
+
+            return {"institutions": institutions_out}
 
         except (OperationalError, DBAPIError) as e:
             # Erreurs DB attendues : connexion, timeout

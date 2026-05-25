@@ -37,7 +37,7 @@ export function TransferRideModal({
           onPress={() => onSelect(company.id)}
           style={{
             borderWidth: 1,
-            borderColor: selectedPartnerId === company.id ? "#0A8F7A" : "#ddd",
+            borderColor: selectedPartnerId === company.id ? "#00796B" : "#ddd",
             borderRadius: 8,
             padding: 10,
           }}

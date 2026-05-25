@@ -36,6 +36,10 @@ export interface MissionHintLike {
   notes?: string | null;
   pickup_access_notes?: string | null;
   dropoff_access_notes?: string | null;
+  pickup_floor?: string | null;
+  pickup_door_code?: string | null;
+  dropoff_floor?: string | null;
+  dropoff_door_code?: string | null;
   wheelchair?: boolean | string | number | null;
   wheelchair_client_has?: boolean | string | number | null;
   wheelchair_need?: boolean | string | number | null;
@@ -100,6 +104,12 @@ function pushHint(
 ): void {
   if (!isMeaningful(value)) return;
   out.push({ icon, label, value: (value ?? "").trim(), priority });
+}
+
+function firstMeaningful(
+  ...values: Array<string | undefined | null>
+): string | undefined | null {
+  return values.find((value) => isMeaningful(value)) ?? null;
 }
 
 /** Détermine aller vs retour. Non-bloquant : si indécidable => unknown. */
@@ -171,18 +181,45 @@ export function getPickupHints(mission: MissionHintLike | null | undefined): Hin
   const c = mission.client;
 
   if (dir === "outbound") {
-    pushHint(out, "key-outline", "Code porte", c?.door_code, HOME_DOOR_CODE_PRIORITY);
-    pushHint(out, "business-outline", "Étage", c?.floor, HOME_FLOOR_PRIORITY);
-    pushHint(out, "document-text-outline", "Notes d'accès", c?.access_notes, HOME_ACCESS_NOTES_PRIORITY);
+    pushHint(
+      out,
+      "key-outline",
+      "Code porte",
+      firstMeaningful(mission.pickup_door_code, c?.door_code),
+      HOME_DOOR_CODE_PRIORITY
+    );
+    pushHint(
+      out,
+      "business-outline",
+      "Étage",
+      firstMeaningful(mission.pickup_floor, c?.floor),
+      HOME_FLOOR_PRIORITY
+    );
+    pushHint(
+      out,
+      "document-text-outline",
+      "Notes d'accès",
+      firstMeaningful(mission.pickup_access_notes, c?.access_notes),
+      HOME_ACCESS_NOTES_PRIORITY
+    );
     pushHint(out, "call-outline", "Contact", c?.contact_phone, HOME_CONTACT_PRIORITY);
     pushMobilityHints(out, mission);
   } else if (dir === "return") {
     pushHint(out, "location-outline", "Établissement", mission.medical_facility, HOSPITAL_ESTABLISHMENT_PRIORITY);
     pushHint(out, "business-outline", "Service / Bâtiment", mission.hospital_service, HOSPITAL_SERVICE_PRIORITY);
     pushHint(out, "person-outline", "Médecin", mission.doctor_name, HOSPITAL_DOCTOR_PRIORITY);
+    pushHint(out, "business-outline", "Étage / Secteur", mission.pickup_floor, HOME_FLOOR_PRIORITY);
     pushMobilityHints(out, mission);
-    pushHint(out, "document-text-outline", "Notes sortie", mission.notes_medical, NOTES_MEDICAL_PRIORITY);
+    pushHint(
+      out,
+      "document-text-outline",
+      "Notes sortie",
+      firstMeaningful(mission.pickup_access_notes, mission.notes_medical),
+      NOTES_MEDICAL_PRIORITY
+    );
   } else {
+    pushHint(out, "key-outline", "Code porte", mission.pickup_door_code, HOME_DOOR_CODE_PRIORITY);
+    pushHint(out, "business-outline", "Étage", mission.pickup_floor, HOME_FLOOR_PRIORITY);
     pushHint(out, "document-text-outline", "Instructions accès", mission.pickup_access_notes, ACCESS_NOTES_PRIORITY);
     pushMobilityHints(out, mission);
   }
@@ -199,15 +236,34 @@ export function getDropoffHints(mission: MissionHintLike | null | undefined): Hi
   const c = mission.client;
 
   if (dir === "return") {
-    pushHint(out, "key-outline", "Code porte", c?.door_code, HOME_DOOR_CODE_PRIORITY);
-    pushHint(out, "business-outline", "Étage", c?.floor, HOME_FLOOR_PRIORITY);
-    pushHint(out, "document-text-outline", "Notes d'accès", c?.access_notes, HOME_ACCESS_NOTES_PRIORITY);
+    pushHint(
+      out,
+      "key-outline",
+      "Code porte",
+      firstMeaningful(mission.dropoff_door_code, c?.door_code),
+      HOME_DOOR_CODE_PRIORITY
+    );
+    pushHint(
+      out,
+      "business-outline",
+      "Étage",
+      firstMeaningful(mission.dropoff_floor, c?.floor),
+      HOME_FLOOR_PRIORITY
+    );
+    pushHint(
+      out,
+      "document-text-outline",
+      "Notes d'accès",
+      firstMeaningful(mission.dropoff_access_notes, c?.access_notes),
+      HOME_ACCESS_NOTES_PRIORITY
+    );
     pushHint(out, "call-outline", "Contact", c?.contact_phone, HOME_CONTACT_PRIORITY);
     pushMobilityHints(out, mission);
   } else {
     pushHint(out, "location-outline", "Établissement", mission.medical_facility, HOSPITAL_ESTABLISHMENT_PRIORITY);
     pushHint(out, "business-outline", "Service / Bâtiment", mission.hospital_service, HOSPITAL_SERVICE_PRIORITY);
     pushHint(out, "person-outline", "Médecin", mission.doctor_name, HOSPITAL_DOCTOR_PRIORITY);
+    pushHint(out, "business-outline", "Étage / Secteur", mission.dropoff_floor, HOME_FLOOR_PRIORITY);
     pushMobilityHints(out, mission);
     pushHint(out, "document-text-outline", "Notes médicales", mission.notes_medical, NOTES_MEDICAL_PRIORITY);
     pushHint(out, "document-text-outline", "Instructions accès", mission.dropoff_access_notes, ACCESS_NOTES_PRIORITY);

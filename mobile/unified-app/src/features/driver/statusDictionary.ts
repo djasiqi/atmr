@@ -81,6 +81,7 @@ const API_LOWERCASE_TO_UX: Record<string, DriverMissionStatus> = {
   awaiting_client_payment: "ASSIGNED",
   accepted: "ASSIGNED",
   assigned: "ASSIGNED",
+  arrived: "ARRIVED",
   en_route: "EN_ROUTE",
   in_progress: "IN_PROGRESS",
   completed: "COMPLETED",

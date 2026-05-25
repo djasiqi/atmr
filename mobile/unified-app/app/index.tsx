@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSession } from "../src/core/sessionProvider";
 import { resolveInitialRoute } from "../src/core/navigation/resolveInitialRoute";
 import { brandSurfaceSoft, ResponsiveContainer, Screen } from "../src/design/responsive";
+import { FONT_SIZE } from "../src/design/responsive/typographyTokens";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const ReactRuntime: any = require("react");
 
@@ -59,13 +60,13 @@ const styles = StyleSheet.create({
     alignItems: "stretch",
   },
   title: {
-    fontSize: 20,
+    fontSize: FONT_SIZE.px20,
     fontWeight: "700",
     color: "#163A34",
     textAlign: "center",
   },
   body: {
-    fontSize: 15,
+    fontSize: FONT_SIZE.px15,
     lineHeight: 22,
     color: "#475569",
     textAlign: "center",
@@ -80,7 +81,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
   },
   retryText: {
-    fontSize: 16,
+    fontSize: FONT_SIZE.px16,
     fontWeight: "600",
     color: "#0A8F7A",
   },
@@ -91,7 +92,7 @@ const styles = StyleSheet.create({
     minHeight: 120,
   },
   loadingText: {
-    fontSize: 15,
+    fontSize: FONT_SIZE.px15,
     color: "#5F7369",
   },
 });

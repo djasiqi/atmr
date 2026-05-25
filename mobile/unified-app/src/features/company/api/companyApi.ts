@@ -171,10 +171,45 @@ type RawRide = {
   company_id?: number | string | null;
   status?: string | null;
   updated_at?: string | null;
+  pickup_at?: string | null;
+  scheduled_at?: string | null;
+  pickup_address?: string | null;
+  dropoff_address?: string | null;
+  pickup_lat?: number | string | null;
+  pickup_lng?: number | string | null;
+  pickup_lon?: number | string | null;
+  dropoff_lat?: number | string | null;
+  dropoff_lng?: number | string | null;
+  dropoff_lon?: number | string | null;
+  distance_km?: number | string | null;
+  route_distance_km?: number | string | null;
+  duration_min?: number | string | null;
+  route_duration_min?: number | string | null;
+  duration_seconds?: number | string | null;
   time?: { pickup_at?: string | null };
   client?: { name?: string | null } | null;
-  route?: { pickup_address?: string | null; dropoff_address?: string | null };
-  driver?: { id?: string | number | null; name?: string | null; display_name?: string | null } | null;
+  route?: {
+    pickup_address?: string | null;
+    dropoff_address?: string | null;
+    distance_km?: number | string | null;
+    duration_min?: number | string | null;
+    route_duration_min?: number | string | null;
+    duration_seconds?: number | string | null;
+    pickup_lat?: number | string | null;
+    pickup_lon?: number | string | null;
+    dropoff_lat?: number | string | null;
+    dropoff_lon?: number | string | null;
+  };
+  driver?: {
+    id?: string | number | null;
+    name?: string | null;
+    display_name?: string | null;
+    driver_type?: string | null;
+    is_emergency?: boolean;
+  } | null;
+  transfer?: {
+    partner_company_name?: string | null;
+  } | null;
   assignment_pickup_delay_minutes?: number | string | null;
 };
 
@@ -195,6 +230,10 @@ type RawOptimizerResponse = {
 type RawDriversResponse = {
   locations?: {
     driver_id?: number | string;
+    driver_name?: string;
+    full_name?: string;
+    first_name?: string;
+    last_name?: string;
     latitude?: number;
     longitude?: number;
     lat?: number;
@@ -204,9 +243,14 @@ type RawDriversResponse = {
     recorded_at?: string;
     received_at?: string;
     mission_id?: number | null;
+    current_booking_id?: number | null;
   }[];
   drivers?: {
     driver_id?: number | string;
+    driver_name?: string;
+    full_name?: string;
+    first_name?: string;
+    last_name?: string;
     latitude?: number;
     longitude?: number;
     lat?: number;
@@ -229,6 +273,34 @@ function toFiniteNumber(input: unknown): number | null {
   if (typeof input === "string") {
     const parsed = Number.parseFloat(input);
     return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function parseDistanceKm(input: unknown): number | null {
+  if (typeof input === "number" && Number.isFinite(input)) {
+    return input > 0 ? input : null;
+  }
+  if (typeof input === "string") {
+    const normalized = input.trim().toLowerCase().replace(",", ".");
+    const match = normalized.match(/-?\d+(\.\d+)?/);
+    if (!match) return null;
+    const parsed = Number.parseFloat(match[0]);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  }
+  return null;
+}
+
+function parseDurationMin(input: unknown): number | null {
+  if (typeof input === "number" && Number.isFinite(input)) {
+    return input > 0 ? input : null;
+  }
+  if (typeof input === "string") {
+    const normalized = input.trim().toLowerCase().replace(",", ".");
+    const match = normalized.match(/-?\d+(\.\d+)?/);
+    if (!match) return null;
+    const parsed = Number.parseFloat(match[0]);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
   }
   return null;
 }
@@ -272,16 +344,62 @@ function normalizeMission(raw: RawRide): CompanyDispatchMission | null {
       : typeof driverNameRaw?.name === "string" && driverNameRaw.name.trim()
         ? driverNameRaw.name.trim()
         : null;
+  const transferRaw = raw.transfer && typeof raw.transfer === "object" ? raw.transfer : null;
+  const partnerCompanyName =
+    typeof transferRaw?.partner_company_name === "string" && transferRaw.partner_company_name.trim()
+      ? transferRaw.partner_company_name.trim()
+      : null;
   const assignmentDelay = toFiniteNumber(raw.assignment_pickup_delay_minutes);
+  const routeDistance =
+    parseDistanceKm(raw.route?.distance_km) ??
+    parseDistanceKm(raw.route_distance_km) ??
+    parseDistanceKm(raw.distance_km);
+  const routeDurationMin =
+    parseDurationMin(raw.route?.duration_min) ??
+    parseDurationMin(raw.route?.route_duration_min) ??
+    parseDurationMin(raw.route_duration_min) ??
+    parseDurationMin(raw.duration_min) ??
+    (() => {
+      const sec =
+        toFiniteNumber(raw.route?.duration_seconds) ??
+        toFiniteNumber(raw.duration_seconds);
+      return sec != null && sec > 0 ? Math.round(sec / 60) : null;
+    })();
+  const pickupLabel =
+    (typeof raw.route?.pickup_address === "string" && raw.route?.pickup_address.trim()) ||
+    (typeof raw.pickup_address === "string" && raw.pickup_address.trim()) ||
+    null;
+  const dropoffLabel =
+    (typeof raw.route?.dropoff_address === "string" && raw.route?.dropoff_address.trim()) ||
+    (typeof raw.dropoff_address === "string" && raw.dropoff_address.trim()) ||
+    null;
+  const pickupLat = toFiniteNumber(raw.route?.pickup_lat ?? raw.pickup_lat);
+  const pickupLon = toFiniteNumber(raw.route?.pickup_lon ?? raw.pickup_lon ?? raw.pickup_lng);
+  const dropoffLat = toFiniteNumber(raw.route?.dropoff_lat ?? raw.dropoff_lat);
+  const dropoffLon = toFiniteNumber(raw.route?.dropoff_lon ?? raw.dropoff_lon ?? raw.dropoff_lng);
+  const scheduledAt = raw.time?.pickup_at ?? raw.pickup_at ?? raw.scheduled_at ?? null;
   return {
     mission_id: missionId,
     status: normalizedStatus,
-    scheduled_at: raw.time?.pickup_at ?? null,
+    scheduled_at: scheduledAt,
     client_name: clientName,
-    pickup_label: raw.route?.pickup_address ?? null,
-    dropoff_label: raw.route?.dropoff_address ?? null,
+    pickup_label: pickupLabel,
+    dropoff_label: dropoffLabel,
+    pickup_lat: pickupLat,
+    pickup_lon: pickupLon,
+    dropoff_lat: dropoffLat,
+    dropoff_lon: dropoffLon,
+    route_distance_km: routeDistance != null && routeDistance > 0 ? routeDistance : null,
+    route_duration_min: routeDurationMin != null && routeDurationMin > 0 ? routeDurationMin : null,
     driver_name: driverNameFromApi,
     driver_id: driverId,
+    partner_company_name: partnerCompanyName,
+    driver_type:
+      typeof raw.driver?.driver_type === "string" && raw.driver.driver_type.trim()
+        ? raw.driver.driver_type.trim().toUpperCase()
+        : raw.driver?.is_emergency
+          ? "EMERGENCY"
+          : null,
     company_id: companyId,
     updated_at: raw.updated_at ?? null,
     assignment_pickup_delay_minutes:
@@ -296,9 +414,29 @@ function normalizeLocation(
   const latitude = toFiniteNumber(raw.latitude ?? raw.lat);
   const longitude = toFiniteNumber(raw.longitude ?? raw.lon ?? raw.lng);
   if (driverId == null || latitude == null || longitude == null) return null;
+  const firstName =
+    typeof raw.first_name === "string" && raw.first_name.trim()
+      ? raw.first_name.trim()
+      : null;
+  const lastName =
+    typeof raw.last_name === "string" && raw.last_name.trim()
+      ? raw.last_name.trim()
+      : null;
+  const mergedFromParts = [firstName, lastName].filter(Boolean).join(" ").trim() || null;
+  const driverName =
+    typeof raw.driver_name === "string" && raw.driver_name.trim()
+      ? raw.driver_name.trim()
+      : typeof raw.full_name === "string" && raw.full_name.trim()
+        ? raw.full_name.trim()
+        : mergedFromParts;
   return {
     driver_id: driverId,
-    mission_id: raw.mission_id ?? null,
+    driver_name: driverName,
+    full_name: driverName,
+    first_name: firstName,
+    last_name: lastName,
+    mission_id:
+      toFiniteNumber(raw.mission_id ?? raw.current_booking_id) ?? null,
     latitude,
     longitude,
     timestamp: toIso(raw.timestamp),
@@ -328,7 +466,7 @@ export async function getDispatchMissions(
           date: options.date,
           q: options.search || undefined,
           status: options.status || undefined,
-          page_size: 120,
+          page_size: 50,
         },
       }),
     () =>
@@ -338,7 +476,7 @@ export async function getDispatchMissions(
           date: options.date,
           q: options.search || undefined,
           status: options.status || undefined,
-          page_size: 120,
+          page_size: 50,
         },
       }),
   ], { domain: "dispatch_missions_get", contextId: options.contextId });
@@ -1334,34 +1472,108 @@ export async function resetCompanyAssignments(options: CompanyRequestOptions & {
 }
 
 export async function searchCompanyAddresses(options: CompanyRequestOptions & { q: string }) {
+  const toAddressRows = (payload: CompanyAnyPayload): Record<string, unknown>[] => {
+    if (Array.isArray(payload)) {
+      return payload.filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === "object");
+    }
+    if (!payload || typeof payload !== "object") return [];
+    const raw = payload as Record<string, unknown>;
+    const candidate = [
+      raw.items,
+      raw.results,
+      raw.data,
+      raw.clients,
+      raw.addresses,
+      raw.features,
+      raw.predictions,
+      raw.suggestions,
+    ].find((entry) => Array.isArray(entry));
+    if (!Array.isArray(candidate)) return [];
+    return candidate.filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === "object");
+  };
+  const hasGoogleSource = (rows: Record<string, unknown>[]): boolean =>
+    rows.some((row) => {
+      const rowSource = typeof row.source === "string" ? row.source : null;
+      const properties = row.properties;
+      const propertySource =
+        properties && typeof properties === "object" && typeof (properties as Record<string, unknown>).source === "string"
+          ? ((properties as Record<string, unknown>).source as string)
+          : null;
+      return rowSource === "google_places" || rowSource === "google" || propertySource === "google_places" || propertySource === "google";
+    });
+  const statusFromError = (error: unknown): number | null =>
+    typeof (error as AxiosError)?.response?.status === "number" ? ((error as AxiosError).response?.status as number) : null;
+
+  const requests: Array<() => Promise<{ data: CompanyAnyPayload }>> = [
+    () =>
+      apiClient.get("/geocode/autocomplete", {
+        ...withContextHeaders(options),
+        params: { q: options.q, lat: 46.2044, lon: 6.1432, limit: 8 },
+      }),
+    () =>
+      apiClient.get("/company_mobile/dispatch/v1/addresses/search", {
+        ...withContextHeaders(options),
+        params: { q: options.q },
+      }),
+  ];
+
   try {
-    const response = await requestWithFallback<CompanyAnyPayload>(
-      [
-        // Aligné web: endpoint proxy géocodage en priorité (Google + fallback backend).
-        () =>
-          apiClient.get("/geocode/autocomplete", {
-            ...withContextHeaders(options),
-            params: { q: options.q, lat: 46.2044, lon: 6.1432, limit: 8 },
-          }),
-        () =>
-          apiClient.get("/company_mobile/dispatch/v1/addresses/search", {
-            ...withContextHeaders(options),
-            params: { q: options.q },
-          }),
-        () =>
-          apiClient.get("/dispatch/v1/places/autocomplete", {
-            ...withContextHeaders(options),
-            params: { q: options.q },
-          }),
-        () =>
-          apiClient.get("/dispatch/v1/addresses/search", {
-            ...withContextHeaders(options),
-            params: { q: options.q },
-          }),
-      ],
-      { domain: "dispatch_address_search", contextId: options.contextId }
-    );
-    return response.data as CompanyAnyPayload;
+    let firstNonEmptyPayload: CompanyAnyPayload | null = null;
+    let lastError: unknown = null;
+    for (let index = 0; index < requests.length; index += 1) {
+      try {
+        if (index > 0) {
+          emitCompanyDispatchTelemetry(
+            "company.dispatch.contract_fallback",
+            {
+              source: "companyApi.searchCompanyAddresses",
+              domain: "dispatch_address_search",
+              context_id: options.contextId,
+              attempt: index + 1,
+            },
+            { allowWhenDisabled: true }
+          );
+        }
+        const response = await requests[index]();
+        const payload = response.data as CompanyAnyPayload;
+        const rows = toAddressRows(payload);
+        if (rows.length === 0) {
+          continue;
+        }
+        if (hasGoogleSource(rows)) {
+          return payload;
+        }
+        if (firstNonEmptyPayload == null) {
+          firstNonEmptyPayload = payload;
+        }
+      } catch (error) {
+        lastError = error;
+        const status = statusFromError(error);
+        if (status === 401 || status === 403) {
+          emitCompanyDispatchTelemetry(
+            "company.dispatch.auth_failure",
+            {
+              source: "companyApi.searchCompanyAddresses",
+              domain: "dispatch_address_search",
+              context_id: options.contextId,
+              status,
+            },
+            { allowWhenDisabled: true }
+          );
+          throw error;
+        }
+        if (index === requests.length - 1) {
+          throw error;
+        }
+      }
+    }
+    if (firstNonEmptyPayload != null) {
+      return firstNonEmptyPayload;
+    }
+    if (lastError != null) {
+      throw lastError;
+    }
+    return [];
   } catch (error) {
     const status = (error as AxiosError | undefined)?.response?.status;
     if (status === 404) {

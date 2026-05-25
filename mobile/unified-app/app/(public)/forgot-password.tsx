@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   ImageBackground,
-  Keyboard,
   Platform,
   Pressable,
   ScrollView,
@@ -14,7 +13,14 @@ import {
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { apiClient } from "../../src/core/api/client";
-import { AppText, Screen, scrollAnchorAboveKeyboard, useAppViewport } from "../../src/design/responsive";
+import {
+  AppText,
+  Screen,
+  scrollAnchorAboveKeyboard,
+  useAppViewport,
+  useKeyboardHeight,
+} from "../../src/design/responsive";
+import { FONT_SIZE } from "../../src/design/responsive/typographyTokens";
 
 const LANDING_BACKGROUND = require("../../assets/images/landing-background.png");
 
@@ -28,28 +34,13 @@ export default function ForgotPasswordScreen() {
   const forgotScrollRef = useRef<ScrollView | null>(null);
   const forgotScrollOffsetYRef = useRef(0);
   const emailFieldAnchorRef = useRef<View | null>(null);
-  const [keyboardVisible, setKeyboardVisible] = useState(false);
-  const [keyboardScrollPaddingBottom, setKeyboardScrollPaddingBottom] = useState(0);
+  const { keyboardVisible, scrollPaddingBottom: keyboardScrollPaddingBottom } = useKeyboardHeight();
 
   useEffect(() => {
-    if (Platform.OS === "web") return;
-    const show = Keyboard.addListener("keyboardDidShow", (e) => {
-      const h = e.endCoordinates?.height ?? 0;
-      const computed = h > 0 ? Math.round(h + 48) : 300;
-      setKeyboardScrollPaddingBottom(Math.max(260, computed));
-      setKeyboardVisible(true);
-    });
-    const hide = Keyboard.addListener("keyboardDidHide", () => {
-      setKeyboardVisible(false);
-      setKeyboardScrollPaddingBottom(0);
-      forgotScrollRef.current?.scrollTo({ y: 0, animated: true });
-      forgotScrollOffsetYRef.current = 0;
-    });
-    return () => {
-      show.remove();
-      hide.remove();
-    };
-  }, []);
+    if (keyboardVisible) return;
+    forgotScrollRef.current?.scrollTo({ y: 0, animated: true });
+    forgotScrollOffsetYRef.current = 0;
+  }, [keyboardVisible]);
 
   const submit = async () => {
     setPending(true);
@@ -227,7 +218,7 @@ const styles = StyleSheet.create({
   },
   kicker: {
     color: "#0A8F7A",
-    fontSize: 13,
+    fontSize: FONT_SIZE.px13,
     fontWeight: "500",
     letterSpacing: 0.5,
     textTransform: "uppercase",
@@ -235,13 +226,13 @@ const styles = StyleSheet.create({
   },
   title: {
     color: "#163A34",
-    fontSize: 30,
+    fontSize: FONT_SIZE.px30,
     lineHeight: 34,
     fontWeight: "700",
   },
   subtitle: {
     color: "#5F7369",
-    fontSize: 15,
+    fontSize: FONT_SIZE.px15,
     lineHeight: 21,
     marginTop: 10,
   },
@@ -256,7 +247,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     paddingHorizontal: 14,
     color: "#163A34",
-    fontSize: 16,
+    fontSize: FONT_SIZE.px16,
   },
   submitButton: {
     marginTop: 20,

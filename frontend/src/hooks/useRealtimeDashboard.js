@@ -15,8 +15,9 @@ const hasCompanyToken = () => hasCompanyScopedAccessToken(getCurrentAuthEnv());
 /**
  * @param {string | null} date - YYYY-MM-DD (doit être le même que dispatchDay sur CompanyDashboard)
  * @param {number} refreshInterval - ms ; 0 = pas d’intervalle (pas de polling périodique via refetchInterval)
+ * @param {{ enabled?: boolean }} [options]
  */
-export const useRealtimeDashboard = (date = null, refreshInterval = 0) => {
+export const useRealtimeDashboard = (date = null, refreshInterval = 0, { enabled: queryEnabled = true } = {}) => {
   const dayKey = useMemo(() => {
     if (date && String(date).trim()) {
       return String(date).trim().slice(0, 10);
@@ -40,7 +41,7 @@ export const useRealtimeDashboard = (date = null, refreshInterval = 0) => {
       });
       return response.data ?? null;
     },
-    enabled: tokenReady,
+    enabled: tokenReady && queryEnabled,
     staleTime: 20_000,
     refetchInterval: refreshInterval > 0 ? refreshInterval : false,
   });

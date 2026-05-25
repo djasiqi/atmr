@@ -193,6 +193,42 @@
   margin: 0;
 }
 
+/* ── Carrier contacts (téléphone / email transporteur) ── */
+
+.carrierContacts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.carrierContactItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #F0FDFA;
+  color: #047857;
+  border: 1px solid #A7F3D0;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background 0.12s ease, border-color 0.12s ease, transform 0.12s ease;
+}
+
+.carrierContactItem:hover {
+  background: #D1FAE5;
+  border-color: #6EE7B7;
+  transform: translateY(-1px);
+}
+
+.carrierContactItem svg {
+  width: 11px;
+  height: 11px;
+}
+
 /* ── Summary grid ── */
 
 .summaryGrid {
@@ -487,12 +523,30 @@
 
 .billingEdit {
   margin-top: 10px;
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 8px;
-  align-items: center;
+  align-items: stretch;
+  width: 100%;
+  min-width: 0;
+}
+
+.billingEdit > .editInput {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-width: 0;
+}
+
+.billingEdit > .billingSaveBtn {
+  grid-column: 1 / -1;
+  justify-self: end;
 }
 
 .billingSelect {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
   padding: 6px 10px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
@@ -593,4 +647,460 @@
   font-size: 11px;
   color: var(--text-muted);
   margin-top: 2px;
+}
+
+.enRouteWarning {
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  border-radius: 8px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.editForm {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.editContext {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  margin-bottom: 16px;
+  background: var(--bg-muted);
+  border-radius: var(--radius-sm);
+}
+
+.editContextLabel {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.editContextSep {
+  width: 1px;
+  height: 14px;
+  background: var(--border);
+}
+
+.editContextMeta {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.editGroup { padding: 0; }
+
+.editGroupTitle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 10px;
+}
+
+.editGroupIcon {
+  color: var(--brand);
+  flex-shrink: 0;
+}
+
+.editDivider {
+  height: 1px;
+  background: var(--border);
+  margin: 14px 0;
+}
+
+.editRoute {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.editRouteTrack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px 0;
+  width: 10px;
+  flex-shrink: 0;
+}
+
+.editRouteDotA,
+.editRouteDotB {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.editRouteDotA { background: var(--brand); }
+.editRouteDotB { background: var(--danger); }
+
+.editRouteLine {
+  width: 2px;
+  flex: 1;
+  min-height: 10px;
+  background: var(--border);
+  margin: 4px 0;
+}
+
+.editRouteFields {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.editField {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.editLabel {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.editInput {
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-surface);
+  font-size: 12.5px;
+  color: var(--text-primary);
+  transition: border-color var(--transition), box-shadow var(--transition);
+  box-sizing: border-box;
+}
+
+.editInput:focus,
+.editTextarea:focus,
+.editInputWrap :global(input):focus {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 2px rgba(0, 121, 107, 0.06);
+}
+
+.editInput::placeholder,
+.editTextarea::placeholder,
+.editInputWrap :global(input)::placeholder {
+  color: #CBD5E1;
+  font-weight: 400;
+}
+
+.editTextarea {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-surface);
+  font-size: 12.5px;
+  color: var(--text-primary);
+  resize: vertical;
+  min-height: 52px;
+  font-family: inherit;
+  line-height: 1.45;
+  transition: border-color var(--transition), box-shadow var(--transition);
+  box-sizing: border-box;
+}
+
+.editInputWrap { width: 100%; }
+
+.editInputWrap :global(input) {
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-surface);
+  font-size: 12.5px;
+  color: var(--text-primary);
+  box-sizing: border-box;
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+.editRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.editRowTriple {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 6px;
+}
+
+.fieldErrorInput {
+  border-color: #f87171;
+  background: #fef2f2;
+}
+
+.fieldErrorLabel { color: #dc2626; }
+
+.fieldErrorHint {
+  font-size: 11.5px;
+  color: #dc2626;
+  margin-top: 2px;
+  padding-left: 2px;
+}
+
+.saveErrorBanner {
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 13px;
+  line-height: 1.4;
+  margin-top: 12px;
+}
+
+.editCheckbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 8px 0 0;
+}
+
+.toggleGroup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.toggleBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px 6px 8px;
+  min-height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition), border-color var(--transition), box-shadow var(--transition);
+}
+
+.toggleBtn:hover {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+
+.toggleBtn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(0, 121, 107, 0.18);
+  border-color: var(--brand);
+}
+
+.toggleIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: var(--bg-muted);
+  color: var(--text-muted);
+  flex-shrink: 0;
+  transition: background var(--transition), color var(--transition);
+}
+
+.toggleLabel {
+  white-space: nowrap;
+}
+
+.toggleState {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--bg-muted);
+  color: var(--text-tertiary, #94a3b8);
+  margin-left: 2px;
+  flex-shrink: 0;
+  transition: background var(--transition), color var(--transition);
+}
+
+.toggleBtnActive {
+  background: var(--brand-light, #e0f2f1);
+  border-color: var(--brand);
+  color: var(--brand);
+}
+
+.toggleBtnActive .toggleIcon {
+  background: var(--brand);
+  color: #fff;
+}
+
+.toggleBtnActive .toggleState {
+  background: var(--brand);
+  color: #fff;
+}
+
+.editActions,
+.editFooter {
+  display: flex;
+  gap: 8px;
+  padding: 14px 0 14px;
+  margin-top: 12px;
+  margin-bottom: 16px;
+  border-top: 1px solid var(--border);
+  position: sticky;
+  bottom: 0;
+  background: var(--bg-surface);
+}
+
+.editCancelBtn,
+.editSaveBtn {
+  height: 34px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.editCancelBtn {
+  flex: 1;
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+}
+
+.editSaveBtn {
+  flex: 1.4;
+  border: none;
+  background: var(--brand);
+  color: #fff;
+}
+
+.editCancelBtn:hover { background: var(--bg-muted); }
+.editSaveBtn:hover { background: var(--brand-hover); }
+.editCancelBtn:disabled,
+.editSaveBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.historyTabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.historyTab,
+.historyTabActive {
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  cursor: pointer;
+}
+
+.historyTabActive {
+  background: var(--brand-light);
+  border-color: var(--brand);
+  color: var(--brand);
+}
+
+.auditList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.auditItem {
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-muted, #f8fafc);
+}
+
+.auditHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.severityInfo,
+.severityWarning,
+.severityCritical {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+.severityInfo {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.severityWarning {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.severityCritical {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.auditMeta {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.auditTitle {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.auditReason,
+.auditAck {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+.auditDiff {
+  font-size: 10px;
+  margin-top: 6px;
+  max-height: 120px;
+  overflow: auto;
+  background: #fff;
+  padding: 6px;
+  border-radius: 4px;
 }

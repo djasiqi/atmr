@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View } from "react-native";
 import { PermissionGuard } from "../../../src/core/guards";
 import { brandSurfaceSoft, ResponsiveContainer, Screen } from "../../../src/design/responsive";
+import { FONT_SIZE } from "../../../src/design/responsive/typographyTokens";
 
 export default function InstitutionHomeScreen() {
   return (
@@ -29,12 +30,12 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   title: {
-    fontSize: 22,
+    fontSize: FONT_SIZE.px22,
     fontWeight: "700",
     color: "#163A34",
   },
   body: {
-    fontSize: 15,
+    fontSize: FONT_SIZE.px15,
     lineHeight: 22,
     color: "#5F7369",
   },

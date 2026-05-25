@@ -266,8 +266,11 @@ services:
       # URL du worker RL pour les requêtes d'optimisation Optuna
       RL_WORKER_URL: ${RL_WORKER_URL:-http://atmr-rl-worker:5000}
 
-      # ✅ AUDIT 100 USERS: Configuration Gunicorn pour 100 utilisateurs simultanés
-      GUNICORN_WORKERS: ${GUNICORN_WORKERS:-12}
+      # Configuration Gunicorn orientée stabilité (override possible via .env.production)
+      GUNICORN_WORKERS: ${GUNICORN_WORKERS:-6}
+      GUNICORN_TIMEOUT: ${GUNICORN_TIMEOUT:-180}
+      GUNICORN_GRACEFUL_TIMEOUT: ${GUNICORN_GRACEFUL_TIMEOUT:-30}
+      GUNICORN_KEEPALIVE: ${GUNICORN_KEEPALIVE:-5}
       # Gunicorn 26+ : le worker eventlet n'existe plus. Forcer gevent (override .env.production).
       GUNICORN_WORKER_CLASS: gevent
       SOCKETIO_ASYNC_MODE: gevent
@@ -360,8 +363,8 @@ services:
         ]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 60s
+      retries: 5
+      start_period: 120s
     deploy:
       resources:
         limits:

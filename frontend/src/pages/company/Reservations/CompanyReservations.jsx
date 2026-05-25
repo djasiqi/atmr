@@ -29,7 +29,6 @@ import ManualBookingForm from '../Dashboard/components/ManualBookingForm';
 import Modal from '../../../components/common/Modal';
 import { toast } from 'sonner';
 import { isCompletedStatus } from '../../../utils/reservationStatusUtils';
-import { exportReservationsExcel } from '../../../utils/exportReservationsExcel';
 import { lirieKeys, lirieInvalidateCompanyReservationLists } from '../../../queryKeys/lirie';
 import styles from './CompanyReservations.module.css';
 
@@ -561,6 +560,7 @@ const CompanyReservations = () => {
           ? `Du ${selectedDay.split(':')[0]} au ${selectedDay.split(':')[1]}`
           : selectedDay;
 
+      const { exportReservationsExcel } = await import('../../../utils/exportReservationsExcel');
       const fileName = await exportReservationsExcel(dataToExport, {
         companyName: company?.name || 'Entreprise',
         periodLabel,

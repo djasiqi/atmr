@@ -98,6 +98,31 @@ describe('mergeDriverLiveUpdate', () => {
     expect(out.latitude).toBe(46.25);
     expect(out.longitude).toBe(6.11);
   });
+
+  it('met à jour location_status/presence_status depuis driver_location_update même si le snapshot était offline', () => {
+    const driver = {
+      id: 1,
+      latitude: 46.2,
+      longitude: 6.1,
+      location_status: 'offline',
+      presence_status: 'offline',
+      last_seen_seconds: 999,
+    };
+    const out = mergeDriverLiveUpdate(
+      driver,
+      {
+        latitude: 46.21,
+        longitude: 6.11,
+        location_status: 'live',
+        presence_status: 'online',
+        last_seen_seconds: 3,
+      },
+      false
+    );
+    expect(out.location_status).toBe('live');
+    expect(out.presence_status).toBe('online');
+    expect(out.last_seen_seconds).toBe(3);
+  });
 });
 
 describe('canonicalTimeMs', () => {

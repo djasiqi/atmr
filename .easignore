@@ -6,4 +6,6 @@
 /mobile/*
 !/mobile/operations-app
 !/mobile/operations-app/**
+!/mobile/unified-app
+!/mobile/unified-app/**
 

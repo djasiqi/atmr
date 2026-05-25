@@ -12,7 +12,12 @@ import InlineTimePicker from '../../../../components/ui/InlineTimePicker';
 import useCompanySocket from '../../../../hooks/useCompanySocket';
 import { toast } from 'sonner';
 import BookingChat from './BookingChat';
-import { completeReservation, patchBillingAdjustment } from '../../../../services/companyService';
+import {
+  completeReservation,
+  patchBillingAdjustment,
+  fetchBookingChangeEvents,
+  acknowledgeBookingChangeEvent,
+} from '../../../../services/companyService';
 import { fetchClinicBillingMappings } from '../../../../services/settingsService';
 import s from './ReservationDetailPanel.module.css';
 
@@ -287,6 +292,34 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onRese
   useEffect(() => {
     if (reservation?.id) loadVouchers();
   }, [reservation?.id, loadVouchers]);
+
+  const [institutionChangeEvents, setInstitutionChangeEvents] = useState([]);
+
+  useEffect(() => {
+    if (!reservation?.id) {
+      setInstitutionChangeEvents([]);
+      return;
+    }
+    const meta = reservation.metadata_json || {};
+    const fromInstitution = !!meta.institution_id || !!reservation.institution_timeline;
+    if (!fromInstitution) {
+      setInstitutionChangeEvents([]);
+      return;
+    }
+    let cancelled = false;
+    fetchBookingChangeEvents(reservation.id)
+      .then((data) => {
+        if (!cancelled) {
+          setInstitutionChangeEvents(
+            (data?.events || []).filter((ev) => ev.source === 'institution_portal'),
+          );
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setInstitutionChangeEvents([]);
+      });
+    return () => { cancelled = true; };
+  }, [reservation?.id, reservation?.institution_timeline, reservation?.metadata_json]);
 
   const allowBillingAdjustByOrigin = useMemo(
     () => (reservation ? allowBillingAdjustByCreatedVia(reservation) : false),
@@ -724,17 +757,51 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onRese
                   Patient
                 </div>
                 <div className={s.editRow}>
-                  <input type="tel" className={s.editInput} value={form.phone}
-                    onChange={(e) => handleChange('phone', e.target.value)} placeholder="Téléphone" />
-                  <input type="text" className={s.editInput} value={form.external_reference}
-                    onChange={(e) => handleChange('external_reference', e.target.value)} placeholder="Ref. DPI" />
+                  <input
+                    type="tel"
+                    id={`reservation-${reservation.id}-phone`}
+                    name="patient_phone"
+                    autoComplete="tel"
+                    aria-label="Téléphone du patient"
+                    className={s.editInput}
+                    value={form.phone}
+                    onChange={(e) => handleChange('phone', e.target.value)}
+                    placeholder="Téléphone"
+                  />
+                  <input
+                    type="text"
+                    id={`reservation-${reservation.id}-external-reference`}
+                    name="external_reference"
+                    autoComplete="off"
+                    aria-label="Référence DPI"
+                    className={s.editInput}
+                    value={form.external_reference}
+                    onChange={(e) => handleChange('external_reference', e.target.value)}
+                    placeholder="Ref. DPI"
+                  />
                 </div>
-                <textarea className={s.editTextarea} value={form.notes_medical}
+                <textarea
+                  id={`reservation-${reservation.id}-notes-medical`}
+                  name="notes_medical"
+                  aria-label="Notes médicales"
+                  className={s.editTextarea}
+                  value={form.notes_medical}
                   onChange={(e) => handleChange('notes_medical', e.target.value)}
-                  placeholder="Pathologie, difficultés, mobilité…" rows={2} style={{ marginTop: 8 }} />
-                <textarea className={s.editTextarea} value={form.instructions}
+                  placeholder="Pathologie, difficultés, mobilité…"
+                  rows={2}
+                  style={{ marginTop: 8 }}
+                />
+                <textarea
+                  id={`reservation-${reservation.id}-instructions`}
+                  name="instructions"
+                  aria-label="Instructions chauffeur"
+                  className={s.editTextarea}
+                  value={form.instructions}
                   onChange={(e) => handleChange('instructions', e.target.value)}
-                  placeholder="Instructions chauffeur" rows={2} style={{ marginTop: 8 }} />
+                  placeholder="Instructions chauffeur"
+                  rows={2}
+                  style={{ marginTop: 8 }}
+                />
               </div>
             ) : (
               <div className={s.editGroup}>
@@ -1265,7 +1332,18 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onRese
             {/* Historique */}
             {(() => {
               const timeline = buildTimeline(reservation);
-              if (timeline.length === 0) return null;
+              const instEvents = institutionChangeEvents.map((ev) => ({
+                event: `Modification institution${ev.severity === 'CRITICAL' ? ' (en route)' : ''}${ev.actor_display_name ? ` — ${ev.actor_display_name}` : ''}`,
+                date: ev.created_at,
+                type: ev.severity === 'CRITICAL' ? 'institution_critical' : 'institution',
+                eventId: ev.id,
+                ackRequired: ev.ack_required,
+                ackCount: ev.ack_received_count,
+              }));
+              const merged = [...timeline, ...instEvents].sort(
+                (a, b) => new Date(b.date) - new Date(a.date),
+              );
+              if (merged.length === 0) return null;
               return (
                 <div className={s.section}>
                   <div className={s.sectionHeader}>
@@ -1273,10 +1351,37 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onRese
                     <h3 className={s.sectionTitle}>Historique</h3>
                   </div>
                   <div className={s.timeline}>
-                    {timeline.map((item, i) => (
-                      <div key={i} className={`${s.timelineItem} ${item.type === 'cancel' ? s.timelineItemCancel : ''}`}>
-                        <div className={s.timelineEvent}>{item.event}</div>
-                        <div className={s.timelineDate}>{fmtShort(item.date)}</div>
+                    {merged.map((item, i) => (
+                      <div key={item.eventId || i} className={`${s.timelineItem} ${item.type === 'cancel' ? s.timelineItemCancel : ''}`}>
+                        <div className={s.timelineEvent}>
+                          {item.event}
+                          {item.type === 'institution_critical' && (
+                            <span className={s.institutionChangeBadge}> Institution</span>
+                          )}
+                        </div>
+                        <div className={s.timelineDate}>
+                          {fmtShort(item.date)}
+                          {item.ackRequired && (
+                            <button
+                              type="button"
+                              className={s.ackBtn}
+                              onClick={async () => {
+                                try {
+                                  await acknowledgeBookingChangeEvent(reservation.id, item.eventId);
+                                  toast.success('Accusé de réception enregistré');
+                                  const data = await fetchBookingChangeEvents(reservation.id);
+                                  setInstitutionChangeEvents(
+                                    (data?.events || []).filter((ev) => ev.source === 'institution_portal'),
+                                  );
+                                } catch (e) {
+                                  toast.error(e?.response?.data?.error || 'Erreur ACK');
+                                }
+                              }}
+                            >
+                              {item.ackCount > 0 ? 'Vu' : 'Accuser réception'}
+                            </button>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>

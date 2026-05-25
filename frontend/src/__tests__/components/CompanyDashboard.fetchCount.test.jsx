@@ -208,8 +208,12 @@ const createWrapper = () => {
 /** Plafonds par famille d’URL (cold mount, périmètre ci-dessus). */
 export const COMPANY_DASHBOARD_GET_BUDGETS = {
   companyMe: 1,
-  companyReservations: 1,
-  /** Liste « flat » utilisée dans fetchAssignedReservations (path avec slash final). */
+  /** Jour (useCompanyData) + fenêtre pending (-2j / +14j). */
+  companyReservations: 2,
+  /**
+   * Fallback GET (path slash) si le cache jour est encore vide au premier tick assigned.
+   * Objectif prod : 0 via cache TanStack ; tests peuvent voir 1 selon timing React Query.
+   */
   companyReservationsSlash: 1,
   drivers: 1,
   driverLocations: 1,

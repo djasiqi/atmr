@@ -233,6 +233,30 @@ export const updateBookingBilling = async (bookingId, data) => {
   return response.data;
 };
 
+/**
+ * Modification opérationnelle d'un booking institution (avant boarded_at)
+ */
+export const patchInstitutionBooking = async (bookingId, data) => {
+  const response = await apiClient.patch(`${BASE_PATH}/bookings/${bookingId}`, data);
+  return response.data;
+};
+
+/**
+ * Annulation booking institution (demande CONVERTED)
+ */
+export const cancelInstitutionBooking = async (bookingId, data) => {
+  const response = await apiClient.post(`${BASE_PATH}/bookings/${bookingId}/cancel`, data);
+  return response.data;
+};
+
+/**
+ * Historique audit / activité booking
+ */
+export const fetchBookingChangeEvents = async (bookingId) => {
+  const response = await apiClient.get(`${BASE_PATH}/bookings/${bookingId}/change-events`);
+  return response.data;
+};
+
 // ============================================================================
 // Users Management
 // ============================================================================
@@ -512,6 +536,9 @@ const institutionService = {
   // Billing
   updateRequestBilling,
   updateBookingBilling,
+  patchInstitutionBooking,
+  cancelInstitutionBooking,
+  fetchBookingChangeEvents,
   // Users
   listInstitutionUsers,
   inviteInstitutionUser,

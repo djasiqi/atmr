@@ -135,6 +135,16 @@ export type ResponsiveTokens = {
   buttonFontSize: number;
   /** Rayon grand (cartes modales, sheets). */
   radiusLg: number;
+  /** Padding bas minimum quand le clavier ouvre une ScrollView publique. */
+  keyboardScrollPaddingMin: number;
+  /** Marge ajoutée à la hauteur clavier pour le padding bas scroll. */
+  keyboardScrollPaddingExtra: number;
+  /** Hauteur max d'une liste déroulante / picker inline (autocomplete, pays, etc.). */
+  dropdownListMaxHeight: number;
+  /** Ratio max d'une bottom sheet / modale par rapport à `usableHeight`. */
+  modalSheetMaxHeightRatio: number;
+  /** Plafond absolu d'une bottom sheet en px. */
+  modalSheetMaxHeightCap: number;
   landing: PublicLandingTokens;
 };
 
@@ -288,6 +298,15 @@ export function useResponsiveTokens(): ResponsiveTokens {
     const fieldGap = spacingSm;
     const cardPadding = landing.cardPadding;
 
+    const keyboardScrollPaddingMin = Math.round(260 * (isLargeText ? 1.1 : 1));
+    const keyboardScrollPaddingExtra = Math.round(48 * (isLargeText ? 1.05 : 1));
+    const dropdownListMaxHeight = Math.min(
+      Math.round(viewport.usableHeight * (viewport.isTablet ? 0.45 : 0.4)),
+      viewport.isTablet ? 360 : 280
+    );
+    const modalSheetMaxHeightRatio = viewport.isTablet ? 0.85 : 0.88;
+    const modalSheetMaxHeightCap = viewport.isTablet ? 720 : 620;
+
     return {
       fontScale,
       effectiveFontScale,
@@ -312,6 +331,11 @@ export function useResponsiveTokens(): ResponsiveTokens {
       cardPadding,
       bodyFontSize,
       buttonFontSize,
+      keyboardScrollPaddingMin,
+      keyboardScrollPaddingExtra,
+      dropdownListMaxHeight,
+      modalSheetMaxHeightRatio,
+      modalSheetMaxHeightCap,
       landing,
     };
   }, [fontScale, isLargeText, isVeryLargeText, viewport]);

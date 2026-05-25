@@ -8,6 +8,7 @@ import type {
 } from "../types";
 import type { DriverEtaSnapshot, DriverStatusUpdateResult } from "../api";
 import {
+  getDriverCompanyBookingsToday as getDriverCompanyBookingsTodayFromApi,
   getDriverMissionDetail as getDriverMissionDetailFromApi,
   getDriverMissionEta as getDriverMissionEtaFromApi,
   getDriverMissions as getDriverMissionsFromApi,
@@ -30,13 +31,21 @@ export async function getDriverMissionsSince(sinceIso: string): Promise<DriverMi
   return missions.map(mapDriverMission);
 }
 
+export async function getDriverCompanyBookingsToday(): Promise<DriverMission[]> {
+  const missions = await getDriverCompanyBookingsTodayFromApi();
+  return missions.map(mapDriverMission);
+}
+
 export async function getDriverMissionDetail(missionId: number): Promise<DriverMissionDetail> {
   const mission = await getDriverMissionDetailFromApi(missionId);
   return mapDriverMissionDetail(mission);
 }
 
-export async function getDriverMissionEta(missionId: number): Promise<DriverEtaSnapshot> {
-  return getDriverMissionEtaFromApi(missionId);
+export async function getDriverMissionEta(
+  missionId: number,
+  options?: { missionStatus?: string | null }
+): Promise<DriverEtaSnapshot> {
+  return getDriverMissionEtaFromApi(missionId, options);
 }
 
 export async function updateDriverMissionStatus(

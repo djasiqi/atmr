@@ -15,7 +15,7 @@ export function AppBadge({ label, tone = "neutral" }: AppBadgeProps) {
 
   const palette =
     tone === "success"
-      ? { bg: "rgba(10, 143, 122, 0.12)", fg: brandPrimary }
+      ? { bg: "rgba(0, 121, 107, 0.12)", fg: brandPrimary }
       : tone === "info"
         ? { bg: "rgba(59, 130, 246, 0.12)", fg: "#1d4ed8" }
         : { bg: "rgba(100, 116, 139, 0.14)", fg: "#475569" };

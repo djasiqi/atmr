@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { ResponsiveContainer, Screen, useAppViewport } from "../../../src/design/responsive";
+import { FONT_SIZE } from "../../../src/design/responsive/typographyTokens";
 
 export default function PreRequestAuthGateScreen() {
   const router = useRouter();
@@ -72,7 +73,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
   },
   title: {
-    fontSize: 26,
+    fontSize: FONT_SIZE.px26,
     fontWeight: "800",
     color: "#163A34",
   },
@@ -89,7 +90,7 @@ const styles = StyleSheet.create({
   primaryBtnText: {
     color: "#FFFFFF",
     fontWeight: "700",
-    fontSize: 16,
+    fontSize: FONT_SIZE.px16,
   },
   outlineBtn: {
     borderWidth: 1.5,
@@ -102,6 +103,6 @@ const styles = StyleSheet.create({
   outlineBtnText: {
     color: "#0A8F7A",
     fontWeight: "700",
-    fontSize: 16,
+    fontSize: FONT_SIZE.px16,
   },
 });

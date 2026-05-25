@@ -45,6 +45,38 @@ import { SharedChatMessage } from "../chat";
 import { isFeatureEnabled } from "../../core/featureFlags/registry";
 import { resolveMediaUrl } from "../../core/api/mediaUrl";
 import { AxiosError } from "axios";
+import { traceInvalidateQueries } from "../../core/observability/perfInstrumentation";
+
+const DRIVER_LOCATION_INVALIDATION_BATCH_MS = 500;
+const driverLocationInvalidationTimers = new Map<
+  string,
+  ReturnType<typeof setTimeout>
+>();
+
+export function resetDriverLocationInvalidationBatchForTests(): void {
+  for (const timer of driverLocationInvalidationTimers.values()) {
+    clearTimeout(timer);
+  }
+  driverLocationInvalidationTimers.clear();
+}
+
+function scheduleDriversLocationsInvalidation(
+  queryClient: QueryClient,
+  contextId: string
+): void {
+  const existing = driverLocationInvalidationTimers.get(contextId);
+  if (existing) clearTimeout(existing);
+  const timer = setTimeout(() => {
+    driverLocationInvalidationTimers.delete(contextId);
+    const key = contextScopedKey(contextId, [
+      ...companyQueryKeys.driversLocations(contextId),
+    ] as unknown[]);
+    void traceInvalidateQueries(key, "driver_location_update_batch", async () => {
+      await queryClient.invalidateQueries({ queryKey: key });
+    });
+  }, DRIVER_LOCATION_INVALIDATION_BATCH_MS);
+  driverLocationInvalidationTimers.set(contextId, timer);
+}
 
 export type CompanyRealtimeInvalidationEvent =
   | "booking_updated"
@@ -300,28 +332,100 @@ export function invalidateCompanyQueriesForEvent(
   }
   const scope = companyContextScope(context.contextId);
   if (event === "booking_updated") {
-    void queryClient.invalidateQueries({
-      queryKey: contextScopedKey(
-        context.contextId,
-        [...companyQueryKeys.root, "missions", scope] as unknown[]
-      ),
-      exact: false,
-    });
-    void queryClient.invalidateQueries({
-      queryKey: contextScopedKey(
-        context.contextId,
-        [...companyQueryKeys.root, "dispatch-delays", scope] as unknown[]
-      ),
-      exact: false,
-    });
     if (typeof context.missionId === "number") {
-      void queryClient.invalidateQueries({
-        queryKey: contextScopedKey(
+      void traceInvalidateQueries(
+        contextScopedKey(
           context.contextId,
           [...companyQueryKeys.rideDetails(context.contextId, context.missionId)] as unknown[]
         ),
-      });
+        "booking_updated_mission_detail",
+        async () => {
+          await queryClient.invalidateQueries({
+            queryKey: contextScopedKey(
+              context.contextId,
+              [...companyQueryKeys.rideDetails(context.contextId, context.missionId)] as unknown[]
+            ),
+            exact: true,
+          });
+        }
+      );
+      void traceInvalidateQueries(
+        contextScopedKey(context.contextId, [...companyQueryKeys.dashboard(context.contextId)]),
+        "booking_updated_mission_dashboard",
+        async () => {
+          await queryClient.invalidateQueries({
+            queryKey: contextScopedKey(
+              context.contextId,
+              [...companyQueryKeys.dashboard(context.contextId)] as unknown[]
+            ),
+            exact: true,
+          });
+        }
+      );
+      return;
     }
+
+    void traceInvalidateQueries(
+      contextScopedKey(context.contextId, [...companyQueryKeys.dashboard(context.contextId)]),
+      "booking_updated",
+      async () => {
+        await queryClient.invalidateQueries({
+          queryKey: contextScopedKey(
+            context.contextId,
+            [...companyQueryKeys.dashboard(context.contextId)] as unknown[]
+          ),
+          exact: true,
+        });
+      }
+    );
+    void traceInvalidateQueries(
+      contextScopedKey(
+        context.contextId,
+        [...companyQueryKeys.root, "missions", scope] as unknown[]
+      ),
+      "booking_updated_missions",
+      async () => {
+        await queryClient.invalidateQueries({
+          queryKey: contextScopedKey(
+            context.contextId,
+            [...companyQueryKeys.root, "missions", scope] as unknown[]
+          ),
+          exact: false,
+        });
+      }
+    );
+    void traceInvalidateQueries(
+      contextScopedKey(
+        context.contextId,
+        [...companyQueryKeys.root, "dispatch-delays", scope] as unknown[]
+      ),
+      "booking_updated_delays",
+      async () => {
+        await queryClient.invalidateQueries({
+          queryKey: contextScopedKey(
+            context.contextId,
+            [...companyQueryKeys.root, "dispatch-delays", scope] as unknown[]
+          ),
+          exact: false,
+        });
+      }
+    );
+    void traceInvalidateQueries(
+      contextScopedKey(
+        context.contextId,
+        [...companyQueryKeys.optimizer(context.contextId)] as unknown[]
+      ),
+      "booking_updated_optimizer",
+      async () => {
+        await queryClient.invalidateQueries({
+          queryKey: contextScopedKey(
+            context.contextId,
+            [...companyQueryKeys.optimizer(context.contextId)] as unknown[]
+          ),
+          exact: true,
+        });
+      }
+    );
     return;
   }
   if (event === "booking_cancelled") {
@@ -335,12 +439,7 @@ export function invalidateCompanyQueriesForEvent(
     return;
   }
   if (event === "driver_location_update") {
-    void queryClient.invalidateQueries({
-      queryKey: contextScopedKey(
-        context.contextId,
-        [...companyQueryKeys.driversLocations(context.contextId)] as unknown[]
-      ),
-    });
+    scheduleDriversLocationsInvalidation(queryClient, context.contextId);
     return;
   }
   if (event === "optimizer_status_changed") {
@@ -353,20 +452,38 @@ export function invalidateCompanyQueriesForEvent(
     return;
   }
   if (event === "delay_invalidated") {
-    void queryClient.invalidateQueries({
-      queryKey: contextScopedKey(
+    void traceInvalidateQueries(
+      contextScopedKey(
         context.contextId,
         [...companyQueryKeys.dashboard(context.contextId)] as unknown[]
       ),
-      exact: false,
-    });
-    void queryClient.invalidateQueries({
-      queryKey: contextScopedKey(
+      "delay_invalidated_dashboard",
+      async () => {
+        await queryClient.invalidateQueries({
+          queryKey: contextScopedKey(
+            context.contextId,
+            [...companyQueryKeys.dashboard(context.contextId)] as unknown[]
+          ),
+          exact: true,
+        });
+      }
+    );
+    void traceInvalidateQueries(
+      contextScopedKey(
         context.contextId,
         [...companyQueryKeys.root, "dispatch-delays", scope] as unknown[]
       ),
-      exact: false,
-    });
+      "delay_invalidated_delays",
+      async () => {
+        await queryClient.invalidateQueries({
+          queryKey: contextScopedKey(
+            context.contextId,
+            [...companyQueryKeys.root, "dispatch-delays", scope] as unknown[]
+          ),
+          exact: false,
+        });
+      }
+    );
     return;
   }
   if (event === "booking_message_sent") {
@@ -412,7 +529,10 @@ export function useCompanyFallbackPolling(refetch: () => Promise<unknown>) {
   const realtime = useCompanyRealtimeStatus();
 
   useEffect(() => {
-    const intervalMs = getCompanyRealtimePollingIntervalMs(realtime.status);
+    const intervalMs = getCompanyRealtimePollingIntervalMs(
+      realtime.transportStatus,
+      realtime.dataFreshness
+    );
     if (!intervalMs) return;
     const intervalId = setInterval(() => {
       void refetch();
@@ -504,7 +624,6 @@ export function useCompanyRideActions() {
         }
       },
       onSuccess: (_, params) => invalidateScope(params.missionId),
-      onSettled: (_, __, params) => invalidateScope(params.missionId),
     }),
     reassign: useMutation({
       mutationFn: (params: { missionId: number; driverId: number }) =>
@@ -554,7 +673,6 @@ export function useCompanyRideActions() {
         }
       },
       onSuccess: (_, params) => invalidateScope(params.missionId),
-      onSettled: (_, __, params) => invalidateScope(params.missionId),
     }),
     cancel: useMutation({
       mutationFn: (params: { missionId: number; reasonCode: string; note?: string; reason?: string }) =>
@@ -771,6 +889,7 @@ export function useCompanyChatMessages(date: string) {
     getNextPageParam: (lastPage) => lastPage.nextBefore ?? undefined,
     initialPageParam: undefined as string | undefined,
     refetchInterval: chatSocketEnabled ? false : realtime.status === "healthy" ? 10_000 : 6_000,
+    maxPages: 5,
   });
 }
 

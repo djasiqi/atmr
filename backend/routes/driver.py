@@ -3664,3 +3664,31 @@ class TestPushNotification(Resource):
 
             sentry_sdk.capture_exception(e)
             return {"error": "Erreur interne"}, 500
+
+
+@driver_ns.route(
+    "/me/bookings/<int:booking_id>/change-events/<int:event_id>/ack"
+)
+class DriverBookingChangeAck(Resource):
+    @jwt_required()
+    @role_required(UserRole.driver)
+    def post(self, booking_id: int, event_id: int):
+        """Accusé de réception chauffeur pour modification institution critique."""
+        from flask_jwt_extended import get_jwt_identity
+        from services.institutions.booking_change_service import (
+            acknowledge_critical_event,
+        )
+
+        driver, error_response, status_code = get_driver_from_token()
+        if error_response:
+            return error_response, status_code or 401
+        if not driver:
+            return {"error": "Chauffeur introuvable"}, 404
+        body, status = acknowledge_critical_event(
+            event_id,
+            user_id=get_jwt_identity(),
+            actor_type="driver",
+            ack_channel="driver_app",
+            driver_id=driver.id,
+        )
+        return body, status

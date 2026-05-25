@@ -5,9 +5,10 @@
  * Colonne droite : panel détail de la demande sélectionnée
  */
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { FaSearch, FaFilter } from 'react-icons/fa';
+import { FaSearch, FaFilter, FaPhoneAlt } from 'react-icons/fa';
+import { FiAlertTriangle } from 'react-icons/fi';
 import { toast } from 'sonner';
 import {
   useInstitutionRequests,
@@ -28,6 +29,7 @@ const BOOKING_STATUS = {
   ASSIGNED:         { label: 'Chauffeur assigné', badge: 'badgeAssigned',       indicator: 'indicatorAssigned' },
   EN_ROUTE:         { label: 'En route',         badge: 'badgeEnRoute',         indicator: 'indicatorEnRoute' },
   IN_PROGRESS:      { label: 'En cours',         badge: 'badgeInProgress',      indicator: 'indicatorInProgress' },
+  OUTBOUND_COMPLETED: { label: 'Retour en cours', badge: 'badgeInProgress',     indicator: 'indicatorInProgress' },
   COMPLETED:        { label: 'Terminé',          badge: 'badgeCompleted',       indicator: 'indicatorCompleted' },
   RETURN_COMPLETED: { label: 'Aller-retour OK',  badge: 'badgeReturnCompleted', indicator: 'indicatorReturnCompleted' },
   CANCELED:         { label: 'Annulé',           badge: 'badgeCancelled',       indicator: 'indicatorCancelled' },
@@ -69,6 +71,68 @@ const fmtDateShort = (d) => {
   return new Date(d).toLocaleDateString('fr-CH', { day: '2-digit', month: '2-digit', year: 'numeric' });
 };
 
+const resolveBookingStatusKey = (bookingSummary) => {
+  if (!bookingSummary) return '';
+  const raw = String(bookingSummary.status || '').toUpperCase();
+  const normalized = raw === 'CANCELLED' ? 'CANCELED' : raw;
+  const returnRaw = String(bookingSummary.return_booking?.status || '').toUpperCase();
+  const returnStatus = returnRaw === 'CANCELLED' ? 'CANCELED' : returnRaw;
+  const overall = String(bookingSummary.overall_status || '').toLowerCase();
+
+  const hasReturn = Boolean(bookingSummary.return_booking);
+  const returnCompleted = ['COMPLETED', 'RETURN_COMPLETED'].includes(returnStatus);
+  const returnCancelled = returnStatus === 'CANCELED';
+  const outboundCompleted = ['COMPLETED', 'RETURN_COMPLETED'].includes(normalized);
+
+  // Source de vérité préférée pour A/R: statut agrégé backend.
+  if (hasReturn && overall) {
+    if (overall === 'completed') return 'RETURN_COMPLETED';
+    if (overall === 'cancelled') return 'CANCELED';
+    if (overall === 'outbound_completed') return 'OUTBOUND_COMPLETED';
+    if (overall === 'in_progress') return 'IN_PROGRESS';
+    if (overall === 'planned') return 'ACCEPTED';
+  }
+
+  if (hasReturn) {
+    if (returnCompleted) return 'RETURN_COMPLETED';
+    if (returnCancelled) return 'CANCELED';
+    if (outboundCompleted) return 'OUTBOUND_COMPLETED';
+  }
+
+  // Défensif: si completed_at existe, l'UI doit afficher "Terminé"
+  // même si un statut stale "IN_PROGRESS" arrive encore du backend/cache.
+  if (
+    bookingSummary.completed_at &&
+    !hasReturn &&
+    normalized !== 'RETURN_COMPLETED' &&
+    normalized !== 'CANCELED'
+  ) {
+    return 'COMPLETED';
+  }
+
+  // Défensif: si le patient est déjà pris en charge (boarded_at), l'UI doit
+  // afficher "En cours" même si le statut métier n'a pas encore basculé.
+  if (
+    bookingSummary.boarded_at &&
+    normalized !== 'COMPLETED' &&
+    normalized !== 'RETURN_COMPLETED' &&
+    normalized !== 'CANCELED'
+  ) {
+    return 'IN_PROGRESS';
+  }
+
+  // De même, si l'événement "en route" est connu mais le statut reste figé.
+  if (
+    bookingSummary.en_route_at &&
+    !bookingSummary.boarded_at &&
+    (normalized === 'ACCEPTED' || normalized === 'ASSIGNED' || normalized === '')
+  ) {
+    return 'EN_ROUTE';
+  }
+
+  return normalized;
+};
+
 const getDateGroupLabel = (dateStr) => {
   if (!dateStr) return 'Autre';
   const d = new Date(dateStr);
@@ -86,9 +150,74 @@ const getDateGroupLabel = (dateStr) => {
 
 const resolveStatus = (req) => {
   if (req.status === 'CONVERTED' && req.booking_summary?.status) {
-    return BOOKING_STATUS[req.booking_summary.status] || REQUEST_STATUS.CONVERTED;
+    const bookingStatusKey = resolveBookingStatusKey(req.booking_summary);
+    return BOOKING_STATUS[bookingStatusKey] || REQUEST_STATUS.CONVERTED;
   }
   return REQUEST_STATUS[req.status] || REQUEST_STATUS.DRAFT;
+};
+
+// ─── Délais ─────────────────────────────────────────────
+const TERMINAL_BOOKING_STATUSES = new Set([
+  'COMPLETED', 'RETURN_COMPLETED', 'CANCELED', 'CANCELLED',
+]);
+const TERMINAL_REQUEST_STATUSES = new Set([
+  'CANCELLED', 'EXPIRED',
+]);
+
+const LATE_THRESHOLD_MIN = 5;
+const LATE_SEVERE_MIN = 15;
+
+// Statuts "course non démarrée": seuls cas où l'institution doit être alertée
+// d'un retard. Dès que la course est EN_ROUTE / IN_PROGRESS / boarded /
+// completed, le suivi est du ressort du transporteur.
+const PRE_START_BOOKING_STATUSES = new Set(['PENDING', 'ACCEPTED', 'ASSIGNED']);
+const PRE_START_REQUEST_STATUSES = new Set(['DRAFT', 'SENT', 'ACCEPTED']);
+
+const resolveDelayInfo = (req, nowMs) => {
+  if (!req || !req.scheduled_time) return null;
+  const bs = req.booking_summary;
+  const bookingStatus = String(bs?.status || '').toUpperCase();
+  const requestStatus = String(req.status || '').toUpperCase();
+
+  if (bs && TERMINAL_BOOKING_STATUSES.has(bookingStatus)) return null;
+  if (!bs && TERMINAL_REQUEST_STATUSES.has(requestStatus)) return null;
+
+  // La course est démarrée (patient pris en charge ou course terminée):
+  // plus de retard à signaler côté institution.
+  if (bs?.boarded_at) return null;
+  if (bs?.completed_at) return null;
+
+  // Ne signaler un retard que si la course n'a pas encore démarré.
+  if (bs) {
+    if (!PRE_START_BOOKING_STATUSES.has(bookingStatus)) return null;
+  } else if (!PRE_START_REQUEST_STATUSES.has(requestStatus)) {
+    return null;
+  }
+
+  const scheduled = new Date(req.scheduled_time).getTime();
+  if (Number.isNaN(scheduled)) return null;
+  const diffMin = Math.floor((nowMs - scheduled) / 60000);
+  if (diffMin < LATE_THRESHOLD_MIN) return null;
+
+  const severity = diffMin >= LATE_SEVERE_MIN ? 'severe' : 'warning';
+  return {
+    minutesLate: diffMin,
+    severity,
+    notStarted: true,
+    label: `Retard +${diffMin} min`,
+    title: `La course n'a pas démarré (prévue à ${new Date(req.scheduled_time).toLocaleTimeString('fr-CH', { hour: '2-digit', minute: '2-digit' })}). Contactez le transporteur.`,
+  };
+};
+
+const formatPhoneHref = (phone) => {
+  if (!phone) return '';
+  const cleaned = String(phone).replace(/[^+0-9]/g, '');
+  return cleaned ? `tel:${cleaned}` : '';
+};
+
+const formatPhoneDisplay = (phone) => {
+  if (!phone) return '';
+  return String(phone).trim();
 };
 
 // ─── Component ─────────────────────────────────────────────
@@ -108,6 +237,12 @@ const InstitutionRequests = () => {
   const updateBookingBilling = useUpdateBookingBilling();
 
   const { data: requestsData, isLoading, error } = useInstitutionRequests(filters);
+
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNowMs(Date.now()), 60000);
+    return () => clearInterval(id);
+  }, []);
 
   const requests = useMemo(
     () => requestsData?.requests || requestsData?.items || [],
@@ -153,10 +288,21 @@ const InstitutionRequests = () => {
       ? (req.booking_summary.billed_to_type === 'clinic' ? 'institution' : 'patient')
       : (req.billing_intent || 'patient');
     const newIntent = currentIntent === 'patient' ? 'institution' : 'patient';
+    const billingPayload = {
+      billing_intent: newIntent,
+      override_reason: 'Modification rapide depuis la liste institution',
+      billing_change_reason_code: 'ADMIN_CORRECTION',
+    };
 
     if (isConverted && req.booking_summary.id) {
       updateBookingBilling.mutate(
-        { bookingId: req.booking_summary.id, data: { billing_intent: newIntent } },
+        {
+          bookingId: req.booking_summary.id,
+          data: {
+            ...billingPayload,
+            version: req.booking_summary.edit_version,
+          },
+        },
         {
           onSuccess: () => toast.success(`Facturation → ${newIntent === 'patient' ? 'Patient' : 'Clinique'}`),
           onError: (err) => toast.error(err?.response?.data?.error || 'Erreur facturation'),
@@ -164,7 +310,7 @@ const InstitutionRequests = () => {
       );
     } else {
       updateRequestBilling.mutate(
-        { requestId: req.id, data: { billing_intent: newIntent } },
+        { requestId: req.id, data: billingPayload },
         {
           onSuccess: () => toast.success(`Facturation → ${newIntent === 'patient' ? 'Patient' : 'Clinique'}`),
           onError: (err) => toast.error(err?.response?.data?.error || 'Erreur facturation'),
@@ -311,11 +457,14 @@ const InstitutionRequests = () => {
                   const isSelected = selectedId === req.id;
 
                   const companyName = req.accepted_by_company?.name;
+                  const companyPhone = req.accepted_by_company?.contact_phone;
+                  const delay = resolveDelayInfo(req, nowMs);
+                  const showCallAction = delay && companyPhone;
 
                   return (
                     <div
                       key={req.id}
-                      className={`${s.requestCard} ${isSelected ? s.requestCardSelected : ''}`}
+                      className={`${s.requestCard} ${isSelected ? s.requestCardSelected : ''} ${delay ? (delay.severity === 'severe' ? s.requestCardLateSevere : s.requestCardLate) : ''}`}
                       data-tour-id={req.status === 'DRAFT' ? 'institution-request-draft-card' : undefined}
                       onClick={() => handleSelectRequest(req)}
                     >
@@ -328,6 +477,15 @@ const InstitutionRequests = () => {
                           <span className={`${s.badge} ${s[st.badge]}`}>{st.label}</span>
                           {companyName && <span className={s.companyTag}>{companyName}</span>}
                           {!companyName && req.status === 'SENT' && <span className={s.waitingTag}>En attente</span>}
+                          {delay && (
+                            <span
+                              className={`${s.lateBadge} ${delay.severity === 'severe' ? s.lateBadgeSevere : ''}`}
+                              title={delay.title}
+                            >
+                              <FiAlertTriangle aria-hidden="true" />
+                              {delay.label}
+                            </span>
+                          )}
                         </div>
                       </div>
 
@@ -347,6 +505,18 @@ const InstitutionRequests = () => {
                         </span>
                         {req.scheduled_time_type === 'arrival' && (
                           <span className={s.timeTypeBadge} title="Heure du rendez-vous (arrivée)">📍 RDV</span>
+                        )}
+                        {showCallAction && (
+                          <a
+                            href={formatPhoneHref(companyPhone)}
+                            className={`${s.callBtn} ${delay.severity === 'severe' ? s.callBtnSevere : ''}`}
+                            onClick={(e) => e.stopPropagation()}
+                            title={`Appeler ${companyName || 'le transporteur'} — ${formatPhoneDisplay(companyPhone)}`}
+                            aria-label={`Appeler ${companyName || 'le transporteur'} au ${formatPhoneDisplay(companyPhone)}`}
+                          >
+                            <FaPhoneAlt aria-hidden="true" />
+                            <span className={s.callBtnLabel}>{formatPhoneDisplay(companyPhone)}</span>
+                          </a>
                         )}
                         {showBillingSwitch && (() => {
                           const isConverted = req.status === 'CONVERTED' && req.booking_summary;

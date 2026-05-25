@@ -63,6 +63,7 @@ const InstitutionSettings = () => {
   
   // Transport settings local state
   const [transportPickupMode, setTransportPickupMode] = useState('institution');
+  const [transportDispatchMode, setTransportDispatchMode] = useState('sequential');
   const [transportEntryPoints, setTransportEntryPoints] = useState([]);
   const [transportContactPhone, setTransportContactPhone] = useState('');
   const [newEntryPoint, setNewEntryPoint] = useState('');
@@ -73,6 +74,7 @@ const InstitutionSettings = () => {
   useEffect(() => {
     if (settingsData?.settings && !transportSettingsLoaded) {
       setTransportPickupMode(settingsData.settings.default_pickup_mode || 'institution');
+      setTransportDispatchMode(settingsData.settings.offer_dispatch_mode || 'sequential');
       setTransportEntryPoints(settingsData.settings.entry_points || []);
       setTransportContactPhone(settingsData.settings.default_contact_phone || '');
       setTransportSettingsLoaded(true);
@@ -213,6 +215,8 @@ const InstitutionSettings = () => {
     return new Date(dateStr).toLocaleString('fr-CH');
   };
 
+  const isSequentialDispatch = transportDispatchMode !== 'broadcast';
+
   return (
     <div className={styles.container}>
       <h2>Paramètres</h2>
@@ -335,34 +339,35 @@ const InstitutionSettings = () => {
           </div>
 
           {/* Mode d'attribution */}
-          <div style={{
-            background: '#f8f9fa',
-            border: '1px solid #e0e0e0',
-            borderRadius: 8,
-            padding: '12px 16px',
-            marginBottom: 20,
-            fontSize: 13,
-            color: '#555',
-            lineHeight: 1.6,
-          }}>
-            <strong style={{ color: '#333' }}>Mode actuel : Séquentiel avec escalade automatique</strong>
-            <br />
-            Les demandes sont envoyées successivement aux transporteurs selon l'ordre défini.
-            En cas de non-réponse dans le délai imparti, la demande est automatiquement proposée au transporteur suivant.
-            {/* Résumé des règles effectives */}
-            <div style={{
-              marginTop: 8,
-              padding: '6px 10px',
-              background: '#e8f5e9',
-              borderRadius: 6,
-              fontSize: 12,
-              color: '#2e7d32',
-              fontWeight: 500,
-            }}>
-              Envoi séquentiel
-              {' \u2022 '}délai jour même : {settingsData?.settings?.timeout_same_day_minutes ?? 5} min
-              {' \u2022 '}délai planifié : {settingsData?.settings?.timeout_default_minutes ?? 60} min
-              {' \u2022 '}escalade automatique activée
+          <div className={styles.allocationModeCard}>
+            <p className={styles.allocationModeTitle}>
+              Mode actuel :{' '}
+              {isSequentialDispatch
+                ? 'Séquentiel avec escalade automatique'
+                : 'Diffusion simultanée (broadcast)'}
+            </p>
+            <p className={styles.allocationModeDescription}>
+              {isSequentialDispatch
+                ? "Les demandes sont envoyées successivement aux transporteurs selon l'ordre défini. En cas de non-réponse dans le délai imparti, la demande est automatiquement proposée au transporteur suivant."
+                : 'Les demandes sont envoyées en parallèle à tous les transporteurs éligibles. Le premier à accepter remporte la demande.'}
+            </p>
+            <div className={styles.allocationModeBadges} role="status" aria-live="polite">
+              <span className={`${styles.allocationBadge} ${styles.allocationBadgePrimary}`}>
+                {isSequentialDispatch ? 'Envoi séquentiel' : 'Envoi broadcast'}
+              </span>
+              {isSequentialDispatch ? (
+                <>
+                  <span className={styles.allocationBadge}>
+                    Délai jour même : {settingsData?.settings?.timeout_same_day_minutes ?? 5} min
+                  </span>
+                  <span className={styles.allocationBadge}>
+                    Délai planifié : {settingsData?.settings?.timeout_default_minutes ?? 60} min
+                  </span>
+                  <span className={styles.allocationBadge}>Escalade automatique activée</span>
+                </>
+              ) : (
+                <span className={styles.allocationBadge}>Escalade non utilisée</span>
+              )}
             </div>
           </div>
 
@@ -381,6 +386,37 @@ const InstitutionSettings = () => {
 
             {/* Mode de départ par défaut */}
             <div style={{ marginBottom: 14 }}>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 6 }}>
+                Mode d&apos;attribution des transporteurs
+              </label>
+              <div style={{ display: 'flex', gap: 16, marginBottom: 8, flexWrap: 'wrap' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, cursor: canAdmin ? 'pointer' : 'default' }}>
+                  <input
+                    type="radio"
+                    name="offer_dispatch_mode"
+                    value="sequential"
+                    checked={transportDispatchMode === 'sequential'}
+                    disabled={!canAdmin}
+                    onChange={() => { setTransportDispatchMode('sequential'); setTransportSettingsDirty(true); }}
+                  />
+                  Séquentiel (avec escalade)
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, cursor: canAdmin ? 'pointer' : 'default' }}>
+                  <input
+                    type="radio"
+                    name="offer_dispatch_mode"
+                    value="broadcast"
+                    checked={transportDispatchMode === 'broadcast'}
+                    disabled={!canAdmin}
+                    onChange={() => { setTransportDispatchMode('broadcast'); setTransportSettingsDirty(true); }}
+                  />
+                  Broadcast (envoi simultané)
+                </label>
+              </div>
+              <span style={{ fontSize: 11, color: '#999', display: 'block', marginBottom: 10 }}>
+                Réglage propre à votre institution, appliqué à chaque envoi de demande.
+              </span>
+
               <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 4 }}>
                 Lieu de départ par défaut
               </label>
@@ -542,6 +578,7 @@ const InstitutionSettings = () => {
                   onClick={async () => {
                     try {
                       await updateSettingsMutation.mutateAsync({
+                        offer_dispatch_mode: transportDispatchMode,
                         default_pickup_mode: transportPickupMode,
                         entry_points: transportEntryPoints,
                         default_contact_phone: transportContactPhone || null,

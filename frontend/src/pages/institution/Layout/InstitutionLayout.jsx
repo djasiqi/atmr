@@ -420,13 +420,6 @@ const InstitutionLayout = () => {
 
         {/* Child route content */}
         <div className={styles.content}>
-          <div
-            className={styles.mobileCanonStripe}
-            role="status"
-            title="Suivi terrain : l’application LIRIE Operations complète ce portail (LIRIE_MOBILE_WEB_CANON)."
-          >
-            Mobilité terrain : l&apos;app LIRIE Operations complète ce portail — détail dans le canon multi-surface.
-          </div>
           <Outlet />
         </div>
 

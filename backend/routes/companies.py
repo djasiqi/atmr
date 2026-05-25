@@ -1627,6 +1627,8 @@ class CompanyReservations(Resource):
             )
 
         flat = request.args.get("flat", "false").lower() == "true"
+        fields_mode = (request.args.get("fields") or "").strip().lower()
+        use_dashboard_fields = fields_mode == "dashboard"
         day_str = (request.args.get("date") or "").strip()
         start_date = (request.args.get("start_date") or "").strip()
         end_date = (request.args.get("end_date") or "").strip()
@@ -1771,6 +1773,16 @@ class CompanyReservations(Resource):
             stats = _booking_stats_from_base_query(base_query)
 
         query = base_query
+
+        from sqlalchemy.orm import joinedload
+
+        query = query.options(
+            joinedload(Booking.client).joinedload(Client.user),
+            joinedload(Booking.driver).joinedload(Driver.user),
+            joinedload(Booking.company),
+            joinedload(Booking.executing_company),
+            joinedload(Booking.billed_to_company),
+        )
 
         # Filtre par onglet
         if tab_filter:
@@ -1945,11 +1957,22 @@ class CompanyReservations(Resource):
 
         reservations = query.offset((page - 1) * per_page).limit(per_page).all()
 
+        from services.companies.booking_transfer_cache import (
+            attach_transfer_cache_to_bookings,
+        )
+
+        attach_transfer_cache_to_bookings(reservations)
+
         # Retourner les données dans le format attendu par le frontend
         try:
             serialized_reservations = []
+            serializer = (
+                (lambda b: b.serialize_dashboard)
+                if use_dashboard_fields
+                else (lambda b: b.serialize)
+            )
             for b in reservations:
-                serialized_reservations.append(b.serialize)
+                serialized_reservations.append(serializer(b))
         except Exception:
             raise
         response_data = {
@@ -6376,3 +6399,135 @@ class DebugBookingTransfer(Resource):
         }
 
         return result, 200
+
+
+# ======================================================
+# Booking change events (audit institution → company)
+# ======================================================
+@companies_ns.route("/me/reservations/<int:booking_id>/change-events")
+class CompanyBookingChangeEvents(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    def get(self, booking_id: int):
+        """Historique des modifications métier (dont institution)."""
+        company, err, code = _get_current_company_via_use_case()
+        if err:
+            return err, code
+        cid_obj = getattr(company, "id", None)
+        try:
+            cid = int(cid_obj) if cid_obj is not None else None
+        except Exception:
+            cid = None
+        if cid is None:
+            return {"error": "Entreprise introuvable"}, 404
+
+        from repositories.booking_repository import BookingRepository
+        from services.institutions.booking_change_service import list_change_events
+
+        booking_repo = BookingRepository()
+        booking = booking_repo.find_model_by_id_with_visibility(booking_id, cid)
+        if not booking:
+            return APIErrorHandler.handle_not_found("Réservation", booking_id, logger)
+
+        events = list_change_events(booking_id, limit=200)
+        return {"events": events, "booking_id": booking_id}, 200
+
+
+@companies_ns.route(
+    "/me/reservations/<int:booking_id>/change-events/<int:event_id>/ack"
+)
+class CompanyBookingChangeAck(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    def post(self, booking_id: int, event_id: int):
+        """Accusé de réception dispatch pour événement critique."""
+        company, err, code = _get_current_company_via_use_case()
+        if err:
+            return err, code
+        cid_obj = getattr(company, "id", None)
+        try:
+            cid = int(cid_obj) if cid_obj is not None else None
+        except Exception:
+            cid = None
+        if cid is None:
+            return {"error": "Entreprise introuvable"}, 404
+
+        from flask_jwt_extended import get_jwt_identity
+        from services.institutions.booking_change_service import (
+            acknowledge_critical_event,
+        )
+
+        body, status = acknowledge_critical_event(
+            event_id,
+            user_id=get_jwt_identity(),
+            actor_type="company_user",
+            ack_channel="company_dispatch",
+            company_id=cid,
+        )
+        return body, status
+
+
+# ======================================================
+# Booking change events (audit institution → company)
+# ======================================================
+@companies_ns.route("/me/reservations/<int:booking_id>/change-events")
+class CompanyBookingChangeEvents(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    def get(self, booking_id: int):
+        """Historique des modifications métier (dont institution)."""
+        company, err, code = _get_current_company_via_use_case()
+        if err:
+            return err, code
+        cid_obj = getattr(company, "id", None)
+        try:
+            cid = int(cid_obj) if cid_obj is not None else None
+        except Exception:
+            cid = None
+        if cid is None:
+            return {"error": "Entreprise introuvable"}, 404
+
+        from repositories.booking_repository import BookingRepository
+        from services.institutions.booking_change_service import list_change_events
+
+        booking_repo = BookingRepository()
+        booking = booking_repo.find_model_by_id_with_visibility(booking_id, cid)
+        if not booking:
+            return APIErrorHandler.handle_not_found("Réservation", booking_id, logger)
+
+        events = list_change_events(booking_id, limit=200)
+        return {"events": events, "booking_id": booking_id}, 200
+
+
+@companies_ns.route(
+    "/me/reservations/<int:booking_id>/change-events/<int:event_id>/ack"
+)
+class CompanyBookingChangeAck(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    def post(self, booking_id: int, event_id: int):
+        """Accusé de réception dispatch pour événement critique."""
+        company, err, code = _get_current_company_via_use_case()
+        if err:
+            return err, code
+        cid_obj = getattr(company, "id", None)
+        try:
+            cid = int(cid_obj) if cid_obj is not None else None
+        except Exception:
+            cid = None
+        if cid is None:
+            return {"error": "Entreprise introuvable"}, 404
+
+        from flask_jwt_extended import get_jwt_identity
+        from services.institutions.booking_change_service import (
+            acknowledge_critical_event,
+        )
+
+        body, status = acknowledge_critical_event(
+            event_id,
+            user_id=get_jwt_identity(),
+            actor_type="company_user",
+            ack_channel="company_dispatch",
+            company_id=cid,
+        )
+        return body, status

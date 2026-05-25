@@ -1,0 +1,18 @@
+import { beforeEach, describe, expect, it } from "@jest/globals";
+import {
+  buildNotificationDedupKey,
+  markNotificationHandled,
+  resetNotificationDedupStoreForTests,
+} from "./notificationDedupStore";
+
+describe("notificationDedupStore", () => {
+  beforeEach(() => {
+    resetNotificationDedupStoreForTests();
+  });
+
+  it("deduplicates by event id", () => {
+    const key = buildNotificationDedupKey({ eventId: "evt-1" });
+    expect(markNotificationHandled(key)).toBe(false);
+    expect(markNotificationHandled(key)).toBe(true);
+  });
+});

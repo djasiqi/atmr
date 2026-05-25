@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import { Image, Pressable, View, Platform, StyleSheet } from "react-native";
 import { useAppViewport } from "../../../design/responsive/useAppViewport";
 import { AppText } from "../../../design/ui/AppText";
@@ -17,8 +17,14 @@ import { VOICE_GROUP_MAX_W } from "./voiceMessageStyles";
 
 type MessageBubbleProps = {
   message: SharedChatMessage;
+  ownSenderId?: string | number | null;
+  ownSenderRoles?: string[];
   onOpenImage?: (url: string) => void;
   onOpenPdf?: (url: string) => void;
+  /** Appelé quand une image/PDF change la hauteur de la bulle (recalage scroll fil). */
+  onMediaLayout?: () => void;
+  /** Fil équipe / mobile : bulles et images plus compactes. */
+  density?: "default" | "compact";
 };
 
 const C_HEADING = "#111827";
@@ -51,8 +57,17 @@ function formatMessageTime(iso: string): string {
   });
 }
 
-function isOwnMessage(message: SharedChatMessage): boolean {
-  return message.senderRole?.toUpperCase() === "COMPANY";
+function isOwnMessage(
+  message: SharedChatMessage,
+  ownSenderId: string | number | null | undefined,
+  ownSenderRoles: string[]
+): boolean {
+  if (ownSenderId != null && message.senderId != null) {
+    return String(message.senderId) === String(ownSenderId);
+  }
+  const role = message.senderRole?.toUpperCase();
+  if (!role) return false;
+  return ownSenderRoles.some((candidate) => candidate.toUpperCase() === role);
 }
 
 const DEFAULT_ASPECT = 4 / 3;
@@ -60,6 +75,8 @@ const DEFAULT_ASPECT = 4 / 3;
 const CHAT_IMAGE_INNER_MAX_W = 320 - 32;
 /** Aperçu compact mais lisible (évite les images trop hautes dans le fil). */
 const CHAT_IMAGE_MAX_H = 200;
+const CHAT_IMAGE_MAX_H_COMPACT = 132;
+const CHAT_IMAGE_MAX_W_COMPACT = 220;
 const IMAGE_BLOCK_GAP = 10;
 
 /** Largeur dispo. image (s’aligne sur la largeur de bulle, plafond 288). */
@@ -90,13 +107,25 @@ function computeImageDisplaySize(
   return { width: outW, height: outH };
 }
 
-export function MessageBubble({ message, onOpenImage, onOpenPdf }: MessageBubbleProps) {
+export const MessageBubble = memo(function MessageBubble({
+  message,
+  ownSenderId,
+  ownSenderRoles = ["COMPANY"],
+  onOpenImage,
+  onOpenPdf,
+  onMediaLayout,
+  density = "default",
+}: MessageBubbleProps) {
   const sender = message.senderName ?? message.senderRole ?? "Équipe";
-  const isOwn = isOwnMessage(message);
+  const isOwn = isOwnMessage(message, ownSenderId, ownSenderRoles);
   const time = formatMessageTime(message.timestamp);
   const { usableWidth } = useAppViewport();
-  /** Contenu bulle : scaling système libre ; métadonnées courtes maxFontSizeMultiplier plus bas. */
-  const maxImageW = capChatImageWidth(usableWidth);
+  const isCompact = density === "compact";
+  const columnMaxW = isCompact ? Math.min(300, Math.round(usableWidth * 0.82)) : 320;
+  const maxImageW = isCompact
+    ? Math.min(CHAT_IMAGE_MAX_W_COMPACT, Math.round(usableWidth * 0.68))
+    : capChatImageWidth(usableWidth);
+  const maxImageH = isCompact ? CHAT_IMAGE_MAX_H_COMPACT : CHAT_IMAGE_MAX_H;
 
   const imageUri = useMemo(() => resolveMediaUrl(message.imageUrl), [message.imageUrl]);
   const pdfUri = useMemo(() => resolveMediaUrl(message.pdfUrl), [message.pdfUrl]);
@@ -108,14 +137,18 @@ export function MessageBubble({ message, onOpenImage, onOpenPdf }: MessageBubble
     setImageNatural(null);
   }, [imageUri]);
 
+  useEffect(() => {
+    if (imageNatural) onMediaLayout?.();
+  }, [imageNatural, onMediaLayout]);
+
   const imageDisplaySize = useMemo(() => {
     if (imageNatural) {
-      return computeImageDisplaySize(imageNatural.w, imageNatural.h, maxImageW, CHAT_IMAGE_MAX_H);
+      return computeImageDisplaySize(imageNatural.w, imageNatural.h, maxImageW, maxImageH);
     }
     const w = maxImageW;
     const h = w / DEFAULT_ASPECT;
-    return { width: w, height: Math.min(h, CHAT_IMAGE_MAX_H) };
-  }, [imageNatural, maxImageW]);
+    return { width: w, height: Math.min(h, maxImageH) };
+  }, [imageNatural, maxImageH, maxImageW]);
 
   const handleImageLoad = (
     e: { nativeEvent?: { source?: { width?: number; height?: number; uri?: string } } } | undefined
@@ -160,6 +193,7 @@ export function MessageBubble({ message, onOpenImage, onOpenPdf }: MessageBubble
     (hasPdf && raw.length > 0 && raw === (message.pdfFilename ?? "").trim()) ||
     (hasAudio && (raw === "" || raw.toLowerCase() === "message vocal"));
   const showText = Boolean(raw) && !isAttachmentPlaceholder;
+  const imageOnly = hasImage && !showText && !hasPdf && !hasAudio;
 
   const bubbleShadow =
     Platform.OS === "web"
@@ -173,7 +207,7 @@ export function MessageBubble({ message, onOpenImage, onOpenPdf }: MessageBubble
         };
 
   return (
-    <View style={[styles.row, isOwn && styles.rowOwn]}>
+    <View style={[styles.row, isCompact && styles.rowCompact, isOwn && styles.rowOwn]}>
       {!isOwn && (
         <View style={[styles.avatar, { backgroundColor: avatarColor(sender) }]}>
           <AppText variant="caption" maxFontSizeMultiplier={1.22} style={styles.avatarText}>
@@ -182,8 +216,15 @@ export function MessageBubble({ message, onOpenImage, onOpenPdf }: MessageBubble
         </View>
       )}
 
-      <View style={[styles.column, isOwn && styles.columnOwn]}>
-        <View style={[styles.header, isOwn && styles.headerOwn]}>
+      <View
+        style={[
+          styles.column,
+          { maxWidth: columnMaxW },
+          isOwn && styles.columnOwn,
+          isCompact && styles.columnCompact,
+        ]}
+      >
+        <View style={[styles.header, isOwn && styles.headerOwn, isCompact && styles.headerCompact]}>
           <AppText variant="label" maxFontSizeMultiplier={1.28} style={styles.senderName} numberOfLines={1}>
             {sender}
           </AppText>
@@ -198,6 +239,9 @@ export function MessageBubble({ message, onOpenImage, onOpenPdf }: MessageBubble
           style={[
             styles.bubble,
             isOwn ? styles.bubbleOwn : styles.bubbleIn,
+            isCompact && styles.bubbleCompact,
+            isCompact && imageOnly && styles.bubbleCompactImageOnly,
+            isCompact && isOwn && styles.bubbleCompactOwn,
             bubbleShadow,
             failed && styles.bubbleFailed,
           ]}
@@ -216,12 +260,25 @@ export function MessageBubble({ message, onOpenImage, onOpenPdf }: MessageBubble
             <View
               style={[
                 styles.imageGroup,
-                { marginTop: showText ? IMAGE_BLOCK_GAP : 0, marginBottom: IMAGE_BLOCK_GAP },
+                isCompact && styles.imageGroupCompact,
+                isCompact && isOwn && styles.imageGroupCompactOwn,
+                {
+                  marginTop: showText ? (isCompact ? 6 : IMAGE_BLOCK_GAP) : 0,
+                  marginBottom: isCompact ? 0 : IMAGE_BLOCK_GAP,
+                },
               ]}
             >
               <Pressable
                 onPress={openImage}
-                style={({ pressed }) => [styles.imageWrap, pressed && styles.imagePressed]}
+                style={({ pressed }) => [
+                  styles.imageWrap,
+                  isCompact && styles.imageWrapCompact,
+                  {
+                    width: imageDisplaySize.width,
+                    height: imageDisplaySize.height,
+                  },
+                  pressed && styles.imagePressed,
+                ]}
                 accessibilityRole="button"
                 accessibilityLabel="Télécharger ou ouvrir l’image"
               >
@@ -234,12 +291,12 @@ export function MessageBubble({ message, onOpenImage, onOpenPdf }: MessageBubble
                       height: imageDisplaySize.height,
                     },
                   ]}
-                  resizeMode="contain"
+                  resizeMode={isCompact ? "cover" : "contain"}
                   onLoad={handleImageLoad}
                   onError={() => setImageLoadFailed(true)}
                 />
-                <View style={styles.imageDownloadFab}>
-                  <Ionicons name="download-outline" size={22} color="#fff" />
+                <View style={[styles.imageDownloadFab, isCompact && styles.imageDownloadFabCompact]}>
+                  <Ionicons name="download-outline" size={isCompact ? 18 : 22} color="#fff" />
                 </View>
               </Pressable>
             </View>
@@ -316,7 +373,7 @@ export function MessageBubble({ message, onOpenImage, onOpenPdf }: MessageBubble
       )}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   row: {
@@ -344,14 +401,25 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: "700",
   },
+  rowCompact: {
+    marginBottom: 8,
+    gap: 8,
+  },
   column: {
     maxWidth: 320,
     flexShrink: 1,
     gap: 4,
   },
+  columnCompact: {
+    gap: 3,
+  },
   columnOwn: {
     alignItems: "flex-end",
     alignSelf: "flex-end",
+  },
+  headerCompact: {
+    gap: 4,
+    marginBottom: 1,
   },
   header: {
     flexDirection: "row",
@@ -405,6 +473,14 @@ const styles = StyleSheet.create({
     maxWidth: CHAT_IMAGE_INNER_MAX_W,
     alignSelf: "center",
   },
+  imageGroupCompact: {
+    width: undefined,
+    alignSelf: "flex-start",
+    maxWidth: CHAT_IMAGE_MAX_W_COMPACT,
+  },
+  imageGroupCompactOwn: {
+    alignSelf: "flex-end",
+  },
   imageWrap: {
     borderRadius: 8,
     overflow: "hidden",
@@ -415,6 +491,10 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: "rgba(0,0,0,0.08)",
   },
+  imageWrapCompact: {
+    alignSelf: "flex-start",
+    borderRadius: 10,
+  },
   imagePressed: {
     opacity: 0.88,
   },
@@ -423,6 +503,13 @@ const styles = StyleSheet.create({
     maxWidth: "100%",
   },
   /** Cercle type Flowbite `h-10 w-10` (aperçu / ouvrir, pas seulement au survol). */
+  imageDownloadFabCompact: {
+    right: 6,
+    bottom: 6,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+  },
   imageDownloadFab: {
     position: "absolute",
     right: 10,

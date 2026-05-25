@@ -958,6 +958,7 @@ export function useRideFormState() {
   const [recurrenceOccurrences, setRecurrenceOccurrences] = useState(10);
   const [recurrenceEndDate, setRecurrenceEndDate] = useState("");
   const [recurrenceLimitMode, setRecurrenceLimitMode] = useState<"count" | "until" | "open">("count");
+  const [recurrenceIntervalWeeks, setRecurrenceIntervalWeeks] = useState(2);
   const [internalNotes, setInternalNotes] = useState("");
   const [isRoundTrip, setIsRoundTrip] = useState(false);
   const [amountInput, setAmountInput] = useState("");
@@ -1016,6 +1017,7 @@ export function useRideFormState() {
     setRecurrenceOccurrences(10);
     setRecurrenceEndDate("");
     setRecurrenceLimitMode("count");
+    setRecurrenceIntervalWeeks(2);
     setInternalNotes("");
     setIsRoundTrip(false);
     setAmountInput("");
@@ -1058,6 +1060,8 @@ export function useRideFormState() {
     setRecurrenceEndDate,
     recurrenceLimitMode,
     setRecurrenceLimitMode,
+    recurrenceIntervalWeeks,
+    setRecurrenceIntervalWeeks,
     internalNotes,
     setInternalNotes,
     isRoundTrip,

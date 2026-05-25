@@ -1,27 +1,31 @@
 import { useEffect, useMemo, useState } from "react";
-import { StyleSheet, View } from "react-native";
-import { AppText } from "../../../design/ui/AppText";
+import { StyleSheet, Text, View } from "react-native";
 import { semanticDanger, semanticWarning } from "../../../design/responsive/colors";
 import NetInfo from "@react-native-community/netinfo";
 import * as Location from "expo-location";
 import { useSession } from "../../../core/sessionProvider";
 import { getTrackingSnapshot } from "../tracking";
-import { useSocketStatus, useTrackingState } from "../hooks";
-import { driverOfflineQueue } from "../offlineQueue";
+import { useSocketStatus } from "../hooks";
+import { FONT_SIZE } from "../../../design/responsive/typographyTokens";
 
+const MAX_FONT_MULTIPLIER = 1.35;
+
+/** Alerte compacte : une ligne courte, titre en semi-gras + corps. */
 function Banner(props: { title: string; message: string; tone?: "warn" | "error" }) {
   const tokens = props.tone === "error" ? semanticDanger : semanticWarning;
   return (
     <View
-      style={[styles.banner, { borderColor: tokens.border, backgroundColor: tokens.bg }]}
-      accessibilityRole="text"
+      style={[styles.banner, { backgroundColor: tokens.bg }]}
+      accessibilityRole="alert"
+      accessibilityLiveRegion="polite"
     >
-      <AppText variant="sectionTitle" style={{ color: tokens.fg }}>
-        {props.title}
-      </AppText>
-      <AppText variant="body" style={{ color: tokens.fg }}>
-        {props.message}
-      </AppText>
+      <Text
+        maxFontSizeMultiplier={MAX_FONT_MULTIPLIER}
+        style={[styles.alertText, { color: tokens.fg }]}
+      >
+        <Text style={styles.alertLead}>{props.title}</Text>
+        {props.message ? ` ${props.message}` : null}
+      </Text>
     </View>
   );
 }
@@ -29,12 +33,9 @@ function Banner(props: { title: string; message: string; tone?: "warn" | "error"
 export function DriverStateBanners() {
   const { status } = useSession();
   const socketStatus = useSocketStatus();
-  const trackingState = useTrackingState();
   const [isOffline, setIsOffline] = useState(false);
   const [gpsEnabled, setGpsEnabled] = useState(true);
   const [trackingDepth, setTrackingDepth] = useState(0);
-  const [transitionQueueCount, setTransitionQueueCount] = useState(0);
-  const [transitionQueueOldestAgeMs, setTransitionQueueOldestAgeMs] = useState(0);
 
   useEffect(() => {
     const unsubscribe = NetInfo.addEventListener((state) => {
@@ -56,18 +57,6 @@ export function DriverStateBanners() {
       if (mounted) {
         setTrackingDepth(getTrackingSnapshot().queueDepth ?? 0);
       }
-      try {
-        const transitionSnapshot = await driverOfflineQueue.getSnapshot();
-        if (mounted) {
-          setTransitionQueueCount(transitionSnapshot.queuedCount);
-          setTransitionQueueOldestAgeMs(transitionSnapshot.oldestAgeMs);
-        }
-      } catch {
-        if (mounted) {
-          setTransitionQueueCount(0);
-          setTransitionQueueOldestAgeMs(0);
-        }
-      }
     };
     void tick();
     const interval = setInterval(() => void tick(), 10_000);
@@ -78,8 +67,15 @@ export function DriverStateBanners() {
   }, []);
 
   const showTrackingWarning = useMemo(() => trackingDepth > 0, [trackingDepth]);
-  const showTransitionPendingWarning = useMemo(() => transitionQueueCount > 0, [transitionQueueCount]);
-  const transitionExpiredRisk = transitionQueueOldestAgeMs >= 10 * 60 * 1000;
+
+  const hasBanner =
+    isOffline ||
+    (socketStatus.degraded && socketStatus.connected) ||
+    !gpsEnabled ||
+    status === "error" ||
+    showTrackingWarning;
+
+  if (!hasBanner) return null;
 
   return (
     <View style={styles.stack}>
@@ -90,23 +86,10 @@ export function DriverStateBanners() {
           tone="warn"
         />
       ) : null}
-      {!socketStatus.connected ? (
-        <Banner
-          title="Connexion temps reel indisponible"
-          message={
-            socketStatus.authExhausted
-              ? "Votre session live a expire. Reconnectez-vous pour reprendre les mises a jour mission."
-              : socketStatus.reconnecting
-              ? "Reconnexion en cours. Les mises a jour live peuvent etre retardees."
-              : "Le canal live est indisponible. Le mode polling reste actif."
-          }
-          tone={socketStatus.authExhausted ? "error" : "warn"}
-        />
-      ) : null}
       {socketStatus.degraded && socketStatus.connected ? (
         <Banner
-          title="Connexion temps reel instable"
-          message="Le service poursuit la synchronisation en mode degrade. Les mises a jour peuvent etre legerement differees."
+          title="Temps reel instable"
+          message="Sync degradee, leger retard possible."
           tone="warn"
         />
       ) : null}
@@ -131,46 +114,25 @@ export function DriverStateBanners() {
           tone="warn"
         />
       ) : null}
-      {socketStatus.degraded ? (
-        <Banner
-          title="Connexion GPS instable"
-          message="Le suivi continue en mode degrade. Certaines positions peuvent etre rejouees avec retard."
-          tone="warn"
-        />
-      ) : null}
-      {showTransitionPendingWarning ? (
-        <Banner
-          title="Action mission en attente"
-          message={
-            transitionExpiredRisk
-              ? "Une action mission n'a pas encore ete envoyee. Verification requise."
-              : `Des actions mission restent en attente d'envoi (${transitionQueueCount}).`
-          }
-          tone={transitionExpiredRisk ? "error" : "warn"}
-        />
-      ) : null}
-      {!trackingState.isTracking && trackingState.mode === "idle" && status === "ready" ? (
-        <Banner
-          title="Tracking inactif"
-          message="Le suivi chauffeur est inactif. Vérifiez qu'une mission est bien engagée."
-          tone="warn"
-        />
-      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  /** Même rythme vertical que le dashboard entreprise (`gap: 14`). */
   stack: {
-    gap: 14,
-  },
-  /** Cartes alerte : rayon 16 comme les tuiles KPI / sections. */
-  banner: {
-    borderWidth: 1,
-    borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
     gap: 6,
+  },
+  banner: {
+    borderRadius: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+  },
+  alertText: {
+    fontSize: FONT_SIZE.px12,
+    lineHeight: 16,
+    fontWeight: "400",
+  },
+  alertLead: {
+    fontWeight: "600",
   },
 });

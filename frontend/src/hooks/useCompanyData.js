@@ -46,7 +46,7 @@ const useCompanyData = ({ day } = {}) => {
   } = useQuery({
     queryKey: lirieKeys.companyReservations(reservationDayKey, RESERVATIONS_LIST_SCOPE_HASH),
     queryFn: async () => {
-      const data = await fetchCompanyReservations(day);
+      const data = await fetchCompanyReservations(day, { fields: 'dashboard' });
       return Array.isArray(data) ? data : (data?.reservations ?? []);
     },
     staleTime: 30_000,

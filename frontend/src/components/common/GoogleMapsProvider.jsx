@@ -4,6 +4,7 @@ import React, {
   useState,
   useEffect,
   useLayoutEffect,
+  useCallback,
   Component,
 } from 'react';
 
@@ -12,12 +13,19 @@ import {
   loadGoogleMapsScript,
   resolveWebMapsApiKey,
 } from '../../utils/googleMapsLoader';
+import { perfMark } from '../../utils/companyDashboardWebPerf';
 
-const GoogleMapsContext = createContext({ isLoaded: false, loadError: null });
+const defaultContextValue = {
+  isLoaded: false,
+  loadError: null,
+  ensureLoaded: () => {},
+};
+
+const GoogleMapsContext = createContext(defaultContextValue);
 
 /**
  * Hook pour savoir si Google Maps SDK est chargé.
- * @returns {{ isLoaded: boolean, loadError: Error | null }}
+ * @returns {{ isLoaded: boolean, loadError: Error | null, ensureLoaded: () => void }}
  */
 export function useGoogleMapsLoaded() {
   return useContext(GoogleMapsContext);
@@ -26,13 +34,26 @@ export function useGoogleMapsLoaded() {
 /**
  * Charge Google Maps manuellement via <script> — plus robuste
  * que useJsApiLoader en StrictMode et avec HMR.
+ * @param {{ autoLoad?: boolean }} props — autoLoad=false : SDK chargé via ensureLoaded() (carte montée).
  */
-function GoogleMapsLoader({ children }) {
+function GoogleMapsLoader({ children, autoLoad = true }) {
   const [isLoaded, setIsLoaded] = useState(() => isGoogleMapsSdkReady());
   const [loadError, setLoadError] = useState(null);
+  const [loadRequested, setLoadRequested] = useState(autoLoad);
   const isDev = process.env.NODE_ENV !== 'production';
+  const providerMountMarkedRef = React.useRef(false);
 
-  // Même frame que le premier paint : si le SDK est déjà en cache, évite un flash « non chargé ».
+  const ensureLoaded = useCallback(() => {
+    setLoadRequested(true);
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!providerMountMarkedRef.current) {
+      providerMountMarkedRef.current = true;
+      perfMark('gmaps_provider_mount');
+    }
+  }, []);
+
   useLayoutEffect(() => {
     if (isGoogleMapsSdkReady()) {
       setIsLoaded(true);
@@ -40,7 +61,7 @@ function GoogleMapsLoader({ children }) {
   }, []);
 
   useEffect(() => {
-    if (isLoaded) return;
+    if (!loadRequested || isLoaded) return;
 
     if (isGoogleMapsSdkReady()) {
       setIsLoaded(true);
@@ -99,10 +120,10 @@ function GoogleMapsLoader({ children }) {
         window.cancelIdleCallback(idleId);
       }
     };
-  }, [isLoaded, isDev]);
+  }, [loadRequested, isLoaded, isDev]);
 
   return (
-    <GoogleMapsContext.Provider value={{ isLoaded, loadError }}>
+    <GoogleMapsContext.Provider value={{ isLoaded, loadError, ensureLoaded }}>
       {children}
     </GoogleMapsContext.Provider>
   );
@@ -129,7 +150,9 @@ class GoogleMapsErrorBoundary extends Component {
   render() {
     if (this.state.hasError) {
       return (
-        <GoogleMapsContext.Provider value={{ isLoaded: false, loadError: new Error('SDK crash') }}>
+        <GoogleMapsContext.Provider
+          value={{ isLoaded: false, loadError: new Error('SDK crash'), ensureLoaded: () => {} }}
+        >
           {this.props.children}
         </GoogleMapsContext.Provider>
       );
@@ -143,11 +166,12 @@ class GoogleMapsErrorBoundary extends Component {
  * Charge le SDK manuellement (pas useJsApiLoader) pour éviter
  * les crashes en StrictMode / HMR.
  * L'app reste 100% fonctionnelle meme si Google Maps échoue.
+ * @param {{ autoLoad?: boolean }} props
  */
-export default function GoogleMapsProvider({ children }) {
+export default function GoogleMapsProvider({ children, autoLoad = true }) {
   return (
     <GoogleMapsErrorBoundary>
-      <GoogleMapsLoader>
+      <GoogleMapsLoader autoLoad={autoLoad}>
         {children}
       </GoogleMapsLoader>
     </GoogleMapsErrorBoundary>

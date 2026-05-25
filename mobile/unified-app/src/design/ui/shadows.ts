@@ -54,7 +54,7 @@ export function getShadowStyle(level: ShadowLevel): ViewStyle {
 /** Ombre bouton primaire (léger glow marque). */
 export function getPrimaryButtonShadowStyle(): ViewStyle {
   return Platform.select({
-    web: { boxShadow: "0 2px 14px rgba(10, 143, 122, 0.28)" },
+    web: { boxShadow: "0 2px 14px rgba(0, 121, 107, 0.28)" },
     ios: {
       shadowColor: brandPrimary,
       shadowOpacity: 0.28,

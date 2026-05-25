@@ -1,5 +1,6 @@
 import { AxiosError } from "axios";
 import { apiClient } from "../../core/api/client";
+import { resolveDriverStatusForUx } from "./statusDictionary";
 import {
   HttpCircuitBreakerScope,
   onHttpRequestFailure,
@@ -14,6 +15,7 @@ import {
   DriverPushRegistrationPayload,
   DriverStatusTransitionPayload,
 } from "./types";
+import { normalizeDriverProfilePayload } from "./domain/driverAvailability";
 import {
   readDriverProfileCache,
   writeDriverProfileCache,
@@ -39,6 +41,8 @@ export type DriverApiError = {
 
 export type DriverChatMessage = {
   id: number | string;
+  sender_id?: number | string | null;
+  receiver_id?: number | string | null;
   content: string;
   sender_role?: string;
   sender_name?: string | null;
@@ -53,6 +57,9 @@ export type DriverEtaSnapshot = {
   mission_id: number;
   eta_minutes: number | null;
   eta_updated_at: string | null;
+  has_gps?: boolean;
+  driver_lat?: number | null;
+  driver_lon?: number | null;
 };
 
 export type DriverProfile = {
@@ -63,6 +70,7 @@ export type DriverProfile = {
   email?: string | null;
   phone?: string | null;
   photo_url?: string | null;
+  is_available?: boolean | number | string | null;
   [key: string]: unknown;
 };
 
@@ -284,7 +292,7 @@ export async function quickCompleteDriverMission(missionId: number): Promise<voi
 export async function updateDriverAvailability(isAvailable: boolean): Promise<void> {
   try {
     await apiClient.put("/driver/me/availability", {
-      available: isAvailable,
+      is_available: isAvailable,
     });
   } catch (error) {
     throw normalizeError(error);
@@ -305,6 +313,14 @@ function normalizeMessages(value: unknown): DriverChatMessage[] {
         : new Date().toISOString();
     messages.push({
       id: typeof id === "string" || typeof id === "number" ? id : `${timestamp}-${content}`,
+      sender_id:
+        typeof raw.sender_id === "string" || typeof raw.sender_id === "number"
+          ? raw.sender_id
+          : null,
+      receiver_id:
+        typeof raw.receiver_id === "string" || typeof raw.receiver_id === "number"
+          ? raw.receiver_id
+          : null,
       content,
       sender_role: typeof raw.sender_role === "string" ? raw.sender_role : undefined,
       sender_name: typeof raw.sender_name === "string" ? raw.sender_name : null,
@@ -335,21 +351,59 @@ export async function getDriverMessages(
   }
 }
 
-export async function getDriverMissionEta(missionId: number): Promise<DriverEtaSnapshot> {
+export async function getDriverMissionEta(
+  missionId: number,
+  options?: { missionStatus?: string | null }
+): Promise<DriverEtaSnapshot> {
   try {
-    const { data } = await apiClient.get("/driver/me/bookings/eta", {
-      params: { mission_id: missionId },
-    });
+    const { data } = await apiClient.get("/driver/me/bookings/eta");
     const payload = (data ?? {}) as Record<string, unknown>;
-    const etaMinutesRaw = payload.eta_minutes ?? payload.eta ?? null;
-    const etaMinutes = typeof etaMinutesRaw === "number" ? etaMinutesRaw : Number(etaMinutesRaw);
+    const bookings = Array.isArray(payload.bookings)
+      ? (payload.bookings as Record<string, unknown>[])
+      : [];
+    const booking = bookings.find((item) => Number(item.id) === missionId);
+
+    if (!booking) {
+      const etaMinutesRaw = payload.eta_minutes ?? payload.eta ?? null;
+      const etaMinutes =
+        typeof etaMinutesRaw === "number" ? etaMinutesRaw : Number(etaMinutesRaw);
+      return {
+        mission_id: missionId,
+        eta_minutes: Number.isFinite(etaMinutes) ? etaMinutes : null,
+        eta_updated_at:
+          typeof payload.eta_updated_at === "string" && payload.eta_updated_at.length > 0
+            ? payload.eta_updated_at
+            : new Date().toISOString(),
+        has_gps: payload.has_gps === true,
+      };
+    }
+
+    const statusKey = resolveDriverStatusForUx(options?.missionStatus ?? null);
+    const etaSecondsRaw =
+      statusKey === "IN_PROGRESS"
+        ? booking.eta_to_dropoff_seconds
+        : booking.eta_to_pickup_seconds;
+    const etaSeconds =
+      typeof etaSecondsRaw === "number" ? etaSecondsRaw : Number(etaSecondsRaw);
+    const etaMinutes = Number.isFinite(etaSeconds) && etaSeconds > 0
+      ? Math.max(1, Math.round(etaSeconds / 60))
+      : null;
+
+    const driverPos = payload.driver_position as Record<string, unknown> | undefined;
+    const driverLatRaw = driverPos?.lat;
+    const driverLonRaw = driverPos?.lon ?? driverPos?.lng;
+    const driverLat =
+      typeof driverLatRaw === "number" ? driverLatRaw : Number(driverLatRaw);
+    const driverLon =
+      typeof driverLonRaw === "number" ? driverLonRaw : Number(driverLonRaw);
+
     return {
       mission_id: missionId,
-      eta_minutes: Number.isFinite(etaMinutes) ? etaMinutes : null,
-      eta_updated_at:
-        typeof payload.eta_updated_at === "string" && payload.eta_updated_at.length > 0
-          ? payload.eta_updated_at
-          : new Date().toISOString(),
+      eta_minutes: etaMinutes,
+      eta_updated_at: new Date().toISOString(),
+      has_gps: payload.has_gps === true,
+      driver_lat: Number.isFinite(driverLat) ? driverLat : null,
+      driver_lon: Number.isFinite(driverLon) ? driverLon : null,
     };
   } catch (error) {
     throw normalizeError(error);
@@ -364,7 +418,7 @@ export async function getDriverProfile(): Promise<DriverProfile> {
   try {
     const { data } = await apiClient.get("/driver/me/profile");
     if (data && typeof data === "object") {
-      const profile = data as DriverProfile;
+      const profile = normalizeDriverProfilePayload(data);
       await writeDriverProfileCache(profile);
       return profile;
     }
@@ -392,13 +446,24 @@ export async function updateDriverProfile(payload: Partial<DriverProfile>): Prom
   }
 }
 
-export async function updateDriverPhoto(photoUrl: string): Promise<DriverProfile> {
+export async function updateDriverPhoto(
+  payload: string | { photoBase64: string; mimeType?: string }
+): Promise<DriverProfile> {
   try {
-    const { data } = await apiClient.put("/driver/me/photo", {
-      photo_url: photoUrl,
-    });
+    const body =
+      typeof payload === "string"
+        ? { photo: payload }
+        : {
+            photo: payload.photoBase64,
+            mime_type: payload.mimeType,
+          };
+    const { data } = await apiClient.put("/driver/me/photo", body);
     if (data && typeof data === "object") {
-      const profile = data as DriverProfile;
+      const payloadData = data as { profile?: DriverProfile } & DriverProfile;
+      const profile =
+        payloadData.profile && typeof payloadData.profile === "object"
+          ? payloadData.profile
+          : payloadData;
       await writeDriverProfileCache(profile);
       return profile;
     }

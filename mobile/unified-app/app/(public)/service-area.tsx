@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { checkServiceArea, ServiceAreaCheckResponse } from "../../src/core/api/client";
 import { ResponsiveContainer, Screen, useAppViewport } from "../../src/design/responsive";
+import { FONT_SIZE } from "../../src/design/responsive/typographyTokens";
 
 export default function ServiceAreaScreen() {
   const { topInset } = useAppViewport();
@@ -120,7 +121,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
   },
   title: {
-    fontSize: 24,
+    fontSize: FONT_SIZE.px24,
     fontWeight: "800",
     color: "#163A34",
   },
@@ -135,7 +136,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    fontSize: 16,
+    fontSize: FONT_SIZE.px16,
     color: "#163A34",
     minHeight: 48,
   },
@@ -153,7 +154,7 @@ const styles = StyleSheet.create({
   btnText: {
     color: "#FFFFFF",
     fontWeight: "700",
-    fontSize: 16,
+    fontSize: FONT_SIZE.px16,
   },
   err: {
     color: "#b91c1c",

@@ -10,6 +10,7 @@ import {
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { apiClient } from "../../src/core/api/client";
 import { Screen, useAppViewport } from "../../src/design/responsive";
+import { FONT_SIZE } from "../../src/design/responsive/typographyTokens";
 
 const DEFAULT_COOLDOWN = 60;
 
@@ -277,7 +278,7 @@ export default function ActivateScreen() {
     return (
       <Screen backgroundColor="#EAF3F1">
         <View style={{ flex: 1, justifyContent: "center", alignItems: "center", gap: 12 }}>
-          <Text style={{ fontSize: 16, color: "#B00020", textAlign: "center" }}>
+          <Text style={{ fontSize: FONT_SIZE.px16, color: "#B00020", textAlign: "center" }}>
             Session d&apos;activation introuvable. Recommencez l&apos;inscription.
           </Text>
           <Pressable onPress={() => router.replace("/(public)/signup" as any)}>
@@ -292,7 +293,7 @@ export default function ActivateScreen() {
     return (
       <Screen backgroundColor="#EAF3F1">
         <View style={{ flex: 1, justifyContent: "center", alignItems: "center", gap: 16 }}>
-          <Text style={{ fontSize: 22, fontWeight: "700", color: "#163A34" }}>Compte activé</Text>
+          <Text style={{ fontSize: FONT_SIZE.px22, fontWeight: "700", color: "#163A34" }}>Compte activé</Text>
           <Text style={{ color: "#2e7d32", textAlign: "center" }}>
             Votre compte est actif. Vous pouvez vous connecter.
           </Text>
@@ -310,7 +311,7 @@ export default function ActivateScreen() {
               paddingHorizontal: 32,
             }}
           >
-            <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>Se connecter</Text>
+            <Text style={{ color: "#fff", fontWeight: "700", fontSize: FONT_SIZE.px15 }}>Se connecter</Text>
           </Pressable>
         </View>
       </Screen>
@@ -327,7 +328,7 @@ export default function ActivateScreen() {
       contentContainerStyle={{ flexGrow: 1, paddingVertical: 16 }}
     >
       <View style={{ gap: 20 }}>
-        <Text style={{ fontSize: 22, fontWeight: "700" }}>Activation du compte</Text>
+        <Text style={{ fontSize: FONT_SIZE.px22, fontWeight: "700" }}>Activation du compte</Text>
         <Text style={{ color: "#555" }}>
           Confirmez votre email et votre téléphone pour activer votre compte.
         </Text>
@@ -335,34 +336,34 @@ export default function ActivateScreen() {
         {/* Messages */}
         {infoMsg ? (
           <View style={{ backgroundColor: "#e8f5e9", borderRadius: 8, padding: 12 }}>
-            <Text style={{ color: "#1b5e20", fontSize: 13 }}>{infoMsg}</Text>
+            <Text style={{ color: "#1b5e20", fontSize: FONT_SIZE.px13 }}>{infoMsg}</Text>
           </View>
         ) : null}
         {debugActivationLink ? (
           <View style={{ backgroundColor: "#fff3e0", borderRadius: 8, padding: 12 }}>
-            <Text style={{ color: "#e65100", fontSize: 13, fontWeight: "600" }}>Lien d&apos;activation (dev) :</Text>
-            <Text style={{ color: "#e65100", fontSize: 12, marginTop: 4 }} selectable>
+            <Text style={{ color: "#e65100", fontSize: FONT_SIZE.px13, fontWeight: "600" }}>Lien d&apos;activation (dev) :</Text>
+            <Text style={{ color: "#e65100", fontSize: FONT_SIZE.px12, marginTop: 4 }} selectable>
               {debugActivationLink}
             </Text>
           </View>
         ) : null}
         {debugSmsCode ? (
           <View style={{ backgroundColor: "#fff3e0", borderRadius: 8, padding: 12 }}>
-            <Text style={{ color: "#e65100", fontSize: 13 }}>
+            <Text style={{ color: "#e65100", fontSize: FONT_SIZE.px13 }}>
               Code SMS de secours (dev) : <Text style={{ fontWeight: "700" }}>{debugSmsCode}</Text>
             </Text>
           </View>
         ) : null}
         {errorMsg ? (
           <View style={{ backgroundColor: "#ffebee", borderRadius: 8, padding: 12 }}>
-            <Text style={{ color: "#B00020", fontSize: 13 }}>{errorMsg}</Text>
+            <Text style={{ color: "#B00020", fontSize: FONT_SIZE.px13 }}>{errorMsg}</Text>
           </View>
         ) : null}
 
         {/* Section Email */}
         <View style={{ gap: 10 }}>
-          <Text style={{ fontSize: 16, fontWeight: "600" }}>Email</Text>
-          <Text style={{ color: "#555", fontSize: 13 }}>
+          <Text style={{ fontSize: FONT_SIZE.px16, fontWeight: "600" }}>Email</Text>
+          <Text style={{ color: "#555", fontSize: FONT_SIZE.px13 }}>
             Un lien a été envoyé à {maskedEmail || "votre adresse email"}.
           </Text>
           <View
@@ -374,7 +375,7 @@ export default function ActivateScreen() {
               alignSelf: "flex-start",
             }}
           >
-            <Text style={{ color: status.email_verified ? "#2e7d32" : "#f57f17", fontWeight: "600", fontSize: 12 }}>
+            <Text style={{ color: status.email_verified ? "#2e7d32" : "#f57f17", fontWeight: "600", fontSize: FONT_SIZE.px12 }}>
               {status.email_verified ? "Email confirmé" : "En attente de confirmation"}
             </Text>
           </View>
@@ -390,7 +391,7 @@ export default function ActivateScreen() {
               opacity: loading || status.email_verified || emailCooldown > 0 ? 0.5 : 1,
             }}
           >
-            <Text style={{ color: "#0A8F7A", fontWeight: "600", fontSize: 13 }}>
+            <Text style={{ color: "#0A8F7A", fontWeight: "600", fontSize: FONT_SIZE.px13 }}>
               {emailCooldown > 0 ? `Renvoyer l'email (${emailCooldown}s)` : "Renvoyer l'email"}
             </Text>
           </Pressable>
@@ -401,15 +402,15 @@ export default function ActivateScreen() {
 
         {/* Section SMS */}
         <View style={{ gap: 10 }}>
-          <Text style={{ fontSize: 16, fontWeight: "600" }}>Téléphone (SMS)</Text>
-          <Text style={{ color: "#555", fontSize: 13 }}>
+          <Text style={{ fontSize: FONT_SIZE.px16, fontWeight: "600" }}>Téléphone (SMS)</Text>
+          <Text style={{ color: "#555", fontSize: FONT_SIZE.px13 }}>
             Saisissez le code reçu sur {maskedPhone || "votre téléphone"}.
           </Text>
 
           {/* Modifier numéro */}
           {!status.phone_verified ? (
             <Pressable onPress={() => { setShowPhoneEdit((v) => !v); clearMessages(); }}>
-              <Text style={{ color: "#0A8F7A", fontSize: 13 }}>
+              <Text style={{ color: "#0A8F7A", fontSize: FONT_SIZE.px13 }}>
                 {showPhoneEdit ? "Annuler" : "Mauvais numéro ?"}
               </Text>
             </Pressable>
@@ -427,7 +428,7 @@ export default function ActivateScreen() {
                   borderColor: "#ddd",
                   borderRadius: 8,
                   padding: 10,
-                  fontSize: 14,
+                  fontSize: FONT_SIZE.px14,
                 }}
               />
               <Pressable
@@ -441,7 +442,7 @@ export default function ActivateScreen() {
                   opacity: loading ? 0.5 : 1,
                 }}
               >
-                <Text style={{ color: "#fff", fontWeight: "600", fontSize: 13 }}>Mettre à jour</Text>
+                <Text style={{ color: "#fff", fontWeight: "600", fontSize: FONT_SIZE.px13 }}>Mettre à jour</Text>
               </Pressable>
             </View>
           ) : null}
@@ -455,7 +456,7 @@ export default function ActivateScreen() {
               alignSelf: "flex-start",
             }}
           >
-            <Text style={{ color: status.phone_verified ? "#2e7d32" : "#f57f17", fontWeight: "600", fontSize: 12 }}>
+            <Text style={{ color: status.phone_verified ? "#2e7d32" : "#f57f17", fontWeight: "600", fontSize: FONT_SIZE.px12 }}>
               {status.phone_verified ? "Téléphone confirmé" : "En attente de confirmation"}
             </Text>
           </View>
@@ -475,7 +476,7 @@ export default function ActivateScreen() {
                   borderColor: "#ddd",
                   borderRadius: 8,
                   padding: 10,
-                  fontSize: 18,
+                  fontSize: FONT_SIZE.px18,
                   letterSpacing: 4,
                   textAlign: "center",
                 }}
@@ -491,7 +492,7 @@ export default function ActivateScreen() {
                   opacity: loading || smsCode.length < 6 ? 0.5 : 1,
                 }}
               >
-                <Text style={{ color: "#fff", fontWeight: "600", fontSize: 13 }}>Valider</Text>
+                <Text style={{ color: "#fff", fontWeight: "600", fontSize: FONT_SIZE.px13 }}>Valider</Text>
               </Pressable>
             </View>
           ) : null}
@@ -509,7 +510,7 @@ export default function ActivateScreen() {
                 opacity: loading || smsCooldown > 0 ? 0.5 : 1,
               }}
             >
-              <Text style={{ color: "#0A8F7A", fontWeight: "600", fontSize: 13 }}>
+              <Text style={{ color: "#0A8F7A", fontWeight: "600", fontSize: FONT_SIZE.px13 }}>
                 {smsCooldown > 0 ? `Renvoyer le code (${smsCooldown}s)` : "Renvoyer le code"}
               </Text>
             </Pressable>
@@ -533,7 +534,7 @@ export default function ActivateScreen() {
           {loading ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>
+            <Text style={{ color: "#fff", fontWeight: "700", fontSize: FONT_SIZE.px15 }}>
               Activer mon compte
             </Text>
           )}
@@ -547,7 +548,7 @@ export default function ActivateScreen() {
             } as any)
           }
         >
-          <Text style={{ color: "#999", textAlign: "center", fontSize: 13 }}>
+          <Text style={{ color: "#999", textAlign: "center", fontSize: FONT_SIZE.px13 }}>
             Déjà activé ? Se connecter
           </Text>
         </Pressable>

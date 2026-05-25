@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   ImageBackground,
-  Keyboard,
   Platform,
   Pressable,
   ScrollView,
@@ -13,7 +12,12 @@ import {
 } from "react-native";
 import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { Screen, scrollAnchorAboveKeyboard, useAppViewport } from "../../src/design/responsive";
+import {
+  Screen,
+  scrollAnchorAboveKeyboard,
+  useAppViewport,
+  useKeyboardHeight,
+} from "../../src/design/responsive";
 import {
   fetchGuestBookingStatus,
   fetchPublicBookingStatus,
@@ -21,6 +25,7 @@ import {
   PublicBookingStatusResponse,
 } from "../../src/core/api/client";
 import { useSession } from "../../src/core/sessionProvider";
+import { FONT_SIZE } from "../../src/design/responsive/typographyTokens";
 
 const LANDING_BACKGROUND = require("../../assets/images/landing-background.png");
 
@@ -58,28 +63,13 @@ export default function BookingStatusScreen() {
   const bookingScrollRef = useRef<ScrollView | null>(null);
   const bookingScrollOffsetYRef = useRef(0);
   const tokenFieldAnchorRef = useRef<View | null>(null);
-  const [keyboardVisible, setKeyboardVisible] = useState(false);
-  const [keyboardScrollPaddingBottom, setKeyboardScrollPaddingBottom] = useState(0);
+  const { keyboardVisible, scrollPaddingBottom: keyboardScrollPaddingBottom } = useKeyboardHeight();
 
   useEffect(() => {
-    if (Platform.OS === "web") return;
-    const show = Keyboard.addListener("keyboardDidShow", (e) => {
-      const h = e.endCoordinates?.height ?? 0;
-      const computed = h > 0 ? Math.round(h + 48) : 300;
-      setKeyboardScrollPaddingBottom(Math.max(260, computed));
-      setKeyboardVisible(true);
-    });
-    const hide = Keyboard.addListener("keyboardDidHide", () => {
-      setKeyboardVisible(false);
-      setKeyboardScrollPaddingBottom(0);
-      bookingScrollRef.current?.scrollTo({ y: 0, animated: true });
-      bookingScrollOffsetYRef.current = 0;
-    });
-    return () => {
-      show.remove();
-      hide.remove();
-    };
-  }, []);
+    if (keyboardVisible) return;
+    bookingScrollRef.current?.scrollTo({ y: 0, animated: true });
+    bookingScrollOffsetYRef.current = 0;
+  }, [keyboardVisible]);
 
   const submit = async () => {
     if (!token.trim()) {
@@ -356,7 +346,7 @@ const styles = StyleSheet.create({
   },
   kicker: {
     color: "#0A8F7A",
-    fontSize: 13,
+    fontSize: FONT_SIZE.px13,
     fontWeight: "600",
     letterSpacing: 0.6,
     textTransform: "uppercase",
@@ -364,13 +354,13 @@ const styles = StyleSheet.create({
   },
   title: {
     color: "#163A34",
-    fontSize: 28,
+    fontSize: FONT_SIZE.px28,
     lineHeight: 32,
     fontWeight: "700",
   },
   subtitle: {
     color: "#5F7369",
-    fontSize: 15,
+    fontSize: FONT_SIZE.px15,
     lineHeight: 22,
     marginTop: 10,
   },
@@ -378,7 +368,7 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
   fieldLabel: {
-    fontSize: 14,
+    fontSize: FONT_SIZE.px14,
     fontWeight: "600",
     color: "#163A34",
     marginBottom: 8,
@@ -391,7 +381,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FAFCFB",
     paddingHorizontal: 14,
     color: "#163A34",
-    fontSize: 16,
+    fontSize: FONT_SIZE.px16,
   },
   submitButton: {
     marginTop: 20,
@@ -406,14 +396,14 @@ const styles = StyleSheet.create({
   },
   submitText: {
     color: "#FFFFFF",
-    fontSize: 16,
+    fontSize: FONT_SIZE.px16,
     fontWeight: "700",
     letterSpacing: 0.2,
   },
   errorText: {
     marginTop: 14,
     color: "#B42318",
-    fontSize: 14,
+    fontSize: FONT_SIZE.px14,
     lineHeight: 20,
     fontWeight: "600",
   },
@@ -425,7 +415,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   resultHeading: {
-    fontSize: 12,
+    fontSize: FONT_SIZE.px12,
     fontWeight: "700",
     color: "#0A8F7A",
     letterSpacing: 0.5,
@@ -433,22 +423,22 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   resultPrimary: {
-    fontSize: 16,
+    fontSize: FONT_SIZE.px16,
     fontWeight: "700",
     color: "#163A34",
   },
   resultStatus: {
-    fontSize: 15,
+    fontSize: FONT_SIZE.px15,
     fontWeight: "700",
     color: "#2E7D32",
   },
   resultLine: {
-    fontSize: 15,
+    fontSize: FONT_SIZE.px15,
     lineHeight: 21,
     color: "#163A34",
   },
   resultMeta: {
-    fontSize: 13,
+    fontSize: FONT_SIZE.px13,
     lineHeight: 18,
     color: "#5F7369",
     marginTop: 4,
@@ -466,7 +456,7 @@ const styles = StyleSheet.create({
   },
   secondaryButtonText: {
     color: "#0A8F7A",
-    fontSize: 15,
+    fontSize: FONT_SIZE.px15,
     fontWeight: "700",
     textAlign: "center",
   },

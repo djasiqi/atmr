@@ -153,6 +153,10 @@ class InstitutionSettingsUpdateSchema(Schema):
         validate=validate.Range(min=1, max=10080),
         metadata={"description": "Timeout par défaut (minutes, 1-10080)"},
     )
+    offer_dispatch_mode = fields.Str(
+        validate=validate.OneOf(["sequential", "broadcast"]),
+        metadata={"description": "Mode d'envoi des demandes (sequential|broadcast)"},
+    )
 
     # ── Billing defaults ──
     default_billing_intent = fields.Str(
@@ -574,16 +578,16 @@ class BillingDetailsSchema(Schema):
 class TransportRequestCreateSchema(Schema):
     """Schema pour création d'une demande de transport.
 
-    external_reference est OBLIGATOIRE et doit être unique par institution.
+    external_reference est optionnelle (si fournie, unique par institution).
     """
 
     class Meta:
         unknown = EXCLUDE
 
-    # Référence externe (OBLIGATOIRE)
+    # Référence externe (optionnelle)
     external_reference = fields.Str(
-        required=True,
-        validate=validate.Length(min=1, max=100),
+        allow_none=True,
+        validate=validate.Length(max=100),
         metadata={"description": "Référence externe DPI (unique par institution)"},
     )
 

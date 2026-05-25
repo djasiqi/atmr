@@ -29,6 +29,12 @@ jest.mock("socket.io-client", () => ({
   io: (url: string, opts?: unknown) => mockIo(url, opts),
 }));
 
+const mockResolveDriverSocketUrl = jest.fn<() => string | null>();
+
+jest.mock("./resolveDriverSocketUrl", () => ({
+  resolveDriverSocketUrl: () => mockResolveDriverSocketUrl(),
+}));
+
 jest.mock("../observability/driverTelemetry", () => ({
   emitDriverTelemetry: (event: string, payload?: unknown) => mockEmitDriverTelemetry(event, payload),
 }));
@@ -86,6 +92,9 @@ describe("realtime manager", () => {
     mockGetAuthAccessToken.mockReset();
     mockRefreshAuthTokenNow.mockResolvedValue(true);
     mockGetAuthAccessToken.mockReturnValue("token-test");
+    mockResolveDriverSocketUrl.mockImplementation(
+      () => process.env.EXPO_PUBLIC_DRIVER_SOCKET_URL ?? null
+    );
     realtimeManager.disconnect();
     delete process.env.EXPO_PUBLIC_DRIVER_SOCKET_URL;
     delete process.env.EXPO_PUBLIC_REALTIME_DEGRADED_HYSTERESIS_MS;
@@ -136,6 +145,7 @@ describe("realtime manager", () => {
   });
 
   it("falls back to polling when socket url is not configured", () => {
+    mockResolveDriverSocketUrl.mockReturnValue(null);
     realtimeManager.connect("driver:42", { enableSocket: true });
     expect(mockIo).not.toHaveBeenCalled();
     expect(realtimeManager.getSnapshot()).toEqual({
@@ -145,7 +155,7 @@ describe("realtime manager", () => {
       desiredTransport: "socket",
       actualTransport: "polling",
       lastEventAt: null,
-      lastError: "EXPO_PUBLIC_DRIVER_SOCKET_URL not configured",
+      lastError: "Driver socket URL not configured",
       reconnectAttempts: 0,
       reconnectBackoffMs: 0,
       authAttempts: 0,
@@ -161,6 +171,7 @@ describe("realtime manager", () => {
 
   it("sets degraded after hysteresis when socket url is missing and socket is never established", () => {
     jest.useFakeTimers();
+    mockResolveDriverSocketUrl.mockReturnValue(null);
     // DEGRADED_HYSTERESIS_MS est figé à l’import (défaut 8000) — avancer 8000 ms + marge
     realtimeManager.connect("driver:42", { enableSocket: true });
     expect(mockIo).not.toHaveBeenCalled();
@@ -350,6 +361,44 @@ describe("realtime manager", () => {
     await Promise.resolve();
     expect(mockRefreshAuthTokenNow).toHaveBeenCalled();
     jest.useRealTimers();
+  });
+
+  it("does not apply async token refresh after logout disconnect", async () => {
+    process.env.EXPO_PUBLIC_DRIVER_SOCKET_URL = "wss://driver.example.test";
+    let resolveRefresh: (() => void) | null = null;
+    mockRefreshAuthTokenNow.mockImplementation(
+      () =>
+        new Promise<boolean>((resolve) => {
+          resolveRefresh = () => resolve(true);
+        })
+    );
+
+    realtimeManager.connect("driver:42", { enableSocket: true });
+    expect(mockIo).toHaveBeenCalledTimes(1);
+
+    realtimeManager.disconnect();
+    expect(realtimeManager.getSnapshot().mode).toBe("idle");
+    mockGetAuthAccessToken.mockClear();
+
+    resolveRefresh?.();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(mockGetAuthAccessToken).not.toHaveBeenCalled();
+    expect(realtimeManager.getSnapshot().mode).toBe("idle");
+  });
+
+  it("ignores stale socket connect callbacks after context switch", () => {
+    process.env.EXPO_PUBLIC_DRIVER_SOCKET_URL = "wss://driver.example.test";
+    realtimeManager.connect("driver:1", { enableSocket: true });
+    const staleConnect = mockHandlers.get("connect")?.[0];
+    expect(staleConnect).toBeDefined();
+
+    realtimeManager.onContextSwitch("driver:2", { enableSocket: true });
+    expect(realtimeManager.getSnapshot().activeContextId).toBe("driver:2");
+
+    staleConnect?.();
+    expect(realtimeManager.getSnapshot().activeContextId).toBe("driver:2");
   });
 
   it("sends wrapped batch payload with tracking session metadata", () => {

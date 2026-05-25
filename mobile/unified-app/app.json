@@ -1,8 +1,8 @@
 {
   "expo": {
     "name": "lirie-unified-app",
-    "slug": "lirie-unified-app",
-    "version": "0.1.0",
+    "slug": "operations-app",
+    "version": "1.0.5",
     "orientation": "portrait",
     "scheme": "lirie",
     "runtimeVersion": {
@@ -36,7 +36,7 @@
         "android.permission.READ_MEDIA_VIDEO",
         "android.permission.READ_MEDIA_AUDIO"
       ],
-      "package": "com.drinjasiqi.lirieunifiedapp",
+      "package": "ch.liri.operations",
       "intentFilters": [
         {
           "action": "VIEW",
@@ -61,11 +61,18 @@
       ]
     },
     "ios": {
+      "bundleIdentifier": "ch.liri.operations",
+      "buildNumber": "1",
+      "googleServicesFile": "./GoogleService-Info.plist",
       "associatedDomains": [
+        "applinks:app.lirie.ch",
         "applinks:app.lirie.ch"
       ],
       "infoPlist": {
         "UIBackgroundModes": [
+          "location",
+          "remote-notification",
+          "fetch",
           "location",
           "remote-notification",
           "fetch"
@@ -75,10 +82,23 @@
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Location is used to provide real-time mission tracking during active transport, including in background while a mission is running.",
         "NSPhotoLibraryUsageDescription": "Photo access is required to send attachments.",
         "NSCameraUsageDescription": "Camera access is required for mission/photo capture.",
-        "NSMicrophoneUsageDescription": "Le micro sert a enregistrer des messages vocaux dans le chat."
+        "NSMicrophoneUsageDescription": "Le micro sert a enregistrer des messages vocaux dans le chat.",
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "config": {
+        "googleMapsApiKey": ""
       }
     },
     "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/lirie-logo-color.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#EAF3F1"
+        }
+      ],
       [
         "expo-build-properties",
         {
@@ -126,7 +146,15 @@
       ],
       "expo-document-picker",
       "expo-updates",
-      "@sentry/react-native/expo"
+      [
+        "@sentry/react-native/expo",
+        {
+          "organization": "lirie",
+          "project": "lirie-mobile"
+        }
+      ],
+      "expo-audio",
+      "expo-video"
     ],
     "experiments": {
       "typedRoutes": true
@@ -134,12 +162,12 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "37d90599-2944-4007-b3b5-ee626ae93f56"
+        "projectId": "3be107c7-29d2-4987-91a0-8d7c31604891"
       }
     },
     "owner": "drinjasiqi",
     "updates": {
-      "url": "https://u.expo.dev/37d90599-2944-4007-b3b5-ee626ae93f56"
+      "url": "https://u.expo.dev/3be107c7-29d2-4987-91a0-8d7c31604891"
     }
   }
 }

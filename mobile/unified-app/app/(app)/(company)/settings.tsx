@@ -5,7 +5,6 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
 import { PermissionGuard } from "../../../src/core/guards";
 import { isFeatureEnabled } from "../../../src/core/featureFlags/registry";
 import { useSession } from "../../../src/core/sessionProvider";
@@ -29,6 +28,7 @@ import {
 import { isContextSwitchClientSupported } from "../../../src/core/contextSwitchPolicy";
 import { E } from "../../../src/features/company/theme/enterpriseOpsTheme";
 import { createShadow } from "../../../src/styles/shadowStyles";
+import { FONT_SIZE } from "../../../src/design/responsive/typographyTokens";
 
 const cardShadow = createShadow({
   shadowColor: "#000000",
@@ -42,8 +42,6 @@ const BORDER_SLATE = "rgba(148, 163, 184, 0.22)";
 
 type PendingAction =
   | "refresh"
-  | "switch-driver"
-  | "switch-company"
   | "dispatch-mode"
   | null;
 
@@ -115,14 +113,12 @@ function InfoRow({ label, value, mono }: InfoRowProps) {
 }
 
 export default function CompanySettingsScreen() {
-  const router = useRouter();
   const {
     activeContext,
     bootstrap,
     can,
     status,
     error,
-    changeContext,
     bootstrapSession,
     logout,
   } = useSession();
@@ -148,7 +144,6 @@ export default function CompanySettingsScreen() {
     () => contexts.filter((ctx: AuthContext) => ctx.context_type === "driver"),
     [contexts]
   );
-  const isCompanyActive = activeContext?.context_type === "company";
 
   const activeCompanyContext = useMemo(
     () =>
@@ -168,7 +163,6 @@ export default function CompanySettingsScreen() {
     if (contextPermissions.includes(permission)) return can(permission);
     return can(fallbackPermission);
   };
-  const canSwitchContext = canRunSensitiveAction("company:context:switch", "company:dashboard:read");
   const companyAccountForDoubleHat =
     !bootstrap?.user?.role || String(bootstrap.user.role).toUpperCase() === "COMPANY";
   const canTransportMobileRoleSwitch =
@@ -218,50 +212,6 @@ export default function CompanySettingsScreen() {
       mounted = false;
     };
   }, [activeCompanyId]);
-
-  async function handleSwitchToDriver() {
-    if (!primaryDriverContext) {
-      setActionMessage("Aucun contexte chauffeur disponible pour ce compte.");
-      return;
-    }
-    setPendingAction("switch-driver");
-    setActionMessage(null);
-    try {
-      await changeContext(primaryDriverContext.context_id);
-      setActionMessage("Contexte chauffeur activé.");
-      router.replace("/(app)/(driver)" as any);
-    } catch (switchError) {
-      setActionMessage(
-        switchError instanceof Error
-          ? switchError.message
-          : "Impossible de basculer vers le contexte chauffeur."
-      );
-    } finally {
-      setPendingAction(null);
-    }
-  }
-
-  async function handleSwitchBackToCompany() {
-    if (!activeCompanyContext) {
-      setActionMessage("Aucun contexte entreprise disponible.");
-      return;
-    }
-    setPendingAction("switch-company");
-    setActionMessage(null);
-    try {
-      await changeContext(activeCompanyContext.context_id);
-      setActionMessage("Contexte entreprise réactivé.");
-      router.replace("/(app)/(company)/settings" as any);
-    } catch (switchError) {
-      setActionMessage(
-        switchError instanceof Error
-          ? switchError.message
-          : "Impossible de réactiver le contexte entreprise."
-      );
-    } finally {
-      setPendingAction(null);
-    }
-  }
 
   async function handleRefreshSession() {
     setPendingAction("refresh");
@@ -456,36 +406,6 @@ export default function CompanySettingsScreen() {
             />
             <AppButton
               title={
-                pendingAction === "switch-driver"
-                  ? "Bascule…"
-                  : "Passer en contexte chauffeur"
-              }
-              disabled={
-                busy ||
-                !isCompanyActive ||
-                !primaryDriverContext ||
-                !canSwitchContext ||
-                !canTransportMobileRoleSwitch
-              }
-              onPress={handleSwitchToDriver}
-            />
-            <AppButton
-              title={
-                pendingAction === "switch-company"
-                  ? "Retour…"
-                  : "Revenir au contexte entreprise"
-              }
-              disabled={
-                busy ||
-                isCompanyActive ||
-                !activeCompanyContext ||
-                !canSwitchContext ||
-                !canTransportMobileRoleSwitch
-              }
-              onPress={handleSwitchBackToCompany}
-            />
-            <AppButton
-              title={
                 pendingAction === "dispatch-mode"
                   ? "Changement de mode…"
                   : "Basculer le mode dispatch"
@@ -593,7 +513,7 @@ const styles = StyleSheet.create({
   heroTextCol: { flex: 1, minWidth: 0, gap: 6 },
   heroTitle: {
     color: E.TEXT,
-    fontSize: 20,
+    fontSize: FONT_SIZE.px20,
     fontWeight: "700",
     letterSpacing: 0.2,
   },
@@ -619,7 +539,7 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontWeight: "700",
     color: E.TEXT,
-    fontSize: 15,
+    fontSize: FONT_SIZE.px15,
     letterSpacing: 0.15,
   },
   kvRow: {
@@ -628,20 +548,20 @@ const styles = StyleSheet.create({
   },
   kvLabel: {
     color: E.TEXT_SEC,
-    fontSize: 12,
+    fontSize: FONT_SIZE.px12,
     fontWeight: "600",
     letterSpacing: 0.2,
     textTransform: "uppercase",
   },
   kvValue: {
     color: E.TEXT,
-    fontSize: 15,
+    fontSize: FONT_SIZE.px15,
     lineHeight: 22,
     fontWeight: "500",
   },
   kvValueMono: {
     fontFamily: Platform.select({ ios: "Menlo", android: "monospace", default: "monospace" }),
-    fontSize: 13,
+    fontSize: FONT_SIZE.px13,
   },
   divider: {
     height: StyleSheet.hairlineWidth,
@@ -667,7 +587,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   statusPillText: {
-    fontSize: 12,
+    fontSize: FONT_SIZE.px12,
     fontWeight: "700",
     letterSpacing: 0.2,
   },
@@ -692,7 +612,7 @@ const styles = StyleSheet.create({
     flex: 1,
     color: "#b91c1c",
     fontWeight: "600",
-    fontSize: 14,
+    fontSize: FONT_SIZE.px14,
     lineHeight: 20,
   },
   alertTextMuted: {
@@ -713,7 +633,7 @@ const styles = StyleSheet.create({
     flex: 1,
     color: E.BRAND_DARK,
     fontWeight: "600",
-    fontSize: 14,
+    fontSize: FONT_SIZE.px14,
   },
   actionsCol: { gap: 10, marginTop: 4 },
   emptyContexts: { paddingVertical: 8 },
@@ -752,7 +672,7 @@ const styles = StyleSheet.create({
   contextId: {
     color: E.TEXT_SEC,
     fontFamily: Platform.select({ ios: "Menlo", android: "monospace", default: "monospace" }),
-    fontSize: 12,
+    fontSize: FONT_SIZE.px12,
   },
   defaultBadge: {
     paddingHorizontal: 8,
@@ -763,7 +683,7 @@ const styles = StyleSheet.create({
     borderColor: "rgba(148, 163, 184, 0.35)",
   },
   defaultBadgeText: {
-    fontSize: 10,
+    fontSize: FONT_SIZE.px10,
     fontWeight: "700",
     color: E.TEXT_SEC,
     textTransform: "uppercase",
@@ -778,7 +698,7 @@ const styles = StyleSheet.create({
     borderColor: "rgba(0, 121, 107, 0.3)",
   },
   activeBadgeText: {
-    fontSize: 10,
+    fontSize: FONT_SIZE.px10,
     fontWeight: "700",
     color: E.BRAND_DARK,
     textTransform: "uppercase",

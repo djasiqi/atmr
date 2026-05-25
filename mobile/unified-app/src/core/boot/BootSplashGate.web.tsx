@@ -34,7 +34,7 @@ export function BootSplashGate({ children }: Props) {
                 },
               ]}
             >
-              <View style={g.styles.lottie} />
+              <View style={g.lottieStyle} />
             </Animated.View>
           ) : null}
         </Animated.View>

@@ -141,7 +141,7 @@ export function ChatComposer({
             onPress={onSend}
             style={({ pressed }) => [
               styles.sendCircle,
-              { backgroundColor: C_BRAND, borderColor: C_BRAND },
+              { backgroundColor: C_BRAND },
               pressed && styles.sendCirclePressed,
             ]}
             accessibilityRole="button"

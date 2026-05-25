@@ -4,7 +4,7 @@ type NotificationFilterContext = {
   companyId?: string | number | null | undefined;
 };
 
-type NotificationFilterDecision = {
+export type NotificationFilterDecision = {
   ignore: boolean;
   reason?: string;
 };
@@ -25,12 +25,42 @@ function asObject(value: unknown): Record<string, unknown> | null {
   return value as Record<string, unknown>;
 }
 
+function filterCompanyContext(
+  data: Record<string, unknown> | null,
+  context: NotificationFilterContext
+): NotificationFilterDecision {
+  if (!data) {
+    return { ignore: true, reason: "invalid_payload" };
+  }
+  const recipientRole = typeof data.recipient_role === "string" ? data.recipient_role : null;
+  if (recipientRole === "driver") {
+    return { ignore: true, reason: "recipient_role_mismatch" };
+  }
+  const payloadCompanyId = normalizeIdentifier(
+    data.company_id ?? data.companyId ?? asObject(data.company)?.id
+  );
+  const contextCompanyId = normalizeIdentifier(context.companyId);
+  if (payloadCompanyId && contextCompanyId && payloadCompanyId !== contextCompanyId) {
+    return { ignore: true, reason: "company_mismatch" };
+  }
+  return { ignore: false };
+}
+
 export function shouldIgnoreNotification(
   payload: unknown,
   context: NotificationFilterContext
 ): NotificationFilterDecision {
-  if (context.contextType !== "driver") {
-    return { ignore: false };
+  const contextType = context.contextType ?? null;
+  if (!contextType) {
+    return { ignore: true, reason: "no_active_context" };
+  }
+
+  if (contextType === "company") {
+    return filterCompanyContext(asObject(payload), context);
+  }
+
+  if (contextType !== "driver") {
+    return { ignore: true, reason: "recipient_role_mismatch" };
   }
 
   const data = asObject(payload);

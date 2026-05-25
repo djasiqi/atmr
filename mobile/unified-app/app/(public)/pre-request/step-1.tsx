@@ -21,6 +21,7 @@ import {
   savePublicPreRequestDraft,
 } from "../../../src/core/public/preRequestDraft";
 import { ADDRESS_INPUT_PLACEHOLDER_VISUAL } from "../../../src/features/public/addressInputPlaceholder";
+import { FONT_SIZE } from "../../../src/design/responsive/typographyTokens";
 
 const LANDING_BACKGROUND = require("../../../assets/images/landing-background.png");
 
@@ -734,7 +735,7 @@ const styles = StyleSheet.create({
   },
   stepPill: {
     alignSelf: "flex-start",
-    fontSize: 12,
+    fontSize: FONT_SIZE.px12,
     fontWeight: "700",
     letterSpacing: 0.4,
     textTransform: "uppercase",
@@ -748,13 +749,13 @@ const styles = StyleSheet.create({
   },
   title: {
     color: "#163A34",
-    fontSize: 28,
+    fontSize: FONT_SIZE.px28,
     lineHeight: 32,
     fontWeight: "700",
   },
   subtitle: {
     color: "#5F7369",
-    fontSize: 15,
+    fontSize: FONT_SIZE.px15,
     lineHeight: 22,
     marginTop: 10,
   },
@@ -771,14 +772,14 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   routeSummaryLabel: {
-    fontSize: 12,
+    fontSize: FONT_SIZE.px12,
     fontWeight: "700",
     color: "#5F7369",
     textTransform: "uppercase",
     letterSpacing: 0.4,
   },
   routeSummaryValue: {
-    fontSize: 16,
+    fontSize: FONT_SIZE.px16,
     fontWeight: "600",
     color: "#163A34",
     lineHeight: 22,
@@ -788,7 +789,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   editRouteLinkText: {
-    fontSize: 14,
+    fontSize: FONT_SIZE.px14,
     fontWeight: "700",
     color: "#0A8F7A",
   },
@@ -802,12 +803,12 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   immediateTitle: {
-    fontSize: 17,
+    fontSize: FONT_SIZE.px17,
     fontWeight: "700",
     color: "#163A34",
   },
   immediateSub: {
-    fontSize: 14,
+    fontSize: FONT_SIZE.px14,
     lineHeight: 20,
     color: "#5F7369",
   },
@@ -825,31 +826,31 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
   optionsToggleText: {
-    fontSize: 15,
+    fontSize: FONT_SIZE.px15,
     fontWeight: "600",
     color: "#163A34",
   },
   sectionHeading: {
     marginTop: 22,
-    fontSize: 17,
+    fontSize: FONT_SIZE.px17,
     fontWeight: "700",
     color: "#163A34",
   },
   sectionHint: {
     marginTop: 6,
-    fontSize: 14,
+    fontSize: FONT_SIZE.px14,
     lineHeight: 20,
     color: "#5F7369",
   },
   subSectionHeading: {
     marginTop: 18,
-    fontSize: 15,
+    fontSize: FONT_SIZE.px15,
     fontWeight: "700",
     color: "#163A34",
   },
   subSectionHint: {
     marginTop: 6,
-    fontSize: 13,
+    fontSize: FONT_SIZE.px13,
     lineHeight: 18,
     color: "#5F7369",
   },
@@ -870,7 +871,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   label: {
-    fontSize: 13,
+    fontSize: FONT_SIZE.px13,
     fontWeight: "600",
     color: "#163A34",
     marginBottom: 8,
@@ -884,7 +885,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: Platform.OS === "web" ? 12 : 10,
     color: "#163A34",
-    fontSize: 16,
+    fontSize: FONT_SIZE.px16,
   },
   fieldInputEmpty: {
     borderWidth: 2,
@@ -933,7 +934,7 @@ const styles = StyleSheet.create({
     opacity: 0.92,
   },
   segmentText: {
-    fontSize: 14,
+    fontSize: FONT_SIZE.px14,
     fontWeight: "600",
     color: "#5F7369",
   },
@@ -959,7 +960,7 @@ const styles = StyleSheet.create({
   },
   outlineButtonText: {
     color: "#0A8F7A",
-    fontSize: 16,
+    fontSize: FONT_SIZE.px16,
     fontWeight: "700",
   },
   outlineButtonTextDisabled: {
@@ -990,13 +991,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   statusBannerTitle: {
-    fontSize: 13,
+    fontSize: FONT_SIZE.px13,
     fontWeight: "700",
     color: "#163A34",
     marginBottom: 4,
   },
   statusBannerMessage: {
-    fontSize: 14,
+    fontSize: FONT_SIZE.px14,
     lineHeight: 20,
     color: "#5F7369",
   },
@@ -1004,7 +1005,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
     color: "#B42318",
     fontWeight: "600",
-    fontSize: 14,
+    fontSize: FONT_SIZE.px14,
   },
   primaryButton: {
     marginTop: 18,
@@ -1024,7 +1025,7 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     color: "#FFFFFF",
-    fontSize: 16,
+    fontSize: FONT_SIZE.px16,
     fontWeight: "700",
     letterSpacing: 0.2,
   },

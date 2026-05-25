@@ -1,0 +1,21 @@
+/** Tokens UI messagerie partagés (chauffeur + entreprise). */
+export const M = {
+  BRAND: "#0A8F7A",
+  BRAND_DARK: "#00796B",
+  BRAND_SOFT: "rgba(10,143,122,0.08)",
+  PAGE_BG: "#F5F7F6",
+  CARD: "#FFFFFF",
+  TEXT: "#111827",
+  TEXT_SEC: "#6B7280",
+  TEXT_MUTED: "#9CA3AF",
+  BORDER: "#E5E7EB",
+  SHELL_BORDER: "#e2e8f0",
+  DANGER: "#dc3545",
+  DANGER_SOFT: "rgba(220,53,69,0.1)",
+  SYNC_OK: "#22C55E",
+  SYNC_SLOW: "#F59E0B",
+  SYNC_OFF: "#94A3B8",
+  OFFLINE_CHIP_BG: "#FEF3C7",
+  OFFLINE_CHIP_TEXT: "#92400E",
+  OFFLINE_ICON: "#B45309",
+} as const;

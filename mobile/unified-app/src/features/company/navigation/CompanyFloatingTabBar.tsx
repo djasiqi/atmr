@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Modal, Platform, Pressable, StyleSheet, View } from "react-native";
+import { useMemo, useState } from "react";
+import { Platform, Pressable, StyleSheet, View } from "react-native";
 import {
   BaseFloatingBar,
   computeCompanyFloatingBottomPad,
@@ -11,14 +11,18 @@ import { Ionicons } from "@expo/vector-icons";
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { useRouter, type Href } from "expo-router";
 import { isFeatureEnabled } from "../../../core/featureFlags/registry";
+import { shouldShowCompanyDriverContextSwitch } from "../../../core/contextSwitchPolicy";
 import { useSession } from "../../../core/sessionProvider";
-import { useCompanyChatUnread } from "../hooks";
+import { useCompanyMessageHubUnreadBadge } from "../messages/hooks";
+import { RadialActionMenu, type RadialAction } from "../../../components/RadialActionMenu";
+import { FONT_SIZE } from "../../../design/responsive/typographyTokens";
 
 const C = {
-  border: "rgba(228, 231, 236, 0.9)",
-  text: "#2D3748",
-  textMuted: "#7A808A",
-  brand: "#0A8F7A",
+  border: "rgba(148, 163, 184, 0.22)",
+  text: "#0F172A",
+  textMuted: "#64748B",
+  brand: "#00796B",
+  brandDark: "#00796B",
 } as const;
 
 /** Web / mobile web : pas de contour rectangulaire au focus, tap ou « hover » sur Pressable. */
@@ -32,6 +36,23 @@ const PRESSABLE_WEB_SUPPRESS_SQUARE_HALO = Platform.select({
   } as const,
   default: undefined,
 });
+
+const CONTEXT_SWITCH_TIMEOUT_MS = 45_000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(message)), ms);
+    promise
+      .then((value) => {
+        clearTimeout(timer);
+        resolve(value);
+      })
+      .catch((error) => {
+        clearTimeout(timer);
+        reject(error);
+      });
+  });
+}
 
 const HIDDEN_SHEET_ROUTES: {
   name: "clients-facturation" | "settings";
@@ -72,14 +93,94 @@ export function CompanyFloatingTabBar({ state, navigation }: BottomTabBarProps) 
   const { usableWidth, bottomInset, horizontalPadding } = useAppViewport();
   const { isLargeText } = useAccessibilityScale();
   const router = useRouter();
+  const { activeContext, bootstrap, changeContext } = useSession();
   const canCreateRide = useCanCreateCompanyRide();
-  const [moreOpen, setMoreOpen] = useState(false);
-  const { unreadCount: chatUnread } = useCompanyChatUnread();
+  const [switchPending, setSwitchPending] = useState(false);
+  const [switchMessage, setSwitchMessage] = useState<string | null>(null);
+  const chatUnread = useCompanyMessageHubUnreadBadge();
   const current = useActiveRouteName(state);
   const maxBarWidth = Math.min(480, usableWidth - 2 * horizontalPadding);
   const focusedFromSheet = HIDDEN_SHEET_ROUTES.some((x) => x.name === current);
   const bottomPad = computeCompanyFloatingBottomPad(bottomInset);
   const totalBarAreaHeight = 64 + bottomInset;
+  const primaryDriverContext = useMemo(() => {
+    const contexts = bootstrap?.available_contexts ?? [];
+    return (
+      contexts.find(
+        (ctx) => ctx.context_type === "driver" && ctx.allow_mobile_context_switch === true
+      ) ?? null
+    );
+  }, [bootstrap?.available_contexts]);
+
+  const canSwitchToDriver = useMemo(
+    () =>
+      activeContext?.context_type === "company" &&
+      primaryDriverContext != null &&
+      shouldShowCompanyDriverContextSwitch(
+        activeContext,
+        primaryDriverContext,
+        bootstrap?.user?.role
+      ),
+    [activeContext, bootstrap?.user?.role, primaryDriverContext]
+  );
+
+  const radialActions = useMemo<RadialAction[]>(() => {
+    const items: RadialAction[] = [
+      {
+        key: "clients-facturation",
+        label: "Clients & facturation",
+        icon: <Ionicons name="reader-outline" size={20} color="#FFFFFF" />,
+        color: "#00796B",
+        onPress: () => {
+          void router.push("/(app)/(company)/clients-facturation" as Href);
+        },
+      },
+      {
+        key: "settings",
+        label: "Paramètres",
+        icon: <Ionicons name="settings-outline" size={20} color="#FFFFFF" />,
+        color: "#0E7490",
+        onPress: () => {
+          void router.push("/(app)/(company)/settings" as Href);
+        },
+      },
+    ];
+    if (canSwitchToDriver && primaryDriverContext) {
+      items.push({
+        key: "driver-context",
+        label: switchPending ? "Bascule..." : "Contexte chauffeur",
+        icon: <Ionicons name="swap-horizontal-outline" size={20} color="#FFFFFF" />,
+        color: "#1D4D8F",
+        disabled: switchPending,
+        onPress: () => {
+          void (async () => {
+            if (switchPending) return;
+            setSwitchPending(true);
+            setSwitchMessage("Bascule vers l'espace chauffeur…");
+            const switchWork = withTimeout(
+              changeContext(primaryDriverContext.context_id),
+              CONTEXT_SWITCH_TIMEOUT_MS,
+              "La bascule a pris trop de temps. Vérifiez votre connexion et réessayez."
+            );
+            router.replace("/(app)/(driver)" as Href);
+            try {
+              await switchWork;
+              setSwitchMessage(null);
+            } catch (error) {
+              setSwitchMessage(
+                error instanceof Error
+                  ? error.message
+                  : "Impossible de basculer vers le contexte chauffeur."
+              );
+            } finally {
+              setSwitchPending(false);
+            }
+          })();
+        },
+      });
+    }
+    return items;
+  }, [canSwitchToDriver, changeContext, primaryDriverContext, router, switchPending]);
 
   return (
     <>
@@ -98,7 +199,6 @@ export function CompanyFloatingTabBar({ state, navigation }: BottomTabBarProps) 
             icon="speedometer-outline"
             active={current === "dashboard" && !focusedFromSheet}
             onPress={() => {
-              setMoreOpen(false);
               navigation.navigate("dashboard" as never);
             }}
           />
@@ -107,14 +207,12 @@ export function CompanyFloatingTabBar({ state, navigation }: BottomTabBarProps) 
             icon="car-outline"
             active={current === "rides" && !focusedFromSheet}
             onPress={() => {
-              setMoreOpen(false);
               navigation.navigate("rides" as never);
             }}
           />
-          <View style={styles.fabSlot}>
+          <View style={styles.barSlot}>
             <Pressable
               onPress={() => {
-                setMoreOpen(false);
                 if (canCreateRide) {
                   void router.push({ pathname: "/(app)/(company)/rides", params: { create: "1" } } as Href);
                 }
@@ -143,60 +241,35 @@ export function CompanyFloatingTabBar({ state, navigation }: BottomTabBarProps) 
             active={current === "chat" && !focusedFromSheet}
             badgeCount={chatUnread}
             onPress={() => {
-              setMoreOpen(false);
-              navigation.navigate("chat" as never);
+              navigation.navigate("messages" as never);
             }}
           />
-          <BarTabButton
-            label="Autres"
-            icon="grid-outline"
-            active={moreOpen || focusedFromSheet}
-            onPress={() => setMoreOpen((v) => !v)}
-          />
-    </BaseFloatingBar>
-
-    <Modal visible={moreOpen} animationType="slide" transparent onRequestClose={() => setMoreOpen(false)}>
-        <View style={styles.modalBackdrop}>
-          <Pressable
-            onPress={() => setMoreOpen(false)}
-            style={{ position: "absolute" as const, top: 0, left: 0, right: 0, bottom: 0 }}
-            accessibilityLabel="Fermer le menu"
-          />
-          <View style={[styles.sheetPanel, { paddingBottom: bottomInset + 20 }]}>
-            <AppText variant="sectionTitle" style={styles.sheetTitle}>
-              Autres écrans
-            </AppText>
-            {HIDDEN_SHEET_ROUTES.map((row) => {
-              const active = current === row.name;
-              return (
-                <Pressable
-                  key={row.name}
-                  onPress={() => {
-                    setMoreOpen(false);
-                    void router.push(row.href);
-                  }}
-                  style={({ pressed }) => [
-                    styles.sheetRow,
-                    active ? styles.sheetRowActive : styles.sheetRowIdle,
-                    pressed && styles.sheetRowPressed,
-                  ]}
-                >
-                  <Ionicons name={row.icon} size={22} color={active ? C.brand : C.textMuted} />
-                  <AppText
-                    variant="body"
-                    maxFontSizeMultiplier={1.35}
-                    style={[styles.sheetRowLabel, { color: active ? C.brand : C.text }]}
-                  >
-                    {row.label}
-                  </AppText>
-                  <View style={{ flex: 1 }} />
-                  <Ionicons name="chevron-forward" size={18} color={C.textMuted} />
-                </Pressable>
-              );
-            })}
+          <View style={styles.barSlot}>
+            <RadialActionMenu
+              inline
+              actions={radialActions}
+              triggerVariant="tab"
+              actionsLayout="vertical"
+              mainIcon={<Ionicons name="grid-outline" size={22} color={focusedFromSheet ? C.brand : C.textMuted} />}
+              openIcon={<Ionicons name="close-outline" size={22} color={C.brand} />}
+              position="bottomRight"
+              radius={68}
+              verticalSpacing={40}
+              verticalExtraSpacing={14}
+              actionsOffsetX={0}
+              actionsOffsetY={-20}
+              showLabels={false}
+              accessibilityLabel="Autres écrans"
+            />
           </View>
+    </BaseFloatingBar>
+      {switchMessage ? (
+        <View style={styles.switchMessageFloating} accessibilityLiveRegion="polite">
+          <AppText variant="caption" style={styles.contextSwitchMessage}>
+            {switchMessage}
+          </AppText>
         </View>
-    </Modal>
+      ) : null}
     </>
   );
 }
@@ -220,7 +293,7 @@ function BarTabButton({
       ? `${label}, ${badgeCount} non lu${badgeCount > 1 ? "s" : ""}`
       : label;
   return (
-    <View style={styles.tabHit}>
+    <View style={styles.barSlot}>
       <Pressable
         onPress={onPress}
         accessibilityLabel={a11y}
@@ -259,8 +332,8 @@ function BarTabButton({
 }
 
 const styles = StyleSheet.create({
-  /** Répartit l’espace entre onglets ; la zone cliquable est la pilule (`tabPressable`), pas toute la colonne. */
-  tabHit: {
+  /** Cinq colonnes égales (Dashboard, Courses, FAB, Chat, menu). */
+  barSlot: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
@@ -269,20 +342,19 @@ const styles = StyleSheet.create({
   tabHitPressed: {
     opacity: Platform.OS === "ios" ? 0.88 : 1,
   },
-  /** Hit target ≈ 44×44, forme pilule — ripple / focus limités à cette forme. */
+  /** Hit target 44×44, forme pilule — ripple / focus limités à cette forme. */
   tabPressable: {
-    paddingHorizontal: 13,
-    paddingVertical: 9,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     borderRadius: 999,
     alignItems: "center",
     justifyContent: "center",
-    minWidth: 44,
-    minHeight: 44,
+    width: 44,
+    height: 44,
     overflow: "hidden",
-    alignSelf: "center",
   },
   tabIconShellActive: {
-    backgroundColor: "rgba(10, 143, 122, 0.1)",
+    backgroundColor: "rgba(0, 121, 107, 0.14)",
   },
   iconBadgeWrap: {
     position: "relative",
@@ -299,7 +371,7 @@ const styles = StyleSheet.create({
     minHeight: 16,
     paddingHorizontal: 4,
     borderRadius: 8,
-    backgroundColor: "rgba(10, 143, 122, 0.2)",
+    backgroundColor: "rgba(0, 121, 107, 0.2)",
     borderWidth: 1,
     borderColor: C.brand,
     alignItems: "center",
@@ -308,36 +380,32 @@ const styles = StyleSheet.create({
   badgeText: {
     fontWeight: "800",
     color: C.brand,
-    fontSize: 10,
+    fontSize: FONT_SIZE.px10,
     lineHeight: 12,
-  },
-  fabSlot: {
-    alignItems: "center",
-    justifyContent: "center",
-    width: 52,
   },
   fabOuter: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: C.brand,
+    backgroundColor: C.brandDark,
     alignItems: "center",
     justifyContent: "center",
+    alignSelf: "center",
     ...Platform.select({
       web: {
-        boxShadow: "0 1px 4px rgba(10, 58, 52, 0.2)",
+        boxShadow: "0 6px 18px rgba(0, 121, 107, 0.35)",
       } as const,
       default: {
-        elevation: 2,
-        shadowColor: "#163A34",
-        shadowOpacity: 0.2,
-        shadowOffset: { width: 0, height: 1 },
-        shadowRadius: 2,
+        elevation: 8,
+        shadowColor: "#00796B",
+        shadowOpacity: 0.35,
+        shadowOffset: { width: 0, height: 4 },
+        shadowRadius: 10,
       },
     }),
   },
   fabOuterDisabled: {
-    backgroundColor: "rgba(10, 143, 122, 0.38)",
+    backgroundColor: "rgba(0, 121, 107, 0.38)",
     ...Platform.select({
       web: { boxShadow: "none" } as const,
       default: { elevation: 0, shadowOpacity: 0 },
@@ -395,7 +463,7 @@ const styles = StyleSheet.create({
     borderColor: "rgba(228, 231, 236, 0.85)",
   },
   sheetRowActive: {
-    backgroundColor: "rgba(10, 143, 122, 0.08)",
+    backgroundColor: "rgba(0, 121, 107, 0.08)",
     borderColor: C.brand,
   },
   sheetRowPressed: {
@@ -403,5 +471,54 @@ const styles = StyleSheet.create({
   },
   sheetRowLabel: {
     fontWeight: "600",
+  },
+  contextSwitchBtn: {
+    minHeight: 36,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    backgroundColor: C.brand,
+    borderColor: C.brand,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 8,
+  },
+  contextSwitchBtnDisabled: {
+    opacity: 0.45,
+  },
+  contextSwitchBtnPressed: {
+    opacity: 0.9,
+  },
+  contextSwitchBtnText: {
+    color: "#FFFFFF",
+    fontWeight: "600",
+    fontSize: FONT_SIZE.px13,
+    lineHeight: 16,
+  },
+  contextSwitchMessage: {
+    color: "#B42318",
+    lineHeight: 16,
+  },
+  switchMessageFloating: {
+    position: "absolute",
+    right: 16,
+    bottom: 140,
+    maxWidth: 220,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(180, 35, 24, 0.36)",
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    ...Platform.select({
+      web: { boxShadow: "0 2px 8px rgba(15, 23, 42, 0.14)" } as const,
+      default: {
+        elevation: 2,
+        shadowColor: "#0f172a",
+        shadowOpacity: 0.1,
+        shadowOffset: { width: 0, height: 1 },
+        shadowRadius: 4,
+      },
+    }),
   },
 });

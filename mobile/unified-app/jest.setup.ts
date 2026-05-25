@@ -1,4 +1,18 @@
 import { jest } from "@jest/globals";
+import { Image } from "react-native";
+
+const resolveAssetSource = Image.resolveAssetSource.bind(Image);
+Image.resolveAssetSource = (source) => {
+  const resolved = resolveAssetSource(source);
+  if (resolved?.uri?.trim()) return resolved;
+  const id =
+    typeof source === "number"
+      ? String(source)
+      : typeof source === "string"
+        ? source
+        : "asset";
+  return { uri: `https://jest.local/${id}.svg`, width: 56, height: 73, scale: 1 };
+};
 
 // `expo-constants` : évite l’accès natif (p.ex. EXDevLauncher) lors d’import indirects.
 jest.mock("expo-constants", () => ({

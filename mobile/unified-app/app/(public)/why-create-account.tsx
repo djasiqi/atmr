@@ -2,6 +2,7 @@ import { ImageBackground, Platform, Pressable, StyleSheet, Text, View } from "re
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen, useAppViewport } from "../../src/design/responsive";
+import { FONT_SIZE } from "../../src/design/responsive/typographyTokens";
 
 const LANDING_BACKGROUND = require("../../assets/images/landing-background.png");
 
@@ -130,7 +131,7 @@ const styles = StyleSheet.create({
   },
   kicker: {
     color: "#0A8F7A",
-    fontSize: 13,
+    fontSize: FONT_SIZE.px13,
     fontWeight: "500",
     letterSpacing: 0.5,
     textTransform: "uppercase",
@@ -138,14 +139,14 @@ const styles = StyleSheet.create({
   },
   title: {
     color: "#163A34",
-    fontSize: 29,
+    fontSize: FONT_SIZE.px29,
     lineHeight: 34,
     fontWeight: "700",
   },
   subtitle: {
     marginTop: 10,
     color: "#5F7369",
-    fontSize: 15,
+    fontSize: FONT_SIZE.px15,
     lineHeight: 21,
   },
   benefitsBlock: {
@@ -168,7 +169,7 @@ const styles = StyleSheet.create({
   benefitText: {
     flex: 1,
     color: "#1F2E2A",
-    fontSize: 14.5,
+    fontSize: FONT_SIZE.px14_5,
     lineHeight: 20,
     fontWeight: "500",
   },
@@ -186,7 +187,7 @@ const styles = StyleSheet.create({
   primaryCtaText: {
     color: "#FFFFFF",
     fontWeight: "700",
-    fontSize: 16,
+    fontSize: FONT_SIZE.px16,
     letterSpacing: 0.2,
   },
   secondaryCta: {
@@ -205,6 +206,6 @@ const styles = StyleSheet.create({
   secondaryCtaText: {
     color: "#0A8F7A",
     fontWeight: "700",
-    fontSize: 15.5,
+    fontSize: FONT_SIZE.px15_5,
   },
 });

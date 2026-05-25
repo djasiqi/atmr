@@ -87,6 +87,25 @@ describe('useAuthToken', () => {
     expect(result.current.isCompany).toBe(false);
   });
 
+  it("normalise un role institution étendu vers 'institution'", () => {
+    const mockToken = 'fake.jwt.token';
+    const mockDecoded = {
+      sub: 'inst-123',
+      role: 'institution_manager',
+      exp: Date.now() / 1000 + 3600,
+    };
+
+    localStorage.setItem('authToken', mockToken);
+    jwtDecode.mockReturnValue(mockDecoded);
+
+    const { result } = renderHook(() => useAuthToken());
+
+    expect(result.current.role).toBe('institution');
+    expect(result.current.isCompany).toBe(false);
+    expect(result.current.isDriver).toBe(false);
+    expect(result.current.isClient).toBe(false);
+  });
+
   it('devrait retourner null si le token est expiré', () => {
     const mockToken = 'expired.jwt.token';
     const mockDecoded = {

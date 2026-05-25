@@ -1,6 +1,3 @@
-import ExcelJS from 'exceljs';
-import { saveAs } from 'file-saver';
-
 const STATUS_LABELS = {
   pending: 'En attente',
   accepted: 'Acceptee',
@@ -57,6 +54,11 @@ function formatTimeExcel(dateStr) {
  * @param {Object} options.stats - Stats KPI {total, inProgress, completed, revenue}
  */
 export async function exportReservationsExcel(reservations, options = {}) {
+  const [{ default: ExcelJS }, { saveAs }] = await Promise.all([
+    import('exceljs'),
+    import('file-saver'),
+  ]);
+
   const {
     companyName = 'Entreprise',
     periodLabel = '',

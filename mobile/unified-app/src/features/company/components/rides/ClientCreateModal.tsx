@@ -13,7 +13,7 @@ type ClientCreateModalProps = {
 };
 
 const CTA_STYLE = { minHeight: 54, borderRadius: 14 } as const;
-const SECONDARY_CTA_BORDER = { borderColor: "rgba(10, 143, 122, 0.45)" } as const;
+const SECONDARY_CTA_BORDER = { borderColor: "rgba(0, 121, 107, 0.45)" } as const;
 const ROW_RADIUS = 14;
 const UI_BORDER_SOFT = "rgba(145, 165, 157, 0.38)";
 

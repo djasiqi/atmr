@@ -1,14 +1,14 @@
 import { Platform, type TextStyle, type ViewStyle, StyleSheet } from "react-native";
 import {
-  borderDefault,
-  borderStrong,
   brandPrimary,
   brandSurfaceSoft,
   brandText,
   brandTextMuted,
   surfaceCard,
 } from "../../../design/responsive/colors";
+import { createShadow } from "../../../styles/shadowStyles";
 import { CHAT_BUBBLE_OWN, CHAT_BUBBLE_OWN_STRONG } from "../chatPalette";
+import { FONT_SIZE } from "../../../design/responsive/typographyTokens";
 
 const MAX_W_FORM = 512;
 const ACTION_SIZE = 50;
@@ -16,9 +16,22 @@ const MENU_FLOAT_TOP = 120;
 /** Bouton envoi / micro : 44pt (guidelines accessibilité, zone de touche). */
 const SEND_DIAM = 44;
 
-/** Champ saisie : coquille claire alignée `AppInput` / tokens shell. */
-const C_FIELD_BG = surfaceCard;
-const C_FIELD_BORDER = borderDefault;
+/** Ombre très légère — alignée cartes dashboard / courses chauffeur. */
+const composerSoftShadow = createShadow({
+  shadowColor: "#0F172A",
+  shadowOffset: { width: 0, height: 1 },
+  shadowOpacity: 0.035,
+  shadowRadius: 14,
+  elevation: 1,
+});
+
+const composerFocusShadow = createShadow({
+  shadowColor: "#0F172A",
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.05,
+  shadowRadius: 16,
+  elevation: 2,
+});
 export const C_FIELD_TEXT = brandText;
 export const C_FIELD_PLACEHOLDER = brandTextMuted;
 /** Icône pièce jointe — ardoise pour contraste sur fond blanc. */
@@ -30,16 +43,7 @@ const C_BRAND_STRONG = CHAT_BUBBLE_OWN_STRONG;
 /** Micro désactivé (cercle gris clair) — contraste renforcé. */
 export const C_ICON_DISABLED = "#64748B";
 
-const cardShadow =
-  Platform.OS === "web"
-    ? { boxShadow: "0 1px 2px 0 rgba(0,0,0,0.08)" as const }
-    : {
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
-        elevation: 3,
-      };
+const C_FIELD_BG = surfaceCard;
 
 /** Hors StyleSheet : évite que les props web-only polluent l’inférence des autres styles. */
 export const textInputWebFix = { outlineStyle: "none" as const, outlineWidth: 0 } as unknown as TextStyle;
@@ -58,7 +62,7 @@ export function webFieldShellFocusOutline(focused: boolean): ViewStyle {
   };
 }
 
-export { C_MUTED, cardShadow, MENU_FLOAT_TOP };
+export { C_MUTED, composerSoftShadow as cardShadow, MENU_FLOAT_TOP };
 
 export const styles = StyleSheet.create({
   root: {
@@ -81,31 +85,17 @@ export const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: C_FIELD_BG,
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: C_FIELD_BORDER,
-    paddingLeft: 14,
-    paddingRight: 4,
+    borderRadius: 999,
+    borderWidth: 0,
+    paddingLeft: 16,
+    paddingRight: 6,
     overflow: "visible",
     zIndex: 2,
-    ...Platform.select({
-      web: {
-        boxShadow: "0 1px 2px rgba(15, 23, 42, 0.05), 0 4px 14px rgba(15, 23, 42, 0.05)",
-      },
-      ios: {
-        shadowColor: "#0f172a",
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.07,
-        shadowRadius: 6,
-      },
-      default: {
-        elevation: 2,
-      },
-    }),
+    ...composerSoftShadow,
   },
   fieldShellFocused: {
     backgroundColor: brandSurfaceSoft,
-    borderColor: borderStrong,
+    ...composerFocusShadow,
   },
   dialMenu: {
     position: "absolute",
@@ -123,7 +113,7 @@ export const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingLeft: 0,
     paddingRight: 4,
-    fontSize: 15,
+    fontSize: FONT_SIZE.px15,
     lineHeight: 22,
     color: C_FIELD_TEXT,
   },
@@ -147,13 +137,12 @@ export const styles = StyleSheet.create({
     minHeight: ACTION_SIZE,
     paddingVertical: 4,
     paddingHorizontal: 2,
-    borderRadius: 8,
+    borderRadius: 12,
     backgroundColor: "#fff",
-    borderWidth: 1,
-    borderColor: C_FIELD_BORDER,
+    borderWidth: 0,
     alignItems: "center",
     justifyContent: "center",
-    ...cardShadow,
+    ...composerSoftShadow,
   },
   /** Typo via `AppText` ; espacement chip uniquement. */
   actionLabel: {
@@ -169,27 +158,14 @@ export const styles = StyleSheet.create({
     borderRadius: SEND_DIAM / 2,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1,
-    ...Platform.select({
-      web: {
-        boxShadow: "0 1px 2px 0 rgba(0,0,0,0.08)" as const,
-      },
-      default: {
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.12,
-        shadowRadius: 2,
-        elevation: 3,
-      },
-    }),
+    borderWidth: 0,
+    ...composerSoftShadow,
   },
   sendCirclePressed: {
     backgroundColor: C_BRAND_STRONG,
-    borderColor: C_BRAND_STRONG,
   },
   sendCircleDisabled: {
     backgroundColor: "#f1f5f9",
-    borderColor: "rgba(148, 163, 184, 0.55)",
     opacity: 1,
     pointerEvents: "none",
     ...Platform.select({

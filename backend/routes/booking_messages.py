@@ -34,6 +34,32 @@ booking_messages_ns = Namespace(
     description="Messages booking (institution <-> entreprise, client <-> entreprise)",
 )
 
+TERMINAL_BOOKING_STATUSES = {"COMPLETED", "RETURN_COMPLETED", "CANCELED", "CANCELLED"}
+
+
+def _normalize_booking_status(raw_status: object) -> str:
+    """Normalise un statut booking en chaîne uppercase."""
+    if raw_status is None:
+        return ""
+    val = getattr(raw_status, "value", raw_status)
+    return str(val).upper()
+
+
+def _is_conversation_closed(booking: Booking) -> bool:
+    """Détermine si la conversation booking doit être clôturée.
+
+    Règle métier A/R:
+    - thread unifié sur l'aller (booking parent)
+    - tant que le retour existe ET n'est pas terminal, la conversation reste ouverte
+    """
+    return_trip = getattr(booking, "return_trip", None)
+    if return_trip is not None:
+        return_status = _normalize_booking_status(getattr(return_trip, "status", None))
+        return return_status in TERMINAL_BOOKING_STATUSES
+
+    status = _normalize_booking_status(getattr(booking, "status", None))
+    return status in TERMINAL_BOOKING_STATUSES
+
 
 # ---------------------------------------------------------------------------
 # Auth helper
@@ -234,9 +260,10 @@ class BookingMessageList(Resource):
                 peer_company_id,
             ) = _get_booking_with_auth(booking_id)
 
-            # Bloquer l'envoi si le booking est terminé ou annulé
-            closed_statuses = {"COMPLETED", "RETURN_COMPLETED", "CANCELED", "CANCELLED"}
-            if booking.status and booking.status.upper() in closed_statuses:
+            # Bloquer l'envoi uniquement si la réservation globale est terminée.
+            # En A/R, on ne clôture pas la conversation après l'aller tant que le retour
+            # n'est pas lui-même terminal.
+            if _is_conversation_closed(booking):
                 return {"error": "Conversation cloturee, le transport est termine"}, 403
 
             body = flask_request.get_json(silent=True) or {}

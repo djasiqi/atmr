@@ -20,6 +20,13 @@ class _BookingLike(Protocol):
     doctor_name: str | None
     hospital_service: str | None
     notes_medical: str | None
+    pickup_access_notes: str | None
+    dropoff_access_notes: str | None
+    pickup_floor: str | None
+    pickup_door_code: str | None
+    dropoff_floor: str | None
+    dropoff_door_code: str | None
+    is_return: bool | None
     wheelchair_client_has: bool | None
     wheelchair_need: bool | None
 
@@ -98,6 +105,13 @@ class GetDriverBookingDetailsUseCase:
                 "doctor_name": booking.doctor_name,
                 "hospital_service": booking.hospital_service,
                 "notes_medical": booking.notes_medical,
+                "pickup_access_notes": getattr(booking, "pickup_access_notes", None),
+                "dropoff_access_notes": getattr(booking, "dropoff_access_notes", None),
+                "pickup_floor": getattr(booking, "pickup_floor", None),
+                "pickup_door_code": getattr(booking, "pickup_door_code", None),
+                "dropoff_floor": getattr(booking, "dropoff_floor", None),
+                "dropoff_door_code": getattr(booking, "dropoff_door_code", None),
+                "is_return": getattr(booking, "is_return", None),
                 "wheelchair_client_has": booking.wheelchair_client_has,
                 "wheelchair_need": booking.wheelchair_need,
             }

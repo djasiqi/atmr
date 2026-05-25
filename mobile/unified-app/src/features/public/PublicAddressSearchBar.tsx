@@ -7,8 +7,8 @@ export type AddressSearchRegion = "CH" | "FR";
 
 const UI_BORDER = "#91A59D";
 const UI_DARK = "#163A34";
-/** Aligné sur `forgot-password` (`fieldInput` / `#0A8F7A`). */
-const BRAND = "#0A8F7A";
+/** Aligné sur `forgot-password` (`fieldInput` / `#00796B`). */
+const BRAND = "#00796B";
 
 /**
  * Hauteur alignée sur le champ email de `forgot-password` (`minHeight: 50`).
@@ -63,7 +63,7 @@ export const PublicAddressSearchBar = forwardRef<TextInput, PublicAddressSearchB
             spellCheck={false}
             textContentType="none"
             importantForAutofill="no"
-            selectionColor="rgba(10, 143, 122, 0.35)"
+            selectionColor="rgba(0, 121, 107, 0.35)"
             underlineColorAndroid="transparent"
             style={[
               styles.input,
@@ -125,7 +125,7 @@ const styles = StyleSheet.create({
     borderColor: BRAND,
     backgroundColor: "#FFFFFF",
     ...Platform.select({
-      web: { boxShadow: "0 2px 6px rgba(10, 143, 122, 0.12)" },
+      web: { boxShadow: "0 2px 6px rgba(0, 121, 107, 0.12)" },
       default: {
         shadowColor: BRAND,
         shadowOpacity: 0.12,

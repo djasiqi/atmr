@@ -11,6 +11,7 @@ import {
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { apiClient } from "../../src/core/api/client";
 import { ResponsiveContainer, Screen, useAppViewport } from "../../src/design/responsive";
+import { FONT_SIZE } from "../../src/design/responsive/typographyTokens";
 
 type ResetApiError = {
   response?: {
@@ -157,7 +158,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
   },
   title: {
-    fontSize: 22,
+    fontSize: FONT_SIZE.px22,
     fontWeight: "700",
     color: "#163A34",
   },
@@ -171,7 +172,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    fontSize: 16,
+    fontSize: FONT_SIZE.px16,
     color: "#163A34",
     minHeight: 50,
   },
@@ -204,7 +205,7 @@ const styles = StyleSheet.create({
   primaryBtnText: {
     color: "#FFFFFF",
     fontWeight: "700",
-    fontSize: 16,
+    fontSize: FONT_SIZE.px16,
   },
   link: {
     color: "#0A8F7A",

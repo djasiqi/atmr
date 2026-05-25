@@ -37,9 +37,9 @@ export function BootSplashGate({ children }: Props) {
                 source={g.source}
                 autoPlay
                 loop={false}
-                style={g.styles.lottie}
-                resizeMode="contain"
-                renderMode={Platform.OS === "android" ? "HARDWARE" : "AUTOMATIC"}
+                style={g.lottieStyle}
+                resizeMode="cover"
+                renderMode={Platform.OS === "android" ? "SOFTWARE" : "AUTOMATIC"}
                 onAnimationFinish={g.onLottieFinish}
               />
             </Animated.View>

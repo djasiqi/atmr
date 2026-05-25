@@ -10,6 +10,7 @@ import * as Linking from "expo-linking";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { AppText, Screen, useAppViewport } from "../../src/design/responsive";
+import { FONT_SIZE } from "../../src/design/responsive/typographyTokens";
 
 const LANDING_BACKGROUND = require("../../assets/images/landing-background.png");
 
@@ -160,7 +161,7 @@ const styles = StyleSheet.create({
   },
   kicker: {
     color: "#0A8F7A",
-    fontSize: 13,
+    fontSize: FONT_SIZE.px13,
     fontWeight: "500",
     letterSpacing: 0.5,
     textTransform: "uppercase",
@@ -168,12 +169,12 @@ const styles = StyleSheet.create({
   },
   title: {
     color: "#163A34",
-    fontSize: 28,
+    fontSize: FONT_SIZE.px28,
     lineHeight: 32,
     fontWeight: "700",
   },
   intro: {
-    fontSize: 15,
+    fontSize: FONT_SIZE.px15,
     lineHeight: 22,
     color: "#5F7369",
     marginTop: 10,
@@ -183,12 +184,12 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   sectionTitle: {
-    fontSize: 15,
+    fontSize: FONT_SIZE.px15,
     fontWeight: "700",
     color: "#163A34",
   },
   body: {
-    fontSize: 15,
+    fontSize: FONT_SIZE.px15,
     lineHeight: 22,
     color: "#5F7369",
   },
@@ -209,7 +210,7 @@ const styles = StyleSheet.create({
   },
   contactText: {
     flex: 1,
-    fontSize: 15,
+    fontSize: FONT_SIZE.px15,
     lineHeight: 20,
     color: "#163A34",
     fontWeight: "500",
@@ -252,7 +253,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.15,
   },
   footnote: {
-    fontSize: 13,
+    fontSize: FONT_SIZE.px13,
     lineHeight: 19,
     color: "#6F857E",
     marginTop: 18,

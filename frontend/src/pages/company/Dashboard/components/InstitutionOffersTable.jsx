@@ -20,6 +20,19 @@ const formatDateTime = (isoString) => {
 /**
  * Convertit une date ISO en valeur pour input datetime-local (YYYY-MM-DDTHH:MM)
  */
+/** Fallback client si can_respond absent ou incohérent avec expires_at. */
+const canRespondToOffer = (offer) => {
+  if (typeof offer?.can_respond === 'boolean') {
+    if (!offer.can_respond) return false;
+  } else if (offer?.status && offer.status !== 'PENDING') {
+    return false;
+  }
+  if (offer?.expires_at) {
+    return new Date(offer.expires_at) > new Date();
+  }
+  return offer?.can_respond !== false;
+};
+
 const toDatetimeLocal = (isoString) => {
   if (!isoString) return '';
   const d = new Date(isoString);
@@ -40,9 +53,10 @@ const ProposeTimeModal = ({ offer, onConfirm, onClose }) => {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!proposedTime) return;
-    // Envoyer l'heure locale telle quelle (pas de conversion UTC)
-    // datetime-local donne "2026-02-12T08:15" → on envoie tel quel
-    onConfirm(offer.id, proposedTime);
+    // datetime-local → interprétation locale navigateur → ISO UTC pour le backend
+    const dt = new Date(proposedTime);
+    if (Number.isNaN(dt.getTime())) return;
+    onConfirm(offer.id, dt.toISOString());
   };
 
   return (
@@ -185,6 +199,9 @@ const InstitutionOffersTable = ({ offers = [], loading, onAccept, onReject }) =>
           <tbody>
             {offers.map((offer) => {
               const req = offer.transport_request || {};
+              const canRespond = canRespondToOffer(offer);
+              const isExpired =
+                offer.expires_at && new Date(offer.expires_at) <= new Date();
               const { date, time } = formatDateTime(req.scheduled_time);
               const mobility = req.mobility;
               const mobilityTags = [];
@@ -267,7 +284,7 @@ const InstitutionOffersTable = ({ offers = [], loading, onAccept, onReject }) =>
                   </td>
                   <td>
                     <span className={`${styles.statusBadge} ${styles.pending}`}>
-                      {offer.can_respond ? 'En attente' : 'Expiré'}
+                      {canRespond ? 'En attente' : isExpired ? 'Expiré' : 'Indisponible'}
                     </span>
                     {offer.expires_at && (
                       <div
@@ -283,7 +300,7 @@ const InstitutionOffersTable = ({ offers = [], loading, onAccept, onReject }) =>
                     )}
                   </td>
                   <td className={styles.actionsCell}>
-                    {offer.can_respond ? (
+                    {canRespond ? (
                       <div style={{ display: 'flex', gap: '2px', alignItems: 'center' }}>
                         {/* Accepter (avec l'horaire demandé) */}
                         <button
@@ -324,7 +341,9 @@ const InstitutionOffersTable = ({ offers = [], loading, onAccept, onReject }) =>
                       </div>
                     ) : (
                       <span style={{ color: 'var(--text-tertiary)', fontSize: '12px' }}>
-                        Aucune action
+                        {isExpired
+                          ? 'Offre expirée, vous ne pouvez plus répondre.'
+                          : 'Aucune action'}
                       </span>
                     )}
                   </td>

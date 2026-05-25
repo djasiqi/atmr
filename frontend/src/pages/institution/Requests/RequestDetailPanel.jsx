@@ -10,15 +10,26 @@ import {
   FaTimes, FaEdit, FaPaperPlane,
   FaTruck, FaRoute, FaFileInvoiceDollar,
   FaHistory, FaWheelchair, FaInfoCircle, FaNotesMedical,
+  FaPhoneAlt, FaEnvelope,
 } from 'react-icons/fa';
 import { HiOutlineX } from 'react-icons/hi';
 import {
   useInstitutionRequest, useInstitutionMe,
   useSendRequest, useCancelRequest,
-  useUpdateRequestBilling, useUpdateBookingBilling, institutionQueryKeys,
+  useUpdateRequestBilling, useUpdateBookingBilling,
+  usePatchInstitutionBooking, useCancelInstitutionBooking,
+  institutionQueryKeys,
 } from '../../../hooks/useInstitutionData';
 import { useQueryClient } from '@tanstack/react-query';
-import { canManageRequests, canEditBilling } from '../../../utils/institutionPermissions';
+import {
+  canManageRequests,
+  canEditBilling,
+  canViewFinancialAmounts,
+  canViewBillingSection,
+} from '../../../utils/institutionPermissions';
+import InstitutionOperationalEdit from './InstitutionOperationalEdit';
+import InstitutionBookingHistory from './InstitutionBookingHistory';
+import InstitutionRequestEdit from './InstitutionRequestEdit';
 import { getAuthEnv } from '../../../utils/webAuthSession';
 import { toast } from 'sonner';
 import { getInstitutionSocket } from '../../../services/institutionSocket';
@@ -33,6 +44,7 @@ const BOOKING_STATUS_MAP = {
   ASSIGNED:         { label: 'Chauffeur assigné',    css: 'statusAssigned' },
   EN_ROUTE:         { label: 'En route',             css: 'statusEnRoute' },
   IN_PROGRESS:      { label: 'En cours',             css: 'statusInProgress' },
+  OUTBOUND_COMPLETED: { label: 'Retour en cours',    css: 'statusInProgress' },
   COMPLETED:        { label: 'Terminé',              css: 'statusCompleted' },
   RETURN_COMPLETED: { label: 'Aller-retour terminé', css: 'statusReturnCompleted' },
   CANCELED:         { label: 'Annulé',               css: 'statusCancelled' },
@@ -72,10 +84,56 @@ const fmtShort = (dateStr) => {
   });
 };
 
+const resolveBookingStatusKey = (bookingSummary) => {
+  if (!bookingSummary) return '';
+  const raw = String(bookingSummary.status || '').toUpperCase();
+  const normalized = raw === 'CANCELLED' ? 'CANCELED' : raw;
+  const returnRaw = String(bookingSummary.return_booking?.status || '').toUpperCase();
+  const returnStatus = returnRaw === 'CANCELLED' ? 'CANCELED' : returnRaw;
+  const overall = String(bookingSummary.overall_status || '').toLowerCase();
+
+  const hasReturn = Boolean(bookingSummary.return_booking);
+  const returnCompleted = ['COMPLETED', 'RETURN_COMPLETED'].includes(returnStatus);
+  const returnCancelled = returnStatus === 'CANCELED';
+  const outboundCompleted = ['COMPLETED', 'RETURN_COMPLETED'].includes(normalized);
+
+  if (hasReturn && overall) {
+    if (overall === 'completed') return 'RETURN_COMPLETED';
+    if (overall === 'cancelled') return 'CANCELED';
+    if (overall === 'outbound_completed') return 'OUTBOUND_COMPLETED';
+    if (overall === 'in_progress') return 'IN_PROGRESS';
+    if (overall === 'planned') return 'ACCEPTED';
+  }
+
+  if (hasReturn) {
+    if (returnCompleted) return 'RETURN_COMPLETED';
+    if (returnCancelled) return 'CANCELED';
+    if (outboundCompleted) return 'OUTBOUND_COMPLETED';
+  }
+
+  if (
+    bookingSummary.completed_at &&
+    !hasReturn &&
+    normalized !== 'RETURN_COMPLETED' &&
+    normalized !== 'CANCELED'
+  ) {
+    return 'COMPLETED';
+  }
+  if (
+    bookingSummary.boarded_at &&
+    normalized !== 'COMPLETED' &&
+    normalized !== 'RETURN_COMPLETED' &&
+    normalized !== 'CANCELED'
+  ) {
+    return 'IN_PROGRESS';
+  }
+  return normalized;
+};
+
 // ─── Status badge ──────────────────────────────────────────
 const StatusBadge = ({ request }) => {
   if (request.status === 'CONVERTED' && request.booking_summary?.status) {
-    const info = BOOKING_STATUS_MAP[request.booking_summary.status];
+    const info = BOOKING_STATUS_MAP[resolveBookingStatusKey(request.booking_summary)];
     if (info) return <span className={`${s.statusBadge} ${s[info.css]}`}>{info.label}</span>;
   }
   const info = REQUEST_STATUS_MAP[request.status] || { label: request.status, css: 'statusDraft' };
@@ -113,15 +171,30 @@ const BillingSection = ({ request, canBilling, billingMutation, bookingBillingMu
     insurance: s.billingStatusInsurance,
   };
 
+  const [overrideReason, setOverrideReason] = useState('');
+
   const handleSave = () => {
     if (!hasChanged) return;
-    if (!window.confirm(
-      `Modifier la facturation vers « ${selectedIntent === 'institution' ? 'Institution' : 'Patient'} » ?`
-    )) return;
+    if (!overrideReason.trim() || overrideReason.trim().length < 3) {
+      toast.error('Motif obligatoire pour modifier la facturation.');
+      return;
+    }
+
+    const billingPayload = {
+      billing_intent: selectedIntent,
+      override_reason: overrideReason.trim(),
+      billing_change_reason_code: 'ADMIN_CORRECTION',
+    };
 
     if (isConverted) {
       bookingBillingMutation.mutate(
-        { bookingId: request.booking_id, data: { billing_intent: selectedIntent } },
+        {
+          bookingId: request.booking_summary?.id || request.booking_id,
+          data: {
+            ...billingPayload,
+            version: request.booking_summary?.edit_version,
+          },
+        },
         {
           onSuccess: () => toast.success('Facturation mise à jour.'),
           onError: (err) => {
@@ -135,7 +208,7 @@ const BillingSection = ({ request, canBilling, billingMutation, bookingBillingMu
       );
     } else {
       billingMutation.mutate(
-        { requestId: request.id, data: { billing_intent: selectedIntent } },
+        { requestId: request.id, data: billingPayload },
         {
           onSuccess: () => toast.success('Intention de facturation mise à jour.'),
           onError: (err) => toast.error(err?.response?.data?.error || 'Erreur'),
@@ -204,6 +277,12 @@ const BillingSection = ({ request, canBilling, billingMutation, bookingBillingMu
 
       {canBilling && !isInvoiced && (
         <div className={s.billingEdit}>
+          <input
+            className={s.editInput}
+            placeholder="Motif obligatoire"
+            value={overrideReason}
+            onChange={(e) => setOverrideReason(e.target.value)}
+          />
           <select
             value={selectedIntent}
             onChange={(e) => setSelectedIntent(e.target.value)}
@@ -235,10 +314,16 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
   const cancelMutation = useCancelRequest();
   const billingMutation = useUpdateRequestBilling();
   const bookingBillingMutation = useUpdateBookingBilling();
+  const patchBookingMutation = usePatchInstitutionBooking();
+  const cancelBookingMutation = useCancelInstitutionBooking();
 
   const institutionRole = meData?.institution_role;
   const canManage = canManageRequests(institutionRole);
   const canBillingEdit = canEditBilling(institutionRole);
+  const canViewAmounts = canViewFinancialAmounts(institutionRole);
+  const showBillingSection = canViewBillingSection(institutionRole);
+  const [isEditingBooking, setIsEditingBooking] = useState(false);
+  const [isEditingRequest, setIsEditingRequest] = useState(false);
   const institutionSocket = useMemo(() => getInstitutionSocket(), []);
 
   const [showSendModal, setShowSendModal] = useState(false);
@@ -491,7 +576,29 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
       await cancelMutation.mutateAsync({ requestId: request.id, reason: '' });
       toast.success('Demande annulée');
     } catch (err) {
-      toast.error(err?.response?.data?.error || 'Erreur lors de l\'annulation');
+      const data = err?.response?.data;
+      if (err?.response?.status === 409 && data?.resulting_booking_id) {
+        const reason = window.prompt(
+          'Motif d\'annulation (obligatoire, min. 10 caractères si en route) :',
+          ''
+        );
+        if (!reason) return;
+        try {
+          await cancelBookingMutation.mutateAsync({
+            bookingId: data.resulting_booking_id,
+            data: {
+              version: request.booking_summary?.edit_version || 1,
+              reason,
+              reason_code: 'CLIENT_REQUEST',
+            },
+          });
+          toast.success('Transport annulé');
+        } catch (e2) {
+          toast.error(e2?.response?.data?.error || 'Erreur annulation transport');
+        }
+        return;
+      }
+      toast.error(data?.error || 'Erreur lors de l\'annulation');
     }
   };
 
@@ -503,14 +610,21 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
     const company = request.accepted_by_company?.name;
     const bs = request.booking_summary;
 
+    const institutionName = request.institution_name || request.institution?.name;
     if (request.created_at)
-      events.push({ event: `Créée${creator ? ` par ${creator}` : ''}`, date: request.created_at });
+      events.push({
+        event: `Demande créée${creator ? ` par ${creator}` : ''}${institutionName ? ` (${institutionName})` : ''}`,
+        date: request.created_at,
+      });
     if (request.sent_at)
-      events.push({ event: 'Envoyée', date: request.sent_at });
+      events.push({ event: 'Demande envoyée', date: request.sent_at });
     if (request.accepted_at)
-      events.push({ event: `Acceptée${company ? ` par ${company}` : ''}`, date: request.accepted_at });
+      events.push({
+        event: `Demande acceptée${company ? ` par ${company}` : ''}`,
+        date: request.accepted_at,
+      });
     if (request.converted_at)
-      events.push({ event: 'Booking créé', date: request.converted_at });
+      events.push({ event: 'Réservation créée', date: request.converted_at });
     if (bs?.assigned_at)
       events.push({ event: 'Chauffeur assigné', date: bs.assigned_at });
     if (bs?.en_route_at)
@@ -567,7 +681,7 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
       return { message: fallbackMsg };
     }
   }, []);
-  const shouldUseDemoChat = Boolean(isDemoInstitution && (demoChatMessages.length > 0 || request?.booking_id));
+  const shouldUseDemoChat = Boolean(isDemoInstitution && (demoChatMessages.length > 0 || request?.booking_id || request?.booking_summary?.id));
 
   // Loading / Error
   if (isLoading) return (
@@ -590,14 +704,29 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
     </div>
   );
 
-  const isConverted = request.status === 'CONVERTED' && request.booking_id;
+  const bs = request.booking_summary;
+  const bookingIdForOperations = bs?.id || request.booking_id || null;
+  const isConverted = request.status === 'CONVERTED' && Boolean(bookingIdForOperations);
   const chatBookingId =
-    request.booking_id || (isDemoInstitution && request.id ? Number(`${request.id}01`) : null);
+    bookingIdForOperations || (isDemoInstitution && request.id ? Number(`${request.id}01`) : null);
   const canShowChat =
     Boolean(chatBookingId)
     && (isConverted || (isDemoInstitution && ['ACCEPTED', 'CONVERTED'].includes(request.status)));
-  const bs = request.booking_summary;
   const timeline = getTimeline();
+  const bookingStatusKey = bs ? resolveBookingStatusKey(bs) : '';
+  const isBoarded = Boolean(bs?.boarded_at);
+  const canEditBookingOperational = Boolean(
+    canManage
+    && isConverted
+    && !isBoarded
+    && !['COMPLETED', 'RETURN_COMPLETED', 'CANCELED'].includes(bookingStatusKey)
+  );
+  const isBookingEnRoute = bookingStatusKey === 'EN_ROUTE';
+  const canEditRequestNow = Boolean(
+    canManage
+    && !isConverted
+    && ['DRAFT', 'SENT', 'ACCEPTED'].includes(request.status)
+  );
   const patientName = request.patient
     ? `${request.patient.first_name} ${request.patient.last_name}`
     : bs?.customer_name || '—';
@@ -617,68 +746,144 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
       <div className={s.panelBody}>
 
         {/* Actions */}
-        {canManage && (request.status === 'DRAFT' || ['DRAFT', 'SENT', 'ACCEPTED'].includes(request.status)) && (
+        {canEditBookingOperational && !isEditingBooking && (
           <div className={s.actions}>
-            {request.status === 'DRAFT' && (
-              <>
-                <button className={`${s.actionBtn} ${s.btnSecondary}`} onClick={() => {}}>
-                  <FaEdit size={11} /> Modifier
-                </button>
-                <button
-                  className={`${s.actionBtn} ${s.btnPrimary}`}
-                  onClick={() => setShowSendModal(true)}
-                  disabled={sendMutation.isPending}
-                  data-tour-id="institution-request-send-btn"
-                >
-                  <FaPaperPlane size={11} /> Envoyer
-                </button>
-              </>
-            )}
-            {['DRAFT', 'SENT', 'ACCEPTED'].includes(request.status) && (
-              <button
-                className={`${s.actionBtn} ${s.btnDanger}`}
-                onClick={handleCancel}
-                disabled={cancelMutation.isPending}
-              >
-                <FaTimes size={11} /> Annuler
-              </button>
-            )}
+            <button
+              className={`${s.actionBtn} ${s.btnSecondary}`}
+              onClick={() => setIsEditingBooking(true)}
+            >
+              <FaEdit size={11} /> Modifier le transport
+            </button>
+            <button
+              className={`${s.actionBtn} ${s.btnDanger}`}
+              onClick={handleCancel}
+              disabled={cancelBookingMutation.isPending}
+            >
+              <FaTimes size={11} /> Annuler le transport
+            </button>
           </div>
         )}
 
-        {/* Transport summary (if booking) */}
-        {isConverted && bs && (
-          <div className={s.section}>
-            <div className={s.sectionHeader}>
-              <div className={`${s.sectionIcon} ${s.sectionIconBrand}`}><FaTruck /></div>
-              <h3 className={s.sectionTitle}>
-                {request.accepted_by_company?.name || 'Transport'}
-              </h3>
-            </div>
-            <div className={s.summaryGrid}>
-              <div className={s.summaryItem}>
-                <span className={s.summaryLabel}>Horaire</span>
-                <span className={s.summaryValue}>{fmt(bs.scheduled_time)}</span>
-              </div>
-              <div className={s.summaryItem}>
-                <span className={s.summaryLabel}>Patient</span>
-                <span className={s.summaryValue}>{patientName}</span>
-              </div>
-              <div className={s.summaryItem}>
-                <span className={s.summaryLabel}>Statut</span>
-                <span className={s.summaryValue}>
-                  {BOOKING_STATUS_MAP[bs.status]?.label || 'En cours'}
-                </span>
-              </div>
-              {bs.amount != null && (
-                <div className={s.summaryItem}>
-                  <span className={s.summaryLabel}>Montant</span>
-                  <span className={s.summaryValue}>{Number(bs.amount).toFixed(2)} CHF</span>
-                </div>
-              )}
-            </div>
+        {isEditingBooking && canEditBookingOperational && (
+          <InstitutionOperationalEdit
+            request={request}
+            bookingId={bookingIdForOperations}
+            editVersion={bs?.edit_version || 1}
+            isEnRoute={isBookingEnRoute}
+            onCancel={() => setIsEditingBooking(false)}
+            onSaved={() => {
+              setIsEditingBooking(false);
+              toast.success('Transport mis à jour');
+            }}
+            patchMutation={patchBookingMutation}
+          />
+        )}
+
+        {canEditRequestNow && !isEditingRequest && (
+          <div className={s.actions}>
+            <button
+              className={`${s.actionBtn} ${s.btnSecondary}`}
+              onClick={() => setIsEditingRequest(true)}
+            >
+              <FaEdit size={11} /> Modifier la demande
+            </button>
+            {request.status === 'DRAFT' && (
+              <button
+                className={`${s.actionBtn} ${s.btnPrimary}`}
+                onClick={() => setShowSendModal(true)}
+                disabled={sendMutation.isPending}
+                data-tour-id="institution-request-send-btn"
+              >
+                <FaPaperPlane size={11} /> Envoyer
+              </button>
+            )}
+            <button
+              className={`${s.actionBtn} ${s.btnDanger}`}
+              onClick={handleCancel}
+              disabled={cancelMutation.isPending}
+            >
+              <FaTimes size={11} /> Annuler
+            </button>
           </div>
         )}
+
+        {canEditRequestNow && isEditingRequest && (
+          <InstitutionRequestEdit
+            request={request}
+            onCancel={() => setIsEditingRequest(false)}
+            onSaved={() => {
+              setIsEditingRequest(false);
+              toast.success('Demande mise à jour');
+            }}
+          />
+        )}
+
+        {/* Transport summary (if booking) */}
+        {isConverted && bs && (() => {
+          const carrier = request.accepted_by_company || {};
+          const carrierName = carrier.name || 'Transport';
+          const carrierPhone = (carrier.contact_phone || '').toString().trim();
+          const carrierEmail = (carrier.contact_email || '').toString().trim();
+          const phoneHref = carrierPhone
+            ? `tel:${carrierPhone.replace(/[^+0-9]/g, '')}`
+            : '';
+          return (
+            <div className={s.section}>
+              <div className={s.sectionHeader}>
+                <div className={`${s.sectionIcon} ${s.sectionIconBrand}`}><FaTruck /></div>
+                <h3 className={s.sectionTitle}>{carrierName}</h3>
+              </div>
+              {(carrierPhone || carrierEmail) && (
+                <div className={s.carrierContacts}>
+                  {carrierPhone && (
+                    <a
+                      href={phoneHref}
+                      className={s.carrierContactItem}
+                      title={`Appeler ${carrierName}`}
+                      aria-label={`Appeler ${carrierName} au ${carrierPhone}`}
+                    >
+                      <FaPhoneAlt aria-hidden="true" />
+                      <span>{carrierPhone}</span>
+                    </a>
+                  )}
+                  {carrierEmail && (
+                    <a
+                      href={`mailto:${carrierEmail}`}
+                      className={s.carrierContactItem}
+                      title={`Écrire à ${carrierName}`}
+                      aria-label={`Envoyer un email à ${carrierName} (${carrierEmail})`}
+                    >
+                      <FaEnvelope aria-hidden="true" />
+                      <span>{carrierEmail}</span>
+                    </a>
+                  )}
+                </div>
+              )}
+              <div className={s.summaryGrid}>
+                <div className={s.summaryItem}>
+                  <span className={s.summaryLabel}>Horaire</span>
+                  <span className={s.summaryValue}>{fmt(bs.scheduled_time)}</span>
+                </div>
+                <div className={s.summaryItem}>
+                  <span className={s.summaryLabel}>Patient</span>
+                  <span className={s.summaryValue}>{patientName}</span>
+                </div>
+                <div className={s.summaryItem}>
+                  <span className={s.summaryLabel}>Statut</span>
+                  <span className={s.summaryValue}>
+                    {BOOKING_STATUS_MAP[resolveBookingStatusKey(bs)]?.label || 'En cours'}
+                  </span>
+                </div>
+                {canViewAmounts && bs.amount != null && (
+                  <div className={s.summaryItem}>
+                    <span className={s.summaryLabel}>Montant</span>
+                    <span className={s.summaryValue}>{Number(bs.amount).toFixed(2)} CHF</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Route */}
         <div className={s.section}>
@@ -755,7 +960,7 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
         )}
 
         {/* Facturation */}
-        {(canBillingEdit || request.billing_intent) && (
+        {showBillingSection && (canBillingEdit || request.billing_intent) && (
           <BillingSection
             request={request}
             canBilling={canBillingEdit}
@@ -771,25 +976,32 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
             socket={institutionSocket}
             fetchMessages={shouldUseDemoChat ? demoFetchMessages : fetchBookingMessages}
             sendMessage={shouldUseDemoChat ? demoSendMessage : sendBookingMessage}
-            closed={['COMPLETED', 'RETURN_COMPLETED', 'CANCELED', 'CANCELLED'].includes(bs?.status || '')}
+            closed={['COMPLETED', 'RETURN_COMPLETED', 'CANCELED'].includes(resolveBookingStatusKey(bs))}
           />
         )}
 
         {/* Historique */}
-        {timeline.length > 0 && (
+        {(timeline.length > 0 || isConverted) && (
           <div className={s.section}>
             <div className={s.sectionHeader}>
               <div className={`${s.sectionIcon} ${s.sectionIconMuted}`}><FaHistory /></div>
               <h3 className={s.sectionTitle}>Historique</h3>
             </div>
-            <div className={s.timeline}>
-              {timeline.map((item, i) => (
-                <div key={i} className={`${s.timelineItem} ${item.type === 'cancel' ? s.timelineItemCancel : ''}`}>
-                  <div className={s.timelineEvent}>{item.event}</div>
-                  <div className={s.timelineDate}>{fmtShort(item.date)}</div>
-                </div>
-              ))}
-            </div>
+            {isConverted && bookingIdForOperations ? (
+              <InstitutionBookingHistory
+                bookingId={bookingIdForOperations}
+                lifecycleTimeline={timeline}
+              />
+            ) : (
+              <div className={s.timeline}>
+                {timeline.map((item, i) => (
+                  <div key={i} className={`${s.timelineItem} ${item.type === 'cancel' ? s.timelineItemCancel : ''}`}>
+                    <div className={s.timelineEvent}>{item.event}</div>
+                    <div className={s.timelineDate}>{fmtShort(item.date)}</div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>

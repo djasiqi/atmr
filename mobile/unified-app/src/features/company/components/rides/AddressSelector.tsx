@@ -5,6 +5,7 @@ import { useResponsiveTokens } from "../../../../design/responsive";
 import { AppInput } from "../../../../design/ui/AppInput";
 import { AppText } from "../../../../design/ui/AppText";
 import { RideAddressOption, useCompanyAddressSearch } from "../../useRideForms";
+import { FONT_SIZE } from "../../../../design/responsive/typographyTokens";
 
 const UI_BORDER_SOFT = "rgba(0, 121, 107, 0.12)";
 const ROW_RADIUS = 12;
@@ -46,6 +47,8 @@ type AddressSelectorProps = {
   containerStyle?: ViewStyle;
   shellStyle?: ViewStyle;
   inputStyle?: TextStyle;
+  /** Affiche un astérisque rouge tant que le champ est vide. */
+  required?: boolean;
 };
 
 export function AddressSelector({
@@ -58,6 +61,7 @@ export function AddressSelector({
   containerStyle,
   shellStyle,
   inputStyle,
+  required = false,
 }: AddressSelectorProps) {
   const t = useResponsiveTokens();
   const [query, setQuery] = useState(value);
@@ -115,66 +119,86 @@ export function AddressSelector({
   return (
     <View style={[{ gap: t.fieldGap }, containerStyle]}>
       {label ? <AppText variant="label">{label}</AppText> : null}
-      <AppInput
-        value={query}
-        onChangeText={(next) => {
-          setQuery(next);
-          onChange(next);
-          if (justSelected) {
-            setJustSelected(false);
-          }
-          const normalizedNext = next.trim().toLowerCase();
-          if (normalizedNext.length <= 2) {
-            setIsSuggestionsOpen(false);
-            return;
-          }
-          if (normalizedNext !== lastSelectedNormalized) {
-            setLastSelectedNormalized("");
-          }
-          setIsSuggestionsOpen(true);
-        }}
-        onFocus={() => {
-          if (justSelected) return;
-          if (canQuery && normalizedQuery !== lastSelectedNormalized) {
+      <View style={{ position: "relative" }}>
+        <AppInput
+          value={query}
+          onChangeText={(next) => {
+            setQuery(next);
+            onChange(next);
+            if (justSelected) {
+              setJustSelected(false);
+            }
+            const normalizedNext = next.trim().toLowerCase();
+            if (normalizedNext.length <= 2) {
+              setIsSuggestionsOpen(false);
+              return;
+            }
+            if (normalizedNext !== lastSelectedNormalized) {
+              setLastSelectedNormalized("");
+            }
             setIsSuggestionsOpen(true);
+          }}
+          onFocus={() => {
+            if (justSelected) return;
+            if (canQuery && normalizedQuery !== lastSelectedNormalized) {
+              setIsSuggestionsOpen(true);
+            }
+          }}
+          placeholder={placeholder}
+          leftSlot={leftSlot}
+          rightSlot={
+            required ? (
+              <View
+                style={{ width: 16, alignItems: "center", justifyContent: "center" }}
+                accessibilityElementsHidden={query.trim().length !== 0}
+              >
+                {query.trim().length === 0 ? (
+                  <AppText
+                    variant="label"
+                    accessibilityLabel="Champ obligatoire"
+                    style={{ color: "#DC2626", fontWeight: "700", fontSize: 16, lineHeight: 18 }}
+                  >
+                    *
+                  </AppText>
+                ) : null}
+              </View>
+            ) : null
           }
-        }}
-        placeholder={placeholder}
-        leftSlot={leftSlot}
-        shellStyle={[
-          { borderRadius: ROW_RADIUS, minHeight: Math.max(t.fieldShellMinHeight, 48) },
-          shellStyle,
-        ]}
-        style={inputStyle}
-      />
-      {shouldShowDropdown ? (
-        <View style={{ gap: 8 }}>
-          <AppText variant="caption" style={{ color: "rgba(71, 85, 105, 0.9)" }}>
-            Suggestions d’adresse
-          </AppText>
+          shellStyle={[
+            { borderRadius: ROW_RADIUS, minHeight: Math.max(t.fieldShellMinHeight, 34) },
+            shellStyle,
+          ]}
+          style={inputStyle}
+        />
+        {shouldShowDropdown ? (
+          <View
+            style={{
+              position: "absolute",
+              left: 0,
+              right: 0,
+              top: "100%",
+              marginTop: 4,
+              zIndex: 20,
+            }}
+          >
           <View
             style={{
               borderWidth: 1,
               borderColor: UI_BORDER_SOFT,
               borderRadius: ROW_RADIUS,
               backgroundColor: "#FFFFFF",
-              shadowColor: "rgba(15, 23, 42, 0.15)",
-              shadowOpacity: 0.1,
-              shadowRadius: 10,
-              shadowOffset: { width: 0, height: 4 },
-              elevation: 2,
               overflow: "hidden",
             }}
           >
             <ScrollView
               nestedScrollEnabled
               keyboardShouldPersistTaps="handled"
-              style={{ maxHeight: SUGGESTIONS_MAX_VISIBLE * 56 }}
+              style={{ maxHeight: SUGGESTIONS_MAX_VISIBLE * 46 }}
             >
               {addressesQuery.isLoading ? (
                 <AppText
                   variant="caption"
-                  style={{ color: "rgba(71, 85, 105, 0.92)", paddingHorizontal: 12, paddingVertical: 10 }}
+                  style={{ color: "rgba(71, 85, 105, 0.92)", paddingHorizontal: 10, paddingVertical: 8 }}
                 >
                   Recherche…
                 </AppText>
@@ -182,28 +206,28 @@ export function AddressSelector({
               {!addressesQuery.isLoading && sortedSuggestions.length === 0 ? (
                 <AppText
                   variant="caption"
-                  style={{ color: "rgba(71, 85, 105, 0.92)", paddingHorizontal: 12, paddingVertical: 10 }}
+                  style={{ color: "rgba(71, 85, 105, 0.92)", paddingHorizontal: 10, paddingVertical: 8 }}
                 >
                   Aucun résultat
                 </AppText>
               ) : null}
               {[
-                { title: "Suggestions", rows: groupedSuggestions.primary },
+                { title: "", rows: groupedSuggestions.primary },
                 { title: "Autres résultats", rows: groupedSuggestions.secondary },
               ]
                 .filter(() => !addressesQuery.isLoading && sortedSuggestions.length > 0)
                 .map((section) => (
                 <View key={section.title}>
-                  {section.rows.length > 0 ? (
+                  {section.rows.length > 0 && section.title ? (
                     <AppText
                       variant="caption"
                       style={{
-                        color: "rgba(30, 41, 59, 0.78)",
+                        color: "rgba(30, 41, 59, 0.72)",
                         fontWeight: "700",
-                        paddingHorizontal: 12,
-                        paddingTop: 8,
-                        paddingBottom: 6,
-                        backgroundColor: "rgba(248, 250, 252, 0.9)",
+                        paddingHorizontal: 9,
+                        paddingTop: 5,
+                        paddingBottom: 3,
+                        backgroundColor: "rgba(248, 250, 252, 0.65)",
                       }}
                     >
                       {section.title}
@@ -228,23 +252,28 @@ export function AddressSelector({
                           setJustSelected(true);
                         }}
                         style={({ hovered, focused, pressed }) => ({
-                          minHeight: t.minTouchHeight,
+                          minHeight: 36,
                           justifyContent: "center",
-                          paddingVertical: 8,
-                          paddingHorizontal: 12,
+                          paddingVertical: 5,
+                          paddingHorizontal: 9,
                           backgroundColor: pressed
                             ? "rgba(15, 23, 42, 0.06)"
                             : hovered || focused
                               ? "rgba(15, 23, 42, 0.03)"
                               : "#FFFFFF",
                           borderBottomWidth: isLast ? 0 : 1,
-                          borderBottomColor: "rgba(148, 163, 184, 0.28)",
+                          borderBottomColor: "rgba(148, 163, 184, 0.22)",
                         })}
                       >
                         <AppText
                           variant="body"
                           numberOfLines={1}
-                          style={{ color: "rgba(15, 23, 42, 0.98)", fontWeight: "600" }}
+                          style={{
+                            color: "rgba(15, 23, 42, 0.9)",
+                            fontSize: FONT_SIZE.px14,
+                            lineHeight: 17,
+                            fontWeight: "600",
+                          }}
                         >
                           {displayPrimary}
                         </AppText>
@@ -252,7 +281,7 @@ export function AddressSelector({
                           <AppText
                             variant="caption"
                             numberOfLines={1}
-                            style={{ color: "rgba(71, 85, 105, 0.92)", marginTop: 2 }}
+                            style={{ color: "rgba(71, 85, 105, 0.82)", marginTop: 1, fontSize: FONT_SIZE.px12, lineHeight: 14 }}
                           >
                             {displaySecondary}
                           </AppText>
@@ -264,8 +293,9 @@ export function AddressSelector({
               ))}
             </ScrollView>
           </View>
-        </View>
-      ) : null}
+          </View>
+        ) : null}
+      </View>
     </View>
   );
 }

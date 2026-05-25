@@ -65,8 +65,10 @@ module.exports = function (app) {
   const socketIoProxy = createProxyMiddleware({
     target: BACKEND_URL,
     changeOrigin: true, // ✅ Changer l'origine pour éviter les problèmes CORS
-    ws: false, // ✅ DÉSACTIVER le support WebSocket pour ce proxy - webpack-dev-server utilise /ws pour le HMR
-    // Note: Socket.IO utilisera polling puis upgrade vers WebSocket via /socket.io, pas via /ws
+    ws: true, // ✅ Activer l'upgrade WebSocket pour /socket.io.
+    // Le HMR webpack-dev-server utilise /ws (chemin distinct, exclu par `filter`),
+    // donc il n'y a pas de conflit. Sans ws:true, le transport WebSocket Socket.IO
+    // échoue et le client retombe en long-polling permanent.
     secure: false,
     logLevel: 'info',
     // ✅ Exclure /ws pour que webpack-dev-server puisse l'utiliser pour le HMR

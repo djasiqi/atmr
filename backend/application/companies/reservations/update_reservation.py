@@ -24,6 +24,10 @@ class _BookingLike(Protocol):
     notes_medical: Any
     pickup_access_notes: Any
     dropoff_access_notes: Any
+    pickup_floor: Any
+    pickup_door_code: Any
+    dropoff_floor: Any
+    dropoff_door_code: Any
     amount: Any
     mission_type: Any
     delivery_description: Any
@@ -132,6 +136,18 @@ class UpdateCompanyReservationUseCase:
         if "dropoff_access_notes" in validated_data:
             booking.dropoff_access_notes = validated_data["dropoff_access_notes"]
             updated_fields.append("dropoff_access_notes")
+        if "pickup_floor" in validated_data:
+            booking.pickup_floor = validated_data["pickup_floor"]
+            updated_fields.append("pickup_floor")
+        if "pickup_door_code" in validated_data:
+            booking.pickup_door_code = validated_data["pickup_door_code"]
+            updated_fields.append("pickup_door_code")
+        if "dropoff_floor" in validated_data:
+            booking.dropoff_floor = validated_data["dropoff_floor"]
+            updated_fields.append("dropoff_floor")
+        if "dropoff_door_code" in validated_data:
+            booking.dropoff_door_code = validated_data["dropoff_door_code"]
+            updated_fields.append("dropoff_door_code")
         if "amount" in validated_data:
             booking.amount = validated_data["amount"]
             updated_fields.append("amount")

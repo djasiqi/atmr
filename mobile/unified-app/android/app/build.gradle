@@ -81,16 +81,7 @@ def enableMinifyInReleaseBuilds = (findProperty('android.enableMinifyInReleaseBu
  */
 def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
 
-def sentryGradle = new File(
-    ["node", "--print", "require('path').dirname(require.resolve('@sentry/react-native/package.json'))"]
-        .execute(null, rootDir)
-        .text
-        .trim(),
-    "sentry.gradle"
-)
-if (sentryGradle.exists()) {
-    apply from: sentryGradle
-}
+apply from: new File(["node", "--print", "require('path').dirname(require.resolve('@sentry/react-native/package.json'))"].execute().text.trim(), "sentry.gradle")
 
 android {
     ndkVersion rootProject.ext.ndkVersion
@@ -98,13 +89,13 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.drinjasiqi.lirieunifiedapp'
+    namespace 'ch.liri.operations'
     defaultConfig {
-        applicationId 'com.drinjasiqi.lirieunifiedapp'
+        applicationId 'ch.liri.operations'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
-        versionName "0.1.0"
+        versionName "1.0.5"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
     }

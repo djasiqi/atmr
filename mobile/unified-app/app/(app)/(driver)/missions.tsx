@@ -1,4 +1,5 @@
 import { StyleSheet } from "react-native";
+import { usePerfScreenReady } from "../../../src/core/observability/usePerfScreenReady";
 import { useRouter } from "expo-router";
 import { DriverContextGuard, PermissionGuard } from "../../../src/core/guards";
 import { useDriverMissionsQuery } from "../../../src/features/driver/hooks";
@@ -10,13 +11,22 @@ import {
   AppText,
   brandSurfaceSoft,
   Screen,
+  useAppViewport,
 } from "../../../src/design/responsive";
 import { groupMissionsByPickupWindow } from "../../../src/features/driver/domain/missionGrouping";
 import { DRIVER_FLOATING_TAB_SCROLL_PADDING } from "../../../src/features/driver/navigation/DriverFloatingTabBar";
+import { FONT_SIZE } from "../../../src/design/responsive/typographyTokens";
 
 export default function DriverMissionsScreen() {
   const router = useRouter();
+  const { width } = useAppViewport();
+  const isCompactMobile = width < 380;
   const missionsQuery = useDriverMissionsQuery();
+  usePerfScreenReady(
+    "driver.missions",
+    "driver.missions.data_ready",
+    missionsQuery.isSuccess || missionsQuery.isError
+  );
 
   return (
     <DriverContextGuard>
@@ -26,9 +36,9 @@ export default function DriverMissionsScreen() {
           backgroundColor={brandSurfaceSoft}
           withHorizontalPadding={false}
           extraScrollBottomPadding={DRIVER_FLOATING_TAB_SCROLL_PADDING}
-          contentContainerStyle={styles.page}
+          contentContainerStyle={[styles.page, isCompactMobile && styles.pageCompact]}
         >
-          <AppText variant="sectionTitle" style={styles.title}>
+          <AppText variant="sectionTitle" style={[styles.title, isCompactMobile && styles.titleCompact]}>
             Missions chauffeur
           </AppText>
           {missionsQuery.isLoading ? <AppSpinner size="small" /> : null}
@@ -37,20 +47,37 @@ export default function DriverMissionsScreen() {
               Impossible de charger les missions : {(missionsQuery.error as Error)?.message ?? "Erreur"}
             </AppText>
           ) : null}
-
-          {groupMissionsByPickupWindow(missionsQuery.data ?? []).map((group) => (
-            <AppCard key={group.id} variant="surface">
+          {!missionsQuery.isLoading && !missionsQuery.isError && (missionsQuery.data?.length ?? 0) === 0 ? (
+            <AppCard variant="surface" style={styles.emptyCard}>
               <AppText variant="label" style={styles.groupTitle}>
-                {group.isGrouped ? `Groupe ${group.missions.length} missions` : "Mission"}
+                Aucune mission disponible
               </AppText>
               <AppText variant="bodyMuted" style={styles.muted}>
+                Les nouvelles missions apparaîtront automatiquement ici.
+              </AppText>
+            </AppCard>
+          ) : null}
+
+          {groupMissionsByPickupWindow(missionsQuery.data ?? []).map((group) => (
+            <AppCard key={group.id} variant="surface" style={isCompactMobile ? styles.groupCardCompact : undefined}>
+              <AppText variant="label" style={[styles.groupTitle, isCompactMobile && styles.groupTitleCompact]}>
+                {group.isGrouped ? `Groupe ${group.missions.length} missions` : "Mission"}
+              </AppText>
+              <AppText variant="bodyMuted" style={[styles.muted, styles.metaLine]}>
                 Départ : {group.displayLabel}
               </AppText>
               {group.missions.map((mission, index) => {
                 const ux = getDriverStatusUx(mission.status as string);
                 return (
-                  <AppCard key={mission.id} variant="surface" style={{ marginTop: index === 0 ? 8 : 10 }}>
-                    <AppText variant="label" style={styles.missionTitle}>
+                  <AppCard
+                    key={mission.id}
+                    variant="surface"
+                    style={[
+                      index === 0 ? styles.missionCardFirst : styles.missionCard,
+                      isCompactMobile && styles.missionCardCompact,
+                    ]}
+                  >
+                    <AppText variant="label" style={[styles.missionTitle, isCompactMobile && styles.missionTitleCompact]}>
                       Mission #{mission.id}
                     </AppText>
                     <AppText variant="body" style={styles.body}>
@@ -88,24 +115,60 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingBottom: 28,
   },
+  pageCompact: {
+    padding: 14,
+    gap: 10,
+    paddingBottom: 24,
+  },
   title: {
     color: "#0f172a",
+  },
+  titleCompact: {
+    fontSize: FONT_SIZE.px20,
+    lineHeight: 25,
+  },
+  groupCardCompact: {
+    padding: 12,
   },
   groupTitle: {
     fontWeight: "700",
     color: "#0f172a",
   },
+  groupTitleCompact: {
+    fontSize: FONT_SIZE.px14,
+    lineHeight: 18,
+  },
   missionTitle: {
     fontWeight: "700",
     color: "#0f172a",
   },
+  missionTitleCompact: {
+    fontSize: FONT_SIZE.px14,
+    lineHeight: 18,
+  },
   body: {
     color: "#334155",
+    lineHeight: 20,
   },
   muted: {
     color: "#64748b",
   },
+  metaLine: {
+    lineHeight: 19,
+  },
   error: {
     color: "#B42318",
+  },
+  emptyCard: {
+    paddingVertical: 16,
+  },
+  missionCardFirst: {
+    marginTop: 8,
+  },
+  missionCard: {
+    marginTop: 10,
+  },
+  missionCardCompact: {
+    padding: 12,
   },
 });

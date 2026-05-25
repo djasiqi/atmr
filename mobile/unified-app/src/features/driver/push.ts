@@ -22,6 +22,7 @@ export type DriverPushPayload = {
   action?: DriverPushQuickAction;
   deep_link?: string;
   payload_schema?: "booking_v1" | "mission_v2" | "unknown";
+  thread_id?: string;
 };
 
 export const DRIVER_PUSH_PAYLOAD_MATRIX: Record<DriverPushType, string> = {
@@ -33,36 +34,65 @@ export const DRIVER_PUSH_PAYLOAD_MATRIX: Record<DriverPushType, string> = {
   informative: "telemetry_only_without_forced_navigation",
 };
 
-const seenPushActions = new Set<string>();
+const SEEN_ACTION_TTL_MS = 60_000;
+const seenPushActions = new Map<string, ReturnType<typeof setTimeout>>();
 
 function buildActionKey(payload: DriverPushPayload) {
   return `${payload.mission_id}:${payload.event_id ?? "no-event"}:${payload.action ?? "open"}`;
 }
 
-export async function handleDriverPushQuickAction(payload: DriverPushPayload): Promise<void> {
-  if (!payload.action) return;
-  const actionKey = buildActionKey(payload);
+function markSeen(actionKey: string): boolean {
   if (seenPushActions.has(actionKey)) {
-    return;
+    return true;
   }
-  seenPushActions.add(actionKey);
+  const timer = setTimeout(() => {
+    seenPushActions.delete(actionKey);
+  }, SEEN_ACTION_TTL_MS);
+  seenPushActions.set(actionKey, timer);
+  return false;
+}
 
-  if (payload.action === "accept") {
-    await quickAcceptDriverMission(payload.mission_id);
-    return;
-  }
-  if (payload.action === "reject") {
-    await quickRejectDriverMission(payload.mission_id);
-    return;
-  }
-
-  if (payload.action === "start") {
-    await quickStartDriverMission(payload.mission_id);
-    return;
-  }
-  if (payload.action === "complete") {
-    await quickCompleteDriverMission(payload.mission_id);
-    return;
+function clearSeen(actionKey: string): void {
+  const timer = seenPushActions.get(actionKey);
+  if (timer) {
+    clearTimeout(timer);
+    seenPushActions.delete(actionKey);
   }
 }
 
+export async function handleDriverPushQuickAction(payload: DriverPushPayload): Promise<void> {
+  if (!payload.action) return;
+  const actionKey = buildActionKey(payload);
+  if (markSeen(actionKey)) {
+    return;
+  }
+
+  try {
+    if (payload.action === "accept") {
+      await quickAcceptDriverMission(payload.mission_id);
+      return;
+    }
+    if (payload.action === "reject") {
+      await quickRejectDriverMission(payload.mission_id);
+      return;
+    }
+    if (payload.action === "start") {
+      await quickStartDriverMission(payload.mission_id);
+      return;
+    }
+    if (payload.action === "complete") {
+      await quickCompleteDriverMission(payload.mission_id);
+      return;
+    }
+  } catch (error) {
+    clearSeen(actionKey);
+    throw error;
+  }
+}
+
+export function resetSeenPushActionsForTests(): void {
+  for (const timer of seenPushActions.values()) {
+    clearTimeout(timer);
+  }
+  seenPushActions.clear();
+}

@@ -44,6 +44,9 @@ export function DriverContextGuard({ children }: PropsWithChildren) {
   if (!activeContext) {
     return <Redirect href={"/(app)/context-selector" as any} />;
   }
+  if (activeContext.context_type === "company") {
+    return <Redirect href={"/(app)/(company)/dashboard" as any} />;
+  }
   if (activeContext.context_type !== "driver") {
     return <Redirect href={"/(app)/unauthorized" as any} />;
   }

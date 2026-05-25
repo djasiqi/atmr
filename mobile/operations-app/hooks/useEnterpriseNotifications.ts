@@ -42,6 +42,7 @@ export const useEnterpriseNotifications = () => {
     bookingUpdated?: (data: any) => void;
     bookingCancelled?: (data: any) => void;
     chatMessage?: (data: any) => void;
+    urgentAlert?: (data: any) => void;
   }>({});
 
   // Enregistrer le token push pour l'entreprise (uniquement en surface enterprise — évite course driver/entreprise)
@@ -265,6 +266,16 @@ export const useEnterpriseNotifications = () => {
       );
     };
 
+    // Handler pour alerte urgence chauffeur (signalement « Problème »)
+    const handleUrgentAlert = (data: any) => {
+      log.info("urgent alert received", { data });
+      const message =
+        typeof data?.message === "string" && data.message.trim()
+          ? data.message.trim()
+          : "Signalement chauffeur";
+      sendNotification("🚨 Alerte urgente", message, { type: "urgent_alert", ...data }, true);
+    };
+
     // Handler pour message de chat (Équipe • Sender, preview 90 chars, collapse/dedupe)
     const handleChatMessage = (message: any) => {
       if (message.sender_id === enterpriseSession?.user?.id) {
@@ -310,6 +321,7 @@ export const useEnterpriseNotifications = () => {
       bookingUpdated: handleBookingUpdated,
       bookingCancelled: handleBookingCancelled,
       chatMessage: handleChatMessage,
+      urgentAlert: handleUrgentAlert,
     };
 
     // Attacher les listeners Socket.IO
@@ -317,6 +329,7 @@ export const useEnterpriseNotifications = () => {
     socket.on("booking_updated", handleBookingUpdated);
     socket.on("booking_cancelled", handleBookingCancelled);
     socket.on("team_chat_message", handleChatMessage);
+    socket.on("urgent_alert", handleUrgentAlert);
 
     // Cleanup
     return () => {
@@ -325,6 +338,7 @@ export const useEnterpriseNotifications = () => {
       if (handlers.bookingUpdated) socket.off("booking_updated", handlers.bookingUpdated);
       if (handlers.bookingCancelled) socket.off("booking_cancelled", handlers.bookingCancelled);
       if (handlers.chatMessage) socket.off("team_chat_message", handlers.chatMessage);
+      if (handlers.urgentAlert) socket.off("urgent_alert", handlers.urgentAlert);
     };
   }, [socket, enterpriseSession]);
 

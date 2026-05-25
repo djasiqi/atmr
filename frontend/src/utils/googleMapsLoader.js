@@ -15,6 +15,7 @@ import {
   loadGoogleMapsScriptWithKey,
   parseGoogleMapsLibraryList,
 } from '../shared/google-maps/bootstrap';
+import { perfMark } from './companyDashboardWebPerf';
 
 /**
  * @returns {string | undefined}
@@ -52,8 +53,13 @@ export function loadGoogleMapsScript() {
   if (!apiKey) {
     return Promise.reject(new Error('API key manquante (REACT_APP_GOOGLE_MAPS_API_KEY)'));
   }
+  perfMark('gmaps_sdk_start');
+  perfMark('gmaps_sdk_request_start');
   return loadGoogleMapsScriptWithKey(apiKey, {
     libraryList: getGoogleMapsLibraryList(),
+  }).then(() => {
+    perfMark('gmaps_sdk_end');
+    perfMark('gmaps_sdk_loaded');
   });
 }
 

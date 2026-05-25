@@ -9,6 +9,7 @@ import {
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { AppText, Screen, useAppViewport } from "../../../src/design/responsive";
+import { FONT_SIZE } from "../../../src/design/responsive/typographyTokens";
 
 const LANDING_BACKGROUND = require("../../../assets/images/landing-background.png");
 
@@ -138,7 +139,7 @@ const styles = StyleSheet.create({
   },
   kicker: {
     color: "#0A8F7A",
-    fontSize: 13,
+    fontSize: FONT_SIZE.px13,
     fontWeight: "500",
     letterSpacing: 0.5,
     textTransform: "uppercase",
@@ -147,14 +148,14 @@ const styles = StyleSheet.create({
   },
   title: {
     color: "#163A34",
-    fontSize: 26,
+    fontSize: FONT_SIZE.px26,
     lineHeight: 30,
     fontWeight: "700",
     textAlign: "center",
   },
   subtitle: {
     color: "#5F7369",
-    fontSize: 15,
+    fontSize: FONT_SIZE.px15,
     lineHeight: 22,
     marginTop: 12,
     textAlign: "center",

@@ -11,6 +11,7 @@ import Animated, {
   withRepeat,
   withTiming,
 } from "react-native-reanimated";
+import { FONT_SIZE } from "../../../design/responsive/typographyTokens";
 
 import { AppText } from "../../../design/ui/AppText";
 import type { CompanyDispatchMission } from "../api/contracts";
@@ -524,14 +525,14 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 2,
   },
-  time: { color: palette.time, fontWeight: "700", fontSize: 15, letterSpacing: 0.2 },
+  time: { color: palette.time, fontWeight: "700", fontSize: FONT_SIZE.px15, letterSpacing: 0.2 },
   etaHint: {
-    fontSize: 10,
+    fontSize: FONT_SIZE.px10,
     fontWeight: "600",
     color: E.TEXT_MUTED,
     maxWidth: 54,
   },
-  client: { color: palette.client, fontWeight: "600", fontSize: 14, width: 120, marginRight: 10, flexShrink: 0 },
+  client: { color: palette.client, fontWeight: "600", fontSize: FONT_SIZE.px14, width: 120, marginRight: 10, flexShrink: 0 },
   chevronContainer: {
     width: 24,
     alignItems: "center",
@@ -553,7 +554,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
   },
   badgeDelayMinutes: {
-    fontSize: 10,
+    fontSize: FONT_SIZE.px10,
     lineHeight: 16,
     fontWeight: "700" as const,
     letterSpacing: 0.2,
@@ -561,7 +562,7 @@ const styles = StyleSheet.create({
   },
   badgeLabel: {
     width: "100%",
-    fontSize: 10,
+    fontSize: FONT_SIZE.px10,
     lineHeight: 16,
     fontWeight: "700",
     letterSpacing: 0.3,
@@ -577,7 +578,7 @@ const styles = StyleSheet.create({
   badgeCtaDisabled: { opacity: 0.55 },
   badgeUnassignedCtaLabel: {
     width: "100%",
-    fontSize: 10,
+    fontSize: FONT_SIZE.px10,
     lineHeight: 16,
     fontWeight: "700",
     letterSpacing: 0.3,
@@ -629,7 +630,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   badgeLabelInline: {
-    fontSize: 10,
+    fontSize: FONT_SIZE.px10,
     fontWeight: "700",
     letterSpacing: 0.3,
     textTransform: "uppercase" as const,
@@ -645,7 +646,7 @@ const styles = StyleSheet.create({
     marginVertical: 6,
     marginLeft: 24,
   },
-  route: { color: palette.routeText, fontSize: 13, lineHeight: 18, flex: 1, flexShrink: 1 },
+  route: { color: palette.routeText, fontSize: FONT_SIZE.px13, lineHeight: 18, flex: 1, flexShrink: 1 },
   expandedContent: { marginTop: 10 },
   routeColumn: { width: "100%" },
   /** Aligné `RideSnippetCard` `footerActions`. */

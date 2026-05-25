@@ -666,6 +666,10 @@ class CreateManualBookingUseCase:
             outbound.notes_medical = validated_data.get("notes_medical")
             outbound.pickup_access_notes = validated_data.get("pickup_access_notes")
             outbound.dropoff_access_notes = validated_data.get("dropoff_access_notes")
+            outbound.pickup_floor = validated_data.get("pickup_floor")
+            outbound.pickup_door_code = validated_data.get("pickup_door_code")
+            outbound.dropoff_floor = validated_data.get("dropoff_floor")
+            outbound.dropoff_door_code = validated_data.get("dropoff_door_code")
             outbound.wheelchair_client_has = validated_data.get(
                 "wheelchair_client_has", False
             )
@@ -727,11 +731,15 @@ class CreateManualBookingUseCase:
                 return_booking.hospital_service = validated_data.get("hospital_service")
                 return_booking.notes_medical = validated_data.get("notes_medical")
                 return_booking.pickup_access_notes = validated_data.get(
-                    "pickup_access_notes"
-                )
-                return_booking.dropoff_access_notes = validated_data.get(
                     "dropoff_access_notes"
                 )
+                return_booking.dropoff_access_notes = validated_data.get(
+                    "pickup_access_notes"
+                )
+                return_booking.pickup_floor = validated_data.get("dropoff_floor")
+                return_booking.pickup_door_code = validated_data.get("dropoff_door_code")
+                return_booking.dropoff_floor = validated_data.get("pickup_floor")
+                return_booking.dropoff_door_code = validated_data.get("pickup_door_code")
                 return_booking.wheelchair_client_has = validated_data.get(
                     "wheelchair_client_has", False
                 )

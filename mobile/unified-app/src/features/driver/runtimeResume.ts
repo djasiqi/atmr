@@ -8,7 +8,7 @@ import { realtimeManager } from "../../core/realtime/realtimeManager";
 import { isFeatureEnabled } from "../../core/featureFlags/registry";
 import { reconcileDriverMissions } from "./sync";
 import { driverOfflineQueue } from "./offlineQueue";
-import { driverQueryKeys, invalidateDriverMissionScope } from "./queryKeys";
+import { invalidateDriverMissionScope } from "./queryKeys";
 import { refreshDriverTokenSingleflight } from "../../core/auth/driverTokenOrchestrator";
 
 type RuntimeResumeOptions = {
@@ -63,9 +63,6 @@ export function useDriverRuntimeResume(options: RuntimeResumeOptions) {
               await driverOfflineQueue.flush();
               await onForegroundResume?.();
               invalidateDriverMissionScope(queryClient, contextId);
-              await queryClient.invalidateQueries({
-                queryKey: driverQueryKeys.missions(contextId),
-              });
               emitDriverTelemetry("driver.runtime.resync", {
                 source: "driver.runtime.resume",
                 context_id: contextId,

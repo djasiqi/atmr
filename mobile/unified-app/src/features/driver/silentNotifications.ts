@@ -20,6 +20,8 @@ function parseMissionId(input: SilentPushPayload): number | null {
 export function isSilentPayload(input: unknown): input is SilentPushPayload {
   if (!input || typeof input !== "object") return false;
   const value = input as SilentPushPayload;
+  const rawType = typeof value.type === "string" ? value.type.toLowerCase() : "";
+  if (rawType === "mission_refresh") return true;
   const silent = value.silent ?? value.silent_push ?? value.background ?? value.content_available;
   if (typeof silent === "boolean") return silent;
   if (typeof silent === "number") return silent === 1;

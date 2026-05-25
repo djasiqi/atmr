@@ -20,9 +20,17 @@ jest.mock("../../../core/realtime/contextRealtimeRouter", () => ({
 const {
   normalizeRealtimeLocation,
   shouldReplaceDriverLocation,
-} = require("./useCompanyDriverLiveTracking");
+  applyPendingDriverUpdates,
+  REALTIME_FLUSH_MS,
+  MAX_BATCH_AGE_MS,
+} = require("./gpsFlushConstants");
 
 describe("company live drivers merge policy", () => {
+  it("exposes bounded batch flush windows", () => {
+    expect(REALTIME_FLUSH_MS).toBeGreaterThan(0);
+    expect(MAX_BATCH_AGE_MS).toBeGreaterThanOrEqual(REALTIME_FLUSH_MS);
+  });
+
   it("normalizes incoming realtime payload variants", () => {
     const normalized = normalizeRealtimeLocation({
       driver_id: "42",
@@ -206,5 +214,57 @@ describe("company live drivers merge policy", () => {
       accepted_observability_only: true,
     };
     expect(shouldReplaceDriverLocation(undefined, incoming)).toBe(true);
+  });
+
+  it("applyPendingDriverUpdates ne recrée pas la map si aucun changement significatif", () => {
+    const current = {
+      driver_id: 7,
+      latitude: 46.5,
+      longitude: 6.6,
+      timestamp: "2026-01-01T10:00:05.000Z",
+      recorded_at: "2026-01-01T10:00:05.000Z",
+      received_at: "2026-01-01T10:00:06.000Z",
+    };
+    const currentMap = { 7: current };
+    const pending = new Map();
+    pending.set(7, {
+      ...current,
+      latitude: current.latitude + 0.00001,
+      longitude: current.longitude + 0.00001,
+    });
+    const next = applyPendingDriverUpdates(currentMap, pending);
+    expect(next).toBe(currentMap);
+  });
+
+  it("applyPendingDriverUpdates remplace uniquement les chauffeurs modifiés", () => {
+    const d1 = {
+      driver_id: 1,
+      latitude: 46.5,
+      longitude: 6.6,
+      timestamp: "2026-01-01T10:00:00.000Z",
+      recorded_at: "2026-01-01T10:00:00.000Z",
+      received_at: "2026-01-01T10:00:01.000Z",
+    };
+    const d2 = {
+      driver_id: 2,
+      latitude: 46.6,
+      longitude: 6.7,
+      timestamp: "2026-01-01T10:00:00.000Z",
+      recorded_at: "2026-01-01T10:00:00.000Z",
+      received_at: "2026-01-01T10:00:01.000Z",
+    };
+    const currentMap = { 1: d1, 2: d2 };
+    const pending = new Map();
+    pending.set(2, {
+      ...d2,
+      latitude: 46.8,
+      longitude: 6.9,
+      timestamp: "2026-01-01T10:00:10.000Z",
+      recorded_at: "2026-01-01T10:00:10.000Z",
+    });
+    const next = applyPendingDriverUpdates(currentMap, pending);
+    expect(next).not.toBe(currentMap);
+    expect(next[1]).toBe(d1);
+    expect(next[2].latitude).toBe(46.8);
   });
 });

@@ -1,20 +1,39 @@
 import { Redirect, Tabs } from "expo-router";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { AppState, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { isFeatureEnabled } from "../../../src/core/featureFlags/registry";
+import {
+  isFeatureEnabled,
+  isCompanyRealtimeSocketExpected,
+} from "../../../src/core/featureFlags/registry";
 import { useSession } from "../../../src/core/sessionProvider";
 import { CompanyContextGuard } from "../../../src/core/guards";
 import { companyRealtimeBridge } from "../../../src/features/company/realtime/companyRealtimeBridge";
 import { CompanyFloatingTabBar } from "../../../src/features/company/navigation/CompanyFloatingTabBar";
+import { E } from "../../../src/features/company/theme/enterpriseOpsTheme";
+import { buildFloatingTabScreenOptions, FLOATING_TAB_IMPLEMENTATION } from "../../../src/navigation/floatingTabScreenOptions";
+import { useCompanyUrgentAlertSound } from "../../../src/features/messaging/useCompanyUrgentAlertSound";
+import { useAppViewport } from "../../../src/design/responsive";
+import { useReduceMotion } from "../../../src/design/navigation/useReduceMotion";
+import { usePerfRouteTracking } from "../../../src/core/observability/usePerfRouteTracking";
 
 export default function CompanyLayout() {
+  usePerfRouteTracking("company");
+  const { width } = useAppViewport();
+  const reduceMotion = useReduceMotion();
+  const tabScreenOptions = useMemo(
+    () => buildFloatingTabScreenOptions(E.BG, width, reduceMotion),
+    [width, reduceMotion]
+  );
   const { activeContext, status } = useSession();
   const dispatchEnabled = isFeatureEnabled("company_dispatch_enabled");
+  const realtimeEnabled = isCompanyRealtimeSocketExpected();
   const companyContextId =
     activeContext && activeContext.context_type === "company"
       ? activeContext.context_id
       : null;
+
+  useCompanyUrgentAlertSound();
 
   // Déconnexion à la sortie de la zone entreprise (évite socket orpheline).
   useEffect(() => {
@@ -26,7 +45,7 @@ export default function CompanyLayout() {
   // Ne lancer le socket qu’après bootstrap. Ne pas couper pendant `bootstrapping` :
   // sinon reconnexion alors que le JWT est réaligné par refresh → faux « jeton absent » / boucles.
   useEffect(() => {
-    if (!dispatchEnabled || !companyContextId) {
+    if (!dispatchEnabled || !realtimeEnabled || !companyContextId) {
       companyRealtimeBridge.disconnect();
       return;
     }
@@ -34,9 +53,9 @@ export default function CompanyLayout() {
       return;
     }
     companyRealtimeBridge.connect(companyContextId);
-  }, [companyContextId, dispatchEnabled, status]);
+  }, [companyContextId, dispatchEnabled, realtimeEnabled, status]);
 
-  // Après mise en arrière-plan / reconnexion réseau, relancer le bridge si le flux était en échec.
+  // Après mise en arrière-plan / reconnexion réseau, relancer le bridge si le flux était en échec ou jamais connecté.
   useEffect(() => {
     if (!dispatchEnabled || !companyContextId || status !== "ready") {
       return;
@@ -45,17 +64,23 @@ export default function CompanyLayout() {
       if (next !== "active") return;
       if (!isFeatureEnabled("company_realtime_enabled")) return;
       const snap = companyRealtimeBridge.getSnapshot();
-      if (snap.status === "failed" || snap.status === "reconnecting" || snap.status === "degraded") {
+      if (snap.status === "idle") {
+        // Bridge jamais connecté (ex : cold start revenu au foreground avant que l'effet principal ne tire).
+        companyRealtimeBridge.connect(companyContextId);
+      } else if (snap.status === "failed" || snap.status === "reconnecting") {
         companyRealtimeBridge.reconnect();
       }
     });
     return () => sub.remove();
-  }, [companyContextId, dispatchEnabled, status]);
+  }, [companyContextId, dispatchEnabled, realtimeEnabled, status]);
 
   if (!activeContext) {
     return <Redirect href="/(app)/context-selector" />;
   }
 
+  if (activeContext.context_type === "driver") {
+    return <Redirect href="/(app)/(driver)" />;
+  }
   if (activeContext.context_type !== "company") {
     return <Redirect href="/(app)/unauthorized" />;
   }
@@ -63,12 +88,13 @@ export default function CompanyLayout() {
   /** Fond onglets aligné sur `operations-app` `(enterprise)/_layout` (#F5F7F6). */
   return (
     <CompanyContextGuard>
-      <View style={{ flex: 1, backgroundColor: "#F5F7F6" }}>
+      <View style={{ flex: 1, backgroundColor: E.BG }}>
       <Tabs
+        implementation={FLOATING_TAB_IMPLEMENTATION}
         screenOptions={{
-          headerShown: false,
-          tabBarActiveTintColor: "#0A8F7A",
-          tabBarInactiveTintColor: "#7A808A",
+          ...tabScreenOptions,
+          tabBarActiveTintColor: E.BRAND,
+          tabBarInactiveTintColor: "#64748B",
         }}
         tabBar={(props) => <CompanyFloatingTabBar {...props} />}
       >
@@ -106,6 +132,7 @@ export default function CompanyLayout() {
             ),
           }}
         />
+        <Tabs.Screen name="messages" options={{ href: null }} />
         <Tabs.Screen
           name="clients-facturation"
           options={{

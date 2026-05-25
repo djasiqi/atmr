@@ -5,25 +5,29 @@ import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 import { Platform } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { QueryProvider } from "../src/core/QueryProvider";
+import { PerfInstrumentationProvider } from "../src/core/observability/PerfInstrumentationProvider";
 import { BootSplashGate } from "../src/core/boot/BootSplashGate";
 import { SessionProvider } from "../src/core/sessionProvider";
 import { MonitoringProvider } from "../src/core/providers/MonitoringProvider";
 import { NativeCapabilitiesProvider } from "../src/core/providers/NativeCapabilitiesProvider";
 import { NotificationsProvider } from "../src/core/providers/NotificationsProvider";
 import { ExternalIntentProvider } from "../src/core/providers/ExternalIntentProvider";
+import { LayoutDebugOverlay } from "../src/design/responsive/LayoutDebugOverlay";
+import { ChatLayoutKpisProvider } from "../src/design/responsive/chatLayoutKpis";
 
 void SplashScreen.preventAutoHideAsync().catch(() => {
   // ignore if splash is already controlled elsewhere
 });
 
-if (Platform.OS !== "web" && !__DEV__) {
+if (Platform.OS !== "web") {
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     require("../tasks/locationTask");
   } catch {
-    // task unavailable in environments without native TaskManager support
+    // TaskManager / BackgroundFetch indisponibles (simulateur partiel, etc.)
   }
 }
 
@@ -111,30 +115,37 @@ export default function RootLayout() {
   }
 
   return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
     <SafeAreaProvider>
       <QueryProvider>
+        <PerfInstrumentationProvider>
         <MonitoringProvider>
           <NativeCapabilitiesProvider>
             <SessionProvider>
               <BootSplashGate>
                 <ExternalIntentProvider>
                   <NotificationsProvider>
-                    <Stack screenOptions={{ headerShown: false }}>
-                      <Stack.Screen name="index" />
-                      <Stack.Screen name="(public)" />
-                      <Stack.Screen name="(app)" />
-                      <Stack.Screen name="quick-action" />
-                      <Stack.Screen name="payment-return" />
-                      <Stack.Screen name="guest-payment-return" />
-                    </Stack>
-                    <StatusBar style="auto" />
+                    <ChatLayoutKpisProvider>
+                      <Stack screenOptions={{ headerShown: false }}>
+                        <Stack.Screen name="index" />
+                        <Stack.Screen name="(public)" />
+                        <Stack.Screen name="(app)" />
+                        <Stack.Screen name="quick-action" />
+                        <Stack.Screen name="payment-return" />
+                        <Stack.Screen name="guest-payment-return" />
+                      </Stack>
+                      <StatusBar style="auto" />
+                      <LayoutDebugOverlay />
+                    </ChatLayoutKpisProvider>
                   </NotificationsProvider>
                 </ExternalIntentProvider>
               </BootSplashGate>
             </SessionProvider>
           </NativeCapabilitiesProvider>
         </MonitoringProvider>
+        </PerfInstrumentationProvider>
       </QueryProvider>
     </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }

@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/react-native";
 import { AppStateStatus, Platform } from "react-native";
 import * as Location from "expo-location";
 import { sendDriverLocation } from "../api/driverHttp";
@@ -7,6 +8,7 @@ import { emitDriverTelemetry } from "../../../core/observability/driverTelemetry
 import { isFeatureEnabled } from "../../../core/featureFlags/registry";
 import { evaluateConnectivityPolicy } from "../../../core/network/connectivityPolicy";
 import { getNetworkSnapshot } from "../../../core/network/networkState";
+import { realtimeManager } from "../../../core/realtime/realtimeManager";
 import { TrackingManager } from "../../../core/tracking/trackingManager";
 import { resolveTrackingCadence, TrackingNetworkProfile } from "../../../core/tracking/cadenceResolver";
 import { driverTrackingQueue, DriverTrackingMode } from "./driverTrackingQueue";
@@ -21,10 +23,15 @@ import {
   startBackgroundLocationTaskIfEligible,
   stopBackgroundLocationTask,
 } from "./backgroundLocationTask";
+import { canUseBackgroundLocation } from "./backgroundRuntimeCompat";
+import { formatTrackingSendError } from "./driverTrackingSendErrorFormat";
 
 const FOREGROUND_INTERVAL_MS = Number(process.env.EXPO_PUBLIC_DRIVER_GPS_FOREGROUND_INTERVAL_MS ?? "8000");
 const BACKGROUND_INTERVAL_MS = Number(process.env.EXPO_PUBLIC_DRIVER_GPS_BACKGROUND_INTERVAL_MS ?? "20000");
 const MAX_BACKOFF_MS = 60_000;
+/** Dernière exception du tick tracking (pour logs __DEV__ / télémétrie, sans PII). */
+let lastTrackingTickFailure: unknown = null;
+
 const WATCH_STALE_MS = 25_000;
 const WATCH_DISTANCE_METERS = 10;
 const POSITION_TIMEOUT_MS = Number(process.env.EXPO_PUBLIC_DRIVER_POSITION_TIMEOUT_MS ?? "7000");
@@ -60,6 +67,12 @@ type TrackingBridgeState = {
   staleFallbackTimeouts: number;
   lastStaleFallbackAttemptMs: number | null;
   lastHttpFallbackTrackingEventId: string | null;
+  fallbackTrackingSeq: number;
+};
+
+export type DriverTrackingPosition = {
+  lat: number;
+  lng: number;
 };
 
 export type DriverTrackingBridgeSnapshot = {
@@ -74,6 +87,7 @@ export type DriverTrackingBridgeSnapshot = {
   flushPathUsed: "http_fallback" | "socket_batch" | null;
   networkProfile: TrackingNetworkProfile;
   lastWatchAt: string | null;
+  lastPosition: DriverTrackingPosition | null;
   lastAttemptAt: string | null;
   consecutiveFailures: number;
   backoffUntilMs: number;
@@ -100,9 +114,18 @@ const state: TrackingBridgeState = {
   staleFallbackTimeouts: 0,
   lastStaleFallbackAttemptMs: null,
   lastHttpFallbackTrackingEventId: null,
+  fallbackTrackingSeq: 0,
 };
 
 const trackingBridgeListeners = new Set<DriverTrackingBridgeListener>();
+
+function readDriverLastKnownPosition(): DriverTrackingPosition | null {
+  if (!state.lastWatchedPosition || state.lastWatchAtMs == null) return null;
+  if (Date.now() - state.lastWatchAtMs > WATCH_STALE_MS) return null;
+  const { latitude, longitude } = state.lastWatchedPosition.coords;
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  return { lat: latitude, lng: longitude };
+}
 
 function buildTrackingBridgeSnapshot(): DriverTrackingBridgeSnapshot {
   const managerSnapshot = trackingManager.getSnapshot();
@@ -118,6 +141,7 @@ function buildTrackingBridgeSnapshot(): DriverTrackingBridgeSnapshot {
     flushPathUsed: state.flushPathUsed,
     networkProfile: state.networkProfile,
     lastWatchAt: state.lastWatchAtMs ? new Date(state.lastWatchAtMs).toISOString() : null,
+    lastPosition: readDriverLastKnownPosition(),
     lastAttemptAt: managerSnapshot.lastAttemptAt,
     consecutiveFailures: managerSnapshot.consecutiveFailures,
     backoffUntilMs: managerSnapshot.backoffUntilMs,
@@ -156,7 +180,7 @@ async function ensurePermission(appState: AppStateStatus) {
       });
       return false;
     }
-    if (isFeatureEnabled("tracking_background_enabled")) {
+    if (isFeatureEnabled("tracking_background_enabled") && canUseBackgroundLocation()) {
       await Location.requestBackgroundPermissionsAsync().catch(() => undefined);
     }
     return true;
@@ -286,6 +310,7 @@ async function flushPoint(appState: AppStateStatus) {
   const flushResult = await driverTrackingQueue.flush({
     ackStaleMs: cadence.ackStaleMs,
     networkProfile: cadence.networkProfile,
+    forceHttpFallback: appState !== "active",
   });
   state.queueDepth = flushResult.queueDepth;
   state.flushPathUsed = flushResult.flushPathUsed;
@@ -316,9 +341,9 @@ async function flushPoint(appState: AppStateStatus) {
         flushResult.backendAcked === 0 &&
         flushResult.socketEmitted === 0 &&
         flushResult.dropped === 0));
-  const fallbackTrackingEventId = `bridge_fb_${state.missionId ?? "presence"}_${Math.floor(
-    (position.timestamp ?? Date.now()) / 1000
-  )}`;
+  const secondBucket = Math.floor((position.timestamp ?? Date.now()) / 1000);
+  state.fallbackTrackingSeq = (state.fallbackTrackingSeq + 1) % 1000;
+  const fallbackTrackingEventId = `bridge_fb_${state.missionId ?? "presence"}_${secondBucket}_${state.fallbackTrackingSeq}`;
   const shouldSkipDuplicateFallback =
     state.lastHttpFallbackTrackingEventId === fallbackTrackingEventId;
   if (shouldFallback && !shouldSkipDuplicateFallback) {
@@ -431,11 +456,13 @@ function stopLocationWatch() {
 }
 
 export async function flushDriverTrackingQueueNow() {
-  const mode = resolveTrackingMode(trackingManager.getSnapshot().appState);
-  const cadence = getCadenceForTick(trackingManager.getSnapshot().appState, mode);
+  const managerSnapshot = trackingManager.getSnapshot();
+  const mode = resolveTrackingMode(managerSnapshot.appState);
+  const cadence = getCadenceForTick(managerSnapshot.appState, mode);
   const result = await driverTrackingQueue.flush({
     ackStaleMs: cadence.ackStaleMs,
     networkProfile: cadence.networkProfile,
+    forceHttpFallback: managerSnapshot.appState !== "active",
   });
   state.queueDepth = result.queueDepth;
   if (result.backendAcked > 0 && result.lastBackendAckAt) {
@@ -491,17 +518,31 @@ const trackingManager = new TrackingManager({
         await sendLegacyPoint(appState, nowIso);
         state.lastSentAt = nowIso;
       }
+      lastTrackingTickFailure = null;
       return "success";
-    } catch {
+    } catch (error) {
+      lastTrackingTickFailure = error;
       return "failed";
     }
   },
   onFailure: ({ appState, consecutiveFailures, backoffMs }) => {
+    const errMeta = formatTrackingSendError(lastTrackingTickFailure);
+    const persistentQueue = isFeatureEnabled("tracking_persistent_runtime_enabled");
     emitDriverTelemetry("tracking.send.failure", {
       source: "driver.tracking.bridge",
       mission_id: state.missionId,
       retry_count: consecutiveFailures,
       app_state: appState,
+      error_message: errMeta.error_message,
+      error_class: errMeta.error_class,
+      http_status: errMeta.http_status,
+      api_error_code: errMeta.api_error_code,
+      transport_code: errMeta.transport_code,
+      tracking_tick_path: persistentQueue ? "persistent_queue" : "legacy_http",
+      flush_path_last: state.flushPathUsed,
+      network_profile: state.networkProfile,
+      presence_window_active: state.presenceWindowActive,
+      driver_socket_ready: realtimeManager.isDriverSocketReady(),
     });
     emitDriverTelemetry("tracking.send.backoff", {
       source: "driver.tracking.bridge",
@@ -509,11 +550,37 @@ const trackingManager = new TrackingManager({
       retry_count: consecutiveFailures,
       app_state: appState,
       backoff_ms: backoffMs,
+      error_class: errMeta.error_class,
     });
     if (__DEV__) {
       console.warn("[driver_tracking_bridge_send_failed]", {
         failures: consecutiveFailures,
         backoffMs,
+        ...errMeta,
+        tracking_tick_path: persistentQueue ? "persistent_queue" : "legacy_http",
+        flush_path_last: state.flushPathUsed,
+        network_profile: state.networkProfile,
+        driver_socket_ready: realtimeManager.isDriverSocketReady(),
+      });
+    }
+    /** Breadcrumbs légers sur rafales d’échecs (évite le bruit à chaque tick). */
+    if (consecutiveFailures === 3 || consecutiveFailures === 10 || consecutiveFailures === 25) {
+      Sentry.addBreadcrumb({
+        category: "driver.tracking",
+        type: "default",
+        level: "warning",
+        message: "tracking_send_failure_burst",
+        data: {
+          failures: consecutiveFailures,
+          backoff_ms: backoffMs,
+          error_class: errMeta.error_class,
+          http_status: errMeta.http_status,
+          api_error_code: errMeta.api_error_code,
+          transport_code: errMeta.transport_code,
+          tracking_tick_path: persistentQueue ? "persistent_queue" : "legacy_http",
+          mission_id: state.missionId,
+          app_state: appState,
+        },
       });
     }
   },
@@ -653,6 +720,10 @@ export function getDriverTrackingPresenceWindowActive(): boolean {
 
 export function getDriverTrackingBridgeSnapshot() {
   return buildTrackingBridgeSnapshot();
+}
+
+export function getDriverLastKnownPosition(): DriverTrackingPosition | null {
+  return readDriverLastKnownPosition();
 }
 
 export function subscribeDriverTrackingBridge(

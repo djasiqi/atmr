@@ -1,8 +1,13 @@
 import { Stack } from "expo-router";
+import { stackPushOptions } from "../../src/design/navigation/stackScreenOptions";
 
+/**
+ * Pile publique — push hiérarchique LIRIE pour onboarding, signup, fallbacks.
+ * Cohérence push 220 / pop 180 sur tous les flux non authentifiés.
+ */
 export default function PublicLayout() {
   return (
-    <Stack screenOptions={{ headerShown: false }}>
+    <Stack screenOptions={{ headerShown: false, ...stackPushOptions }}>
       <Stack.Screen name="index" />
       <Stack.Screen name="onboarding-step-1" />
       <Stack.Screen name="onboarding-step-2" />

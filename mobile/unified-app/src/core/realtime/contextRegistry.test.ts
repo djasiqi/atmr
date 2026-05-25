@@ -13,7 +13,12 @@ describe("context registry", () => {
   });
 
   it("resolves channels by surface helper", () => {
-    expect(getRealtimeChannelsForSurface("driver")).toEqual(["driver_mission_event"]);
+    expect(getRealtimeChannelsForSurface("driver")).toEqual([
+      "driver_mission_event",
+      "team_chat_message",
+      "team_chat_typing",
+      "conversation_message",
+    ]);
     expect(getRealtimeChannelsForSurface("company")).toEqual([
       "company_dispatch_update",
       "new_booking",
@@ -22,6 +27,8 @@ describe("context registry", () => {
       "booking_message",
       "booking_message_sent",
       "team_chat_message",
+      "conversation_message",
+      "urgent_alert",
       "driver_location_update",
       "driver_live_state_update",
       "optimizer_status_changed",

@@ -83,6 +83,23 @@ jest.mock("../../features/driver/silentNotifications", () => ({
   isSilentPayload: (payload: unknown) => mockIsSilentPayload(payload),
 }));
 
+jest.mock("@tanstack/react-query", () => ({
+  useQueryClient: () => ({
+    invalidateQueries: jest.fn(),
+  }),
+}));
+
+jest.mock("../../features/driver/driverRealtimeSync", () => ({
+  configureDriverRealtimeSync: jest.fn(),
+  requestMissionRefresh: jest.fn(),
+  requestChatRefresh: jest.fn(),
+}));
+
+jest.mock("../notifications/notificationDedupStore", () => ({
+  buildNotificationDedupKey: () => "dedup-key",
+  markNotificationHandled: () => false,
+}));
+
 describe("NotificationsProvider", () => {
   beforeEach(() => {
     onReceived = null;

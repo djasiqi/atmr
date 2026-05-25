@@ -189,6 +189,10 @@ class Booking(db.Model):
     notes_medical = Column(Text)
     pickup_access_notes = Column(Text, nullable=True)
     dropoff_access_notes = Column(Text, nullable=True)
+    pickup_floor = Column(String(50), nullable=True)
+    pickup_door_code = Column(String(50), nullable=True)
+    dropoff_floor = Column(String(50), nullable=True)
+    dropoff_door_code = Column(String(50), nullable=True)
     is_urgent = Column(Boolean, nullable=False, server_default=text("false"))
     time_confirmed = Column(Boolean, nullable=False, server_default=text("true"))
 
@@ -250,6 +254,12 @@ class Booking(db.Model):
         nullable=False,
         server_default=func.now(),
         onupdate=func.now(),
+    )
+    edit_version: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        server_default=text("1"),
+        default=1,
     )
 
     billed_to_type = Column(String(50), nullable=False, server_default="patient")
@@ -564,6 +574,10 @@ class Booking(db.Model):
             "notes_medical": self.notes_medical or "Aucune note",
             "pickup_access_notes": getattr(self, "pickup_access_notes", None) or None,
             "dropoff_access_notes": getattr(self, "dropoff_access_notes", None) or None,
+            "pickup_floor": getattr(self, "pickup_floor", None) or None,
+            "pickup_door_code": getattr(self, "pickup_door_code", None) or None,
+            "dropoff_floor": getattr(self, "dropoff_floor", None) or None,
+            "dropoff_door_code": getattr(self, "dropoff_door_code", None) or None,
             "wheelchair_client_has": _as_bool(self.wheelchair_client_has),
             "wheelchair_need": _as_bool(self.wheelchair_need),
             # ✅ P1-4 Phase 1.4: Standardiser timestamps en ISO 8601
@@ -572,6 +586,7 @@ class Booking(db.Model):
                 if isinstance(created_dt, datetime)
                 else None
             ),
+            "edit_version": int(self.edit_version or 1),
             "updated_at": (
                 iso_utc_z(to_utc_from_db(updated_dt))
                 if isinstance(updated_dt, datetime)
@@ -644,6 +659,88 @@ class Booking(db.Model):
             # ✅ Timeline institution (si booking issu d'une demande institution)
             "institution_timeline": self._get_institution_timeline(),
             "online_payment": self._online_client_payment_brief(),
+        }
+
+    @property
+    def serialize_dashboard(self):
+        """Projection légère pour le dashboard entreprise (KPI, table, dispatch)."""
+        scheduled_dt = _as_dt(self.scheduled_time)
+        status_val = self.status
+        cli = self.client
+        transfer_cache = getattr(self, "_transfer_cache", None)
+        if transfer_cache is not None:
+            is_transferred = bool(transfer_cache.get("is_transferred"))
+            active_transfer = transfer_cache.get("active_transfer")
+        else:
+            is_transferred = (
+                self.executing_company_id is not None
+                and self.executing_company_id != self.company_id
+            )
+            active_transfer = None
+
+        date_local, time_local = (
+            split_date_time_local(scheduled_dt) if scheduled_dt else (None, None)
+        )
+
+        return {
+            "id": self.id,
+            "client_name": self.customer_full_name,
+            "pickup_location": self.pickup_location,
+            "dropoff_location": self.dropoff_location,
+            "pickup_lat": _as_float(self.pickup_lat),
+            "pickup_lon": _as_float(self.pickup_lon),
+            "dropoff_lat": _as_float(self.dropoff_lat),
+            "dropoff_lon": _as_float(self.dropoff_lon),
+            "scheduled_time": (
+                iso_utc_z(to_utc_from_db(scheduled_dt)) if scheduled_dt else None
+            ),
+            "date_formatted": date_local or "Non spécifié",
+            "time_formatted": time_local or "Non spécifié",
+            "status": getattr(status_val, "value", "unknown").lower(),
+            "company_id": self.company_id,
+            "company_name": self.company.name if self.company else None,
+            "executing_company_id": self.executing_company_id,
+            "executing_company_name": (
+                self.executing_company.name if self.executing_company else None
+            ),
+            "is_transferred": is_transferred,
+            "active_transfer": active_transfer,
+            "driver_id": self.driver_id,
+            "driver_name": (
+                f"{self.driver.user.first_name} {self.driver.user.last_name}".strip()
+                if self.driver and self.driver.user
+                else None
+            ),
+            "driver": {
+                "id": self.driver.id,
+                "full_name": (
+                    (
+                        f"{self.driver.user.first_name or ''} "
+                        f"{self.driver.user.last_name or ''}"
+                    ).strip()
+                    or (self.driver.user.username if self.driver.user else None)
+                    if self.driver and self.driver.user
+                    else None
+                ),
+            }
+            if self.driver
+            else None,
+            "client": {
+                "id": getattr(cli, "id", None),
+                "full_name": self.customer_full_name,
+                "is_institution": bool(getattr(cli, "is_institution", False))
+                if cli
+                else False,
+            },
+            "is_return": _as_bool(self.is_return),
+            "parent_booking_id": self.parent_booking_id,
+            "has_return": self.return_trip is not None,
+            "time_confirmed": _as_bool(self.time_confirmed),
+            "mission_type": getattr(self, "mission_type", None) or "patient_transport",
+            "wheelchair_need": _as_bool(self.wheelchair_need),
+            "amount": round(_as_float(self.amount), 2),
+            "billed_to_type": (_as_str(self.billed_to_type) or "patient"),
+            "billed_to_company_id": self.billed_to_company_id,
         }
 
     def _online_client_payment_brief(self):
@@ -740,6 +837,9 @@ class Booking(db.Model):
         transférée, on vérifie s'il existe un transfert ACCEPTED ou COMPLETED
         où owner_company_id != company_id actuel.
         """
+        transfer_cache = getattr(self, "_transfer_cache", None)
+        if transfer_cache is not None:
+            return bool(transfer_cache.get("is_transferred"))
         try:
             from models.booking_transfer import BookingTransfer
             from models.enums import TransferStatus
@@ -775,6 +875,9 @@ class Booking(db.Model):
 
     def _get_active_transfer_info(self):
         """Récupère les informations du transfert actif pour cette réservation."""
+        transfer_cache = getattr(self, "_transfer_cache", None)
+        if transfer_cache is not None:
+            return transfer_cache.get("active_transfer")
         try:
             from models.booking_transfer import BookingTransfer
             from models.enums import TransferStatus

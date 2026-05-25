@@ -1,0 +1,25 @@
+{
+  "label": "baseline",
+  "generated_at": "2026-05-23T00:00:00.000Z",
+  "note": "Remplacer par __exportPerfStabilizationSnapshot__('baseline') après session de référence.",
+  "latencies": {
+    "mission_open": { "p50_ms": 0, "p95_ms": 0, "max_ms": 0, "count": 0 },
+    "fleet_map_open": { "p50_ms": 0, "p95_ms": 0, "max_ms": 0, "count": 0 },
+    "context_switch_total": { "p50_ms": 0, "p95_ms": 0, "max_ms": 0, "count": 0 }
+  },
+  "memory": {
+    "heap_used_mb": { "p50_ms": 0, "p95_ms": 0, "max_ms": 0, "count": 0 },
+    "heap_peak_mb": { "p50_ms": 0, "p95_ms": 0, "max_ms": 0, "count": 0 },
+    "gc_events": 0
+  },
+  "network": {
+    "http_requests_per_min": 0,
+    "invalidate_booking_updated_per_min": 0,
+    "invalidate_driver_location_per_min": 0
+  },
+  "fleet": {
+    "enrich_fleet_drivers_duration_ms": { "p50_ms": 0, "p95_ms": 0, "max_ms": 0, "count": 0 }
+  },
+  "instrumentation_row_count": 0,
+  "top_by_sum_ms": []
+}

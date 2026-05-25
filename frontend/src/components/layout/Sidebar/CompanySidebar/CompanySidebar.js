@@ -10,7 +10,7 @@
  * - Responsive automatique : ouvert grand écran, icônes seules petit écran
  */
 
-import React, { useEffect, useRef, useCallback, useMemo, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useCallback, useMemo, useState } from 'react';
 import { NavLink, useParams, useLocation } from 'react-router-dom';
 import {
   HiOutlineViewGrid,
@@ -60,8 +60,8 @@ const CompanySidebar = () => {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef(null);
 
-  // Sync --sidebar-w CSS variable on resize
-  useEffect(() => {
+  // Sync --sidebar-w CSS variable on resize (layout phase to avoid first-paint shift)
+  useLayoutEffect(() => {
     const update = () => {
       document.documentElement.style.setProperty('--sidebar-w', `${getSidebarWidth()}px`);
     };
@@ -133,7 +133,7 @@ const CompanySidebar = () => {
 
   const toolsNav = [
     { path: `${basePath}/invoices/clients`, label: 'Facturation', icon: <HiOutlineDocumentText /> },
-    { path: `${basePath}/dispatch`, label: 'Dispatch', icon: <HiOutlineLightningBolt /> },
+    { path: `${basePath}/dispatch`, label: 'Exploitation', icon: <HiOutlineLightningBolt /> },
     { path: `${basePath}/analytics`, label: 'Analytics', icon: <HiOutlineChartBar /> },
   ];
 
@@ -184,7 +184,7 @@ const CompanySidebar = () => {
               key={item.path}
               to={item.path}
               data-tour-id={
-                item.label === 'Dispatch'
+                item.path.endsWith('/dispatch')
                   ? 'sidebar-dispatch-link'
                   : item.label === 'Facturation'
                     ? 'sidebar-facturation-link'

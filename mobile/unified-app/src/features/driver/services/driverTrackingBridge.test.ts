@@ -70,6 +70,16 @@ jest.mock("../../../core/observability/driverTelemetry", () => ({
     mockEmitDriverTelemetry(event, payload as any),
 }));
 
+jest.mock("@sentry/react-native", () => ({
+  addBreadcrumb: jest.fn(),
+}));
+
+jest.mock("../../../core/realtime/realtimeManager", () => ({
+  realtimeManager: {
+    isDriverSocketReady: jest.fn(() => false),
+  },
+}));
+
 jest.mock("../missionBarAndroid", () => ({
   showMissionBarAndroid: jest.fn(),
   hideMissionBarAndroid: jest.fn(),

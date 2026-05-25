@@ -187,6 +187,19 @@ export function canEditBilling(institutionRole) {
   return can(institutionRole, INSTITUTION_ACTIONS.EDIT_BILLING);
 }
 
+/** Montants visibles : admin, billing, curator uniquement */
+export function canViewFinancialAmounts(institutionRole) {
+  const role = institutionRole?.toLowerCase();
+  return role === 'institution_admin'
+    || role === 'institution_billing'
+    || role === 'institution_curator';
+}
+
+/** Bloc facturation visible (édition ou lecture) : admin + billing */
+export function canViewBillingSection(institutionRole) {
+  return canViewFinancialAmounts(institutionRole);
+}
+
 /**
  * Vérifie si l'utilisateur peut changer la facturation (institution/patient) sur une demande
  * @param {string} institutionRole
@@ -274,6 +287,8 @@ const institutionPermissions = {
   isCurator,
   canManageRequests,
   canEditBilling,
+  canViewFinancialAmounts,
+  canViewBillingSection,
   canEditRequestBilling,
   canViewAdminData,
   canEditAdminData,

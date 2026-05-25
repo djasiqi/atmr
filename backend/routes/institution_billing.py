@@ -58,6 +58,20 @@ billing_update_model = institution_billing_ns.model(
         "billing_details": fields.Raw(
             description="Détails de facturation (JSON)",
         ),
+        "override_reason": fields.String(
+            required=True,
+            description="Motif obligatoire de modification facturation",
+        ),
+        "billing_change_reason_code": fields.String(
+            required=True,
+            description="Code motif (liste fermée)",
+        ),
+        "reason_comment": fields.String(
+            description="Commentaire optionnel",
+        ),
+        "version": fields.Integer(
+            description="Version optimiste du booking (si CONVERTED)",
+        ),
     },
 )
 
@@ -84,6 +98,10 @@ class BillingUpdateSchema(Schema):
         required=False,
         allow_none=True,
     )
+    override_reason = ma_fields.String(required=True, validate=validate.Length(min=3))
+    billing_change_reason_code = ma_fields.String(required=True)
+    reason_comment = ma_fields.String(required=False, allow_none=True)
+    version = ma_fields.Integer(required=False)
 
 
 billing_update_schema = BillingUpdateSchema()
@@ -120,7 +138,22 @@ def get_billing_context() -> tuple[int, int | None, str | None]:
         msg = ROLE_REQUIRED_MSG % (", ".join(BILLING_ALLOWED_ROLES), institution_role)
         abort(403, description=msg)
 
-    user_id = get_jwt_identity()
+    raw_identity = get_jwt_identity()
+    user_id: int | None = None
+    if raw_identity is not None:
+        raw = str(raw_identity).strip()
+        if raw:
+            if raw.isdigit():
+                user_id = int(raw)
+            else:
+                try:
+                    from models import User
+
+                    u = User.query.filter_by(public_id=raw).first()
+                    if u:
+                        user_id = int(u.id)
+                except Exception:
+                    user_id = None
     return institution_id, user_id, institution_role
 
 
@@ -176,9 +209,24 @@ class RequestBillingUpdate(Resource):
 
             validated = cast(dict[str, Any], billing_update_schema.load(data))
 
+            from services.institutions.booking_change_service import (
+                BILLING_CHANGE_REASON_CODES,
+            )
+
+            code = (validated.get("billing_change_reason_code") or "").upper()
+            if code not in BILLING_CHANGE_REASON_CODES:
+                return {
+                    "error": "billing_change_reason_code invalide",
+                    "allowed": sorted(BILLING_CHANGE_REASON_CODES),
+                }, 400
+
             # Garder anciennes valeurs pour audit
             old_intent = transport_req.billing_intent
             old_details = transport_req.billing_details
+            before = {
+                "billing_intent": old_intent,
+                "billing_details": old_details,
+            }
 
             # Mettre à jour
             if validated.get("billing_intent"):
@@ -186,6 +234,11 @@ class RequestBillingUpdate(Resource):
 
             if "billing_details" in validated:
                 transport_req.billing_details = validated["billing_details"]
+
+            after = {
+                "billing_intent": transport_req.billing_intent,
+                "billing_details": transport_req.billing_details,
+            }
 
             db.session.commit()
 
@@ -309,8 +362,30 @@ class BookingBillingUpdate(Resource):
 
             validated = cast(dict[str, Any], billing_update_schema.load(data))
 
+            from services.institutions.booking_change_service import (
+                BILLING_CHANGE_REASON_CODES,
+                bump_edit_version,
+                check_version,
+                record_change_event,
+                _billing_snapshot,
+            )
+
+            code = (validated.get("billing_change_reason_code") or "").upper()
+            if code not in BILLING_CHANGE_REASON_CODES:
+                return {
+                    "error": "billing_change_reason_code invalide",
+                    "allowed": sorted(BILLING_CHANGE_REASON_CODES),
+                }, 400
+
+            client_version = validated.get("version")
+            if client_version is not None:
+                conflict = check_version(booking, client_version)
+                if conflict:
+                    return conflict, 409
+
             # Garder anciennes valeurs pour audit
             old_billed_to = booking.billed_to_type
+            before = _billing_snapshot(booking)
 
             # Mettre à jour le booking
             # Mapping billing_intent → billed_to_type (institution → clinic)
@@ -331,6 +406,34 @@ class BookingBillingUpdate(Resource):
                     booking.billed_to_company_id = booking.company_id
                 else:
                     booking.billed_to_company_id = None
+
+            booking.billing_override_reason = validated.get("override_reason")
+            bump_edit_version(booking)
+            after = _billing_snapshot(booking)
+            financial_role = (
+                "billing"
+                if role == InstitutionRole.BILLING.value
+                else "admin"
+            )
+            record_change_event(
+                booking=booking,
+                transport_request=transport_req,
+                institution_id=institution_id,
+                actor_user_id=user_id,
+                actor_role=role,
+                actor_type="institution_user",
+                actor_display_name=None,
+                action_type="billing_changed",
+                change_scope="billing",
+                source="institution_portal",
+                before_snapshot=before,
+                after_snapshot=after,
+                reason=validated.get("override_reason"),
+                change_class="major",
+                severity="WARNING",
+                financial_actor_role=financial_role,
+                billing_change_reason_code=code,
+            )
 
             db.session.commit()
 

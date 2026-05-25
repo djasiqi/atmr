@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { realtimeManager } from "../../../core/realtime/realtimeManager";
 import { getTrackingSnapshot, subscribeTrackingSnapshot } from "../tracking";
 
 export type TrackingRuntimeMode =
@@ -34,20 +33,27 @@ function mapSnapshotToTrackingState(
   };
 }
 
+function trackingSnapshotsEqual(
+  a: ReturnType<typeof getTrackingSnapshot>,
+  b: ReturnType<typeof getTrackingSnapshot>
+): boolean {
+  return (
+    a.isRunning === b.isRunning &&
+    a.missionStatus === b.missionStatus &&
+    a.lastSentAt === b.lastSentAt &&
+    a.lastAckAt === b.lastAckAt &&
+    a.queueDepth === b.queueDepth &&
+    a.missionId === b.missionId
+  );
+}
+
 export function useTrackingState(): TrackingState {
   const [snapshot, setSnapshot] = useState(() => getTrackingSnapshot());
 
   useEffect(() => {
-    const unsubscribeTracking = subscribeTrackingSnapshot((nextSnapshot) => {
-      setSnapshot(nextSnapshot);
+    return subscribeTrackingSnapshot((nextSnapshot) => {
+      setSnapshot((prev) => (trackingSnapshotsEqual(prev, nextSnapshot) ? prev : nextSnapshot));
     });
-    const unsubscribeRealtime = realtimeManager.subscribe(() => {
-      setSnapshot(getTrackingSnapshot());
-    });
-    return () => {
-      unsubscribeTracking();
-      unsubscribeRealtime();
-    };
   }, []);
 
   return useMemo(() => mapSnapshotToTrackingState(snapshot), [snapshot]);

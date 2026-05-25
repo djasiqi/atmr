@@ -677,6 +677,86 @@ def get_institution_from_booking(booking_id: int) -> int | None:
     return None
 
 
+def emit_offer_unavailable(
+    *,
+    company_id: int,
+    offer_id: int,
+    transport_request: Any,
+    reason: str = "accepted_by_peer",
+    accepted_by_company_id: int | None = None,
+    accepted_by_company_name: str | None = None,
+) -> bool:
+    """Notifie une entreprise qu'une offre n'est plus disponible (broadcast concurrent)."""
+    if not company_id or not offer_id:
+        return False
+
+    metadata: dict[str, Any] = {
+        "offer_id": offer_id,
+        "request_id": transport_request.id,
+        "public_id": str(getattr(transport_request, "public_id", "")),
+        "reason": reason,
+        "accepted_by_company_id": accepted_by_company_id,
+        "accepted_by_company_name": accepted_by_company_name,
+    }
+    institution = getattr(transport_request, "institution", None)
+    institution_name = getattr(institution, "name", None) if institution else None
+    if institution_name:
+        metadata["institution_name"] = institution_name
+
+    title = "Demande plus disponible"
+    message = (
+        f"La demande #{transport_request.id} a été acceptée par un autre transporteur"
+    )
+    if institution_name:
+        message = f"{institution_name} — demande déjà prise par un autre transporteur"
+
+    dedupe_key = (
+        f"offer_unavailable:{transport_request.id}:{company_id}:{reason}"
+    )
+
+    try:
+        persist_company_notification(
+            company_id=company_id,
+            event_type="offer_unavailable",
+            title=title,
+            message=message,
+            metadata=metadata,
+            dedupe_key=dedupe_key,
+        )
+
+        from services.realtime.socketio import emit_company_event
+
+        emit_company_event(
+            company_id,
+            "offer_unavailable",
+            SocketEvent.create(
+                "offer_unavailable",
+                {
+                    **metadata,
+                    "transport_request_id": transport_request.id,
+                    "institution_name": institution_name,
+                },
+            ),
+        )
+
+        from services.metrics.institution_metrics import track_offer_unavailable_emitted
+
+        track_offer_unavailable_emitted(
+            company_id=company_id,
+            offer_id=offer_id,
+            transport_request_id=transport_request.id,
+            reason=reason,
+        )
+        return True
+    except Exception as e:
+        logger.error(
+            "[InstitutionEvents] Error emitting offer_unavailable to company %s: %s",
+            company_id,
+            e,
+        )
+        return False
+
+
 def _format_request_info(transport_req: Any) -> dict[str, Any]:
     return {
         "request_id": transport_req.id,

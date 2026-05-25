@@ -257,6 +257,10 @@ class BookingUpdateSchema(Schema):
     dropoff_access_notes = fields.Str(
         validate=validate.Length(max=1000), allow_none=True
     )
+    pickup_floor = fields.Str(validate=validate.Length(max=50), allow_none=True)
+    pickup_door_code = fields.Str(validate=validate.Length(max=50), allow_none=True)
+    dropoff_floor = fields.Str(validate=validate.Length(max=50), allow_none=True)
+    dropoff_door_code = fields.Str(validate=validate.Length(max=50), allow_none=True)
 
     # ✅ Livraison matériel : permettre de corriger mission_type et delivery_description
     mission_type = fields.Str(

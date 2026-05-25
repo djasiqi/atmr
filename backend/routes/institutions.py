@@ -504,6 +504,7 @@ class InstitutionSettingsResource(Resource):
             settings_fields = [
                 "timeout_same_day_minutes",
                 "timeout_default_minutes",
+                "offer_dispatch_mode",
                 "default_billing_intent",
                 "default_vat_rate",
                 "default_payment_terms_days",

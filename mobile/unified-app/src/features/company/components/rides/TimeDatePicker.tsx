@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -13,9 +12,11 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useResponsiveTokens } from "../../../../design/responsive";
+import { Modal } from "../../../../design/ui/LegacyModal";
 import { AppText } from "../../../../design/ui/AppText";
 import { E } from "../../theme/enterpriseOpsTheme";
 import { normalizeScheduledTimeIso } from "../../useRideForms";
+import { FONT_SIZE } from "../../../../design/responsive/typographyTokens";
 
 const SWISS_TZ = "Europe/Zurich";
 const ROW_RADIUS = 12;
@@ -62,7 +63,7 @@ const PICKER_ACTION_HEIGHT = 36;
 
 const styles = StyleSheet.create({
   label: {
-    fontSize: 13,
+    fontSize: FONT_SIZE.px13,
     fontWeight: "600" as const,
     color: E.TEXT,
     marginBottom: 4,
@@ -77,12 +78,56 @@ const styles = StyleSheet.create({
     paddingHorizontal: 11,
     backgroundColor: "#fff",
   },
+  splitRow: {
+    flexDirection: "row" as const,
+    alignItems: "stretch" as const,
+    borderWidth: 1,
+    borderColor: "rgba(145, 165, 157, 0.38)",
+    borderRadius: ROW_RADIUS,
+    overflow: "hidden" as const,
+    backgroundColor: "#FFFFFF",
+  },
+  splitRowTonal: {
+    backgroundColor: "#FAFBFA",
+  },
+  splitCell: {
+    flex: 1,
+    minHeight: 46,
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    paddingHorizontal: 11,
+    backgroundColor: "#FFFFFF",
+  },
+  splitCellTonal: {
+    backgroundColor: "#FAFBFA",
+  },
+  splitCellPressed: {
+    backgroundColor: "#F4FAF8",
+  },
+  splitCellDate: {
+    flex: 1.55,
+  },
+  splitCellTime: {
+    flex: 1,
+  },
+  splitDivider: {
+    width: StyleSheet.hairlineWidth,
+    backgroundColor: "rgba(145, 165, 157, 0.32)",
+  },
+  splitValue: {
+    flex: 1,
+    marginRight: 4,
+    minWidth: 0,
+  },
   rowIdle: {
     backgroundColor: "#FFFFFF",
   },
   rowEmpty: {
     backgroundColor: "#FCFDFC",
     borderColor: "rgba(145, 165, 157, 0.3)",
+  },
+  rowTonal: {
+    backgroundColor: "#FAFBFA",
   },
   rowHovered: {
     borderColor: "rgba(0, 121, 107, 0.34)",
@@ -110,7 +155,7 @@ const styles = StyleSheet.create({
     marginRight: 7,
   },
   rowValue: {
-    fontSize: 13,
+    fontSize: FONT_SIZE.px13,
     fontWeight: "600" as const,
     lineHeight: 17,
   },
@@ -125,6 +170,18 @@ const styles = StyleSheet.create({
     width: 18,
     alignItems: "center" as const,
     justifyContent: "center" as const,
+  },
+  requiredSlot: {
+    width: 16,
+    marginLeft: 4,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+  },
+  requiredMark: {
+    color: "#DC2626",
+    fontWeight: "700" as const,
+    fontSize: 16,
+    lineHeight: 18,
   },
   webActionsRow: {
     flexDirection: "row" as const,
@@ -152,7 +209,7 @@ const styles = StyleSheet.create({
     opacity: 0.9,
   },
   webActionText: {
-    fontSize: 11,
+    fontSize: FONT_SIZE.px11,
     fontWeight: "700" as const,
   },
   webActionTextSecondary: {
@@ -175,7 +232,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between" as const,
   },
   iosSheetTitle: {
-    fontSize: 14,
+    fontSize: FONT_SIZE.px14,
     fontWeight: "700" as const,
     color: E.TEXT,
   },
@@ -191,12 +248,12 @@ const styles = StyleSheet.create({
     backgroundColor: "#F8FAFC",
   },
   iosSheetCloseText: {
-    fontSize: 12,
+    fontSize: FONT_SIZE.px12,
     fontWeight: "700" as const,
     color: E.TEXT_SEC,
   },
   iosPreview: {
-    fontSize: 12,
+    fontSize: FONT_SIZE.px12,
     lineHeight: 16,
     color: E.TEXT_SEC,
   },
@@ -214,7 +271,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   iosQuickChipText: {
-    fontSize: 11,
+    fontSize: FONT_SIZE.px11,
     fontWeight: "700" as const,
     color: E.BRAND,
   },
@@ -224,25 +281,29 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end" as const,
   },
   mobileModalCard: {
-    backgroundColor: "#FFFFFF",
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    padding: 10,
-    maxHeight: "84%",
+    flexGrow: 0,
+    flexShrink: 1,
   },
   mobileModalHeader: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     justifyContent: "space-between" as const,
+    gap: 10,
     marginBottom: 8,
   },
+  mobileModalHeaderText: {
+    flexGrow: 1,
+    flexShrink: 1,
+    minWidth: 0,
+  },
   mobileModalTitle: {
-    fontSize: 14,
+    fontSize: FONT_SIZE.px15,
     fontWeight: "700" as const,
     color: E.TEXT,
+    lineHeight: 18,
   },
   mobileModalClose: {
-    minHeight: 34,
+    minHeight: 32,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: "rgba(100, 116, 139, 0.2)",
@@ -252,15 +313,15 @@ const styles = StyleSheet.create({
     justifyContent: "center" as const,
   },
   mobileModalPreview: {
-    fontSize: 12,
-    lineHeight: 16,
+    fontSize: FONT_SIZE.px12,
+    lineHeight: 14,
     color: E.TEXT_SEC,
-    marginBottom: 8,
+    marginTop: 2,
   },
   mobileStepTabs: {
     flexDirection: "row" as const,
     gap: 6,
-    marginBottom: 6,
+    marginBottom: 8,
   },
   mobileStepTab: {
     flex: 1,
@@ -277,7 +338,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0, 121, 107, 0.08)",
   },
   mobileStepTabText: {
-    fontSize: 12,
+    fontSize: FONT_SIZE.px12,
     fontWeight: "700" as const,
     color: E.TEXT_SEC,
   },
@@ -313,7 +374,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0, 121, 107, 0.14)",
   },
   mobileDateSegText: {
-    fontSize: 24,
+    fontSize: FONT_SIZE.px24,
     fontWeight: "800" as const,
     color: E.TEXT,
     letterSpacing: -0.35,
@@ -376,7 +437,7 @@ const styles = StyleSheet.create({
     borderColor: "rgba(0, 121, 107, 0.35)",
   },
   mobileMonthStripLabel: {
-    fontSize: 10,
+    fontSize: FONT_SIZE.px10,
     fontWeight: "700" as const,
     color: E.TEXT_MUTED,
     letterSpacing: 0.2,
@@ -386,7 +447,7 @@ const styles = StyleSheet.create({
     color: E.TEXT,
   },
   mobileMonthStripYear: {
-    fontSize: 14,
+    fontSize: FONT_SIZE.px14,
     fontWeight: "700" as const,
     color: E.TEXT_MUTED,
     fontVariant: ["tabular-nums"],
@@ -412,7 +473,7 @@ const styles = StyleSheet.create({
     borderColor: "rgba(0, 121, 107, 0.35)",
   },
   mobileYearStripLabel: {
-    fontSize: 14,
+    fontSize: FONT_SIZE.px14,
     fontWeight: "700" as const,
     color: E.TEXT_MUTED,
     fontVariant: ["tabular-nums"],
@@ -440,7 +501,7 @@ const styles = StyleSheet.create({
     backgroundColor: E.BRAND,
   },
   mobileDayStripWeekday: {
-    fontSize: 10,
+    fontSize: FONT_SIZE.px10,
     fontWeight: "700" as const,
     color: E.TEXT_MUTED,
     letterSpacing: 0.2,
@@ -449,7 +510,7 @@ const styles = StyleSheet.create({
     color: "rgba(255,255,255,0.92)",
   },
   mobileDayStripNumber: {
-    fontSize: 14,
+    fontSize: FONT_SIZE.px14,
     fontWeight: "700" as const,
     color: E.TEXT,
   },
@@ -461,7 +522,7 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
   },
   mobileTimeHeaderColon: {
-    fontSize: 24,
+    fontSize: FONT_SIZE.px24,
     fontWeight: "800" as const,
     color: E.TEXT_SEC,
     letterSpacing: -0.35,
@@ -507,7 +568,7 @@ const styles = StyleSheet.create({
     borderColor: "rgba(0, 121, 107, 0.35)",
   },
   mobileTimeStripValue: {
-    fontSize: 14,
+    fontSize: FONT_SIZE.px14,
     fontWeight: "700" as const,
     color: E.TEXT_MUTED,
     fontVariant: ["tabular-nums"],
@@ -542,7 +603,7 @@ const styles = StyleSheet.create({
     borderColor: "rgba(148, 163, 184, 0.28)",
   },
   mobileActionDockText: {
-    fontSize: 11,
+    fontSize: FONT_SIZE.px11,
     fontWeight: "700" as const,
   },
   mobileActionDockTextPrimary: {
@@ -563,7 +624,7 @@ const styles = StyleSheet.create({
     borderColor: "rgba(148, 163, 184, 0.25)",
   },
   mobileModalCloseText: {
-    fontSize: 12,
+    fontSize: FONT_SIZE.px12,
     fontWeight: "700" as const,
     color: E.TEXT_SEC,
   },
@@ -591,6 +652,12 @@ function getMonthTitle(d: Date): string {
 
 function getMonthAbbr3Fr(d: Date): string {
   return FR_MONTH_ABBR_3[d.getMonth()];
+}
+
+function capitalizeFirst(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
 }
 
 function startOfDay(d: Date): Date {
@@ -726,11 +793,53 @@ function formatSwissDateOnlyDisplay(iso: string): string {
   });
 }
 
+function formatSwissDateCompactDisplay(iso: string): string {
+  const n = normalizeScheduledTimeIso(iso);
+  if (!n) return "";
+  const d = parseToDate(n);
+  if (!d) return "";
+  const weekday = capitalizeFirst(
+    d.toLocaleDateString("fr-CH", {
+      timeZone: SWISS_TZ,
+      weekday: "short",
+    }).replace(/\.$/, ""),
+  );
+  const day = d.toLocaleDateString("fr-CH", {
+    timeZone: SWISS_TZ,
+    day: "2-digit",
+  });
+  const month = capitalizeFirst(
+    d.toLocaleDateString("fr-CH", {
+      timeZone: SWISS_TZ,
+      month: "short",
+    }).replace(/\.$/, ""),
+  );
+  const year = d.toLocaleDateString("fr-CH", {
+    timeZone: SWISS_TZ,
+    year: "numeric",
+  });
+  return `${weekday}. ${day} ${month} ${year}`;
+}
+
+function formatSwissTimeOnlyDisplay(iso: string): string {
+  const n = normalizeScheduledTimeIso(iso);
+  if (!n) return "";
+  const d = parseToDate(n);
+  if (!d) return "";
+  return d.toLocaleTimeString("fr-CH", {
+    timeZone: SWISS_TZ,
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 type TimeDatePickerProps = {
   value: string;
   onChange: (value: string) => void;
   /** True: sélection date uniquement (pas d'étape heure). */
   dateOnly?: boolean;
+  /** Rendu champ : une ligne combinée (défaut) ou deux cellules date/heure. */
+  display?: "combined" | "split";
   /** Libellé au-dessus du champ. */
   label?: string;
   /** Texte affiché lorsque la valeur est vide. */
@@ -745,21 +854,29 @@ type TimeDatePickerProps = {
   /** Titre de la feuille mobile (par défaut : le label sans astérisque final). */
   modalTitle?: string;
   accessibilityLabel?: string;
+  /** Surface « tonal » (gris très clair) pour indiquer un champ révélé par un bouton optionnel. */
+  tonal?: boolean;
+  /** Affiche un astérisque rouge tant que la valeur est vide (champ obligatoire). */
+  required?: boolean;
 };
 
 export function TimeDatePicker({
   value,
   onChange,
   dateOnly = false,
+  display = "combined",
   label = "Date & heure de départ *",
   emptyLabel = "Non défini",
   emptyPreviewReferenceIso,
   emptyPreviewSuffix = " · heure à définir",
   modalTitle: modalTitleProp,
   accessibilityLabel = "Choisir la date et l’heure de départ",
+  tonal = false,
+  required = false,
 }: TimeDatePickerProps) {
+  const modalTitleFallback = dateOnly ? "Date" : "Date & heure";
   const modalTitle =
-    modalTitleProp ?? label.replace(/\s*\*\s*$/, "").trim();
+    (modalTitleProp ?? label.replace(/\s*\*\s*$/, "").trim()) || modalTitleFallback;
   const t = useResponsiveTokens();
   const preview = useMemo(() => {
     const main = dateOnly ? formatSwissDateOnlyDisplay(value) : formatSwissDisplay(value);
@@ -771,6 +888,8 @@ export function TimeDatePicker({
     }
     return "";
   }, [value, emptyPreviewReferenceIso, emptyPreviewSuffix, dateOnly]);
+  const splitDatePreview = useMemo(() => formatSwissDateCompactDisplay(value), [value]);
+  const splitTimePreview = useMemo(() => formatSwissTimeOnlyDisplay(value), [value]);
   const [mobileEditorOpen, setMobileEditorOpen] = useState(false);
   const [mobileStep, setMobileStep] = useState<"date" | "time">("date");
   const baseDate = useMemo(() => {
@@ -1018,54 +1137,156 @@ export function TimeDatePicker({
 
   return (
     <View style={{ marginBottom: 4 }}>
-      <AppText variant="label" style={styles.label}>
-        {label}
-      </AppText>
-      <Pressable
-        onPress={openPicker}
-        style={({ pressed, hovered, focused }) => [
-          rowStyle,
-          preview ? styles.rowIdle : styles.rowEmpty,
-          hovered && styles.rowHovered,
-          focused && styles.rowFocused,
-          pressed && styles.rowPressed,
-        ]}
-        accessibilityRole="button"
-        accessibilityLabel={accessibilityLabel}
-      >
-        <View style={styles.leadingIconWrap}>
-          <Ionicons name="calendar-outline" size={20} color={ICON_COLOR} />
+      {label.trim().length > 0 ? (
+        <AppText variant="label" style={styles.label}>
+          {label}
+        </AppText>
+      ) : null}
+      {display === "split" && !dateOnly ? (
+        <View style={[styles.splitRow, tonal && styles.splitRowTonal]}>
+          <Pressable
+            onPress={openPicker}
+            style={({ pressed }) => [
+              styles.splitCell,
+              styles.splitCellDate,
+              tonal && styles.splitCellTonal,
+              pressed && styles.splitCellPressed,
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel={accessibilityLabel}
+          >
+            <View style={styles.leadingIconWrap}>
+              <Ionicons name="calendar-outline" size={19} color={ICON_COLOR} />
+            </View>
+            <View style={styles.splitValue}>
+              <AppText
+                variant="label"
+                style={[
+                  styles.rowValue,
+                  splitDatePreview ? styles.rowValueDefined : styles.rowValueUndefined,
+                ]}
+                numberOfLines={1}
+              >
+                {splitDatePreview || emptyLabel}
+              </AppText>
+            </View>
+          </Pressable>
+          <View style={styles.splitDivider} />
+          <Pressable
+            onPress={() => {
+              openPicker();
+              requestAnimationFrame(() => setMobileStep("time"));
+            }}
+            style={({ pressed }) => [
+              styles.splitCell,
+              styles.splitCellTime,
+              tonal && styles.splitCellTonal,
+              pressed && styles.splitCellPressed,
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel="Choisir l’heure de départ"
+          >
+            <View style={styles.leadingIconWrap}>
+              <Ionicons name="time-outline" size={19} color={ICON_COLOR} />
+            </View>
+            <View style={styles.splitValue}>
+              <AppText
+                variant="label"
+                style={[
+                  styles.rowValue,
+                  splitTimePreview ? styles.rowValueDefined : styles.rowValueUndefined,
+                ]}
+                numberOfLines={1}
+              >
+                {splitTimePreview || "--:--"}
+              </AppText>
+            </View>
+            <View style={styles.trailingIconWrap}>
+              <Ionicons name="chevron-forward" size={16} color={E.TEXT_MUTED} />
+            </View>
+            <View style={styles.requiredSlot}>
+              {required && !preview ? (
+                <AppText
+                  variant="label"
+                  accessibilityLabel="Champ obligatoire"
+                  style={styles.requiredMark}
+                >
+                  *
+                </AppText>
+              ) : null}
+            </View>
+          </Pressable>
         </View>
-        <View style={styles.rowMuted}>
-          <AppText style={[styles.rowValue, preview ? styles.rowValueDefined : styles.rowValueUndefined]}>
-            {preview || emptyLabel}
-          </AppText>
-        </View>
-        <View style={styles.trailingIconWrap}>
-          <Ionicons name="chevron-forward" size={17} color={E.TEXT_MUTED} />
-        </View>
-      </Pressable>
+      ) : (
+        <Pressable
+          onPress={openPicker}
+          style={({ pressed, hovered, focused }) => [
+            rowStyle,
+            preview ? styles.rowIdle : styles.rowEmpty,
+            tonal && styles.rowTonal,
+            hovered && styles.rowHovered,
+            focused && styles.rowFocused,
+            pressed && styles.rowPressed,
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel={accessibilityLabel}
+        >
+          <View style={styles.leadingIconWrap}>
+            <Ionicons name="calendar-outline" size={20} color={ICON_COLOR} />
+          </View>
+          <View style={styles.rowMuted}>
+            <AppText style={[styles.rowValue, preview ? styles.rowValueDefined : styles.rowValueUndefined]}>
+              {preview || emptyLabel}
+            </AppText>
+          </View>
+          <View style={styles.trailingIconWrap}>
+            <Ionicons name="chevron-forward" size={17} color={E.TEXT_MUTED} />
+          </View>
+          <View style={styles.requiredSlot}>
+            {required && !preview ? (
+              <AppText
+                variant="label"
+                accessibilityLabel="Champ obligatoire"
+                style={styles.requiredMark}
+              >
+                *
+              </AppText>
+            ) : null}
+          </View>
+        </Pressable>
+      )}
 
       <Modal
-          transparent
-          animationType="slide"
-          visible={mobileEditorOpen}
-          onRequestClose={() => setMobileEditorOpen(false)}
-        >
-          <View style={styles.mobileModalBackdrop}>
+        visible={mobileEditorOpen}
+        title=""
+        onClose={() => setMobileEditorOpen(false)}
+        presentation="bottomSheet"
+        sheetBodyMaxHeightRatio={0.88}
+        renderHeader={() => (
+          <View style={styles.mobileModalHeader}>
+            <View style={styles.mobileModalHeaderText}>
+              <AppText style={styles.mobileModalTitle} numberOfLines={1}>
+                {modalTitle}
+              </AppText>
+              {preview ? (
+                <AppText style={styles.mobileModalPreview} numberOfLines={1}>
+                  {preview}
+                </AppText>
+              ) : null}
+            </View>
             <Pressable
-              style={{ flex: 1 }}
+              style={styles.mobileModalClose}
               onPress={() => setMobileEditorOpen(false)}
-              accessibilityLabel="Fermer l’éditeur date et heure"
-            />
-            <View style={styles.mobileModalCard}>
-              <View style={styles.mobileModalHeader}>
-                <AppText style={styles.mobileModalTitle}>{modalTitle}</AppText>
-                <Pressable style={styles.mobileModalClose} onPress={() => setMobileEditorOpen(false)}>
-                  <AppText style={styles.mobileModalCloseText}>Valider</AppText>
-                </Pressable>
-              </View>
-              <AppText style={styles.mobileModalPreview}>{preview || emptyLabel}</AppText>
+              accessibilityRole="button"
+              accessibilityLabel="Valider et fermer le sélecteur"
+            >
+              <AppText style={styles.mobileModalCloseText}>Valider</AppText>
+            </Pressable>
+          </View>
+        )}
+        footer={null}
+      >
+        <View style={styles.mobileModalCard}>
               {!dateOnly ? (
               <View style={styles.mobileStepTabs}>
                 <Pressable
@@ -1174,8 +1395,7 @@ export function TimeDatePicker({
                                 horizontal
                                 snapToInterval={MONTH_CELL_WIDTH}
                                 snapToAlignment="start"
-                                decelerationRate="fast"
-                                disableIntervalMomentum
+                                decelerationRate="normal"
                                 nestedScrollEnabled
                                 keyboardShouldPersistTaps="handled"
                                 showsHorizontalScrollIndicator={false}
@@ -1232,8 +1452,7 @@ export function TimeDatePicker({
                                 horizontal
                                 snapToInterval={YEAR_CELL_WIDTH}
                                 snapToAlignment="start"
-                                decelerationRate="fast"
-                                disableIntervalMomentum
+                                decelerationRate="normal"
                                 nestedScrollEnabled
                                 keyboardShouldPersistTaps="handled"
                                 showsHorizontalScrollIndicator={false}
@@ -1278,8 +1497,7 @@ export function TimeDatePicker({
                                 horizontal
                                 snapToInterval={DAY_CELL_WIDTH}
                                 snapToAlignment="start"
-                                decelerationRate="fast"
-                                disableIntervalMomentum
+                                decelerationRate="normal"
                                 nestedScrollEnabled
                                 keyboardShouldPersistTaps="handled"
                                 showsHorizontalScrollIndicator={false}
@@ -1437,8 +1655,7 @@ export function TimeDatePicker({
                             horizontal
                             snapToInterval={TIME_HOUR_CELL_WIDTH}
                             snapToAlignment="start"
-                            decelerationRate="fast"
-                            disableIntervalMomentum
+                            decelerationRate="normal"
                             nestedScrollEnabled
                             keyboardShouldPersistTaps="handled"
                             showsHorizontalScrollIndicator={false}
@@ -1486,8 +1703,7 @@ export function TimeDatePicker({
                             horizontal
                             snapToInterval={TIME_MINUTE_CELL_WIDTH}
                             snapToAlignment="start"
-                            decelerationRate="fast"
-                            disableIntervalMomentum
+                            decelerationRate="normal"
                             nestedScrollEnabled
                             keyboardShouldPersistTaps="handled"
                             showsHorizontalScrollIndicator={false}
@@ -1600,10 +1816,9 @@ export function TimeDatePicker({
                     </View>
                   )}
                 </View>
-              </ScrollView>
-            </View>
+            </ScrollView>
           </View>
-        </Modal>
+      </Modal>
     </View>
   );
 }

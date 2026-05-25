@@ -1,11 +1,9 @@
 import { Redirect, useRouter } from "expo-router";
 import {
-  AccessibilityInfo,
   Animated,
   Easing,
   Image,
   ImageBackground,
-  Keyboard,
   Platform,
   Alert,
   Pressable,
@@ -20,8 +18,10 @@ import {
   Screen,
   scrollAnchorAboveKeyboard,
   useAppViewport,
+  useKeyboardHeight,
   useResponsiveTokens,
 } from "../../src/design/responsive";
+import { useReduceMotion } from "../../src/design/navigation/useReduceMotion";
 import { autocompleteAddress } from "../../src/features/client/api";
 import { AddressAutocompleteSuggestion } from "../../src/features/client/types";
 import { useSession } from "../../src/core/sessionProvider";
@@ -32,6 +32,7 @@ import {
   PublicAddressSearchBar,
   type AddressSearchRegion,
 } from "../../src/features/public/PublicAddressSearchBar";
+import { FONT_SIZE } from "../../src/design/responsive/typographyTokens";
 
 /** Recherche d’adresses limitée à la Suisse (sélecteur pays retiré de l’UI). */
 const PUBLIC_ADDRESS_COUNTRY: AddressSearchRegion = "CH";
@@ -68,7 +69,7 @@ export default function PublicHomeScreen() {
   const { bootstrap } = useSession();
   const viewport = useAppViewport();
   const { landing: layout } = useResponsiveTokens();
-  const [reduceMotion, setReduceMotion] = useState(false);
+  const reduceMotion = useReduceMotion();
   const screenOpacity = useRef(new Animated.Value(0)).current;
 
   const logoOpacity = useRef(new Animated.Value(0)).current;
@@ -106,9 +107,8 @@ export default function PublicHomeScreen() {
   const landingScrollOffsetYRef = useRef(0);
   const pickupInputAnchorRef = useRef<View>(null);
   const dropoffInputAnchorRef = useRef<View>(null);
-  /** Natif : padding scroll supplémentaire pendant que le clavier est visible (aligné sur `login.tsx`). */
-  const [keyboardVisible, setKeyboardVisible] = useState(false);
-  const [keyboardScrollPaddingBottom, setKeyboardScrollPaddingBottom] = useState(0);
+  /** Clavier dual : `useKeyboardHeight` factorise listeners + magic padding (cf. plan Sprint 1). */
+  const { keyboardVisible, scrollPaddingBottom: keyboardScrollPaddingBottom } = useKeyboardHeight();
   const useNativeDriver = Platform.OS !== "web";
   const accentLayout = useMemo(() => {
     const narrowShortSide = viewport.isTiny || viewport.isCompact;
@@ -129,29 +129,6 @@ export default function PublicHomeScreen() {
   const dropoffCompleted = dropoffInputValue.length >= 5;
 
   useEffect(() => {
-    let mounted = true;
-    AccessibilityInfo.isReduceMotionEnabled()
-      .then((enabled) => {
-        if (mounted) {
-          setReduceMotion(enabled);
-        }
-      })
-      .catch(() => {
-        // keep default false when API is unavailable
-      });
-
-    const subscription = AccessibilityInfo.addEventListener(
-      "reduceMotionChanged",
-      (enabled) => setReduceMotion(enabled),
-    );
-
-    return () => {
-      mounted = false;
-      subscription.remove();
-    };
-  }, []);
-
-  useEffect(() => {
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
@@ -163,24 +140,10 @@ export default function PublicHomeScreen() {
   }, [pickupValue]);
 
   useEffect(() => {
-    if (Platform.OS === "web") return;
-    const show = Keyboard.addListener("keyboardDidShow", (e) => {
-      const h = e.endCoordinates?.height ?? 0;
-      const computed = h > 0 ? Math.round(h + 48) : 300;
-      setKeyboardScrollPaddingBottom(Math.max(260, computed));
-      setKeyboardVisible(true);
-    });
-    const hide = Keyboard.addListener("keyboardDidHide", () => {
-      setKeyboardVisible(false);
-      setKeyboardScrollPaddingBottom(0);
-      landingScrollRef.current?.scrollTo({ y: 0, animated: true });
-      landingScrollOffsetYRef.current = 0;
-    });
-    return () => {
-      show.remove();
-      hide.remove();
-    };
-  }, []);
+    if (keyboardVisible) return;
+    landingScrollRef.current?.scrollTo({ y: 0, animated: true });
+    landingScrollOffsetYRef.current = 0;
+  }, [keyboardVisible]);
 
   useEffect(() => {
     if (reduceMotion) {
@@ -1219,7 +1182,7 @@ const styles = StyleSheet.create({
   },
   suggestionPrimary: {
     color: UI_DARK_TEXT,
-    fontSize: 13,
+    fontSize: FONT_SIZE.px13,
     lineHeight: 16,
     fontWeight: "600",
     ...Platform.select({
@@ -1230,7 +1193,7 @@ const styles = StyleSheet.create({
   suggestionSecondary: {
     marginTop: 2,
     color: UI_MUTED_TEXT,
-    fontSize: 12,
+    fontSize: FONT_SIZE.px12,
     lineHeight: 15,
     ...Platform.select({
       android: { includeFontPadding: false },
@@ -1252,7 +1215,7 @@ const styles = StyleSheet.create({
   ctaText: {
     color: "#FFFFFF",
     letterSpacing: 0.2,
-    fontSize: 13,
+    fontSize: FONT_SIZE.px13,
     lineHeight: 16,
     fontWeight: "600",
   },

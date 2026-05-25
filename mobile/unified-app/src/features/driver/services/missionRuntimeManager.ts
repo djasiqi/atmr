@@ -61,8 +61,11 @@ class MissionRuntimeManager {
     const updatedAtMs = this.parseIso(updatedAt);
     if (!Number.isFinite(updatedAtMs)) return;
     const current = this.missionVersions.get(missionId);
+    if (current && updatedAtMs < current.updatedAtMs) {
+      return;
+    }
     this.missionVersions.set(missionId, {
-      updatedAtMs: Math.max(current?.updatedAtMs ?? updatedAtMs, updatedAtMs),
+      updatedAtMs,
       eventSequence: current?.eventSequence ?? -1,
     });
   }
@@ -105,6 +108,16 @@ class MissionRuntimeManager {
         ? Math.max(current?.updatedAtMs ?? nextUpdatedAt, nextUpdatedAt)
         : current?.updatedAtMs ?? Number.NaN,
     });
+    this.purgeStaleMissionVersions();
+  }
+
+  private purgeStaleMissionVersions(): void {
+    const cutoff = Date.now() - 7_200_000;
+    for (const [missionId, version] of this.missionVersions) {
+      if (version.updatedAtMs < cutoff) {
+        this.missionVersions.delete(missionId);
+      }
+    }
   }
 
   snapshot() {

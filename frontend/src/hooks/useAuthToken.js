@@ -5,6 +5,7 @@ import {
   getEnvAccessToken,
   getEnvRefreshToken,
   getEnvUser,
+  normalizeAuthRole,
   removeLegacyGlobalTokens,
 } from '../utils/webAuthSession';
 
@@ -30,12 +31,14 @@ const useAuthToken = () => {
           setUser(null);
           return;
         }
+        const role = normalizeAuthRole(decoded.role);
 
         setUser({
           ...decoded,
-          isCompany: decoded.role === 'company',
-          isDriver: decoded.role === 'driver',
-          isClient: decoded.role === 'client',
+          role,
+          isCompany: role === 'company',
+          isDriver: role === 'driver',
+          isClient: role === 'client',
           companyId: decoded.company_id,
           userId: decoded.sub,
           public_id: decoded.sub,
@@ -47,11 +50,13 @@ const useAuthToken = () => {
       }
     } else if (storedUser) {
       // Mode cookies httpOnly : utiliser les infos utilisateur stockées
+      const role = normalizeAuthRole(storedUser.role);
       setUser({
         ...storedUser,
-        isCompany: String(storedUser.role || '').toLowerCase() === 'company',
-        isDriver: String(storedUser.role || '').toLowerCase() === 'driver',
-        isClient: String(storedUser.role || '').toLowerCase() === 'client',
+        role,
+        isCompany: role === 'company',
+        isDriver: role === 'driver',
+        isClient: role === 'client',
         companyId: storedUser.company_id,
         userId: storedUser.id,
         public_id: storedUser.public_id,

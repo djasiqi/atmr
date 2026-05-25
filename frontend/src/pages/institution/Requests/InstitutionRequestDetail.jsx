@@ -30,6 +30,7 @@ const BOOKING_STATUS_MAP = {
   ASSIGNED:         { label: 'Chauffeur assigné',    css: 'statusAssigned' },
   EN_ROUTE:         { label: 'En route',             css: 'statusEnRoute' },
   IN_PROGRESS:      { label: 'En cours',             css: 'statusInProgress' },
+  OUTBOUND_COMPLETED: { label: 'Retour en cours',    css: 'statusInProgress' },
   COMPLETED:        { label: 'Terminé',              css: 'statusCompleted' },
   RETURN_COMPLETED: { label: 'Aller-retour terminé', css: 'statusReturnCompleted' },
   CANCELED:         { label: 'Annulé',               css: 'statusCancelled' },
@@ -66,10 +67,48 @@ const fmtShort = (dateStr) => {
   });
 };
 
+const resolveBookingStatusKey = (bookingSummary) => {
+  if (!bookingSummary) return '';
+  const raw = String(bookingSummary.status || '').toUpperCase();
+  const normalized = raw === 'CANCELLED' ? 'CANCELED' : raw;
+  const returnRaw = String(bookingSummary.return_booking?.status || '').toUpperCase();
+  const returnStatus = returnRaw === 'CANCELLED' ? 'CANCELED' : returnRaw;
+  const overall = String(bookingSummary.overall_status || '').toLowerCase();
+
+  const hasReturn = Boolean(bookingSummary.return_booking);
+  const returnCompleted = ['COMPLETED', 'RETURN_COMPLETED'].includes(returnStatus);
+  const returnCancelled = returnStatus === 'CANCELED';
+  const outboundCompleted = ['COMPLETED', 'RETURN_COMPLETED'].includes(normalized);
+
+  if (hasReturn && overall) {
+    if (overall === 'completed') return 'RETURN_COMPLETED';
+    if (overall === 'cancelled') return 'CANCELED';
+    if (overall === 'outbound_completed') return 'OUTBOUND_COMPLETED';
+    if (overall === 'in_progress') return 'IN_PROGRESS';
+    if (overall === 'planned') return 'ACCEPTED';
+  }
+
+  if (hasReturn) {
+    if (returnCompleted) return 'RETURN_COMPLETED';
+    if (returnCancelled) return 'CANCELED';
+    if (outboundCompleted) return 'OUTBOUND_COMPLETED';
+  }
+
+  if (
+    bookingSummary.completed_at &&
+    !hasReturn &&
+    normalized !== 'RETURN_COMPLETED' &&
+    normalized !== 'CANCELED'
+  ) {
+    return 'COMPLETED';
+  }
+  return normalized;
+};
+
 // ─── Status badge ──────────────────────────────────────────
 const StatusBadge = ({ request }) => {
   if (request.status === 'CONVERTED' && request.booking_summary?.status) {
-    const info = BOOKING_STATUS_MAP[request.booking_summary.status];
+    const info = BOOKING_STATUS_MAP[resolveBookingStatusKey(request.booking_summary)];
     if (info) return <span className={`${s.statusBadge} ${s[info.css]}`}>{info.label}</span>;
   }
   const info = REQUEST_STATUS_MAP[request.status] || { label: request.status, css: 'statusDraft' };
@@ -397,7 +436,7 @@ const InstitutionRequestDetail = () => {
               <div className={s.summaryItem}>
                 <span className={s.summaryLabel}>Statut du transport</span>
                 <span className={s.summaryValue}>
-                  {BOOKING_STATUS_MAP[bs.status]?.label || 'En cours'}
+                  {BOOKING_STATUS_MAP[resolveBookingStatusKey(bs)]?.label || 'En cours'}
                 </span>
               </div>
               {bs.amount != null && (
@@ -518,16 +557,34 @@ const InstitutionRequestDetail = () => {
         />
       )}
 
-      {/* ═══ Communication (si booking converti) ═══ */}
-      {isConverted && request.booking_id && (
-        <BookingChat
-          bookingId={request.booking_id}
-          socket={institutionSocket}
-          fetchMessages={fetchBookingMessages}
-          sendMessage={sendBookingMessage}
-          closed={['COMPLETED', 'RETURN_COMPLETED', 'CANCELED', 'CANCELLED'].includes(bs?.status || '')}
-        />
-      )}
+      {/* ═══ Communication (si booking converti et chauffeur assigné ou en course) ═══ */}
+      {isConverted && request.booking_id && (() => {
+        const chatActiveStatuses = ['ASSIGNED', 'EN_ROUTE', 'IN_PROGRESS'];
+        const statusNorm = resolveBookingStatusKey(bs);
+        const canShowChat = chatActiveStatuses.includes(statusNorm);
+        if (!canShowChat) {
+          return (
+            <div className={s.card}>
+              <div className={s.cardHeader}>
+                <div className={`${s.cardIcon} ${s.cardIconMuted}`}>💬</div>
+                <h3 className={s.cardTitle}>Communication</h3>
+              </div>
+              <p className={s.infoValue} style={{ margin: 0 }}>
+                Le transport a été confirmé. Le chauffeur sera assigné prochainement.
+              </p>
+            </div>
+          );
+        }
+        return (
+          <BookingChat
+            bookingId={request.booking_id}
+            socket={institutionSocket}
+            fetchMessages={fetchBookingMessages}
+            sendMessage={sendBookingMessage}
+            closed={['COMPLETED', 'RETURN_COMPLETED', 'CANCELED'].includes(resolveBookingStatusKey(bs))}
+          />
+        );
+      })()}
 
       {/* ═══ CARD 7 — Historique ═══ */}
       <div className={s.card}>

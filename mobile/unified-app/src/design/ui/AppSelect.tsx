@@ -104,7 +104,7 @@ export function AppSelect({
                     paddingHorizontal: t.spacingMd,
                     borderBottomWidth: StyleSheet.hairlineWidth,
                     borderBottomColor: "rgba(148, 163, 184, 0.35)",
-                    backgroundColor: opt.value === value ? "rgba(10, 143, 122, 0.08)" : "transparent",
+                    backgroundColor: opt.value === value ? "rgba(0, 121, 107, 0.08)" : "transparent",
                   }}
                 >
                   <AppText variant="body" style={opt.value === value ? { color: brandPrimary } : undefined}>

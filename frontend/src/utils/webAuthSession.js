@@ -34,6 +34,21 @@ export const setAuthEnv = (env) => {
   return normalized;
 };
 
+export const normalizeAuthRole = (rawRole) => {
+  const normalized = String(rawRole || '').trim().toLowerCase();
+  if (!normalized) return '';
+  if (normalized.startsWith('institution')) return 'institution';
+  if (
+    normalized === 'admin' ||
+    normalized.startsWith('company') ||
+    normalized.startsWith('transport_company')
+  ) {
+    return normalized === 'admin' ? 'admin' : 'company';
+  }
+  if (normalized.startsWith('driver')) return 'driver';
+  return normalized;
+};
+
 export const setEnvPublicId = (
   publicId,
   env = getAuthEnv(),
@@ -190,7 +205,7 @@ const clearRoleScopedSession = (scope) => {
 };
 
 const resolveRoleScope = (role) => {
-  const normalized = String(role || '').trim().toLowerCase();
+  const normalized = normalizeAuthRole(role);
   if (normalized === 'company' || normalized === 'admin') return 'company';
   if (normalized === 'driver') return 'driver';
   if (normalized === 'institution') return 'institution';

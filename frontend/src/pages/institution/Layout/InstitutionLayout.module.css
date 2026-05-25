@@ -898,20 +898,3 @@
   }
 }
 
-.mobileCanonStripe {
-  padding: 0.35rem 0.6rem;
-  margin-bottom: 0.5rem;
-  font-size: 0.78rem;
-  line-height: 1.35;
-  color: #5d4037;
-  background: #fff8e1;
-  border: 1px solid #ffe082;
-  border-radius: 6px;
-}
-
-@media (max-width: 640px) {
-  .mobileCanonStripe {
-    font-size: 0.72rem;
-    padding: 0.28rem 0.45rem;
-  }
-}

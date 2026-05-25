@@ -1,8 +1,9 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { useSession } from "../../core/sessionProvider";
 import { QUERY_STALE_TIME_MS } from "../../core/queryStaleTimes";
+import { realtimeManager } from "../../core/realtime/realtimeManager";
 import { useActiveDriverContextId } from "./hooks";
 import { getDriverMessages, type DriverChatMessage } from "./api";
 
@@ -23,7 +24,8 @@ export function useDriverChatMessages(companyId: number | null, contextId: strin
     queryKey: [...DRIVER_CHAT_KEY, contextId ?? "none", companyId ?? "none"],
     queryFn: () => getDriverMessages(companyId as number, { limit: 40 }),
     enabled: Boolean(companyId && contextId),
-    refetchInterval: 10_000,
+    refetchInterval: () =>
+      realtimeManager.isDriverSocketReady() ? false : 10_000,
     staleTime: QUERY_STALE_TIME_MS.default,
   });
 }
@@ -62,17 +64,25 @@ export function useUnreadMessages(
     },
   });
 
-  return {
-    unreadCount,
-    /** Dernière horodatage de lecture (AsyncStorage), pour l’ancre de scroll. */
-    lastReadAt: lastReadQuery.data ?? null,
-    isLoadingLastRead: lastReadQuery.isLoading,
-    markRead: async (timestamp?: string) => {
+  const markRead = useCallback(
+    async (timestamp?: string) => {
       const latest = timestamp ?? messages?.[messages.length - 1]?.timestamp;
       if (!latest) return;
       await markReadMutation.mutateAsync(latest);
     },
-  };
+    [markReadMutation, messages]
+  );
+
+  return useMemo(
+    () => ({
+      unreadCount,
+      /** Dernière horodatage de lecture (AsyncStorage), pour l’ancre de scroll. */
+      lastReadAt: lastReadQuery.data ?? null,
+      isLoadingLastRead: lastReadQuery.isLoading,
+      markRead,
+    }),
+    [lastReadQuery.data, lastReadQuery.isLoading, markRead, unreadCount]
+  );
 }
 
 /** Badge chat pour la barre d’onglets driver (même logique que `useUnreadMessages` sur l’accueil). */

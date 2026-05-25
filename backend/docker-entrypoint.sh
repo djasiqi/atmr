@@ -473,7 +473,12 @@ start_application() {
         # partagé entre workers). En production avec Redis message_queue, utiliser 4+ workers.
         # ✅ AUDIT 100 USERS: Défaut augmenté de 4 à 6 pour supporter 100 utilisateurs simultanés (laisser 2 CPU pour système/overhead)
         WORKERS="${GUNICORN_WORKERS:-6}"
+        GUNICORN_TIMEOUT="${GUNICORN_TIMEOUT:-180}"
+        GUNICORN_GRACEFUL_TIMEOUT="${GUNICORN_GRACEFUL_TIMEOUT:-30}"
+        GUNICORN_KEEPALIVE="${GUNICORN_KEEPALIVE:-5}"
         echo "  Workers configurés: $WORKERS"
+        echo "  Timeout worker: ${GUNICORN_TIMEOUT}s"
+        echo "  Graceful timeout: ${GUNICORN_GRACEFUL_TIMEOUT}s"
         if [ "$WORKERS" = "1" ]; then
             echo "  ⚠️  Mode single-worker (diagnostic Socket.IO multi-workers)"
         fi
@@ -487,8 +492,9 @@ start_application() {
             --bind 0.0.0.0:5000 \
             --worker-class "$_gw" \
             --workers "$WORKERS" \
-            --timeout 120 \
-            --keep-alive 2 \
+            --timeout "$GUNICORN_TIMEOUT" \
+            --graceful-timeout "$GUNICORN_GRACEFUL_TIMEOUT" \
+            --keep-alive "$GUNICORN_KEEPALIVE" \
             --max-requests 1000 \
             --max-requests-jitter 100 \
             --preload \

@@ -273,6 +273,56 @@ def geneva_naive_midnight_from_date_ymd(ymd: str) -> datetime | None:
     return datetime(d.year, d.month, d.day, 0, 0, 0)
 
 
+def is_return_time_pending(dt: datetime | None) -> bool:
+    """True si l'heure de retour est la sentinelle « à définir » (00:00:00).
+
+    Toute logique métier (dispatch, notifications, planification) doit traiter
+    cette valeur comme « heure non définie », jamais comme minuit réel.
+    """
+    if dt is None:
+        return True
+    st = api_scheduled_iso_to_naive_geneva(dt)
+    if st is None:
+        return False
+    return st.hour == 0 and st.minute == 0 and st.second == 0
+
+
+PROPOSED_PICKUP_MAX_DAYS = 365
+
+
+def validate_proposed_pickup_time(
+    value: Union[str, datetime],
+) -> tuple[datetime | None, str | None]:
+    """Valide et normalise un horaire proposé (ISO8601 → naive Geneva).
+
+    Règles:
+    - format ISO8601 valide obligatoire
+    - timezone normalisée en UTC pour les comparaisons
+    - date passée refusée
+    - date > maintenant + 365 jours refusée
+
+    Returns:
+        (datetime_naive_geneva, error_message)
+    """
+    parsed = parse_iso8601(value) if isinstance(value, str) else to_utc(value)
+    if parsed is None:
+        return None, "Format d'horaire invalide (ISO8601 attendu)"
+
+    utc_dt = parsed.astimezone(UTC) if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+    now_utc = datetime.now(UTC)
+    if utc_dt <= now_utc:
+        return None, "L'horaire proposé doit être dans le futur"
+    if utc_dt > now_utc + timedelta(days=PROPOSED_PICKUP_MAX_DAYS):
+        return None, (
+            f"L'horaire proposé ne peut pas dépasser {PROPOSED_PICKUP_MAX_DAYS} jours"
+        )
+
+    naive_geneva = api_scheduled_iso_to_naive_geneva(utc_dt)
+    if naive_geneva is None:
+        return None, "Format d'horaire invalide (ISO8601 attendu)"
+    return naive_geneva, None
+
+
 def api_scheduled_iso_to_naive_geneva(
     value: Union[str, datetime, None],
 ) -> datetime | None:

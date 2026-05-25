@@ -11,22 +11,67 @@ Gère l'acceptation atomique avec:
 from __future__ import annotations
 
 import logging
+import re
+import unicodedata
+import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
+
+from sqlalchemy.exc import IntegrityError
 
 from ext import db
 from models import (
     Booking,
     BookingStatus,
     Client,
+    Company,
     OfferStatus,
     RequestOffer,
     RequestStatus,
     TransportRequest,
+    User,
 )
+from models.enums import ClientType, ManagementMode, UserRole
 from security.audit_log import AuditLogger
+from shared.time_utils import (
+    api_scheduled_iso_to_naive_geneva,
+    is_return_time_pending,
+)
 
 logger = logging.getLogger(__name__)
+
+
+def _normalize_institution_name(value: str | None) -> str:
+    """Normalise un nom d'institution pour matching tolérant."""
+    if not value:
+        return ""
+    normalized = unicodedata.normalize("NFKD", str(value))
+    normalized = "".join(ch for ch in normalized if not unicodedata.combining(ch))
+    normalized = (
+        normalized.lower().replace("’", "'").replace("`", "'").replace("´", "'")
+    )
+    normalized = re.sub(r"[^a-z0-9]+", " ", normalized)
+    return re.sub(r"\s+", " ", normalized).strip()
+
+
+def _track_accept_conflict(
+    *,
+    offer_id: int,
+    company_id: int,
+    transport_request_id: int | None,
+    reason: str,
+) -> None:
+    try:
+        from services.metrics.institution_metrics import track_offer_accept_conflict_409
+
+        track_offer_accept_conflict_409(
+            offer_id=offer_id,
+            company_id=company_id,
+            transport_request_id=transport_request_id,
+            reason=reason,
+        )
+    except Exception:
+        pass
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,6 +138,15 @@ class AcceptOfferUseCase:
                     status_code=403,
                 )
 
+            company = Company.query.get(input_data.company_id)
+            if not company or not company.is_approved:
+                return AcceptOfferResult(
+                    success=False,
+                    offer_id=input_data.offer_id,
+                    error="Entreprise non approuvée",
+                    status_code=403,
+                )
+
             # 2. Verrouiller la TransportRequest (FOR UPDATE)
             transport_request = (
                 db.session.query(TransportRequest)
@@ -114,6 +168,12 @@ class AcceptOfferUseCase:
                 RequestStatus.SENT.value,
                 RequestStatus.ACCEPTED.value,
             ]:
+                _track_accept_conflict(
+                    offer_id=input_data.offer_id,
+                    company_id=input_data.company_id,
+                    transport_request_id=transport_request.id,
+                    reason=f"request_status_{transport_request.status}",
+                )
                 return AcceptOfferResult(
                     success=False,
                     offer_id=input_data.offer_id,
@@ -132,6 +192,12 @@ class AcceptOfferUseCase:
             )
 
             if offer.status != OfferStatus.PENDING.value:
+                _track_accept_conflict(
+                    offer_id=input_data.offer_id,
+                    company_id=input_data.company_id,
+                    transport_request_id=transport_request.id,
+                    reason=f"offer_status_{offer.status}",
+                )
                 return AcceptOfferResult(
                     success=False,
                     offer_id=input_data.offer_id,
@@ -303,6 +369,28 @@ class AcceptOfferUseCase:
             except Exception as event_err:
                 logger.warning("[AcceptOffer] Error emitting events: %s", event_err)
 
+            # Notifier les autres entreprises (broadcast) que l'offre n'est plus disponible
+            try:
+                from services.events.institution_events import emit_offer_unavailable
+
+                accepted_company_name = (
+                    offer.company.name if offer.company else None
+                )
+                for other_offer in other_offers:
+                    emit_offer_unavailable(
+                        company_id=other_offer.company_id,
+                        offer_id=other_offer.id,
+                        transport_request=transport_request,
+                        reason="accepted_by_peer",
+                        accepted_by_company_id=input_data.company_id,
+                        accepted_by_company_name=accepted_company_name,
+                    )
+            except Exception as unavailable_err:
+                logger.warning(
+                    "[AcceptOffer] Error emitting offer_unavailable: %s",
+                    unavailable_err,
+                )
+
             return AcceptOfferResult(
                 success=True,
                 offer_id=offer.id,
@@ -341,8 +429,8 @@ class AcceptOfferUseCase:
         Returns:
             Tuple (outbound_booking, return_booking | None)
         """
-        # Résoudre le client institution existant dans la base de l'entreprise
-        institution_client = self._find_institution_client(
+        # Résoudre ou créer le client institution dans la base de l'entreprise
+        institution_client = self._get_or_create_institution_client(
             transport_request, company_id
         )
 
@@ -352,24 +440,31 @@ class AcceptOfferUseCase:
         if institution_client and institution_client.preferential_rate:
             amount = float(institution_client.preferential_rate)
 
-        # Facturation: utiliser le type par défaut du client institution
+        # Facturation: la demande (billing_intent) est la source de vérité.
         billed_to_type = "patient"
         billed_to_company_id = None
-        if institution_client:
-            billed_to = getattr(institution_client, "default_billed_to_type", None)
-            if billed_to and billed_to in ("patient", "clinic", "insurance"):
-                billed_to_type = billed_to
-            # Si facturé à la clinique ou assurance, il faut renseigner billed_to_company_id
-            if billed_to_type != "patient":
-                billed_to_company_id = getattr(
-                    institution_client, "default_billed_to_company_id", None
-                )
+        billing_intent = (getattr(transport_request, "billing_intent", None) or "patient").lower()
+        if billing_intent == "institution":
+            billed_to_type = "clinic"
+            billed_to_company_id = company_id
+        elif billing_intent == "patient":
+            billed_to_type = "patient"
+            billed_to_company_id = None
+        else:
+            logger.warning(
+                "[AcceptOffer] billing_intent non géré '%s' pour request=%s. Fallback sur patient.",
+                billing_intent,
+                transport_request.id,
+            )
+            billed_to_type = "patient"
+            billed_to_company_id = None
 
         # Réutiliser le champ hospital_service du Booking pour le point d'accueil
         entry_point = getattr(transport_request, "pickup_entry_point", None) or ""
 
-        # Horaire: utiliser l'horaire proposé par l'entreprise si fourni
-        effective_pickup_time = proposed_pickup_time or transport_request.scheduled_time
+        # Horaire: utiliser l'horaire proposé par l'entreprise si fourni (naïf Genève)
+        raw_pickup = proposed_pickup_time or transport_request.scheduled_time
+        effective_pickup_time = api_scheduled_iso_to_naive_geneva(raw_pickup)
 
         booking = Booking(
             # Identité
@@ -393,6 +488,8 @@ class AcceptOfferUseCase:
             if transport_request.pickup_lng
             else None,
             pickup_access_notes=self._format_pickup_notes(transport_request),
+            pickup_floor=transport_request.pickup_floor,
+            pickup_door_code=transport_request.pickup_door_code,
             # Lieux dropoff
             dropoff_location=transport_request.dropoff_location,
             dropoff_lat=float(transport_request.dropoff_lat)
@@ -402,6 +499,8 @@ class AcceptOfferUseCase:
             if transport_request.dropoff_lng
             else None,
             dropoff_access_notes=self._format_dropoff_notes(transport_request),
+            dropoff_floor=transport_request.dropoff_floor,
+            dropoff_door_code=transport_request.dropoff_door_code,
             # Point d'accueil → champ existant hospital_service du Booking
             hospital_service=entry_point if entry_point else None,
             # Mobilité
@@ -451,13 +550,20 @@ class AcceptOfferUseCase:
             transport_request.id,
         )
 
-        return_time = getattr(transport_request, "return_time", None)
-        if transport_request.is_round_trip and return_time is None:
+        return_time_raw = getattr(transport_request, "return_time", None)
+        return_time_naive = (
+            api_scheduled_iso_to_naive_geneva(return_time_raw)
+            if return_time_raw is not None
+            else None
+        )
+        return_time_pending = is_return_time_pending(return_time_naive)
+
+        if transport_request.is_round_trip and return_time_naive is None:
             logger.warning(
                 "[AcceptOffer] A/R sans return_time, skip retour request_id=%s",
                 transport_request.id,
             )
-        elif transport_request.is_round_trip and return_time is not None:
+        elif transport_request.is_round_trip and return_time_naive is not None:
             return_booking = Booking(
                 company_id=company_id,
                 user_id=user_id,
@@ -465,7 +571,8 @@ class AcceptOfferUseCase:
                 customer_name=booking.customer_name,
                 mission_type=booking.mission_type,
                 delivery_description=booking.delivery_description,
-                scheduled_time=return_time,
+                scheduled_time=return_time_naive,
+                time_confirmed=not return_time_pending,
                 is_round_trip=False,
                 is_return=True,
                 parent_booking_id=booking.id,
@@ -474,10 +581,14 @@ class AcceptOfferUseCase:
                 pickup_lat=booking.dropoff_lat,
                 pickup_lon=booking.dropoff_lon,
                 pickup_access_notes=booking.dropoff_access_notes,
+                pickup_floor=booking.dropoff_floor,
+                pickup_door_code=booking.dropoff_door_code,
                 dropoff_location=booking.pickup_location,
                 dropoff_lat=booking.pickup_lat,
                 dropoff_lon=booking.pickup_lon,
                 dropoff_access_notes=booking.pickup_access_notes,
+                dropoff_floor=booking.pickup_floor,
+                dropoff_door_code=booking.pickup_door_code,
                 hospital_service=booking.hospital_service,
                 wheelchair_client_has=booking.wheelchair_client_has,
                 wheelchair_need=booking.wheelchair_need,
@@ -495,9 +606,10 @@ class AcceptOfferUseCase:
             self._resolve_billing_party(return_booking, transport_request, company_id)
 
             logger.info(
-                "[AcceptOffer] Return booking %s created (parent=%s) for request %s",
+                "[AcceptOffer] Return booking %s created (parent=%s, time_confirmed=%s) for request %s",
                 return_booking.id,
                 booking.id,
+                not return_time_pending,
                 transport_request.id,
             )
 
@@ -543,24 +655,16 @@ class AcceptOfferUseCase:
                 billing_err,
             )
 
-    def _find_institution_client(
+    def _get_or_create_institution_client(
         self,
         transport_request: TransportRequest,
         company_id: int,
     ) -> Client | None:
-        """Cherche le client institution existant dans la base de l'entreprise.
-
-        Stratégie de recherche (par priorité) :
-        1. Match exact par linked_institution_id (FK formelle)
-        2. Fallback: match par nom d'institution (ilike)
-
-        Retourne le Client si trouvé, None sinon.
-        """
+        """Retourne le client institution lié par FK, ou le crée automatiquement."""
         institution = transport_request.institution
         if not institution:
             return None
 
-        # 1. Match par FK linked_institution_id (le plus fiable)
         client = Client.query.filter(
             Client.company_id == company_id,
             Client.is_institution.is_(True),
@@ -576,31 +680,150 @@ class AcceptOfferUseCase:
             )
             return client
 
-        # 2. Fallback: match par nom
-        inst_name = institution.name
-        if inst_name:
-            client = Client.query.filter(
+        fallback_by_name = self._find_institution_client_by_name(
+            institution_name=getattr(institution, "name", None),
+            company_id=company_id,
+        )
+        if fallback_by_name:
+            if not getattr(fallback_by_name, "linked_institution_id", None):
+                fallback_by_name.linked_institution_id = institution.id
+            logger.info(
+                "[AcceptOffer] Institution client found by name fallback: %s (id=%s, rate=%s, linked=%s)",
+                institution.name,
+                fallback_by_name.id,
+                fallback_by_name.preferential_rate,
+                fallback_by_name.linked_institution_id,
+            )
+            return fallback_by_name
+
+        return self._create_institution_client(institution, company_id)
+
+    def _find_institution_client_by_name(
+        self, institution_name: str | None, company_id: int
+    ) -> Client | None:
+        """Fallback robuste quand linked_institution_id est absent/incomplet."""
+        normalized_target = _normalize_institution_name(institution_name)
+        if not normalized_target:
+            return None
+
+        candidates = Client.query.filter(
+            Client.company_id == company_id,
+            Client.is_institution.is_(True),
+        ).all()
+
+        for candidate in candidates:
+            candidate_name = getattr(candidate, "institution_name", None)
+            normalized_candidate = _normalize_institution_name(candidate_name)
+            if not normalized_candidate:
+                continue
+            if (
+                normalized_candidate == normalized_target
+                or normalized_candidate in normalized_target
+                or normalized_target in normalized_candidate
+            ):
+                return candidate
+
+        return None
+
+    def _create_institution_client(
+        self,
+        institution: object,
+        company_id: int,
+    ) -> Client | None:
+        """Crée un client institution dédié pour une entreprise de transport."""
+        inst_id = getattr(institution, "id", None)
+        inst_name = getattr(institution, "name", None) or f"Institution {inst_id}"
+
+        # Important: création sous savepoint pour ne pas invalider la transaction
+        # d'acceptation globale en cas de collision (email/user déjà existant).
+        try:
+            with db.session.begin_nested():
+                inst_user = User()
+                inst_user.username = f"inst_{inst_id}_{uuid.uuid4().hex[:8]}"
+                # Compte technique: email local unique par institution+entreprise.
+                # On conserve l'email métier dans Client.contact_email.
+                inst_user.email = (
+                    f"institution-{inst_id}-company-{company_id}@lirie.local"
+                )
+                inst_user.role = UserRole.CLIENT
+                inst_user.password = "!auto_institution_client!"
+                inst_user.first_name = inst_name[:120]
+                inst_user.last_name = "Institution"
+                db.session.add(inst_user)
+                db.session.flush()
+
+                new_client = Client()
+                new_client.user_id = inst_user.id
+                new_client.company_id = company_id
+                new_client.is_institution = True
+                new_client.institution_name = inst_name
+                new_client.linked_institution_id = inst_id
+                new_client.client_type = ClientType.TRANSPORT
+                new_client.management_mode = ManagementMode.CORPORATE
+                new_client.billing_address = (
+                    getattr(institution, "billing_address", None)
+                    or getattr(institution, "address", None)
+                )
+                new_client.contact_email = getattr(
+                    institution, "billing_email", None
+                ) or getattr(institution, "contact_email", None)
+                new_client.contact_phone = getattr(institution, "contact_phone", None)
+                # Par défaut, facturation au patient tant qu'aucun payeur tiers
+                # n'est explicitement configuré (évite invalidation booking).
+                new_client.default_billed_to_type = "patient"
+                db.session.add(new_client)
+                db.session.flush()
+
+            logger.info(
+                "institution_client_auto_created institution_id=%s client_id=%s company_id=%s",
+                inst_id,
+                new_client.id,
+                company_id,
+            )
+            try:
+                from services.metrics.institution_metrics import (
+                    track_institution_client_auto_created,
+                )
+
+                track_institution_client_auto_created(
+                    institution_id=int(inst_id),
+                    client_id=new_client.id,
+                    company_id=company_id,
+                )
+            except Exception:
+                pass
+
+            return new_client
+        except IntegrityError as create_err:
+            logger.warning(
+                "[AcceptOffer] IntegrityError auto-create institution client (inst=%s, company=%s): %s",
+                inst_id,
+                company_id,
+                create_err,
+            )
+            # Concurrence: un autre worker a peut-être créé le client entre-temps.
+            existing = Client.query.filter(
                 Client.company_id == company_id,
                 Client.is_institution.is_(True),
-                Client.institution_name.ilike(inst_name),
+                Client.linked_institution_id == inst_id,
             ).first()
-
-            if client:
-                logger.info(
-                    "[AcceptOffer] Institution client found by name: %s (id=%s, rate=%s)",
-                    inst_name,
-                    client.id,
-                    client.preferential_rate,
-                )
-                return client
-
-        logger.warning(
-            "[AcceptOffer] No institution client found for '%s' (inst_id=%s) in company %s",
-            institution.name,
-            institution.id,
-            company_id,
-        )
+            if existing:
+                return existing
+        except Exception as create_err:
+            logger.exception(
+                "[AcceptOffer] Failed to auto-create institution client for %s: %s",
+                inst_name,
+                create_err,
+            )
         return None
+
+    def _find_institution_client(
+        self,
+        transport_request: TransportRequest,
+        company_id: int,
+    ) -> Client | None:
+        """Deprecated: use _get_or_create_institution_client."""
+        return self._get_or_create_institution_client(transport_request, company_id)
 
     def _get_customer_name(self, transport_request: TransportRequest) -> str:
         """Retourne le nom du client pour le booking."""

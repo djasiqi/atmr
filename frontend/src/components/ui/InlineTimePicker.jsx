@@ -100,11 +100,22 @@ export default function InlineTimePicker({ value, onChange, placeholder: _placeh
   const updatePosition = useCallback(() => {
     if (!wrapperRef.current) return;
     const rect = wrapperRef.current.getBoundingClientRect();
-    const popH = 220, popW = 180;
-    let top = rect.bottom + window.scrollY + 4;
-    let left = rect.left + window.scrollX;
-    if (rect.bottom + popH > window.innerHeight) top = rect.top + window.scrollY - popH - 4;
-    if (left + popW > window.innerWidth) left = window.innerWidth - popW - 8;
+    const margin = 8;
+    const gap = 4;
+    const popW = 180;
+    const measured = popoverRef.current?.offsetHeight;
+    const popH = measured && measured > 48 ? measured : 220;
+    const spaceBelow = window.innerHeight - rect.bottom - margin;
+    const spaceAbove = rect.top - margin;
+    let top;
+    if (spaceBelow >= popH + gap || spaceBelow >= spaceAbove) {
+      top = rect.bottom + gap;
+    } else {
+      top = rect.top - popH - gap;
+    }
+    let left = Math.min(rect.left, window.innerWidth - popW - margin);
+    left = Math.max(margin, Math.min(left, window.innerWidth - popW - margin));
+    top = Math.max(margin, Math.min(top, window.innerHeight - popH - margin));
     setPos({ top, left });
   }, []);
 

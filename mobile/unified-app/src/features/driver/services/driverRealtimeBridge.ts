@@ -45,9 +45,7 @@ export function startDriverRealtimeBridge(
   const unsubscribeLifecycle = realtimeManager.subscribe((snapshot) => {
     const justReconnected = !wasConnected && snapshot.connected;
     const transitionGateEnabled = isFeatureEnabled("realtime_resync_transition_gate_enabled");
-    const shouldResync =
-      snapshot.activeContextId === contextId &&
-      (transitionGateEnabled ? justReconnected : snapshot.connected);
+    const shouldResync = snapshot.activeContextId === contextId && justReconnected;
     if (shouldResync) {
       const now = Date.now();
       if (transitionGateEnabled && now - lastReconnectResyncAtMs < reconnectResyncThrottleMs) {
@@ -128,6 +126,7 @@ export function startDriverRealtimeBridge(
     unsubscribeDriverEvents();
     stopDriverRealtimePolling();
     disposeDriverMissionSyncOrchestrator(contextId);
-    realtimeManager.disconnect();
+    // Ne pas appeler disconnect() ici : le socket est partagé (layout chauffeur, chat).
+    // La déconnexion est gérée par sessionProvider (logout / changement de contexte).
   };
 }

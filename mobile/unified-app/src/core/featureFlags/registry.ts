@@ -11,6 +11,10 @@ function envEnabled(name: string): boolean {
   return process.env[name] === "1";
 }
 
+function envExplicitlyDisabled(name: string): boolean {
+  return process.env[name] === "0";
+}
+
 // Single source of truth for rollout-safe toggles.
 export const featureFlags = {
   driver_unified_enabled: {
@@ -23,8 +27,12 @@ export const featureFlags = {
   realtime_socket_enabled: {
     key: "realtime_socket_enabled",
     source: "env",
-    enabled: envEnabled("EXPO_PUBLIC_ENABLE_DRIVER_SOCKET"),
-    description: "Enable realtime socket bridge for driver context.",
+    enabled: envExplicitlyDisabled("EXPO_PUBLIC_ENABLE_DRIVER_SOCKET")
+      ? false
+      : envEnabled("EXPO_PUBLIC_ENABLE_DRIVER_SOCKET") ||
+        (typeof __DEV__ !== "undefined" && __DEV__),
+    description:
+      "Socket chauffeur (messagerie, missions). Local : actif par défaut en __DEV__ ou EXPO_PUBLIC_ENABLE_DRIVER_SOCKET=1. Voir expo-driver-dev.env.template.",
   } satisfies FeatureFlagDefinition,
   tracking_background_enabled: {
     key: "tracking_background_enabled",
@@ -109,6 +117,16 @@ export const featureFlags = {
     enabled: envEnabled("EXPO_PUBLIC_ENABLE_DRIVER_NOTIFICATION_ACTIONS"),
     description: "Enable quick notification actions and channels bootstrap.",
   } satisfies FeatureFlagDefinition,
+  driver_messages_hub_enabled: {
+    key: "driver_messages_hub_enabled",
+    source: "env",
+    enabled:
+      process.env.EXPO_PUBLIC_ENABLE_DRIVER_MESSAGES_HUB === undefined
+        ? true
+        : envEnabled("EXPO_PUBLIC_ENABLE_DRIVER_MESSAGES_HUB"),
+    description:
+      "Hub Messages chauffeur (inbox mission-first, conversation enrichie, urgence dispatch).",
+  } satisfies FeatureFlagDefinition,
   driver_mission_bar_enabled: {
     key: "driver_mission_bar_enabled",
     source: "env",
@@ -132,6 +150,20 @@ export const featureFlags = {
     source: "env",
     enabled: envEnabled("EXPO_PUBLIC_ENABLE_REALTIME_RESYNC_TRANSITION_GATE"),
     description: "Trigger reconnect resync only on true connection transitions and gate bursty re-syncs.",
+  } satisfies FeatureFlagDefinition,
+  realtime_reconnect_circuit_breaker_enabled: {
+    key: "realtime_reconnect_circuit_breaker_enabled",
+    source: "env",
+    enabled: envEnabled("EXPO_PUBLIC_ENABLE_REALTIME_RECONNECT_CIRCUIT_BREAKER"),
+    description:
+      "Active un cooldown reconnexion Socket.IO après rafales d'échecs (fenêtre glissante) pour limiter storms et consommation batterie.",
+  } satisfies FeatureFlagDefinition,
+  company_gps_flush_priority_lanes_enabled: {
+    key: "company_gps_flush_priority_lanes_enabled",
+    source: "env",
+    enabled: envEnabled("EXPO_PUBLIC_ENABLE_COMPANY_GPS_FLUSH_PRIORITY_LANES"),
+    description:
+      "Active les lanes de flush GPS (critical/visible/background). Désactivé : pipeline P0 (critical immédiat, reste en batch 300ms).",
   } satisfies FeatureFlagDefinition,
   realtime_adaptive_polling_enabled: {
     key: "realtime_adaptive_polling_enabled",
@@ -190,16 +222,31 @@ export const featureFlags = {
   company_dispatch_enabled: {
     key: "company_dispatch_enabled",
     source: "env",
-    enabled: envEnabled("EXPO_PUBLIC_ENABLE_COMPANY_DISPATCH"),
+    enabled: envExplicitlyDisabled("EXPO_PUBLIC_ENABLE_COMPANY_DISPATCH")
+      ? false
+      : envEnabled("EXPO_PUBLIC_ENABLE_COMPANY_DISPATCH") ||
+        (typeof __DEV__ !== "undefined" && __DEV__),
     description:
-      "Déverrouille companyRealtimeBridge.connect dans (company)/_layout. Local dev: EXPO_PUBLIC_ENABLE_COMPANY_DISPATCH=1. Prod: laisser désactivé (0/absent) sauf override session (feature_flags). Requiert aussi company_realtime + URL socket (ou API base en __DEV__, voir companyRealtimeBridge).",
+      "Déverrouille companyRealtimeBridge.connect dans (company)/_layout. Local dev: actif par défaut en __DEV__ (ou EXPO_PUBLIC_ENABLE_COMPANY_DISPATCH=1). Prod: désactivé sauf override session (feature_flags). Requiert aussi company_realtime + URL socket.",
+  } satisfies FeatureFlagDefinition,
+  mobile_context_cache_parking_enabled: {
+    key: "mobile_context_cache_parking_enabled",
+    source: "env",
+    enabled:
+      process.env.EXPO_PUBLIC_MOBILE_CONTEXT_CACHE_PARKING === undefined
+        ? true
+        : envEnabled("EXPO_PUBLIC_MOBILE_CONTEXT_CACHE_PARKING"),
+    description:
+      "Conserve le cache React Query par contexte (LRU 2) au switch entreprise/chauffeur au lieu de purge systématique.",
   } satisfies FeatureFlagDefinition,
   company_realtime_enabled: {
     key: "company_realtime_enabled",
     source: "env",
-    enabled: envEnabled("EXPO_PUBLIC_ENABLE_COMPANY_REALTIME"),
+    enabled: envExplicitlyDisabled("EXPO_PUBLIC_ENABLE_COMPANY_REALTIME")
+      ? false
+      : envEnabled("EXPO_PUBLIC_ENABLE_COMPANY_REALTIME"),
     description:
-      "Kill-switch for the company socket bridge. EXPO_PUBLIC_ENABLE_COMPANY_REALTIME=1 + URL (EXPO_PUBLIC_COMPANY_SOCKET_URL ou origine EXPO_PUBLIC_API_BASE_URL ; pas de repli DRIVER). Voir expo-company-env.template.",
+      "Kill-switch for the company socket bridge. EXPO_PUBLIC_ENABLE_COMPANY_REALTIME=1 + URL (EXPO_PUBLIC_COMPANY_SOCKET_URL ou origine EXPO_PUBLIC_API_BASE_URL ; pas de repli DRIVER). En __DEV__, activé automatiquement si le dispatch company est actif (env ou feature_flags session). Voir expo-company-env.template.",
   } satisfies FeatureFlagDefinition,
   company_dispatch_screen_enabled: {
     key: "company_dispatch_screen_enabled",
@@ -256,6 +303,24 @@ export const featureFlags = {
     enabled: envEnabled("EXPO_PUBLIC_ENABLE_COMPANY_MOBILE_ROLE_GUARDS"),
     description: "Enable additional role-based guards on sensitive company actions.",
   } satisfies FeatureFlagDefinition,
+  perf_instrumentation_enabled: {
+    key: "perf_instrumentation_enabled",
+    source: "env",
+    enabled:
+      envEnabled("EXPO_PUBLIC_PERF_INSTRUMENTATION") ||
+      (typeof __DEV__ !== "undefined" && __DEV__),
+    description:
+      "Instrumentation perf Phase 0 (notify, invalidate, JS long tasks, heap). Actif en __DEV__ ou EXPO_PUBLIC_PERF_INSTRUMENTATION=1.",
+  } satisfies FeatureFlagDefinition,
+  perf_chat_local_patch_enabled: {
+    key: "perf_chat_local_patch_enabled",
+    source: "env",
+    enabled:
+      envEnabled("EXPO_PUBLIC_PERF_CHAT_LOCAL_PATCH") ||
+      (typeof __DEV__ !== "undefined" && __DEV__),
+    description:
+      "Phase A chat : patch React Query local au lieu d'invalidate. __DEV__ on, prod off sauf EXPO_PUBLIC_PERF_CHAT_LOCAL_PATCH=1.",
+  } satisfies FeatureFlagDefinition,
 } as const;
 
 export type FeatureFlagKey = keyof typeof featureFlags;
@@ -300,10 +365,33 @@ export function setRuntimeFeatureFlagOverrides(
     typeof maybeVersion === "string" && maybeVersion.trim().length > 0 ? maybeVersion : null;
 }
 
+function isCompanyDispatchEnabledResolved(): boolean {
+  const runtimeDispatch = toBoolean(runtimeOverrides.company_dispatch_enabled);
+  if (runtimeDispatch !== null) return runtimeDispatch;
+  return featureFlags.company_dispatch_enabled.enabled;
+}
+
 export function isFeatureEnabled(key: FeatureFlagKey): boolean {
   const runtimeValue = toBoolean(runtimeOverrides[key]);
   if (runtimeValue !== null) return runtimeValue;
+  if (
+    key === "company_realtime_enabled" &&
+    !envExplicitlyDisabled("EXPO_PUBLIC_ENABLE_COMPANY_REALTIME") &&
+    typeof __DEV__ !== "undefined" &&
+    __DEV__ &&
+    isCompanyDispatchEnabledResolved()
+  ) {
+    return true;
+  }
   return featureFlags[key].enabled;
+}
+
+/** Socket company attendu (dispatch + realtime) — pilote cockpit et _layout. */
+export function isCompanyRealtimeSocketExpected(): boolean {
+  return (
+    isFeatureEnabled("company_dispatch_enabled") &&
+    isFeatureEnabled("company_realtime_enabled")
+  );
 }
 
 export function getFeatureFlagSource(key: FeatureFlagKey): FeatureFlagSource {

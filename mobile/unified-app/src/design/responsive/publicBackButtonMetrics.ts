@@ -1,7 +1,7 @@
 import type { AppViewport } from "./useAppViewport";
 
-const BG_IDLE_PILL = "rgba(10, 143, 122, 0.06)";
-const BG_PRESSED = "rgba(10, 143, 122, 0.12)";
+const BG_IDLE_PILL = "rgba(0, 121, 107, 0.06)";
+const BG_PRESSED = "rgba(0, 121, 107, 0.12)";
 
 /** Mesures alignées sur les rendus web (ghost vs pastille verte, icônes 22 / 20 / 18). */
 export type PublicBackButtonMetrics = {
