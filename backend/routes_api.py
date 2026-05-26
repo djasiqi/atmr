@@ -231,6 +231,7 @@ def init_namespaces(app):
     from routes.messages import messages_ns
     from routes.conversations import conversations_ns
     from routes.messages_hub import messages_hub_ns
+    from routes.directions import directions_ns
     from routes.osrm import osrm_ns
     from routes.osrm_health import osrm_health_ns
     from routes.osrm_metrics import ns_osrm_metrics
@@ -322,6 +323,9 @@ def init_namespaces(app):
     api_v1.add_namespace(messages_ns, path="/messages")
     api_v1.add_namespace(messages_hub_ns, path="/messages")
     api_v1.add_namespace(conversations_ns, path="/conversations")
+
+    # Routes directions (proxy Google Directions avec cache Redis)
+    api_v1.add_namespace(directions_ns, path="/directions")
 
     # Routes geocode
     api_v1.add_namespace(geocode_ns, path="/geocode")
@@ -445,6 +449,7 @@ def init_namespaces(app):
         api_legacy.add_namespace(messages_ns, path="/messages")
         api_legacy.add_namespace(messages_hub_ns, path="/messages")
         api_legacy.add_namespace(conversations_ns, path="/conversations")
+        api_legacy.add_namespace(directions_ns, path="/directions")
         api_legacy.add_namespace(geocode_ns, path="/geocode")
         api_legacy.add_namespace(medical_ns, path="/medical")
         api_legacy.add_namespace(invoices_ns, path="/invoices")

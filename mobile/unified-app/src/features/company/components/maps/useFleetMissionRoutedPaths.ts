@@ -22,7 +22,7 @@ export function useFleetMissionRoutedPaths(
 
   overlays: FleetMissionOverlay[],
 
-  apiKey: string | undefined
+  apiKey?: string | undefined
 
 ): {
 
@@ -58,7 +58,7 @@ export function useFleetMissionRoutedPaths(
 
   useEffect(() => {
 
-    if (!apiKey || overlays.length === 0) {
+    if (overlays.length === 0) {
 
       setRoutedPathsByMissionId(new Map());
 

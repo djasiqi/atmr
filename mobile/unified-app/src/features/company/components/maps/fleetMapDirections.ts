@@ -211,6 +211,11 @@ export function writeCachedFleetDirectionsPath(
   });
 }
 
+/** Helper test-only : vide le cache mémoire des trajets pré-calculés. */
+export function resetFleetDirectionsCacheForTests(): void {
+  directionsPathCache.clear();
+}
+
 /** Segment mis en avant quand la mission est sélectionnée sur la carte. */
 export function resolveFleetMissionRouteFocusLeg(
   lifecyclePhase: FleetMissionLifecyclePhase

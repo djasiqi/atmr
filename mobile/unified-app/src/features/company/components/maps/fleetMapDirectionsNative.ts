@@ -10,83 +10,73 @@ import {
   type FleetMapLatLng,
   type FleetRouteLegId,
 } from "./fleetMapDirections";
+import { apiClient } from "../../../../core/api/client";
 import { emitDriverTelemetry } from "../../../../core/observability/driverTelemetry";
 
-type DirectionsJsonStep = {
-  polyline?: { points?: string };
-};
-
-type DirectionsJsonLeg = {
-  steps?: DirectionsJsonStep[];
-};
-
-type DirectionsJsonRoute = {
-  legs?: DirectionsJsonLeg[];
-  overview_polyline?: { points?: string };
-};
-
-type DirectionsJsonResponse = {
+// Le mobile n'appelle plus directement Google Directions : la clé est restée côté serveur,
+// le proxy /api/v1/directions absorbe les renders répétés via cache Redis et renvoie la
+// polyline encodée.
+type DirectionsProxyResponse = {
   status?: string;
-  routes?: DirectionsJsonRoute[];
+  overview_polyline?: string | null;
+  cached?: boolean;
+  source?: string;
   error_message?: string;
+  http_status?: number;
 };
 
-function extractNativeDirectionsPath(route: DirectionsJsonRoute | undefined): FleetMapLatLng[] {
-  const overview = route?.overview_polyline?.points;
-  if (overview) {
-    return simplifyFleetDirectionsPathForNative(decodeEncodedPolyline(overview));
-  }
-
-  const detailed: FleetMapLatLng[] = [];
-  for (const leg of route?.legs ?? []) {
-    for (const step of leg.steps ?? []) {
-      const encoded = step.polyline?.points;
-      if (encoded) detailed.push(...decodeEncodedPolyline(encoded));
-    }
-  }
-  if (detailed.length >= 2) return simplifyFleetDirectionsPathForNative(detailed);
-  return [];
+function extractPathFromEncodedPolyline(encoded: string | null | undefined): FleetMapLatLng[] {
+  if (!encoded) return [];
+  return simplifyFleetDirectionsPathForNative(decodeEncodedPolyline(encoded));
 }
 
 export async function fetchFleetDirectionsPathNative(
   plan: FleetDirectionsPlan,
-  apiKey: string
+  _apiKey?: string
 ): Promise<FleetMapLatLng[]> {
+  void _apiKey;
   const stablePlan = buildStableDirectionsFetchPlan(plan);
   const cached = readCachedFleetDirectionsPath(stablePlan);
   if (cached && cached.length >= 2) return cached;
 
-  const params = new URLSearchParams({
-    origin: `${stablePlan.origin.latitude},${stablePlan.origin.longitude}`,
-    destination: `${stablePlan.destination.latitude},${stablePlan.destination.longitude}`,
+  const body: Record<string, unknown> = {
+    origin: {
+      latitude: stablePlan.origin.latitude,
+      longitude: stablePlan.origin.longitude,
+    },
+    destination: {
+      latitude: stablePlan.destination.latitude,
+      longitude: stablePlan.destination.longitude,
+    },
     mode: "driving",
     region: "ch",
-    key: apiKey,
-  });
-
-  const waypoints = (stablePlan.waypoints ?? [])
-    .map((waypoint) => `${waypoint.latitude},${waypoint.longitude}`)
-    .join("|");
-  if (waypoints) params.set("waypoints", waypoints);
+  };
+  if (stablePlan.waypoints && stablePlan.waypoints.length > 0) {
+    body.waypoints = stablePlan.waypoints.map((waypoint) => ({
+      latitude: waypoint.latitude,
+      longitude: waypoint.longitude,
+    }));
+  }
 
   try {
-    const response = await fetch(
-      `https://maps.googleapis.com/maps/api/directions/json?${params.toString()}`
-    );
-    const data = (await response.json()) as DirectionsJsonResponse;
-    if (data.status !== "OK" || !data.routes?.[0]) {
+    const response = await apiClient.post<DirectionsProxyResponse>("/directions", body);
+    const data = response.data ?? {};
+    if (data.status !== "OK" || !data.overview_polyline) {
       emitDriverTelemetry("company.fleet.directions.failed", {
         source: "company.fleetMapDirectionsNative",
         status: data.status ?? "unknown",
         error_message: data.error_message ?? null,
-        http_status: response.status,
-        route_count: data.routes?.length ?? 0,
+        http_status: data.http_status ?? response.status ?? null,
+        cached: Boolean(data.cached),
         has_waypoints: Boolean(stablePlan.waypoints && stablePlan.waypoints.length > 0),
       });
       return [];
     }
 
-    const points = dedupeFleetDirectionsPoints(extractNativeDirectionsPath(data.routes[0]), 8);
+    const points = dedupeFleetDirectionsPoints(
+      extractPathFromEncodedPolyline(data.overview_polyline),
+      8
+    );
     if (points.length >= 2) {
       writeCachedFleetDirectionsPath(stablePlan, points);
     }
@@ -109,7 +99,7 @@ type OverlayDirectionsInput = {
 
 export async function fetchFleetDirectionsPathsForOverlaysNative(
   overlays: OverlayDirectionsInput[],
-  apiKey: string
+  apiKey?: string
 ): Promise<Map<string, FleetMapLatLng[]>> {
   const routed = new Map<string, FleetMapLatLng[]>();
 
