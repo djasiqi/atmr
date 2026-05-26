@@ -33,7 +33,7 @@ const InstitutionOperationalEdit = ({
   onSaved,
   patchMutation,
 }) => {
-  const bs = request.booking_summary || {};
+  const bs = useMemo(() => request.booking_summary || {}, [request.booking_summary]);
   const patientName = request.patient
     ? `${request.patient.first_name || ''} ${request.patient.last_name || ''}`.trim()
     : bs.customer_name || 'Patient';

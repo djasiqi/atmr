@@ -652,7 +652,7 @@ function DriverLiveMap({ drivers: propDrivers }) {
       lastStaleMetricAtRef.current = now;
       trackStaleMarkers(company?.id, staleMarkersCount);
     }
-  }, [drivers, companyCoords, upsertMarker, removeMarker, company?.id]);
+  }, [drivers, companyCoords, upsertMarker, removeMarker, company?.id, captureOverlayStats]);
 
   // fitBounds uniquement si le set structurel visible change (pas sur tick GPS)
   useEffect(() => {
