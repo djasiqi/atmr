@@ -150,3 +150,17 @@ def institution_is_demo(institution: Institution | None) -> bool:
 def company_is_demo(company: Company | None) -> bool:
     """Public: vérifie si une entreprise est démo (pour filtrer les notifications)."""
     return _company_is_demo(company)
+
+
+def filter_companies_for_institution(
+    companies: list[Company],
+    institution: Institution | None,
+) -> list[Company]:
+    """Filtre les transporteurs selon le type d'institution (démo ↔ réel).
+
+    - Institution démo : uniquement entreprises démo (@demo.lirie.ch, etc.).
+    - Institution réelle : exclut les entreprises démo (LIRIE Demo, comptes test).
+    """
+    if institution_is_demo(institution):
+        return [c for c in companies if company_is_demo(c)]
+    return [c for c in companies if not company_is_demo(c)]

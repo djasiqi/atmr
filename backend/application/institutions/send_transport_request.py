@@ -396,10 +396,7 @@ class SendTransportRequestUseCase:
         Si la demande vient d'une institution démo, seules les entreprises démo
         sont éligibles (évite que des transporteurs réels voient des demandes démo).
         """
-        from services.demo.soft_delete_guard import (
-            company_is_demo,
-            institution_is_demo,
-        )
+        from services.demo.soft_delete_guard import filter_companies_for_institution
 
         query = Company.query.filter(
             Company.is_approved == True,  # noqa: E712
@@ -410,8 +407,10 @@ class SendTransportRequestUseCase:
             query = query.filter(Company.id.notin_(excluded_ids))
 
         companies = query.all()
-        if transport_request and institution_is_demo(transport_request.institution):
-            companies = [c for c in companies if company_is_demo(c)]
+        if transport_request:
+            companies = filter_companies_for_institution(
+                companies, transport_request.institution
+            )
         return companies
 
     @staticmethod

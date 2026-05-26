@@ -20,7 +20,7 @@ from marshmallow import fields as ma_fields
 from marshmallow import validate
 
 from ext import db
-from models import Company, InstitutionTransportPreference
+from models import Company, Institution, InstitutionTransportPreference
 from models.enums import InstitutionRole
 from routes.api_error_models import (
     create_api_error_model,
@@ -287,6 +287,7 @@ class EligibleCompanies(Resource):
         """
         try:
             institution_id, _user_id = get_institution_context()
+            institution = Institution.query.get(institution_id)
 
             # Récupérer uniquement les entreprises de transport approuvées.
             # Le filtre is_approved exclut déjà les institutions qui auraient
@@ -297,6 +298,9 @@ class EligibleCompanies(Resource):
                 .order_by(Company.name)
                 .all()
             )
+            from services.demo.soft_delete_guard import filter_companies_for_institution
+
+            companies = filter_companies_for_institution(companies, institution)
 
             # Récupérer les IDs déjà préférés
             preferred_ids = set(

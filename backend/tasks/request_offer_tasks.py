@@ -308,10 +308,7 @@ def _escalate_sequential_request(
 def _create_fallback_broadcast(transport_request: TransportRequest) -> None:
     """Crée des offres broadcast de fallback après épuisement des préférences."""
     from models import Company
-    from services.demo.soft_delete_guard import (
-        company_is_demo,
-        institution_is_demo,
-    )
+    from services.demo.soft_delete_guard import filter_companies_for_institution
 
     # Récupérer les IDs des entreprises déjà contactées
     existing_offers = RequestOffer.query.filter_by(
@@ -327,9 +324,9 @@ def _create_fallback_broadcast(transport_request: TransportRequest) -> None:
     if contacted_company_ids:
         query = query.filter(Company.id.notin_(list(contacted_company_ids)))
 
-    eligible = query.all()
-    if institution_is_demo(transport_request.institution):
-        eligible = [c for c in eligible if company_is_demo(c)]
+    eligible = filter_companies_for_institution(
+        query.all(), transport_request.institution
+    )
 
     if not eligible:
         # Aucune entreprise disponible -> request EXPIRED
