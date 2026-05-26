@@ -1214,10 +1214,11 @@ def _permissions_for_context(context_type: str) -> list[str]:
 
 
 def _company_allows_driver_workspace_switch(company: object | None) -> bool:
-    """Entreprise « transport + dispatch » : seule cible de la bascule mobile entreprise↔chauffeur."""
+    """Entreprise transport : bascule mobile entreprise↔chauffeur (double casquette opérateur)."""
     if company is None:
         return False
-    return bool(getattr(company, "dispatch_enabled", False))
+    company_id = getattr(company, "id", None)
+    return company_id is not None
 
 
 def _allow_mobile_company_driver_context_switch(
@@ -1234,7 +1235,7 @@ def _allow_mobile_company_driver_context_switch(
     - Les chauffeurs d'**urgence** (DriverType.EMERGENCY) qui doivent ouvrir l'app entreprise
       utilisent le flux dédié `POST /driver/me/switch-to-enterprise` (émission d'un jeton
       entreprise), pas cette bascule de contexte.
-    - Dispatch entreprise requis (dispatch_enabled).
+    - Toute entreprise liée au compte (indépendant de dispatch_mode / dispatch_enabled).
     """
     if user.role is not UserRole.COMPANY:
         return False

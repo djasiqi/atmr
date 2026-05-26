@@ -24,8 +24,10 @@ class EnsureCompanyOperatorDriverResult:
 class EnsureCompanyOperatorDriverUseCase:
     """Crée un profil chauffeur sur le même user que l'entreprise si absent.
 
-    Cible : opérateurs transport (dispatch actif) qui basculent entreprise ↔ chauffeur
-    dans l'app unifiée via ``/auth/bootstrap`` et ``/auth/switch-context``.
+    Cible : comptes entreprise transport (manuel, semi-auto ou fully-auto) qui basculent
+    entreprise ↔ chauffeur dans l'app unifiée via ``/auth/bootstrap`` et
+    ``/auth/switch-context``. Indépendant de ``dispatch_enabled`` (moteur d'assignation
+    auto) et de ``dispatch_mode``.
     """
 
     def execute(self, user: User) -> EnsureCompanyOperatorDriverResult:
@@ -34,9 +36,6 @@ class EnsureCompanyOperatorDriverUseCase:
 
         company = getattr(user, "company", None)
         if company is None or company.id is None:
-            return EnsureCompanyOperatorDriverResult(driver=None, created=False)
-
-        if not bool(getattr(company, "dispatch_enabled", False)):
             return EnsureCompanyOperatorDriverResult(driver=None, created=False)
 
         existing = getattr(user, "driver", None)

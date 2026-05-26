@@ -73,15 +73,15 @@ def test_idempotent_when_driver_already_exists(db):
 
 
 @pytest.mark.unit
-def test_skips_when_dispatch_disabled(db):
+def test_provisions_when_dispatch_disabled(db):
     user = _create_company_user(db, dispatch_enabled=False)
     uc = EnsureCompanyOperatorDriverUseCase()
 
     result = uc.execute(user)
 
-    assert result.driver is None
-    assert result.created is False
-    assert Driver.query.filter_by(user_id=user.id).count() == 0
+    assert result.created is True
+    assert result.driver is not None
+    assert Driver.query.filter_by(user_id=user.id).count() == 1
 
 
 @pytest.mark.unit
@@ -100,3 +100,19 @@ def test_bootstrap_contexts_include_driver_after_provision(db):
     company_ctx = next(ctx for ctx in contexts if ctx["context_type"] == "company")
     assert driver_ctx["allow_mobile_context_switch"] is True
     assert company_ctx["allow_mobile_context_switch"] is True
+
+
+@pytest.mark.unit
+def test_bootstrap_contexts_include_driver_when_dispatch_disabled(db):
+    user = _create_company_user(db, dispatch_enabled=False)
+    EnsureCompanyOperatorDriverUseCase().execute(user)
+    db.session.commit()
+
+    user = User.query.filter_by(id=user.id).first()
+    contexts = _build_available_contexts(user)
+    types = {ctx["context_type"] for ctx in contexts}
+
+    assert "company" in types
+    assert "driver" in types
+    driver_ctx = next(ctx for ctx in contexts if ctx["context_type"] == "driver")
+    assert driver_ctx["allow_mobile_context_switch"] is True
