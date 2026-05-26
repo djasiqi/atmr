@@ -149,6 +149,16 @@ class SaveDriverPushTokenUseCase:
                     provider = (
                         "fcm" if not token.startswith("ExponentPushToken") else "expo"
                     )
+                if (
+                    provider == "fcm"
+                    and platform == "ios"
+                    and token.startswith(("APA91", "APA91b"))
+                ):
+                    app_logger.warning(
+                        "[push-token] platform ios->android inferred for FCM Android token driver_id=%s",
+                        driver_id,
+                    )
+                    platform = "android"
 
                 existing_token = DeviceToken.query.filter_by(
                     driver_id=driver_id,

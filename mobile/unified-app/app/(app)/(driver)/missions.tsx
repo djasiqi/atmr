@@ -16,12 +16,23 @@ import {
 import { groupMissionsByPickupWindow } from "../../../src/features/driver/domain/missionGrouping";
 import { DRIVER_FLOATING_TAB_SCROLL_PADDING } from "../../../src/features/driver/navigation/DriverFloatingTabBar";
 import { FONT_SIZE } from "../../../src/design/responsive/typographyTokens";
+import { DriverTrackingBanner } from "../../../src/features/driver/components/DriverTrackingBanner";
+import { DriverTrackingQaPanel } from "../../../src/features/driver/components/DriverTrackingQaPanel";
+import {
+  isTrackingQaPanelEnabled,
+  useDriverBackgroundTrackingUi,
+} from "../../../src/features/driver/hooks/useDriverBackgroundTrackingUi";
+import * as Location from "expo-location";
 
 export default function DriverMissionsScreen() {
   const router = useRouter();
   const { width } = useAppViewport();
   const isCompactMobile = width < 380;
   const missionsQuery = useDriverMissionsQuery();
+  const trackingUi = useDriverBackgroundTrackingUi();
+  const handleRequestBgPermission = async () => {
+    await Location.requestBackgroundPermissionsAsync().catch(() => undefined);
+  };
   usePerfScreenReady(
     "driver.missions",
     "driver.missions.data_ready",
@@ -41,6 +52,8 @@ export default function DriverMissionsScreen() {
           <AppText variant="sectionTitle" style={[styles.title, isCompactMobile && styles.titleCompact]}>
             Missions chauffeur
           </AppText>
+          {isTrackingQaPanelEnabled() ? <DriverTrackingQaPanel ui={trackingUi} /> : null}
+          <DriverTrackingBanner ui={trackingUi} onRequestPermission={handleRequestBgPermission} />
           {missionsQuery.isLoading ? <AppSpinner size="small" /> : null}
           {missionsQuery.isError ? (
             <AppText variant="error" style={styles.error}>

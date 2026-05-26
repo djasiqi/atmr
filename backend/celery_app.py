@@ -114,6 +114,7 @@ celery: Celery = Celery(
         "tasks.saferpay_reconciliation_tasks",  # Paiements Saferpay PENDING (beat)
         "tasks.invoice_pdf_tasks",  # V2 : PDF facture transport async (file d'attente)
         "tasks.transport_invoicing_automation",  # V3 : rappel mensuel / batch (stubs)
+        "tasks.health_tasks",  # Smoke test Celery broker/worker (runbook incident)
     ],
 )
 

@@ -19,7 +19,10 @@ import {
 } from "../../features/driver/driverRealtimeSync";
 import {
   disposeDriverFirebaseMessaging,
+  driverFcmPlatform,
+  getDriverFcmToken,
   initDriverFirebaseMessaging,
+  subscribeDriverFcmTokenRefresh,
 } from "../../features/driver/firebaseMessaging";
 import { resolveDriverDeepLink } from "../navigation/deepLinkHandler";
 import { configureMissionBarIOS } from "../../features/driver/missionBarIOS";
@@ -773,6 +776,44 @@ export function NotificationsProvider({ children }: PropsWithChildren) {
       });
     })();
   }, [Notifications, status, activeContext?.context_type, bootstrap?.user?.id]);
+
+  useEffect(() => {
+    if (!isFeatureEnabled("driver_fcm_native_enabled")) return;
+    if (!isFeatureEnabled("driver_push_enabled")) return;
+    if (Platform.OS === "web") return;
+    if (status !== "ready") return;
+    if (activeContext?.context_type !== "driver") return;
+    const driverId = Number(bootstrap?.user?.id);
+    if (!Number.isFinite(driverId)) return;
+
+    const registerFcmToken = async (token: string) => {
+      if (!token) return;
+      await registerDriverPushToken({
+        token,
+        driverId,
+        platform: driverFcmPlatform(),
+        provider: "fcm",
+      }).catch(() => undefined);
+      emitDriverTelemetry("push.token.registered", {
+        source: "core.notifications.provider",
+        driver_id: String(driverId),
+        provider: "fcm",
+      });
+    };
+
+    void (async () => {
+      const token = await getDriverFcmToken();
+      if (token) await registerFcmToken(token);
+    })();
+
+    const unsubscribeRefresh = subscribeDriverFcmTokenRefresh((token) => {
+      void registerFcmToken(token);
+    });
+
+    return () => {
+      unsubscribeRefresh();
+    };
+  }, [status, activeContext?.context_type, bootstrap?.user?.id]);
 
   useEffect(() => {
     if (!isFeatureEnabled("driver_push_enabled")) return;

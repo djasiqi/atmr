@@ -45,6 +45,18 @@ def handle_driver_new_booking(event: dict[str, Any]) -> None:
     """
     booking_id = event.get("booking_id")
     driver_id = event.get("driver_id")
+    event_id = event.get("event_id")
+    correlation_id = event.get("correlation_id")
+
+    from services.notifications.push_pipeline_log import log_driver_push_stage
+
+    log_driver_push_stage(
+        "driver_push.handler",
+        event_id=event_id,
+        correlation_id=correlation_id,
+        booking_id=booking_id,
+        driver_id=driver_id,
+    )
 
     logger.info(
         "[EventBus] DriverNewBookingEvent received: booking_id=%s driver_id=%s event_keys=%s",
@@ -77,7 +89,12 @@ def handle_driver_new_booking(event: dict[str, Any]) -> None:
                 driver_id,
             )
             try:
-                notify_driver_new_booking(int(driver_id), booking)
+                notify_driver_new_booking(
+                    int(driver_id),
+                    booking,
+                    event_id=event_id,
+                    correlation_id=correlation_id,
+                )
                 try:
                     from services.notifications.end_client_booking_notify import (
                         notify_end_client_booking_milestone,

@@ -1,5 +1,5 @@
 import * as Sentry from "@sentry/react-native";
-import { AppStateStatus, Platform } from "react-native";
+import { AppState, AppStateStatus, Platform } from "react-native";
 import * as Location from "expo-location";
 import { sendDriverLocation } from "../api/driverHttp";
 import { DriverMissionStatus } from "../types";
@@ -19,8 +19,10 @@ import {
   updateMissionLiveActivity,
 } from "../missionBarIOS";
 import {
+  ensureNativeTrackingWhileForeground,
+  initializeBackgroundLocationTask,
+  resumePendingNativeTrackingIfNeeded,
   setBackgroundTrackingMissionContext,
-  startBackgroundLocationTaskIfEligible,
   stopBackgroundLocationTask,
 } from "./backgroundLocationTask";
 import { canUseBackgroundLocation } from "./backgroundRuntimeCompat";
@@ -42,6 +44,33 @@ const STALE_FALLBACK_BREAKER_MS = Number(
   process.env.EXPO_PUBLIC_DRIVER_STALE_FALLBACK_BREAKER_MS ?? "60000"
 );
 let permissionRequestInFlight: Promise<boolean> | null = null;
+let nativeTrackingAppStateSubscribed = false;
+
+function ensureNativeTrackingAppStateListener(): void {
+  if (nativeTrackingAppStateSubscribed || Platform.OS === "web") return;
+  nativeTrackingAppStateSubscribed = true;
+  initializeBackgroundLocationTask();
+  AppState.addEventListener("change", (next) => {
+    if (next === "active") {
+      void resumePendingNativeTrackingIfNeeded();
+      if (state.missionId != null && isFeatureEnabled("tracking_background_enabled")) {
+        void ensureNativeTrackingWhileForeground(
+          state.missionId,
+          state.missionStatus,
+          {},
+          "app_resume"
+        );
+      } else if (state.presenceWindowActive && isFeatureEnabled("tracking_background_enabled")) {
+        void ensureNativeTrackingWhileForeground(
+          null,
+          null,
+          { presenceWindow: true },
+          "app_resume_presence"
+        );
+      }
+    }
+  });
+}
 
 type TrackingBridgeState = {
   missionId: number | null;
@@ -604,13 +633,25 @@ function ensureManagerState() {
   }
   if (state.missionId != null) {
     void setBackgroundTrackingMissionContext(state.missionId, state.missionStatus, "mission");
+    ensureNativeTrackingAppStateListener();
     if (isFeatureEnabled("tracking_background_enabled")) {
-      void startBackgroundLocationTaskIfEligible(state.missionId, state.missionStatus);
+      void ensureNativeTrackingWhileForeground(
+        state.missionId,
+        state.missionStatus,
+        {},
+        "ensure_manager_state"
+      );
     }
   } else if (state.presenceWindowActive) {
     void setBackgroundTrackingMissionContext(null, null, "presence_window");
+    ensureNativeTrackingAppStateListener();
     if (isFeatureEnabled("tracking_background_enabled")) {
-      void startBackgroundLocationTaskIfEligible(null, null, { presenceWindow: true });
+      void ensureNativeTrackingWhileForeground(
+        null,
+        null,
+        { presenceWindow: true },
+        "ensure_manager_presence"
+      );
     }
   }
   void ensureLocationWatch();
@@ -637,8 +678,9 @@ export function startDriverTrackingBridge(missionId: number, status: DriverMissi
   void showMissionBarAndroid(missionId, status);
   void startMissionLiveActivity({ missionId, status });
   void setBackgroundTrackingMissionContext(missionId, status);
+  ensureNativeTrackingAppStateListener();
   if (isFeatureEnabled("tracking_background_enabled")) {
-    void startBackgroundLocationTaskIfEligible(missionId, status);
+    void ensureNativeTrackingWhileForeground(missionId, status, {}, "mission_started");
   }
   ensureManagerState();
   notifyTrackingBridgeListeners();

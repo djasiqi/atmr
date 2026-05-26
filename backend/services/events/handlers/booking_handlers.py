@@ -71,6 +71,23 @@ def handle_booking_assigned(event: dict[str, Any]) -> None:
         targets = compute_all_notification_targets("booking_assigned", ctx)
         _log_notification_dispatched("booking_assigned", booking_id, targets)
 
+        if targets.notify_driver_push and ctx.driver_id:
+            try:
+                from services.notifications.core import notify_driver_new_booking
+
+                notify_driver_new_booking(
+                    int(ctx.driver_id),
+                    booking,
+                    event_id=event.get("event_id"),
+                    correlation_id=event.get("correlation_id"),
+                )
+            except Exception:
+                logger.exception(
+                    "[EventBus] notify_driver_new_booking fallback failed booking_id=%s driver_id=%s",
+                    booking_id,
+                    ctx.driver_id,
+                )
+
         if targets.notify_institution_persist and targets.institution_id:
             try:
                 from services.events.institution_events import (

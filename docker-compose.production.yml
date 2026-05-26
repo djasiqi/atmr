@@ -454,7 +454,7 @@ services:
     # Charger les variables depuis .env.production (créé par le workflow GitHub Actions)
     env_file:
       - .env.production
-    command: celery -A celery_app.celery worker --loglevel=info --concurrency=${CELERY_CONCURRENCY:-16} -Q default,dispatch,realtime,notifications,billing,rl,geocoding,dlq
+    command: celery -A celery_app.celery worker --loglevel=info --concurrency=${CELERY_CONCURRENCY:-4} -Q default,dispatch,realtime,notifications,billing,rl,geocoding,dlq
     healthcheck:
       test: ["CMD", "celery", "-A", "celery_app.celery", "inspect", "ping"]
       interval: 30s

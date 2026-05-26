@@ -338,6 +338,16 @@ def _send_push_to_driver(
         # ✅ AMÉLIORATION MAJEURE: Utiliser Celery pour queue persistante + fallback SMS/Email
         if use_celery:
             from tasks.notification_tasks import send_push_notification_task
+            from services.notifications.push_pipeline_log import log_driver_push_stage
+
+            log_driver_push_stage(
+                "driver_push.enqueue",
+                event_id=data.get("event_id") if data else None,
+                correlation_id=data.get("correlation_id") if data else None,
+                booking_id=data.get("booking_id") if data else None,
+                driver_id=driver_id,
+                notification_type=notification_type,
+            )
 
             app_logger.warning(
                 "[event_fanout] Queueing notification to driver %s via Celery (type: %s)",
@@ -504,6 +514,9 @@ def fanout_booking_assigned_to_driver(
     driver_id: int,
     booking_id: int,
     booking_data: Dict[str, Any] | None = None,
+    *,
+    event_id: str | None = None,
+    correlation_id: str | None = None,
 ) -> None:
     """Fan-out hybride pour une mission assignée à un chauffeur.
 
@@ -511,6 +524,8 @@ def fanout_booking_assigned_to_driver(
         driver_id: ID du chauffeur
         booking_id: ID de la mission
         booking_data: Données de la mission (optionnel)
+        event_id: ID événement domaine (corrélation pipeline push)
+        correlation_id: Trace optionnelle
     """
     app_logger.warning(
         "[event_fanout] fanout_booking_assigned_to_driver called: driver_id=%s booking_id=%s",
@@ -534,6 +549,27 @@ def fanout_booking_assigned_to_driver(
         )
 
     # 2. Push notification (background) — message métier (nom client + contexte), jamais ID-only
+    from services.notifications.push_driver_booking_dedup import (
+        claim_driver_booking_push,
+    )
+    from services.notifications.push_pipeline_log import log_driver_push_stage
+
+    if not claim_driver_booking_push(driver_id, booking_id):
+        log_driver_push_stage(
+            "driver_push.dedup_skipped",
+            event_id=event_id,
+            correlation_id=correlation_id,
+            booking_id=booking_id,
+            driver_id=driver_id,
+            notification_type="booking_assigned",
+        )
+        app_logger.info(
+            "[event_fanout] booking_assigned push dedup skip driver_id=%s booking_id=%s",
+            driver_id,
+            booking_id,
+        )
+        return
+
     push_ctx: Dict[str, Any] = dict(booking_data or {})
     push_ctx.setdefault("id", booking_id)
     discrete = _get_recipient_discreet_mode(driver_id=driver_id)
@@ -553,6 +589,11 @@ def fanout_booking_assigned_to_driver(
     data = dict(msg["data"])
     data["recipient_role"] = "driver"
     data["actor_role"] = "company"
+    if event_id:
+        data["event_id"] = event_id
+    if correlation_id:
+        data["correlation_id"] = correlation_id
+    data.setdefault("booking_id", booking_id)
 
     _log_push_fanout(
         event_type="booking_assigned",

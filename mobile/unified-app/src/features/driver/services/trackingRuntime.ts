@@ -1,58 +1,109 @@
-import { DriverTrackingMode } from "../runtimeContracts";
+/**
+ * État runtime partagé : erreurs de démarrage natif, dernier callback task, pending FGS.
+ * Source unique pour bannière, QA panel et télémétrie P1.
+ */
 
-type TrackingRuntimeState = {
+export type PendingFgsStartState = {
+  active: boolean;
+  reason?: string;
   missionId: number | null;
-  mode: DriverTrackingMode;
-  lastReconcileAt: string | null;
+  deferredAt?: number;
 };
 
-const STORAGE_KEY = "driver_tracking_runtime_v1";
-let state: TrackingRuntimeState = {
-  missionId: null,
-  mode: "off",
-  lastReconcileAt: null,
+export type TrackingRuntimeSnapshot = {
+  lastNativeStartError: string | null;
+  lastNativeStartErrorAt: number | null;
+  lastTaskInvokedAt: number | null;
+  pendingFgsStart: PendingFgsStartState;
 };
 
-export function getTrackingRuntimeState(): TrackingRuntimeState {
-  return { ...state };
-}
+type TrackingRuntimeListener = (snapshot: TrackingRuntimeSnapshot) => void;
 
-export async function hydrateTrackingRuntimeState(): Promise<TrackingRuntimeState> {
-  try {
-    const storage = await import("@react-native-async-storage/async-storage");
-    const raw = await storage.default.getItem(STORAGE_KEY);
-    if (!raw) return getTrackingRuntimeState();
-    const parsed = JSON.parse(raw) as TrackingRuntimeState;
-    if (parsed && typeof parsed === "object") {
-      state = {
-        missionId: typeof parsed.missionId === "number" ? parsed.missionId : null,
-        mode:
-          typeof parsed.mode === "string"
-            ? (parsed.mode as DriverTrackingMode)
-            : "off",
-        lastReconcileAt:
-          typeof parsed.lastReconcileAt === "string" ? parsed.lastReconcileAt : null,
-      };
-    }
-  } catch {
-    // best effort
-  }
-  return getTrackingRuntimeState();
-}
+const listeners = new Set<TrackingRuntimeListener>();
 
-export async function updateTrackingRuntimeState(
-  patch: Partial<TrackingRuntimeState>
-): Promise<TrackingRuntimeState> {
-  state = {
-    ...state,
-    ...patch,
-    lastReconcileAt: new Date().toISOString(),
+let lastNativeStartError: string | null = null;
+let lastNativeStartErrorAt: number | null = null;
+let lastTaskInvokedAt: number | null = null;
+let pendingFgsStart: PendingFgsStartState = { active: false };
+
+function buildSnapshot(): TrackingRuntimeSnapshot {
+  return {
+    lastNativeStartError,
+    lastNativeStartErrorAt,
+    lastTaskInvokedAt,
+    pendingFgsStart: { ...pendingFgsStart },
   };
-  try {
-    const storage = await import("@react-native-async-storage/async-storage");
-    await storage.default.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch {
-    // best effort
+}
+
+function notifyListeners(): void {
+  const snapshot = buildSnapshot();
+  for (const listener of listeners) {
+    try {
+      listener(snapshot);
+    } catch {
+      // noop
+    }
   }
-  return getTrackingRuntimeState();
+}
+
+export function getTrackingRuntimeSnapshot(): TrackingRuntimeSnapshot {
+  return buildSnapshot();
+}
+
+export function subscribeTrackingRuntime(listener: TrackingRuntimeListener): () => void {
+  listeners.add(listener);
+  listener(buildSnapshot());
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+export function recordNativeStartFailure(payload: {
+  reason: string;
+  error: string;
+}): void {
+  lastNativeStartError = `${payload.reason}: ${payload.error}`.slice(0, 500);
+  lastNativeStartErrorAt = Date.now();
+  notifyListeners();
+}
+
+export function clearNativeStartFailure(): void {
+  if (lastNativeStartError === null && lastNativeStartErrorAt === null) return;
+  lastNativeStartError = null;
+  lastNativeStartErrorAt = null;
+  notifyListeners();
+}
+
+export function setLastTaskInvokedAt(timestampMs: number = Date.now()): void {
+  lastTaskInvokedAt = timestampMs;
+  notifyListeners();
+}
+
+export function getPendingFgsStart(): PendingFgsStartState {
+  return { ...pendingFgsStart };
+}
+
+export function setPendingFgsStart(state: PendingFgsStartState): void {
+  pendingFgsStart = { ...state };
+  notifyListeners();
+}
+
+export function clearPendingFgsStart(): void {
+  if (!pendingFgsStart.active) return;
+  pendingFgsStart = { active: false };
+  notifyListeners();
+}
+
+/** Appelé au boot (NativeCapabilitiesProvider) — réservé pour hydratation persistée future. */
+export async function hydrateTrackingRuntimeState(): Promise<void> {
+  // no-op Sprint 1
+}
+
+/** Test-only reset */
+export function __resetTrackingRuntimeForTests(): void {
+  lastNativeStartError = null;
+  lastNativeStartErrorAt = null;
+  lastTaskInvokedAt = null;
+  pendingFgsStart = { active: false };
+  listeners.clear();
 }

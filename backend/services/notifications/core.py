@@ -30,7 +30,13 @@ if TYPE_CHECKING:
 
 
 # ---------- 2) WebSocket - nouvelle course ----------
-def notify_driver_new_booking(driver_id: int, booking: Booking) -> None:
+def notify_driver_new_booking(
+    driver_id: int,
+    booking: Booking,
+    *,
+    event_id: str | None = None,
+    correlation_id: str | None = None,
+) -> None:
     """Notifie un chauffeur d'une nouvelle mission assignée.
 
     Fan-out hybride:
@@ -46,6 +52,17 @@ def notify_driver_new_booking(driver_id: int, booking: Booking) -> None:
     except (ValueError, TypeError, AttributeError):
         booking_data = {"id": booking_id}
 
+    from services.notifications.push_pipeline_log import log_driver_push_stage
+
+    log_driver_push_stage(
+        "driver_push.notify",
+        event_id=event_id,
+        correlation_id=correlation_id,
+        booking_id=booking_id,
+        driver_id=driver_id,
+        notification_type="booking_assigned",
+    )
+
     app_logger.warning(
         "[notify_driver_new_booking] Calling fanout_booking_assigned_to_driver: driver_id=%s booking_id=%s",
         driver_id,
@@ -57,6 +74,8 @@ def notify_driver_new_booking(driver_id: int, booking: Booking) -> None:
         driver_id=driver_id,
         booking_id=booking_id or 0,
         booking_data=booking_data,
+        event_id=event_id,
+        correlation_id=correlation_id,
     )
 
     app_logger.warning(

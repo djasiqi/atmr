@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Location from "expo-location";
 import * as Battery from "expo-battery";
-import { AppStateStatus } from "react-native";
+import { AppState, AppStateStatus, Platform } from "react-native";
 import { DriverMissionStatus } from "../types";
 import { isTrackingActiveStatus } from "../domain/status";
 import { driverTrackingQueue } from "./driverTrackingQueue";
@@ -12,6 +12,14 @@ import {
   canUseBackgroundLocation,
   describeBackgroundRuntime,
 } from "./backgroundRuntimeCompat";
+import {
+  clearNativeStartFailure,
+  clearPendingFgsStart,
+  getPendingFgsStart,
+  recordNativeStartFailure,
+  setLastTaskInvokedAt,
+  setPendingFgsStart,
+} from "./trackingRuntime";
 
 type BackgroundTrackingTaskMode = "mission" | "presence_window";
 
@@ -22,7 +30,11 @@ type BackgroundTaskRuntimeContext = {
   updatedAt: string;
 };
 
-const BACKGROUND_LOCATION_TASK_NAME = "background-location-task";
+export const BACKGROUND_LOCATION_TASK_NAME = "background-location-task";
+
+const FGS_START_TIMEOUT_MS = 30_000;
+const FGS_WATCHDOG_RETRY_MS = 2_500;
+
 const TASK_CONTEXT_STORAGE_KEY = "@driver:bg_tracking_context_v1";
 const KILL_SWITCH_KEY = "driver_background_tracking_enabled";
 const BACKGROUND_INTERVAL_MS = Number(
@@ -44,6 +56,15 @@ const BACKGROUND_INTERVAL_LOW_BATTERY_MS = Number(
 );
 
 let taskDefined = false;
+let bgStartInProgress = false;
+let watchdogActive = false;
+let watchdogTimer: ReturnType<typeof setInterval> | null = null;
+let watchdogStartedAt = 0;
+let watchdogMissionId: number | null = null;
+let watchdogMissionStatus: DriverMissionStatus | null = null;
+let watchdogPresenceWindow = false;
+let watchdogReason = "watchdog";
+
 const inMemoryStorage = new Map<string, string>();
 
 async function readStorage(key: string): Promise<string | null> {
@@ -89,7 +110,6 @@ function parseBooleanLike(value: string | null): boolean | null {
 async function isKillSwitchEnabled(): Promise<boolean> {
   const value = await readStorage(KILL_SWITCH_KEY);
   const parsed = parseBooleanLike(value);
-  // Legacy behavior from ops: key means "enabled". kill-switch is active when explicitly false.
   if (parsed === false) return true;
   return false;
 }
@@ -106,7 +126,9 @@ async function readTaskContext(): Promise<BackgroundTaskRuntimeContext | null> {
           ? parsed.missionId
           : null,
       missionStatus:
-        typeof parsed.missionStatus === "string" ? (parsed.missionStatus as DriverMissionStatus) : null,
+        typeof parsed.missionStatus === "string"
+          ? (parsed.missionStatus as DriverMissionStatus)
+          : null,
       taskMode:
         parsed.taskMode === "presence_window" ? "presence_window" : "mission",
       updatedAt:
@@ -136,6 +158,66 @@ function resolveBackgroundTrackingMode(
     return "availability_presence";
   }
   return "mission_live";
+}
+
+export function isBackgroundLocationTaskDefined(): boolean {
+  return taskDefined;
+}
+
+export async function getNativeTaskLifecycleStatus(): Promise<{
+  taskDefined: boolean;
+  taskStarted: boolean;
+}> {
+  const defined = taskDefined;
+  let started = false;
+  if (typeof Location.hasStartedLocationUpdatesAsync === "function") {
+    started = await Location.hasStartedLocationUpdatesAsync(BACKGROUND_LOCATION_TASK_NAME).catch(
+      () => false
+    );
+  }
+  return { taskDefined: defined, taskStarted: started };
+}
+
+export async function isNativeBackgroundTrackingRunning(): Promise<boolean> {
+  const { taskStarted } = await getNativeTaskLifecycleStatus();
+  return taskStarted;
+}
+
+async function readPermissionSnapshot(): Promise<{
+  fg: "granted" | "denied" | "undetermined";
+  bg: "granted" | "denied" | "undetermined";
+}> {
+  try {
+    const [fg, bg] = await Promise.all([
+      Location.getForegroundPermissionsAsync(),
+      Location.getBackgroundPermissionsAsync(),
+    ]);
+    const toStatus = (s: { status?: string }): "granted" | "denied" | "undetermined" =>
+      s?.status === "granted" ? "granted" : s?.status === "denied" ? "denied" : "undetermined";
+    return { fg: toStatus(fg), bg: toStatus(bg) };
+  } catch {
+    return { fg: "undetermined", bg: "undetermined" };
+  }
+}
+
+function stopNativeTrackingWatchdog(): void {
+  watchdogActive = false;
+  if (watchdogTimer) {
+    clearInterval(watchdogTimer);
+    watchdogTimer = null;
+  }
+}
+
+async function emitRegistrationStatus(): Promise<void> {
+  const lifecycle = await getNativeTaskLifecycleStatus();
+  emitDriverTelemetry("tracking.background.task.registration_status", {
+    source: "driver.services.backgroundLocationTask",
+    task_name: BACKGROUND_LOCATION_TASK_NAME,
+    task_defined: lifecycle.taskDefined,
+    task_started: lifecycle.taskStarted,
+    runtime: describeBackgroundRuntime(),
+    bg_flag_enabled: isFeatureEnabled("tracking_background_enabled"),
+  });
 }
 
 function defineTaskIfNeeded() {
@@ -199,7 +281,17 @@ function defineTaskIfNeeded() {
         return;
       }
 
-      const locations = Array.isArray(data?.locations) ? data?.locations : [];
+      const locations = Array.isArray(data?.locations) ? data.locations : [];
+      setLastTaskInvokedAt(Date.now());
+      emitDriverTelemetry("tracking.background.task_invoked", {
+        source: "driver.services.backgroundLocationTask",
+        task_name: BACKGROUND_LOCATION_TASK_NAME,
+        locations_count: locations.length,
+        timestamp: Date.now(),
+        mission_id: context.missionId,
+        task_mode: context.taskMode,
+      });
+
       const mode = resolveBackgroundTrackingMode(context.missionStatus, context.taskMode);
       for (const location of locations) {
         const timestamp = new Date(location.timestamp ?? Date.now()).toISOString();
@@ -291,25 +383,27 @@ export async function setBackgroundTrackingMissionContext(
 }
 
 type StartBackgroundOptions = {
-  /** Mode présence (07h–19h) sans mission active. */
   presenceWindow?: boolean;
 };
 
-export async function startBackgroundLocationTaskIfEligible(
+async function startBackgroundLocationTaskIfEligibleInternal(
   missionId: number | null,
   missionStatus: DriverMissionStatus | null,
-  options: StartBackgroundOptions = {}
-) {
+  options: StartBackgroundOptions = {},
+  startReason: string
+): Promise<boolean> {
   if (
     typeof Location.hasStartedLocationUpdatesAsync !== "function" ||
     typeof Location.startLocationUpdatesAsync !== "function"
   ) {
-    return;
+    return false;
   }
-  if (!isFeatureEnabled("tracking_background_enabled")) return;
+  if (!isFeatureEnabled("tracking_background_enabled")) return false;
   const isPresenceWindow = options.presenceWindow === true;
   const taskMode: BackgroundTrackingTaskMode = isPresenceWindow ? "presence_window" : "mission";
-  if (!isPresenceWindow && (missionId == null || !isTrackingActiveStatus(missionStatus))) return;
+  if (!isPresenceWindow && (missionId == null || !isTrackingActiveStatus(missionStatus))) {
+    return false;
+  }
   if (!canUseBackgroundLocation()) {
     emitDriverTelemetry("tracking.background.task.skipped", {
       source: "driver.services.backgroundLocationTask",
@@ -319,7 +413,7 @@ export async function startBackgroundLocationTaskIfEligible(
       task_mode: taskMode,
       task_name: BACKGROUND_LOCATION_TASK_NAME,
     });
-    return;
+    return false;
   }
   if (await isKillSwitchEnabled()) {
     emitDriverTelemetry("tracking.background.task.skipped", {
@@ -329,22 +423,47 @@ export async function startBackgroundLocationTaskIfEligible(
       task_mode: taskMode,
       task_name: BACKGROUND_LOCATION_TASK_NAME,
     });
-    return;
+    return false;
   }
+
   defineTaskIfNeeded();
+  const lifecycleBefore = await getNativeTaskLifecycleStatus();
+  const perms = await readPermissionSnapshot();
+
   const granted = await ensurePermissions();
   if (!granted) {
     emitDriverTelemetry("tracking.permission.denied", {
       source: "driver.services.backgroundLocationTask",
       mission_id: missionId,
       task_mode: taskMode,
-      app_state: "background",
+      app_state: AppState.currentState,
     });
-    return;
+    recordNativeStartFailure({
+      reason: "permission_denied",
+      error: "background or foreground location not granted",
+    });
+    emitDriverTelemetry("tracking.background.start_failed", {
+      source: "driver.services.backgroundLocationTask",
+      reason: startReason,
+      failure_reason: "permission_denied",
+      task_defined: lifecycleBefore.taskDefined,
+      task_started: false,
+      app_state: AppState.currentState,
+      fg_permission: perms.fg,
+      bg_permission: perms.bg,
+      mission_id: missionId,
+    });
+    return false;
   }
+
   await setBackgroundTrackingMissionContext(missionId, missionStatus, taskMode);
   const hasStarted = await Location.hasStartedLocationUpdatesAsync(BACKGROUND_LOCATION_TASK_NAME);
-  if (hasStarted) return;
+  if (hasStarted) {
+    clearNativeStartFailure();
+    clearPendingFgsStart();
+    return true;
+  }
+
   const batteryLevel = await Battery.getBatteryLevelAsync().catch(() => null);
   const isLowBattery = typeof batteryLevel === "number" && batteryLevel <= LOW_BATTERY_THRESHOLD;
   const intervalBase =
@@ -355,32 +474,251 @@ export async function startBackgroundLocationTaskIfEligible(
     ? Math.max(intervalBase, BACKGROUND_INTERVAL_LOW_BATTERY_MS)
     : intervalBase;
 
-  await Location.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK_NAME, {
-    accuracy: isLowBattery ? Location.Accuracy.Low : Location.Accuracy.Balanced,
-    timeInterval: effectiveIntervalMs,
-    distanceInterval: BACKGROUND_DISTANCE_METERS,
-    pausesUpdatesAutomatically: false,
-    showsBackgroundLocationIndicator: true,
-    foregroundService: {
-      notificationTitle: FOREGROUND_SERVICE_TITLE,
-      notificationBody: FOREGROUND_SERVICE_BODY,
-      notificationColor: FOREGROUND_SERVICE_COLOR,
-    },
-  });
-
-  emitDriverTelemetry("tracking.background.task.started", {
+  emitDriverTelemetry("tracking.background.start_requested", {
     source: "driver.services.backgroundLocationTask",
-    task_name: BACKGROUND_LOCATION_TASK_NAME,
+    reason: startReason,
+    task_defined: lifecycleBefore.taskDefined,
+    task_started: lifecycleBefore.taskStarted,
+    app_state: AppState.currentState,
+    fg_permission: perms.fg,
+    bg_permission: perms.bg,
     mission_id: missionId,
     task_mode: taskMode,
-    interval_ms: effectiveIntervalMs,
-    distance_m: BACKGROUND_DISTANCE_METERS,
-    low_battery_mode: isLowBattery,
-    battery_level: batteryLevel,
   });
+
+  try {
+    await Location.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK_NAME, {
+      accuracy: isLowBattery ? Location.Accuracy.Low : Location.Accuracy.Balanced,
+      timeInterval: effectiveIntervalMs,
+      distanceInterval: BACKGROUND_DISTANCE_METERS,
+      pausesUpdatesAutomatically: false,
+      showsBackgroundLocationIndicator: true,
+      foregroundService: {
+        notificationTitle: FOREGROUND_SERVICE_TITLE,
+        notificationBody: FOREGROUND_SERVICE_BODY,
+        notificationColor: FOREGROUND_SERVICE_COLOR,
+      },
+    });
+
+    const lifecycleAfter = await getNativeTaskLifecycleStatus();
+
+    emitDriverTelemetry("tracking.background.start_success", {
+      source: "driver.services.backgroundLocationTask",
+      reason: startReason,
+      task_defined: lifecycleAfter.taskDefined,
+      task_started: lifecycleAfter.taskStarted,
+      app_state: AppState.currentState,
+      mission_id: missionId,
+      task_mode: taskMode,
+    });
+
+    if (!lifecycleAfter.taskStarted) {
+      recordNativeStartFailure({
+        reason: startReason,
+        error: "startLocationUpdatesAsync returned without active native task",
+      });
+      return false;
+    }
+
+    clearNativeStartFailure();
+    clearPendingFgsStart();
+
+    emitDriverTelemetry("tracking.background.task.started", {
+      source: "driver.services.backgroundLocationTask",
+      task_name: BACKGROUND_LOCATION_TASK_NAME,
+      mission_id: missionId,
+      task_mode: taskMode,
+      interval_ms: effectiveIntervalMs,
+      distance_m: BACKGROUND_DISTANCE_METERS,
+      low_battery_mode: isLowBattery,
+      battery_level: batteryLevel,
+    });
+    return true;
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    recordNativeStartFailure({ reason: startReason, error: message });
+    emitDriverTelemetry("tracking.background.start_failed", {
+      source: "driver.services.backgroundLocationTask",
+      reason: startReason,
+      failure_reason: "start_exception",
+      error: message,
+      task_defined: lifecycleBefore.taskDefined,
+      task_started: false,
+      app_state: AppState.currentState,
+      fg_permission: perms.fg,
+      bg_permission: perms.bg,
+      mission_id: missionId,
+    });
+    return false;
+  }
+}
+
+async function runWatchdogTick(): Promise<void> {
+  if (!watchdogActive) return;
+  if (bgStartInProgress) return;
+
+  const lifecycle = await getNativeTaskLifecycleStatus();
+  if (lifecycle.taskStarted) {
+    stopNativeTrackingWatchdog();
+    clearPendingFgsStart();
+    clearNativeStartFailure();
+    return;
+  }
+
+  if (Date.now() - watchdogStartedAt >= FGS_START_TIMEOUT_MS) {
+    recordNativeStartFailure({
+      reason: "startup_timeout",
+      error: `FGS not running after ${FGS_START_TIMEOUT_MS}ms`,
+    });
+    emitDriverTelemetry("tracking.background.start_failed", {
+      source: "driver.services.backgroundLocationTask",
+      reason: watchdogReason,
+      failure_reason: "startup_timeout",
+      task_defined: lifecycle.taskDefined,
+      task_started: false,
+      app_state: AppState.currentState,
+      mission_id: watchdogMissionId,
+    });
+    stopNativeTrackingWatchdog();
+    return;
+  }
+
+  if (AppState.currentState !== "active") {
+    return;
+  }
+
+  if (bgStartInProgress) return;
+  bgStartInProgress = true;
+  try {
+    await startBackgroundLocationTaskIfEligibleInternal(
+      watchdogMissionId,
+      watchdogMissionStatus,
+      { presenceWindow: watchdogPresenceWindow },
+      watchdogReason
+    );
+  } finally {
+    bgStartInProgress = false;
+  }
+}
+
+function startNativeTrackingWatchdog(
+  missionId: number | null,
+  missionStatus: DriverMissionStatus | null,
+  options: StartBackgroundOptions,
+  reason: string
+): void {
+  watchdogMissionId = missionId;
+  watchdogMissionStatus = missionStatus;
+  watchdogPresenceWindow = options.presenceWindow === true;
+  watchdogReason = reason;
+  watchdogStartedAt = Date.now();
+  if (watchdogActive && watchdogTimer) {
+    return;
+  }
+  watchdogActive = true;
+  void runWatchdogTick();
+  watchdogTimer = setInterval(() => {
+    void runWatchdogTick();
+  }, FGS_WATCHDOG_RETRY_MS);
+}
+
+/**
+ * Démarre le tracking natif (FGS) tant que l'app est au premier plan, avec watchdog et defer BG.
+ */
+export async function ensureNativeTrackingWhileForeground(
+  missionId: number | null,
+  missionStatus: DriverMissionStatus | null,
+  options: StartBackgroundOptions = {},
+  reason = "ensure_native_tracking"
+): Promise<void> {
+  if (Platform.OS === "web") return;
+  if (!isFeatureEnabled("tracking_background_enabled")) return;
+  if (!canUseBackgroundLocation()) return;
+
+  const isPresenceWindow = options.presenceWindow === true;
+  if (!isPresenceWindow && (missionId == null || !isTrackingActiveStatus(missionStatus))) {
+    return;
+  }
+
+  const lifecycle = await getNativeTaskLifecycleStatus();
+  if (lifecycle.taskStarted) {
+    stopNativeTrackingWatchdog();
+    clearPendingFgsStart();
+    return;
+  }
+
+  if (AppState.currentState !== "active") {
+    setPendingFgsStart({
+      active: true,
+      reason: "android_fgs_requires_foreground",
+      missionId,
+      deferredAt: Date.now(),
+    });
+    emitDriverTelemetry("tracking.background.start_deferred", {
+      source: "driver.services.backgroundLocationTask",
+      reason,
+      app_state: AppState.currentState,
+      mission_id: missionId,
+      task_defined: lifecycle.taskDefined,
+      task_started: lifecycle.taskStarted,
+    });
+    return;
+  }
+
+  clearPendingFgsStart();
+
+  if (bgStartInProgress) {
+    startNativeTrackingWatchdog(missionId, missionStatus, options, reason);
+    return;
+  }
+
+  bgStartInProgress = true;
+  try {
+    await startBackgroundLocationTaskIfEligibleInternal(missionId, missionStatus, options, reason);
+    const lifecycle = await getNativeTaskLifecycleStatus();
+    if (lifecycle.taskStarted) {
+      stopNativeTrackingWatchdog();
+      return;
+    }
+    startNativeTrackingWatchdog(missionId, missionStatus, options, reason);
+  } finally {
+    bgStartInProgress = false;
+  }
+}
+
+export async function resumePendingNativeTrackingIfNeeded(): Promise<void> {
+  const pending = getPendingFgsStart();
+  if (!pending.active) return;
+  const ctx = await readTaskContext();
+  if (ctx?.taskMode === "presence_window") {
+    await ensureNativeTrackingWhileForeground(null, null, { presenceWindow: true }, "app_resume");
+    return;
+  }
+  if (ctx?.missionId != null) {
+    await ensureNativeTrackingWhileForeground(
+      ctx.missionId,
+      ctx.missionStatus,
+      {},
+      "app_resume_pending"
+    );
+  }
+}
+
+export async function startBackgroundLocationTaskIfEligible(
+  missionId: number | null,
+  missionStatus: DriverMissionStatus | null,
+  options: StartBackgroundOptions = {}
+) {
+  await ensureNativeTrackingWhileForeground(
+    missionId,
+    missionStatus,
+    options,
+    "start_background_location_task"
+  );
 }
 
 export async function stopBackgroundLocationTask(reason: string) {
+  stopNativeTrackingWatchdog();
   await setBackgroundTrackingMissionContext(null, null);
   if (
     typeof Location.hasStartedLocationUpdatesAsync !== "function" ||
@@ -412,5 +750,12 @@ export function initializeBackgroundLocationTask() {
     return;
   }
   defineTaskIfNeeded();
+  void emitRegistrationStatus();
 }
 
+/** Test-only reset */
+export function __resetBackgroundLocationTaskStateForTests(): void {
+  taskDefined = false;
+  bgStartInProgress = false;
+  stopNativeTrackingWatchdog();
+}

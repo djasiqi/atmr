@@ -113,6 +113,19 @@ def send_push_notification_task(
     app = get_flask_app()
     with app.app_context():
         try:
+            from services.notifications.push_pipeline_log import log_driver_push_stage
+
+            _booking_id = (data or {}).get("booking_id")
+            log_driver_push_stage(
+                "driver_push.task_start",
+                event_id=(data or {}).get("event_id"),
+                correlation_id=(data or {}).get("correlation_id"),
+                booking_id=_booking_id,
+                driver_id=driver_id,
+                notification_type=notification_type,
+                celery_task_id=getattr(self.request, "id", None),
+            )
+
             logger.warning(
                 "[notification_task] send_push_notification_task started: driver_id=%s notification_type=%s",
                 driver_id,
@@ -333,13 +346,25 @@ def send_push_notification_task(
                         success_count,
                         len(device_tokens_data),
                     )
-                    return {
+                    result_payload = {
                         "ok": True,
                         "channel": "push",
                         "attempts": self.request.retries + 1,
                         "devices_sent": success_count,
                         "devices_total": len(device_tokens_data),
                     }
+                    log_driver_push_stage(
+                        "driver_push.task_done",
+                        event_id=(data or {}).get("event_id"),
+                        correlation_id=(data or {}).get("correlation_id"),
+                        booking_id=_booking_id,
+                        driver_id=driver_id,
+                        notification_type=notification_type,
+                        celery_task_id=getattr(self.request, "id", None),
+                        ok=True,
+                        devices_sent=success_count,
+                    )
+                    return result_payload
 
                 # Tous les envois ont échoué
                 # Si tous les tokens sont invalides, passer directement au fallback

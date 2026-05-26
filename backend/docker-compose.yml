@@ -57,7 +57,7 @@ services:
   celery-worker:
     image: docker.io/djasiqi/atmr-backend:latest
     env_file: .env.production
-    command: celery -A celery_app.celery worker --loglevel=INFO --concurrency=${CELERY_CONCURRENCY:-16} -Q default,dispatch,realtime,notifications,billing,rl,geocoding,dlq
+    command: celery -A celery_app.celery worker --loglevel=INFO --concurrency=${CELERY_CONCURRENCY:-4} -Q default,dispatch,realtime,notifications,billing,rl,geocoding,dlq
     depends_on:
       - redis
       - postgres

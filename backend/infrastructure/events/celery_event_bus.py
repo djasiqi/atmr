@@ -24,4 +24,16 @@ class CeleryEventBus(EventBus):
     def publish(self, event: DomainEvent) -> None:
         from celery_app import celery
 
-        celery.send_task("events.handle_domain_event", args=[event.to_dict()])
+        event_dict = event.to_dict()
+        if getattr(event, "event_type", None) == "DriverNewBookingEvent":
+            from services.notifications.push_pipeline_log import log_driver_push_stage
+
+            log_driver_push_stage(
+                "driver_push.publish",
+                event_id=event_dict.get("event_id"),
+                correlation_id=event_dict.get("correlation_id"),
+                booking_id=event_dict.get("booking_id"),
+                driver_id=event_dict.get("driver_id"),
+            )
+
+        celery.send_task("events.handle_domain_event", args=[event_dict])

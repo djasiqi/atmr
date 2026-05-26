@@ -91,6 +91,14 @@ jest.mock("../missionBarIOS", () => ({
   updateMissionLiveActivity: jest.fn(),
 }));
 
+jest.mock("./backgroundLocationTask", () => ({
+  ensureNativeTrackingWhileForeground: jest.fn().mockResolvedValue(undefined),
+  initializeBackgroundLocationTask: jest.fn(),
+  resumePendingNativeTrackingIfNeeded: jest.fn().mockResolvedValue(undefined),
+  setBackgroundTrackingMissionContext: jest.fn().mockResolvedValue(undefined),
+  stopBackgroundLocationTask: jest.fn().mockResolvedValue(undefined),
+}));
+
 describe("driver tracking bridge", () => {
   beforeEach(() => {
     jest.useFakeTimers();
