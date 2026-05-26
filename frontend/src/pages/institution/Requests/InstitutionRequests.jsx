@@ -220,6 +220,26 @@ const formatPhoneDisplay = (phone) => {
   return String(phone).trim();
 };
 
+const isRoundTripRequest = (req) => Boolean(req?.is_round_trip ?? req?.round_trip);
+
+const resolveTripTypeMeta = (req) => {
+  if (isRoundTripRequest(req)) {
+    const returnHint = req.return_time
+      ? ` — retour prévu à ${fmtTime(req.return_time)}`
+      : '';
+    return {
+      label: 'A/R',
+      title: `Aller-retour${returnHint}`,
+      badgeClass: 'tripTypeRoundTrip',
+    };
+  }
+  return {
+    label: 'Aller simple',
+    title: 'Trajet aller simple (pas de retour planifié)',
+    badgeClass: 'tripTypeOneWay',
+  };
+};
+
 // ─── Component ─────────────────────────────────────────────
 const InstitutionRequests = () => {
   const location = useLocation();
@@ -460,6 +480,7 @@ const InstitutionRequests = () => {
                   const companyPhone = req.accepted_by_company?.contact_phone;
                   const delay = resolveDelayInfo(req, nowMs);
                   const showCallAction = delay && companyPhone;
+                  const tripType = resolveTripTypeMeta(req);
 
                   return (
                     <div
@@ -489,23 +510,42 @@ const InstitutionRequests = () => {
                         </div>
                       </div>
 
-                      {/* Col 2 : trajet (centré verticalement) */}
+                      {/* Col 2 : trajet — départ puis destination */}
                       <div className={s.colCenter}>
-                        <span className={`${s.routeDot} ${s.routeDotStart}`} />
-                        <span className={s.routeText}>{shortAddr(req.pickup_location)}</span>
-                        <span className={s.routeArrow}>→</span>
-                        <span className={`${s.routeDot} ${s.routeDotEnd}`} />
-                        <span className={s.routeText}>{shortAddr(req.dropoff_location)}</span>
+                        <div className={s.routeRow}>
+                          <span className={`${s.routeDot} ${s.routeDotStart}`} />
+                          <span className={s.routeText}>{shortAddr(req.pickup_location)}</span>
+                        </div>
+                        <div className={s.routeRow}>
+                          <span className={`${s.routeDot} ${s.routeDotEnd}`} />
+                          <span className={s.routeText}>{shortAddr(req.dropoff_location)}</span>
+                        </div>
                       </div>
 
                       {/* Col 3 : date/heure + toggle facturation */}
                       <div className={s.colRight}>
                         <span className={s.cardDateTime}>
                           {fmtDateShort(req.scheduled_time)} · {fmtTime(req.scheduled_time)}
+                          {isRoundTripRequest(req) && req.return_time && (
+                            <span className={s.returnTimeInline}>
+                              {' '}
+                              · retour {fmtTime(req.return_time)}
+                            </span>
+                          )}
                         </span>
-                        {req.scheduled_time_type === 'arrival' && (
-                          <span className={s.timeTypeBadge} title="Heure du rendez-vous (arrivée)">📍 RDV</span>
-                        )}
+                        <div className={s.cardMetaBadges}>
+                          <span
+                            className={`${s.tripTypeBadge} ${s[tripType.badgeClass]}`}
+                            title={tripType.title}
+                          >
+                            {tripType.label}
+                          </span>
+                          {req.scheduled_time_type === 'arrival' && (
+                            <span className={s.timeTypeBadge} title="Heure du rendez-vous (arrivée)">
+                              📍 RDV
+                            </span>
+                          )}
+                        </div>
                         {showCallAction && (
                           <a
                             href={formatPhoneHref(companyPhone)}

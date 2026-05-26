@@ -908,8 +908,13 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
               </div>
             </div>
           </div>
-          {request.round_trip && (
-            <div className={s.roundTripBadge}>Aller-retour</div>
+          {(request.is_round_trip || request.round_trip) ? (
+            <div className={s.roundTripBadge}>
+              Aller-retour
+              {request.return_time ? ` — retour ${fmt(request.return_time)}` : ''}
+            </div>
+          ) : (
+            <div className={s.oneWayBadge}>Aller simple</div>
           )}
         </div>
 
@@ -926,6 +931,14 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
           <div className={s.infoRow}>
             <span className={s.infoLabel}>Date et heure</span>
             <span className={s.infoValue}>{fmt(request.scheduled_time)}</span>
+          </div>
+          <div className={s.infoRow}>
+            <span className={s.infoLabel}>Type de trajet</span>
+            <span className={s.infoValue}>
+              {(request.is_round_trip || request.round_trip)
+                ? `Aller-retour${request.return_time ? ` (retour ${fmt(request.return_time)})` : ''}`
+                : 'Aller simple'}
+            </span>
           </div>
           {request.external_reference && (
             <div className={s.infoRow}>
