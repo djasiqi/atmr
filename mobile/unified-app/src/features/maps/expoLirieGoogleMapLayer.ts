@@ -12,9 +12,9 @@ export const LIRIE_MAP_STYLES = [
   { featureType: "poi.business", stylers: [{ visibility: "off" }] },
   { featureType: "poi.attraction", stylers: [{ visibility: "off" }] },
   { featureType: "poi.government", stylers: [{ visibility: "off" }] },
+  // `poi` masque tous les POI natifs ; pas de `poi.place` (valide JS, rejeté par Maps SDK Android).
   { featureType: "poi", stylers: [{ visibility: "off" }] },
   { featureType: "poi.medical", stylers: [{ visibility: "off" }] },
-  { featureType: "poi.place", stylers: [{ visibility: "off" }] },
   { featureType: "poi.school", stylers: [{ visibility: "off" }] },
   { featureType: "poi.park", elementType: "labels.icon", stylers: [{ visibility: "off" }] },
   { featureType: "transit", stylers: [{ visibility: "simplified" }, { saturation: -40 }] },
@@ -49,7 +49,6 @@ export const LIRIE_POI_SUPPRESSION_STYLES = [
   { featureType: "poi.attraction", stylers: [{ visibility: "off" }] },
   { featureType: "poi.government", stylers: [{ visibility: "off" }] },
   { featureType: "poi.medical", stylers: [{ visibility: "off" }] },
-  { featureType: "poi.place", stylers: [{ visibility: "off" }] },
   { featureType: "poi.school", stylers: [{ visibility: "off" }] },
 ] as const;
 

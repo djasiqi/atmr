@@ -1,6 +1,7 @@
 """Use-cases Drivers (Companies)."""
 
 from .create_driver import CreateCompanyDriverUseCase
+from .ensure_company_operator_driver import EnsureCompanyOperatorDriverUseCase
 from .create_driver_vacation import CreateDriverVacationUseCase
 from .delete_company_driver import DeleteCompanyDriverUseCase
 from .list_company_drivers import ListCompanyDriversUseCase
@@ -11,6 +12,7 @@ from .update_company_driver import UpdateCompanyDriverUseCase
 
 __all__ = [
     "CreateCompanyDriverUseCase",
+    "EnsureCompanyOperatorDriverUseCase",
     "CreateDriverVacationUseCase",
     "DeleteCompanyDriverUseCase",
     "ListCompanyDriversUseCase",

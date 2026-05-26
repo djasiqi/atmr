@@ -1397,6 +1397,21 @@ def _load_user_for_bootstrap(public_id: str) -> User | None:
     )
 
 
+def _prepare_user_for_bootstrap(user: User) -> User:
+    """Provisionne la fiche chauffeur entreprise si besoin, puis recharge le user ORM."""
+    from application.companies.drivers.ensure_company_operator_driver import (
+        EnsureCompanyOperatorDriverUseCase,
+    )
+
+    result = EnsureCompanyOperatorDriverUseCase().execute(user)
+    if result.created:
+        db.session.commit()
+        reloaded = _load_user_for_bootstrap(str(user.public_id))
+        if reloaded is not None:
+            return reloaded
+    return user
+
+
 def _redis_active_context_key(user_public_id: str) -> str:
     return f"{CONTEXT_SWITCH_REDIS_PREFIX}{user_public_id}"
 
@@ -2525,6 +2540,8 @@ class AuthBootstrap(Resource):
                 is_authenticated=False,
             ), 200
 
+        user = _prepare_user_for_bootstrap(user)
+
         payload = _bootstrap_base_response(
             request_id=request_id,
             is_authenticated=True,
@@ -2584,6 +2601,8 @@ class AuthSwitchContext(Resource):
                 "retryable": False,
                 "request_id": request_id,
             }, 401
+
+        user = _prepare_user_for_bootstrap(user)
 
         data = request.get_json(silent=True) or {}
         target_context_id = str(
