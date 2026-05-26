@@ -275,6 +275,13 @@ if PROMETHEUS_AVAILABLE and Counter and Histogram and Gauge:
         "Total notifications bloquées par rate limit",
         ["driver_id"],
     )
+
+    # P0.5: couverture enregistrement push (owners avec ≥1 token actif)
+    PUSH_ACTIVE_OWNERS = Gauge(
+        "push_active_owners_total",
+        "Propriétaires avec au moins un DeviceToken actif",
+        ["owner_type"],
+    )
 else:
     PUSH_NOTIFICATIONS_TOTAL = None
     PUSH_NOTIFICATION_LATENCY_SECONDS = None
@@ -282,6 +289,7 @@ else:
     PUSH_NOTIFICATION_SUCCESS_RATE = None
     PUSH_TOKENS_INVALIDATED = None
     PUSH_RATE_LIMIT_HITS = None
+    PUSH_ACTIVE_OWNERS = None
 
 # ==================== Resync Metrics ====================
 
@@ -634,6 +642,42 @@ def track_push_token_invalidated(reason: str) -> None:
     except Exception as e:
         logger.debug(
             "[PrometheusMetrics] Error tracking push token invalidation: %s", e
+        )
+
+
+def refresh_push_active_owners_gauges() -> None:
+    """Met à jour les gauges de couverture push (drivers / companies joignables)."""
+    if not PROMETHEUS_AVAILABLE or not PUSH_ACTIVE_OWNERS:
+        return
+
+    try:
+        from sqlalchemy import distinct, func
+
+        from models import DeviceToken
+
+        driver_owners = (
+            DeviceToken.query.with_entities(func.count(distinct(DeviceToken.driver_id)))
+            .filter(
+                DeviceToken.driver_id.isnot(None),
+                DeviceToken.is_active.is_(True),
+            )
+            .scalar()
+        )
+        company_owners = (
+            DeviceToken.query.with_entities(
+                func.count(distinct(DeviceToken.company_id))
+            )
+            .filter(
+                DeviceToken.company_id.isnot(None),
+                DeviceToken.is_active.is_(True),
+            )
+            .scalar()
+        )
+        PUSH_ACTIVE_OWNERS.labels(owner_type="driver").set(int(driver_owners or 0))
+        PUSH_ACTIVE_OWNERS.labels(owner_type="company").set(int(company_owners or 0))
+    except Exception as e:
+        logger.debug(
+            "[PrometheusMetrics] Error refreshing push active owners: %s", e
         )
 
 

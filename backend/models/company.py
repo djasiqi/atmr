@@ -165,6 +165,12 @@ class Company(db.Model):
         primaryjoin="Company.id == Client.default_billed_to_company_id",
     )
     drivers = relationship("Driver", back_populates="company", passive_deletes=True)
+    device_tokens = relationship(
+        "DeviceToken",
+        back_populates="company",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
     dispatch_runs: Mapped[List[DispatchRun]] = relationship(
         "DispatchRun",
         back_populates="company",

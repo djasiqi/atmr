@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
 from typing import Any, Protocol
 
 from ext import app_logger
@@ -138,62 +137,23 @@ class SaveDriverPushTokenUseCase:
                         _surf,
                         driver_id,
                     )
-                # ✅ CORRECTIF #3: Enregistrer dans DeviceToken (support multi-device)
-                from ext import db
-                from models import DeviceToken
+                from application.notifications.upsert_device_token import (
+                    upsert_device_token,
+                )
 
                 device_id = payload.get("device_id") or payload.get("deviceId")
-                platform = payload.get("platform")  # "ios" | "android"
-                provider = payload.get("provider", "expo")  # "expo" | "fcm"
-                if provider not in ("expo", "fcm"):
-                    provider = (
-                        "fcm" if not token.startswith("ExponentPushToken") else "expo"
-                    )
-                if (
-                    provider == "fcm"
-                    and platform == "ios"
-                    and token.startswith(("APA91", "APA91b"))
-                ):
-                    app_logger.warning(
-                        "[push-token] platform ios->android inferred for FCM Android token driver_id=%s",
-                        driver_id,
-                    )
-                    platform = "android"
+                platform = payload.get("platform")
+                provider = payload.get("provider", "expo")
+                if isinstance(device_id, str):
+                    device_id = device_id.strip() or None
 
-                existing_token = DeviceToken.query.filter_by(
+                upsert_device_token(
                     driver_id=driver_id,
+                    device_id=device_id if isinstance(device_id, str) else None,
                     token=token,
-                ).first()
-
-                if existing_token:
-                    existing_token.is_active = True
-                    existing_token.updated_at = datetime.utcnow()
-                    if device_id:
-                        existing_token.device_id = device_id
-                    if platform:
-                        existing_token.platform = platform
-                    existing_token.provider = provider
-                    app_logger.info(
-                        "[push-token] Token existant réactivé/mis à jour pour driver %s (provider=%s)",
-                        driver_id,
-                        provider,
-                    )
-                else:
-                    device_token = DeviceToken()
-                    device_token.driver_id = driver_id
-                    device_token.token = token
-                    device_token.device_id = device_id
-                    device_token.platform = platform
-                    device_token.provider = provider
-                    device_token.is_active = True
-                    db.session.add(device_token)
-                    app_logger.info(
-                        "[push-token] Nouveau token enregistré pour driver %s (device: %s, platform: %s, provider: %s)",
-                        driver_id,
-                        device_id,
-                        platform,
-                        provider,
-                    )
+                    platform=platform if isinstance(platform, str) else None,
+                    provider=provider if isinstance(provider, str) else None,
+                )
 
                 # ✅ CONSERVER driver.push_token pour rétrocompatibilité (legacy)
                 # Les anciens codes qui utilisent driver.push_token continueront de fonctionner

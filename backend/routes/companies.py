@@ -109,7 +109,12 @@ MIN_PUSH_TOKEN_LENGTH = 10
 save_company_push_token_model = companies_ns.model(
     "SaveCompanyPushToken",
     {
-        "token": fields.String(required=True, description="Expo push token"),
+        "token": fields.String(required=True, description="Expo/FCM push token"),
+        "device_id": fields.String(
+            required=True, description="Identifiant stable d'installation"
+        ),
+        "platform": fields.String(required=False, description="ios | android"),
+        "provider": fields.String(required=False, description="expo | fcm"),
         "companyId": fields.Integer(
             required=False,
             description=(
@@ -123,7 +128,7 @@ save_company_push_token_model = companies_ns.model(
 
 @companies_ns.route("/save-push-token")
 class SaveCompanyPushToken(Resource):
-    """Enregistre le push token pour le compte entreprise (dispatch)."""
+    """Enregistre le push token pour le compte entreprise (multi-appareils)."""
 
     @companies_ns.expect(save_company_push_token_model, validate=True)
     @jwt_required()
@@ -131,17 +136,14 @@ class SaveCompanyPushToken(Resource):
     def post(self):
         from flask_jwt_extended import get_jwt
 
-        from models import Company, User
+        from application.companies.save_company_push_token import (
+            SaveCompanyPushTokenUseCase,
+        )
+        from models import User
+        from repositories.company_repository import CompanyRepository
+        from repositories.user_repository import UserRepository
 
         payload = request.get_json(force=True) or {}
-        token = (payload.get("token") or payload.get("push_token") or "").strip()
-        if not token or len(token) < MIN_PUSH_TOKEN_LENGTH:
-            return APIErrorHandler.handle_validation_error(
-                "Token push invalide ou manquant.",
-                field="token",
-                logger_instance=logger,
-            )
-
         user_public_id = get_jwt_identity()
         user = User.query.filter_by(public_id=user_public_id).first()
         if not user:
@@ -153,68 +155,113 @@ class SaveCompanyPushToken(Resource):
 
         claims = get_jwt() or {}
         role_claim = str(claims.get("role") or "").upper()
-        company_id_payload = payload.get("companyId") or payload.get("company_id")
 
-        # COMPANY: utiliser user.company, et valider companyId si fourni
-        if role_claim == UserRole.COMPANY.value:
-            company = user.company
-            if not company:
-                return APIErrorHandler.handle_permission_error(
-                    "Entreprise introuvable pour ce compte.",
-                    logger_instance=logger,
-                )
-            if company_id_payload is not None:
-                try:
-                    requested_id = int(company_id_payload)
-                except (TypeError, ValueError):
-                    return APIErrorHandler.handle_validation_error(
-                        "Format companyId invalide.",
-                        field="companyId",
-                        logger_instance=logger,
-                    )
-                if int(company.id) != requested_id:
-                    return APIErrorHandler.handle_permission_error(
-                        "Accès refusé (companyId ne correspond pas).",
-                        logger_instance=logger,
-                    )
-        else:
-            # ADMIN: companyId requis
-            if company_id_payload is None:
-                return APIErrorHandler.handle_validation_error(
-                    "companyId requis pour un admin.",
-                    field="companyId",
-                    logger_instance=logger,
-                )
+        uc = SaveCompanyPushTokenUseCase(
+            user_repo=UserRepository(),
+            company_repo=CompanyRepository(),
+        )
+        result = uc.execute(
+            payload=payload,
+            jwt_identity=user_public_id,
+            role_claim=role_claim,
+            company_from_user=user.company,
+        )
+        if result.should_commit:
+            db.session.commit()
             try:
-                requested_id = int(company_id_payload)
-            except (TypeError, ValueError):
-                return APIErrorHandler.handle_validation_error(
-                    "Format companyId invalide.",
-                    field="companyId",
-                    logger_instance=logger,
-                )
-            company = Company.query.get(requested_id)
-            if not company:
-                return APIErrorHandler.handle_not_found(
-                    "Entreprise",
-                    requested_id,
-                    logger,
+                from services.monitoring.prometheus import (
+                    refresh_push_active_owners_gauges,
                 )
 
-        # Stocker le token sur l'user de l'entreprise (fanout lit company.user.push_token)
-        company_user = User.query.get(company.user_id)
-        if not company_user:
+                refresh_push_active_owners_gauges()
+            except ImportError:
+                pass
+        return result.response, result.status_code
+
+
+@companies_ns.route("/me/test-push")
+class CompanyTestPushNotification(Resource):
+    """Diagnostic : envoie une push de test à tous les appareils entreprise actifs."""
+
+    @jwt_required()
+    @role_required(UserRole.company, UserRole.admin)
+    def post(self):
+        from flask_jwt_extended import get_jwt
+
+        from ext import redis_client
+        from models import DeviceToken, User
+        from services.notifications.push import send_push_message
+
+        user_public_id = get_jwt_identity()
+        user = User.query.filter_by(public_id=user_public_id).first()
+        if not user or not user.company:
             return APIErrorHandler.handle_not_found(
-                "Utilisateur",
-                company.user_id,
+                "Entreprise",
+                user_public_id if user else None,
                 logger,
             )
 
-        company_user.push_token = token
-        db.session.commit()
+        company = user.company
+        MAX_TEST_PUSH_PER_MIN = 3
+
+        if redis_client:
+            rl_key = f"test_push_company_rl:{company.id}"
+            count = redis_client.get(rl_key)
+            if count and int(count) >= MAX_TEST_PUSH_PER_MIN:  # type: ignore[arg-type]
+                return {
+                    "ok": False,
+                    "error": "Limite atteinte : max 3 tests par minute",
+                }, 429
+            redis_client.incr(rl_key)
+            redis_client.expire(rl_key, 60)
+
+        active_tokens = (
+            DeviceToken.query.filter_by(company_id=company.id, is_active=True)
+            .order_by(DeviceToken.updated_at.desc())
+            .all()
+        )
+
+        if not active_tokens:
+            return {
+                "ok": False,
+                "error": "Aucun token push enregistré pour cette entreprise",
+            }, 404
+
+        results = []
+        for dt in active_tokens[:MAX_TEST_PUSH_PER_MIN]:
+            res = send_push_message(
+                token=dt.token,
+                title="Test notification Liri",
+                body="Si vous voyez ceci, les notifications entreprise fonctionnent !",
+                data={
+                    "type": "test_push",
+                    "company_id": company.id,
+                    "recipient_role": "company",
+                },
+                bypass_rate_limit=True,
+                provider=getattr(dt, "provider", None),
+                platform=getattr(dt, "platform", None),
+                device_token_id=dt.id,
+            )
+            results.append(
+                {
+                    "token_preview": dt.token[:20] + "...",
+                    "platform": dt.platform,
+                    "ok": res.get("ok", False),
+                    "error": res.get("error"),
+                }
+            )
+
+        try:
+            db.session.commit()
+        except Exception:
+            logger.exception("commit after company test-push lifecycle")
+
+        all_ok = all(r["ok"] for r in results)
         return {
-            "message": "✅ Push token entreprise enregistré.",
-            "company_id": company.id,
+            "ok": all_ok,
+            "results": results,
+            "tokens_count": len(active_tokens),
         }, 200
 
 

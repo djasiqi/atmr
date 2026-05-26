@@ -2354,49 +2354,65 @@ class Logout(Resource):
                     str(revoke_error),
                 )
 
-            # ✅ CORRECTIF #4: Invalider tous les tokens push du driver au logout
-            # C'est correct : quand le driver se déconnecte explicitement, on invalide les tokens
-            # Les notifications push doivent fonctionner uniquement si le driver est connecté
-            # (app ouverte, en arrière-plan, ou fermée - mais pas déconnecté)
+            # Invalidation push ciblée par device_id (multi-appareils : iPhone ≠ iPad)
             try:
-                if user and user.role == UserRole.driver:
-                    from repositories.driver_repository import DriverRepository
+                logout_body = request.get_json(silent=True) or {}
+                device_id = (
+                    logout_body.get("device_id")
+                    or logout_body.get("deviceId")
+                    or request.headers.get("X-Device-ID")
+                )
+                if device_id:
+                    device_id = str(device_id).strip()
+                if user and device_id:
+                    from application.notifications.upsert_device_token import (
+                        deactivate_device_tokens_for_logout,
+                    )
 
-                    driver_repo = DriverRepository()
-                    driver = driver_repo.find_model_by_user_id(user.id)
-                    driver_id_for_log = driver.id if driver else None
-                    if driver:
-                        from models import DeviceToken
+                    tokens_invalidated = 0
+                    if user.role == UserRole.driver:
+                        from repositories.driver_repository import DriverRepository
 
-                        # Invalider tous les tokens actifs du driver
-                        tokens_invalidated = DeviceToken.query.filter_by(
-                            driver_id=driver.id, is_active=True
-                        ).update({"is_active": False})
+                        driver_repo = DriverRepository()
+                        driver = driver_repo.find_model_by_user_id(user.id)
+                        driver_id_for_log = driver.id if driver else None
+                        if driver:
+                            tokens_invalidated = deactivate_device_tokens_for_logout(
+                                driver_id=driver.id,
+                                device_id=device_id,
+                            )
+                    elif user.role == UserRole.company and user.company:
+                        tokens_invalidated = deactivate_device_tokens_for_logout(
+                            company_id=int(user.company.id),
+                            device_id=device_id,
+                        )
+
+                    if tokens_invalidated > 0:
                         db.session.commit()
-
-                        if tokens_invalidated > 0:
-                            logger.info(
-                                "[logout] %d token(s) push invalidé(s) pour driver %s",
-                                tokens_invalidated,
-                                driver.id,
+                        logger.info(
+                            "[logout] %d token(s) push invalidé(s) device_id=%s user=%s",
+                            tokens_invalidated,
+                            device_id[:8] + "…" if len(device_id) > 8 else device_id,
+                            current_user_id,
+                        )
+                        try:
+                            from services.monitoring.prometheus import (
+                                track_push_token_invalidated,
                             )
-                            # ✅ INSTRUMENTATION: Métrique Prometheus pour tokens invalidés au logout
-                            try:
-                                from services.monitoring.prometheus import (
-                                    track_push_token_invalidated,
-                                )
 
-                                for _ in range(tokens_invalidated):
-                                    track_push_token_invalidated(reason="logout")
-                            except ImportError:
-                                pass  # Prometheus non disponible
-                        else:
-                            logger.debug(
-                                "[logout] Aucun token push actif à invalider pour driver %s",
-                                driver.id,
-                            )
+                            for _ in range(tokens_invalidated):
+                                track_push_token_invalidated(reason="logout")
+                        except ImportError:
+                            pass
+                    else:
+                        logger.debug(
+                            "[logout] Aucun token push actif pour device_id sur ce compte",
+                        )
+                elif user and user.role == UserRole.driver:
+                    logger.debug(
+                        "[logout] device_id absent — pas d'invalidation push (multi-device)",
+                    )
             except Exception as device_token_error:
-                # Ne pas bloquer le logout si l'invalidation des tokens push échoue
                 logger.warning(
                     "Échec invalidation tokens push lors logout (ignoré): %s",
                     str(device_token_error),

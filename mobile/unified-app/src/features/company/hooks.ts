@@ -79,12 +79,14 @@ function scheduleDriversLocationsInvalidation(
 }
 
 export type CompanyRealtimeInvalidationEvent =
+  | "booking_created"
   | "booking_updated"
   | "booking_cancelled"
   | "driver_location_update"
   | "optimizer_status_changed"
   | "delay_invalidated"
-  | "booking_message_sent";
+  | "booking_message_sent"
+  | "urgent_alert";
 
 type CompanyEventContext = {
   contextId: string;
@@ -331,6 +333,36 @@ export function invalidateCompanyQueriesForEvent(
     return;
   }
   const scope = companyContextScope(context.contextId);
+
+  const invalidateMissionsDashboardInbox = () => {
+    void queryClient.invalidateQueries({
+      queryKey: contextScopedKey(
+        context.contextId,
+        [...companyQueryKeys.dashboard(context.contextId)] as unknown[]
+      ),
+      exact: true,
+    });
+    void queryClient.invalidateQueries({
+      queryKey: contextScopedKey(
+        context.contextId,
+        [...companyQueryKeys.root, "missions", scope] as unknown[]
+      ),
+      exact: false,
+    });
+    void queryClient.invalidateQueries({
+      queryKey: contextScopedKey(
+        context.contextId,
+        [...companyQueryKeys.inbox(context.contextId)] as unknown[]
+      ),
+      exact: false,
+    });
+  };
+
+  if (event === "booking_created" || event === "urgent_alert") {
+    invalidateMissionsDashboardInbox();
+    return;
+  }
+
   if (event === "booking_updated") {
     if (typeof context.missionId === "number") {
       void traceInvalidateQueries(

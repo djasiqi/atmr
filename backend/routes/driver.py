@@ -3639,6 +3639,9 @@ class TestPushNotification(Resource):
                     data={"type": "test_push", "driver_id": driver.id},
                     driver_id=driver.id,
                     bypass_rate_limit=True,
+                    provider=getattr(dt, "provider", None),
+                    platform=getattr(dt, "platform", None),
+                    device_token_id=dt.id,
                 )
                 results.append(
                     {

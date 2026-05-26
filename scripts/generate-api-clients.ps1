@@ -7,7 +7,7 @@ $SCRIPT_DIR = Split-Path -Parent $MyInvocation.MyCommand.Path
 $PROJECT_ROOT = Split-Path -Parent $SCRIPT_DIR
 $SPEC_FILE = Join-Path $PROJECT_ROOT "backend\docs\openapi.json"
 $FRONTEND_OUTPUT = Join-Path $PROJECT_ROOT "frontend\src\generated\api"
-$MOBILE_OUTPUT = Join-Path $PROJECT_ROOT "mobile\operations-app\src\generated\api"
+$MOBILE_OUTPUT = Join-Path $PROJECT_ROOT "mobile\unified-app\src\generated\api"
 
 # Vérifier que la spec existe
 if (-not (Test-Path $SPEC_FILE)) {

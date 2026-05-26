@@ -195,10 +195,14 @@ export function useCompanyDashboardScreenModel() {
         };
         const missionId = resolveMissionIdFromEvent(eventPayload);
         const normalizedEventType = normalizeCompanyEventType(eventPayload.event_type);
-        if (normalizedEventType === "booking_updated") {
+        if (normalizedEventType === "booking_created") {
+          invalidate("booking_created", missionId);
+        } else if (normalizedEventType === "booking_updated") {
           invalidate("booking_updated", missionId);
         } else if (normalizedEventType === "booking_cancelled") {
           invalidate("booking_cancelled", missionId);
+        } else if (normalizedEventType === "urgent_alert") {
+          invalidate("urgent_alert", missionId);
         } else if (normalizedEventType === "driver_location_update") {
           invalidate("driver_location_update");
         } else if (normalizedEventType === "optimizer_status_changed") {

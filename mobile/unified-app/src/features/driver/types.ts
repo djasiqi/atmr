@@ -86,6 +86,7 @@ export type DriverSocketEvent = {
 export type DriverPushRegistrationPayload = {
   token: string;
   driverId: number;
+  deviceId: string;
   platform?: "ios" | "android";
   provider?: "expo" | "fcm";
 };

@@ -1,15 +1,23 @@
 # backend/services/notifications/company_push.py
-"""Envoi synchrone de push aux entreprises (dispatcher).
-
-Module séparé pour éviter le cycle d'import fanout ↔ notification_tasks.
-"""
+"""Envoi synchrone de push aux entreprises (multi-appareils DeviceToken)."""
 
 from __future__ import annotations
 
+import uuid
 from typing import Any, Dict
 
-from ext import app_logger
+from ext import app_logger, db
 from services.notifications.push import send_push_message
+
+
+def _ensure_event_ids(data: Dict[str, Any]) -> Dict[str, Any]:
+    out = dict(data)
+    if not out.get("event_id"):
+        out["event_id"] = str(uuid.uuid4())
+    if not out.get("dedupe_key"):
+        out["dedupe_key"] = f"company:{out.get('event_id')}"
+    out.setdefault("recipient_role", "company")
+    return out
 
 
 def send_push_to_company_sync(
@@ -20,23 +28,13 @@ def send_push_to_company_sync(
     *,
     timeout: int = 5,
 ) -> bool:
-    """Envoie une push notification à une entreprise (dispatcher).
-
-    Args:
-        company_id: ID de l'entreprise
-        title: Titre de la notification
-        body: Corps du message
-        data: Données additionnelles (pour deep linking, etc.)
-        timeout: Timeout en secondes (défaut: 5)
-
-    Returns:
-        True si la push a été envoyée avec succès, False sinon
-    """
+    """Envoie une push à tous les DeviceToken actifs de l'entreprise."""
     success = False
     try:
-        # Guard centralise : bloquer self-notification (company est l'acteur)
-        actor_role = data.get("actor_role") if data else None
-        actor_id = data.get("actor_id") if data else None
+        data = _ensure_event_ids(data)
+
+        actor_role = data.get("actor_role")
+        actor_id = data.get("actor_id")
         if (
             actor_role == "company"
             and actor_id is not None
@@ -48,111 +46,137 @@ def send_push_to_company_sync(
             )
             return True
 
-        from models import Company, User
+        from models import Company, DeviceToken
 
         company = Company.query.get(company_id)
         if not company:
             app_logger.debug(
-                "[event_fanout] Company %s not found, push skipped", company_id
+                "[company_push] Company %s not found, push skipped", company_id
             )
-        else:
+            return False
+
+        device_tokens = (
+            DeviceToken.query.filter_by(company_id=company_id, is_active=True)
+            .order_by(DeviceToken.updated_at.desc())
+            .all()
+        )
+
+        if not device_tokens:
+            app_logger.warning(
+                "PUSH_COMPANY_TOKEN_MISSING company_id=%s company_user_id_target=%s",
+                company_id,
+                company.user_id,
+            )
+            # Legacy fallback (1 release)
+            from models import User
+
             company_user = User.query.get(company.user_id)
-            if not company_user:
+            legacy_token = getattr(company_user, "push_token", None) if company_user else None
+            if legacy_token:
+                result = send_push_message(
+                    token=legacy_token,
+                    title=title,
+                    body=body,
+                    data=data,
+                    timeout=timeout,
+                )
+                return bool(result.get("ok"))
+            return False
+
+        from services.notifications.token_audit import (
+            _token_hash,
+            log_push_recipient_proof,
+        )
+
+        token_hashes = [_token_hash(dt.token) for dt in device_tokens if dt.token]
+        log_push_recipient_proof(
+            trace_id=data.get("trace_id"),
+            booking_id=data.get("booking_id"),
+            status=data.get("status"),
+            recipient_role="company",
+            recipient_id=company.user_id or company_id,
+            token_count=len(device_tokens),
+            token_hashes=token_hashes,
+            collapse_key=data.get("collapse_key"),
+            dedupe_key=data.get("dedupe_key"),
+            routing_version=data.get("routing_version"),
+            routing_decision=data.get("routing_decision"),
+            source=data.get("source"),
+            actor_role=data.get("actor_role"),
+            actor_id=data.get("actor_id"),
+        )
+
+        driver_id_from_booking = data.get("driver_id")
+        if driver_id_from_booking and device_tokens:
+            from services.notifications.token_audit import check_token_collision
+
+            driver_tokens = [
+                dt.token
+                for dt in DeviceToken.query.filter_by(
+                    driver_id=int(driver_id_from_booking),
+                    is_active=True,
+                ).all()
+                if dt.token
+            ]
+            first_company_token = device_tokens[0].token
+            if first_company_token:
+                check_token_collision(
+                    driver_tokens=driver_tokens,
+                    company_token=first_company_token,
+                    driver_id=int(driver_id_from_booking),
+                    company_user_id=company.user_id,
+                    trace_id=data.get("trace_id"),
+                )
+
+        success_count = 0
+        for device_token in device_tokens:
+            result = send_push_message(
+                token=device_token.token,
+                title=title,
+                body=body,
+                data={**data, "company_id": company_id},
+                timeout=timeout,
+                provider=getattr(device_token, "provider", None),
+                platform=getattr(device_token, "platform", None),
+                device_token_id=device_token.id,
+            )
+            if result.get("ok"):
+                success_count += 1
                 app_logger.debug(
-                    "[event_fanout] Company user %s not found, push skipped",
-                    company.user_id,
+                    "[company_push] Push sent to company %s (device %s)",
+                    company_id,
+                    device_token.id,
                 )
             else:
-                push_token = getattr(company_user, "push_token", None)
-                if not push_token:
-                    app_logger.warning(
-                        "PUSH_COMPANY_TOKEN_MISSING company_id=%s company_user_id_target=%s",
-                        company_id,
-                        company.user_id,
-                    )
-                    app_logger.debug(
-                        "[event_fanout] Company user %s has no push_token, push skipped",
-                        company.user_id,
-                    )
-                else:
-                    # P0.4: Recipient proof logging (DEBUG_NOTIF_ROUTING)
-                    from services.notifications.token_audit import (
-                        _token_hash,
-                        check_token_collision,
-                        log_push_recipient_proof,
-                    )
+                app_logger.warning(
+                    "[company_push] Push failed for company %s (device %s): %s",
+                    company_id,
+                    device_token.id,
+                    result.get("error", "Unknown error"),
+                )
 
-                    token_hash = _token_hash(push_token)
-                    log_push_recipient_proof(
-                        trace_id=data.get("trace_id"),
-                        booking_id=data.get("booking_id"),
-                        status=data.get("status"),
-                        recipient_role="company",
-                        recipient_id=company.user_id or company_id,
-                        token_count=1,
-                        token_hashes=[token_hash],
-                        collapse_key=data.get("collapse_key"),
-                        dedupe_key=data.get("dedupe_key"),
-                        routing_version=data.get("routing_version"),
-                        routing_decision=data.get("routing_decision"),
-                        source=data.get("source"),
-                        actor_role=data.get("actor_role"),
-                        actor_id=data.get("actor_id"),
-                    )
-                    # P0.4: Détection collision token (driver vs company)
-                    driver_id_from_booking = data.get("driver_id")
-                    if driver_id_from_booking:
-                        from models import DeviceToken
+        try:
+            db.session.commit()
+        except Exception:
+            app_logger.exception("[company_push] commit after push lifecycle")
 
-                        driver_tokens = [
-                            dt.token
-                            for dt in DeviceToken.query.filter_by(
-                                driver_id=int(driver_id_from_booking),
-                                is_active=True,
-                            ).all()
-                            if dt.token
-                        ]
-                        check_token_collision(
-                            driver_tokens=driver_tokens,
-                            company_token=push_token,
-                            driver_id=int(driver_id_from_booking),
-                            company_user_id=company.user_id,
-                            trace_id=data.get("trace_id"),
-                        )
-
-                    result = send_push_message(
-                        token=push_token,
-                        title=title,
-                        body=body,
-                        data=data,
-                        timeout=timeout,
-                    )
-
-                    if result.get("ok"):
-                        app_logger.info(
-                            "[event_fanout] Push sent to company %s", company_id
-                        )
-                        success = True
-                    else:
-                        app_logger.warning(
-                            "[event_fanout] Push failed for company %s: %s",
-                            company_id,
-                            result.get("error", "Unknown error"),
-                        )
+        success = success_count > 0
+        if success:
+            app_logger.info(
+                "[company_push] Push sent to company %s (%d/%d devices)",
+                company_id,
+                success_count,
+                len(device_tokens),
+            )
     except (ValueError, TypeError, AttributeError) as e:
         app_logger.error(
-            "[event_fanout] Push failed (validation error: %s): %s",
+            "[company_push] Push failed (validation error: %s): %s",
             type(e).__name__,
             e,
         )
-    except (ConnectionError, OSError, TimeoutError) as e:
-        app_logger.error(
-            "[event_fanout] Push failed (network error: %s): %s",
-            type(e).__name__,
-            e,
-        )
-        raise  # P1: Propager pour que Celery task puisse retry
+    except (ConnectionError, OSError, TimeoutError):
+        raise
     except Exception:
-        app_logger.exception("[event_fanout] Push failed")
+        app_logger.exception("[company_push] Push failed")
 
     return success

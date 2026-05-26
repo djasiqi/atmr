@@ -1241,6 +1241,9 @@ def fanout_urgent_alert(
         )
 
     # 2. Push notification (background) - pour company et driver
+    import uuid as _uuid
+
+    _urgent_event_id = str(_uuid.uuid4())
     push_data_base: Dict[str, Any] = {
         "type": "urgent_alert",
         "alert_id": str(alert_id),
@@ -1250,6 +1253,8 @@ def fanout_urgent_alert(
         "driver_id": driver_id,
         "deepLink": f"atmr://alerts/{alert_id}",
         "actor_role": "system",
+        "event_id": _urgent_event_id,
+        "dedupe_key": f"urgent:{_urgent_event_id}",
     }
 
     # Push pour company (P1: async via Celery)

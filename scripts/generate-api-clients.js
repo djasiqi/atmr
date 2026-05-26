@@ -9,7 +9,7 @@ const path = require("path");
 const PROJECT_ROOT = path.resolve(__dirname, "..");
 const SPEC_FILE = path.join(PROJECT_ROOT, "backend", "docs", "openapi.json");
 const FRONTEND_OUTPUT = path.join(PROJECT_ROOT, "frontend", "src", "generated", "api");
-const MOBILE_OUTPUT = path.join(PROJECT_ROOT, "mobile", "operations-app", "src", "generated", "api");
+const MOBILE_OUTPUT = path.join(PROJECT_ROOT, "mobile", "unified-app", "src", "generated", "api");
 
 // Vérifier que la spec existe
 if (!fs.existsSync(SPEC_FILE)) {

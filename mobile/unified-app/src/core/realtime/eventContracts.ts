@@ -7,6 +7,7 @@ export type CanonicalDriverEventType =
   | "eta_changed";
 
 export type CanonicalCompanyEventType =
+  | "booking_created"
   | "booking_updated"
   | "booking_cancelled"
   | "driver_location_update"
@@ -33,6 +34,8 @@ const DRIVER_EVENT_ALIASES: Record<string, CanonicalDriverEventType> = {
 };
 
 const COMPANY_EVENT_ALIASES: Record<string, CanonicalCompanyEventType> = {
+  booking_created: "booking_created",
+  new_booking: "booking_created",
   booking_updated: "booking_updated",
   mission_updated: "booking_updated",
   ride_updated: "booking_updated",

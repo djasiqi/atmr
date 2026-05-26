@@ -48,7 +48,7 @@ mobile/**/node_modules/
 
 # ===== Clients API générés (optionnel - peut être commité) =====
 # frontend/src/generated/
-# mobile/operations-app/src/generated/
+# mobile/unified-app/src/generated/
 
 # Builds / caches
 frontend/build/

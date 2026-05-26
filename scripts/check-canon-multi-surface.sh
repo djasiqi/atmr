@@ -19,7 +19,7 @@ touch_dispatch=false
 
 while IFS= read -r f; do
   [[ -z "${f:-}" ]] && continue
-  if [[ "$f" == mobile/operations-app/* ]]; then touch_ops=true; fi
+  if [[ "$f" == mobile/unified-app/* ]]; then touch_ops=true; fi
   if [[ "$f" == frontend/src/pages/driver/* ]]; then touch_driver=true; fi
   if [[ "$f" == frontend/src/pages/company/Dispatch/* ]] || [[ "$f" == frontend/src/pages/company/*/Dispatch/* ]]; then
     touch_dispatch=true
@@ -43,7 +43,7 @@ if [[ "$PR_COMBINED" =~ LIRIE_MOBILE_WEB_CANON|docs/LIRIE_MOBILE_WEB_CANON|docs/
 fi
 
 echo "check-canon-multi-surface: échec — cette PR modifie au moins deux zones parmi:" >&2
-echo "  - mobile/operations-app" >&2
+echo "  - mobile/unified-app" >&2
 echo "  - frontend/src/pages/driver" >&2
 echo "  - frontend/src/pages/company/.../Dispatch" >&2
 echo "" >&2

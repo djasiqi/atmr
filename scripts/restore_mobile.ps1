@@ -154,11 +154,8 @@ Get-ChildItem $MobileDir | Select-Object -First 10 | Format-Table Name, Length, 
 Write-Host ""
 
 # Afficher la structure
-if (Test-Path "$MobileDir\operations-app") {
-    Write-Info "📱 operations-app trouvé"
-}
-if (Test-Path "$MobileDir\client-app") {
-    Write-Info "📱 client-app trouvé"
+if (Test-Path "$MobileDir\unified-app") {
+    Write-Info "📱 unified-app trouvé"
 }
 
 # Nettoyer le répertoire temporaire

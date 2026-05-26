@@ -219,6 +219,12 @@ export const featureFlags = {
     enabled: envEnabled("EXPO_PUBLIC_ENABLE_DRIVER_PUSH"),
     description: "Enable push registration and push listeners for drivers.",
   } satisfies FeatureFlagDefinition,
+  company_push_enabled: {
+    key: "company_push_enabled",
+    source: "env",
+    enabled: envEnabled("EXPO_PUBLIC_ENABLE_COMPANY_PUSH"),
+    description: "Enable company push token registration and notification handlers.",
+  } satisfies FeatureFlagDefinition,
   company_dispatch_enabled: {
     key: "company_dispatch_enabled",
     source: "env",

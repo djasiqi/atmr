@@ -16,7 +16,7 @@
 
 - Backend : `backend/`
 - Frontend web : `frontend/`
-- Mobile : `mobile/operations-app/`
+- Mobile : `mobile/unified-app/`
 - Documentation : `docs/`
 
 ## 🔧 Conventions de code

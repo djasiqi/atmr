@@ -787,7 +787,7 @@ def main() -> None:
                 print(f"⚠️  Répertoire frontend introuvable: {frontend_dir}")
     
     if not args.no_mobile:
-        mobile_dir = project_root / "mobile" / "operations-app"
+        mobile_dir = project_root / "mobile" / "unified-app"
         if mobile_dir.exists():
             print("   Indexation mobile...")
             index_mobile, file_map_mobile = build_code_index(

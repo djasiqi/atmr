@@ -248,6 +248,7 @@ export async function registerDriverPushToken(
     await apiClient.post("/driver/save-push-token", {
       token: payload.token,
       driverId: payload.driverId,
+      device_id: payload.deviceId,
       platform: payload.platform,
       provider: payload.provider,
       client_auth_surface: "driver",

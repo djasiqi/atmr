@@ -503,6 +503,19 @@ def send_push_message(
         },
     )
 
+    if device_token_id is not None:
+        try:
+            from services.notifications.device_token_lifecycle import (
+                apply_push_result_to_device_token,
+            )
+
+            apply_push_result_to_device_token(device_token_id, result)
+        except Exception as e:
+            app_logger.warning(
+                "[push] device_token lifecycle update failed (ignored): %s",
+                str(e)[:200],
+            )
+
     return result
 
 

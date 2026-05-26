@@ -1,7 +1,7 @@
 {
   "cli": {
     "version": ">=16.4.8",
-    "appVersionSource": "remote"
+    "appVersionSource": "local"
   },
   "build": {
     "development": {
@@ -57,7 +57,8 @@
         "EXPO_PUBLIC_ENABLE_DRIVER_PUSH": "1",
         "EXPO_PUBLIC_ENABLE_DRIVER_NOTIFICATION_ACTIONS": "1",
         "EXPO_PUBLIC_ENABLE_DRIVER_MISSION_BAR": "1",
-        "EXPO_PUBLIC_ENABLE_DRIVER_FCM_NATIVE": "1"
+        "EXPO_PUBLIC_ENABLE_DRIVER_FCM_NATIVE": "1",
+        "EXPO_PUBLIC_ENABLE_COMPANY_PUSH": "1"
       },
       "android": {
         "buildType": "apk"
@@ -91,7 +92,8 @@
         "EXPO_PUBLIC_ENABLE_DRIVER_PUSH": "1",
         "EXPO_PUBLIC_ENABLE_DRIVER_NOTIFICATION_ACTIONS": "1",
         "EXPO_PUBLIC_ENABLE_DRIVER_MISSION_BAR": "1",
-        "EXPO_PUBLIC_ENABLE_DRIVER_FCM_NATIVE": "1"
+        "EXPO_PUBLIC_ENABLE_DRIVER_FCM_NATIVE": "1",
+        "EXPO_PUBLIC_ENABLE_COMPANY_PUSH": "1"
       },
       "android": {
         "buildType": "app-bundle",

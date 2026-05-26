@@ -9,7 +9,7 @@ const { execSync } = require("child_process");
 const PROJECT_ROOT = path.resolve(__dirname, "..");
 const SPEC_FILE = path.join(PROJECT_ROOT, "backend", "docs", "openapi.json");
 const FRONTEND_DIR = path.join(PROJECT_ROOT, "frontend", "src");
-const MOBILE_DIR = path.join(PROJECT_ROOT, "mobile", "operations-app");
+const MOBILE_DIR = path.join(PROJECT_ROOT, "mobile", "unified-app");
 
 console.log("📊 Génération de la matrice de couverture API...");
 

@@ -8,7 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 SPEC_FILE="$PROJECT_ROOT/backend/docs/openapi.json"
 FRONTEND_OUTPUT="$PROJECT_ROOT/frontend/src/generated/api"
-MOBILE_OUTPUT="$PROJECT_ROOT/mobile/operations-app/src/generated/api"
+MOBILE_OUTPUT="$PROJECT_ROOT/mobile/unified-app/src/generated/api"
 
 # Vérifier que la spec existe
 if [ ! -f "$SPEC_FILE" ]; then

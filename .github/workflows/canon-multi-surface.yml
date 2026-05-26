@@ -1,12 +1,12 @@
 # Contrat d'application du canon multi-surface (LIRIE) — semi-automatique.
-# Si une PR touche ≥2 zones parmi operations-app, chauffeur web, dispatch web,
+# Si une PR touche ≥2 zones parmi unified-app, chauffeur web, dispatch web,
 # le titre ou le corps doit mentionner le canon, docs/adr/, ou API_CANON_RULES.
 name: Canon multi-surface
 
 on:
   pull_request:
     paths:
-      - 'mobile/operations-app/**'
+      - 'mobile/unified-app/**'
       - 'frontend/src/pages/driver/**'
       - 'frontend/src/pages/company/**/Dispatch/**'
       - 'frontend/src/pages/company/Dispatch/**'

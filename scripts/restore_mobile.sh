@@ -163,11 +163,8 @@ ls -la "$MOBILE_DIR" | head -10
 echo ""
 
 # Afficher la structure
-if [ -d "$MOBILE_DIR/operations-app" ]; then
-    echo "📱 operations-app trouvé"
-fi
-if [ -d "$MOBILE_DIR/client-app" ]; then
-    echo "📱 client-app trouvé"
+if [ -d "$MOBILE_DIR/unified-app" ]; then
+    echo "📱 unified-app trouvé"
 fi
 
 echo ""
