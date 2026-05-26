@@ -171,6 +171,10 @@ export SAFERPAY_CUSTOMER_ID="${34:-}"
 export SAFERPAY_TERMINAL_ID="${35:-}"
 export SAFERPAY_API_USERNAME="${36:-}"
 export SAFERPAY_API_PASSWORD="${37:-}"
+export SMS_NOTIFICATIONS_ENABLED="${38:-false}"
+export TWILIO_ACCOUNT_SID="${39:-}"
+export TWILIO_AUTH_TOKEN="${40:-}"
+export TWILIO_PHONE_NUMBER="${41:-}"
 # SAFERPAY_API_BASE_URL + SAFERPAY_ALLOW_TEST_API_IN_PRODUCTION : non sensibles →
 # scripts/env.production.defaults.fragment (append après le bloc CI).
 # Réglages mobile/token/websocket (optionnels, avec defaults robustes)
@@ -311,6 +315,10 @@ echo "✅ Stack production arrêtée ; monitoring non interrompu (volumes prése
   echo "BREVO_API_KEY=${BREVO_API_KEY:-}"
   echo "EMAIL_NOTIFICATIONS_ENABLED=true"
   echo "EMAIL_PROVIDER=brevo"
+  echo "SMS_NOTIFICATIONS_ENABLED=${SMS_NOTIFICATIONS_ENABLED:-false}"
+  echo "TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID:-}"
+  echo "TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN:-}"
+  echo "TWILIO_PHONE_NUMBER=${TWILIO_PHONE_NUMBER:-}"
   echo "SMTP_FROM_EMAIL=${SMTP_FROM_EMAIL:-noreply@lirie.ch}"
   echo "SMTP_FROM_NAME=${SMTP_FROM_NAME:-LIRIE}"
   echo "DEMO_EMAIL_FROM=${DEMO_EMAIL_FROM:-noreply@lirie.ch}"

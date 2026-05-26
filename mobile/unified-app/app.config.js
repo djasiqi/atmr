@@ -69,11 +69,48 @@ function resolveIosMapsApiKey() {
   return trimEnv("EXPO_PUBLIC_GOOGLE_MAPS_IOS_API_KEY") || trimEnv("EXPO_PUBLIC_GOOGLE_MAPS_API_KEY");
 }
 
+const INVALID_ANDROID_MAPS_KEYS = new Set(["", "test-android-key", "your-android-maps-api-key"]);
+
+function assertAndroidMapsApiKeyForEasProdBuild(apiKey) {
+  const normalized = typeof apiKey === "string" ? apiKey.trim() : "";
+  if (!normalized || INVALID_ANDROID_MAPS_KEYS.has(normalized)) {
+    throw new Error(
+      "[app.config] EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_API_KEY manquante ou placeholder sur build EAS prod. " +
+        "Ajoutez la clé dans eas.json (preview/production env) ou EAS Environment, puis relancez avec --clear-cache."
+    );
+  }
+  if (!normalized.startsWith("AIza")) {
+    throw new Error(
+      `[app.config] EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_API_KEY invalide sur build EAS prod (attendu préfixe AIza).`
+    );
+  }
+}
+
 /** @type {import('expo/config').ExpoConfig} */
 module.exports = ({ config }) => {
   const base = config ?? appJson.expo;
   const androidMapsApiKey = resolveAndroidMapsApiKey();
   const iosMapsApiKey = resolveIosMapsApiKey();
+
+  if (isCiBuild) {
+    const mapsEnv = process.env.EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_API_KEY;
+    console.log(
+      "[app.config] EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_API_KEY =",
+      typeof mapsEnv === "string" && mapsEnv.trim().length > 0
+        ? `${mapsEnv.trim().slice(0, 8)}… (${mapsEnv.trim().length} chars)`
+        : mapsEnv ?? "(undefined)"
+    );
+    console.log(
+      "[app.config] android.config.googleMaps.apiKey resolved =",
+      androidMapsApiKey
+        ? `${androidMapsApiKey.slice(0, 8)}… (${androidMapsApiKey.length} chars)`
+        : "(empty)"
+    );
+  }
+
+  if (shouldEnforceProdEnv) {
+    assertAndroidMapsApiKeyForEasProdBuild(androidMapsApiKey);
+  }
 
   return {
     ...base,

@@ -27,38 +27,36 @@
   white-space: nowrap;
 }
 
-/* État connecté - Vert */
+/* États alignés sur tokens.css — contrastes WCAG AA sur fond pastel */
 .connected {
-  background-color: #e8f5e9;
-  color: #4caf50;
-  border: 1px solid #4caf50;
+  background-color: var(--success-bg, #dcfce7);
+  color: var(--success-hover, #15803d);
+  border: 1px solid var(--success-primary, #16a34a);
 }
 
 .connected .icon {
-  color: #4caf50;
+  color: var(--success-primary, #16a34a);
 }
 
-/* État déconnecté - Rouge */
 .disconnected {
-  background-color: #ffebee;
-  color: #f44336;
-  border: 1px solid #f44336;
+  background-color: var(--error-bg, #fee2e2);
+  color: var(--error-hover, #dc2626);
+  border: 1px solid var(--error-primary, #ef4444);
 }
 
 .disconnected .icon {
-  color: #f44336;
+  color: var(--error-hover, #dc2626);
 }
 
-/* État reconnexion - Orange */
 .reconnecting {
-  background-color: #fff3e0;
-  color: #ff9800;
-  border: 1px solid #ff9800;
+  background-color: var(--warning-bg, #fef3c7);
+  color: var(--warning-hover, #d97706);
+  border: 1px solid var(--warning-primary, #f59e0b);
   animation: pulse 1.5s ease-in-out infinite;
 }
 
 .reconnecting .icon {
-  color: #ff9800;
+  color: var(--warning-hover, #d97706);
   animation: spin 1s linear infinite;
 }
 

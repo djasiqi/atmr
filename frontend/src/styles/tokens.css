@@ -34,9 +34,15 @@
   /* ============ COULEURS TEXTE ============ */
   --text-primary: #0f172a; /* Texte principal */
   --text-secondary: #374151; /* Texte secondaire */
-  --text-tertiary: #6b7280; /* Texte atténué */
-  --text-disabled: #9ca3af; /* Texte désactivé */
+  --text-tertiary: #6b7280; /* Texte atténué (≥ 4.5:1 sur blanc) */
+  /* Placeholders & légendes sur fond clair — WCAG 2 AA (≥ 4.5:1 sur #fff / #f8fafc) */
+  --text-placeholder: #64748b;
+  --text-caption: #64748b;
+  --text-disabled: #9ca3af; /* États désactivés uniquement (hors exigence lecture) */
   --text-inverse: #ffffff; /* Texte sur fond foncé */
+  /* Sidebar brand — contrastes validés sur #00796b */
+  --sidebar-on-brand: #e0f2f1;
+  --sidebar-on-brand-muted: #b2dfdb;
 
   /* ============ COULEURS BORDURES ============ */
   --border-primary: #e5e7eb; /* Bordure standard */

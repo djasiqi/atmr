@@ -1,0 +1,141 @@
+
+‚Q
+;
+android*http://schemas.android.com/apk/res/android	RelativeLayout"K
+*http://schemas.android.com/apk/res/androidpadding24dp"	(Õ„2:h0"`
+*http://schemas.android.com/apk/res/androidlayout_widthmatch_parent"	(ô„2:0ÿÿÿÿÿÿÿÿÿ"a
+*http://schemas.android.com/apk/res/androidlayout_heightmatch_parent"	(õ„2:0ÿÿÿÿÿÿÿÿÿ"~
+*http://schemas.android.com/apk/res/androidtheme?android:attr/dialogTheme"	(€€„2%
+#ˆ†„android:attr/dialogTheme0"•
+*http://schemas.android.com/apk/res/androidid'@+id/sentry_dialog_user_feedback_layout"	(Ğ„21
+/øƒ¨ø%id/sentry_dialog_user_feedback_layout0*´
+«TextView"W
+*http://schemas.android.com/apk/res/androidlayout_marginBottom16dp"(ú„2:h "`
+*http://schemas.android.com/apk/res/androidlayout_widthmatch_parent"(ô„2:0ÿÿÿÿÿÿÿÿÿ"a
+*http://schemas.android.com/apk/res/androidlayout_heightwrap_content"(õ„2:0şÿÿÿÿÿÿÿÿ"Ystyle?android:attr/windowTitleStyle"2,
+*Û€„android:attr/windowTitleStyle0ÿÿ"X
+*http://schemas.android.com/apk/res/androidlayout_alignParentToptrue"(Œƒ„2:@"“
+*http://schemas.android.com/apk/res/androidid&@+id/sentry_dialog_user_feedback_title"(Ğ„20
+.úƒ¨ø$id/sentry_dialog_user_feedback_title0"E
+*http://schemas.android.com/apk/res/androidtextReport a Bug(Ï‚„"L
+*http://schemas.android.com/apk/res/android	textStylebold"(—„2:8" 
+*http://schemas.android.com/apk/res/androidlayout_alignRight%@+id/sentry_dialog_user_feedback_logo"(‰ƒ„2/
+-ùƒ¨ø#id/sentry_dialog_user_feedback_logo0M*Ó
+Ê	ImageView"X
+*http://schemas.android.com/apk/res/androidcontentDescriptionLogo of the brand(ó„„"}
+*http://schemas.android.com/apk/res/androidsrc@drawable/sentry_logo_dark" (™‚„2%
+#Áƒ ødrawable/sentry_logo_dark0"P
+*http://schemas.android.com/apk/res/androidlayout_width32dp" (ô„2:h@"Q
+*http://schemas.android.com/apk/res/androidlayout_height32dp" (õ„2:h@"…
+*http://schemas.android.com/apk/res/androidtint?android:attr/colorForeground" (¡‚„2)
+'°€„android:attr/colorForeground0"Z
+*http://schemas.android.com/apk/res/androidlayout_alignParentRighttrue" (ƒ„2:@"£
+*http://schemas.android.com/apk/res/androidlayout_alignBottom&@+id/sentry_dialog_user_feedback_title" (Šƒ„20
+.úƒ¨ø$id/sentry_dialog_user_feedback_title0" 
+*http://schemas.android.com/apk/res/androidlayout_alignTop&@+id/sentry_dialog_user_feedback_title" (ˆƒ„20
+.úƒ¨ø$id/sentry_dialog_user_feedback_title0"‘
+*http://schemas.android.com/apk/res/androidid%@+id/sentry_dialog_user_feedback_logo" (Ğ„2/
+-ùƒ¨ø#id/sentry_dialog_user_feedback_logo0 4*õ
+ìTextView"œ
+*http://schemas.android.com/apk/res/androidlayout_below%@id/sentry_dialog_user_feedback_title")(…ƒ„20
+.úƒ¨ø$id/sentry_dialog_user_feedback_title0"`
+*http://schemas.android.com/apk/res/androidlayout_widthmatch_parent")(ô„2:0ÿÿÿÿÿÿÿÿÿ"a
+*http://schemas.android.com/apk/res/androidlayout_heightwrap_content")(õ„2:0şÿÿÿÿÿÿÿÿ"S
+*http://schemas.android.com/apk/res/androidlayout_marginTop4dp")(ø„2:h"™
+*http://schemas.android.com/apk/res/androidid)@+id/sentry_dialog_user_feedback_txt_name")(Ğ„23
+1ıƒ¨ø'id/sentry_dialog_user_feedback_txt_name0"=
+*http://schemas.android.com/apk/res/androidtextName(Ï‚„"L
+*http://schemas.android.com/apk/res/android	textStylebold")(—„2:8)H*Á
+¸EditText"¢
+*http://schemas.android.com/apk/res/androidlayout_below(@id/sentry_dialog_user_feedback_txt_name"3(…ƒ„23
+1ıƒ¨ø'id/sentry_dialog_user_feedback_txt_name0"’
+*http://schemas.android.com/apk/res/android
+background!@drawable/sentry_edit_text_border"3(Ô„2,
+*Àƒ ø drawable/sentry_edit_text_border0"B
+*http://schemas.android.com/apk/res/androidhint	Your Name(Ğ‚„"`
+*http://schemas.android.com/apk/res/androidlayout_widthmatch_parent"3(ô„2:0ÿÿÿÿÿÿÿÿÿ"a
+*http://schemas.android.com/apk/res/androidlayout_heightwrap_content"3(õ„2:0şÿÿÿÿÿÿÿÿ"T
+*http://schemas.android.com/apk/res/androidpaddingHorizontal8dp"3(½Š„2:h"N
+*http://schemas.android.com/apk/res/androidpaddingLeft8dp"3(Ö„2:h"O
+*http://schemas.android.com/apk/res/androidpaddingRight8dp"3(Ø„2:h"V
+*http://schemas.android.com/apk/res/android	inputTypetextPersonName"3( „„2:8a"™
+*http://schemas.android.com/apk/res/androidid)@+id/sentry_dialog_user_feedback_edt_name"3(Ğ„23
+1÷ƒ¨ø'id/sentry_dialog_user_feedback_edt_name03K*ş
+õTextView"¢
+*http://schemas.android.com/apk/res/androidlayout_below(@id/sentry_dialog_user_feedback_edt_name"<(…ƒ„23
+1÷ƒ¨ø'id/sentry_dialog_user_feedback_edt_name0"`
+*http://schemas.android.com/apk/res/androidlayout_widthmatch_parent"<(ô„2:0ÿÿÿÿÿÿÿÿÿ"a
+*http://schemas.android.com/apk/res/androidlayout_heightwrap_content"<(õ„2:0şÿÿÿÿÿÿÿÿ"S
+*http://schemas.android.com/apk/res/androidlayout_marginTop8dp"<(ø„2:h"›
+*http://schemas.android.com/apk/res/androidid*@+id/sentry_dialog_user_feedback_txt_email"<(Ğ„24
+2üƒ¨ø(id/sentry_dialog_user_feedback_txt_email0">
+*http://schemas.android.com/apk/res/androidtextEmail(Ï‚„"L
+*http://schemas.android.com/apk/res/android	textStylebold"<(—„2:8<K*Ô
+ËEditText"¤
+*http://schemas.android.com/apk/res/androidlayout_below)@id/sentry_dialog_user_feedback_txt_email"F(…ƒ„24
+2üƒ¨ø(id/sentry_dialog_user_feedback_txt_email0"’
+*http://schemas.android.com/apk/res/android
+background!@drawable/sentry_edit_text_border"F(Ô„2,
+*Àƒ ø drawable/sentry_edit_text_border0"O
+*http://schemas.android.com/apk/res/androidhintyour.email@example.org(Ğ‚„"`
+*http://schemas.android.com/apk/res/androidlayout_widthmatch_parent"F(ô„2:0ÿÿÿÿÿÿÿÿÿ"a
+*http://schemas.android.com/apk/res/androidlayout_heightwrap_content"F(õ„2:0şÿÿÿÿÿÿÿÿ"T
+*http://schemas.android.com/apk/res/androidpaddingHorizontal8dp"F(½Š„2:h"N
+*http://schemas.android.com/apk/res/androidpaddingLeft8dp"F(Ö„2:h"O
+*http://schemas.android.com/apk/res/androidpaddingRight8dp"F(Ø„2:h"X
+*http://schemas.android.com/apk/res/android	inputTypetextEmailAddress"F( „„2:8!"›
+*http://schemas.android.com/apk/res/androidid*@+id/sentry_dialog_user_feedback_edt_email"F(Ğ„24
+2öƒ¨ø(id/sentry_dialog_user_feedback_edt_email0FL*
+”TextView"¤
+*http://schemas.android.com/apk/res/androidlayout_below)@id/sentry_dialog_user_feedback_edt_email"O(…ƒ„24
+2öƒ¨ø(id/sentry_dialog_user_feedback_edt_email0"`
+*http://schemas.android.com/apk/res/androidlayout_widthmatch_parent"O(ô„2:0ÿÿÿÿÿÿÿÿÿ"a
+*http://schemas.android.com/apk/res/androidlayout_heightwrap_content"O(õ„2:0şÿÿÿÿÿÿÿÿ"S
+*http://schemas.android.com/apk/res/androidlayout_marginTop8dp"O(ø„2:h"§
+*http://schemas.android.com/apk/res/androidid0@+id/sentry_dialog_user_feedback_txt_description"O(Ğ„2:
+8ûƒ¨ø.id/sentry_dialog_user_feedback_txt_description0"O
+*http://schemas.android.com/apk/res/androidtextDescription (Required)(Ï‚„"L
+*http://schemas.android.com/apk/res/android	textStylebold"O(—„2:8OL*
+
+‡
+EditText"°
+*http://schemas.android.com/apk/res/androidlayout_below/@id/sentry_dialog_user_feedback_txt_description"[(…ƒ„2:
+8ûƒ¨ø.id/sentry_dialog_user_feedback_txt_description0"N
+*http://schemas.android.com/apk/res/androidgravitytop|left"[(¯„2:83"’
+*http://schemas.android.com/apk/res/android
+background!@drawable/sentry_edit_text_border"[(Ô„2,
+*Àƒ ø drawable/sentry_edit_text_border0"]
+*http://schemas.android.com/apk/res/androidhint$What's the bug? What did you expect?(Ğ‚„"`
+*http://schemas.android.com/apk/res/androidlayout_widthmatch_parent"[(ô„2:0ÿÿÿÿÿÿÿÿÿ"a
+*http://schemas.android.com/apk/res/androidlayout_heightwrap_content"[(õ„2:0şÿÿÿÿÿÿÿÿ"E
+*http://schemas.android.com/apk/res/androidlines6"[(Ô‚„2:0"T
+*http://schemas.android.com/apk/res/androidpaddingHorizontal8dp"[(½Š„2:h"N
+*http://schemas.android.com/apk/res/androidpaddingLeft8dp"[(Ö„2:h"O
+*http://schemas.android.com/apk/res/androidpaddingRight8dp"[(Ø„2:h"W
+*http://schemas.android.com/apk/res/android	inputTypetextMultiLine"[( „„2:8€"§
+*http://schemas.android.com/apk/res/androidid0@+id/sentry_dialog_user_feedback_edt_description"[(Ğ„2:
+8õƒ¨ø.id/sentry_dialog_user_feedback_edt_description0[R*î
+åButton"°
+*http://schemas.android.com/apk/res/androidlayout_below/@id/sentry_dialog_user_feedback_edt_description"e(…ƒ„2:
+8õƒ¨ø.id/sentry_dialog_user_feedback_edt_description0"`
+*http://schemas.android.com/apk/res/androidlayout_widthmatch_parent"e(ô„2:0ÿÿÿÿÿÿÿÿÿ"a
+*http://schemas.android.com/apk/res/androidlayout_heightwrap_content"e(õ„2:0şÿÿÿÿÿÿÿÿ"‰
+*http://schemas.android.com/apk/res/androidbackgroundTint?android:attr/colorPrimary"e(ëˆ„2&
+$³ˆ„android:attr/colorPrimary0"š
+*http://schemas.android.com/apk/res/android	textColor%?android:attr/textColorPrimaryInverse"e(˜„21
+/¹€„$android:attr/textColorPrimaryInverse0"T
+*http://schemas.android.com/apk/res/androidlayout_marginTop32dp"e(ø„2:h@"™
+*http://schemas.android.com/apk/res/androidid)@+id/sentry_dialog_user_feedback_btn_send"e(Ğ„23
+1ôƒ¨ø'id/sentry_dialog_user_feedback_btn_send0"H
+*http://schemas.android.com/apk/res/androidtextSend Bug Report(Ï‚„eR*Ã
+ºButton"¢
+*http://schemas.android.com/apk/res/androidlayout_below(@id/sentry_dialog_user_feedback_btn_send"n(…ƒ„23
+1ôƒ¨ø'id/sentry_dialog_user_feedback_btn_send0"`
+*http://schemas.android.com/apk/res/androidlayout_widthmatch_parent"n(ô„2:0ÿÿÿÿÿÿÿÿÿ"a
+*http://schemas.android.com/apk/res/androidlayout_heightwrap_content"n(õ„2:0şÿÿÿÿÿÿÿÿ"
+*http://schemas.android.com/apk/res/androidbackgroundTint?android:attr/colorBackground"n(ëˆ„2)
+'±€„android:attr/colorBackground0"S
+*http://schemas.android.com/apk/res/androidlayout_marginTop8dp"n(ø„2:h"
+*http://schemas.android.com/apk/res/androidid+@+id/sentry_dialog_user_feedback_btn_cancel"n(Ğ„25
+3óƒ¨ø)id/sentry_dialog_user_feedback_btn_cancel0"?
+*http://schemas.android.com/apk/res/androidtextCancel(Ï‚„nK	

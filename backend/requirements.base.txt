@@ -135,6 +135,9 @@ types-requests>=2.32.0
 types-pytz>=2024.1
 types-Deprecated>=1.2.0
 
+# ========== Notifications (SMS activation / fallback chauffeur) ==========
+twilio>=9.0.0
+
 # ========== Optional Extra ==========
 stripe>=11.0.0
 python-stdnum>=1.20

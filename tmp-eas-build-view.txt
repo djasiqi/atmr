@@ -1,0 +1,32 @@
+﻿node.exe : Ôÿà eas-cli@19.1.0 is now available.
+Au caractère C:\Users\jasiq\AppData\Local\nodejs\eas.ps1:16 : 5
++     & "$basedir/node$exe"  "$basedir/node_modules/eas-cli/bin/run" $a ...
++     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Ôÿà eas-cli@19.1.0 is now available.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+To upgrade, run:
+npm install -g eas-cli
+Proceeding with outdated version.
+
+- Fetching the buildÔÇª
+ÔêÜ Found a matching build for the project @drinjasiqi/operations-app
+
+ID                       91af2a60-a6a7-469c-860b-f0af63fe4310
+Platform                 Android
+Status                   finished
+Profile                  preview
+Distribution             internal
+Channel                  preview
+SDK Version              54.0.0
+Runtime Version          1.0.5
+Version                  1.0.5
+Version code             99
+Commit                   79004bc8d45f7d44eb6b4032282840ea4a9c921c
+Logs                     https://expo.dev/accounts/drinjasiqi/projects/operations-app/builds/91af2a60-a6a7-469c-860b-f0af63fe4310
+Application Archive URL  https://expo.dev/artifacts/eas/iZpovyyJcqLAsJvD9eUgGU.apk
+Build Artifacts URL      null
+Fingerprint              52b0b5c7dd637d27d0d2f0ba6672ee30c8f9158d
+Started at               26.05.2026 11:52:06
+Finished at              26.05.2026 12:13:36
+Started by               drinjasiqi

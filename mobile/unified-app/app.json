@@ -122,6 +122,7 @@
       "@react-native-firebase/messaging",
       "./prebuild-mods/withIosFirebaseModularHeaders.js",
       "./prebuild-mods/withAndroidIconBackground.js",
+      "./prebuild-mods/withAndroidGoogleMapsKey.js",
       "expo-router",
       [
         "expo-location",

@@ -2,3 +2,7 @@
 .env
 .env.*
 !.env.example
+
+# Ne jamais réutiliser un dossier android/ local (prebuild EAS doit être propre).
+android/
+ios/

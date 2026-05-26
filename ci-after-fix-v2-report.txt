@@ -1,0 +1,705 @@
+=== RESUME ===
+FAILED:  255
+ERROR:   40
+SKIPPED: 35
+ScopeMismatch: 0
+
+=== TOP CAUSES (première ligne) ===
+  20  failed on setup with "sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value i
+  12  RuntimeError: Working outside of application context.
+  11  sqlalchemy.exc.IntegrityError: (psycopg2.errors.UniqueViolation) duplicate key value violates unique
+   9  sqlalchemy.exc.IntegrityError: (psycopg2.errors.ForeignKeyViolation) insert or update on table "driv
+   9  TypeError: PurePath.__init__() got an unexpected keyword argument 'encoding'
+   8  ValueError: Heure prévue dans le passé.
+   7  AttributeError: <module 'os' (frozen)> does not have the attribute 'geteuid'
+   7  sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "due_date" of
+   7  AttributeError: module 'services.unified_dispatch.orchestration' has no attribute 'shadow_mode_manag
+   7  AttributeError: module 'services.unified_dispatch' has no attribute 'apply'
+   7  failed on setup with "sqlalchemy.exc.CompileError: (in table 'booking', column 'rejected_by'): Compi
+   6  AttributeError: <module 'routes.institutions' from 'C:\\Users\\jasiq\\atmr\\backend\\routes\\institu
+   6  AttributeError: <module 'services.events.handlers_registry' from 'C:\\Users\\jasiq\\atmr\\backend\\s
+   5  AttributeError: module 'services' has no attribute 'notification_service'
+   5  AttributeError: module 'services.unified_dispatch' has no attribute 'autonomous_manager'
+   5  failed on setup with "file C:\Users\jasiq\atmr\backend\tests\integration\test_email_signature_in_inv
+   4  services.demo.access_service.DemoAccessError: Impossible d'initialiser les données de démonstration.
+   4  AttributeError: <module 'backend.ext' from 'C:\\Users\\jasiq\\atmr\\backend\\ext.py'> does not have 
+   4  AttributeError: module 'services' has no attribute 'rl'. Did you mean: 'ml'?
+   4  AttributeError: module 'services.unified_dispatch.data' has no attribute 'Company'
+   4  failed on setup with "file C:\Users\jasiq\atmr\backend\tests\routes\test_company_settings_email_sign
+   3  AttributeError: <module 'security.api_key_auth' from 'C:\\Users\\jasiq\\atmr\\backend\\security\\api
+   3  RuntimeError: SOCKETIO_CORS_ORIGINS contient une origine non sécurisée en production: http://192.168
+   3  assert True is False
+   3  AssertionError: Regex pattern did not match.
+   3  Failed: DID NOT RAISE <class 'ValueError'>
+   3  AssertionError: assert 'token' not in {'message': 'Connexion réussie', 'refresh_token': 'eyJhbGciOiJ
+   3  ImportError: import error in services.maps: No module named 'services.maps'
+   3  AttributeError: <module 'services.security.idempotency' from 'C:\\Users\\jasiq\\atmr\\backend\\servi
+   3  ModuleNotFoundError: No module named 'services.unified_dispatch.ml_predictor'
+
+=== FAILED (255) ===
+tests.chaos.test_traffic_control.TestTrafficControlManager::test_add_latency_success
+  -> AttributeError: <module 'os' (frozen)> does not have the attribute 'geteuid'
+tests.chaos.test_traffic_control.TestTrafficControlManager::test_add_latency_no_root
+  -> AttributeError: <module 'os' (frozen)> does not have the attribute 'geteuid'
+tests.chaos.test_traffic_control.TestTrafficControlManager::test_add_latency_invalid_params
+  -> AttributeError: <module 'os' (frozen)> does not have the attribute 'geteuid'
+tests.chaos.test_traffic_control.TestTrafficControlManager::test_add_latency_timeout
+  -> AttributeError: <module 'os' (frozen)> does not have the attribute 'geteuid'
+tests.chaos.test_traffic_control.TestTrafficControlManager::test_add_packet_loss_success
+  -> AttributeError: <module 'os' (frozen)> does not have the attribute 'geteuid'
+tests.chaos.test_traffic_control.TestTrafficControlManager::test_add_packet_loss_invalid_percent
+  -> AttributeError: <module 'os' (frozen)> does not have the attribute 'geteuid'
+tests.chaos.test_traffic_control.TestTrafficControlManager::test_clear_success
+  -> AttributeError: <module 'os' (frozen)> does not have the attribute 'geteuid'
+tests.infrastructure.test_invoice_calculator_recompute.TestRecomputeInvoiceTotals::test_recompute_handles_empty_invoice
+  -> sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "due_date" of relation "invoices"
+tests.infrastructure.test_invoice_calculator_recompute.TestRecomputeInvoiceTotals::test_recompute_with_vat
+  -> sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "due_date" of relation "invoices"
+tests.infrastructure.test_invoice_calculator_recompute.TestRecomputeInvoiceTotals::test_recompute_respects_existing_payments
+  -> sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "due_date" of relation "invoices"
+tests.integration.test_admin_platform_bookings.TestAdminPlatformBookingsList::test_detail_404_unknown_id
+  -> assert 500 == 404
+tests.integration.test_admin_stats_booking_trends.TestGetMonthlyBookingCounts::test_boundaries_inclusive_and_exclusion_outside_window
+  -> AssertionError: assert 1 == 2
+tests.integration.test_bookings_integration.TestBookingsIntegration::test_cancel_booking_releases_resources
+  -> AttributeError: type object 'BookingStatus' has no attribute 'CANCELLED'. Did you mean: 'CANCELED'?
+tests.integration.test_client_type_invariants.TestClientTypeInvariants::test_no_portal_with_company
+  -> AssertionError: 292 client(s) PORTAL avec company_id detecte(s). Etat invalide : un client PORTAL ne doit pas etre ratta
+tests.integration.test_companies_integration.TestCompaniesIntegration::test_search_companies_returns_match
+  -> TypeError: EnvironBuilder.__init__() got an unexpected keyword argument 'params'
+tests.integration.test_dispatch_orchestrator_regression.TestEdgeCases::test_no_drivers
+  -> ValueError: Heure prévue dans le passé.
+tests.integration.test_dispatch_orchestrator_regression.TestEdgeCases::test_bookings_without_geographic_coordinates
+  -> ValueError: Heure prévue dans le passé.
+tests.integration.test_expire_awaiting_client_payment.TestExpireAwaitingClientPayment::test_cancels_when_created_before_grace
+  -> assert 6 == 1
+tests.integration.test_expire_awaiting_client_payment.TestExpireAwaitingClientPayment::test_skips_when_saferpay_pending_has_transaction_id_only
+  -> sqlalchemy.exc.IntegrityError: (psycopg2.errors.UniqueViolation) duplicate key value violates unique constraint "uq_paym
+tests.integration.test_invoices_integration.TestInvoicesIntegration::test_cancel_direct_client_invoice_no_leak_to_s2_exclusions
+  -> ValueError: Heure prévue dans le passé.
+tests.integration.test_invoices_integration.TestInvoicesIntegration::test_return_excluded_when_parent_aller_canceled
+  -> AssertionError: Cas 3 : parent COMPLETED + retour CANCELED billable → retour doit être inclus (total_eligible=2)
+tests.integration.test_invoices_integration.TestInvoicesV1PeriodPreviewAndDraftEdit::test_draft_apply_global_discount_custom_negative_line
+  -> assert 0 >= 1
+tests.integration.test_orchestration_integration.TestProblemBuilderIntegration::test_build_problem_with_real_data
+  -> ValueError: Heure prévue dans le passé.
+tests.integration.test_orchestration_integration.TestPipelineExecutorIntegration::test_execute_pipeline_without_clustering
+  -> ValueError: Heure prévue dans le passé.
+tests.integration.test_orchestration_integration.TestShadowModeManagerIntegration::test_should_apply_rl_integration
+  -> AttributeError: module 'services.unified_dispatch.orchestration' has no attribute 'shadow_mode_manager'
+tests.integration.test_orchestration_performance.TestExecutionTime::test_small_dataset_execution_time
+  -> ValueError: Heure prévue dans le passé.
+tests.integration.test_orchestration_performance.TestExecutionTime::test_medium_dataset_execution_time
+  -> ValueError: Heure prévue dans le passé.
+tests.integration.test_orchestration_performance.TestExecutionTime::test_large_dataset_execution_time
+  -> ValueError: Heure prévue dans le passé.
+tests.routes.test_demo_access_routes::test_admin_provision_access_success_partial_email
+  -> assert 500 == 200
+tests.routes.test_input_validation.TestDispatchRunValidation::test_invalid_date_format
+  -> AssertionError: assert ('for_date' in {} or 'errors.for_date' in {})
+tests.routes.test_input_validation.TestDispatchRunValidation::test_invalid_mode
+  -> AssertionError: assert ('mode' in {} or 'errors.mode' in {})
+tests.routes.test_input_validation.TestValidationErrorFormat::test_validation_error_structure
+  -> AssertionError: assert 'errors' in {'details': {'fields': {'errors.for_date': ['for_date doit être au format YYYY-MM-DD'
+tests.routes.test_input_validation.TestValidationErrorFormat::test_multiple_validation_errors
+  -> AssertionError: assert 0 > 1
+tests.routes.test_institution_api_keys.TestApiKeyRateLimit::test_rate_limit_exceeded
+  -> AttributeError: <module 'security.api_key_auth' from 'C:\\Users\\jasiq\\atmr\\backend\\security\\api_key_auth.py'> does 
+tests.routes.test_institution_api_keys.TestApiKeyRateLimit::test_rate_limit_headers
+  -> AttributeError: <module 'security.api_key_auth' from 'C:\\Users\\jasiq\\atmr\\backend\\security\\api_key_auth.py'> does 
+tests.routes.test_institution_api_keys.TestApiKeyRateLimit::test_rate_limit_redis_unavailable
+  -> AttributeError: <module 'security.api_key_auth' from 'C:\\Users\\jasiq\\atmr\\backend\\security\\api_key_auth.py'> does 
+tests.routes.test_institution_invitations.TestInstitutionInvitation::test_invite_new_user_creates_invited_status
+  -> AttributeError: <module 'routes.institutions' from 'C:\\Users\\jasiq\\atmr\\backend\\routes\\institutions.py'> does not 
+tests.routes.test_institution_invitations.TestInstitutionInvitation::test_invite_duplicate_email_in_institution_returns_409
+  -> AttributeError: <module 'routes.institutions' from 'C:\\Users\\jasiq\\atmr\\backend\\routes\\institutions.py'> does not 
+tests.routes.test_institution_invitations.TestInstitutionInvitation::test_verify_valid_token
+  -> sqlalchemy.exc.IntegrityError: (psycopg2.errors.UniqueViolation) duplicate key value violates unique constraint "ix_user
+tests.routes.test_institution_invitations.TestInstitutionInvitation::test_verify_expired_token_returns_400
+  -> sqlalchemy.exc.IntegrityError: (psycopg2.errors.UniqueViolation) duplicate key value violates unique constraint "ix_user
+tests.routes.test_institution_invitations.TestInstitutionInvitation::test_activate_account_success
+  -> sqlalchemy.exc.IntegrityError: (psycopg2.errors.UniqueViolation) duplicate key value violates unique constraint "ix_user
+tests.routes.test_institution_invitations.TestInstitutionInvitation::test_activate_account_short_password_returns_400
+  -> sqlalchemy.exc.IntegrityError: (psycopg2.errors.UniqueViolation) duplicate key value violates unique constraint "ix_user
+tests.routes.test_institution_invitations.TestInstitutionInvitation::test_activate_already_active_returns_400
+  -> sqlalchemy.exc.IntegrityError: (psycopg2.errors.UniqueViolation) duplicate key value violates unique constraint "ix_user
+tests.routes.test_institution_invitations.TestInstitutionInvitation::test_resend_invite_success
+  -> AttributeError: <module 'routes.institutions' from 'C:\\Users\\jasiq\\atmr\\backend\\routes\\institutions.py'> does not 
+tests.routes.test_institution_invitations.TestInstitutionInvitation::test_invite_email_fail_returns_invite_link
+  -> AttributeError: <module 'routes.institutions' from 'C:\\Users\\jasiq\\atmr\\backend\\routes\\institutions.py'> does not 
+tests.routes.test_institution_invitations.TestInstitutionInvitation::test_invite_email_success_also_returns_invite_link
+  -> AttributeError: <module 'routes.institutions' from 'C:\\Users\\jasiq\\atmr\\backend\\routes\\institutions.py'> does not 
+tests.routes.test_institution_invitations.TestInstitutionInvitation::test_resend_email_fail_returns_invite_link
+  -> AttributeError: <module 'routes.institutions' from 'C:\\Users\\jasiq\\atmr\\backend\\routes\\institutions.py'> does not 
+tests.routes.test_institution_patients.TestInstitutionPatientsCRUD::test_create_patient_jwt
+  -> KeyError: 'first_name'
+tests.routes.test_institution_patients.TestInstitutionPatientsCRUD::test_create_patient_api_key
+  -> KeyError: 'first_name'
+tests.routes.test_institution_requests.TestTransportRequestsCRUD::test_send_request_already_sent_fails
+  -> assert 200 == 400
+tests.routes.test_institution_requests.TestTransportRequestsCRUD::test_cancel_request_converted_fails
+  -> assert 409 == 400
+tests.routes.test_platform_governance_api::test_platform_me_ok
+  -> AssertionError: assert 'ADMIN' == 'admin'
+tests.routes.test_platform_governance_api::test_tenants_list_contains_sample_company
+  -> assert 1503 in {8, 33, 48, 49, 50, 51, ...}
+tests.security.test_jwt_hardening.TestJWTExpirationConfig::test_login_uses_config_expiration
+  -> assert 82800 <= 1
+tests.security.test_owasp_top10.TestA04InsecureDesign::test_validation_schemas_are_strict
+  -> AssertionError: assert 'errors' in {'error': 'invalid_json', 'message': 'Corps de requête JSON manquant ou invalide. Vér
+tests.security.test_phase3_integration.TestAdminIPWhitelistIntegration::test_admin_ip_whitelist_integration
+  -> RuntimeError: Working outside of request context.
+tests.security.test_phase3_integration.TestAdminIPWhitelistIntegration::test_admin_ip_whitelist_blocked
+  -> RuntimeError: Working outside of request context.
+tests.security.test_security_integration.TestSecurityMonitoring::test_audit_logs_are_persistent
+  -> sqlalchemy.exc.InternalError: (psycopg2.errors.RaiseException) Modification of audit_logs is not allowed. Audit logs are
+tests.security.test_security_regressions.TestF6UploadsCorsAndHeaders::test_uploads_evil_origin_no_acao
+  -> AssertionError: assert 'https://evil.com' != 'https://evil.com'
+tests.security.test_security_validation.TestFlaskSecurityConfig::test_session_cookie_secure_in_production
+  -> RuntimeError: SOCKETIO_CORS_ORIGINS contient une origine non sécurisée en production: http://192.168.1.103:8081. Toutes 
+tests.security.test_security_validation.TestFlaskSecurityConfig::test_talisman_hsts_configured
+  -> RuntimeError: SOCKETIO_CORS_ORIGINS contient une origine non sécurisée en production: http://192.168.1.103:8081. Toutes 
+tests.security.test_security_validation.TestFlaskSecurityConfig::test_csp_configured
+  -> RuntimeError: SOCKETIO_CORS_ORIGINS contient une origine non sécurisée en production: http://192.168.1.103:8081. Toutes 
+tests.security.test_security_validation.TestShellInjectionProtection::test_no_subprocess_with_shell_true
+  -> OSError: [WinError 6] Descripteur non valide
+tests.security.test_token_rotation::test_token_rotation_on_refresh
+  -> Failed: Erreur 400: {'error': 'invalid_json', 'message': 'Corps de requête JSON manquant ou invalide. Vérifiez le format
+tests.security.test_token_rotation::test_revoke_all_tokens_on_logout
+  -> AssertionError: Le token devrait être révoqué après logout: eyJhbGci...
+tests.security.test_token_rotation::test_token_limit_per_user
+  -> AssertionError: Le nombre de tokens actifs devrait être limité à 2
+tests.security.test_token_rotation::test_token_store_and_retrieve
+  -> AttributeError: 'FakeRedis' object has no attribute 'zadd'. Did you mean: 'sadd'?
+tests.security.test_token_rotation::test_revoke_all_user_tokens
+  -> AttributeError: 'FakeRedis' object has no attribute 'zadd'. Did you mean: 'sadd'?
+tests.services.test_booking_transfer_service.TestBookingTransferService::test_validate_completion
+  -> ValueError: La course doit être en statut PENDING, ACCEPTED ou ASSIGNED pour être transférée (actuel: COMPLETED)
+tests.services.test_demo_access_service::test_provision_and_consume_magic_link
+  -> services.demo.access_service.DemoAccessError: Impossible d'initialiser les données de démonstration. Veuillez réessayer 
+tests.services.test_demo_access_service::test_provision_rejects_second_active_access
+  -> services.demo.access_service.DemoAccessError: Impossible d'initialiser les données de démonstration. Veuillez réessayer 
+tests.services.test_demo_access_service::test_resend_rotates_token_without_extending_demo_expiry
+  -> services.demo.access_service.DemoAccessError: Impossible d'initialiser les données de démonstration. Veuillez réessayer 
+tests.services.test_demo_access_service::test_revoke_blocks_consumption
+  -> services.demo.access_service.DemoAccessError: Impossible d'initialiser les données de démonstration. Veuillez réessayer 
+tests.services.test_demo_access_service::test_enforce_demo_user_access_validity_blocks_expired_demo_user
+  -> sqlalchemy.exc.IntegrityError: (psycopg2.errors.UniqueViolation) duplicate key value violates unique constraint "ix_user
+tests.services.test_demo_access_service::test_enforce_demo_user_access_validity_allows_active_demo_user
+  -> sqlalchemy.exc.IntegrityError: (psycopg2.errors.UniqueViolation) duplicate key value violates unique constraint "ix_user
+tests.services.test_email_signature_form_validation.TestEmailSignatureFormValidation::test_truncate_long_email
+  -> AssertionError: assert 336 < 150
+tests.services.test_email_signature_html_render.TestEmailSignatureHtmlRender::test_render_all_variables
+  -> AssertionError: assert 'info@casa-famiglia.ch' in 'Emmenez-moi Sàrl<br>022 512 02 03<br>facturation@casa-famiglia.ch<br>
+tests.services.test_email_signature_html_render.TestEmailSignatureHtmlRender::test_render_with_company_logo_url
+  -> AssertionError: assert ('test_logo.png' in 'https://example.com/logo.png' or '/uploads/company_logos/test_logo.png' in '
+tests.services.test_email_signature_html_render.TestEmailSignatureHtmlRender::test_render_address_formatting
+  -> AssertionError: assert '<br>' in 'Route de Chevrens 145&lt;br&gt;1247 Anières'
+tests.services.test_email_signature_html_render.TestEmailSignatureHtmlRender::test_render_table_based_template
+  -> assert 'info@casa-famiglia.ch' in '<table cellpadding="0" cellspacing="0" border="0" style="font-family: Arial, sans-ser
+tests.services.test_email_signature_html_render.TestGenerateSimpleSignatureHtml::test_generate_simple_signature_with_all_fields
+  -> assert 'https://example.com/logo.png' in '<table cellpadding="0" cellspacing="0" border="0" width="520" align="left" sty
+tests.services.test_email_signature_html_render.TestGenerateSimpleSignatureHtml::test_generate_simple_signature_address_newlines
+  -> assert 'Ligne 2' in '<table cellpadding="0" cellspacing="0" border="0" width="520" align="left" style="width:520px; max-
+tests.services.test_email_signature_provider_mode.TestSmtpMimeContainsRelatedAndContentId::test_smtp_mime_contains_related_and_content_id
+  -> AssertionError: sendmail doit avoir été appelé une fois
+tests.services.test_event_handlers_performance.TestEventPerformance::test_booking_updated_event_latency
+  -> AttributeError: module 'services' has no attribute 'notification_service'
+tests.services.test_event_handlers_performance.TestEventPerformance::test_booking_cancelled_event_latency
+  -> AttributeError: module 'services' has no attribute 'notification_service'
+tests.services.test_event_handlers_performance.TestEventPerformance::test_driver_new_booking_event_latency
+  -> sqlalchemy.exc.IntegrityError: (psycopg2.errors.ForeignKeyViolation) insert or update on table "driver" violates foreign
+tests.services.test_event_handlers_performance.TestEventPerformance::test_multiple_events_throughput
+  -> sqlalchemy.exc.IntegrityError: (psycopg2.errors.ForeignKeyViolation) insert or update on table "driver" violates foreign
+tests.services.test_event_handlers_performance.TestEventPerformance::test_metrics_handler_performance
+  -> AssertionError: Overhead metrics_handler trop élevé: 19.91ms (attendu < 5ms)
+tests.services.test_event_handlers_phase2.TestBookingUpdatedHandler::test_handle_booking_updated_success
+  -> sqlalchemy.exc.IntegrityError: (psycopg2.errors.ForeignKeyViolation) insert or update on table "driver" violates foreign
+tests.services.test_event_handlers_phase2.TestBookingUpdatedHandler::test_handle_booking_updated_actor_driver_no_push_to_driver
+  -> sqlalchemy.exc.IntegrityError: (psycopg2.errors.ForeignKeyViolation) insert or update on table "driver" violates foreign
+tests.services.test_event_handlers_phase2.TestBookingUpdatedHandler::test_handle_booking_updated_exception_handling
+  -> sqlalchemy.exc.IntegrityError: (psycopg2.errors.ForeignKeyViolation) insert or update on table "driver" violates foreign
+tests.services.test_event_handlers_phase2.TestBookingCancelledHandler::test_handle_booking_cancelled_success
+  -> AttributeError: <module 'services.events.handlers.booking_handlers' from 'C:\\Users\\jasiq\\atmr\\backend\\services\\eve
+tests.services.test_event_handlers_phase2.TestBookingCancelledHandler::test_handle_booking_cancelled_exception_handling
+  -> AttributeError: module 'services' has no attribute 'notification_service'
+tests.services.test_event_handlers_phase2.TestDriverNewBookingHandler::test_handle_driver_new_booking_success
+  -> sqlalchemy.exc.IntegrityError: (psycopg2.errors.ForeignKeyViolation) insert or update on table "driver" violates foreign
+tests.services.test_event_handlers_phase2.TestDriverNewBookingHandler::test_handle_driver_new_booking_booking_not_found
+  -> AttributeError: module 'services' has no attribute 'notification_service'
+tests.services.test_event_handlers_phase2.TestDriverNewBookingHandler::test_handle_driver_new_booking_exception_handling
+  -> sqlalchemy.exc.IntegrityError: (psycopg2.errors.ForeignKeyViolation) insert or update on table "driver" violates foreign
+tests.services.test_event_handlers_phase2.TestEventIntegration::test_booking_updated_event_flow
+  -> sqlalchemy.exc.IntegrityError: (psycopg2.errors.ForeignKeyViolation) insert or update on table "driver" violates foreign
+tests.services.test_event_handlers_phase2.TestEventIntegration::test_booking_cancelled_event_flow
+  -> AttributeError: module 'services' has no attribute 'notification_service'
+tests.services.test_event_handlers_phase2.TestEventIntegration::test_driver_new_booking_event_flow
+  -> sqlalchemy.exc.IntegrityError: (psycopg2.errors.ForeignKeyViolation) insert or update on table "driver" violates foreign
+tests.services.test_generate_invoice_use_case::test_key_error_mapping_incomplete_returns_400
+  -> assert True is False
+tests.services.test_get_company_drivers_live_locations_use_case::test_returns_only_drivers_with_locations
+  -> AssertionError: assert {'items': [{'...': 1.0, ...}]} == {'items': [{'... 'lon': 2.0}]}
+tests.services.test_invoice_pdf_performance.TestInvoicePdfPerformance::test_performance_logging_normal
+  -> sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "password" of relation "user" vio
+tests.services.test_invoice_pdf_performance.TestInvoicePdfPerformance::test_performance_logging_large_invoice
+  -> sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "password" of relation "user" vio
+tests.services.test_invoice_pdf_unified.TestInvoicePdfUnified::test_s1_client_invoice_header
+  -> AssertionError: Header 'Client' manquant pour facture client
+tests.services.test_invoice_pdf_unified.TestInvoicePdfUnified::test_s2_clinic_invoice_header
+  -> AssertionError: Header 'Patient' manquant pour facture clinique
+tests.services.test_invoice_pdf_unified.TestInvoicePdfUnified::test_roundtrip_explicit_detection
+  -> AssertionError: Détail 'Aller :' manquant pour aller/retour
+tests.services.test_invoice_pdf_unified.TestInvoicePdfUnified::test_material_delivery_line_in_pdf
+  -> AssertionError: Libellé 'Livraison' manquant pour MATERIAL_DELIVERY
+tests.services.test_invoice_pdf_unified.TestInvoicePdfUnified::test_mixed_invoice_2_rides_1_delivery_in_pdf
+  -> AssertionError: Libellé livraison manquant
+tests.services.test_location_service_redis_failover::test_update_driver_location_disables_canonical_outputs_when_non_canonical
+  -> RuntimeError: Working outside of application context.
+tests.services.test_message_idempotence::test_find_idempotent_message
+  -> sqlalchemy.exc.IntegrityError: (psycopg2.errors.ForeignKeyViolation) insert or update on table "message" violates foreig
+tests.services.test_night_mode.TestShouldSendNightNotification::test_mission_on_duty
+  -> AttributeError: <module 'services.events.night_mode' from 'C:\\Users\\jasiq\\atmr\\backend\\services\\events\\night_mode
+tests.services.test_night_mode.TestShouldSendNightNotification::test_mission_off_duty
+  -> AttributeError: <module 'services.events.night_mode' from 'C:\\Users\\jasiq\\atmr\\backend\\services\\events\\night_mode
+tests.services.test_partner_invoice_pdf.TestPartnerInvoicePdf::test_partner_invoice_pdf_qrbill_section_paiement
+  -> AssertionError: Le QR-Bill devrait être présent (aucun indicateur trouvé)
+tests.services.test_partner_invoice_pdf.TestPartnerInvoicePdf::test_partner_invoice_pdf_contains_scor_reference
+  -> AssertionError: Le QR-Bill devrait contenir une référence SCOR (RF...)
+tests.services.test_partner_invoice_pdf.TestPartnerInvoicePdf::test_partner_invoice_pdf_contains_footer_message
+  -> AssertionError: Le PDF devrait contenir des indicateurs de paiement
+tests.services.test_partner_invoice_pdf.TestPartnerInvoicePdf::test_partner_invoice_pdf_contains_total_amount
+  -> AssertionError: Le PDF devrait contenir des informations de montant
+tests.services.test_partnership_service.TestPartnershipService::test_create_partnership_duplicate
+  -> AssertionError: Regex pattern did not match.
+tests.services.test_partnership_service.TestPartnershipService::test_create_partnership_same_company
+  -> AssertionError: Regex pattern did not match.
+tests.services.test_partnership_service.TestPartnershipService::test_get_partnerships_for_company
+  -> assert 0 == 2
+tests.services.test_pdf_billed_to_s2_bypass.TestGetBilledToS2Bypass::test_get_billed_to_s2_clinic_monthly_without_link
+  -> sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "due_date" of relation "invoices"
+tests.services.test_pdf_billed_to_s2_bypass.TestGetBilledToS2Bypass::test_get_billed_to_clinic_type_without_link
+  -> sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "due_date" of relation "invoices"
+tests.services.test_pdf_billed_to_s2_bypass.TestGetBilledToS2Bypass::test_get_billed_to_ems_type_without_link
+  -> sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "due_date" of relation "invoices"
+tests.services.test_pdf_billed_to_s2_bypass.TestGetBilledToS2Bypass::test_get_billed_to_other_type_falls_back_to_client_when_no_link
+  -> sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "due_date" of relation "invoices"
+tests.services.test_push_message_builder::test_build_push_message_assigned_driver
+  -> AssertionError: assert 'HUG' in 'Drin Jasiqi • 13:00'
+tests.services.test_push_message_builder::test_build_push_message_status_en_route
+  -> AssertionError: assert 'Course • En route' == 'Statut : Mis...our de course'
+tests.services.test_push_message_builder::test_build_push_message_completed
+  -> AssertionError: assert 'Course • Terminée' == 'Terminé : Course terminée'
+tests.services.test_qrr_reference.TestQRRReference::test_qrr_invalid_qr_iban_raises_exception
+  -> Failed: DID NOT RAISE <class 'ValueError'>
+tests.services.test_qrr_reference.TestQRRReference::test_qrr_invalid_qr_iban_format_raises_exception
+  -> Failed: DID NOT RAISE <class 'ValueError'>
+tests.services.test_qrr_reference.TestQRRReference::test_qrr_invalid_qr_iban_5th_char_raises_exception
+  -> Failed: DID NOT RAISE <class 'ValueError'>
+tests.services.test_reminder_pdf_invoice_intact.TestReminderPdfInvoiceIntact::test_generate_multiple_reminders_creates_distinct_pdfs
+  -> AssertionError: La génération du rappel niveau 1 a échoué
+tests.services.test_reminder_pdf_invoice_intact.TestReminderPdfInvoiceIntact::test_reminder_pdf_uses_invoice_template
+  -> AssertionError: Le PDF rappel doit contenir 'DÉTAIL DES PRESTATIONS' (template facture)
+tests.services.test_routing_interface_advanced::test_build_time_matrix_uses_routing_service_with_advanced_params
+  -> ModuleNotFoundError: No module named 'services.interfaces.geocoding_interface'
+tests.services.test_routing_interface_advanced::test_calculate_eta_fallback_uses_routing_service_eta_seconds
+  -> ModuleNotFoundError: No module named 'services.interfaces.geocoding_interface'
+tests.services.test_saferpay_finalize::test_finalize_capture_failed_persists_tx
+  -> sqlalchemy.exc.IntegrityError: (psycopg2.errors.UniqueViolation) duplicate key value violates unique constraint "uq_paym
+tests.services.test_saferpay_finalize::test_finalize_payment_failed_tx
+  -> sqlalchemy.exc.IntegrityError: (psycopg2.errors.UniqueViolation) duplicate key value violates unique constraint "uq_paym
+tests.services.test_saferpay_finalize::test_finalize_completed_happy_path
+  -> sqlalchemy.exc.IntegrityError: (psycopg2.errors.UniqueViolation) duplicate key value violates unique constraint "uq_paym
+tests.services.test_saferpay_return_urls::test_validate_return_url_override_rejects_unknown
+  -> AssertionError: Regex pattern did not match.
+tests.services.test_save_driver_push_token_use_case::test_driver_id_from_payload_sets_token
+  -> AssertionError: assert 401 == 200
+tests.services.test_save_driver_push_token_use_case::test_fallback_jwt_resolves_driver
+  -> RuntimeError: Working outside of application context.
+tests.services.test_token_audit.TestLogPushRecipientProof::test_log_when_debug_enabled
+  -> AttributeError: <module 'services.notifications.token_audit' from 'C:\\Users\\jasiq\\atmr\\backend\\services\\notificati
+tests.services.test_update_driver_booking_status_use_case::test_driver_cancel_no_show_billable_and_label
+  -> RuntimeError: Working outside of application context.
+tests.services.test_update_driver_booking_status_use_case::test_driver_cancel_vehicle_issue_non_billable_and_label
+  -> RuntimeError: Working outside of application context.
+tests.services.test_update_driver_booking_status_use_case::test_scope_reservation_parent_canceled_child_accepted_cancels_child
+  -> RuntimeError: Working outside of application context.
+tests.services.test_update_driver_booking_status_use_case::test_scope_reservation_parent_completed_child_accepted_cancels_only_child
+  -> RuntimeError: Working outside of application context.
+tests.services.unified_dispatch.orchestration.test_metrics_finalizer.TestAnalyzeUnassignedReasons::test_analyze_unassigned_reasons_success
+  -> AttributeError: module 'services.unified_dispatch' has no attribute 'analysis'
+tests.services.unified_dispatch.orchestration.test_metrics_finalizer.TestAnalyzeUnassignedReasons::test_analyze_unassigned_reasons_import_error
+  -> AttributeError: module 'services.unified_dispatch' has no attribute 'analysis'
+tests.services.unified_dispatch.orchestration.test_metrics_finalizer.TestRecordPrometheusMetrics::test_record_prometheus_metrics_success
+  -> AttributeError: module 'services.unified_dispatch' has no attribute 'dispatch_prometheus_metrics'
+tests.services.unified_dispatch.orchestration.test_metrics_finalizer.TestRecordPrometheusMetrics::test_record_prometheus_metrics_import_error
+  -> AttributeError: module 'services.unified_dispatch' has no attribute 'dispatch_prometheus_metrics'
+tests.services.unified_dispatch.orchestration.test_shadow_mode_manager.TestShouldApplyRl::test_should_apply_rl_returns_true_with_quality_score
+  -> AttributeError: module 'services.unified_dispatch.orchestration' has no attribute 'shadow_mode_manager'
+tests.services.unified_dispatch.orchestration.test_shadow_mode_manager.TestShouldApplyRl::test_should_apply_rl_returns_false_with_none_quality_score
+  -> AttributeError: module 'services.unified_dispatch.orchestration' has no attribute 'shadow_mode_manager'
+tests.services.unified_dispatch.orchestration.test_shadow_mode_manager.TestShouldApplyRl::test_should_apply_rl_handles_none_dispatch_run_id
+  -> AttributeError: module 'services.unified_dispatch.orchestration' has no attribute 'shadow_mode_manager'
+tests.services.unified_dispatch.orchestration.test_shadow_mode_manager.TestGenerateAndStoreSuggestions::test_generate_and_store_suggestions_returns_true_when_stored
+  -> AttributeError: module 'services.unified_dispatch.orchestration' has no attribute 'shadow_mode_manager'
+tests.services.unified_dispatch.orchestration.test_shadow_mode_manager.TestGenerateAndStoreSuggestions::test_generate_and_store_suggestions_returns_false_when_not_stored
+  -> AttributeError: module 'services.unified_dispatch.orchestration' has no attribute 'shadow_mode_manager'
+tests.services.unified_dispatch.orchestration.test_shadow_mode_manager.TestGenerateAndStoreSuggestions::test_generate_and_store_suggestions_handles_none_dispatch_run_id
+  -> AttributeError: module 'services.unified_dispatch.orchestration' has no attribute 'shadow_mode_manager'
+tests.services.unified_dispatch.test_apply_post_commit_notifications.TestPostCommitNotifications::test_notifications_emises_apres_commit_reussi
+  -> AttributeError: module 'services.unified_dispatch' has no attribute 'apply'
+tests.services.unified_dispatch.test_apply_post_commit_notifications.TestPostCommitNotifications::test_aucune_notification_si_rollback
+  -> AttributeError: module 'services.unified_dispatch' has no attribute 'apply'
+tests.services.unified_dispatch.test_apply_post_commit_notifications.TestPostCommitNotifications::test_notifications_deferred_si_transaction_externe
+  -> AttributeError: module 'services.unified_dispatch' has no attribute 'apply'
+tests.services.unified_dispatch.test_apply_post_commit_notifications.TestPostCommitNotifications::test_idempotence_driver_changed
+  -> AttributeError: module 'services.unified_dispatch' has no attribute 'apply'
+tests.services.unified_dispatch.test_apply_post_commit_notifications.TestPostCommitNotifications::test_notifications_idempotentes_pas_de_duplication
+  -> AttributeError: module 'services.unified_dispatch' has no attribute 'apply'
+tests.services.unified_dispatch.test_apply_post_commit_notifications.TestPostCommitNotifications::test_metriques_prometheus_si_disponible
+  -> AttributeError: module 'services.unified_dispatch' has no attribute 'apply'
+tests.services.unified_dispatch.test_apply_post_commit_notifications.TestPostCommitNotifications::test_logs_ameliores_contexte_supplementaire
+  -> AttributeError: module 'services.unified_dispatch' has no attribute 'apply'
+tests.test_api_error_models.TestAPIErrorModels::test_create_api_error_model
+  -> AssertionError: assert 'error' in {'properties': {'details': {'description': 'Détails supplémentaires pour le debugging'
+tests.test_api_error_models.TestAPIErrorModels::test_create_validation_error_model
+  -> assert 'error' in {'properties': {'error': {'description': "Type d'erreur", 'example': 'validation_error', 'type': 'stri
+tests.test_api_error_models.TestAPIErrorModels::test_create_not_found_error_model
+  -> assert 'error' in {'properties': {'error': {'description': "Type d'erreur", 'example': 'not_found', 'type': 'string'}, '
+tests.test_api_error_models.TestAPIErrorModels::test_create_permission_error_model
+  -> assert 'error' in {'properties': {'error': {'description': "Type d'erreur", 'example': 'permission_denied', 'type': 'str
+tests.test_api_error_models.TestAPIErrorModels::test_all_models_have_trace_id
+  -> AssertionError: Modèle APIError manque trace_id
+tests.test_api_error_models.TestAPIErrorModels::test_error_models_consistency
+  -> KeyError: 'error'
+tests.test_auth_cookies.TestLoginCookies::test_login_sets_cookies_for_web
+  -> AssertionError: assert 'token' not in {'message': 'Connexion réussie', 'refresh_token': 'eyJhbGciOiJIUzI1NiIsImtpZCI6ImF
+tests.test_auth_cookies.TestMobileCompatibility::test_mobile_header_detection_login
+  -> AssertionError: assert 'token' not in {'message': 'Connexion réussie', 'refresh_token': 'eyJhbGciOiJIUzI1NiIsImtpZCI6ImF
+tests.test_auth_cookies.TestMobileCompatibility::test_mobile_header_case_sensitive
+  -> AssertionError: assert 'token' not in {'message': 'Connexion réussie', 'refresh_token': 'eyJhbGciOiJIUzI1NiIsImtpZCI6ImF
+tests.test_auth_public_mode::test_pre_request_draft_create_fetch_update_consume
+  -> AssertionError: assert 'updated' == 'stored'
+tests.test_auth_public_mode::test_guest_booking_create_minimal_without_pii
+  -> assert 422 == 201
+tests.test_autonomous_manager.TestProcessOpportunities::test_process_opportunities_with_apply
+  -> AttributeError: module 'services.unified_dispatch' has no attribute 'autonomous_manager'
+tests.test_autonomous_manager.TestProcessOpportunities::test_process_opportunities_with_error
+  -> AttributeError: module 'services.unified_dispatch' has no attribute 'autonomous_manager'
+tests.test_bookings::test_get_booking_details
+  -> KeyError: 'customer_name'
+tests.test_bookings::test_booking_create_geocoding_failure_rejected
+  -> ImportError: import error in services.maps: No module named 'services.maps'
+tests.test_bookings::test_booking_create_geocode_address_failure_rejected
+  -> ImportError: import error in services.maps: No module named 'services.maps'
+tests.test_bookings::test_booking_create_invalid_coordinates_rejected
+  -> ImportError: import error in services.maps: No module named 'services.maps'
+tests.test_bookings::test_saferpay_assert_returns_finalize_payload
+  -> AssertionError: assert 'assert_failed' == 'already_completed'
+tests.test_brevo_provider.TestBrevoEmailProvider::test_verify_domain_verified
+  -> AssertionError: assert False is True
+tests.test_brevo_provider.TestBrevoEmailProvider::test_verify_domain_not_verified
+  -> AssertionError: assert None is not None
+tests.test_brevo_provider.TestBrevoEmailProvider::test_verify_domain_not_found
+  -> TypeError: argument of type 'NoneType' is not a container or iterable
+tests.test_brevo_provider.TestBrevoEmailProvider::test_get_domain_dns_records
+  -> assert None is not None
+tests.test_cancellation_fee_integration.TestCancellationPolicySchemaValidation::test_enabled_without_tiers_fails
+  -> Failed: DID NOT RAISE <class 'marshmallow.exceptions.ValidationError'>
+tests.test_cancellation_rules.TestGetAllReasonCodes::test_returns_seven_codes
+  -> AssertionError: assert 9 == 7
+tests.test_delete_or_cancel_reservation_use_case::test_cancel_assigned_persists_cancellation_fields_without_reason
+  -> assert False is True
+tests.test_docker_production_comprehensive.TestDockerProduction::test_dockerfile_structure
+  -> TypeError: PurePath.__init__() got an unexpected keyword argument 'encoding'
+tests.test_docker_production_comprehensive.TestDockerProduction::test_docker_compose_structure
+  -> TypeError: PurePath.__init__() got an unexpected keyword argument 'encoding'
+tests.test_docker_production_comprehensive.TestDockerProduction::test_docker_smoke_tests
+  -> AssertionError: assert False
+tests.test_docker_production_comprehensive.TestDockerProduction::test_security_configurations
+  -> TypeError: PurePath.__init__() got an unexpected keyword argument 'encoding'
+tests.test_docker_production_comprehensive.TestDockerProduction::test_resource_limits
+  -> TypeError: PurePath.__init__() got an unexpected keyword argument 'encoding'
+tests.test_docker_production_comprehensive.TestDockerProduction::test_healthcheck_configuration
+  -> TypeError: PurePath.__init__() got an unexpected keyword argument 'encoding'
+tests.test_docker_production_comprehensive.TestDockerProduction::test_environment_variables
+  -> TypeError: PurePath.__init__() got an unexpected keyword argument 'encoding'
+tests.test_docker_production_comprehensive.TestDockerProduction::test_network_configuration
+  -> TypeError: PurePath.__init__() got an unexpected keyword argument 'encoding'
+tests.test_docker_production_comprehensive.TestDockerProduction::test_volume_configuration
+  -> TypeError: PurePath.__init__() got an unexpected keyword argument 'encoding'
+tests.test_etape5_cancellation_audit.TestInstitutionEvents::test_emit_request_sent
+  -> AssertionError: Expected 'emit' to have been called once. Called 2 times.
+tests.test_etape5_cancellation_audit.TestInstitutionEvents::test_emit_booking_status_updated
+  -> AssertionError: Expected 'emit' to have been called once. Called 2 times.
+tests.test_exception_handling_corrections.TestExceptionHandlingCorrections::test_event_registry_data_errors
+  -> AttributeError: <module 'services.events.handlers_registry' from 'C:\\Users\\jasiq\\atmr\\backend\\services\\events\\han
+tests.test_exception_handling_corrections.TestExceptionHandlingCorrections::test_event_registry_connection_errors
+  -> AttributeError: <module 'services.events.handlers_registry' from 'C:\\Users\\jasiq\\atmr\\backend\\services\\events\\han
+tests.test_exception_handling_corrections.TestExceptionHandlingCorrections::test_exception_safety_net
+  -> AttributeError: <module 'services.events.handlers_registry' from 'C:\\Users\\jasiq\\atmr\\backend\\services\\events\\han
+tests.test_exception_handling_corrections.TestExceptionLogging::test_logging_with_context
+  -> AttributeError: <module 'services.events.handlers_registry' from 'C:\\Users\\jasiq\\atmr\\backend\\services\\events\\han
+tests.test_exception_handling_corrections.TestExceptionLogging::test_exception_logging_with_trace
+  -> AttributeError: <module 'services.events.handlers_registry' from 'C:\\Users\\jasiq\\atmr\\backend\\services\\events\\han
+tests.test_exception_handling_corrections.TestExceptionRegression::test_no_broad_exception_swallowing
+  -> AttributeError: <module 'services.events.handlers_registry' from 'C:\\Users\\jasiq\\atmr\\backend\\services\\events\\han
+tests.test_idempotency_service.TestIdempotencyService::test_get_idempotency_key_from_request_with_header
+  -> AttributeError: <module 'services.security.idempotency' from 'C:\\Users\\jasiq\\atmr\\backend\\services\\security\\idemp
+tests.test_idempotency_service.TestIdempotencyService::test_get_idempotency_key_from_request_with_x_header
+  -> AttributeError: <module 'services.security.idempotency' from 'C:\\Users\\jasiq\\atmr\\backend\\services\\security\\idemp
+tests.test_idempotency_service.TestIdempotencyService::test_get_idempotency_key_from_request_missing
+  -> AttributeError: <module 'services.security.idempotency' from 'C:\\Users\\jasiq\\atmr\\backend\\services\\security\\idemp
+tests.test_idempotency_service.TestIdempotencyService::test_check_key_custom_ttl
+  -> TypeError: IdempotencyService.check_key() got an unexpected keyword argument 'ttl'. Did you mean '_ttl'?
+tests.test_ml_integration.TestMLPredictor::test_model_loads_if_available
+  -> ModuleNotFoundError: No module named 'services.unified_dispatch.ml_predictor'
+tests.test_ml_integration.TestMLPredictor::test_predict_delay_with_mock_data
+  -> ModuleNotFoundError: No module named 'services.unified_dispatch.ml_predictor'
+tests.test_ml_integration.TestMLPredictor::test_prediction_performance
+  -> ModuleNotFoundError: No module named 'services.unified_dispatch.ml_predictor'
+tests.test_p0_stabilization.TestAuthLoginP0::test_login_invalid_email
+  -> AssertionError: assert 'trace_id' in {'details': {'fields': {'errors.email': ['Not a valid email address.'], 'message': 
+tests.test_p0_stabilization.TestAuthLoginP0::test_login_rate_limit
+  -> assert (429 in [400, 400, 400, 400, 400, 400] or False)
+tests.test_p0_stabilization.TestCreateClientP0::test_create_client_success
+  -> assert 403 in [200, 201]
+tests.test_p0_stabilization.TestCreateClientP0::test_create_client_idempotency
+  -> assert 403 in [200, 201]
+tests.test_p0_stabilization.TestCreateClientP0::test_create_client_validation_error
+  -> AssertionError: assert 'trace_id' in {'error': 'invalid_json', 'message': 'Corps de requête JSON manquant ou invalide. V
+tests.test_p0_stabilization.TestCreateCompanyClientP0::test_create_company_client_success
+  -> assert 400 in [200, 201]
+tests.test_p0_stabilization.TestCreateCompanyClientP0::test_create_company_client_idempotency
+  -> assert 404 in [200, 201]
+tests.test_p0_stabilization.TestCreatePaymentP0::test_create_payment_idempotency
+  -> assert 400 in [200, 201]
+tests.test_p0_stabilization.TestCreatePaymentP0::test_create_payment_invoice_not_found
+  -> assert 400 == 404
+tests.test_p0_stabilization.TestP0StabilizationE2E::test_e2e_booking_creation_flow
+  -> assert 403 in [200, 201]
+tests.test_p0_stabilization.TestP0StabilizationE2E::test_e2e_payment_flow
+  -> AttributeError: type object 'InvoiceStatus' has no attribute 'PENDING'
+tests.test_redis_rate_limits.TestRateLimitFlush::test_flush_success
+  -> assert 404 == 200
+tests.test_redis_rate_limits.TestRateLimitFlush::test_flush_redis_down
+  -> assert 404 == 503
+tests.test_redis_rate_limits.TestRateLimitFlush::test_flush_unauthorized
+  -> assert 404 in [401, 403]
+tests.test_redis_rate_limits.TestRateLimitStats::test_stats_success
+  -> assert 404 == 200
+tests.test_redis_rate_limits.TestRateLimitStats::test_stats_redis_down
+  -> assert 404 == 503
+tests.test_redis_rate_limits.TestRedisInfo::test_info_success
+  -> assert 404 == 200
+tests.test_redis_rate_limits.TestRateLimitConfig::test_config_success
+  -> AttributeError: <module 'backend.routes.admin' from 'C:\\Users\\jasiq\\atmr\\backend\\routes\\admin.py'> does not have t
+tests.test_redis_rate_limits.TestRedisStorageWithTTL::test_ttl_set_on_first_incr
+  -> AttributeError: <module 'backend.ext' from 'C:\\Users\\jasiq\\atmr\\backend\\ext.py'> does not have the attribute 'Redis
+tests.test_redis_rate_limits.TestRedisStorageWithTTL::test_ttl_not_set_on_subsequent_incr
+  -> AttributeError: <module 'backend.ext' from 'C:\\Users\\jasiq\\atmr\\backend\\ext.py'> does not have the attribute 'Redis
+tests.test_redis_rate_limits.TestRedisStorageWithTTL::test_ttl_renewed_with_elastic_expiry
+  -> AttributeError: <module 'backend.ext' from 'C:\\Users\\jasiq\\atmr\\backend\\ext.py'> does not have the attribute 'Redis
+tests.test_redis_rate_limits.TestRedisStorageWithTTL::test_ttl_error_handled_gracefully
+  -> AttributeError: <module 'backend.ext' from 'C:\\Users\\jasiq\\atmr\\backend\\ext.py'> does not have the attribute 'Redis
+tests.test_rl_logger.TestRLLoggerWithRedis::test_redis_logging
+  -> AttributeError: module 'services' has no attribute 'rl'. Did you mean: 'ml'?
+tests.test_rl_logger.TestRLLoggerWithRedis::test_get_recent_logs
+  -> AttributeError: module 'services' has no attribute 'rl'. Did you mean: 'ml'?
+tests.test_rl_logger.TestRLLoggerWithDB::test_db_logging
+  -> AttributeError: module 'services' has no attribute 'rl'. Did you mean: 'ml'?
+tests.test_rl_logger.TestRLLoggerIntegration::test_log_rl_decision_convenience_function
+  -> AttributeError: module 'services' has no attribute 'rl'. Did you mean: 'ml'?
+tests.test_safety_guards.TestSafetyGuardsIntegration::test_logging_integration
+  -> AttributeError: module 'services' has no attribute 'safety_guards'
+tests.test_safety_limits.TestAutonomousActionModel::test_count_actions_today
+  -> assert 1 == 5
+tests.test_safety_limits.TestSafetyLimits::test_daily_limit_reached
+  -> assert True is False
+tests.test_safety_limits.TestSafetyLimits::test_action_type_daily_limit
+  -> assert True is False
+tests.test_safety_limits.TestActionLogging::test_successful_action_logged
+  -> AttributeError: module 'services.unified_dispatch' has no attribute 'autonomous_manager'
+tests.test_safety_limits.TestActionLogging::test_failed_action_logged
+  -> AttributeError: module 'services.unified_dispatch' has no attribute 'autonomous_manager'
+tests.test_safety_limits.TestActionLogging::test_action_blocked_by_limits_not_logged
+  -> AttributeError: module 'services.unified_dispatch' has no attribute 'autonomous_manager'
+tests.test_shadow_mode.TestShadowModeManager::test_save_daily_report
+  -> TypeError: PurePath.__init__() got an unexpected keyword argument 'encoding'
+tests.test_validation_schemas.TestRegisterSchema::test_valid_register
+  -> marshmallow.exceptions.ValidationError: {'message': 'Erreur de validation des données', 'errors': {'phone': ['Missing da
+tests.unified_dispatch.test_preferred_driver.TestPreferredDriverPropagation::test_preferred_driver_propagates_to_problem
+  -> AttributeError: module 'services.unified_dispatch.data' has no attribute 'Company'
+tests.unified_dispatch.test_preferred_driver.TestPreferredDriverPropagation::test_preferred_driver_none_when_not_in_overrides
+  -> AttributeError: module 'services.unified_dispatch.data' has no attribute 'Company'
+tests.unified_dispatch.test_preferred_driver.TestPreferredDriverPropagation::test_preferred_driver_invalid_value_ignored
+  -> AttributeError: module 'services.unified_dispatch.data' has no attribute 'Company'
+tests.unified_dispatch.test_preferred_driver.TestPreferredDriverPropagation::test_preferred_driver_not_in_available_drivers_ignored
+  -> AttributeError: module 'services.unified_dispatch.data' has no attribute 'Company'
+tests.unit.test_send_invoice_by_email.TestSendInvoiceByEmailUseCase::test_send_invoice_success
+  -> RuntimeError: Working outside of application context.
+tests.unit.test_send_invoice_by_email.TestSendInvoiceByEmailUseCase::test_send_invoice_not_found
+  -> RuntimeError: Working outside of application context.
+tests.unit.test_send_invoice_by_email.TestSendInvoiceByEmailUseCase::test_send_invoice_client_no_email
+  -> RuntimeError: Working outside of application context.
+tests.unit.test_send_invoice_by_email.TestSendInvoiceByEmailUseCase::test_send_invoice_domain_not_verified
+  -> RuntimeError: Working outside of application context.
+tests.unit.test_send_invoice_by_email.TestSendInvoiceByEmailUseCase::test_send_invoice_brevo_error
+  -> RuntimeError: Working outside of application context.
+tests.unit.test_send_invoice_by_email.TestSendInvoiceByEmailUseCase::test_send_invoice_custom_recipient
+  -> RuntimeError: Working outside of application context.
+
+=== ERROR (40) ===
+tests.infrastructure.test_invoice_calculator_recompute.TestRecomputeInvoiceTotals::test_recompute_updates_totals_from_lines
+  -> failed on setup with "sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "due_date" 
+tests.infrastructure.test_invoice_calculator_recompute.TestRecomputeInvoiceTotals::test_recompute_is_idempotent
+  -> failed on setup with "sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "due_date" 
+tests.infrastructure.test_invoice_calculator_recompute.TestRecomputeInvoiceTotals::test_recompute_without_commit_is_preview
+  -> failed on setup with "sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "due_date" 
+tests.integration.test_email_signature_in_invoices.TestEmailSignatureInInvoices::test_send_invoice_email_includes_signature
+  -> failed on setup with "file C:\Users\jasiq\atmr\backend\tests\integration\test_email_signature_in_invoices.py, line 22
+tests.integration.test_email_signature_in_invoices.TestEmailSignatureInInvoices::test_send_reminder_email_includes_signature
+  -> failed on setup with "file C:\Users\jasiq\atmr\backend\tests\integration\test_email_signature_in_invoices.py, line 90
+tests.integration.test_email_signature_in_invoices.TestEmailSignatureInInvoices::test_send_invoice_email_no_signature_when_empty
+  -> failed on setup with "file C:\Users\jasiq\atmr\backend\tests\integration\test_email_signature_in_invoices.py, line 169
+tests.integration.test_email_signature_in_invoices.TestEmailSignatureInInvoices::test_send_invoice_email_includes_html_signature
+  -> failed on setup with "file C:\Users\jasiq\atmr\backend\tests\integration\test_email_signature_in_invoices.py, line 239
+tests.integration.test_email_signature_in_invoices.TestEmailSignatureInInvoices::test_send_invoice_email_includes_form_signature
+  -> failed on setup with "file C:\Users\jasiq\atmr\backend\tests\integration\test_email_signature_in_invoices.py, line 313
+tests.routes.test_company_settings_billing_persistence.TestCompanySettingsBillingPersistence::test_billing_settings_banking_fields_persistence
+  -> failed on setup with "file C:\Users\jasiq\atmr\backend\tests\routes\test_company_settings_billing_persistence.py, line 2
+tests.routes.test_company_settings_billing_persistence.TestCompanySettingsBillingPersistence::test_billing_settings_empty_values_persistence
+  -> failed on setup with "file C:\Users\jasiq\atmr\backend\tests\routes\test_company_settings_billing_persistence.py, line 1
+tests.routes.test_company_settings_email_signature.TestCompanySettingsEmailSignature::test_email_signature_text_persistence
+  -> failed on setup with "file C:\Users\jasiq\atmr\backend\tests\routes\test_company_settings_email_signature.py, line 12
+tests.routes.test_company_settings_email_signature.TestCompanySettingsEmailSignature::test_email_signature_text_empty_persistence
+  -> failed on setup with "file C:\Users\jasiq\atmr\backend\tests\routes\test_company_settings_email_signature.py, line 53
+tests.routes.test_company_settings_email_signature.TestCompanySettingsEmailSignature::test_email_signature_mode_and_html_template_persistence
+  -> failed on setup with "file C:\Users\jasiq\atmr\backend\tests\routes\test_company_settings_email_signature.py, line 82
+tests.routes.test_company_settings_email_signature.TestCompanySettingsEmailSignature::test_email_signature_form_mode_persistence
+  -> failed on setup with "file C:\Users\jasiq\atmr\backend\tests\routes\test_company_settings_email_signature.py, line 121
+tests.routes.test_platform_postgres_governance::test_platform_tenant_detail_roundtrip
+  -> failed on setup with "file C:\Users\jasiq\atmr\backend\tests\routes\test_platform_postgres_governance.py, line 10
+tests.routes.test_platform_postgres_governance::test_replay_contract_shape
+  -> failed on setup with "file C:\Users\jasiq\atmr\backend\tests\routes\test_platform_postgres_governance.py, line 21
+tests.routes.test_request_offers.TestSendWithOffers::test_send_without_preferences_creates_broadcast
+  -> failed on setup with "sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "username" 
+tests.routes.test_request_offers.TestSendWithOffers::test_send_with_preferences_creates_sequential
+  -> failed on setup with "sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "username" 
+tests.routes.test_request_offers.TestSendWithOffers::test_send_already_sent_is_idempotent
+  -> failed on setup with "sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "username" 
+tests.routes.test_request_offers.TestSendWithOffers::test_send_converted_request_fails_409
+  -> failed on setup with "sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "username" 
+tests.routes.test_request_offers.TestAcceptOffer::test_accept_offer_creates_booking
+  -> failed on setup with "sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "username" 
+tests.routes.test_request_offers.TestAcceptOffer::test_accept_makes_other_offers_unavailable
+  -> failed on setup with "sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "username" 
+tests.routes.test_request_offers.TestAcceptOffer::test_second_accept_fails
+  -> failed on setup with "sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "username" 
+tests.routes.test_request_offers.TestAcceptOffer::test_cannot_accept_other_company_offer
+  -> failed on setup with "sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "username" 
+tests.routes.test_request_offers.TestRejectOffer::test_reject_sequential_triggers_escalade
+  -> failed on setup with "sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "username" 
+tests.routes.test_request_offers.TestTransportPreferences::test_get_preferences_empty
+  -> failed on setup with "sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "username" 
+tests.routes.test_request_offers.TestTransportPreferences::test_set_preferences
+  -> failed on setup with "sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "username" 
+tests.routes.test_request_offers.TestTransportPreferences::test_set_preferences_replaces_existing
+  -> failed on setup with "sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "username" 
+tests.routes.test_request_offers.TestTransportPreferences::test_get_eligible_companies
+  -> failed on setup with "sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "username" 
+tests.services.test_export_payments_csv.TestExportPaymentsCSV::test_export_includes_payment_in_month
+  -> failed on setup with "sqlalchemy.exc.CompileError: (in table 'booking', column 'rejected_by'): Compiler <sqlalchemy.dial
+tests.services.test_export_payments_csv.TestExportPaymentsCSV::test_export_excludes_payment_outside_month
+  -> failed on setup with "sqlalchemy.exc.CompileError: (in table 'booking', column 'rejected_by'): Compiler <sqlalchemy.dial
+tests.services.test_export_payments_csv.TestExportPaymentsCSV::test_export_partial_payment_creates_multiple_lines
+  -> failed on setup with "sqlalchemy.exc.CompileError: (in table 'booking', column 'rejected_by'): Compiler <sqlalchemy.dial
+tests.services.test_export_payments_csv.TestExportPaymentsCSV::test_export_excludes_unpaid_invoice
+  -> failed on setup with "sqlalchemy.exc.CompileError: (in table 'booking', column 'rejected_by'): Compiler <sqlalchemy.dial
+tests.services.test_export_payments_csv.TestExportPaymentsCSV::test_export_excludes_cancelled_invoice
+  -> failed on setup with "sqlalchemy.exc.CompileError: (in table 'booking', column 'rejected_by'): Compiler <sqlalchemy.dial
+tests.services.test_export_payments_csv.TestExportPaymentsCSV::test_export_s2_invoice_uses_clinic_name
+  -> failed on setup with "sqlalchemy.exc.CompileError: (in table 'booking', column 'rejected_by'): Compiler <sqlalchemy.dial
+tests.services.test_export_payments_csv.TestExportPaymentsCSV::test_export_csv_format_includes_all_columns
+  -> failed on setup with "sqlalchemy.exc.CompileError: (in table 'booking', column 'rejected_by'): Compiler <sqlalchemy.dial
+tests.test_etape5_cancellation_audit.TestCancelConvertedRequest::test_cancel_converted_returns_409
+  -> failed on setup with "sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "username" 
+tests.test_etape5_cancellation_audit.TestCancelConvertedRequest::test_cancel_draft_request_succeeds
+  -> failed on setup with "sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "username" 
+tests.test_etape5_cancellation_audit.TestBillingPermissions::test_billing_user_can_update_request_billing
+  -> failed on setup with "sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "username" 
+tests.test_etape5_cancellation_audit.TestBillingPermissions::test_reader_user_cannot_update_request_billing
+  -> failed on setup with "sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "username" 
+
+=== SKIPPED (35) ===
+::tests.services.test_processed_fanout_consumer_commit
+  -> collection skipped
+tests.integration.test_socket_driver_location.TestSocketDriverLocation::test_driver_without_company_emits_error_and_no_redis_write
+  -> SKIP_SOCKETIO=1, socket tests désactivés
+tests.integration.test_socket_driver_location.TestSocketDriverLocation::test_socket_single_rejects_availability_presence
+  -> SKIP_SOCKETIO=1, socket tests désactivés
+tests.integration.test_socket_driver_location.TestSocketDriverLocation::test_socket_single_dedup_skip_skips_inc_received_and_location_service
+  -> SKIP_SOCKETIO=1, socket tests désactivés
+tests.services.unified_dispatch.orchestration.test_metrics_finalizer.TestSerialize::test_serialize_assignment_with_to_dict
+  -> _serialize_assignment method does not exist in MetricsFinalizer
+tests.services.unified_dispatch.orchestration.test_metrics_finalizer.TestSerialize::test_serialize_assignment_without_to_dict
+  -> _serialize_assignment method does not exist in MetricsFinalizer
+tests.services.unified_dispatch.orchestration.test_metrics_finalizer.TestSerialize::test_serialize_booking_with_to_dict
+  -> _serialize_booking method does not exist in MetricsFinalizer
+tests.services.unified_dispatch.orchestration.test_metrics_finalizer.TestSerialize::test_serialize_booking_without_to_dict
+  -> _serialize_booking method does not exist in MetricsFinalizer
+tests.services.unified_dispatch.orchestration.test_metrics_finalizer.TestSerialize::test_serialize_driver_with_to_dict
+  -> _serialize_driver method does not exist in MetricsFinalizer
+tests.services.unified_dispatch.orchestration.test_metrics_finalizer.TestSerialize::test_serialize_driver_without_to_dict
+  -> _serialize_driver method does not exist in MetricsFinalizer
+tests.services.unified_dispatch.orchestration.test_pipeline_executor.TestExecute::test_execute_without_clustering
+  -> Test trop complexe avec trop de mocks, nécessite refactoring
+tests.test_booking_repository.TestSqlAlchemyBookingRepository::test_find_by_id_not_found
+  -> Test d'intégration nécessitant un contexte Flask - à implémenter dans test_integration.py
+tests.test_bookings::test_booking_assigned_without_driver_id_rejected
+  -> freezegun not installed
+tests.test_bookings::test_booking_driver_id_none_with_assigned_status_rejected
+  -> freezegun not installed
+tests.test_bookings::test_booking_assigned_with_driver_id_accepted
+  -> freezegun not installed
+tests.test_clean_architecture_boundaries::test_application_layer_has_no_forbidden_imports
+  -> Forbidden imports in application layer (violations réelles nécessitant refactoring):
+tests.test_d1_opentelemetry.TestOpenTelemetry::test_trace_id_in_logs
+  -> OpenTelemetry non disponible
+tests.test_dispatch_integration.TestDispatchSafetyIntegration::test_safe_dispatch_with_rl_optimization
+  -> Modules non disponibles
+tests.test_dispatch_integration.TestDispatchSafetyIntegration::test_unsafe_dispatch_with_rollback
+  -> Modules non disponibles
+tests.test_dispatch_integration.TestDispatchSafetyIntegration::test_rl_optimizer_safety_check
+  -> Modules non disponibles
+tests.test_docker_production_comprehensive.TestDockerProduction::test_docker_entrypoint
+  -> docker-entrypoint.sh non trouvé
+tests.test_docker_production_comprehensive.TestDockerProduction::test_model_warmup_service
+  -> ModelWarmupService non disponible
+tests.test_docker_production_comprehensive.TestDockerProduction::test_build_script
+  -> scripts/build-docker.sh non trouvé
+tests.test_docker_production_comprehensive.TestDockerProduction::test_validation_script
+  -> scripts/validate_step9_docker_hardening.py non trouvé
+tests.test_docker_production_comprehensive.TestDockerProduction::test_deployment_script
+  -> scripts/deploy_step9_docker_hardening.py non trouvé
+tests.test_docker_production_comprehensive.TestProductionServices::test_model_warmup_functionality
+  -> ModelWarmupService non disponible
+tests.test_driver_repository.TestSqlAlchemyDriverRepository::test_find_by_id_not_found
+  -> Test d'intégration nécessitant un contexte Flask - à implémenter dans test_integration.py
+tests.test_etape5_cancellation_audit.TestAuditLogsImmutable::test_audit_log_update_blocked
+  -> Nécessite migration appliquée avec triggers
+tests.test_etape5_cancellation_audit.TestAuditLogsImmutable::test_audit_log_delete_blocked
+  -> Nécessite migration appliquée avec triggers
+tests.test_p0_stabilization.TestCreatePaymentP0::test_create_payment_success
+  -> Tests obsolètes - API attend paid_at dans le payload
+tests.test_p0_stabilization.TestCreatePaymentP0::test_create_payment_missing_idempotency_key
+  -> Tests obsolètes - API attend paid_at dans le payload
+tests.test_rl_logger.TestRLLogger::test_hash_state_torch_tensor
+  -> PyTorch non disponible
+tests.test_rl_logger.TestRLLoggerIntegration::test_logging_with_torch_tensors
+  -> PyTorch ou RLLogger non disponible
+tests.test_time_mocking_example::test_frozen_time_example
+  -> freezegun not installed
+tests.test_time_mocking_example::test_frozen_time_with_relative_dates
+  -> freezegun not installed
+
+=== SCOPE_MISMATCH (0) ===

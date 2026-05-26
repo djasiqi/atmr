@@ -1,0 +1,1181 @@
+=== RESUME ===
+FAILED:  334
+ERROR:   179
+SKIPPED: 37
+ScopeMismatch: 36
+
+=== TOP CAUSES (première ligne) ===
+ 101  sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation
+  65  failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pic
+  57  failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid 
+  36  failed on setup with "Failed: ScopeMismatch: You tried to access the function scoped fixture app wit
+  19  RuntimeError: Working outside of application context.
+  13  sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum u
+  13  AttributeError: module 'services' has no attribute 'idempotency_service'
+   9  sqlalchemy.exc.IntegrityError: (psycopg2.errors.ForeignKeyViolation) insert or update on table "driv
+   9  TypeError: PurePath.__init__() got an unexpected keyword argument 'encoding'
+   8  failed on setup with "sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value i
+   7  AttributeError: <module 'os' (frozen)> does not have the attribute 'geteuid'
+   7  sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "due_date" of
+   7  AttributeError: module 'services.unified_dispatch.orchestration' has no attribute 'shadow_mode_manag
+   7  AttributeError: type object 'BookingStatus' has no attribute 'CONFIRMED'
+   6  AttributeError: <module 'services.events.handlers_registry' from 'C:\\Users\\jasiq\\atmr\\backend\\s
+   5  ImportError: cannot import name 'generate_simple_signature_html' from 'services.email.signature_util
+   5  AttributeError: module 'services.unified_dispatch' has no attribute 'autonomous_manager'
+   5  failed on setup with "file C:\Users\jasiq\atmr\backend\tests\integration\test_email_signature_in_inv
+   4  RuntimeError: Working outside of request context.
+   4  AttributeError: module 'services' has no attribute 'notification_service'
+   4  AttributeError: module 'services' has no attribute 'rl'. Did you mean: 'ml'?
+   4  AttributeError: module 'services.unified_dispatch.data' has no attribute 'Company'
+   4  failed on setup with "file C:\Users\jasiq\atmr\backend\tests\routes\test_company_settings_email_sign
+   3  AssertionError: {"error":"internal_server_error","message":"The server encountered an internal error
+   3  sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column invoice_lines.line_meta do
+   3  AttributeError: <module 'security.api_key_auth' from 'C:\\Users\\jasiq\\atmr\\backend\\security\\api
+   3  sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column booking.pickup_floor does 
+   3  AssertionError: Regex pattern did not match.
+   3  Failed: DID NOT RAISE <class 'ValueError'>
+   3  AssertionError: assert 'token' not in {'message': 'Connexion réussie', 'refresh_token': 'eyJhbGciOiJ
+
+=== FAILED (334) ===
+tests.chaos.test_traffic_control.TestTrafficControlManager::test_add_latency_success
+  -> AttributeError: <module 'os' (frozen)> does not have the attribute 'geteuid'
+tests.chaos.test_traffic_control.TestTrafficControlManager::test_add_latency_no_root
+  -> AttributeError: <module 'os' (frozen)> does not have the attribute 'geteuid'
+tests.chaos.test_traffic_control.TestTrafficControlManager::test_add_latency_invalid_params
+  -> AttributeError: <module 'os' (frozen)> does not have the attribute 'geteuid'
+tests.chaos.test_traffic_control.TestTrafficControlManager::test_add_latency_timeout
+  -> AttributeError: <module 'os' (frozen)> does not have the attribute 'geteuid'
+tests.chaos.test_traffic_control.TestTrafficControlManager::test_add_packet_loss_success
+  -> AttributeError: <module 'os' (frozen)> does not have the attribute 'geteuid'
+tests.chaos.test_traffic_control.TestTrafficControlManager::test_add_packet_loss_invalid_percent
+  -> AttributeError: <module 'os' (frozen)> does not have the attribute 'geteuid'
+tests.chaos.test_traffic_control.TestTrafficControlManager::test_clear_success
+  -> AttributeError: <module 'os' (frozen)> does not have the attribute 'geteuid'
+tests.infrastructure.test_invoice_calculator_recompute.TestRecomputeInvoiceTotals::test_recompute_handles_empty_invoice
+  -> sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "due_date" of relation "invoices"
+tests.infrastructure.test_invoice_calculator_recompute.TestRecomputeInvoiceTotals::test_recompute_with_vat
+  -> sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "due_date" of relation "invoices"
+tests.infrastructure.test_invoice_calculator_recompute.TestRecomputeInvoiceTotals::test_recompute_respects_existing_payments
+  -> sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "due_date" of relation "invoices"
+tests.integration.test_admin_dashboard_summary.TestAdminDashboardSummaryEndpoint::test_summary_shape_and_keys
+  -> AssertionError: {"error":"internal_server_error","message":"The server encountered an internal error and was unable to c
+tests.integration.test_admin_platform_bookings.TestAdminPlatformBookingsList::test_list_shape_and_keys
+  -> AssertionError: {"error":"internal_server_error","message":"The server encountered an internal error and was unable to c
+tests.integration.test_admin_platform_bookings.TestAdminPlatformBookingsList::test_detail_404_unknown_id
+  -> assert 500 == 404
+tests.integration.test_admin_stats_booking_trends.TestGetMonthlyBookingCounts::test_aggregates_two_months_and_keys_yyyy_mm
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.integration.test_admin_stats_booking_trends.TestGetMonthlyBookingCounts::test_same_day_multiple_bookings
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.integration.test_admin_stats_booking_trends.TestGetMonthlyBookingCounts::test_boundaries_inclusive_and_exclusion_outside_window
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.integration.test_admin_stats_booking_trends.TestAdminStatsEndpointBookingTrends::test_booking_trends_twelve_months_shape
+  -> AssertionError: {"error":"internal_server_error","message":"The server encountered an internal error and was unable to c
+tests.integration.test_admin_stats_booking_trends.TestAdminStatsEndpointBookingTrends::test_booking_trends_reflects_seeded_bookings
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.integration.test_client_type_invariants.TestClientTypeInvariants::test_no_transport_without_company
+  -> RuntimeError: Working outside of application context.
+tests.integration.test_client_type_invariants.TestClientTypeInvariants::test_no_portal_with_company
+  -> RuntimeError: Working outside of application context.
+tests.integration.test_client_type_invariants.TestClientTypeInvariants::test_transport_has_management_mode
+  -> RuntimeError: Working outside of application context.
+tests.integration.test_client_type_invariants.TestClientTypeInvariants::test_portal_has_no_management_mode
+  -> RuntimeError: Working outside of application context.
+tests.integration.test_client_type_invariants.TestClientTypeInvariants::test_no_legacy_client_types
+  -> RuntimeError: Working outside of application context.
+tests.integration.test_client_type_invariants.TestClientTypeInvariants::test_only_valid_management_modes
+  -> RuntimeError: Working outside of application context.
+tests.integration.test_client_type_invariants.TestClientTypeInvariants::test_institution_patients_untouched
+  -> RuntimeError: Working outside of application context.
+tests.integration.test_companies_integration.TestCompaniesIntegration::test_busy_when_active_booking
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.integration.test_companies_integration.TestCompaniesIntegration::test_search_companies_returns_match
+  -> TypeError: EnvironBuilder.__init__() got an unexpected keyword argument 'params'
+tests.integration.test_dispatch_integration.TestDispatchIntegration::test_dispatch_request_creates_assignments
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.integration.test_dispatch_orchestrator_regression.TestEdgeCases::test_no_drivers
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.integration.test_dispatch_orchestrator_regression.TestEdgeCases::test_bookings_without_geographic_coordinates
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.integration.test_expire_awaiting_client_payment.TestExpireAwaitingClientPayment::test_cancels_when_created_before_grace
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.integration.test_expire_awaiting_client_payment.TestExpireAwaitingClientPayment::test_skips_when_within_grace
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.integration.test_expire_awaiting_client_payment.TestExpireAwaitingClientPayment::test_skips_when_payment_completed
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.integration.test_expire_awaiting_client_payment.TestExpireAwaitingClientPayment::test_skips_when_saferpay_pending_has_token
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.integration.test_expire_awaiting_client_payment.TestExpireAwaitingClientPayment::test_skips_when_saferpay_pending_has_transaction_id_only
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.integration.test_invoices_integration.TestInvoicesIntegration::test_clinic_monthly_totals_exclusions_patient_only_not_in_excluded
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.integration.test_invoices_integration.TestInvoicesIntegration::test_eligible_clients_returns_unbilled_count_and_total_amount
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.integration.test_invoices_integration.TestInvoicesIntegration::test_eligible_clients_patient_canceled_billable_and_parent_rule
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.integration.test_invoices_integration.TestInvoicesIntegration::test_unbilled_reservations_includes_canceled_billable_patient
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.integration.test_invoices_integration.TestInvoicesIntegration::test_canceled_eligible_only_billable_in_invoice
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.integration.test_invoices_integration.TestInvoicesIntegration::test_return_excluded_when_parent_aller_canceled
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.integration.test_invoices_integration.TestInvoicesIntegration::test_unbilled_reservation_ids_endpoint
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.integration.test_invoices_integration.TestInvoicesIntegration::test_generate_reminder_updates_invoice
+  -> assert 500 in [200, 400, 404]
+tests.integration.test_invoices_integration.TestInvoicesV1PeriodPreviewAndDraftEdit::test_period_preview_s2_clinic_only_billed_to_clinic
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.integration.test_invoices_integration.TestInvoicesV1PeriodPreviewAndDraftEdit::test_draft_custom_line_manual_discount_updates_invoice_totals
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column invoice_lines.line_meta does not exist
+tests.integration.test_orchestration_integration.TestProblemBuilderIntegration::test_build_problem_with_real_data
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.integration.test_orchestration_integration.TestPipelineExecutorIntegration::test_execute_pipeline_without_clustering
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.integration.test_orchestration_integration.TestShadowModeManagerIntegration::test_should_apply_rl_integration
+  -> AttributeError: module 'services.unified_dispatch.orchestration' has no attribute 'shadow_mode_manager'
+tests.integration.test_orchestration_performance.TestExecutionTime::test_small_dataset_execution_time
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.integration.test_orchestration_performance.TestExecutionTime::test_medium_dataset_execution_time
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.integration.test_orchestration_performance.TestExecutionTime::test_large_dataset_execution_time
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.performance.test_dispatch_n1_queries.TestDispatchN1Queries::test_dispatch_n1_queries_small_batch
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.performance.test_dispatch_n1_queries.TestDispatchN1Queries::test_dispatch_n1_queries_medium_batch
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.performance.test_dispatch_n1_queries.TestDispatchN1Queries::test_dispatch_n1_queries_large_batch
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.routes.test_demo_access_routes::test_admin_provision_access_success_partial_email
+  -> assert 500 == 200
+tests.routes.test_input_validation.TestDispatchRunValidation::test_invalid_date_format
+  -> AssertionError: assert ('for_date' in {} or 'errors.for_date' in {})
+tests.routes.test_input_validation.TestDispatchRunValidation::test_invalid_mode
+  -> AssertionError: assert ('mode' in {} or 'errors.mode' in {})
+tests.routes.test_input_validation.TestValidationErrorFormat::test_validation_error_structure
+  -> AssertionError: assert 'errors' in {'details': {'fields': {'errors.for_date': ['for_date doit être au format YYYY-MM-DD'
+tests.routes.test_input_validation.TestValidationErrorFormat::test_multiple_validation_errors
+  -> AssertionError: assert 0 > 1
+tests.routes.test_institution_api_keys.TestApiKeyRateLimit::test_rate_limit_exceeded
+  -> AttributeError: <module 'security.api_key_auth' from 'C:\\Users\\jasiq\\atmr\\backend\\security\\api_key_auth.py'> does 
+tests.routes.test_institution_api_keys.TestApiKeyRateLimit::test_rate_limit_headers
+  -> AttributeError: <module 'security.api_key_auth' from 'C:\\Users\\jasiq\\atmr\\backend\\security\\api_key_auth.py'> does 
+tests.routes.test_institution_api_keys.TestApiKeyRateLimit::test_rate_limit_redis_unavailable
+  -> AttributeError: <module 'security.api_key_auth' from 'C:\\Users\\jasiq\\atmr\\backend\\security\\api_key_auth.py'> does 
+tests.routes.test_institution_invitations.TestInstitutionInvitation::test_verify_valid_token
+  -> sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum user_role: "INSTITUTI
+tests.routes.test_institution_invitations.TestInstitutionInvitation::test_verify_expired_token_returns_400
+  -> sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum user_role: "INSTITUTI
+tests.routes.test_institution_invitations.TestInstitutionInvitation::test_activate_account_success
+  -> sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum user_role: "INSTITUTI
+tests.routes.test_institution_invitations.TestInstitutionInvitation::test_activate_account_short_password_returns_400
+  -> sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum user_role: "INSTITUTI
+tests.routes.test_institution_invitations.TestInstitutionInvitation::test_activate_already_active_returns_400
+  -> sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum user_role: "INSTITUTI
+tests.routes.test_institution_patients.TestInstitutionPatientsCRUD::test_create_patient_api_key
+  -> KeyError: 'first_name'
+tests.routes.test_institutions.TestInstitutionMe::test_institution_me_no_institution_claim
+  -> sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum user_role: "INSTITUTI
+tests.routes.test_institutions.TestInstitutionUserRelation::test_user_with_institution
+  -> sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum user_role: "INSTITUTI
+tests.routes.test_institutions.TestInstitutionUserRelation::test_institution_has_multiple_users
+  -> sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum user_role: "INSTITUTI
+tests.routes.test_institutions.TestInstitutionRoleValidation::test_valid_institution_roles
+  -> sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum user_role: "INSTITUTI
+tests.routes.test_platform_governance_api::test_platform_me_ok
+  -> AssertionError: assert 'ADMIN' == 'admin'
+tests.routes.test_platform_governance_api::test_tenants_list_contains_sample_company
+  -> assert 391 in {8, 33, 48, 49, 50, 51, ...}
+tests.security.test_jwt_hardening.TestJWTExpirationConfig::test_login_uses_config_expiration
+  -> assert 82800 <= 1
+tests.security.test_owasp_top10.TestA04InsecureDesign::test_validation_schemas_are_strict
+  -> AssertionError: assert 'errors' in {'error': 'invalid_json', 'message': 'Corps de requête JSON manquant ou invalide. Vér
+tests.security.test_phase3_integration.TestAdminIPWhitelistIntegration::test_admin_ip_whitelist_integration
+  -> RuntimeError: Working outside of request context.
+tests.security.test_phase3_integration.TestAdminIPWhitelistIntegration::test_admin_ip_whitelist_blocked
+  -> RuntimeError: Working outside of request context.
+tests.security.test_security_integration.TestSecurityMonitoring::test_audit_logs_are_persistent
+  -> sqlalchemy.exc.InternalError: (psycopg2.errors.RaiseException) Modification of audit_logs is not allowed. Audit logs are
+tests.security.test_security_regressions.TestF6UploadsCorsAndHeaders::test_uploads_evil_origin_no_acao
+  -> AssertionError: assert 'https://evil.com' != 'https://evil.com'
+tests.security.test_security_validation.TestShellInjectionProtection::test_no_subprocess_with_shell_true
+  -> OSError: [WinError 6] Descripteur non valide
+tests.security.test_sql_injection.TestSQLInjectionPathParams::test_sql_injection_in_booking_id
+  -> assert 500 in (200, 401, 403, 404)
+tests.security.test_sql_injection.TestSQLAlchemyProtection::test_sqlalchemy_filter_protection
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column booking.pickup_floor does not exist
+tests.security.test_token_rotation::test_token_rotation_on_refresh
+  -> Failed: Erreur 400: {'error': 'invalid_json', 'message': 'Corps de requête JSON manquant ou invalide. Vérifiez le format
+tests.security.test_token_rotation::test_revoke_all_tokens_on_logout
+  -> AssertionError: Le token devrait être révoqué après logout: eyJhbGci...
+tests.security.test_token_rotation::test_token_limit_per_user
+  -> AssertionError: Le nombre de tokens actifs devrait être limité à 2
+tests.security.test_token_rotation::test_token_store_and_retrieve
+  -> AttributeError: 'FakeRedis' object has no attribute 'zadd'. Did you mean: 'sadd'?
+tests.security.test_token_rotation::test_revoke_all_user_tokens
+  -> AttributeError: 'FakeRedis' object has no attribute 'zadd'. Did you mean: 'sadd'?
+tests.services.test_booking_transfer_service.TestBookingTransferService::test_propose_transfer
+  -> AttributeError: type object 'BookingStatus' has no attribute 'CONFIRMED'
+tests.services.test_booking_transfer_service.TestBookingTransferService::test_propose_transfer_wrong_company
+  -> AttributeError: type object 'BookingStatus' has no attribute 'CONFIRMED'
+tests.services.test_booking_transfer_service.TestBookingTransferService::test_propose_transfer_already_transferred
+  -> AttributeError: type object 'BookingStatus' has no attribute 'CONFIRMED'
+tests.services.test_booking_transfer_service.TestBookingTransferService::test_accept_transfer
+  -> AttributeError: type object 'BookingStatus' has no attribute 'CONFIRMED'
+tests.services.test_booking_transfer_service.TestBookingTransferService::test_accept_transfer_wrong_company
+  -> AttributeError: type object 'BookingStatus' has no attribute 'CONFIRMED'
+tests.services.test_booking_transfer_service.TestBookingTransferService::test_reject_transfer
+  -> AttributeError: type object 'BookingStatus' has no attribute 'CONFIRMED'
+tests.services.test_booking_transfer_service.TestBookingTransferService::test_validate_completion
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.services.test_booking_transfer_service.TestBookingTransferService::test_validate_completion_not_completed
+  -> AttributeError: type object 'BookingStatus' has no attribute 'CONFIRMED'
+tests.services.test_demo_access_service::test_provision_and_consume_magic_link
+  -> sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum user_role: "INSTITUTI
+tests.services.test_demo_access_service::test_provision_rejects_second_active_access
+  -> sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum user_role: "INSTITUTI
+tests.services.test_demo_access_service::test_resend_rotates_token_without_extending_demo_expiry
+  -> sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum user_role: "INSTITUTI
+tests.services.test_demo_access_service::test_revoke_blocks_consumption
+  -> sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum user_role: "INSTITUTI
+tests.services.test_dispatch_scoring_v1::test_declined_company_not_reproposed
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.services.test_email_signature_form_validation.TestEmailSignatureFormValidation::test_truncate_long_email
+  -> AssertionError: assert 336 < 150
+tests.services.test_email_signature_html_render.TestEmailSignatureHtmlRender::test_render_all_variables
+  -> AssertionError: assert 'info@casa-famiglia.ch' in 'Emmenez-moi Sàrl<br>022 512 02 03<br>facturation@casa-famiglia.ch<br>
+tests.services.test_email_signature_html_render.TestEmailSignatureHtmlRender::test_render_with_company_logo_url
+  -> AssertionError: assert ('test_logo.png' in 'https://example.com/logo.png' or '/uploads/company_logos/test_logo.png' in '
+tests.services.test_email_signature_html_render.TestEmailSignatureHtmlRender::test_render_address_formatting
+  -> AssertionError: assert '<br>' in 'Route de Chevrens 145&lt;br&gt;1247 Anières'
+tests.services.test_email_signature_html_render.TestEmailSignatureHtmlRender::test_render_table_based_template
+  -> assert 'info@casa-famiglia.ch' in '<table cellpadding="0" cellspacing="0" border="0" style="font-family: Arial, sans-ser
+tests.services.test_email_signature_html_render.TestGenerateSimpleSignatureHtml::test_generate_simple_signature_with_all_fields
+  -> ImportError: cannot import name 'generate_simple_signature_html' from 'services.email.signature_utils' (C:\Users\jasiq\a
+tests.services.test_email_signature_html_render.TestGenerateSimpleSignatureHtml::test_generate_simple_signature_minimal
+  -> ImportError: cannot import name 'generate_simple_signature_html' from 'services.email.signature_utils' (C:\Users\jasiq\a
+tests.services.test_email_signature_html_render.TestGenerateSimpleSignatureHtml::test_generate_simple_signature_escapes_html
+  -> ImportError: cannot import name 'generate_simple_signature_html' from 'services.email.signature_utils' (C:\Users\jasiq\a
+tests.services.test_email_signature_html_render.TestGenerateSimpleSignatureHtml::test_generate_simple_signature_address_newlines
+  -> ImportError: cannot import name 'generate_simple_signature_html' from 'services.email.signature_utils' (C:\Users\jasiq\a
+tests.services.test_email_signature_html_render.TestGenerateSimpleSignatureHtml::test_generate_simple_signature_empty_returns_empty
+  -> ImportError: cannot import name 'generate_simple_signature_html' from 'services.email.signature_utils' (C:\Users\jasiq\a
+tests.services.test_email_signature_provider_mode.TestSmtpMimeContainsRelatedAndContentId::test_smtp_mime_contains_related_and_content_id
+  -> AssertionError: sendmail doit avoir été appelé une fois
+tests.services.test_event_handlers_performance.TestEventPerformance::test_booking_updated_event_latency
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.services.test_event_handlers_performance.TestEventPerformance::test_booking_cancelled_event_latency
+  -> AttributeError: module 'services' has no attribute 'notification_service'
+tests.services.test_event_handlers_performance.TestEventPerformance::test_driver_new_booking_event_latency
+  -> sqlalchemy.exc.IntegrityError: (psycopg2.errors.ForeignKeyViolation) insert or update on table "driver" violates foreign
+tests.services.test_event_handlers_performance.TestEventPerformance::test_multiple_events_throughput
+  -> sqlalchemy.exc.IntegrityError: (psycopg2.errors.ForeignKeyViolation) insert or update on table "driver" violates foreign
+tests.services.test_event_handlers_performance.TestEventPerformance::test_metrics_handler_performance
+  -> AssertionError: Overhead metrics_handler trop élevé: 27.41ms (attendu < 5ms)
+tests.services.test_event_handlers_phase2.TestBookingUpdatedHandler::test_handle_booking_updated_success
+  -> sqlalchemy.exc.IntegrityError: (psycopg2.errors.ForeignKeyViolation) insert or update on table "driver" violates foreign
+tests.services.test_event_handlers_phase2.TestBookingUpdatedHandler::test_handle_booking_updated_actor_driver_no_push_to_driver
+  -> sqlalchemy.exc.IntegrityError: (psycopg2.errors.ForeignKeyViolation) insert or update on table "driver" violates foreign
+tests.services.test_event_handlers_phase2.TestBookingUpdatedHandler::test_handle_booking_updated_exception_handling
+  -> sqlalchemy.exc.IntegrityError: (psycopg2.errors.ForeignKeyViolation) insert or update on table "driver" violates foreign
+tests.services.test_event_handlers_phase2.TestBookingCancelledHandler::test_handle_booking_cancelled_success
+  -> AttributeError: <module 'services.events.handlers.booking_handlers' from 'C:\\Users\\jasiq\\atmr\\backend\\services\\eve
+tests.services.test_event_handlers_phase2.TestBookingCancelledHandler::test_handle_booking_cancelled_exception_handling
+  -> AttributeError: module 'services' has no attribute 'notification_service'
+tests.services.test_event_handlers_phase2.TestDriverNewBookingHandler::test_handle_driver_new_booking_success
+  -> sqlalchemy.exc.IntegrityError: (psycopg2.errors.ForeignKeyViolation) insert or update on table "driver" violates foreign
+tests.services.test_event_handlers_phase2.TestDriverNewBookingHandler::test_handle_driver_new_booking_booking_not_found
+  -> AttributeError: module 'services' has no attribute 'notification_service'
+tests.services.test_event_handlers_phase2.TestDriverNewBookingHandler::test_handle_driver_new_booking_exception_handling
+  -> sqlalchemy.exc.IntegrityError: (psycopg2.errors.ForeignKeyViolation) insert or update on table "driver" violates foreign
+tests.services.test_event_handlers_phase2.TestEventIntegration::test_booking_updated_event_flow
+  -> sqlalchemy.exc.IntegrityError: (psycopg2.errors.ForeignKeyViolation) insert or update on table "driver" violates foreign
+tests.services.test_event_handlers_phase2.TestEventIntegration::test_booking_cancelled_event_flow
+  -> AttributeError: module 'services' has no attribute 'notification_service'
+tests.services.test_event_handlers_phase2.TestEventIntegration::test_driver_new_booking_event_flow
+  -> sqlalchemy.exc.IntegrityError: (psycopg2.errors.ForeignKeyViolation) insert or update on table "driver" violates foreign
+tests.services.test_generate_invoice_use_case::test_integrity_error_enum_not_migrated_returns_400
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.services.test_generate_invoice_use_case::test_key_error_mapping_incomplete_returns_400
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.services.test_get_company_drivers_live_locations_use_case::test_returns_only_drivers_with_locations
+  -> AssertionError: assert {'items': [{'...': 1.0, ...}]} == {'items': [{'... 'lon': 2.0}]}
+tests.services.test_invoice_pdf_performance.TestInvoicePdfPerformance::test_performance_logging_normal
+  -> sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "password" of relation "user" vio
+tests.services.test_invoice_pdf_performance.TestInvoicePdfPerformance::test_performance_logging_large_invoice
+  -> sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "password" of relation "user" vio
+tests.services.test_invoice_pdf_unified.TestInvoicePdfUnified::test_s1_client_invoice_header
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.services.test_invoice_pdf_unified.TestInvoicePdfUnified::test_s2_clinic_invoice_header
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.services.test_invoice_pdf_unified.TestInvoicePdfUnified::test_roundtrip_explicit_detection
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.services.test_invoice_pdf_unified.TestInvoicePdfUnified::test_material_delivery_line_in_pdf
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.services.test_invoice_pdf_unified.TestInvoicePdfUnified::test_mixed_invoice_2_rides_1_delivery_in_pdf
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.services.test_location_service_redis_failover::test_update_driver_location_disables_canonical_outputs_when_non_canonical
+  -> RuntimeError: Working outside of application context.
+tests.services.test_message_idempotence::test_find_idempotent_message
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "thread_id" of relation "message" does not exi
+tests.services.test_night_mode.TestShouldSendNightNotification::test_mission_on_duty
+  -> AttributeError: <module 'services.events.night_mode' from 'C:\\Users\\jasiq\\atmr\\backend\\services\\events\\night_mode
+tests.services.test_night_mode.TestShouldSendNightNotification::test_mission_off_duty
+  -> AttributeError: <module 'services.events.night_mode' from 'C:\\Users\\jasiq\\atmr\\backend\\services\\events\\night_mode
+tests.services.test_partner_invoice_pdf.TestPartnerInvoicePdf::test_partner_invoice_pdf_1_transfer_no_exception
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.services.test_partner_invoice_pdf.TestPartnerInvoicePdf::test_partner_invoice_pdf_30_transfers_no_exception
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.services.test_partner_invoice_pdf.TestPartnerInvoicePdf::test_partner_invoice_pdf_has_2_pages
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.services.test_partner_invoice_pdf.TestPartnerInvoicePdf::test_partner_invoice_pdf_30_transfers_has_at_least_2_pages
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.services.test_partner_invoice_pdf.TestPartnerInvoicePdf::test_partner_invoice_pdf_qrbill_section_paiement
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.services.test_partner_invoice_pdf.TestPartnerInvoicePdf::test_partner_invoice_pdf_qrbill_recepisse
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.services.test_partner_invoice_pdf.TestPartnerInvoicePdf::test_partner_invoice_pdf_contains_scor_reference
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.services.test_partner_invoice_pdf.TestPartnerInvoicePdf::test_partner_invoice_pdf_contains_footer_message
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.services.test_partner_invoice_pdf.TestPartnerInvoicePdf::test_partner_invoice_pdf_contains_invoice_number
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.services.test_partner_invoice_pdf.TestPartnerInvoicePdf::test_partner_invoice_pdf_contains_iban
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.services.test_partner_invoice_pdf.TestPartnerInvoicePdf::test_partner_invoice_pdf_contains_total_amount
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.services.test_partnership_service.TestPartnershipService::test_create_partnership_duplicate
+  -> AssertionError: Regex pattern did not match.
+tests.services.test_partnership_service.TestPartnershipService::test_create_partnership_same_company
+  -> AssertionError: Regex pattern did not match.
+tests.services.test_partnership_service.TestPartnershipService::test_get_partnerships_for_company
+  -> assert 0 == 2
+tests.services.test_pdf_billed_to_s2_bypass.TestGetBilledToS2Bypass::test_get_billed_to_s2_clinic_monthly_without_link
+  -> sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "due_date" of relation "invoices"
+tests.services.test_pdf_billed_to_s2_bypass.TestGetBilledToS2Bypass::test_get_billed_to_clinic_type_without_link
+  -> sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "due_date" of relation "invoices"
+tests.services.test_pdf_billed_to_s2_bypass.TestGetBilledToS2Bypass::test_get_billed_to_ems_type_without_link
+  -> sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "due_date" of relation "invoices"
+tests.services.test_pdf_billed_to_s2_bypass.TestGetBilledToS2Bypass::test_get_billed_to_other_type_falls_back_to_client_when_no_link
+  -> sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "due_date" of relation "invoices"
+tests.services.test_push_message_builder::test_build_push_message_assigned_driver
+  -> AssertionError: assert 'HUG' in 'Drin Jasiqi • 13:00'
+tests.services.test_push_message_builder::test_build_push_message_status_en_route
+  -> AssertionError: assert 'Course • En route' == 'Statut : Mis...our de course'
+tests.services.test_push_message_builder::test_build_push_message_completed
+  -> AssertionError: assert 'Course • Terminée' == 'Terminé : Course terminée'
+tests.services.test_qrr_reference.TestQRRReference::test_qrr_invalid_qr_iban_raises_exception
+  -> Failed: DID NOT RAISE <class 'ValueError'>
+tests.services.test_qrr_reference.TestQRRReference::test_qrr_invalid_qr_iban_format_raises_exception
+  -> Failed: DID NOT RAISE <class 'ValueError'>
+tests.services.test_qrr_reference.TestQRRReference::test_qrr_invalid_qr_iban_5th_char_raises_exception
+  -> Failed: DID NOT RAISE <class 'ValueError'>
+tests.services.test_reminder_pdf_invoice_intact.TestReminderPdfInvoiceIntact::test_generate_reminder_does_not_modify_invoice_pdf_url
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column invoice_lines.line_meta does not exist
+tests.services.test_reminder_pdf_invoice_intact.TestReminderPdfInvoiceIntact::test_generate_multiple_reminders_creates_distinct_pdfs
+  -> AssertionError: La génération du rappel niveau 1 a échoué
+tests.services.test_reminder_pdf_invoice_intact.TestReminderPdfInvoiceIntact::test_generate_reminder_pdf_service_does_not_modify_invoice
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column invoice_lines.line_meta does not exist
+tests.services.test_reminder_pdf_invoice_intact.TestReminderPdfInvoiceIntact::test_reminder_pdf_uses_invoice_template
+  -> AssertionError: La génération du rappel a échoué
+tests.services.test_routing_interface_advanced::test_build_time_matrix_uses_routing_service_with_advanced_params
+  -> ModuleNotFoundError: No module named 'services.interfaces.geocoding_interface'
+tests.services.test_routing_interface_advanced::test_calculate_eta_fallback_uses_routing_service_eta_seconds
+  -> ModuleNotFoundError: No module named 'services.interfaces.geocoding_interface'
+tests.services.test_saferpay_finalize::test_finalize_already_completed
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.services.test_saferpay_finalize::test_finalize_capture_failed_persists_tx
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.services.test_saferpay_finalize::test_finalize_assert_transient_no_failed
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.services.test_saferpay_finalize::test_finalize_assert_400_failed
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.services.test_saferpay_finalize::test_finalize_payment_failed_tx
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.services.test_saferpay_finalize::test_finalize_completed_happy_path
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.services.test_saferpay_return_urls::test_validate_return_url_override_rejects_unknown
+  -> AssertionError: Regex pattern did not match.
+tests.services.test_save_driver_push_token_use_case::test_driver_id_from_payload_sets_token
+  -> AssertionError: assert 401 == 200
+tests.services.test_save_driver_push_token_use_case::test_fallback_jwt_resolves_driver
+  -> RuntimeError: Working outside of application context.
+tests.services.test_token_audit.TestLogPushRecipientProof::test_log_when_debug_enabled
+  -> AttributeError: <module 'services.notifications.token_audit' from 'C:\\Users\\jasiq\\atmr\\backend\\services\\notificati
+tests.services.test_update_driver_booking_status_use_case::test_driver_cancel_no_show_billable_and_label
+  -> RuntimeError: Working outside of application context.
+tests.services.test_update_driver_booking_status_use_case::test_driver_cancel_vehicle_issue_non_billable_and_label
+  -> RuntimeError: Working outside of application context.
+tests.services.test_update_driver_booking_status_use_case::test_scope_reservation_parent_canceled_child_accepted_cancels_child
+  -> RuntimeError: Working outside of application context.
+tests.services.test_update_driver_booking_status_use_case::test_scope_reservation_parent_completed_child_accepted_cancels_only_child
+  -> RuntimeError: Working outside of application context.
+tests.services.unified_dispatch.orchestration.test_metrics_finalizer.TestAnalyzeUnassignedReasons::test_analyze_unassigned_reasons_success
+  -> AttributeError: module 'services.unified_dispatch' has no attribute 'analysis'
+tests.services.unified_dispatch.orchestration.test_metrics_finalizer.TestAnalyzeUnassignedReasons::test_analyze_unassigned_reasons_import_error
+  -> AttributeError: module 'services.unified_dispatch' has no attribute 'analysis'
+tests.services.unified_dispatch.orchestration.test_metrics_finalizer.TestRecordPrometheusMetrics::test_record_prometheus_metrics_success
+  -> AttributeError: module 'services.unified_dispatch' has no attribute 'dispatch_prometheus_metrics'
+tests.services.unified_dispatch.orchestration.test_metrics_finalizer.TestRecordPrometheusMetrics::test_record_prometheus_metrics_import_error
+  -> AttributeError: module 'services.unified_dispatch' has no attribute 'dispatch_prometheus_metrics'
+tests.services.unified_dispatch.orchestration.test_shadow_mode_manager.TestShouldApplyRl::test_should_apply_rl_returns_true_with_quality_score
+  -> AttributeError: module 'services.unified_dispatch.orchestration' has no attribute 'shadow_mode_manager'
+tests.services.unified_dispatch.orchestration.test_shadow_mode_manager.TestShouldApplyRl::test_should_apply_rl_returns_false_with_none_quality_score
+  -> AttributeError: module 'services.unified_dispatch.orchestration' has no attribute 'shadow_mode_manager'
+tests.services.unified_dispatch.orchestration.test_shadow_mode_manager.TestShouldApplyRl::test_should_apply_rl_handles_none_dispatch_run_id
+  -> AttributeError: module 'services.unified_dispatch.orchestration' has no attribute 'shadow_mode_manager'
+tests.services.unified_dispatch.orchestration.test_shadow_mode_manager.TestGenerateAndStoreSuggestions::test_generate_and_store_suggestions_returns_true_when_stored
+  -> AttributeError: module 'services.unified_dispatch.orchestration' has no attribute 'shadow_mode_manager'
+tests.services.unified_dispatch.orchestration.test_shadow_mode_manager.TestGenerateAndStoreSuggestions::test_generate_and_store_suggestions_returns_false_when_not_stored
+  -> AttributeError: module 'services.unified_dispatch.orchestration' has no attribute 'shadow_mode_manager'
+tests.services.unified_dispatch.orchestration.test_shadow_mode_manager.TestGenerateAndStoreSuggestions::test_generate_and_store_suggestions_handles_none_dispatch_run_id
+  -> AttributeError: module 'services.unified_dispatch.orchestration' has no attribute 'shadow_mode_manager'
+tests.services.unified_dispatch.test_apply_skipped_logging.TestSkippedAssignmentsLogging::test_skip_booking_not_found_logged
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column booking.pickup_floor does not exist
+tests.services.unified_dispatch.test_apply_skipped_logging.TestSkippedAssignmentsLogging::test_skip_status_invalid_logged
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.services.unified_dispatch.test_apply_skipped_logging.TestSkippedAssignmentsLogging::test_skip_driver_not_found_logged
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.services.unified_dispatch.test_apply_skipped_logging.TestSkippedAssignmentsLogging::test_skip_driver_not_available_logged
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.test_a2_idempotence.TestIdempotence::test_dispatch_idempotent
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.test_a2_idempotence.TestIdempotence::test_unique_constraint_enforced
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.test_a2_idempotence.TestIdempotence::test_transaction_rollback_on_error
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.test_a2_idempotence.TestIdempotence::test_lock_doux_prevents_race_conditions
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.test_api_error_models.TestAPIErrorModels::test_create_api_error_model
+  -> AssertionError: assert 'error' in {'properties': {'details': {'description': 'Détails supplémentaires pour le debugging'
+tests.test_api_error_models.TestAPIErrorModels::test_create_validation_error_model
+  -> assert 'error' in {'properties': {'error': {'description': "Type d'erreur", 'example': 'validation_error', 'type': 'stri
+tests.test_api_error_models.TestAPIErrorModels::test_create_not_found_error_model
+  -> assert 'error' in {'properties': {'error': {'description': "Type d'erreur", 'example': 'not_found', 'type': 'string'}, '
+tests.test_api_error_models.TestAPIErrorModels::test_create_permission_error_model
+  -> assert 'error' in {'properties': {'error': {'description': "Type d'erreur", 'example': 'permission_denied', 'type': 'str
+tests.test_api_error_models.TestAPIErrorModels::test_all_models_have_trace_id
+  -> AssertionError: Modèle APIError manque trace_id
+tests.test_api_error_models.TestAPIErrorModels::test_error_models_consistency
+  -> KeyError: 'error'
+tests.test_auth_cookies.TestLoginCookies::test_login_sets_cookies_for_web
+  -> AssertionError: assert 'token' not in {'message': 'Connexion réussie', 'refresh_token': 'eyJhbGciOiJIUzI1NiIsImtpZCI6ImF
+tests.test_auth_cookies.TestMobileCompatibility::test_mobile_header_detection_login
+  -> AssertionError: assert 'token' not in {'message': 'Connexion réussie', 'refresh_token': 'eyJhbGciOiJIUzI1NiIsImtpZCI6ImF
+tests.test_auth_cookies.TestMobileCompatibility::test_mobile_header_case_sensitive
+  -> AssertionError: assert 'token' not in {'message': 'Connexion réussie', 'refresh_token': 'eyJhbGciOiJIUzI1NiIsImtpZCI6ImF
+tests.test_auth_public_mode::test_guest_booking_create_minimal_without_pii
+  -> assert 422 == 201
+tests.test_autonomous_manager.TestProcessOpportunities::test_process_opportunities_with_apply
+  -> AttributeError: module 'services.unified_dispatch' has no attribute 'autonomous_manager'
+tests.test_autonomous_manager.TestProcessOpportunities::test_process_opportunities_with_error
+  -> AttributeError: module 'services.unified_dispatch' has no attribute 'autonomous_manager'
+tests.test_bookings::test_list_bookings_pagination
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.test_bookings::test_get_booking_details
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.test_bookings::test_booking_amount_rounding_rules
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.test_bookings::test_booking_amount_minimum_accepted
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.test_bookings::test_booking_return_leg_zero_amount_allowed
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.test_bookings::test_booking_create_geocoding_failure_rejected
+  -> ImportError: import error in services.maps: No module named 'services.maps'
+tests.test_bookings::test_booking_create_geocode_address_failure_rejected
+  -> ImportError: import error in services.maps: No module named 'services.maps'
+tests.test_bookings::test_booking_create_invalid_coordinates_rejected
+  -> ImportError: import error in services.maps: No module named 'services.maps'
+tests.test_bookings::test_saferpay_assert_returns_finalize_payload
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.test_bookings::test_saferpay_assert_not_found_payment
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.test_brevo_provider.TestBrevoEmailProvider::test_verify_domain_verified
+  -> AssertionError: assert False is True
+tests.test_brevo_provider.TestBrevoEmailProvider::test_verify_domain_not_verified
+  -> AssertionError: assert None is not None
+tests.test_brevo_provider.TestBrevoEmailProvider::test_verify_domain_not_found
+  -> TypeError: argument of type 'NoneType' is not a container or iterable
+tests.test_brevo_provider.TestBrevoEmailProvider::test_get_domain_dns_records
+  -> assert None is not None
+tests.test_cancellation_fee_integration.TestCancellationPolicySchemaValidation::test_enabled_without_tiers_fails
+  -> Failed: DID NOT RAISE <class 'marshmallow.exceptions.ValidationError'>
+tests.test_cancellation_rules.TestGetAllReasonCodes::test_returns_seven_codes
+  -> AssertionError: assert 9 == 7
+tests.test_delete_or_cancel_reservation_use_case::test_cancel_assigned_persists_cancellation_fields_without_reason
+  -> assert False is True
+tests.test_dispatch::test_create_booking_for_dispatch
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.test_docker_production_comprehensive.TestDockerProduction::test_dockerfile_structure
+  -> TypeError: PurePath.__init__() got an unexpected keyword argument 'encoding'
+tests.test_docker_production_comprehensive.TestDockerProduction::test_docker_compose_structure
+  -> TypeError: PurePath.__init__() got an unexpected keyword argument 'encoding'
+tests.test_docker_production_comprehensive.TestDockerProduction::test_docker_smoke_tests
+  -> AssertionError: assert False
+tests.test_docker_production_comprehensive.TestDockerProduction::test_security_configurations
+  -> TypeError: PurePath.__init__() got an unexpected keyword argument 'encoding'
+tests.test_docker_production_comprehensive.TestDockerProduction::test_resource_limits
+  -> TypeError: PurePath.__init__() got an unexpected keyword argument 'encoding'
+tests.test_docker_production_comprehensive.TestDockerProduction::test_healthcheck_configuration
+  -> TypeError: PurePath.__init__() got an unexpected keyword argument 'encoding'
+tests.test_docker_production_comprehensive.TestDockerProduction::test_environment_variables
+  -> TypeError: PurePath.__init__() got an unexpected keyword argument 'encoding'
+tests.test_docker_production_comprehensive.TestDockerProduction::test_network_configuration
+  -> TypeError: PurePath.__init__() got an unexpected keyword argument 'encoding'
+tests.test_docker_production_comprehensive.TestDockerProduction::test_volume_configuration
+  -> TypeError: PurePath.__init__() got an unexpected keyword argument 'encoding'
+tests.test_driver_runtime_contracts::test_bookings_since_include_terminal_returns_terminal_states
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.test_driver_runtime_contracts::test_driver_status_transition_errors_are_structured
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.test_etape5_cancellation_audit.TestInstitutionEvents::test_emit_request_sent
+  -> KeyError: 'room'
+tests.test_exception_handling_corrections.TestExceptionHandlingCorrections::test_event_registry_data_errors
+  -> AttributeError: <module 'services.events.handlers_registry' from 'C:\\Users\\jasiq\\atmr\\backend\\services\\events\\han
+tests.test_exception_handling_corrections.TestExceptionHandlingCorrections::test_event_registry_connection_errors
+  -> AttributeError: <module 'services.events.handlers_registry' from 'C:\\Users\\jasiq\\atmr\\backend\\services\\events\\han
+tests.test_exception_handling_corrections.TestExceptionHandlingCorrections::test_exception_safety_net
+  -> AttributeError: <module 'services.events.handlers_registry' from 'C:\\Users\\jasiq\\atmr\\backend\\services\\events\\han
+tests.test_exception_handling_corrections.TestExceptionLogging::test_logging_with_context
+  -> AttributeError: <module 'services.events.handlers_registry' from 'C:\\Users\\jasiq\\atmr\\backend\\services\\events\\han
+tests.test_exception_handling_corrections.TestExceptionLogging::test_exception_logging_with_trace
+  -> AttributeError: <module 'services.events.handlers_registry' from 'C:\\Users\\jasiq\\atmr\\backend\\services\\events\\han
+tests.test_exception_handling_corrections.TestExceptionRegression::test_no_broad_exception_swallowing
+  -> AttributeError: <module 'services.events.handlers_registry' from 'C:\\Users\\jasiq\\atmr\\backend\\services\\events\\han
+tests.test_heuristics.TestHeuristicsPooling::test_can_be_pooled_same_location_and_time
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.test_heuristics.TestHeuristicsPooling::test_can_be_pooled_disabled
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.test_heuristics.TestHeuristicsPooling::test_can_be_pooled_different_time
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.test_heuristics.TestHeuristicsScoring::test_regular_driver_bonus
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.test_heuristics.TestHeuristicsScoring::test_regular_driver_no_bonus
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.test_heuristics.TestHeuristicsScoring::test_score_driver_for_booking_basic
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.test_heuristics.TestHeuristicsAssignment::test_assign_single_booking_driver
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.test_heuristics.TestHeuristicsAssignment::test_closest_feasible_finds_driver
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.test_heuristics.TestHeuristicsAssignUrgent::test_assign_urgent_with_urgent_bookings
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.test_heuristics.TestHeuristicsAssignUrgent::test_assign_urgent_empty_list
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.test_heuristics.TestHeuristicsHelpers::test_is_return_urgent
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.test_heuristics.TestHeuristicsHelpers::test_booking_coords
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.test_heuristics.TestHeuristicsHelpers::test_is_booking_assigned
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.test_heuristics.TestHeuristicsHelpers::test_current_driver_id
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.test_heuristics.TestHeuristicsHelpers::test_priority_weight
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.test_heuristics.TestHeuristicsAssignWithDriverWindows::test_assign_with_driver_windows
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.test_heuristics.TestHeuristicsAssignWithDriverWindows::test_assign_with_multiple_bookings_fairness
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.test_heuristics.TestHeuristicsAssignWithDriverWindows::test_assign_with_pooling_enabled
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.test_idempotency_service.TestIdempotencyService::test_check_key_not_exists
+  -> AttributeError: module 'services' has no attribute 'idempotency_service'
+tests.test_idempotency_service.TestIdempotencyService::test_check_key_exists
+  -> AttributeError: module 'services' has no attribute 'idempotency_service'
+tests.test_idempotency_service.TestIdempotencyService::test_check_key_invalid_json
+  -> AttributeError: module 'services' has no attribute 'idempotency_service'
+tests.test_idempotency_service.TestIdempotencyService::test_check_key_redis_unavailable
+  -> AttributeError: module 'services' has no attribute 'idempotency_service'
+tests.test_idempotency_service.TestIdempotencyService::test_check_key_redis_error
+  -> AttributeError: module 'services' has no attribute 'idempotency_service'
+tests.test_idempotency_service.TestIdempotencyService::test_store_response_success
+  -> AttributeError: module 'services' has no attribute 'idempotency_service'
+tests.test_idempotency_service.TestIdempotencyService::test_store_response_redis_unavailable
+  -> AttributeError: module 'services' has no attribute 'idempotency_service'
+tests.test_idempotency_service.TestIdempotencyService::test_store_response_redis_error
+  -> AttributeError: module 'services' has no attribute 'idempotency_service'
+tests.test_idempotency_service.TestIdempotencyService::test_get_idempotency_key_from_request_with_header
+  -> AttributeError: module 'services' has no attribute 'idempotency_service'
+tests.test_idempotency_service.TestIdempotencyService::test_get_idempotency_key_from_request_with_x_header
+  -> AttributeError: module 'services' has no attribute 'idempotency_service'
+tests.test_idempotency_service.TestIdempotencyService::test_get_idempotency_key_from_request_missing
+  -> AttributeError: module 'services' has no attribute 'idempotency_service'
+tests.test_idempotency_service.TestIdempotencyService::test_idempotency_roundtrip
+  -> AttributeError: module 'services' has no attribute 'idempotency_service'
+tests.test_idempotency_service.TestIdempotencyService::test_check_key_custom_ttl
+  -> AttributeError: module 'services' has no attribute 'idempotency_service'
+tests.test_ml_integration.TestMLPredictor::test_model_loads_if_available
+  -> ModuleNotFoundError: No module named 'services.unified_dispatch.ml_predictor'
+tests.test_ml_integration.TestMLPredictor::test_predict_delay_with_mock_data
+  -> ModuleNotFoundError: No module named 'services.unified_dispatch.ml_predictor'
+tests.test_ml_integration.TestMLPredictor::test_prediction_performance
+  -> ModuleNotFoundError: No module named 'services.unified_dispatch.ml_predictor'
+tests.test_p0_stabilization.TestAuthLoginP0::test_login_invalid_email
+  -> AssertionError: assert 'trace_id' in {'details': {'fields': {'errors.email': ['Not a valid email address.'], 'message': 
+tests.test_p0_stabilization.TestAuthLoginP0::test_login_rate_limit
+  -> assert (429 in [400, 400, 400, 400, 400, 400] or False)
+tests.test_p0_stabilization.TestCreateClientP0::test_create_client_success
+  -> assert 403 in [200, 201]
+tests.test_p0_stabilization.TestCreateClientP0::test_create_client_idempotency
+  -> assert 403 in [200, 201]
+tests.test_p0_stabilization.TestCreateClientP0::test_create_client_validation_error
+  -> AssertionError: assert 'trace_id' in {'error': 'invalid_json', 'message': 'Corps de requête JSON manquant ou invalide. V
+tests.test_p0_stabilization.TestCreateCompanyClientP0::test_create_company_client_success
+  -> assert 400 in [200, 201]
+tests.test_p0_stabilization.TestCreateCompanyClientP0::test_create_company_client_idempotency
+  -> assert 404 in [200, 201]
+tests.test_p0_stabilization.TestCreatePaymentP0::test_create_payment_idempotency
+  -> assert 400 in [200, 201]
+tests.test_p0_stabilization.TestCreatePaymentP0::test_create_payment_invoice_not_found
+  -> assert 400 == 404
+tests.test_p0_stabilization.TestP0StabilizationE2E::test_e2e_booking_creation_flow
+  -> assert 403 in [200, 201]
+tests.test_p0_stabilization.TestP0StabilizationE2E::test_e2e_payment_flow
+  -> AttributeError: type object 'InvoiceStatus' has no attribute 'PENDING'
+tests.test_pricing_simulate_api::test_booking_pricing_version_freeze
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.test_purge_tasks.TestPurgeOldBookings::test_purge_old_bookings_no_data
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column booking.pickup_floor does not exist
+tests.test_purge_tasks.TestPurgeOldBookings::test_purge_old_bookings_with_old_completed
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.test_purge_tasks.TestPurgeOldBookings::test_purge_old_bookings_keeps_active
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.test_purge_tasks.TestPurgeOldMessages::test_purge_old_messages_no_data
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedTable) relation "conversation" does not exist
+tests.test_rl_logger.TestRLLoggerWithRedis::test_redis_logging
+  -> AttributeError: module 'services' has no attribute 'rl'. Did you mean: 'ml'?
+tests.test_rl_logger.TestRLLoggerWithRedis::test_get_recent_logs
+  -> AttributeError: module 'services' has no attribute 'rl'. Did you mean: 'ml'?
+tests.test_rl_logger.TestRLLoggerWithDB::test_db_logging
+  -> AttributeError: module 'services' has no attribute 'rl'. Did you mean: 'ml'?
+tests.test_rl_logger.TestRLLoggerIntegration::test_log_rl_decision_convenience_function
+  -> AttributeError: module 'services' has no attribute 'rl'. Did you mean: 'ml'?
+tests.test_safety_guards.TestSafetyGuardsIntegration::test_logging_integration
+  -> AttributeError: module 'services' has no attribute 'safety_guards'
+tests.test_safety_limits.TestAutonomousActionModel::test_count_actions_today
+  -> assert 1 == 5
+tests.test_safety_limits.TestSafetyLimits::test_daily_limit_reached
+  -> assert True is False
+tests.test_safety_limits.TestSafetyLimits::test_action_type_daily_limit
+  -> assert True is False
+tests.test_safety_limits.TestActionLogging::test_successful_action_logged
+  -> AttributeError: module 'services.unified_dispatch' has no attribute 'autonomous_manager'
+tests.test_safety_limits.TestActionLogging::test_failed_action_logged
+  -> AttributeError: module 'services.unified_dispatch' has no attribute 'autonomous_manager'
+tests.test_safety_limits.TestActionLogging::test_action_blocked_by_limits_not_logged
+  -> AttributeError: module 'services.unified_dispatch' has no attribute 'autonomous_manager'
+tests.test_shadow_mode.TestShadowModeManager::test_save_daily_report
+  -> TypeError: PurePath.__init__() got an unexpected keyword argument 'encoding'
+tests.test_solver.TestSolverEmptyProblems::test_solve_no_drivers
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.test_solver.TestSolverBasicScenarios::test_solve_single_booking_single_driver
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.test_solver.TestSolverBasicScenarios::test_solve_multiple_bookings_multiple_drivers
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.test_solver.TestSolverConstraints::test_solve_respects_time_windows
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.test_solver.TestSolverConstraints::test_solve_respects_capacity
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.test_solver.TestSolverDebugInfo::test_solve_returns_debug_info
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.test_solver.TestSolverDebugInfo::test_solve_handles_infeasible_problem
+  -> sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relation "booking" does not 
+tests.test_trace_id_middleware.TestTraceIdIntegration::test_trace_id_in_response_header
+  -> RuntimeError: Working outside of request context.
+tests.test_trace_id_middleware.TestTraceIdIntegration::test_trace_id_header_priority
+  -> RuntimeError: Working outside of request context.
+tests.test_validation_schemas.TestRegisterSchema::test_valid_register
+  -> marshmallow.exceptions.ValidationError: {'message': 'Erreur de validation des données', 'errors': {'phone': ['Missing da
+tests.unified_dispatch.test_preferred_driver.TestPreferredDriverPropagation::test_preferred_driver_propagates_to_problem
+  -> AttributeError: module 'services.unified_dispatch.data' has no attribute 'Company'
+tests.unified_dispatch.test_preferred_driver.TestPreferredDriverPropagation::test_preferred_driver_none_when_not_in_overrides
+  -> AttributeError: module 'services.unified_dispatch.data' has no attribute 'Company'
+tests.unified_dispatch.test_preferred_driver.TestPreferredDriverPropagation::test_preferred_driver_invalid_value_ignored
+  -> AttributeError: module 'services.unified_dispatch.data' has no attribute 'Company'
+tests.unified_dispatch.test_preferred_driver.TestPreferredDriverPropagation::test_preferred_driver_not_in_available_drivers_ignored
+  -> AttributeError: module 'services.unified_dispatch.data' has no attribute 'Company'
+tests.unit.test_send_invoice_by_email.TestSendInvoiceByEmailUseCase::test_send_invoice_success
+  -> RuntimeError: Working outside of application context.
+tests.unit.test_send_invoice_by_email.TestSendInvoiceByEmailUseCase::test_send_invoice_not_found
+  -> RuntimeError: Working outside of application context.
+tests.unit.test_send_invoice_by_email.TestSendInvoiceByEmailUseCase::test_send_invoice_client_no_email
+  -> RuntimeError: Working outside of application context.
+tests.unit.test_send_invoice_by_email.TestSendInvoiceByEmailUseCase::test_send_invoice_domain_not_verified
+  -> RuntimeError: Working outside of application context.
+tests.unit.test_send_invoice_by_email.TestSendInvoiceByEmailUseCase::test_send_invoice_brevo_error
+  -> RuntimeError: Working outside of application context.
+tests.unit.test_send_invoice_by_email.TestSendInvoiceByEmailUseCase::test_send_invoice_custom_recipient
+  -> RuntimeError: Working outside of application context.
+
+=== ERROR (179) ===
+tests.infrastructure.test_invoice_calculator_recompute.TestRecomputeInvoiceTotals::test_recompute_updates_totals_from_lines
+  -> failed on setup with "sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "due_date" 
+tests.infrastructure.test_invoice_calculator_recompute.TestRecomputeInvoiceTotals::test_recompute_is_idempotent
+  -> failed on setup with "sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "due_date" 
+tests.infrastructure.test_invoice_calculator_recompute.TestRecomputeInvoiceTotals::test_recompute_without_commit_is_preview
+  -> failed on setup with "sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "due_date" 
+tests.integration.test_bookings_integration.TestBookingsIntegration::test_get_booking_with_relations
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.integration.test_bookings_integration.TestBookingsIntegration::test_update_booking_status_flow
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.integration.test_bookings_integration.TestBookingsIntegration::test_cancel_booking_releases_resources
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.integration.test_dispatch_integration.TestDispatchIntegration::test_dispatch_with_existing_assignments
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.integration.test_email_signature_in_invoices.TestEmailSignatureInInvoices::test_send_invoice_email_includes_signature
+  -> failed on setup with "file C:\Users\jasiq\atmr\backend\tests\integration\test_email_signature_in_invoices.py, line 22
+tests.integration.test_email_signature_in_invoices.TestEmailSignatureInInvoices::test_send_reminder_email_includes_signature
+  -> failed on setup with "file C:\Users\jasiq\atmr\backend\tests\integration\test_email_signature_in_invoices.py, line 90
+tests.integration.test_email_signature_in_invoices.TestEmailSignatureInInvoices::test_send_invoice_email_no_signature_when_empty
+  -> failed on setup with "file C:\Users\jasiq\atmr\backend\tests\integration\test_email_signature_in_invoices.py, line 169
+tests.integration.test_email_signature_in_invoices.TestEmailSignatureInInvoices::test_send_invoice_email_includes_html_signature
+  -> failed on setup with "file C:\Users\jasiq\atmr\backend\tests\integration\test_email_signature_in_invoices.py, line 239
+tests.integration.test_email_signature_in_invoices.TestEmailSignatureInInvoices::test_send_invoice_email_includes_form_signature
+  -> failed on setup with "file C:\Users\jasiq\atmr\backend\tests\integration\test_email_signature_in_invoices.py, line 313
+tests.integration.test_invoices_integration.TestInvoicesIntegration::test_generate_invoice_full_flow
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.integration.test_invoices_integration.TestInvoicesIntegration::test_get_invoice_with_lines
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.integration.test_invoices_integration.TestInvoicesIntegration::test_cancel_invoice_releases_bookings
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.integration.test_invoices_integration.TestInvoicesIntegration::test_cancel_direct_client_invoice_preserves_billed_to_type_patient
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.integration.test_invoices_integration.TestInvoicesIntegration::test_cancel_direct_client_invoice_no_leak_to_s2_exclusions
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.integration.test_invoices_integration.TestInvoicesIntegration::test_duplicate_invoice_creates_draft
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.integration.test_invoices_integration.TestInvoicesIntegration::test_consolidated_invoice_multiple_clients
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.integration.test_invoices_integration.TestInvoicesV1PeriodPreviewAndDraftEdit::test_period_preview_patient
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.integration.test_invoices_integration.TestInvoicesV1PeriodPreviewAndDraftEdit::test_draft_remove_line_frees_booking
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.integration.test_invoices_integration.TestInvoicesV1PeriodPreviewAndDraftEdit::test_draft_patch_line_recomputes
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.integration.test_invoices_integration.TestInvoicesV1PeriodPreviewAndDraftEdit::test_draft_get_repairs_zero_total_with_vat_on_custom_line
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.integration.test_invoices_integration.TestInvoicesV1PeriodPreviewAndDraftEdit::test_draft_apply_global_discount_custom_negative_line
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.integration.test_invoices_integration.TestInvoicesV1PeriodPreviewAndDraftEdit::test_draft_remove_global_discount_restores_ride_line_ht
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.integration.test_invoices_integration.TestInvoicesV1PeriodPreviewAndDraftEdit::test_remove_global_discount_without_pct_meta_preserves_ride_amounts
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.integration.test_invoices_integration.TestInvoicesV1PeriodPreviewAndDraftEdit::test_sent_invoice_line_can_be_edited
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.integration.test_invoices_integration.TestInvoicesV1PeriodPreviewAndDraftEdit::test_draft_edit_refused_when_invoice_paid
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.routes.test_company_settings_billing_persistence.TestCompanySettingsBillingPersistence::test_billing_settings_banking_fields_persistence
+  -> failed on setup with "file C:\Users\jasiq\atmr\backend\tests\routes\test_company_settings_billing_persistence.py, line 2
+tests.routes.test_company_settings_billing_persistence.TestCompanySettingsBillingPersistence::test_billing_settings_empty_values_persistence
+  -> failed on setup with "file C:\Users\jasiq\atmr\backend\tests\routes\test_company_settings_billing_persistence.py, line 1
+tests.routes.test_company_settings_email_signature.TestCompanySettingsEmailSignature::test_email_signature_text_persistence
+  -> failed on setup with "file C:\Users\jasiq\atmr\backend\tests\routes\test_company_settings_email_signature.py, line 12
+tests.routes.test_company_settings_email_signature.TestCompanySettingsEmailSignature::test_email_signature_text_empty_persistence
+  -> failed on setup with "file C:\Users\jasiq\atmr\backend\tests\routes\test_company_settings_email_signature.py, line 53
+tests.routes.test_company_settings_email_signature.TestCompanySettingsEmailSignature::test_email_signature_mode_and_html_template_persistence
+  -> failed on setup with "file C:\Users\jasiq\atmr\backend\tests\routes\test_company_settings_email_signature.py, line 82
+tests.routes.test_company_settings_email_signature.TestCompanySettingsEmailSignature::test_email_signature_form_mode_persistence
+  -> failed on setup with "file C:\Users\jasiq\atmr\backend\tests\routes\test_company_settings_email_signature.py, line 121
+tests.routes.test_institution_api_keys.TestApiKeyEndpoints::test_create_api_key_success
+  -> failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum
+tests.routes.test_institution_api_keys.TestApiKeyEndpoints::test_create_api_key_invalid_scopes
+  -> failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum
+tests.routes.test_institution_api_keys.TestApiKeyEndpoints::test_create_api_key_reader_forbidden
+  -> failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum
+tests.routes.test_institution_api_keys.TestApiKeyEndpoints::test_list_api_keys
+  -> failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum
+tests.routes.test_institution_api_keys.TestApiKeyEndpoints::test_revoke_api_key
+  -> failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum
+tests.routes.test_institution_api_keys.TestApiKeyEndpoints::test_revoke_api_key_not_found
+  -> failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum
+tests.routes.test_institution_invitations.TestInstitutionInvitation::test_invite_new_user_creates_invited_status
+  -> failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum
+tests.routes.test_institution_invitations.TestInstitutionInvitation::test_invite_duplicate_email_in_institution_returns_409
+  -> failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum
+tests.routes.test_institution_invitations.TestInstitutionInvitation::test_disable_user_success
+  -> failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum
+tests.routes.test_institution_invitations.TestInstitutionInvitation::test_disable_self_returns_400
+  -> failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum
+tests.routes.test_institution_invitations.TestInstitutionInvitation::test_disable_last_admin_returns_400
+  -> failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum
+tests.routes.test_institution_invitations.TestInstitutionInvitation::test_resend_invite_success
+  -> failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum
+tests.routes.test_institution_invitations.TestInstitutionInvitation::test_invite_email_fail_returns_invite_link
+  -> failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum
+tests.routes.test_institution_invitations.TestInstitutionInvitation::test_invite_email_success_also_returns_invite_link
+  -> failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum
+tests.routes.test_institution_invitations.TestInstitutionInvitation::test_resend_email_fail_returns_invite_link
+  -> failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum
+tests.routes.test_institution_patients.TestInstitutionPatientsCRUD::test_create_patient_jwt
+  -> failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum
+tests.routes.test_institution_patients.TestInstitutionPatientsCRUD::test_create_patient_duplicate_external_reference
+  -> failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum
+tests.routes.test_institution_patients.TestInstitutionPatientsCRUD::test_list_patients
+  -> failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum
+tests.routes.test_institution_patients.TestInstitutionPatientsCRUD::test_list_patients_search
+  -> failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum
+tests.routes.test_institution_patients.TestInstitutionPatientsCRUD::test_get_patient_by_id
+  -> failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum
+tests.routes.test_institution_patients.TestInstitutionPatientsCRUD::test_get_patient_by_external_reference
+  -> failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum
+tests.routes.test_institution_patients.TestInstitutionPatientsCRUD::test_update_patient
+  -> failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum
+tests.routes.test_institution_patients.TestInstitutionPatientsCRUD::test_patient_not_found
+  -> failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum
+tests.routes.test_institution_requests.TestTransportRequestsCRUD::test_create_request_jwt
+  -> failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum
+tests.routes.test_institution_requests.TestTransportRequestsCRUD::test_create_request_without_external_reference
+  -> failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum
+tests.routes.test_institution_requests.TestTransportRequestsCRUD::test_create_request_material_delivery
+  -> failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum
+tests.routes.test_institution_requests.TestTransportRequestsCRUD::test_create_request_material_delivery_missing_description
+  -> failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum
+tests.routes.test_institution_requests.TestTransportRequestsCRUD::test_create_request_duplicate_external_reference
+  -> failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum
+tests.routes.test_institution_requests.TestTransportRequestsCRUD::test_list_requests
+  -> failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum
+tests.routes.test_institution_requests.TestTransportRequestsCRUD::test_list_requests_filter_status
+  -> failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum
+tests.routes.test_institution_requests.TestTransportRequestsCRUD::test_get_request_by_id
+  -> failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum
+tests.routes.test_institution_requests.TestTransportRequestsCRUD::test_get_request_by_external_reference
+  -> failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum
+tests.routes.test_institution_requests.TestTransportRequestsCRUD::test_update_request_draft
+  -> failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum
+tests.routes.test_institution_requests.TestTransportRequestsCRUD::test_update_request_cancelled_fails
+  -> failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum
+tests.routes.test_institution_requests.TestTransportRequestsCRUD::test_send_request
+  -> failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum
+tests.routes.test_institution_requests.TestTransportRequestsCRUD::test_send_request_already_sent_fails
+  -> failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum
+tests.routes.test_institution_requests.TestTransportRequestsCRUD::test_cancel_request_draft
+  -> failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum
+tests.routes.test_institution_requests.TestTransportRequestsCRUD::test_cancel_request_converted_fails
+  -> failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum
+tests.routes.test_institution_requests.TestTransportRequestsCRUD::test_request_not_found
+  -> failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum
+tests.routes.test_institution_requests.TestTransportRequestsCRUD::test_request_with_patient_external_reference
+  -> failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum
+tests.routes.test_institution_requests.TestTransportRequestsCRUD::test_request_with_mobility_info
+  -> failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum
+tests.routes.test_institutions.TestInstitutionMe::test_institution_me_success
+  -> failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum
+tests.routes.test_institutions.TestInstitutionSettingsTimezone::test_put_settings_invalid_timezone_returns_400
+  -> failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum
+tests.routes.test_institutions.TestInstitutionSettingsTimezone::test_put_settings_valid_timezone_accepted
+  -> failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum
+tests.routes.test_institutions.TestInstitutionSettingsTimezone::test_put_settings_common_timezone_accepted
+  -> failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum
+tests.routes.test_platform_postgres_governance::test_platform_tenant_detail_roundtrip
+  -> failed on setup with "file C:\Users\jasiq\atmr\backend\tests\routes\test_platform_postgres_governance.py, line 10
+tests.routes.test_platform_postgres_governance::test_replay_contract_shape
+  -> failed on setup with "file C:\Users\jasiq\atmr\backend\tests\routes\test_platform_postgres_governance.py, line 21
+tests.routes.test_request_offers.TestSendWithOffers::test_send_without_preferences_creates_broadcast
+  -> failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum
+tests.routes.test_request_offers.TestSendWithOffers::test_send_with_preferences_creates_sequential
+  -> failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum
+tests.routes.test_request_offers.TestSendWithOffers::test_send_already_sent_is_idempotent
+  -> failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum
+tests.routes.test_request_offers.TestSendWithOffers::test_send_converted_request_fails_409
+  -> failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum
+tests.routes.test_request_offers.TestAcceptOffer::test_accept_offer_creates_booking
+  -> failed on setup with "sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "username" 
+tests.routes.test_request_offers.TestAcceptOffer::test_accept_makes_other_offers_unavailable
+  -> failed on setup with "sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "username" 
+tests.routes.test_request_offers.TestAcceptOffer::test_second_accept_fails
+  -> failed on setup with "sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "username" 
+tests.routes.test_request_offers.TestAcceptOffer::test_cannot_accept_other_company_offer
+  -> failed on setup with "sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "username" 
+tests.routes.test_request_offers.TestRejectOffer::test_reject_sequential_triggers_escalade
+  -> failed on setup with "sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "username" 
+tests.routes.test_request_offers.TestTransportPreferences::test_get_preferences_empty
+  -> failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum
+tests.routes.test_request_offers.TestTransportPreferences::test_set_preferences
+  -> failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum
+tests.routes.test_request_offers.TestTransportPreferences::test_set_preferences_replaces_existing
+  -> failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum
+tests.routes.test_request_offers.TestTransportPreferences::test_get_eligible_companies
+  -> failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum
+tests.security.test_security_validation.TestFlaskSecurityConfig::test_session_cookie_secure_in_production
+  -> failed on setup with "Failed: ScopeMismatch: You tried to access the function scoped fixture app with a session scoped r
+tests.security.test_security_validation.TestFlaskSecurityConfig::test_session_cookie_secure_in_development
+  -> failed on setup with "Failed: ScopeMismatch: You tried to access the function scoped fixture app with a session scoped r
+tests.security.test_security_validation.TestFlaskSecurityConfig::test_talisman_hsts_configured
+  -> failed on setup with "Failed: ScopeMismatch: You tried to access the function scoped fixture app with a session scoped r
+tests.security.test_security_validation.TestFlaskSecurityConfig::test_csp_configured
+  -> failed on setup with "Failed: ScopeMismatch: You tried to access the function scoped fixture app with a session scoped r
+tests.services.test_export_payments_csv.TestExportPaymentsCSV::test_export_includes_payment_in_month
+  -> failed on setup with "Failed: ScopeMismatch: You tried to access the function scoped fixture app with a session scoped r
+tests.services.test_export_payments_csv.TestExportPaymentsCSV::test_export_excludes_payment_outside_month
+  -> failed on setup with "Failed: ScopeMismatch: You tried to access the function scoped fixture app with a session scoped r
+tests.services.test_export_payments_csv.TestExportPaymentsCSV::test_export_partial_payment_creates_multiple_lines
+  -> failed on setup with "Failed: ScopeMismatch: You tried to access the function scoped fixture app with a session scoped r
+tests.services.test_export_payments_csv.TestExportPaymentsCSV::test_export_excludes_unpaid_invoice
+  -> failed on setup with "Failed: ScopeMismatch: You tried to access the function scoped fixture app with a session scoped r
+tests.services.test_export_payments_csv.TestExportPaymentsCSV::test_export_excludes_cancelled_invoice
+  -> failed on setup with "Failed: ScopeMismatch: You tried to access the function scoped fixture app with a session scoped r
+tests.services.test_export_payments_csv.TestExportPaymentsCSV::test_export_s2_invoice_uses_clinic_name
+  -> failed on setup with "Failed: ScopeMismatch: You tried to access the function scoped fixture app with a session scoped r
+tests.services.test_export_payments_csv.TestExportPaymentsCSV::test_export_csv_format_includes_all_columns
+  -> failed on setup with "Failed: ScopeMismatch: You tried to access the function scoped fixture app with a session scoped r
+tests.services.unified_dispatch.test_apply.TestRollbackTransactionnel::test_rollback_complet_en_cas_derreur_partielle
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.services.unified_dispatch.test_apply.TestRollbackTransactionnel::test_atomicite_batch_assignations
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.services.unified_dispatch.test_apply.TestRollbackTransactionnel::test_rollback_en_cas_de_conflit_db
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.services.unified_dispatch.test_apply.TestRollbackTransactionnel::test_etat_coherent_apres_crash_simule
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.services.unified_dispatch.test_apply.TestRollbackTransactionnel::test_transaction_avec_savepoint
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.services.unified_dispatch.test_apply_post_commit_notifications.TestPostCommitNotifications::test_notifications_emises_apres_commit_reussi
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.services.unified_dispatch.test_apply_post_commit_notifications.TestPostCommitNotifications::test_aucune_notification_si_rollback
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.services.unified_dispatch.test_apply_post_commit_notifications.TestPostCommitNotifications::test_notifications_deferred_si_transaction_externe
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.services.unified_dispatch.test_apply_post_commit_notifications.TestPostCommitNotifications::test_idempotence_driver_changed
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.services.unified_dispatch.test_apply_post_commit_notifications.TestPostCommitNotifications::test_notifications_idempotentes_pas_de_duplication
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.services.unified_dispatch.test_apply_post_commit_notifications.TestPostCommitNotifications::test_metriques_prometheus_si_disponible
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.services.unified_dispatch.test_apply_post_commit_notifications.TestPostCommitNotifications::test_logs_ameliores_contexte_supplementaire
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.test_api_versioning.TestAPIVersioning::test_v1_endpoint_exists
+  -> failed on setup with "Failed: ScopeMismatch: You tried to access the function scoped fixture app with a session scoped r
+tests.test_api_versioning.TestAPIVersioning::test_v1_deprecation_header
+  -> failed on setup with "Failed: ScopeMismatch: You tried to access the function scoped fixture app with a session scoped r
+tests.test_api_versioning.TestAPIVersioning::test_v2_endpoint_available
+  -> failed on setup with "Failed: ScopeMismatch: You tried to access the function scoped fixture app with a session scoped r
+tests.test_api_versioning.TestAPIVersioning::test_legacy_api_if_enabled
+  -> failed on setup with "Failed: ScopeMismatch: You tried to access the function scoped fixture app with a session scoped r
+tests.test_api_versioning.TestAPIVersioning::test_versioning_swagger_docs
+  -> failed on setup with "Failed: ScopeMismatch: You tried to access the function scoped fixture app with a session scoped r
+tests.test_api_versioning.TestAPIVersioning::test_same_endpoint_v1_v2_behavior
+  -> failed on setup with "Failed: ScopeMismatch: You tried to access the function scoped fixture app with a session scoped r
+tests.test_bookings::test_booking_idor_blocked_other_client
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.test_bookings::test_booking_ownership_client_can_access_own_booking
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.test_bookings::test_booking_ownership_admin_can_access_all_bookings
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.test_data_n1_optimization.TestGetBookingsForDayEagerLoading::test_eager_loading_relations_loaded
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.test_data_n1_optimization.TestGetBookingsForDayEagerLoading::test_eager_loading_query_count
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.test_data_n1_optimization.TestGetBookingsForDayEagerLoading::test_eager_loading_no_lazy_queries
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.test_data_n1_optimization.TestBuildVrptwProblemRelations::test_relations_accessible_in_build_vrptw_problem
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.test_data_n1_optimization.TestEnrichCoordsCompanyAccess::test_enrich_booking_coords_company_attributes_loaded
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.test_engine.TestEnginePublicAPI::test_run_no_data
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.test_engine.TestEnginePublicAPI::test_run_with_valid_scenario
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.test_engine.TestEnginePublicAPI::test_run_with_regular_first
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.test_engine.TestEnginePublicAPI::test_run_with_overrides
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.test_engine.TestEnginePublicAPI::test_run_heuristic_only_mode
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.test_engine.TestEnginePublicAPI::test_run_solver_only_mode
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.test_engine.TestEnginePublicAPI::test_run_creates_dispatch_run
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.test_engine.TestEnginePublicAPI::test_run_reuses_existing_dispatch_run
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.test_engine.TestEngineInternalFunctions::test_analyze_unassigned_reasons_no_drivers
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.test_engine.TestEngineInternalFunctions::test_filter_problem
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.test_engine.TestEngineInternalFunctions::test_serialize_assignment
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.test_engine.TestEngineInternalFunctions::test_serialize_booking
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.test_engine.TestEngineApplyAndEmit::test_apply_and_emit_with_assignments
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.test_engine.TestEngineEdgeCases::test_run_with_invalid_date
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.test_engine.TestEngineEdgeCases::test_run_with_concurrent_lock
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.test_engine.TestEngineEdgeCases::test_run_handles_db_error_gracefully
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.test_engine.TestEngineEdgeCases::test_run_with_empty_problem_bookings
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.test_engine.TestEngineAdditionalCoverage::test_run_with_different_modes
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.test_engine.TestEngineAdditionalCoverage::test_run_with_overrides_dict
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.test_engine.TestEngineAdditionalCoverage::test_run_with_allow_emergency_flag
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.test_engine.TestEngineAdditionalCoverage::test_analyze_unassigned_with_no_drivers
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.test_engine.TestEngineAdditionalCoverage::test_run_with_regular_first_false
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.test_etape5_cancellation_audit.TestCancelConvertedRequest::test_cancel_converted_returns_409
+  -> failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum
+tests.test_etape5_cancellation_audit.TestCancelConvertedRequest::test_cancel_draft_request_succeeds
+  -> failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum
+tests.test_etape5_cancellation_audit.TestBillingPermissions::test_billing_user_can_update_request_billing
+  -> failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum
+tests.test_etape5_cancellation_audit.TestBillingPermissions::test_reader_user_cannot_update_request_billing
+  -> failed on setup with "sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input value for enum
+tests.test_ml_monitoring.TestMLMonitoringService::test_log_prediction
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.test_ml_monitoring.TestMLMonitoringService::test_update_actual_delay
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.test_ml_monitoring.TestMLMonitoringService::test_get_metrics
+  -> failed on setup with "sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedColumn) column "pickup_floor" of relati
+tests.test_redis_rate_limits.TestRateLimitFlush::test_flush_success
+  -> failed on setup with "Failed: ScopeMismatch: You tried to access the function scoped fixture app with a session scoped r
+tests.test_redis_rate_limits.TestRateLimitFlush::test_flush_redis_down
+  -> failed on setup with "Failed: ScopeMismatch: You tried to access the function scoped fixture app with a session scoped r
+tests.test_redis_rate_limits.TestRateLimitFlush::test_flush_unauthorized
+  -> failed on setup with "Failed: ScopeMismatch: You tried to access the function scoped fixture app with a session scoped r
+tests.test_redis_rate_limits.TestRateLimitStats::test_stats_success
+  -> failed on setup with "Failed: ScopeMismatch: You tried to access the function scoped fixture app with a session scoped r
+tests.test_redis_rate_limits.TestRateLimitStats::test_stats_redis_down
+  -> failed on setup with "Failed: ScopeMismatch: You tried to access the function scoped fixture app with a session scoped r
+tests.test_redis_rate_limits.TestRedisInfo::test_info_success
+  -> failed on setup with "Failed: ScopeMismatch: You tried to access the function scoped fixture app with a session scoped r
+tests.test_redis_rate_limits.TestRateLimitConfig::test_config_success
+  -> failed on setup with "Failed: ScopeMismatch: You tried to access the function scoped fixture app with a session scoped r
+tests.test_redis_rate_limits.TestRedisStorageWithTTL::test_ttl_set_on_first_incr
+  -> failed on setup with "Failed: ScopeMismatch: You tried to access the function scoped fixture app with a session scoped r
+tests.test_redis_rate_limits.TestRedisStorageWithTTL::test_ttl_not_set_on_subsequent_incr
+  -> failed on setup with "Failed: ScopeMismatch: You tried to access the function scoped fixture app with a session scoped r
+tests.test_redis_rate_limits.TestRedisStorageWithTTL::test_ttl_renewed_with_elastic_expiry
+  -> failed on setup with "Failed: ScopeMismatch: You tried to access the function scoped fixture app with a session scoped r
+tests.test_redis_rate_limits.TestRedisStorageWithTTL::test_ttl_error_handled_gracefully
+  -> failed on setup with "Failed: ScopeMismatch: You tried to access the function scoped fixture app with a session scoped r
+tests.test_trace_id_middleware.TestTraceIdMiddleware::test_get_trace_id_generates_new
+  -> failed on setup with "Failed: ScopeMismatch: You tried to access the function scoped fixture app with a session scoped r
+tests.test_trace_id_middleware.TestTraceIdMiddleware::test_get_trace_id_from_header
+  -> failed on setup with "Failed: ScopeMismatch: You tried to access the function scoped fixture app with a session scoped r
+tests.test_trace_id_middleware.TestTraceIdMiddleware::test_get_trace_id_from_trace_id_header
+  -> failed on setup with "Failed: ScopeMismatch: You tried to access the function scoped fixture app with a session scoped r
+tests.test_trace_id_middleware.TestTraceIdMiddleware::test_get_trace_id_cached
+  -> failed on setup with "Failed: ScopeMismatch: You tried to access the function scoped fixture app with a session scoped r
+tests.test_trace_id_middleware.TestTraceIdMiddleware::test_inject_trace_id_middleware
+  -> failed on setup with "Failed: ScopeMismatch: You tried to access the function scoped fixture app with a session scoped r
+tests.test_trace_id_middleware.TestTraceIdMiddleware::test_add_trace_id_to_response
+  -> failed on setup with "Failed: ScopeMismatch: You tried to access the function scoped fixture app with a session scoped r
+tests.test_trace_id_middleware.TestTraceIdMiddleware::test_get_trace_id_for_logging
+  -> failed on setup with "Failed: ScopeMismatch: You tried to access the function scoped fixture app with a session scoped r
+tests.test_trace_id_middleware.TestTraceIdMiddleware::test_trace_id_persistence_across_requests
+  -> failed on setup with "Failed: ScopeMismatch: You tried to access the function scoped fixture app with a session scoped r
+
+=== SKIPPED (37) ===
+::tests.services.test_processed_fanout_consumer_commit
+  -> collection skipped
+tests.integration.test_indicative_fare_integration::test_indicative_fare_estimate_disabled_412
+  -> Table platform_client_indicative_fare_config absente (flask db upgrade).
+tests.integration.test_indicative_fare_integration::test_admin_put_bumps_config_version_then_estimate_matches
+  -> Table platform_client_indicative_fare_config absente (flask db upgrade).
+tests.integration.test_socket_driver_location.TestSocketDriverLocation::test_driver_without_company_emits_error_and_no_redis_write
+  -> SKIP_SOCKETIO=1, socket tests désactivés
+tests.integration.test_socket_driver_location.TestSocketDriverLocation::test_socket_single_rejects_availability_presence
+  -> SKIP_SOCKETIO=1, socket tests désactivés
+tests.integration.test_socket_driver_location.TestSocketDriverLocation::test_socket_single_dedup_skip_skips_inc_received_and_location_service
+  -> SKIP_SOCKETIO=1, socket tests désactivés
+tests.services.unified_dispatch.orchestration.test_metrics_finalizer.TestSerialize::test_serialize_assignment_with_to_dict
+  -> _serialize_assignment method does not exist in MetricsFinalizer
+tests.services.unified_dispatch.orchestration.test_metrics_finalizer.TestSerialize::test_serialize_assignment_without_to_dict
+  -> _serialize_assignment method does not exist in MetricsFinalizer
+tests.services.unified_dispatch.orchestration.test_metrics_finalizer.TestSerialize::test_serialize_booking_with_to_dict
+  -> _serialize_booking method does not exist in MetricsFinalizer
+tests.services.unified_dispatch.orchestration.test_metrics_finalizer.TestSerialize::test_serialize_booking_without_to_dict
+  -> _serialize_booking method does not exist in MetricsFinalizer
+tests.services.unified_dispatch.orchestration.test_metrics_finalizer.TestSerialize::test_serialize_driver_with_to_dict
+  -> _serialize_driver method does not exist in MetricsFinalizer
+tests.services.unified_dispatch.orchestration.test_metrics_finalizer.TestSerialize::test_serialize_driver_without_to_dict
+  -> _serialize_driver method does not exist in MetricsFinalizer
+tests.services.unified_dispatch.orchestration.test_pipeline_executor.TestExecute::test_execute_without_clustering
+  -> Test trop complexe avec trop de mocks, nécessite refactoring
+tests.test_booking_repository.TestSqlAlchemyBookingRepository::test_find_by_id_not_found
+  -> Test d'intégration nécessitant un contexte Flask - à implémenter dans test_integration.py
+tests.test_bookings::test_booking_assigned_without_driver_id_rejected
+  -> freezegun not installed
+tests.test_bookings::test_booking_driver_id_none_with_assigned_status_rejected
+  -> freezegun not installed
+tests.test_bookings::test_booking_assigned_with_driver_id_accepted
+  -> freezegun not installed
+tests.test_clean_architecture_boundaries::test_application_layer_has_no_forbidden_imports
+  -> Forbidden imports in application layer (violations réelles nécessitant refactoring):
+tests.test_d1_opentelemetry.TestOpenTelemetry::test_trace_id_in_logs
+  -> OpenTelemetry non disponible
+tests.test_dispatch_integration.TestDispatchSafetyIntegration::test_safe_dispatch_with_rl_optimization
+  -> Modules non disponibles
+tests.test_dispatch_integration.TestDispatchSafetyIntegration::test_unsafe_dispatch_with_rollback
+  -> Modules non disponibles
+tests.test_dispatch_integration.TestDispatchSafetyIntegration::test_rl_optimizer_safety_check
+  -> Modules non disponibles
+tests.test_docker_production_comprehensive.TestDockerProduction::test_docker_entrypoint
+  -> docker-entrypoint.sh non trouvé
+tests.test_docker_production_comprehensive.TestDockerProduction::test_model_warmup_service
+  -> ModelWarmupService non disponible
+tests.test_docker_production_comprehensive.TestDockerProduction::test_build_script
+  -> scripts/build-docker.sh non trouvé
+tests.test_docker_production_comprehensive.TestDockerProduction::test_validation_script
+  -> scripts/validate_step9_docker_hardening.py non trouvé
+tests.test_docker_production_comprehensive.TestDockerProduction::test_deployment_script
+  -> scripts/deploy_step9_docker_hardening.py non trouvé
+tests.test_docker_production_comprehensive.TestProductionServices::test_model_warmup_functionality
+  -> ModelWarmupService non disponible
+tests.test_driver_repository.TestSqlAlchemyDriverRepository::test_find_by_id_not_found
+  -> Test d'intégration nécessitant un contexte Flask - à implémenter dans test_integration.py
+tests.test_etape5_cancellation_audit.TestAuditLogsImmutable::test_audit_log_update_blocked
+  -> Nécessite migration appliquée avec triggers
+tests.test_etape5_cancellation_audit.TestAuditLogsImmutable::test_audit_log_delete_blocked
+  -> Nécessite migration appliquée avec triggers
+tests.test_p0_stabilization.TestCreatePaymentP0::test_create_payment_success
+  -> Tests obsolètes - API attend paid_at dans le payload
+tests.test_p0_stabilization.TestCreatePaymentP0::test_create_payment_missing_idempotency_key
+  -> Tests obsolètes - API attend paid_at dans le payload
+tests.test_rl_logger.TestRLLogger::test_hash_state_torch_tensor
+  -> PyTorch non disponible
+tests.test_rl_logger.TestRLLoggerIntegration::test_logging_with_torch_tensors
+  -> PyTorch ou RLLogger non disponible
+tests.test_time_mocking_example::test_frozen_time_example
+  -> freezegun not installed
+tests.test_time_mocking_example::test_frozen_time_with_relative_dates
+  -> freezegun not installed
+
+=== SCOPE_MISMATCH (36) ===
+tests.security.test_security_validation.TestFlaskSecurityConfig::test_session_cookie_secure_in_production
+tests.security.test_security_validation.TestFlaskSecurityConfig::test_session_cookie_secure_in_development
+tests.security.test_security_validation.TestFlaskSecurityConfig::test_talisman_hsts_configured
+tests.security.test_security_validation.TestFlaskSecurityConfig::test_csp_configured
+tests.services.test_export_payments_csv.TestExportPaymentsCSV::test_export_includes_payment_in_month
+tests.services.test_export_payments_csv.TestExportPaymentsCSV::test_export_excludes_payment_outside_month
+tests.services.test_export_payments_csv.TestExportPaymentsCSV::test_export_partial_payment_creates_multiple_lines
+tests.services.test_export_payments_csv.TestExportPaymentsCSV::test_export_excludes_unpaid_invoice
+tests.services.test_export_payments_csv.TestExportPaymentsCSV::test_export_excludes_cancelled_invoice
+tests.services.test_export_payments_csv.TestExportPaymentsCSV::test_export_s2_invoice_uses_clinic_name
+tests.services.test_export_payments_csv.TestExportPaymentsCSV::test_export_csv_format_includes_all_columns
+tests.test_api_versioning.TestAPIVersioning::test_v1_endpoint_exists
+tests.test_api_versioning.TestAPIVersioning::test_v1_deprecation_header
+tests.test_api_versioning.TestAPIVersioning::test_v2_endpoint_available
+tests.test_api_versioning.TestAPIVersioning::test_legacy_api_if_enabled
+tests.test_api_versioning.TestAPIVersioning::test_versioning_swagger_docs
+tests.test_api_versioning.TestAPIVersioning::test_same_endpoint_v1_v2_behavior
+tests.test_redis_rate_limits.TestRateLimitFlush::test_flush_success
+tests.test_redis_rate_limits.TestRateLimitFlush::test_flush_redis_down
+tests.test_redis_rate_limits.TestRateLimitFlush::test_flush_unauthorized
+tests.test_redis_rate_limits.TestRateLimitStats::test_stats_success
+tests.test_redis_rate_limits.TestRateLimitStats::test_stats_redis_down
+tests.test_redis_rate_limits.TestRedisInfo::test_info_success
+tests.test_redis_rate_limits.TestRateLimitConfig::test_config_success
+tests.test_redis_rate_limits.TestRedisStorageWithTTL::test_ttl_set_on_first_incr
+tests.test_redis_rate_limits.TestRedisStorageWithTTL::test_ttl_not_set_on_subsequent_incr
+tests.test_redis_rate_limits.TestRedisStorageWithTTL::test_ttl_renewed_with_elastic_expiry
+tests.test_redis_rate_limits.TestRedisStorageWithTTL::test_ttl_error_handled_gracefully
+tests.test_trace_id_middleware.TestTraceIdMiddleware::test_get_trace_id_generates_new
+tests.test_trace_id_middleware.TestTraceIdMiddleware::test_get_trace_id_from_header
+tests.test_trace_id_middleware.TestTraceIdMiddleware::test_get_trace_id_from_trace_id_header
+tests.test_trace_id_middleware.TestTraceIdMiddleware::test_get_trace_id_cached
+tests.test_trace_id_middleware.TestTraceIdMiddleware::test_inject_trace_id_middleware
+tests.test_trace_id_middleware.TestTraceIdMiddleware::test_add_trace_id_to_response
+tests.test_trace_id_middleware.TestTraceIdMiddleware::test_get_trace_id_for_logging
+tests.test_trace_id_middleware.TestTraceIdMiddleware::test_trace_id_persistence_across_requests

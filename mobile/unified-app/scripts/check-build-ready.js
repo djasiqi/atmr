@@ -100,6 +100,14 @@ function checkEasProduction() {
   } else {
     errors.push("❌ EXPO_PUBLIC_API_BASE_URL HTTPS manquant dans eas.json (production.env)");
   }
+  const androidMapsKey = prodEnv.EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_API_KEY?.trim();
+  if (androidMapsKey && androidMapsKey.startsWith("AIza") && androidMapsKey !== "test-android-key") {
+    checks.push("✅ EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_API_KEY prod dans eas.json");
+  } else {
+    errors.push(
+      "❌ EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_API_KEY manquante ou placeholder dans eas.json (production.env)"
+    );
+  }
 }
 
 log("\n🔍 Vérification build production unified-app\n");

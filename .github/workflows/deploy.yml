@@ -319,6 +319,11 @@ jobs:
       SOCKETIO_CORS_ORIGINS: ${{ secrets.SOCKETIO_CORS_ORIGINS }}
       # ✅ Email Brevo - Clé API pour envoi d'emails transactionnels
       BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
+      # SMS activation (Twilio) — optionnel ; surcharge possible via .env.production.local sur le serveur
+      SMS_NOTIFICATIONS_ENABLED: ${{ secrets.SMS_NOTIFICATIONS_ENABLED }}
+      TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+      TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
+      TWILIO_PHONE_NUMBER: ${{ secrets.TWILIO_PHONE_NUMBER }}
       # ✅ Configuration environnement
       POSTGRES_HOST: ${{ secrets.POSTGRES_HOST }}
       FLASK_ENV: ${{ secrets.FLASK_ENV }}
@@ -526,4 +531,8 @@ jobs:
               "${{ secrets.SAFERPAY_CUSTOMER_ID }}" \
               "${{ secrets.SAFERPAY_TERMINAL_ID }}" \
               "${{ secrets.SAFERPAY_API_USERNAME }}" \
-              "${{ secrets.SAFERPAY_API_PASSWORD }}"
+              "${{ secrets.SAFERPAY_API_PASSWORD }}" \
+              "${{ secrets.SMS_NOTIFICATIONS_ENABLED }}" \
+              "${{ secrets.TWILIO_ACCOUNT_SID }}" \
+              "${{ secrets.TWILIO_AUTH_TOKEN }}" \
+              "${{ secrets.TWILIO_PHONE_NUMBER }}"

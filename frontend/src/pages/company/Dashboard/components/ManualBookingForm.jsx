@@ -1,7 +1,6 @@
 // frontend/src/pages/company/Dashboard/components/ManualBookingForm.jsx (fixed)
 
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
-import AsyncCreatableSelect from 'react-select/async-creatable';
 import NewClientModal from '../../Clients/components/NewClientModal';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -14,6 +13,11 @@ import {
 } from '../../../../services/companyService';
 import Input from './ui/Input';
 import Label from './ui/Label';
+import {
+  useIsolatedField,
+  IsolatedTextInput,
+  IsolatedTextarea,
+} from './ui/IsolatedFormField';
 import AddressAutocomplete from '../../../../components/common/AddressAutocomplete';
 import apiClient from '../../../../utils/apiClient';
 import { fetchBillingSettings, simulatePricing } from '../../../../services/settingsService';
@@ -28,6 +32,8 @@ import { toast } from 'sonner';
 import styles from './ManualBookingForm.module.css';
 import InlineDatePicker from '../../../../components/ui/InlineDatePicker';
 import InlineTimePicker from '../../../../components/ui/InlineTimePicker';
+import ManualBookingClientSelect from './ManualBookingClientSelect';
+import { useBookingFormFocusGuard } from './useBookingFormFocusGuard';
 
 /** Trim + vide → null. Réutilisable pour champs optionnels (medical_facility, hospital_service, notes_medical, etc.). */
 function cleanOptionalText(s) {
@@ -182,6 +188,8 @@ const routePointsSignature = (routePoints) => {
 
 export default function ManualBookingForm({ onSuccess, onClose, onSubmitStart }) {
   const queryClient = useQueryClient();
+  const formRef = useRef(null);
+  useBookingFormFocusGuard(formRef);
 
   // Swap pickup ↔ dropoff
   const handleSwapAddresses = () => {
@@ -282,11 +290,29 @@ export default function ManualBookingForm({ onSuccess, onClose, onSubmitStart })
 
   // --- Infos médicales libres (toujours disponibles)
   const [medicalFacility, setMedicalFacility] = useState('');
-  const [doctorName, setDoctorName] = useState('');
-  const [hospitalService, setHospitalService] = useState(''); // restera synchronisé avec serviceName
-  const [notesMedical, setNotesMedical] = useState('');
-  const [pickupAccessNotes, setPickupAccessNotes] = useState('');
-  const [dropoffAccessNotes, setDropoffAccessNotes] = useState('');
+  const {
+    valueRef: doctorNameRef,
+    sync: syncDoctorName,
+    externalValue: doctorNameExternal,
+  } = useIsolatedField('');
+  const {
+    valueRef: hospitalServiceRef,
+    sync: syncHospitalService,
+    externalValue: hospitalServiceExternal,
+  } = useIsolatedField('');
+  const {
+    valueRef: notesMedicalRef,
+    sync: syncNotesMedical,
+    externalValue: notesMedicalExternal,
+  } = useIsolatedField('');
+  const {
+    valueRef: pickupAccessNotesRef,
+    externalValue: pickupAccessNotesExternal,
+  } = useIsolatedField('');
+  const {
+    valueRef: dropoffAccessNotesRef,
+    externalValue: dropoffAccessNotesExternal,
+  } = useIsolatedField('');
   const [wheelchairOptions, setWheelchairOptions] = useState({
     clientHasWheelchair: false,
     needWheelchair: false,
@@ -467,7 +493,7 @@ export default function ManualBookingForm({ onSuccess, onClose, onSubmitStart })
     if (establishment && newText !== (establishment.label || establishment.display_name || '')) {
       setEstablishment(null);
       setServiceObj(null);
-      setHospitalService('');
+      syncHospitalService('');
     }
   };
 
@@ -475,7 +501,7 @@ export default function ManualBookingForm({ onSuccess, onClose, onSubmitStart })
   React.useEffect(() => {
     if (!establishment) {
       setServiceObj(null);
-      setHospitalService('');
+      syncHospitalService('');
     }
   }, [establishment]);
 
@@ -486,7 +512,7 @@ export default function ManualBookingForm({ onSuccess, onClose, onSubmitStart })
 
     // Toujours réinitialiser le service (sélection ou désélection → pas d’ancienne valeur gardée)
     setServiceObj(null);
-    setHospitalService('');
+    syncHospitalService('');
 
     if (estab) console.log('🏥 Establishment set, ID:', estab?.id, 'Type:', typeof estab?.id);
   };
@@ -495,7 +521,7 @@ export default function ManualBookingForm({ onSuccess, onClose, onSubmitStart })
     (srv) => {
       console.log('🏥 ManualBookingForm.onChangeService:', srv);
       setServiceObj(srv || null);
-      setHospitalService(srv?.name || '');
+      syncHospitalService(srv?.name || '');
 
       // --- Logique pour la destination ---
       if (srv && establishment) {
@@ -513,7 +539,7 @@ export default function ManualBookingForm({ onSuccess, onClose, onSubmitStart })
         if (details.length > 0) {
           const detailsText = details.join(' - ');
           // Ajoute les détails aux notes existantes (s'il y en a)
-          setNotesMedical((prevNotes) =>
+          syncNotesMedical((prevNotes) =>
             prevNotes ? `${prevNotes}\n${detailsText}` : detailsText
           );
         }
@@ -807,7 +833,7 @@ export default function ManualBookingForm({ onSuccess, onClose, onSubmitStart })
   ]);
 
   // === Clients ===
-  const handleSelectClient = async (clientObj) => {
+  const handleSelectClient = useCallback(async (clientObj) => {
     console.log('👤 Client sélectionné:', clientObj);
     setSelectedClient(clientObj);
     setActiveStay(null); // Réinitialiser le séjour actif
@@ -839,7 +865,7 @@ export default function ManualBookingForm({ onSuccess, onClose, onSubmitStart })
           setEstablishmentText(clinic.name);
           setEstablishment(null);
           setServiceObj(null);
-          setHospitalService('');
+          syncHospitalService('');
         }
 
         // Set pickup to clinic address (structured > raw > clinic name as last resort)
@@ -913,7 +939,15 @@ export default function ManualBookingForm({ onSuccess, onClose, onSubmitStart })
       console.log(`📍 Adresse du client: ${homeAddress}`);
     }
 
-  };
+  }, [getClinicPickupAddress, syncHospitalService]);
+
+  const handleCreateClientOption = useCallback(() => {
+    setShowClientModal(true);
+  }, []);
+
+  const handleBillToPatientChange = useCallback((checked) => {
+    setBillToPatient(checked);
+  }, []);
 
   const loadClientOptions = useCallback(async (q) => {
     try {
@@ -1057,16 +1091,16 @@ export default function ManualBookingForm({ onSuccess, onClose, onSubmitStart })
   // === Notes médicales → extraction
   function handleNotesMedicalBlur(e) {
     const value = e.target.value;
-    // ❌ Supprimé : setNotesMedical(value) car déjà géré par onChange
+    // ❌ Supprimé : syncNotesMedical(value) car déjà géré par onChange
 
     const extracted = extractMedicalServiceInfo(value);
 
     if (extracted.medical_facility) setMedicalFacility(extracted.medical_facility);
     if (extracted.hospital_service) {
-      setHospitalService(extracted.hospital_service);
+      syncHospitalService(extracted.hospital_service);
       setServiceObj(null); // pas d'ID → on laisse vide ; l'utilisateur choisira dans la liste
     }
-    if (extracted.doctor_name) setDoctorName(extracted.doctor_name);
+    if (extracted.doctor_name) syncDoctorName(extracted.doctor_name);
     
     // Helper pour vérifier si un texte existe déjà dans les notes (normalisé)
     const hasTextInNotes = (notes, text) => {
@@ -1083,7 +1117,7 @@ export default function ManualBookingForm({ onSuccess, onClose, onSubmitStart })
     if (extracted.floor && !hasTextInNotes(notes, extracted.floor)) {
       notes += (notes ? '\n' : '') + extracted.floor;
     }
-    if (notes !== value) setNotesMedical(notes);
+    if (notes !== value) syncNotesMedical(notes);
   }
 
   // P2.1: Résumé enrichi — confirm bar (summaryText + badges séparés)
@@ -1363,18 +1397,20 @@ export default function ManualBookingForm({ onSuccess, onClose, onSubmitStart })
             establishmentText
         ),
       }),
-      ...(cleanOptionalText(hospitalService || serviceObj?.name) != null && {
-        hospital_service: cleanOptionalText(hospitalService || serviceObj?.name),
+      ...(cleanOptionalText(hospitalServiceRef.current || serviceObj?.name) != null && {
+        hospital_service: cleanOptionalText(hospitalServiceRef.current || serviceObj?.name),
       }),
-      ...(cleanOptionalText(doctorName) != null && { doctor_name: cleanOptionalText(doctorName) }),
-      ...(cleanOptionalText(notesMedical) != null && {
-        notes_medical: cleanOptionalText(notesMedical),
+      ...(cleanOptionalText(doctorNameRef.current) != null && {
+        doctor_name: cleanOptionalText(doctorNameRef.current),
       }),
-      ...(cleanOptionalText(pickupAccessNotes) != null && {
-        pickup_access_notes: cleanOptionalText(pickupAccessNotes),
+      ...(cleanOptionalText(notesMedicalRef.current) != null && {
+        notes_medical: cleanOptionalText(notesMedicalRef.current),
       }),
-      ...(cleanOptionalText(dropoffAccessNotes) != null && {
-        dropoff_access_notes: cleanOptionalText(dropoffAccessNotes),
+      ...(cleanOptionalText(pickupAccessNotesRef.current) != null && {
+        pickup_access_notes: cleanOptionalText(pickupAccessNotesRef.current),
+      }),
+      ...(cleanOptionalText(dropoffAccessNotesRef.current) != null && {
+        dropoff_access_notes: cleanOptionalText(dropoffAccessNotesRef.current),
       }),
       wheelchair_client_has: wheelchairOptions.clientHasWheelchair || undefined,
       wheelchair_need: wheelchairOptions.needWheelchair || undefined,
@@ -1466,98 +1502,21 @@ export default function ManualBookingForm({ onSuccess, onClose, onSubmitStart })
           Renseignez le trajet, puis ajoutez les détails si nécessaire.
         </p>
       </div>
-      <form onSubmit={handleSubmit} className={styles.form}>
+      <form ref={formRef} onSubmit={handleSubmit} className={styles.form}>
         <div className={styles.formScrollBody}>
           {/* COLONNE GAUCHE */}
           <div className={styles.columnLeft} data-tour-id="booking-left-panel">
-          {/* Client */}
-          <div className={styles.formGroup} data-tour-id="booking-client">
-            <Label htmlFor="client-select">Client *</Label>
-            <AsyncCreatableSelect
-              inputId="client-select"
-              cacheOptions
-              defaultOptions={defaultClientOptions.length > 0 ? defaultClientOptions : true}
-              loadOptions={loadClientOptions}
-              onChange={handleSelectClient}
-              onCreateOption={(input) => {
-                console.log("➕ Création d'un nouveau client:", input);
-                setShowClientModal(true);
-              }}
-              value={selectedClient}
-              placeholder="Rechercher un client…"
-              formatCreateLabel={(i) => `➕ Créer "${i}"`}
-              formatOptionLabel={(option, { context }) => {
-                if (option.__isNew__) return option.label;
-                const c = option.raw || option;
-                const label = option.label || '';
-                if (context === 'value') {
-                  // Affichage dans le champ sélectionné: nom uniquement (sans téléphone/meta).
-                  return <span className={styles.clientOptionLabel}>{label}</span>;
-                }
-                const phone = c?.phone || c?.contact_phone || '';
-                const metaParts = [];
-                if (c?.is_institution) metaParts.push('🏥 Institution');
-                if (phone) metaParts.push(phone);
-                const metaText = metaParts.join(' · ');
-                return (
-                  <div className={styles.clientOption}>
-                    <span className={styles.clientOptionLabel}>{label}</span>
-                    {metaText && (
-                      <span className={styles.clientOptionMeta}>{metaText}</span>
-                    )}
-                  </div>
-                );
-              }}
-              noOptionsMessage={({ inputValue }) =>
-                inputValue
-                  ? `Aucun client trouvé pour "${inputValue}"`
-                  : 'Aucun client chargé. Ouvrez la liste ou tapez pour rechercher.'
-              }
-              loadingMessage={() => '🔍 Recherche en cours...'}
-              menuPortalTarget={typeof window !== 'undefined' ? document.body : null}
-              menuPosition="fixed"
-              styles={{ menuPortal: (base) => ({ ...base, zIndex: 'var(--z-modal-popover)' }) }}
-              classNamePrefix="react-select"
-            />
-            
-            {/* 🏥 Afficher info séjour actif et case override */}
-            {activeStay && activeStay.clinic && (
-              <div className={styles.activeStayCard}>
-                <div className={styles.activeStayRow}>
-                  <span className={styles.activeStayIcon}>🏥</span>
-                  <div className={styles.activeStayContent}>
-                    <strong className={styles.activeStayTitle}>
-                      Client hospitalisé à {activeStay.clinic.name}
-                    </strong>
-                    <small className={styles.activeStayMeta}>
-                      Adresse de départ: {getClinicPickupAddress(activeStay.clinic)}
-                      {activeStay.clinic.preferential_rate && (
-                        <span className={styles.activeStayRate}>
-                          💰 Tarif préférentiel: {activeStay.clinic.preferential_rate.toFixed(2)} CHF
-                        </span>
-                      )}
-                    </small>
-                  </div>
-                </div>
-                <div className={styles.activeStayOverride}>
-                  <label className={styles.activeStayLabel}>
-                    <input
-                      type="checkbox"
-                      checked={billToPatient}
-                      onChange={(e) => setBillToPatient(e.target.checked)}
-                      className={styles.checkbox}
-                    />
-                    <span>Facturation patient (override)</span>
-                  </label>
-                  {billToPatient && (
-                    <small className={styles.activeStayWarning}>
-                      ⚠️ La facturation sera adressée au client (le départ reste la clinique)
-                    </small>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
+          <ManualBookingClientSelect
+            selectedClient={selectedClient}
+            defaultClientOptions={defaultClientOptions}
+            loadClientOptions={loadClientOptions}
+            onChange={handleSelectClient}
+            onCreateOption={handleCreateClientOption}
+            activeStay={activeStay}
+            billToPatient={billToPatient}
+            onBillToPatientChange={handleBillToPatientChange}
+            getClinicPickupAddress={getClinicPickupAddress}
+          />
 
           {/* Lieu de prise en charge + Swap + Destination — P0: id/htmlFor a11y */}
           <div className={styles.formGroup} data-tour-id="booking-addresses">
@@ -1725,13 +1684,13 @@ export default function ManualBookingForm({ onSuccess, onClose, onSubmitStart })
                   // ✅ Pour Google Places, nettoyer juste avant la virgule
                   if (isGooglePlace) {
                     const cleanName = establishmentName.split(',')[0].trim();
-                    setDoctorName(cleanName);
+                    syncDoctorName(cleanName);
                     // NE PAS remplir l'établissement pour un docteur
                     setEstablishmentText('');
                     setMedicalFacility('');
                     // Ajouter l'étage dans les notes si présent et pas déjà présent
                     if (floorInfo) {
-                      setNotesMedical((prevNotes) => {
+                      syncNotesMedical((prevNotes) => {
                         if (hasFloorInNotes(prevNotes, floorInfo)) {
                           return prevNotes; // L'étage existe déjà, ne pas dupliquer
                         }
@@ -1742,7 +1701,7 @@ export default function ManualBookingForm({ onSuccess, onClose, onSubmitStart })
                   } else {
                     // Pour Photon/autre, utiliser l'extraction
                     const extracted = extractMedicalServiceInfo(establishmentName);
-                    setDoctorName(extracted.doctor_name || establishmentName.split(',')[0].trim());
+                    syncDoctorName(extracted.doctor_name || establishmentName.split(',')[0].trim());
                     setEstablishmentText('');
                     setMedicalFacility('');
                   }
@@ -1756,7 +1715,7 @@ export default function ManualBookingForm({ onSuccess, onClose, onSubmitStart })
                     setMedicalFacility(establishmentName);
                     // Ajouter l'étage dans les notes si présent et pas déjà présent
                     if (floorInfo) {
-                      setNotesMedical((prevNotes) => {
+                      syncNotesMedical((prevNotes) => {
                         if (hasFloorInNotes(prevNotes, floorInfo)) {
                           return prevNotes; // L'étage existe déjà, ne pas dupliquer
                         }
@@ -1769,8 +1728,8 @@ export default function ManualBookingForm({ onSuccess, onClose, onSubmitStart })
                     const extracted = extractMedicalServiceInfo(establishmentName);
                     setEstablishmentText(extracted.medical_facility || establishmentName);
                     setMedicalFacility(extracted.medical_facility || establishmentName);
-                    if (extracted.doctor_name) setDoctorName(extracted.doctor_name);
-                    if (extracted.hospital_service) setHospitalService(extracted.hospital_service);
+                    if (extracted.doctor_name) syncDoctorName(extracted.doctor_name);
+                    if (extracted.hospital_service) syncHospitalService(extracted.hospital_service);
                   }
                 }
                 // ✅ 3️⃣ TOUT LE RESTE → NOTES MÉDICALES
@@ -1787,7 +1746,7 @@ export default function ManualBookingForm({ onSuccess, onClose, onSubmitStart })
                       // C'est un lieu nommé (restaurant, magasin, parc, etc.)
                       console.log('📍 [Destination] Lieu public/POI détecté:', establishmentName);
                       let locationNote = `📍 Rendez-vous: ${establishmentName}`;
-                      setNotesMedical((prevNotes) => {
+                      syncNotesMedical((prevNotes) => {
                         // Construire la note avec l'étage si présent et pas déjà dans prevNotes
                         let finalNote = locationNote;
                         if (floorInfo && !hasFloorInNotes(prevNotes, floorInfo)) {
@@ -1798,7 +1757,7 @@ export default function ManualBookingForm({ onSuccess, onClose, onSubmitStart })
                       // Ne PAS remplir les champs médicaux
                       setEstablishmentText('');
                       setMedicalFacility('');
-                      setDoctorName('');
+                      syncDoctorName('');
                     } else {
                       // Juste une adresse de rue → ne rien faire
                       console.log('ℹ️ [Destination] Adresse de rue normale:', establishmentName);
@@ -1810,14 +1769,14 @@ export default function ManualBookingForm({ onSuccess, onClose, onSubmitStart })
                       console.log('✅ [Destination] Info médicale extraite:', extracted);
                       setEstablishmentText(extracted.medical_facility || '');
                       setMedicalFacility(extracted.medical_facility || '');
-                      if (extracted.doctor_name) setDoctorName(extracted.doctor_name);
+                      if (extracted.doctor_name) syncDoctorName(extracted.doctor_name);
                       if (extracted.hospital_service)
-                        setHospitalService(extracted.hospital_service || '');
+                        syncHospitalService(extracted.hospital_service || '');
                     }
                   }
                 }
 
-                // Ne pas appeler setHospitalService/setServiceObj ici pour éviter d'écraser
+                // Ne pas appeler syncHospitalService/setServiceObj ici pour éviter d'écraser
                 setServiceObj(null);
               }}
               placeholder="Saisir ou choisir l'adresse"
@@ -2168,12 +2127,12 @@ export default function ManualBookingForm({ onSuccess, onClose, onSubmitStart })
                   placeholder="Ex: CHIR, Urgences adultes, Cardiologie…"
                 />
               ) : (
-                <Input
+                <IsolatedTextInput
                   id="hospital_service"
                   type="text"
                   name="hospital_service"
-                  value={hospitalService}
-                  onChange={(e) => setHospitalService(e.target.value)}
+                  externalValue={hospitalServiceExternal}
+                  valueRef={hospitalServiceRef}
                   placeholder="Ex: CHIR, Urgences, Cardiologie…"
                 />
               )}
@@ -2182,12 +2141,12 @@ export default function ManualBookingForm({ onSuccess, onClose, onSubmitStart })
             {/* Nom du médecin */}
             <div className={styles.medicalFormGroup}>
               <Label htmlFor="doctor_name">Médecin</Label>
-              <Input
+              <IsolatedTextInput
                 id="doctor_name"
                 type="text"
                 name="doctor_name"
-                value={doctorName}
-                onChange={(e) => setDoctorName(e.target.value)}
+                externalValue={doctorNameExternal}
+                valueRef={doctorNameRef}
                 placeholder="Ex : Dr Dupont"
               />
             </div>
@@ -2195,11 +2154,11 @@ export default function ManualBookingForm({ onSuccess, onClose, onSubmitStart })
             {/* Notes médicales */}
             <div className={styles.medicalFormGroup}>
               <Label htmlFor="notes_medical">Notes</Label>
-              <textarea
+              <IsolatedTextarea
                 id="notes_medical"
                 name="notes_medical"
-                value={notesMedical}
-                onChange={(e) => setNotesMedical(e.target.value)}
+                externalValue={notesMedicalExternal}
+                valueRef={notesMedicalRef}
                 onBlur={handleNotesMedicalBlur}
                 placeholder="Instructions particulières, bâtiment, étage…"
                 rows={2}
@@ -2210,12 +2169,12 @@ export default function ManualBookingForm({ onSuccess, onClose, onSubmitStart })
             {/* Instructions accès pickup */}
             <div className={styles.medicalFormGroup}>
               <Label htmlFor="pickup_access_notes">Accès pickup</Label>
-              <Input
+              <IsolatedTextInput
                 id="pickup_access_notes"
                 type="text"
                 name="pickup_access_notes"
-                value={pickupAccessNotes}
-                onChange={(e) => setPickupAccessNotes(e.target.value)}
+                externalValue={pickupAccessNotesExternal}
+                valueRef={pickupAccessNotesRef}
                 placeholder="Ex: entrée arrière, sonner à…, table…, appeler avant…"
               />
             </div>
@@ -2223,12 +2182,12 @@ export default function ManualBookingForm({ onSuccess, onClose, onSubmitStart })
             {/* Instructions accès destination */}
             <div className={styles.medicalFormGroup}>
               <Label htmlFor="dropoff_access_notes">Accès destination</Label>
-              <Input
+              <IsolatedTextInput
                 id="dropoff_access_notes"
                 type="text"
                 name="dropoff_access_notes"
-                value={dropoffAccessNotes}
-                onChange={(e) => setDropoffAccessNotes(e.target.value)}
+                externalValue={dropoffAccessNotesExternal}
+                valueRef={dropoffAccessNotesRef}
                 placeholder="Ex: entrée B, étage 2, service…, appeler secrétariat…"
               />
             </div>

@@ -429,7 +429,7 @@
   font-size: 0.75rem;
   font-weight: 600;
   margin: 0 0 8px 0;
-  color: #94a3b8;
+  color: var(--text-caption, #64748b);
   padding-bottom: 6px;
   border-bottom: 1px solid #e2e8f0;
 }
@@ -440,7 +440,7 @@
   padding: 2px 6px;
   border-radius: 999px;
   background: #e2e8f0;
-  color: #94a3b8;
+  color: var(--text-caption, #64748b);
 }
 
 .medicalFormGroup {
@@ -949,7 +949,7 @@
 
 /* Placeholder visible quand pas de valeur - EXACTEMENT comme les autres champs */
 .formGroup :global(.react-select__placeholder) {
-  color: #94a3b8 !important;
+  color: var(--text-placeholder, #64748b) !important;
   font-size: 14px !important;
   position: static !important;
   pointer-events: none !important;
