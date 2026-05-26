@@ -99,7 +99,9 @@ export type DriverTelemetryEventName =
   | "driver.mission_bar.background_event"
   | "driver.mission_bar.background.unavailable"
   | "driver.mission_bar.ios.unavailable"
-  | "driver.mission_bar.ios.live_activity_unavailable";
+  | "driver.mission_bar.ios.live_activity_unavailable"
+  | "company.fleet.directions.failed"
+  | "company.fleet.directions.exception";
 
 export type DriverTelemetryPayload = {
   source: string;

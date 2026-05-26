@@ -10,6 +10,7 @@ import {
   type FleetMapLatLng,
   type FleetRouteLegId,
 } from "./fleetMapDirections";
+import { emitDriverTelemetry } from "../../../../core/observability/driverTelemetry";
 
 type DirectionsJsonStep = {
   polyline?: { points?: string };
@@ -27,6 +28,7 @@ type DirectionsJsonRoute = {
 type DirectionsJsonResponse = {
   status?: string;
   routes?: DirectionsJsonRoute[];
+  error_message?: string;
 };
 
 function extractNativeDirectionsPath(route: DirectionsJsonRoute | undefined): FleetMapLatLng[] {
@@ -72,14 +74,29 @@ export async function fetchFleetDirectionsPathNative(
       `https://maps.googleapis.com/maps/api/directions/json?${params.toString()}`
     );
     const data = (await response.json()) as DirectionsJsonResponse;
-    if (data.status !== "OK" || !data.routes?.[0]) return [];
+    if (data.status !== "OK" || !data.routes?.[0]) {
+      emitDriverTelemetry("company.fleet.directions.failed", {
+        source: "company.fleetMapDirectionsNative",
+        status: data.status ?? "unknown",
+        error_message: data.error_message ?? null,
+        http_status: response.status,
+        route_count: data.routes?.length ?? 0,
+        has_waypoints: Boolean(stablePlan.waypoints && stablePlan.waypoints.length > 0),
+      });
+      return [];
+    }
 
     const points = dedupeFleetDirectionsPoints(extractNativeDirectionsPath(data.routes[0]), 8);
     if (points.length >= 2) {
       writeCachedFleetDirectionsPath(stablePlan, points);
     }
     return points;
-  } catch {
+  } catch (error) {
+    emitDriverTelemetry("company.fleet.directions.exception", {
+      source: "company.fleetMapDirectionsNative",
+      error: error instanceof Error ? error.message : String(error),
+      has_waypoints: Boolean(stablePlan.waypoints && stablePlan.waypoints.length > 0),
+    });
     return [];
   }
 }
