@@ -565,6 +565,29 @@ def _handle_oidc_login(
     return user, company
 
 
+def _ensure_company_operator_driver_for_user(user: Any) -> None:
+    """Crée une seule fois le profil chauffeur lié au compte entreprise dispatch."""
+    user_model = user if isinstance(user, User) else None
+    if user_model is None:
+        public_id = getattr(user, "public_id", None)
+        user_id = getattr(user, "id", None)
+        if public_id:
+            user_model = User.query.filter_by(public_id=str(public_id)).first()
+        elif user_id is not None:
+            user_model = User.query.filter_by(id=int(user_id)).first()
+    if user_model is None:
+        return
+
+    from application.companies.drivers.ensure_company_operator_driver import (
+        EnsureCompanyOperatorDriverUseCase,
+    )
+    from ext import db
+
+    result = EnsureCompanyOperatorDriverUseCase().execute(user_model)
+    if result.created:
+        db.session.commit()
+
+
 # ====== Resources ======
 @company_mobile_auth_ns.route("/login")
 class EnterpriseMobileLogin(Resource):
@@ -666,6 +689,7 @@ class EnterpriseMobileLogin(Resource):
                         result = ({"error": "Code MFA invalide."}, 401)
                     else:
                         # MFA vérifié, continuer avec l'émission de tokens
+                        _ensure_company_operator_driver_for_user(user)
                         response = _issue_tokens(user, company, device_id)
                         response["mfa_required"] = False
                         result = (response, 200)
@@ -685,6 +709,7 @@ class EnterpriseMobileLogin(Resource):
                     )
             else:
                 # Pas de MFA requis, émettre les tokens directement
+                _ensure_company_operator_driver_for_user(user)
                 response = _issue_tokens(user, company, device_id)
                 response["mfa_required"] = False
                 result = (response, 200)
@@ -740,6 +765,7 @@ class EnterpriseMobileMfaVerify(Resource):
                 logger_instance=logger,
             )
 
+        _ensure_company_operator_driver_for_user(user)
         response = _issue_tokens(
             user,  # pyright: ignore[reportArgumentType]
             company,
@@ -868,6 +894,7 @@ class EnterpriseMobileRefresh(Resource):
                     if not company:
                         result = _refresh_reject("tenant_access_revoked", 403)
                     else:
+                        _ensure_company_operator_driver_for_user(user_model or user)
                         response = _issue_tokens(user, company, session_id=session_id)  # pyright: ignore[reportArgumentType]
                         response["mfa_required"] = False
                         result = (response, 200)
@@ -903,6 +930,7 @@ class MyDriverAccount(Resource):
             user.email,
             user.role,
         )
+        _ensure_company_operator_driver_for_user(user)
         # 1. Vérifier si ce user a directement un compte driver (user_id)
         # Utiliser le repository pour récupérer le driver
         from repositories.company_repository import CompanyRepository
@@ -1058,6 +1086,7 @@ class SwitchToDriver(Resource):
                 logger,
             )
 
+        _ensure_company_operator_driver_for_user(user)
         # Utiliser la même logique que MyDriverAccount pour trouver le driver
         # 1. Vérifier si ce user a directement un compte driver (user_id)
         # Utiliser le repository pour récupérer le driver
@@ -1244,6 +1273,7 @@ class EnterpriseMobileSession(Resource):
                     logger_instance=logger,
                 )
 
+            _ensure_company_operator_driver_for_user(user)
             # Récupérer l'entreprise
             # ✅ Fix: UserDTO n'a pas d'attribut company, utiliser CompanyRepository
             from repositories.company_repository import CompanyRepository
