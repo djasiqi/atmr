@@ -108,11 +108,31 @@ function checkEasProduction() {
       "❌ EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_API_KEY manquante ou placeholder dans eas.json (production.env)"
     );
   }
+  const prodPrebuild = eas.build.production.prebuildCommand ?? "";
+  if (prodPrebuild.includes("--clean")) {
+    checks.push("✅ prebuildCommand --clean (production) — évite le skip prebuild EAS");
+  } else {
+    errors.push(
+      "❌ prebuildCommand avec --clean manquant dans eas.json (production) — EAS peut ignorer le prebuild si android/ existe"
+    );
+  }
+}
+
+function checkNativeDirsAbsentForEas() {
+  for (const dir of ["android", "ios"]) {
+    const fullPath = path.join(ROOT, dir);
+    if (fs.existsSync(fullPath)) {
+      warnings.push(
+        `⚠️ Dossier ${dir}/ présent localement — supprimez-le avant eas build (npm run prebuild le régénère). .easignore l'exclut mais --clean côté serveur est plus sûr.`
+      );
+    }
+  }
 }
 
 log("\n🔍 Vérification build production unified-app\n");
 
 checkEasProduction();
+checkNativeDirsAbsentForEas();
 checkDisplayName();
 checkGitTracked("assets/images/icon.png", "Icône store (512, icon.png)");
 checkGitTracked("assets/images/adaptive-foreground.png", "Adaptive Android (1024, zone sûre ~66 %, adaptive-foreground.png)");

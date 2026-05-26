@@ -1,8 +1,16 @@
+# Copie minimale de .gitignore + exclusions EAS (prioritaire sur .gitignore).
+node_modules/
+.expo/
+dist/
+web-build/
+
 # Ne pas envoyer les .env locaux (dev LAN) — les secrets prod viennent d'EAS / eas.json.
 .env
 .env.*
 !.env.example
 
-# Ne jamais réutiliser un dossier android/ local (prebuild EAS doit être propre).
+# Ne jamais réutiliser un dossier natif local (prebuild EAS doit régénérer).
+/android
+/ios
 android/
 ios/

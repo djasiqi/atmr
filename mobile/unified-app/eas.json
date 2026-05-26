@@ -9,7 +9,9 @@
       "distribution": "internal",
       "environment": "development",
       "channel": "development",
+      "prebuildCommand": "expo prebuild --clean --no-install",
       "env": {
+        "EXPO_NO_GIT_STATUS": "1",
         "APP_VARIANT": "dev",
         "EXPO_PUBLIC_APP_ENV": "development",
         "EXPO_PUBLIC_ENABLE_DRIVER_SOCKET": "1",
@@ -34,7 +36,9 @@
       "distribution": "internal",
       "environment": "preview",
       "channel": "preview",
+      "prebuildCommand": "expo prebuild --clean --no-install",
       "env": {
+        "EXPO_NO_GIT_STATUS": "1",
         "APP_VARIANT": "prod",
         "EXPO_PUBLIC_APP_ENV": "preview",
         "EXPO_PUBLIC_API_BASE_URL": "https://api.lirie.ch/api/v1",
@@ -68,7 +72,9 @@
       "distribution": "store",
       "environment": "production",
       "channel": "production",
+      "prebuildCommand": "expo prebuild --clean --no-install",
       "env": {
+        "EXPO_NO_GIT_STATUS": "1",
         "APP_VARIANT": "prod",
         "EXPO_PUBLIC_APP_ENV": "production",
         "EXPO_PUBLIC_API_BASE_URL": "https://api.lirie.ch/api/v1",
