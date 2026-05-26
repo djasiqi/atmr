@@ -381,10 +381,14 @@ class TestAcceptOfferRoundTrip:
         assert return_booking.billed_to_company_id == outbound.billed_to_company_id
 
     @patch("application.institutions.accept_offer.db")
-    def test_billing_intent_institution_sets_clinic_and_company(self, mock_db: MagicMock):
+    def test_billing_intent_institution_sets_clinic_and_company(
+        self, mock_db: MagicMock
+    ):
         """billing_intent=institution -> billed_to_type=clinic, company_id accepté."""
         uc = self._make_uc()
-        client = _Client(preferential_rate=Decimal("75.00"), default_billed_to_type="clinic")
+        client = _Client(
+            preferential_rate=Decimal("75.00"), default_billed_to_type="clinic"
+        )
         uc._get_or_create_institution_client = MagicMock(return_value=client)  # type: ignore[assignment]
         uc._resolve_billing_party = MagicMock()  # type: ignore[assignment]
 
@@ -417,7 +421,9 @@ class TestAcceptOfferRoundTrip:
     def test_billing_intent_patient_keeps_patient_billing(self, mock_db: MagicMock):
         """billing_intent=patient -> billed_to_type=patient sans company_id."""
         uc = self._make_uc()
-        client = _Client(preferential_rate=Decimal("75.00"), default_billed_to_type="clinic")
+        client = _Client(
+            preferential_rate=Decimal("75.00"), default_billed_to_type="clinic"
+        )
         uc._get_or_create_institution_client = MagicMock(return_value=client)  # type: ignore[assignment]
         uc._resolve_billing_party = MagicMock()  # type: ignore[assignment]
 

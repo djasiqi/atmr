@@ -41,7 +41,7 @@ class TestBookingTransferService:
             booking = BookingFactory(
                 company=company_a,
                 client=client,
-                status=BookingStatus.CONFIRMED,
+                status=BookingStatus.ACCEPTED,
                 amount=100.0,
             )
             db.session.commit()
@@ -80,7 +80,7 @@ class TestBookingTransferService:
             booking = BookingFactory(
                 company=company_c,  # Course d'une autre entreprise
                 client=client,
-                status=BookingStatus.CONFIRMED,
+                status=BookingStatus.ACCEPTED,
             )
             db.session.commit()
 
@@ -107,7 +107,7 @@ class TestBookingTransferService:
             booking = BookingFactory(
                 company=company_a,
                 client=client,
-                status=BookingStatus.CONFIRMED,
+                status=BookingStatus.ACCEPTED,
             )
             db.session.commit()
 
@@ -142,7 +142,7 @@ class TestBookingTransferService:
             booking = BookingFactory(
                 company=company_a,
                 client=client,
-                status=BookingStatus.CONFIRMED,
+                status=BookingStatus.ACCEPTED,
             )
             db.session.commit()
 
@@ -180,7 +180,7 @@ class TestBookingTransferService:
             booking = BookingFactory(
                 company=company_a,
                 client=client,
-                status=BookingStatus.CONFIRMED,
+                status=BookingStatus.ACCEPTED,
             )
             db.session.commit()
 
@@ -214,7 +214,7 @@ class TestBookingTransferService:
             booking = BookingFactory(
                 company=company_a,
                 client=client,
-                status=BookingStatus.CONFIRMED,
+                status=BookingStatus.ACCEPTED,
             )
             db.session.commit()
 
@@ -296,7 +296,7 @@ class TestBookingTransferService:
             booking = BookingFactory(
                 company=company_a,
                 client=client,
-                status=BookingStatus.CONFIRMED,  # Pas complétée
+                status=BookingStatus.ACCEPTED,  # Pas complétée
             )
             db.session.commit()
 

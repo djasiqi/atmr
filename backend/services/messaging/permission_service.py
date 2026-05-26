@@ -5,7 +5,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from models import Conversation, ConversationParticipant, Driver, Message, User
-from models.messaging_enums import ConversationType, DEFAULT_MESSAGE_VISIBILITY_TAGS, ParticipantRole
+from models.messaging_enums import (
+    ConversationType,
+    DEFAULT_MESSAGE_VISIBILITY_TAGS,
+    ParticipantRole,
+)
 
 if TYPE_CHECKING:
     from models.enums import UserRole
@@ -68,7 +72,10 @@ class MessagingPermissionService:
     @staticmethod
     def can_create_direct(user: User) -> bool:
         """Chauffeurs de la même entreprise peuvent démarrer un DM collègue."""
-        return _normalized_user_role(user) == "DRIVER" and getattr(user, "driver", None) is not None
+        return (
+            _normalized_user_role(user) == "DRIVER"
+            and getattr(user, "driver", None) is not None
+        )
 
     @staticmethod
     def can_direct_message_peer(user: User, peer_user_id: int) -> bool:
@@ -132,7 +139,9 @@ def _company_id_for_user(user: User) -> int:
 def driver_assigned_to_booking(driver: Driver, booking_id: int) -> bool:
     from models import Booking
 
-    booking = Booking.query.filter_by(id=booking_id, company_id=driver.company_id).first()
+    booking = Booking.query.filter_by(
+        id=booking_id, company_id=driver.company_id
+    ).first()
     if not booking:
         return False
     return int(getattr(booking, "driver_id", 0) or 0) == int(driver.id)

@@ -4480,7 +4480,9 @@ class InstitutionsList(Resource):
                 clean = dict(row)
                 clean.pop("_priority", None)
                 institutions_out.append(clean)
-            institutions_out.sort(key=lambda item: str(item.get("institution_name") or "").lower())
+            institutions_out.sort(
+                key=lambda item: str(item.get("institution_name") or "").lower()
+            )
 
             return {"institutions": institutions_out}
 

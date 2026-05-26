@@ -6,6 +6,23 @@ import BookingStatusScreen from "../../app/(public)/booking-status";
 
 jest.mock("../../assets/images/landing-background.png", () => 1);
 
+/** ScrollView dans Screen ne rend pas toujours les enfants avec react-test-renderer. */
+jest.mock("../../src/design/responsive", () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- jest.mock factory scope
+  const ReactMod = require("react") as typeof import("react");
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- jest.mock factory scope
+  const { View } = require("react-native") as typeof import("react-native");
+  const actual =
+    jest.requireActual<typeof import("../../src/design/responsive")>(
+      "../../src/design/responsive"
+    );
+  return {
+    ...actual,
+    Screen: ({ children }: { children: ReactMod.ReactNode }) =>
+      ReactMod.createElement(View, { style: { flex: 1 } }, children),
+  };
+});
+
 const safeAreaMetrics = {
   frame: { x: 0, y: 0, width: 390, height: 844 },
   insets: { top: 0, left: 0, right: 0, bottom: 0 },
@@ -22,6 +39,7 @@ const mockFetchGuestBookingStatus = jest.fn() as jest.Mock<any>;
 
 jest.mock("expo-router", () => ({
   useLocalSearchParams: () => mockUseLocalSearchParams(),
+  usePathname: () => "/(public)/booking-status",
   useRouter: () => ({ push: jest.fn(), replace: jest.fn(), canGoBack: () => false, back: jest.fn() }),
   Redirect: (props: { href: unknown }) => {
     mockRedirect(props);

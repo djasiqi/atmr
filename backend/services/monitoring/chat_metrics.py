@@ -207,7 +207,9 @@ def _socket_connect_backfill() -> Counter | None:
     return _SOCKET_CONNECT_BACKFILL
 
 
-def observe_hub_threads_duration_ms(duration_ms: int, route: str = "hub_threads") -> None:
+def observe_hub_threads_duration_ms(
+    duration_ms: int, route: str = "hub_threads"
+) -> None:
     h = _hub_threads_duration()
     if h is not None:
         h.labels(route=route).observe(max(0, duration_ms))

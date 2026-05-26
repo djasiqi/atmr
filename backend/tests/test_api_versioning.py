@@ -8,21 +8,6 @@ Vérifie que:
 """
 
 import pytest
-from flask import Flask
-
-
-@pytest.fixture
-def app():
-    """Crée une instance Flask pour tests."""
-    from app import create_app
-
-    return create_app("testing")
-
-
-@pytest.fixture
-def client(app: Flask):
-    """Client de test Flask."""
-    return app.test_client()
 
 
 class TestAPIVersioning:

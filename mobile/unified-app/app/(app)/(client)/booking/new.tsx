@@ -1325,7 +1325,7 @@ export default function ClientBookingCreateScreen(
         label: item.label,
         place_id: item.place_id,
         lat: la0,
-        lon: item.lon,
+        lon: lo0,
         lng: item.lng,
         isGeocoded: isGeocodedSuggestion(item),
         selection,
@@ -2394,6 +2394,8 @@ export default function ClientBookingCreateScreen(
       setPickupRefineMessage(null);
       void loadSuggestions("pickup", domicile);
     }
+    // loadSuggestions est stable pour l'effet d'initialisation domicile.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pickupTouched, pickupLocation, profileQuery.data]);
 
   useEffect(() => {
@@ -2458,6 +2460,8 @@ export default function ClientBookingCreateScreen(
       }
       setErrorMessage(null);
     })();
+    // Hydratation one-shot du brouillon public : fonctions métier volontairement hors deps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.publicDraftId]);
 
   useEffect(() => {

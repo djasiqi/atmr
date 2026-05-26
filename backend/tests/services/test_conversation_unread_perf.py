@@ -28,18 +28,20 @@ def test_unread_count_uses_read_ids_set(read_ids, expected):
 
 
 def test_hub_threads_for_company_reuses_inbox():
-  inbox = {
-    "sections": {
-      "mission_active": [],
-      "urgent": [],
-      "dispatch": [{"conversation_id": 1, "thread_id": "dispatch"}],
-      "drivers": [],
-      "archives": [],
-    },
-    "unread_total": 0,
-  }
-  with patch.object(
-    ConversationService, "build_company_inbox", side_effect=AssertionError("no rebuild")
-  ):
-    threads = ConversationService.hub_threads_for_company(MagicMock(), inbox=inbox)
-  assert len(threads) == 1
+    inbox = {
+        "sections": {
+            "mission_active": [],
+            "urgent": [],
+            "dispatch": [{"conversation_id": 1, "thread_id": "dispatch"}],
+            "drivers": [],
+            "archives": [],
+        },
+        "unread_total": 0,
+    }
+    with patch.object(
+        ConversationService,
+        "build_company_inbox",
+        side_effect=AssertionError("no rebuild"),
+    ):
+        threads = ConversationService.hub_threads_for_company(MagicMock(), inbox=inbox)
+    assert len(threads) == 1

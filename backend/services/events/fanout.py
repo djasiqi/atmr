@@ -487,7 +487,9 @@ def _create_event_payload(data: Dict[str, Any], event_type: str) -> Dict[str, An
         - event_type: Type d'événement métier
         - ...tous les champs de data (fusionnés)
     """
-    from services.events.booking_socket_payload import maybe_shrink_booking_socket_payload
+    from services.events.booking_socket_payload import (
+        maybe_shrink_booking_socket_payload,
+    )
 
     shrunk = maybe_shrink_booking_socket_payload(data, event_type)
     return SocketEvent.create(

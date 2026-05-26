@@ -76,9 +76,18 @@ class Message(db.Model):
     is_read = Column(Boolean, nullable=False, default=False)
 
     thread_id = Column(sa.String(64), nullable=True, index=True)
-    booking_id = Column(Integer, ForeignKey("booking.id", ondelete="SET NULL"), nullable=True, index=True)
-    message_type = Column(sa.String(32), nullable=False, default="text", server_default="text")
-    priority = Column(sa.String(16), nullable=False, default="normal", server_default="normal")
+    booking_id = Column(
+        Integer,
+        ForeignKey("booking.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    message_type = Column(
+        sa.String(32), nullable=False, default="text", server_default="text"
+    )
+    priority = Column(
+        sa.String(16), nullable=False, default="normal", server_default="normal"
+    )
     client_message_id = Column(sa.String(64), nullable=True, index=True)
     acked_at = Column(DateTime(timezone=True), nullable=True)
 
@@ -95,7 +104,9 @@ class Message(db.Model):
     sender = relationship("User", foreign_keys=[sender_id], lazy="joined")
     receiver = relationship("User", foreign_keys=[receiver_id], lazy="joined")
     company = relationship("Company", lazy="joined")
-    conversation = relationship("Conversation", back_populates="messages", lazy="joined")
+    conversation = relationship(
+        "Conversation", back_populates="messages", lazy="joined"
+    )
 
     @override
     def __repr__(self):
@@ -144,7 +155,9 @@ class Message(db.Model):
             "message_type": getattr(self, "message_type", None) or "text",
             "priority": getattr(self, "priority", None) or "normal",
             "client_message_id": getattr(self, "client_message_id", None),
-            "acked_at": _iso(self.acked_at) if getattr(self, "acked_at", None) else None,
+            "acked_at": _iso(self.acked_at)
+            if getattr(self, "acked_at", None)
+            else None,
             "conversation_id": getattr(self, "conversation_id", None),
             "visibility_tags": getattr(self, "visibility_tags", None),
             "system_event_key": getattr(self, "system_event_key", None),

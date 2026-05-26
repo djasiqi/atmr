@@ -44,7 +44,9 @@ from .enums import InvoiceBillingStrategy, InvoiceLineType, InvoiceStatus, Payme
 logger = logging.getLogger(__name__)
 
 
-def _ordered_unique_booking_ids_from_lines(lines: list[Any] | tuple[Any, ...]) -> list[int]:
+def _ordered_unique_booking_ids_from_lines(
+    lines: list[Any] | tuple[Any, ...],
+) -> list[int]:
     """IDs courses pour registre mobile / ``list_view`` (plusieurs trajets, A/R fusionné).
 
     Une ligne fusionnée n’a qu’un ``reservation_id`` (segment principal) ; les autres IDs
@@ -423,7 +425,9 @@ class Invoice(db.Model):
 
         booking_ids_ordered: list[int] = []
         if hasattr(self, "lines") and self.lines:
-            booking_ids_ordered = _ordered_unique_booking_ids_from_lines(list(self.lines))
+            booking_ids_ordered = _ordered_unique_booking_ids_from_lines(
+                list(self.lines)
+            )
 
         primary_booking_id: int | None = (
             booking_ids_ordered[0] if booking_ids_ordered else None

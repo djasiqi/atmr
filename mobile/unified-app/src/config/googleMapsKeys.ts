@@ -19,7 +19,9 @@ function trimEnv(name: string): string {
           ? process.env.EXPO_PUBLIC_GOOGLE_MAPS_IOS_API_KEY
           : name === "EXPO_PUBLIC_GOOGLE_MAPS_LIBRARIES"
             ? process.env.EXPO_PUBLIC_GOOGLE_MAPS_LIBRARIES
-            : undefined;
+            : name === "EXPO_PUBLIC_GOOGLE_MAPS_FLEET_LIBRARIES"
+              ? process.env.EXPO_PUBLIC_GOOGLE_MAPS_FLEET_LIBRARIES
+              : undefined;
   return typeof v === "string" ? v.trim() : "";
 }
 

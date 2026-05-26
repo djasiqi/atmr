@@ -7,8 +7,12 @@ from services.geolocation.location import LocationService
 
 def test_osrm_circuit_breaker_opens_after_threshold(monkeypatch):
     svc = LocationService(redis_client_instance=None)
-    monkeypatch.setattr("services.geolocation.location.OSRM_CIRCUIT_BREAKER_THRESHOLD", 2)
-    monkeypatch.setattr("services.geolocation.location.OSRM_CIRCUIT_BREAKER_COOLDOWN_SEC", 60)
+    monkeypatch.setattr(
+        "services.geolocation.location.OSRM_CIRCUIT_BREAKER_THRESHOLD", 2
+    )
+    monkeypatch.setattr(
+        "services.geolocation.location.OSRM_CIRCUIT_BREAKER_COOLDOWN_SEC", 60
+    )
     svc._register_osrm_failure("nearest", RuntimeError("timeout"))
     assert svc._is_osrm_circuit_open() is False
     svc._register_osrm_failure("nearest", RuntimeError("timeout"))

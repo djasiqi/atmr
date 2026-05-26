@@ -651,9 +651,7 @@ def create_app(config_name: str | None = None):
 
         init_company_dashboard_sql_perf(app)
     except Exception as e:
-        app.logger.warning(
-            "[CompanyDashboardSQLPerf] Échec initialisation: %s", e
-        )
+        app.logger.warning("[CompanyDashboardSQLPerf] Échec initialisation: %s", e)
 
     # Prometheus middleware pour métriques HTTP (latence p50/p95/p99)
     try:

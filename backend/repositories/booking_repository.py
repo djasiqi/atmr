@@ -695,7 +695,9 @@ class BookingRepository:
         self, booking_id: int, company_id: int
     ) -> Booking | None:
         """Même entreprise (lecture équipe) — ex. liste `/me/company-bookings/today`."""
-        return Booking.query.filter_by(id=booking_id, company_id=company_id).one_or_none()
+        return Booking.query.filter_by(
+            id=booking_id, company_id=company_id
+        ).one_or_none()
 
     def find_model_by_id_and_client(
         self, booking_id: int, client_id: int

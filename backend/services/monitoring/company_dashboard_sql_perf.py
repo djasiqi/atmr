@@ -37,9 +37,7 @@ def _reset_sql_counters() -> None:
 
 
 @event.listens_for(Engine, "before_cursor_execute")
-def _before_cursor_execute(
-    conn, cursor, statement, parameters, context, executemany
-):  # noqa: ARG001
+def _before_cursor_execute(conn, cursor, statement, parameters, context, executemany):  # noqa: ARG001
     if not getattr(g, "_dash_sql_trace", False):
         return
     g._dash_sql_pending_start = time.perf_counter()

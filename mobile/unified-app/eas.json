@@ -10,6 +10,8 @@
       "environment": "development",
       "channel": "development",
       "env": {
+        "APP_VARIANT": "dev",
+        "EXPO_PUBLIC_APP_ENV": "development",
         "EXPO_PUBLIC_ENABLE_DRIVER_SOCKET": "1",
         "EXPO_PUBLIC_ENABLE_BG_LOCATION": "1",
         "EXPO_PUBLIC_ENABLE_TRACKING_PERSISTENT_QUEUE": "1",
@@ -33,6 +35,10 @@
       "environment": "preview",
       "channel": "preview",
       "env": {
+        "APP_VARIANT": "prod",
+        "EXPO_PUBLIC_APP_ENV": "preview",
+        "EXPO_PUBLIC_API_BASE_URL": "https://api.lirie.ch/api/v1",
+        "EXPO_PUBLIC_DRIVER_SOCKET_URL": "https://api.lirie.ch",
         "EXPO_PUBLIC_ENABLE_DRIVER_SOCKET": "1",
         "EXPO_PUBLIC_ENABLE_BG_LOCATION": "1",
         "EXPO_PUBLIC_ENABLE_TRACKING_PERSISTENT_QUEUE": "1",
@@ -55,6 +61,22 @@
       "distribution": "store",
       "environment": "production",
       "channel": "production",
+      "env": {
+        "APP_VARIANT": "prod",
+        "EXPO_PUBLIC_APP_ENV": "production",
+        "EXPO_PUBLIC_API_BASE_URL": "https://api.lirie.ch/api/v1",
+        "EXPO_PUBLIC_DRIVER_SOCKET_URL": "https://api.lirie.ch",
+        "EXPO_PUBLIC_ENABLE_DRIVER_SOCKET": "1",
+        "EXPO_PUBLIC_ENABLE_BG_LOCATION": "1",
+        "EXPO_PUBLIC_ENABLE_TRACKING_PERSISTENT_QUEUE": "1",
+        "EXPO_PUBLIC_ENABLE_TRACKING_HTTP_FALLBACK": "1",
+        "EXPO_PUBLIC_ENABLE_TRACKING_RESUME_RESYNC": "1",
+        "EXPO_PUBLIC_ENABLE_REALTIME_AUTH_RECONNECT": "1",
+        "EXPO_PUBLIC_ENABLE_DRIVER_PUSH": "1",
+        "EXPO_PUBLIC_ENABLE_DRIVER_NOTIFICATION_ACTIONS": "1",
+        "EXPO_PUBLIC_ENABLE_DRIVER_MISSION_BAR": "1",
+        "EXPO_PUBLIC_ENABLE_DRIVER_FCM_NATIVE": "1"
+      },
       "android": {
         "buildType": "app-bundle",
         "autoIncrement": true
@@ -62,6 +84,19 @@
       "ios": {
         "simulator": false,
         "autoIncrement": true
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "android": {
+        "serviceAccountKeyPath": "./credentials/google-play-service-account.json",
+        "track": "production"
+      },
+      "ios": {
+        "appleId": "jasiqi.drin@gmail.com",
+        "ascAppId": "6756059634",
+        "appleTeamId": "6WULBZ4X7W"
       }
     }
   }

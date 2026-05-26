@@ -11,7 +11,9 @@ from services.infrastructure.socketio_runtime_check import (
 )
 
 
-def test_single_worker_safe_without_message_queue(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_single_worker_safe_without_message_queue(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("GUNICORN_WORKERS", "1")
     diag = collect_socketio_runtime_diagnostics(message_queue=None, redis_url="")
     assert diag.multi_worker_safe is True

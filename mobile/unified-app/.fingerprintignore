@@ -1,0 +1,7 @@
+# Secrets Firebase injectés via EAS (contenu différent local vs CI).
+GoogleService-Info.plist
+google-services.json
+
+# Dossiers natifs générés par prebuild (présents sur EAS, absents en local CNG).
+ios/**
+android/**

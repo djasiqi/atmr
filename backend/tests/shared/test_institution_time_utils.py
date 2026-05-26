@@ -25,9 +25,7 @@ class TestIsReturnTimePending:
 
 class TestValidateProposedPickupTime:
     def test_rejects_past(self):
-        past = (datetime.now(UTC) - timedelta(hours=1)).strftime(
-            "%Y-%m-%dT%H:%M:%SZ"
-        )
+        past = (datetime.now(UTC) - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
         dt, err = validate_proposed_pickup_time(past)
         assert dt is None
         assert err is not None

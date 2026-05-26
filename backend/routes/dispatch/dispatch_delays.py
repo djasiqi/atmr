@@ -183,7 +183,9 @@ class DelaysResource(Resource):
                 elif dropoff_time:
                     try:
                         current_time = now_local()
-                        time_diff_seconds = (current_time - dropoff_time).total_seconds()
+                        time_diff_seconds = (
+                            current_time - dropoff_time
+                        ).total_seconds()
                         if time_diff_seconds > TIME_DIFF_SECONDS_THRESHOLD:
                             dropoff_delay = int(time_diff_seconds / 60)
                     except Exception:
@@ -194,7 +196,6 @@ class DelaysResource(Resource):
                 # ETA présents → une ligne (retard 0 possible). Sans ETA mais horloge en retard → ligne utile
                 # pour aller/retour même quand les ETA ne sont pas encore posés sur l’assignment.
                 if pickup_eta or dropoff_eta or max_delay > MAX_DELAY_ZERO:
-
                     # ✨ NOUVEAUTÉ: Générer des suggestions intelligentes
                     suggestions_list = []
                     try:

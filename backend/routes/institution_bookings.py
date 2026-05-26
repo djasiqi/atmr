@@ -189,9 +189,7 @@ class InstitutionBookingUpdate(Resource):
                 }, 400
 
             try:
-                validated = cast(
-                    dict[str, Any], booking_patch_schema.load(data)
-                )
+                validated = cast(dict[str, Any], booking_patch_schema.load(data))
             except ValidationError as ve:
                 return {"error": "Données invalides", "details": ve.messages}, 400
 
@@ -249,9 +247,7 @@ class InstitutionBookingCancel(Resource):
 
             data = request.get_json() or {}
             try:
-                validated = cast(
-                    dict[str, Any], booking_cancel_schema.load(data)
-                )
+                validated = cast(dict[str, Any], booking_cancel_schema.load(data))
             except ValidationError as ve:
                 return {"error": "Données invalides", "details": ve.messages}, 400
 

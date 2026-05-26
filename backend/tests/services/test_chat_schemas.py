@@ -14,5 +14,7 @@ def test_team_chat_rejects_invalid_receiver_id():
 
 
 def test_team_chat_coerces_receiver_id():
-    payload = TeamChatInboundPayload.model_validate({"receiver_id": "42", "content": "x"})
+    payload = TeamChatInboundPayload.model_validate(
+        {"receiver_id": "42", "content": "x"}
+    )
     assert payload.receiver_id == 42

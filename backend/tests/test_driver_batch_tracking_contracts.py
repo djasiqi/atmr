@@ -79,7 +79,9 @@ def test_batch_single_active_session_conflict_returns_409(client, db, monkeypatc
     assert response.get_json()["error"] == "tracking_session_conflict"
 
 
-def test_batch_duplicate_position_id_absorbed_and_ordered_by_sequence(client, db, monkeypatch):
+def test_batch_duplicate_position_id_absorbed_and_ordered_by_sequence(
+    client, db, monkeypatch
+):
     company = create_test_company(db)
     driver = create_test_driver(db, company=company)
     fake_redis = _FakeRedis()

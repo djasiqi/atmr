@@ -17,7 +17,9 @@ def test_resolve_by_legacy_thread_prefers_canonical_dispatch():
         "services.messaging.conversation_service.ConversationService.ensure_company_dispatch_conversation",
         return_value=canonical,
     ) as ensure_mock:
-        result = ConversationService.resolve_by_legacy_thread(1, "dispatch", driver=None)
+        result = ConversationService.resolve_by_legacy_thread(
+            1, "dispatch", driver=None
+        )
 
     assert result is canonical
     ensure_mock.assert_called_once_with(1)

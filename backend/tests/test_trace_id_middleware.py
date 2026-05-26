@@ -3,10 +3,10 @@
 Tests pour la génération et l'injection de trace_id dans les requêtes.
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
-from flask import Flask
+from flask import Flask, g
 
 from middleware.trace_id import (
     add_trace_id_to_response,
@@ -43,79 +43,58 @@ class TestTraceIdMiddleware:
     """Tests pour le middleware trace_id."""
 
     @pytest.fixture
-    def app(self):
-        """Créer une app Flask pour les tests."""
+    def trace_app(self):
+        """App Flask minimale (nom distinct pour éviter conflit avec conftest `app`)."""
         app = Flask(__name__)
         app.config["TESTING"] = True
         return app
 
-    def test_get_trace_id_generates_new(self, app):
+    def test_get_trace_id_generates_new(self, trace_app):
         """Test génération nouveau trace_id si absent."""
-        with app.app_context(), patch("middleware.trace_id.request") as mock_request:
-            mock_request.headers.get.return_value = None
-
+        with trace_app.test_request_context():
             trace_id = get_trace_id()
 
             assert trace_id is not None
             assert len(trace_id) == 32
-            assert hasattr(app.app_context().g, "trace_id")
+            assert hasattr(g, "trace_id")
 
-    def test_get_trace_id_from_header(self, app):
+    def test_get_trace_id_from_header(self, trace_app):
         """Test récupération trace_id depuis header X-Trace-Id."""
         expected_trace_id = "custom-trace-id-12345"
-        with app.app_context(), patch("middleware.trace_id.request") as mock_request:
-            mock_request.headers.get.side_effect = lambda key: (
-                expected_trace_id if key == "X-Trace-Id" else None
-            )
-
+        with trace_app.test_request_context(headers={"X-Trace-Id": expected_trace_id}):
             trace_id = get_trace_id()
 
             assert trace_id == expected_trace_id
-            assert app.app_context().g.trace_id == expected_trace_id
+            assert g.trace_id == expected_trace_id
 
-    def test_get_trace_id_from_trace_id_header(self, app):
+    def test_get_trace_id_from_trace_id_header(self, trace_app):
         """Test récupération trace_id depuis header Trace-Id."""
         expected_trace_id = "custom-trace-id-67890"
-        with app.app_context(), patch("middleware.trace_id.request") as mock_request:
-            mock_request.headers.get.side_effect = lambda key: (
-                expected_trace_id if key == "Trace-Id" else None
-            )
-
+        with trace_app.test_request_context(headers={"Trace-Id": expected_trace_id}):
             trace_id = get_trace_id()
 
             assert trace_id == expected_trace_id
 
-    def test_get_trace_id_cached(self, app):
+    def test_get_trace_id_cached(self, trace_app):
         """Test que trace_id est mis en cache dans g."""
-        with app.app_context(), patch("middleware.trace_id.request") as mock_request:
-            mock_request.headers.get.return_value = None
-
+        with trace_app.test_request_context():
             trace_id1 = get_trace_id()
             trace_id2 = get_trace_id()
 
-            # Devrait retourner le même trace_id
             assert trace_id1 == trace_id2
-            # Ne devrait appeler generate_trace_id qu'une fois
-            assert mock_request.headers.get.call_count <= 2
 
-    def test_inject_trace_id_middleware(self, app):
+    def test_inject_trace_id_middleware(self, trace_app):
         """Test injection trace_id via middleware."""
-        with app.app_context(), patch("middleware.trace_id.request") as mock_request:
-            mock_request.headers.get.return_value = None
-
+        with trace_app.test_request_context():
             inject_trace_id_middleware()
 
-            assert hasattr(app.app_context().g, "trace_id")
-            trace_id = app.app_context().g.trace_id
-            assert trace_id is not None
-            assert len(trace_id) == 32
+            assert hasattr(g, "trace_id")
+            assert g.trace_id is not None
+            assert len(g.trace_id) == 32
 
-    def test_add_trace_id_to_response(self, app):
+    def test_add_trace_id_to_response(self, trace_app):
         """Test ajout trace_id dans headers de réponse."""
-        with app.app_context(), patch("middleware.trace_id.request") as mock_request:
-            mock_request.headers.get.return_value = None
-
-            # Créer une réponse mock
+        with trace_app.test_request_context():
             mock_response = MagicMock()
             mock_response.headers = {}
 
@@ -125,26 +104,19 @@ class TestTraceIdMiddleware:
             assert "X-Trace-Id" in mock_response.headers
             assert len(mock_response.headers["X-Trace-Id"]) == 32
 
-    def test_get_trace_id_for_logging(self, app):
+    def test_get_trace_id_for_logging(self, trace_app):
         """Test récupération trace_id pour logs structurés."""
-        with app.app_context(), patch("middleware.trace_id.request") as mock_request:
-            mock_request.headers.get.return_value = None
-
+        with trace_app.test_request_context():
             log_data = get_trace_id_for_logging()
 
             assert isinstance(log_data, dict)
             assert "trace_id" in log_data
             assert len(log_data["trace_id"]) == 32
 
-    def test_trace_id_persistence_across_requests(self, app):
+    def test_trace_id_persistence_across_requests(self, trace_app):
         """Test que trace_id persiste dans le même contexte."""
-        with app.app_context(), patch("middleware.trace_id.request") as mock_request:
-            mock_request.headers.get.return_value = None
-
-            # Premier appel
+        with trace_app.test_request_context():
             trace_id1 = get_trace_id()
-
-            # Deuxième appel dans le même contexte
             trace_id2 = get_trace_id()
 
             assert trace_id1 == trace_id2
@@ -154,38 +126,29 @@ class TestTraceIdIntegration:
     """Tests d'intégration pour trace_id."""
 
     @pytest.fixture
-    def client(self, app):
-        """Créer un client de test."""
-        return app.test_client()
+    def trace_app(self):
+        """App Flask minimale pour les tests d'intégration trace_id."""
+        app = Flask(__name__)
+        app.config["TESTING"] = True
+        return app
 
-    def test_trace_id_in_response_header(self, app):
+    def test_trace_id_in_response_header(self, trace_app):
         """Test que trace_id est ajouté dans les headers de réponse."""
-        with app.app_context(), patch("middleware.trace_id.request") as mock_request:
-            mock_request.headers.get.return_value = None
+        @trace_app.route("/test")
+        def test_route():
+            from flask import jsonify
 
-            @app.route("/test")
-            def test_route():
-                from flask import jsonify
+            return jsonify({"status": "ok"})
 
-                return jsonify({"status": "ok"})
-
-            # Simuler before_request
+        with trace_app.test_request_context("/test"):
             inject_trace_id_middleware()
+            trace_app.test_client().get("/test")
 
-            # Simuler after_request
-            with app.test_request_context("/test"):
-                app.test_client().get("/test")
-                # Note: Dans un vrai test, il faudrait appeler add_trace_id_to_response
-                # via le hook after_request de Flask
-
-    def test_trace_id_header_priority(self, app):
+    def test_trace_id_header_priority(self, trace_app):
         """Test priorité des headers (X-Trace-Id > Trace-Id)."""
-        with app.app_context(), patch("middleware.trace_id.request") as mock_request:
-            mock_request.headers.get.side_effect = lambda key: (
-                "x-trace-id-value" if key == "X-Trace-Id" else "trace-id-value"
-            )
-
+        with trace_app.test_request_context(
+            headers={"X-Trace-Id": "x-trace-id-value", "Trace-Id": "trace-id-value"}
+        ):
             trace_id = get_trace_id()
 
-            # Devrait utiliser X-Trace-Id en priorité
             assert trace_id == "x-trace-id-value"

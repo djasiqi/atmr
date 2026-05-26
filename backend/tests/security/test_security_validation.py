@@ -217,13 +217,6 @@ class TestLogSanitization:
 class TestFlaskSecurityConfig:
     """Tests pour la configuration de sécurité Flask."""
 
-    @pytest.fixture
-    def app(self):
-        """Créer une application Flask de test."""
-        app = Flask(__name__)
-        app.config["TESTING"] = True
-        return app
-
     def test_session_cookie_secure_in_production(self):
         """Test que SESSION_COOKIE_SECURE est activé en production."""
         # Simuler un environnement de production

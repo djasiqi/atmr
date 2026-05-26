@@ -22,7 +22,10 @@ class MessageRead(db.Model):
         Integer, ForeignKey("user.id", ondelete="CASCADE"), nullable=False, index=True
     )
     message_id = mapped_column(
-        Integer, ForeignKey("message.id", ondelete="CASCADE"), nullable=False, index=True
+        Integer,
+        ForeignKey("message.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     read_at = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()

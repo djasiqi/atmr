@@ -17,7 +17,7 @@ describe("diagnoseGoogleMapsWebKeyIssue", () => {
 
   it("signale une config Android seule sans clé web", () => {
     delete process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
-    process.env.EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_API_KEY = "AIzaSyB12345678901234567890123456789012";
+    process.env.EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_API_KEY = "mock_android_maps_key_for_unit_tests_only";
     expect(diagnoseGoogleMapsWebKeyIssue()).toBe("android_only_configured");
     expect(formatGoogleMapsWebKeyHelpMessage("android_only_configured")).toMatch(/EXPO_PUBLIC_GOOGLE_MAPS_API_KEY/);
   });

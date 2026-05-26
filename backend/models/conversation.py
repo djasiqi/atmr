@@ -33,9 +33,14 @@ class Conversation(db.Model):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     company_id = mapped_column(
-        Integer, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True
+        Integer,
+        ForeignKey("company.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
-    conversation_type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    conversation_type: Mapped[str] = mapped_column(
+        String(32), nullable=False, index=True
+    )
     context_type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     context_id = mapped_column(Integer, nullable=True, index=True)
     title = mapped_column(String(255), nullable=False, default="")

@@ -510,7 +510,9 @@ class TransportRequest(db.Model):
             "dropoff_floor": getattr(booking, "dropoff_floor", None),
             "dropoff_door_code": getattr(booking, "dropoff_door_code", None),
             "wheelchair_need": bool(getattr(booking, "wheelchair_need", False)),
-            "wheelchair_client_has": bool(getattr(booking, "wheelchair_client_has", False)),
+            "wheelchair_client_has": bool(
+                getattr(booking, "wheelchair_client_has", False)
+            ),
             "mission_type": getattr(booking, "mission_type", None),
             "delivery_description": getattr(booking, "delivery_description", None),
             "is_return": bool(getattr(booking, "is_return", False)),

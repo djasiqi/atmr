@@ -39,7 +39,9 @@ def _user_role(user) -> str:
     return str(getattr(user.role, "value", user.role)).upper()
 
 
-def _resolve_hub_access(user, company_id: int) -> tuple[dict[str, Any] | None, tuple[dict, int] | None]:
+def _resolve_hub_access(
+    user, company_id: int
+) -> tuple[dict[str, Any] | None, tuple[dict, int] | None]:
     role = _user_role(user)
     active_ctx = (request.headers.get("X-Active-Context-Id") or "").strip()
     in_driver_context = active_ctx.startswith("driver:")
@@ -59,7 +61,12 @@ def _resolve_hub_access(user, company_id: int) -> tuple[dict[str, Any] | None, t
             return None, ({"error": "Entreprise chauffeur introuvable"}, 404)
         if int(resolved) != int(company_id):
             return None, ({"error": "Accès refusé"}, 403)
-        return {"kind": "driver", "user": user, "driver": driver, "company_id": int(resolved)}, None
+        return {
+            "kind": "driver",
+            "user": user,
+            "driver": driver,
+            "company_id": int(resolved),
+        }, None
 
     if driver_err:
         return None, driver_err
@@ -205,7 +212,10 @@ class MessageHubThreadMessages(Resource):
                 driver=actor["driver"],
                 reader_user=user,
             )
-        return {"messages": [m.serialize for m in messages], "thread_id": thread_id}, 200
+        return {
+            "messages": [m.serialize for m in messages],
+            "thread_id": thread_id,
+        }, 200
 
     @jwt_required()
     def post(self, company_id: int, thread_id: str):
@@ -275,7 +285,9 @@ class MessageHubMarkRead(Resource):
             if actor["kind"] == "company"
             else getattr(actor["driver"], "user_id", None)
         )
-        reader_role = SenderRole.COMPANY if actor["kind"] == "company" else SenderRole.DRIVER
+        reader_role = (
+            SenderRole.COMPANY if actor["kind"] == "company" else SenderRole.DRIVER
+        )
         updated = mark_thread_read(
             company_id,
             str(thread_id),

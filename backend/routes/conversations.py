@@ -217,7 +217,9 @@ class ConversationParticipants(Resource):
         if int(conv.company_id) != int(actor["company_id"]):
             return {"error": "Accès refusé"}, 403
         try:
-            payload = ConversationService.list_dispatch_participants(conv, actor["user"])
+            payload = ConversationService.list_dispatch_participants(
+                conv, actor["user"]
+            )
         except PermissionError as e:
             return {"error": str(e)}, 403
         return payload, 200
@@ -283,7 +285,9 @@ class ConversationManage(Resource):
         if int(conv.company_id) != int(actor["company_id"]):
             return {"error": "Accès refusé"}, 403
         try:
-            payload = ConversationService.get_dispatch_channel_manage(conv, actor["user"])
+            payload = ConversationService.get_dispatch_channel_manage(
+                conv, actor["user"]
+            )
         except PermissionError as e:
             return {"error": str(e)}, 403
         return payload, 200
@@ -302,7 +306,9 @@ class ConversationManage(Resource):
         body = request.get_json(silent=True) or {}
         title = body.get("title") if isinstance(body.get("title"), str) else None
         description = (
-            body.get("description") if isinstance(body.get("description"), str) else None
+            body.get("description")
+            if isinstance(body.get("description"), str)
+            else None
         )
         try:
             payload = ConversationService.update_dispatch_channel(

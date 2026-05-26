@@ -13,7 +13,12 @@ from application.bookings.cancellation_rules import (
     get_cancellation_display_label,
 )
 from ext import db
-from models import Booking, BookingChangeAcknowledgement, BookingChangeEvent, TransportRequest
+from models import (
+    Booking,
+    BookingChangeAcknowledgement,
+    BookingChangeEvent,
+    TransportRequest,
+)
 from models.enums import BookingStatus, InstitutionRole
 from shared.time_utils import parse_local_naive
 
@@ -150,7 +155,9 @@ def _changed_fields_map(
     before: dict[str, Any], after: dict[str, Any]
 ) -> dict[str, bool]:
     keys = set(before) | set(after)
-    return {k: before.get(k) != after.get(k) for k in keys if before.get(k) != after.get(k)}
+    return {
+        k: before.get(k) != after.get(k) for k in keys if before.get(k) != after.get(k)
+    }
 
 
 def classify_change(
@@ -193,7 +200,14 @@ def build_operational_impact(
         "recalculate_route": bool(
             is_en_route
             and changed_fields
-            & {"pickup_location", "dropoff_location", "pickup_lat", "pickup_lon", "dropoff_lat", "dropoff_lon"}
+            & {
+                "pickup_location",
+                "dropoff_location",
+                "pickup_lat",
+                "pickup_lon",
+                "dropoff_lat",
+                "dropoff_lon",
+            }
         ),
         "billing_review": change_class == "critical",
         "en_route": is_en_route,
@@ -228,7 +242,9 @@ def resolve_institution_booking(
 
 def assert_operational_role(role: str | None) -> str | None:
     if role not in OPERATIONAL_ROLES:
-        return f"Rôle requis: {', '.join(sorted(OPERATIONAL_ROLES))}. Votre rôle: {role}"
+        return (
+            f"Rôle requis: {', '.join(sorted(OPERATIONAL_ROLES))}. Votre rôle: {role}"
+        )
     return None
 
 
@@ -241,7 +257,9 @@ def assert_not_boarded(booking: Booking) -> str | None:
     return None
 
 
-def check_version(booking: Booking, client_version: int | None) -> dict[str, Any] | None:
+def check_version(
+    booking: Booking, client_version: int | None
+) -> dict[str, Any] | None:
     current = int(booking.edit_version or 1)
     if client_version is None:
         return {"error": "version requise pour la mise à jour optimiste."}
@@ -314,9 +332,7 @@ def bump_edit_version(booking: Booking) -> int:
     return booking.edit_version
 
 
-def apply_operational_patch(
-    booking: Booking, validated: dict[str, Any]
-) -> list[str]:
+def apply_operational_patch(booking: Booking, validated: dict[str, Any]) -> list[str]:
     updated: list[str] = []
     for key, value in validated.items():
         if key not in INSTITUTION_OPERATIONAL_FIELDS:
@@ -351,12 +367,11 @@ def fanout_critical_change(
 
     company_id = booking.company_id or booking.executing_company_id
     req_id = transport_request.id if transport_request else None
-    public_id = getattr(transport_request, "public_id", None) if transport_request else None
-    patient = booking.customer_name or "Patient"
-    msg = (
-        f"Modification institution en route — {patient} "
-        f"(course #{booking.id})"
+    public_id = (
+        getattr(transport_request, "public_id", None) if transport_request else None
     )
+    patient = booking.customer_name or "Patient"
+    msg = f"Modification institution en route — {patient} (course #{booking.id})"
     meta = {
         "booking_id": booking.id,
         "request_id": req_id,
@@ -514,7 +529,9 @@ def update_institution_booking(
     actor_display_name: str | None,
 ) -> tuple[dict[str, Any], int]:
     booking = ctx.booking
-    unknown = set(payload.keys()) - INSTITUTION_OPERATIONAL_FIELDS - {"version", "reason"}
+    unknown = (
+        set(payload.keys()) - INSTITUTION_OPERATIONAL_FIELDS - {"version", "reason"}
+    )
     if unknown:
         return {
             "error": "Champs non autorisés.",
@@ -541,9 +558,7 @@ def update_institution_booking(
     is_en_route = status == BookingStatus.EN_ROUTE.value
     reason = (payload.get("reason") or "").strip()
     changed_preview = set(patch.keys())
-    _cc, _sev, ack_required = classify_change(
-        changed_preview, is_en_route=is_en_route
-    )
+    _cc, _sev, ack_required = classify_change(changed_preview, is_en_route=is_en_route)
     if is_en_route and (changed_preview & CRITICAL_EN_ROUTE_FIELDS):
         if len(reason) < MIN_CRITICAL_REASON_LEN:
             return {
@@ -680,9 +695,7 @@ def list_change_events(
             (BookingChangeEvent.institution_id == institution_id)
             | (BookingChangeEvent.institution_id.is_(None))
         )
-    rows = (
-        q.order_by(BookingChangeEvent.created_at.desc()).limit(limit).all()
-    )
+    rows = q.order_by(BookingChangeEvent.created_at.desc()).limit(limit).all()
     return [r.serialize() for r in rows]
 
 

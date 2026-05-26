@@ -74,7 +74,10 @@ def test_report_hub_emergency_returns_message_payload():
     system_msg.serialize = {"id": 77, "content": "⚠ Incident", "message_type": "system"}
 
     with (
-        patch("services.messages.hub_service.create_system_message", return_value=system_msg) as create_mock,
+        patch(
+            "services.messages.hub_service.create_system_message",
+            return_value=system_msg,
+        ) as create_mock,
         patch("services.events.fanout.fanout_urgent_alert"),
     ):
         payload = report_hub_emergency(driver, issue_type="incident")

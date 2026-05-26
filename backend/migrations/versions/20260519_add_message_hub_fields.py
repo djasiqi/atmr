@@ -19,16 +19,32 @@ def upgrade():
         batch_op.add_column(sa.Column("thread_id", sa.String(length=64), nullable=True))
         batch_op.add_column(sa.Column("booking_id", sa.Integer(), nullable=True))
         batch_op.add_column(
-            sa.Column("message_type", sa.String(length=32), nullable=False, server_default="text")
+            sa.Column(
+                "message_type",
+                sa.String(length=32),
+                nullable=False,
+                server_default="text",
+            )
         )
         batch_op.add_column(
-            sa.Column("priority", sa.String(length=16), nullable=False, server_default="normal")
+            sa.Column(
+                "priority",
+                sa.String(length=16),
+                nullable=False,
+                server_default="normal",
+            )
         )
-        batch_op.add_column(sa.Column("client_message_id", sa.String(length=64), nullable=True))
-        batch_op.add_column(sa.Column("acked_at", sa.DateTime(timezone=True), nullable=True))
+        batch_op.add_column(
+            sa.Column("client_message_id", sa.String(length=64), nullable=True)
+        )
+        batch_op.add_column(
+            sa.Column("acked_at", sa.DateTime(timezone=True), nullable=True)
+        )
         batch_op.create_index("ix_message_thread_id", ["thread_id"], unique=False)
         batch_op.create_index("ix_message_booking_id", ["booking_id"], unique=False)
-        batch_op.create_index("ix_message_client_message_id", ["client_message_id"], unique=False)
+        batch_op.create_index(
+            "ix_message_client_message_id", ["client_message_id"], unique=False
+        )
 
 
 def downgrade():

@@ -97,9 +97,9 @@ ASYNC_MODE: AsyncMode = cast("AsyncMode", _env_async)
 # Flask-SocketIO se connectera à Redis automatiquement quand nécessaire.
 # Si REDIS_URL est vide ou "memory://", alors message_queue=None (mode single-worker).
 _socketio_message_queue: str | None = None
-_socketio_disable_queue_for_tests = (
-    os.getenv("SOCKETIO_TEST_DISABLE_MESSAGE_QUEUE", "0").lower() in {"1", "true", "yes"}
-)
+_socketio_disable_queue_for_tests = os.getenv(
+    "SOCKETIO_TEST_DISABLE_MESSAGE_QUEUE", "0"
+).lower() in {"1", "true", "yes"}
 if _socketio_disable_queue_for_tests:
     _socketio_message_queue = None
     app_logger.info("[Socket.IO] test mode: message_queue désactivée")

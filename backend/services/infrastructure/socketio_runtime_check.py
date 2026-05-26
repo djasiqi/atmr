@@ -127,5 +127,7 @@ def log_socketio_runtime_diagnostics(
             flush=True,
         )
     elif diag.gunicorn_workers == 1:
-        print("✅ [Socket.IO] Mode single-worker (message_queue optionnelle)", flush=True)
+        print(
+            "✅ [Socket.IO] Mode single-worker (message_queue optionnelle)", flush=True
+        )
     return diag

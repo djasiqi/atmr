@@ -9,7 +9,16 @@ from typing import Any
 
 from ext import db
 from sqlalchemy import and_, or_
-from models import Booking, Company, Conversation, ConversationParticipant, Driver, Message, MessageRead, User
+from models import (
+    Booking,
+    Company,
+    Conversation,
+    ConversationParticipant,
+    Driver,
+    Message,
+    MessageRead,
+    User,
+)
 from models.messaging_enums import (
     ConversationContext,
     ConversationType,
@@ -32,11 +41,21 @@ from services.messaging.legacy_thread import (
 from services.messaging.permission_service import MessagingPermissionService
 
 MESSAGING_BACKFILL_ON_INBOX = os.environ.get("MESSAGING_BACKFILL_ON_INBOX", "1") == "1"
-MESSAGING_BACKFILL_ON_CONNECT = os.environ.get("MESSAGING_BACKFILL_ON_CONNECT", "0") == "1"
+MESSAGING_BACKFILL_ON_CONNECT = (
+    os.environ.get("MESSAGING_BACKFILL_ON_CONNECT", "0") == "1"
+)
 
 logger = logging.getLogger(__name__)
 
-_TERMINAL = {"COMPLETED", "CANCELLED", "CANCELED", "REASSIGNED", "NO_SHOW", "FAILED", "RETURN_COMPLETED"}
+_TERMINAL = {
+    "COMPLETED",
+    "CANCELLED",
+    "CANCELED",
+    "REASSIGNED",
+    "NO_SHOW",
+    "FAILED",
+    "RETURN_COMPLETED",
+}
 
 
 class ConversationService:
@@ -94,16 +113,16 @@ class ConversationService:
         return conv
 
     @staticmethod
-    def ensure_company_driver_conversation(company_id: int, driver: Driver) -> Conversation:
+    def ensure_company_driver_conversation(
+        company_id: int, driver: Driver
+    ) -> Conversation:
         driver_user_id = int(driver.user_id) if driver.user_id else None
-        existing = (
-            Conversation.query.filter_by(
-                company_id=company_id,
-                conversation_type=ConversationType.COMPANY.value,
-                context_type=ConversationContext.COMPANY.value,
-                context_id=driver.id,
-            ).first()
-        )
+        existing = Conversation.query.filter_by(
+            company_id=company_id,
+            conversation_type=ConversationType.COMPANY.value,
+            context_type=ConversationContext.COMPANY.value,
+            context_id=driver.id,
+        ).first()
         if existing:
             return existing
 
@@ -451,7 +470,12 @@ class ConversationService:
                 "colleagues": colleagues,
                 "archives": archives,
             },
-            "threads": mission_active + urgent + company_rows + groups + colleagues + archives,
+            "threads": mission_active
+            + urgent
+            + company_rows
+            + groups
+            + colleagues
+            + archives,
             "unread_total": unread_total,
         }
 
@@ -560,7 +584,9 @@ class ConversationService:
             return conv
         booking_id = parse_mission_thread(thread_id)
         if booking_id:
-            return ConversationService.ensure_mission_conversation(company_id, booking_id)
+            return ConversationService.ensure_mission_conversation(
+                company_id, booking_id
+            )
         if thread_id.startswith("company_driver:"):
             try:
                 driver_id = int(thread_id.split(":", 1)[1])
@@ -601,7 +627,9 @@ class ConversationService:
                     seen_conv.add(int(cid))
                 if tid:
                     seen_thread.add(tid)
-                threads.append({**row, "section": str(row.get("section") or section_key)})
+                threads.append(
+                    {**row, "section": str(row.get("section") or section_key)}
+                )
         return threads
 
     @staticmethod
@@ -622,7 +650,11 @@ class ConversationService:
         if last and getattr(last, "priority", None) in ("urgent", "important"):
             priority = str(last.priority)
         legacy = conversation_id_to_legacy_thread(conv)
-        booking_id = conv.context_id if conv.conversation_type == ConversationType.MISSION.value else None
+        booking_id = (
+            conv.context_id
+            if conv.conversation_type == ConversationType.MISSION.value
+            else None
+        )
         return {
             "conversation_id": conv.id,
             "thread_id": legacy or str(conv.id),
@@ -634,7 +666,9 @@ class ConversationService:
             "unread_count": unread,
             "priority": priority,
             "last_message_preview": _preview(last),
-            "last_message_at": last.timestamp.isoformat() if last and last.timestamp else None,
+            "last_message_at": last.timestamp.isoformat()
+            if last and last.timestamp
+            else None,
             "last_message_from_self": bool(last and last.sender_id == user_id),
             "conversation_type": conv.conversation_type,
             "context_type": conv.context_type,
@@ -717,7 +751,9 @@ class ConversationService:
             ).first()
             if not existing:
                 db.session.add(
-                    MessageRead(user_id=user.id, message_id=msg.id, read_at=datetime.now(UTC))
+                    MessageRead(
+                        user_id=user.id, message_id=msg.id, read_at=datetime.now(UTC)
+                    )
                 )
                 updated += 1
             if not msg.is_read:
@@ -760,9 +796,7 @@ class ConversationService:
             .first()
         )
         row["last_activity_at"] = (
-            last_msg.timestamp.isoformat()
-            if last_msg and last_msg.timestamp
-            else None
+            last_msg.timestamp.isoformat() if last_msg and last_msg.timestamp else None
         )
         row["can_remove"] = (
             str(part.participant_role).upper() != ParticipantRole.DISPATCH.value
@@ -798,7 +832,9 @@ class ConversationService:
                     {
                         "driver_id": int(d.id),
                         "user_id": uid,
-                        "display_name": _user_display(getattr(d, "user", None) or User.query.get(uid)),
+                        "display_name": _user_display(
+                            getattr(d, "user", None) or User.query.get(uid)
+                        ),
                     }
                 )
         return {
@@ -837,7 +873,9 @@ class ConversationService:
                     conversation,
                     event_type="participant_added",
                     actor_user=user,
-                    detail=_user_display(getattr(driver, "user", None) or User.query.get(uid)),
+                    detail=_user_display(
+                        getattr(driver, "user", None) or User.query.get(uid)
+                    ),
                 )
             return ConversationService._participant_payload(existing)
         part = ConversationService._add_participant(
@@ -870,7 +908,9 @@ class ConversationService:
         if str(part.participant_role).upper() == ParticipantRole.DISPATCH.value:
             raise PermissionError("Impossible de retirer l'exploitation du canal")
         part.left_at = datetime.now(UTC)
-        removed_name = _user_display(getattr(part, "user", None) or User.query.get(int(target_user_id)))
+        removed_name = _user_display(
+            getattr(part, "user", None) or User.query.get(int(target_user_id))
+        )
         db.session.commit()
         ConversationService._append_channel_audit(
             conversation,
@@ -911,7 +951,9 @@ class ConversationService:
                         "kind": "photo",
                         "url": msg.image_url,
                         "label": "Photo",
-                        "timestamp": msg.timestamp.isoformat() if msg.timestamp else None,
+                        "timestamp": msg.timestamp.isoformat()
+                        if msg.timestamp
+                        else None,
                     }
                 )
             if msg.pdf_url:
@@ -922,7 +964,9 @@ class ConversationService:
                         "kind": "document",
                         "url": msg.pdf_url,
                         "label": getattr(msg, "pdf_filename", None) or "Document PDF",
-                        "timestamp": msg.timestamp.isoformat() if msg.timestamp else None,
+                        "timestamp": msg.timestamp.isoformat()
+                        if msg.timestamp
+                        else None,
                     }
                 )
             audio_url = getattr(msg, "audio_url", None)
@@ -934,7 +978,9 @@ class ConversationService:
                         "kind": "audio",
                         "url": audio_url,
                         "label": "Message vocal",
-                        "timestamp": msg.timestamp.isoformat() if msg.timestamp else None,
+                        "timestamp": msg.timestamp.isoformat()
+                        if msg.timestamp
+                        else None,
                     }
                 )
         return items
@@ -965,7 +1011,9 @@ class ConversationService:
         actor_user: User,
         detail: str,
     ) -> None:
-        meta = dict(conversation.conversation_metadata or Conversation.default_metadata())
+        meta = dict(
+            conversation.conversation_metadata or Conversation.default_metadata()
+        )
         log = list(meta.get("audit_log") or [])
         log.insert(
             0,
@@ -991,7 +1039,9 @@ class ConversationService:
             else None
         )
         creator_name = _user_display(creator) if creator else "Système"
-        created_at = conversation.created_at.isoformat() if conversation.created_at else None
+        created_at = (
+            conversation.created_at.isoformat() if conversation.created_at else None
+        )
         history.append(
             {
                 "at": created_at,
@@ -1087,7 +1137,9 @@ class ConversationService:
                 )
                 changed = True
         if description is not None:
-            meta = dict(conversation.conversation_metadata or Conversation.default_metadata())
+            meta = dict(
+                conversation.conversation_metadata or Conversation.default_metadata()
+            )
             clean_desc = description.strip()[:500]
             if clean_desc != meta.get("description"):
                 meta["description"] = clean_desc
@@ -1171,7 +1223,9 @@ class ConversationService:
             return conv
         booking_id = parse_mission_thread(thread_id)
         if booking_id:
-            return ConversationService.ensure_mission_conversation(company_id, booking_id)
+            return ConversationService.ensure_mission_conversation(
+                company_id, booking_id
+            )
         if thread_id.startswith("company_driver:") and driver:
             try:
                 driver_ctx_id = int(thread_id.split(":", 1)[1])
@@ -1211,7 +1265,9 @@ class ConversationService:
                 and str(getattr(msg.sender_role, "value", msg.sender_role)) == "COMPANY"
                 and getattr(msg, "receiver_id", None) is None
             ):
-                conv = ConversationService.ensure_company_dispatch_conversation(company_id)
+                conv = ConversationService.ensure_company_dispatch_conversation(
+                    company_id
+                )
                 if not getattr(msg, "thread_id", None):
                     msg.thread_id = company_dispatch_legacy_thread_id()
             elif tid.startswith("company_driver:"):
@@ -1235,7 +1291,9 @@ class ConversationService:
             elif tid.startswith("mission:"):
                 bid = parse_mission_thread(tid)
                 if bid:
-                    conv = ConversationService.ensure_mission_conversation(company_id, bid)
+                    conv = ConversationService.ensure_mission_conversation(
+                        company_id, bid
+                    )
                 else:
                     continue
             elif tid.startswith(DIRECT_PREFIX):
@@ -1243,7 +1301,9 @@ class ConversationService:
                 if peer_uid is None:
                     pair = parse_direct_pair_legacy_thread(tid)
                     if pair and driver and driver.user_id:
-                        peer_uid = pair[1] if int(driver.user_id) == pair[0] else pair[0]
+                        peer_uid = (
+                            pair[1] if int(driver.user_id) == pair[0] else pair[0]
+                        )
                 if peer_uid and driver:
                     conv = ConversationService.ensure_direct_driver_conversation(
                         company_id, driver, int(peer_uid)
@@ -1320,7 +1380,9 @@ class ConversationService:
         return threads
 
 
-def _peer_user_id_in_conversation(conv: Conversation, viewer_user_id: int) -> int | None:
+def _peer_user_id_in_conversation(
+    conv: Conversation, viewer_user_id: int
+) -> int | None:
     for part in conv.participants or []:
         uid = int(part.user_id)
         if uid != int(viewer_user_id):
@@ -1417,9 +1479,9 @@ def _dedupe_thread_rows_by_id(
     dispatch_canonical_id: int | None = None
     if company_id is not None:
         try:
-            dispatch_canonical_id = ConversationService.ensure_company_dispatch_conversation(
-                company_id
-            ).id
+            dispatch_canonical_id = (
+                ConversationService.ensure_company_dispatch_conversation(company_id).id
+            )
         except Exception:
             dispatch_canonical_id = None
 

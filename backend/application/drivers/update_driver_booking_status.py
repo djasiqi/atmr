@@ -683,7 +683,9 @@ class UpdateDriverBookingStatusUseCase:
 
             self._db.commit()
             try:
-                from services.messaging.system_message_emitter import SystemMessageEmitter
+                from services.messaging.system_message_emitter import (
+                    SystemMessageEmitter,
+                )
 
                 SystemMessageEmitter.on_booking_status_change(
                     booking,

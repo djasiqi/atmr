@@ -2,6 +2,11 @@ import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { emitCompanyDispatchTelemetry } from "./companyTelemetry";
 
 const mockEmitPlatformTelemetry = jest.fn();
+const mockIsFeatureEnabled = jest.fn((key: string) => key !== "company_dispatch_enabled");
+
+jest.mock("../../../core/featureFlags/registry", () => ({
+  isFeatureEnabled: (key: string) => mockIsFeatureEnabled(key),
+}));
 
 jest.mock("../../../core/observability/platformTelemetry", () => ({
   emitPlatformTelemetry: (...args: unknown[]) => mockEmitPlatformTelemetry(...args),
@@ -10,6 +15,7 @@ jest.mock("../../../core/observability/platformTelemetry", () => ({
 describe("company telemetry (shadow-ready)", () => {
   beforeEach(() => {
     mockEmitPlatformTelemetry.mockReset();
+    mockIsFeatureEnabled.mockImplementation((key: string) => key !== "company_dispatch_enabled");
   });
 
   it("does not emit while company dispatch flag is disabled", () => {

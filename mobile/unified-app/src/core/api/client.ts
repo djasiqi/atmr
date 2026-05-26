@@ -62,9 +62,20 @@ function deriveBundleHostForDev(): string | null {
   return hostUri.split(":")[0] ?? null;
 }
 
+/** Repli legacy EXPO_PUBLIC_API_URL (operations-app / secrets EAS historiques). */
+function resolveApiBaseUrlFromEnv(): string | undefined {
+  const direct = process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
+  if (direct) return direct;
+  const legacy = process.env.EXPO_PUBLIC_API_URL?.trim();
+  if (!legacy) return undefined;
+  const normalized = legacy.replace(/\/$/, "");
+  if (normalized.endsWith("/api/v1")) return normalized;
+  return `${normalized}/api/v1`;
+}
+
 function resolveBaseUrl(): string {
-  const envUrl = process.env.EXPO_PUBLIC_API_BASE_URL;
-  const configUrl = Constants.expoConfig?.extra?.apiBaseUrl;
+  const envUrl = resolveApiBaseUrlFromEnv();
+  const configUrl = (Constants.expoConfig?.extra as { apiBaseUrl?: string } | undefined)?.apiBaseUrl;
   const defaultUrl = "https://api.lirie.ch/api/v1";
   const chosen = envUrl ?? configUrl ?? defaultUrl;
 
@@ -102,6 +113,8 @@ function resolveBaseUrl(): string {
 const baseURL = resolveBaseUrl();
 const useMockBootstrap = process.env.EXPO_PUBLIC_USE_MOCK_BOOTSTRAP === "1";
 
+// axios default export expose .create ; import nommé non utilisé ici.
+// eslint-disable-next-line import/no-named-as-default-member
 export const apiClient = axios.create({
   baseURL,
   timeout: 15000,

@@ -264,7 +264,9 @@ def build_driver_threads(
         elif status in _terminal_statuses():
             archived.append(booking)
 
-    def thread_messages(thread_id: str, peer_user_id: int | None = None) -> list[Message]:
+    def thread_messages(
+        thread_id: str, peer_user_id: int | None = None
+    ) -> list[Message]:
         return [
             m
             for m in messages_asc
@@ -288,7 +290,9 @@ def build_driver_threads(
             and getattr(m, "sender_id", None) != my_user_id
         )
 
-    def last_for_thread(thread_id: str, peer_user_id: int | None = None) -> Message | None:
+    def last_for_thread(
+        thread_id: str, peer_user_id: int | None = None
+    ) -> Message | None:
         msgs = thread_messages(thread_id, peer_user_id)
         return msgs[-1] if msgs else None
 
@@ -328,8 +332,12 @@ def build_driver_threads(
             "dropoff_location": dropoff,
             "unread_count": unread_for_thread(thread_id, peer_user_id),
             "priority": priority_for_thread(thread_id, peer_user_id),
-            "last_message_preview": _last_message_preview(thread_messages(thread_id, peer_user_id)),
-            "last_message_at": last.timestamp.isoformat() if last and last.timestamp else None,
+            "last_message_preview": _last_message_preview(
+                thread_messages(thread_id, peer_user_id)
+            ),
+            "last_message_at": last.timestamp.isoformat()
+            if last and last.timestamp
+            else None,
         }
 
     threads: list[dict[str, Any]] = []
@@ -371,7 +379,9 @@ def build_driver_threads(
         )
     )
 
-    colleague_roster = list_driver_colleagues(company_id, driver, limit_messages=limit_messages)
+    colleague_roster = list_driver_colleagues(
+        company_id, driver, limit_messages=limit_messages
+    )
     colleague_rows: list[dict[str, Any]] = []
     for row in colleague_roster:
         peer_uid = int(row["peer_user_id"])
@@ -501,11 +511,7 @@ def get_thread_messages(
                 thread_id,
                 perm_err,
             )
-            if (
-                conv is not None
-                and thread_id == THREAD_DISPATCH
-                and driver is not None
-            ):
+            if conv is not None and thread_id == THREAD_DISPATCH and driver is not None:
                 if ConversationService._sync_dispatch_driver_participants(
                     conv, company_id
                 ):
@@ -520,7 +526,8 @@ def get_thread_messages(
                 rows = _messages_for_conversation_legacy(
                     conv.id,
                     company_id,
-                    legacy_thread_id=getattr(conv, "legacy_thread_id", None) or thread_id,
+                    legacy_thread_id=getattr(conv, "legacy_thread_id", None)
+                    or thread_id,
                     before=before,
                     limit=limit,
                 )
@@ -643,6 +650,7 @@ def _driver_display_name(driver: Driver) -> str:
             return str(username)
     return "Chauffeur"
 
+
 def report_hub_emergency(
     driver: Driver,
     *,
@@ -725,7 +733,10 @@ def send_driver_hub_message(
     if has_image and has_pdf:
         return None, ({"error": "Limite : une image ou un PDF par message."}, 400)
     if not (content or has_image or has_pdf):
-        return None, ({"error": "Le message doit contenir du texte, une image ou un PDF."}, 400)
+        return None, (
+            {"error": "Le message doit contenir du texte, une image ou un PDF."},
+            400,
+        )
     if content and len(content) > MAX_HUB_MESSAGE_LENGTH:
         return None, (
             {"error": f"Message trop long (max {MAX_HUB_MESSAGE_LENGTH} caractères)."},
@@ -734,7 +745,10 @@ def send_driver_hub_message(
 
     allowed_spam, spam_error = can_send_message(int(user.id))
     if not allowed_spam:
-        return None, ({"error": spam_error or "Trop de messages. Attendez 1 seconde."}, 429)
+        return None, (
+            {"error": spam_error or "Trop de messages. Attendez 1 seconde."},
+            429,
+        )
 
     receiver_id = body.get("receiver_id")
     if receiver_id is not None:
@@ -771,7 +785,10 @@ def send_driver_hub_message(
                 company_id, tid, driver
             )
         if tid.startswith("direct:") and conv_obj is None:
-            return None, ({"error": "Collègue introuvable ou message direct refusé."}, 403)
+            return None, (
+                {"error": "Collègue introuvable ou message direct refusé."},
+                403,
+            )
         if conv_obj is not None:
             MessagingPermissionService.assert_can_write(user, conv_obj)
             conversation_id_val = conv_obj.id
@@ -818,9 +835,7 @@ def send_driver_hub_message(
         except IntegrityError:
             db.session.rollback()
             if client_message_id:
-                message = find_idempotent_message(
-                    int(user.id), str(client_message_id)
-                )
+                message = find_idempotent_message(int(user.id), str(client_message_id))
                 if message is not None:
                     note_duplicate_hit(channel="rest")
             if message is None:
@@ -869,7 +884,10 @@ def send_company_hub_message(
     if has_image and has_pdf:
         return None, ({"error": "Limite : une image ou un PDF par message."}, 400)
     if not (content or has_image or has_pdf):
-        return None, ({"error": "Le message doit contenir du texte, une image ou un PDF."}, 400)
+        return None, (
+            {"error": "Le message doit contenir du texte, une image ou un PDF."},
+            400,
+        )
     if content and len(content) > MAX_HUB_MESSAGE_LENGTH:
         return None, (
             {"error": f"Message trop long (max {MAX_HUB_MESSAGE_LENGTH} caractères)."},
@@ -878,7 +896,10 @@ def send_company_hub_message(
 
     allowed_spam, spam_error = can_send_message(int(user.id))
     if not allowed_spam:
-        return None, ({"error": spam_error or "Trop de messages. Attendez 1 seconde."}, 429)
+        return None, (
+            {"error": spam_error or "Trop de messages. Attendez 1 seconde."},
+            429,
+        )
 
     booking_id_raw = body.get("booking_id")
     booking_id = None
@@ -949,9 +970,7 @@ def send_company_hub_message(
         except IntegrityError:
             db.session.rollback()
             if client_message_id:
-                message = find_idempotent_message(
-                    int(user.id), str(client_message_id)
-                )
+                message = find_idempotent_message(int(user.id), str(client_message_id))
                 if message is not None:
                     note_duplicate_hit(channel="rest")
             if message is None:
@@ -1018,7 +1037,9 @@ def create_system_message(
         from services.messaging.conversation_service import ConversationService
 
         if booking_id is not None:
-            conv = ConversationService.ensure_mission_conversation(company_id, int(booking_id))
+            conv = ConversationService.ensure_mission_conversation(
+                company_id, int(booking_id)
+            )
             conversation_id_val = conv.id
         elif thread_id == THREAD_DISPATCH:
             conv = ConversationService.ensure_company_dispatch_conversation(company_id)
@@ -1026,7 +1047,9 @@ def create_system_message(
             if reporter is not None:
                 ConversationService._sync_dispatch_driver_participants(conv, company_id)
         elif driver is not None:
-            conv = ConversationService.resolve_by_legacy_thread(company_id, thread_id, driver)
+            conv = ConversationService.resolve_by_legacy_thread(
+                company_id, thread_id, driver
+            )
             if conv is not None:
                 conversation_id_val = conv.id
     except Exception:

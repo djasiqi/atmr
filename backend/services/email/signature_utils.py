@@ -760,3 +760,43 @@ def inject_signature_into_html(
         )
 
     return (html_content, logo_info)
+
+
+def generate_simple_signature_html(
+    contact_name: str | None = None,
+    phone: str | None = None,
+    email: str | None = None,
+    website: str | None = None,
+    address: str | None = None,
+    logo_url: str | None = None,
+) -> str:
+    """Alias legacy pour tests et appels simples (délègue au mode form)."""
+    from types import SimpleNamespace
+
+    address_line: str | None = None
+    zip_code: str | None = None
+    city: str | None = None
+    if address and address.strip():
+        lines = [line.strip() for line in address.strip().splitlines() if line.strip()]
+        if lines:
+            address_line = lines[0]
+        if len(lines) > 1:
+            tail = lines[-1]
+            parts = tail.split(None, 1)
+            if len(parts) == 2 and parts[0].isdigit():
+                zip_code, city = parts[0], parts[1]
+            else:
+                city = tail
+
+    company_obj = SimpleNamespace(logo_url=logo_url, name=contact_name or "") if logo_url else None
+
+    return generate_signature_html_from_form(
+        name=contact_name,
+        phone_main=phone,
+        email=email,
+        website=website,
+        address_line=address_line,
+        zip_code=zip_code,
+        city=city,
+        company_obj=company_obj,
+    )

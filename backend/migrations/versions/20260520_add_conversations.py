@@ -37,13 +37,19 @@ def upgrade():
         sa.ForeignKeyConstraint(["created_by"], ["user.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index("ix_conversation_company_type", "conversation", ["company_id", "conversation_type"])
+    op.create_index(
+        "ix_conversation_company_type",
+        "conversation",
+        ["company_id", "conversation_type"],
+    )
     op.create_index(
         "ix_conversation_context",
         "conversation",
         ["context_type", "context_id", "company_id"],
     )
-    op.create_index("ix_conversation_legacy_thread_id", "conversation", ["legacy_thread_id"])
+    op.create_index(
+        "ix_conversation_legacy_thread_id", "conversation", ["legacy_thread_id"]
+    )
 
     op.create_table(
         "conversation_participant",
@@ -51,9 +57,15 @@ def upgrade():
         sa.Column("conversation_id", sa.Integer(), nullable=False),
         sa.Column("user_id", sa.Integer(), nullable=False),
         sa.Column("participant_role", sa.String(length=32), nullable=False),
-        sa.Column("can_read", sa.Boolean(), nullable=False, server_default=sa.text("true")),
-        sa.Column("can_write", sa.Boolean(), nullable=False, server_default=sa.text("true")),
-        sa.Column("can_manage", sa.Boolean(), nullable=False, server_default=sa.text("false")),
+        sa.Column(
+            "can_read", sa.Boolean(), nullable=False, server_default=sa.text("true")
+        ),
+        sa.Column(
+            "can_write", sa.Boolean(), nullable=False, server_default=sa.text("true")
+        ),
+        sa.Column(
+            "can_manage", sa.Boolean(), nullable=False, server_default=sa.text("false")
+        ),
         sa.Column(
             "joined_at",
             sa.DateTime(timezone=True),
@@ -61,11 +73,17 @@ def upgrade():
             nullable=False,
         ),
         sa.Column("left_at", sa.DateTime(timezone=True), nullable=True),
-        sa.ForeignKeyConstraint(["conversation_id"], ["conversation.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(
+            ["conversation_id"], ["conversation.id"], ondelete="CASCADE"
+        ),
         sa.ForeignKeyConstraint(["user_id"], ["user.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index("ix_conv_participant_user", "conversation_participant", ["user_id", "conversation_id"])
+    op.create_index(
+        "ix_conv_participant_user",
+        "conversation_participant",
+        ["user_id", "conversation_id"],
+    )
     op.create_index(
         "uq_conversation_participant",
         "conversation_participant",
@@ -88,14 +106,25 @@ def upgrade():
         sa.ForeignKeyConstraint(["user_id"], ["user.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index("uq_message_read_user_message", "message_read", ["user_id", "message_id"], unique=True)
+    op.create_index(
+        "uq_message_read_user_message",
+        "message_read",
+        ["user_id", "message_id"],
+        unique=True,
+    )
 
     with op.batch_alter_table("message", schema=None) as batch_op:
         batch_op.add_column(sa.Column("conversation_id", sa.Integer(), nullable=True))
         batch_op.add_column(
-            sa.Column("visibility_tags", postgresql.JSONB(astext_type=sa.Text()), nullable=True)
+            sa.Column(
+                "visibility_tags",
+                postgresql.JSONB(astext_type=sa.Text()),
+                nullable=True,
+            )
         )
-        batch_op.add_column(sa.Column("system_event_key", sa.String(length=128), nullable=True))
+        batch_op.add_column(
+            sa.Column("system_event_key", sa.String(length=128), nullable=True)
+        )
         batch_op.create_foreign_key(
             "fk_message_conversation_id",
             "conversation",
@@ -103,8 +132,12 @@ def upgrade():
             ["id"],
             ondelete="SET NULL",
         )
-        batch_op.create_index("ix_message_conversation_id", ["conversation_id"], unique=False)
-        batch_op.create_index("ix_message_system_event_key", ["system_event_key"], unique=False)
+        batch_op.create_index(
+            "ix_message_conversation_id", ["conversation_id"], unique=False
+        )
+        batch_op.create_index(
+            "ix_message_system_event_key", ["system_event_key"], unique=False
+        )
 
 
 def downgrade():

@@ -13,10 +13,15 @@ def _transfer_info_dict(transfer: BookingTransfer) -> dict[str, Any]:
     try:
         return transfer.to_dict()
     except Exception:
-        return {"id": getattr(transfer, "id", None), "status": str(getattr(transfer, "status", ""))}
+        return {
+            "id": getattr(transfer, "id", None),
+            "status": str(getattr(transfer, "status", "")),
+        }
 
 
-def build_transfer_cache_for_bookings(bookings: list[Booking]) -> dict[int, dict[str, Any]]:
+def build_transfer_cache_for_bookings(
+    bookings: list[Booking],
+) -> dict[int, dict[str, Any]]:
     """Retourne booking_id → { is_transferred, active_transfer }."""
     if not bookings:
         return {}
@@ -52,12 +57,20 @@ def build_transfer_cache_for_bookings(bookings: list[Booking]) -> dict[int, dict
         is_transferred = False
         for t in transfers:
             status = getattr(t, "status", None)
-            if status in (TransferStatus.PENDING, TransferStatus.ACCEPTED, TransferStatus.COMPLETED):
+            if status in (
+                TransferStatus.PENDING,
+                TransferStatus.ACCEPTED,
+                TransferStatus.COMPLETED,
+            ):
                 if active is None:
                     active = _transfer_info_dict(t)
             if status in (TransferStatus.ACCEPTED, TransferStatus.COMPLETED):
                 owner_id = getattr(t, "owner_company_id", None)
-                if owner_id is not None and company_id is not None and owner_id != company_id:
+                if (
+                    owner_id is not None
+                    and company_id is not None
+                    and owner_id != company_id
+                ):
                     is_transferred = True
         if not is_transferred and getattr(booking, "executing_company_id", None):
             exec_id = booking.executing_company_id

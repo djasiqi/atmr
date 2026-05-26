@@ -339,9 +339,7 @@ def init_namespaces(app):
     api_v1.add_namespace(
         institution_settings_ns, path="/institutions/settings"
     )  # ✅ ÉTAPE 4
-    api_v1.add_namespace(
-        institution_billing_ns, path="/institutions/billing"
-    )
+    api_v1.add_namespace(institution_billing_ns, path="/institutions/billing")
     api_v1.add_namespace(
         institution_bookings_ns, path="/institutions/bookings"
     )  # ✅ ÉTAPE 5
@@ -458,7 +456,9 @@ def init_namespaces(app):
         api_legacy.add_namespace(institution_settings_ns, path="/institutions/settings")
         api_legacy.add_namespace(institution_billing_ns, path="/institutions/billing")
         api_legacy.add_namespace(institution_bookings_ns, path="/institutions/bookings")
-        api_legacy.add_namespace(institution_notifications_ns, path="/institutions/notifications")
+        api_legacy.add_namespace(
+            institution_notifications_ns, path="/institutions/notifications"
+        )
         api_legacy.add_namespace(institution_teams_ns, path="/institutions/teams")
         api_legacy.add_namespace(planning_ns, path="/planning")
         api_legacy.add_namespace(pricing_ns, path="/pricing")

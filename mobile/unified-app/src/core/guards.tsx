@@ -1,6 +1,5 @@
+import React from "react";
 import { Redirect } from "expo-router";
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const ReactRuntime: any = require("react");
 import { useSession } from "./sessionProvider";
 import {
   resolveAuthGuardRedirect,
@@ -13,7 +12,8 @@ import {
 } from "./guardDecisions";
 import { isFeatureEnabled } from "./featureFlags/registry";
 import { emitDriverTelemetry } from "./observability/driverTelemetry";
-type PropsWithChildren<P = object> = P & { children?: any };
+
+type PropsWithChildren<P = object> = P & { children?: React.ReactNode };
 
 export function AuthGuard({ children }: PropsWithChildren) {
   const { bootstrap } = useSession();
@@ -75,11 +75,11 @@ export function AppVersionGuard({ children }: PropsWithChildren) {
 }
 
 export function DriverUnifiedGateGuard({ children }: PropsWithChildren) {
-  const evaluatedRef = ReactRuntime.useRef(false);
+  const evaluatedRef = React.useRef(false);
   const enabled = isFeatureEnabled("driver_unified_enabled");
   const result = resolveDriverUnifiedGate(enabled);
 
-  ReactRuntime.useEffect(() => {
+  React.useEffect(() => {
     if (evaluatedRef.current) return;
     evaluatedRef.current = true;
     emitDriverTelemetry("driver.gate.unified_evaluated", {

@@ -6228,8 +6228,7 @@ class PDFService:
         )
 
         usable_width_pt = float(
-            A4[0]
-            - (INVOICE_PAGE_LEFT_MARGIN_CM + INVOICE_PAGE_RIGHT_MARGIN_CM) * cm
+            A4[0] - (INVOICE_PAGE_LEFT_MARGIN_CM + INVOICE_PAGE_RIGHT_MARGIN_CM) * cm
         )
 
         story = []

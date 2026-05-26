@@ -65,9 +65,7 @@ def upgrade():
             nullable=True,
         ),
         sa.Column("financial_actor_role", sa.String(length=32), nullable=True),
-        sa.Column(
-            "billing_change_reason_code", sa.String(length=64), nullable=True
-        ),
+        sa.Column("billing_change_reason_code", sa.String(length=64), nullable=True),
         sa.Column(
             "ack_required",
             sa.Boolean(),

@@ -47,7 +47,9 @@ def test_is_company_managed_dispatch():
 
 @patch("services.messaging.conversation_service.Driver")
 @patch("services.messaging.conversation_service.ConversationParticipant")
-def test_remove_dispatch_participant_blocks_dispatch_role(mock_part_model, _mock_driver):
+def test_remove_dispatch_participant_blocks_dispatch_role(
+    mock_part_model, _mock_driver
+):
     conv = _dispatch_conv()
     user = _company_user()
     part = MagicMock()
@@ -62,7 +64,9 @@ def test_remove_dispatch_participant_blocks_dispatch_role(mock_part_model, _mock
 @patch("services.messaging.conversation_service.db")
 @patch("services.messaging.conversation_service.Driver")
 @patch("services.messaging.conversation_service.ConversationParticipant")
-def test_remove_dispatch_participant_sets_left_at(mock_part_model, _mock_driver, mock_db):
+def test_remove_dispatch_participant_sets_left_at(
+    mock_part_model, _mock_driver, mock_db
+):
     conv = _dispatch_conv()
     user = _company_user()
     part = MagicMock()
@@ -70,7 +74,9 @@ def test_remove_dispatch_participant_sets_left_at(mock_part_model, _mock_driver,
     part.left_at = None
     mock_part_model.query.filter_by.return_value.first.return_value = part
 
-    result = ConversationService.remove_dispatch_participant(conv, user, target_user_id=5)
+    result = ConversationService.remove_dispatch_participant(
+        conv, user, target_user_id=5
+    )
     assert result["removed_user_id"] == 5
     assert part.left_at is not None
     assert mock_db.session.commit.call_count >= 1
@@ -95,9 +101,15 @@ def test_list_dispatch_participants_rejects_driver_manage(_mock=None):
     assert payload["available_drivers"] == []
 
 
-@patch("services.messaging.conversation_service.MessagingPermissionService.assert_can_manage")
-@patch("services.messaging.conversation_service.ConversationService.get_dispatch_channel_manage")
-@patch("services.messaging.conversation_service.ConversationService._append_channel_audit")
+@patch(
+    "services.messaging.conversation_service.MessagingPermissionService.assert_can_manage"
+)
+@patch(
+    "services.messaging.conversation_service.ConversationService.get_dispatch_channel_manage"
+)
+@patch(
+    "services.messaging.conversation_service.ConversationService._append_channel_audit"
+)
 @patch("services.messaging.conversation_service.db")
 @patch("services.messaging.conversation_service.MessageRead.query")
 @patch("services.messaging.conversation_service.Message.query")

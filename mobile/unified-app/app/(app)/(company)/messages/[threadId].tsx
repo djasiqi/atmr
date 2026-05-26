@@ -16,7 +16,6 @@ import {
   ChatConversationShell,
   ImagePreviewModal,
   PdfPreviewModal,
-  TypingIndicator,
 } from "../../../../src/features/chat";
 import { resolveConversationId, fetchThreadMessages } from "../../../../src/features/driver/messages/api";
 import { ChannelConversationHeader } from "../../../../src/features/driver/messages/components/ChannelConversationHeader";

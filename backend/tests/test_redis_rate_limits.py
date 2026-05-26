@@ -18,8 +18,8 @@ from flask.testing import FlaskClient
 
 
 @pytest.fixture
-def app():
-    """Fixture de l'application Flask pour les tests."""
+def rate_limit_app():
+    """App Flask minimale pour les tests rate-limit (évite conflit conftest `app`)."""
     with patch("backend.app.create_app") as mock_create_app:
         app = Flask(__name__)
         app.config["TESTING"] = True
@@ -32,9 +32,9 @@ def app():
 
 
 @pytest.fixture
-def client(app):
+def client(rate_limit_app):
     """Fixture du client de test Flask."""
-    return app.test_client()
+    return rate_limit_app.test_client()
 
 
 @pytest.fixture

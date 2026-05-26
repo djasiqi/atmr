@@ -152,7 +152,9 @@ class WebSocketRateLimiter:
                 member,
             )
             allowed = bool(result and int(result[0]) == 1)
-            retry_after = int(result[1]) if result and len(result) > 1 else window_seconds
+            retry_after = (
+                int(result[1]) if result and len(result) > 1 else window_seconds
+            )
             count = int(result[2]) if result and len(result) > 2 else 0
             if not allowed:
                 # Rate limit dépassé

@@ -23,7 +23,7 @@ const {
   applyPendingDriverUpdates,
   REALTIME_FLUSH_MS,
   MAX_BATCH_AGE_MS,
-} = require("./gpsFlushConstants");
+} = require("./useCompanyDriverLiveTracking");
 
 describe("company live drivers merge policy", () => {
   it("exposes bounded batch flush windows", () => {

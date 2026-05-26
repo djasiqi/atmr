@@ -1,0 +1,4 @@
+# Ne pas envoyer les .env locaux (dev LAN) — les secrets prod viennent d'EAS / eas.json.
+.env
+.env.*
+!.env.example

@@ -737,9 +737,13 @@ class CreateManualBookingUseCase:
                     "pickup_access_notes"
                 )
                 return_booking.pickup_floor = validated_data.get("dropoff_floor")
-                return_booking.pickup_door_code = validated_data.get("dropoff_door_code")
+                return_booking.pickup_door_code = validated_data.get(
+                    "dropoff_door_code"
+                )
                 return_booking.dropoff_floor = validated_data.get("pickup_floor")
-                return_booking.dropoff_door_code = validated_data.get("pickup_door_code")
+                return_booking.dropoff_door_code = validated_data.get(
+                    "pickup_door_code"
+                )
                 return_booking.wheelchair_client_has = validated_data.get(
                     "wheelchair_client_has", False
                 )

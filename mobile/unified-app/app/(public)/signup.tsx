@@ -38,7 +38,6 @@ const TERMS_URL = "https://www.lirie.ch/conditions";
 const PRIVACY_URL = "https://www.lirie.ch/privacy";
 
 const UI_SURFACE = "#F3F7F5";
-const UI_MUTED = "#5F7369";
 const UI_BORDER_SOFT = "rgba(145, 165, 157, 0.38)";
 
 type Gender = "male" | "female" | "other";

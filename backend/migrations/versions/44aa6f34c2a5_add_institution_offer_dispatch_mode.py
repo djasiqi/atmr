@@ -1,4 +1,3 @@
-
 """add institution offer dispatch mode
 
 Revision ID: 44aa6f34c2a5
@@ -6,6 +5,7 @@ Revises: 20260525_req_ext_ref_optional
 Create Date: 2026-05-25 17:17:36.002619
 
 """
+
 from alembic import op
 import sqlalchemy as sa
 
@@ -31,4 +31,3 @@ def upgrade():
 
 def downgrade():
     op.drop_column("institution_settings", "offer_dispatch_mode")
-

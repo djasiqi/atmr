@@ -411,9 +411,7 @@ class BookingBillingUpdate(Resource):
             bump_edit_version(booking)
             after = _billing_snapshot(booking)
             financial_role = (
-                "billing"
-                if role == InstitutionRole.BILLING.value
-                else "admin"
+                "billing" if role == InstitutionRole.BILLING.value else "admin"
             )
             record_change_event(
                 booking=booking,

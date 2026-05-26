@@ -399,9 +399,17 @@ def _build_ride_summary(
                     origin,
                     destination,
                 )
-                if duration_seconds is None and isinstance(computed_duration_s, int) and computed_duration_s > 0:
+                if (
+                    duration_seconds is None
+                    and isinstance(computed_duration_s, int)
+                    and computed_duration_s > 0
+                ):
                     duration_seconds = computed_duration_s
-                if distance_meters is None and isinstance(computed_distance_m, int) and computed_distance_m > 0:
+                if (
+                    distance_meters is None
+                    and isinstance(computed_distance_m, int)
+                    and computed_distance_m > 0
+                ):
                     distance_meters = computed_distance_m
             except Exception as exc:  # noqa: BLE001
                 logger.warning(

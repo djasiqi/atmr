@@ -23,8 +23,12 @@ from services.messaging.conversation_service import ConversationService
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Nettoyage messagerie multi-canaux")
-    parser.add_argument("--company-id", type=int, default=None, help="Limiter à une entreprise")
-    parser.add_argument("--dry-run", action="store_true", help="Simulation (défaut si pas --yes)")
+    parser.add_argument(
+        "--company-id", type=int, default=None, help="Limiter à une entreprise"
+    )
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Simulation (défaut si pas --yes)"
+    )
     parser.add_argument(
         "--purge-messages",
         action="store_true",
@@ -62,7 +66,9 @@ def main() -> int:
 
         for cid in company_ids:
             msg_count = Message.query.filter_by(company_id=cid).count()
-            null_thread = Message.query.filter_by(company_id=cid, thread_id=None).count()
+            null_thread = Message.query.filter_by(
+                company_id=cid, thread_id=None
+            ).count()
             print(f"\n=== Entreprise {cid} ===")
             print(f"  messages total      : {msg_count}")
             print(f"  sans thread_id      : {null_thread}")
@@ -80,10 +86,14 @@ def main() -> int:
                 else:
                     db.session.query(MessageRead).filter(
                         MessageRead.message_id.in_(
-                            db.session.query(Message.id).filter(Message.company_id == cid)
+                            db.session.query(Message.id).filter(
+                                Message.company_id == cid
+                            )
                         )
                     ).delete(synchronize_session=False)
-                    Message.query.filter_by(company_id=cid).delete(synchronize_session=False)
+                    Message.query.filter_by(company_id=cid).delete(
+                        synchronize_session=False
+                    )
                     db.session.commit()
                     print("  ✓ messages supprimés")
 
@@ -93,16 +103,22 @@ def main() -> int:
                 else:
                     ConversationService.ensure_company_dispatch_conversation(cid)
                     ConversationService.ensure_company_group_conversation(cid)
-                    drivers = Driver.query.filter_by(company_id=cid, is_active=True).all()
+                    drivers = Driver.query.filter_by(
+                        company_id=cid, is_active=True
+                    ).all()
                     for d in drivers:
                         if d.user_id:
-                            ConversationService.ensure_company_driver_conversation(cid, d)
+                            ConversationService.ensure_company_driver_conversation(
+                                cid, d
+                            )
                     print("  ✓ conversations canons provisionnées")
 
         if dry_run and (args.purge_messages or args.rebuild_conversations):
             print("\nRelancer avec --yes pour appliquer.")
         elif not args.purge_messages and not args.rebuild_conversations:
-            print("\nIndiquez --purge-messages et/ou --rebuild-conversations (avec --yes).")
+            print(
+                "\nIndiquez --purge-messages et/ou --rebuild-conversations (avec --yes)."
+            )
 
     return 0
 

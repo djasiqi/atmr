@@ -122,9 +122,8 @@ def pytest_ignore_collect(path: object, config: object) -> bool:
     )
 
 
-@pytest.fixture(scope="session")
-def app() -> Flask:
-    """Crée une instance Flask en mode test."""
+def _build_session_flask_app() -> Flask:
+    """Construit l'application Flask partagée pour la session de tests."""
 
     # ✅ FIX: Passer explicitement "testing" pour désactiver force_https dans Talisman
     app = create_app(config_name="testing")
@@ -170,6 +169,18 @@ def app() -> Flask:
     return app
 
 
+@pytest.fixture(scope="session")
+def _session_flask_app() -> Flask:
+    """App Flask session-scoped (nom privé : évite ScopeMismatch avec fixtures locales `app`)."""
+    return _build_session_flask_app()
+
+
+@pytest.fixture(scope="session")
+def app(_session_flask_app: Flask) -> Flask:
+    """Crée une instance Flask en mode test."""
+    return _session_flask_app
+
+
 def _postgresql_schema_ready(app: Flask) -> bool:
     """Vérifie que le schéma PostgreSQL (table user) existe. Skip si SQLite ou erreur connexion."""
     uri = (app.config.get("SQLALCHEMY_DATABASE_URI") or "").lower()
@@ -197,9 +208,9 @@ def _postgresql_schema_ready(app: Flask) -> bool:
 
 
 @pytest.fixture(scope="session")
-def postgresql_schema_ready(app: Flask) -> bool:
+def postgresql_schema_ready(_session_flask_app: Flask) -> bool:
     """Session-scoped: schéma PostgreSQL prêt pour les tests d'intégration."""
-    return _postgresql_schema_ready(app)
+    return _postgresql_schema_ready(_session_flask_app)
 
 
 @pytest.fixture(autouse=True)

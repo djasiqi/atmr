@@ -710,9 +710,7 @@ def emit_offer_unavailable(
     if institution_name:
         message = f"{institution_name} — demande déjà prise par un autre transporteur"
 
-    dedupe_key = (
-        f"offer_unavailable:{transport_request.id}:{company_id}:{reason}"
-    )
+    dedupe_key = f"offer_unavailable:{transport_request.id}:{company_id}:{reason}"
 
     try:
         persist_company_notification(

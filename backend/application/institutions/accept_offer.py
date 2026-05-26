@@ -373,9 +373,7 @@ class AcceptOfferUseCase:
             try:
                 from services.events.institution_events import emit_offer_unavailable
 
-                accepted_company_name = (
-                    offer.company.name if offer.company else None
-                )
+                accepted_company_name = offer.company.name if offer.company else None
                 for other_offer in other_offers:
                     emit_offer_unavailable(
                         company_id=other_offer.company_id,
@@ -443,7 +441,9 @@ class AcceptOfferUseCase:
         # Facturation: la demande (billing_intent) est la source de vérité.
         billed_to_type = "patient"
         billed_to_company_id = None
-        billing_intent = (getattr(transport_request, "billing_intent", None) or "patient").lower()
+        billing_intent = (
+            getattr(transport_request, "billing_intent", None) or "patient"
+        ).lower()
         if billing_intent == "institution":
             billed_to_type = "clinic"
             billed_to_company_id = company_id
@@ -760,10 +760,9 @@ class AcceptOfferUseCase:
                 new_client.linked_institution_id = inst_id
                 new_client.client_type = ClientType.TRANSPORT
                 new_client.management_mode = ManagementMode.CORPORATE
-                new_client.billing_address = (
-                    getattr(institution, "billing_address", None)
-                    or getattr(institution, "address", None)
-                )
+                new_client.billing_address = getattr(
+                    institution, "billing_address", None
+                ) or getattr(institution, "address", None)
                 new_client.contact_email = getattr(
                     institution, "billing_email", None
                 ) or getattr(institution, "contact_email", None)

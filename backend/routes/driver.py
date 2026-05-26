@@ -121,9 +121,10 @@ def _maybe_geocode_booking_endpoint(
     out: dict[str, Any], *, lat_key: str, lon_key: str, address_key: str
 ) -> None:
     """Best-effort : remplit lat/lon depuis l'adresse texte si coords absentes."""
-    if _as_float_or_none(out.get(lat_key)) is not None and _as_float_or_none(
-        out.get(lon_key)
-    ) is not None:
+    if (
+        _as_float_or_none(out.get(lat_key)) is not None
+        and _as_float_or_none(out.get(lon_key)) is not None
+    ):
         return
     address = out.get(address_key)
     if not isinstance(address, str) or not address.strip():
@@ -193,7 +194,10 @@ def _enrich_driver_booking_list_payload(payload: dict[str, Any]) -> dict[str, An
                         estimated = True
                     if duration_seconds is None:
                         duration_seconds = int(
-                            round((km / max(DRIVER_LIST_FALLBACK_SPEED_KMH, 1e-3)) * 3600.0)
+                            round(
+                                (km / max(DRIVER_LIST_FALLBACK_SPEED_KMH, 1e-3))
+                                * 3600.0
+                            )
                         )
                         estimated = True
             except Exception:
@@ -206,9 +210,9 @@ def _enrich_driver_booking_list_payload(payload: dict[str, Any]) -> dict[str, An
     if duration_seconds is not None and duration_seconds > 0:
         out["duration_seconds"] = duration_seconds
         out["duration_minutes"] = max(1, int(round(duration_seconds / 60.0)))
-        out["duration_in_minutes"] = out.get("duration_in_minutes") or out[
-            "duration_minutes"
-        ]
+        out["duration_in_minutes"] = (
+            out.get("duration_in_minutes") or out["duration_minutes"]
+        )
     if estimated:
         out["distance_duration_estimated"] = True
 
@@ -2030,10 +2034,12 @@ class DriverLocationBatch(Resource):
                 rejected += 1
                 continue
             position_id = point.get("position_id")
-            if isinstance(position_id, str) and position_id.strip() and redis_client is not None:
-                idem_key = (
-                    f"driver:{driver.id}:tracking_session:{tracking_session_id}:position:{position_id.strip()}"
-                )
+            if (
+                isinstance(position_id, str)
+                and position_id.strip()
+                and redis_client is not None
+            ):
+                idem_key = f"driver:{driver.id}:tracking_session:{tracking_session_id}:position:{position_id.strip()}"
                 if redis_client.exists(idem_key):
                     accepted += 1
                     continue
@@ -3666,9 +3672,7 @@ class TestPushNotification(Resource):
             return {"error": "Erreur interne"}, 500
 
 
-@driver_ns.route(
-    "/me/bookings/<int:booking_id>/change-events/<int:event_id>/ack"
-)
+@driver_ns.route("/me/bookings/<int:booking_id>/change-events/<int:event_id>/ack")
 class DriverBookingChangeAck(Resource):
     @jwt_required()
     @role_required(UserRole.driver)

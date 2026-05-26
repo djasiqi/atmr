@@ -76,7 +76,10 @@ def conversation_id_to_legacy_thread(conversation) -> str | None:
         return str(legacy)
     if ctype == ConversationType.MISSION.value and cid:
         return mission_thread_id(int(cid))
-    if ctype == ConversationType.COMPANY.value and ctx == ConversationContext.COMPANY.value:
+    if (
+        ctype == ConversationType.COMPANY.value
+        and ctx == ConversationContext.COMPANY.value
+    ):
         company_id = getattr(conversation, "company_id", None)
         if cid is not None and company_id is not None and int(cid) == int(company_id):
             return THREAD_DISPATCH

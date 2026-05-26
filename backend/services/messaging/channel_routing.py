@@ -65,9 +65,12 @@ def emit_chat_message(
             rooms_emitted.add(company_room)
         return
 
-    if tid in (THREAD_TEAM, THREAD_SUPPORT) or tid.startswith("mission:") or tid.startswith(
-        "direct:"
-    ) or tid.startswith("company_driver:"):
+    if (
+        tid in (THREAD_TEAM, THREAD_SUPPORT)
+        or tid.startswith("mission:")
+        or tid.startswith("direct:")
+        or tid.startswith("company_driver:")
+    ):
         if not rooms_emitted:
             logger.warning(
                 "[chat] fallback broadcast pour thread_id=%s company_id=%s (pas de conversation_id)",

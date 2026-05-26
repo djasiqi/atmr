@@ -22,7 +22,7 @@ from ext import db
 class TestClientTypeInvariants:
     """Invariants metier sur la table client apres migration Phase A."""
 
-    def test_no_transport_without_company(self):
+    def test_no_transport_without_company(self, db):
         """Un client TRANSPORT doit toujours avoir un company_id."""
         result = db.session.execute(
             text(
@@ -36,7 +36,7 @@ class TestClientTypeInvariants:
             "a une entreprise de transport."
         )
 
-    def test_no_portal_with_company(self):
+    def test_no_portal_with_company(self, db):
         """Un client PORTAL ne doit pas avoir de company_id."""
         result = db.session.execute(
             text(
@@ -50,7 +50,7 @@ class TestClientTypeInvariants:
             "a une entreprise."
         )
 
-    def test_transport_has_management_mode(self):
+    def test_transport_has_management_mode(self, db):
         """Un client TRANSPORT doit avoir un management_mode renseigne."""
         result = db.session.execute(
             text(
@@ -64,7 +64,7 @@ class TestClientTypeInvariants:
             "management_mode (SELF_SERVICE, MANAGED ou CORPORATE)."
         )
 
-    def test_portal_has_no_management_mode(self):
+    def test_portal_has_no_management_mode(self, db):
         """Un client PORTAL ne doit pas avoir de management_mode."""
         result = db.session.execute(
             text(
@@ -78,7 +78,7 @@ class TestClientTypeInvariants:
             "management_mode."
         )
 
-    def test_no_legacy_client_types(self):
+    def test_no_legacy_client_types(self, db):
         """Aucun ancien type (PRIVATE, SELF_SERVICE, CORPORATE) ne doit subsister."""
         result = db.session.execute(
             text(
@@ -93,7 +93,7 @@ class TestClientTypeInvariants:
             "La migration Phase A n'a pas ete completee."
         )
 
-    def test_only_valid_management_modes(self):
+    def test_only_valid_management_modes(self, db):
         """Seules les valeurs SELF_SERVICE, MANAGED, CORPORATE sont acceptees."""
         result = db.session.execute(
             text(
@@ -106,7 +106,7 @@ class TestClientTypeInvariants:
             f"Valeurs management_mode invalides : {[r[0] for r in result]}"
         )
 
-    def test_institution_patients_untouched(self):
+    def test_institution_patients_untouched(self, db):
         """La table institution_patients ne doit pas avoir ete modifiee."""
         count = db.session.execute(
             text("SELECT COUNT(*) FROM institution_patients")

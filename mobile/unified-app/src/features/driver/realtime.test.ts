@@ -1,5 +1,5 @@
 import { QueryClient } from "@tanstack/react-query";
-import { describe, expect, it, jest } from "@jest/globals";
+import { describe, expect, it, jest, beforeEach } from "@jest/globals";
 import { driverQueryKeys } from "./queryKeys";
 
 jest.mock("@react-native-async-storage/async-storage", () => ({
@@ -20,8 +20,17 @@ jest.mock("./services/missionSyncOrchestrator", () => ({
 }));
 
 const { applyDriverSocketEvent } = require("./realtime") as typeof import("./realtime");
+const { missionRuntimeManager } = require("./services/missionRuntimeManager") as typeof import("./services/missionRuntimeManager");
+
+function recentIso(offsetMs: number): string {
+  return new Date(Date.now() + offsetMs).toISOString();
+}
 
 describe("driver realtime merge behavior", () => {
+  beforeEach(() => {
+    missionRuntimeManager.resetForTests();
+  });
+
   it("applies event only once when sequence is duplicated", () => {
     const queryClient = new QueryClient();
     const contextId = "driver:42";
@@ -29,7 +38,7 @@ describe("driver realtime merge behavior", () => {
       {
         id: 1,
         status: "ASSIGNED",
-        updated_at: "2026-04-15T10:00:00.000Z",
+        updated_at: recentIso(-120_000),
       },
     ]);
 
@@ -37,14 +46,14 @@ describe("driver realtime merge behavior", () => {
       mission_id: 1,
       event_type: "mission_status_changed",
       event_sequence: 2,
-      updated_at: "2026-04-15T10:01:00.000Z",
+      updated_at: recentIso(-60_000),
       payload: { status: "EN_ROUTE" },
     });
     applyDriverSocketEvent(queryClient, contextId, {
       mission_id: 1,
       event_type: "mission_status_changed",
       event_sequence: 2,
-      updated_at: "2026-04-15T10:01:30.000Z",
+      updated_at: recentIso(-30_000),
       payload: { status: "ARRIVED" },
     });
 
@@ -64,7 +73,7 @@ describe("driver realtime merge behavior", () => {
       {
         id: 7,
         status: "IN_PROGRESS",
-        updated_at: "2026-04-15T11:00:00.000Z",
+        updated_at: recentIso(0),
       },
     ]);
 
@@ -72,7 +81,7 @@ describe("driver realtime merge behavior", () => {
       mission_id: 7,
       event_type: "mission_updated",
       event_sequence: 1,
-      updated_at: "2026-04-15T10:59:00.000Z",
+      updated_at: recentIso(-60_000),
       payload: { status: "ARRIVED" },
     });
 

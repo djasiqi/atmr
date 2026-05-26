@@ -16,7 +16,7 @@ describe("fleetNativeMarkerImage", () => {
     expect(src.uri.length).toBeGreaterThan(0);
     expect(src.assetModule).toBeDefined();
     expect(src.width).toBe(FLEET_NATIVE_DRIVER_MARKER_SIZE_PX);
-    expect(src.height).toBeGreaterThan(src.width);
+    expect(src.height).toBe(FLEET_NATIVE_DRIVER_MARKER_SIZE_PX);
     if (usesLirieDriverMarkerRasterPng()) {
       expect(Platform.OS === "ios" || Platform.OS === "android").toBe(true);
     }

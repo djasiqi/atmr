@@ -89,6 +89,7 @@ def _store_sid_claims(sid: str, data: Dict[str, Any]) -> None:
     set_sid_claims(sid, data)
     _SID_INDEX[sid] = data
 
+
 # ✅ Tracking des erreurs token_expired par IP pour réduire le bruit dans les logs
 # Format: {ip: (last_log_time | None, count)}
 _TOKEN_EXPIRED_TRACKING: Dict[str, tuple[datetime | None, int]] = {}
@@ -904,7 +905,9 @@ def init_chat_socket(socketio: SocketIO):
                             join_room(conv_room)
                             ws_metrics.on_room_join(conv_room)
                 except Exception:
-                    logger.exception("[socketio] join conversation rooms on connect failed")
+                    logger.exception(
+                        "[socketio] join conversation rooms on connect failed"
+                    )
 
                 emit("connected", {"message": "✅ Chauffeur connecté"})
 
@@ -994,7 +997,9 @@ def init_chat_socket(socketio: SocketIO):
                         ws_metrics.on_room_join(conv_room)
                         joined_conv += 1
                 except Exception:
-                    logger.exception("[socketio] join conversation rooms for company on connect failed")
+                    logger.exception(
+                        "[socketio] join conversation rooms for company on connect failed"
+                    )
 
                 emit("connected", {"message": f"✅ Entreprise connectée à {room}"})
 
@@ -1379,7 +1384,9 @@ def init_chat_socket(socketio: SocketIO):
             )
 
             thread_type_metric = (
-                str(thread_id).split(":", 1)[0] if thread_id and ":" in str(thread_id) else (str(thread_id) if thread_id else "unknown")
+                str(thread_id).split(":", 1)[0]
+                if thread_id and ":" in str(thread_id)
+                else (str(thread_id) if thread_id else "unknown")
             )
 
             message: Message | None = None
@@ -1421,9 +1428,7 @@ def init_chat_socket(socketio: SocketIO):
                         )
 
                         if conversation_id_val:
-                            conv_obj = Conversation.query.get(
-                                int(conversation_id_val)
-                            )
+                            conv_obj = Conversation.query.get(int(conversation_id_val))
                         else:
                             driver_resolve = (
                                 Driver.query.filter_by(user_id=user.id).first()
@@ -1452,9 +1457,7 @@ def init_chat_socket(socketio: SocketIO):
                                 )
                                 return
                         if conv_obj is not None:
-                            MessagingPermissionService.assert_can_write(
-                                user, conv_obj
-                            )
+                            MessagingPermissionService.assert_can_write(user, conv_obj)
                             conversation_id_val = conv_obj.id
                     except PermissionError as perm_err:
                         inc_chat_message_rejected("permission")
@@ -1492,10 +1495,7 @@ def init_chat_socket(socketio: SocketIO):
                     from sqlalchemy.exc import IntegrityError
 
                     db.session.rollback()
-                    if (
-                        client_message_id
-                        and isinstance(commit_err, IntegrityError)
-                    ):
+                    if client_message_id and isinstance(commit_err, IntegrityError):
                         raced = find_idempotent_message(
                             sender_id, str(client_message_id)
                         )
@@ -1518,11 +1518,7 @@ def init_chat_socket(socketio: SocketIO):
                         )
                         emit(
                             "error",
-                            {
-                                "error": (
-                                    "Erreur lors de la sauvegarde du message."
-                                )
-                            },
+                            {"error": ("Erreur lors de la sauvegarde du message.")},
                         )
                         return
 
