@@ -48,6 +48,46 @@ def upgrade() -> None:
         "device_tokens",
         "(driver_id IS NOT NULL) OR (company_id IS NOT NULL)",
     )
+    # Dédoublonnage avant index uniques partiels (legacy sans contrainte device_id).
+    # Conserve la ligne la plus récente / active par (owner, device_id).
+    op.execute(
+        """
+        DELETE FROM device_tokens
+        WHERE id IN (
+            SELECT id
+            FROM (
+                SELECT id,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY driver_id, device_id
+                           ORDER BY is_active DESC, updated_at DESC, id DESC
+                       ) AS rn
+                FROM device_tokens
+                WHERE driver_id IS NOT NULL
+                  AND device_id IS NOT NULL
+            ) ranked
+            WHERE rn > 1
+        )
+        """
+    )
+    op.execute(
+        """
+        DELETE FROM device_tokens
+        WHERE id IN (
+            SELECT id
+            FROM (
+                SELECT id,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY company_id, device_id
+                           ORDER BY is_active DESC, updated_at DESC, id DESC
+                       ) AS rn
+                FROM device_tokens
+                WHERE company_id IS NOT NULL
+                  AND device_id IS NOT NULL
+            ) ranked
+            WHERE rn > 1
+        )
+        """
+    )
     op.create_index(
         "ix_device_tokens_company_active",
         "device_tokens",
