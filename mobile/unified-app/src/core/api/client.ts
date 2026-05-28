@@ -16,6 +16,8 @@ import { getRuntimeFlagsVersion, isFeatureEnabled } from "../featureFlags/regist
 import { getNetworkSnapshot } from "../network/networkState";
 import { evaluateConnectivityPolicy } from "../network/connectivityPolicy";
 
+const DEFAULT_PROD_API_BASE_URL = "https://api.lirie.ch/api/v1";
+
 function extractHostFromUrl(value: string | null | undefined): string | null {
   if (!value) return null;
   const match = value.match(/https?:\/\/([^/:]+)/i);
@@ -47,6 +49,12 @@ function isNonLoopbackDevApiHost(hostname: string): boolean {
   return isDevAlignableApiHost(hostname) && !isLoopbackStyleHost(hostname);
 }
 
+function isUnsafeProductionApiUrl(value: string): boolean {
+  if (!value.startsWith("https://")) return true;
+  const host = extractHostFromUrl(value);
+  return Boolean(host && isDevAlignableApiHost(host));
+}
+
 function deriveBundleHostForDev(): string | null {
   if (Platform?.OS === "web") {
     const webHost = globalThis?.location?.hostname;
@@ -76,8 +84,11 @@ function resolveApiBaseUrlFromEnv(): string | undefined {
 function resolveBaseUrl(): string {
   const envUrl = resolveApiBaseUrlFromEnv();
   const configUrl = (Constants.expoConfig?.extra as { apiBaseUrl?: string } | undefined)?.apiBaseUrl;
-  const defaultUrl = "https://api.lirie.ch/api/v1";
-  const chosen = envUrl ?? configUrl ?? defaultUrl;
+  const chosen = envUrl ?? configUrl ?? DEFAULT_PROD_API_BASE_URL;
+
+  if (!__DEV__ && isUnsafeProductionApiUrl(chosen)) {
+    return DEFAULT_PROD_API_BASE_URL;
+  }
 
   // Web dev : suivre l’hôte de la page (localhost/IP LAN) pour éviter qu’une ancienne
   // IP compilée dans le bundle continue d’être utilisée après changement de réseau.
