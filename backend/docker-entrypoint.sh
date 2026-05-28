@@ -470,9 +470,10 @@ start_application() {
         echo "  Mode production: démarrage avec Gunicorn"
         # ✅ FIX Socket.IO multi-workers: Pour diagnostiquer "Invalid session" errors,
         # définir GUNICORN_WORKERS=1 pour forcer un seul worker (évite le problème de SID
-        # partagé entre workers). En production avec Redis message_queue, utiliser 4+ workers.
-        # ✅ AUDIT 100 USERS: Défaut augmenté de 4 à 6 pour supporter 100 utilisateurs simultanés (laisser 2 CPU pour système/overhead)
-        WORKERS="${GUNICORN_WORKERS:-6}"
+        # partagé entre workers).
+        # ⚠️ gevent + Flask-SocketIO : éviter --preload (ConcurrentObjectUseError après fork).
+        # Défaut 2 workers (REST + Socket.IO sur le même pool) ; augmenter via GUNICORN_WORKERS si besoin.
+        WORKERS="${GUNICORN_WORKERS:-2}"
         GUNICORN_TIMEOUT="${GUNICORN_TIMEOUT:-180}"
         GUNICORN_GRACEFUL_TIMEOUT="${GUNICORN_GRACEFUL_TIMEOUT:-30}"
         GUNICORN_KEEPALIVE="${GUNICORN_KEEPALIVE:-5}"
@@ -483,23 +484,40 @@ start_application() {
             echo "  ⚠️  Mode single-worker (diagnostic Socket.IO multi-workers)"
         fi
         # Gunicorn 26+ ne fournit plus le worker eventlet ; défaut gevent.
+        _skip_sio="false"
+        case "$(echo "${SKIP_SOCKETIO:-false}" | tr '[:upper:]' '[:lower:]')" in
+            1|true|yes) _skip_sio="true" ;;
+        esac
         _gw="${GUNICORN_WORKER_CLASS:-gevent}"
+        if [ "$_skip_sio" = "true" ]; then
+            _gw="${GUNICORN_WORKER_CLASS:-gthread}"
+            echo "  Mode REST pur (SKIP_SOCKETIO=1) — worker défaut: $_gw"
+        fi
         if [ "$_gw" = "eventlet" ]; then
             echo "⚠️  GUNICORN_WORKER_CLASS=eventlet incompatible avec Gunicorn 26+ — bascule sur gevent."
             _gw=gevent
         fi
+        _gunicorn_extra=()
+        if [ "$_gw" = "gthread" ]; then
+            _threads="${GUNICORN_THREADS:-4}"
+            _gunicorn_extra=(--threads "$_threads")
+            echo "  Threads gthread: $_threads"
+        fi
         exec gunicorn wsgi:app \
+            --config gunicorn.conf.py \
             --bind 0.0.0.0:5000 \
             --worker-class "$_gw" \
             --workers "$WORKERS" \
+            "${_gunicorn_extra[@]}" \
             --timeout "$GUNICORN_TIMEOUT" \
             --graceful-timeout "$GUNICORN_GRACEFUL_TIMEOUT" \
             --keep-alive "$GUNICORN_KEEPALIVE" \
+            --worker-tmp-dir /dev/shm \
             --max-requests 1000 \
             --max-requests-jitter 100 \
-            --preload \
             --access-logfile - \
             --error-logfile - \
+            --capture-output \
             --log-level info
     fi
 }

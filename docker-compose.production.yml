@@ -267,13 +267,16 @@ services:
       RL_WORKER_URL: ${RL_WORKER_URL:-http://atmr-rl-worker:5000}
 
       # Configuration Gunicorn orientée stabilité (override possible via .env.production)
-      GUNICORN_WORKERS: ${GUNICORN_WORKERS:-6}
+      # Défaut 2 : gevent + Socket.IO sur le même pool (pas de --preload, voir docker-entrypoint.sh)
+      GUNICORN_WORKERS: ${GUNICORN_WORKERS:-2}
       GUNICORN_TIMEOUT: ${GUNICORN_TIMEOUT:-180}
       GUNICORN_GRACEFUL_TIMEOUT: ${GUNICORN_GRACEFUL_TIMEOUT:-30}
       GUNICORN_KEEPALIVE: ${GUNICORN_KEEPALIVE:-5}
       # Gunicorn 26+ : le worker eventlet n'existe plus. Forcer gevent (override .env.production).
       GUNICORN_WORKER_CLASS: gevent
       SOCKETIO_ASYNC_MODE: gevent
+      SKIP_SOCKETIO: ${SKIP_SOCKETIO:-false}
+      WS_RELAY_PUBLISH_ENABLED: ${WS_RELAY_PUBLISH_ENABLED:-false}
       IOS_STARTUP_FATAL_RECOVERY_DISABLED: ${IOS_STARTUP_FATAL_RECOVERY_DISABLED:-false}
       DB_POOL_SIZE: ${DB_POOL_SIZE:-20}
       DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-10}
@@ -307,8 +310,9 @@ services:
       - atmr-network
       - traefik-network
       - atmr-rl-network # Pour communiquer avec le worker RL
-    # Labels Traefik pour le routage automatique
+    # Labels Traefik pour le routage automatique + autoheal (restart si unhealthy)
     labels:
+      - "autoheal=true"
       # Activer Traefik pour ce conteneur
       - "traefik.enable=true"
       # Router les requêtes vers le backend sur www.lirie.ch et api.lirie.ch
@@ -343,7 +347,7 @@ services:
       - "traefik.http.routers.backend-secure-ws.middlewares=backend-headers"
       - "traefik.http.routers.backend-secure-ws.priority=50"
       # ✅ Healthcheck pour le service backend (évite 502 si backend down)
-      - "traefik.http.services.backend.loadbalancer.healthcheck.path=/health"
+      - "traefik.http.services.backend.loadbalancer.healthcheck.path=/api/v1/ready"
       - "traefik.http.services.backend.loadbalancer.healthcheck.interval=30s"
       - "traefik.http.services.backend.loadbalancer.healthcheck.timeout=10s"
       - "traefik.http.services.backend.loadbalancer.healthcheck.scheme=http"
@@ -360,7 +364,7 @@ services:
           "CMD",
           "python",
           "-c",
-          "import urllib.request; urllib.request.urlopen('http://localhost:5000/health', timeout=5)",
+          "import urllib.request; r=urllib.request.urlopen('http://localhost:5000/api/v1/ready', timeout=5); exit(0 if r.status==200 else 1)",
         ]
       interval: 30s
       timeout: 10s
@@ -414,6 +418,10 @@ services:
       WS_KAFKA_SSL_KEYFILE: ${WS_KAFKA_SSL_KEYFILE:-}
       KAFKA_TOPIC_DRIVER_LOCATION_PROCESSED: ${KAFKA_TOPIC_DRIVER_LOCATION_PROCESSED:-driver.location.processed}
       KAFKA_TOPIC_MISSION_EVENTS: ${KAFKA_TOPIC_MISSION_EVENTS:-mission.events}
+      WS_SERVICE_ACCEPT_CONNECTIONS: ${WS_SERVICE_ACCEPT_CONNECTIONS:-true}
+      WS_KILL_SWITCH_DRAIN_SEC: ${WS_KILL_SWITCH_DRAIN_SEC:-30}
+      BACKEND_INTERNAL_TRACKING_INGEST_URL: ${BACKEND_INTERNAL_TRACKING_INGEST_URL:-http://backend:5000/api/internal/tracking/ingest}
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
     expose:
       - "8001"
     networks:
@@ -818,6 +826,21 @@ services:
         reservations:
           memory: 256M
           cpus: "0.1"
+
+  # Redémarre les conteneurs marqués autoheal=true lorsqu'ils restent unhealthy
+  autoheal:
+    image: willfarrell/autoheal:latest
+    container_name: atmr-autoheal
+    restart: unless-stopped
+    environment:
+      AUTOHEAL_CONTAINER_LABEL: all
+      AUTOHEAL_INTERVAL: 30
+      AUTOHEAL_START_PERIOD: 120
+      AUTOHEAL_DEFAULT_STOP_TIMEOUT: 10
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - atmr-network
 
   # Nginx (reverse proxy) - Optionnel
   # DÉSACTIVÉ : nécessite nginx/nginx.conf sur le serveur

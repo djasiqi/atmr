@@ -683,7 +683,9 @@ def create_app(config_name: str | None = None):
 
     # --- Socket.IO ---
     # ✅ Skip Socket.IO pour les scripts (évite blocage)
-    skip_socketio = os.getenv("SKIP_SOCKETIO", "false").lower() == "true"
+    from services.infrastructure.runtime_flags import is_skip_socketio
+
+    skip_socketio = is_skip_socketio()
 
     # Définir cors_origins même si Socket.IO est désactivé
     # (nécessaire pour CORS plus bas)
@@ -1291,6 +1293,24 @@ def create_app(config_name: str | None = None):
                 return metrics_resource.get()
         return None
 
+    @app.before_request
+    def _bypass_talisman_for_readiness():  # pyright: ignore[reportUnusedFunction]
+        """Healthcheck Docker/Traefik : /api/v1/ready sans redirection HTTPS."""
+        if request.path not in ("/api/v1/ready", "/ready"):
+            return None
+        remote = request.remote_addr or ""
+        host = request.host or ""
+        if (
+            remote in ("127.0.0.1", "::1", "localhost")
+            or request.scheme == "http"
+            or "localhost" in host
+            or current_app.config.get("TESTING", False)
+        ):
+            from routes.healthcheck import readiness
+
+            return readiness()
+        return None
+
     # ✅ FIX RC1: Désactiver strict_transport_security et force_https en mode testing
     # S'assurer que force_https est bien False en testing (force explicitement)
     if config_name == "testing":
@@ -1762,6 +1782,9 @@ def create_app(config_name: str | None = None):
 
             # ✅ Enregistrer healthcheck avec préfixe /api/v1
             app.register_blueprint(healthcheck_bp, url_prefix="/api/v1")
+            from routes.internal_tracking import internal_tracking_bp
+
+            app.register_blueprint(internal_tracking_bp)
             app.register_blueprint(feature_flags_bp)
             app.register_blueprint(ml_monitoring_bp)
 

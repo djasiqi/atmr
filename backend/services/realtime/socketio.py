@@ -13,10 +13,12 @@ from sqlalchemy.orm import joinedload
 
 from ext import app_logger, socketio
 from schemas.socket_events import EVENT_VERSION, SocketEvent
+from services.infrastructure.runtime_flags import is_skip_socketio
 from services.monitoring.driver_location_metrics import (
     inc_fanout,
     inc_payload_legacy_lng_usage,
 )
+from services.realtime.ws_relay_publisher import publish_relay_event
 
 if TYPE_CHECKING:
     from models import Booking
@@ -158,6 +160,32 @@ def _enrich_payload_if_needed(
 # - Flask-SocketIO >= 5: 'to='
 # - Compat anciennes versions: 'room='
 # ---------------------------------------------------------------------------
+_CRITICAL_EVENTS = frozenset(
+    {
+        "booking_updated",
+        "booking_cancelled",
+        "booking_reassigned",
+        "team_chat_message",
+        "team_chat_typing",
+        "dispatch_assignment",
+        "dispatch_run_started",
+        "dispatch_run_completed",
+        "dispatch_run_failed",
+        "dispatch_delay_detected",
+        "urgent_alert",
+        "delay_live_invalidate",
+    }
+)
+
+
+def _relay_criticality(event: str) -> str:
+    if event in _CRITICAL_EVENTS or event.startswith("dispatch"):
+        return "critical"
+    if event in ("driver_location_update", "driver_live_state_update"):
+        return "high"
+    return "normal"
+
+
 def _safe_emit(
     event: str,
     payload: dict[str, Any],
@@ -171,6 +199,15 @@ def _safe_emit(
     - gère la compatibilité Flask-SocketIO v4/v5,
     - ne remonte pas d'exception aux appelants.
     """
+    if is_skip_socketio():
+        publish_relay_event(
+            room=room or "",
+            event_type=event,
+            payload=payload,
+            criticality=_relay_criticality(event),
+        )
+        return
+
     if room is None:
         app_logger.error("[socketio] _safe_emit sans room: event=%s", event)
         return
@@ -228,6 +265,12 @@ def _safe_emit(
             inc_socketio_event(event)
         except Exception:
             pass
+        publish_relay_event(
+            room=room,
+            event_type=event,
+            payload=payload,
+            criticality=_relay_criticality(event),
+        )
         if _LIRIE_WS_V2_ALIASES:
             alias = _LIRIE_EVENT_ALIASES.get(event)
             if alias:

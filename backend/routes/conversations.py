@@ -58,10 +58,13 @@ class ConversationsInbox(Resource):
     @jwt_required()
     def get(self):
         user = user_repo.find_by_public_id_with_driver_and_company(get_jwt_identity())
-        driver, err = resolve_request_driver(user)
+        actor, err = _resolve_conversation_actor(user)
         if err:
             return err
-        inbox = ConversationService.build_driver_inbox(driver)
+        if actor["kind"] == "company":
+            inbox = ConversationService.build_company_inbox(actor["user"])
+        else:
+            inbox = ConversationService.build_driver_inbox(actor["driver"])
         return {
             **inbox,
             "generated_at": datetime.utcnow().isoformat() + "Z",

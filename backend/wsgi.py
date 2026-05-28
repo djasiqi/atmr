@@ -39,9 +39,16 @@ if hasattr(sys.stderr, "reconfigure"):
 # ✅ FIX: Permettre de désactiver eventlet pour les migrations
 # eventlet.monkey_patch() interfère avec les transactions Alembic/psycopg
 _disable_eventlet = os.getenv("DISABLE_EVENTLET", "0") == "1"
+_skip_socketio = os.getenv("SKIP_SOCKETIO", "false").strip().lower() in (
+    "1",
+    "true",
+    "yes",
+)
 _async_mode = (os.getenv("SOCKETIO_ASYNC_MODE") or "gevent").strip().lower()
 
-if _disable_eventlet:
+if _skip_socketio:
+    print("⏭️ [WSGI] SKIP_SOCKETIO=1 — pas de monkey-patch gevent/eventlet", flush=True)
+elif _disable_eventlet:
     print("⚠️ [WSGI] eventlet désactivé (DISABLE_EVENTLET=1)", flush=True)
 elif _async_mode == "eventlet":
     try:
@@ -52,6 +59,8 @@ elif _async_mode == "eventlet":
     except ImportError:
         print("⚠️ [WSGI] eventlet non disponible", flush=True)
 elif _async_mode == "gevent":
+    # ⚠️ monkey.patch_all() doit s'exécuter dans chaque worker Gunicorn après fork.
+    # Ne pas utiliser gunicorn --preload avec gevent + Flask-SocketIO (ConcurrentObjectUseError).
     try:
         from gevent import monkey
 
@@ -68,4 +77,7 @@ _cfg = os.getenv("FLASK_ENV") or os.getenv("FLASK_CONFIG") or "production"
 app = create_app(_cfg)
 print(f"✅ [WSGI] Application Flask créée (config={_cfg})", flush=True)
 print("✅ [WSGI] Application exportée pour Gunicorn", flush=True)
-print("✅ [WSGI] Socket.IO intégré via socketio.init_app", flush=True)
+if _skip_socketio:
+    print("⏭️ [WSGI] Socket.IO désactivé (mode REST pur)", flush=True)
+else:
+    print("✅ [WSGI] Socket.IO intégré via socketio.init_app", flush=True)

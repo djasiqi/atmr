@@ -118,17 +118,44 @@ else:
 
 # Verbosité Socket.IO uniquement en LOG_LEVEL=DEBUG (évite bruit/IO en prod)
 _sio_debug_logs = os.getenv("LOG_LEVEL", "").upper() == "DEBUG"
-
-socketio = SocketIO(
-    async_mode=ASYNC_MODE,
-    message_queue=_socketio_message_queue,  # ✅ FIX: Utiliser Redis si REDIS_URL défini (au lieu de None hardcodé)
-    # ✅ Configuration des timeouts pour éviter "Bad file descriptor"
-    ping_timeout=60,  # Timeout avant de considérer le client déconnecté (secondes)
-    ping_interval=25,  # Intervalle entre les pings (secondes)
-    # ✅ Gestion propre des déconnexions — logs moteur Socket.IO = DEBUG seulement
-    engineio_logger=_sio_debug_logs,
-    logger=_sio_debug_logs,
+_skip_socketio_boot = os.getenv("SKIP_SOCKETIO", "false").strip().lower() in (
+    "1",
+    "true",
+    "yes",
 )
+
+
+class _NoOpSocketIO:
+    """Stub minimal quand SKIP_SOCKETIO=1 (mode REST pur, PR A / PR D)."""
+
+    def init_app(self, app: Any, **kwargs: Any) -> None:
+        return None
+
+    def emit(self, *args: Any, **kwargs: Any) -> None:
+        return None
+
+    def on(self, *args: Any, **kwargs: Any) -> Any:
+        def _decorator(fn: Any) -> Any:
+            return fn
+
+        return _decorator
+
+    def run(self, *args: Any, **kwargs: Any) -> None:
+        return None
+
+
+if _skip_socketio_boot:
+    app_logger.info("[Socket.IO] SKIP_SOCKETIO=1 — stub NoOp (pas de message_queue Redis)")
+    socketio: SocketIO | _NoOpSocketIO = _NoOpSocketIO()  # type: ignore[assignment]
+else:
+    socketio = SocketIO(
+        async_mode=ASYNC_MODE,
+        message_queue=_socketio_message_queue,
+        ping_timeout=60,
+        ping_interval=25,
+        engineio_logger=_sio_debug_logs,
+        logger=_sio_debug_logs,
+    )
 
 # ========================
 # ✅ C2: Redis Storage avec TTL automatiques
