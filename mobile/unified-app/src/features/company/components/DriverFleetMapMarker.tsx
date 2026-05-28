@@ -29,6 +29,10 @@ export function DriverFleetMapMarker({ driver }: Props) {
     [status]
   );
 
+  if (!imageSource.uri?.trim()) {
+    return null;
+  }
+
   return (
     <FleetMapRasterMarker
       coordinate={{ latitude: driver.latitude, longitude: driver.longitude }}

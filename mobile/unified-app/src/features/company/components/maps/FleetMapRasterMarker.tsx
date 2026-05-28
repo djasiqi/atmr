@@ -3,7 +3,6 @@ import { Platform } from "react-native";
 import { Marker } from "react-native-maps";
 
 import type { FleetNativeMarkerImageSource } from "./fleetNativeMarkerImage";
-import { resolveMetroAssetSource } from "./resolveMetroAssetSource";
 import { isValidMapCoord } from "./mapsIosNewArchSafeMode";
 
 type Props = {
@@ -19,8 +18,8 @@ type Props = {
 const DEFAULT_ANCHOR = { x: 0.5, y: 0.5 } as const;
 
 /**
- * Marqueur raster PNG embarqué.
- * Android : `icon` avec `require()` natif (une URI data/SVG ou file:// Windows → pin rouge Google).
+ * Marqueur raster — consommateur pur : utilise uniquement uri/width/height déjà résolus.
+ * Ne refait pas de résolution Metro au render (uri déjà fournie par les builders).
  */
 function FleetMapRasterMarkerComponent({
   coordinate,
@@ -32,26 +31,23 @@ function FleetMapRasterMarkerComponent({
   onPress,
 }: Props) {
   const markerProps = useMemo(() => {
-    const { width, height, assetModule, uri } = imageSource;
+    const uri = imageSource.uri?.trim() ?? "";
+    if (!uri) return null;
 
-    if (assetModule != null) {
-      if (Platform.OS === "android") {
-        // require() natif : seule méthode fiable pour éviter le pin rouge Google.
-        return { icon: assetModule };
-      }
-      const resolved = resolveMetroAssetSource(assetModule);
-      return {
-        image: {
-          uri: resolved.uri,
-          width,
-          height,
-        },
-      };
+    const { width, height, assetModule } = imageSource;
+    const raster = { uri, width, height };
+    const isDataUri = uri.startsWith("data:");
+
+    if (Platform.OS === "android" && assetModule != null && !isDataUri) {
+      return { icon: assetModule };
     }
 
-    const raster = { uri, width, height };
     return Platform.OS === "android" ? { icon: raster } : { image: raster };
   }, [imageSource]);
+
+  if (!markerProps) {
+    return null;
+  }
 
   if (!isValidMapCoord(coordinate.latitude, coordinate.longitude)) {
     return null;

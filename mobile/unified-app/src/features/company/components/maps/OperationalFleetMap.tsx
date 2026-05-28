@@ -43,6 +43,10 @@ import { ClusterDriversSheet } from "./ClusterDriversSheet";
 
 import { useOperationalFleetMap } from "./useOperationalFleetMap";
 
+import { FleetMapErrorBoundary } from "./FleetMapErrorBoundary";
+import { ALL_LIRIE_DRIVER_MARKER_MODULES } from "./fleetLirieDriverMarkerModules";
+import { prefetchLirieDriverMarkerAssets } from "./fleetLirieDriverMarkerAssets";
+
 import { FLEET_MAP_COLORS } from "./mapStatusTheme";
 import { computeFleetMapFitEdgePadding } from "./fleetMapFitPadding";
 import type { CockpitMapPolicy, MapSignalsSnapshot } from "./fleetMapTypes";
@@ -244,6 +248,8 @@ function FleetMapSurface({
 
     >
 
+      <FleetMapErrorBoundary>
+
       <EnterpriseDriversMap
 
         drivers={fleet.filtered}
@@ -294,6 +300,8 @@ function FleetMapSurface({
         logoClipFill={isCockpit && cockpitImmersive}
 
       />
+
+      </FleetMapErrorBoundary>
 
       {showLegend ? <MapLegend /> : null}
 
@@ -542,6 +550,10 @@ export function OperationalFleetMap({
     syncSelectedDriverId: isCockpit ? syncSelectedDriverId : undefined,
 
   });
+
+  useEffect(() => {
+    void prefetchLirieDriverMarkerAssets(ALL_LIRIE_DRIVER_MARKER_MODULES);
+  }, []);
 
   const [fullscreen, setFullscreen] = useState(false);
 

@@ -1,10 +1,13 @@
 import { Platform } from "react-native";
+import * as Sentry from "@sentry/react-native";
 
+import { isFeatureEnabled } from "../../../../core/featureFlags/registry";
 import {
   makeFleetClusterCountBadgeDataUrl,
   makeFleetEtaBadgeMarkerDataUrl,
   makeMissionAnchorMarkerDataUrl,
 } from "./fleetMarkerIcons";
+import { buildDriverMarkerPngUri } from "./fleetMarkerPngEncode";
 
 import type { FleetMissionAnchorStyle } from "./fleetMapMissionVisual";
 
@@ -19,6 +22,7 @@ import {
   LIRIE_CLUSTER_MARKER_DISPLAY_WIDTH_PX,
 } from "./fleetLirieMarkerSizing";
 import type { FleetOperationalStatus } from "./mapStatusTheme";
+import { FLEET_STATUS_THEME } from "./mapStatusTheme";
 
 import {
   usesAndroidFleetMarkerPng,
@@ -27,23 +31,19 @@ import {
   withAndroidMissionAnchorPng,
 } from "./resolveFleetNativeMarkerUri";
 
-
-
 /** Largeur d’affichage des pins chauffeur Lirie sur la carte native. */
 export const FLEET_NATIVE_DRIVER_MARKER_SIZE_PX = FLEET_DRIVER_MARKER_SIZE_PX;
 
 export const FLEET_NATIVE_CLUSTER_MARKER_SIZE_PX = LIRIE_CLUSTER_MARKER_DISPLAY_WIDTH_PX;
 
-
-
 export type FleetNativeMarkerImageSource = {
   uri: string;
   width: number;
   height: number;
+  /** Module Metro — uniquement si PNG Lirie résolu (pas en safe / data-URI). */
   assetModule?: number;
 };
 
-/** Sur mobile, seules les URL distantes ou PNG data-URI sont sûres (pas SVG / file:// hôte). */
 function isUsableNativeMarkerUri(uri: string): boolean {
   if (uri.startsWith("data:image/svg")) return false;
   if (uri.startsWith("data:image/png") || uri.startsWith("data:image/jpeg")) return true;
@@ -106,35 +106,62 @@ function resolveCustomDriverMarkerIconUriByStatus(
   return raw;
 }
 
-
-
-export function buildFleetDriverMarkerImageSource(
-
+function emergencyGeneratedDriverMarker(
   status: FleetOperationalStatus,
-
-  selected = false
-
+  sizePx: number,
+  selected: boolean
 ): FleetNativeMarkerImageSource {
-
-  const sizePx = Math.round(
-    FLEET_NATIVE_DRIVER_MARKER_SIZE_PX * (selected ? 1.08 : 1)
-  );
-
-  const customUri = resolveCustomDriverMarkerIconUri();
-  const customStatusUri = resolveCustomDriverMarkerIconUriByStatus(status);
-  const resolvedCustomUri = customStatusUri ?? customUri;
-  if (resolvedCustomUri) {
-    return {
-      uri: resolvedCustomUri,
-      width: sizePx,
-      height: sizePx,
-    };
-  }
-
-  return buildLirieDriverMarkerImageSource(status, sizePx);
+  const theme = FLEET_STATUS_THEME[status];
+  return {
+    uri: buildDriverMarkerPngUri({
+      fill: theme.fill,
+      selected,
+      pulse: theme.pulse === true,
+      sizePx,
+    }),
+    width: sizePx,
+    height: sizePx,
+  };
 }
 
+export function buildFleetDriverMarkerImageSource(
+  status: FleetOperationalStatus,
+  selected = false
+): FleetNativeMarkerImageSource {
+  const sizePx = Math.round(FLEET_NATIVE_DRIVER_MARKER_SIZE_PX * (selected ? 1.08 : 1));
 
+  if (isFeatureEnabled("fleet_map_safe_markers")) {
+    Sentry.addBreadcrumb({
+      category: "fleet_map",
+      message: "fleet_map.safe_marker_mode_active",
+      level: "info",
+    });
+  }
+
+  try {
+    const customUri = resolveCustomDriverMarkerIconUri();
+    const customStatusUri = resolveCustomDriverMarkerIconUriByStatus(status);
+    const resolvedCustomUri = customStatusUri ?? customUri;
+    if (resolvedCustomUri) {
+      return {
+        uri: resolvedCustomUri,
+        width: sizePx,
+        height: sizePx,
+      };
+    }
+
+    return buildLirieDriverMarkerImageSource(status, sizePx, selected);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : "build_marker_failed";
+    Sentry.addBreadcrumb({
+      category: "fleet_map",
+      message: "fleet_map.marker_fallback_used",
+      level: "warning",
+      data: { status, reason },
+    });
+    return emergencyGeneratedDriverMarker(status, sizePx, selected);
+  }
+}
 
 /** Pastille « 2 », « 3 »… (Android : PNG). */
 export function buildFleetClusterCountBadgeImageSource(
@@ -164,76 +191,44 @@ export function buildFleetClusterMarkerImageSource(
   return buildFleetDriverMarkerImageSource(status, false);
 }
 
-
-
 export function buildFleetEtaBadgeImageSource(label: string): FleetNativeMarkerImageSource {
-
   const badge = makeFleetEtaBadgeMarkerDataUrl(label);
 
   const source: FleetNativeMarkerImageSource = {
-
     uri: badge.uri,
-
     width: badge.width,
-
     height: badge.height,
-
   };
 
   if (!usesAndroidFleetMarkerPng()) return source;
 
   return withAndroidEtaBadgePng(source, label);
-
 }
 
-
-
 export function buildMissionAnchorImageSource(
-
   anchor: FleetMissionAnchorStyle,
-
   selected = false
-
 ): FleetNativeMarkerImageSource {
-
   const sizePx = anchor.radius * 2 + (selected ? 8 : 6);
 
   const source: FleetNativeMarkerImageSource = {
-
     uri: makeMissionAnchorMarkerDataUrl(anchor.fill, {
-
       stroke: anchor.stroke,
-
       radiusPx: anchor.radius,
-
       selected,
-
       halo: anchor.role === "urgent" || anchor.role === "active",
-
     }),
-
     width: sizePx,
-
     height: sizePx,
-
   };
 
   if (!usesAndroidFleetMarkerPng()) return source;
 
   return withAndroidMissionAnchorPng(source, {
-
     fill: anchor.fill,
-
     stroke: anchor.stroke,
-
     radiusPx: anchor.radius,
-
     selected,
-
     halo: anchor.role === "urgent" || anchor.role === "active",
-
   });
-
 }
-
-
