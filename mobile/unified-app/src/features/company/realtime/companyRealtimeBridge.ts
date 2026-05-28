@@ -8,6 +8,10 @@ import { normalizeCompanyEventType } from "../../../core/realtime/eventContracts
 import { mobileReconnectCircuitBreaker } from "../../../core/realtime/reconnectCircuitBreaker";
 import { recordReconnectAttempt } from "../../../core/observability/realtimeMetrics";
 import {
+  getWsCanaryExtraHeaders,
+  trackCriticalEventForAck,
+} from "../../../core/realtime/wsCanary";
+import {
   recordCompanySocketConnected,
   recordSocketReconnect,
 } from "../../../core/observability/perfKpi";
@@ -449,6 +453,7 @@ class CompanyRealtimeBridge {
           return;
         }
         this.updateEventTimestamp();
+        trackCriticalEventForAck(socket, eventName, payload);
         contextRealtimeRouter.dispatch(
           currentContextId,
           {
@@ -553,9 +558,14 @@ class CompanyRealtimeBridge {
       // `_extract_token` côté Flask : auth (token) et/ou header Bearer (natif en complément)
       auth: handshakeAuth,
       ...(disablePollingUpgrade ? { upgrade: false as const } : {}),
-      ...(Platform.OS !== "web"
-        ? { extraHeaders: { Authorization: `Bearer ${token}` } as Record<string, string> }
-        : {}),
+      ...(() => {
+        const canary = getWsCanaryExtraHeaders();
+        const headers: Record<string, string> = { ...canary };
+        if (Platform.OS !== "web") {
+          headers.Authorization = `Bearer ${token}`;
+        }
+        return Object.keys(headers).length > 0 ? { extraHeaders: headers } : {};
+      })(),
     };
 
     if (typeof __DEV__ !== "undefined" && __DEV__) {

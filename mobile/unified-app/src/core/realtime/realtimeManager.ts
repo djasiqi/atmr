@@ -2,6 +2,7 @@ import { io, Socket } from "socket.io-client";
 import { isFeatureEnabled } from "../featureFlags/registry";
 import { mobileReconnectCircuitBreaker } from "./reconnectCircuitBreaker";
 import { resolveDriverSocketUrl } from "./resolveDriverSocketUrl";
+import { getWsCanaryExtraHeaders } from "./wsCanary";
 import { emitDriverTelemetry } from "../observability/driverTelemetry";
 import {
   recordDriverSocketConnected,
@@ -557,6 +558,7 @@ class RealtimeManager {
     } catch {
       accessToken = null;
     }
+    const canaryHeaders = getWsCanaryExtraHeaders();
     const socketOptions: NonNullable<Parameters<typeof io>[1]> = {
       transports: ["websocket", "polling"],
       reconnection: false, // géré manuellement pour contrôler l'auth recovery
@@ -564,6 +566,9 @@ class RealtimeManager {
       path: "/socket.io",
       query: { context_id: contextId, surface: "driver" },
       auth: handshakeAuth,
+      ...(Object.keys(canaryHeaders).length > 0
+        ? { extraHeaders: canaryHeaders }
+        : {}),
     };
 
     const hasAccessToken = Boolean(accessToken);
