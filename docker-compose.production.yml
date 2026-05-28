@@ -274,6 +274,7 @@ services:
       # Gunicorn 26+ : le worker eventlet n'existe plus. Forcer gevent (override .env.production).
       GUNICORN_WORKER_CLASS: gevent
       SOCKETIO_ASYNC_MODE: gevent
+      IOS_STARTUP_FATAL_RECOVERY_DISABLED: ${IOS_STARTUP_FATAL_RECOVERY_DISABLED:-false}
       DB_POOL_SIZE: ${DB_POOL_SIZE:-20}
       DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-10}
       DB_POOL_TIMEOUT: ${DB_POOL_TIMEOUT:-30}

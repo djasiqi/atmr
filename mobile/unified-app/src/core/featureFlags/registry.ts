@@ -327,6 +327,13 @@ export const featureFlags = {
     description:
       "Phase A chat : patch React Query local au lieu d'invalidate. __DEV__ on, prod off sauf EXPO_PUBLIC_PERF_CHAT_LOCAL_PATCH=1.",
   } satisfies FeatureFlagDefinition,
+  ios_startup_fatal_recovery_disabled: {
+    key: "ios_startup_fatal_recovery_disabled",
+    source: "external",
+    enabled: false,
+    description:
+      "Kill-switch backend: disables ErrorRecovery.crash() during iOS startup. Read via bootstrap/version-check after native hotfix. IOS_STARTUP_FATAL_RECOVERY_DISABLED=true on server.",
+  } satisfies FeatureFlagDefinition,
 } as const;
 
 export type FeatureFlagKey = keyof typeof featureFlags;

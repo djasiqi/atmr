@@ -19,6 +19,7 @@ from flask_restx import (  # pyright: ignore[reportMissingImports]
 from werkzeug.exceptions import BadRequest  # pyright: ignore[reportMissingImports]
 
 from ext import limiter
+from services.infrastructure.runtime_flags import get_mobile_startup_runtime_flags
 from services.infrastructure.version import check_app_version
 from shared.error_handlers import APIErrorHandler
 
@@ -73,6 +74,13 @@ version_check_response = app_version_ns.model(
             description="Message personnalisé pour la mise à jour",
             example="Une nouvelle version est disponible...",
             allow_null=True,
+        ),
+        "startup_runtime": fields.Raw(
+            description=(
+                "Flags runtime startup mobile (kill-switch iOS fatal recovery). "
+                "Consommé uniquement par les builds qui implémentent la lecture."
+            ),
+            example={"ios_startup_fatal_recovery_disabled": False},
         ),
     },
 )
@@ -136,12 +144,14 @@ class VersionCheck(Resource):
 
             # Vérification de version
             result = check_app_version(platform, current_version)
+            result["startup_runtime"] = get_mobile_startup_runtime_flags()
 
             logger.info(
-                "Version check: %s %s → %s",
+                "Version check: %s %s → %s (ios_fatal_recovery_disabled=%s)",
                 platform,
                 current_version,
                 result["status"],
+                result["startup_runtime"].get("ios_startup_fatal_recovery_disabled"),
             )
 
             return result, 200

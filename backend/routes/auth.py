@@ -1164,6 +1164,13 @@ def _feature_flags_config() -> dict[str, object]:
         except Exception:
             flags["saferpay_enabled"] = False
 
+    try:
+        from services.infrastructure.runtime_flags import get_mobile_startup_runtime_flags
+
+        flags.update(get_mobile_startup_runtime_flags())
+    except Exception:
+        flags.setdefault("ios_startup_fatal_recovery_disabled", False)
+
     return cast("dict[str, object]", flags)
 
 

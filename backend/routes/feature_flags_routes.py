@@ -6,6 +6,7 @@ from flask import Blueprint, jsonify, request  # pyright: ignore[reportMissingIm
 from werkzeug.exceptions import BadRequest  # pyright: ignore[reportMissingImports]
 
 from services.infrastructure.feature_flags import FeatureFlags, get_feature_flags_status
+from services.infrastructure.runtime_flags import get_runtime_flags_status
 
 PERCENTAGE_PERCENT = 100
 MIN_SUCCESS_RATE = 0.95
@@ -45,6 +46,21 @@ def get_status() -> tuple[dict[str, Any], int]:
 
     except Exception as e:
         # ✅ REFACTORING: Utilisation de APIErrorHandler pour centraliser la gestion des erreurs
+        from shared.error_handlers import APIErrorHandler
+
+        return APIErrorHandler.handle_exception(e, logger)
+
+
+@feature_flags_bp.route("/runtime-status", methods=["GET"])
+def get_runtime_status() -> tuple[dict[str, Any], int]:
+    """Statut des flags runtime (Socket.IO, relay, kill-switch startup iOS).
+
+    Usage ops: vérifier IOS_STARTUP_FATAL_RECOVERY_DISABLED sans redéploiement mobile.
+    Note: les builds anciens ignorent ce flag tant que le hotfix mobile ne le consomme pas.
+    """
+    try:
+        return jsonify(get_runtime_flags_status()), 200
+    except Exception as e:
         from shared.error_handlers import APIErrorHandler
 
         return APIErrorHandler.handle_exception(e, logger)
