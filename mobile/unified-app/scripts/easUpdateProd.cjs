@@ -125,7 +125,17 @@ if (platformIdx < 0) {
 }
 for (const arg of argv) easArgs.push(arg);
 
-const result = spawnSync("eas", easArgs, {
+function quoteForShell(arg) {
+  if (arg === "" || /[\s"'`$\\!()]/.test(arg)) {
+    return `"${String(arg).replace(/(["\\$`])/g, "\\$1")}"`;
+  }
+  return arg;
+}
+
+const easBinary = process.platform === "win32" ? "eas.cmd" : "eas";
+const fullCommand = [easBinary, ...easArgs.map(quoteForShell)].join(" ");
+
+const result = spawnSync(fullCommand, {
   stdio: "inherit",
   shell: true,
   env: process.env,
