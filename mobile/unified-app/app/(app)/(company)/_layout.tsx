@@ -13,6 +13,7 @@ import { CompanyFloatingTabBar } from "../../../src/features/company/navigation/
 import { E } from "../../../src/features/company/theme/enterpriseOpsTheme";
 import { buildFloatingTabScreenOptions, FLOATING_TAB_IMPLEMENTATION } from "../../../src/navigation/floatingTabScreenOptions";
 import { useCompanyUrgentAlertSound } from "../../../src/features/messaging/useCompanyUrgentAlertSound";
+import { useCompanyRecoveryListener } from "../../../src/features/company/realtime/useCompanyRecoveryListener";
 import { useAppViewport } from "../../../src/design/responsive";
 import { useReduceMotion } from "../../../src/design/navigation/useReduceMotion";
 import { usePerfRouteTracking } from "../../../src/core/observability/usePerfRouteTracking";
@@ -34,6 +35,9 @@ export default function CompanyLayout() {
       : null;
 
   useCompanyUrgentAlertSound();
+  // Phase 2 PR B/C — gate D3.2 : recovery cohérent dashboard/missions/inbox/chat
+  // sur stale (5 min sans event) ou reconnect (background/foreground, transition réseau).
+  useCompanyRecoveryListener(companyContextId);
 
   // Déconnexion à la sortie de la zone entreprise (évite socket orpheline).
   useEffect(() => {

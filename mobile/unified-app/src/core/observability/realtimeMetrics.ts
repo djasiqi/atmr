@@ -2,12 +2,18 @@
  * Métriques locales realtime (mobile) — debug via __DEV__ ou EXPO_PUBLIC_REALTIME_METRICS_DEBUG=1
  */
 
+type RecoveryResyncTrigger = "stale" | "reconnect";
+
 type RealtimeMetricsSnapshot = {
   reconnectAttemptCount: number;
   gpsBatchFlushCount: number;
   gpsBatchDroppedOrCoalescedCount: number;
   mapSetStatePerSecond: number;
   samplingRate: number;
+  // Phase 2 PR B/C — gate D3.2 : compteur resync déclenché par recovery listener
+  // (background long, polling cassé, relay drop) → mesure la pression de récupération.
+  recoveryResyncTotal: number;
+  recoveryResyncByTrigger: Record<RecoveryResyncTrigger, number>;
 };
 
 const metrics = {
@@ -17,6 +23,9 @@ const metrics = {
   mapSetStateTimestamps: [] as number[],
   gpsEventSampleCounter: 0,
   gpsEventSampleEvery: 1,
+  recoveryResyncTotal: 0,
+  recoveryResyncStale: 0,
+  recoveryResyncReconnect: 0,
 };
 const MAP_SET_STATE_WINDOW_MS = 1_000;
 const MAX_MAP_SET_STATE_TIMESTAMPS = 100;
@@ -62,6 +71,27 @@ export function shouldSampleGpsMetricEvent(): boolean {
   return metrics.gpsEventSampleCounter % metrics.gpsEventSampleEvery === 0;
 }
 
+export function recordCompanyRecoveryResync(trigger: RecoveryResyncTrigger): void {
+  metrics.recoveryResyncTotal += 1;
+  if (trigger === "stale") {
+    metrics.recoveryResyncStale += 1;
+  } else {
+    metrics.recoveryResyncReconnect += 1;
+  }
+}
+
+export function resetRealtimeMetricsForTests(): void {
+  metrics.reconnectAttemptCount = 0;
+  metrics.gpsBatchFlushCount = 0;
+  metrics.gpsBatchDroppedOrCoalescedCount = 0;
+  metrics.mapSetStateTimestamps = [];
+  metrics.gpsEventSampleCounter = 0;
+  metrics.gpsEventSampleEvery = 1;
+  metrics.recoveryResyncTotal = 0;
+  metrics.recoveryResyncStale = 0;
+  metrics.recoveryResyncReconnect = 0;
+}
+
 export function getRealtimeMetricsSnapshot(): RealtimeMetricsSnapshot {
   return {
     reconnectAttemptCount: metrics.reconnectAttemptCount,
@@ -69,5 +99,10 @@ export function getRealtimeMetricsSnapshot(): RealtimeMetricsSnapshot {
     gpsBatchDroppedOrCoalescedCount: metrics.gpsBatchDroppedOrCoalescedCount,
     mapSetStatePerSecond: metrics.mapSetStateTimestamps.length,
     samplingRate: metrics.gpsEventSampleEvery <= 1 ? 1 : 1 / metrics.gpsEventSampleEvery,
+    recoveryResyncTotal: metrics.recoveryResyncTotal,
+    recoveryResyncByTrigger: {
+      stale: metrics.recoveryResyncStale,
+      reconnect: metrics.recoveryResyncReconnect,
+    },
   };
 }
