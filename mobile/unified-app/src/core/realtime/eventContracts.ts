@@ -16,7 +16,10 @@ export type CanonicalCompanyEventType =
   | "booking_message_sent"
   | "team_chat_message"
   | "urgent_alert"
-  | "company_dispatch_update";
+  | "company_dispatch_update"
+  // Phase 2 PR B/C — gate D3.1
+  | "dispatch_assignment"
+  | "dispatch_run_lifecycle";
 
 const DRIVER_EVENT_ALIASES: Record<string, CanonicalDriverEventType> = {
   mission_assigned: "mission_assigned",
@@ -51,6 +54,12 @@ const COMPANY_EVENT_ALIASES: Record<string, CanonicalCompanyEventType> = {
   team_chat_message: "team_chat_message",
   urgent_alert: "urgent_alert",
   company_dispatch_update: "company_dispatch_update",
+  // Phase 2 PR B/C — gate D3.1 : dispatch_* aliases vers 2 canoniques distincts
+  // pour permettre une invalidation cohérente sans surfetch.
+  dispatch_assignment: "dispatch_assignment",
+  dispatch_run_started: "dispatch_run_lifecycle",
+  dispatch_run_completed: "dispatch_run_lifecycle",
+  dispatch_run_failed: "dispatch_run_lifecycle",
 };
 
 export function normalizeDriverEventType(input: unknown): CanonicalDriverEventType | null {

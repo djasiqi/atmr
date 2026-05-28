@@ -33,6 +33,20 @@ describe("context registry", () => {
       "driver_live_state_update",
       "optimizer_status_changed",
       "delay_invalidated",
+      "dispatch_assignment",
+      "dispatch_run_started",
+      "dispatch_run_completed",
+      "dispatch_run_failed",
     ]);
+  });
+
+  // Phase 2 PR B/C — gate D3.1 : sans ces channels, ws-service
+  // confirmed_critical_miss est faussement élevé sur cohorte canary.
+  it("subscribes company surface to dispatch_* critical channels (gate D3.1)", () => {
+    const channels = getRealtimeChannelsForSurface("company");
+    expect(channels).toContain("dispatch_assignment");
+    expect(channels).toContain("dispatch_run_started");
+    expect(channels).toContain("dispatch_run_completed");
+    expect(channels).toContain("dispatch_run_failed");
   });
 });

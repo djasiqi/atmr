@@ -21,6 +21,11 @@ export const CONTEXT_REALTIME_CHANNELS: Record<RealtimeSurface, string[]> = {
     "driver_live_state_update",
     "optimizer_status_changed",
     "delay_invalidated",
+    // Phase 2 PR B/C — gate D3.1 (sans ces channels, ws-service confirmed_critical_miss est faussement élevé)
+    "dispatch_assignment",
+    "dispatch_run_started",
+    "dispatch_run_completed",
+    "dispatch_run_failed",
   ],
   client: ["client_booking_update"],
   institution: ["institution_transport_update"],

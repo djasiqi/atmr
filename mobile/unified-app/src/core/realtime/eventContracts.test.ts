@@ -12,4 +12,15 @@ describe("company realtime event aliases", () => {
   it("keeps company_dispatch_update as canonical aggregate signal", () => {
     expect(normalizeCompanyEventType("company_dispatch_update")).toBe("company_dispatch_update");
   });
+
+  // Phase 2 PR B/C — gate D3.1
+  it("maps dispatch_assignment to its own canonical type", () => {
+    expect(normalizeCompanyEventType("dispatch_assignment")).toBe("dispatch_assignment");
+  });
+
+  it("maps dispatch_run_started/completed/failed to dispatch_run_lifecycle", () => {
+    expect(normalizeCompanyEventType("dispatch_run_started")).toBe("dispatch_run_lifecycle");
+    expect(normalizeCompanyEventType("dispatch_run_completed")).toBe("dispatch_run_lifecycle");
+    expect(normalizeCompanyEventType("dispatch_run_failed")).toBe("dispatch_run_lifecycle");
+  });
 });

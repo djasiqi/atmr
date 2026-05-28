@@ -211,6 +211,13 @@ export function useCompanyDashboardScreenModel() {
           invalidate("delay_invalidated", missionId);
         } else if (normalizedEventType === "company_dispatch_update") {
           void refreshAll();
+        } else if (normalizedEventType === "dispatch_assignment") {
+          // Phase 2 PR B/C — gate D3.1 : event critical, invalidation ciblée
+          // (dashboard + missions + ride detail si missionId).
+          invalidate("dispatch_assignment", missionId);
+        } else if (normalizedEventType === "dispatch_run_lifecycle") {
+          // Phase 2 PR B/C — gate D3.1 : run started/completed/failed.
+          invalidate("dispatch_run_lifecycle", missionId);
         }
       });
     }, [activeContext, invalidate, refreshAll])

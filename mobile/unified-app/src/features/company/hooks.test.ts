@@ -79,4 +79,48 @@ describe("company query invalidation policy", () => {
     // Doublon immédiat ignoré (dedup).
     expect(spy).toHaveBeenCalledTimes(firstPassCalls);
   });
+
+  // Phase 2 PR B/C — gate D3.1
+  it("invalidates dashboard + missions for dispatch_assignment without missionId", () => {
+    const queryClient = new QueryClient();
+    const spy = jest.spyOn(queryClient, "invalidateQueries");
+
+    invalidateCompanyQueriesForEvent(queryClient, "dispatch_assignment", {
+      contextId: "company:42",
+    });
+
+    expect(spy).toHaveBeenCalledTimes(2);
+    const keys = spy.mock.calls.map((call) => (call[0] as { queryKey: unknown[] }).queryKey);
+    expect(keys.some((k) => (k as unknown[]).includes("dashboard"))).toBe(true);
+    expect(keys.some((k) => (k as unknown[]).includes("missions"))).toBe(true);
+  });
+
+  it("invalidates dashboard + missions + ride-details for dispatch_assignment with missionId", () => {
+    const queryClient = new QueryClient();
+    const spy = jest.spyOn(queryClient, "invalidateQueries");
+
+    invalidateCompanyQueriesForEvent(queryClient, "dispatch_assignment", {
+      contextId: "company:42",
+      missionId: 777,
+    });
+
+    expect(spy).toHaveBeenCalledTimes(3);
+    const keys = spy.mock.calls.map((call) => (call[0] as { queryKey: unknown[] }).queryKey);
+    expect(keys.some((k) => (k as unknown[]).includes("ride-details"))).toBe(true);
+  });
+
+  it("invalidates dashboard + missions + dispatch-delays for dispatch_run_lifecycle", () => {
+    const queryClient = new QueryClient();
+    const spy = jest.spyOn(queryClient, "invalidateQueries");
+
+    invalidateCompanyQueriesForEvent(queryClient, "dispatch_run_lifecycle", {
+      contextId: "company:42",
+    });
+
+    expect(spy).toHaveBeenCalledTimes(3);
+    const keys = spy.mock.calls.map((call) => (call[0] as { queryKey: unknown[] }).queryKey);
+    expect(keys.some((k) => (k as unknown[]).includes("dashboard"))).toBe(true);
+    expect(keys.some((k) => (k as unknown[]).includes("missions"))).toBe(true);
+    expect(keys.some((k) => (k as unknown[]).includes("dispatch-delays"))).toBe(true);
+  });
 });

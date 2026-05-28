@@ -1,5 +1,8 @@
 import { isFeatureEnabled } from "../featureFlags/registry";
 
+// Phase 2 PR B/C — gate D3.1 : strict alignment avec
+// services/ws-service/event_contract.py:CRITICAL_EVENT_TYPES.
+// Toute divergence ici fausse confirmed_critical_miss côté canary.
 const CRITICAL_EVENTS = new Set([
   "booking_updated",
   "booking_cancelled",
@@ -7,7 +10,9 @@ const CRITICAL_EVENTS = new Set([
   "dispatch_assignment",
   "dispatch_run_started",
   "dispatch_run_completed",
+  "dispatch_run_failed",
   "urgent_alert",
+  "delay_live_invalidate",
 ]);
 
 /** Headers Traefik pour router vers ws-service (canary). */

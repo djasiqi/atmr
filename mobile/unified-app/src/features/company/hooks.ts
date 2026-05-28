@@ -86,7 +86,10 @@ export type CompanyRealtimeInvalidationEvent =
   | "optimizer_status_changed"
   | "delay_invalidated"
   | "booking_message_sent"
-  | "urgent_alert";
+  | "urgent_alert"
+  // Phase 2 PR B/C — gate D3.1
+  | "dispatch_assignment"
+  | "dispatch_run_lifecycle";
 
 type CompanyEventContext = {
   contextId: string;
@@ -526,6 +529,115 @@ export function invalidateCompanyQueriesForEvent(
       ),
       exact: false,
     });
+    return;
+  }
+  // Phase 2 PR B/C — gate D3.1 : dispatch_assignment touche dashboard + missions
+  // (et ride detail si on connaît le missionId). On ne refetch pas l'optimizer
+  // pour rester ciblé et éviter le surfetch identifié dans l'audit.
+  if (event === "dispatch_assignment") {
+    void traceInvalidateQueries(
+      contextScopedKey(
+        context.contextId,
+        [...companyQueryKeys.dashboard(context.contextId)] as unknown[]
+      ),
+      "dispatch_assignment_dashboard",
+      async () => {
+        await queryClient.invalidateQueries({
+          queryKey: contextScopedKey(
+            context.contextId,
+            [...companyQueryKeys.dashboard(context.contextId)] as unknown[]
+          ),
+          exact: true,
+        });
+      }
+    );
+    void traceInvalidateQueries(
+      contextScopedKey(
+        context.contextId,
+        [...companyQueryKeys.root, "missions", scope] as unknown[]
+      ),
+      "dispatch_assignment_missions",
+      async () => {
+        await queryClient.invalidateQueries({
+          queryKey: contextScopedKey(
+            context.contextId,
+            [...companyQueryKeys.root, "missions", scope] as unknown[]
+          ),
+          exact: false,
+        });
+      }
+    );
+    if (typeof context.missionId === "number") {
+      void traceInvalidateQueries(
+        contextScopedKey(
+          context.contextId,
+          [...companyQueryKeys.rideDetails(context.contextId, context.missionId)] as unknown[]
+        ),
+        "dispatch_assignment_ride_detail",
+        async () => {
+          await queryClient.invalidateQueries({
+            queryKey: contextScopedKey(
+              context.contextId,
+              [...companyQueryKeys.rideDetails(context.contextId, context.missionId as number)] as unknown[]
+            ),
+            exact: true,
+          });
+        }
+      );
+    }
+    return;
+  }
+  // Phase 2 PR B/C — gate D3.1 : dispatch_run_lifecycle (started/completed/failed)
+  // touche dashboard + missions + dispatch-delays (impact sur l'ETA agrégé).
+  if (event === "dispatch_run_lifecycle") {
+    void traceInvalidateQueries(
+      contextScopedKey(
+        context.contextId,
+        [...companyQueryKeys.dashboard(context.contextId)] as unknown[]
+      ),
+      "dispatch_run_lifecycle_dashboard",
+      async () => {
+        await queryClient.invalidateQueries({
+          queryKey: contextScopedKey(
+            context.contextId,
+            [...companyQueryKeys.dashboard(context.contextId)] as unknown[]
+          ),
+          exact: true,
+        });
+      }
+    );
+    void traceInvalidateQueries(
+      contextScopedKey(
+        context.contextId,
+        [...companyQueryKeys.root, "missions", scope] as unknown[]
+      ),
+      "dispatch_run_lifecycle_missions",
+      async () => {
+        await queryClient.invalidateQueries({
+          queryKey: contextScopedKey(
+            context.contextId,
+            [...companyQueryKeys.root, "missions", scope] as unknown[]
+          ),
+          exact: false,
+        });
+      }
+    );
+    void traceInvalidateQueries(
+      contextScopedKey(
+        context.contextId,
+        [...companyQueryKeys.root, "dispatch-delays", scope] as unknown[]
+      ),
+      "dispatch_run_lifecycle_delays",
+      async () => {
+        await queryClient.invalidateQueries({
+          queryKey: contextScopedKey(
+            context.contextId,
+            [...companyQueryKeys.root, "dispatch-delays", scope] as unknown[]
+          ),
+          exact: false,
+        });
+      }
+    );
   }
 }
 
@@ -920,7 +1032,8 @@ export function useCompanyChatMessages(date: string) {
     enabled: Boolean(contextId),
     getNextPageParam: (lastPage) => lastPage.nextBefore ?? undefined,
     initialPageParam: undefined as string | undefined,
-    refetchInterval: chatSocketEnabled ? false : realtime.status === "healthy" ? 10_000 : 6_000,
+    refetchInterval:
+      chatSocketEnabled || realtime.status === "healthy" ? false : 6_000,
     maxPages: 5,
   });
 }
