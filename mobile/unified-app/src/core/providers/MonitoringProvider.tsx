@@ -3,6 +3,24 @@ import type { PropsWithChildren } from "../reactCompat";
 import { setDriverTelemetrySink } from "../observability/driverTelemetry";
 import { sendIngestEvent } from "../observability/ingestAdapter";
 import * as Sentry from "@sentry/react-native";
+import * as Updates from "expo-updates";
+import Constants from "expo-constants";
+
+function applyFleetMapSentryContext(): void {
+  try {
+    Sentry.setTag("expo_update_id", Updates.updateId ?? "embedded");
+    Sentry.setTag(
+      "is_embedded_launch",
+      String(Updates.isEmbeddedLaunch ?? true)
+    );
+    Sentry.setTag(
+      "runtime_version",
+      Updates.runtimeVersion ?? Constants.expoConfig?.runtimeVersion ?? "unknown"
+    );
+  } catch {
+    // Best effort — monitoring ne doit pas bloquer le démarrage
+  }
+}
 
 export function MonitoringProvider({ children }: PropsWithChildren) {
   useEffect(() => {
@@ -15,6 +33,7 @@ export function MonitoringProvider({ children }: PropsWithChildren) {
         tracesSampleRate: 0.2,
         environment: process.env.EXPO_PUBLIC_APP_ENV ?? "development",
       });
+      applyFleetMapSentryContext();
     }
 
     setDriverTelemetrySink((event, payload) => {

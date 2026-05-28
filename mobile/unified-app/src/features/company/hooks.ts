@@ -882,7 +882,7 @@ export type CompanyClientsReadonlyResult = {
 
 export function useCompanyClientsReadonlyQuery(params: { q?: string; page?: number; limit?: number }) {
   const contextId = useActiveCompanyContextId();
-  const flagOn = isFeatureEnabled("company_mobile_clients_readonly_enabled");
+  const flagOn = true;
   return useQuery({
     queryKey: contextId
       ? contextScopedKey(
@@ -909,7 +909,7 @@ export function useCompanyClientsReadonlyQuery(params: { q?: string; page?: numb
 
 export function useCompanyClientReadonlyDetailQuery(clientId: number | null) {
   const contextId = useActiveCompanyContextId();
-  const flagOn = isFeatureEnabled("company_mobile_clients_readonly_enabled");
+  const flagOn = true;
   return useQuery({
     queryKey:
       contextId && clientId
@@ -940,7 +940,7 @@ export function useCompanyClientReadonlyDetailQuery(clientId: number | null) {
 
 export function useCompanyInvoicesReadonlyQuery(params: { q?: string; page?: number; limit?: number }) {
   const contextId = useActiveCompanyContextId();
-  const flagOn = isFeatureEnabled("company_mobile_invoices_readonly_enabled");
+  const flagOn = true;
   return useQuery({
     queryKey: contextId
       ? contextScopedKey(

@@ -29,4 +29,26 @@ module.exports = defineConfig([
       ],
     },
   },
+  {
+    files: ["src/features/company/components/maps/**/*.{ts,tsx}"],
+    ignores: [
+      "src/features/company/components/maps/resolveMetroAssetSource.ts",
+      "src/features/company/components/maps/fleetLirieDriverMarkerAssets.ts",
+      "src/features/company/components/maps/fleetNativeMarkerImage.ts",
+    ],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "./resolveMetroAssetSource",
+              message:
+                "Résolution asset uniquement dans fleetNativeMarkerImage / fleetLirieDriverMarkerAssets.",
+            },
+          ],
+        },
+      ],
+    },
+  },
 ]);

@@ -24,6 +24,13 @@ export const featureFlags = {
     enabled: true,
     description: "Espace chauffeur dans l’app unifiée. Désactivable via feature_flags (bootstrap) pour cohorte legacy.",
   } satisfies FeatureFlagDefinition,
+  ws_service_canary: {
+    key: "ws_service_canary",
+    source: "env",
+    enabled: envEnabled("EXPO_PUBLIC_WS_CANARY_ENABLED"),
+    description:
+      "Route Socket.IO vers ws-service via header X-WS-Canary (rollout progressif PR C).",
+  } satisfies FeatureFlagDefinition,
   realtime_socket_enabled: {
     key: "realtime_socket_enabled",
     source: "env",
@@ -225,6 +232,13 @@ export const featureFlags = {
     enabled: envEnabled("EXPO_PUBLIC_ENABLE_COMPANY_PUSH"),
     description: "Enable company push token registration and notification handlers.",
   } satisfies FeatureFlagDefinition,
+  fleet_map_safe_markers: {
+    key: "fleet_map_safe_markers",
+    source: "env",
+    enabled: envEnabled("EXPO_PUBLIC_FLEET_MAP_SAFE_MARKERS"),
+    description:
+      "Carte flotte : force les marqueurs en data-URI (sans PNG Metro/OTA). Rollback d'urgence via bootstrap feature_flags ou EXPO_PUBLIC_FLEET_MAP_SAFE_MARKERS=1.",
+  } satisfies FeatureFlagDefinition,
   company_dispatch_enabled: {
     key: "company_dispatch_enabled",
     source: "env",
@@ -332,7 +346,7 @@ export const featureFlags = {
     source: "external",
     enabled: false,
     description:
-      "Kill-switch backend: disables ErrorRecovery.crash() during iOS startup. Read via bootstrap/version-check after native hotfix. IOS_STARTUP_FATAL_RECOVERY_DISABLED=true on server.",
+      "Kill-switch backend : désarme ErrorRecovery.crash() au startup iOS. Lu via bootstrap/version-check après hotfix natif. IOS_STARTUP_FATAL_RECOVERY_DISABLED=true côté serveur.",
   } satisfies FeatureFlagDefinition,
 } as const;
 

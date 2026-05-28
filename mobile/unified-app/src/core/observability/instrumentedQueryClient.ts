@@ -27,6 +27,7 @@ export function createInstrumentedQueryClient(): QueryClient {
       queries: {
         staleTime: QUERY_STALE_TIME_MS.default,
         retry: 1,
+        refetchOnMount: "ifStale",
       },
       mutations: {
         retry: 1,

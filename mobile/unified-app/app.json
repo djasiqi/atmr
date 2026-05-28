@@ -62,12 +62,12 @@
           ]
         }
       ],
-      "versionCode": 105
+      "versionCode": 106
     },
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "ch.liri.operations",
-      "buildNumber": "57",
+      "buildNumber": "58",
       "googleServicesFile": "./GoogleService-Info.plist",
       "associatedDomains": [
         "applinks:app.lirie.ch"
@@ -164,6 +164,9 @@
       ],
       "expo-audio",
       "expo-video"
+    ],
+    "assetBundlePatterns": [
+      "assets/**/*"
     ],
     "experiments": {
       "typedRoutes": true

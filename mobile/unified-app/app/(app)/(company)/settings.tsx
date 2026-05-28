@@ -5,6 +5,7 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter, type Href } from "expo-router";
 import { PermissionGuard } from "../../../src/core/guards";
 import { isFeatureEnabled } from "../../../src/core/featureFlags/registry";
 import { useSession } from "../../../src/core/sessionProvider";
@@ -113,6 +114,7 @@ function InfoRow({ label, value, mono }: InfoRowProps) {
 }
 
 export default function CompanySettingsScreen() {
+  const router = useRouter();
   const {
     activeContext,
     bootstrap,
@@ -171,6 +173,8 @@ export default function CompanySettingsScreen() {
     (activeCompanyContext?.allow_mobile_context_switch === true) &&
     (primaryDriverContext?.allow_mobile_context_switch === true);
   const canDispatchManage = canRunSensitiveAction("company:dispatch:manage", "company:dashboard:read");
+  const clientsReadonlyEnabled = isFeatureEnabled("company_mobile_clients_readonly_enabled");
+  const invoicesReadonlyEnabled = isFeatureEnabled("company_mobile_invoices_readonly_enabled");
 
   const busy = pendingAction !== null;
   const fluxPill = realtimePillColors(companyRealtime.status);
@@ -389,6 +393,16 @@ export default function CompanySettingsScreen() {
             label="Temps réel entreprise"
             value={isFeatureEnabled("company_realtime_enabled") ? "Activé" : "Désactivé"}
           />
+          <View style={styles.divider} />
+          <InfoRow
+            label="Clients (lecture seule)"
+            value={clientsReadonlyEnabled ? "Activé" : "Désactivé"}
+          />
+          <View style={styles.divider} />
+          <InfoRow
+            label="Facturation (lecture seule)"
+            value={invoicesReadonlyEnabled ? "Activé" : "Désactivé"}
+          />
         </View>
 
         <View style={styles.card}>
@@ -403,6 +417,13 @@ export default function CompanySettingsScreen() {
               title={pendingAction === "refresh" ? "Resynchronisation…" : "Resynchroniser la session"}
               disabled={busy}
               onPress={handleRefreshSession}
+            />
+            <AppButton
+              title="Ouvrir Clients & facturation"
+              disabled={busy}
+              onPress={() => {
+                void router.push("/(app)/(company)/clients-facturation" as Href);
+              }}
             />
             <AppButton
               title={

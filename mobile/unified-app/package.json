@@ -19,6 +19,8 @@
     "lint": "expo lint",
     "test": "jest --watchAll=false",
     "sync:fleet-markers": "node scripts/syncFleetLirieMarkerPngs.mjs",
+    "check:fleet-map-no-runtime-resolve": "node scripts/checkFleetMapNoRuntimeResolve.mjs",
+    "preflight:ota-fleet-map": "npm run check:fleet-map-no-runtime-resolve && npm test -- --watchAll=false --testPathPattern=resolveMetroAssetSource && npm test -- --watchAll=false --testPathPattern=fleetNativeMarkerImage",
     "update:prod:ios": "node ./scripts/easUpdateProd.cjs --platform ios",
     "update:prod:android": "node ./scripts/easUpdateProd.cjs --platform android",
     "update:prod:all": "node ./scripts/easUpdateProd.cjs --platform all",

@@ -65,7 +65,7 @@ export function useCompanyMessageHubThreads(companyId: number | null) {
     queryKey: [...HUB_KEY, "threads", companyId ?? "none"],
     enabled: Boolean(companyId),
     queryFn: async () => {
-      const hub = await fetchMessageHubThreads(companyId as number);
+      const hub = await fetchMessageHubThreads(companyId as number, { source: "hub-only" });
       const threads = filterMissionThreadsWithDiscussion(
         dedupeMessageHubThreads(hub.threads)
       );

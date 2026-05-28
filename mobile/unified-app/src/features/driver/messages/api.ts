@@ -179,17 +179,25 @@ export async function resolveConversationId(
   }
 }
 
-export async function fetchMessageHubThreads(companyId: number): Promise<{
+export type MessageHubThreadsSource = "inbox-first" | "hub-only";
+
+export async function fetchMessageHubThreads(
+  companyId: number,
+  options?: { source?: MessageHubThreadsSource }
+): Promise<{
   threads: MessageHubThread[];
   unread_total: number;
 }> {
-  try {
-    const inbox = await fetchConversationsInbox();
-    if (inbox.threads.length > 0) {
-      return { threads: inbox.threads, unread_total: inbox.unread_total };
+  const source = options?.source ?? "inbox-first";
+  if (source !== "hub-only") {
+    try {
+      const inbox = await fetchConversationsInbox();
+      if (inbox.threads.length > 0) {
+        return { threads: inbox.threads, unread_total: inbox.unread_total };
+      }
+    } catch {
+      // fallback hub
     }
-  } catch {
-    // fallback hub
   }
   const { data } = await apiClient.get(`/messages/${companyId}/hub/threads`);
   const payload = (data ?? {}) as Record<string, unknown>;

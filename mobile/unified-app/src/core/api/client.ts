@@ -147,6 +147,17 @@ let resumeAttemptId: string | null = null;
 let activeContextIdForApi: string | null = null;
 const REFRESH_TOKEN_STORAGE_KEY = "auth_refresh_token";
 const REFRESH_FAILURE_TELEMETRY_COOLDOWN_MS = 10000;
+const POST_BOOTSTRAP_REFRESH_SKIP_MS = 5000;
+let lastBootstrapAuthSuccessAtMs = 0;
+
+/** Évite un refresh token concurrent juste après login/bootstrap. */
+export function markBootstrapAuthFresh(): void {
+  lastBootstrapAuthSuccessAtMs = Date.now();
+}
+
+function shouldSkipPostBootstrapRefresh(): boolean {
+  return Date.now() - lastBootstrapAuthSuccessAtMs < POST_BOOTSTRAP_REFRESH_SKIP_MS;
+}
 
 function shouldEmitRefreshFailure(status: number | null, reason: string): boolean {
   const signature = `${status ?? "null"}|${reason}`;
@@ -595,7 +606,9 @@ export async function fetchBootstrap(activeContextId?: string | null): Promise<B
   try {
     const headers = activeContextId ? { "X-Active-Context-Id": activeContextId } : undefined;
     const { data } = await apiClient.get("/auth/bootstrap", { headers });
-    return bootstrapResponseSchema.parse(data);
+    const parsed = bootstrapResponseSchema.parse(data);
+    markBootstrapAuthFresh();
+    return parsed;
   } catch (error) {
     const err = error as AxiosError;
     emitDriverTelemetry("auth.bootstrap.failure", {
@@ -622,6 +635,7 @@ export async function login(email: string, password: string): Promise<void> {
       setAuthToken(token);
     }
     await writeRefreshToken(refreshToken);
+    markBootstrapAuthFresh();
   } catch (error) {
     throw toApiError(error);
   }
@@ -647,7 +661,9 @@ export async function switchContext(targetContextId: string): Promise<SwitchCont
       await writeRefreshToken(inlineRefresh);
     }
     const parsed = switchContextResponseSchema.parse(data);
-    void refreshAuthTokenNow().catch(() => false);
+    if (!shouldSkipPostBootstrapRefresh()) {
+      void refreshAuthTokenNow().catch(() => false);
+    }
     return parsed;
   } catch (error) {
     throw toApiError(error);

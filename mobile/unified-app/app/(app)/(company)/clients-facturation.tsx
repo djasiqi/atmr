@@ -3,7 +3,6 @@ import { Platform, Pressable, StyleSheet, TouchableOpacity, View } from "react-n
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams } from "expo-router";
 import { PermissionGuard } from "../../../src/core/guards";
-import { isFeatureEnabled } from "../../../src/core/featureFlags/registry";
 import {
   useCompanyClientReadonlyDetailQuery,
   useCompanyClientsReadonlyQuery,
@@ -743,8 +742,9 @@ const READONLY_LIST_CARD_STACK_GAP = 4;
 export default function CompanyClientsAndBillingScreen() {
   const params = useLocalSearchParams<{ section?: string }>();
   const requestedSection = params.section === "invoices" ? "invoices" : "clients";
-  const clientsReadonlyEnabled = isFeatureEnabled("company_mobile_clients_readonly_enabled");
-  const invoicesReadonlyEnabled = isFeatureEnabled("company_mobile_invoices_readonly_enabled");
+  // Accès direct à l’écran existant : ne pas afficher l’état "à activer" ici.
+  const clientsReadonlyEnabled = true;
+  const invoicesReadonlyEnabled = true;
   const [activeSection, setActiveSection] = useState<CompanyReadonlySection>(requestedSection);
   const [clientSearch, setClientSearch] = useState("");
   const [clientListLimit, setClientListLimit] = useState(CLIENT_LIST_PAGE_SIZE);
