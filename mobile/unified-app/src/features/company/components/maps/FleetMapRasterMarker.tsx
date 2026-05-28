@@ -4,6 +4,7 @@ import { Marker } from "react-native-maps";
 
 import type { FleetNativeMarkerImageSource } from "./fleetNativeMarkerImage";
 import { resolveMetroAssetSource } from "./resolveMetroAssetSource";
+import { isValidMapCoord } from "./mapsIosNewArchSafeMode";
 
 type Props = {
   coordinate: { latitude: number; longitude: number };
@@ -51,6 +52,10 @@ function FleetMapRasterMarkerComponent({
     const raster = { uri, width, height };
     return Platform.OS === "android" ? { icon: raster } : { image: raster };
   }, [imageSource]);
+
+  if (!isValidMapCoord(coordinate.latitude, coordinate.longitude)) {
+    return null;
+  }
 
   return (
     <Marker

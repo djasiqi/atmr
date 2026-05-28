@@ -11,6 +11,7 @@ import { driverFleetMarkerTitle } from "../../utils/companyDriverMapStatus";
 import { buildFleetDriverMarkerImageSource } from "./fleetNativeMarkerImage";
 import { countDriverMarkerRender } from "./fleetMapDevInstrumentation";
 import { recordDriverMarkerRender } from "../../../../core/observability/perfInstrumentation";
+import { IOS_MAP_NO_CUSTOM_MARKER_CHILDREN, isValidMapCoord } from "./mapsIosNewArchSafeMode";
 
 type Props = {
   item: FleetDriverMapItem;
@@ -69,9 +70,17 @@ function DriverMarkerComponent({
 
   void vectorMode;
 
+  if (!imageSource.uri?.trim()) {
+    return null;
+  }
+
+  if (!isValidMapCoord(coordinate.latitude, coordinate.longitude)) {
+    return null;
+  }
+
   return (
     <>
-      {showLivePulse ? (
+      {showLivePulse && !IOS_MAP_NO_CUSTOM_MARKER_CHILDREN ? (
         <Marker
           coordinate={coordinate}
           anchor={{ x: 0.5, y: 0.58 }}

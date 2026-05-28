@@ -6,6 +6,7 @@ import { FleetMapRasterMarker } from "./FleetMapRasterMarker";
 import { buildFleetDriverMarkerImageSource } from "./fleetNativeMarkerImage";
 import { pickClusterRepresentativeStatus } from "./fleetLirieClusterMarker";
 import { FLEET_MAP_MARKER_DIMMED_OPACITY } from "./fleetMapTypes";
+import { isValidMapCoord } from "./mapsIosNewArchSafeMode";
 
 type Props = {
   latitude: number;
@@ -30,6 +31,14 @@ export function ClusterMarker({ latitude, longitude, count, drivers, onPress, di
     () => buildFleetDriverMarkerImageSource(status, false),
     [status]
   );
+
+  if (!iconSource.uri?.trim()) {
+    return null;
+  }
+
+  if (!isValidMapCoord(latitude, longitude)) {
+    return null;
+  }
 
   return (
     <>

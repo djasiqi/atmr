@@ -7,6 +7,7 @@ import {
   resolveFleetClusterCountBadgeLayout,
   resolveFleetClusterBadgeFontSize,
 } from "./fleetLirieClusterMarker";
+import { IOS_MAP_NO_CUSTOM_MARKER_CHILDREN, isValidMapCoord } from "./mapsIosNewArchSafeMode";
 
 type Props = {
   coordinate: { latitude: number; longitude: number };
@@ -30,6 +31,14 @@ export function ClusterCountBadgeMarker({ coordinate, count, onPress, opacity = 
   const stopTracking = useCallback(() => {
     setTracksViewChanges(false);
   }, []);
+
+  if (IOS_MAP_NO_CUSTOM_MARKER_CHILDREN) {
+    return null;
+  }
+
+  if (!isValidMapCoord(coordinate.latitude, coordinate.longitude)) {
+    return null;
+  }
 
   return (
     <Marker
