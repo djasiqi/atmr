@@ -89,6 +89,37 @@ WS_KAFKA_SSL_CERTFILE = os.getenv("WS_KAFKA_SSL_CERTFILE", "")
 WS_KAFKA_SSL_KEYFILE = os.getenv("WS_KAFKA_SSL_KEYFILE", "")
 WS_RELAY_CHANNEL = os.getenv("WS_RELAY_CHANNEL", "ws:relay:events")
 POD_ID = os.getenv("POD_ID", os.getenv("HOSTNAME", "local"))
+WS_KAFKA_LAG_WARN_THRESHOLD = int(os.getenv("WS_KAFKA_LAG_WARN_THRESHOLD", "1000"))
+WS_KAFKA_LAG_CRITICAL_THRESHOLD = int(
+    os.getenv("WS_KAFKA_LAG_CRITICAL_THRESHOLD", "10000")
+)
+WS_KAFKA_DEGRADED_PAUSE_SEC = int(os.getenv("WS_KAFKA_DEGRADED_PAUSE_SEC", "300"))
+BACKEND_INTERNAL_INGEST_URL = os.getenv(
+    "BACKEND_INTERNAL_TRACKING_INGEST_URL",
+    "http://backend:5000/api/internal/tracking/ingest",
+)
+INTERNAL_SERVICE_TOKEN = os.getenv("INTERNAL_SERVICE_TOKEN", "")
+
+from auth_claims import normalize_auth_payload  # noqa: E402
+from dedup import deduper  # noqa: E402
+from kill_switch import (  # noqa: E402
+    connections_accepted,
+    disengage_kill_switch,
+    drain_and_force_disconnect,
+    engage_kill_switch,
+    force_disconnect_total,
+    is_kill_switch_engaged,
+)
+from rooms import company_room, driver_room  # noqa: E402
+from delivery_metrics import (  # noqa: E402
+    delivery_attempt_log_line,
+    record_ack,
+    record_delivery_attempt,
+    stats as delivery_stats,
+)
+from event_contract import event_criticality  # noqa: E402
+
+_kafka_degraded = False
 
 redis_client: redis.Redis | None = None
 redis_manager: socketio.AsyncRedisManager | None = None
@@ -238,10 +269,6 @@ async def _wait_redis_ping_with_retry(client: Any) -> None:
     raise RuntimeError("redis ping retries exhausted")
 
 
-def _driver_room(driver_id: int) -> str:
-    return f"driver:{driver_id}"
-
-
 def _has_local_room_members(room: str, namespace: str = "/") -> bool:
     try:
         namespace_rooms = sio.manager.rooms.get(namespace, {})
@@ -251,9 +278,35 @@ def _has_local_room_members(room: str, namespace: str = "/") -> bool:
         return False
 
 
-async def _relay_event_if_needed(event: dict[str, Any], room: str) -> str:
+async def _emit_to_room(
+    event_type: str,
+    payload: dict[str, Any],
+    room: str,
+    *,
+    user_id: str = "",
+) -> bool:
+    event_id = payload.get("event_id") if isinstance(payload.get("event_id"), str) else ""
+    if event_id and user_id:
+        if not deduper.should_emit(user_id=user_id, room=room, event_id=event_id):
+            return False
+    if event_id and user_id and event_criticality(event_type) == "critical":
+        record_delivery_attempt(event_type, event_id, user_id, room)
+        logger.info(
+            "%s",
+            delivery_attempt_log_line(event_type, event_id, user_id, room),
+        )
+    await sio.emit(event_type, payload, to=room)
+    return True
+
+
+async def _relay_event_if_needed(
+    event: dict[str, Any],
+    room: str,
+    *,
+    user_id: str = "",
+) -> str:
     if _has_local_room_members(room):
-        await sio.emit(event["type"], event["payload"], to=room)
+        await _emit_to_room(event["type"], event["payload"], room, user_id=user_id)
         return "local"
 
     if redis_client is None:
@@ -298,9 +351,14 @@ async def _aiokafka_safe_stop(consumer: Any) -> None:
 
 
 async def _consume_kafka_events() -> None:
+    global _kafka_degraded
     if not KAFKA_CONSUMER_ENABLED:
         logger.info("kafka consumer disabled by env")
         return
+    if _kafka_degraded:
+        logger.warning("kafka consumer paused (degraded mode)")
+        await asyncio.sleep(WS_KAFKA_DEGRADED_PAUSE_SEC)
+        _kafka_degraded = False
     if AIOKafkaConsumer is None:
         logger.error("aiokafka not installed; disabling ws kafka consumer")
         return
@@ -413,22 +471,31 @@ async def _consume_kafka_events() -> None:
                 continue
 
             driver_id_obj = value.get("driver_id")
+            company_id_obj = value.get("company_id")
             if not isinstance(driver_id_obj, int):
                 continue
 
             event_type_obj = value.get("type") or value.get("event_type") or msg.topic
+            if event_type_obj == "driver.location.processed":
+                event_type_obj = "driver_location_update"
             event_payload_obj = value.get("payload", value)
             if not isinstance(event_type_obj, str) or not isinstance(event_payload_obj, dict):
                 continue
             event_id_obj = event_payload_obj.get("event_id") if isinstance(event_payload_obj.get("event_id"), str) else "n/a"
 
-            room = _driver_room(driver_id_obj)
+            if isinstance(company_id_obj, int):
+                room = company_room(company_id_obj)
+            else:
+                cid = event_payload_obj.get("company_id")
+                room = company_room(cid) if isinstance(cid, int) else driver_room(driver_id_obj)
+
             relay_mode = await _relay_event_if_needed(
                 {
                     "type": event_type_obj,
                     "payload": event_payload_obj,
                 },
                 room,
+                user_id=str(driver_id_obj),
             )
             logger.info(
                 "kafka event processed topic=%s partition=%s offset=%s driver_id=%s event_type=%s event_id=%s relay_mode=%s room=%s",
@@ -486,7 +553,15 @@ async def _listen_relay_events() -> None:
                 continue
             if not _has_local_room_members(room_obj):
                 continue
-            await sio.emit(event_type_obj, event_payload_obj, to=room_obj)
+            uid = ""
+            if isinstance(event_payload_obj.get("company_id"), int):
+                uid = f"company:{event_payload_obj['company_id']}"
+            await _emit_to_room(
+                event_type_obj,
+                event_payload_obj,
+                room_obj,
+                user_id=uid,
+            )
     except asyncio.CancelledError:
         raise
     except Exception:
@@ -667,8 +742,49 @@ async def _extract_token(auth: dict[str, Any] | None, environ: dict[str, Any]) -
     return None
 
 
+@fastapi_app.post("/ops/ws/kill-switch")
+async def ops_kill_switch() -> JSONResponse:
+    """Refuse nouvelles connexions ; drain puis force disconnect."""
+    engage_kill_switch()
+    asyncio.create_task(drain_and_force_disconnect(sio))
+    return JSONResponse({"ok": True, "accept_connections": False})
+
+
+@fastapi_app.post("/ops/kafka/degraded")
+async def ops_kafka_degraded(engaged: bool = True) -> JSONResponse:
+    """Force le mode dégradé Kafka (ops/tests).
+
+    Truncate window de pause : voir WS_KAFKA_DEGRADED_PAUSE_SEC. Le consumer
+    redémarrera après cette pause. La websocket loop n'est jamais bloquée
+    (consumer est une asyncio.Task indépendante).
+    """
+    global _kafka_degraded
+    _kafka_degraded = bool(engaged)
+    return JSONResponse({"ok": True, "kafka_degraded": _kafka_degraded})
+
+
+@fastapi_app.post("/ops/ws/kill-switch/reset")
+async def ops_kill_switch_reset() -> JSONResponse:
+    """Désengage le kill switch in-memory (ops/tests).
+
+    Ne modifie PAS la variable d'env WS_SERVICE_ACCEPT_CONNECTIONS : si elle
+    est à false côté infra, le service continuera à refuser les connexions.
+    """
+    disengage_kill_switch()
+    return JSONResponse(
+        {
+            "ok": True,
+            "accept_connections": connections_accepted() and not is_kill_switch_engaged(),
+        }
+    )
+
+
 @sio.event
 async def connect(sid: str, environ: dict[str, Any], auth: dict[str, Any] | None) -> bool:
+    if not connections_accepted() or is_kill_switch_engaged():
+        logger.info("socket reject: kill switch sid=%s", sid)
+        return False
+
     token = await _extract_token(auth, environ)
     if not token:
         logger.info("socket reject: missing token sid=%s", sid)
@@ -679,38 +795,37 @@ async def connect(sid: str, environ: dict[str, Any], auth: dict[str, Any] | None
         logger.info("socket reject: invalid token sid=%s", sid)
         return False
 
-    user_id_obj = payload.get("sub") or payload.get("user_id")
-    role_obj = payload.get("role")
-    company_id_obj = payload.get("company_id")
-    driver_id_obj = payload.get("driver_id")
-
-    if not isinstance(user_id_obj, int) or not isinstance(role_obj, str):
+    claims = normalize_auth_payload(payload)
+    if claims is None:
         logger.info("socket reject: invalid claims sid=%s", sid)
         return False
 
-    company_id = company_id_obj if isinstance(company_id_obj, int) else None
-    driver_id = driver_id_obj if isinstance(driver_id_obj, int) else None
+    user_id = claims["user_id"]
+    role = claims["role"]
+    company_id = claims.get("company_id")
+    driver_id = claims.get("driver_id")
 
     await sio.save_session(
         sid,
         {
-            "user_id": user_id_obj,
-            "role": role_obj,
+            "user_id": user_id,
+            "role": role,
             "company_id": company_id,
             "driver_id": driver_id,
         },
     )
 
     if driver_id is not None:
-        await sio.enter_room(sid, f"driver:{driver_id}")
+        await sio.enter_room(sid, driver_room(driver_id))
     if company_id is not None:
-        await sio.enter_room(sid, f"company:{company_id}")
+        await sio.enter_room(sid, company_room(company_id))
 
+    presence_uid = int(user_id) if user_id.isdigit() else hash(user_id) % (2**31)
     try:
         await _register_presence(
             sid=sid,
-            user_id=user_id_obj,
-            role=role_obj,
+            user_id=presence_uid,
+            role=role,
             company_id=company_id,
             driver_id=driver_id,
         )
@@ -718,6 +833,15 @@ async def connect(sid: str, environ: dict[str, Any], auth: dict[str, Any] | None
         logger.warning("socket reject: redis presence unavailable sid=%s", sid)
         return False
 
+    await sio.emit(
+        "connected",
+        {
+            "ok": True,
+            "authority": WS_AUTHORITY_SOURCE,
+            "version": WS_VERSION,
+        },
+        to=sid,
+    )
     await sio.emit(
         "connection.authority",
         {
@@ -730,13 +854,36 @@ async def connect(sid: str, environ: dict[str, Any], auth: dict[str, Any] | None
     logger.info(
         "socket connected sid=%s user_id=%s role=%s company_id=%s driver_id=%s authority=%s",
         sid,
-        user_id_obj,
-        role_obj,
+        user_id,
+        role,
         company_id,
         driver_id,
         WS_AUTHORITY_SOURCE,
     )
     return True
+
+
+@sio.event
+async def join_company(sid: str, data: dict[str, Any] | None = None) -> dict[str, Any]:
+    session = await sio.get_session(sid)
+    company_id = session.get("company_id") if isinstance(session, dict) else None
+    if isinstance(company_id, int):
+        await sio.enter_room(sid, company_room(company_id))
+    return {"ok": True}
+
+
+@sio.event
+async def event_ack_batch(sid: str, data: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Ack client pour corrélation confirmed_critical_miss (critical only côté mobile)."""
+    if not isinstance(data, dict):
+        return {"ok": False}
+    ids = data.get("event_ids")
+    if isinstance(ids, list) and redis_client is not None:
+        for eid in ids[:50]:
+            if isinstance(eid, str):
+                await redis_client.setex(f"ws:ack:{sid}:{eid}", 30, "1")
+                record_ack(eid)
+    return {"ok": True}
 
 
 @sio.event
@@ -773,8 +920,15 @@ async def health() -> JSONResponse:
             "redis_up": redis_up,
             "kafka_consumer_enabled": KAFKA_CONSUMER_ENABLED,
             "kafka_consumer_running": kafka_consumer_task is not None and not kafka_consumer_task.done(),
+            "kafka_degraded": _kafka_degraded,
             "degraded_presence": not redis_up and ALLOW_IF_REDIS_PRESENCE_DOWN,
             "degraded_auth": not redis_up and ALLOW_IF_REDIS_AUTH_DOWN,
+            "accept_connections": connections_accepted() and not is_kill_switch_engaged(),
+            "kill_switch_active": is_kill_switch_engaged(),
+            "force_disconnect_total": force_disconnect_total(),
+            "deduped_total": deduper.deduped_total,
+            "gps_ingest": __import__("gps_ingest").stats(),
+            "delivery": delivery_stats(),
         }
     )
 
@@ -803,12 +957,54 @@ async def startup() -> None:
             else _build_redis_connection_url()
         )
         redis_manager = socketio.AsyncRedisManager(sio_redis_url)
+        # CRITIQUE : set_server + initialize binde la back-reference manager.server,
+        # sinon NoneType.eio crash à chaque connexion (validation locale Phase 2).
+        redis_manager.set_server(sio)
         sio.manager = redis_manager
+        sio.manager_initialized = False
+        await sio.manager.initialize() if asyncio.iscoroutinefunction(
+            sio.manager.initialize
+        ) else sio.manager.initialize()
+        sio.manager_initialized = True
     except Exception:
         logger.exception("socket io redis manager unavailable")
 
     relay_listener_task = asyncio.create_task(_listen_relay_events())
     kafka_consumer_task = asyncio.create_task(_consume_kafka_events())
+    from gps_ingest import flush_loop
+
+    asyncio.create_task(flush_loop())
+
+
+@sio.event
+async def driver_location(sid: str, data: dict[str, Any] | None = None) -> None:
+    if not isinstance(data, dict):
+        return
+    session = await sio.get_session(sid)
+    driver_id = session.get("driver_id") if isinstance(session, dict) else None
+    if not isinstance(driver_id, int):
+        return
+    from gps_ingest import enqueue_point
+
+    enqueue_point(driver_id, data)
+
+
+@sio.event
+async def driver_location_batch(sid: str, data: dict[str, Any] | None = None) -> None:
+    if not isinstance(data, dict):
+        return
+    session = await sio.get_session(sid)
+    driver_id = session.get("driver_id") if isinstance(session, dict) else None
+    if not isinstance(driver_id, int):
+        return
+    positions = data.get("positions")
+    if not isinstance(positions, list):
+        return
+    from gps_ingest import enqueue_point
+
+    for pos in positions:
+        if isinstance(pos, dict):
+            enqueue_point(driver_id, pos)
 
 
 @fastapi_app.on_event("shutdown")
