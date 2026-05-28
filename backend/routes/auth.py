@@ -857,17 +857,12 @@ def _login_post_body():
             err_code,
             trace_id,
         )
-        # Messages génériques côté API ; le mobile affiche des messages clairs
-        auth_code = (
-            AuthErrorCodes.EMAIL_NOT_FOUND
-            if err_code == AuthErrorCodes.EMAIL_NOT_FOUND
-            else AuthErrorCodes.INVALID_PASSWORD
-            if err_code == AuthErrorCodes.INVALID_PASSWORD
-            else AuthErrorCodes.INVALID_CREDENTIALS
-        )
+        # Toujours renvoyer un code générique pour éviter d'exposer
+        # si l'email existe ou si le mot de passe est incorrect.
+        auth_code = AuthErrorCodes.INVALID_CREDENTIALS
         return auth_error(
             auth_code,
-            "Identifiants incorrects",
+            "Les données de connexion sont incorrectes.",
             401,
             details={"trace_id": trace_id},
         )

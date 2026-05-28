@@ -100,6 +100,10 @@ function toUiErrorMessage(error: unknown, fallback: string): string {
       ? ((error as { status?: number }).status ?? null)
       : null;
   const effectiveStatus = axiosLikeStatus ?? statusFromShape;
+  const isLoginFlow = fallback === "Login failed";
+  if (isLoginFlow && effectiveStatus === 401) {
+    return "Les données de connexion sont incorrectes.";
+  }
   if (effectiveStatus === 401 || effectiveStatus === 403) {
     return "Session expirée ou invalide. Reconnectez-vous pour continuer.";
   }
@@ -175,6 +179,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
     const cycle = (async () => {
       setStatus("bootstrapping");
       setError(null);
+      const bootstrapStartedAt = Date.now();
       void appendSessionJournalEvent("session.bootstrap.start", undefined, activeContext?.context_id ?? null);
       try {
         await resumeSessionIfPossible();
@@ -280,7 +285,8 @@ export function SessionProvider({ children }: PropsWithChildren) {
       void appendSessionJournalEvent(
         data.is_authenticated ? "session.bootstrap.success" : "session.bootstrap.unauthenticated",
         {
-        context_type: resolved?.context_type ?? null,
+          context_type: resolved?.context_type ?? null,
+          duration_ms: Date.now() - bootstrapStartedAt,
         },
         resolved?.context_id ?? null
       );

@@ -313,6 +313,10 @@ const Login = () => {
     } catch (error) {
       const responseData = error?.response?.data;
       const status = error?.response?.status;
+      if (status === 401) {
+        setErrorMessage("Les données de connexion sont incorrectes.");
+        return;
+      }
       if (status === 403 && responseData?.reason === 'account_pending_activation') {
         const pendingActivation = getPendingActivationByEmail(loginFormData.email);
         const sessionId =

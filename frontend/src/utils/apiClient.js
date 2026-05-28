@@ -432,6 +432,13 @@ apiClient.interceptors.response.use(
   async (error) => {
     const status = error?.response?.status;
     const cfg = error?.config || {};
+    const requestUrl = String(cfg.url || '');
+    const isAuthEndpoint =
+      requestUrl.includes('/auth/login') ||
+      requestUrl.includes('/auth/refresh-token') ||
+      requestUrl.includes('/auth/refresh') ||
+      requestUrl.includes('/auth/logout') ||
+      requestUrl.includes('/auth/passwordless/');
     // Aucun fallback cross-env : requêtes demo ne retentent jamais sur /api/app
 
     // Message sympa pour 429 (limiter)
@@ -440,7 +447,7 @@ apiClient.interceptors.response.use(
     }
 
     // ✅ Gestion 401 avec refresh automatique
-    if (status === 401 && !cfg.skipAuthRedirect) {
+    if (status === 401 && !cfg.skipAuthRedirect && !isAuthEndpoint) {
       // ✅ Détecter AVANT le refresh si c'est un problème de token fresh
       const errorData = error?.response?.data || {};
       const errorMsg = (errorData.msg || errorData.error || errorData.message || '').toLowerCase();
@@ -463,7 +470,7 @@ apiClient.interceptors.response.use(
       }
       
       // Si déjà en train de refresh une requête /auth/refresh-token, éviter boucle
-      if (cfg.url?.includes('/auth/refresh-token')) {
+      if (requestUrl.includes('/auth/refresh-token')) {
         logoutUser();
         return Promise.reject(error);
       }
