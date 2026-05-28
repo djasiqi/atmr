@@ -34,6 +34,8 @@ jobs:
         run: npm run no-legacy-imports
       - name: check-instrumentation-events
         run: npm run check-instrumentation-events
+      - name: check-fleet-map-no-runtime-resolve
+        run: npm run check:fleet-map-no-runtime-resolve
       - name: Prefill pilot execution log
         run: npm run prefill-pilot-log
 
