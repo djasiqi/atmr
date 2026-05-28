@@ -3,6 +3,10 @@ import { isFeatureEnabled } from "../featureFlags/registry";
 import { mobileReconnectCircuitBreaker } from "./reconnectCircuitBreaker";
 import { resolveDriverSocketUrl } from "./resolveDriverSocketUrl";
 import { getWsCanaryExtraHeaders } from "./wsCanary";
+import {
+  observeConnectionAuthority,
+  type AuthorityPayload,
+} from "./connectionAuthority";
 import { emitDriverTelemetry } from "../observability/driverTelemetry";
 import {
   recordDriverSocketConnected,
@@ -667,6 +671,12 @@ class RealtimeManager {
         context_id: contextId,
       });
       void appendSessionJournalEvent("realtime.socket.connected", undefined, contextId);
+    });
+
+    // Phase 2 PR B/C — gate D3.3 (fix G4) : observabilité ws-service vs backend.
+    socket.on("connection.authority", (payload: unknown) => {
+      if (!this.isCurrentSocket(socket, generation)) return;
+      observeConnectionAuthority(payload as AuthorityPayload | undefined);
     });
 
     socket.on("disconnect", () => {

@@ -12,6 +12,10 @@ import {
   trackCriticalEventForAck,
 } from "../../../core/realtime/wsCanary";
 import {
+  observeConnectionAuthority,
+  type AuthorityPayload,
+} from "../../../core/realtime/connectionAuthority";
+import {
   recordCompanySocketConnected,
   recordSocketReconnect,
 } from "../../../core/observability/perfKpi";
@@ -649,6 +653,12 @@ class CompanyRealtimeBridge {
       recordCompanySocketConnected(false);
       this.clearDataFreshnessInterval();
       this.setTransportStatus("reconnecting");
+    });
+
+    // Phase 2 PR B/C — gate D3.3 (fix G4) : observabilité chemin ws-service vs backend.
+    // Le payload ws-service contient {authority, canary, version}.
+    socket.on("connection.authority", (payload: unknown) => {
+      observeConnectionAuthority(payload as AuthorityPayload | undefined);
     });
 
     socket.on("connect_error", (error) => {
