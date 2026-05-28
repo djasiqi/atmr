@@ -281,6 +281,44 @@ groups:
           summary: "Container {{ $labels.name }} utilise > 90% mémoire (working set/cgroup)"
           description: "Working set: {{ $value | humanizePercentage }}"
 
+      - alert: BackendContainerRestartSpike
+        expr: |
+          rate(container_start_time_seconds{
+            id =~ "/docker/.*",
+            name =~ ".*backend.*"
+          }[10m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "Backend redémarre fréquemment"
+          description: "Pic de redémarrages backend (autoheal ou crash loop)."
+
+      - alert: BackendReadinessFailing
+        expr: |
+          probe_success{job="blackbox-api-ready"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "Readiness API échoue (blackbox)"
+          description: "GET /api/v1/ready ne renvoie pas 200 depuis 2 min (workers morts ou dépendances down)."
+
+      - alert: TraefikBackend502Spike
+        expr: |
+          sum(rate(http_requests_total{status="502"}[5m])) > 0.05
+          or
+          probe_http_status_code{job="blackbox-api-ready"} == 502
+        for: 3m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "Pic de réponses 502 sur l'API"
+          description: "502 détectés via blackbox ou métriques HTTP backend (Traefik / workers Gunicorn)."
+
       - alert: ContainerRestartLoop
         expr: |
           rate(container_start_time_seconds{

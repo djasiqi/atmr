@@ -1,0 +1,86 @@
+# Compose dédié validation locale Phase 2 (ws-service + relay + dedup + canary)
+# Pas de Postgres/OSRM/ML : on valide UNIQUEMENT le runtime realtime.
+# Usage :
+#   docker compose -f docker-compose.phase2-validation.yml up -d --build
+#   docker compose -f docker-compose.phase2-validation.yml logs -f ws-service
+#   docker compose -f docker-compose.phase2-validation.yml down -v
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: atmr-validation-redis
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 2s
+      retries: 10
+    command: >-
+      redis-server
+      --appendonly no
+      --maxmemory 200mb
+      --maxmemory-policy allkeys-lru
+
+  ws-service:
+    build:
+      context: ./services/ws-service
+      dockerfile: Dockerfile
+    container_name: atmr-validation-ws
+    depends_on:
+      redis:
+        condition: service_healthy
+    ports:
+      - "8001:8001"
+    environment:
+      JWT_SECRET_KEY: validation-jwt-secret-only-for-local
+      JWT_ALGORITHM: HS256
+      REDIS_CLUSTER_URL: redis://redis:6379/0
+      REDIS_PASSWORD: ""
+      WS_VERSION: validation-v1
+      WS_AUTHORITY_SOURCE: ws-service
+      WS_PRESENCE_TTL_SECONDS: "90"
+      WS_AUTH_CACHE_TTL_SECONDS: "10"
+      WS_ALLOW_IF_REDIS_PRESENCE_DOWN: "false"
+      WS_ALLOW_IF_REDIS_AUTH_DOWN: "false"
+      WS_KAFKA_CONSUMER_ENABLED: "false"
+      WS_RELAY_CHANNEL: "ws:relay:events"
+      LOG_LEVEL: INFO
+      WS_SERVICE_ACCEPT_CONNECTIONS: "true"
+      WS_KILL_SWITCH_DRAIN_SEC: "5"
+      WS_DEDUP_TTL_SEC: "90"
+      WS_DEDUP_LRU_PER_SCOPE_MAX: "500"
+      WS_DEDUP_GLOBAL_MAX: "50000"
+      WS_GPS_FLUSH_INTERVAL_SEC: "2"
+      WS_GPS_MAX_POINTS_PER_BATCH: "10"
+      WS_GPS_INGEST_TIMEOUT_SEC: "0.5"
+      WS_GPS_RATE_LIMIT_PER_DRIVER_PER_MIN: "30"
+      BACKEND_INTERNAL_TRACKING_INGEST_URL: "http://mock-backend:8080/api/internal/tracking/ingest"
+      INTERNAL_SERVICE_TOKEN: "validation-token"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8001/health', timeout=2)\""]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  mock-backend:
+    image: python:3.12-slim
+    container_name: atmr-validation-mock-backend
+    working_dir: /app
+    volumes:
+      - ./tests/phase2_validation/mock_backend:/app:ro
+    command: >-
+      sh -c "pip install --no-cache-dir fastapi uvicorn && uvicorn server:app --host 0.0.0.0 --port 8080"
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8080/health', timeout=2)\""]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 30s
+
+networks:
+  default:
+    name: atmr-phase2-validation

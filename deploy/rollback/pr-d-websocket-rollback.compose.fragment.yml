@@ -1,0 +1,36 @@
+# Fragment rollback PR D — fusionner avec docker-compose.production.yml
+# Cible : 15–30 min. Drill staging obligatoire avant prod.
+#
+# Usage :
+#   docker compose \
+#     -f docker-compose.production.yml \
+#     -f deploy/rollback/pr-d-websocket-rollback.compose.fragment.yml \
+#     up -d backend
+#
+# Effet :
+#   - SKIP_SOCKETIO=false        → backend réactive Socket.IO
+#   - GUNICORN_WORKER_CLASS=gevent
+#   - GUNICORN_WORKERS=2         → marge si trafic remonte sur le backend
+#   - SOCKETIO_ASYNC_MODE=gevent
+#   - WS_RELAY_PUBLISH_ENABLED=false → coupe le double envoi vers ws-service
+#
+# Pour Traefik (séparé — config dynamique) :
+#   - Réactiver backend-secure-ws router sur PathPrefix(`/socket.io`)
+#   - Sticky cookie ATMR_SOCKET_SESSION
+#   - Retirer le router ws-service permanent sur /socket.io (canary headers seulement)
+
+services:
+  backend:
+    environment:
+      SKIP_SOCKETIO: "false"
+      GUNICORN_WORKER_CLASS: gevent
+      GUNICORN_WORKERS: "2"
+      SOCKETIO_ASYNC_MODE: gevent
+      WS_RELAY_PUBLISH_ENABLED: "false"
+
+  ws-service:
+    # Optionnel : refuser de nouvelles connexions ws-service pendant le rollback
+    # (les clients existants drainent puis basculent sur backend au reconnect).
+    environment:
+      WS_SERVICE_ACCEPT_CONNECTIONS: "false"
+      WS_KILL_SWITCH_DRAIN_SEC: "60"

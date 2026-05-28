@@ -320,6 +320,37 @@ services:
           cpus: "0.1"
           memory: 128M
 
+  # ==================== Blackbox Exporter (readiness / 502) ====================
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.24.0
+    container_name: atmr-blackbox-exporter
+    restart: unless-stopped
+    command:
+      - "--config.file=/etc/blackbox/blackbox.yml"
+    volumes:
+      - ./monitoring/prometheus/blackbox.yml:/etc/blackbox/blackbox.yml:ro
+    networks:
+      - monitoring
+      - atmr-network
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://localhost:9115/health",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: "0.1"
+          memory: 64M
+
   # ==================== Redis Exporter ====================
   redis-exporter:
     image: oliver006/redis_exporter:v1.55.0
