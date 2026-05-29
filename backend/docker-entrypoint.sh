@@ -472,6 +472,10 @@ start_application() {
         # définir GUNICORN_WORKERS=1 pour forcer un seul worker (évite le problème de SID
         # partagé entre workers).
         # ⚠️ gevent + Flask-SocketIO : éviter --preload (ConcurrentObjectUseError après fork).
+        # Phase probatoire freezes : --preload est conservé pour matcher la prod v5 ;
+        # SEUL changement = ajout de --config gunicorn.conf.py (hooks worker_int/worker_abort
+        # avec faulthandler.dump_traceback). Retirer --preload + bumps app dans un PR séparé
+        # une fois la stack bloquante capturée. Voir investigation/probatoire-freezes/VERDICT.md.
         # Défaut 2 workers (REST + Socket.IO sur le même pool) ; augmenter via GUNICORN_WORKERS si besoin.
         WORKERS="${GUNICORN_WORKERS:-2}"
         GUNICORN_TIMEOUT="${GUNICORN_TIMEOUT:-180}"
@@ -515,6 +519,7 @@ start_application() {
             --worker-tmp-dir /dev/shm \
             --max-requests 1000 \
             --max-requests-jitter 100 \
+            --preload \
             --access-logfile - \
             --error-logfile - \
             --capture-output \
