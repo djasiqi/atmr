@@ -147,33 +147,29 @@ def build_merged_round_trip_invoice_line_description_from_segments(
     *,
     primary_segment_description: str,
 ) -> str:
-    """Libellé A/R pour 1..n segments (ordre chronologique recommandé).
+    """Libellé A/R : on garde la description du segment aller telle quelle.
 
-    Utilise les extrêmes du premier et du dernier segment pour le libellé court.
+    Le tag « [A/R] » est ajouté par le rendu (PDF / aperçu HTML) via le
+    line_meta, pour éviter le double libellé « Trajet : aller-retour — ... »
+    qui masque la vraie destination.
     """
-    if not segment_bookings:
-        base = (primary_segment_description or "").strip()
-        return base or "Trajet aller-retour [A/R]"
-    ordered = sorted(
-        segment_bookings,
-        key=lambda b: (
-            b.scheduled_time or datetime.min,
-            int(b.id or 0),
-        ),
-    )
-    first = ordered[0]
-    last = ordered[-1]
-    pu = (getattr(first, "pickup_location", None) or "").strip()
-    do = (getattr(last, "dropoff_location", None) or "").strip()
-    if pu and do:
-        pu_s = pu.split(",")[0].strip()[:200]
-        do_s = do.split(",")[0].strip()[:200]
-        if pu_s and do_s:
-            return f"Trajet aller-retour — {pu_s} ↔ {do_s}"
     base = (primary_segment_description or "").strip()
-    if not base:
-        return "Trajet aller-retour [A/R]"
-    return f"{base} [A/R]"
+    if base:
+        return base
+    if segment_bookings:
+        ordered = sorted(
+            segment_bookings,
+            key=lambda b: (
+                b.scheduled_time or datetime.min,
+                int(b.id or 0),
+            ),
+        )
+        first = ordered[0]
+        pu = (getattr(first, "pickup_location", None) or "").strip()
+        do = (getattr(first, "dropoff_location", None) or "").strip()
+        if pu and do:
+            return f"Trajet {pu} → {do}"
+    return "Trajet aller-retour"
 
 
 def patient_display_name_clinic_monthly(

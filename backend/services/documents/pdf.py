@@ -599,6 +599,11 @@ def _detect_and_group_round_trips(
         booking = item.get("booking")
         if not booking:
             continue
+        line = item.get("line")
+        if line and line.type == InvoiceLineType.MATERIAL_DELIVERY:
+            # Les livraisons sont facturées comme prestations distinctes. Ne jamais
+            # les consolider en aller-retour via les liens explicites.
+            continue
         booking_id = getattr(booking, "id", None)
         if booking_id:
             items_by_booking_id[booking_id] = item
@@ -725,12 +730,25 @@ def _detect_and_group_round_trips(
         patient_id = item.get("patient_id")
         date = item.get("date")
         booking = item.get("booking")
+        line = item.get("line")
 
         # ✅ Annulés : ne pas regrouper, transport_display = libellé uniquement
         if _is_booking_cancelled(booking):
             item["is_round_trip"] = False
             item["transport_type"] = "Aller"
             item["transport_display"] = _get_cancellation_transport_display(booking)
+            item["earliest_scheduled"] = item.get("date")
+            standalone_items.append(item)
+            continue
+
+        if line and line.type == InvoiceLineType.MATERIAL_DELIVERY:
+            # Une livraison matériel n'est pas un A/R, même si deux lignes du même
+            # client partagent une adresse ou se suivent le même jour.
+            item["is_round_trip"] = False
+            item["transport_type"] = "Aller"
+            item["transport_display"] = (
+                line.description[:80] if line.description else "Livraison"
+            )
             item["earliest_scheduled"] = item.get("date")
             standalone_items.append(item)
             continue
@@ -767,9 +785,25 @@ def _detect_and_group_round_trips(
 
     consolidated_lines: list[dict[str, Any]] = []
 
+    def _pair_is_strict_reverse(it_a, it_b):
+        """A/R strict : pickup_a == dropoff_b et dropoff_a == pickup_b (adresses
+        normalisees). Refuse les chaines A->B + B->C et les paires « hub ».
+        """
+        pa = _normalize_address_for_comparison(it_a.get("pickup", "") or "")
+        da = _normalize_address_for_comparison(it_a.get("dropoff", "") or "")
+        pb = _normalize_address_for_comparison(it_b.get("pickup", "") or "")
+        db = _normalize_address_for_comparison(it_b.get("dropoff", "") or "")
+        if not (pa and da and pb and db):
+            return False
+        return pa == db and da == pb
+
     for (_patient_id, _date_key), items in groups.items():
-        if len(items) < _MIN_ITEMS_FOR_ROUND_TRIP:
-            # Pas assez d'items pour un A/R, garder tel quel
+        # Un A/R commercial = exactement 2 segments avec adresses inversees.
+        # 1 seul item, 3+ items, ou 2 items qui forment une chaine A->B + B->C
+        # restent en lignes individuelles.
+        if len(items) != _MIN_ITEMS_FOR_ROUND_TRIP or not _pair_is_strict_reverse(
+            items[0], items[1]
+        ):
             for item in items:
                 item["is_round_trip"] = False
                 item["transport_type"] = "Aller"
@@ -2330,6 +2364,12 @@ def _pdf_show_ar_legend(
             continue
         if lm.get("round_trip_merge_partner_reservation_id") is not None:
             return True
+        if lm.get("round_trip_secondary_reservation_id") is not None:
+            return True
+        if lm.get("is_round_trip_leg") is True and (
+            lm.get("merged_segment_count") or 0
+        ) >= 2:
+            return True
     return False
 
 
@@ -2359,6 +2399,12 @@ def _consolidated_item_shows_ar_tag_pdf(item: dict[str, Any]) -> bool:
         if lm.get("preview_hide_merged_round_trip") is True:
             continue
         if lm.get("round_trip_merge_partner_reservation_id") is not None:
+            return True
+        if lm.get("round_trip_secondary_reservation_id") is not None:
+            return True
+        if lm.get("is_round_trip_leg") is True and (
+            lm.get("merged_segment_count") or 0
+        ) >= 2:
             return True
     return False
 
@@ -2494,8 +2540,17 @@ def _pdf_format_transport_detail_inner_wrapped(
     is_ride_line: bool,
     is_material_delivery: bool,
     force_balanced_two_lines: bool = False,
+    inline_suffix_text: str | None = None,
+    inline_suffix_html: str | None = None,
 ) -> str:
-    """Trajet / Livraison / libellé : préfixes métier + wrap largeur colonne (adresse complète, pas ville seule)."""
+    """Trajet / Livraison / libellé : préfixes métier + wrap largeur colonne (adresse complète, pas ville seule).
+
+    Si ``inline_suffix_text`` (ex. ``" [A/R]"``) est fourni avec
+    ``force_balanced_two_lines=True``, la deuxieme ligne est tronquee en
+    reservant la largeur necessaire pour le suffixe, puis ``inline_suffix_html``
+    (markup) est concatene en fin de seconde ligne afin d'eviter qu'il deborde
+    sur une troisieme ligne dans le PDF.
+    """
     from shared.utils.transport_description_normalize import (
         normalize_transport_line_description,
     )
@@ -2507,12 +2562,26 @@ def _pdf_format_transport_detail_inner_wrapped(
         s = normalize_transport_line_description(raw_s, kind="material_delivery")
     else:
         s = raw_s
-    # Ne pas retirer « Trajet : » sur une livraison matériel (pas de vocabulaire trajet).
-    if is_ride_line and s.lower().startswith("trajet :"):
-        s = s[8:].strip()
+    # Strip de tout préfixe « Trajet » résiduel (avec/sans deux-points) pour éviter la duplication
+    # « Trajet : Trajet Chemin… » lors du re-préfixage plus bas. Idempotent.
+    if is_ride_line:
+        import re as _re_trajet
+        s = _re_trajet.sub(
+            r"^Trajet\s*[:：\uff1a]?\s+", "", s, count=1, flags=_re_trajet.IGNORECASE
+        )
     fs = float(FONT_BODY)
     if is_material_delivery and s:
-        lines = _wrap_line_by_width(f"Livraison : {s}", font_name, fs, desc_inner_pt)
+        import re as _re_livr
+        s_md = _re_livr.sub(
+            r"^Livraison\s*[-–—:：\uff1a]\s+",
+            "",
+            s,
+            count=1,
+            flags=_re_livr.IGNORECASE,
+        )
+        lines = _wrap_line_by_width(
+            f"Livraison : {s_md}", font_name, fs, desc_inner_pt
+        )
         return "<br/>".join(_xml_escape_for_paragraph(x) for x in lines)
     if not is_ride_line:
         if not s:
@@ -2525,8 +2594,14 @@ def _pdf_format_transport_detail_inner_wrapped(
         if sep in s:
             a, b = s.split(sep, 1)
             a_clean = a.strip()
-            if a_clean.lower().startswith("trajet :"):
-                a_clean = a_clean[8:].strip()
+            import re as _re_trajet_a
+            a_clean = _re_trajet_a.sub(
+                r"^Trajet\s*[:：\uff1a]?\s+",
+                "",
+                a_clean,
+                count=1,
+                flags=_re_trajet_a.IGNORECASE,
+            )
             b_clean = b.strip()
             if force_balanced_two_lines:
                 line_a = _truncate_text_to_width_with_ellipsis(
@@ -2535,6 +2610,31 @@ def _pdf_format_transport_detail_inner_wrapped(
                     font_size=fs,
                     max_width_pt=desc_inner_pt,
                 )
+                suffix_text = (inline_suffix_text or "").rstrip()
+                if suffix_text:
+                    from reportlab.pdfbase.pdfmetrics import stringWidth
+
+                    suffix_w = stringWidth(" " + suffix_text, font_name, fs)
+                    reserved = max(0.0, desc_inner_pt - suffix_w - 2.0)
+                    line_b_truncated = _truncate_text_to_width_with_ellipsis(
+                        f"→ {b_clean}",
+                        font_name=font_name,
+                        font_size=fs,
+                        max_width_pt=reserved if reserved > 0 else desc_inner_pt,
+                    )
+                    suffix_markup = inline_suffix_html or _xml_escape_for_paragraph(
+                        suffix_text
+                    )
+                    line_b_html = (
+                        f"{_xml_escape_for_paragraph(line_b_truncated)}"
+                        f"&nbsp;{suffix_markup}"
+                    )
+                    return "<br/>".join(
+                        [
+                            _xml_escape_for_paragraph(line_a),
+                            line_b_html,
+                        ]
+                    )
                 line_b = _truncate_text_to_width_with_ellipsis(
                     f"→ {b_clean}",
                     font_name=font_name,
@@ -2800,6 +2900,7 @@ def _build_s2_table(
             )
         line_desc_opt = _line_description_from_consolidated_item(item)
         if is_ar:
+            ar_suffix_html = _pdf_s2_ar_tag_markup()
             if line_desc_opt:
                 if max_simple_description_lines == 2 and (
                     " → " in line_desc_opt or " ↔ " in line_desc_opt
@@ -2808,20 +2909,26 @@ def _build_s2_table(
                         line_desc_opt,
                         font_name=font_name,
                         desc_inner_pt=desc_inner_pt,
-                        is_ride_line=True,
-                        is_material_delivery=False,
+                        is_ride_line=is_ride_td,
+                        is_material_delivery=is_material_td,
                         force_balanced_two_lines=True,
+                        inline_suffix_text="[A/R]",
+                        inline_suffix_html=ar_suffix_html,
                     )
+                    esc_desc = _pdf_limit_html_br_lines(
+                        esc_desc, max_simple_description_lines
+                    )
+                    inner_html = f"{esc_desc}{disc_suffix}{note_suffix}"
                 else:
                     esc_desc = _pdf_escape_wrapped_plain(
                         line_desc_opt, font_name, desc_inner_pt
                     )
-                esc_desc = _pdf_limit_html_br_lines(
-                    esc_desc, max_simple_description_lines
-                )
-                inner_html = (
-                    f"{esc_desc} {_pdf_s2_ar_tag_markup()}{disc_suffix}{note_suffix}"
-                )
+                    esc_desc = _pdf_limit_html_br_lines(
+                        esc_desc, max_simple_description_lines
+                    )
+                    inner_html = (
+                        f"{esc_desc}&nbsp;{ar_suffix_html}{disc_suffix}{note_suffix}"
+                    )
             else:
                 body_tr = _pdf_format_transport_detail_inner_wrapped(
                     item.get("transport_display", ""),
@@ -2830,13 +2937,22 @@ def _build_s2_table(
                     is_ride_line=is_ride_td,
                     is_material_delivery=is_material_td,
                     force_balanced_two_lines=max_simple_description_lines == 2,
+                    inline_suffix_text="[A/R]"
+                    if max_simple_description_lines == 2
+                    else None,
+                    inline_suffix_html=ar_suffix_html
+                    if max_simple_description_lines == 2
+                    else None,
                 )
                 body_tr = _pdf_limit_html_br_lines(
                     body_tr, max_simple_description_lines
                 )
-                inner_html = (
-                    f"{body_tr} {_pdf_s2_ar_tag_markup()}{disc_suffix}{note_suffix}"
-                )
+                if max_simple_description_lines == 2:
+                    inner_html = f"{body_tr}{disc_suffix}{note_suffix}"
+                else:
+                    inner_html = (
+                        f"{body_tr}&nbsp;{ar_suffix_html}{disc_suffix}{note_suffix}"
+                    )
             amount_cell = _pdf_s2_amount_only_paragraph(
                 net_disp,
                 s2_main_style,
@@ -2852,8 +2968,8 @@ def _build_s2_table(
                         line_desc_opt,
                         font_name=font_name,
                         desc_inner_pt=desc_inner_pt,
-                        is_ride_line=True,
-                        is_material_delivery=False,
+                        is_ride_line=is_ride_td,
+                        is_material_delivery=is_material_td,
                         force_balanced_two_lines=True,
                     )
                 else:

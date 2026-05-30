@@ -20,6 +20,9 @@ from application.invoices.round_trip_billing_lock import (
     filter_bookings_open_for_new_invoice_line,
     round_trip_component_id_sets,
 )
+from application.invoices.round_trip_booking_pairs import (
+    normalize_address_for_round_trip_comparison,
+)
 from infrastructure.invoices.invoice_calculator import (
     InvoiceCalculator,
     round_to_5_cents,
@@ -32,7 +35,47 @@ from repositories.company_billing_settings_repository import (
     CompanyBillingSettingsRepository,
 )
 
-_MIN_ROUND_TRIP_COMPONENT_SIZE = 2
+# Taille exacte d'un A/R : 2 segments (aller + retour). Les composantes de taille
+# > 2 sont des chaînes de trajets distincts qui doivent rester facturées en lignes
+# individuelles, pas regroupées en un faux A/R.
+_ROUND_TRIP_COMPONENT_SIZE = 2
+
+
+def _is_strict_round_trip_pair(bookings_pair: list[Any]) -> bool:
+    """Vrai A/R : 2 segments A→B et B→A (adresses inversées) ou liés explicitement.
+
+    Refuse les chaînes A→B + B→C ou les paires « hub » qui partagent une seule
+    extrémité — chacun doit rester facturé séparément.
+    """
+    if len(bookings_pair) != 2:
+        return False
+    a, b = bookings_pair
+    # Lien explicite parent / retour : toujours considéré comme A/R commercial.
+    pid_a = getattr(a, "parent_booking_id", None)
+    pid_b = getattr(b, "parent_booking_id", None)
+    try:
+        if pid_a is not None and int(pid_a) == int(getattr(b, "id", -1)):
+            return True
+        if pid_b is not None and int(pid_b) == int(getattr(a, "id", -1)):
+            return True
+    except (TypeError, ValueError):
+        pass
+    # Sinon : inversion stricte des adresses normalisées (A→B et B→A).
+    a_pick = normalize_address_for_round_trip_comparison(
+        getattr(a, "pickup_location", "") or ""
+    )
+    a_drop = normalize_address_for_round_trip_comparison(
+        getattr(a, "dropoff_location", "") or ""
+    )
+    b_pick = normalize_address_for_round_trip_comparison(
+        getattr(b, "pickup_location", "") or ""
+    )
+    b_drop = normalize_address_for_round_trip_comparison(
+        getattr(b, "dropoff_location", "") or ""
+    )
+    if not (a_pick and a_drop and b_pick and b_drop):
+        return False
+    return a_pick == b_drop and a_drop == b_pick
 
 
 def _preview_base_amount_ht(booking: Any, billing_settings_dto: Any) -> Decimal:
@@ -104,16 +147,22 @@ def _consolidate_period_preview_round_trip_rows(
         for c in round_trip_component_id_sets(
             bookings, amount_ht_fn=_amount_for_booking
         )
-        if len(c) >= _MIN_ROUND_TRIP_COMPONENT_SIZE
+        if len(c) == _ROUND_TRIP_COMPONENT_SIZE
     ]
     if not comps:
         return preview_lines
+    bookings_by_id = {int(b.id): b for b in bookings}
     by_id = {pl.booking_id: pl for pl in preview_lines}
     hidden_ids: set[int] = set()
     merged_rows: dict[int, PeriodPreviewLine] = {}
     for comp in comps:
         pls = [by_id[bid] for bid in comp if bid in by_id]
-        if len(pls) < _MIN_ROUND_TRIP_COMPONENT_SIZE:
+        if len(pls) != _ROUND_TRIP_COMPONENT_SIZE:
+            continue
+        comp_bookings = [bookings_by_id[bid] for bid in comp if bid in bookings_by_id]
+        if not _is_strict_round_trip_pair(comp_bookings):
+            # 2 trajets sur la meme journee mais qui ne forment pas un A/R
+            # strict (ex. A->B puis B->C en chaine) : facturer separement.
             continue
         primary_pl = min(
             pls,

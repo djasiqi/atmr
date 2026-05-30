@@ -67,6 +67,48 @@ logger = logging.getLogger(__name__)
 PERIOD_MONTH_THRESHOLD = 12
 MAX_BOOKING_IDS_SHOWN = 10  # Limite le nombre d'IDs affichés dans les messages d'erreur
 ROUND_TRIP_MERGE_MIN_SEGMENTS = 2
+# Taille exacte d'un A/R commercial (aller + retour). Les composantes plus
+# grandes correspondent a une chaine de trajets independants et ne doivent pas
+# etre regroupees sur une seule ligne de facture (ex. 4 trajets enchaines a la
+# meme date pour le meme patient = 4 lignes distinctes).
+ROUND_TRIP_MERGE_EXACT_SEGMENTS = 2
+
+
+def _is_strict_reverse_round_trip(segments: list[Any]) -> bool:
+    """Vrai A/R commercial : 2 segments avec adresses inversees (A->B et B->A)
+    ou lien explicite parent / retour. Refuse les chaines A->B + B->C.
+    """
+    if len(segments) != ROUND_TRIP_MERGE_EXACT_SEGMENTS:
+        return False
+    from application.invoices.round_trip_booking_pairs import (
+        normalize_address_for_round_trip_comparison,
+    )
+
+    a, b = segments
+    pid_a = getattr(a, "parent_booking_id", None)
+    pid_b = getattr(b, "parent_booking_id", None)
+    try:
+        if pid_a is not None and int(pid_a) == int(getattr(b, "id", -1)):
+            return True
+        if pid_b is not None and int(pid_b) == int(getattr(a, "id", -1)):
+            return True
+    except (TypeError, ValueError):
+        pass
+    a_pick = normalize_address_for_round_trip_comparison(
+        getattr(a, "pickup_location", "") or ""
+    )
+    a_drop = normalize_address_for_round_trip_comparison(
+        getattr(a, "dropoff_location", "") or ""
+    )
+    b_pick = normalize_address_for_round_trip_comparison(
+        getattr(b, "pickup_location", "") or ""
+    )
+    b_drop = normalize_address_for_round_trip_comparison(
+        getattr(b, "dropoff_location", "") or ""
+    )
+    if not (a_pick and a_drop and b_pick and b_drop):
+        return False
+    return a_pick == b_drop and a_drop == b_pick
 
 
 @dataclass(frozen=True, slots=True)
@@ -809,19 +851,24 @@ class GenerateInvoiceUseCase:
             def rt_amount_ht(booking: Booking) -> Decimal:
                 return drafts[int(booking.id)].base_amount
 
-            round_trip_group_sets = [
+            round_trip_group_sets_raw = [
                 s
                 for s in round_trip_component_id_sets(
                     ride_bookings, amount_ht_fn=rt_amount_ht
                 )
-                if len(s) >= ROUND_TRIP_MERGE_MIN_SEGMENTS
+                if len(s) == ROUND_TRIP_MERGE_EXACT_SEGMENTS
             ]
+            round_trip_group_sets = []
+            for _s in round_trip_group_sets_raw:
+                _segs = [bookings_by_id[i] for i in _s if i in bookings_by_id]
+                if _is_strict_reverse_round_trip(_segs):
+                    round_trip_group_sets.append(_s)
             in_round_trip_merge: set[int] = set()
             round_trip_primary_by_booking_id: dict[int, int] = {}
             for comp in round_trip_group_sets:
                 in_round_trip_merge |= comp
                 segs_b = [bookings_by_id[i] for i in comp if i in bookings_by_id]
-                if len(segs_b) < ROUND_TRIP_MERGE_MIN_SEGMENTS:
+                if len(segs_b) != ROUND_TRIP_MERGE_EXACT_SEGMENTS:
                     continue
                 pri_b = min(
                     segs_b,
@@ -984,7 +1031,7 @@ class GenerateInvoiceUseCase:
                         for i in next(gs for gs in round_trip_group_sets if rid in gs)
                         if i in bookings_by_id
                     ]
-                    if len(grp_bookings) < ROUND_TRIP_MERGE_MIN_SEGMENTS:
+                    if len(grp_bookings) != ROUND_TRIP_MERGE_EXACT_SEGMENTS:
                         emit_single_line(reservation, d)
                         continue
                     emit_merged_round_trip_group(grp_bookings)
