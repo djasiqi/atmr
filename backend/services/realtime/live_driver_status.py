@@ -89,7 +89,7 @@ def resolve_driver_status_for_fanout(
     is_active: bool,
     presence_status: str,
 ) -> str:
-    """Statut affiché entreprise : offline | busy | assigned | available."""
+    """Statut affiché entreprise : offline | busy | assigned | available | *_constrained."""
     if not is_active:
         return "offline"
     if mission_status in {
@@ -98,7 +98,11 @@ def resolve_driver_status_for_fanout(
     }:
         return "busy"
     if mission_status == BookingStatus.ASSIGNED.value:
+        if presence_status == "degraded_constrained":
+            return "assigned_constrained"
         return "assigned"
     if presence_status == "offline":
         return "offline"
+    if presence_status == "degraded_constrained":
+        return "available_constrained"
     return "available"

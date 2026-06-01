@@ -1,0 +1,3 @@
+OUT_DIR=/tmp/probatoire-freezes
+abort_dumps_index lines: 1046
+abort_stacks_full bytes: 0

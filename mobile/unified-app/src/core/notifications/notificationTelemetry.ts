@@ -48,6 +48,21 @@ export function emitNotificationReceived(payload: Record<string, unknown>): void
     source: "core.notifications.pipeline",
     ...payload,
   });
+
+  void ackPushNotificationReceived(payload).catch(() => {
+    // Best-effort : ne pas bloquer le pipeline mobile si l'ack HTTP échoue.
+  });
+}
+
+async function ackPushNotificationReceived(payload: Record<string, unknown>): Promise<void> {
+  const { apiClient } = await import("../api/client");
+  await apiClient.post("/driver/me/push-notifications/ack", {
+    notification_type: payload.type ?? payload.notification_type,
+    booking_id: payload.booking_id ?? payload.mission_id,
+    notification_id: payload.event_id ?? payload.trace_id ?? payload.notification_id,
+    correlation_id: payload.correlation_id,
+    received_at_ms: Date.now(),
+  });
 }
 
 export function emitNotificationFiltered(

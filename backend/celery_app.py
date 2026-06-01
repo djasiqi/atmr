@@ -115,6 +115,7 @@ celery: Celery = Celery(
         "tasks.invoice_pdf_tasks",  # V2 : PDF facture transport async (file d'attente)
         "tasks.transport_invoicing_automation",  # V3 : rappel mensuel / batch (stubs)
         "tasks.health_tasks",  # Smoke test Celery broker/worker (runbook incident)
+        "tasks.tracking_health_tasks",  # Tracking BG: silent wake stale + purge device health
     ],
 )
 
@@ -312,6 +313,24 @@ celery.conf.beat_schedule = {
         "options": {
             "expires": 1800,
             "jitter": 120,
+        },
+    },
+    # Tracking BG: silent push wake pour drivers en mission avec fix stale
+    "tracking-stale-wake": {
+        "task": "tasks.tracking_health_tasks.stale_tracking_wake_tick",
+        "schedule": 60.0,
+        "options": {
+            "expires": 120,
+            "jitter": 5,
+        },
+    },
+    # Purge historique device-health (>30 jours)
+    "purge-device-health-events": {
+        "task": "tasks.tracking_health_tasks.purge_device_health_events",
+        "schedule": 24 * 3600,
+        "options": {
+            "expires": 6 * 3600,
+            "jitter": 600,
         },
     },
     # Marché ouvert : PENDING sans entreprise et sans offre PROPOSED (rattrapage centralisé)

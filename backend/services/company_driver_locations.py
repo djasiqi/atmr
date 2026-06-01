@@ -24,10 +24,16 @@ from services.company_driver_location_freshness import (
     last_seen_seconds_from_db_last_position_update,
     last_seen_seconds_from_location_fields,
 )
+from services.driver_device_health import (
+    read_driver_device_health_batch,
+    resolve_tracking_display_status,
+)
 from services.geolocation.presence import (
+    apply_device_health_override,
     compute_location_status,
     presence_status_from_location_status,
 )
+from services.realtime.live_driver_status import resolve_driver_status_for_fanout
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +93,12 @@ def build_company_driver_locations_items(
             redis_results = [None] * (len(drivers) * 2)
         except Exception:
             redis_results = [None] * (len(drivers) * 2)
+
+    device_health_by_driver: dict[int, dict[str, Any] | None] = {}
+    if redis_client and drivers:
+        device_health_by_driver = read_driver_device_health_batch(
+            [d.id for d in drivers]
+        )
 
     driver_ids = [d.id for d in drivers]
     active_bookings_map: dict[int, dict[str, Any]] = {}
@@ -226,28 +238,38 @@ def build_company_driver_locations_items(
                     last_seen_seconds=float(last_seen_seconds),
                 )
         presence_status = presence_status_from_location_status(location_status)
+        device_health = device_health_by_driver.get(driver.id)
+        presence_status, location_status = apply_device_health_override(
+            presence_status,
+            location_status,
+            device_health,
+        )
         is_stale = location_status in {"stale", "offline"}
-
-        if not is_active:
-            status = "offline"
-        elif mission_status in (
-            BookingStatus.EN_ROUTE.value,
-            BookingStatus.IN_PROGRESS.value,
-        ):
-            status = "busy"
-        elif mission_status == BookingStatus.ASSIGNED.value:
-            status = "assigned"
-        else:
-            status = "available"
 
         if not is_active:
             presence_status = "offline"
             location_status = "offline"
+
+        status = resolve_driver_status_for_fanout(
+            mission_status=mission_status or "NONE",
+            is_active=is_active,
+            presence_status=presence_status,
+        )
         offline_reason = (
             "no_signal"
             if location_status == "offline"
-            else ("location_stale" if presence_status == "degraded" else "")
+            else (
+                "device_constrained"
+                if presence_status == "degraded_constrained"
+                else ("location_stale" if presence_status == "degraded" else "")
+            )
         )
+        tracking_display_status = resolve_tracking_display_status(
+            location_status=location_status,
+            health_snapshot=device_health,
+        )
+        if presence_status == "degraded_constrained":
+            tracking_display_status = "degraded_constrained"
         is_available = status == "available"
 
         first_name = getattr(getattr(driver, "user", None), "first_name", None)
@@ -276,7 +298,10 @@ def build_company_driver_locations_items(
             "location_mode": location_mode,
             "is_available": is_available,
             "offline_reason": offline_reason,
+            "tracking_display_status": tracking_display_status,
         }
+        if device_health is not None:
+            loc_item["device_health"] = device_health
         if accuracy_m is not None:
             loc_item["accuracy_m"] = accuracy_m
         if has_active_booking:
@@ -403,6 +428,12 @@ def merge_drivers_with_locations(
             "current_booking_id": loc.get("current_booking_id")
             if loc.get("current_booking_id") is not None
             else drv.get("current_booking_id"),
+            "tracking_display_status": loc.get("tracking_display_status")
+            if loc.get("tracking_display_status") is not None
+            else drv.get("tracking_display_status"),
+            "device_health": loc.get("device_health")
+            if loc.get("device_health") is not None
+            else drv.get("device_health"),
             "client_short": loc.get("client_short")
             if loc.get("client_short") is not None
             else (drv.get("client_short") or ""),

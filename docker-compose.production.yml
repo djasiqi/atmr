@@ -290,8 +290,23 @@ services:
       # Firebase Cloud Messaging (FCM)
       FIREBASE_SERVICE_ACCOUNT_PATH: /app/firebase-service-account.json
 
-      # Lifecycle DeviceToken après envoi FCM (métriques + désactivation si token_invalid)
-      PUSH_DEVICE_TOKEN_LIFECYCLE_ENABLED: "1"
+      # ===== Notifications push — Remédiation P0/P1/P2 =====
+      # Voir docs/notifications/remediation-flags.md / scripts/env.production.defaults.fragment
+      # P0 — Lifecycle DeviceToken (déjà actif en prod)
+      PUSH_DEVICE_TOKEN_LIFECYCLE_ENABLED: ${PUSH_DEVICE_TOKEN_LIFECYCLE_ENABLED:-1}
+      PUSH_DEVICE_TOKEN_STALE_DAYS: ${PUSH_DEVICE_TOKEN_STALE_DAYS:-30}
+      PUSH_DEVICE_TOKEN_MIN_FAILURES: ${PUSH_DEVICE_TOKEN_MIN_FAILURES:-5}
+      # P0 — Night mode fuseau explicite
+      NIGHT_MODE_TZ: ${NIGHT_MODE_TZ:-Europe/Paris}
+      # P0 — Circuit breaker FCM Redis partagé
+      FCM_CIRCUIT_BREAKER_FAILURE_THRESHOLD: ${FCM_CIRCUIT_BREAKER_FAILURE_THRESHOLD:-5}
+      FCM_CIRCUIT_BREAKER_OPEN_SECONDS: ${FCM_CIRCUIT_BREAKER_OPEN_SECONDS:-60}
+      FCM_CIRCUIT_BREAKER_WINDOW_SECONDS: ${FCM_CIRCUIT_BREAKER_WINDOW_SECONDS:-60}
+      FCM_RETRY_MAX_ATTEMPTS: ${FCM_RETRY_MAX_ATTEMPTS:-3}
+      FCM_RETRY_BASE_DELAY_MS: ${FCM_RETRY_BASE_DELAY_MS:-2000}
+      # P2 — Push pipeline Kafka-first (off par défaut tant que broker non bascule)
+      NOTIFICATIONS_KAFKA_PUBLISH_ENABLED: ${NOTIFICATIONS_KAFKA_PUBLISH_ENABLED:-false}
+      PUSH_KAFKA_FIRST_ENABLED: ${PUSH_KAFKA_FIRST_ENABLED:-false}
 
       # Migrations Alembic : désactivées au démarrage du conteneur (voir migration_exec /
       # DATABASE_URL_DIRECT dans scripts/deploy-production.sh). DATABASE_URL passe par PgBouncer.
@@ -516,7 +531,18 @@ services:
       # Firebase Cloud Messaging (FCM)
       FIREBASE_SERVICE_ACCOUNT_PATH: /app/firebase-service-account.json
 
-      PUSH_DEVICE_TOKEN_LIFECYCLE_ENABLED: "1"
+      # ===== Notifications push — Remédiation P0/P1/P2 (worker Celery) =====
+      PUSH_DEVICE_TOKEN_LIFECYCLE_ENABLED: ${PUSH_DEVICE_TOKEN_LIFECYCLE_ENABLED:-1}
+      PUSH_DEVICE_TOKEN_STALE_DAYS: ${PUSH_DEVICE_TOKEN_STALE_DAYS:-30}
+      PUSH_DEVICE_TOKEN_MIN_FAILURES: ${PUSH_DEVICE_TOKEN_MIN_FAILURES:-5}
+      NIGHT_MODE_TZ: ${NIGHT_MODE_TZ:-Europe/Paris}
+      FCM_CIRCUIT_BREAKER_FAILURE_THRESHOLD: ${FCM_CIRCUIT_BREAKER_FAILURE_THRESHOLD:-5}
+      FCM_CIRCUIT_BREAKER_OPEN_SECONDS: ${FCM_CIRCUIT_BREAKER_OPEN_SECONDS:-60}
+      FCM_CIRCUIT_BREAKER_WINDOW_SECONDS: ${FCM_CIRCUIT_BREAKER_WINDOW_SECONDS:-60}
+      FCM_RETRY_MAX_ATTEMPTS: ${FCM_RETRY_MAX_ATTEMPTS:-3}
+      FCM_RETRY_BASE_DELAY_MS: ${FCM_RETRY_BASE_DELAY_MS:-2000}
+      NOTIFICATIONS_KAFKA_PUBLISH_ENABLED: ${NOTIFICATIONS_KAFKA_PUBLISH_ENABLED:-false}
+      PUSH_KAFKA_FIRST_ENABLED: ${PUSH_KAFKA_FIRST_ENABLED:-false}
 
     volumes:
       - backend_logs:/app/logs

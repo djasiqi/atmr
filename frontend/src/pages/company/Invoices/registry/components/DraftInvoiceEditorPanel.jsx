@@ -34,6 +34,7 @@ import {
 import {
   INVOICE_PRINT_SIDES,
   downloadPdfAsFile,
+  openPdfUrlWithPrintDialog,
   printPdfFromUrlInHiddenFrame,
   printPdfInEmbeddedIframe,
   triggerPdfDownloadAnchorFallback,
@@ -755,13 +756,19 @@ const DraftInvoiceEditorPanel = ({
         if (mountedRef.current) setError('Aucun PDF disponible.');
         return;
       }
-      const started = printPdfFromUrlInHiddenFrame(raw, {
+      const started = await printPdfFromUrlInHiddenFrame(raw, {
         printSides: INVOICE_PRINT_SIDES.SIMPLEX,
       });
-      if (!started && mountedRef.current) {
-        setError(
-          "Impossible de lancer l'impression. Utilisez « Télécharger » puis imprimez le fichier."
-        );
+      if (!started) {
+        /** Repli : ouvrir le PDF dans un onglet avec dialogue d’impression. */
+        const openedInTab = openPdfUrlWithPrintDialog(raw, {
+          printSides: INVOICE_PRINT_SIDES.SIMPLEX,
+        });
+        if (!openedInTab && mountedRef.current) {
+          setError(
+            "Impossible de lancer l'impression. Utilisez « Télécharger » puis imprimez le fichier."
+          );
+        }
       }
     } catch (e) {
       if (mountedRef.current) {

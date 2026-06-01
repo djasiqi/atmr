@@ -1,4 +1,4 @@
-import { getResolvedApiBaseUrl } from "../api/client";
+import { alignDevLocalUrlWithBundleHost, getResolvedApiBaseUrl } from "../api/client";
 
 const DEFAULT_PROD_DRIVER_SOCKET_URL = "https://api.lirie.ch";
 
@@ -31,7 +31,7 @@ export function resolveDriverSocketUrl(): string | null {
   if (fromEnv) {
     return !__DEV__ && isUnsafeProductionSocketUrl(fromEnv)
       ? DEFAULT_PROD_DRIVER_SOCKET_URL
-      : fromEnv;
+      : alignDevLocalUrlWithBundleHost(fromEnv);
   }
   try {
     return new URL(getResolvedApiBaseUrl()).origin;

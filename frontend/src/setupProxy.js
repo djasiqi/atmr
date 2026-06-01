@@ -66,23 +66,37 @@ module.exports = function (app) {
     target: BACKEND_URL,
     changeOrigin: true, // ✅ Changer l'origine pour éviter les problèmes CORS
     ws: true, // ✅ Activer l'upgrade WebSocket pour /socket.io.
-    // Le HMR webpack-dev-server utilise /ws (chemin distinct, exclu par `filter`),
+    // Le HMR webpack-dev-server utilise /ws (chemin distinct, exclu par `pathFilter`),
     // donc il n'y a pas de conflit. Sans ws:true, le transport WebSocket Socket.IO
     // échoue et le client retombe en long-polling permanent.
     secure: false,
-    logLevel: 'info',
-    // ✅ Exclure /ws pour que webpack-dev-server puisse l'utiliser pour le HMR
-    filter: function (pathname, req) {
-      const isWsPath = pathname === '/ws' || pathname.startsWith('/ws/');
-      // Ne pas capturer /ws - webpack-dev-server en a besoin pour le HMR
+    logger: console, // v3: remplace `logLevel`
+    // ✅ Exclure /ws pour que webpack-dev-server puisse l'utiliser pour le HMR.
+    // ⚠️ v3 : option `filter` renommée en `pathFilter` (sinon ignorée → /ws est
+    // intercepté par le handler upgrade global de ws:true et proxifié à tort).
+    //
+    // ⚠️ v3 bis : hpm appelle pathFilter avec `req.url`. Or, monté via
+    // `app.use('/socket.io', ...)`, Express STRIPPE le préfixe `/socket.io`
+    // avant d'appeler le middleware → `req.url` devient `/?EIO=4...` et
+    // `pathname.startsWith('/socket.io')` retourne TOUJOURS false. Résultat :
+    // toutes les requêtes HTTP polling retombent dans le 404 par défaut
+    // d'Express ("Cannot GET /socket.io/") et le badge SocketStatusBadge
+    // reste sur "Déconnecté". Pour les upgrades WebSocket, hpm utilise
+    // l'upgrade listener global et `req.url` contient le chemin COMPLET.
+    // Donc on s'aligne sur `req.originalUrl` (présent côté HTTP) avec
+    // fallback sur `req.url` (présent côté upgrade WS) pour avoir le
+    // chemin complet dans les deux cas.
+    pathFilter: function (_pathname, req) {
+      const sourceUrl = req.originalUrl || req.url || '';
+      const fullPath = sourceUrl.split('?')[0];
+      const isWsPath = fullPath === '/ws' || fullPath.startsWith('/ws/');
       if (isWsPath) {
-        console.log(`[SOCKET.IO PROXY] Filtre: /ws exclu (pathname: ${pathname}, url: ${req.url})`);
-        return false; // Ne pas proxifier
+        console.log(`[SOCKET.IO PROXY] Filtre: /ws exclu (fullPath: ${fullPath}, url: ${req.url})`);
+        return false;
       }
-      // Ne capturer que les requêtes qui commencent par /socket.io
-      const shouldProxy = pathname.startsWith('/socket.io');
+      const shouldProxy = fullPath.startsWith('/socket.io');
       if (shouldProxy) {
-        console.log(`[SOCKET.IO PROXY] Filtre: /socket.io accepté (pathname: ${pathname})`);
+        console.log(`[SOCKET.IO PROXY] Filtre: /socket.io accepté (fullPath: ${fullPath})`);
       }
       return shouldProxy;
     },
@@ -135,84 +149,77 @@ module.exports = function (app) {
       console.log(`[SOCKET.IO PROXY] pathRewrite: ${path} -> ${rewrittenPath} (original: ${req.url})`);
       return rewrittenPath;
     },
-    onProxyReq: (proxyReq, req) => {
-      // ✅ Log de test pour vérifier que le callback est appelé
-      console.log('[SOCKET.IO PROXY] onProxyReq appelé pour:', req.url);
-      // ✅ S'assurer que les cookies sont transmis
-      if (req.headers.cookie) {
-        proxyReq.setHeader('Cookie', req.headers.cookie);
-        console.log(`[SOCKET.IO] Cookies transmis: ${req.headers.cookie.substring(0, 50)}...`);
-      } else {
-        console.warn(`[SOCKET.IO] ⚠️ Aucun cookie dans la requête`);
-        // ✅ Logger tous les headers pour debug
-        console.log(`[SOCKET.IO] Headers reçus:`, Object.keys(req.headers));
-      }
-      // ✅ S'assurer que les headers d'authentification sont transmis
-      if (req.headers.authorization) {
-        proxyReq.setHeader('Authorization', req.headers.authorization);
-        console.log(`[SOCKET.IO] Authorization header transmis`);
-      }
-      // ✅ Transmettre les headers WebSocket si présents (pour les upgrades WebSocket)
-      if (req.headers.upgrade === 'websocket') {
-        proxyReq.setHeader('Upgrade', 'websocket');
-        console.log(`[SOCKET.IO] Upgrade header transmis: websocket`);
-      }
-      if (req.headers.connection) {
-        proxyReq.setHeader('Connection', req.headers.connection);
-        console.log(`[SOCKET.IO] Connection header transmis: ${req.headers.connection}`);
-      }
-      if (req.headers['sec-websocket-key']) {
-        proxyReq.setHeader('Sec-WebSocket-Key', req.headers['sec-websocket-key']);
-      }
-      if (req.headers['sec-websocket-version']) {
-        proxyReq.setHeader('Sec-WebSocket-Version', req.headers['sec-websocket-version']);
-      }
-      if (req.headers['sec-websocket-protocol']) {
-        proxyReq.setHeader('Sec-WebSocket-Protocol', req.headers['sec-websocket-protocol']);
-      }
-      if (req.headers['sec-websocket-extensions']) {
-        proxyReq.setHeader('Sec-WebSocket-Extensions', req.headers['sec-websocket-extensions']);
-      }
-      console.log(`[SOCKET.IO] ${req.method} ${req.url} -> ${proxyReq.path}`);
-    },
-    onProxyRes: (proxyRes, req, res) => {
-      // ✅ Log de test pour vérifier que le callback est appelé
-      console.log('[SOCKET.IO PROXY] onProxyRes appelé pour:', req.url, 'status:', proxyRes.statusCode);
-      // ✅ Logger les cookies reçus du backend
-      const setCookieHeaders = proxyRes.headers['set-cookie'];
-      if (setCookieHeaders) {
-        console.log(`[SOCKET.IO] Cookies reçus du backend: ${setCookieHeaders.length} cookie(s)`);
-        // ✅ Transmettre les cookies au client
-        res.setHeader('Set-Cookie', setCookieHeaders);
-      }
-      // ✅ Logger le status code pour debug
-      console.log(`[SOCKET.IO] Response: ${proxyRes.statusCode} ${req.url}`);
-    },
-    onProxyReqWs: (proxyReq, req) => {
-      // ✅ Transmettre les cookies lors de l'upgrade WebSocket
-      if (req.headers.cookie) {
-        proxyReq.setHeader('Cookie', req.headers.cookie);
-        console.log(`[SOCKET.IO WS] Cookies transmis lors de l'upgrade`);
-      } else {
-        console.warn(`[SOCKET.IO WS] ⚠️ Aucun cookie lors de l'upgrade WebSocket`);
-      }
-      // ✅ S'assurer que les headers d'authentification sont transmis
-      if (req.headers.authorization) {
-        proxyReq.setHeader('Authorization', req.headers.authorization);
-        console.log(`[SOCKET.IO WS] Authorization header transmis`);
-      }
-      console.log(`[SOCKET.IO WS] Upgrade: ${req.url}`);
-    },
-    onError: (err, req, res) => {
-      console.error('[SOCKET.IO ERROR]:', err.message);
-      console.error('[SOCKET.IO ERROR] Request:', req.method, req.url);
-      // ✅ Retourner une erreur structurée au client
-      if (res && !res.headersSent) {
-        res.status(503).json({
-          error: 'Socket.IO proxy error',
-          message: err.message,
-        });
-      }
+    // ⚠️ v3 : `onProxyReq` / `onProxyRes` / `onError` / `onProxyReqWs` ne sont plus
+    // reconnus en option racine. On les déplace dans `on: { ... }`.
+    on: {
+      proxyReq: (proxyReq, req) => {
+        console.log('[SOCKET.IO PROXY] proxyReq appelé pour:', req.url);
+        if (req.headers.cookie) {
+          proxyReq.setHeader('Cookie', req.headers.cookie);
+          console.log(`[SOCKET.IO] Cookies transmis: ${req.headers.cookie.substring(0, 50)}...`);
+        } else {
+          console.warn(`[SOCKET.IO] ⚠️ Aucun cookie dans la requête`);
+          console.log(`[SOCKET.IO] Headers reçus:`, Object.keys(req.headers));
+        }
+        if (req.headers.authorization) {
+          proxyReq.setHeader('Authorization', req.headers.authorization);
+          console.log(`[SOCKET.IO] Authorization header transmis`);
+        }
+        if (req.headers.upgrade === 'websocket') {
+          proxyReq.setHeader('Upgrade', 'websocket');
+          console.log(`[SOCKET.IO] Upgrade header transmis: websocket`);
+        }
+        if (req.headers.connection) {
+          proxyReq.setHeader('Connection', req.headers.connection);
+          console.log(`[SOCKET.IO] Connection header transmis: ${req.headers.connection}`);
+        }
+        if (req.headers['sec-websocket-key']) {
+          proxyReq.setHeader('Sec-WebSocket-Key', req.headers['sec-websocket-key']);
+        }
+        if (req.headers['sec-websocket-version']) {
+          proxyReq.setHeader('Sec-WebSocket-Version', req.headers['sec-websocket-version']);
+        }
+        if (req.headers['sec-websocket-protocol']) {
+          proxyReq.setHeader('Sec-WebSocket-Protocol', req.headers['sec-websocket-protocol']);
+        }
+        if (req.headers['sec-websocket-extensions']) {
+          proxyReq.setHeader('Sec-WebSocket-Extensions', req.headers['sec-websocket-extensions']);
+        }
+        console.log(`[SOCKET.IO] ${req.method} ${req.url} -> ${proxyReq.path}`);
+      },
+      proxyRes: (proxyRes, req, res) => {
+        console.log('[SOCKET.IO PROXY] proxyRes appelé pour:', req.url, 'status:', proxyRes.statusCode);
+        const setCookieHeaders = proxyRes.headers['set-cookie'];
+        if (setCookieHeaders) {
+          console.log(`[SOCKET.IO] Cookies reçus du backend: ${setCookieHeaders.length} cookie(s)`);
+          res.setHeader('Set-Cookie', setCookieHeaders);
+        }
+        console.log(`[SOCKET.IO] Response: ${proxyRes.statusCode} ${req.url}`);
+      },
+      proxyReqWs: (proxyReq, req) => {
+        if (req.headers.cookie) {
+          proxyReq.setHeader('Cookie', req.headers.cookie);
+          console.log(`[SOCKET.IO WS] Cookies transmis lors de l'upgrade`);
+        } else {
+          console.warn(`[SOCKET.IO WS] ⚠️ Aucun cookie lors de l'upgrade WebSocket`);
+        }
+        if (req.headers.authorization) {
+          proxyReq.setHeader('Authorization', req.headers.authorization);
+          console.log(`[SOCKET.IO WS] Authorization header transmis`);
+        }
+        console.log(`[SOCKET.IO WS] Upgrade: ${req.url}`);
+      },
+      error: (err, req, res) => {
+        console.error('[SOCKET.IO ERROR]:', err.message);
+        console.error('[SOCKET.IO ERROR] Request:', req.method, req.url);
+        // res peut être un net.Socket lors d'un upgrade WS échoué → pas de status JSON dans ce cas.
+        if (res && typeof res.status === 'function' && !res.headersSent) {
+          res.status(503).json({
+            error: 'Socket.IO proxy error',
+            message: err.message,
+          });
+        }
+      },
     },
   });
   
@@ -229,7 +236,7 @@ module.exports = function (app) {
       target: `${BACKEND_URL}/api/gateway`,
       changeOrigin: true,
       secure: false,
-      logLevel: 'warn',
+      logger: console,
     })
   );
 
@@ -239,7 +246,7 @@ module.exports = function (app) {
       target: `${BACKEND_URL}/api/v1`,
       changeOrigin: true,
       secure: false,
-      logLevel: 'warn',
+      logger: console,
     })
   );
 
@@ -249,7 +256,7 @@ module.exports = function (app) {
       target: `${DEMO_BACKEND_URL}/api/v1`,
       changeOrigin: true,
       secure: false,
-      logLevel: 'warn',
+      logger: console,
     })
   );
 
@@ -261,7 +268,7 @@ module.exports = function (app) {
       target: BACKEND_URL,
       changeOrigin: true,
       secure: false,
-      logLevel: 'warn',
+      logger: console,
       pathRewrite: function (path) {
         return '/uploads' + path;
       },
@@ -276,7 +283,7 @@ module.exports = function (app) {
       target: BACKEND_URL,
       changeOrigin: true,
       secure: false,
-      logLevel: 'debug',
+      logger: console,
       timeout: 120000, // 120s timeout
       proxyTimeout: 120000, // 120s proxy timeout
       pathRewrite: function (path) {
@@ -286,24 +293,26 @@ module.exports = function (app) {
         console.log(`[API V1] pathRewrite: ${path} -> ${rewritten}`);
         return rewritten;
       },
-      onProxyReq: (proxyReq, req) => {
-        console.log(`[API V1] Proxying ${req.method} ${req.url} -> ${BACKEND_URL}${proxyReq.path}`);
-      },
-      onProxyRes: (proxyRes, req) => {
-        console.log(`[API V1] ${req.method} ${req.url} -> ${proxyRes.statusCode}`);
-      },
-      onError: (err, req, res) => {
-        // ✅ Gestion d'erreur améliorée pour 504 Gateway Timeout
-        console.error(`[API V1] Proxy error for ${req.method} ${req.url}:`, err.message);
-        if (res && !res.headersSent) {
-          const isRefused = err.code === 'ECONNREFUSED' || err.code === 'ETIMEDOUT';
-          res.status(isRefused ? 503 : 504).json({
-            error: isRefused ? 'Service temporairement indisponible' : 'Gateway Timeout',
-            message: `Backend (${BACKEND_URL}) non accessible. ` +
-              'Vérifiez: 1) docker compose up -d  2) docker compose ps (api doit être healthy)  3) curl http://127.0.0.1:5000/health',
-            code: err.code,
-          });
-        }
+      // v3 : événements regroupés sous `on:`
+      on: {
+        proxyReq: (proxyReq, req) => {
+          console.log(`[API V1] Proxying ${req.method} ${req.url} -> ${BACKEND_URL}${proxyReq.path}`);
+        },
+        proxyRes: (proxyRes, req) => {
+          console.log(`[API V1] ${req.method} ${req.url} -> ${proxyRes.statusCode}`);
+        },
+        error: (err, req, res) => {
+          console.error(`[API V1] Proxy error for ${req.method} ${req.url}:`, err.message);
+          if (res && typeof res.status === 'function' && !res.headersSent) {
+            const isRefused = err.code === 'ECONNREFUSED' || err.code === 'ETIMEDOUT';
+            res.status(isRefused ? 503 : 504).json({
+              error: isRefused ? 'Service temporairement indisponible' : 'Gateway Timeout',
+              message: `Backend (${BACKEND_URL}) non accessible. ` +
+                'Vérifiez: 1) docker compose up -d  2) docker compose ps (api doit être healthy)  3) curl http://127.0.0.1:5000/health',
+              code: err.code,
+            });
+          }
+        },
       },
     })
   );
@@ -317,16 +326,15 @@ module.exports = function (app) {
       changeOrigin: true,
       secure: false,
       ws: false, // ✅ Désactiver le support WebSocket pour ce proxy (webpack-dev-server utilise /ws pour le HMR)
-      logLevel: 'debug',
+      logger: console,
       timeout: 120000, // 120s timeout
       proxyTimeout: 120000, // 120s proxy timeout
-      // ✅ IMPORTANT: Exclure /ws pour que webpack-dev-server puisse l'utiliser pour le HMR
-      filter: function (pathname, _req) {
-        // Ne pas capturer /ws - webpack-dev-server en a besoin pour le HMR
+      // ✅ Exclure /ws pour que webpack-dev-server puisse l'utiliser pour le HMR
+      // ⚠️ v3 : option `filter` renommée en `pathFilter` (sinon ignorée).
+      pathFilter: function (pathname, _req) {
         if (pathname === '/ws' || pathname.startsWith('/ws/')) {
           return false;
         }
-        // Capturer toutes les autres requêtes qui commencent par /api
         return pathname.startsWith('/api');
       },
       // ✅ IMPORTANT: http-proxy-middleware supprime automatiquement le préfixe /api avant pathRewrite
@@ -334,36 +342,34 @@ module.exports = function (app) {
       // Il faut réajouter /api pour que le backend reçoive /api/shadow-mode/status
       // MAIS ne pas le faire pour /api/v1/* qui est déjà géré par le proxy /api/v1
       pathRewrite: function (path) {
-        // ✅ IMPORTANT: Ne jamais transformer /ws en /api/ws
-        // webpack-dev-server utilise /ws pour le HMR et ne doit pas être proxifié
+        // Garde-fou : si /ws arrive ici (ne devrait pas grâce au pathFilter), on ne le proxifie pas
         if (path === '/ws' || path.startsWith('/ws/')) {
-          console.warn(`[API PROXY] ⚠️ Tentative de proxifier /ws - cela ne devrait pas arriver (filtre devrait l'exclure)`);
-          return path; // Retourner tel quel (ne devrait jamais arriver grâce au filtre)
+          console.warn(`[API PROXY] ⚠️ Tentative de proxifier /ws - cela ne devrait pas arriver (pathFilter devrait l'exclure)`);
+          return path;
         }
-        // Si le path commence déjà par /api, le retourner tel quel (ne devrait pas arriver)
         if (path.startsWith('/api')) {
           return path;
         }
-        // Si le path commence par /v1, c'est géré par le proxy /api/v1, ne pas le modifier ici
         if (path.startsWith('/v1')) {
           return path;
         }
-        // Pour toutes les autres routes (/shadow-mode, etc.), réajouter /api
         return `/api${path}`;
       },
-      onProxyRes: (proxyRes, req) => {
-        console.log(`[API] ${req.method} ${req.url} -> ${proxyRes.statusCode}`);
-      },
-      onError: (err, req, res) => {
-        console.error(`[API] Proxy error for ${req.method} ${req.url}:`, err.message);
-        if (res && !res.headersSent) {
-          const isRefused = err.code === 'ECONNREFUSED' || err.code === 'ETIMEDOUT';
-          res.status(isRefused ? 503 : 504).json({
-            error: isRefused ? 'Service temporairement indisponible' : 'Gateway Timeout',
-            message: `Backend (${BACKEND_URL}) non accessible. Vérifiez: docker compose up -d`,
-            code: err.code,
-          });
-        }
+      on: {
+        proxyRes: (proxyRes, req) => {
+          console.log(`[API] ${req.method} ${req.url} -> ${proxyRes.statusCode}`);
+        },
+        error: (err, req, res) => {
+          console.error(`[API] Proxy error for ${req.method} ${req.url}:`, err.message);
+          if (res && typeof res.status === 'function' && !res.headersSent) {
+            const isRefused = err.code === 'ECONNREFUSED' || err.code === 'ETIMEDOUT';
+            res.status(isRefused ? 503 : 504).json({
+              error: isRefused ? 'Service temporairement indisponible' : 'Gateway Timeout',
+              message: `Backend (${BACKEND_URL}) non accessible. Vérifiez: docker compose up -d`,
+              code: err.code,
+            });
+          }
+        },
       },
     })
   );

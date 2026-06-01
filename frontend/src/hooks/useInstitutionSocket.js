@@ -103,8 +103,24 @@ export function useInstitutionSocket(institutionId) {
 
   const handleNewNotification = useCallback((data) => {
     console.log('[InstitutionSocket] new_notification:', data);
-    if (!mountedRef.current) return;
-    queryClient.invalidateQueries({ queryKey: institutionQueryKeys.notifications() });
+    if (!mountedRef.current || !data?.id) return;
+
+    queryClient.setQueryData(institutionQueryKeys.notifications(), (old) => {
+      if (!old) return old;
+      const list = old.notifications || [];
+      if (list.some((n) => n.id === data.id)) {
+        return old;
+      }
+      const incoming = {
+        ...data,
+        metadata: data.metadata ?? {},
+      };
+      return {
+        ...old,
+        notifications: [incoming, ...list].slice(0, 30),
+        unread_count: incoming.is_read ? old.unread_count : (old.unread_count || 0) + 1,
+      };
+    });
 
     const eventType = data?.event_type || data?.payload?.event_type;
     if (eventType === 'offer_accepted') {

@@ -1,7 +1,10 @@
 /**
- * État runtime partagé : erreurs de démarrage natif, dernier callback task, pending FGS.
- * Source unique pour bannière, QA panel et télémétrie P1.
+ * État runtime partagé : erreurs de démarrage natif, dernier callback task, pending FGS,
+ * mission/mode courants (consommés par reconcileTrackingRuntime + telémetrie P1).
+ * Source unique pour bannière, QA panel et observabilité.
  */
+
+import type { DriverTrackingMode } from "../runtimeContracts";
 
 export type PendingFgsStartState = {
   active: boolean;
@@ -10,11 +13,18 @@ export type PendingFgsStartState = {
   deferredAt?: number;
 };
 
+export type TrackingRuntimeState = {
+  missionId: number | null;
+  mode: DriverTrackingMode;
+};
+
 export type TrackingRuntimeSnapshot = {
   lastNativeStartError: string | null;
   lastNativeStartErrorAt: number | null;
   lastTaskInvokedAt: number | null;
   pendingFgsStart: PendingFgsStartState;
+  missionId: number | null;
+  mode: DriverTrackingMode;
 };
 
 type TrackingRuntimeListener = (snapshot: TrackingRuntimeSnapshot) => void;
@@ -25,6 +35,7 @@ let lastNativeStartError: string | null = null;
 let lastNativeStartErrorAt: number | null = null;
 let lastTaskInvokedAt: number | null = null;
 let pendingFgsStart: PendingFgsStartState = { active: false };
+let currentState: TrackingRuntimeState = { missionId: null, mode: "off" };
 
 function buildSnapshot(): TrackingRuntimeSnapshot {
   return {
@@ -32,6 +43,8 @@ function buildSnapshot(): TrackingRuntimeSnapshot {
     lastNativeStartErrorAt,
     lastTaskInvokedAt,
     pendingFgsStart: { ...pendingFgsStart },
+    missionId: currentState.missionId,
+    mode: currentState.mode,
   };
 }
 
@@ -94,6 +107,21 @@ export function clearPendingFgsStart(): void {
   notifyListeners();
 }
 
+export function getTrackingRuntimeState(): TrackingRuntimeState {
+  return { ...currentState };
+}
+
+export async function updateTrackingRuntimeState(
+  next: Partial<TrackingRuntimeState>
+): Promise<void> {
+  const merged: TrackingRuntimeState = { ...currentState, ...next };
+  if (merged.missionId === currentState.missionId && merged.mode === currentState.mode) {
+    return;
+  }
+  currentState = merged;
+  notifyListeners();
+}
+
 /** Appelé au boot (NativeCapabilitiesProvider) — réservé pour hydratation persistée future. */
 export async function hydrateTrackingRuntimeState(): Promise<void> {
   // no-op Sprint 1
@@ -105,5 +133,6 @@ export function __resetTrackingRuntimeForTests(): void {
   lastNativeStartErrorAt = null;
   lastTaskInvokedAt = null;
   pendingFgsStart = { active: false };
+  currentState = { missionId: null, mode: "off" };
   listeners.clear();
 }

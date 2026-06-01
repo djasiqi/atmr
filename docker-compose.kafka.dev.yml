@@ -8,6 +8,16 @@
 # Intégration lourde / multi-brokers : utiliser docker-compose.kafka.yml
 
 services:
+  # Override du producteur : n'active Kafka pour l'API QUE lorsque ce fichier est mergé.
+  # Sans ce bloc, atmr_api resterait en KAFKA_ENABLED=false (chemin synchrone) car
+  # backend/.env ne définit aucune variable Kafka. Ainsi `docker compose up` seul
+  # (sans ce fichier) ne tente jamais de joindre un broker absent.
+  atmr_api:
+    environment:
+      - KAFKA_ENABLED=true
+      - TRACKING_INGEST_ASYNC_ENABLED=true
+      - KAFKA_BOOTSTRAP_SERVERS=kafka-broker-1:29092
+
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
     hostname: zookeeper
@@ -28,6 +38,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
 
   kafka-broker-1:
     image: confluentinc/cp-kafka:7.6.0
@@ -73,6 +84,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 15
+    restart: unless-stopped
 
   kafka-topics-init:
     image: confluentinc/cp-kafka:7.6.0

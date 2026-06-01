@@ -201,6 +201,16 @@ export const formatLastSeen = (lastSeenSeconds) => {
 };
 
 export const getFreshnessStatus = (driver) => {
+  const trackingDisplay = String(driver?.tracking_display_status || '').toLowerCase();
+  if (
+    trackingDisplay === 'live' ||
+    trackingDisplay === 'stale' ||
+    trackingDisplay === 'degraded_constrained' ||
+    trackingDisplay === 'silent_wake_pending' ||
+    trackingDisplay === 'offline_unknown'
+  ) {
+    return trackingDisplay;
+  }
   const backendStatus = String(driver?.location_status || '').toLowerCase();
   if (backendStatus === 'live' || backendStatus === 'recent' || backendStatus === 'stale' || backendStatus === 'offline') {
     return backendStatus;

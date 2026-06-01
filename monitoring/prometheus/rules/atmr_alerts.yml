@@ -347,3 +347,134 @@ groups:
             3. Vérifier si certaines factures dépassent systématiquement les seuils (40 lignes ou 1500ms)
             4. Consulter les métriques invoice_pdf_rows et invoice_pdf_generation_ms pour diagnostiquer
           runbook_url: "https://docs.atmr.ch/runbooks/pdf-warnings"
+
+  # ==================== Notifications Push (P0 observabilité) ====================
+  - name: notifications_push
+    interval: 30s
+    rules:
+      - alert: NotificationDeliveryRateLow
+        expr: |
+          (
+            sum(rate(notifications_delivered_total[30m]))
+            / clamp_min(sum(rate(notifications_created_total[30m])), 0.001)
+          ) < 0.85
+        for: 15m
+        labels:
+          severity: warning
+          component: notifications
+        annotations:
+          summary: "Taux délivrabilité notifications < 85% (30m)"
+          description: "Seulement {{ $value | humanizePercentage }} des notifications créées sont accusées reçues côté mobile."
+
+      - alert: NotificationFCMCircuitBreakerOpen
+        expr: |
+          sum(increase(circuit_breaker_opened_total{service="fcm"}[10m])) > 0
+        for: 5m
+        labels:
+          severity: critical
+          component: notifications
+        annotations:
+          summary: "Circuit breaker FCM ouvert"
+          description: "FCM a ouvert le circuit breaker {{ $value }} fois en 10 minutes."
+
+      - alert: NotificationE2ELatencyHigh
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum(rate(notification_e2e_latency_seconds_bucket[10m])) by (le)
+          ) > 30
+        for: 10m
+        labels:
+          severity: warning
+          component: notifications
+        annotations:
+          summary: "Latence E2E notification p95 > 30s"
+          description: "p95 pipeline notification = {{ $value | humanizeDuration }}."
+
+      - alert: NotificationKafkaPublishStalled
+        expr: |
+          (
+            sum(rate(notifications_created_total[15m])) > 0.01
+          )
+          and (
+            sum(rate(notifications_sent_total{channel="push"}[15m])) == 0
+          )
+        for: 15m
+        labels:
+          severity: critical
+          component: notifications
+        annotations:
+          summary: "Notifications créées mais aucun envoi push (15m)"
+          description: "Pipeline bloqué entre création et envoi FCM/Kafka."
+
+  # ==================== Tracking Health Alerts ====================
+  - name: tracking_health
+    interval: 30s
+    rules:
+      - alert: TrackingStaleHigh
+        expr: |
+          (
+            sum(rate(driver_device_stale_fix_total[10m]))
+            /
+            clamp_min(sum(rate(driver_device_health_reports_total[10m])), 0.001)
+          ) > 0.20
+        for: 10m
+        labels:
+          severity: critical
+          component: tracking
+          team: mobile-platform
+          service: tracking
+        annotations:
+          summary: ">20% heartbeats device-health avec fix stale"
+          description: "Taux stale élevé sur les heartbeats device-health ({{ $value | humanizePercentage }})."
+          runbook_url: "https://grafana/d/driver-tracking-health"
+
+      - alert: TrackingOemStaleHigh
+        expr: |
+          (
+            sum by (manufacturer) (rate(driver_device_stale_fix_total[1h]))
+            /
+            clamp_min(sum by (manufacturer) (rate(driver_device_health_reports_total[1h])), 0.001)
+          ) > 0.40
+        for: 30m
+        labels:
+          severity: warning
+          component: tracking
+          team: mobile-platform
+          service: tracking
+        annotations:
+          summary: "Stale rate OEM > 40%"
+          description: "Constructeur {{ $labels.manufacturer }} au-dessus du seuil ({{ $value | humanizePercentage }})."
+          runbook_url: "https://grafana/d/driver-tracking-health"
+
+      - alert: TrackingSilentWakeLow
+        expr: |
+          (
+            sum(rate(silent_push_wake_total{result="acked"}[15m]))
+            /
+            clamp_min(sum(rate(silent_push_wake_total{result="sent"}[15m])), 0.001)
+          ) < 0.80
+        for: 15m
+        labels:
+          severity: warning
+          component: tracking
+          team: mobile-platform
+          service: tracking
+        annotations:
+          summary: "Wake success rate < 80%"
+          description: "Les silent push ne réveillent pas suffisamment le tracking mobile ({{ $value | humanizePercentage }} ack/sent)."
+          runbook_url: "https://grafana/d/driver-tracking-health"
+
+      - alert: TrackingDeviceHealthPipelineSilent
+        expr: |
+          absent_over_time(sum(rate(driver_device_health_reports_total[5m]))[10m:1m]) == 1
+        for: 5m
+        labels:
+          severity: critical
+          component: tracking
+          team: mobile-platform
+          service: tracking
+        annotations:
+          summary: "Pipeline device-health silencieux"
+          description: "Aucun heartbeat device-health reçu depuis 10 minutes."
+          runbook_url: "https://grafana/d/driver-tracking-health"

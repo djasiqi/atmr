@@ -15,6 +15,15 @@ logger = logging.getLogger(__name__)
 PUSH_DEDUP_PREFIX = "push:dedup:"
 PUSH_THROTTLE_PREFIX = "push:throttle:"
 
+# INCR + EXPIRE atomique (évite clé sans TTL si expire échoue après incr)
+_THROTTLE_LUA = """
+local count = redis.call('INCR', KEYS[1])
+if count == 1 then
+  redis.call('EXPIRE', KEYS[1], ARGV[1])
+end
+return count
+"""
+
 
 def _get_redis() -> Redis | None:
     try:
@@ -32,15 +41,33 @@ def should_skip_dedup(recipient_role: str, recipient_id: int, dedupe_key: str) -
         return False
     key = f"{PUSH_DEDUP_PREFIX}{recipient_role}:{recipient_id}:{dedupe_key}"
     try:
-        if redis_client.get(key):
+        # SET NX EX atomique — évite la race GET puis SETEX sous charge multi-worker
+        was_set = redis_client.set(key, "1", nx=True, ex=300)
+        if not was_set:
             logger.info(
                 "event=push_deduped recipient_role=%s recipient_id=%s dedupe_key=%s",
                 recipient_role,
                 recipient_id,
                 dedupe_key,
             )
+            try:
+                from services.notifications.metrics import record_dedup_hit
+                from services.notifications.notification_pipeline_observability import (
+                    log_notification_pipeline_event,
+                )
+
+                record_dedup_hit()
+                log_notification_pipeline_event(
+                    "notification_deduped",
+                    driver_id=recipient_id if recipient_role == "driver" else None,
+                    pipeline_stage="dedup",
+                    dedupe_key=dedupe_key,
+                    recipient_role=recipient_role,
+                    recipient_id=recipient_id,
+                )
+            except Exception:
+                pass
             return True
-        redis_client.setex(key, 300, "1")  # TTL 5 min
         return False
     except Exception as e:
         logger.warning("dedup check failed: %s. Continuing.", e)
@@ -60,10 +87,8 @@ def should_skip_throttle(
         return False
     key = f"{PUSH_THROTTLE_PREFIX}{recipient_role}:{recipient_id}:{scope_key}"
     try:
-        raw_count = redis_client.incr(key)
+        raw_count = redis_client.eval(_THROTTLE_LUA, 1, key, window_s)
         count = cast(int, raw_count) if raw_count is not None else 0
-        if count == 1:
-            redis_client.expire(key, window_s)
         if count > max_per_window:
             logger.info(
                 "event=push_throttled recipient_role=%s recipient_id=%s scope=%s count=%s max=%s",
@@ -73,6 +98,25 @@ def should_skip_throttle(
                 count,
                 max_per_window,
             )
+            try:
+                from services.notifications.metrics import record_throttle_block
+                from services.notifications.notification_pipeline_observability import (
+                    log_notification_pipeline_event,
+                )
+
+                record_throttle_block()
+                log_notification_pipeline_event(
+                    "notification_throttled",
+                    driver_id=recipient_id if recipient_role == "driver" else None,
+                    pipeline_stage="throttle",
+                    scope_key=scope_key,
+                    count=count,
+                    max_per_window=max_per_window,
+                    recipient_role=recipient_role,
+                    recipient_id=recipient_id,
+                )
+            except Exception:
+                pass
             return True
         return False
     except Exception as e:

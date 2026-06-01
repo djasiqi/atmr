@@ -77,6 +77,7 @@ _TRACKING_KAFKA_DLQ = None
 _TRACKING_KAFKA_REBALANCE = None
 _TRACKING_PROCESSED_FANOUT_FAILURES = None
 _TRACKING_KAFKA_E2E_LATENCY = None
+_DRIVER_DEVICE_HEALTH_RECEIVED = None
 
 if Counter is not None:
     _DEDUP_SKIPPED = Counter(
@@ -146,6 +147,14 @@ if Counter is not None:
         "tracking_processed_fanout_failures_total",
         "Échecs traitement message dans le consumer driver.location.processed → fanout",
         ["error_type"],
+    )
+    _DRIVER_DEVICE_HEALTH_RECEIVED = Counter(
+        "driver_device_health_received_total",
+        (
+            "Heartbeats device-status reçus du mobile (canal santé app, séparé "
+            "du GPS)"
+        ),
+        ["constraint_reason"],
     )
 
 if Histogram is not None:
@@ -398,3 +407,31 @@ def observe_tracking_kafka_e2e_latency(*, latency_ms: float) -> None:
     if latency_ms < 0:
         return
     _TRACKING_KAFKA_E2E_LATENCY.observe(float(latency_ms) / 1000.0)
+
+
+# Cardinalité bornée : on n'accepte qu'un petit jeu de raisons connues côté
+# mobile, le reste retombe sur "_unknown" (évite l'explosion des labels par
+# constraint_reason inventés côté client).
+_KNOWN_CONSTRAINT_REASONS: frozenset[str] = frozenset(
+    {
+        "",
+        "samsung_battery_optimized",
+        "battery_optimized",
+        "doze",
+        "permission_revoked",
+        "fg_permission_denied",
+        "bg_permission_denied",
+        "gps_provider_disabled",
+        "fgs_killed",
+        "low_fix_success_rate",
+    }
+)
+
+
+def inc_driver_device_health_received(*, constraint_reason: str | None) -> None:
+    """Incrémente le compteur des heartbeats device-status reçus."""
+    if not _metrics_enabled() or _DRIVER_DEVICE_HEALTH_RECEIVED is None:
+        return
+    raw = (constraint_reason or "").strip()
+    cr = raw if raw in _KNOWN_CONSTRAINT_REASONS else "_unknown"
+    _DRIVER_DEVICE_HEALTH_RECEIVED.labels(constraint_reason=cr).inc()

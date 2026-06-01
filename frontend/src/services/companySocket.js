@@ -14,6 +14,8 @@ import {
 import { companyReconnectCircuitBreaker } from './reconnectCircuitBreaker';
 import { bindUrgentAlertSoundListeners } from '../utils/urgentAlertSound';
 
+const isDevelopment = process.env.NODE_ENV === 'development';
+
 let socket = null;
 let connectPromise = null;
 /** Incrémenté à chaque create/destroy pour invalider callbacks async obsolètes. */
@@ -234,6 +236,7 @@ if (process.env.NODE_ENV === 'production' && typeof window !== 'undefined') {
 function buildSocketOptions() {
   const jitterDelay = Math.random() * 100;
   const jitterMax = Math.random() * 500;
+  const hasAccessToken = Boolean(getAccessToken());
 
   return {
     ...SOCKET_CONFIG,
@@ -249,6 +252,14 @@ function buildSocketOptions() {
         cb({});
       }
     },
+    // Dev-only metadata sent by Socket.IO's query string. This makes it easy to
+    // identify whether the browser even starts the Engine.IO handshake.
+    query: isDevelopment
+      ? {
+          client: 'company-web',
+          has_token: hasAccessToken ? '1' : '0',
+        }
+      : undefined,
   };
 }
 
@@ -326,29 +337,80 @@ function attachSocketHandlers(targetSocket, generation, { onFirstConnectError } 
       onFirstConnectError(err);
     }
     if (typeof window !== 'undefined') {
-      window.dispatchEvent(
-        new CustomEvent('socket_connection_rejected', {
-          detail: { message: msg, code: msg, originalError: err },
-        })
-      );
+      // On ne dispatch `socket_connection_rejected` (qui déclenche un toast utilisateur)
+      // que pour les erreurs identifiables comme un refus d'auth/accès côté backend.
+      // Les erreurs de transport (websocket error, xhr poll error, timeout, transport
+      // close, ECONNRESET…) doivent rester silencieuses : Socket.IO reconnecte tout seul
+      // et le circuit breaker remontera l'état via COMPANY_SOCKET_STATE_EVENT en cas
+      // d'échec persistant. Sans ce filtre, un simple hoquet réseau produisait une
+      // cascade de toasts "auth refusée".
+      const authCodes = [
+        'AUTH_REQUIRED',
+        'AUTH_INVALID',
+        'TOKEN_EXPIRED',
+        'AUTH_FORBIDDEN',
+        'COMPANY_NOT_FOUND',
+        'DRIVER_OR_COMPANY_NOT_FOUND',
+        'RATE_LIMIT',
+      ];
+      const isAuthLike = authCodes.some((c) => msg.includes(c));
+      if (isAuthLike) {
+        window.dispatchEvent(
+          new CustomEvent('socket_connection_rejected', {
+            detail: { message: msg, code: msg, originalError: err },
+          })
+        );
+      } else {
+        // Événement séparé pour la télémétrie / debugging sans déclencher de toast utilisateur.
+        window.dispatchEvent(
+          new CustomEvent('socket_connect_transport_error', {
+            detail: { message: msg, code: msg, originalError: err },
+          })
+        );
+      }
     }
   });
 
   targetSocket.on('unauthorized', (err) => {
     if (!isSocketGenerationActive(generation)) return;
     const reason = err?.reason || err?.data?.reason;
-    if (reason === 'token_expired') {
+    if (reason !== 'token_expired') return;
+
+    // ⚠️ Ancien comportement (cassé): on supprimait `authToken`/`refreshToken`
+    // puis on reconnectait. Conséquence: handshake suivant avec `auth: {}`,
+    // backend rejette AUTH_REQUIRED, boucle d'échec, badge reste sur
+    // "Jamais connecté" même après que l'utilisateur ait rafraîchi son token
+    // via une requête REST.
+    //
+    // Nouveau comportement: déléguer le rafraîchissement à l'intercepteur
+    // axios (apiClient) via un ping authentifié léger. L'intercepteur 401
+    // sait gérer la rotation /auth/refresh-token et stocke le nouveau token
+    // dans les bonnes clés scopées. Au succès, on relance la connexion socket
+    // avec le nouveau token via le callback `auth` de buildSocketOptions().
+    void (async () => {
+      let refreshed = false;
       try {
-        localStorage.removeItem('authToken');
-        localStorage.removeItem('refreshToken');
-      } catch {}
+        // Import paresseux pour éviter une dépendance circulaire au chargement.
+        const mod = await import('../utils/apiClient');
+        const apiClient = mod?.default;
+        if (apiClient && typeof apiClient.get === 'function') {
+          // GET très léger. Si le token est expiré, l'intercepteur axios
+          // déclenche le refresh puis rejoue la requête; sinon il propage.
+          await apiClient.get('/companies/me');
+          refreshed = true;
+        }
+      } catch {
+        refreshed = false;
+      }
+      if (!isSocketGenerationActive(generation)) return;
+      if (!refreshed) return;
       try {
         if (targetSocket.io?.opts) {
           targetSocket.io.opts.reconnection = true;
         }
         targetSocket.connect();
       } catch {}
-    }
+    })();
   });
 
   eventSubscribers.forEach((_, event) => {
@@ -389,6 +451,15 @@ export function getCompanySocket() {
         const activeGeneration = nextSocketGeneration();
         const socketOptions = buildSocketOptions();
         const socketUrl = getSocketUrl();
+        if (isDevelopment) {
+          // eslint-disable-next-line no-console
+          console.info('[CompanySocket] creating socket', {
+            socketUrl,
+            path: socketOptions.path,
+            transports: socketOptions.transports,
+            hasAccessToken: Boolean(getAccessToken()),
+          });
+        }
         socket = io(socketUrl, socketOptions);
         attachSocketHandlers(socket, activeGeneration, {
           onFirstConnectError: settleReject,
@@ -404,6 +475,9 @@ export function getCompanySocket() {
         };
 
         socket.on('connect', onInitialConnect);
+        if (!socket.connected) {
+          socket.connect();
+        }
 
         if (socket.connected) {
           socket.off('connect', onInitialConnect);

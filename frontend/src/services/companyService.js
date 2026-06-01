@@ -364,6 +364,7 @@ export const fetchCompanyDriversCanonical = async () => {
       last_seen_seconds: loc.last_seen_seconds ?? drv.last_seen_seconds ?? null,
       location_status: loc.location_status ?? drv.location_status ?? null,
       presence_status: loc.presence_status ?? drv.presence_status ?? null,
+      device_health: loc.device_health ?? drv.device_health ?? null,
       location_mode: loc.location_mode ?? drv.location_mode ?? null,
       recorded_at: loc.recorded_at ?? drv.recorded_at ?? null,
       received_at: loc.received_at ?? drv.received_at ?? null,
@@ -381,7 +382,21 @@ export const fetchCompanyDriversCanonical = async () => {
  */
 export const createDriver = async (driverData) => {
   try {
-    const { data } = await apiClient.post('/companies/me/drivers/create', driverData);
+    // Forcer un JSON strict pour éviter les erreurs backend "invalid_json"
+    // lorsque le body est interprété avec un content-type ambigu.
+    const sanitizedPayload = Object.fromEntries(
+      Object.entries(driverData || {}).filter(([, value]) => value !== undefined)
+    );
+    const { data } = await apiClient.post(
+      '/companies/me/drivers/create',
+      JSON.stringify(sanitizedPayload),
+      {
+        headers: {
+          'Content-Type': 'application/json; charset=utf-8',
+          Accept: 'application/json; charset=utf-8',
+        },
+      }
+    );
     return data;
   } catch (error) {
     // Améliorer le message d'erreur pour le débogage

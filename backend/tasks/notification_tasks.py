@@ -211,16 +211,41 @@ def send_push_notification_task(
 
             # ✅ FIX: Extraire les données AVANT de fermer la session DB
             # pour éviter les connexions stale pendant les opérations longues (push)
-            device_tokens_data = [
-                {
+            #
+            # P1 stabilisation notifs : dédup par `token` (et secondairement par
+            # `device_id`). Plusieurs lignes `device_tokens.is_active=true`
+            # peuvent partager le même token push (rotation device_id, réinstall
+            # app). Sans dédup, on envoyait N copies du MÊME message au même
+            # device → notifications visiblement dupliquées côté utilisateur.
+            # On garde la ligne la plus récente par token.
+            _seen_tokens: dict[str, dict[str, Any]] = {}
+            for dt in device_tokens_raw:
+                if not dt.token:
+                    continue
+                candidate = {
                     "id": dt.id,
                     "token": dt.token,
+                    "device_id": getattr(dt, "device_id", None),
                     "platform": getattr(dt, "platform", None),
                     "provider": getattr(dt, "provider", "expo"),
+                    "updated_at": getattr(dt, "updated_at", None),
                 }
-                for dt in device_tokens_raw
-                if dt.token
-            ]
+                existing = _seen_tokens.get(dt.token)
+                if existing is None:
+                    _seen_tokens[dt.token] = candidate
+                    continue
+                cur_updated = existing.get("updated_at")
+                new_updated = candidate.get("updated_at")
+                if new_updated and (not cur_updated or new_updated > cur_updated):
+                    _seen_tokens[dt.token] = candidate
+            device_tokens_data = list(_seen_tokens.values())
+            if len(device_tokens_data) < len(device_tokens_raw):
+                logger.info(
+                    "[notification_task] dedup tokens driver=%s before=%s after=%s",
+                    driver_id,
+                    len(device_tokens_raw),
+                    len(device_tokens_data),
+                )
 
             # ✅ FIX: Fermer la session DB AVANT les opérations longues (push avec retries)
             # Cela évite les erreurs "server closed the connection unexpectedly"

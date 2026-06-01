@@ -265,22 +265,34 @@ class RefreshTokenService:
         except Exception:
             pass  # Ne pas bloquer si métriques indisponibles
 
-    def store_token(self, user_id: int, token: str) -> None:
+    def store_token(
+        self,
+        user_id: int,
+        token: str,
+        ttl_seconds: int | None = None,
+    ) -> None:
         """Stocke un nouveau token actif.
 
         Args:
             user_id: ID de l'utilisateur propriétaire du token
             token: Le refresh token JWT en clair
+            ttl_seconds: Durée de vie spécifique en secondes pour ce token. Si
+                ``None``, utilise ``JWT_REFRESH_TOKEN_EXPIRES`` (compatibilité
+                rétro). Permet d'aligner le TTL Redis sur l'expiration JWT
+                effective (ex: refresh token court pour remember_me=False).
         """
         import time
 
         token_hash = self._hash_token(token)
 
-        try:
-            refresh_expires_delta = current_app.config["JWT_REFRESH_TOKEN_EXPIRES"]
-            ttl = int(refresh_expires_delta.total_seconds())
-        except Exception:
-            ttl = 30 * 24 * 3600
+        if ttl_seconds is not None and ttl_seconds > 0:
+            ttl = int(ttl_seconds)
+        else:
+            try:
+                refresh_expires_delta = current_app.config["JWT_REFRESH_TOKEN_EXPIRES"]
+                ttl = int(refresh_expires_delta.total_seconds())
+            except Exception:
+                ttl = 30 * 24 * 3600
 
         self.redis_client.setex(
             f"{self.active_tokens_prefix}{token_hash}",

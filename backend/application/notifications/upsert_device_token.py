@@ -13,6 +13,49 @@ def _normalize_provider(token: str, provider: str | None) -> str:
     return "fcm" if not token.startswith("ExponentPushToken") else "expo"
 
 
+def _deactivate_other_rows_with_same_token(
+    *,
+    driver_id: int | None,
+    company_id: int | None,
+    token: str,
+    keep_row_id: int | None,
+) -> int:
+    """Désactive toutes les autres lignes actives portant le même `token` pour l'owner.
+
+    Cas réel : un même token FCM/Expo peut se retrouver attaché à plusieurs
+    `device_id` (réinstall app, rotation Expo/Installation ID, etc.). On garde
+    une seule ligne active par `token` pour éviter le fan-out qui multipliait
+    les notifications. La ligne conservée est celle passée via `keep_row_id`
+    (l'upsert courant).
+    """
+    if not token:
+        return 0
+    if driver_id is None and company_id is None:
+        return 0
+    q = DeviceToken.query.filter(
+        DeviceToken.token == token,
+        DeviceToken.is_active.is_(True),
+    )
+    if driver_id is not None:
+        q = q.filter(DeviceToken.driver_id == driver_id)
+    elif company_id is not None:
+        q = q.filter(DeviceToken.company_id == company_id)
+    if keep_row_id is not None:
+        q = q.filter(DeviceToken.id != keep_row_id)
+    count = q.update({"is_active": False}, synchronize_session=False)
+    count = int(count or 0)
+    if count > 0:
+        app_logger.info(
+            "[push-token] Désactivation %s ligne(s) doublon(s) du même token "
+            "owner driver=%s company=%s keep_row=%s",
+            count,
+            driver_id,
+            company_id,
+            keep_row_id,
+        )
+    return count
+
+
 def upsert_device_token(
     *,
     driver_id: int | None = None,
@@ -89,6 +132,12 @@ def upsert_device_token(
             row.driver_id = driver_id
         if company_id is not None:
             row.company_id = company_id
+        _deactivate_other_rows_with_same_token(
+            driver_id=driver_id,
+            company_id=company_id,
+            token=token,
+            keep_row_id=row.id,
+        )
         app_logger.info(
             "[push-token] Token mis à jour owner driver=%s company=%s device_id=%s provider=%s",
             driver_id,
@@ -110,6 +159,13 @@ def upsert_device_token(
     row.updated_at = now
     row.last_seen_at = now
     db.session.add(row)
+    db.session.flush()
+    _deactivate_other_rows_with_same_token(
+        driver_id=driver_id,
+        company_id=company_id,
+        token=token,
+        keep_row_id=row.id,
+    )
     app_logger.info(
         "[push-token] Nouveau token owner driver=%s company=%s device_id=%s provider=%s",
         driver_id,

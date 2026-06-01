@@ -62,6 +62,7 @@ export function mergeDriverLiveUpdate(driver, update, fromLiveState) {
   const locationStatus = update.location_status ?? driver.location_status ?? null;
   const presenceStatus = update.presence_status ?? driver.presence_status ?? null;
   const status = fromLiveState ? update.status ?? driver.status : driver.status ?? update.status;
+  const deviceHealth = update.device_health ?? driver.device_health ?? null;
 
   return {
     ...driver,
@@ -71,6 +72,7 @@ export function mergeDriverLiveUpdate(driver, update, fromLiveState) {
     last_seen_seconds: update.last_seen_seconds ?? driver.last_seen_seconds ?? null,
     location_status: locationStatus,
     presence_status: presenceStatus,
+    device_health: deviceHealth,
     status,
     mission_status: fromLiveState
       ? update.mission_status ?? driver.mission_status ?? null

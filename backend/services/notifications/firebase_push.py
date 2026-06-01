@@ -11,78 +11,35 @@ from __future__ import annotations
 import json
 import os
 import random
-import threading
 import time
 from pathlib import Path
 from typing import Any
 
 from ext import app_logger
+from services.notifications.fcm_redis_circuit_breaker import (
+    allow_fcm_request,
+    record_fcm_non_retryable_failure,
+    record_fcm_retryable_failure,
+    record_fcm_success,
+)
 
 _firebase_initialized = False
 
 FCM_RETRY_MAX_ATTEMPTS = max(1, int(os.getenv("FCM_RETRY_MAX_ATTEMPTS", "3")))
 FCM_RETRY_BASE_DELAY_MS = max(100, int(os.getenv("FCM_RETRY_BASE_DELAY_MS", "2000")))
-FCM_CIRCUIT_BREAKER_FAILURE_THRESHOLD = max(
-    1, int(os.getenv("FCM_CIRCUIT_BREAKER_FAILURE_THRESHOLD", "5"))
-)
-FCM_CIRCUIT_BREAKER_OPEN_SECONDS = max(
-    1, int(os.getenv("FCM_CIRCUIT_BREAKER_OPEN_SECONDS", "60"))
-)
 
 
-class _InMemoryCircuitBreaker:
-    """Circuit breaker local au process pour appels FCM."""
-
-    def __init__(self, *, failure_threshold: int, open_seconds: int):
-        self._failure_threshold = failure_threshold
-        self._open_seconds = open_seconds
-        self._lock = threading.Lock()
-        self._opened_until_ts = 0.0
-        self._consecutive_retryable_failures = 0
-        self._half_open_probe_in_flight = False
-
-    def allow_request(self) -> bool:
-        now = time.time()
-        with self._lock:
-            if self._opened_until_ts > now:
-                return False
-            if self._opened_until_ts > 0:
-                # Passage en half-open (max 1 probe simultané)
-                if self._half_open_probe_in_flight:
-                    return False
-                self._half_open_probe_in_flight = True
-                return True
-            return True
-
-    def record_success(self) -> None:
-        with self._lock:
-            self._opened_until_ts = 0.0
-            self._consecutive_retryable_failures = 0
-            self._half_open_probe_in_flight = False
-
-    def record_retryable_failure(self) -> None:
-        now = time.time()
-        with self._lock:
-            if self._half_open_probe_in_flight:
-                self._half_open_probe_in_flight = False
-            self._consecutive_retryable_failures += 1
-            if self._consecutive_retryable_failures >= self._failure_threshold:
-                self._opened_until_ts = now + self._open_seconds
-                self._consecutive_retryable_failures = 0
-                app_logger.warning(
-                    "[fcm] Circuit breaker OPEN for %ss after retryable failures",
-                    self._open_seconds,
-                )
-
-    def record_non_retryable_failure(self) -> None:
-        with self._lock:
-            self._half_open_probe_in_flight = False
+def fcm_data_value(value: Any) -> str:
+    """Sérialise une valeur pour le bloc data FCM (JSON pour structures)."""
+    if value is None:
+        return ""
+    if isinstance(value, (dict, list, tuple)):
+        return json.dumps(value, default=str, ensure_ascii=False)
+    return str(value)
 
 
-_fcm_circuit_breaker = _InMemoryCircuitBreaker(
-    failure_threshold=FCM_CIRCUIT_BREAKER_FAILURE_THRESHOLD,
-    open_seconds=FCM_CIRCUIT_BREAKER_OPEN_SECONDS,
-)
+def _fcm_str_data(data: dict[str, Any] | None) -> dict[str, str]:
+    return {k: fcm_data_value(v) for k, v in (data or {}).items()}
 
 
 def _fcm_generic_error_result(exc: BaseException) -> dict[str, Any]:
@@ -139,7 +96,7 @@ def _is_retryable_fcm_exception(exc: BaseException) -> bool:
 def _send_with_retry(msg: Any, *, platform: str) -> dict[str, Any]:
     from firebase_admin import messaging
 
-    if not _fcm_circuit_breaker.allow_request():
+    if not allow_fcm_request():
         return {
             "ok": False,
             "error": "circuit_breaker_open",
@@ -150,26 +107,26 @@ def _send_with_retry(msg: Any, *, platform: str) -> dict[str, Any]:
     for attempt in range(FCM_RETRY_MAX_ATTEMPTS):
         try:
             message_id = messaging.send(msg)
-            _fcm_circuit_breaker.record_success()
+            record_fcm_success()
             app_logger.info("[fcm] %s push sent: %s", platform, message_id)
             return {"ok": True, "message_id": message_id}
         except messaging.UnregisteredError:
-            _fcm_circuit_breaker.record_non_retryable_failure()
+            record_fcm_non_retryable_failure()
             return {"ok": False, "error": "token_unregistered", "token_invalid": True}
         except messaging.SenderIdMismatchError:
-            _fcm_circuit_breaker.record_non_retryable_failure()
+            record_fcm_non_retryable_failure()
             return {"ok": False, "error": "sender_id_mismatch", "token_invalid": True}
         except Exception as e:
             last_exception = e
             retryable = _is_retryable_fcm_exception(e)
             if not retryable:
-                _fcm_circuit_breaker.record_non_retryable_failure()
+                record_fcm_non_retryable_failure()
                 app_logger.exception("[fcm] %s push failed (non retryable)", platform)
                 return _fcm_generic_error_result(e)
 
             is_last_attempt = attempt >= (FCM_RETRY_MAX_ATTEMPTS - 1)
             if is_last_attempt:
-                _fcm_circuit_breaker.record_retryable_failure()
+                record_fcm_retryable_failure()
                 app_logger.warning(
                     "[fcm] %s push failed after %s retry attempts: %s",
                     platform,
@@ -265,20 +222,46 @@ def send_fcm_android(
     data: dict[str, Any] | None = None,
     channel_id: str = "missions_v2",
 ) -> dict[str, Any]:
-    """Send data-only FCM message for Android (background handler + Notifee)."""
+    """Send FCM message for Android.
+
+    - title/body non vides : notification visible (Android Notification block + data).
+    - title/body vides : message data-only (silencieux). Évite tout fallback
+      générique type "Liri / Mise à jour mission" qui pollue le tiroir système.
+    """
     if not _init_firebase():
         return {"ok": False, "error": "Firebase not initialized"}
 
     from firebase_admin import messaging
 
-    str_data = {k: str(v) for k, v in (data or {}).items()}
-    str_data.update({"title": title, "body": body, "channelId": channel_id})
+    str_data = _fcm_str_data(data)
+    str_data.update({"channelId": channel_id})
+    if title:
+        str_data["title"] = title
+    if body:
+        str_data["body"] = body
 
-    msg = messaging.Message(
-        token=token,
-        data=str_data,
-        android=messaging.AndroidConfig(priority="high"),
-    )
+    has_display = bool(title) or bool(body)
+
+    if has_display:
+        msg = messaging.Message(
+            token=token,
+            notification=messaging.Notification(title=title, body=body),
+            data=str_data,
+            android=messaging.AndroidConfig(
+                priority="high",
+                notification=messaging.AndroidNotification(
+                    channel_id=channel_id,
+                    sound="default",
+                ),
+            ),
+        )
+    else:
+        msg = messaging.Message(
+            token=token,
+            data=str_data,
+            android=messaging.AndroidConfig(priority="high"),
+        )
+
     result = _send_with_retry(msg, platform="Android")
     if result.get("error") == "token_unregistered":
         app_logger.warning("[fcm] Android token unregistered: %s...", token[:20])
@@ -293,25 +276,45 @@ def send_fcm_ios(
     body: str,
     data: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Send notification+data FCM message for iOS (system tray display)."""
+    """Send FCM message for iOS.
+
+    - title/body non vides : notification visible (alerte APNs priorité 10).
+    - title/body vides : message data-only (content-available, priorité 5).
+      Évite l'affichage d'une notif vide côté iOS.
+    """
     if not _init_firebase():
         return {"ok": False, "error": "Firebase not initialized"}
 
     from firebase_admin import messaging
 
-    str_data = {k: str(v) for k, v in (data or {}).items()}
+    str_data = _fcm_str_data(data)
+    if title:
+        str_data["title"] = title
+    if body:
+        str_data["body"] = body
 
-    msg = messaging.Message(
-        token=token,
-        notification=messaging.Notification(title=title, body=body),
-        data=str_data,
-        apns=messaging.APNSConfig(
-            headers={"apns-push-type": "alert", "apns-priority": "10"},
-            payload=messaging.APNSPayload(
-                aps=messaging.Aps(sound="default"),
+    has_display = bool(title) or bool(body)
+
+    if has_display:
+        msg = messaging.Message(
+            token=token,
+            notification=messaging.Notification(title=title, body=body),
+            data=str_data,
+            apns=messaging.APNSConfig(
+                headers={"apns-push-type": "alert", "apns-priority": "10"},
+                payload=messaging.APNSPayload(aps=messaging.Aps(sound="default")),
             ),
-        ),
-    )
+        )
+    else:
+        msg = messaging.Message(
+            token=token,
+            data=str_data,
+            apns=messaging.APNSConfig(
+                headers={"apns-push-type": "background", "apns-priority": "5"},
+                payload=messaging.APNSPayload(aps=messaging.Aps(content_available=True)),
+            ),
+        )
+
     result = _send_with_retry(msg, platform="iOS")
     if result.get("error") == "token_unregistered":
         app_logger.warning("[fcm] iOS token unregistered: %s...", token[:20])
@@ -335,7 +338,7 @@ def send_fcm_silent(
 
     from firebase_admin import messaging
 
-    str_data = {"type": "silent_update", **{k: str(v) for k, v in (data or {}).items()}}
+    str_data = {"type": "silent_update", **_fcm_str_data(data)}
 
     apns_config = None
     android_config = None

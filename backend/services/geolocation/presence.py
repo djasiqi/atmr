@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 
 LocationMode = str
 LocationStatus = str
@@ -8,6 +9,11 @@ PresenceStatus = str
 
 MISSION_LIVE_THRESHOLDS = (20, 90, 300)  # live, recent, stale upper bounds
 AVAILABILITY_THRESHOLDS = (90, 300, 900)
+
+DEVICE_HEALTH_FRESH_SEC = 120
+"""Fenêtre de fraîcheur du heartbeat device-status pour qu'il puisse
+overrider la présence (>= 120 s : on retombe sur le calcul standard, comme
+si aucun health n'était disponible)."""
 
 
 # Fraîcheur REST (last_seen) : ``resolve_location_freshness_timestamp`` dans
@@ -70,3 +76,71 @@ def presence_status_from_location_status(location_status: str) -> PresenceStatus
     if location_status == "stale":
         return "degraded"
     return "offline"
+
+
+def _is_device_health_fresh(
+    device_health: dict[str, Any] | None,
+    *,
+    now_ms: int | None = None,
+    fresh_sec: int = DEVICE_HEALTH_FRESH_SEC,
+) -> bool:
+    """Vrai si le heartbeat device-status est arrivé il y a moins de ``fresh_sec``."""
+    if not device_health:
+        return False
+    raw = device_health.get("last_heartbeat_at")
+    try:
+        last_ms = int(raw) if raw is not None else None
+    except (TypeError, ValueError):
+        return False
+    if last_ms is None or last_ms <= 0:
+        return False
+    ref_ms = (
+        int(now_ms)
+        if isinstance(now_ms, (int, float))
+        else int(datetime.now(UTC).timestamp() * 1000)
+    )
+    age_sec = max(0, (ref_ms - last_ms) / 1000.0)
+    return age_sec < float(fresh_sec)
+
+
+def _has_device_constraint(device_health: dict[str, Any]) -> bool:
+    """Vrai si le device_health signale une contrainte OEM / permission."""
+    if device_health.get("battery_optimized") is True:
+        return True
+    reason = device_health.get("constraint_reason")
+    return bool(isinstance(reason, str) and reason.strip())
+
+
+def apply_device_health_override(
+    presence_status: PresenceStatus,
+    location_status: LocationStatus,
+    device_health: dict[str, Any] | None,
+    *,
+    now_ms: int | None = None,
+    fresh_sec: int = DEVICE_HEALTH_FRESH_SEC,
+) -> tuple[PresenceStatus, LocationStatus]:
+    """Override "app vivante mais GPS bloqué" → ``degraded_constrained``.
+
+    Règle :
+
+    * si ``presence_status`` est ``offline`` ou ``degraded``,
+    * ET le ``device_health`` est récent (heartbeat < ``fresh_sec``),
+    * ET le device signale une contrainte (``battery_optimized=True`` ou
+      ``constraint_reason`` non vide),
+
+    on remplace le couple ``(presence_status, location_status)`` par
+    ``("degraded_constrained", "degraded_constrained")``. Sinon on
+    retourne le couple inchangé (passe-through strict — c'est ce qui
+    garantit "si device_health absent, comportement identique à avant").
+    """
+    if presence_status not in {"offline", "degraded"}:
+        return presence_status, location_status
+    if not device_health:
+        return presence_status, location_status
+    if not _is_device_health_fresh(
+        device_health, now_ms=now_ms, fresh_sec=fresh_sec
+    ):
+        return presence_status, location_status
+    if not _has_device_constraint(device_health):
+        return presence_status, location_status
+    return "degraded_constrained", "degraded_constrained"

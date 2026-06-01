@@ -1,0 +1,18 @@
+--- docker inspect Cmd/Args ---
+[/app/docker-entrypoint.sh] [-- /app/docker-entrypoint.sh]
+--- ps gunicorn ---
+--- worker count ---
+0
+--- env Gunicorn/SocketIO ---
+6
+gevent
+180
+gevent
+--- DATABASE_URL (masque) ---
+postgresql+psycopg2://***@postgres:5432/atmr
+postgresql+psycopg2://***@postgres:5432/atmr
+--- drivername ---
+--- psycogreen ---
+psycogreen ABSENT
+--- gunicorn.conf.py in container ---
+ABSENT

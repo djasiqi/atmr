@@ -1,0 +1,1083 @@
+backend-1  | [2026-05-28 18:59:46 +0000] [7] [CRITICAL] WORKER TIMEOUT (pid:84)
+backend-1  | 172.18.0.2 - - [28/May/2026:18:59:49 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [28/May/2026:18:59:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 96646 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [28/May/2026:18:59:54 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [28/May/2026:19:00:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 96647 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:00:19 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [28/May/2026:19:00:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 96661 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [28/May/2026:19:00:25 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [28/May/2026:19:00:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 90776 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:00:49 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [28/May/2026:19:00:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 95858 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [28/May/2026:19:00:55 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:00:59 +0000] "GET /api/v1/auth/csrf-token HTTP/1.1" 200 130 "-" "Lirie/58 CFNetwork/3860.400.51 Darwin/25.3.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:00:59 +0000] "POST /api/v1/auth/refresh-token HTTP/1.1" 200 1100 "-" "Lirie/58 CFNetwork/3860.400.51 Darwin/25.3.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:00:59 +0000] "GET /api/v1/auth/bootstrap HTTP/1.1" 200 1623 "-" "Lirie/58 CFNetwork/3860.400.51 Darwin/25.3.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:00:59 +0000] "GET /api/v1/companies/notifications?limit=30 HTTP/1.1" 200 53 "-" "Lirie/58 CFNetwork/3860.400.51 Darwin/25.3.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:00:59 +0000] "GET /api/v1/company-settings/billing HTTP/1.1" 200 2237 "-" "Lirie/58 CFNetwork/3860.400.51 Darwin/25.3.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:00:59 +0000] "GET /api/v1/companies/me/drivers/locations HTTP/1.1" 200 3252 "-" "Lirie/58 CFNetwork/3860.400.51 Darwin/25.3.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:00:59 +0000] "GET /api/v1/company_dispatch/delays/live?date=2026-05-28 HTTP/1.1" 200 140 "-" "Lirie/58 CFNetwork/3860.400.51 Darwin/25.3.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:01:00 +0000] "GET /api/v1/company_mobile/dispatch/v1/dashboard/realtime?date=2026-05-28 HTTP/1.1" 200 426 "-" "Lirie/58 CFNetwork/3860.400.51 Darwin/25.3.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:01:00 +0000] "GET /api/v1/companies/me/clients?page=1&per_page=8 HTTP/1.1" 200 11407 "-" "Lirie/58 CFNetwork/3860.400.51 Darwin/25.3.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:01:00 +0000] "GET /api/v1/company-settings/billing/parties?active=true HTTP/1.1" 200 2669 "-" "Lirie/58 CFNetwork/3860.400.51 Darwin/25.3.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:01:00 +0000] "GET /api/v1/company-settings/billing HTTP/1.1" 200 2237 "-" "Lirie/58 CFNetwork/3860.400.51 Darwin/25.3.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:01:00 +0000] "GET /api/v1/company_mobile/dispatch/v1/status HTTP/1.1" 200 329 "-" "Lirie/58 CFNetwork/3860.400.51 Darwin/25.3.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:01:00 +0000] "GET /api/v1/messages/1/hub/threads HTTP/1.1" 200 7910 "-" "Lirie/58 CFNetwork/3860.400.51 Darwin/25.3.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:01:00 +0000] "GET /api/v1/messages/1/hub/unread-count HTTP/1.1" 200 20 "-" "Lirie/58 CFNetwork/3860.400.51 Darwin/25.3.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:01:00 +0000] "GET /api/v1/company_mobile/dispatch/v1/mode HTTP/1.1" 200 1084 "-" "Lirie/58 CFNetwork/3860.400.51 Darwin/25.3.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:01:00 +0000] "GET /api/v1/company_dispatch/delays?date=2026-05-28 HTTP/1.1" 200 3 "-" "Lirie/58 CFNetwork/3860.400.51 Darwin/25.3.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:01:01 +0000] "GET /api/v1/company_mobile/dispatch/v1/rides?date=2026-05-28&page_size=50 HTTP/1.1" 200 6392 "-" "Lirie/58 CFNetwork/3860.400.51 Darwin/25.3.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:01:01 +0000] "GET /api/v1/company_mobile/dispatch/v1/status?date=2026-05-28 HTTP/1.1" 200 330 "-" "Lirie/58 CFNetwork/3860.400.51 Darwin/25.3.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:01:01 +0000] "GET /api/v1/companies/me/invoices?limit=50 HTTP/1.1" 200 559583 "-" "Lirie/58 CFNetwork/3860.400.51 Darwin/25.3.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:01:01 +0000] "GET /api/v1/companies/me/invoices?limit=500 HTTP/1.1" 200 559583 "-" "Lirie/58 CFNetwork/3860.400.51 Darwin/25.3.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:01:01 +0000] "GET /api/v1/company_mobile/dispatch/v1/status HTTP/1.1" 200 328 "-" "Lirie/58 CFNetwork/3860.400.51 Darwin/25.3.0"
+backend-1  | 172.20.0.2 - - [28/May/2026:19:01:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 98178 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:01:09 +0000] "GET /api/v1/companies/me/drivers HTTP/1.1" 401 63 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/dispatch" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:01:09 +0000] "GET /api/v1/companies/me/drivers/locations HTTP/1.1" 401 63 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/dispatch" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:01:09 +0000] "GET /api/v1/companies/me/drivers/locations HTTP/1.1" 401 63 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | Refresh token rejeté : token révoqué pour user 1e92e54a-fd52-47ed-9ca1-ef42ecdd818b
+backend-1  | Permission refusée: Refresh token révoqué
+backend-1  | Refresh token invalid - trace_id: 02e2cdc9a61d4f79b979438fc896ba8c
+backend-1  | 172.18.0.2 - - [28/May/2026:19:01:09 +0000] "GET /api/v1/companies/me/drivers HTTP/1.1" 401 63 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:01:09 +0000] "POST /api/v1/auth/refresh-token HTTP/1.1" 401 235 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/dispatch" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | Refresh token rejeté : token révoqué pour user 1e92e54a-fd52-47ed-9ca1-ef42ecdd818b
+backend-1  | Permission refusée: Refresh token révoqué
+backend-1  | Refresh token invalid - trace_id: c6ed4f9719d548958c5bd04425b6b20f
+backend-1  | 172.18.0.2 - - [28/May/2026:19:01:09 +0000] "POST /api/v1/auth/refresh-token HTTP/1.1" 401 235 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:01:15 +0000] "GET /api/v1/messages/1/hub/unread-count HTTP/1.1" 200 20 "-" "Lirie/58 CFNetwork/3860.400.51 Darwin/25.3.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:01:19 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [28/May/2026:19:01:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 98629 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [28/May/2026:19:01:26 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [28/May/2026:19:01:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 98616 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:01:44 +0000] "GET /api/v1/company_mobile/dispatch/v1/dashboard/realtime?date=2026-05-28 HTTP/1.1" 200 426 "-" "Lirie/58 CFNetwork/3860.400.51 Darwin/25.3.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:01:44 +0000] "GET /api/v1/company_mobile/dispatch/v1/status?date=2026-05-28 HTTP/1.1" 200 328 "-" "Lirie/58 CFNetwork/3860.400.51 Darwin/25.3.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:01:44 +0000] "GET /api/v1/company_mobile/dispatch/v1/status?date=2026-05-28 HTTP/1.1" 200 328 "-" "Lirie/58 CFNetwork/3860.400.51 Darwin/25.3.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:01:44 +0000] "GET /api/v1/messages/1/hub/unread-count HTTP/1.1" 200 20 "-" "Lirie/58 CFNetwork/3860.400.51 Darwin/25.3.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:01:44 +0000] "GET /api/v1/company_mobile/dispatch/v1/rides?date=2026-05-28&page_size=50 HTTP/1.1" 200 6392 "-" "Lirie/58 CFNetwork/3860.400.51 Darwin/25.3.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:01:44 +0000] "GET /api/v1/company_mobile/dispatch/v1/rides?date=2026-05-28&page_size=50 HTTP/1.1" 200 6392 "-" "Lirie/58 CFNetwork/3860.400.51 Darwin/25.3.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:01:45 +0000] "GET /api/v1/company_mobile/dispatch/v1/mode HTTP/1.1" 200 1084 "-" "Lirie/58 CFNetwork/3860.400.51 Darwin/25.3.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:01:45 +0000] "GET /api/v1/company_mobile/dispatch/v1/rides?date=2026-05-28&page_size=50 HTTP/1.1" 200 6392 "-" "Lirie/58 CFNetwork/3860.400.51 Darwin/25.3.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:01:45 +0000] "GET /api/v1/companies/notifications?limit=30 HTTP/1.1" 200 53 "-" "Lirie/58 CFNetwork/3860.400.51 Darwin/25.3.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:01:49 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [28/May/2026:19:01:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 98614 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [28/May/2026:19:01:57 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:02:00 +0000] "GET /api/v1/messages/1/hub/unread-count HTTP/1.1" 200 20 "-" "Lirie/58 CFNetwork/3860.400.51 Darwin/25.3.0"
+backend-1  | 172.20.0.2 - - [28/May/2026:19:02:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 92670 "-" "Prometheus/2.48.0"
+backend-1  | [SecurityAlerts] ⚠️ ALERTE: 10 tentatives d'accès non autorisé depuis 18.199.94.40 (endpoint: /api/v1/companies/me/drivers/locations, status: 401)
+backend-1  | 172.18.0.2 - - [28/May/2026:19:02:09 +0000] "GET /api/v1/companies/me/drivers/locations HTTP/1.1" 401 63 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:02:09 +0000] "GET /api/v1/companies/me/drivers HTTP/1.1" 401 63 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:02:09 +0000] "GET /api/v1/companies/me/drivers/locations HTTP/1.1" 401 63 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/dispatch" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | [SecurityAlerts] ⚠️ ALERTE: 10 tentatives d'accès non autorisé depuis 3.79.113.85 (endpoint: /api/v1/companies/me/drivers, status: 401)
+backend-1  | 172.18.0.2 - - [28/May/2026:19:02:09 +0000] "GET /api/v1/companies/me/drivers HTTP/1.1" 401 63 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/dispatch" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | Refresh token rejeté : token révoqué pour user 1e92e54a-fd52-47ed-9ca1-ef42ecdd818b
+backend-1  | Permission refusée: Refresh token révoqué
+backend-1  | Refresh token invalid - trace_id: b3665bc8e85b4b02b131eca4f5cba49d
+backend-1  | 172.18.0.2 - - [28/May/2026:19:02:09 +0000] "POST /api/v1/auth/refresh-token HTTP/1.1" 401 235 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | Refresh token rejeté : token révoqué pour user 1e92e54a-fd52-47ed-9ca1-ef42ecdd818b
+backend-1  | Permission refusée: Refresh token révoqué
+backend-1  | Refresh token invalid - trace_id: 81cb00e9c2374af99125d63b700969a8
+backend-1  | 172.18.0.2 - - [28/May/2026:19:02:09 +0000] "POST /api/v1/auth/refresh-token HTTP/1.1" 401 235 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/dispatch" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:02:15 +0000] "GET /api/v1/messages/1/hub/unread-count HTTP/1.1" 200 20 "-" "Lirie/58 CFNetwork/3860.400.51 Darwin/25.3.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:02:19 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [28/May/2026:19:02:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 98615 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [28/May/2026:19:02:27 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [28/May/2026:19:02:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 100409 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:02:49 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [28/May/2026:19:02:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 123084 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:02:56 +0000] "GET /api/v1/company_mobile/dispatch/v1/dashboard/realtime?date=2026-05-28 HTTP/1.1" 200 426 "-" "Lirie/58 CFNetwork/3860.400.51 Darwin/25.3.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:02:56 +0000] "GET /api/v1/company_mobile/dispatch/v1/status?date=2026-05-28 HTTP/1.1" 200 328 "-" "Lirie/58 CFNetwork/3860.400.51 Darwin/25.3.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:02:56 +0000] "GET /api/v1/company_mobile/dispatch/v1/status?date=2026-05-28 HTTP/1.1" 200 328 "-" "Lirie/58 CFNetwork/3860.400.51 Darwin/25.3.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:02:57 +0000] "GET /api/v1/messages/1/hub/unread-count HTTP/1.1" 200 20 "-" "Lirie/58 CFNetwork/3860.400.51 Darwin/25.3.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:02:57 +0000] "GET /api/v1/company_mobile/dispatch/v1/rides?date=2026-05-28&page_size=50 HTTP/1.1" 200 6392 "-" "Lirie/58 CFNetwork/3860.400.51 Darwin/25.3.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:02:57 +0000] "GET /api/v1/company_mobile/dispatch/v1/rides?date=2026-05-28&page_size=50 HTTP/1.1" 200 6392 "-" "Lirie/58 CFNetwork/3860.400.51 Darwin/25.3.0"
+backend-1  | 127.0.0.1 - - [28/May/2026:19:02:58 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [28/May/2026:19:03:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 98615 "-" "Prometheus/2.48.0"
+backend-1  | [CompanyNotifications] GET error: Signature has expired
+backend-1  | Traceback (most recent call last):
+backend-1  |   File "/app/routes/company_notifications.py", line 48, in get
+backend-1  |     company_id = _get_company_id()
+backend-1  |                  ^^^^^^^^^^^^^^^^^
+backend-1  |   File "/app/routes/company_notifications.py", line 33, in _get_company_id
+backend-1  |     verify_jwt_in_request()
+backend-1  |   File "/usr/local/lib/python3.11/site-packages/flask_jwt_extended/view_decorators.py", line 94, in verify_jwt_in_request
+backend-1  |     jwt_data, jwt_header, jwt_location = _decode_jwt_from_request(
+backend-1  |                                          ^^^^^^^^^^^^^^^^^^^^^^^^^
+backend-1  |   File "/usr/local/lib/python3.11/site-packages/flask_jwt_extended/view_decorators.py", line 340, in _decode_jwt_from_request
+backend-1  |     decoded_token = decode_token(encoded_token, csrf_token)
+backend-1  |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend-1  |   File "/usr/local/lib/python3.11/site-packages/flask_jwt_extended/utils.py", line 128, in decode_token
+backend-1  |     return jwt_manager._decode_jwt_from_config(encoded_token, csrf_value, allow_expired)
+backend-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend-1  |   File "/usr/local/lib/python3.11/site-packages/flask_jwt_extended/jwt_manager.py", line 557, in _decode_jwt_from_config
+backend-1  |     return _decode_jwt(**kwargs, allow_expired=allow_expired)
+backend-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend-1  |   File "/usr/local/lib/python3.11/site-packages/flask_jwt_extended/tokens.py", line 98, in _decode_jwt
+backend-1  |     decoded_token = jwt.decode(
+backend-1  |                     ^^^^^^^^^^^
+backend-1  |   File "/usr/local/lib/python3.11/site-packages/jwt/api_jwt.py", line 368, in decode
+backend-1  |     decoded = self.decode_complete(
+backend-1  |               ^^^^^^^^^^^^^^^^^^^^^
+backend-1  |   File "/usr/local/lib/python3.11/site-packages/jwt/api_jwt.py", line 275, in decode_complete
+backend-1  | [2026-05-28 19:46:06 +0000] [7] [CRITICAL] WORKER TIMEOUT (pid:89)
+backend-1  | 172.18.0.2 - - [28/May/2026:19:46:09 +0000] "GET /api/v1/companies/me/drivers HTTP/1.1" 401 63 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/dispatch" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:46:09 +0000] "GET /api/v1/companies/me/drivers/locations HTTP/1.1" 401 63 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/dispatch" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:46:09 +0000] "GET /api/v1/companies/me/drivers HTTP/1.1" 401 63 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | Refresh token rejeté : token révoqué pour user 1e92e54a-fd52-47ed-9ca1-ef42ecdd818b
+backend-1  | Permission refusée: Refresh token révoqué
+backend-1  | Refresh token invalid - trace_id: ca931a1a53d747aeb2467500d0134a65
+backend-1  | 172.18.0.2 - - [28/May/2026:19:46:09 +0000] "POST /api/v1/auth/refresh-token HTTP/1.1" 401 235 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/dispatch" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:46:09 +0000] "GET /api/v1/companies/me/drivers/locations HTTP/1.1" 401 63 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | Refresh token rejeté : token révoqué pour user 1e92e54a-fd52-47ed-9ca1-ef42ecdd818b
+backend-1  | Permission refusée: Refresh token révoqué
+backend-1  | Refresh token invalid - trace_id: 77df97475e7342028ca6642516dccc4f
+backend-1  | 172.18.0.2 - - [28/May/2026:19:46:09 +0000] "POST /api/v1/auth/refresh-token HTTP/1.1" 401 235 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 127.0.0.1 - - [28/May/2026:19:46:14 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:46:19 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [28/May/2026:19:46:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 106277 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [28/May/2026:19:46:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 102755 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [28/May/2026:19:46:44 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:46:49 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [28/May/2026:19:46:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 98616 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [28/May/2026:19:47:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 94316 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [28/May/2026:19:47:15 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:47:19 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [28/May/2026:19:47:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 106275 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [28/May/2026:19:47:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 94316 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [28/May/2026:19:47:45 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:47:49 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [28/May/2026:19:47:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 98616 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [28/May/2026:19:48:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 98615 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:48:09 +0000] "GET /api/v1/companies/me/drivers/locations HTTP/1.1" 401 63 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:48:09 +0000] "GET /api/v1/companies/me/drivers HTTP/1.1" 401 63 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:48:09 +0000] "GET /api/v1/companies/me/drivers HTTP/1.1" 401 63 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/dispatch" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | Refresh token rejeté : token révoqué pour user 1e92e54a-fd52-47ed-9ca1-ef42ecdd818b
+backend-1  | Permission refusée: Refresh token révoqué
+backend-1  | Refresh token invalid - trace_id: 694584e86e024da0a18803ffb13b6414
+backend-1  | 172.18.0.2 - - [28/May/2026:19:48:09 +0000] "GET /api/v1/companies/me/drivers/locations HTTP/1.1" 401 63 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/dispatch" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:48:09 +0000] "POST /api/v1/auth/refresh-token HTTP/1.1" 401 235 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | Refresh token rejeté : token révoqué pour user 1e92e54a-fd52-47ed-9ca1-ef42ecdd818b
+backend-1  | Permission refusée: Refresh token révoqué
+backend-1  | Refresh token invalid - trace_id: 2baae2bbda834d59a67a87c95201208f
+backend-1  | 172.18.0.2 - - [28/May/2026:19:48:09 +0000] "POST /api/v1/auth/refresh-token HTTP/1.1" 401 235 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/dispatch" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 127.0.0.1 - - [28/May/2026:19:48:16 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:48:19 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [28/May/2026:19:48:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 98627 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [28/May/2026:19:48:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 98616 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [28/May/2026:19:48:46 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:48:49 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [28/May/2026:19:48:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 98615 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [28/May/2026:19:49:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 106278 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:49:09 +0000] "GET /api/v1/companies/me/drivers HTTP/1.1" 401 63 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/dispatch" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:49:09 +0000] "GET /api/v1/companies/me/drivers/locations HTTP/1.1" 401 63 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/dispatch" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:49:09 +0000] "GET /api/v1/companies/me/drivers HTTP/1.1" 401 63 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | Refresh token rejeté : token révoqué pour user 1e92e54a-fd52-47ed-9ca1-ef42ecdd818b
+backend-1  | Permission refusée: Refresh token révoqué
+backend-1  | Refresh token invalid - trace_id: 15a0e7ae058242c18c86d3fb4a9b7ac5
+backend-1  | 172.18.0.2 - - [28/May/2026:19:49:09 +0000] "POST /api/v1/auth/refresh-token HTTP/1.1" 401 235 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/dispatch" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:49:09 +0000] "GET /api/v1/companies/me/drivers/locations HTTP/1.1" 401 63 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | Refresh token rejeté : token révoqué pour user 1e92e54a-fd52-47ed-9ca1-ef42ecdd818b
+backend-1  | Permission refusée: Refresh token révoqué
+backend-1  | Refresh token invalid - trace_id: f31a8413400d4c329357e2e5d8f963cb
+backend-1  | 172.18.0.2 - - [28/May/2026:19:49:09 +0000] "POST /api/v1/auth/refresh-token HTTP/1.1" 401 235 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 127.0.0.1 - - [28/May/2026:19:49:17 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:49:19 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [28/May/2026:19:49:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 106274 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [28/May/2026:19:49:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 94318 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [28/May/2026:19:49:47 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:49:49 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [28/May/2026:19:49:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 98629 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [28/May/2026:19:50:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 106278 "-" "Prometheus/2.48.0"
+backend-1  | [CSRF] Token manquant pour POST /
+backend-1  | 172.18.0.2 - - [28/May/2026:19:50:06 +0000] "POST / HTTP/1.1" 403 32 "https://api.lirie.ch/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
+backend-1  | [CSRF] Token manquant pour POST /
+backend-1  | 172.18.0.2 - - [28/May/2026:19:50:06 +0000] "POST / HTTP/1.1" 403 32 "https://api.lirie.ch/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
+backend-1  | [CSRF] Token manquant pour POST /
+backend-1  | 172.18.0.2 - - [28/May/2026:19:50:06 +0000] "POST / HTTP/1.1" 403 32 "https://api.lirie.ch/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36"
+backend-1  | [CSRF] Token manquant pour POST /
+backend-1  | 172.18.0.2 - - [28/May/2026:19:50:06 +0000] "POST / HTTP/1.1" 403 32 "https://api.lirie.ch/" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
+backend-1  | [CSRF] Token manquant pour POST /
+backend-1  | 172.18.0.2 - - [28/May/2026:19:50:06 +0000] "POST / HTTP/1.1" 403 32 "https://api.lirie.ch/" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
+backend-1  | [CSRF] Token manquant pour POST /
+backend-1  | 172.18.0.2 - - [28/May/2026:19:50:06 +0000] "POST / HTTP/1.1" 403 32 "https://api.lirie.ch/" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
+backend-1  | [CSRF] Token manquant pour POST /
+backend-1  | 172.18.0.2 - - [28/May/2026:19:50:07 +0000] "POST / HTTP/1.1" 403 32 "https://api.lirie.ch/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
+backend-1  | [CSRF] Token manquant pour POST /
+backend-1  | 172.18.0.2 - - [28/May/2026:19:50:07 +0000] "POST / HTTP/1.1" 403 32 "https://api.lirie.ch/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36"
+backend-1  | [CSRF] Token manquant pour POST /
+backend-1  | 172.18.0.2 - - [28/May/2026:19:50:08 +0000] "POST / HTTP/1.1" 403 32 "https://api.lirie.ch/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36"
+backend-1  | 127.0.0.1 - - [28/May/2026:19:50:18 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:50:19 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [28/May/2026:19:50:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 102752 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [28/May/2026:19:50:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 106278 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [28/May/2026:19:50:48 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:50:49 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [28/May/2026:19:50:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 106291 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [28/May/2026:19:51:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 106277 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:51:09 +0000] "GET /api/v1/companies/me/drivers/locations HTTP/1.1" 401 63 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/dispatch" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:51:09 +0000] "GET /api/v1/companies/me/drivers HTTP/1.1" 401 63 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/dispatch" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:51:09 +0000] "GET /api/v1/companies/me/drivers/locations HTTP/1.1" 401 63 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:51:09 +0000] "GET /api/v1/companies/me/drivers HTTP/1.1" 401 63 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | Refresh token rejeté : token révoqué pour user 1e92e54a-fd52-47ed-9ca1-ef42ecdd818b
+backend-1  | Permission refusée: Refresh token révoqué
+backend-1  | Refresh token invalid - trace_id: b789e1d58c814dcaa58c65ddaec1dc54
+backend-1  | 172.18.0.2 - - [28/May/2026:19:51:09 +0000] "POST /api/v1/auth/refresh-token HTTP/1.1" 401 235 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/dispatch" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | Refresh token rejeté : token révoqué pour user 1e92e54a-fd52-47ed-9ca1-ef42ecdd818b
+backend-1  | Permission refusée: Refresh token révoqué
+backend-1  | Refresh token invalid - trace_id: 627112722b6a4ac6b233d29132005f41
+backend-1  | 172.18.0.2 - - [28/May/2026:19:51:09 +0000] "POST /api/v1/auth/refresh-token HTTP/1.1" 401 235 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:51:14 +0000] "GET /api/v1/auth/csrf-token HTTP/1.1" 200 130 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:51:14 +0000] "POST /api/v1/auth/refresh-token HTTP/1.1" 200 1100 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:51:14 +0000] "GET /api/v1/auth/bootstrap HTTP/1.1" 200 1623 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:51:15 +0000] "GET /api/v1/companies/notifications?limit=30 HTTP/1.1" 200 53 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:51:15 +0000] "GET /api/v1/company_mobile/dispatch/v1/status HTTP/1.1" 200 328 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:51:15 +0000] "GET /api/v1/company_mobile/dispatch/v1/status?date=2026-05-28 HTTP/1.1" 200 328 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:51:15 +0000] "GET /api/v1/company_mobile/dispatch/v1/dashboard/realtime?date=2026-05-28 HTTP/1.1" 200 426 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:51:15 +0000] "GET /api/v1/companies/me/drivers/locations HTTP/1.1" 200 3135 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:51:15 +0000] "GET /api/v1/company-settings/billing/parties?active=true HTTP/1.1" 200 2669 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:51:15 +0000] "GET /api/v1/company_dispatch/delays/live?date=2026-05-28 HTTP/1.1" 200 140 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:51:15 +0000] "GET /api/v1/company-settings/billing HTTP/1.1" 200 2237 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:51:16 +0000] "GET /api/v1/company_mobile/dispatch/v1/mode HTTP/1.1" 200 1084 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:19:51:16 +0000] "GET /api/v1/companies/me/clients?page=1&per_page=8 HTTP/1.1" 200 11407 "-" "okhttp/4.12.0"
+backend-1  | [2026-05-28 20:34:06 +0000] [7] [CRITICAL] WORKER TIMEOUT (pid:88)
+backend-1  | 172.18.0.2 - - [28/May/2026:20:34:09 +0000] "GET /api/v1/companies/me/drivers HTTP/1.1" 401 63 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [28/May/2026:20:34:09 +0000] "GET /api/v1/companies/me/drivers/locations HTTP/1.1" 401 63 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [28/May/2026:20:34:09 +0000] "GET /api/v1/companies/me/drivers/locations HTTP/1.1" 401 63 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/dispatch" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [28/May/2026:20:34:09 +0000] "GET /api/v1/companies/me/drivers HTTP/1.1" 401 63 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/dispatch" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | Refresh token rejeté : token révoqué pour user 1e92e54a-fd52-47ed-9ca1-ef42ecdd818b
+backend-1  | Permission refusée: Refresh token révoqué
+backend-1  | Refresh token invalid - trace_id: 4d405075f05f42d781743ac6df239a04
+backend-1  | 172.18.0.2 - - [28/May/2026:20:34:09 +0000] "POST /api/v1/auth/refresh-token HTTP/1.1" 401 235 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | Refresh token rejeté : token révoqué pour user 1e92e54a-fd52-47ed-9ca1-ef42ecdd818b
+backend-1  | Permission refusée: Refresh token révoqué
+backend-1  | Refresh token invalid - trace_id: 1c75093e83c44bf88ab4f50280a33cdb
+backend-1  | 172.18.0.2 - - [28/May/2026:20:34:09 +0000] "POST /api/v1/auth/refresh-token HTTP/1.1" 401 235 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/dispatch" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [28/May/2026:20:34:19 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [28/May/2026:20:34:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 110397 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [28/May/2026:20:34:33 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [28/May/2026:20:34:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 110397 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:20:34:49 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [28/May/2026:20:34:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 100779 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [28/May/2026:20:35:04 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [28/May/2026:20:35:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 100780 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:20:35:19 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [28/May/2026:20:35:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 110396 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [28/May/2026:20:35:34 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [28/May/2026:20:35:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 111753 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:20:35:49 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [28/May/2026:20:35:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 100779 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [28/May/2026:20:36:05 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [28/May/2026:20:36:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 111754 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:20:36:09 +0000] "GET /api/v1/companies/me/drivers HTTP/1.1" 401 63 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/dispatch" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [28/May/2026:20:36:09 +0000] "GET /api/v1/companies/me/drivers/locations HTTP/1.1" 401 63 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/dispatch" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [28/May/2026:20:36:09 +0000] "GET /api/v1/companies/me/drivers/locations HTTP/1.1" 401 63 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | Refresh token rejeté : token révoqué pour user 1e92e54a-fd52-47ed-9ca1-ef42ecdd818b
+backend-1  | Permission refusée: Refresh token révoqué
+backend-1  | Refresh token invalid - trace_id: 3dc3f13ea72b4e7eabb86da1206d00df
+backend-1  | 172.18.0.2 - - [28/May/2026:20:36:09 +0000] "POST /api/v1/auth/refresh-token HTTP/1.1" 401 235 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/dispatch" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [28/May/2026:20:36:09 +0000] "GET /api/v1/companies/me/drivers HTTP/1.1" 401 63 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | Refresh token rejeté : token révoqué pour user 1e92e54a-fd52-47ed-9ca1-ef42ecdd818b
+backend-1  | Permission refusée: Refresh token révoqué
+backend-1  | Refresh token invalid - trace_id: efe42dd8912b4f60a6594dd6949005bf
+backend-1  | 172.18.0.2 - - [28/May/2026:20:36:09 +0000] "POST /api/v1/auth/refresh-token HTTP/1.1" 401 235 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [28/May/2026:20:36:19 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [28/May/2026:20:36:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 100792 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [28/May/2026:20:36:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 110398 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [28/May/2026:20:36:36 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.18.0.2 - - [28/May/2026:20:36:49 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [28/May/2026:20:36:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 111767 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [28/May/2026:20:37:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 100779 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [28/May/2026:20:37:06 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.18.0.2 - - [28/May/2026:20:37:19 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [28/May/2026:20:37:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 110398 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [28/May/2026:20:37:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 100792 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [28/May/2026:20:37:37 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.18.0.2 - - [28/May/2026:20:37:49 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [28/May/2026:20:37:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 110397 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [28/May/2026:20:38:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 110412 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [28/May/2026:20:38:07 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.18.0.2 - - [28/May/2026:20:38:09 +0000] "GET /api/v1/companies/me/drivers/locations HTTP/1.1" 401 63 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/dispatch" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [28/May/2026:20:38:09 +0000] "GET /api/v1/companies/me/drivers HTTP/1.1" 401 63 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/dispatch" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [28/May/2026:20:38:09 +0000] "GET /api/v1/companies/me/drivers/locations HTTP/1.1" 401 63 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [28/May/2026:20:38:09 +0000] "GET /api/v1/companies/me/drivers HTTP/1.1" 401 63 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | Refresh token rejeté : token révoqué pour user 1e92e54a-fd52-47ed-9ca1-ef42ecdd818b
+backend-1  | Permission refusée: Refresh token révoqué
+backend-1  | Refresh token invalid - trace_id: 0adf333de22c40a88f6110fcef49e97a
+backend-1  | 172.18.0.2 - - [28/May/2026:20:38:09 +0000] "POST /api/v1/auth/refresh-token HTTP/1.1" 401 235 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/dispatch" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | Refresh token rejeté : token révoqué pour user 1e92e54a-fd52-47ed-9ca1-ef42ecdd818b
+backend-1  | Permission refusée: Refresh token révoqué
+backend-1  | Refresh token invalid - trace_id: d78cbe5ef0ca4c649c83e446d88b8aef
+backend-1  | 172.18.0.2 - - [28/May/2026:20:38:09 +0000] "POST /api/v1/auth/refresh-token HTTP/1.1" 401 235 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [28/May/2026:20:38:19 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [28/May/2026:20:38:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 110398 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [28/May/2026:20:38:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 110398 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [28/May/2026:20:38:38 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.18.0.2 - - [28/May/2026:20:38:49 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [28/May/2026:20:38:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 110409 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [28/May/2026:20:39:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 111754 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [28/May/2026:20:39:08 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.18.0.2 - - [28/May/2026:20:39:19 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [28/May/2026:20:39:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 110409 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [28/May/2026:20:39:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 111754 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [28/May/2026:20:39:39 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.18.0.2 - - [28/May/2026:20:39:49 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [28/May/2026:20:39:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 110397 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [28/May/2026:20:40:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 110409 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:20:40:09 +0000] "GET /api/v1/companies/me/drivers HTTP/1.1" 401 63 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [28/May/2026:20:40:09 +0000] "GET /api/v1/companies/me/drivers/locations HTTP/1.1" 401 63 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [28/May/2026:20:40:09 +0000] "GET /api/v1/companies/me/drivers HTTP/1.1" 401 63 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/dispatch" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | Refresh token rejeté : token révoqué pour user 1e92e54a-fd52-47ed-9ca1-ef42ecdd818b
+backend-1  | Permission refusée: Refresh token révoqué
+backend-1  | Refresh token invalid - trace_id: a3efee3ff4f5412aac882f7959e62052
+backend-1  | 172.18.0.2 - - [28/May/2026:20:40:09 +0000] "POST /api/v1/auth/refresh-token HTTP/1.1" 401 235 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [28/May/2026:20:40:09 +0000] "GET /api/v1/companies/me/drivers/locations HTTP/1.1" 401 63 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/dispatch" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | Refresh token rejeté : token révoqué pour user 1e92e54a-fd52-47ed-9ca1-ef42ecdd818b
+backend-1  | Permission refusée: Refresh token révoqué
+backend-1  | Refresh token invalid - trace_id: 39370a3031c94dbc99bec3359f8f60da
+backend-1  | 172.18.0.2 - - [28/May/2026:20:40:09 +0000] "POST /api/v1/auth/refresh-token HTTP/1.1" 401 235 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/dispatch" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 127.0.0.1 - - [28/May/2026:20:40:09 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.18.0.2 - - [28/May/2026:20:40:19 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [28/May/2026:20:40:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 111768 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [28/May/2026:20:40:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 110397 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [28/May/2026:20:40:40 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.18.0.2 - - [28/May/2026:20:40:49 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [28/May/2026:20:40:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 100778 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [28/May/2026:20:41:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 111754 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:20:41:09 +0000] "GET /api/v1/companies/me/drivers/locations HTTP/1.1" 401 63 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/dispatch" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [28/May/2026:20:41:09 +0000] "GET /api/v1/companies/me/drivers HTTP/1.1" 401 63 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/dispatch" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [28/May/2026:20:41:09 +0000] "GET /api/v1/companies/me/drivers/locations HTTP/1.1" 401 63 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | Refresh token rejeté : token révoqué pour user 1e92e54a-fd52-47ed-9ca1-ef42ecdd818b
+backend-1  | Permission refusée: Refresh token révoqué
+backend-1  | Refresh token invalid - trace_id: c2ba3085541d43c5b76092e1fa3b3385
+backend-1  | 172.18.0.2 - - [28/May/2026:20:41:09 +0000] "GET /api/v1/companies/me/drivers HTTP/1.1" 401 63 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [28/May/2026:20:41:09 +0000] "POST /api/v1/auth/refresh-token HTTP/1.1" 401 235 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/dispatch" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | Refresh token rejeté : token révoqué pour user 1e92e54a-fd52-47ed-9ca1-ef42ecdd818b
+backend-1  | Permission refusée: Refresh token révoqué
+backend-1  | Refresh token invalid - trace_id: 59b42190d36e4caea365005cc519ccbe
+backend-1  | 172.18.0.2 - - [28/May/2026:20:41:09 +0000] "POST /api/v1/auth/refresh-token HTTP/1.1" 401 235 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 127.0.0.1 - - [28/May/2026:20:41:10 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.18.0.2 - - [28/May/2026:20:41:19 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [28/May/2026:20:41:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 111756 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [28/May/2026:20:41:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 111755 "-" "Prometheus/2.48.0"
+backend-1  | [2026-05-28 21:07:20 +0000] [7] [CRITICAL] WORKER TIMEOUT (pid:87)
+backend-1  | 172.20.0.2 - - [28/May/2026:21:07:21 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 128618 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:07:22 +0000] "GET /api/v1/company_mobile/dispatch/v1/status HTTP/1.1" 200 330 "-" "Lirie/58 CFNetwork/3860.400.51 Darwin/25.3.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:07:22 +0000] "GET /api/v1/companies/me/invoices?limit=500 HTTP/1.1" 200 559583 "-" "Lirie/58 CFNetwork/3860.400.51 Darwin/25.3.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:07:22 +0000] "GET /api/v1/companies/me/invoices?limit=50 HTTP/1.1" 200 559583 "-" "Lirie/58 CFNetwork/3860.400.51 Darwin/25.3.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:07:22 +0000] "GET /api/v1/company_dispatch/delays?date=2026-05-28 HTTP/1.1" 200 3 "-" "Lirie/58 CFNetwork/3860.400.51 Darwin/25.3.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:07:22 +0000] "GET /api/v1/company_mobile/dispatch/v1/rides?date=2026-05-28&page_size=50 HTTP/1.1" 200 6392 "-" "Lirie/58 CFNetwork/3860.400.51 Darwin/25.3.0"
+backend-1  | 172.20.0.2 - - [28/May/2026:21:07:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 128632 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [28/May/2026:21:07:38 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:07:49 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [28/May/2026:21:07:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 123300 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [28/May/2026:21:08:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 123299 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [28/May/2026:21:08:09 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:08:19 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [28/May/2026:21:08:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 128617 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [28/May/2026:21:08:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 128617 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [28/May/2026:21:08:39 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:08:49 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [28/May/2026:21:08:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 128629 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [28/May/2026:21:09:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 128617 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:09:09 +0000] "GET /api/v1/companies/me/drivers/locations HTTP/1.1" 200 3135 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:09:09 +0000] "GET /api/v1/companies/me/drivers HTTP/1.1" 200 13081 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:09:09 +0000] "GET /api/v1/companies/me/drivers/locations HTTP/1.1" 200 3135 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:09:09 +0000] "GET /api/v1/companies/me/drivers HTTP/1.1" 200 13081 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 127.0.0.1 - - [28/May/2026:21:09:10 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:09:19 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [28/May/2026:21:09:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 123312 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [28/May/2026:21:09:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 128617 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [28/May/2026:21:09:40 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:09:49 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [28/May/2026:21:09:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 128629 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [28/May/2026:21:10:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 128630 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:10:09 +0000] "GET /api/v1/companies/me/drivers/locations HTTP/1.1" 200 3135 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:10:09 +0000] "GET /api/v1/companies/me/drivers HTTP/1.1" 200 13081 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:10:09 +0000] "GET /api/v1/companies/me/drivers/locations HTTP/1.1" 200 3135 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:10:09 +0000] "GET /api/v1/companies/me/drivers HTTP/1.1" 200 13081 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 127.0.0.1 - - [28/May/2026:21:10:11 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:10:19 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [28/May/2026:21:10:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 128642 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [28/May/2026:21:10:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 128627 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [28/May/2026:21:10:41 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:10:49 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [28/May/2026:21:10:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 128628 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [28/May/2026:21:11:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 123300 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [28/May/2026:21:11:12 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:11:19 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [28/May/2026:21:11:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 128628 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [28/May/2026:21:11:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 123299 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [28/May/2026:21:11:42 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:11:49 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [28/May/2026:21:11:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 128629 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [28/May/2026:21:12:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 123299 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:12:09 +0000] "GET /api/v1/companies/me/drivers/locations HTTP/1.1" 200 3135 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:12:09 +0000] "GET /api/v1/companies/me/drivers HTTP/1.1" 200 13081 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:12:09 +0000] "GET /api/v1/companies/me/drivers HTTP/1.1" 200 13081 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:12:09 +0000] "GET /api/v1/companies/me/drivers/locations HTTP/1.1" 200 3135 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 127.0.0.1 - - [28/May/2026:21:12:13 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:12:19 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [28/May/2026:21:12:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 128629 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [28/May/2026:21:12:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 123299 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [28/May/2026:21:12:44 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:12:49 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [28/May/2026:21:12:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 123299 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [28/May/2026:21:13:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 123300 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:13:09 +0000] "GET /api/v1/companies/notifications?limit=30&offset=0 HTTP/1.1" 200 53 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 127.0.0.1 - - [28/May/2026:21:13:14 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:13:19 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [28/May/2026:21:13:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 128644 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [28/May/2026:21:13:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 128629 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [28/May/2026:21:13:45 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:13:49 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [28/May/2026:21:13:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 123298 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [28/May/2026:21:14:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 128630 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:14:09 +0000] "GET /api/v1/companies/me/drivers/locations HTTP/1.1" 200 3135 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:14:09 +0000] "GET /api/v1/companies/me/drivers HTTP/1.1" 200 13081 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:14:09 +0000] "GET /api/v1/companies/me/drivers/locations HTTP/1.1" 200 3135 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:14:09 +0000] "GET /api/v1/companies/me/drivers HTTP/1.1" 200 13081 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:14:15 +0000] "GET /api/v1/companies/notifications?limit=30&offset=0 HTTP/1.1" 200 53 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 127.0.0.1 - - [28/May/2026:21:14:15 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:14:19 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [28/May/2026:21:14:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 128642 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [28/May/2026:21:14:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 123300 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [28/May/2026:21:14:46 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:14:49 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [28/May/2026:21:14:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 128630 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [28/May/2026:21:15:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 123300 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:15:13 +0000] "GET /api/v1/companies/me/drivers HTTP/1.1" 200 13081 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:15:13 +0000] "GET /api/v1/companies/me/drivers/locations HTTP/1.1" 200 3135 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:15:13 +0000] "GET /api/v1/companies/me/drivers HTTP/1.1" 200 13081 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:15:13 +0000] "GET /api/v1/companies/me/drivers/locations HTTP/1.1" 200 3135 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 127.0.0.1 - - [28/May/2026:21:15:16 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:15:19 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [28/May/2026:21:15:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 123307 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [28/May/2026:21:15:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 123307 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [28/May/2026:21:15:47 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:15:49 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [28/May/2026:21:15:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 128630 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [28/May/2026:21:16:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 128643 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [28/May/2026:21:16:17 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:16:19 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [28/May/2026:21:16:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 123307 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [28/May/2026:21:16:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 123306 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [28/May/2026:21:16:48 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:16:49 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [28/May/2026:21:16:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 128631 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [28/May/2026:21:17:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 123308 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [28/May/2026:21:17:18 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:17:19 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [28/May/2026:21:17:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 128630 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [28/May/2026:21:17:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 128644 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:17:49 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 127.0.0.1 - - [28/May/2026:21:17:49 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:17:49 +0000] "GET /api/v1/companies/me/drivers/locations HTTP/1.1" 200 3135 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:17:49 +0000] "GET /api/v1/companies/me/drivers HTTP/1.1" 200 13081 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:17:49 +0000] "GET /api/v1/companies/me/drivers/locations HTTP/1.1" 200 3135 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:17:49 +0000] "GET /api/v1/companies/me/drivers HTTP/1.1" 200 13081 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.20.0.2 - - [28/May/2026:21:17:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 128629 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [28/May/2026:21:18:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 123322 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:18:19 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 127.0.0.1 - - [28/May/2026:21:18:19 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | [2026-05-28 21:30:03 +0000] [7] [CRITICAL] WORKER TIMEOUT (pid:86)
+backend-1  | 172.20.0.2 - - [28/May/2026:21:30:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 128950 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:30:09 +0000] "GET /api/v1/driver/me/bookings/since?since=2026-05-28T21:29:58.917Z&include_terminal=true HTTP/1.1" 200 3 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:30:13 +0000] "GET /api/v1/messages/1?limit=40 HTTP/1.1" 200 23570 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:30:19 +0000] "GET /api/v1/messages/1/hub/unread-count HTTP/1.1" 200 20 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:30:19 +0000] "GET /api/v1/driver/me/bookings HTTP/1.1" 200 3 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:30:19 +0000] "GET /api/v1/driver/me/bookings/since?since=2026-05-28T21:30:09.025Z&include_terminal=true HTTP/1.1" 200 3 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:30:19 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [28/May/2026:21:30:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 128951 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:30:24 +0000] "GET /api/v1/messages/1?limit=40 HTTP/1.1" 200 23570 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:30:29 +0000] "GET /api/v1/driver/me/bookings/since?since=2026-05-28T21:30:19.215Z&include_terminal=true HTTP/1.1" 200 3 "-" "okhttp/4.12.0"
+backend-1  | 127.0.0.1 - - [28/May/2026:21:30:32 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:30:33 +0000] "GET /api/v1/driver/me/bookings HTTP/1.1" 200 3 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:30:34 +0000] "GET /api/v1/messages/1/hub/unread-count HTTP/1.1" 200 20 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:30:34 +0000] "GET /api/v1/messages/1?limit=40 HTTP/1.1" 200 23570 "-" "okhttp/4.12.0"
+backend-1  | 172.20.0.2 - - [28/May/2026:21:30:36 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 128950 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:30:39 +0000] "GET /api/v1/driver/me/bookings/since?since=2026-05-28T21:30:28.964Z&include_terminal=true HTTP/1.1" 200 3 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:30:45 +0000] "GET /api/v1/messages/1?limit=40 HTTP/1.1" 200 23570 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:30:48 +0000] "GET /api/v1/driver/me/bookings HTTP/1.1" 200 3 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:30:49 +0000] "GET /api/v1/driver/me/bookings/since?since=2026-05-28T21:30:38.913Z&include_terminal=true HTTP/1.1" 200 3 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:30:49 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:30:50 +0000] "GET /api/v1/messages/1/hub/unread-count HTTP/1.1" 200 20 "-" "okhttp/4.12.0"
+backend-1  | 172.20.0.2 - - [28/May/2026:21:30:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 128950 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:30:55 +0000] "GET /api/v1/messages/1?limit=40 HTTP/1.1" 200 23570 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:30:59 +0000] "GET /api/v1/driver/me/bookings/since?since=2026-05-28T21:30:48.930Z&include_terminal=true HTTP/1.1" 200 3 "-" "okhttp/4.12.0"
+backend-1  | 127.0.0.1 - - [28/May/2026:21:31:02 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:31:03 +0000] "GET /api/v1/driver/me/bookings HTTP/1.1" 200 3 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:31:05 +0000] "GET /api/v1/messages/1?limit=40 HTTP/1.1" 200 23570 "-" "okhttp/4.12.0"
+backend-1  | 172.20.0.2 - - [28/May/2026:21:31:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 128950 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:31:06 +0000] "GET /api/v1/messages/1/hub/unread-count HTTP/1.1" 200 20 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:31:09 +0000] "GET /api/v1/driver/me/bookings/since?since=2026-05-28T21:30:58.953Z&include_terminal=true HTTP/1.1" 200 3 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:31:15 +0000] "GET /api/v1/messages/1?limit=40 HTTP/1.1" 200 23570 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:31:18 +0000] "GET /api/v1/driver/me/bookings HTTP/1.1" 200 3 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:31:19 +0000] "GET /api/v1/driver/me/bookings/since?since=2026-05-28T21:31:08.974Z&include_terminal=true HTTP/1.1" 200 3 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:31:19 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [28/May/2026:21:31:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 128951 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:31:22 +0000] "GET /api/v1/messages/1/hub/unread-count HTTP/1.1" 200 20 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:31:26 +0000] "GET /api/v1/messages/1?limit=40 HTTP/1.1" 200 23570 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:31:29 +0000] "GET /api/v1/driver/me/bookings/since?since=2026-05-28T21:31:19.174Z&include_terminal=true HTTP/1.1" 200 3 "-" "okhttp/4.12.0"
+backend-1  | 127.0.0.1 - - [28/May/2026:21:31:33 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:31:33 +0000] "GET /api/v1/driver/me/bookings HTTP/1.1" 200 3 "-" "okhttp/4.12.0"
+backend-1  | 172.20.0.2 - - [28/May/2026:21:31:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 128950 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:31:36 +0000] "GET /api/v1/messages/1?limit=40 HTTP/1.1" 200 23570 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:31:37 +0000] "GET /api/v1/messages/1/hub/unread-count HTTP/1.1" 200 20 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:31:39 +0000] "GET /api/v1/driver/me/bookings/since?since=2026-05-28T21:31:28.950Z&include_terminal=true HTTP/1.1" 200 3 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:31:46 +0000] "GET /api/v1/messages/1?limit=40 HTTP/1.1" 200 23570 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:31:48 +0000] "GET /api/v1/driver/me/bookings HTTP/1.1" 200 3 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [28/May/2026:21:31:49 +0000] "GET /api/v1/driver/me/bookings/since?since=2026-05-28T21:31:39.005Z&include_terminal=true HTTP/1.1" 200 3 "-" "okhttp/4.12.0"
+backend-1  | [2026-05-28 21:31:49 +0000] [85] [INFO] Autorestarting worker after current request.
+backend-1  | 172.18.0.2 - - [28/May/2026:21:31:49 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [28/May/2026:21:31:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 128951 "-" "Prometheus/2.48.0"
+backend-1  | [2026-05-28 21:31:56 +0000] [85] [INFO] Worker exiting (pid: 85)
+backend-1  | Sentry is attempting to send 1 pending events
+backend-1  | Waiting up to 2 seconds
+backend-1  | Press Ctrl-C to quit
+backend-1  | 🚀 Démarrage du conteneur ATMR Backend...
+backend-1  | Timestamp: 2026-05-28 21:34:44 UTC
+backend-1  | User: root
+backend-1  | Working Directory: /app
+backend-1  | Python Version: Python 3.11.15
+backend-1  | Memory: N/A (free command not available)
+backend-1  | CPU Cores: 2
+backend-1  | 🔧 Configuration:
+backend-1  |   FLASK_ENV: production
+backend-1  |   OMP_NUM_THREADS: 2
+backend-1  |   MKL_NUM_THREADS: 2
+backend-1  | 🔒 Mode production détecté - Désactivation de pytest...
+backend-1  |   ✅ pytest désactivé pour la production
+backend-1  | 📁 Création des répertoires de données...
+backend-1  | 🔐 Correction des permissions en tant que root...
+backend-1  | ✅ Permissions corrigées
+backend-1  | 📋 Vérification des permissions de /app/data/ml/models:
+backend-1  | total 35440
+backend-1  | drwxr-xr-x 2 appuser appgroup     4096 Jan 13 02:22 .
+backend-1  | drwxr-xr-x 9 appuser appgroup     4096 Jan 13 02:22 ..
+backend-1  | -rw-r--r-- 1 appuser appgroup 36276078 Jan 13 02:19 delay_predictor.pkl
+backend-1  | -rwxr-xr-x 1 appuser appgroup     1524 Jan 13 02:19 training_metadata.json
+backend-1  | 🚀 Démarrage du conteneur ATMR Backend...
+backend-1  | Timestamp: 2026-05-28 21:34:45 UTC
+backend-1  | User: appuser
+backend-1  | Working Directory: /app
+backend-1  | Python Version: Python 3.11.15
+backend-1  | Memory: N/A (free command not available)
+backend-1  | CPU Cores: 2
+backend-1  | 🔧 Configuration:
+backend-1  |   FLASK_ENV: production
+backend-1  |   OMP_NUM_THREADS: 2
+backend-1  |   MKL_NUM_THREADS: 2
+backend-1  | 🔒 Mode production détecté - Désactivation de pytest...
+backend-1  |   ✅ pytest désactivé pour la production
+backend-1  | 📁 Création des répertoires de données...
+backend-1  | ✅ Répertoires de données vérifiés
+backend-1  | ✅ Répertoires de données créés avec permissions
+backend-1  | 🔍 Vérifications préliminaires...
+backend-1  | 📦 Vérification des dépendances critiques...
+backend-1  | ℹ️  RL désactivé dans cet environnement – on ignore les dépendances RL.
+backend-1  |    (torch, gymnasium, optuna ne sont pas installés en production)
+backend-1  | ✅ flask
+backend-1  | ✅ sqlalchemy
+backend-1  | ✅ celery
+backend-1  | ✅ redis
+backend-1  | ✅ pandas
+backend-1  | ✅ numpy
+backend-1  | ✅ sklearn
+backend-1  | ℹ️  Dépendances RL ignorées (RL_ENABLED=false)
+backend-1  | ✅ Toutes les dépendances critiques sont présentes
+backend-1  | 🗄️  Vérification de la base de données...
+backend-1  | ✅ DATABASE_URL configurée: postgresql+psycopg2:...
+backend-1  | ✅ Connexion à la base de données réussie
+backend-1  | 🔴 Vérification de Redis...
+backend-1  | Redis URL: redis://:Palidhje%4037_46%21%21@redis:6379/0
+backend-1  | ✅ Connexion à Redis réussie
+backend-1  | 🔥 Warmup des modèles ML...
+backend-1  |   📊 Chargement du modèle de prédiction de retard depuis /app/data/ml/models/delay_predictor.pkl...
+backend-1  | /usr/local/lib/python3.11/site-packages/sklearn/base.py:463: InconsistentVersionWarning: Trying to unpickle estimator DecisionTreeRegressor from version 1.7.2 when using version 1.8.0. This might lead to breaking code or invalid results. Use at your own risk. For more info please refer to:
+backend-1  | https://scikit-learn.org/stable/model_persistence.html#security-maintainability-limitations
+backend-1  |   warnings.warn(
+backend-1  | /usr/local/lib/python3.11/site-packages/sklearn/base.py:463: InconsistentVersionWarning: Trying to unpickle estimator RandomForestRegressor from version 1.7.2 when using version 1.8.0. This might lead to breaking code or invalid results. Use at your own risk. For more info please refer to:
+backend-1  | https://scikit-learn.org/stable/model_persistence.html#security-maintainability-limitations
+backend-1  |   warnings.warn(
+backend-1  | [2026-05-29 04:36:36 +0000] [7] [CRITICAL] WORKER TIMEOUT (pid:83)
+backend-1  | 172.18.0.2 - - [29/May/2026:04:36:42 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 127.0.0.1 - - [29/May/2026:04:36:50 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:36:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 70817 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:37:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 61775 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:04:37:12 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:37:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 70815 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [29/May/2026:04:37:21 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:37:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 59295 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:04:37:42 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:37:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 70816 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [29/May/2026:04:37:51 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:38:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 70829 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:04:38:12 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:38:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 65861 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [29/May/2026:04:38:21 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:38:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 70830 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:04:38:42 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:38:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 61776 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [29/May/2026:04:38:52 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:39:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 59295 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:04:39:12 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:39:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 65862 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [29/May/2026:04:39:23 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:39:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 55783 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:04:39:42 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:39:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 55785 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [29/May/2026:04:39:53 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:40:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 59294 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:04:40:12 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:40:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 65862 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [29/May/2026:04:40:24 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:40:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 65862 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:04:40:42 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:40:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 70815 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [29/May/2026:04:40:54 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:41:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 61775 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:04:41:12 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:41:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 61787 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [29/May/2026:04:41:25 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:41:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 70815 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:04:41:42 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:41:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 61775 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [29/May/2026:04:41:55 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:42:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 70829 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:04:42:12 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:42:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 55783 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [29/May/2026:04:42:26 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:42:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 59295 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:04:42:42 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:42:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 61776 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [29/May/2026:04:42:56 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:43:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 55784 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:04:43:12 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:43:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 65875 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [29/May/2026:04:43:27 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:43:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 65861 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:04:43:42 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:43:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 70816 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [29/May/2026:04:43:57 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:44:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 70829 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:04:44:12 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:44:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 55795 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [29/May/2026:04:44:28 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:44:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 65862 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:04:44:42 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:44:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 65861 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [29/May/2026:04:44:58 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:45:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 70816 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:04:45:12 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:45:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 59294 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [29/May/2026:04:45:29 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:45:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 65862 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:04:45:42 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:45:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 59293 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [29/May/2026:04:45:59 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:46:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 59295 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:04:46:12 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:46:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 55783 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [29/May/2026:04:46:30 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:46:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 61788 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:04:46:42 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:46:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 65874 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [29/May/2026:04:47:00 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:47:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 70816 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:04:47:12 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:47:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 65861 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [29/May/2026:04:47:31 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:47:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 61775 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:04:47:42 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:47:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 55798 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [29/May/2026:04:48:02 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:48:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 61775 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:04:48:12 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:48:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 61775 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [29/May/2026:04:48:32 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:48:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 55784 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:04:48:42 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:48:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 65861 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [29/May/2026:04:49:03 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:49:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 55783 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:04:49:12 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:49:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 61774 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [29/May/2026:04:49:33 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:49:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 70818 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:04:49:42 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:49:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 55797 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [29/May/2026:04:50:04 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:50:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 65860 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:04:50:12 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:50:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 61787 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [29/May/2026:04:50:34 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:50:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 61786 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:04:50:42 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:50:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 59294 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [29/May/2026:04:51:05 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:51:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 61788 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:04:51:12 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:51:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 61776 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [29/May/2026:04:51:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 61788 "-" "Prometheus/2.48.0"
+backend-1  | [2026-05-29 05:56:21 +0000] [7] [CRITICAL] WORKER TIMEOUT (pid:88)
+backend-1  | 172.20.0.2 - - [29/May/2026:05:56:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 65861 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [29/May/2026:05:56:41 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.18.0.2 - - [29/May/2026:05:56:42 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [29/May/2026:05:56:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 70828 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [29/May/2026:05:57:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 59307 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [29/May/2026:05:57:11 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.18.0.2 - - [29/May/2026:05:57:12 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [29/May/2026:05:57:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 70816 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [29/May/2026:05:57:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 70816 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [29/May/2026:05:57:42 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.18.0.2 - - [29/May/2026:05:57:42 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [29/May/2026:05:57:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 59309 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [29/May/2026:05:58:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 55784 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [29/May/2026:05:58:12 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.18.0.2 - - [29/May/2026:05:58:12 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [29/May/2026:05:58:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 59309 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [29/May/2026:05:58:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 59296 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:05:58:42 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 127.0.0.1 - - [29/May/2026:05:58:43 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:05:58:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 65862 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [29/May/2026:05:59:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 55782 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:05:59:12 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 127.0.0.1 - - [29/May/2026:05:59:13 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:05:59:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 59295 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [29/May/2026:05:59:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 70814 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:05:59:42 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 127.0.0.1 - - [29/May/2026:05:59:44 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:05:59:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 70816 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [29/May/2026:06:00:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 55783 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:06:00:12 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 127.0.0.1 - - [29/May/2026:06:00:14 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:06:00:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 70815 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [29/May/2026:06:00:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 70815 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:06:00:42 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 127.0.0.1 - - [29/May/2026:06:00:45 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:06:00:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 65861 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [29/May/2026:06:01:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 70816 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:06:01:12 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 127.0.0.1 - - [29/May/2026:06:01:15 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:06:01:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 65860 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [29/May/2026:06:01:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 65860 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:06:01:42 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 127.0.0.1 - - [29/May/2026:06:01:46 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:06:01:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 65860 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [29/May/2026:06:02:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 59295 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:06:02:12 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 127.0.0.1 - - [29/May/2026:06:02:16 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:06:02:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 70815 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [29/May/2026:06:02:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 70814 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:06:02:42 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 127.0.0.1 - - [29/May/2026:06:02:47 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:06:02:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 65873 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [29/May/2026:06:03:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 70827 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:06:03:12 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 127.0.0.1 - - [29/May/2026:06:03:17 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:06:03:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 59308 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [29/May/2026:06:03:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 59296 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:06:03:42 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 127.0.0.1 - - [29/May/2026:06:03:48 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:06:03:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 55795 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [29/May/2026:06:04:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 55783 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:06:04:12 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 127.0.0.1 - - [29/May/2026:06:04:18 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:06:04:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 55796 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [29/May/2026:06:04:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 70829 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:06:04:42 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 127.0.0.1 - - [29/May/2026:06:04:49 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:06:04:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 70813 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [29/May/2026:06:05:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 59294 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:06:05:12 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 127.0.0.1 - - [29/May/2026:06:05:19 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:06:05:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 70815 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [29/May/2026:06:05:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 70815 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:06:05:42 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 127.0.0.1 - - [29/May/2026:06:05:50 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:06:05:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 70815 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [29/May/2026:06:06:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 65861 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:06:06:12 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 127.0.0.1 - - [29/May/2026:06:06:20 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:06:06:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 65874 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [29/May/2026:06:06:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 70815 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:06:06:42 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [29/May/2026:06:06:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 70814 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [29/May/2026:06:06:51 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:06:07:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 59293 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:06:07:12 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [29/May/2026:06:07:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 70815 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [29/May/2026:06:07:21 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:06:07:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 59294 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:06:07:42 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [29/May/2026:06:07:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 65861 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [29/May/2026:06:07:52 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:06:08:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 59293 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:06:08:12 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [29/May/2026:06:08:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 59306 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [29/May/2026:06:08:22 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:06:08:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 59294 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:06:08:42 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [29/May/2026:06:08:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 59294 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [29/May/2026:06:08:53 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:06:09:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 70815 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:06:09:12 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [29/May/2026:06:09:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 65860 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [29/May/2026:06:09:23 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:06:09:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 59294 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:06:09:42 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [29/May/2026:06:09:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 65861 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [29/May/2026:06:09:54 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:06:10:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 59294 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:06:10:12 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [29/May/2026:06:10:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 59294 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [29/May/2026:06:10:24 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:06:10:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 59294 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:06:10:42 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [29/May/2026:06:10:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 70814 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [29/May/2026:06:10:55 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:06:11:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 70825 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:06:11:12 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [29/May/2026:06:11:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 59293 "-" "Prometheus/2.48.0"
+backend-1  | [2026-05-29 07:15:35 +0000] [7] [CRITICAL] WORKER TIMEOUT (pid:87)
+backend-1  | 172.20.0.2 - - [29/May/2026:07:15:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 61191 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:15:42 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [29/May/2026:07:15:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 61191 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [29/May/2026:07:16:01 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:07:16:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 55797 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:16:12 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [29/May/2026:07:16:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 55783 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [29/May/2026:07:16:31 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:07:16:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 61190 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:16:42 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [29/May/2026:07:16:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 55784 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [29/May/2026:07:17:02 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:07:17:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 61189 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:17:12 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [29/May/2026:07:17:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 61202 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [29/May/2026:07:17:32 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:07:17:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 55783 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:17:42 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [29/May/2026:07:17:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 55796 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [29/May/2026:07:18:03 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:07:18:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 65861 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:18:12 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [29/May/2026:07:18:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 65861 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [29/May/2026:07:18:34 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:07:18:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 61190 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:18:42 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [29/May/2026:07:18:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 61191 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [29/May/2026:07:19:04 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:07:19:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 61189 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:19:12 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [29/May/2026:07:19:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 65874 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [29/May/2026:07:19:35 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:07:19:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 61190 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:19:42 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [29/May/2026:07:19:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 55783 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [29/May/2026:07:20:05 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:07:20:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 61189 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:20:12 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [29/May/2026:07:20:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 55783 "-" "Prometheus/2.48.0"
+backend-1  | 172.20.0.2 - - [29/May/2026:07:20:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 65862 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [29/May/2026:07:20:36 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:20:42 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.20.0.2 - - [29/May/2026:07:20:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 55797 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:21:04 +0000] "GET /api/v1/driver/me/bookings HTTP/1.1" 200 3 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:21:04 +0000] "GET /api/v1/messages/1?limit=40 HTTP/1.1" 200 23570 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:21:04 +0000] "GET /api/v1/driver/me/bookings/since?since=2026-05-28T22:28:43.078Z&include_terminal=true HTTP/1.1" 200 3 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:21:05 +0000] "GET /api/v1/messages/1/hub/unread-count HTTP/1.1" 200 20 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:21:05 +0000] "GET /api/v1/driver/me/bookings/since?since=2026-05-28T22:00:00.000Z&include_terminal=true HTTP/1.1" 200 3 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:21:05 +0000] "GET /api/v1/driver/me/bookings HTTP/1.1" 200 3 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:21:06 +0000] "GET /api/v1/driver/me/bookings/since?since=2026-05-29T07:21:04.596Z&include_terminal=true HTTP/1.1" 200 3 "-" "okhttp/4.12.0"
+backend-1  | 172.20.0.2 - - [29/May/2026:07:21:06 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 65859 "-" "Prometheus/2.48.0"
+backend-1  | 127.0.0.1 - - [29/May/2026:07:21:06 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:21:08 +0000] "GET /api/v1/company_mobile/dispatch/v1/dashboard/realtime?date=2026-05-29 HTTP/1.1" 200 421 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:21:08 +0000] "GET /api/v1/company_dispatch/delays/live?date=2026-05-29 HTTP/1.1" 200 140 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:21:08 +0000] "GET /api/v1/companies/me/drivers/locations HTTP/1.1" 200 3136 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:21:08 +0000] "GET /api/v1/companies/notifications?limit=30 HTTP/1.1" 200 53 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:21:08 +0000] "GET /api/v1/company-settings/billing/parties?active=true HTTP/1.1" 200 2669 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:21:08 +0000] "GET /api/v1/company_mobile/dispatch/v1/status HTTP/1.1" 200 328 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:21:08 +0000] "GET /api/v1/company_mobile/dispatch/v1/status?date=2026-05-29 HTTP/1.1" 200 328 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:21:08 +0000] "GET /api/v1/company-settings/billing HTTP/1.1" 200 2237 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:21:08 +0000] "GET /api/v1/company_mobile/dispatch/v1/mode HTTP/1.1" 200 1084 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:21:08 +0000] "GET /api/v1/conversations/inbox HTTP/1.1" 403 46 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:21:09 +0000] "GET /api/v1/company_mobile/dispatch/v1/rides?date=2026-05-29&page_size=50 HTTP/1.1" 200 2163 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:21:09 +0000] "GET /api/v1/companies/me/drivers/locations HTTP/1.1" 401 63 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | [CompanyNotifications] GET error: Signature has expired
+backend-1  | Traceback (most recent call last):
+backend-1  |   File "/app/routes/company_notifications.py", line 48, in get
+backend-1  |     company_id = _get_company_id()
+backend-1  |                  ^^^^^^^^^^^^^^^^^
+backend-1  |   File "/app/routes/company_notifications.py", line 33, in _get_company_id
+backend-1  |     verify_jwt_in_request()
+backend-1  |   File "/usr/local/lib/python3.11/site-packages/flask_jwt_extended/view_decorators.py", line 94, in verify_jwt_in_request
+backend-1  |     jwt_data, jwt_header, jwt_location = _decode_jwt_from_request(
+backend-1  |                                          ^^^^^^^^^^^^^^^^^^^^^^^^^
+backend-1  |   File "/usr/local/lib/python3.11/site-packages/flask_jwt_extended/view_decorators.py", line 340, in _decode_jwt_from_request
+backend-1  |     decoded_token = decode_token(encoded_token, csrf_token)
+backend-1  |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend-1  |   File "/usr/local/lib/python3.11/site-packages/flask_jwt_extended/utils.py", line 128, in decode_token
+backend-1  |     return jwt_manager._decode_jwt_from_config(encoded_token, csrf_value, allow_expired)
+backend-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend-1  |   File "/usr/local/lib/python3.11/site-packages/flask_jwt_extended/jwt_manager.py", line 557, in _decode_jwt_from_config
+backend-1  |     return _decode_jwt(**kwargs, allow_expired=allow_expired)
+backend-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend-1  |   File "/usr/local/lib/python3.11/site-packages/flask_jwt_extended/tokens.py", line 98, in _decode_jwt
+backend-1  |     decoded_token = jwt.decode(
+backend-1  |                     ^^^^^^^^^^^
+backend-1  |   File "/usr/local/lib/python3.11/site-packages/jwt/api_jwt.py", line 368, in decode
+backend-1  |     decoded = self.decode_complete(
+backend-1  |               ^^^^^^^^^^^^^^^^^^^^^
+backend-1  |   File "/usr/local/lib/python3.11/site-packages/jwt/api_jwt.py", line 275, in decode_complete
+backend-1  |     self._validate_claims(
+backend-1  |   File "/usr/local/lib/python3.11/site-packages/jwt/api_jwt.py", line 408, in _validate_claims
+backend-1  |     self._validate_exp(payload, now, leeway)
+backend-1  |   File "/usr/local/lib/python3.11/site-packages/jwt/api_jwt.py", line 511, in _validate_exp
+backend-1  |     raise ExpiredSignatureError("Signature has expired")
+backend-1  | jwt.exceptions.ExpiredSignatureError: Signature has expired
+backend-1  | 172.18.0.2 - - [29/May/2026:07:21:09 +0000] "GET /api/v1/companies/me/drivers HTTP/1.1" 401 63 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:21:09 +0000] "GET /api/v1/companies/notifications?limit=30&offset=0 HTTP/1.1" 500 28 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:21:09 +0000] "GET /api/v1/company_mobile/dispatch/v1/status HTTP/1.1" 200 328 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:21:09 +0000] "GET /api/v1/company-settings/billing HTTP/1.1" 200 2237 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:21:09 +0000] "GET /api/v1/company_dispatch/delays?date=2026-05-29 HTTP/1.1" 200 3 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:21:09 +0000] "GET /api/v1/messages/1/hub/threads HTTP/1.1" 200 7910 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:21:10 +0000] "GET /api/v1/messages/1/hub/unread-count HTTP/1.1" 200 20 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:21:10 +0000] "POST /api/v1/auth/switch-context HTTP/1.1" 200 1142 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:21:10 +0000] "POST /api/v1/auth/refresh-token HTTP/1.1" 200 1100 "-" "okhttp/4.12.0"
+backend-1  | [2026-05-29 07:21:11,269] WARNING in ext: ⛔ Accès refusé : Emmenez Moi (COMPANY) a tenté d'accéder à une route restreinte.
+backend-1  | 172.18.0.2 - - [29/May/2026:07:21:11 +0000] "PUT /api/v1/driver/me/location HTTP/1.1" 403 63 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:21:12 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:21:17 +0000] "GET /api/v1/auth/csrf-token HTTP/1.1" 200 130 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:21:17 +0000] "POST /api/v1/auth/refresh-token HTTP/1.1" 200 157 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:21:18 +0000] "GET /api/v1/companies/me/drivers/locations HTTP/1.1" 200 3136 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:21:18 +0000] "GET /api/v1/companies/me/drivers HTTP/1.1" 200 13081 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:21:18 +0000] "GET /api/v1/company_dispatch/delays?date=2026-05-29 HTTP/1.1" 200 3 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | [2026-05-29 07:21:19,091] WARNING in ext: ⛔ Accès refusé : Emmenez Moi (COMPANY) a tenté d'accéder à une route restreinte.
+backend-1  | 172.18.0.2 - - [29/May/2026:07:21:19 +0000] "PUT /api/v1/driver/me/location HTTP/1.1" 403 63 "-" "okhttp/4.12.0"
+backend-1  | 172.20.0.2 - - [29/May/2026:07:21:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 88173 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:21:25 +0000] "GET /api/v1/messages/1/hub/unread-count HTTP/1.1" 200 20 "-" "okhttp/4.12.0"
+backend-1  | [2026-05-29 07:21:27,232] WARNING in ext: ⛔ Accès refusé : Emmenez Moi (COMPANY) a tenté d'accéder à une route restreinte.
+backend-1  | 172.18.0.2 - - [29/May/2026:07:21:27 +0000] "PUT /api/v1/driver/me/location HTTP/1.1" 403 63 "-" "okhttp/4.12.0"
+backend-1  | [2026-05-29 07:44:41 +0000] [7] [CRITICAL] WORKER TIMEOUT (pid:86)
+backend-1  | 172.18.0.2 - - [29/May/2026:07:44:42 +0000] "GET /api/v1/messages/1/hub/unread-count HTTP/1.1" 200 20 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:44:42 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | [2026-05-29 07:44:45,609] WARNING in ext: ⛔ Accès refusé : Emmenez Moi (COMPANY) a tenté d'accéder à une route restreinte.
+backend-1  | 172.18.0.2 - - [29/May/2026:07:44:45 +0000] "GET /api/v1/company_mobile/dispatch/v1/dashboard/realtime?date=2026-05-29 HTTP/1.1" 200 421 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:44:45 +0000] "PUT /api/v1/driver/me/location HTTP/1.1" 403 63 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:44:45 +0000] "GET /api/v1/company_mobile/dispatch/v1/status?date=2026-05-29 HTTP/1.1" 200 328 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:44:45 +0000] "GET /api/v1/company_mobile/dispatch/v1/rides?date=2026-05-29&page_size=50 HTTP/1.1" 200 2163 "-" "okhttp/4.12.0"
+backend-1  | 172.20.0.2 - - [29/May/2026:07:44:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 115908 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:44:57 +0000] "GET /api/v1/messages/1/hub/unread-count HTTP/1.1" 200 20 "-" "okhttp/4.12.0"
+backend-1  | 127.0.0.1 - - [29/May/2026:07:45:01 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:07:45:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 115907 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:45:12 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:45:13 +0000] "GET /api/v1/messages/1/hub/unread-count HTTP/1.1" 200 20 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:45:16 +0000] "GET /api/v1/companies/me HTTP/1.1" 200 2982 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/reservations" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:45:16 +0000] "GET /api/v1/company_dispatch/delays?date=2026-05-29 HTTP/1.1" 200 3 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/reservations" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:45:16 +0000] "GET /api/v1/companies/me/reservations?flat=true&include_stats=true&page=1&per_page=25&sort_order=desc&date=2026-05-30&exclude_canceled=true HTTP/1.1" 200 179 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/reservations" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.20.0.2 - - [29/May/2026:07:45:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 115932 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:45:29 +0000] "GET /api/v1/messages/1/hub/unread-count HTTP/1.1" 200 20 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:45:30 +0000] "GET /api/v1/company-settings/billing HTTP/1.1" 200 2237 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/reservations" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:45:30 +0000] "GET /api/v1/companies/me/clients?per_page=1000 HTTP/1.1" 200 1086668 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/reservations" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:45:31 +0000] "GET /api/v1/companies/me/clients?per_page=1000 HTTP/1.1" 200 1086668 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/reservations" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 127.0.0.1 - - [29/May/2026:07:45:31 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:45:32 +0000] "GET /api/v1/companies/me/clients?search=I HTTP/1.1" 200 144326 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/reservations" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:45:32 +0000] "GET /api/v1/companies/me/clients?search=Ig HTTP/1.1" 200 58208 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/reservations" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:45:33 +0000] "GET /api/v1/companies/me/clients?search=Igw HTTP/1.1" 200 1634 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/reservations" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:45:33 +0000] "GET /api/v1/companies/me/clients?search=Igwe HTTP/1.1" 200 1634 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/reservations" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.20.0.2 - - [29/May/2026:07:45:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 115932 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:45:37 +0000] "GET /api/v1/companies/notifications?limit=30&offset=0 HTTP/1.1" 200 53 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/clients" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:45:37 +0000] "GET /api/v1/companies/me/clients?per_page=1000 HTTP/1.1" 200 1086668 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/clients" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:45:37 +0000] "GET /api/v1/company_dispatch/delays?date=2026-05-29 HTTP/1.1" 200 3 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/clients" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:45:41 +0000] "GET /api/v1/companies/me/clients?per_page=1000 HTTP/1.1" 200 1086668 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/clients?selected=431" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:45:41 +0000] "GET /api/v1/clients/431/stays HTTP/1.1" 200 30 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/clients?selected=431" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:45:41 +0000] "GET /api/v1/clients/431/billing-parties HTTP/1.1" 200 30 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/clients?selected=431" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:45:42 +0000] "GET /api/v1/companies/me/clients/431/reservations?include_invoices=false&limit=3 HTTP/1.1" 200 274 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/clients?selected=431" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:45:42 +0000] "GET /api/v1/clients/431/billing-parties HTTP/1.1" 200 30 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/clients?selected=431" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:45:42 +0000] "GET /api/v1/company-settings/billing/clinic-mappings HTTP/1.1" 200 482 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/clients?selected=431" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:45:42 +0000] "GET /api/v1/company-settings/billing/parties?active=true HTTP/1.1" 200 2669 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/clients?selected=431" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:45:42 +0000] "GET /api/v1/clients/431/stays HTTP/1.1" 200 30 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/clients?selected=431" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:45:42 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:45:44 +0000] "GET /api/v1/messages/1/hub/unread-count HTTP/1.1" 200 20 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:45:48 +0000] "PUT /api/v1/companies/me/clients/431 HTTP/1.1" 200 1373 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/clients?selected=431" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:45:48 +0000] "GET /api/v1/companies/me/clients?per_page=1000 HTTP/1.1" 200 1086651 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/clients?selected=431" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:45:49 +0000] "GET /api/v1/companies/me/clients?per_page=1000 HTTP/1.1" 200 1086651 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/clients?selected=431" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:45:49 +0000] "GET /api/v1/clients/431/billing-parties HTTP/1.1" 200 30 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/clients?selected=431" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:45:49 +0000] "GET /api/v1/clients/431/stays HTTP/1.1" 200 30 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/clients?selected=431" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:45:49 +0000] "GET /api/v1/clients/431/billing-parties HTTP/1.1" 200 30 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/clients?selected=431" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:45:49 +0000] "GET /api/v1/clients/431/stays HTTP/1.1" 200 30 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/clients?selected=431" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:45:49 +0000] "GET /api/v1/company-settings/billing/parties?active=true HTTP/1.1" 200 2669 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/clients?selected=431" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:45:49 +0000] "GET /api/v1/companies/me/clients/431/reservations?include_invoices=false&limit=3 HTTP/1.1" 200 274 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/clients?selected=431" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:45:49 +0000] "GET /api/v1/company-settings/billing/clinic-mappings HTTP/1.1" 200 482 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/clients?selected=431" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:45:49 +0000] "GET /api/v1/company_mobile/dispatch/v1/dashboard/realtime?date=2026-05-29 HTTP/1.1" 200 421 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:45:49 +0000] "GET /api/v1/company_mobile/dispatch/v1/status?date=2026-05-29 HTTP/1.1" 200 329 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:45:50 +0000] "GET /api/v1/company_mobile/dispatch/v1/rides?date=2026-05-29&page_size=50 HTTP/1.1" 200 2163 "-" "okhttp/4.12.0"
+backend-1  | 172.20.0.2 - - [29/May/2026:07:45:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 107590 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:46:00 +0000] "GET /api/v1/messages/1/hub/unread-count HTTP/1.1" 200 20 "-" "okhttp/4.12.0"
+backend-1  | 127.0.0.1 - - [29/May/2026:07:46:02 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:07:46:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 126607 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:46:11 +0000] "GET /api/v1/geocode/autocomplete?q=Rue%20des%20Horlogers%2015%2C%201227%2C%20Carouge&lat=46.2044&lon=6.1432&limit=8 HTTP/1.1" 200 1554 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/clients?selected=431" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | [2026-05-29 07:46:12,704] WARNING in ext: ⛔ Accès refusé : Emmenez Moi (COMPANY) a tenté d'accéder à une route restreinte.
+backend-1  | 172.18.0.2 - - [29/May/2026:07:46:12 +0000] "PUT /api/v1/driver/me/location HTTP/1.1" 403 63 "-" "okhttp/4.12.0"
+backend-1  | [2026-05-29 07:46:12,736] WARNING in ext: ⛔ Accès refusé : Emmenez Moi (COMPANY) a tenté d'accéder à une route restreinte.
+backend-1  | [2026-05-29 07:46:12,739] WARNING in ext: ⛔ Accès refusé : Emmenez Moi (COMPANY) a tenté d'accéder à une route restreinte.
+backend-1  | 172.18.0.2 - - [29/May/2026:07:46:12 +0000] "PUT /api/v1/driver/me/location HTTP/1.1" 403 63 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:46:12 +0000] "PUT /api/v1/driver/me/location HTTP/1.1" 403 63 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:46:12 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:46:15 +0000] "PUT /api/v1/companies/me/clients/431 HTTP/1.1" 200 1381 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/clients?selected=431" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:46:15 +0000] "GET /api/v1/companies/me/clients?per_page=1000 HTTP/1.1" 200 1086659 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/clients?selected=431" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:46:16 +0000] "GET /api/v1/companies/me/clients?per_page=1000 HTTP/1.1" 200 1086659 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/clients?selected=431" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:46:16 +0000] "GET /api/v1/clients/431/billing-parties HTTP/1.1" 200 30 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/clients?selected=431" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:46:16 +0000] "GET /api/v1/clients/431/stays HTTP/1.1" 200 30 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/clients?selected=431" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:46:16 +0000] "GET /api/v1/clients/431/billing-parties HTTP/1.1" 200 30 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/clients?selected=431" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:46:16 +0000] "GET /api/v1/company-settings/billing/parties?active=true HTTP/1.1" 200 2669 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/clients?selected=431" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:46:16 +0000] "GET /api/v1/messages/1/hub/unread-count HTTP/1.1" 200 20 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:46:16 +0000] "GET /api/v1/companies/me/clients/431/reservations?include_invoices=false&limit=3 HTTP/1.1" 200 274 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/clients?selected=431" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:46:16 +0000] "GET /api/v1/clients/431/stays HTTP/1.1" 200 30 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/clients?selected=431" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:46:16 +0000] "GET /api/v1/company-settings/billing/clinic-mappings HTTP/1.1" 200 482 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/clients?selected=431" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.20.0.2 - - [29/May/2026:07:46:20 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 109698 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:46:27 +0000] "GET /api/v1/company_dispatch/delays?date=2026-05-29 HTTP/1.1" 200 3 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/reservations" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:46:27 +0000] "GET /api/v1/companies/notifications?limit=30&offset=0 HTTP/1.1" 200 53 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/reservations" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:46:27 +0000] "GET /api/v1/companies/me HTTP/1.1" 200 2982 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/reservations" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:46:27 +0000] "GET /api/v1/companies/me/reservations?flat=true&include_stats=true&page=1&per_page=25&sort_order=desc&exclude_canceled=true HTTP/1.1" 200 94405 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/reservations" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:46:32 +0000] "GET /api/v1/messages/1/hub/unread-count HTTP/1.1" 200 20 "-" "okhttp/4.12.0"
+backend-1  | 127.0.0.1 - - [29/May/2026:07:46:32 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.20.0.2 - - [29/May/2026:07:46:35 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 128510 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:46:37 +0000] "GET /api/v1/companies/me/reservations?flat=true&include_stats=true&page=1&per_page=25&sort_order=desc&date=2026-05-18&exclude_canceled=true HTTP/1.1" 200 179 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/reservations" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:46:38 +0000] "GET /api/v1/company-settings/billing HTTP/1.1" 200 2237 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/reservations" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:46:38 +0000] "GET /api/v1/companies/me/clients?per_page=1000 HTTP/1.1" 200 1086659 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/reservations" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:46:38 +0000] "GET /api/v1/companies/me/clients?per_page=1000 HTTP/1.1" 200 1086659 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/reservations" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:46:41 +0000] "GET /api/v1/companies/me/clients?search=i HTTP/1.1" 200 144326 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/reservations" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:46:42 +0000] "GET /api/v1/companies/me/clients?search=ig HTTP/1.1" 200 58199 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/reservations" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:46:42 +0000] "GET /api/v1/companies/me/clients?search=igw HTTP/1.1" 200 1625 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/reservations" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:46:42 +0000] "GET /api/v1/companies/me/clients?search=igwe HTTP/1.1" 200 1625 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/reservations" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:46:42 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:46:43 +0000] "GET /api/v1/clients/431/active-stay HTTP/1.1" 200 32 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/reservations" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:46:47 +0000] "GET /api/v1/messages/1/hub/unread-count HTTP/1.1" 200 20 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:46:48 +0000] "GET /api/v1/geocode/autocomplete?q=HUG%20Gen%C3%A8ve&lat=46.2044&lon=6.1432&limit=8 HTTP/1.1" 200 2590 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/reservations" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:46:49 +0000] "GET /api/v1/geocode/place-details?place_id=ChIJbcOgE9J6jEcRQcQIwduaFnE HTTP/1.1" 200 870 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/reservations" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:46:49 +0000] "GET /api/v1/osrm/route?pickup_lat=46.1830752&pickup_lon=6.1439627&dropoff_lat=46.19361970000001&dropoff_lon=6.1491603 HTTP/1.1" 200 3624 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/reservations" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:46:49 +0000] "GET /api/v1/medical/establishments?q=H%C3%B4pitaux%20Universitaires%20de%20Gen%C3%A8ve%20(HUG)&limit=8 HTTP/1.1" 200 3 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/reservations" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:46:49 +0000] "POST /api/v1/pricing/simulate HTTP/1.1" 200 471 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/reservations" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.20.0.2 - - [29/May/2026:07:46:50 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 113575 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:46:57 +0000] "POST /api/v1/pricing/simulate HTTP/1.1" 200 471 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/reservations" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:47:00 +0000] "POST /api/v1/pricing/simulate HTTP/1.1" 200 471 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/reservations" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:47:01 +0000] "POST /api/v1/pricing/simulate HTTP/1.1" 200 471 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/reservations" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 127.0.0.1 - - [29/May/2026:07:47:03 +0000] "GET /health HTTP/1.1" 200 42 "-" "Python-urllib/3.11"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:47:03 +0000] "GET /api/v1/messages/1/hub/unread-count HTTP/1.1" 200 20 "-" "okhttp/4.12.0"
+backend-1  | 172.20.0.2 - - [29/May/2026:07:47:05 +0000] "GET /api/v1/prometheus/metrics HTTP/1.1" 200 113573 "-" "Prometheus/2.48.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:47:12 +0000] "POST /api/v1/companies/me/reservations/manual HTTP/1.1" 201 13934 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/reservations" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:47:12 +0000] "GET /health HTTP/1.1" 200 42 "-" "Go-http-client/1.1"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:47:12 +0000] "GET /api/v1/companies/me/reservations?flat=true&include_stats=true&page=1&per_page=25&sort_order=desc&date=2026-05-18&exclude_canceled=true HTTP/1.1" 200 179 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/reservations" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:47:16 +0000] "GET /api/v1/company-settings/billing HTTP/1.1" 200 2237 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/reservations" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:47:16 +0000] "GET /api/v1/companies/me/clients?per_page=1000 HTTP/1.1" 200 1086659 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/reservations" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:47:16 +0000] "GET /api/v1/companies/me/clients?per_page=1000 HTTP/1.1" 200 1086659 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/reservations" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:47:18 +0000] "GET /api/v1/company_mobile/dispatch/v1/dashboard/realtime?date=2026-05-29 HTTP/1.1" 200 421 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:47:18 +0000] "GET /api/v1/company_mobile/dispatch/v1/status?date=2026-05-29 HTTP/1.1" 200 328 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:47:18 +0000] "GET /api/v1/company_mobile/dispatch/v1/rides?date=2026-05-29&page_size=50 HTTP/1.1" 200 2163 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:47:19 +0000] "GET /api/v1/messages/1/hub/unread-count HTTP/1.1" 200 20 "-" "okhttp/4.12.0"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:47:20 +0000] "GET /api/v1/companies/me/clients?search=B HTTP/1.1" 200 145102 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/reservations" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | 172.18.0.2 - - [29/May/2026:07:47:20 +0000] "GET /api/v1/companies/me/clients?search=Bu HTTP/1.1" 200 87708 "https://www.lirie.ch/dashboard/company/1e92e54a-fd52-47ed-9ca1-ef42ecdd818b/reservations" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+backend-1  | [2026-05-29 07:55:08 +0000] [7] [CRITICAL] WORKER TIMEOUT (pid:85)
+backend-1  | [2026-05-29 07:55:09 +0000] [84] [INFO] Worker exiting (pid: 84)
+backend-1  | [2026-05-29 07:58:08 +0000] [7] [CRITICAL] WORKER TIMEOUT (pid:84)

@@ -37,7 +37,9 @@ export async function showMissionBarAndroid(missionId: number, status: string): 
       body: `Statut: ${status}`,
       android: {
         channelId: DRIVER_NOTIFICATION_CHANNELS.missionActive,
-        asForegroundService: true,
+        // Évite un second FGS dismissable en parallèle du service expo-location.
+        asForegroundService: false,
+        ongoing: true,
         pressAction: {
           id: "open_mission",
           launchActivity: "default",

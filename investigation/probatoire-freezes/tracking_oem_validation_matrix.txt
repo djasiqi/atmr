@@ -1,0 +1,24 @@
+# Matrice validation OEM — tracking BG fiable
+
+Protocole minimal par device :
+1. Login driver + readiness gate validé
+2. Démarrer mission active
+3. Passer app en background + écran éteint 10 min
+4. Activer mode Doze (adb shell dumpsys deviceidle force-idle)
+5. Vérifier : FGS actif, points GPS < 90s, silent wake si stale
+
+| OEM | Android | Device test | FGS stable | Auto-start requis | Silent wake OK | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| Samsung | 14 | S23 | TODO | Parfois | TODO | |
+| Samsung | 15 | S24 | TODO | Parfois | TODO | |
+| Xiaomi | 14 | Redmi Note | TODO | Oui | TODO | MIUI auto-start |
+| Redmi | 14 | Redmi | TODO | Oui | TODO | |
+| Oppo | 14 | Reno | TODO | Oui | TODO | ColorOS |
+| Vivo | 14 | Y series | TODO | Oui | TODO | FunTouch |
+| Pixel | 15 | Pixel 8 | TODO | Non | TODO | Référence AOSP |
+| OnePlus | 15 | 12R | TODO | Oui | TODO | OxygenOS |
+
+KPI cibles post-validation :
+- 95% ASSIGNED avec last_fix_age < 90s
+- 99% ASSIGNED avec last_fix_age < 300s
+- Wake success rate > 90%

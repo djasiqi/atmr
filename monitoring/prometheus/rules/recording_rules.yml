@@ -166,3 +166,24 @@ groups:
           metric_type: http
           error_type: "5xx"
 
+  - name: tracking_health_recording
+    interval: 1m
+    rules:
+      - record: tracking:silent_wake_success_rate_5m
+        expr: |
+          sum(rate(silent_push_wake_total{result="acked"}[5m]))
+          /
+          clamp_min(sum(rate(silent_push_wake_total{result="sent"}[5m])), 0.001)
+        labels:
+          metric_type: tracking
+      - record: tracking:device_fix_age_p95_5m
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum(rate(driver_device_last_fix_age_seconds_bucket[5m])) by (le)
+          )
+      - record: tracking:battery_optimized_rate_5m
+        expr: |
+          sum(rate(driver_device_health_reports_total{battery_optimized="true"}[5m]))
+          /
+          clamp_min(sum(rate(driver_device_health_reports_total[5m])), 0.001)

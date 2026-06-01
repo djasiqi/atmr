@@ -1,0 +1,214 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": { "defaults": { "unit": "percentunit" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 0 },
+      "id": 1,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        {
+          "expr": "sum(rate(driver_device_health_reports_total{battery_optimized=\"true\"}[5m])) / clamp_min(sum(rate(driver_device_health_reports_total[5m])), 0.001)",
+          "legendFormat": "battery optimized"
+        }
+      ],
+      "title": "% drivers battery optimized",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 0 },
+      "id": 2,
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(driver_device_last_fix_age_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p95 fix age"
+        }
+      ],
+      "title": "Fix age p95 (mobile heartbeat)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": { "defaults": { "unit": "percentunit" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 0 },
+      "id": 3,
+      "targets": [
+        {
+          "expr": "sum(rate(silent_push_wake_total{result=\"acked\"}[5m])) / clamp_min(sum(rate(silent_push_wake_total{result=\"sent\"}[5m])), 0.001)",
+          "legendFormat": "wake success"
+        }
+      ],
+      "title": "Silent push wake success rate",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "id": 4,
+      "targets": [
+        {
+          "expr": "sum by (manufacturer) (rate(driver_device_stale_fix_total[1h]))",
+          "legendFormat": "{{manufacturer}}"
+        }
+      ],
+      "title": "Stale fix rate by OEM",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "id": 5,
+      "targets": [
+        {
+          "expr": "sum by (sync_type, status) (rate(silent_notifications_sent_total[5m]))",
+          "legendFormat": "{{sync_type}} {{status}}"
+        }
+      ],
+      "title": "Silent notifications sent",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": { "defaults": { "unit": "percentunit" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 16 },
+      "id": 6,
+      "targets": [
+        {
+          "expr": "sum(rate(driver_device_health_reports_total{tracking_active=\"true\"}[5m])) / clamp_min(sum(rate(driver_device_health_reports_total[5m])), 0.001)",
+          "legendFormat": "tracking active"
+        }
+      ],
+      "title": "% drivers tracking active in mission",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": { "defaults": { "unit": "cpm" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 16 },
+      "id": 7,
+      "targets": [
+        {
+          "expr": "sum(rate(driver_device_health_reports_total[1m])) * 60",
+          "legendFormat": "heartbeats/min"
+        }
+      ],
+      "title": "Heartbeats received per minute",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 16 },
+      "id": 8,
+      "targets": [
+        {
+          "expr": "sum(rate(push_fcm_background_handler_no_callback_total[5m]))",
+          "legendFormat": "{{platform}}"
+        }
+      ],
+      "title": "FCM background handler no callback",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
+      "id": 9,
+      "targets": [
+        {
+          "expr": "sum by (key) (rate(device_health_redis_write_total[5m]))",
+          "legendFormat": "{{key}}"
+        },
+        {
+          "expr": "sum by (caller) (rate(device_health_legacy_read_total[5m]))",
+          "legendFormat": "legacy read {{caller}}"
+        }
+      ],
+      "title": "Redis device-health migration",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
+      "id": 10,
+      "targets": [
+        {
+          "expr": "sum by (field) (rate(device_health_dual_write_mismatch_total[5m]))",
+          "legendFormat": "{{field}}"
+        }
+      ],
+      "title": "Dual-write mismatches",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["tracking", "device-health", "atmr"],
+  "templating": {
+    "list": [
+      {
+        "current": { "selected": true, "text": "Prometheus", "value": "prometheus" },
+        "hide": 0,
+        "includeAll": false,
+        "label": "Datasource",
+        "name": "datasource",
+        "options": [],
+        "query": "prometheus",
+        "refresh": 1,
+        "type": "datasource"
+      },
+      {
+        "allValue": ".*",
+        "current": { "selected": true, "text": "All", "value": "$__all" },
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "definition": "label_values(driver_device_health_reports_total, manufacturer)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Manufacturer",
+        "multi": true,
+        "name": "manufacturer",
+        "query": { "query": "label_values(driver_device_health_reports_total, manufacturer)", "refId": "A" },
+        "refresh": 2,
+        "type": "query"
+      },
+      {
+        "allValue": ".*",
+        "current": { "selected": true, "text": "All", "value": "$__all" },
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "definition": "label_values(driver_device_health_reports_total, platform)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Platform",
+        "multi": true,
+        "name": "platform",
+        "query": { "query": "label_values(driver_device_health_reports_total, platform)", "refId": "A" },
+        "refresh": 2,
+        "type": "query"
+      }
+    ]
+  },
+  "time": { "from": "now-6h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Driver Tracking Health",
+  "uid": "driver-tracking-health",
+  "version": 1
+}

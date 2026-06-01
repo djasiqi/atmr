@@ -1,6 +1,10 @@
 import React from 'react';
 import styles from '../../Dashboard/DriverDashboard.module.css';
-import { FiRepeat, FiUserX, FiUserCheck, FiTruck } from 'react-icons/fi';
+import { FiRepeat, FiUserX, FiUserCheck, FiTruck, FiAlertTriangle, FiPhone } from 'react-icons/fi';
+import {
+  isDriverConstrained,
+  getDriverConstraintReason,
+} from '../../../../utils/companyDriverProjections';
 
 const DriverTable = ({ driver, loading, onToggle, onToggleType }) => {
   if (loading) return <p className={styles.emptyText}>Chargement des chauffeurs...</p>;
@@ -45,9 +49,33 @@ const DriverTable = ({ driver, loading, onToggle, onToggleType }) => {
                 </span>
               </td>
               <td>
-                <span className={drv.is_available ? styles.badgeAvailable : styles.badgeUnavailable}>
-                  {drv.is_available ? 'Disponible' : 'Indisponible'}
-                </span>
+                <div className={styles.statusCell}>
+                  <span className={drv.is_available ? styles.badgeAvailable : styles.badgeUnavailable}>
+                    {drv.is_available ? 'Disponible' : 'Indisponible'}
+                  </span>
+                  {isDriverConstrained(drv) && (
+                    <span
+                      className={styles.badgeConstrained}
+                      title={`Batterie restreinte — l'app du chauffeur signale un problème d'optimisation batterie (raison : ${
+                        getDriverConstraintReason(drv) || 'inconnue'
+                      }). Position figée.`}
+                      role="status"
+                    >
+                      <FiAlertTriangle size={11} aria-hidden />
+                      <span>Batterie restreinte</span>
+                    </span>
+                  )}
+                  {isDriverConstrained(drv) && drv.phone ? (
+                    <a
+                      href={`tel:${drv.phone}`}
+                      className={styles.contactLink}
+                      title={`Contacter le chauffeur (${drv.phone})`}
+                    >
+                      <FiPhone size={11} aria-hidden />
+                      <span>Contacter le chauffeur</span>
+                    </a>
+                  ) : null}
+                </div>
               </td>
               <td>
                 <button

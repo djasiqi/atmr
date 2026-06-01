@@ -184,7 +184,15 @@ const AddDriverForm = ({ onSubmit, onClose }) => {
     const vehicleModel =
       (selectedVehicle && String(selectedVehicle.model || selectedVehicle.name || '').trim()) || '';
     const vehicleBrand =
-      (selectedVehicle && String(selectedVehicle.brand || '').trim()) || '';
+      (selectedVehicle &&
+        String(
+          selectedVehicle.brand ||
+            selectedVehicle.make ||
+            selectedVehicle.manufacturer ||
+            vehicleModel ||
+            'Non renseignee'
+        ).trim()) ||
+      'Non renseignee';
     const vehiclePlate =
       (selectedVehicle && String(selectedVehicle.license_plate || '').trim()) || '';
 

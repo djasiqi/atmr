@@ -7,6 +7,7 @@ et garantir la cohérence entre Socket.IO (foreground) et Push notifications (ba
 
 from __future__ import annotations
 
+import json
 import os
 import re
 from datetime import datetime
@@ -22,6 +23,7 @@ from services.notifications.push import send_push_message
 from services.notifications.push_message_builder import (
     CHANGE_TYPE_ADDRESS_CHANGE,
     CHANGE_TYPE_CANCEL,
+    CHANGE_TYPE_DETAILS_CHANGE,
     CHANGE_TYPE_TIME_CHANGE,
     CHAT_TYPE_DIRECT,
     EVENT_ASSIGNED,
@@ -335,10 +337,22 @@ def _send_push_to_driver(
         is_urgent = notification_type == "urgent_alert"
         bypass_rate_limit = is_urgent
 
-        # ✅ AMÉLIORATION MAJEURE: Utiliser Celery pour queue persistante + fallback SMS/Email
+        # ✅ AMÉLIORATION MAJEURE: Kafka-first (P2) ou Celery pour queue persistante
         if use_celery:
+            from services.notifications.notification_pipeline_observability import (
+                log_notification_pipeline_event,
+            )
             from tasks.notification_tasks import send_push_notification_task
             from services.notifications.push_pipeline_log import log_driver_push_stage
+
+            log_notification_pipeline_event(
+                "notification_created",
+                notification_id=data.get("event_id") if data else None,
+                booking_id=data.get("booking_id") if data else None,
+                driver_id=driver_id,
+                notification_type=notification_type,
+                correlation_id=data.get("correlation_id") if data else None,
+            )
 
             log_driver_push_stage(
                 "driver_push.enqueue",
@@ -348,6 +362,34 @@ def _send_push_to_driver(
                 driver_id=driver_id,
                 notification_type=notification_type,
             )
+
+            kafka_first = (
+                os.getenv("PUSH_KAFKA_FIRST_ENABLED", "false").lower() == "true"
+            )
+            if kafka_first:
+                try:
+                    from services.notifications.kafka_producer import send_push_via_kafka
+
+                    if send_push_via_kafka(
+                        driver_id,
+                        title,
+                        body,
+                        data=data,
+                        notification_type=notification_type,
+                        bypass_rate_limit=bypass_rate_limit,
+                    ):
+                        app_logger.info(
+                            "[event_fanout] Push queued via Kafka-first for driver %s",
+                            driver_id,
+                        )
+                        channel = data.get("channelId", "unknown")
+                        track_notification_sent(notification_type, channel, "kafka")
+                        return True
+                except Exception:
+                    app_logger.exception(
+                        "[event_fanout] Kafka-first failed, fallback Celery driver=%s",
+                        driver_id,
+                    )
 
             app_logger.warning(
                 "[event_fanout] Queueing notification to driver %s via Celery (type: %s)",
@@ -730,6 +772,7 @@ def fanout_booking_updated(
         new_time: str | None = None
         address_change_type: str | None = None
         new_address_short: str | None = None
+        details_change_labels: list[str] | None = None
 
         if status in {"canceled", "cancelled"}:
             change_type = CHANGE_TYPE_CANCEL
@@ -754,6 +797,27 @@ def fanout_booking_updated(
                 elif not address_change_type and ch_d:
                     address_change_type = "dropoff"
                 change_type = CHANGE_TYPE_ADDRESS_CHANGE
+            else:
+                details_fields_map = {
+                    "notes": "Notes",
+                    "notes_medical": "Notes médicales",
+                    "medical_facility": "Établissement",
+                    "hospital_service": "Service / bât.",
+                    "doctor_name": "Médecin",
+                    "pickup_access_notes": "Accès pickup",
+                    "dropoff_access_notes": "Accès destination",
+                    "wheelchair_client_has": "Chaise roulante",
+                    "wheelchair_need": "Chaise roulante",
+                }
+                labels = [
+                    label
+                    for key, label in details_fields_map.items()
+                    if key in changes
+                ]
+                if labels:
+                    # Dedup des labels en conservant l'ordre
+                    details_change_labels = list(dict.fromkeys(labels))
+                    change_type = CHANGE_TYPE_DETAILS_CHANGE
 
         discrete = _get_recipient_discreet_mode(driver_id=driver_id)
         msg = build_push_for_company_to_driver(
@@ -764,6 +828,7 @@ def fanout_booking_updated(
             new_time=new_time,
             address_change_type=address_change_type,
             new_address_short=new_address_short,
+            details_change_labels=details_change_labels,
             discrete_mode=discrete,
         )
 
@@ -817,6 +882,14 @@ def fanout_booking_updated(
             title=msg["title"],
             body=msg["body"],
             data=data,
+        )
+    else:
+        app_logger.info(
+            "[event_fanout] booking_updated push skipped (socket-only policy): "
+            "driver_id=%s booking_id=%s changes=%s",
+            driver_id,
+            booking_id,
+            (booking_data or {}).get("changes"),
         )
 
 
@@ -1379,6 +1452,59 @@ def _send_notification_to_executing_company(  # pyright: ignore[reportUnusedFunc
 # ========================================
 
 
+SILENT_UPDATE_THROTTLE_SECONDS = int(
+    os.environ.get("SILENT_UPDATE_THROTTLE_SECONDS", "30")
+)
+# Skip total des silent push Expo (Expo Push API n'a pas de vrai silent fiable Android).
+SILENT_UPDATE_SKIP_EXPO = os.environ.get(
+    "SILENT_UPDATE_SKIP_EXPO", "true"
+).strip().lower() in ("1", "true", "yes", "on")
+
+
+def _should_throttle_silent_update(driver_id: int, sync_type: str) -> bool:
+    """Throttle Redis: True si un silent_update identique a été envoyé récemment.
+
+    Fail-open si Redis est indisponible (on laisse passer le message).
+    """
+    if SILENT_UPDATE_THROTTLE_SECONDS <= 0:
+        return False
+    try:
+        from ext import redis_client
+
+        if not redis_client:
+            return False
+        key = f"silent_update:{driver_id}:{sync_type}"
+        was_set = redis_client.set(
+            key, "1", nx=True, ex=SILENT_UPDATE_THROTTLE_SECONDS
+        )
+        return not bool(was_set)
+    except Exception:
+        return False
+
+
+def _dedup_device_tokens_by_token(device_tokens: list[Any]) -> list[Any]:
+    """Conserve uniquement le DeviceToken le plus récent par valeur de token.
+
+    Évite d'envoyer N copies du même push à un même appareil quand plusieurs
+    lignes `device_tokens.is_active=true` partagent la même valeur `token`
+    (artefact de réinscriptions multiples avec device_id instables).
+    """
+    by_token: dict[str, Any] = {}
+    for dt in device_tokens:
+        token = getattr(dt, "token", None)
+        if not token:
+            continue
+        existing = by_token.get(token)
+        if existing is None:
+            by_token[token] = dt
+            continue
+        existing_updated = getattr(existing, "updated_at", None)
+        new_updated = getattr(dt, "updated_at", None)
+        if new_updated and (not existing_updated or new_updated > existing_updated):
+            by_token[token] = dt
+    return list(by_token.values())
+
+
 def send_silent_data_update(
     driver_id: int,
     sync_type: str,
@@ -1388,6 +1514,13 @@ def send_silent_data_update(
     """Envoie une notification silencieuse pour sync données en arrière-plan.
 
     Phase 2.6 - Notifications silencieuses pour préchargement et sync données.
+
+    Garanties :
+    - throttle Redis par (driver_id, sync_type) pour éviter la rafale liée au polling ;
+    - dédup des tokens par valeur `token` (multi-`device_id` → 1 envoi par device réel) ;
+    - les tokens `expo` sont skippés par défaut (pas de vrai silent push Android côté Expo) :
+      seuls les tokens `fcm` reçoivent un message data-only ; les autres sont ignorés
+      ou rebasculés en FCM côté upsert.
 
     Args:
         driver_id: ID du chauffeur cible
@@ -1408,6 +1541,16 @@ def send_silent_data_update(
         def track_silent_notification_sent(*args, **kwargs):
             pass
 
+    if _should_throttle_silent_update(driver_id, sync_type):
+        app_logger.info(
+            "[silent_update] throttled driver=%s sync_type=%s window=%ss",
+            driver_id,
+            sync_type,
+            SILENT_UPDATE_THROTTLE_SECONDS,
+        )
+        track_silent_notification_sent(sync_type, "throttled")
+        return True
+
     try:
         # ✅ CORRECTIF #3: Utiliser DeviceToken pour support multi-device
         from models import DeviceToken
@@ -1424,23 +1567,35 @@ def send_silent_data_update(
             track_silent_notification_sent(sync_type, "failed")
             return False
 
+        deduped_tokens = _dedup_device_tokens_by_token(device_tokens)
+        if len(deduped_tokens) < len(device_tokens):
+            app_logger.info(
+                "[silent_update] dedup tokens driver=%s before=%s after=%s",
+                driver_id,
+                len(device_tokens),
+                len(deduped_tokens),
+            )
+
         # ⚠️ IMPORTANT: Pas de title/body pour notification silencieuse
         push_data: Dict[str, Any] = {
             "type": "silent_update",
             "sync_type": sync_type,
-            "payload": payload,
+            "payload": json.dumps(payload, default=str, ensure_ascii=False),
             "timestamp": int(datetime.now().timestamp()),
             "content-available": 1,  # iOS background fetch
         }
 
         success_count = 0
-        for device_token in device_tokens:
+        skipped_expo = 0
+        attempted = 0
+        for device_token in deduped_tokens:
             dt_provider = getattr(device_token, "provider", None)
             dt_platform = getattr(device_token, "platform", None)
 
             if dt_provider == "fcm":
                 from services.notifications.firebase_push import send_fcm_silent
 
+                attempted += 1
                 result = send_fcm_silent(
                     token=device_token.token,
                     data=push_data,
@@ -1455,6 +1610,16 @@ def send_silent_data_update(
                 except Exception:
                     pass
             else:
+                if SILENT_UPDATE_SKIP_EXPO:
+                    skipped_expo += 1
+                    app_logger.debug(
+                        "[silent_update] skip expo token driver=%s sync_type=%s "
+                        "(no reliable silent push via Expo)",
+                        driver_id,
+                        sync_type,
+                    )
+                    continue
+                attempted += 1
                 result = send_push_message(
                     token=device_token.token,
                     title="",
@@ -1486,12 +1651,30 @@ def send_silent_data_update(
 
         if success:
             app_logger.info(
-                f"[silent_update] Envoyé à driver {driver_id}: sync_type={sync_type} ({success_count}/{len(device_tokens)} devices)"
+                "[silent_update] Envoyé à driver %s: sync_type=%s "
+                "(%s/%s devices, skipped_expo=%s, total_active=%s)",
+                driver_id,
+                sync_type,
+                success_count,
+                attempted,
+                skipped_expo,
+                len(device_tokens),
             )
             track_silent_notification_sent(sync_type, "success")
+        elif attempted == 0 and skipped_expo > 0:
+            app_logger.info(
+                "[silent_update] no fcm tokens driver=%s sync_type=%s "
+                "(skipped_expo=%s)",
+                driver_id,
+                sync_type,
+                skipped_expo,
+            )
+            track_silent_notification_sent(sync_type, "skipped_expo_only")
         else:
             app_logger.error(
-                f"[silent_update] Échec envoi à driver {driver_id}: sync_type={sync_type}"
+                "[silent_update] Échec envoi à driver %s: sync_type=%s",
+                driver_id,
+                sync_type,
             )
             track_silent_notification_sent(sync_type, "failed")
 

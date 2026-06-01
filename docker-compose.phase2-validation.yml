@@ -6,7 +6,7 @@
 #   docker compose -f docker-compose.phase2-validation.yml down -v
 
 services:
-  redis:
+  validation-redis:
     image: redis:7-alpine
     container_name: atmr-validation-redis
     ports:
@@ -21,6 +21,7 @@ services:
       --appendonly no
       --maxmemory 200mb
       --maxmemory-policy allkeys-lru
+    restart: unless-stopped
 
   ws-service:
     build:
@@ -28,14 +29,14 @@ services:
       dockerfile: Dockerfile
     container_name: atmr-validation-ws
     depends_on:
-      redis:
+      validation-redis:
         condition: service_healthy
     ports:
       - "8001:8001"
     environment:
       JWT_SECRET_KEY: validation-jwt-secret-only-for-local
       JWT_ALGORITHM: HS256
-      REDIS_CLUSTER_URL: redis://redis:6379/0
+      REDIS_CLUSTER_URL: redis://validation-redis:6379/0
       REDIS_PASSWORD: ""
       WS_VERSION: validation-v1
       WS_AUTHORITY_SOURCE: ws-service
@@ -63,6 +64,7 @@ services:
       timeout: 3s
       retries: 10
       start_period: 10s
+    restart: unless-stopped
 
   mock-backend:
     image: python:3.12-slim
@@ -80,6 +82,7 @@ services:
       timeout: 3s
       retries: 30
       start_period: 30s
+    restart: unless-stopped
 
 networks:
   default:

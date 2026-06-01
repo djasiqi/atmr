@@ -3,6 +3,10 @@ import React, { useEffect, useLayoutEffect, useRef, useState, useMemo, useCallba
 import {
   buildDriverStructuralSetKey,
   isSameMarkerPosition,
+  isDriverConstrained,
+  getDriverConstraintReason,
+  resolveDriverMapVisualStatus,
+  CONSTRAINED_MARKER_COLOR,
 } from '../../../../utils/companyDriverProjections';
 import {
   recordDriverLiveMapRender,
@@ -49,6 +53,7 @@ const STATUS_TITLE_LABELS = {
   busy: 'En course',
   offline: 'Hors-ligne',
   emergency: 'Urgence',
+  constrained: 'Batterie restreinte',
 };
 
 const CONTAINER_STYLE = { width: '100%', height: '100%', minHeight: '280px' };
@@ -140,25 +145,62 @@ function getMarkerLatLngLiteral(marker) {
 }
 
 // Popup chauffeur — mini card structurée, classes CSS globales .lirie-popup-*
+const escapeHtml = (value) => {
+  if (value == null) return '';
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+};
+
+const CONSTRAINT_REASON_LABELS = {
+  battery_optimized: 'Optimisation batterie OS',
+  permission_bg_denied: 'Permission arrière-plan refusée',
+  permission_fg_denied: 'Permission GPS refusée',
+  fgs_not_running: 'Service tracking arrêté',
+  gps_provider_disabled: 'GPS désactivé',
+  fix_stale: 'Dernier fix GPS trop ancien',
+};
+
 const createStyledTooltip = (driver, opts = {}) => {
-  const { lastSeenSeconds, isStale, status: statusOverride, clientShort, currentBookingId, noGps } = opts;
+  const {
+    lastSeenSeconds,
+    isStale,
+    status: statusOverride,
+    clientShort,
+    currentBookingId,
+    noGps,
+    isConstrained,
+    constraintReason,
+  } = opts;
   const status = statusOverride ?? getDriverStatus(driver);
 
   const statusConf = {
-    available: { label: 'Disponible', dot: AVAILABLE_LIGHT_GREEN, bg: '#dcfce7', color: '#15803d' },
-    assigned:  { label: 'Assigné',   dot: '#f59e0b', bg: '#fef3c7', color: '#b45309' },
-    busy:      { label: 'En course',  dot: '#00796B', bg: '#e0f2f1', color: '#00695C' },
-    offline:   { label: 'Hors-ligne', dot: '#91A3A0', bg: '#f1f5f9', color: '#64748b' },
-    emergency: { label: 'Urgence',    dot: '#ef4444', bg: '#fee2e2', color: '#dc2626' },
+    available:   { label: 'Disponible',         dot: AVAILABLE_LIGHT_GREEN, bg: '#dcfce7', color: '#15803d' },
+    assigned:    { label: 'Assigné',            dot: '#f59e0b',             bg: '#fef3c7', color: '#b45309' },
+    busy:        { label: 'En course',          dot: '#00796B',             bg: '#e0f2f1', color: '#00695C' },
+    offline:     { label: 'Hors-ligne',         dot: '#91A3A0',             bg: '#f1f5f9', color: '#64748b' },
+    emergency:   { label: 'Urgence',            dot: '#ef4444',             bg: '#fee2e2', color: '#dc2626' },
+    constrained: { label: 'Batterie restreinte', dot: CONSTRAINED_MARKER_COLOR,   bg: '#ffedd5', color: '#9a3412' },
   };
-  const conf = statusConf[status] || statusConf.offline;
+  const conf = { ...(statusConf[status] || statusConf.offline) };
   if (noGps) conf.label = 'Sans GPS';
 
   const displayName = getDriverDisplayName(driver);
 
   // Ligne meta
   let metaLine = '';
-  if (status === 'offline' && (lastSeenSeconds != null || isStale)) {
+  if (status === 'constrained' || isConstrained) {
+    const reasonLabel = constraintReason && String(constraintReason).trim()
+      ? (CONSTRAINT_REASON_LABELS[String(constraintReason).trim()] || constraintReason)
+      : 'inconnue';
+    const seenLabel = Number.isFinite(Number(lastSeenSeconds))
+      ? `Dernier signal il y a ${Number(lastSeenSeconds)}s.`
+      : 'Dernier signal inconnu.';
+    metaLine = `Position figée — l'app du chauffeur signale un problème d'optimisation batterie (raison&nbsp;: ${escapeHtml(reasonLabel)}). ${seenLabel}`;
+  } else if (status === 'offline' && (lastSeenSeconds != null || isStale)) {
     metaLine = formatLastSeen(lastSeenSeconds);
   } else if (status === 'busy' || status === 'assigned') {
     const parts = [];
@@ -176,11 +218,11 @@ const createStyledTooltip = (driver, opts = {}) => {
   return `<div class="lirie-popup">
   <div class="lirie-popup-header">
     <span class="lirie-popup-dot" style="background:${conf.dot}"></span>
-    <span class="lirie-popup-name">${displayName}</span>
-    <span class="lirie-popup-badge" style="background:${conf.bg};color:${conf.color}">${conf.label}</span>
+    <span class="lirie-popup-name">${escapeHtml(displayName)}</span>
+    <span class="lirie-popup-badge" style="background:${conf.bg};color:${conf.color}">${escapeHtml(conf.label)}</span>
   </div>${metaLine ? `
   <div class="lirie-popup-meta">${metaLine}</div>` : ''}${chips.length > 0 ? `
-  <div class="lirie-popup-chips">${chips.map((c) => `<span class="lirie-popup-chip">${c}</span>`).join('')}</div>` : ''}
+  <div class="lirie-popup-chips">${chips.map((c) => `<span class="lirie-popup-chip">${escapeHtml(c)}</span>`).join('')}</div>` : ''}
 </div>`;
 };
 
@@ -286,10 +328,20 @@ function DriverLiveMap({ drivers: propDrivers }) {
     const map = mapRef.current;
     if (!map || !window.google) return;
 
-    const markerColors = { ...STATUS_COLORS, available: AVAILABLE_LIGHT_GREEN };
+    const markerColors = {
+      ...STATUS_COLORS,
+      available: AVAILABLE_LIGHT_GREEN,
+      constrained: CONSTRAINED_MARKER_COLOR,
+    };
     const baseColor = markerColors[status] ?? markerColors.available;
-    const color = isStale ? blendHexColors(baseColor, '#94A3B8', 0.55) : baseColor;
-    const opacity = isStale ? 0.88 : 1;
+    // Position figée (degraded_constrained / *_constrained) : on garde la couleur orange
+    // pleine intensité même si `last_seen_seconds` dépasse le seuil "stale" — c'est précisément
+    // l'information visuelle : la position N'EST PAS rafraîchie côté chauffeur.
+    const isConstrainedMarker = status === 'constrained';
+    const color = isStale && !isConstrainedMarker
+      ? blendHexColors(baseColor, '#94A3B8', 0.55)
+      : baseColor;
+    const opacity = isStale && !isConstrainedMarker ? 0.88 : 1;
     const markerLabel = getDriverMarkerLabel(driver);
     const titleStatus = STATUS_TITLE_LABELS[status] || status || 'Inconnu';
     const markerTitle = `${getDriverDisplayName(driver)} · ${titleStatus}${isStale ? ' · signal ancien' : ''}`;
@@ -568,7 +620,7 @@ function DriverLiveMap({ drivers: propDrivers }) {
   // Sync marqueurs (GPS tick → update position uniquement, pas de fitBounds)
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !Array.isArray(drivers)) return;
+    if (!mapReady || !map || !Array.isArray(drivers)) return;
 
     let staleMarkersCount = 0;
     const newLocatedIds = new Set();
@@ -578,19 +630,23 @@ function DriverLiveMap({ drivers: propDrivers }) {
       if (!resolved) return;
 
       const { coords, isFallback } = resolved;
-      const status = isFallback ? 'offline' : getDriverStatus(d);
+      const isConstrained = !isFallback && isDriverConstrained(d);
+      const visualStatus = resolveDriverMapVisualStatus(d, { isFallback });
+      const constraintReason = isConstrained ? getDriverConstraintReason(d) : null;
       const freshness = getFreshnessStatus(d);
-      const isLocated = !isFallback && freshness !== 'offline';
+      const isLocated = !isFallback && !['offline', 'offline_unknown'].includes(freshness);
       if (isLocated) newLocatedIds.add(d.id);
 
       const lastSeenSecondsNumber = Number(d.last_seen_seconds);
-      const locStat = String(d.location_status || '').toLowerCase();
+      const locStat = String(d.tracking_display_status || d.location_status || '').toLowerCase();
       const hasBackendStatus = locStat === 'stale' || locStat === 'offline'
-        || locStat === 'live' || locStat === 'recent';
-      const staleByAge = !d.location_status
+        || locStat === 'live' || locStat === 'recent'
+        || locStat === 'degraded_constrained' || locStat === 'offline_unknown';
+      const staleByAge = !d.location_status && !d.tracking_display_status
         && Number.isFinite(lastSeenSecondsNumber)
         && lastSeenSecondsNumber > STALE_SECONDS_THRESHOLD;
-      const staleByStatus = locStat === 'stale' || locStat === 'offline';
+      const staleByStatus = locStat === 'stale' || locStat === 'offline'
+        || locStat === 'degraded_constrained' || locStat === 'offline_unknown';
       const isStaleMarker = isFallback
         || (hasBackendStatus ? staleByStatus : staleByAge);
       if (isStaleMarker) staleMarkersCount += 1;
@@ -602,8 +658,11 @@ function DriverLiveMap({ drivers: propDrivers }) {
             isStale: isStaleMarker,
             clientShort: d.client_short,
             currentBookingId: d.current_booking_id,
+            status: visualStatus,
+            isConstrained,
+            constraintReason,
           };
-      upsertMarker(d.id, coords, status, isStaleMarker, d, tooltipOpts);
+      upsertMarker(d.id, coords, visualStatus, isStaleMarker, d, tooltipOpts);
     });
 
     // Synchroniser le compteur localisés
@@ -652,12 +711,12 @@ function DriverLiveMap({ drivers: propDrivers }) {
       lastStaleMetricAtRef.current = now;
       trackStaleMarkers(company?.id, staleMarkersCount);
     }
-  }, [drivers, companyCoords, upsertMarker, removeMarker, company?.id, captureOverlayStats]);
+  }, [mapReady, drivers, companyCoords, upsertMarker, removeMarker, company?.id, captureOverlayStats]);
 
   // fitBounds uniquement si le set structurel visible change (pas sur tick GPS)
   useEffect(() => {
     const map = mapRef.current;
-    if (!map) return;
+    if (!mapReady || !map) return;
     if (lastStructuralSetKeyRef.current === structuralSetKey) return;
     lastStructuralSetKeyRef.current = structuralSetKey;
 
@@ -672,7 +731,7 @@ function DriverLiveMap({ drivers: propDrivers }) {
       map.setCenter(companyCoords || SWITZERLAND_CENTER);
       map.setZoom(companyCoords ? 13 : 9);
     }
-  }, [structuralSetKey, companyCoords, fitBoundsToMarkers]);
+  }, [mapReady, structuralSetKey, companyCoords, fitBoundsToMarkers]);
 
   useEffect(() => {
     setShowNoGpsBanner(allDrivers.length > 0 && locatedCount === 0);
@@ -881,6 +940,13 @@ function DriverLiveMap({ drivers: propDrivers }) {
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#ef4444', flexShrink: 0 }} />
                 <span>Urgence</span>
               </div>
+              <div
+                style={{ display: 'flex', alignItems: 'center', gap: 4 }}
+                title="Batterie restreinte — l'app du chauffeur signale un problème d'optimisation batterie. La position est figée."
+              >
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: CONSTRAINED_MARKER_COLOR, flexShrink: 0 }} />
+                <span>Batterie</span>
+              </div>
             </div>
           </div>
         </div>
@@ -1022,6 +1088,12 @@ function areDriverLiveMapPropsEqual(prev, next) {
     if (a.status !== b.status) return false;
     if (a.location_status !== b.location_status) return false;
     if (a.last_seen_seconds !== b.last_seen_seconds) return false;
+    if (a.presence_status !== b.presence_status) return false;
+    const ah = a.device_health || null;
+    const bh = b.device_health || null;
+    const ar = ah ? ah.constraint_reason ?? null : null;
+    const br = bh ? bh.constraint_reason ?? null : null;
+    if (ar !== br) return false;
   }
   return true;
 }

@@ -305,6 +305,19 @@ async function getCurrentPositionWithTimeout(
     stale_fallback_timeout_total: state.staleFallbackTimeouts,
     stale_fallback_blocked_until_ms: state.staleFallbackBlockedUntilMs,
   });
+  /* Heartbeat forcé : on signale au backend que le device n'a plus de fix
+   * (cas Samsung One UI : FGS éteint silencieusement, getCurrentPositionAsync
+   * timeout). Lazy-required pour éviter les cycles d'import (bridge -> heartbeat
+   * -> bridge.snapshot). Errors silencieuses, observabilité uniquement. */
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const heartbeat = require("./deviceHealthHeartbeat") as typeof import("./deviceHealthHeartbeat");
+    if (typeof heartbeat.triggerDeviceHealthNow === "function") {
+      void heartbeat.triggerDeviceHealthNow("stale_fallback_timeout").catch(() => undefined);
+    }
+  } catch {
+    /* noop */
+  }
   return Location.getLastKnownPositionAsync({
     maxAge: WATCH_STALE_MS,
     requiredAccuracy: 100,

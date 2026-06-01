@@ -28,7 +28,8 @@
         "android.permission.WAKE_LOCK",
         "android.permission.USE_BIOMETRIC",
         "android.permission.USE_FINGERPRINT",
-        "android.permission.RECORD_AUDIO"
+        "android.permission.RECORD_AUDIO",
+        "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
       ],
       "blockedPermissions": [
         "android.permission.SYSTEM_ALERT_WINDOW",
@@ -124,20 +125,16 @@
       "./prebuild-mods/withIosFirebaseModularHeaders.js",
       "./prebuild-mods/withAndroidIconBackground.js",
       "./prebuild-mods/withAndroidGoogleMapsKey.js",
+      "./prebuild-mods/withAndroidTrackingForegroundService.js",
       "expo-router",
       [
         "expo-location",
         {
           "isAndroidBackgroundLocationEnabled": true,
-          "foregroundService": {
-            "title": "Lirie Unified est active",
-            "body": "Suivi de la localisation en cours pour votre mission active.",
-            "color": "#0A7F59",
-            "notificationId": "driver-tracking-service",
-            "notificationTitle": "Lirie Unified est active",
-            "notificationBody": "Suivi de la localisation en cours pour votre mission active.",
-            "notificationColor": "#0A7F59"
-          }
+          "isAndroidForegroundServiceEnabled": true,
+          "isIosBackgroundLocationEnabled": true,
+          "locationAlwaysAndWhenInUsePermission": "Location is used to provide real-time mission tracking during active transport, including in background while a mission is running.",
+          "androidForegroundServiceIcon": "./assets/images/icon.png"
         }
       ],
       "expo-task-manager",

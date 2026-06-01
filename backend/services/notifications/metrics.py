@@ -109,6 +109,36 @@ try:
 
     PROMETHEUS_AVAILABLE = True
 
+    NOTIFICATIONS_CREATED = Counter(
+        "notifications_created_total",
+        "Notifications créées dans le pipeline",
+        ["notification_type"],
+    )
+
+    NOTIFICATIONS_DELIVERED = Counter(
+        "notifications_delivered_total",
+        "Notifications délivrées côté mobile (ack reçu)",
+        ["notification_type"],
+    )
+
+    NOTIFICATION_E2E_LATENCY = Histogram(
+        "notification_e2e_latency_seconds",
+        "Latence bout-en-bout notification (created -> fcm_sent)",
+        buckets=[0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10, 30, 60],
+    )
+
+    DEDUP_HITS = Counter(
+        "notifications_dedup_hits_total",
+        "Notifications bloquées par dedup Redis",
+        ["notification_type"],
+    )
+
+    THROTTLE_BLOCKS = Counter(
+        "notifications_throttle_blocks_total",
+        "Notifications bloquées par throttle Redis",
+        ["notification_type"],
+    )
+
 except ImportError:
     logger.warning("[metrics] prometheus_client not installed, metrics disabled")
     PROMETHEUS_AVAILABLE = False
@@ -345,3 +375,51 @@ def observe_email_duration(duration: float, region: str = "unknown") -> None:
     """
     if PROMETHEUS_AVAILABLE:
         EMAIL_NOTIFICATION_DURATION.labels(region=region).observe(duration)
+
+
+def record_pipeline_notification_created(notification_type: str) -> None:
+    if PROMETHEUS_AVAILABLE:
+        NOTIFICATIONS_CREATED.labels(notification_type=notification_type).inc()
+
+
+def record_pipeline_notification_sent(notification_type: str) -> None:
+    if PROMETHEUS_AVAILABLE:
+        NOTIFICATIONS_SENT.labels(
+            channel="push",
+            notification_type=notification_type,
+            region="unknown",
+        ).inc()
+
+
+def record_pipeline_notification_failed(notification_type: str) -> None:
+    if PROMETHEUS_AVAILABLE:
+        NOTIFICATIONS_FAILED.labels(
+            channel="push",
+            notification_type=notification_type,
+            reason="delivery_failed",
+            region="unknown",
+        ).inc()
+
+
+def record_pipeline_notification_delivered(notification_type: str) -> None:
+    if PROMETHEUS_AVAILABLE:
+        NOTIFICATIONS_DELIVERED.labels(notification_type=notification_type).inc()
+
+
+def observe_notification_e2e_latency(duration_seconds: float) -> None:
+    if PROMETHEUS_AVAILABLE:
+        NOTIFICATION_E2E_LATENCY.observe(duration_seconds)
+
+
+def record_dedup_hit(notification_type: str = "unknown") -> None:
+    if PROMETHEUS_AVAILABLE:
+        DEDUP_HITS.labels(notification_type=notification_type).inc()
+        NOTIFICATIONS_DEDUPLICATED.labels(
+            notification_type=notification_type,
+            region="unknown",
+        ).inc()
+
+
+def record_throttle_block(notification_type: str = "unknown") -> None:
+    if PROMETHEUS_AVAILABLE:
+        THROTTLE_BLOCKS.labels(notification_type=notification_type).inc()

@@ -146,16 +146,44 @@ class KafkaProducer:
             return False
 
         try:
+            from services.notifications.notification_pipeline_observability import (
+                build_idempotency_key,
+                log_notification_pipeline_event,
+            )
+
+            payload_data = data or {}
+            idempotency_key = build_idempotency_key(
+                driver_id=driver_id,
+                notification_type=notification_type,
+                title=title,
+                body=body,
+                data=payload_data,
+            )
             message = {
                 "driver_id": driver_id,
                 "title": title,
                 "body": body,
-                "data": data or {},
+                "data": payload_data,
                 "notification_type": notification_type,
                 "bypass_rate_limit": bypass_rate_limit,
                 "priority": priority,
                 "timestamp": int(time.time() * 1000),
+                "idempotency_key": idempotency_key,
+                "notification_id": payload_data.get("event_id")
+                or payload_data.get("trace_id"),
+                "booking_id": payload_data.get("booking_id"),
+                "correlation_id": payload_data.get("correlation_id"),
             }
+
+            log_notification_pipeline_event(
+                "notification_kafka_published",
+                notification_id=message.get("notification_id"),
+                booking_id=message.get("booking_id"),
+                driver_id=driver_id,
+                notification_type=notification_type,
+                correlation_id=message.get("correlation_id"),
+                idempotency_key=idempotency_key,
+            )
 
             # Utiliser driver_id comme clé pour garantir l'ordre par driver
             data_region_id_obj = (data or {}).get("region_id")

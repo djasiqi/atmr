@@ -11,13 +11,14 @@ export type DriverPushType =
   | "mission_cancelled"
   | "mission_reassigned"
   | "reminder_action"
-  | "informative";
+  | "informative"
+  | "chat_message";
 
 export type DriverPushQuickAction = "accept" | "reject" | "start" | "complete";
 
 export type DriverPushPayload = {
   type: DriverPushType;
-  mission_id: number;
+  mission_id: number | null;
   event_id?: string;
   action?: DriverPushQuickAction;
   deep_link?: string;
@@ -32,6 +33,7 @@ export const DRIVER_PUSH_PAYLOAD_MATRIX: Record<DriverPushType, string> = {
   mission_reassigned: "route_to_mission_and_force_resync",
   reminder_action: "route_to_mission_and_focus_action",
   informative: "telemetry_only_without_forced_navigation",
+  chat_message: "route_to_chat_thread",
 };
 
 const SEEN_ACTION_TTL_MS = 60_000;
@@ -62,6 +64,8 @@ function clearSeen(actionKey: string): void {
 
 export async function handleDriverPushQuickAction(payload: DriverPushPayload): Promise<void> {
   if (!payload.action) return;
+  if (!Number.isFinite(payload.mission_id)) return;
+  const missionId = payload.mission_id as number;
   const actionKey = buildActionKey(payload);
   if (markSeen(actionKey)) {
     return;
@@ -69,19 +73,19 @@ export async function handleDriverPushQuickAction(payload: DriverPushPayload): P
 
   try {
     if (payload.action === "accept") {
-      await quickAcceptDriverMission(payload.mission_id);
+      await quickAcceptDriverMission(missionId);
       return;
     }
     if (payload.action === "reject") {
-      await quickRejectDriverMission(payload.mission_id);
+      await quickRejectDriverMission(missionId);
       return;
     }
     if (payload.action === "start") {
-      await quickStartDriverMission(payload.mission_id);
+      await quickStartDriverMission(missionId);
       return;
     }
     if (payload.action === "complete") {
-      await quickCompleteDriverMission(payload.mission_id);
+      await quickCompleteDriverMission(missionId);
       return;
     }
   } catch (error) {

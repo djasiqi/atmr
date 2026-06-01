@@ -13,6 +13,200 @@
   },
   "panels": [
     {
+      "id": 100,
+      "title": "KPI métier — délivrabilité notifications",
+      "type": "timeseries",
+      "gridPos": {"x": 0, "y": 0, "w": 24, "h": 8},
+      "targets": [
+        {
+          "expr": "sum(rate(notifications_created_total[5m]))",
+          "legendFormat": "created",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(notifications_sent_total{channel=\"push\"}[5m]))",
+          "legendFormat": "sent",
+          "refId": "B"
+        },
+        {
+          "expr": "sum(rate(notifications_failed_total{channel=\"push\"}[5m]))",
+          "legendFormat": "failed",
+          "refId": "C"
+        },
+        {
+          "expr": "sum(rate(notifications_delivered_total[5m]))",
+          "legendFormat": "delivered",
+          "refId": "D"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {"drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 8}
+        }
+      }
+    },
+    {
+      "id": 101,
+      "title": "KPI métier par type (new_booking, booking_updated, chat, reassignment)",
+      "type": "timeseries",
+      "gridPos": {"x": 0, "y": 0, "w": 24, "h": 8},
+      "targets": [
+        {
+          "expr": "sum by (notification_type) (rate(notifications_created_total{notification_type=~\"new_booking|booking|booking_updated|chat_message|message|reassignment|booking_reassigned\"}[5m]))",
+          "legendFormat": "created {{notification_type}}",
+          "refId": "A"
+        },
+        {
+          "expr": "sum by (notification_type) (rate(notifications_delivered_total{notification_type=~\"new_booking|booking|booking_updated|chat_message|message|reassignment|booking_reassigned\"}[5m]))",
+          "legendFormat": "delivered {{notification_type}}",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {"drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 8}
+        }
+      }
+    },
+    {
+      "id": 102,
+      "title": "Latence E2E notification (created → fcm_sent)",
+      "type": "timeseries",
+      "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(notification_e2e_latency_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p50",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(notification_e2e_latency_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p95",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(notification_e2e_latency_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p99",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {"drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 8}
+        }
+      }
+    },
+    {
+      "id": 103,
+      "title": "Dedup / Throttle (technique)",
+      "type": "timeseries",
+      "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
+      "targets": [
+        {
+          "expr": "sum(rate(notifications_dedup_hits_total[5m]))",
+          "legendFormat": "dedup_hits",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(notifications_throttle_blocks_total[5m]))",
+          "legendFormat": "throttle_blocks",
+          "refId": "B"
+        },
+        {
+          "expr": "sum(rate(circuit_breaker_opened_total{service=\"fcm\"}[5m]))",
+          "legendFormat": "fcm_cb_open",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {"drawStyle": "line", "lineInterpolation": "smooth", "fillOpacity": 8}
+        }
+      }
+    },
+    {
+      "id": 104,
+      "title": "Taux délivrabilité (delivered / created)",
+      "type": "stat",
+      "gridPos": {"x": 0, "y": 16, "w": 8, "h": 6},
+      "targets": [
+        {
+          "expr": "sum(rate(notifications_delivered_total[1h])) / clamp_min(sum(rate(notifications_created_total[1h])), 0.001)",
+          "legendFormat": "delivery_rate",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"value": null, "color": "red"},
+              {"value": 0.85, "color": "yellow"},
+              {"value": 0.95, "color": "green"}
+            ]
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": {"calcs": ["lastNotNull"]},
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value"
+      }
+    },
+    {
+      "id": 105,
+      "title": "Perte pipeline par étape (1h)",
+      "type": "bargauge",
+      "gridPos": {"x": 8, "y": 16, "w": 16, "h": 6},
+      "targets": [
+        {
+          "expr": "sum(increase(notifications_created_total[1h]))",
+          "legendFormat": "created",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(increase(notifications_sent_total{channel=\"push\"}[1h]))",
+          "legendFormat": "sent",
+          "refId": "B"
+        },
+        {
+          "expr": "sum(increase(notifications_failed_total{channel=\"push\"}[1h]))",
+          "legendFormat": "failed",
+          "refId": "C"
+        },
+        {
+          "expr": "sum(increase(notifications_delivered_total[1h]))",
+          "legendFormat": "delivered",
+          "refId": "D"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"value": null, "color": "blue"}
+            ]
+          }
+        }
+      },
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "reduceOptions": {"calcs": ["lastNotNull"]}
+      }
+    },
+    {
       "id": 1,
       "title": "Taux de Succès par Type",
       "type": "timeseries",

@@ -3,7 +3,12 @@ import {
   isSameMarkerPosition,
   projectDriverForMap,
   projectDriversForMap,
+  isDriverConstrained,
+  resolveDriverMapVisualStatus,
+  resolveDriverMapMarkerColor,
+  CONSTRAINED_MARKER_COLOR,
 } from '../../utils/companyDriverProjections';
+import { STATUS_COLORS } from '../../utils/mapUtils';
 
 describe('companyDriverProjections', () => {
   it('buildDriverStructuralSetKey ignore lat/lng et reflète ids + filtre', () => {
@@ -62,5 +67,53 @@ describe('DriverLiveMap anti-régression lat/lng only', () => {
       { id: 11, latitude: 46.2, longitude: 6.2 },
     ];
     expect(buildDriverStructuralSetKey(before)).not.toBe(buildDriverStructuralSetKey(after));
+  });
+});
+
+describe('degraded_constrained / batterie restreinte', () => {
+  it('isDriverConstrained détecte presence_status degraded_constrained', () => {
+    expect(isDriverConstrained({ presence_status: 'degraded_constrained' })).toBe(true);
+    expect(isDriverConstrained({ presence_status: 'online' })).toBe(false);
+    expect(isDriverConstrained({})).toBe(false);
+    expect(isDriverConstrained(null)).toBe(false);
+  });
+
+  it('isDriverConstrained détecte status assigned_constrained / available_constrained', () => {
+    expect(isDriverConstrained({ status: 'assigned_constrained' })).toBe(true);
+    expect(isDriverConstrained({ status: 'available_constrained' })).toBe(true);
+    expect(isDriverConstrained({ status: 'assigned' })).toBe(false);
+  });
+
+  it('projectDriverForMap propage presence_status et device_health', () => {
+    const projected = projectDriverForMap({
+      id: 7,
+      lat: 46.2,
+      lng: 6.1,
+      status: 'assigned_constrained',
+      presence_status: 'degraded_constrained',
+      device_health: { constraint_reason: 'battery_optimized', battery_optimized: true },
+    });
+    expect(projected).toMatchObject({
+      id: 7,
+      presence_status: 'degraded_constrained',
+      device_health: { constraint_reason: 'battery_optimized', battery_optimized: true },
+    });
+  });
+
+  it('resolveDriverMapVisualStatus renvoie constrained pour un chauffeur restreint', () => {
+    const driver = {
+      status: 'assigned',
+      presence_status: 'degraded_constrained',
+    };
+    expect(resolveDriverMapVisualStatus(driver)).toBe('constrained');
+    expect(resolveDriverMapVisualStatus(driver, { isFallback: true })).toBe('offline');
+  });
+
+  it('resolveDriverMapMarkerColor mappe constrained vers orange (#f97316)', () => {
+    const colors = { ...STATUS_COLORS, available: '#4ade80' };
+    expect(resolveDriverMapMarkerColor('constrained', colors)).toBe(CONSTRAINED_MARKER_COLOR);
+    expect(resolveDriverMapMarkerColor('constrained', colors)).toBe('#f97316');
+    expect(resolveDriverMapMarkerColor('assigned', colors)).toBe(STATUS_COLORS.assigned);
+    expect(resolveDriverMapMarkerColor('offline', colors)).toBe(STATUS_COLORS.offline);
   });
 });

@@ -108,70 +108,96 @@ export function printPdfInEmbeddedIframe(iframe) {
  * Imprime un PDF depuis son URL dans une iframe hors écran (pas d’onglet / fenêtre visible).
  * Utile après un `await` (régénération PDF) où `window.open` serait bloqué ou indésirable.
  *
+ * La promesse ne se résout `true` que lorsque `print()` a **effectivement** été appelé sur le
+ * document embarqué : l’appelant peut ainsi proposer un repli (nouvel onglet / téléchargement)
+ * quand le visualiseur PDF n’a pas pu déclencher le dialogue d’impression.
+ *
+ * L’iframe est positionnée hors écran mais avec une **vraie taille** (et non 1px / opacity:0) :
+ * certains navigateurs refusent d’imprimer un contenu effectivement invisible, et le plugin PDF
+ * de Chromium a besoin d’être réellement rendu avant que `contentWindow.print()` soit utilisable.
+ *
  * @param {string} url
  * @param {{ printSides?: string }} [options]
- * @returns {boolean} false si l’iframe n’a pas pu être configurée ; true si chargement démarré
+ * @returns {Promise<boolean>} `true` si l’impression a pu être déclenchée, sinon `false`
  */
 export function printPdfFromUrlInHiddenFrame(url, options = {}) {
   const fixedUrl = ensurePdfUrlWorksInDev(url);
   if (!fixedUrl || typeof fixedUrl !== 'string') {
-    return false;
+    return Promise.resolve(false);
   }
 
   let absoluteUrl = fixedUrl;
   try {
     absoluteUrl = fixedUrl.startsWith('/') ? `${window.location.origin}${fixedUrl}` : fixedUrl;
   } catch {
-    return false;
+    return Promise.resolve(false);
   }
 
-  try {
-    const iframe = document.createElement('iframe');
-    iframe.setAttribute('title', 'Impression PDF');
-    Object.assign(iframe.style, {
-      position: 'fixed',
-      inset: '0',
-      width: '1px',
-      height: '1px',
-      margin: '-1px',
-      padding: '0',
-      border: '0',
-      opacity: '0',
-      pointerEvents: 'none',
-      zIndex: '-1',
-      overflow: 'hidden',
-    });
+  void options.printSides;
 
-    document.body.appendChild(iframe);
+  return new Promise((resolve) => {
+    let iframe = null;
+    try {
+      iframe = document.createElement('iframe');
+      iframe.setAttribute('title', 'Impression PDF');
+      /**
+       * Hors écran mais rendu (taille proche A4 à 96 dpi) : indispensable pour que le
+       * visualiseur PDF intégré accepte de s’imprimer. On évite display:none / 1px / opacity:0.
+       */
+      Object.assign(iframe.style, {
+        position: 'fixed',
+        left: '-10000px',
+        top: '0',
+        width: '794px',
+        height: '1123px',
+        margin: '0',
+        padding: '0',
+        border: '0',
+        pointerEvents: 'none',
+        visibility: 'hidden',
+      });
+
+      document.body.appendChild(iframe);
+    } catch {
+      resolve(false);
+      return;
+    }
+
+    const localIframe = iframe;
+    let settled = false;
 
     const cleanup = () => {
       window.setTimeout(() => {
         try {
-          iframe.remove();
+          localIframe.remove();
         } catch {
           /* noop */
         }
       }, 3000);
     };
 
-    void options.printSides;
+    /** Résout une seule fois ; programme le retrait de l’iframe. */
+    const finish = (ok) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(ok);
+    };
 
-    let attempted = false;
     const invokePrint = () => {
-      if (attempted) return;
+      if (settled) return;
       try {
-        const w = iframe.contentWindow;
+        const w = localIframe.contentWindow;
         if (!w || typeof w.print !== 'function') return;
         w.focus();
         w.print();
-        attempted = true;
-        cleanup();
+        finish(true);
       } catch {
-        /* viewer PDF sandbox / navigateur */
+        /* viewer PDF sandbox / navigateur : on laissera le dernier timeout conclure à l’échec */
       }
     };
 
-    iframe.addEventListener(
+    localIframe.addEventListener(
       'load',
       () => {
         window.setTimeout(invokePrint, 450);
@@ -180,16 +206,15 @@ export function printPdfFromUrlInHiddenFrame(url, options = {}) {
     );
 
     window.setTimeout(invokePrint, 900);
+    /** Dernier essai : si rien n’a abouti, on conclut à l’échec pour permettre un repli. */
     window.setTimeout(() => {
-      if (!attempted) invokePrint();
-      if (!attempted) cleanup();
+      if (settled) return;
+      invokePrint();
+      if (!settled) finish(false);
     }, 2800);
 
-    iframe.src = absoluteUrl;
-    return true;
-  } catch {
-    return false;
-  }
+    localIframe.src = absoluteUrl;
+  });
 }
 
 /**

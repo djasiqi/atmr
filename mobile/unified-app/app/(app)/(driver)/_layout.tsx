@@ -20,6 +20,10 @@ import {
 } from "../../../src/features/driver/services/driverAvailabilityBridge";
 import { setDriverPresenceWindowActive } from "../../../src/features/driver/tracking";
 import {
+  startBackgroundTrackingHealthMonitor,
+  stopBackgroundTrackingHealthMonitor,
+} from "../../../src/features/driver/services/backgroundTrackingHealthMonitor";
+import {
   buildFloatingTabScreenOptions,
   FLOATING_TAB_IMPLEMENTATION,
   FLOATING_TAB_PAGE_BG,
@@ -83,6 +87,15 @@ function DriverTrackingHost() {
       driverAvailable && workWindowEnabled && window.isOpen
     );
   }, [driverAvailable, workWindowEnabled, window.isOpen]);
+
+  useEffect(() => {
+    if (trackingMission?.id != null) {
+      const stop = startBackgroundTrackingHealthMonitor();
+      return () => stop();
+    }
+    stopBackgroundTrackingHealthMonitor();
+    return undefined;
+  }, [trackingMission?.id]);
 
   return null;
 }

@@ -19,6 +19,7 @@ const mockIsSilentPayload = jest.fn() as jest.Mock<any>;
 const mockIsFeatureEnabled = jest.fn() as jest.Mock<any>;
 const mockRouterPush = jest.fn() as jest.Mock<any>;
 const mockUseSession = jest.fn() as jest.Mock<any>;
+const mockEnsureDriverNotificationChannels = jest.fn() as jest.Mock<any>;
 let currentSession: {
   status: string;
   activeContext: { context_type: string } | null;
@@ -95,6 +96,32 @@ jest.mock("../../features/driver/driverRealtimeSync", () => ({
   requestChatRefresh: jest.fn(),
 }));
 
+jest.mock("../../features/driver/notificationChannels", () => ({
+  ensureDriverNotificationChannels: () => mockEnsureDriverNotificationChannels(),
+}));
+
+jest.mock("../../features/driver/notificationActions", () => ({
+  ensureDriverNotificationActions: jest.fn().mockResolvedValue(undefined),
+}));
+
+jest.mock("../../features/driver/notificationGrouping", () => ({
+  ensureDriverNotificationGrouping: jest.fn().mockResolvedValue(undefined),
+}));
+
+jest.mock("../../features/driver/missionBarIOS", () => ({
+  configureMissionBarIOS: jest.fn().mockResolvedValue(undefined),
+}));
+
+jest.mock("../../features/driver/missionBarBackground", () => ({
+  registerMissionBarBackgroundHandlers: jest.fn(),
+}));
+
+jest.mock("../../features/driver/firebaseMessaging", () => ({
+  initDriverFirebaseMessaging: jest.fn(),
+  disposeDriverFirebaseMessaging: jest.fn(),
+  driverFcmPlatform: () => "android",
+}));
+
 jest.mock("../notifications/notificationDedupStore", () => ({
   buildNotificationDedupKey: () => "dedup-key",
   markNotificationHandled: () => false,
@@ -120,8 +147,10 @@ describe("NotificationsProvider", () => {
     mockIsFeatureEnabled.mockReset();
     mockRouterPush.mockReset();
     mockUseSession.mockReset();
+    mockEnsureDriverNotificationChannels.mockReset();
 
     mockIsFeatureEnabled.mockImplementation((flag: string) => flag === "driver_push_enabled");
+    mockEnsureDriverNotificationChannels.mockResolvedValue(undefined);
     mockRequestPermissionsAsync.mockResolvedValue({ granted: true });
     mockGetExpoPushTokenAsync.mockResolvedValue({ data: "ExpoPushToken[test]" });
     mockGetLastNotificationResponseAsync.mockResolvedValue(null);
@@ -160,7 +189,38 @@ describe("NotificationsProvider", () => {
     );
     expect(mockEmitDriverTelemetry).toHaveBeenCalledWith(
       "push.token.registered",
-      expect.objectContaining({ source: "core.notifications.provider", driver_id: "42" })
+      expect.objectContaining({ source: "driver.notifications.bridge", provider: "expo" })
+    );
+
+    await act(async () => {
+      renderer!.unmount();
+    });
+  });
+
+  it("emits telemetry when notification channel setup fails", async () => {
+    mockIsFeatureEnabled.mockImplementation(
+      (flag: string) =>
+        flag === "driver_push_enabled" || flag === "driver_notification_actions_enabled"
+    );
+    mockEnsureDriverNotificationChannels.mockRejectedValue(new Error("channel setup failed"));
+
+    let renderer: ReturnType<typeof create>;
+    await act(async () => {
+      renderer = create(
+        <NotificationsProvider>
+          <></>
+        </NotificationsProvider>
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mockEmitDriverTelemetry).toHaveBeenCalledWith(
+      "push.channels.setup_failed",
+      expect.objectContaining({
+        source: "core.notifications.provider",
+        error: "channel setup failed",
+      })
     );
 
     await act(async () => {
@@ -196,7 +256,7 @@ describe("NotificationsProvider", () => {
     expect(mockHandleDriverPushQuickAction).toHaveBeenCalledWith(
       expect.objectContaining({ mission_id: 321, type: "mission_assigned" })
     );
-    expect(mockRouterPush).toHaveBeenCalledWith("/(app)/(driver)/missions/321");
+    expect(mockRouterPush).toHaveBeenCalledWith("/(app)/(driver)");
 
     await act(async () => {
       renderer!.unmount();
@@ -584,7 +644,7 @@ describe("NotificationsProvider", () => {
       await Promise.resolve();
     });
 
-    expect(mockRouterPush).toHaveBeenCalledWith("/(app)/(driver)/missions/602");
+    expect(mockRouterPush).toHaveBeenCalledWith("/(app)/(driver)");
 
     await act(async () => {
       renderer!.unmount();
@@ -656,5 +716,73 @@ describe("NotificationsProvider", () => {
 
     process.env.EXPO_PUBLIC_DRIVER_DEEPLINK_BOOTSTRAP_TIMEOUT_MS = previousTimeout;
     jest.useRealTimers();
+  });
+
+  it("routes reassigned mission notifications to today trips page", async () => {
+    let renderer: ReturnType<typeof create>;
+    await act(async () => {
+      renderer = create(
+        <NotificationsProvider>
+          <></>
+        </NotificationsProvider>
+      );
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      onResponse?.({
+        notification: {
+          request: {
+            identifier: "notif-reassigned",
+            content: {
+              data: { mission_id: 730, type: "mission_reassigned", event_id: "evt-r1" },
+            },
+          },
+        },
+      });
+      await Promise.resolve();
+    });
+
+    expect(mockRouterPush).toHaveBeenCalledWith("/(app)/(driver)/trips");
+
+    await act(async () => {
+      renderer!.unmount();
+    });
+  });
+
+  it("routes chat notifications to the targeted thread", async () => {
+    let renderer: ReturnType<typeof create>;
+    await act(async () => {
+      renderer = create(
+        <NotificationsProvider>
+          <></>
+        </NotificationsProvider>
+      );
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      onResponse?.({
+        notification: {
+          request: {
+            identifier: "notif-chat-route",
+            content: {
+              data: {
+                type: "chat_message",
+                thread_id: "dispatch",
+                deep_link: "atmr://chat/thread/dispatch",
+              },
+            },
+          },
+        },
+      });
+      await Promise.resolve();
+    });
+
+    expect(mockRouterPush).toHaveBeenCalledWith("/(app)/(driver)/messages/dispatch");
+
+    await act(async () => {
+      renderer!.unmount();
+    });
   });
 });

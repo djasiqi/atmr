@@ -201,17 +201,15 @@ def _check_duplicate_notification(  # ✅ CORRECTIF: Simple underscore = publiqu
 
         dedup_key = f"push:dedup:{driver_id}:{content_hash}"
 
-        # Vérifier si cette notification a déjà été envoyée
-        if redis_client.get(dedup_key):
+        # SET NX EX atomique — évite race GET+SETEX sous charge multi-worker
+        was_set = redis_client.set(dedup_key, "1", nx=True, ex=DEDUP_WINDOW)
+        if not was_set:
             app_logger.debug(
                 "[push] Notification dupliquée détectée pour driver %s (type: %s)",
                 driver_id,
                 notification_type,
             )
             return True  # C'est un doublon
-
-        # ✅ CORRECTIF: Utiliser DEDUP_WINDOW (maintenant 300s) pour couvrir retries Celery
-        redis_client.setex(dedup_key, DEDUP_WINDOW, "1")
         return False
     except Exception as e:
         app_logger.warning(
@@ -224,6 +222,39 @@ def _check_duplicate_notification(  # ✅ CORRECTIF: Simple underscore = publiqu
 # Push token invalidation is handled via DeviceToken.is_active = False
 # (see services/events/fanout.py and tasks/notification_tasks.py).
 # No legacy invalidation path (driver.push_token) — DeviceToken is the source of truth.
+
+
+def _log_fcm_pipeline_result(
+    result: Dict[str, Any],
+    *,
+    driver_id: int | None,
+    data: Dict[str, Any] | None,
+    correlation_id: str | None,
+    notification_type: str | None = None,
+) -> None:
+    """Journalise le résultat FCM dans le pipeline observabilité."""
+    try:
+        from services.notifications.notification_pipeline_observability import (
+            log_notification_pipeline_event,
+        )
+
+        payload = data or {}
+        ntype = notification_type or payload.get("type") or "unknown"
+        booking_id = payload.get("booking_id") or payload.get("mission_id")
+        notification_id = payload.get("event_id") or payload.get("trace_id")
+        event = "notification_fcm_sent" if result.get("ok") else "notification_fcm_failed"
+        log_notification_pipeline_event(
+            event,
+            notification_id=notification_id,
+            booking_id=booking_id,
+            driver_id=driver_id,
+            notification_type=str(ntype),
+            correlation_id=correlation_id or payload.get("correlation_id"),
+            error=result.get("error"),
+            token_invalid=bool(result.get("token_invalid")),
+        )
+    except Exception:
+        pass
 
 
 def send_push_message(
@@ -281,6 +312,12 @@ def send_push_message(
                     "[push] device_token lifecycle update failed (ignored): %s",
                     str(e)[:200],
                 )
+        _log_fcm_pipeline_result(
+            result,
+            driver_id=driver_id,
+            data=data,
+            correlation_id=correlation_id,
+        )
         return result
 
     # Expo Push API path (legacy fallback)

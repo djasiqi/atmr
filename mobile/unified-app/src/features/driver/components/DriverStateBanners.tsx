@@ -1,23 +1,41 @@
 import { useEffect, useMemo, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { AppState, Linking, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { semanticDanger, semanticWarning } from "../../../design/responsive/colors";
 import NetInfo from "@react-native-community/netinfo";
 import * as Location from "expo-location";
 import { useSession } from "../../../core/sessionProvider";
+import {
+  getPushPermissionDenied,
+  subscribePushPermissionDenied,
+} from "../../../core/notifications/pushPermissionState";
 import { getTrackingSnapshot } from "../tracking";
 import { useSocketStatus } from "../hooks";
 import { FONT_SIZE } from "../../../design/responsive/typographyTokens";
+import {
+  checkBatteryOptimizationStatus,
+  getOemBatteryGuidance,
+  openOemBatterySettings,
+  requestIgnoreBatteryOptimizations,
+} from "../services/batteryOptimization";
 
 const MAX_FONT_MULTIPLIER = 1.35;
 
 /** Alerte compacte : une ligne courte, titre en semi-gras + corps. */
-function Banner(props: { title: string; message: string; tone?: "warn" | "error" }) {
+function Banner(props: {
+  title: string;
+  message: string;
+  tone?: "warn" | "error";
+  actionLabel?: string;
+  onAction?: () => void;
+}) {
   const tokens = props.tone === "error" ? semanticDanger : semanticWarning;
   return (
-    <View
+    <Pressable
       style={[styles.banner, { backgroundColor: tokens.bg }]}
       accessibilityRole="alert"
       accessibilityLiveRegion="polite"
+      onPress={props.onAction}
+      disabled={!props.onAction}
     >
       <Text
         maxFontSizeMultiplier={MAX_FONT_MULTIPLIER}
@@ -25,8 +43,11 @@ function Banner(props: { title: string; message: string; tone?: "warn" | "error"
       >
         <Text style={styles.alertLead}>{props.title}</Text>
         {props.message ? ` ${props.message}` : null}
+        {props.actionLabel ? (
+          <Text style={styles.alertAction}> {props.actionLabel}</Text>
+        ) : null}
       </Text>
-    </View>
+    </Pressable>
   );
 }
 
@@ -36,6 +57,36 @@ export function DriverStateBanners() {
   const [isOffline, setIsOffline] = useState(false);
   const [gpsEnabled, setGpsEnabled] = useState(true);
   const [trackingDepth, setTrackingDepth] = useState(0);
+  const [pushPermissionDenied, setPushPermissionDeniedState] = useState(getPushPermissionDenied());
+  const [batteryOptimizationActive, setBatteryOptimizationActive] = useState(false);
+  const [oemGuidance, setOemGuidance] = useState(() => getOemBatteryGuidance());
+
+  useEffect(() => {
+    return subscribePushPermissionDenied(() => {
+      setPushPermissionDeniedState(getPushPermissionDenied());
+    });
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+    let mounted = true;
+
+    const refresh = async () => {
+      const result = await checkBatteryOptimizationStatus();
+      if (!mounted) return;
+      setBatteryOptimizationActive(result.checked && result.isIgnoring === false);
+    };
+
+    void refresh();
+    const sub = AppState.addEventListener("change", (next) => {
+      if (next === "active") void refresh();
+    });
+
+    return () => {
+      mounted = false;
+      sub.remove();
+    };
+  }, []);
 
   useEffect(() => {
     const unsubscribe = NetInfo.addEventListener((state) => {
@@ -69,9 +120,11 @@ export function DriverStateBanners() {
   const showTrackingWarning = useMemo(() => trackingDepth > 0, [trackingDepth]);
 
   const hasBanner =
+    pushPermissionDenied ||
     isOffline ||
     (socketStatus.degraded && socketStatus.connected) ||
     !gpsEnabled ||
+    batteryOptimizationActive ||
     status === "error" ||
     showTrackingWarning;
 
@@ -79,6 +132,17 @@ export function DriverStateBanners() {
 
   return (
     <View style={styles.stack}>
+      {pushPermissionDenied ? (
+        <Banner
+          title="Notifications desactivees"
+          message="Activez les notifications pour recevoir vos missions."
+          tone="error"
+          actionLabel="Ouvrir les reglages"
+          onAction={() => {
+            void Linking.openSettings();
+          }}
+        />
+      ) : null}
       {isOffline ? (
         <Banner
           title="Mode hors ligne"
@@ -98,6 +162,31 @@ export function DriverStateBanners() {
           title="GPS desactive"
           message="Activez la localisation pour maintenir le suivi mission."
           tone="error"
+        />
+      ) : null}
+      {batteryOptimizationActive ? (
+        <Banner
+          title="Optimisation batterie active"
+          message="Vos positions GPS peuvent ne pas etre transmises en arriere-plan."
+          tone="warn"
+          actionLabel="Appuyer ici pour corriger"
+          onAction={() => {
+            void requestIgnoreBatteryOptimizations().then(async () => {
+              const result = await checkBatteryOptimizationStatus();
+              setBatteryOptimizationActive(result.checked && result.isIgnoring === false);
+            });
+          }}
+        />
+      ) : null}
+      {oemGuidance.hasOemSettings && batteryOptimizationActive ? (
+        <Banner
+          title="Reglages fabricant requis"
+          message={`Sur ${oemGuidance.manufacturer || "votre appareil"}, ouvrez aussi Auto-start / apps protegees.`}
+          tone="warn"
+          actionLabel="Reglages avances fabricant"
+          onAction={() => {
+            void openOemBatterySettings();
+          }}
         />
       ) : null}
       {status === "error" ? (
@@ -134,5 +223,9 @@ const styles = StyleSheet.create({
   },
   alertLead: {
     fontWeight: "600",
+  },
+  alertAction: {
+    fontWeight: "600",
+    textDecorationLine: "underline",
   },
 });

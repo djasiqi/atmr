@@ -21,6 +21,23 @@ import {
   setPendingFgsStart,
 } from "./trackingRuntime";
 
+/**
+ * Notifie le heartbeat de santé tracking en cas d'échec de démarrage natif —
+ * lazy-required pour éviter le cycle deviceHealthHeartbeat <-> backgroundLocationTask.
+ * Fire-and-forget : toute erreur réseau est swallow par le module heartbeat.
+ */
+function notifyDeviceHealthOnNativeStartFailure(reason: string): void {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const mod = require("./deviceHealthHeartbeat") as typeof import("./deviceHealthHeartbeat");
+    if (typeof mod.triggerDeviceHealthNow === "function") {
+      void mod.triggerDeviceHealthNow(`native_start_failure:${reason}`).catch(() => undefined);
+    }
+  } catch {
+    /* noop */
+  }
+}
+
 type BackgroundTrackingTaskMode = "mission" | "presence_window";
 
 type BackgroundTaskRuntimeContext = {
@@ -442,6 +459,7 @@ async function startBackgroundLocationTaskIfEligibleInternal(
       reason: "permission_denied",
       error: "background or foreground location not granted",
     });
+    notifyDeviceHealthOnNativeStartFailure("permission_denied");
     emitDriverTelemetry("tracking.background.start_failed", {
       source: "driver.services.backgroundLocationTask",
       reason: startReason,
@@ -486,19 +504,25 @@ async function startBackgroundLocationTaskIfEligibleInternal(
     task_mode: taskMode,
   });
 
+  const locationOptions: Location.LocationTaskOptions = {
+    accuracy: isLowBattery ? Location.Accuracy.Low : Location.Accuracy.Balanced,
+    timeInterval: effectiveIntervalMs,
+    distanceInterval: BACKGROUND_DISTANCE_METERS,
+    pausesUpdatesAutomatically: false,
+    showsBackgroundLocationIndicator: true,
+    foregroundService: {
+      notificationTitle: FOREGROUND_SERVICE_TITLE,
+      notificationBody: FOREGROUND_SERVICE_BODY,
+      notificationColor: FOREGROUND_SERVICE_COLOR,
+      killServiceOnDestroy: false,
+    },
+  };
+  if (Platform.OS === "ios") {
+    locationOptions.activityType = Location.ActivityType.AutomotiveNavigation;
+  }
+
   try {
-    await Location.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK_NAME, {
-      accuracy: isLowBattery ? Location.Accuracy.Low : Location.Accuracy.Balanced,
-      timeInterval: effectiveIntervalMs,
-      distanceInterval: BACKGROUND_DISTANCE_METERS,
-      pausesUpdatesAutomatically: false,
-      showsBackgroundLocationIndicator: true,
-      foregroundService: {
-        notificationTitle: FOREGROUND_SERVICE_TITLE,
-        notificationBody: FOREGROUND_SERVICE_BODY,
-        notificationColor: FOREGROUND_SERVICE_COLOR,
-      },
-    });
+    await Location.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK_NAME, locationOptions);
 
     const lifecycleAfter = await getNativeTaskLifecycleStatus();
 
@@ -517,6 +541,7 @@ async function startBackgroundLocationTaskIfEligibleInternal(
         reason: startReason,
         error: "startLocationUpdatesAsync returned without active native task",
       });
+      notifyDeviceHealthOnNativeStartFailure("native_task_inactive");
       return false;
     }
 
@@ -537,6 +562,7 @@ async function startBackgroundLocationTaskIfEligibleInternal(
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     recordNativeStartFailure({ reason: startReason, error: message });
+    notifyDeviceHealthOnNativeStartFailure("start_exception");
     emitDriverTelemetry("tracking.background.start_failed", {
       source: "driver.services.backgroundLocationTask",
       reason: startReason,
@@ -570,6 +596,7 @@ async function runWatchdogTick(): Promise<void> {
       reason: "startup_timeout",
       error: `FGS not running after ${FGS_START_TIMEOUT_MS}ms`,
     });
+    notifyDeviceHealthOnNativeStartFailure("startup_timeout");
     emitDriverTelemetry("tracking.background.start_failed", {
       source: "driver.services.backgroundLocationTask",
       reason: watchdogReason,
@@ -684,6 +711,50 @@ export async function ensureNativeTrackingWhileForeground(
   } finally {
     bgStartInProgress = false;
   }
+}
+
+export async function restartNativeTrackingFromWake(reason = "silent_push_wake"): Promise<void> {
+  if (Platform.OS === "web") return;
+  try {
+    await resumePendingNativeTrackingIfNeeded();
+    const ctx = await readTaskContext();
+    if (ctx?.taskMode === "presence_window") {
+      await ensureNativeTrackingWhileForeground(null, null, { presenceWindow: true }, reason);
+      return;
+    }
+    if (ctx?.missionId != null) {
+      await ensureNativeTrackingWhileForeground(
+        ctx.missionId,
+        ctx.missionStatus,
+        {},
+        reason
+      );
+    }
+    emitDriverTelemetry("tracking.background.wake_restart", {
+      source: "driver.services.backgroundLocationTask",
+      reason,
+      mission_id: ctx?.missionId ?? null,
+    });
+  } catch (error) {
+    emitDriverTelemetry("tracking.background.wake_restart_failed", {
+      source: "driver.services.backgroundLocationTask",
+      reason,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+/**
+ * Fallback iOS : relance les updates avec cadence réduite si le tracking principal est inactif.
+ */
+export async function ensureIosSignificantLocationFallback(
+  missionId: number | null,
+  missionStatus: DriverMissionStatus | null
+): Promise<void> {
+  if (Platform.OS !== "ios") return;
+  const lifecycle = await getNativeTaskLifecycleStatus();
+  if (lifecycle.taskStarted) return;
+  await ensureNativeTrackingWhileForeground(missionId, missionStatus, {}, "ios_significant_fallback");
 }
 
 export async function resumePendingNativeTrackingIfNeeded(): Promise<void> {

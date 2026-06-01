@@ -596,14 +596,33 @@
   color: var(--text-secondary);
   cursor: pointer;
   user-select: none;
+  /* Indispensable pour ancrer l'input visually-hidden ci-dessous DANS le label,
+     sinon il flotte vers l'ancêtre positionné le plus proche et l'association
+     label/input peut casser le toggle natif au clic. */
+  position: relative;
 }
 
+/* Pattern "visually-hidden" : l'input reste focusable et toggleable au clic
+   via le <label> parent (pas de pointer-events:none, pas de width/height à 0
+   qui cassent le click synthétique du label dans certains navigateurs). */
 .rememberCheckbox {
   position: absolute;
   opacity: 0;
-  width: 0;
-  height: 0;
-  pointer-events: none;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  clip: rect(0 0 0 0);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* Accessibilité clavier : un anneau de focus visible sur le visuel custom
+   quand l'input réel reçoit le focus. */
+.rememberCheckbox:focus-visible + .checkboxCustom {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 2px;
 }
 
 .checkboxCustom {

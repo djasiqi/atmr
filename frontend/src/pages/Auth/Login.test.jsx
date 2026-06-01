@@ -9,7 +9,16 @@ import { setPendingActivationSession } from '../../utils/activationSessionStore'
 
 jest.mock('../../utils/apiClient', () => ({
   __esModule: true,
-  default: { post: jest.fn() },
+  default: {
+    post: jest.fn(),
+    // Stub minimal nécessaire pour les modules qui installent un intercepteur
+    // au chargement (ex: companyDashboardApiTiming) — sans cela le test suite
+    // refuse de démarrer.
+    interceptors: {
+      request: { use: jest.fn() },
+      response: { use: jest.fn() },
+    },
+  },
   cleanLocalSession: jest.fn(),
   setCurrentAuthEnv: jest.fn((env) => env || 'app'),
 }));
@@ -98,6 +107,7 @@ describe('Login Page', () => {
         {
           email: 'test@test.com',
           password: 'password123',
+          remember_me: false,
         },
         expect.objectContaining({ skipCsrf: true })
       );
@@ -169,6 +179,97 @@ describe('Login Page', () => {
     await waitFor(() => {
       expect(screen.getByText(/invalid credentials/i)).toBeInTheDocument();
     }, { timeout: 3000 });
+  });
+
+  it('envoie remember_me=true et ne stocke que l\'email quand la case est cochée', async () => {
+    apiClient.post.mockResolvedValue({
+      data: {
+        token: 'jwt-remember',
+        user: { public_id: 'user-rm', role: 'company' },
+        target_env: 'app',
+        redirect_to: '/app/dashboard/company/user-rm',
+      },
+    });
+    jwtDecode.mockReturnValue({ sub: 'user-rm', role: 'company' });
+
+    renderLogin();
+
+    fireEvent.change(screen.getByLabelText(/email/i), {
+      target: { value: 'remember@example.com' },
+    });
+    fireEvent.change(screen.getByPlaceholderText(/entrez votre mot de passe/i), {
+      target: { value: 'sup3rs3cret' },
+    });
+    fireEvent.click(screen.getByLabelText(/se souvenir de moi/i));
+    fireEvent.click(screen.getByRole('button', { name: /se connecter/i }));
+
+    await waitFor(() => {
+      expect(apiClient.post).toHaveBeenCalledWith(
+        '/auth/login',
+        {
+          email: 'remember@example.com',
+          password: 'sup3rs3cret',
+          remember_me: true,
+        },
+        expect.objectContaining({ skipCsrf: true })
+      );
+    });
+
+    const stored = JSON.parse(localStorage.getItem('lirie_remember_me') || '{}');
+    expect(stored).toEqual({ email: 'remember@example.com', version: 2 });
+    expect(stored).not.toHaveProperty('password');
+  });
+
+  it('purge l\'ancien format { email, password } et ne pré-remplit que l\'email', async () => {
+    localStorage.setItem(
+      'lirie_remember_me',
+      JSON.stringify({ email: 'legacy@example.com', password: 'plaintext-leak' }),
+    );
+
+    renderLogin();
+
+    expect(screen.getByLabelText(/email/i)).toHaveValue('legacy@example.com');
+    expect(screen.getByPlaceholderText(/entrez votre mot de passe/i)).toHaveValue('');
+
+    const stored = JSON.parse(localStorage.getItem('lirie_remember_me') || '{}');
+    expect(stored).toEqual({ email: 'legacy@example.com', version: 2 });
+    expect(stored).not.toHaveProperty('password');
+  });
+
+  it('supprime REMEMBER_KEY si la case est décochée', async () => {
+    localStorage.setItem(
+      'lirie_remember_me',
+      JSON.stringify({ email: 'old@example.com', version: 2 }),
+    );
+
+    apiClient.post.mockResolvedValue({
+      data: {
+        token: 'jwt-token',
+        user: { public_id: 'user-x', role: 'client' },
+        target_env: 'app',
+      },
+    });
+    jwtDecode.mockReturnValue({ sub: 'user-x', role: 'client' });
+
+    renderLogin();
+
+    fireEvent.click(screen.getByLabelText(/se souvenir de moi/i));
+    fireEvent.change(screen.getByLabelText(/email/i), {
+      target: { value: 'new@example.com' },
+    });
+    fireEvent.change(screen.getByPlaceholderText(/entrez votre mot de passe/i), {
+      target: { value: 'password123' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /se connecter/i }));
+
+    await waitFor(() => {
+      expect(apiClient.post).toHaveBeenCalledWith(
+        '/auth/login',
+        expect.objectContaining({ remember_me: false }),
+        expect.objectContaining({ skipCsrf: true }),
+      );
+    });
+    expect(localStorage.getItem('lirie_remember_me')).toBeNull();
   });
 
   it('redirige vers activation si compte pending_activation', async () => {

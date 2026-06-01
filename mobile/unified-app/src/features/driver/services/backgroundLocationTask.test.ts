@@ -114,6 +114,39 @@ describe("backgroundLocationTask", () => {
     expect(trackingRuntime.getTrackingRuntimeSnapshot().lastNativeStartError).toContain("test_start");
   });
 
+  it("passes killServiceOnDestroy false in foregroundService options", async () => {
+    bgTask.initializeBackgroundLocationTask();
+    await bgTask.ensureNativeTrackingWhileForeground(11, "EN_ROUTE", {}, "options_test");
+
+    expect(mockStart).toHaveBeenCalled();
+    const options = mockStart.mock.calls[0]?.[1] as { foregroundService?: { killServiceOnDestroy?: boolean } };
+    expect(options.foregroundService?.killServiceOnDestroy).toBe(false);
+  });
+
+  it("restartNativeTrackingFromWake emits wake_restart telemetry for mission context", async () => {
+    bgTask.initializeBackgroundLocationTask();
+    const asyncStorage = require("@react-native-async-storage/async-storage") as {
+      getItem: jest.Mock;
+    };
+    asyncStorage.getItem.mockResolvedValueOnce(
+      JSON.stringify({
+        missionId: 55,
+        missionStatus: "IN_PROGRESS",
+        taskMode: "mission",
+        updatedAt: new Date().toISOString(),
+      })
+    );
+    mockHasStarted.mockResolvedValue(false);
+    mockStart.mockResolvedValue(undefined);
+
+    await bgTask.restartNativeTrackingFromWake("silent_push_wake_test");
+
+    expect(mockEmit).toHaveBeenCalledWith(
+      "tracking.background.wake_restart",
+      expect.objectContaining({ reason: "silent_push_wake_test", mission_id: 55 })
+    );
+  });
+
   it("records startup_timeout when watchdog exhausts without task started", async () => {
     jest.useFakeTimers();
     bgTask.initializeBackgroundLocationTask();

@@ -96,6 +96,31 @@ DRIVER_LIST_FALLBACK_SPEED_KMH = float(
     os.getenv("DRIVER_LIST_FALLBACK_SPEED_KMH", "32.0")
 )
 
+# P0 stabilisation notifs : par défaut, les endpoints HTTP de polling
+# (/driver/me/profile, /driver/me/bookings) ne déclenchent plus de
+# silent push à chaque appel. Pour réactiver explicitement, soit l'env
+# DRIVER_HTTP_SILENT_SYNC_ENABLED=true, soit le header X-Silent-Sync: 1
+# côté client (debug / one-off). Le throttle Redis dans
+# send_silent_data_update reste actif en cas de réactivation.
+DRIVER_HTTP_SILENT_SYNC_ENABLED = (
+    os.getenv("DRIVER_HTTP_SILENT_SYNC_ENABLED", "false").strip().lower() == "true"
+)
+
+
+def _should_emit_http_silent_sync() -> bool:
+    """Décide si un endpoint HTTP de polling a le droit d'émettre un silent push.
+
+    Désactivé par défaut pour éviter la rafale provoquée par le polling mobile.
+    Les silent updates légitimes restent émis depuis les handlers d'événements
+    (Kafka / changements d'état métier) ou peuvent être forcés explicitement
+    via header X-Silent-Sync: 1.
+    """
+    try:
+        header_optin = request.headers.get("X-Silent-Sync") == "1"
+    except Exception:
+        header_optin = False
+    return DRIVER_HTTP_SILENT_SYNC_ENABLED or header_optin
+
 
 def _as_float_or_none(value: Any) -> float | None:
     try:
@@ -387,6 +412,62 @@ location_model = driver_ns.model(
     },
 )
 
+device_health_status_model = driver_ns.model(
+    "DriverDeviceHealthStatus",
+    {
+        "kind": fields.String(
+            required=True,
+            description="Type de heartbeat. Doit valoir 'tracking_health'.",
+            enum=["tracking_health"],
+        ),
+        "fgs_running": fields.Boolean(
+            required=True,
+            description="Foreground service de tracking actif côté mobile.",
+        ),
+        "fg_permission": fields.String(
+            required=True,
+            description="Permission GPS foreground.",
+            enum=["granted", "denied", "undetermined"],
+        ),
+        "bg_permission": fields.String(
+            required=True,
+            description="Permission GPS background.",
+            enum=["granted", "denied", "undetermined"],
+        ),
+        "gps_provider_enabled": fields.Boolean(
+            required=True,
+            description="Provider GPS système activé (location services).",
+        ),
+        "battery_optimized": fields.Boolean(
+            required=True,
+            description=(
+                "L'app subit une optimisation batterie OEM (Doze / Samsung "
+                "One UI battery optimization)."
+            ),
+        ),
+        "battery_level": fields.Float(
+            required=False, description="Niveau batterie (0.0 à 1.0)."
+        ),
+        "is_charging": fields.Boolean(
+            required=False, description="Le device est en charge."
+        ),
+        "last_fix_age_seconds": fields.Integer(
+            required=False, description="Ancienneté du dernier fix GPS (s)."
+        ),
+        "fix_success_rate_last_5min": fields.Float(
+            required=False,
+            description="Taux de succès des fixes GPS sur les 5 dernières minutes (0..1).",
+        ),
+        "constraint_reason": fields.String(
+            required=False,
+            description=(
+                "Raison de contrainte (ex: samsung_battery_optimized, doze, "
+                "permission_revoked)."
+            ),
+        ),
+    },
+)
+
 booking_status_model = driver_ns.model(
     "BookingStatusUpdate",
     {
@@ -534,24 +615,24 @@ class DriverProfile(Resource):
                     status_code = uc_res.status_code
 
                     # ✅ Implémentation : Synchroniser le profil via notification silencieuse
-                    # Permet de synchroniser le profil en arrière-plan pour optimisation
+                    # Découplé du polling : n'émet plus à chaque GET pour éviter la rafale
+                    # (cf. DRIVER_HTTP_SILENT_SYNC_ENABLED / header X-Silent-Sync: 1).
                     try:
-                        from services.events.fanout import send_profile_sync
+                        if _should_emit_http_silent_sync():
+                            from services.events.fanout import send_profile_sync
 
-                        # Extraire le profil et les stats si disponibles
-                        profile_data = result if result else {}
-                        stats_data = profile_data.get("stats")  # Stats optionnelles
+                            profile_data = result if result else {}
+                            stats_data = profile_data.get("stats")
 
-                        # Envoyer la notification silencieuse (pas de son/vibration)
-                        send_profile_sync(
-                            driver_id=driver.id,
-                            profile=profile_data,
-                            stats=stats_data,
-                        )
-                        logger.debug(
-                            "[Driver Profile] Profil synchronisé via notification silencieuse pour driver %s",
-                            driver.id,
-                        )
+                            send_profile_sync(
+                                driver_id=driver.id,
+                                profile=profile_data,
+                                stats=stats_data,
+                            )
+                            logger.debug(
+                                "[Driver Profile] Profil synchronisé via notification silencieuse pour driver %s",
+                                driver.id,
+                            )
                     except Exception as e:
                         # Ne pas faire échouer l'endpoint si la sync échoue
                         logger.debug(
@@ -560,70 +641,72 @@ class DriverProfile(Resource):
                         )
 
                     # ✅ Implémentation : Synchroniser la configuration via notification silencieuse
-                    # Permet de synchroniser la config de l'app en arrière-plan pour optimisation
-                    try:
-                        from services.events.fanout import send_config_update
-                        from services.events.night_mode import get_night_mode_status
+                    # Découplé du polling : opt-in via DRIVER_HTTP_SILENT_SYNC_ENABLED
+                    # ou header X-Silent-Sync: 1.
+                    if _should_emit_http_silent_sync():
+                        try:
+                            from services.events.fanout import send_config_update
+                            from services.events.night_mode import get_night_mode_status
 
-                        # Récupérer le statut du mode nuit
-                        night_mode_status = get_night_mode_status()
+                            # Récupérer le statut du mode nuit
+                            night_mode_status = get_night_mode_status()
 
-                        # Construire la configuration de l'app
-                        app_config = {
-                            "night_mode": {
-                                "is_night": night_mode_status.get("is_night", False),
-                                "current_time": night_mode_status.get("current_time"),
-                                "night_start": night_mode_status.get(
-                                    "night_start", "22:00"
-                                ),
-                                "night_end": night_mode_status.get(
-                                    "night_end", "06:00"
-                                ),
-                            },
-                            "notifications": {
-                                "enabled": True,  # Les notifications sont toujours activées si l'app est utilisée
-                                "critical_alerts": True,  # Alertes critiques toujours activées
-                                "silent_updates": True,  # Mises à jour silencieuses activées
-                            },
-                            "app_preferences": {
-                                "language": "fr",  # Langue par défaut
-                                "units": "metric",  # Unités métriques
-                            },
-                        }
+                            # Construire la configuration de l'app
+                            app_config = {
+                                "night_mode": {
+                                    "is_night": night_mode_status.get("is_night", False),
+                                    "current_time": night_mode_status.get("current_time"),
+                                    "night_start": night_mode_status.get(
+                                        "night_start", "22:00"
+                                    ),
+                                    "night_end": night_mode_status.get(
+                                        "night_end", "06:00"
+                                    ),
+                                },
+                                "notifications": {
+                                    "enabled": True,  # Les notifications sont toujours activées si l'app est utilisée
+                                    "critical_alerts": True,  # Alertes critiques toujours activées
+                                    "silent_updates": True,  # Mises à jour silencieuses activées
+                                },
+                                "app_preferences": {
+                                    "language": "fr",  # Langue par défaut
+                                    "units": "metric",  # Unités métriques
+                                },
+                            }
 
-                        # Ajouter la config de l'entreprise si disponible
-                        # Note: company_id est nullable=False selon le modèle Driver
-                        company_id_value = getattr(driver, "company_id", None)
-                        if company_id_value:
-                            try:
-                                from models.company import Company
+                            # Ajouter la config de l'entreprise si disponible
+                            # Note: company_id est nullable=False selon le modèle Driver
+                            company_id_value = getattr(driver, "company_id", None)
+                            if company_id_value:
+                                try:
+                                    from models.company import Company
 
-                                company = Company.query.get(company_id_value)
-                                if company:
-                                    # Ajouter des infos sur le mode dispatch si pertinent
-                                    dispatch_mode = getattr(
-                                        company, "dispatch_mode", None
-                                    )
-                                    if dispatch_mode:
-                                        app_config["dispatch"] = {
-                                            "mode": dispatch_mode,
-                                        }
-                            except Exception:
-                                # Ne pas bloquer si on ne peut pas récupérer la config entreprise
-                                pass
+                                    company = Company.query.get(company_id_value)
+                                    if company:
+                                        # Ajouter des infos sur le mode dispatch si pertinent
+                                        dispatch_mode = getattr(
+                                            company, "dispatch_mode", None
+                                        )
+                                        if dispatch_mode:
+                                            app_config["dispatch"] = {
+                                                "mode": dispatch_mode,
+                                            }
+                                except Exception:
+                                    # Ne pas bloquer si on ne peut pas récupérer la config entreprise
+                                    pass
 
-                        # Envoyer la notification silencieuse (pas de son/vibration)
-                        send_config_update(driver_id=driver.id, config=app_config)
-                        logger.debug(
-                            "[Driver Profile] Configuration synchronisée via notification silencieuse pour driver %s",
-                            driver.id,
-                        )
-                    except Exception as e:
-                        # Ne pas faire échouer l'endpoint si la sync échoue
-                        logger.debug(
-                            "[Driver Profile] Échec sync configuration (non-critique): %s",
-                            e,
-                        )
+                            # Envoyer la notification silencieuse (pas de son/vibration)
+                            send_config_update(driver_id=driver.id, config=app_config)
+                            logger.debug(
+                                "[Driver Profile] Configuration synchronisée via notification silencieuse pour driver %s",
+                                driver.id,
+                            )
+                        except Exception as e:
+                            # Ne pas faire échouer l'endpoint si la sync échoue
+                            logger.debug(
+                                "[Driver Profile] Échec sync configuration (non-critique): %s",
+                                e,
+                            )
         except (ValueError, TypeError, AttributeError) as e:
             logger.warning(
                 "❌ Erreur validation/récupération profil driver: %s - %s",
@@ -900,16 +983,16 @@ class DriverUpcomingBookings(Resource):
                 request.headers.get("X-Missions-Preload") == "1"
                 or os.environ.get("DRIVER_MISSIONS_PRELOAD_DEFAULT", "0") == "1"
             )
-            if should_preload:
+            if should_preload and _should_emit_http_silent_sync():
                 missions_data = [
                     b.serialize if hasattr(b, "serialize") else {"id": b.id}
                     for b in bookings
                 ]
                 send_missions_preload(driver_id=driver.id, missions=missions_data)
-            logger.debug(
-                "[Driver Bookings] Missions préchargées via notification silencieuse pour driver %s",
-                driver.id,
-            )
+                logger.debug(
+                    "[Driver Bookings] Missions préchargées via notification silencieuse pour driver %s",
+                    driver.id,
+                )
         except Exception as e:
             # Ne pas faire échouer l'endpoint si le préchargement échoue
             logger.debug(
@@ -918,91 +1001,93 @@ class DriverUpcomingBookings(Resource):
             )
 
         # ✅ Implémentation : Précharger les cartes (routes) via notification silencieuse
-        # Permet de précharger les itinéraires pour optimisation navigation
-        try:
-            import os
+        # Découplé du polling /me/bookings : opt-in via DRIVER_HTTP_SILENT_SYNC_ENABLED
+        # ou header X-Silent-Sync: 1. Sinon, on ne calcule pas les routes et on ne pousse rien.
+        if _should_emit_http_silent_sync():
+            try:
+                import os
 
-            from services.events.fanout import send_maps_precache
-            from services.geolocation.osrm import route_info
+                from services.events.fanout import send_maps_precache
+                from services.geolocation.osrm import route_info
 
-            routes_data = []
-            osrm_base_url = os.getenv("UD_OSRM_BASE_URL", "http://osrm:5000")
+                routes_data = []
+                osrm_base_url = os.getenv("UD_OSRM_BASE_URL", "http://osrm:5000")
 
-            # Calculer les routes pour chaque booking avec pickup et dropoff
-            for booking in bookings:
-                pickup_lat = getattr(booking, "pickup_lat", None)
-                pickup_lon = getattr(booking, "pickup_lon", None)
-                dropoff_lat = getattr(booking, "dropoff_lat", None)
-                dropoff_lon = getattr(booking, "dropoff_lon", None)
+                # Calculer les routes pour chaque booking avec pickup et dropoff
+                for booking in bookings:
+                    pickup_lat = getattr(booking, "pickup_lat", None)
+                    pickup_lon = getattr(booking, "pickup_lon", None)
+                    dropoff_lat = getattr(booking, "dropoff_lat", None)
+                    dropoff_lon = getattr(booking, "dropoff_lon", None)
 
-                # Si les coordonnées sont disponibles, calculer la route
-                if all(
-                    [
-                        pickup_lat is not None,
-                        pickup_lon is not None,
-                        dropoff_lat is not None,
-                        dropoff_lon is not None,
-                    ]
-                ):
-                    try:
-                        # Convertir en float une seule fois avec vérification explicite
-                        pickup_lat_float = float(pickup_lat)  # type: ignore[arg-type]
-                        pickup_lon_float = float(pickup_lon)  # type: ignore[arg-type]
-                        dropoff_lat_float = float(dropoff_lat)  # type: ignore[arg-type]
-                        dropoff_lon_float = float(dropoff_lon)  # type: ignore[arg-type]
+                    # Si les coordonnées sont disponibles, calculer la route
+                    if all(
+                        [
+                            pickup_lat is not None,
+                            pickup_lon is not None,
+                            dropoff_lat is not None,
+                            dropoff_lon is not None,
+                        ]
+                    ):
+                        try:
+                            # Convertir en float une seule fois avec vérification explicite
+                            pickup_lat_float = float(pickup_lat)  # type: ignore[arg-type]
+                            pickup_lon_float = float(pickup_lon)  # type: ignore[arg-type]
+                            dropoff_lat_float = float(dropoff_lat)  # type: ignore[arg-type]
+                            dropoff_lon_float = float(dropoff_lon)  # type: ignore[arg-type]
 
-                        # Calculer la route (avec timeout court pour ne pas ralentir l'endpoint)
-                        route_result = route_info(
-                            origin=(pickup_lat_float, pickup_lon_float),
-                            destination=(dropoff_lat_float, dropoff_lon_float),
-                            base_url=osrm_base_url,
-                            profile="driving",
-                            timeout=2,  # Timeout court pour ne pas bloquer
-                            overview="simplified",  # Geometry simplifiée pour préchargement
-                            geometries="geojson",
-                        )
+                            # Calculer la route (avec timeout court pour ne pas ralentir l'endpoint)
+                            route_result = route_info(
+                                origin=(pickup_lat_float, pickup_lon_float),
+                                destination=(dropoff_lat_float, dropoff_lon_float),
+                                base_url=osrm_base_url,
+                                profile="driving",
+                                timeout=2,  # Timeout court pour ne pas bloquer
+                                overview="simplified",  # Geometry simplifiée pour préchargement
+                                geometries="geojson",
+                            )
 
-                        # Extraire les données essentielles de la route
-                        routes_data.append(
-                            {
-                                "booking_id": booking.id,
-                                "pickup": {
-                                    "lat": pickup_lat_float,
-                                    "lon": pickup_lon_float,
-                                },
-                                "dropoff": {
-                                    "lat": dropoff_lat_float,
-                                    "lon": dropoff_lon_float,
-                                },
-                                "duration_seconds": route_result.get("duration", 0),
-                                "distance_meters": route_result.get("distance", 0),
-                                "geometry": route_result.get(
-                                    "geometry"
-                                ),  # GeoJSON geometry
-                            }
-                        )
-                    except Exception as route_error:
-                        # Ne pas bloquer si une route échoue
-                        logger.debug(
-                            "[Driver Bookings] Échec calcul route pour booking %s (non-critique): %s",
-                            booking.id,
-                            route_error,
-                        )
+                            # Extraire les données essentielles de la route
+                            routes_data.append(
+                                {
+                                    "booking_id": booking.id,
+                                    "pickup": {
+                                        "lat": pickup_lat_float,
+                                        "lon": pickup_lon_float,
+                                    },
+                                    "dropoff": {
+                                        "lat": dropoff_lat_float,
+                                        "lon": dropoff_lon_float,
+                                    },
+                                    "duration_seconds": route_result.get("duration", 0),
+                                    "distance_meters": route_result.get("distance", 0),
+                                    "geometry": route_result.get(
+                                        "geometry"
+                                    ),  # GeoJSON geometry
+                                }
+                            )
+                        except Exception as route_error:
+                            # Ne pas bloquer si une route échoue
+                            logger.debug(
+                                "[Driver Bookings] Échec calcul route pour booking %s (non-critique): %s",
+                                booking.id,
+                                route_error,
+                            )
 
-            # Envoyer la notification silencieuse si on a des routes
-            if routes_data:
-                send_maps_precache(driver_id=driver.id, routes=routes_data)
+                # Envoyer la notification silencieuse si on a des routes
+                if routes_data:
+                    send_maps_precache(driver_id=driver.id, routes=routes_data)
+                    logger.debug(
+                        "[Driver Bookings] Cartes préchargées via notification silencieuse pour driver %s (%s routes)",
+                        driver.id,
+                        len(routes_data),
+                    )
+            except Exception as e:
+                # Ne pas faire échouer l'endpoint si le préchargement échoue
                 logger.debug(
-                    "[Driver Bookings] Cartes préchargées via notification silencieuse pour driver %s (%s routes)",
-                    driver.id,
-                    len(routes_data),
+                    "[Driver Bookings] Échec préchargement cartes (non-critique): %s",
+                    e,
                 )
-        except Exception as e:
-            # Ne pas faire échouer l'endpoint si le préchargement échoue
-            logger.debug(
-                "[Driver Bookings] Échec préchargement cartes (non-critique): %s",
-                e,
-            )
 
         return [_enrich_driver_booking_list_payload(b.serialize) for b in bookings], 200
 
@@ -1946,6 +2031,119 @@ class DriverLocation(Resource):
             result_payload["trace_id"] = get_trace_id()
 
         return result, status_code
+
+
+@driver_ns.route("/me/device-status")
+class DriverDeviceStatus(Resource):
+    """Heartbeat santé device (canal séparé du tracking GPS).
+
+    Permet au mobile de signaler l'état de l'application et du provider GPS
+    indépendamment du flux de positions. Le backend persiste le dernier
+    snapshot dans ``driver:{id}:device_health`` (TTL 120 s) et l'utilise
+    pour distinguer "téléphone éteint" (= ``offline``) d'une contrainte OEM
+    (= ``degraded_constrained``) lors de l'agrégation côté entreprise.
+
+    Contrat :
+
+    * Auth : JWT driver classique (cf. ``/me/location``).
+    * Body : voir :class:`DeviceHealthStatusSchema` (champs requis :
+      ``kind``, ``fgs_running``, ``fg_permission``, ``bg_permission``,
+      ``gps_provider_enabled``, ``battery_optimized``).
+    * Réponse : 204 No Content si l'écriture Redis a réussi (200 sinon, en
+      mode dégradé Redis).
+    * Si Redis est indisponible, la requête réussit quand même (200) pour
+      ne pas faire échouer le mobile : on préserve le contrat de tracking
+      existant.
+    """
+
+    @jwt_required()
+    @role_required(UserRole.driver)
+    @driver_ns.expect(device_health_status_model, validate=False)
+    def post(self):
+        driver, error_response, status_code = get_driver_from_token()
+        if error_response:
+            return error_response, status_code
+        driver = cast("Driver", driver)
+
+        from marshmallow import ValidationError
+
+        from schemas.driver_schemas import DeviceHealthStatusSchema
+        from schemas.validation_utils import (
+            handle_validation_error,
+            validate_request,
+        )
+        from services.geolocation.device_health import (
+            DEVICE_HEALTH_TTL_SEC,
+            write_device_health,
+        )
+        from services.monitoring.driver_location_metrics import (
+            inc_driver_device_health_received,
+        )
+
+        raw_body = request.get_json(force=True, silent=True) or {}
+        if not isinstance(raw_body, dict):
+            return {
+                "error": "invalid_json",
+                "message": "Corps JSON invalide.",
+            }, 400
+
+        try:
+            payload = validate_request(
+                DeviceHealthStatusSchema(), raw_body, strict=False
+            )
+        except ValidationError as exc:
+            return handle_validation_error(exc)
+
+        constraint_reason = payload.get("constraint_reason") or ""
+
+        try:
+            inc_driver_device_health_received(constraint_reason=constraint_reason)
+        except Exception:
+            logger.debug(
+                "[device_health] metric inc failed (non-blocking)", exc_info=True
+            )
+
+        wrote = False
+        try:
+            wrote = write_device_health(
+                redis_client,
+                driver.id,
+                payload,
+                ttl_sec=DEVICE_HEALTH_TTL_SEC,
+            )
+        except Exception:
+            logger.exception(
+                "[device_health] write_device_health failed driver_id=%s",
+                driver.id,
+            )
+
+        if not hasattr(DriverDeviceStatus, "_log_counter"):
+            DriverDeviceStatus._log_counter = 0  # type: ignore[attr-defined]
+        DriverDeviceStatus._log_counter += 1  # type: ignore[attr-defined]
+        if DriverDeviceStatus._log_counter % 10 == 1:  # type: ignore[attr-defined]
+            current_app.logger.info(
+                (
+                    "[device_health] driver_id=%s fgs=%s fg_perm=%s bg_perm=%s "
+                    "gps=%s battery_opt=%s reason=%s fix_rate=%s wrote=%s"
+                ),
+                driver.id,
+                payload.get("fgs_running"),
+                payload.get("fg_permission"),
+                payload.get("bg_permission"),
+                payload.get("gps_provider_enabled"),
+                payload.get("battery_optimized"),
+                constraint_reason or None,
+                payload.get("fix_success_rate_last_5min"),
+                wrote,
+            )
+
+        if wrote:
+            return "", 204
+        return {
+            "ok": True,
+            "stored": False,
+            "reason": "redis_unavailable",
+        }, 200
 
 
 @driver_ns.route("/me/locations/batch")
@@ -3675,6 +3873,52 @@ class TestPushNotification(Resource):
             return {"error": "Erreur interne"}, 500
 
 
+@driver_ns.route("/me/push-notifications/ack")
+class PushNotificationAck(Resource):
+    """Accusé réception push mobile — ferme la boucle observabilité E2E."""
+
+    @jwt_required()
+    @role_required(UserRole.driver)
+    def post(self):
+        driver, error_response, status_code = get_driver_from_token()
+        if error_response:
+            return error_response, status_code
+
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            return {"ok": False, "error": "invalid_payload"}, 400
+
+        notification_type = str(
+            body.get("notification_type") or body.get("type") or "unknown"
+        )
+        booking_id = body.get("booking_id") or body.get("mission_id")
+        notification_id = (
+            body.get("notification_id") or body.get("event_id") or body.get("trace_id")
+        )
+        correlation_id = body.get("correlation_id")
+        received_at_ms = body.get("received_at_ms")
+
+        try:
+            from services.notifications.notification_pipeline_observability import (
+                log_notification_pipeline_event,
+            )
+
+            log_notification_pipeline_event(
+                "notification_mobile_received",
+                notification_id=notification_id,
+                booking_id=booking_id,
+                driver_id=getattr(driver, "id", None),
+                notification_type=notification_type,
+                correlation_id=correlation_id,
+                received_at_ms=received_at_ms,
+                pipeline_stage="mobile",
+            )
+        except Exception:
+            logger.exception("[push_ack] failed to log mobile received")
+
+        return {"ok": True}, 200
+
+
 @driver_ns.route("/me/bookings/<int:booking_id>/change-events/<int:event_id>/ack")
 class DriverBookingChangeAck(Resource):
     @jwt_required()
@@ -3699,3 +3943,125 @@ class DriverBookingChangeAck(Resource):
             driver_id=driver.id,
         )
         return body, status
+
+
+device_health_model = driver_ns.model(
+    "DriverDeviceHealthPayload",
+    {
+        "manufacturer": fields.String,
+        "model": fields.String,
+        "platform": fields.String,
+        "battery_optimized": fields.Boolean,
+        "location_permission": fields.String,
+        "notifications_enabled": fields.Boolean,
+        "tracking_active": fields.Boolean,
+        "app_state": fields.String,
+        "last_fix_age_seconds": fields.Integer,
+        "constraint_reason": fields.String,
+        "fgs_running": fields.Boolean,
+        "trigger_reason": fields.String,
+        "fg_permission": fields.String,
+        "bg_permission": fields.String,
+        "kind": fields.String,
+    },
+)
+
+
+@driver_ns.route("/me/device-health")
+class DriverDeviceHealth(Resource):
+    """Heartbeat santé device — source de vérité tracking readiness."""
+
+    @jwt_required()
+    @role_required(UserRole.driver)
+    @driver_ns.expect(device_health_model, validate=False)
+    def post(self):
+        driver, error_response, status_code = get_driver_from_token()
+        if error_response:
+            return error_response, status_code
+
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            return {"ok": False, "error": "invalid_payload"}, 400
+
+        try:
+            from services.driver_device_health import ingest_driver_device_health
+
+            snapshot = ingest_driver_device_health(driver.id, body)
+            return {"ok": True, "snapshot": snapshot}, 200
+        except Exception:
+            logger.exception("device-health ingest failed driver_id=%s", driver.id)
+            db.session.rollback()
+            return {"ok": False, "error": "ingest_failed"}, 500
+
+
+@driver_ns.route("/me/telemetry/tracking")
+class DriverTrackingTelemetry(Resource):
+    """Télémétrie mobile tracking (compteurs Prometheus côté backend)."""
+
+    @jwt_required()
+    @role_required(UserRole.driver)
+    def post(self):
+        driver, error_response, status_code = get_driver_from_token()
+        if error_response:
+            return error_response, status_code
+
+        body = request.get_json(silent=True) or {}
+        event = str(body.get("event") or "")
+        platform = str(body.get("platform") or "unknown")
+
+        if event == "push_fcm_background_handler_no_callback":
+            try:
+                from services.monitoring.driver_device_health_metrics import (
+                    record_fcm_background_handler_no_callback,
+                )
+
+                record_fcm_background_handler_no_callback(platform=platform)
+            except Exception:
+                pass
+
+        return {"ok": True}, 200
+
+
+@driver_ns.route("/me/push-notifications/silent-ack")
+class SilentPushWakeAck(Resource):
+    """Accusé réveil silent push (wake success rate)."""
+
+    @jwt_required()
+    @role_required(UserRole.driver)
+    def post(self):
+        driver, error_response, status_code = get_driver_from_token()
+        if error_response:
+            return error_response, status_code
+
+        body = request.get_json(silent=True) or {}
+        sync_type = str(body.get("sync_type") or body.get("type") or "unknown")
+        raw_result = body.get("result")
+        raw_outcome = body.get("outcome")
+        if raw_result is not None:
+            result = str(raw_result)
+        elif raw_outcome is not None:
+            result = str(raw_outcome)
+        else:
+            result = "acked"
+        if result == "resync_success":
+            result = "acked"
+        duration_ms = body.get("duration_ms")
+
+        try:
+            from services.monitoring.driver_device_health_metrics import (
+                record_silent_push_wake,
+            )
+            from services.monitoring.notification_metrics import (
+                track_silent_sync_duration,
+            )
+
+            record_silent_push_wake(sync_type=sync_type, result=result)
+            if duration_ms is not None:
+                try:
+                    track_silent_sync_duration(sync_type, float(duration_ms) / 1000.0)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        return {"ok": True}, 200

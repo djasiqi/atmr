@@ -340,7 +340,13 @@ class KafkaConsumer:
         from ext import db
         from models import DeviceToken, Driver
         from services.notifications.device_token_lifecycle import (
-            is_push_device_token_lifecycle_enabled,
+            apply_push_result_to_device_token,
+            deactivate_stale_device_tokens,
+        )
+        from services.notifications.notification_pipeline_observability import (
+            NotificationE2ETimer,
+            claim_idempotency_key,
+            log_notification_pipeline_event,
         )
         from services.notifications.push import send_push_message
 
@@ -350,6 +356,36 @@ class KafkaConsumer:
         data = message.get("data", {})
         if not isinstance(data, dict):
             data = {}
+
+        notification_type = message.get("notification_type", "unknown")
+        notification_id = message.get("notification_id") or data.get("event_id")
+        booking_id = message.get("booking_id") or data.get("booking_id")
+        correlation_id = message.get("correlation_id") or data.get("correlation_id")
+
+        log_notification_pipeline_event(
+            "notification_kafka_consumed",
+            notification_id=notification_id,
+            booking_id=booking_id,
+            driver_id=driver_id,
+            notification_type=notification_type,
+            correlation_id=correlation_id,
+        )
+
+        idempotency_key = message.get("idempotency_key")
+        if idempotency_key and not claim_idempotency_key(str(idempotency_key)):
+            log_notification_pipeline_event(
+                "notification_skipped",
+                notification_id=notification_id,
+                booking_id=booking_id,
+                driver_id=driver_id,
+                notification_type=notification_type,
+                correlation_id=correlation_id,
+                reason="idempotency_replay",
+            )
+            return
+
+        timer = NotificationE2ETimer()
+        timer.start()
 
         driver = db.session.get(Driver, driver_id)
         if not driver:
@@ -364,6 +400,7 @@ class KafkaConsumer:
             raise NotificationConsumerSkip("no_active_tokens")
 
         success_count = 0
+        invalid_count = 0
         last_result: Dict[str, Any] | None = None
         for device_token in device_tokens:
             result = send_push_message(
@@ -376,21 +413,57 @@ class KafkaConsumer:
                 provider=getattr(device_token, "provider", None),
                 platform=getattr(device_token, "platform", None),
                 device_token_id=device_token.id,
+                correlation_id=correlation_id,
             )
             last_result = result
+            apply_push_result_to_device_token(device_token.id, result)
 
             if result.get("ok"):
                 success_count += 1
-            elif (
-                result.get("token_invalid")
-                and not is_push_device_token_lifecycle_enabled()
-            ):
-                device_token.is_active = False
+                log_notification_pipeline_event(
+                    "notification_fcm_sent",
+                    notification_id=notification_id,
+                    booking_id=booking_id,
+                    driver_id=driver_id,
+                    notification_type=notification_type,
+                    correlation_id=correlation_id,
+                    device_token_id=device_token.id,
+                )
+            elif result.get("token_invalid"):
+                invalid_count += 1
+            else:
+                log_notification_pipeline_event(
+                    "notification_fcm_failed",
+                    notification_id=notification_id,
+                    booking_id=booking_id,
+                    driver_id=driver_id,
+                    notification_type=notification_type,
+                    correlation_id=correlation_id,
+                    error=result.get("error"),
+                )
 
         try:
             db.session.commit()
         except Exception:
             logger.exception("[kafka_consumer] commit after push lifecycle")
+
+        try:
+            deactivate_stale_device_tokens(session=db.session)
+            db.session.commit()
+        except Exception:
+            logger.exception("[kafka_consumer] stale token cleanup failed")
+
+        if success_count == 0 and invalid_count == len(device_tokens):
+            log_notification_pipeline_event(
+                "notification_skipped",
+                notification_id=notification_id,
+                booking_id=booking_id,
+                driver_id=driver_id,
+                notification_type=notification_type,
+                correlation_id=correlation_id,
+                reason="all_tokens_invalid",
+            )
+            raise NotificationConsumerSkip("all_tokens_invalid")
 
         if success_count == 0:
             error_msg = (
@@ -399,6 +472,8 @@ class KafkaConsumer:
                 else "No active tokens"
             )
             raise Exception(error_msg)
+
+        timer.observe_if_started()
 
         logger.info(
             "[kafka_consumer] Push sent successfully to driver %s (%d/%d devices)",

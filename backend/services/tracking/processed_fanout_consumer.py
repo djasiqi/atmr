@@ -84,7 +84,9 @@ def _fanout_processed_message(envelope: dict[str, Any]) -> None:
     from services.company_driver_location_freshness import (
         last_seen_seconds_from_location_fields,
     )
+    from services.geolocation.device_health import read_device_health
     from services.geolocation.presence import (
+        apply_device_health_override,
         compute_location_status,
         presence_status_from_location_status,
     )
@@ -176,6 +178,15 @@ def _fanout_processed_message(envelope: dict[str, Any]) -> None:
         )
         presence_status = presence_status_from_location_status(location_status)
 
+        from ext import redis_client as _redis_client
+
+        device_health = read_device_health(_redis_client, driver_id)
+        presence_status, location_status = apply_device_health_override(
+            presence_status,
+            location_status,
+            device_health,
+        )
+
         mission_status_resolved = resolve_mission_status_for_driver(driver_id)
         is_active = (
             bool(getattr(driver, "is_active", True)) if driver is not None else True
@@ -233,6 +244,8 @@ def _fanout_processed_message(envelope: dict[str, Any]) -> None:
             "first_name": first_name,
             "last_name": last_name,
         }
+        if device_health is not None:
+            canonical_payload["device_health"] = device_health
         if event_id:
             canonical_payload["event_id"] = event_id
 

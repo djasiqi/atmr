@@ -6,7 +6,8 @@
  * - Dropdown avec liste scrollable
  * - Clic sur une notif = marquer comme lue + navigation
  * - "Tout marquer comme lu"
- * - Écoute socket new_notification pour temps réel
+ * - Temps réel via useInstitutionSocket (InstitutionLayout) : merge React Query local
+ * - Polling React Query comme filet de sécurité (60s)
  */
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';

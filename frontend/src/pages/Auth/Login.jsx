@@ -103,11 +103,39 @@ const Login = () => {
   useEffect(() => {
     try {
       const saved = localStorage.getItem(REMEMBER_KEY);
-      if (saved) {
-        const { email, password } = JSON.parse(saved);
-        setLoginFormData({ email: email || '', password: password || '' });
-        setRememberMe(true);
+      if (!saved) return;
+      let parsed = null;
+      try {
+        parsed = JSON.parse(saved);
+      } catch {
+        localStorage.removeItem(REMEMBER_KEY);
+        return;
       }
+      const email = typeof parsed?.email === 'string' ? parsed.email.trim() : '';
+      const hadLegacyPassword =
+        parsed && Object.prototype.hasOwnProperty.call(parsed, 'password');
+
+      if (!email) {
+        if (hadLegacyPassword) {
+          localStorage.removeItem(REMEMBER_KEY);
+        }
+        return;
+      }
+
+      // Migration: l'ancien format pouvait stocker { email, password }.
+      // On purge tout résiduel password et on normalise vers email-only.
+      if (hadLegacyPassword || parsed?.version !== 2) {
+        try {
+          localStorage.setItem(
+            REMEMBER_KEY,
+            JSON.stringify({ email, version: 2 }),
+          );
+        } catch { /* quota plein, on ignore */ }
+      }
+
+      // Préremplir uniquement l'email; ne JAMAIS repopuler le mot de passe.
+      setLoginFormData((prev) => ({ ...prev, email }));
+      setRememberMe(true);
     } catch { /* ignore corrupted data */ }
   }, []);
 
@@ -256,7 +284,15 @@ const Login = () => {
 
     setIsLoading(true);
     try {
-      const response = await apiClient.post('/auth/login', loginFormData, { skipCsrf: true });
+      const response = await apiClient.post(
+        '/auth/login',
+        {
+          email: loginFormData.email,
+          password: loginFormData.password,
+          remember_me: rememberMe,
+        },
+        { skipCsrf: true },
+      );
       const { token, user, refresh_token, target_env, redirect_to } = response.data;
 
       if (!user || !user.role || !user.public_id) {
@@ -265,11 +301,16 @@ const Login = () => {
 
       const authEnv = setCurrentAuthEnv(target_env);
 
+      // ⚠️ Sécurité: on ne stocke JAMAIS le mot de passe en clair.
+      // REMEMBER_KEY ne contient que l'email (et un marqueur de version)
+      // pour pré-remplir l'identifiant et cocher la case au prochain chargement.
       if (rememberMe) {
-        localStorage.setItem(REMEMBER_KEY, JSON.stringify({
-          email: loginFormData.email,
-          password: loginFormData.password,
-        }));
+        try {
+          localStorage.setItem(
+            REMEMBER_KEY,
+            JSON.stringify({ email: loginFormData.email, version: 2 }),
+          );
+        } catch { /* quota plein, on ignore */ }
       } else {
         localStorage.removeItem(REMEMBER_KEY);
       }

@@ -18,6 +18,11 @@ class LoginSchema(Schema):
 
     email = fields.Email(required=True, validate=EMAIL_VALIDATOR)
     password = fields.Str(required=True, validate=PASSWORD_VALIDATOR)
+    # Optionnel: si True (côté web), demande un refresh token long-lived (ex: 30j)
+    # avec cookie persistant. Si False/absent: refresh token court (ex: 1h) et
+    # cookie de session (max_age=None). Ignoré pour les clients mobiles, qui
+    # conservent leurs propres TTL.
+    remember_me = fields.Bool(load_default=False)
 
 
 class RegisterSchema(Schema):

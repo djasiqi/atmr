@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from application.notifications.upsert_device_token import (
+    _deactivate_other_rows_with_same_token,
     deactivate_device_tokens_for_logout,
     upsert_device_token,
 )
@@ -60,3 +61,49 @@ def test_deactivate_logout_by_device_id(mock_dt):
         device_id="install-uuid",
     )
     assert count == 1
+
+
+@patch("application.notifications.upsert_device_token.DeviceToken")
+def test_deactivate_other_rows_with_same_token_keeps_target(mock_dt):
+    """Vérifie que la dédup désactive les doublons et conserve `keep_row_id`."""
+    q = MagicMock()
+    q.filter.return_value = q
+    q.update.return_value = 9
+    mock_dt.query.filter.return_value = q
+    mock_dt.token = MagicMock()
+    mock_dt.is_active = MagicMock()
+    mock_dt.driver_id = MagicMock()
+    mock_dt.id = MagicMock()
+    mock_dt.is_active.is_.return_value = True
+
+    count = _deactivate_other_rows_with_same_token(
+        driver_id=7135,
+        company_id=None,
+        token="ExponentPushToken[abc]",
+        keep_row_id=25,
+    )
+    assert count == 9
+    # update appelé avec is_active=False
+    q.update.assert_called_once_with({"is_active": False}, synchronize_session=False)
+
+
+def test_deactivate_other_rows_with_same_token_noop_without_owner():
+    """Sans owner ni token, on ne fait rien."""
+    assert (
+        _deactivate_other_rows_with_same_token(
+            driver_id=None,
+            company_id=None,
+            token="ExponentPushToken[abc]",
+            keep_row_id=None,
+        )
+        == 0
+    )
+    assert (
+        _deactivate_other_rows_with_same_token(
+            driver_id=1,
+            company_id=None,
+            token="",
+            keep_row_id=None,
+        )
+        == 0
+    )

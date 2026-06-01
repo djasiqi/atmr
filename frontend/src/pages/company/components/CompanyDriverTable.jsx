@@ -1,8 +1,12 @@
 // src/pages/company/components/CompanyDriverTable.jsx
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { FiEdit, FiTrash2, FiMoreVertical, FiEye, FiPower } from 'react-icons/fi';
+import { FiEdit, FiTrash2, FiMoreVertical, FiEye, FiPower, FiAlertTriangle, FiPhone } from 'react-icons/fi';
 import s from './CompanyDriverTable.module.css';
 import { formatLastSeen, getFreshnessStatus } from '../../../utils/mapUtils';
+import {
+  isDriverConstrained,
+  getDriverConstraintReason,
+} from '../../../utils/companyDriverProjections';
 
 const CompanyDriverTable = ({ drivers, onEdit, onToggleStatus, onDeleteRequest }) => {
   const [openMenu, setOpenMenu] = useState(null);
@@ -96,9 +100,34 @@ const CompanyDriverTable = ({ drivers, onEdit, onToggleStatus, onDeleteRequest }
                   </span>
                 </td>
                 <td>
-                  <span className={`${s.statusBadge} ${availability.className}`}>
-                    {availability.label}
-                  </span>
+                  <div className={s.statusCell}>
+                    <span className={`${s.statusBadge} ${availability.className}`}>
+                      {availability.label}
+                    </span>
+                    {isDriverConstrained(driver) && (
+                      <span
+                        className={`${s.statusBadge} ${s.statusConstrained}`}
+                        title={`Batterie restreinte — l'app du chauffeur signale un problème d'optimisation batterie (raison : ${
+                          getDriverConstraintReason(driver) || 'inconnue'
+                        }). Position figée.`}
+                        role="status"
+                      >
+                        <FiAlertTriangle size={11} aria-hidden />
+                        <span>Batterie restreinte</span>
+                      </span>
+                    )}
+                    {isDriverConstrained(driver) && driver.phone ? (
+                      <a
+                        href={`tel:${driver.phone}`}
+                        className={s.contactLink}
+                        onClick={(e) => e.stopPropagation()}
+                        title={`Contacter le chauffeur (${driver.phone})`}
+                      >
+                        <FiPhone size={11} aria-hidden />
+                        <span>Contacter le chauffeur</span>
+                      </a>
+                    ) : null}
+                  </div>
                 </td>
                 <td>
                   <span className={s.driverSub}>

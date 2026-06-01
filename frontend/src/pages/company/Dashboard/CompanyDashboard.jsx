@@ -77,6 +77,11 @@ import {
   shouldAcceptRealtimeEvent,
 } from '../../../utils/realtimeEventGuard';
 import { getAuthEnv } from '../../../utils/webAuthSession';
+import {
+  countConstrainedAssignedImminentDrivers,
+  buildConstrainedImminentToastMessage,
+  CONSTRAINED_IMMINENT_TOAST_ID,
+} from '../../../utils/companyDriverConstrainedBanner';
 
 const DriverLiveMap = lazy(() => import('./components/DriverLiveMap'));
 const ReservationChart = lazy(() => import('./components/ReservationChart'));
@@ -224,13 +229,23 @@ const CompanyDashboard = () => {
     const handler = (e) => {
       const code = (e.detail?.code || e.detail?.message || '').toString();
       const authCodes = ['AUTH_REQUIRED', 'AUTH_INVALID', 'TOKEN_EXPIRED', 'AUTH_FORBIDDEN', 'COMPANY_NOT_FOUND', 'DRIVER_OR_COMPANY_NOT_FOUND'];
+      // Sonner: passer le même `id` dédoublonne (remplace au lieu d'empiler) — évite la cascade
+      // pendant les reconnexions Socket.IO.
       if (authCodes.some((c) => code.includes(c))) {
-        toast.error('Session expirée ou accès refusé. Reconnectez-vous.', { duration: 5000 });
+        toast.error('Session expirée ou accès refusé. Reconnectez-vous.', {
+          id: 'socket-auth-rejected',
+          duration: 5000,
+        });
       } else if (code.includes('RATE_LIMIT')) {
-        toast.warning('Trop de tentatives de connexion. Réessayez dans quelques instants.', { duration: 5000 });
-      } else if (code.includes('CONNECT_ERROR') || code) {
-        toast.error('Connexion temps réel refusée. Vérifiez votre authentification.', { duration: 5000 });
+        toast.warning('Trop de tentatives de connexion. Réessayez dans quelques instants.', {
+          id: 'socket-rate-limit',
+          duration: 5000,
+        });
       }
+      // Sinon (erreurs transport: websocket error, xhr poll error, timeout, transport close...):
+      // pas de toast. Socket.IO reconnecte tout seul et le circuit breaker affiche déjà
+      // l'état "reconnecting" via COMPANY_SOCKET_STATE_EVENT. Le message générique précédent
+      // ("Connexion temps réel refusée. Vérifiez votre authentification.") était trompeur.
     };
     window.addEventListener('socket_connection_rejected', handler);
     return () => window.removeEventListener('socket_connection_rejected', handler);
@@ -343,6 +358,24 @@ const CompanyDashboard = () => {
       setLastDataSyncAt(Date.now());
     }
   }, [reservations, driver, qualityMetrics]);
+
+  // Bannière sticky : chauffeurs ASSIGNED + batterie restreinte + mission < 30 min
+  useEffect(() => {
+    if (!company?.id) return;
+    const count = countConstrainedAssignedImminentDrivers(
+      driversForMap,
+      reservations,
+      Date.now()
+    );
+    if (count > 0) {
+      toast.warning(buildConstrainedImminentToastMessage(count), {
+        id: CONSTRAINED_IMMINENT_TOAST_ID,
+        duration: Infinity,
+      });
+    } else {
+      toast.dismiss(CONSTRAINED_IMMINENT_TOAST_ID);
+    }
+  }, [company?.id, driversForMap, reservations]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -1281,7 +1314,7 @@ const CompanyDashboard = () => {
             lastSyncAt={lastDataSyncAt}
             isSyncing={loadingReservations || loadingDriver || loadingRealtimeDashboard}
             realtimeEnabled
-            realtimeConnected={Boolean(socket?.connected)}
+            realtimeConnected={socketConnected}
             sourceLabel="Dispatch"
             className={styles.dashboardFreshness}
           />

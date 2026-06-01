@@ -9,6 +9,12 @@ import { emitDriverTelemetry } from "../observability/driverTelemetry";
 import { useEffect } from "../reactCompat";
 import { getExpoNotificationsModule } from "./expoNotificationsCompat";
 import { getStableDeviceId } from "./getStableDeviceId";
+import {
+  clearPendingPushTokenRegistration,
+  flushPendingPushTokenRegistrations,
+  persistPendingPushTokenRegistration,
+  registerWithRetry,
+} from "./pendingPushTokenRegistration";
 
 export type PushRegisterCallbacks = {
   registerExpo: (input: {
@@ -28,13 +34,43 @@ export type RegisterPushTokenOptions = {
   fcmEnabled: boolean;
   callbacks: PushRegisterCallbacks;
   telemetrySource: string;
+  onPermissionDenied?: () => void;
 };
+
+async function registerPushTokenWithPersistence(
+  provider: "expo" | "fcm",
+  input: { token: string; deviceId: string; platform: "ios" | "android" },
+  registerFn: () => Promise<void>,
+  telemetrySource: string
+): Promise<void> {
+  try {
+    await registerWithRetry(registerFn);
+    await clearPendingPushTokenRegistration(provider);
+    emitDriverTelemetry("push.token.registered", {
+      source: telemetrySource,
+      provider,
+    });
+  } catch (error) {
+    await persistPendingPushTokenRegistration({
+      provider,
+      token: input.token,
+      deviceId: input.deviceId,
+      platform: input.platform,
+    });
+    emitDriverTelemetry("push.token.register_failed", {
+      source: telemetrySource,
+      provider,
+      reason: error instanceof Error ? error.message : "unknown",
+      persisted: true,
+    });
+  }
+}
 
 /**
  * Enregistre Expo + FCM avec device_id stable et listeners de rotation.
  */
 export function useRegisterPushTokenEffect(options: RegisterPushTokenOptions): void {
-  const { enabled, fcmEnabled, callbacks, telemetrySource } = options;
+  const { enabled, fcmEnabled, callbacks, telemetrySource, onPermissionDenied } = options;
   const Notifications = getExpoNotificationsModule();
 
   useEffect(() => {
@@ -45,25 +81,22 @@ export function useRegisterPushTokenEffect(options: RegisterPushTokenOptions): v
 
     const registerExpo = async () => {
       try {
+        await flushPendingPushTokenRegistrations(callbacks);
+
         const perm = await Notifications.requestPermissionsAsync();
         if (!perm.granted) {
           emitDriverTelemetry("push.token.permission_denied", {
             source: telemetrySource,
           });
+          onPermissionDenied?.();
           return;
         }
         const deviceId = await getStableDeviceId();
         const tokenResult = await Notifications.getExpoPushTokenAsync();
         if (!tokenResult?.data || cancelled) return;
-        await callbacks.registerExpo({
-          token: tokenResult.data,
-          deviceId,
-          platform: Platform.OS === "ios" ? "ios" : "android",
-        });
-        emitDriverTelemetry("push.token.registered", {
-          source: telemetrySource,
-          provider: "expo",
-        });
+        const platform = Platform.OS === "ios" ? "ios" : "android";
+        const payload = { token: tokenResult.data, deviceId, platform };
+        await registerPushTokenWithPersistence("expo", payload, () => callbacks.registerExpo(payload), telemetrySource);
       } catch (error) {
         emitDriverTelemetry("push.token.register_failed", {
           source: telemetrySource,
@@ -80,11 +113,14 @@ export function useRegisterPushTokenEffect(options: RegisterPushTokenOptions): v
       void (async () => {
         try {
           const deviceId = await getStableDeviceId();
-          await callbacks.registerExpo({
-            token: data,
-            deviceId,
-            platform: Platform.OS === "ios" ? "ios" : "android",
-          });
+          const platform = Platform.OS === "ios" ? "ios" : "android";
+          const payload = { token: data, deviceId, platform };
+          await registerPushTokenWithPersistence(
+            "expo",
+            payload,
+            () => callbacks.registerExpo(payload),
+            telemetrySource
+          );
         } catch (error) {
           emitDriverTelemetry("push.token.register_failed", {
             source: telemetrySource,
@@ -99,36 +135,34 @@ export function useRegisterPushTokenEffect(options: RegisterPushTokenOptions): v
       cancelled = true;
       expoSubscription?.remove();
     };
-  }, [Notifications, callbacks, enabled, telemetrySource]);
+  }, [Notifications, callbacks, enabled, onPermissionDenied, telemetrySource]);
 
   useEffect(() => {
     if (!enabled || !fcmEnabled || Platform.OS === "web") return;
 
     let cancelled = false;
+    let fcmRegistrationInFlight = false;
 
     const registerFcm = async (token: string) => {
-      if (!token || cancelled) return;
+      if (!token || cancelled || fcmRegistrationInFlight) return;
+      fcmRegistrationInFlight = true;
       try {
         const deviceId = await getStableDeviceId();
-        await callbacks.registerFcm({
-          token,
-          deviceId,
-          platform: Platform.OS === "ios" ? "ios" : "android",
-        });
-        emitDriverTelemetry("push.token.registered", {
-          source: telemetrySource,
-          provider: "fcm",
-        });
-      } catch (error) {
-        emitDriverTelemetry("push.token.register_failed", {
-          source: telemetrySource,
-          provider: "fcm",
-          reason: error instanceof Error ? error.message : "unknown",
-        });
+        const platform = Platform.OS === "ios" ? "ios" : "android";
+        const payload = { token, deviceId, platform };
+        await registerPushTokenWithPersistence(
+          "fcm",
+          payload,
+          () => callbacks.registerFcm(payload),
+          telemetrySource
+        );
+      } finally {
+        fcmRegistrationInFlight = false;
       }
     };
 
     void (async () => {
+      await flushPendingPushTokenRegistrations(callbacks);
       const token = await getDriverFcmToken();
       if (token) await registerFcm(token);
     })();

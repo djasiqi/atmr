@@ -29,6 +29,7 @@ CHANGE_TYPE_ASSIGN = "assign"
 CHANGE_TYPE_STATUS = "status"
 CHANGE_TYPE_TIME_CHANGE = "time_change"
 CHANGE_TYPE_ADDRESS_CHANGE = "address_change"
+CHANGE_TYPE_DETAILS_CHANGE = "details_change"
 CHANGE_TYPE_CANCEL = "cancel"
 
 # Mapping unique statut → label FR (jamais d'ID dans title/body)
@@ -500,6 +501,7 @@ def build_push_for_company_to_driver(
     new_time: str | None = None,
     address_change_type: str | None = None,
     new_address_short: str | None = None,
+    details_change_labels: list[str] | None = None,
     discrete_mode: bool = False,
 ) -> dict[str, Any]:
     """Template Company→Driver: assignation, modif heure/lieu, annulation.
@@ -537,7 +539,13 @@ def build_push_for_company_to_driver(
     collapse_key = f"booking:{bid}"
     # dedupe_key inclut event_type (pas seulement status) → cas "statut inchangé mais info modifiée"
     dedupe_key = f"booking:{bid}:event:{change_type}:status:{str(status or '').lower()}"
-    is_significant = change_type in {CHANGE_TYPE_CANCEL, CHANGE_TYPE_ASSIGN}
+    is_significant = change_type in {
+        CHANGE_TYPE_CANCEL,
+        CHANGE_TYPE_ASSIGN,
+        CHANGE_TYPE_TIME_CHANGE,
+        CHANGE_TYPE_ADDRESS_CHANGE,
+        CHANGE_TYPE_DETAILS_CHANGE,
+    }
     throttle_seconds = 0 if is_significant else 8
 
     title = ""
@@ -552,7 +560,7 @@ def build_push_for_company_to_driver(
         data["event"] = "booking_assigned"
 
     elif change_type == CHANGE_TYPE_TIME_CHANGE:
-        title = "Course • Horaire modifié"
+        title = f"Mission #{bid} • Horaire modifié"
         body_lines.append(client_name)
         if old_time and new_time:
             body_lines.append(f"{old_time} → {new_time}")
@@ -564,7 +572,7 @@ def build_push_for_company_to_driver(
         data["new_time"] = new_time
 
     elif change_type == CHANGE_TYPE_ADDRESS_CHANGE:
-        title = "Course • Adresse modifiée"
+        title = f"Mission #{bid} • Adresse modifiée"
         body_lines.append(client_name)
         if address_change_type == "pickup" and new_address_short:
             body_lines.append(f"Départ modifié : {new_address_short}")
@@ -576,6 +584,18 @@ def build_push_for_company_to_driver(
             body_lines.append("Destination modifiée")
         body = "\n".join(s for s in body_lines if s)
         data["event"] = "address_change"
+
+    elif change_type == CHANGE_TYPE_DETAILS_CHANGE:
+        title = f"Mission #{bid} • Informations modifiées"
+        body_lines.append(client_name)
+        if details_change_labels:
+            body_lines.append(", ".join(details_change_labels[:4]))
+        else:
+            body_lines.append("Informations mission mises à jour")
+        body = "\n".join(s for s in body_lines if s)
+        data["event"] = "details_change"
+        if details_change_labels:
+            data["details_change_labels"] = details_change_labels
 
     elif change_type == CHANGE_TYPE_CANCEL:
         title = "Course • Annulée"

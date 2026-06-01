@@ -279,22 +279,30 @@ def handle_booking_updated(event: dict[str, Any]) -> None:
                 targets.exclude_driver_id is None
                 or int(driver_id) != int(targets.exclude_driver_id)
             ):
+                # Politique produit: pour le chauffeur, seules les notifications
+                # de changements significatifs doivent être visuelles :
+                # horaire, adresses, informations médicales/accès, notes.
+                # Les autres updates passent uniquement en socket/realtime.
                 changes = event.get("changes") or {}
                 changes_keys = (
                     set(changes.keys()) if isinstance(changes, dict) else set()
                 )
-                driver_push = targets.notify_driver_push and (
-                    bool(
-                        changes_keys.intersection(
-                            {
-                                "scheduled_time",
-                                "pickup_location",
-                                "dropoff_location",
-                                "notes",
-                            }
-                        )
-                    )
-                    or status_val in {"cancelled", "canceled"}
+                driver_push_fields = {
+                    "scheduled_time",
+                    "pickup_location",
+                    "dropoff_location",
+                    "notes",
+                    "notes_medical",
+                    "medical_facility",
+                    "hospital_service",
+                    "doctor_name",
+                    "pickup_access_notes",
+                    "dropoff_access_notes",
+                    "wheelchair_client_has",
+                    "wheelchair_need",
+                }
+                driver_push = targets.notify_driver_push and bool(
+                    changes_keys.intersection(driver_push_fields)
                 )
                 fanout_booking_updated(
                     driver_id=int(driver_id),

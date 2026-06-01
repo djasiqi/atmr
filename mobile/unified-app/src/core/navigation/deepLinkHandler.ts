@@ -71,6 +71,25 @@ export function resolveDriverDeepLink(input: string | null | undefined): DriverD
       missionId: null,
     };
   }
+  const chatThreadTail = removeAnySchemePrefix(
+    input,
+    SCHEMES.map((scheme) => `${scheme}chat/thread/`)
+  );
+  if (chatThreadTail != null) {
+    const threadId = chatThreadTail.split("?")[0];
+    if (threadId.length > 0) {
+      return {
+        route: `/(app)/(driver)/messages/${encodeURIComponent(threadId)}`,
+        missionId: null,
+      };
+    }
+  }
+  if (normalized.startsWith("atmr://chat") || normalized.startsWith("lirie://chat")) {
+    return {
+      route: "/(app)/(driver)/chat",
+      missionId: null,
+    };
+  }
   if (normalized.startsWith("atmr://quick-action") || normalized.startsWith("lirie://quick-action")) {
     const [, query = ""] = input.split("?");
     const map = parseQuery(query);

@@ -12,7 +12,11 @@ import { DriverPushPayload, handleDriverPushQuickAction } from "../../features/d
 import { ensureDriverNotificationChannels } from "../../features/driver/notificationChannels";
 import { ensureDriverNotificationActions } from "../../features/driver/notificationActions";
 import { ensureDriverNotificationGrouping } from "../../features/driver/notificationGrouping";
-import { handleSilentPushPayload, isSilentPayload } from "../../features/driver/silentNotifications";
+import {
+  handleSilentPushPayload,
+  isSilentPayload,
+  shouldSuppressVisualPush,
+} from "../../features/driver/silentNotifications";
 import {
   configureDriverRealtimeSync,
   requestChatRefresh,
@@ -25,9 +29,15 @@ import {
 import { resolveDriverDeepLink } from "../navigation/deepLinkHandler";
 import { configureMissionBarIOS } from "../../features/driver/missionBarIOS";
 import { registerMissionBarBackgroundHandlers } from "../../features/driver/missionBarBackground";
+import { loadNotifee } from "../../features/driver/notifeeCompat";
+import { resolveDriverNotificationContract } from "../../features/driver/notificationChannels";
 import { appendSessionJournalEvent } from "../observability/sessionJournal";
 import { shouldIgnoreNotification } from "../notifications/shouldIgnoreNotification";
 import { getExpoNotificationsModule } from "../notifications/expoNotificationsCompat";
+import {
+  clearPushPermissionDenied,
+  setPushPermissionDenied,
+} from "../notifications/pushPermissionState";
 import {
   buildNotificationDedupKey,
   markNotificationHandled,
@@ -212,6 +222,7 @@ export function NotificationsProvider({ children }: PropsWithChildren) {
     if (raw === "mission_updated" || raw === "booking_updated") return "mission_updated";
     if (raw === "mission_cancelled" || raw === "booking_cancelled") return "mission_cancelled";
     if (raw === "mission_reassigned" || raw === "booking_reassigned") return "mission_reassigned";
+    if (raw === "chat_message" || raw === "message" || raw === "team_chat_message") return "chat_message";
     if (raw === "reminder_action") return "reminder_action";
     if (raw === "informative") return "informative";
     if (raw === "delay") return null;
@@ -240,6 +251,9 @@ export function NotificationsProvider({ children }: PropsWithChildren) {
     (input: unknown, actionIdentifier?: string): DriverPushPayload | null => {
       if (!input || typeof input !== "object") return null;
       const value = input as Record<string, unknown>;
+      const rawType = String(value.type ?? "mission_updated");
+      const type = normalizePushType(rawType);
+      if (!type) return null;
       const missionIdRaw =
         value.mission_id ?? value.missionId ?? value.booking_id ?? value.bookingId;
       const missionId = Number(missionIdRaw);
@@ -251,10 +265,8 @@ export function NotificationsProvider({ children }: PropsWithChildren) {
             : undefined;
       const deepLinkTarget = parseDeepLinkTarget(deepLink);
       const resolvedMissionId = Number.isFinite(missionId) ? missionId : deepLinkTarget?.missionId ?? null;
-      if (!Number.isFinite(resolvedMissionId)) return null;
-      const rawType = String(value.type ?? "mission_updated");
-      const type = normalizePushType(rawType);
-      if (!type) return null;
+      const requiresMissionId = type !== "chat_message" && type !== "informative";
+      if (requiresMissionId && !Number.isFinite(resolvedMissionId)) return null;
       const schema =
         value.mission_id != null || value.missionId != null
           ? "mission_v2"
@@ -263,7 +275,7 @@ export function NotificationsProvider({ children }: PropsWithChildren) {
             : "unknown";
       const threadId = extractThreadId(value);
       return {
-        mission_id: resolvedMissionId as number,
+        mission_id: Number.isFinite(resolvedMissionId) ? (resolvedMissionId as number) : null,
         type,
         event_id: typeof value.event_id === "string" ? value.event_id : undefined,
         action:
@@ -311,7 +323,7 @@ export function NotificationsProvider({ children }: PropsWithChildren) {
         },
         activeContext?.context_id ?? null
       );
-      if (payload.action) {
+      if (payload.action && Number.isFinite(payload.mission_id)) {
         emitDriverTelemetry("push.quick_action.dispatch", {
           source: "core.notifications.provider",
           mission_id: payload.mission_id,
@@ -319,7 +331,7 @@ export function NotificationsProvider({ children }: PropsWithChildren) {
         });
       }
       await handleDriverPushQuickAction(payload);
-      if (payload.action) {
+      if (payload.action && Number.isFinite(payload.mission_id)) {
         emitDriverTelemetry("push.quick_action.success", {
           source: "core.notifications.provider",
           mission_id: payload.mission_id,
@@ -327,11 +339,12 @@ export function NotificationsProvider({ children }: PropsWithChildren) {
         });
       }
       if (
-        payload.type === "mission_updated" ||
-        payload.type === "mission_reassigned" ||
-        payload.type === "mission_cancelled"
+        payload.mission_id != null &&
+        (payload.type === "mission_updated" ||
+          payload.type === "mission_reassigned" ||
+          payload.type === "mission_cancelled")
       ) {
-        await triggerDriverResync("push_update", payload.mission_id);
+        await triggerDriverResync("push_update", payload.mission_id ?? null);
       }
       if (payload.thread_id) {
         requestChatRefresh(payload.thread_id, "push_chat");
@@ -344,6 +357,38 @@ export function NotificationsProvider({ children }: PropsWithChildren) {
           skipped: true,
           reason: "active_screen",
         });
+        return;
+      }
+
+      if (payload.type === "chat_message") {
+        const deepLinkTarget = parseDeepLinkTarget(payload.deep_link);
+        const route = deepLinkTarget?.route
+          ? deepLinkTarget.route
+          : payload.thread_id
+            ? `/(app)/(driver)/messages/${encodeURIComponent(payload.thread_id)}`
+            : "/(app)/(driver)/chat";
+        recordNotificationNavigationTotal({ route });
+        emitNotificationNavigation({
+          mission_id: payload.mission_id,
+          route,
+        });
+        router.push(route as any);
+        return;
+      }
+
+      if (payload.type === "mission_assigned") {
+        const route = "/(app)/(driver)";
+        recordNotificationNavigationTotal({ route });
+        emitNotificationNavigation({ mission_id: payload.mission_id, route });
+        router.push(route as any);
+        return;
+      }
+
+      if (payload.type === "mission_reassigned") {
+        const route = "/(app)/(driver)/trips";
+        recordNotificationNavigationTotal({ route });
+        emitNotificationNavigation({ mission_id: payload.mission_id, route });
+        router.push(route as any);
         return;
       }
 
@@ -369,11 +414,11 @@ export function NotificationsProvider({ children }: PropsWithChildren) {
         });
         router.push(deepLinkTarget.route as any);
       } else if (
-        payload.type === "mission_assigned" ||
         payload.type === "mission_cancelled" ||
         payload.type === "reminder_action" ||
-        payload.action
+        (payload.action && Number.isFinite(payload.mission_id))
       ) {
+        if (!Number.isFinite(payload.mission_id)) return;
         const route = `/(app)/(driver)/missions/${payload.mission_id}`;
         recordNotificationNavigationTotal({ route });
         emitNotificationNavigation({ mission_id: payload.mission_id, route });
@@ -400,8 +445,15 @@ export function NotificationsProvider({ children }: PropsWithChildren) {
           reason: "route_timeout",
         });
         if (status === "ready" && activeContext?.context_type === "driver") {
-          void triggerDriverResync("push_route_fallback", payload.mission_id);
-          router.push("/(app)/(driver)/missions" as any);
+          if (payload.type !== "chat_message") {
+            void triggerDriverResync("push_route_fallback", payload.mission_id);
+            router.push("/(app)/(driver)/missions" as any);
+          } else {
+            const route = payload.thread_id
+              ? `/(app)/(driver)/messages/${encodeURIComponent(payload.thread_id)}`
+              : "/(app)/(driver)/chat";
+            router.push(route as any);
+          }
         }
       }, DEEPLINK_BOOTSTRAP_TIMEOUT_MS);
     },
@@ -454,6 +506,87 @@ export function NotificationsProvider({ children }: PropsWithChildren) {
     },
     [triggerDriverResync]
   );
+
+  const displayDriverPushNotification = useCallback(
+    async (payload: Record<string, unknown>) => {
+      if (isSilentPayload(payload)) return;
+      if (shouldSuppressVisualPush(payload)) return;
+
+      const rawType = extractRawType(payload);
+      const contract = resolveDriverNotificationContract(rawType);
+      const title =
+        typeof payload.title === "string"
+          ? payload.title
+          : typeof (payload as { notification?: { title?: string } }).notification?.title === "string"
+            ? (payload as { notification?: { title?: string } }).notification?.title
+            : "Liri";
+      const body =
+        typeof payload.body === "string"
+          ? payload.body
+          : typeof (payload as { notification?: { body?: string } }).notification?.body === "string"
+            ? (payload as { notification?: { body?: string } }).notification?.body
+            : "Mise à jour mission";
+      const channelId =
+        typeof payload.channelId === "string" && payload.channelId.length > 0
+          ? payload.channelId
+          : contract.channelId;
+
+      if (Platform.OS === "android" && AppState.currentState !== "active") {
+        const mod = await loadNotifee();
+        if (mod) {
+          const { default: notifee, AndroidImportance } = mod;
+          await notifee.createChannel({
+            id: channelId,
+            name: "Missions",
+            importance: AndroidImportance.HIGH,
+          });
+          await notifee.displayNotification({
+            title,
+            body,
+            data: payload as Record<string, string>,
+            android: {
+              channelId,
+              pressAction: { id: "default" },
+            },
+          });
+          return;
+        }
+      }
+
+      if (!Notifications) return;
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title,
+          body,
+          data: payload as Record<string, unknown>,
+        },
+        trigger: null,
+      });
+    },
+    [Notifications]
+  );
+
+  const clearForegroundNotifications = useCallback(async () => {
+    if (Platform.OS === "web") return;
+    if (!Notifications) return;
+
+    if (typeof Notifications.dismissAllNotificationsAsync === "function") {
+      await Notifications.dismissAllNotificationsAsync().catch(() => undefined);
+    }
+
+    const mod = await loadNotifee();
+    if (!mod) return;
+    const notifee = mod.default as {
+      cancelAllNotifications?: () => Promise<void>;
+      cancelDisplayedNotifications?: () => Promise<void>;
+    };
+    if (typeof notifee.cancelDisplayedNotifications === "function") {
+      await notifee.cancelDisplayedNotifications().catch(() => undefined);
+    }
+    if (typeof notifee.cancelAllNotifications === "function") {
+      await notifee.cancelAllNotifications().catch(() => undefined);
+    }
+  }, [Notifications]);
 
   useEffect(() => {
     if (!Notifications) return;
@@ -589,6 +722,25 @@ export function NotificationsProvider({ children }: PropsWithChildren) {
   ]);
 
   useEffect(() => {
+    if (Platform.OS === "web") return;
+    if (activeContext?.context_type !== "driver") return;
+    if (status !== "ready") return;
+
+    if (AppState.currentState === "active") {
+      void clearForegroundNotifications();
+    }
+
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState !== "active") return;
+      void clearForegroundNotifications();
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [activeContext?.context_type, clearForegroundNotifications, status]);
+
+  useEffect(() => {
     if (status !== "ready" || activeContext?.context_type !== "driver") return;
     const pending = pendingPayloadRef.current;
     if (!pending) return;
@@ -615,13 +767,54 @@ export function NotificationsProvider({ children }: PropsWithChildren) {
     const isWeb = Platform.OS === "web";
     if (isWeb) return;
     if (isFeatureEnabled("driver_notification_actions_enabled")) {
-      void ensureDriverNotificationChannels().catch(() => undefined);
-      void ensureDriverNotificationActions().catch(() => undefined);
-      void ensureDriverNotificationGrouping().catch(() => undefined);
-      void configureMissionBarIOS().catch(() => undefined);
+      void ensureDriverNotificationChannels().catch((err) => {
+        console.error("[Android] Notification channels setup failed:", err);
+        emitDriverTelemetry("push.channels.setup_failed", {
+          source: "core.notifications.provider",
+          error: err instanceof Error ? err.message : "unknown",
+        });
+      });
+      void ensureDriverNotificationActions().catch((err) => {
+        console.error("[Android] Notification actions setup failed:", err);
+        emitDriverTelemetry("push.actions.setup_failed", {
+          source: "core.notifications.provider",
+          error: err instanceof Error ? err.message : "unknown",
+        });
+      });
+      void ensureDriverNotificationGrouping().catch((err) => {
+        console.error("[Android] Notification grouping setup failed:", err);
+        emitDriverTelemetry("push.grouping.setup_failed", {
+          source: "core.notifications.provider",
+          error: err instanceof Error ? err.message : "unknown",
+        });
+      });
+      void configureMissionBarIOS().catch((err) => {
+        console.error("[iOS] Mission bar setup failed:", err);
+        emitDriverTelemetry("push.mission_bar.setup_failed", {
+          source: "core.notifications.provider",
+          error: err instanceof Error ? err.message : "unknown",
+        });
+      });
       registerMissionBarBackgroundHandlers();
     }
-    void Notifications.requestPermissionsAsync().catch(() => undefined);
+    void Notifications.requestPermissionsAsync()
+      .then((perm) => {
+        if (!perm.granted) {
+          setPushPermissionDenied(true);
+          emitDriverTelemetry("push.token.permission_denied", {
+            source: "core.notifications.provider",
+          });
+          return;
+        }
+        clearPushPermissionDenied();
+      })
+      .catch((err) => {
+        console.error("[Notifications] requestPermissionsAsync failed:", err);
+        emitDriverTelemetry("push.permission.request_failed", {
+          source: "core.notifications.provider",
+          error: err instanceof Error ? err.message : "unknown",
+        });
+      });
     const received = Notifications.addNotificationReceivedListener((notification) => {
       const data = notification.request.content.data;
       const notificationId = notification.request.identifier;
@@ -740,26 +933,13 @@ export function NotificationsProvider({ children }: PropsWithChildren) {
           requestChatRefresh(parsed.thread_id, "push_fcm");
         }
       }
-      if (AppState.currentState === "active" && Notifications) {
-        const title =
-          typeof payload.title === "string"
-            ? payload.title
-            : typeof (payload as { notification?: { title?: string } }).notification?.title ===
-                "string"
-              ? (payload as { notification?: { title?: string } }).notification?.title
-              : "Liri";
-        const body =
-          typeof payload.body === "string"
-            ? payload.body
-            : typeof (payload as { notification?: { body?: string } }).notification?.body ===
-                "string"
-              ? (payload as { notification?: { body?: string } }).notification?.body
-              : "Mise à jour mission";
-        await Notifications.scheduleNotificationAsync({
-          content: { title, body, data: payload as Record<string, unknown> },
-          trigger: null,
-        }).catch(() => undefined);
-      }
+      await displayDriverPushNotification(payload).catch((err) => {
+        console.error("[FCM] display notification failed:", err);
+        emitDriverTelemetry("push.display.schedule_failed", {
+          source: "core.notifications.provider",
+          error: err instanceof Error ? err.message : "unknown",
+        });
+      });
     });
     return () => {
       disposeDriverFirebaseMessaging();
@@ -771,6 +951,7 @@ export function NotificationsProvider({ children }: PropsWithChildren) {
     parsePayload,
     processSilentPayload,
     shouldApplyNotificationFilter,
+    displayDriverPushNotification,
     triggerDriverResync,
   ]);
 

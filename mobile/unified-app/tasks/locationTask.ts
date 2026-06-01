@@ -41,6 +41,14 @@ export async function registerDriverBackgroundTasks(): Promise<void> {
 
     TaskManager.defineTask(DRIVER_LOCATION_TASK, async () => {
       await flushDriverTrackingQueueNow();
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const bgTask = require("../src/features/driver/services/backgroundLocationTask") as typeof import("../src/features/driver/services/backgroundLocationTask");
+        await bgTask.resumePendingNativeTrackingIfNeeded();
+        await bgTask.restartNativeTrackingFromWake("background_fetch_tick");
+      } catch {
+        /* noop */
+      }
       const snapshot = await getDriverTrackingQueueSnapshot();
       emitDriverTelemetry("tracking.background.task.tick", {
         source: "driver.tasks.locationTask",

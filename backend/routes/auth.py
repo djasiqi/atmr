@@ -181,6 +181,34 @@ def _resolve_access_token_expires(is_mobile_request: bool) -> timedelta:
     return current_app.config["JWT_ACCESS_TOKEN_EXPIRES"]
 
 
+def _resolve_refresh_token_expires(
+    *, is_mobile_request: bool, remember_me: bool
+) -> timedelta:
+    """Résout la durée du refresh token selon le client et l'option remember_me.
+
+    - Clients mobile/API: durée par défaut (``JWT_REFRESH_TOKEN_EXPIRES``) pour
+      ne pas casser les flux existants. Le flag ``remember_me`` est ignoré.
+    - Web sans remember_me: durée courte (``JWT_REFRESH_TOKEN_SHORT_EXPIRES_SECONDS``,
+      défaut 1h). Combiné à un cookie de session (Max-Age=None) côté navigateur.
+    - Web avec remember_me: durée longue (``JWT_REFRESH_TOKEN_LONG_EXPIRES_SECONDS``,
+      défaut 30j). Cookie persistant.
+    """
+    default_delta: timedelta = current_app.config["JWT_REFRESH_TOKEN_EXPIRES"]
+    if is_mobile_request:
+        return default_delta
+
+    if remember_me:
+        long_seconds = int(
+            os.getenv("JWT_REFRESH_TOKEN_LONG_EXPIRES_SECONDS", str(30 * 24 * 3600))
+        )
+        return timedelta(seconds=long_seconds)
+
+    short_seconds = int(
+        os.getenv("JWT_REFRESH_TOKEN_SHORT_EXPIRES_SECONDS", str(60 * 60))
+    )
+    return timedelta(seconds=short_seconds)
+
+
 ACTIVATION_EMAIL_TTL_MINUTES = int(os.getenv("ACTIVATION_EMAIL_TTL_MINUTES", "30"))
 ACTIVATION_SMS_TTL_MINUTES = int(os.getenv("ACTIVATION_SMS_TTL_MINUTES", "5"))
 ACTIVATION_SMS_MAX_ATTEMPTS = int(os.getenv("ACTIVATION_SMS_MAX_ATTEMPTS", "5"))
@@ -578,6 +606,15 @@ login_model = auth_ns.model(
         "password": fields.String(
             required=True, description="Le mot de passe de l'utilisateur", min_length=6
         ),
+        "remember_me": fields.Boolean(
+            required=False,
+            default=False,
+            description=(
+                "Si true (web) : refresh token long-lived (ex: 30j) avec cookie "
+                "persistant. Si false/absent : refresh token court (ex: 1h) avec "
+                "cookie de session. Ignoré pour les clients mobiles."
+            ),
+        ),
     },
 )
 
@@ -804,6 +841,7 @@ def _login_post_body():
 
     email = validated_data["email"]
     password = validated_data["password"]
+    remember_me = bool(validated_data.get("remember_me", False))
 
     # ✅ DDD: Utiliser le use case pour authentifier l'utilisateur
     uc = AuthenticateUserUseCase()
@@ -929,7 +967,10 @@ def _login_post_body():
     # (durée configurée dans JWT_REFRESH_TOKEN_EXPIRES)
     # ✅ SECURITY: Ajouter la claim 'aud' et 'pwd_hash' pour invalidation après changement de mot de passe
     pwd_hash_version = _get_password_hash_version(user)
-    refresh_expires_delta = current_app.config["JWT_REFRESH_TOKEN_EXPIRES"]
+    refresh_expires_delta = _resolve_refresh_token_expires(
+        is_mobile_request=is_mobile_request,
+        remember_me=remember_me,
+    )
     refresh_token = create_refresh_token(
         identity=str(user.public_id),
         additional_claims={
@@ -941,9 +982,13 @@ def _login_post_body():
 
     # ✅ PHASE 2: Stocker le refresh token dans Redis et DB
     try:
-        # Stocker dans Redis pour rotation et limitation
+        # Stocker dans Redis pour rotation et limitation (TTL aligné avec le JWT)
         token_service = RefreshTokenService()
-        token_service.store_token(user.id, refresh_token)
+        token_service.store_token(
+            user.id,
+            refresh_token,
+            ttl_seconds=int(refresh_expires_delta.total_seconds()),
+        )
 
         # Stocker aussi dans la DB pour compatibilité et audit
         refresh_expires_at = datetime.now(UTC) + refresh_expires_delta
@@ -1047,15 +1092,19 @@ def _login_post_body():
         )
 
         # Cookie refresh_token
+        # remember_me=True  -> cookie persistant (Max-Age aligné sur le TTL serveur)
+        # remember_me=False -> cookie de session (max_age=None) supprimé à la
+        # fermeture du navigateur, TTL serveur court (cf. _resolve_refresh_token_expires)
+        refresh_cookie_max_age = (
+            int(refresh_expires_delta.total_seconds()) if remember_me else None
+        )
         response.set_cookie(
             current_app.config["COOKIE_REFRESH_TOKEN_NAME"],
             refresh_token,
             httponly=current_app.config["COOKIE_HTTP_ONLY"],
             secure=current_app.config["COOKIE_SECURE"],
             samesite=current_app.config["COOKIE_SAME_SITE"],
-            max_age=int(
-                current_app.config["JWT_REFRESH_TOKEN_EXPIRES"].total_seconds()
-            ),
+            max_age=refresh_cookie_max_age,
             path=current_app.config["COOKIE_PATH"],
             domain=current_app.config["COOKIE_DOMAIN"],
         )

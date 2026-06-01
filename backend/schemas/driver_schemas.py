@@ -7,6 +7,77 @@ from marshmallow import (  # pyright: ignore[reportMissingImports]
 )
 
 
+class DeviceHealthStatusSchema(Schema):
+    """Schema pour POST /api/v1/driver/me/device-status.
+
+    Canal séparé du tracking GPS : le mobile remonte ici l'état du device
+    (foreground service, permissions, OEM battery optimization, taux de
+    succès des fixes…). Permet de distinguer "téléphone éteint" d'une
+    contrainte OEM (Samsung One UI, Doze…) qui tue le BG GPS de l'app.
+    """
+
+    kind = fields.Str(
+        required=True,
+        validate=validate.OneOf(
+            ["tracking_health"],
+            error="kind doit valoir 'tracking_health'",
+        ),
+    )
+    fgs_running = fields.Bool(required=True)
+    fg_permission = fields.Str(
+        required=True,
+        validate=validate.OneOf(
+            ["granted", "denied", "undetermined"],
+            error=(
+                "fg_permission doit être: 'granted', 'denied' ou 'undetermined'"
+            ),
+        ),
+    )
+    bg_permission = fields.Str(
+        required=True,
+        validate=validate.OneOf(
+            ["granted", "denied", "undetermined"],
+            error=(
+                "bg_permission doit être: 'granted', 'denied' ou 'undetermined'"
+            ),
+        ),
+    )
+    gps_provider_enabled = fields.Bool(required=True)
+    battery_optimized = fields.Bool(required=True)
+
+    battery_level = fields.Float(
+        required=False,
+        allow_none=True,
+        validate=validate.Range(
+            min=0.0, max=1.0, error="battery_level doit être entre 0 et 1"
+        ),
+    )
+    is_charging = fields.Bool(required=False, allow_none=True)
+    last_fix_age_seconds = fields.Int(
+        required=False,
+        allow_none=True,
+        validate=validate.Range(
+            min=0, error="last_fix_age_seconds doit être >= 0"
+        ),
+    )
+    fix_success_rate_last_5min = fields.Float(
+        required=False,
+        allow_none=True,
+        validate=validate.Range(
+            min=0.0,
+            max=1.0,
+            error="fix_success_rate_last_5min doit être entre 0 et 1",
+        ),
+    )
+    constraint_reason = fields.Str(
+        required=False,
+        allow_none=True,
+        validate=validate.Length(
+            max=64, error="constraint_reason max 64 caractères"
+        ),
+    )
+
+
 class DriverProfileUpdateSchema(Schema):
     """Schema pour mise à jour profil chauffeur (PUT /api/driver/me/profile)."""
 

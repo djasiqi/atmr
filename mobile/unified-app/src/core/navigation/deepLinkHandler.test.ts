@@ -22,6 +22,13 @@ describe("resolveDriverDeepLink", () => {
       missionId: 321,
     });
   });
+
+  it("resolves chat thread deep link", () => {
+    expect(resolveDriverDeepLink("atmr://chat/thread/dispatch")).toEqual({
+      route: "/(app)/(driver)/messages/dispatch",
+      missionId: null,
+    });
+  });
 });
 
 describe("resolveCompanyDeepLink", () => {

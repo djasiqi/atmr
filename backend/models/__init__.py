@@ -37,6 +37,7 @@ from .delay_event import DelayEvent
 from .demo_access import DemoAccess
 from .demo_request import DemoRequest
 from .device_token import DeviceToken
+from .driver_device_health_event import DriverDeviceHealthEvent
 from .dispatch import (
     Assignment,
     DailyStats,
@@ -235,6 +236,7 @@ __all__ = [
     "DemoAccess",
     "DemoRequest",
     "DeviceToken",  # ✅ Support multi-device pour push notifications
+    "DriverDeviceHealthEvent",
     "DispatchMetrics",
     "DispatchOffer",
     "DispatchOfferStatus",

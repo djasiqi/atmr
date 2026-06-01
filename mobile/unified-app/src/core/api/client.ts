@@ -70,6 +70,37 @@ function deriveBundleHostForDev(): string | null {
   return hostUri.split(":")[0] ?? null;
 }
 
+/** Dev : réaligne une URL locale sur l'hôte Metro quand l'IP LAN du PC change. */
+export function alignDevLocalUrlWithBundleHost(chosen: string): string {
+  // Web dev : suivre l'hôte de la page (localhost/IP LAN) pour éviter qu'une ancienne
+  // IP compilée dans le bundle continue d'être utilisée après changement de réseau.
+  if (__DEV__ && Platform?.OS === "web") {
+    const webHost = globalThis?.location?.hostname;
+    const chosenHost = extractHostFromUrl(chosen);
+    if (
+      typeof webHost === "string" &&
+      webHost.length > 0 &&
+      chosenHost &&
+      webHost !== chosenHost &&
+      isDevAlignableApiHost(chosenHost)
+    ) {
+      return chosen.replace(chosenHost, webHost);
+    }
+  }
+
+  if (__DEV__) {
+    const bundleHost = deriveBundleHostForDev();
+    const chosenHost = extractHostFromUrl(chosen);
+    if (bundleHost && chosenHost && bundleHost !== chosenHost && isDevAlignableApiHost(chosenHost)) {
+      if (isLoopbackStyleHost(bundleHost) && isNonLoopbackDevApiHost(chosenHost)) {
+        return chosen;
+      }
+      return chosen.replace(chosenHost, bundleHost);
+    }
+  }
+  return chosen;
+}
+
 /** Repli legacy EXPO_PUBLIC_API_URL (operations-app / secrets EAS historiques). */
 function resolveApiBaseUrlFromEnv(): string | undefined {
   const direct = process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
@@ -90,35 +121,7 @@ function resolveBaseUrl(): string {
     return DEFAULT_PROD_API_BASE_URL;
   }
 
-  // Web dev : suivre l’hôte de la page (localhost/IP LAN) pour éviter qu’une ancienne
-  // IP compilée dans le bundle continue d’être utilisée après changement de réseau.
-  if (__DEV__ && Platform?.OS === "web") {
-    const webHost = globalThis?.location?.hostname;
-    const chosenHost = extractHostFromUrl(chosen);
-    if (
-      typeof webHost === "string" &&
-      webHost.length > 0 &&
-      chosenHost &&
-      webHost !== chosenHost &&
-      isDevAlignableApiHost(chosenHost)
-    ) {
-      return chosen.replace(chosenHost, webHost);
-    }
-  }
-
-  // Dev : si l’IP LAN du PC change, réaligner une base **locale** sur l’hôte Metro.
-  // Ne pas remplacer api.lirie.ch (ou autre prod) par localhost — sinon le mobile appelle https://localhost/...
-  if (__DEV__) {
-    const bundleHost = deriveBundleHostForDev();
-    const chosenHost = extractHostFromUrl(chosen);
-    if (bundleHost && chosenHost && bundleHost !== chosenHost && isDevAlignableApiHost(chosenHost)) {
-      if (isLoopbackStyleHost(bundleHost) && isNonLoopbackDevApiHost(chosenHost)) {
-        return chosen;
-      }
-      return chosen.replace(chosenHost, bundleHost);
-    }
-  }
-  return chosen;
+  return alignDevLocalUrlWithBundleHost(chosen);
 }
 
 const baseURL = resolveBaseUrl();

@@ -1,0 +1,60 @@
+"""Historique heartbeat santé device chauffeur (tracking readiness / diagnostics)."""
+
+from __future__ import annotations
+
+from datetime import datetime
+
+from ext import db
+
+
+class DriverDeviceHealthEvent(db.Model):
+    """Snapshot périodique device-health remonté par l'app mobile."""
+
+    __tablename__ = "driver_device_health_events"
+
+    id = db.Column(db.Integer, primary_key=True)
+    driver_id = db.Column(
+        db.Integer,
+        db.ForeignKey("driver.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    recorded_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.utcnow(),
+        index=True,
+    )
+    manufacturer = db.Column(db.String(64), nullable=True)
+    model = db.Column(db.String(128), nullable=True)
+    platform = db.Column(db.String(16), nullable=True)
+    battery_optimized = db.Column(db.Boolean, nullable=True)
+    location_permission = db.Column(db.String(32), nullable=True)
+    notifications_enabled = db.Column(db.Boolean, nullable=True)
+    tracking_active = db.Column(db.Boolean, nullable=True)
+    app_state = db.Column(db.String(32), nullable=True)
+    last_fix_age_seconds = db.Column(db.Integer, nullable=True)
+    constraint_reason = db.Column(db.String(64), nullable=True)
+    fgs_running = db.Column(db.Boolean, nullable=True)
+    trigger_reason = db.Column(db.String(128), nullable=True)
+
+    driver = db.relationship("Driver", backref=db.backref("device_health_events", lazy="dynamic"))
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "driver_id": self.driver_id,
+            "recorded_at": self.recorded_at.isoformat() if self.recorded_at else None,
+            "manufacturer": self.manufacturer,
+            "model": self.model,
+            "platform": self.platform,
+            "battery_optimized": self.battery_optimized,
+            "location_permission": self.location_permission,
+            "notifications_enabled": self.notifications_enabled,
+            "tracking_active": self.tracking_active,
+            "app_state": self.app_state,
+            "last_fix_age_seconds": self.last_fix_age_seconds,
+            "constraint_reason": self.constraint_reason,
+            "fgs_running": self.fgs_running,
+            "trigger_reason": self.trigger_reason,
+        }
