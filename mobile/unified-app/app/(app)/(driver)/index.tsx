@@ -189,6 +189,9 @@ export default function DriverHomeScreen() {
     if (!activeMission) return;
     setReleaseMissionOpen(true);
   }, [activeMission, trackingReady]);
+
+  return (
+    <DriverContextGuard>
       <PermissionGuard permission="mission:read">
         <>
           <Screen
