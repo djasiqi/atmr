@@ -444,7 +444,7 @@ jobs:
           username: ${{ env.SSH_USER }}
           key: ${{ env.SSH_KEY }}
           port: ${{ env.SSH_PORT }}
-          source: "scripts/smoke_tests.sh,scripts/deploy-production.sh,scripts/env.production.defaults.fragment"
+          source: "scripts/smoke_tests.sh,scripts/deploy-production.sh,scripts/env.production.defaults.fragment,scripts/lib/kafka_checks.sh,scripts/deploy-kafka-production.sh,scripts/ops/validate-prod-correction.sh,scripts/ops/apply-redis-sysctl.sh"
           target: "/srv/atmr/"
 
       - name: Decode Firebase service account locally

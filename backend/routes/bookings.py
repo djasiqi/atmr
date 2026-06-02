@@ -178,7 +178,7 @@ def _queue_trigger(company_id: int | None, action: str) -> None:
         # API moderne
         t1 = getattr(queue, "trigger_on_booking_change", None)
         if callable(t1):
-            t1(company_id, params={"action": action})
+            t1(company_id, reason=f"booking_{action}")
             return
         # API alternative
         t2 = getattr(queue, "trigger", None)

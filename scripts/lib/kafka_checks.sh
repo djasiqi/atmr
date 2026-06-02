@@ -169,6 +169,85 @@ kafka_check_atmr_network() {
   return 1
 }
 
+kafka_read_replication_factor() {
+  local name="$1"
+  local default="${2:-2}"
+  local v=""
+  local envf="${ATMR_ENV_FILE:-}"
+  if [[ -n "${envf}" ]] && [[ -f "${envf}" ]]; then
+    v="$(grep -E "^${name}=" "${envf}" 2>/dev/null | tail -n1 | cut -d'=' -f2-)"
+    v="${v//\'/}"
+    v="${v//\"/}"
+    v="${v// /}"
+    if [[ -n "${v}" ]] && [[ "${v}" =~ ^[0-9]+$ ]]; then
+      printf '%s\n' "${v}"
+      return
+    fi
+  fi
+  printf '%s\n' "${default}"
+}
+
+kafka_count_broker_services() {
+  kafka_docker_compose config --services 2>/dev/null | grep -c '^kafka-broker-' || echo 0
+}
+
+kafka_check_replication_factors() {
+  local broker_count topic_rf broker_rf
+  broker_count="$(kafka_count_broker_services)"
+  topic_rf="$(kafka_read_replication_factor KAFKA_TOPIC_REPLICATION_FACTOR 2)"
+  broker_rf="$(kafka_read_replication_factor KAFKA_BROKER_REPLICATION_FACTOR 2)"
+  if [[ "${broker_count}" -lt 1 ]]; then
+    log_fail "aucun service kafka-broker-* dans le merge Compose"
+    return 1
+  fi
+  if ((topic_rf > broker_count)); then
+    log_fail "KAFKA_TOPIC_REPLICATION_FACTOR=${topic_rf} > broker_count=${broker_count}"
+    return 1
+  fi
+  if ((broker_rf > broker_count)); then
+    log_fail "KAFKA_BROKER_REPLICATION_FACTOR=${broker_rf} > broker_count=${broker_count}"
+    return 1
+  fi
+  log_info "réplication OK (brokers=${broker_count}, topic_rf=${topic_rf}, broker_rf=${broker_rf})"
+  return 0
+}
+
+kafka_check_functional_smoke() {
+  local first rf topic
+  first="$(kafka_bootstrap_first)"
+  rf="$(kafka_read_replication_factor KAFKA_TOPIC_REPLICATION_FACTOR 2)"
+  topic="atmr.ops.smoke"
+  if ! kafka_docker_compose exec -T kafka-broker-1 kafka-topics \
+    --bootstrap-server "${first}" \
+    --create --if-not-exists \
+    --topic "${topic}" \
+    --partitions 1 \
+    --replication-factor "${rf}" >/dev/null 2>&1; then
+    log_fail "création topic smoke ${topic} KO"
+    return 1
+  fi
+  local marker="atmr-kafka-smoke-$(date +%s)"
+  if ! printf '%s\n' "${marker}" | kafka_docker_compose exec -T kafka-broker-1 kafka-console-producer \
+    --bootstrap-server "${first}" \
+    --topic "${topic}" >/dev/null 2>&1; then
+    log_fail "publish smoke message KO"
+    return 1
+  fi
+  local consumed
+  consumed="$(kafka_docker_compose exec -T kafka-broker-1 kafka-console-consumer \
+    --bootstrap-server "${first}" \
+    --topic "${topic}" \
+    --from-beginning \
+    --timeout-ms 10000 \
+    --max-messages 50 2>/dev/null | grep -F "${marker}" | tail -n1 || true)"
+  if [[ -z "${consumed}" ]]; then
+    log_fail "consume smoke message KO (marker=${marker})"
+    return 1
+  fi
+  log_info "smoke Kafka producer→broker→consumer OK (${topic})"
+  return 0
+}
+
 kafka_check_compose_resolution() {
   local services
   services="$(kafka_docker_compose config --services 2>/dev/null || true)"

@@ -332,10 +332,10 @@ services:
       - "traefik.enable=true"
       # Router les requêtes vers le backend sur www.lirie.ch et api.lirie.ch
       # Router HTTP (port 80) - redirige vers HTTPS
-      - "traefik.http.routers.backend.rule=Host(`www.lirie.ch`) || Host(`lirie.ch`) || Host(`api.lirie.ch`)"
+      - "traefik.http.routers.backend.rule=Host(`api.lirie.ch`)"
       - "traefik.http.routers.backend.entrypoints=web"
       # Router HTTPS (port 443) avec certificat SSL automatique
-      - "traefik.http.routers.backend-secure.rule=Host(`www.lirie.ch`) || Host(`lirie.ch`) || Host(`api.lirie.ch`)"
+      - "traefik.http.routers.backend-secure.rule=Host(`api.lirie.ch`)"
       - "traefik.http.routers.backend-secure.entrypoints=websecure"
       - "traefik.http.routers.backend-secure.tls.certresolver=letsencrypt"
       # Redirection HTTP vers HTTPS
@@ -355,7 +355,7 @@ services:
       - "traefik.http.routers.backend-secure.middlewares=backend-headers"
       # ✅ WebSocket: Route spécifique pour /socket.io avec sticky sessions
       # Les timeouts WebSocket sont gérés au niveau de l'entrypoint Traefik (voir traefik.yml)
-      - "traefik.http.routers.backend-secure-ws.rule=(Host(`www.lirie.ch`) || Host(`lirie.ch`) || Host(`api.lirie.ch`)) && PathPrefix(`/socket.io`)"
+      - "traefik.http.routers.backend-secure-ws.rule=Host(`api.lirie.ch`) && PathPrefix(`/socket.io`)"
       - "traefik.http.routers.backend-secure-ws.entrypoints=websecure"
       - "traefik.http.routers.backend-secure-ws.tls.certresolver=letsencrypt"
       - "traefik.http.routers.backend-secure-ws.service=backend"
@@ -451,7 +451,7 @@ services:
       # ⚠️ Traefik v3 : matchers Header / HeaderRegexp (singulier).
       # En v2 c'était Headers / HeadersRegexp (pluriel) — ne PAS revenir au pluriel
       # tant que la prod tourne Traefik v3, sinon la règle est rejetée comme fonction non supportée.
-      - "traefik.http.routers.ws-canary-secure.rule=(Host(`www.lirie.ch`) || Host(`lirie.ch`) || Host(`api.lirie.ch`)) && PathPrefix(`/socket.io`) && (Header(`X-WS-Canary`, `${WS_CANARY_HEADER_VALUE:-1}`) || HeaderRegexp(`Cookie`, `(?i).*ws_canary=${WS_CANARY_COOKIE_VALUE:-1}.*`))"
+      - "traefik.http.routers.ws-canary-secure.rule=Host(`api.lirie.ch`) && PathPrefix(`/socket.io`) && (Header(`X-WS-Canary`, `${WS_CANARY_HEADER_VALUE:-1}`) || HeaderRegexp(`Cookie`, `(?i).*ws_canary=${WS_CANARY_COOKIE_VALUE:-1}.*`))"
       - "traefik.http.routers.ws-canary-secure.entrypoints=websecure"
       - "traefik.http.routers.ws-canary-secure.tls.certresolver=letsencrypt"
       - "traefik.http.routers.ws-canary-secure.priority=200"
@@ -791,10 +791,10 @@ services:
     deploy:
       resources:
         limits:
-          memory: 256M
+          memory: 384M
           cpus: "0.25"
         reservations:
-          memory: 128M
+          memory: 192M
           cpus: "0.1"
 
   # Flower (monitoring Celery) - Optionnel

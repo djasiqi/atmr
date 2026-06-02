@@ -1,0 +1,16 @@
+# Exemple — à fusionner dans /srv/atmr/traefik/dynamic.yml UNIQUEMENT si l'audit
+# montre qu'un redirect/router capture encore /.well-known/acme-challenge/
+#
+# Prérequis : retirer lirie.ch / www.lirie.ch des routeurs Docker labels avant.
+#
+# Audit :
+#   docker exec traefik sh -lc 'cat /etc/traefik/dynamic.yml'
+#   docker logs --since 10m traefik | grep -iE 'acme|challenge|redirect'
+
+http:
+  routers:
+    acme-http:
+      entryPoints: ["web"]
+      rule: "PathPrefix(`/.well-known/acme-challenge/`)"
+      priority: 1000
+      service: noop@internal

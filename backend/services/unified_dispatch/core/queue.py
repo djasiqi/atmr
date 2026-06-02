@@ -55,6 +55,20 @@ COALESCE_MS = int(os.getenv("UD_RTC_COALESCE_MS", "800"))
 LOCK_TTL_SEC = int(os.getenv("UD_RTC_LOCK_TTL_SEC", "30"))
 MAX_BACKLOG = int(os.getenv("UD_RTC_MAX_QUEUE_BACKLOG", "100"))
 
+# Kwargs autorisés pour run_dispatch_task (signature Celery stricte).
+ALLOWED_RUN_KWARGS = frozenset(
+    {
+        "company_id",
+        "for_date",
+        "mode",
+        "regular_first",
+        "allow_emergency",
+        "overrides",
+        "dispatch_overrides",
+        "dispatch_run_id",
+    }
+)
+
 # ✅ P1: Limites pour les caches in-memory (évite explosion mémoire)
 # Limite le nombre d'entreprises en cache (max 1000 entreprises actives)
 CACHE_MAX_COMPANIES = int(os.getenv("UD_CACHE_MAX_COMPANIES", "1000"))
@@ -688,6 +702,7 @@ def trigger_on_booking_change(
     company_id: int,
     mode: str = "auto",
     params: Dict[str, Any] | None = None,
+    reason: str = "booking_change",
 ) -> None:
     """Déclenche un dispatch suite à un changement de booking.
 
@@ -695,8 +710,9 @@ def trigger_on_booking_change(
         company_id: ID de l'entreprise
         mode: Mode de dispatch (défaut: "auto")
         params: Paramètres additionnels pour le dispatch
+        reason: Raison traçable (ex. booking_assign) — stockée dans st.backlog
     """
-    trigger(company_id=company_id, reason="booking_change", mode=mode, params=params)
+    trigger(company_id=company_id, reason=reason, mode=mode, params=params)
 
 
 def stop_all() -> None:
@@ -836,11 +852,20 @@ def _enqueue_celery_task(st: CompanyDispatchState, mode: str) -> None:
                 list(getattr(st, "params", {}).keys()),
             )
 
-            # Déballer proprement les params coalescés
-            run_kwargs = dict(getattr(st, "params", {}))
-            # Garantir company_id (sécurité)
+            raw_params = dict(getattr(st, "params", {}) or {})
+            rejected = {
+                k: v for k, v in raw_params.items() if k not in ALLOWED_RUN_KWARGS
+            }
+            if rejected:
+                logger.warning(
+                    "[Queue] Ignoring unsupported run kwargs for company=%s: %s",
+                    company_id,
+                    sorted(rejected.keys()),
+                )
+            run_kwargs = {
+                k: v for k, v in raw_params.items() if k in ALLOWED_RUN_KWARGS
+            }
             run_kwargs["company_id"] = company_id
-            # Ajouter mode si absent
             run_kwargs.setdefault("mode", mode)
 
             # Anti-duplication: vérifier si un run identique est déjà en cours

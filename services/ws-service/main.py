@@ -898,6 +898,25 @@ async def presence_heartbeat(sid: str, _: dict[str, Any] | None = None) -> dict[
     return {"ok": True, "ts": _now_ms()}
 
 
+@fastapi_app.get("/metrics")
+async def metrics() -> JSONResponse:
+    """Métriques Prometheus text (scrape job monitoring)."""
+    kafka_consumer_running = (
+        kafka_consumer_task is not None and not kafka_consumer_task.done()
+    )
+    lines = [
+        "# HELP ws_kafka_consumer_enabled Kafka consumer activé par configuration",
+        "# TYPE ws_kafka_consumer_enabled gauge",
+        f"ws_kafka_consumer_enabled {1 if KAFKA_CONSUMER_ENABLED else 0}",
+        "# HELP ws_kafka_consumer_running Consumer Kafka actif (task vivante)",
+        "# TYPE ws_kafka_consumer_running gauge",
+        f"ws_kafka_consumer_running {1 if kafka_consumer_running else 0}",
+    ]
+    from fastapi.responses import PlainTextResponse
+
+    return PlainTextResponse("\n".join(lines) + "\n", media_type="text/plain; version=0.0.4")
+
+
 @fastapi_app.get("/health")
 async def health() -> JSONResponse:
     redis_up = False
@@ -911,26 +930,32 @@ async def health() -> JSONResponse:
         except Exception:
             redis_up = False
 
-    return JSONResponse(
-        {
-            "ok": True,
-            "service": "ws-service",
-            "authority": WS_AUTHORITY_SOURCE,
-            "version": WS_VERSION,
-            "redis_up": redis_up,
-            "kafka_consumer_enabled": KAFKA_CONSUMER_ENABLED,
-            "kafka_consumer_running": kafka_consumer_task is not None and not kafka_consumer_task.done(),
-            "kafka_degraded": _kafka_degraded,
-            "degraded_presence": not redis_up and ALLOW_IF_REDIS_PRESENCE_DOWN,
-            "degraded_auth": not redis_up and ALLOW_IF_REDIS_AUTH_DOWN,
-            "accept_connections": connections_accepted() and not is_kill_switch_engaged(),
-            "kill_switch_active": is_kill_switch_engaged(),
-            "force_disconnect_total": force_disconnect_total(),
-            "deduped_total": deduper.deduped_total,
-            "gps_ingest": __import__("gps_ingest").stats(),
-            "delivery": delivery_stats(),
-        }
+    kafka_consumer_running = (
+        kafka_consumer_task is not None and not kafka_consumer_task.done()
     )
+    kafka_required_but_down = KAFKA_CONSUMER_ENABLED and not kafka_consumer_running
+    status = "degraded" if kafka_required_but_down else "ok"
+    payload = {
+        "ok": not kafka_required_but_down,
+        "status": status,
+        "service": "ws-service",
+        "authority": WS_AUTHORITY_SOURCE,
+        "version": WS_VERSION,
+        "redis_up": redis_up,
+        "kafka_consumer_enabled": KAFKA_CONSUMER_ENABLED,
+        "kafka_consumer_running": kafka_consumer_running,
+        "kafka_degraded": _kafka_degraded or kafka_required_but_down,
+        "degraded_presence": not redis_up and ALLOW_IF_REDIS_PRESENCE_DOWN,
+        "degraded_auth": not redis_up and ALLOW_IF_REDIS_AUTH_DOWN,
+        "accept_connections": connections_accepted() and not is_kill_switch_engaged(),
+        "kill_switch_active": is_kill_switch_engaged(),
+        "force_disconnect_total": force_disconnect_total(),
+        "deduped_total": deduper.deduped_total,
+        "gps_ingest": __import__("gps_ingest").stats(),
+        "delivery": delivery_stats(),
+    }
+    status_code = 503 if kafka_required_but_down else 200
+    return JSONResponse(payload, status_code=status_code)
 
 
 @fastapi_app.on_event("startup")

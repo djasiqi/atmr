@@ -74,6 +74,19 @@ scrape_configs:
         target_label: "metric_type"
         replacement: "http"
 
+  # ==================== ws-service (Kafka consumer health) ====================
+  - job_name: "atmr-ws-service"
+    metrics_path: "/metrics"
+    static_configs:
+      - targets:
+          - "ws-service:8001"
+        labels:
+          service: "atmr-ws-service"
+          component: "realtime"
+          environment: "production"
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
   # ==================== Celery Workers ====================
   # ⚠️ DÉSACTIVÉ: Le worker Celery n'expose pas de serveur HTTP avec métriques
   # Les métriques Celery sont disponibles via Flower (port 5555) ou via le backend

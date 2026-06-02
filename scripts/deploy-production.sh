@@ -368,6 +368,26 @@ fi
 
 cp .env.production .env && chmod 600 .env
 
+# Garde-fou Kafka : si les 4 flags sont à true, les brokers doivent être joignables.
+if [ -f "scripts/lib/kafka_checks.sh" ]; then
+  # shellcheck source=/dev/null
+  export ATMR_ENV_FILE="/srv/atmr/.env.production"
+  # shellcheck disable=SC1091
+  source "scripts/lib/kafka_checks.sh"
+  if kafka_check_flags_all_true 2>/dev/null; then
+    echo "🔍 Kafka activé — preflight brokers/DNS avant déploiement..."
+    KAFKA_PREFLIGHT_OK=1
+    kafka_check_compose_files || KAFKA_PREFLIGHT_OK=0
+    kafka_check_replication_factors || KAFKA_PREFLIGHT_OK=0
+    kafka_check_dns_from_atmr_network || KAFKA_PREFLIGHT_OK=0
+    if [ "${KAFKA_PREFLIGHT_OK}" != "1" ]; then
+      echo "❌ Preflight Kafka KO : déployer la stack Kafka (scripts/deploy-kafka-production.sh) ou désactiver les flags."
+      exit 1
+    fi
+    echo "✅ Preflight Kafka OK"
+  fi
+fi
+
 mkdir -p data/rl/shadow_mode data/ml data/rl data/ml/models && chmod -R 755 data && chown -R 999:999 data 2>/dev/null || true
 
 # ✅ CORRECTION : Démarrer le monitoring AVANT la production pour éviter les problèmes de dépendances

@@ -75,6 +75,7 @@ kafka_check_flags_all_true || PREFLIGHT_OK=0
 kafka_check_compose_files || PREFLIGHT_OK=0
 kafka_check_atmr_network || PREFLIGHT_OK=0
 kafka_check_compose_resolution || PREFLIGHT_OK=0
+kafka_check_replication_factors || PREFLIGHT_OK=0
 
 if ((PREFLIGHT_OK == 0)); then
   if [[ "${FORCE:-0}" == "1" ]]; then
@@ -116,6 +117,7 @@ kafka_check_dns_from_atmr_network || POST_OK=0
 kafka_check_broker_api || POST_OK=0
 kafka_check_topics_exist || POST_OK=0
 kafka_check_consumers_running || POST_OK=0
+kafka_check_functional_smoke || POST_OK=0
 
 kafka_summary
 
