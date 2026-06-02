@@ -25,6 +25,9 @@ export const SPLASH_BACKGROUND_COLOR = "#EAF3F1";
  */
 export const WEB_SPLASH_LOTTIE_SIM_MS = 2600;
 
+/** Safety timeout : force animFinished si Lottie ne déclenche jamais onAnimationFinish. */
+export const SPLASH_LOTTIE_FALLBACK_TIMEOUT_MS = 4000;
+
 const shouldUseNativeDriver = Platform.OS !== "web";
 
 export function useBootSplashGate(): {
@@ -48,6 +51,9 @@ export function useBootSplashGate(): {
   );
   const { status } = useSession();
   const prevStatusRef = useRef(status);
+  const bootStartedAtRef = useRef(Date.now());
+  const lastSnapshotRef = useRef("");
+  const fallbackWarnedRef = useRef(false);
   const fadeOpacity = useRef(new Animated.Value(1)).current;
   const lottieOpacity = useRef(new Animated.Value(1)).current;
 
@@ -81,6 +87,9 @@ export function useBootSplashGate(): {
   }, []);
 
   useEffect(() => {
+    if (prevStatusRef.current !== status) {
+      console.log("[BootSplash] status transition", prevStatusRef.current, "->", status);
+    }
     if (prevStatusRef.current === "error" && status === "bootstrapping") {
       setAnimFinished(false);
     }
@@ -140,6 +149,11 @@ export function useBootSplashGate(): {
         }),
       ]).start(({ finished }) => {
         if (finished) {
+          console.log(
+            "[BootSplash] overlay hidden after",
+            Date.now() - bootStartedAtRef.current,
+            "ms",
+          );
           setOverlayMounted(false);
           fadeOpacity.setValue(1);
           lottieOpacity.setValue(1);
@@ -180,6 +194,47 @@ export function useBootSplashGate(): {
       clearTimeout(id);
     };
   }, [showLottieLayer, showOverlay, onLottieFinish]);
+
+  useEffect(() => {
+    if (Platform.OS === "web") {
+      return;
+    }
+    if (!showLottieLayer || animFinished) {
+      return;
+    }
+
+    const id = setTimeout(() => {
+      if (!fallbackWarnedRef.current) {
+        fallbackWarnedRef.current = true;
+        console.warn(
+          "[BootSplash] Lottie fallback triggered after",
+          SPLASH_LOTTIE_FALLBACK_TIMEOUT_MS,
+          "ms without onAnimationFinish",
+        );
+      }
+      onLottieFinish();
+    }, SPLASH_LOTTIE_FALLBACK_TIMEOUT_MS);
+
+    return () => clearTimeout(id);
+  }, [showLottieLayer, animFinished, onLottieFinish]);
+
+  useEffect(() => {
+    const elapsedMs = Date.now() - bootStartedAtRef.current;
+    const snapshot = JSON.stringify({
+      status,
+      introState,
+      animFinished,
+      showLottieLayer,
+      showOverlay,
+      overlayMounted,
+      elapsedMs,
+    });
+
+    if (snapshot !== lastSnapshotRef.current) {
+      lastSnapshotRef.current = snapshot;
+      console.log("[BootSplash] state", snapshot);
+    }
+  }, [status, introState, animFinished, showLottieLayer, showOverlay, overlayMounted]);
 
   const insets = useMemo(
     () => ({ top: topInset, bottom: bottomInset, left: safeLeft, right: safeRight }),
