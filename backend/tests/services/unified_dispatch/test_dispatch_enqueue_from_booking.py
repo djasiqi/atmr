@@ -6,7 +6,10 @@ from contextlib import contextmanager
 from unittest.mock import MagicMock, patch
 
 from services.unified_dispatch.core import queue as ud_queue
-from services.unified_dispatch.core.queue import ALLOWED_RUN_KWARGS, CompanyDispatchState
+from services.unified_dispatch.core.queue import (
+    ALLOWED_RUN_KWARGS,
+    CompanyDispatchState,
+)
 
 
 @contextmanager

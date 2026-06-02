@@ -1,4 +1,4 @@
-"""Régression : kwargs non supportés (ex. action) ne doivent pas atteindre run_dispatch_task."""
+"""Régression : ne pas transmettre les kwargs non supportés à Celery."""
 
 from __future__ import annotations
 
@@ -6,7 +6,10 @@ from contextlib import contextmanager
 from unittest.mock import MagicMock, patch
 
 from services.unified_dispatch.core import queue as ud_queue
-from services.unified_dispatch.core.queue import ALLOWED_RUN_KWARGS, CompanyDispatchState
+from services.unified_dispatch.core.queue import (
+    ALLOWED_RUN_KWARGS,
+    CompanyDispatchState,
+)
 
 
 @contextmanager
@@ -17,7 +20,9 @@ def _fake_app_context():
     yield app
 
 
-def _make_state(company_id: int = 42, params: dict | None = None) -> CompanyDispatchState:
+def _make_state(
+    company_id: int = 42, params: dict | None = None
+) -> CompanyDispatchState:
     st = CompanyDispatchState(company_id=company_id)
     st.params = dict(params or {})
     st.backlog.append("2026-06-02T12:00:00+00:00 booking_assign")

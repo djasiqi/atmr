@@ -48,5 +48,6 @@ def handle_dispatch_requested(event: dict[str, Any]) -> None:
         return
 
     logger.warning(
-        "[EventBus] Aucun trigger compatible trouvé dans services.unified_dispatch.queue"
+        "[EventBus] Aucun trigger compatible trouvé dans "
+        "services.unified_dispatch.queue"
     )
