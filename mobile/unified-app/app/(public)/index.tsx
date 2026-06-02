@@ -47,6 +47,7 @@ const LANDING_BACKGROUND = require("../../assets/images/landing-background.png")
 const UI_DARK_TEXT = "#163A34";
 const UI_MUTED_TEXT = "#5F7369";
 const UI_SURFACE = "#F3F7F5";
+const LANDING_REVEAL_FALLBACK_MS = 1200;
 
 /** Aligné sur la barre d’adresse (`PublicAddressSearchBar`, minHeight ~50). */
 const SUGGESTION_ROW_HEIGHT = 46;
@@ -81,6 +82,7 @@ export default function PublicHomeScreen() {
   const cardTranslateY = useRef(new Animated.Value(0)).current;
   const ctaOpacity = useRef(new Animated.Value(0)).current;
   const ctaScale = useRef(new Animated.Value(0.99)).current;
+  const landingRevealFallbackWarnedRef = useRef(false);
   const [pickupValue, setPickupValue] = useState("");
   const [dropoffValue, setDropoffValue] = useState("");
   /**
@@ -171,7 +173,21 @@ export default function PublicHomeScreen() {
     ctaScale.setValue(0.99);
     screenOpacity.setValue(0);
 
-    Animated.parallel([
+    const revealContent = () => {
+      screenOpacity.setValue(1);
+      logoOpacity.setValue(1);
+      logoScale.setValue(1);
+      logoTranslateY.setValue(0);
+      titleOpacity.setValue(1);
+      titleTranslateY.setValue(0);
+      cardOpacity.setValue(1);
+      cardTranslateY.setValue(0);
+      ctaOpacity.setValue(1);
+      ctaScale.setValue(1);
+    };
+
+    let animationCompleted = false;
+    const landingRevealAnimation = Animated.parallel([
       Animated.timing(screenOpacity, {
         toValue: 1,
         duration: 260,
@@ -238,7 +254,27 @@ export default function PublicHomeScreen() {
         easing: Easing.out(Easing.cubic),
         useNativeDriver,
       }),
-    ]).start();
+    ]);
+
+    landingRevealAnimation.start(({ finished }) => {
+      animationCompleted = finished;
+    });
+
+    const fallbackId = setTimeout(() => {
+      if (animationCompleted) {
+        return;
+      }
+      if (!landingRevealFallbackWarnedRef.current) {
+        landingRevealFallbackWarnedRef.current = true;
+        console.warn("[PublicHome] reveal fallback triggered after", LANDING_REVEAL_FALLBACK_MS, "ms");
+      }
+      revealContent();
+    }, LANDING_REVEAL_FALLBACK_MS);
+
+    return () => {
+      clearTimeout(fallbackId);
+      landingRevealAnimation.stop();
+    };
   }, [
     cardOpacity,
     cardTranslateY,
