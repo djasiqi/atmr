@@ -26,6 +26,7 @@ import {
   evaluateTrackingReadiness,
 } from "../../../src/features/driver/components/DriverTrackingReadinessGate";
 import { readTrackingOnboarded } from "../../../src/features/driver/services/trackingReadinessPersistence";
+import { isFeatureEnabled } from "../../../src/core/featureFlags/registry";
 import { DashboardMissionMap } from "../../../src/features/driver/components/DashboardMissionMap";
 import { DashboardActiveMission } from "../../../src/features/driver/components/DashboardActiveMission";
 import { DriverDashboardHeader } from "../../../src/features/driver/components/DriverDashboardHeader";
@@ -123,8 +124,17 @@ export default function DriverHomeScreen() {
   const [pullRefreshing, setPullRefreshing] = useState(false);
   const [trackingReady, setTrackingReady] = useState(false);
   const [trackingOnboarded, setTrackingOnboarded] = useState<boolean | null>(null);
+  const trackingBackgroundEnabled = useMemo(
+    () => isFeatureEnabled("tracking_background_enabled"),
+    []
+  );
 
   useEffect(() => {
+    if (!trackingBackgroundEnabled) {
+      setTrackingOnboarded(true);
+      setTrackingReady(true);
+      return;
+    }
     let cancelled = false;
     void readTrackingOnboarded().then((onboarded) => {
       if (cancelled) return;
@@ -134,11 +144,12 @@ export default function DriverHomeScreen() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [trackingBackgroundEnabled]);
 
   useEffect(() => {
+    if (!trackingBackgroundEnabled) return;
     void evaluateTrackingReadiness().then((snapshot) => setTrackingReady(snapshot.ready));
-  }, []);
+  }, [trackingBackgroundEnabled]);
 
   const allowMissionActions = trackingReady || trackingOnboarded === true;
 

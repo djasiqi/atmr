@@ -8,6 +8,11 @@
  * - Aux ouvertures suivantes : si "onboarded" est déjà persisté, le gate
  *   reste invisible. Les régressions (perm révoquée, GPS off, batterie)
  *   sont alors signalées par DriverStateBanners (banners non bloquants).
+ *
+ * NB : la lecture des prérequis device (permissions Location, GPS) est
+ * faite directement via expo-location, indépendamment du feature flag
+ * `tracking_background_enabled`. Le flag contrôle l'orchestration runtime
+ * du tracking BG, pas l'état réel des permissions OS.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -29,7 +34,6 @@ import {
   openOemBatterySettings,
   requestIgnoreBatteryOptimizations,
 } from "../services/batteryOptimization";
-import { evaluateBackgroundTrackingGate } from "../services/backgroundTrackingGating";
 import {
   markTrackingOnboarded,
   readTrackingOnboarded,
@@ -58,21 +62,23 @@ async function readNotificationsGranted(): Promise<boolean> {
 }
 
 export async function evaluateTrackingReadiness(): Promise<TrackingReadinessSnapshot> {
-  const [gate, battery, notificationsGranted, oem] = await Promise.all([
-    evaluateBackgroundTrackingGate(),
+  const [fg, bg, servicesEnabled, battery, notificationsGranted, oem] = await Promise.all([
+    Location.getForegroundPermissionsAsync().catch(() => ({ granted: false })),
+    Location.getBackgroundPermissionsAsync().catch(() => ({ granted: false })),
+    Location.hasServicesEnabledAsync().catch(() => false),
     checkBatteryOptimizationStatus(),
     readNotificationsGranted(),
     Promise.resolve(getOemBatteryGuidance()),
   ]);
 
-  const fg = await Location.getForegroundPermissionsAsync().catch(() => ({ granted: false }));
-  const bgPermissionGranted = gate.permission === "granted";
   const fgPermissionGranted = Boolean(fg.granted);
+  const bgPermissionGranted = Boolean(bg.granted);
+  const gpsEnabled = Boolean(servicesEnabled);
   const batteryExempt =
     Platform.OS !== "android" || !battery.checked || battery.isIgnoring !== false;
 
   const ready =
-    gate.servicesEnabled &&
+    gpsEnabled &&
     bgPermissionGranted &&
     fgPermissionGranted &&
     notificationsGranted &&
@@ -84,7 +90,7 @@ export async function evaluateTrackingReadiness(): Promise<TrackingReadinessSnap
     fgPermissionGranted,
     notificationsGranted,
     batteryExempt,
-    gpsEnabled: gate.servicesEnabled,
+    gpsEnabled,
     oem: oem.oem,
     hasOemSettings: oem.hasOemSettings,
   };
