@@ -448,7 +448,10 @@ services:
       - "traefik.http.services.ws-service.loadbalancer.healthcheck.path=/health"
       - "traefik.http.services.ws-service.loadbalancer.healthcheck.interval=30s"
       - "traefik.http.services.ws-service.loadbalancer.healthcheck.timeout=10s"
-      - "traefik.http.routers.ws-canary-secure.rule=(Host(`www.lirie.ch`) || Host(`lirie.ch`) || Host(`api.lirie.ch`)) && PathPrefix(`/socket.io`) && (Headers(`X-WS-Canary`, `${WS_CANARY_HEADER_VALUE:-1}`) || HeadersRegexp(`Cookie`, `(?i).*ws_canary=${WS_CANARY_COOKIE_VALUE:-1}.*`))"
+      # ⚠️ Traefik v3 : matchers Header / HeaderRegexp (singulier).
+      # En v2 c'était Headers / HeadersRegexp (pluriel) — ne PAS revenir au pluriel
+      # tant que la prod tourne Traefik v3, sinon la règle est rejetée comme fonction non supportée.
+      - "traefik.http.routers.ws-canary-secure.rule=(Host(`www.lirie.ch`) || Host(`lirie.ch`) || Host(`api.lirie.ch`)) && PathPrefix(`/socket.io`) && (Header(`X-WS-Canary`, `${WS_CANARY_HEADER_VALUE:-1}`) || HeaderRegexp(`Cookie`, `(?i).*ws_canary=${WS_CANARY_COOKIE_VALUE:-1}.*`))"
       - "traefik.http.routers.ws-canary-secure.entrypoints=websecure"
       - "traefik.http.routers.ws-canary-secure.tls.certresolver=letsencrypt"
       - "traefik.http.routers.ws-canary-secure.priority=200"

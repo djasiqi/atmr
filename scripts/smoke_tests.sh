@@ -11,8 +11,12 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 # Configuration
+# /api/v1/ready est l'endpoint canonique de readiness (DB + Redis), aligné sur :
+#   - le healthcheck Docker du conteneur backend (docker-compose.production.yml)
+#   - le healthcheck Traefik (label loadbalancer.healthcheck.path=/api/v1/ready)
+# /healthz et /api/v1/health n'existent pas côté backend (404).
 BACKEND_URL="${BACKEND_URL:-http://localhost:5000}"
-HEALTH_ENDPOINT="${HEALTH_ENDPOINT:-/health}"
+HEALTH_ENDPOINT="${HEALTH_ENDPOINT:-/api/v1/ready}"
 TIMEOUT="${TIMEOUT:-10}"
 
 # Compteur d'erreurs
@@ -60,21 +64,22 @@ fi
 
 info "✅ Backend disponible, démarrage des tests"
 
-# Test 1: Vérifier que l'endpoint /health répond avec status 200
-info "Test 1: Vérification de l'endpoint /health"
+# Test 1: Vérifier que l'endpoint de readiness répond avec status 200
+info "Test 1: Vérification de l'endpoint ${HEALTH_ENDPOINT}"
 if curl -f -s --max-time "${TIMEOUT}" "${BACKEND_URL}${HEALTH_ENDPOINT}" > /dev/null; then
-    info "✅ L'endpoint /health répond correctement"
+    info "✅ L'endpoint ${HEALTH_ENDPOINT} répond correctement"
 else
-    error "❌ L'endpoint /health ne répond pas ou retourne une erreur"
+    error "❌ L'endpoint ${HEALTH_ENDPOINT} ne répond pas ou retourne une erreur"
 fi
 
-# Test 2: Vérifier que la réponse JSON contient 'status: healthy'
-info "Test 2: Vérification du contenu de la réponse /health"
+# Test 2: Vérifier que la réponse JSON contient un statut sain
+# /api/v1/ready -> {"status":"ready", ...} ; /health -> {"status":"healthy", ...}
+info "Test 2: Vérification du contenu de la réponse ${HEALTH_ENDPOINT}"
 HEALTH_RESPONSE=$(curl -f -s --max-time "${TIMEOUT}" "${BACKEND_URL}${HEALTH_ENDPOINT}" || echo "")
-if echo "${HEALTH_RESPONSE}" | grep -q '"status"[[:space:]]*:[[:space:]]*"healthy"'; then
-    info "✅ La réponse contient 'status: healthy'"
+if echo "${HEALTH_RESPONSE}" | grep -qE '"status"[[:space:]]*:[[:space:]]*"(ready|healthy|ok)"'; then
+    info "✅ La réponse contient un statut sain (ready/healthy/ok)"
 else
-    error "❌ La réponse ne contient pas 'status: healthy'"
+    error "❌ La réponse ne contient pas de statut sain (ready/healthy/ok)"
     warn "Réponse reçue: ${HEALTH_RESPONSE}"
 fi
 

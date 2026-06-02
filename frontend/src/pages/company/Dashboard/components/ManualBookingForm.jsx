@@ -503,7 +503,7 @@ export default function ManualBookingForm({ onSuccess, onClose, onSubmitStart })
       setServiceObj(null);
       syncHospitalService('');
     }
-  }, [establishment]);
+  }, [establishment, syncHospitalService]);
 
   const onPickEstablishment = (estab) => {
     console.log('🏥 ManualBookingForm.onPickEstablishment:', estab);
@@ -545,7 +545,7 @@ export default function ManualBookingForm({ onSuccess, onClose, onSubmitStart })
         }
       }
     },
-    [establishment]
+    [establishment, syncHospitalService, syncNotesMedical]
   );
 
   // === State montant + pricing auto ===
