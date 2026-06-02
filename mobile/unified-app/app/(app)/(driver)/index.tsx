@@ -25,6 +25,7 @@ import {
   DriverTrackingReadinessGate,
   evaluateTrackingReadiness,
 } from "../../../src/features/driver/components/DriverTrackingReadinessGate";
+import { readTrackingOnboarded } from "../../../src/features/driver/services/trackingReadinessPersistence";
 import { DashboardMissionMap } from "../../../src/features/driver/components/DashboardMissionMap";
 import { DashboardActiveMission } from "../../../src/features/driver/components/DashboardActiveMission";
 import { DriverDashboardHeader } from "../../../src/features/driver/components/DriverDashboardHeader";
@@ -121,10 +122,25 @@ export default function DriverHomeScreen() {
 
   const [pullRefreshing, setPullRefreshing] = useState(false);
   const [trackingReady, setTrackingReady] = useState(false);
+  const [trackingOnboarded, setTrackingOnboarded] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void readTrackingOnboarded().then((onboarded) => {
+      if (cancelled) return;
+      setTrackingOnboarded(onboarded);
+      if (onboarded) setTrackingReady(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     void evaluateTrackingReadiness().then((snapshot) => setTrackingReady(snapshot.ready));
   }, []);
+
+  const allowMissionActions = trackingReady || trackingOnboarded === true;
 
   const onOpenMission = useCallback(
     (missionId: number) =>
@@ -137,10 +153,10 @@ export default function DriverHomeScreen() {
 
   const guardedOpenMission = useCallback(
     (missionId: number) => {
-      if (!trackingReady) return;
+      if (!allowMissionActions) return;
       onOpenMission(missionId);
     },
-    [onOpenMission, trackingReady]
+    [onOpenMission, allowMissionActions]
   );
 
   const onPullRefresh = useCallback(async () => {
@@ -169,7 +185,7 @@ export default function DriverHomeScreen() {
 
   const onMissionTransitionFromDashboard = useCallback(
     (target: DriverTransitionStatus) => {
-      if (!trackingReady) return;
+      if (!allowMissionActions) return;
       if (!activeMission) return;
       if (target === "COMPLETED") {
         setConfirmCompletionOpen(true);
@@ -181,14 +197,14 @@ export default function DriverHomeScreen() {
       }
       transitionMutation.mutate({ missionId: activeMission.id, targetStatus: target });
     },
-    [activeMission, transitionMutation, trackingReady]
+    [activeMission, transitionMutation, allowMissionActions]
   );
 
   const onMissionReleaseFromDashboard = useCallback(() => {
-    if (!trackingReady) return;
+    if (!allowMissionActions) return;
     if (!activeMission) return;
     setReleaseMissionOpen(true);
-  }, [activeMission, trackingReady]);
+  }, [activeMission, allowMissionActions]);
 
   return (
     <DriverContextGuard>
@@ -225,7 +241,7 @@ export default function DriverHomeScreen() {
 
             <DriverStateBanners />
 
-            {!trackingReady ? (
+            {trackingOnboarded === false && !trackingReady ? (
               <DriverTrackingReadinessGate onReadyChange={setTrackingReady} />
             ) : null}
 
@@ -248,7 +264,7 @@ export default function DriverHomeScreen() {
               <View style={styles.missionActiveSection}>
                 <DashboardActiveMission
                   mission={activeMission}
-                  pending={transitionMutation.isPending || !trackingReady}
+                  pending={transitionMutation.isPending || !allowMissionActions}
                   onMissionTransition={onMissionTransitionFromDashboard}
                   onMissionRelease={onMissionReleaseFromDashboard}
                   onOpenDetails={() => guardedOpenMission(activeMission.id)}
@@ -267,7 +283,7 @@ export default function DriverHomeScreen() {
               />
             ) : null}
 
-            {!bootstrapPending && trackingReady ? (
+            {!bootstrapPending && allowMissionActions ? (
               <DriverUpcomingMissions
                 missions={upcomingMissions}
                 onOpenMission={guardedOpenMission}

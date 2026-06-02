@@ -1,7 +1,15 @@
 /**
  * Gate bloquant avant première mission — vérifie les prérequis tracking.
+ *
+ * Comportement :
+ * - À la première utilisation : checklist bloquante affichée tant que tout
+ *   n'est pas vert. Quand tout passe, on persiste "onboarded" et le gate
+ *   se masque (bandeau succès court).
+ * - Aux ouvertures suivantes : si "onboarded" est déjà persisté, le gate
+ *   reste invisible. Les régressions (perm révoquée, GPS off, batterie)
+ *   sont alors signalées par DriverStateBanners (banners non bloquants).
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   AppState,
@@ -22,6 +30,10 @@ import {
   requestIgnoreBatteryOptimizations,
 } from "../services/batteryOptimization";
 import { evaluateBackgroundTrackingGate } from "../services/backgroundTrackingGating";
+import {
+  markTrackingOnboarded,
+  readTrackingOnboarded,
+} from "../services/trackingReadinessPersistence";
 
 export type TrackingReadinessSnapshot = {
   ready: boolean;
@@ -80,17 +92,26 @@ export async function evaluateTrackingReadiness(): Promise<TrackingReadinessSnap
 
 type Props = {
   onReadyChange?: (ready: boolean) => void;
+  /** Si true, le composant ne s'affiche jamais (utile une fois l'onboarding fait). */
+  silent?: boolean;
 };
 
 export function DriverTrackingReadinessGate(props: Props) {
   const [loading, setLoading] = useState(true);
   const [snapshot, setSnapshot] = useState<TrackingReadinessSnapshot | null>(null);
+  const onboardedRef = useRef(false);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     const next = await evaluateTrackingReadiness();
     setSnapshot(next);
     props.onReadyChange?.(next.ready);
+    if (next.ready && !onboardedRef.current) {
+      onboardedRef.current = true;
+      void markTrackingOnboarded().catch(() => {
+        /* persistance best-effort */
+      });
+    }
     setLoading(false);
   }, [props.onReadyChange]);
 
@@ -128,6 +149,8 @@ export function DriverTrackingReadinessGate(props: Props) {
     ];
   }, [snapshot]);
 
+  if (props.silent) return null;
+
   if (loading && !snapshot) {
     return (
       <View style={styles.container}>
@@ -137,12 +160,7 @@ export function DriverTrackingReadinessGate(props: Props) {
   }
 
   if (snapshot?.ready) {
-    return (
-      <View style={[styles.container, styles.readyBox]}>
-        <Text style={styles.readyTitle}>Tracking prêt</Text>
-        <Text style={styles.readyBody}>Vous pouvez démarrer une mission.</Text>
-      </View>
-    );
+    return null;
   }
 
   return (
