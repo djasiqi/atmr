@@ -208,8 +208,14 @@ class TrackingIngestConsumer:
             logger.info("[tracking_consumer] initialized")
         except ImportError:
             logger.error("[tracking_consumer] kafka-python dependency missing")
-        except Exception:
+        except Exception as exc:
             logger.exception("[tracking_consumer] initialization failed")
+            try:
+                from shared.sentry_init import capture_kafka_error
+
+                capture_kafka_error(exc)
+            except Exception:
+                logger.debug("[tracking_consumer] sentry capture skipped", exc_info=True)
 
     def _is_valid(self, message: dict[str, Any]) -> bool:
         payload = message.get("payload")
@@ -422,15 +428,24 @@ class TrackingIngestConsumer:
         assert self._consumer is not None
         self._running = True
         logger.info("[tracking_consumer] start loop")
-        while self._running:
-            polled = self._consumer.poll(timeout_ms=1000)
-            for _tp, records in polled.items():
-                for record in records:
-                    try:
-                        self._process_record(record)
-                    except Exception:
-                        logger.exception("[tracking_consumer] processing error")
-        self.close()
+        try:
+            while self._running:
+                polled = self._consumer.poll(timeout_ms=1000)
+                for _tp, records in polled.items():
+                    for record in records:
+                        try:
+                            self._process_record(record)
+                        except Exception:
+                            logger.exception("[tracking_consumer] processing error")
+        except Exception as exc:
+            from shared.sentry_init import capture_kafka_error, is_kafka_connection_error
+
+            if is_kafka_connection_error(exc):
+                capture_kafka_error(exc)
+            logger.exception("[tracking_consumer] poll loop failed")
+            raise
+        finally:
+            self.close()
 
     def _shutdown_signal(self, signum, _frame) -> None:
         logger.info("[tracking_consumer] shutdown signal=%s", signum)
@@ -445,6 +460,9 @@ class TrackingIngestConsumer:
 
 
 def run_tracking_ingest_consumer() -> None:
+    from shared.sentry_init import init_sentry
+
+    init_sentry()
     if not KAFKA_ENABLED or not TRACKING_INGEST_ASYNC_ENABLED:
         logger.info(
             "[tracking_consumer] disabled (KAFKA_ENABLED or TRACKING_INGEST_ASYNC_ENABLED), exiting cleanly"

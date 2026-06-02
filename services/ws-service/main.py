@@ -27,6 +27,17 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s %(message)s",
 )
 
+try:
+    from sentry_init import capture_kafka_error, init_ws_sentry
+
+    init_ws_sentry()
+except ImportError:
+    def init_ws_sentry() -> None:
+        return
+
+    def capture_kafka_error(_exc: BaseException) -> None:
+        return
+
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "")
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 AUTH_CACHE_TTL_SECONDS = int(os.getenv("WS_AUTH_CACHE_TTL_SECONDS", "60"))
@@ -510,7 +521,8 @@ async def _consume_kafka_events() -> None:
             )
     except asyncio.CancelledError:
         raise
-    except Exception:
+    except Exception as exc:
+        capture_kafka_error(exc)
         logger.exception("kafka consumer loop failed")
     finally:
         await _aiokafka_safe_stop(consumer)

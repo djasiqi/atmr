@@ -163,6 +163,12 @@ class KafkaConsumer:
             logger.exception(
                 "[kafka_consumer] Failed to initialize Kafka consumer: %s", e
             )
+            try:
+                from shared.sentry_init import capture_kafka_error
+
+                capture_kafka_error(e)
+            except Exception:
+                logger.debug("[kafka_consumer] sentry capture skipped", exc_info=True)
 
     def _trace_id_from_message(self, message: Dict[str, Any]) -> str:
         raw = message.get("trace_id")
@@ -302,6 +308,13 @@ class KafkaConsumer:
 
         except KeyboardInterrupt:
             logger.info("[kafka_consumer] Received keyboard interrupt")
+        except Exception as e:
+            from shared.sentry_init import capture_kafka_error, is_kafka_connection_error
+
+            if is_kafka_connection_error(e):
+                capture_kafka_error(e)
+            logger.exception("[kafka_consumer] Consumer loop failed: %s", e)
+            raise
         finally:
             self._shutdown()
 
@@ -562,6 +575,9 @@ class KafkaConsumer:
 
 def run_kafka_consumer() -> None:
     """Point d'entrée pour lancer le consumer Kafka."""
+    from shared.sentry_init import init_sentry
+
+    init_sentry()
     if not KAFKA_ENABLED:
         logger.info("[kafka_consumer] désactivé (KAFKA_ENABLED=false), sortie propre")
         sys.exit(0)

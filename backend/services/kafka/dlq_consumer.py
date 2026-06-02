@@ -113,8 +113,14 @@ class KafkaDlqConsumer:
             )
         except ImportError:
             logger.error("[kafka_dlq] kafka-python dependency missing")
-        except Exception:
+        except Exception as exc:
             logger.exception("[kafka_dlq] initialization failed")
+            try:
+                from shared.sentry_init import capture_kafka_error
+
+                capture_kafka_error(exc)
+            except Exception:
+                logger.debug("[kafka_dlq] sentry capture skipped", exc_info=True)
 
     def _persist_event(self, record) -> None:
         payload = {
@@ -153,22 +159,31 @@ class KafkaDlqConsumer:
         assert self._consumer is not None
         self._running = True
         logger.info("[kafka_dlq] start loop")
-        while self._running:
-            polled = self._consumer.poll(timeout_ms=1000)
-            for _tp, records in polled.items():
-                for record in records:
-                    try:
-                        self._persist_event(record)
-                        self._consumer.commit()
-                        self._update_dlq_metric(record.topic)
-                    except Exception:
-                        logger.exception(
-                            "[kafka_dlq] persist failed topic=%s partition=%s offset=%s",
-                            record.topic,
-                            record.partition,
-                            record.offset,
-                        )
-        self.close()
+        try:
+            while self._running:
+                polled = self._consumer.poll(timeout_ms=1000)
+                for _tp, records in polled.items():
+                    for record in records:
+                        try:
+                            self._persist_event(record)
+                            self._consumer.commit()
+                            self._update_dlq_metric(record.topic)
+                        except Exception:
+                            logger.exception(
+                                "[kafka_dlq] persist failed topic=%s partition=%s offset=%s",
+                                record.topic,
+                                record.partition,
+                                record.offset,
+                            )
+        except Exception as exc:
+            from shared.sentry_init import capture_kafka_error, is_kafka_connection_error
+
+            if is_kafka_connection_error(exc):
+                capture_kafka_error(exc)
+            logger.exception("[kafka_dlq] poll loop failed")
+            raise
+        finally:
+            self.close()
 
     def _shutdown_signal(self, signum, _frame) -> None:
         logger.info("[kafka_dlq] shutdown signal=%s", signum)
@@ -180,6 +195,9 @@ class KafkaDlqConsumer:
 
 
 def run_kafka_dlq_consumer() -> None:
+    from shared.sentry_init import init_sentry
+
+    init_sentry()
     if not KAFKA_ENABLED:
         logger.info("[kafka_dlq] disabled (KAFKA_ENABLED=false), exiting cleanly")
         sys.exit(0)

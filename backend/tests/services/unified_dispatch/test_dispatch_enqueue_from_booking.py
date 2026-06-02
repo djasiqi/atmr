@@ -45,19 +45,14 @@ class TestDispatchEnqueueFromBooking:
             patch.object(st, "app_ref", app),
             patch("services.unified_dispatch.core.queue._APP", app),
             patch("ext.redis_client", None),
-            patch("celery_app.celery") as mock_celery,
+            patch(
+                "tasks.dispatch_tasks.run_dispatch_task.apply_async",
+                side_effect=lambda *, kwargs=None, **_kw: (
+                    sent_kwargs.update(kwargs or {}),
+                    MagicMock(id="task-booking", state="PENDING"),
+                )[1],
+            ),
         ):
-            mock_result = MagicMock()
-            mock_result.id = "task-booking"
-            mock_celery.send_task.return_value = mock_result
-            mock_celery.conf.broker_url = "redis://redis:6379/0"
-
-            def capture_send(_name, kwargs=None, **_kw):
-                sent_kwargs.update(kwargs or {})
-                return mock_result
-
-            mock_celery.send_task.side_effect = capture_send
-
             ud_queue._enqueue_celery_task(st, mode="auto")
 
         assert "action" not in sent_kwargs

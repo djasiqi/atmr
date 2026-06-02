@@ -7,7 +7,7 @@ import uuid
 from contextlib import suppress
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
-from typing import Any, Dict, List, cast
+from typing import Any, Dict, List
 
 from cachetools import (  # pyright: ignore[reportMissingModuleSource]  # ✅ P1: Limiter caches in-memory
     LRUCache,
@@ -867,6 +867,7 @@ def _enqueue_celery_task(st: CompanyDispatchState, mode: str) -> None:
             }
             run_kwargs["company_id"] = company_id
             run_kwargs.setdefault("mode", mode)
+            run_kwargs.setdefault("for_date", date.today().isoformat())
 
             # Anti-duplication: vérifier si un run identique est déjà en cours
             import hashlib
@@ -908,204 +909,12 @@ def _enqueue_celery_task(st: CompanyDispatchState, mode: str) -> None:
             )
 
             # Import here to avoid circular imports
-            from celery_app import celery as celery_app
             from tasks.dispatch_tasks import run_dispatch_task
 
-            # ✅ Vérifier et forcer Redis comme transport
-            broker_url = celery_app.conf.broker_url
-
-            # Constante pour la longueur max de l'URL du broker à afficher
-            MAX_BROKER_URL_DISPLAY_LENGTH = 50
-
-            # ✅ Forcer explicitement le transport Redis (toujours, pour être sûr)
-            celery_app.conf.broker_transport = "redis"
-
-            # ✅ Forcer aussi broker_write_url pour s'assurer que Redis est utilisé
-            celery_app.conf.broker_write_url = broker_url
-            celery_app.conf.broker_read_url = broker_url
-
-            # ✅ Vérifier que le broker_url commence bien par "redis://"
-            if broker_url and not broker_url.startswith("redis://"):
-                logger.error(
-                    "[Queue] ⚠️ broker_url ne commence pas par 'redis://': %s",
-                    broker_url[:MAX_BROKER_URL_DISPLAY_LENGTH] + "***"
-                    if len(broker_url) > MAX_BROKER_URL_DISPLAY_LENGTH
-                    else broker_url,
-                )
-                # Reconstruire l'URL Redis depuis les variables d'environnement
-                import os
-                from urllib.parse import quote_plus
-
-                redis_host = os.getenv("REDIS_HOST", "redis")
-                redis_port = os.getenv("REDIS_PORT", "6379")
-                redis_db = os.getenv("REDIS_DB", "0")
-                redis_password = os.getenv("REDIS_PASSWORD", "")
-                if redis_password:
-                    redis_password_escaped = quote_plus(redis_password)
-                    broker_url = f"redis://:{redis_password_escaped}@{redis_host}:{redis_port}/{redis_db}"
-                else:
-                    broker_url = f"redis://{redis_host}:{redis_port}/{redis_db}"
-                celery_app.conf.broker_url = broker_url
-                logger.info(
-                    "[Queue] ✅ broker_url reconstruit pour Redis: %s",
-                    broker_url[:MAX_BROKER_URL_DISPLAY_LENGTH] + "***"
-                    if len(broker_url) > MAX_BROKER_URL_DISPLAY_LENGTH
-                    else broker_url,
-                )
-
-            # ✅ FORCER la réinitialisation COMPLÈTE de la connexion Celery
-            # Le problème : Celery/Kombu utilise AMQP en cache même si on configure Redis
-            # Solution : Fermer TOUTES les connexions et forcer une nouvelle connexion Redis
-            with suppress(Exception):
-                # 1. Fermer la connexion principale si elle existe
-                connection = getattr(celery_app, "_connection", None)
-                if connection:
-                    logger.info(
-                        "[Queue] 🔄 Fermeture de la connexion Celery principale"
-                    )
-                    with suppress(Exception):
-                        connection.close()
-                    celery_app._connection = None
-
-                # 2. Forcer la suppression du cache de connexion broker
-                broker_connection = getattr(celery_app, "broker_connection", None)
-                if broker_connection is not None:
-                    logger.info("[Queue] 🔄 Suppression du cache broker_connection")
-                    with suppress(Exception):
-                        broker_connection.close()
-                    celery_app.broker_connection = None
-
-                # 3. Forcer la suppression de tous les caches de connexion Kombu
-                # Kombu peut mettre en cache la connexion dans plusieurs endroits
-                if hasattr(celery_app, "pool"):
-                    pool = getattr(celery_app, "pool", None)
-                    if pool and hasattr(pool, "_connection"):
-                        logger.info("[Queue] 🔄 Suppression du cache pool._connection")
-                        with suppress(Exception):
-                            if pool._connection:
-                                pool._connection.close()
-                        pool._connection = None
-
-            # 4. FORCER la création d'une nouvelle connexion avec Redis explicitement
-            # en passant broker_url et transport directement
-            logger.info("[Queue] 🔄 Création d'une nouvelle connexion Redis explicite")
-
-            # Initialiser redis_connection à None
-            redis_connection = None
-
-            try:
-                # Forcer la création d'une nouvelle connexion avec Redis
-                # en passant broker_url et transport explicitement
-                from kombu import Connection  # pyright: ignore[reportMissingImports]
-
-                # Créer une nouvelle connexion Kombu avec Redis explicitement
-                redis_connection = Connection(
-                    broker_url,
-                    transport="redis",
-                    transport_options={},
-                )
-
-                logger.info("[Queue] ✅ Nouvelle connexion Redis créée explicitement")
-            except Exception as conn_err:
-                logger.warning(
-                    "[Queue] ⚠️ Erreur lors de la création explicite de la connexion Redis: %s",
-                    conn_err,
-                )
-                # Continuer quand même, peut-être que la connexion par défaut fonctionnera
-
-            logger.info(
-                "[Queue] Enqueuing task with broker_url=%s, transport=%s",
-                broker_url[:MAX_BROKER_URL_DISPLAY_LENGTH] + "***"
-                if broker_url and len(broker_url) > MAX_BROKER_URL_DISPLAY_LENGTH
-                else broker_url,
-                celery_app.conf.broker_transport,
+            task = run_dispatch_task.apply_async(
+                kwargs=run_kwargs,
+                queue="default",
             )
-
-            # Enqueue Celery task avec Celery normalement
-            # ✅ Forcer Celery à utiliser Redis en remplaçant broker_connection
-            logger.info(
-                "[Queue] 📤 Enfilage de la tâche via Celery avec connexion Redis forcée"
-            )
-
-            # Initialiser old_connection pour pouvoir la restaurer
-            old_connection = None
-            old_connection_for_write = None
-
-            try:
-                # Si on a créé une connexion Redis, forcer Celery à l'utiliser
-                if redis_connection is not None:
-                    logger.info(
-                        "[Queue] 🔄 Remplacement de broker_connection pour forcer Redis"
-                    )
-                    # Sauvegarder l'ancienne connexion et les méthodes internes
-                    old_connection = getattr(celery_app, "broker_connection", None)
-                    old_connection_for_write = getattr(
-                        celery_app, "_connection_for_write", None
-                    )
-
-                    # Forcer la connexion Redis
-                    celery_app.broker_connection = redis_connection
-
-                    # Forcer aussi _connection_for_write pour éviter qu'il crée une nouvelle connexion AMQP
-                    def force_redis_connection(*_args: Any, **_kwargs: Any) -> Any:
-                        logger.info(
-                            "[Queue] 🔄 Utilisation de la connexion Redis forcée"
-                        )
-                        return redis_connection
-
-                    celery_app._connection_for_write = force_redis_connection
-
-                    logger.info(
-                        "[Queue] ✅ broker_connection et _connection_for_write remplacés"
-                    )
-
-                # Utiliser send_task() qui utilisera notre connexion Redis
-                task_name = "tasks.dispatch_tasks.run_dispatch_task"
-
-                # Vérifier la connexion avant d'envoyer
-                logger.info(
-                    "[Queue] 🔍 Vérification connexion avant send_task: broker_transport=%s",
-                    celery_app.conf.broker_transport,
-                )
-
-                result = celery_app.send_task(
-                    task_name,
-                    kwargs=run_kwargs,
-                    queue="default",
-                )
-
-                task = result
-                logger.info(
-                    "[Queue] ✅ Tâche envoyée via Celery.send_task() (task_id=%s)",
-                    result.id,
-                )
-            except Exception as send_err:
-                logger.error(
-                    "[Queue] ❌ Erreur avec send_task(), fallback apply_async(): %s",
-                    send_err,
-                )
-                logger.exception("[Queue] Stack trace complète:")
-                # Fallback : utiliser apply_async() normalement
-                TaskCallable = cast("Any", run_dispatch_task)
-                task = TaskCallable.apply_async(kwargs=run_kwargs, queue="default")
-            finally:
-                # Restaurer l'ancienne connexion si on l'a remplacée
-                if old_connection is not None:
-                    celery_app.broker_connection = old_connection
-                    logger.info("[Queue] 🔄 Ancienne connexion restaurée")
-                # Restaurer _connection_for_write si on l'a remplacé
-                if (
-                    redis_connection is not None
-                    and old_connection_for_write is not None
-                ):
-                    celery_app._connection_for_write = old_connection_for_write
-                    logger.info("[Queue] 🔄 _connection_for_write restauré")
-                elif redis_connection is not None and hasattr(
-                    celery_app, "_connection_for_write"
-                ):
-                    # Supprimer l'attribut si on l'a ajouté
-                    with suppress(Exception):
-                        delattr(celery_app, "_connection_for_write")
             st.last_task_id = task.id
             _CELERY_STATE[company_id] = task.state
 

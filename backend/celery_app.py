@@ -822,3 +822,17 @@ def update_celery_queue_length_metric():
         logger.warning(
             "[Celery] Erreur lors de la mise à jour de la métrique queue_length: %s", e
         )
+
+
+from celery.signals import worker_process_init
+
+
+@worker_process_init.connect
+def _init_celery_worker_sentry(**_kwargs: Any) -> None:
+    """Initialise Sentry dans chaque processus worker Celery."""
+    try:
+        from shared.sentry_init import init_sentry
+
+        init_sentry(celery=True)
+    except Exception as exc:
+        logger.warning("[Celery] Sentry worker init skipped: %s", exc)

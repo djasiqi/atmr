@@ -309,8 +309,14 @@ class ProcessedLocationFanoutConsumer:
             )
         except ImportError:
             logger.error("[processed_fanout] kafka-python dependency missing")
-        except Exception:
+        except Exception as exc:
             logger.exception("[processed_fanout] initialization failed")
+            try:
+                from shared.sentry_init import capture_kafka_error
+
+                capture_kafka_error(exc)
+            except Exception:
+                logger.debug("[processed_fanout] sentry capture skipped", exc_info=True)
 
     def _shutdown_signal(self, signum, _frame) -> None:
         logger.info("[processed_fanout] shutdown signal=%s", signum)
@@ -376,7 +382,11 @@ class ProcessedLocationFanoutConsumer:
                                 "[processed_fanout] commit failed after batch partition=%s",
                                 getattr(tp, "partition", "?"),
                             )
-            except Exception:
+            except Exception as exc:
+                from shared.sentry_init import capture_kafka_error, is_kafka_connection_error
+
+                if is_kafka_connection_error(exc):
+                    capture_kafka_error(exc)
                 logger.exception("[processed_fanout] poll loop error")
                 time.sleep(1.0)
         self.close()
@@ -387,6 +397,9 @@ class ProcessedLocationFanoutConsumer:
 
 
 def run_processed_location_fanout_consumer() -> None:
+    from shared.sentry_init import init_sentry
+
+    init_sentry()
     if not (
         KAFKA_ENABLED
         and TRACKING_INGEST_ASYNC_ENABLED

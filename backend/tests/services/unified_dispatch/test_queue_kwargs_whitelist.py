@@ -29,6 +29,22 @@ def _make_state(
     return st
 
 
+def _patch_run_dispatch_apply_async(capture: dict):
+    """Helper: patch apply_async and capture kwargs."""
+
+    def _apply_async(*, kwargs=None, **_kw):
+        capture.update(kwargs or {})
+        mock_result = MagicMock()
+        mock_result.id = "task-test"
+        mock_result.state = "PENDING"
+        return mock_result
+
+    return patch(
+        "tasks.dispatch_tasks.run_dispatch_task.apply_async",
+        side_effect=_apply_async,
+    )
+
+
 class TestQueueKwargsWhitelist:
     def test_allowed_kwargs_pass_through(self):
         st = _make_state(
@@ -46,19 +62,8 @@ class TestQueueKwargsWhitelist:
             patch.object(st, "app_ref", app),
             patch("services.unified_dispatch.core.queue._APP", app),
             patch("ext.redis_client", None),
-            patch("celery_app.celery") as mock_celery,
+            _patch_run_dispatch_apply_async(sent_kwargs),
         ):
-            mock_result = MagicMock()
-            mock_result.id = "task-1"
-            mock_celery.send_task.return_value = mock_result
-            mock_celery.conf.broker_url = "redis://redis:6379/0"
-
-            def capture_send(_name, kwargs=None, **_kw):
-                sent_kwargs.update(kwargs or {})
-                return mock_result
-
-            mock_celery.send_task.side_effect = capture_send
-
             ud_queue._enqueue_celery_task(st, mode="auto")
 
         assert sent_kwargs["company_id"] == 42
@@ -77,20 +82,9 @@ class TestQueueKwargsWhitelist:
             patch.object(st, "app_ref", app),
             patch("services.unified_dispatch.core.queue._APP", app),
             patch("ext.redis_client", None),
-            patch("celery_app.celery") as mock_celery,
+            _patch_run_dispatch_apply_async(sent_kwargs),
             caplog.at_level("WARNING"),
         ):
-            mock_result = MagicMock()
-            mock_result.id = "task-2"
-            mock_celery.send_task.return_value = mock_result
-            mock_celery.conf.broker_url = "redis://redis:6379/0"
-
-            def capture_send(_name, kwargs=None, **_kw):
-                sent_kwargs.update(kwargs or {})
-                return mock_result
-
-            mock_celery.send_task.side_effect = capture_send
-
             ud_queue._enqueue_celery_task(st, mode="auto")
 
         assert "action" not in sent_kwargs
@@ -110,20 +104,25 @@ class TestQueueKwargsWhitelist:
             patch.object(st, "app_ref", app),
             patch("services.unified_dispatch.core.queue._APP", app),
             patch("ext.redis_client", None),
-            patch("celery_app.celery") as mock_celery,
+            _patch_run_dispatch_apply_async(sent_kwargs),
         ):
-            mock_result = MagicMock()
-            mock_result.id = "task-3"
-            mock_celery.send_task.return_value = mock_result
-            mock_celery.conf.broker_url = "redis://redis:6379/0"
-
-            def capture_send(_name, kwargs=None, **_kw):
-                sent_kwargs.update(kwargs or {})
-                return mock_result
-
-            mock_celery.send_task.side_effect = capture_send
-
             ud_queue._enqueue_celery_task(st, mode="semi_auto")
 
         assert sent_kwargs["company_id"] == 42
         assert sent_kwargs["mode"] == "semi_auto"
+
+    def test_for_date_defaulted_when_missing(self):
+        st = _make_state(params={})
+        sent_kwargs: dict = {}
+
+        with (
+            _fake_app_context() as app,
+            patch.object(st, "app_ref", app),
+            patch("services.unified_dispatch.core.queue._APP", app),
+            patch("ext.redis_client", None),
+            _patch_run_dispatch_apply_async(sent_kwargs),
+        ):
+            ud_queue._enqueue_celery_task(st, mode="auto")
+
+        assert sent_kwargs["company_id"] == 42
+        assert sent_kwargs.get("for_date")

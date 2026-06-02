@@ -506,7 +506,7 @@ def purge_all_old_data(self: Task) -> dict[str, Any]:
                 try:
                     # Appeler directement la tâche Celery dans le contexte actuel
                     # On passe self pour respecter la signature (bind=True)
-                    result = purge_func(self)
+                    result = purge_func()
                     results[model_name] = result
                     total_deleted += result.get("deleted_count", 0)
                     total_errors += len(result.get("errors", []))

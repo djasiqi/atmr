@@ -5,7 +5,7 @@ import logging
 import os
 import time
 from contextlib import suppress
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Any, Dict, cast
 
 from celery import shared_task
@@ -69,13 +69,14 @@ def _safe_int(v: Any) -> int | None:
 def run_dispatch_task(
     self,
     company_id: int,
-    for_date: str,
+    for_date: str | None = None,
     mode: str = "auto",
     regular_first: bool = True,
     allow_emergency: bool | None = None,
     overrides: Dict[str, Any] | None = None,
     dispatch_overrides: Dict[str, Any] | None = None,
     dispatch_run_id: int | None = None,  # ✅ Nouveau paramètre optionnel
+    **_legacy_kwargs: Any,
 ) -> Dict[str, Any]:
     """Exécuté par un worker Celery.
     - Nettoie/normalise la session DB avant/après.
@@ -86,6 +87,16 @@ def run_dispatch_task(
     """
     start_time = time.time()
     task_id = getattr(self.request, "id", None)
+
+    if _legacy_kwargs:
+        logger.warning(
+            "[Celery] Ignoring legacy kwargs for company=%s: %s",
+            company_id,
+            sorted(_legacy_kwargs.keys()),
+        )
+
+    if not for_date:
+        for_date = date.today().isoformat()
 
     # --- Normalisation d'entrée ---
     mode = (mode or "auto").strip().lower()

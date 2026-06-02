@@ -45,7 +45,7 @@ except ImportError:  # pragma: no cover
 
 
 # --- Imports de libs tiers (tous en haut pour Ruff E402) ---
-import sentry_sdk
+import sentry_sdk  # noqa: F401 — réexport pour routes.* (from app import sentry_sdk)
 from dotenv import load_dotenv
 from flask import (
     Flask,
@@ -57,9 +57,6 @@ from flask import (
 )
 from flask_cors import CORS
 from flask_talisman import Talisman
-from sentry_sdk.integrations.flask import (
-    FlaskIntegration,
-)
 from werkzeug.exceptions import (
     BadRequest,
     HTTPException,
@@ -1686,17 +1683,9 @@ def create_app(config_name: str | None = None):
         return response
 
     # 6) Sentry
-    sentry_dsn = os.getenv("SENTRY_DSN", default=None)
-    if sentry_dsn and config_name != "testing":
-        _sentry_traces_default = "0.1" if config_name == "production" else "1.0"
-        sentry_sdk.init(
-            dsn=sentry_dsn,
-            integrations=[FlaskIntegration()],
-            traces_sample_rate=float(
-                os.getenv("SENTRY_TRACES_SAMPLE_RATE", _sentry_traces_default)
-            ),
-            environment=config_name,
-        )
+    from shared.sentry_init import init_sentry
+
+    init_sentry(environment=config_name, flask=True, celery=True)
 
     # 7) Logging
     # ✅ S1: Forcer WARNING en production, ignorer APP_LOG_LEVEL si défini à DEBUG/INFO
