@@ -67,6 +67,10 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+mobile-*-log*.txt
+tmp-logcat-*.txt
+investigation/probatoire-freezes/*_ip_counts.txt
+investigation/probatoire-freezes/timeout_stacks_full.txt
 
 # ===== Env / secrets =====
 .env
