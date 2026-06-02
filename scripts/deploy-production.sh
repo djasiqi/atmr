@@ -256,26 +256,6 @@ else
   echo "ℹ️  PostgreSQL non actif, pas de backup nécessaire (peut-être le premier déploiement)"
 fi
 
-# ✅ Nettoyage SÉCURISÉ : arrêt uniquement de la stack **production** (conservation des volumes)
-echo "🧹 Arrêt des conteneurs de la stack production (conservation des données)..."
-# ⚠️ IMPORTANT: Ne JAMAIS utiliser --volumes en production pour préserver les données
-# Ne pas faire « docker compose … monitoring down » ici : cela coupait Grafana / Prometheus /
-# Alertmanager à chaque déploiement. Le monitoring est mis à jour plus bas via
-# « docker compose -f docker-compose.monitoring.yml up -d » sans arrêt préalable.
-docker compose -f docker-compose.production.yml down --remove-orphans || true
-
-# Supprimer d'éventuels résidus **uniquement** pour les services prod (pas atmr-grafana, etc.)
-# atmr-backend retiré : le service s'appelle backend sans container_name fixe; compose down le gère
-for _c in atmr-postgres atmr-redis atmr-osrm atmr-celery-worker atmr-celery-beat atmr-flower; do
-  docker rm -f "${_c}" 2>/dev/null || true
-done
-
-# ⚠️ DÉSACTIVÉ EN PRODUCTION: Ne JAMAIS nettoyer les volumes automatiquement
-# Les volumes contiennent les données PostgreSQL et ne doivent être supprimés que manuellement
-# echo "🧹 Nettoyage approfondi des volumes Docker..."
-# docker volume prune -a -f || true
-echo "✅ Stack production arrêtée ; monitoring non interrompu (volumes préservés)"
-
 # Créer .env.production
 {
   echo "DATABASE_URL=${DATABASE_URL}"
@@ -382,11 +362,32 @@ if [ -f "scripts/lib/kafka_checks.sh" ]; then
     kafka_check_dns_from_atmr_network || KAFKA_PREFLIGHT_OK=0
     if [ "${KAFKA_PREFLIGHT_OK}" != "1" ]; then
       echo "❌ Preflight Kafka KO : déployer la stack Kafka (scripts/deploy-kafka-production.sh) ou désactiver les flags."
+      echo "   La stack production n'a pas encore été arrêtée."
       exit 1
     fi
     echo "✅ Preflight Kafka OK"
   fi
 fi
+
+# ✅ Nettoyage SÉCURISÉ : arrêt uniquement de la stack **production** (conservation des volumes)
+echo "🧹 Arrêt des conteneurs de la stack production (conservation des données)..."
+# ⚠️ IMPORTANT: Ne JAMAIS utiliser --volumes en production pour préserver les données.
+# Ne pas utiliser --remove-orphans ici : avec le même répertoire/projet Compose,
+# cela supprime aussi Grafana / Prometheus / Alertmanager considérés comme
+# orphelins du fichier docker-compose.production.yml.
+docker compose -f docker-compose.production.yml down || true
+
+# Supprimer d'éventuels résidus **uniquement** pour les services prod (pas atmr-grafana, etc.)
+# atmr-backend retiré : le service s'appelle backend sans container_name fixe; compose down le gère
+for _c in atmr-postgres atmr-redis atmr-osrm atmr-celery-worker atmr-celery-beat atmr-flower; do
+  docker rm -f "${_c}" 2>/dev/null || true
+done
+
+# ⚠️ DÉSACTIVÉ EN PRODUCTION: Ne JAMAIS nettoyer les volumes automatiquement
+# Les volumes contiennent les données PostgreSQL et ne doivent être supprimés que manuellement
+# echo "🧹 Nettoyage approfondi des volumes Docker..."
+# docker volume prune -a -f || true
+echo "✅ Stack production arrêtée ; monitoring non interrompu (volumes préservés)"
 
 mkdir -p data/rl/shadow_mode data/ml data/rl data/ml/models && chmod -R 755 data && chown -R 999:999 data 2>/dev/null || true
 
