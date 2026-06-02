@@ -5,6 +5,7 @@ import { useSession } from "../sessionProvider";
 import { BOOT_LOTTIE_FIRST_LAUNCH_ONLY } from "./bootSplashConfig";
 import { getBootLottieIntroSeen, setBootLottieIntroSeen } from "./bootSplashStorage";
 import { computeBootLottieDisplaySize } from "./bootLottieLayout";
+import { reportBootFallback } from "../observability/bootDiagnostics";
 import { resolveBootLottieSource } from "./resolveBootLottieSource";
 import type { BootLottieAsset } from "./bootLottieAssets";
 
@@ -206,17 +207,17 @@ export function useBootSplashGate(): {
     const id = setTimeout(() => {
       if (!fallbackWarnedRef.current) {
         fallbackWarnedRef.current = true;
-        console.warn(
-          "[BootSplash] Lottie fallback triggered after",
-          SPLASH_LOTTIE_FALLBACK_TIMEOUT_MS,
-          "ms without onAnimationFinish",
-        );
+        reportBootFallback("BootSplashFallbackTriggered", {
+          elapsedMs: Date.now() - bootStartedAtRef.current,
+          status,
+          introState,
+        });
       }
       onLottieFinish();
     }, SPLASH_LOTTIE_FALLBACK_TIMEOUT_MS);
 
     return () => clearTimeout(id);
-  }, [showLottieLayer, animFinished, onLottieFinish]);
+  }, [showLottieLayer, animFinished, introState, onLottieFinish, status]);
 
   useEffect(() => {
     const elapsedMs = Date.now() - bootStartedAtRef.current;

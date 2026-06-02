@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Animated, Easing, Platform, StyleSheet, View } from "react-native";
+import { useRevealFallback } from "../../../src/core/boot/useRevealFallback";
 import * as ImagePicker from "expo-image-picker";
 import { DriverContextGuard } from "../../../src/core/guards";
 import { useSession } from "../../../src/core/sessionProvider";
@@ -64,6 +65,25 @@ export default function DriverProfileScreen() {
   const availabilityPulse = useRef(new Animated.Value(1)).current;
   const messageAnim = useRef(new Animated.Value(0)).current;
 
+  const PROFILE_REVEAL_FALLBACK_MS = 1200;
+
+  const revealProfileSections = useCallback(() => {
+    sectionEntrance.forEach((value) => {
+      value.setValue(1);
+    });
+  }, [sectionEntrance]);
+
+  const {
+    arm: armProfileReveal,
+    settled: settleProfileReveal,
+    disarm: disarmProfileReveal,
+  } = useRevealFallback({
+    enabled: true,
+    timeoutMs: PROFILE_REVEAL_FALLBACK_MS,
+    name: "ProfileRevealFallbackTriggered",
+    reveal: revealProfileSections,
+  });
+
   const contextDriverId = useMemo(() => {
     const rawContextId = activeContext?.context_id ?? "";
     if (!rawContextId.startsWith("driver:")) return null;
@@ -104,7 +124,7 @@ export default function DriverProfileScreen() {
   }, []);
 
   useEffect(() => {
-    Animated.stagger(
+    const sectionRevealAnimation = Animated.stagger(
       70,
       sectionEntrance.map((value) =>
         Animated.timing(value, {
@@ -114,8 +134,16 @@ export default function DriverProfileScreen() {
           useNativeDriver: true,
         })
       )
-    ).start();
-  }, [sectionEntrance]);
+    );
+    armProfileReveal();
+    sectionRevealAnimation.start(({ finished }) => {
+      settleProfileReveal(finished ?? false);
+    });
+    return () => {
+      disarmProfileReveal();
+      sectionRevealAnimation.stop();
+    };
+  }, [armProfileReveal, disarmProfileReveal, sectionEntrance, settleProfileReveal]);
 
   useEffect(() => {
     Animated.sequence([

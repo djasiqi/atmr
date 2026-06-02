@@ -12,7 +12,8 @@ import {
   Text,
   View,
 } from "react-native";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRevealFallback } from "../../src/core/boot/useRevealFallback";
 import {
   ResponsiveContainer,
   Screen,
@@ -82,7 +83,6 @@ export default function PublicHomeScreen() {
   const cardTranslateY = useRef(new Animated.Value(0)).current;
   const ctaOpacity = useRef(new Animated.Value(0)).current;
   const ctaScale = useRef(new Animated.Value(0.99)).current;
-  const landingRevealFallbackWarnedRef = useRef(false);
   const [pickupValue, setPickupValue] = useState("");
   const [dropoffValue, setDropoffValue] = useState("");
   /**
@@ -121,6 +121,41 @@ export default function PublicHomeScreen() {
       smallRight: viewport.isTablet ? 72 : 52,
     };
   }, [viewport.isCompact, viewport.isTablet, viewport.isTiny]);
+
+  const revealContent = useCallback(() => {
+    screenOpacity.setValue(1);
+    logoOpacity.setValue(1);
+    logoScale.setValue(1);
+    logoTranslateY.setValue(0);
+    titleOpacity.setValue(1);
+    titleTranslateY.setValue(0);
+    cardOpacity.setValue(1);
+    cardTranslateY.setValue(0);
+    ctaOpacity.setValue(1);
+    ctaScale.setValue(1);
+  }, [
+    cardOpacity,
+    cardTranslateY,
+    ctaOpacity,
+    ctaScale,
+    logoOpacity,
+    logoScale,
+    logoTranslateY,
+    screenOpacity,
+    titleOpacity,
+    titleTranslateY,
+  ]);
+
+  const {
+    arm: armLandingReveal,
+    settled: settleLandingReveal,
+    disarm: disarmLandingReveal,
+  } = useRevealFallback({
+    enabled: !reduceMotion,
+    timeoutMs: LANDING_REVEAL_FALLBACK_MS,
+    name: "LandingRevealFallbackTriggered",
+    reveal: revealContent,
+  });
 
   const pickupInputValue = pickupValue.trim();
   const dropoffInputValue = dropoffValue.trim();
@@ -173,20 +208,6 @@ export default function PublicHomeScreen() {
     ctaScale.setValue(0.99);
     screenOpacity.setValue(0);
 
-    const revealContent = () => {
-      screenOpacity.setValue(1);
-      logoOpacity.setValue(1);
-      logoScale.setValue(1);
-      logoTranslateY.setValue(0);
-      titleOpacity.setValue(1);
-      titleTranslateY.setValue(0);
-      cardOpacity.setValue(1);
-      cardTranslateY.setValue(0);
-      ctaOpacity.setValue(1);
-      ctaScale.setValue(1);
-    };
-
-    let animationCompleted = false;
     const landingRevealAnimation = Animated.parallel([
       Animated.timing(screenOpacity, {
         toValue: 1,
@@ -256,34 +277,27 @@ export default function PublicHomeScreen() {
       }),
     ]);
 
+    armLandingReveal();
     landingRevealAnimation.start(({ finished }) => {
-      animationCompleted = finished;
+      settleLandingReveal(finished ?? false);
     });
 
-    const fallbackId = setTimeout(() => {
-      if (animationCompleted) {
-        return;
-      }
-      if (!landingRevealFallbackWarnedRef.current) {
-        landingRevealFallbackWarnedRef.current = true;
-        console.warn("[PublicHome] reveal fallback triggered after", LANDING_REVEAL_FALLBACK_MS, "ms");
-      }
-      revealContent();
-    }, LANDING_REVEAL_FALLBACK_MS);
-
     return () => {
-      clearTimeout(fallbackId);
+      disarmLandingReveal();
       landingRevealAnimation.stop();
     };
   }, [
+    armLandingReveal,
     cardOpacity,
     cardTranslateY,
     ctaOpacity,
     ctaScale,
+    disarmLandingReveal,
     logoOpacity,
     logoScale,
     logoTranslateY,
     reduceMotion,
+    settleLandingReveal,
     titleOpacity,
     titleTranslateY,
     useNativeDriver,
