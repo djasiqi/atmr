@@ -1,5 +1,13 @@
 import { getExpoNotificationsModule } from "../../core/notifications/expoNotificationsCompat";
 
+/**
+ * Channel generique, cree pour TOUS les contextes (driver/company/client) des le
+ * montage du provider, independamment des flags chauffeur. Sert de fallback
+ * universel: sur Android targetSdk 36, une notification postee sans channel est
+ * silencieusement supprimee.
+ */
+export const GENERIC_NOTIFICATION_CHANNEL_ID = "default";
+
 export const DRIVER_NOTIFICATION_CHANNELS = {
   missionUpdates: "mission_updates",
   chat: "chat",
@@ -83,6 +91,38 @@ export function resolveDriverNotificationContract(
 ): DriverNotificationContract {
   const key = (input ?? "").toLowerCase() as DriverNotificationEventType;
   return DRIVER_NOTIFICATION_CONTRACT[key] ?? DRIVER_NOTIFICATION_CONTRACT.mission_updated;
+}
+
+/**
+ * Cree le channel generique `default` (HIGH). A appeler au montage, sans aucun
+ * gating (ni flag, ni role, ni contexte), pour garantir qu'au moins un channel
+ * existe des le premier lancement quel que soit le compte.
+ */
+export async function ensureBaseNotificationChannels(): Promise<void> {
+  const Notifications = getExpoNotificationsModule();
+  if (!Notifications) return;
+
+  await Notifications.setNotificationChannelAsync(GENERIC_NOTIFICATION_CHANNEL_ID, {
+    name: "Général",
+    importance: Notifications.AndroidImportance.HIGH,
+    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+  });
+}
+
+/**
+ * Nombre de channels Android actuellement enregistres (0 sur iOS/web : normal).
+ * Permet d'instrumenter le cas anormal "0 channel" en production (Android).
+ */
+export async function getRegisteredNotificationChannelCount(): Promise<number> {
+  const Notifications = getExpoNotificationsModule();
+  if (!Notifications) return 0;
+  if (typeof Notifications.getNotificationChannelsAsync !== "function") return 0;
+  try {
+    const channels = await Notifications.getNotificationChannelsAsync();
+    return Array.isArray(channels) ? channels.length : 0;
+  } catch {
+    return 0;
+  }
 }
 
 export async function ensureDriverNotificationChannels(): Promise<void> {

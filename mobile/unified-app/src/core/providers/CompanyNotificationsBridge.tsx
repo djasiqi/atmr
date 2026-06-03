@@ -5,6 +5,7 @@ import { useCallback, useMemo } from "react";
 import { isFeatureEnabled } from "../featureFlags/registry";
 import { useEffect } from "../reactCompat";
 import { useSession } from "../sessionProvider";
+import { emitDriverTelemetry } from "../observability/driverTelemetry";
 import { getExpoNotificationsModule } from "../notifications/expoNotificationsCompat";
 import {
   extractEventIdFromData,
@@ -75,6 +76,22 @@ export function CompanyNotificationsBridge({ children }: Props) {
     }),
     [companyId]
   );
+
+  // P0.2 — Instrumentation du gate d'enregistrement entreprise. Permet de prouver
+  // en prod POURQUOI le POST /companies/save-push-token n'est pas atteint
+  // (contexte non-company, companyId null, session pas ready, flag off...).
+  // Re-emis a chaque transition (status ready / changement de contexte).
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+    emitDriverTelemetry("push.company.register_gate", {
+      source: "company.notifications.bridge",
+      context_type: activeContext?.context_type ?? null,
+      status,
+      company_id: companyId,
+      company_push_enabled: isFeatureEnabled("company_push_enabled"),
+      push_enabled: pushEnabled,
+    });
+  }, [activeContext?.context_type, companyId, pushEnabled, status]);
 
   useRegisterPushTokenEffect({
     enabled: pushEnabled,

@@ -8,7 +8,8 @@ import { appendSessionJournalEvent } from "./sessionJournal";
 export type BootFallbackName =
   | "BootSplashFallbackTriggered"
   | "LandingRevealFallbackTriggered"
-  | "ProfileRevealFallbackTriggered";
+  | "ProfileRevealFallbackTriggered"
+  | "NotificationChannelsMissing";
 
 /** Detection runtime de la New Architecture (Fabric / Bridgeless), sans dependre d'app.json. */
 function detectNewArchEnabled(): boolean {

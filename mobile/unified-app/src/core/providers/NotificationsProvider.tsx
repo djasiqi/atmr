@@ -9,7 +9,12 @@ import { useSession } from "../sessionProvider";
 import { CompanyNotificationsBridge } from "./CompanyNotificationsBridge";
 import { DriverNotificationsBridge } from "./DriverNotificationsBridge";
 import { DriverPushPayload, handleDriverPushQuickAction } from "../../features/driver/push";
-import { ensureDriverNotificationChannels } from "../../features/driver/notificationChannels";
+import {
+  ensureBaseNotificationChannels,
+  ensureDriverNotificationChannels,
+  getRegisteredNotificationChannelCount,
+  resolveDriverNotificationContract,
+} from "../../features/driver/notificationChannels";
 import { ensureDriverNotificationActions } from "../../features/driver/notificationActions";
 import { ensureDriverNotificationGrouping } from "../../features/driver/notificationGrouping";
 import {
@@ -30,8 +35,8 @@ import { resolveDriverDeepLink } from "../navigation/deepLinkHandler";
 import { configureMissionBarIOS } from "../../features/driver/missionBarIOS";
 import { registerMissionBarBackgroundHandlers } from "../../features/driver/missionBarBackground";
 import { loadNotifee } from "../../features/driver/notifeeCompat";
-import { resolveDriverNotificationContract } from "../../features/driver/notificationChannels";
 import { appendSessionJournalEvent } from "../observability/sessionJournal";
+import { reportBootFallback } from "../observability/bootDiagnostics";
 import { shouldIgnoreNotification } from "../notifications/shouldIgnoreNotification";
 import { getExpoNotificationsModule } from "../notifications/expoNotificationsCompat";
 import {
@@ -760,6 +765,39 @@ export function NotificationsProvider({ children }: PropsWithChildren) {
     status,
     triggerDriverResync,
   ]);
+
+  // P0.1 — Channels Android crees au montage, SANS gating (ni flag, ni role, ni
+  // contexte). Sur targetSdk 36, une notification sans channel est supprimee
+  // silencieusement; les channels doivent donc exister des le 1er lancement pour
+  // tous les comptes (driver/company/client). Instrumente le cas "0 channel".
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+    if (!getExpoNotificationsModule()) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        await ensureBaseNotificationChannels();
+        await ensureDriverNotificationChannels();
+      } catch (err) {
+        emitDriverTelemetry("push.channels.setup_failed", {
+          source: "core.notifications.provider.base",
+          error: err instanceof Error ? err.message : "unknown",
+        });
+      }
+      if (cancelled || Platform.OS !== "android") return;
+      const count = await getRegisteredNotificationChannelCount();
+      if (!cancelled && count === 0) {
+        reportBootFallback("NotificationChannelsMissing", {
+          source: "core.notifications.provider.base",
+          context_type: sessionRef.current.contextType,
+        });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // Montage unique: ne depend d'aucun flag/contexte volontairement.
+  }, []);
 
   useEffect(() => {
     if (!isFeatureEnabled("driver_push_enabled")) return;
