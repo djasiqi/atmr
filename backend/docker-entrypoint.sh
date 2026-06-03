@@ -471,11 +471,13 @@ start_application() {
         # ✅ FIX Socket.IO multi-workers: Pour diagnostiquer "Invalid session" errors,
         # définir GUNICORN_WORKERS=1 pour forcer un seul worker (évite le problème de SID
         # partagé entre workers).
-        # ⚠️ gevent + Flask-SocketIO : éviter --preload (ConcurrentObjectUseError après fork).
-        # Phase probatoire freezes : --preload est conservé pour matcher la prod v5 ;
-        # SEUL changement = ajout de --config gunicorn.conf.py (hooks worker_int/worker_abort
-        # avec faulthandler.dump_traceback). Retirer --preload + bumps app dans un PR séparé
-        # une fois la stack bloquante capturée. Voir investigation/probatoire-freezes/VERDICT.md.
+        # ⚠️ gevent + Flask-SocketIO : NE PAS utiliser --preload.
+        # Avec --preload, wsgi:app est importé dans le master AVANT fork, donc
+        # gevent.monkey.patch_all() (voir wsgi.py) s'exécute avant le fork et laisse
+        # le hub gevent / locks dans un état incohérent dans les workers. Conséquence :
+        # freeze non coopératif au teardown du recyclage --max-requests (graceful-timeout
+        # ignoré, WORKER TIMEOUT après --timeout). Sans --preload, chaque worker importe
+        # wsgi:app après fork et patche proprement (cf. wsgi.py:61-70).
         # Défaut 2 workers (REST + Socket.IO sur le même pool) ; augmenter via GUNICORN_WORKERS si besoin.
         WORKERS="${GUNICORN_WORKERS:-2}"
         GUNICORN_TIMEOUT="${GUNICORN_TIMEOUT:-180}"
@@ -518,8 +520,7 @@ start_application() {
             --keep-alive "$GUNICORN_KEEPALIVE" \
             --worker-tmp-dir /dev/shm \
             --max-requests 1000 \
-            --max-requests-jitter 100 \
-            --preload \
+            --max-requests-jitter 250 \
             --access-logfile - \
             --error-logfile - \
             --capture-output \

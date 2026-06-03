@@ -14,6 +14,8 @@ import {
 } from "react-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRevealFallback } from "../../src/core/boot/useRevealFallback";
+import { reportBootFallback } from "../../src/core/observability/bootDiagnostics";
+import { useAccessibilityScale } from "../../src/design/responsive/useAccessibilityScale";
 import {
   ResponsiveContainer,
   Screen,
@@ -49,6 +51,13 @@ const UI_DARK_TEXT = "#163A34";
 const UI_MUTED_TEXT = "#5F7369";
 const UI_SURFACE = "#F3F7F5";
 const LANDING_REVEAL_FALLBACK_MS = 1200;
+/**
+ * Filet de sécurité DUR, indépendant de l'animation et de son callback.
+ * Garantit que le contenu finit visible même si l'animation native ne s'applique
+ * jamais ou notifie `finished` à tort (cas observés New Architecture / Android Samsung,
+ * où l'écran reste sur le fond seul). À garder ≥ durée totale de l'anim d'entrée.
+ */
+const LANDING_REVEAL_HARD_TIMEOUT_MS = 1600;
 
 /** Aligné sur la barre d’adresse (`PublicAddressSearchBar`, minHeight ~50). */
 const SUGGESTION_ROW_HEIGHT = 46;
@@ -71,6 +80,7 @@ export default function PublicHomeScreen() {
   const { bootstrap } = useSession();
   const viewport = useAppViewport();
   const { landing: layout } = useResponsiveTokens();
+  const { fontScale, isLargeText, isVeryLargeText } = useAccessibilityScale();
   const reduceMotion = useReduceMotion();
   const screenOpacity = useRef(new Animated.Value(0)).current;
 
@@ -98,6 +108,8 @@ export default function PublicHomeScreen() {
   const [isResolvingPickupLocation, setIsResolvingPickupLocation] = useState(false);
   const [pickupLocationHint, setPickupLocationHint] = useState<string | null>(null);
   const isMountedRef = useRef(true);
+  /** Passe à true quand l'animation d'entrée notifie réellement `finished`. */
+  const revealSettledRef = useRef(false);
   /** Incrémenté à chaque frappe / clear : invalide le callback géolocalisation en cours. */
   const pickupLocationGenRef = useRef(0);
   /** Suggestion construite depuis le GPS (affichée dans la liste, sans remplir le champ). */
@@ -155,6 +167,7 @@ export default function PublicHomeScreen() {
     timeoutMs: LANDING_REVEAL_FALLBACK_MS,
     name: "LandingRevealFallbackTriggered",
     reveal: revealContent,
+    extra: { fontScale, isLargeText, isVeryLargeText, reduceMotion },
   });
 
   const pickupInputValue = pickupValue.trim();
@@ -197,6 +210,7 @@ export default function PublicHomeScreen() {
       return;
     }
 
+    revealSettledRef.current = false;
     logoOpacity.setValue(0);
     logoScale.setValue(0.99);
     logoTranslateY.setValue(0);
@@ -279,6 +293,7 @@ export default function PublicHomeScreen() {
 
     armLandingReveal();
     landingRevealAnimation.start(({ finished }) => {
+      revealSettledRef.current = finished ?? false;
       settleLandingReveal(finished ?? false);
     });
 
@@ -303,6 +318,29 @@ export default function PublicHomeScreen() {
     useNativeDriver,
     screenOpacity,
   ]);
+
+  // Filet dur : on révèle le contenu quoi qu'il arrive, sans dépendre du
+  // callback `finished` de l'animation (qui peut ne jamais arriver — ou arriver
+  // sans que la vue soit réellement mise à jour — sur New Architecture/Android).
+  // Si l'animation n'a pas notifié `finished` à temps, on remonte l'incident à
+  // Sentry avec le contexte appareil/accessibilité pour confirmer la cause (S25…).
+  useEffect(() => {
+    if (reduceMotion) {
+      return;
+    }
+    const hardRevealTimer = setTimeout(() => {
+      revealContent();
+      if (!revealSettledRef.current) {
+        reportBootFallback("LandingRevealHardTimeout", {
+          fontScale,
+          isLargeText,
+          isVeryLargeText,
+          reduceMotion,
+        });
+      }
+    }, LANDING_REVEAL_HARD_TIMEOUT_MS);
+    return () => clearTimeout(hardRevealTimer);
+  }, [reduceMotion, revealContent, fontScale, isLargeText, isVeryLargeText]);
 
   useEffect(() => {
     let cancelled = false;

@@ -200,7 +200,11 @@ export function useBootSplashGate(): {
     if (Platform.OS === "web") {
       return;
     }
-    if (!showLottieLayer || animFinished) {
+    // On arme le filet dès que l'overlay est monté (et non quand le calque Lottie
+    // est visible) : si `autoPlay` ne démarre jamais l'animation (New Architecture /
+    // Android Samsung), `onAnimationFinish` ne se déclenche pas — ce timeout garantit
+    // tout de même la sortie du splash.
+    if (!overlayMounted || animFinished) {
       return;
     }
 
@@ -217,7 +221,7 @@ export function useBootSplashGate(): {
     }, SPLASH_LOTTIE_FALLBACK_TIMEOUT_MS);
 
     return () => clearTimeout(id);
-  }, [showLottieLayer, animFinished, introState, onLottieFinish, status]);
+  }, [overlayMounted, animFinished, introState, onLottieFinish, status]);
 
   useEffect(() => {
     const elapsedMs = Date.now() - bootStartedAtRef.current;

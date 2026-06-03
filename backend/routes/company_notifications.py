@@ -14,7 +14,9 @@ from datetime import UTC, datetime, timedelta
 from flask import abort
 from flask import request as flask_request
 from flask_jwt_extended import get_jwt, verify_jwt_in_request
+from flask_jwt_extended.exceptions import JWTExtendedException
 from flask_restx import Namespace, Resource
+from jwt.exceptions import PyJWTError
 from sqlalchemy import or_
 
 from ext import db
@@ -29,8 +31,17 @@ company_notifications_ns = Namespace(
 
 
 def _get_company_id() -> int:
-    """Extrait le company_id du JWT."""
-    verify_jwt_in_request()
+    """Extrait le company_id du JWT.
+
+    Un token absent/expiré/invalide doit renvoyer 401 (et non 500). On intercepte
+    explicitement les exceptions JWT car la collecte se fait dans un bloc try/except
+    générique des routes qui, sinon, les transforme en 500 « Erreur serveur ».
+    """
+    try:
+        verify_jwt_in_request()
+    except (JWTExtendedException, PyJWTError) as exc:
+        logger.info("[CompanyNotifications] JWT invalide ou expiré: %s", exc)
+        abort(401, description="Token invalide ou expiré")
     claims = get_jwt()
     company_id = claims.get("company_id")
     if not company_id:

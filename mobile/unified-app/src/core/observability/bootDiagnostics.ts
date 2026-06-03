@@ -1,4 +1,4 @@
-import { Platform } from "react-native";
+import { PixelRatio, Platform } from "react-native";
 import * as Application from "expo-application";
 import * as Device from "expo-device";
 import * as Sentry from "@sentry/react-native";
@@ -8,6 +8,7 @@ import { appendSessionJournalEvent } from "./sessionJournal";
 export type BootFallbackName =
   | "BootSplashFallbackTriggered"
   | "LandingRevealFallbackTriggered"
+  | "LandingRevealHardTimeout"
   | "ProfileRevealFallbackTriggered"
   | "NotificationChannelsMissing";
 
@@ -37,6 +38,7 @@ export function reportBootFallback(
       app_version: Application.nativeApplicationVersion ?? "unknown",
       ota_update_id: Updates.updateId ?? "embedded",
       new_arch_enabled: String(detectNewArchEnabled()),
+      font_scale: String(PixelRatio.getFontScale()),
     };
     Sentry.captureMessage(name, {
       level: "warning",
