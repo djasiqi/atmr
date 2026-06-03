@@ -392,7 +392,7 @@ class TestProcessOpportunities:
         )
         assert stats["auto_applied"] == 0
 
-    @patch("services.unified_dispatch.autonomous_manager.apply_suggestion")
+    @patch("services.unified_dispatch.utils.autonomous.apply_suggestion")
     def test_process_opportunities_with_apply(self, mock_apply, db):
         """Test application réelle de suggestions."""
         company = CompanyFactory(dispatch_mode=DispatchMode.FULLY_AUTO)
@@ -414,7 +414,7 @@ class TestProcessOpportunities:
         assert stats["errors"] == 0
         mock_apply.assert_called_once()
 
-    @patch("services.unified_dispatch.autonomous_manager.apply_suggestion")
+    @patch("services.unified_dispatch.utils.autonomous.apply_suggestion")
     def test_process_opportunities_with_error(self, mock_apply, db):
         """Test gestion d'erreur lors de l'application."""
         company = CompanyFactory(dispatch_mode=DispatchMode.FULLY_AUTO)

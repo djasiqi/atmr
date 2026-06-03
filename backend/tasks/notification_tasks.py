@@ -713,6 +713,20 @@ def _send_sms_fallback(
             )
             return {"ok": True, "channel": "sms"}
 
+        # Canal SMS désactivé par configuration : état attendu, pas une panne.
+        # On évite de polluer Sentry (niveau error) avec un simple cas de config.
+        if result.get("disabled"):
+            logger.info(
+                "[notification_task] SMS non envoyé à driver %s (canal désactivé)",
+                driver.id,
+            )
+            return {
+                "ok": False,
+                "error": result.get("error"),
+                "channel": "sms",
+                "skipped": True,
+            }
+
         logger.error(
             "[notification_task] SMS failed for driver %s: %s",
             driver.id,

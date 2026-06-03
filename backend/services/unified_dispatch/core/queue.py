@@ -18,7 +18,7 @@ from flask import current_app  # pyright: ignore[reportMissingImports]
 from sqlalchemy.exc import IntegrityError
 
 from ext import db
-from models import Company, DispatchRun, DispatchStatus
+from models import Company, DispatchRun, DispatchStatus, DispatchTriggerOrigin
 from models.base import _as_dt, _iso
 from repositories.company_repository import CompanyRepository
 from repositories.dispatch_run_repository import DispatchRunRepository
@@ -66,6 +66,7 @@ ALLOWED_RUN_KWARGS = frozenset(
         "overrides",
         "dispatch_overrides",
         "dispatch_run_id",
+        "origin",
     }
 )
 
@@ -659,17 +660,95 @@ def trigger_job(company_id: int, params: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _automation_blocked(
+    company_id: int,
+    origin: DispatchTriggerOrigin,
+    reason: str = "",
+) -> bool:
+    """Décide si un déclenchement AUTOMATIQUE doit être bloqué pour la société.
+
+    C'est le garde-fou central : tous les chemins automatiques (changement de
+    réservation, annulation, bus d'événements, autorun) convergent vers
+    `trigger()` et passent donc par ici. Un déclenchement MANUEL explicite
+    (`origin == MANUAL`, ex. bouton « Lancer le dispatch ») n'appelle jamais
+    cette fonction et reste donc toujours autorisé.
+
+    Politique en cas d'échec de résolution du mode (DB indisponible, etc.) :
+    fail-open (on laisse passer) afin de ne pas bloquer les sociétés FULLY_AUTO
+    sur un incident transitoire ; le mode MANUAL reste protégé tant que la DB
+    répond, et l'autorun dispose de son propre garde-fou.
+
+    Returns:
+        True si le déclenchement doit être abandonné.
+    """
+    try:
+        from services.unified_dispatch.utils.autonomous import (
+            get_manager_for_company,
+        )
+
+        manager = get_manager_for_company(company_id)
+    except Exception as e:
+        logger.warning(
+            (
+                "[Queue] Impossible de résoudre le mode dispatch pour company=%s "
+                "(origin=%s): %s — déclenchement autorisé par défaut (fail-open)"
+            ),
+            company_id,
+            getattr(origin, "value", origin),
+            e,
+        )
+        return False
+
+    if manager.is_automation_allowed():
+        return False
+
+    logger.warning(
+        (
+            "[Queue] ⛔ Auto-dispatch refusé: company=%s mode=%s origin=%s "
+            "reason=%s (automatisation non autorisée pour ce mode)"
+        ),
+        company_id,
+        manager.mode.value,
+        getattr(origin, "value", origin),
+        reason,
+    )
+    try:
+        from services.unified_dispatch.metrics.prometheus import (
+            record_auto_trigger_blocked,
+        )
+
+        record_auto_trigger_blocked(
+            company_id=company_id,
+            dispatch_mode=manager.mode.value,
+            origin=getattr(origin, "value", str(origin)),
+        )
+    except Exception:
+        logger.debug("[Queue] record_auto_trigger_blocked indisponible", exc_info=True)
+
+    return True
+
+
 def trigger(
     company_id: int,
     reason: str = "generic",
     mode: str = "auto",
     params: Dict[str, Any] | None = None,
+    origin: DispatchTriggerOrigin = DispatchTriggerOrigin.MANUAL,
 ) -> None:
     """Appel léger depuis les routes ou services :
     - Empile la demande (pour debug),
     - Programme/relance un timer de coalescence,
     - Garantit qu'un seul run partira après DEBOUNCE+COALESCE.
+
+    `origin` distingue l'origine du déclenchement (manuel vs automatique). Si
+    l'origine est automatique et que la société n'autorise pas l'automatisation
+    (ex. mode MANUAL), le déclenchement est abandonné ici même. La valeur par
+    défaut `MANUAL` garantit qu'un appel direct (ex. bouton « Lancer le
+    dispatch » via `trigger_job`) n'est jamais bloqué.
     """
+    if origin.is_automated and _automation_blocked(company_id, origin, reason):
+        return
+
     st = _get_state(company_id)
 
     # Anti-tempête : limiter la taille du backlog
@@ -682,6 +761,9 @@ def trigger(
     # valeur pour chaque clé)
     if params:
         st.params = dict(params)
+    # Propage l'origine jusqu'à la tâche Celery (logs/métriques + défense en
+    # profondeur dans run_dispatch_task).
+    st.params["origin"] = origin.value
 
     try:
         # si on est dans un contexte requête, mémorise l'app pour le worker
@@ -703,16 +785,28 @@ def trigger_on_booking_change(
     mode: str = "auto",
     params: Dict[str, Any] | None = None,
     reason: str = "booking_change",
+    origin: DispatchTriggerOrigin = DispatchTriggerOrigin.BOOKING_CHANGE,
 ) -> None:
-    """Déclenche un dispatch suite à un changement de booking.
+    """Déclenche un dispatch AUTOMATIQUE suite à un changement de booking.
+
+    Point de convergence de tous les déclencheurs automatiques pilotés par les
+    réservations (bus d'événements, annulation, mises à jour). Le garde-fou
+    d'automatisation est appliqué dans `trigger()` via `origin`.
 
     Args:
         company_id: ID de l'entreprise
         mode: Mode de dispatch (défaut: "auto")
         params: Paramètres additionnels pour le dispatch
         reason: Raison traçable (ex. booking_assign) — stockée dans st.backlog
+        origin: Origine automatique du déclenchement (défaut: BOOKING_CHANGE)
     """
-    trigger(company_id=company_id, reason=reason, mode=mode, params=params)
+    trigger(
+        company_id=company_id,
+        reason=reason,
+        mode=mode,
+        params=params,
+        origin=origin,
+    )
 
 
 def stop_all() -> None:

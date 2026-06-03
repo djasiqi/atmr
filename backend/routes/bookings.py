@@ -174,16 +174,25 @@ booking_export_pdf_model = bookings_ns.model(
 def _queue_trigger(company_id: int | None, action: str) -> None:
     if not company_id:
         return
+    # Déclenchement AUTOMATIQUE : on précise l'origine pour que le garde-fou
+    # d'automatisation (queue.trigger) s'applique en mode MANUAL.
+    from models import DispatchTriggerOrigin
+
+    origin = (
+        DispatchTriggerOrigin.CANCELLATION
+        if action == "cancel"
+        else DispatchTriggerOrigin.BOOKING_CHANGE
+    )
     try:
         # API moderne
         t1 = getattr(queue, "trigger_on_booking_change", None)
         if callable(t1):
-            t1(company_id, reason=f"booking_{action}")
+            t1(company_id, reason=f"booking_{action}", origin=origin)
             return
         # API alternative
         t2 = getattr(queue, "trigger", None)
         if callable(t2):
-            t2(company_id, reason=f"booking_{action}", mode="auto")
+            t2(company_id, reason=f"booking_{action}", mode="auto", origin=origin)
             return
     except Exception as e:
         logger.warning("⚠️ _queue_trigger failed: %s", e)

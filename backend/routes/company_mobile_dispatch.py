@@ -2108,7 +2108,8 @@ class MobileDispatchMode(Resource):
                 "message": "Aucun changement (mode identique).",
             }, 200
 
-        cast("Any", company).dispatch_mode = target_mode
+        # Invariant MANUAL ⇒ dispatch_enabled=false (centralisé sur le modèle)
+        cast("Any", company).set_dispatch_mode(target_mode)
 
         try:
             if target_mode.value == "fully_auto":

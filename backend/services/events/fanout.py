@@ -501,10 +501,14 @@ def _send_push_to_driver(
                     len(device_tokens),
                 )
     except (ValueError, TypeError, AttributeError) as e:
+        # On capture la stack (exc_info) : un « 'NoneType' object is not callable »
+        # n'est pas une vraie erreur de validation mais un bug de code, indiagnostiquable
+        # sans trace. La trace permet de localiser l'appel fautif au prochain incident.
         app_logger.error(
             "[event_fanout] Push failed (validation error: %s): %s",
             type(e).__name__,
             e,
+            exc_info=True,
         )
     except (ConnectionError, OSError) as e:
         app_logger.error(

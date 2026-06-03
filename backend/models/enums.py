@@ -398,6 +398,33 @@ class DispatchMode(str, PyEnum):
     FULLY_AUTO = "fully_auto"
 
 
+class DispatchTriggerOrigin(str, PyEnum):
+    """Origine d'un déclenchement de dispatch.
+
+    Distinct de `DispatchMode` (politique d'automatisation de la société) et de
+    `mode` (stratégie de calcul du moteur : auto / solver_only / heuristic_only).
+    Cet enum répond à la question « QUI/QUOI a déclenché ce run ? » afin de
+    décider si le garde-fou d'automatisation doit s'appliquer.
+
+    - MANUAL: déclenchement explicite par l'entreprise (bouton « Lancer le
+      dispatch »). Doit fonctionner même en mode MANUAL.
+    - BOOKING_CHANGE / CANCELLATION / EVENT_BUS / AUTORUN / REALTIME:
+      déclenchements automatiques. Soumis au garde-fou `is_automation_allowed()`.
+    """
+
+    MANUAL = "manual"
+    BOOKING_CHANGE = "booking_change"
+    CANCELLATION = "cancellation"
+    EVENT_BUS = "event_bus"
+    AUTORUN = "autorun"
+    REALTIME = "realtime"
+
+    @property
+    def is_automated(self) -> bool:
+        """True si l'origine correspond à un déclenchement automatique."""
+        return self is not DispatchTriggerOrigin.MANUAL
+
+
 class PlatformBillingPeriodStatus(str, PyEnum):
     """Période de facturation plateforme LIRIE (brouillon / figée)."""
 

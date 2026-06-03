@@ -72,6 +72,30 @@ class AutonomousDispatchManager:
         # En fully auto : toujours actif
         return bool(self.mode == DispatchMode.FULLY_AUTO)
 
+    def is_automation_allowed(self) -> bool:
+        """Détermine si un dispatch déclenché AUTOMATIQUEMENT est autorisé.
+
+        À utiliser pour tous les déclencheurs non explicites (changement de
+        réservation, annulation, bus d'événements, autorun, monitoring temps
+        réel). Un déclenchement MANUEL explicite par l'entreprise (bouton
+        « Lancer le dispatch ») ne doit PAS passer par ce garde-fou et reste
+        autorisé quel que soit le mode.
+
+        Sémantique identique à `should_run_autorun()` aujourd'hui, mais exposée
+        sous un nom métier distinct afin de pouvoir évoluer indépendamment et
+        d'être appelée depuis le choke point de la file de dispatch.
+
+        Returns:
+            True si l'automatisation est autorisée pour ce mode/config.
+        """
+        if self.mode == DispatchMode.MANUAL:
+            return False
+
+        if self.mode == DispatchMode.SEMI_AUTO:
+            return bool(self.config["auto_dispatch"]["enabled"])
+
+        return bool(self.mode == DispatchMode.FULLY_AUTO)
+
     def should_run_realtime_optimizer(self) -> bool:
         """Détermine si le RealtimeOptimizer doit tourner en continu.
 

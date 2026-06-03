@@ -381,8 +381,14 @@ class DispatchMetricsCollector:
                 bookings_map[b.id] = b
 
         for assignment in assignments:
-            # Récupérer l'ID du chauffeur
-            driver_id = int(assignment.driver_id)  # type: ignore[reportArgumentType]
+            # Un assignment peut exister sans chauffeur attribué (ex. statut
+            # SCHEDULED non encore résolu) : driver_id est alors None et le
+            # pooling « par chauffeur » n'a pas de sens — on l'ignore au lieu de
+            # faire planter le calcul des métriques (int(None) -> TypeError).
+            raw_driver_id = getattr(assignment, "driver_id", None)
+            if raw_driver_id is None:
+                continue
+            driver_id = int(raw_driver_id)  # type: ignore[reportArgumentType]
 
             bid = getattr(assignment, "booking_id", None)
             booking = bookings_map.get(int(bid)) if bid is not None else None

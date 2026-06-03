@@ -15,7 +15,7 @@ from sqlalchemy.exc import DBAPIError, OperationalError
 
 from celery_app import get_flask_app
 from ext import db
-from models import Company, DispatchMode
+from models import Company, DispatchMode, DispatchTriggerOrigin
 from services.unified_dispatch import engine
 
 logger = logging.getLogger(__name__)
@@ -76,6 +76,7 @@ def run_dispatch_task(
     overrides: Dict[str, Any] | None = None,
     dispatch_overrides: Dict[str, Any] | None = None,
     dispatch_run_id: int | None = None,  # ✅ Nouveau paramètre optionnel
+    origin: str = DispatchTriggerOrigin.MANUAL.value,
     **_legacy_kwargs: Any,
 ) -> Dict[str, Any]:
     """Exécuté par un worker Celery.
@@ -120,6 +121,78 @@ def run_dispatch_task(
         # précédent
         with suppress(Exception):
             db.session.rollback()
+
+        # 🛡️ Défense en profondeur : refuser un run déclenché AUTOMATIQUEMENT si
+        # la société n'autorise pas l'automatisation (ex. mode MANUAL). Le
+        # garde-fou principal est dans queue.trigger(), mais on revérifie ici
+        # car run_dispatch_task est le point de convergence de tous les chemins.
+        # Clé sur `origin` (et NON sur `mode`, qui est la stratégie du moteur)
+        # afin de ne jamais bloquer un dispatch lancé manuellement.
+        try:
+            origin_enum = DispatchTriggerOrigin(
+                (origin or DispatchTriggerOrigin.MANUAL.value).strip().lower()
+            )
+        except ValueError:
+            origin_enum = DispatchTriggerOrigin.MANUAL
+
+        if origin_enum.is_automated:
+            try:
+                from services.unified_dispatch.utils.autonomous import (
+                    get_manager_for_company,
+                )
+
+                manager = get_manager_for_company(company_id)
+                if not manager.is_automation_allowed():
+                    logger.warning(
+                        (
+                            "[Celery] ⛔ Run auto refusé: company=%s mode=%s "
+                            "origin=%s (automatisation non autorisée)"
+                        ),
+                        company_id,
+                        manager.mode.value,
+                        origin_enum.value,
+                    )
+                    try:
+                        from services.unified_dispatch.metrics.prometheus import (
+                            record_auto_trigger_blocked,
+                        )
+
+                        record_auto_trigger_blocked(
+                            company_id=company_id,
+                            dispatch_mode=manager.mode.value,
+                            origin=origin_enum.value,
+                        )
+                    except Exception:
+                        logger.debug(
+                            "[Celery] record_auto_trigger_blocked indisponible",
+                            exc_info=True,
+                        )
+                    return {
+                        "assignments": [],
+                        "unassigned": [],
+                        "bookings": [],
+                        "drivers": [],
+                        "meta": {
+                            "reason": "automation_not_allowed",
+                            "origin": origin_enum.value,
+                            "company_id": company_id,
+                            "for_date": for_date,
+                            "skipped": True,
+                        },
+                        "dispatch_run_id": None,
+                    }
+            except Exception:
+                # Fail-open : ne pas bloquer sur un incident transitoire de
+                # résolution du mode (cohérent avec queue._automation_blocked).
+                logger.warning(
+                    (
+                        "[Celery] Impossible de vérifier l'automatisation pour "
+                        "company=%s origin=%s — run autorisé par défaut"
+                    ),
+                    company_id,
+                    origin_enum.value,
+                    exc_info=True,
+                )
 
         # ✅ Si dispatch_run_id est fourni, mettre à jour son statut à RUNNING
         if dispatch_run_id:
@@ -510,6 +583,7 @@ def autorun_tick() -> Dict[str, Any]:
                     mode="auto",
                     regular_first=True,
                     allow_emergency=None,
+                    origin=DispatchTriggerOrigin.AUTORUN.value,
                 )
 
                 results["triggered"] += 1

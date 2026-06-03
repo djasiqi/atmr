@@ -133,6 +133,15 @@ if (
         ["company_id"],
     )
 
+    # Compteur d'auto-dispatch refusés (société non autorisée à l'automatisation)
+    DISPATCH_AUTO_TRIGGER_BLOCKED_TOTAL = _get_or_create_metric(
+        Counter,
+        "dispatch_auto_trigger_blocked_total",
+        "Nombre de dispatch automatiques refusés car l'automatisation "
+        "n'est pas autorisée pour la société (ex. mode MANUAL)",
+        ["company_id", "dispatch_mode", "origin"],
+    )
+
     # Compteur conflits temporels
     DISPATCH_TEMPORAL_CONFLICTS_TOTAL = _get_or_create_metric(
         Counter,
@@ -236,6 +245,7 @@ else:
     DISPATCH_ASSIGNMENT_RATE = None
     DISPATCH_UNASSIGNED_COUNT = None
     DISPATCH_CIRCUIT_BREAKER_STATE = None
+    DISPATCH_AUTO_TRIGGER_BLOCKED_TOTAL = None
     DISPATCH_TEMPORAL_CONFLICTS_TOTAL = None
     DISPATCH_DB_CONFLICTS_TOTAL = None
     DISPATCH_OSRM_CACHE_HITS_TOTAL = None
@@ -411,6 +421,31 @@ def record_circuit_breaker_state(
         except Exception as e:
             logger.warning(
                 "[DispatchMetrics] Erreur enregistrement circuit breaker: %s", e
+            )
+
+
+def record_auto_trigger_blocked(
+    company_id: int,
+    dispatch_mode: str,
+    origin: str,
+) -> None:
+    """Enregistre un dispatch automatique refusé par le garde-fou.
+
+    Args:
+        company_id: ID de l'entreprise
+        dispatch_mode: Mode de dispatch de la société (ex. "manual")
+        origin: Origine du déclenchement (ex. "booking_change", "cancellation")
+    """
+    if DISPATCH_AUTO_TRIGGER_BLOCKED_TOTAL:
+        try:
+            DISPATCH_AUTO_TRIGGER_BLOCKED_TOTAL.labels(
+                company_id=str(company_id),
+                dispatch_mode=dispatch_mode or "unknown",
+                origin=origin or "unknown",
+            ).inc()
+        except Exception as e:
+            logger.warning(
+                "[DispatchMetrics] Erreur enregistrement auto_trigger_blocked: %s", e
             )
 
 

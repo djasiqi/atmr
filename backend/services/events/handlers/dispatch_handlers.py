@@ -37,14 +37,27 @@ def handle_dispatch_requested(event: dict[str, Any]) -> None:
         logger.exception("[EventBus] queue import failed")
         return
 
+    # Déclenchement AUTOMATIQUE via le bus d'événements : on précise l'origine
+    # pour que le garde-fou d'automatisation (queue.trigger) s'applique.
+    from models import DispatchTriggerOrigin
+
     trigger1: Any = getattr(_queue, "trigger_on_booking_change", None)
     if callable(trigger1):
-        trigger1(company_id, reason=str(reason or f"event_{action}"))
+        trigger1(
+            company_id,
+            reason=str(reason or f"event_{action}"),
+            origin=DispatchTriggerOrigin.EVENT_BUS,
+        )
         return
 
     trigger2: Any = getattr(_queue, "trigger", None)
     if callable(trigger2):
-        trigger2(company_id, reason=str(reason or f"event_{action}"), mode="auto")
+        trigger2(
+            company_id,
+            reason=str(reason or f"event_{action}"),
+            mode="auto",
+            origin=DispatchTriggerOrigin.EVENT_BUS,
+        )
         return
 
     logger.warning(

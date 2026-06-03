@@ -38,7 +38,7 @@ def send_sms_notification(
         logger.debug(
             "[sms] SMS notifications disabled (SMS_NOTIFICATIONS_ENABLED=false)"
         )
-        return {"ok": False, "error": "SMS notifications disabled"}
+        return {"ok": False, "error": "SMS notifications disabled", "disabled": True}
 
     if not all([TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER]):
         logger.error("[sms] Twilio credentials not configured")

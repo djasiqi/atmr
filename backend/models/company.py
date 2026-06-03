@@ -395,6 +395,24 @@ class Company(db.Model):
     def can_dispatch(self) -> bool:
         return bool(_as_bool(self.is_approved) and _as_bool(self.dispatch_enabled))
 
+    def set_dispatch_mode(self, mode: "DispatchMode") -> "DispatchMode":
+        """Change le mode de dispatch en garantissant l'invariant métier.
+
+        Invariant : `dispatch_mode == MANUAL ⇒ dispatch_enabled == False`.
+        Au passage en MANUAL, on coupe automatiquement `dispatch_enabled` afin
+        qu'aucun déclencheur automatique ne puisse lancer un dispatch.
+
+        Args:
+            mode: Le nouveau mode de dispatch.
+
+        Returns:
+            Le mode effectivement appliqué.
+        """
+        self.dispatch_mode = mode
+        if mode == DispatchMode.MANUAL:
+            self.dispatch_enabled = False
+        return mode
+
     def approve(self):
         self.is_approved = True
         self.accepted_at = datetime.now(UTC)

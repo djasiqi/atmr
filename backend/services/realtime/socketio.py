@@ -1035,7 +1035,7 @@ def join_conversation_room(
 ) -> None:
     """Ajoute un client (sid) à la room conversation — utilisable hors handler."""
     try:
-        cast("Any", socketio).enter_room(
+        cast("Any", socketio).server.enter_room(
             sid, get_conversation_room(conversation_id), namespace=namespace
         )
     except (ConnectionError, OSError) as e:
@@ -1063,7 +1063,7 @@ def join_company_room(
     - utilisable hors contexte handler.
     """
     try:
-        cast("Any", socketio).enter_room(
+        cast("Any", socketio).server.enter_room(
             sid, get_company_room(company_id), namespace=namespace
         )
     except (ConnectionError, OSError) as e:
@@ -1089,7 +1089,7 @@ def leave_company_room(
     - utilisable hors contexte handler.
     """
     try:
-        cast("Any", socketio).leave_room(
+        cast("Any", socketio).server.leave_room(
             sid, get_company_room(company_id), namespace=namespace
         )
     except (ConnectionError, OSError) as e:
@@ -1111,7 +1111,7 @@ def leave_company_room(
 def join_date_room(sid: str, date_str: str, namespace: str = DEFAULT_NAMESPACE) -> None:
     """Ajoute un client (sid) à la room de date (YYYY-MM-DD)."""
     try:
-        cast("Any", socketio).enter_room(
+        cast("Any", socketio).server.enter_room(
             sid, get_date_room(date_str), namespace=namespace
         )
     except (ConnectionError, OSError) as e:
@@ -1135,7 +1135,7 @@ def leave_date_room(
 ) -> None:
     """Retire un client (sid) de la room de date (YYYY-MM-DD)."""
     try:
-        cast("Any", socketio).leave_room(
+        cast("Any", socketio).server.leave_room(
             sid, get_date_room(date_str), namespace=namespace
         )
     except (ConnectionError, OSError) as e:

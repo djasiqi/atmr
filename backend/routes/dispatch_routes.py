@@ -3543,7 +3543,8 @@ class DispatchModeResource(Resource):
             from models.enums import DispatchMode
 
             try:
-                cast("Any", company).dispatch_mode = DispatchMode(new_mode)
+                # Invariant MANUAL ⇒ dispatch_enabled=false (centralisé sur le modèle)
+                cast("Any", company).set_dispatch_mode(DispatchMode(new_mode))
                 logger.info(
                     "[Dispatch] Company %s changed mode to: %s (from: %s)",
                     company_id,
