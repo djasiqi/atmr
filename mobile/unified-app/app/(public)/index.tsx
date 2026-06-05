@@ -82,17 +82,22 @@ export default function PublicHomeScreen() {
   const { landing: layout } = useResponsiveTokens();
   const { fontScale, isLargeText, isVeryLargeText } = useAccessibilityScale();
   const reduceMotion = useReduceMotion();
-  const screenOpacity = useRef(new Animated.Value(0)).current;
+  // ⚠️ Robustesse : l'opacité démarre à 1 (contenu visible par défaut). L'entrée
+  // est une animation purement cosmétique de transform (rise + scale) ; sa
+  // défaillance (callback `finished` non fiable sous Fabric/Hermes, animation native
+  // non appliquée) ne peut donc JAMAIS produire un écran « fond seul ». La visibilité
+  // ne dépend plus de l'animation. Voir l'effet d'entrée plus bas.
+  const screenOpacity = useRef(new Animated.Value(1)).current;
 
-  const logoOpacity = useRef(new Animated.Value(0)).current;
-  const logoScale = useRef(new Animated.Value(0.99)).current;
+  const logoOpacity = useRef(new Animated.Value(1)).current;
+  const logoScale = useRef(new Animated.Value(1)).current;
   const logoTranslateY = useRef(new Animated.Value(0)).current;
-  const titleOpacity = useRef(new Animated.Value(0)).current;
+  const titleOpacity = useRef(new Animated.Value(1)).current;
   const titleTranslateY = useRef(new Animated.Value(0)).current;
-  const cardOpacity = useRef(new Animated.Value(0)).current;
+  const cardOpacity = useRef(new Animated.Value(1)).current;
   const cardTranslateY = useRef(new Animated.Value(0)).current;
-  const ctaOpacity = useRef(new Animated.Value(0)).current;
-  const ctaScale = useRef(new Animated.Value(0.99)).current;
+  const ctaOpacity = useRef(new Animated.Value(1)).current;
+  const ctaScale = useRef(new Animated.Value(1)).current;
   const [pickupValue, setPickupValue] = useState("");
   const [dropoffValue, setDropoffValue] = useState("");
   /**
@@ -211,80 +216,39 @@ export default function PublicHomeScreen() {
     }
 
     revealSettledRef.current = false;
-    logoOpacity.setValue(0);
-    logoScale.setValue(0.99);
-    logoTranslateY.setValue(0);
-    titleOpacity.setValue(0);
-    titleTranslateY.setValue(0);
-    cardOpacity.setValue(0);
-    cardTranslateY.setValue(0);
-    ctaOpacity.setValue(0);
-    ctaScale.setValue(0.99);
-    screenOpacity.setValue(0);
+    // On ne touche JAMAIS à l'opacité : seules les transforms partent d'un état
+    // « from » (léger rise + scale) puis reviennent à l'identité. Si l'animation
+    // native ne s'applique pas, le contenu reste pleinement visible (opacité 1),
+    // au pire décalé de quelques pixels — jamais invisible.
+    logoScale.setValue(0.985);
+    titleTranslateY.setValue(10);
+    cardTranslateY.setValue(14);
+    ctaScale.setValue(0.985);
 
     const landingRevealAnimation = Animated.parallel([
-      Animated.timing(screenOpacity, {
-        toValue: 1,
-        duration: 260,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver,
-      }),
-      Animated.timing(logoOpacity, {
-        toValue: 1,
-        duration: 220,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver,
-      }),
       Animated.timing(logoScale, {
         toValue: 1,
         duration: 240,
         easing: Easing.out(Easing.cubic),
         useNativeDriver,
       }),
-      Animated.timing(logoTranslateY, {
-        toValue: 0,
-        duration: 240,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver,
-      }),
-      Animated.timing(titleOpacity, {
-        toValue: 1,
-        duration: 180,
-        delay: 20,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver,
-      }),
       Animated.timing(titleTranslateY, {
         toValue: 0,
-        duration: 200,
-        delay: 80,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver,
-      }),
-      Animated.timing(cardOpacity, {
-        toValue: 1,
-        duration: 200,
-        delay: 40,
+        duration: 220,
+        delay: 60,
         easing: Easing.out(Easing.cubic),
         useNativeDriver,
       }),
       Animated.timing(cardTranslateY, {
         toValue: 0,
-        duration: 220,
-        delay: 130,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver,
-      }),
-      Animated.timing(ctaOpacity, {
-        toValue: 1,
-        duration: 180,
-        delay: 60,
+        duration: 240,
+        delay: 110,
         easing: Easing.out(Easing.cubic),
         useNativeDriver,
       }),
       Animated.timing(ctaScale, {
         toValue: 1,
-        duration: 180,
+        duration: 200,
         delay: 60,
         easing: Easing.out(Easing.cubic),
         useNativeDriver,
@@ -319,11 +283,11 @@ export default function PublicHomeScreen() {
     screenOpacity,
   ]);
 
-  // Filet dur : on révèle le contenu quoi qu'il arrive, sans dépendre du
-  // callback `finished` de l'animation (qui peut ne jamais arriver — ou arriver
-  // sans que la vue soit réellement mise à jour — sur New Architecture/Android).
-  // Si l'animation n'a pas notifié `finished` à temps, on remonte l'incident à
-  // Sentry avec le contexte appareil/accessibilité pour confirmer la cause (S25…).
+  // Filet de sécurité : le contenu est désormais toujours visible (opacité 1), donc
+  // ceci ne « révèle » plus rien de critique — ça fige juste les transforms à leur
+  // état de repos si l'animation native n'a pas notifié `finished` à temps, et ça
+  // remonte l'incident à Sentry (contexte appareil/accessibilité) pour suivre la
+  // fiabilité du pipeline d'animation sous Fabric/Hermes.
   useEffect(() => {
     if (reduceMotion) {
       return;

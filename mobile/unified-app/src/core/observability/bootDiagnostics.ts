@@ -40,10 +40,16 @@ export function reportBootFallback(
       new_arch_enabled: String(detectNewArchEnabled()),
       font_scale: String(PixelRatio.getFontScale()),
     };
+    // `fingerprint` explicite : ces événements sont émis depuis un setTimeout, donc
+    // la stack synthétique (Hermes) est mal mappée vers des symboles arbitraires
+    // (ex. FlatList.props.renderItem). Sans fingerprint, Sentry grouperait par cette
+    // stack trompeuse → issues mal nommées/attribuées et fragmentées par appareil.
+    // On regroupe donc par nom d'événement.
     Sentry.captureMessage(name, {
       level: "warning",
       tags,
       extra: extra ?? {},
+      fingerprint: [name],
     });
   } catch {
     // monitoring ne doit pas casser le boot
