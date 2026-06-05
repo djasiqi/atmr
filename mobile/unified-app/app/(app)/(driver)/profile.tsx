@@ -175,7 +175,12 @@ export default function DriverProfileScreen() {
   }, [messageAnim, securityMessage, sessionError]);
 
   const entranceStyle = (index: number) => ({
-    opacity: sectionEntrance[index],
+    // ⚠️ Robustesse : opacité constante à 1, la visibilité ne dépend PAS de
+    // l'animation. Auparavant `opacity: sectionEntrance[index]` (valeur 0 au repos)
+    // laissait les sections invisibles si le callback `finished` n'arrivait jamais
+    // (Fabric/Hermes) → écran « vide ». Seul le translateY reste animé (slide-up
+    // cosmétique) ; au pire les sections sont décalées de 14px mais restent visibles.
+    opacity: 1,
     transform: [
       {
         translateY: sectionEntrance[index].interpolate({
