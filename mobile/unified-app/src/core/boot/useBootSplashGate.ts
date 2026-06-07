@@ -29,6 +29,14 @@ export const WEB_SPLASH_LOTTIE_SIM_MS = 2600;
 /** Safety timeout : force animFinished si Lottie ne déclenche jamais onAnimationFinish. */
 export const SPLASH_LOTTIE_FALLBACK_TIMEOUT_MS = 4000;
 
+/**
+ * Durée naturelle de l'animation d'intro (~op 157 @ 60 fps sur les JSON fournis).
+ * Sert à terminer l'intro de façon DÉTERMINISTE sur natif, sans dépendre de
+ * `onAnimationFinish` (callback non fiable sous Fabric/Hermes : il peut ne jamais
+ * arriver, laissant le splash bloqué jusqu'au filet de secours à 4 s).
+ */
+export const SPLASH_LOTTIE_INTRO_MS = 2600;
+
 const shouldUseNativeDriver = Platform.OS !== "web";
 
 export function useBootSplashGate(): {
@@ -181,20 +189,24 @@ export function useBootSplashGate(): {
     }
   }, [introState]);
 
+  // Complétion DÉTERMINISTE de l'intro, indépendante de `onAnimationFinish`.
+  // Ce callback Lottie est non fiable sous Fabric/Hermes (il peut ne jamais arriver
+  // → splash bloqué jusqu'au filet de secours à 4 s, cf. BootSplashFallbackTriggered).
+  // On termine donc l'intro après la durée naturelle de l'animation sur toutes les
+  // plateformes ; `onAnimationFinish` ne sert plus que de raccourci s'il arrive avant.
   useEffect(() => {
-    if (Platform.OS !== "web") {
+    if (!showLottieLayer || !showOverlay || animFinished) {
       return;
     }
-    if (!showLottieLayer || !showOverlay) {
-      return;
-    }
+    const durationMs =
+      Platform.OS === "web" ? WEB_SPLASH_LOTTIE_SIM_MS : SPLASH_LOTTIE_INTRO_MS;
     const id = setTimeout(() => {
       onLottieFinish();
-    }, WEB_SPLASH_LOTTIE_SIM_MS);
+    }, durationMs);
     return () => {
       clearTimeout(id);
     };
-  }, [showLottieLayer, showOverlay, onLottieFinish]);
+  }, [showLottieLayer, showOverlay, animFinished, onLottieFinish]);
 
   useEffect(() => {
     if (Platform.OS === "web") {
