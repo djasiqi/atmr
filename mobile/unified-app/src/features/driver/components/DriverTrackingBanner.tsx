@@ -13,10 +13,10 @@ export function DriverTrackingBanner({ ui, onRequestPermission }: Props) {
 
   const isPermission = ui.bannerKind === "permission_required";
   const message = isPermission
-    ? 'Autorisation « Toujours autoriser » requise pour le suivi en mission.'
+    ? "Suivi en arrière-plan indisponible — l'entreprise peut ne pas voir votre position actuelle."
     : ui.lastNativeStartError?.includes("startup_timeout")
-      ? "Suivi arrière-plan indisponible (délai de démarrage dépassé)."
-      : "Suivi arrière-plan indisponible.";
+      ? "Suivi arrière-plan indisponible (délai de démarrage dépassé) — l'entreprise peut ne pas voir votre position."
+      : "Suivi en arrière-plan indisponible — l'entreprise peut ne pas voir votre position actuelle.";
 
   const openSettings = () => {
     if (Platform.OS === "ios") {

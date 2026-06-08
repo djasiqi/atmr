@@ -1,13 +1,8 @@
 /**
- * Gate bloquant avant première mission — vérifie les prérequis tracking.
+ * Panneau pédagogique tracking — informatif, non bloquant pour la navigation.
  *
- * Comportement :
- * - À la première utilisation : checklist bloquante affichée tant que tout
- *   n'est pas vert. Quand tout passe, on persiste "onboarded" et le gate
- *   se masque (bandeau succès court).
- * - Aux ouvertures suivantes : si "onboarded" est déjà persisté, le gate
- *   reste invisible. Les régressions (perm révoquée, GPS off, batterie)
- *   sont alors signalées par DriverStateBanners (banners non bloquants).
+ * - onboarding : premier contact
+ * - needs_attention : réglages incomplets ou révoqués (sans reset onboarding)
  *
  * NB : la lecture des prérequis device (permissions Location, GPS) est
  * faite directement via expo-location, indépendamment du feature flag
@@ -36,7 +31,7 @@ import {
 } from "../services/batteryOptimization";
 import {
   markTrackingOnboarded,
-  readTrackingOnboarded,
+  setTrackingNeedsAttention,
 } from "../services/trackingReadinessPersistence";
 
 export type TrackingReadinessSnapshot = {
@@ -100,6 +95,7 @@ type Props = {
   onReadyChange?: (ready: boolean) => void;
   /** Si true, le composant ne s'affiche jamais (utile une fois l'onboarding fait). */
   silent?: boolean;
+  mode?: "onboarding" | "needs_attention";
 };
 
 export function DriverTrackingReadinessGate(props: Props) {
@@ -112,11 +108,14 @@ export function DriverTrackingReadinessGate(props: Props) {
     const next = await evaluateTrackingReadiness();
     setSnapshot(next);
     props.onReadyChange?.(next.ready);
-    if (next.ready && !onboardedRef.current) {
-      onboardedRef.current = true;
-      void markTrackingOnboarded().catch(() => {
-        /* persistance best-effort */
-      });
+    if (next.ready) {
+      if (!onboardedRef.current) {
+        onboardedRef.current = true;
+        void markTrackingOnboarded().catch(() => undefined);
+      }
+      void setTrackingNeedsAttention(false).catch(() => undefined);
+    } else {
+      void setTrackingNeedsAttention(true).catch(() => undefined);
     }
     setLoading(false);
   }, [props.onReadyChange]);
@@ -210,7 +209,8 @@ export function DriverTrackingReadinessGate(props: Props) {
       </View>
       <View style={[styles.warningBox, { backgroundColor: semanticWarning.bg }]}>
         <Text style={{ color: semanticWarning.fg }}>
-          La première mission reste bloquée tant que tous les prérequis ne sont pas validés.
+          Le démarrage d&apos;une mission suivie (écran verrouillé) requiert ces réglages.
+          Vous pouvez continuer à consulter vos missions.
         </Text>
       </View>
     </View>

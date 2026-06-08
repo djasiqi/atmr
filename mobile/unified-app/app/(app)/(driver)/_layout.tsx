@@ -31,6 +31,7 @@ import {
 import { useAppViewport } from "../../../src/design/responsive";
 import { useReduceMotion } from "../../../src/design/navigation/useReduceMotion";
 import { usePerfRouteTracking } from "../../../src/core/observability/usePerfRouteTracking";
+import { DriverTrackingBannerHost } from "../../../src/features/driver/components/DriverTrackingBannerHost";
 
 /**
  * Sélectionne la mission active sur laquelle le tracking GPS doit être
@@ -126,6 +127,7 @@ export default function DriverLayout() {
       <View style={{ flex: 1, backgroundColor: FLOATING_TAB_PAGE_BG.driver }}>
         <DriverTrackingHost />
         <DriverRealtimeSyncHost />
+        <DriverTrackingBannerHost />
         <Tabs
           implementation={FLOATING_TAB_IMPLEMENTATION}
           screenOptions={{

@@ -18,6 +18,8 @@ import {
   requestIgnoreBatteryOptimizations,
 } from "../services/batteryOptimization";
 
+/** Suivi mission dégradé (permission/FGS) : bannière globale via DriverTrackingBannerHost dans _layout. */
+
 const MAX_FONT_MULTIPLIER = 1.35;
 
 /** Alerte compacte : une ligne courte, titre en semi-gras + corps. */

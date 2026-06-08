@@ -27,6 +27,7 @@ import {
 } from "./backgroundLocationTask";
 import { canUseBackgroundLocation } from "./backgroundRuntimeCompat";
 import { formatTrackingSendError } from "./driverTrackingSendErrorFormat";
+import { isLiveTrackingDisclosureAccepted } from "./liveTrackingDisclosureSession";
 
 const FOREGROUND_INTERVAL_MS = Number(process.env.EXPO_PUBLIC_DRIVER_GPS_FOREGROUND_INTERVAL_MS ?? "8000");
 const BACKGROUND_INTERVAL_MS = Number(process.env.EXPO_PUBLIC_DRIVER_GPS_BACKGROUND_INTERVAL_MS ?? "20000");
@@ -209,7 +210,14 @@ async function ensurePermission(appState: AppStateStatus) {
       });
       return false;
     }
-    if (isFeatureEnabled("tracking_background_enabled") && canUseBackgroundLocation()) {
+    const missionLive =
+      state.missionId != null && isTrackingActiveStatus(state.missionStatus);
+    if (
+      missionLive &&
+      isLiveTrackingDisclosureAccepted() &&
+      isFeatureEnabled("tracking_background_enabled") &&
+      canUseBackgroundLocation()
+    ) {
       await Location.requestBackgroundPermissionsAsync().catch(() => undefined);
     }
     return true;

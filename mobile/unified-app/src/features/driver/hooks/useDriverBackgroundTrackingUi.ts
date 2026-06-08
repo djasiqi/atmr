@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { AppState } from "react-native";
-import * as Location from "expo-location";
 import { isFeatureEnabled } from "../../../core/featureFlags/registry";
 import { describeBackgroundRuntime } from "../services/backgroundRuntimeCompat";
 import { getNativeTaskLifecycleStatus } from "../services/backgroundLocationTask";
+import { evaluateMissionTrackingCapability } from "../services/missionLiveTrackingEligibility";
 import {
   getTrackingRuntimeSnapshot,
   subscribeTrackingRuntime,
@@ -51,23 +51,23 @@ async function loadDiagnostics(): Promise<DriverBackgroundTrackingUiState> {
     tracking.missionStatus != null &&
     isTrackingActiveStatus(tracking.missionStatus);
 
-  let bgPermissionGranted = false;
-  try {
-    const bg = await Location.getBackgroundPermissionsAsync();
-    bgPermissionGranted = bg.status === "granted";
-  } catch {
-    bgPermissionGranted = false;
-  }
+  const capability = missionActive
+    ? await evaluateMissionTrackingCapability({ forLiveTransition: false })
+    : null;
 
   let showBanner = false;
   let bannerKind: DriverBackgroundTrackingUiState["bannerKind"] = null;
 
-  if (missionActive && !bgPermissionGranted) {
+  if (missionActive && capability && !capability.capable) {
     showBanner = true;
-    bannerKind = "permission_required";
-  } else if (missionActive && !lifecycle.taskStarted) {
-    showBanner = true;
-    bannerKind = "background_unavailable";
+    if (
+      capability.constraintReason === "permission_bg_denied" ||
+      capability.constraintReason === "permission_fg_denied"
+    ) {
+      bannerKind = "permission_required";
+    } else {
+      bannerKind = "background_unavailable";
+    }
   }
 
   return {

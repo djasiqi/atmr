@@ -27,6 +27,9 @@ import {
   resolveDriverStatusForUx,
 } from "../../../src/features/driver/statusDictionary";
 import type { DriverMission, DriverTransitionStatus } from "../../../src/features/driver/types";
+import { MissionLiveTrackingDisclosureModal } from "../../../src/features/driver/components/MissionLiveTrackingDisclosureModal";
+import { useMissionLiveTrackingGuard } from "../../../src/features/driver/hooks/useMissionLiveTrackingGuard";
+import { requiresLiveTrackingPermission } from "../../../src/features/driver/services/missionLiveTrackingEligibility";
 import { missionActiveCardShadow } from "../../../src/features/driver/theme/driverDashboardTheme";
 import { getCallablePhoneFromMission, openNavigation, safeCall } from "../../../src/features/driver/utils/missionContact";
 import { createShadow } from "../../../src/styles/shadowStyles";
@@ -632,6 +635,7 @@ export default function DriverTripsScreen() {
   const mineQuery = useDriverMissionsQuery();
   const companyQuery = useDriverCompanyBookingsTodayQuery();
   const statusTransition = useDriverStatusTransition();
+  const liveTrackingGuard = useMissionLiveTrackingGuard();
   const [tab, setTab] = useState<TopTab>("mine");
   const [expandedMissionId, setExpandedMissionId] = useState<number | null>(null);
   const [tabsWidth, setTabsWidth] = useState(0);
@@ -706,7 +710,18 @@ export default function DriverTripsScreen() {
   function onStartMission(mission: DriverMission) {
     const target = nextTransitionTarget(String(mission.status ?? ""));
     if (!target) return;
-    statusTransition.mutate({ missionId: mission.id, targetStatus: target });
+    const proceed = () => {
+      statusTransition.mutate({ missionId: mission.id, targetStatus: target });
+    };
+    if (requiresLiveTrackingPermission(target)) {
+      liveTrackingGuard.guardTransition({
+        missionId: mission.id,
+        target,
+        onProceed: proceed,
+      });
+      return;
+    }
+    proceed();
   }
 
   return (
@@ -862,6 +877,14 @@ export default function DriverTripsScreen() {
             )}
           </View>
         </Screen>
+        <MissionLiveTrackingDisclosureModal
+          visible={liveTrackingGuard.disclosureVisible}
+          pending={liveTrackingGuard.disclosurePending}
+          showOpenSettings={liveTrackingGuard.showOpenSettings}
+          onCancel={liveTrackingGuard.onDisclosureCancel}
+          onContinue={liveTrackingGuard.onDisclosureContinue}
+          onOpenSettings={liveTrackingGuard.onDisclosureOpenSettings}
+        />
       </PermissionGuard>
     </DriverContextGuard>
   );

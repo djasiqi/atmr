@@ -47,6 +47,16 @@ export const featureFlags = {
     enabled: envEnabled("EXPO_PUBLIC_ENABLE_BG_LOCATION"),
     description: "Allow background location capabilities/tracking flow.",
   } satisfies FeatureFlagDefinition,
+  driver_mission_live_tracking_guard_enabled: {
+    key: "driver_mission_live_tracking_guard_enabled",
+    source: "env",
+    enabled:
+      process.env.EXPO_PUBLIC_ENABLE_DRIVER_MISSION_LIVE_TRACKING_GUARD === undefined
+        ? true
+        : envEnabled("EXPO_PUBLIC_ENABLE_DRIVER_MISSION_LIVE_TRACKING_GUARD"),
+    description:
+      "Gate store-safe EN_ROUTE/IN_PROGRESS sur capability tracking mission (disclosure + permissions).",
+  } satisfies FeatureFlagDefinition,
   tracking_persistent_runtime_enabled: {
     key: "tracking_persistent_runtime_enabled",
     source: "env",

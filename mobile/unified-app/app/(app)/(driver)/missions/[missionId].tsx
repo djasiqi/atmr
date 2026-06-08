@@ -10,7 +10,7 @@ import {
   useDynamicEtaQuery,
 } from "../../../../src/features/driver/hooks";
 import { getDriverStatusUx } from "../../../../src/features/driver/statusDictionary";
-import { DriverMissionStatus } from "../../../../src/features/driver/types";
+import { DriverMissionStatus, type DriverTransitionStatus } from "../../../../src/features/driver/types";
 import {
   AppCard,
   AppSpinner,
@@ -28,7 +28,9 @@ import { DriverStateBanners } from "../../../../src/features/driver/components/D
 import { useMissionLayout } from "../../../../src/features/driver/hooks/useMissionLayout";
 import { DRIVER_FLOATING_TAB_SCROLL_PADDING } from "../../../../src/features/driver/navigation/DriverFloatingTabBar";
 import { FONT_SIZE } from "../../../../src/design/responsive/typographyTokens";
-
+import { MissionLiveTrackingDisclosureModal } from "../../../../src/features/driver/components/MissionLiveTrackingDisclosureModal";
+import { useMissionLiveTrackingGuard } from "../../../../src/features/driver/hooks/useMissionLiveTrackingGuard";
+import { requiresLiveTrackingPermission } from "../../../../src/features/driver/services/missionLiveTrackingEligibility";
 export default function DriverMissionDetailScreen() {
   const router = useRouter();
   const { width } = useAppViewport();
@@ -43,7 +45,32 @@ export default function DriverMissionDetailScreen() {
     missionStatus: mission?.status ?? null,
   });
   const transition = useDriverStatusTransition();
+  const liveTrackingGuard = useMissionLiveTrackingGuard();
   const mission = missionQuery.data;
+
+  const handleMissionTransition = (nextStatus: DriverTransitionStatus) => {
+    if (!mission?.id) return;
+    if (nextStatus === "COMPLETED") {
+      setConfirmCompletionOpen(true);
+      return;
+    }
+    if (nextStatus === "CANCELLED") {
+      setCancelOpen(true);
+      return;
+    }
+    const proceed = () => {
+      transition.mutate({ missionId: mission.id, targetStatus: nextStatus });
+    };
+    if (requiresLiveTrackingPermission(nextStatus)) {
+      liveTrackingGuard.guardTransition({
+        missionId: mission.id,
+        target: nextStatus,
+        onProceed: proceed,
+      });
+      return;
+    }
+    proceed();
+  };
   // NB: le tracking GPS est piloté au niveau du `_layout.tsx` driver
   // via `DriverTrackingHost` pour qu'il reste actif quel que soit
   // l'écran ouvert. Pas besoin de le re-déclencher ici.
@@ -135,18 +162,7 @@ export default function DriverMissionDetailScreen() {
               mode="mission"
               missionStatus={mission.status as DriverMissionStatus}
               pending={transition.isPending}
-              onTransition={(nextStatus) => {
-                if (!mission?.id) return;
-                if (nextStatus === "COMPLETED") {
-                  setConfirmCompletionOpen(true);
-                  return;
-                }
-                if (nextStatus === "CANCELLED") {
-                  setCancelOpen(true);
-                  return;
-                }
-                transition.mutate({ missionId: mission.id, targetStatus: nextStatus });
-              }}
+              onTransition={handleMissionTransition}
             />
           ) : null}
 
@@ -176,6 +192,14 @@ export default function DriverMissionDetailScreen() {
             transition.mutate({ missionId: mission.id, targetStatus: "CANCELLED", reason });
             setCancelOpen(false);
           }}
+        />
+        <MissionLiveTrackingDisclosureModal
+          visible={liveTrackingGuard.disclosureVisible}
+          pending={liveTrackingGuard.disclosurePending}
+          showOpenSettings={liveTrackingGuard.showOpenSettings}
+          onCancel={liveTrackingGuard.onDisclosureCancel}
+          onContinue={liveTrackingGuard.onDisclosureContinue}
+          onOpenSettings={liveTrackingGuard.onDisclosureOpenSettings}
         />
       </PermissionGuard>
     </DriverContextGuard>

@@ -5,8 +5,14 @@
 import { AppState, Platform } from "react-native";
 
 import { emitDriverTelemetry } from "../../../core/observability/driverTelemetry";
+import { getTrackingSnapshot } from "../tracking";
+import { isTrackingActiveStatus } from "../domain/status";
 import { triggerDeviceHealthNow } from "./deviceHealthHeartbeat";
-import { checkBatteryOptimizationStatus } from "./batteryOptimization";
+import { evaluateMissionTrackingCapability } from "./missionLiveTrackingEligibility";
+import {
+  readTrackingOnboarded,
+  setTrackingNeedsAttention,
+} from "./trackingReadinessPersistence";
 
 const MONITOR_INTERVAL_MS = 60_000;
 
@@ -23,48 +29,57 @@ async function runMonitorChecks(): Promise<MonitorCheckResult> {
     return { ok: true, constraintReason: null };
   }
 
-  const Location = await import("expo-location").catch(() => null);
-  if (!Location) {
-    return { ok: false, constraintReason: "location_module_unavailable" };
+  const capability = await evaluateMissionTrackingCapability({ forLiveTransition: false });
+  return {
+    ok: capability.capable,
+    constraintReason: capability.constraintReason,
+  };
+}
+
+async function emitProductTelemetryOnConstraintChange(
+  previous: string | null,
+  next: string | null
+): Promise<void> {
+  if (previous === next || next === null) return;
+
+  const tracking = getTrackingSnapshot();
+  const missionId = tracking.missionId;
+  const missionLive =
+    missionId != null &&
+    tracking.missionStatus != null &&
+    isTrackingActiveStatus(tracking.missionStatus);
+  if (!missionLive) return;
+
+  const wasOnboarded = await readTrackingOnboarded().catch(() => false);
+
+  if (
+    next === "permission_bg_denied" ||
+    next === "permission_fg_denied"
+  ) {
+    emitDriverTelemetry("tracking.permission_revoked_during_mission", {
+      source: "driver.background_tracking_health_monitor",
+      mission_id: missionId,
+      was_onboarded: wasOnboarded,
+      constraint_reason: next,
+    });
   }
 
-  const [fg, bg, gpsEnabled, battery] = await Promise.all([
-    Location.getForegroundPermissionsAsync().catch(() => ({ status: "undetermined" })),
-    Location.getBackgroundPermissionsAsync().catch(() => ({ status: "undetermined" })),
-    Location.hasServicesEnabledAsync().catch(() => false),
-    checkBatteryOptimizationStatus(),
-  ]);
-
-  if (fg.status !== "granted") {
-    return { ok: false, constraintReason: "permission_fg_denied" };
+  if (next === "fgs_not_running") {
+    emitDriverTelemetry("tracking.fgs_stopped_during_mission", {
+      source: "driver.background_tracking_health_monitor",
+      mission_id: missionId,
+      constraint_reason: next,
+    });
   }
-  if (bg.status !== "granted") {
-    return { ok: false, constraintReason: "permission_bg_denied" };
-  }
-  if (!gpsEnabled) {
-    return { ok: false, constraintReason: "gps_provider_disabled" };
-  }
-  if (Platform.OS === "android" && battery.checked && battery.isIgnoring === false) {
-    return { ok: false, constraintReason: "battery_optimized" };
-  }
-
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const bgTask = require("./backgroundLocationTask") as typeof import("./backgroundLocationTask");
-    const lifecycle = await bgTask.getNativeTaskLifecycleStatus();
-    if (!lifecycle.taskStarted) {
-      return { ok: false, constraintReason: "fgs_not_running" };
-    }
-  } catch {
-    return { ok: false, constraintReason: "tracking_runtime_unavailable" };
-  }
-
-  return { ok: true, constraintReason: null };
 }
 
 async function tickMonitor(): Promise<void> {
   const result = await runMonitorChecks();
   if (result.constraintReason !== lastConstraintReason) {
+    await emitProductTelemetryOnConstraintChange(
+      lastConstraintReason,
+      result.constraintReason
+    );
     lastConstraintReason = result.constraintReason;
     emitDriverTelemetry("tracking.health_monitor.constraint_changed", {
       source: "driver.background_tracking_health_monitor",
@@ -72,6 +87,13 @@ async function tickMonitor(): Promise<void> {
       ok: result.ok,
     });
   }
+
+  if (!result.ok) {
+    void setTrackingNeedsAttention(true).catch(() => undefined);
+  } else {
+    void setTrackingNeedsAttention(false).catch(() => undefined);
+  }
+
   await triggerDeviceHealthNow(
     result.ok ? "health_monitor_ok" : `health_monitor:${result.constraintReason}`
   );

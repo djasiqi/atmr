@@ -22,6 +22,7 @@ import { MissionProgressStepper } from "./MissionProgressStepper";
 import { RouteVerticalDashedLine } from "./RouteVerticalDashedLine";
 import { useMissionRouteMetrics } from "../hooks/useMissionRouteMetrics";
 import { useDynamicEtaQuery } from "../hooks";
+import { useMissionLocationStale } from "../hooks/useMissionLocationStale";
 import { useSession } from "../../../core/sessionProvider";
 import {
   getCallablePhoneFromMission,
@@ -176,6 +177,7 @@ export function DashboardActiveMission({
   const { can } = useSession();
   const statusUx = getDriverStatusUx(mission.status);
   const statusKey = resolveDriverStatusForUx(mission.status);
+  const locationStale = useMissionLocationStale(mission.id, statusKey);
   const etaQuery = useDynamicEtaQuery(mission.id, { missionStatus: statusKey });
   const routeMetrics = useMissionRouteMetrics(mission, {
     etaMinutes: etaQuery.data?.eta_minutes,
@@ -233,10 +235,19 @@ export function DashboardActiveMission({
               MISSION ACTIVE
             </AppText>
           </View>
-          <View style={styles.statusBadge}>
-            <AppText variant="caption" style={styles.statusBadgeText} numberOfLines={1}>
-              {badgeLabel}
-            </AppText>
+          <View style={styles.headerBadges}>
+            {locationStale ? (
+              <View style={styles.staleBadge}>
+                <AppText variant="caption" style={styles.staleBadgeText} numberOfLines={1}>
+                  NON LOCALISÉ
+                </AppText>
+              </View>
+            ) : null}
+            <View style={styles.statusBadge}>
+              <AppText variant="caption" style={styles.statusBadgeText} numberOfLines={1}>
+                {badgeLabel}
+              </AppText>
+            </View>
           </View>
         </View>
 
@@ -494,6 +505,26 @@ const styles = StyleSheet.create({
     letterSpacing: 0.55,
     fontSize: FONT_SIZE.px11,
     lineHeight: 14,
+  },
+  headerBadges: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    flexShrink: 1,
+  },
+  staleBadge: {
+    backgroundColor: "rgba(220, 38, 38, 0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(220, 38, 38, 0.35)",
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+  },
+  staleBadgeText: {
+    color: "#B91C1C",
+    fontWeight: "800",
+    fontSize: FONT_SIZE.px10,
+    letterSpacing: 0.35,
   },
   statusBadge: {
     backgroundColor: D.assignedBadgeBg,
