@@ -30,7 +30,7 @@ import {
   type DashboardRuntimeMetrics,
 } from "./dispatchDashboardPresentation";
 import { buildCompanyDashboardUiModel } from "./companyDashboardViewModel";
-import { IN_FLIGHT_MISSION_STATUSES, toEpoch } from "./companyDashboardMissionUi";
+import { IN_FLIGHT_MISSION_STATUSES, missionHasDefinedPickupTime, toEpoch } from "./companyDashboardMissionUi";
 import type { DispatchModeValue } from "../components/DispatchModeSheet";
 
 const HEALTHY_FRESHNESS_WINDOW_MS = 30_000;
@@ -304,7 +304,9 @@ export function useCompanyDashboardScreenModel() {
     let c = 0;
     for (const m of missions) {
       if (m.status === "completed" || m.status === "cancelled") continue;
-      if (!m.scheduled_at) continue;
+      // Exclure les courses « À définir » (sentinelle T00:00:00) : sans horaire
+      // de prise en charge fixé, elles ne peuvent pas être en retard.
+      if (!missionHasDefinedPickupTime(m.scheduled_at)) continue;
       if (toEpoch(m.scheduled_at) < now) c += 1;
     }
     return c;
@@ -321,7 +323,7 @@ export function useCompanyDashboardScreenModel() {
     const hasPending = missions.some(
       (m) =>
         (m.status === "pending" || m.status === "proposed" || m.status === "accepted") &&
-        Boolean(m.scheduled_at) &&
+        missionHasDefinedPickupTime(m.scheduled_at) &&
         toEpoch(m.scheduled_at) < now
     );
     let enMission = 0;

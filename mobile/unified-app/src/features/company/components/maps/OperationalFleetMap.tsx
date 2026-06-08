@@ -351,6 +351,7 @@ function FleetMapSurface({
         visible={isCockpit || fleet.driverSheetOpen || Boolean(fleet.peekDriver)}
 
         driver={fleet.selectedDriver}
+        selectedMission={fleet.selectedMission}
 
         peekDriver={isCockpit && !fleet.selectedDriver ? fleet.peekDriver : null}
         upcomingMissions={isCockpit ? missions : undefined}

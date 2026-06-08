@@ -304,6 +304,11 @@ export function useOperationalFleetMap({
     [missionOverlays, selectedMissionId]
   );
 
+  const selectedMission = useMemo(
+    () => (selectedMissionId != null ? missions.find((m) => m.mission_id === selectedMissionId) ?? null : null),
+    [missions, selectedMissionId]
+  );
+
   const visibleMissionOverlays = useMemo(() => {
     if (cockpitMapPolicy.globalVectorMode) return [];
     if (layers.mission?.missionRoutes === false) return [];
@@ -748,6 +753,7 @@ export function useOperationalFleetMap({
     peekDriver,
     selectedDriverId,
     selectedMissionId,
+    selectedMission,
     missionOverlays: visibleMissionOverlays,
     missionsById,
     stableEtaAnchors,

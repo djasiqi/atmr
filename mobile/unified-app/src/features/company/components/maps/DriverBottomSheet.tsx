@@ -34,6 +34,7 @@ type Props = {
   visible: boolean;
 
   driver: FleetDriverMapItem | null;
+  selectedMission?: CompanyDispatchMission | null;
 
   peekDriver?: FleetDriverMapItem | null;
   upcomingMissions?: CompanyDispatchMission[];
@@ -83,6 +84,7 @@ export function DriverBottomSheet({
   visible,
 
   driver,
+  selectedMission = null,
 
   peekDriver = null,
   upcomingMissions,
@@ -151,6 +153,7 @@ export function DriverBottomSheet({
           ) : selected ? (
             <CompactSelectedDriverPeek
               driver={selected}
+              selectedMission={selectedMission}
               onClose={onClose}
               onViewMission={onViewMission}
             />
@@ -375,10 +378,12 @@ function FleetDriverPeekTableColumnsHeader() {
 
 function FleetDriverPeekTableRow({
   driver,
+  missionOverride,
   onPress,
   showBorder,
 }: {
   driver: FleetDriverMapItem;
+  missionOverride?: CompanyDispatchMission | null;
   onPress?: () => void;
   showBorder?: boolean;
 }) {
@@ -387,7 +392,7 @@ function FleetDriverPeekTableRow({
   const mapsApiKey = useMemo(() => resolveGoogleMapsNativeApiKey(), []);
   const theme = FLEET_STATUS_THEME[enrichment.operationalStatus];
   const name = conciseRouteSegment(resolveDriverDisplayName(driver), 14);
-  const mission = enrichment.linkedMission;
+  const mission = missionOverride ?? enrichment.linkedMission;
   const pickup = mission ? formatPeekTableRouteLabel(mission.pickup_label) : "—";
   const dropoff = mission ? formatPeekTableRouteLabel(mission.dropoff_label) : "—";
   useEffect(() => {
@@ -522,15 +527,18 @@ function CompactClusterDriversPeek({
 /** Même carte / tableau que « Prochaines courses », colonnes Chauffeur · Trajet · Statut. */
 function CompactSelectedDriverPeek({
   driver,
+  selectedMission,
   onClose,
   onViewMission,
 }: {
   driver: FleetDriverMapItem;
+  selectedMission?: CompanyDispatchMission | null;
   onClose: () => void;
   onViewMission?: (missionId: number) => void;
 }) {
   const name = conciseRouteSegment(resolveDriverDisplayName(driver), 14);
-  const mission = driver.enrichment.linkedMission;
+  const mission =
+    selectedMission?.driver_id === driver.driver_id ? selectedMission : driver.enrichment.linkedMission;
   const missionId = mission?.mission_id ?? driver.mission_id;
 
   return (
@@ -552,6 +560,7 @@ function CompactSelectedDriverPeek({
       <FleetDriverPeekTableColumnsHeader />
       <FleetDriverPeekTableRow
         driver={driver}
+        missionOverride={mission}
         onPress={missionId != null && onViewMission ? () => onViewMission(missionId) : undefined}
       />
     </View>
