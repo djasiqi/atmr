@@ -111,6 +111,8 @@ from .billing_party import BillingParty, ClientBillingParty
 from .contact_request import ContactRequest
 from .curator_team import CuratorTeam, CuratorTeamMember
 from .institution import Institution
+from .institution_reserved_username import InstitutionReservedUsername
+from .institution_user_audit_event import InstitutionUserAuditEvent
 from .institution_api_key import (
     InstitutionApiKey,
     VALID_SCOPES as INSTITUTION_API_VALID_SCOPES,
@@ -261,7 +263,9 @@ __all__ = [
     "GenderEnum",
     "GeoUnit",
     "GeoUnitType",
-    "Institution",  # ✅ Portail institutionnel
+    "Institution",
+    "InstitutionReservedUsername",
+    "InstitutionUserAuditEvent",  # ✅ Portail institutionnel
     "InstitutionApiKey",  # ✅ API Keys DPI
     "InstitutionNotification",  # ✅ Notifications in-app
     "InstitutionPatient",  # ✅ Patients institution

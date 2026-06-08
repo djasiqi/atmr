@@ -35,6 +35,7 @@ import PatientFormModal from '../Patients/PatientFormModal';
 import { toast } from 'sonner';
 import InlineDatePicker from '../../../components/ui/InlineDatePicker';
 import InlineTimePicker from '../../../components/ui/InlineTimePicker';
+import ChipSelect from '../../../components/ui/ChipSelect';
 import styles from './InstitutionRequestForm.module.css';
 
 const BILLING_INTENTS = [
@@ -331,6 +332,11 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
         pickup_type: def.pickupType,
         dropoff_type: def.dropoffType,
       };
+      // Retour domicile : facturation par défaut au patient, A/R décoché
+      if (tripTypeValue === 'return_home') {
+        updates.billing_intent = 'patient';
+        updates.round_trip = false;
+      }
       // Auto-fill pickup for institution mode
       if (def.pickupType === 'institution' && institutionAddress) {
         updates.pickup_location = institutionAddress;
@@ -943,10 +949,14 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
           {/* Billing inline (left column, compact) */}
           <div className={styles.formGroup}>
             <label htmlFor="billing_intent" className={styles.formLabel}>Facturé à</label>
-            <select id="billing_intent" value={formData.billing_intent} onChange={(e) => handleChange('billing_intent', e.target.value)}
-              className={styles.inputFull} disabled={!canBilling}>
-              {BILLING_INTENTS.map(opt => (<option key={opt.value} value={opt.value}>{opt.label}</option>))}
-            </select>
+            <ChipSelect
+              id="billing_intent"
+              options={BILLING_INTENTS}
+              value={formData.billing_intent}
+              onChange={(val) => handleChange('billing_intent', val)}
+              placeholder="Facturé à"
+              disabled={!canBilling}
+            />
             {!canBilling && <span className={styles.billingHint}>Géré par l'institution</span>}
           </div>
 

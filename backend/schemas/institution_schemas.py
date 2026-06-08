@@ -910,9 +910,22 @@ class InstitutionUserInviteSchema(Schema):
     class Meta:
         unknown = EXCLUDE
 
+    creation_mode = fields.Str(
+        load_default="email",
+        validate=validate.OneOf(
+            ["email", "username"],
+            error="Mode de création invalide. Valeurs: email, username",
+        ),
+    )
     email = fields.Email(
-        required=True,
-        error_messages={"required": "L'email est requis", "invalid": "Email invalide"},
+        required=False,
+        allow_none=True,
+        error_messages={"invalid": "Email invalide"},
+    )
+    username = fields.Str(
+        required=False,
+        allow_none=True,
+        validate=validate.Length(min=3, max=50),
     )
     institution_role = fields.Str(
         required=True,
@@ -929,6 +942,29 @@ class InstitutionUserInviteSchema(Schema):
         validate=validate.Length(max=100),
         load_default=None,
     )
+    job_title = fields.Str(
+        validate=validate.Length(max=120),
+        load_default=None,
+        allow_none=True,
+        metadata={"description": "Fonction / metier (descriptif, sans permission)"},
+    )
+
+    @staticmethod
+    def validate_payload(data: dict) -> dict | None:
+        """Validation croisée creation_mode / email / username."""
+        mode = str(data.get("creation_mode") or "email").strip().lower()
+        email = data.get("email")
+        username = data.get("username")
+
+        if mode == "email":
+            if not email:
+                return {"email": ["L'email est requis en mode invitation par email"]}
+        elif mode == "username":
+            if not username or not str(username).strip():
+                return {
+                    "username": ["L'identifiant est requis en mode création par identifiant"]
+                }
+        return None
 
 
 class InstitutionUserUpdateRoleSchema(Schema):
@@ -943,6 +979,23 @@ class InstitutionUserUpdateRoleSchema(Schema):
             VALID_INSTITUTION_ROLES,
             error="Rôle invalide. Valeurs acceptées: {choices}",
         ),
+    )
+
+
+class InstitutionUserUpdateProfileSchema(Schema):
+    """Schema pour modifier les champs descriptifs d'un utilisateur (admin).
+
+    Champs purement organisationnels, sans impact sur les permissions.
+    """
+
+    class Meta:
+        unknown = EXCLUDE
+
+    job_title = fields.Str(
+        validate=validate.Length(max=120),
+        allow_none=True,
+        load_default=None,
+        metadata={"description": "Fonction / metier (descriptif, sans permission)"},
     )
 
 

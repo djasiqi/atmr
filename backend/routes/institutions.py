@@ -43,6 +43,7 @@ from schemas.institution_schemas import (
     InstitutionSettingsUpdateSchema,
     InstitutionUpdateSchema,
     InstitutionUserInviteSchema,
+    InstitutionUserUpdateProfileSchema,
     InstitutionUserUpdateRoleSchema,
     PermissionRequestCreateSchema,
 )
@@ -949,12 +950,9 @@ class DpiProbe(Resource):
 # ============================================================================
 
 
-def _serialize_institution_user(user: User) -> dict[str, object]:
+def _serialize_institution_user(user: User, institution=None) -> dict[str, object]:
     """Sérialise un utilisateur institution pour la réponse API."""
-    from datetime import UTC, datetime
-
     status = user.account_status or "active"
-    # Si invited et token expiré → marquer comme "expired"
     if (
         status == "invited"
         and user.invite_expires_at
@@ -970,24 +968,110 @@ def _serialize_institution_user(user: User) -> dict[str, object]:
         "first_name": user.first_name,
         "last_name": user.last_name,
         "institution_role": user.institution_role,
+        "job_title": getattr(user, "job_title", None),
         "account_status": status,
+        "authentication_method": getattr(user, "authentication_method", None) or "email",
+        "force_password_change": bool(getattr(user, "force_password_change", False)),
+        "first_login_completed_at": user.first_login_completed_at.isoformat()
+        if getattr(user, "first_login_completed_at", None)
+        else None,
         "invite_sent_at": user.invite_sent_at.isoformat()
         if user.invite_sent_at
         else None,
         "invite_expires_at": user.invite_expires_at.isoformat()
         if user.invite_expires_at
         else None,
+        "password_expires_at": user.password_expires_at.isoformat()
+        if getattr(user, "password_expires_at", None)
+        else None,
         "created_at": user.created_at.isoformat() if user.created_at else None,
     }
 
 
+def _record_institution_user_audit(
+    *,
+    institution_id: int,
+    target_user_id: int,
+    performed_by_user_id: int | None,
+    event_type: str,
+    metadata: dict | None = None,
+) -> None:
+    try:
+        from models.institution_user_audit_event import InstitutionUserAuditEvent
+
+        InstitutionUserAuditEvent.record(
+            institution_id=institution_id,
+            target_user_id=target_user_id,
+            performed_by_user_id=performed_by_user_id,
+            event_type=event_type,
+            ip_address=request.remote_addr,
+            user_agent=request.headers.get("User-Agent"),
+            metadata=metadata,
+        )
+        db.session.commit()
+    except Exception as audit_err:
+        db.session.rollback()
+        logger.warning("[Institution] Audit event failed: %s", audit_err)
+
+
+def _invite_response_payload(result, institution) -> dict[str, object]:
+    from application.institutions.invitation_service import build_invite_url
+
+    payload: dict[str, object] = {
+        "message": result.message,
+        "user": _serialize_institution_user(result.user, institution)
+        if result.user
+        else None,
+        "email_sent": result.email_result.success if result.email_result else False,
+        "email_type": result.email_type,
+        "email_error": result.email_result.error
+        if result.email_result and not result.email_result.success
+        else None,
+        "creation_mode": result.creation_mode,
+    }
+    if result.raw_token:
+        payload["invite_link"] = build_invite_url(result.raw_token)
+    if result.temporary_credentials:
+        payload["temporary_credentials"] = result.temporary_credentials
+        payload["credentials_shown_once"] = result.credentials_shown_once
+    if result.email_result is None and result.creation_mode == "username":
+        payload["email_sent"] = False
+    return payload
+
+
 def _count_admins(institution_id: int) -> int:
-    """Compte le nombre d'admins actifs dans l'institution (exclut disabled)."""
+    """Compte le nombre d'admins actifs dans l'institution (exclut disabled/archived)."""
     return User.query.filter(
         User.institution_id == institution_id,
         User.institution_role == InstitutionRole.ADMIN.value,
+        User.archived_at.is_(None),
         db.or_(User.account_status.is_(None), User.account_status != "disabled"),
     ).count()
+
+
+def _pending_activation_users(institution_id: int) -> list[User]:
+    """Utilisateurs en attente d'activation pour une institution."""
+    now = datetime.now(UTC)
+    return (
+        User.query.filter_by(institution_id=institution_id)
+        .filter(User.archived_at.is_(None))
+        .filter(
+            db.or_(
+                db.and_(
+                    User.authentication_method == "username",
+                    User.first_login_completed_at.is_(None),
+                ),
+                db.and_(
+                    User.force_password_change.is_(True),
+                    User.password_expires_at.isnot(None),
+                    User.password_expires_at < now,
+                ),
+                User.account_status == "invited",
+            )
+        )
+        .order_by(User.created_at.asc())
+        .all()
+    )
 
 
 @institutions_ns.route("/users")
@@ -1009,12 +1093,13 @@ class InstitutionUsers(Resource):
 
             users = (
                 User.query.filter_by(institution_id=institution.id)
+                .filter(User.archived_at.is_(None))
                 .order_by(User.created_at.asc())
                 .all()
             )
 
             return {
-                "users": [_serialize_institution_user(u) for u in users],
+                "users": [_serialize_institution_user(u, institution) for u in users],
                 "total": len(users),
             }, 200
 
@@ -1031,21 +1116,8 @@ class InstitutionUsers(Resource):
     @jwt_required()
     @role_required(UserRole.INSTITUTION)
     def post(self):
-        """Invite un utilisateur dans l'institution par email (admin only).
-
-        - Si l'email existe déjà dans cette institution → 409
-        - Si l'email existe dans une autre institution → 409
-        - Si l'email existe mais libre → rattache + envoie invitation
-        - Si l'email n'existe pas → crée le user (status=invited) + envoie invitation
-        """
-        from datetime import UTC, datetime
-
-        from application.institutions.invitation_service import (
-            build_invite_url,
-            generate_invite_token,
-            get_invite_expiry,
-            send_invitation_email,
-        )
+        """Invite ou ajoute un utilisateur à l'institution (admin only)."""
+        from application.institutions.invitation_service import invite_or_attach_institution_user
 
         try:
             institution, admin_user = AuthorizationService.require_institution_role(
@@ -1058,145 +1130,71 @@ class InstitutionUsers(Resource):
             if errors:
                 return {"error": "Données invalides", "details": errors}, 400
 
+            cross_errors = InstitutionUserInviteSchema.validate_payload(data)
+            if cross_errors:
+                return {"error": "Données invalides", "details": cross_errors}, 400
+
             validated = schema.load(data) or {}
-            email = str(validated.get("email", "")).strip().lower()
+            creation_mode = str(validated.get("creation_mode") or "email").strip().lower()
+            email_raw = validated.get("email")
+            email = str(email_raw).strip().lower() if email_raw else None
             role_value = str(validated.get("institution_role", ""))
             first_name = validated.get("first_name")
             last_name = validated.get("last_name")
+            local_username = validated.get("username")
+            if local_username:
+                local_username = str(local_username).strip().lower()
+            job_title = validated.get("job_title")
 
-            # Vérifier si l'utilisateur existe déjà
-            existing_user = User.query.filter_by(email=email).first()
+            result = invite_or_attach_institution_user(
+                institution=institution,
+                admin_user=admin_user,
+                email=email,
+                role_value=role_value,
+                first_name=str(first_name) if first_name else None,
+                last_name=str(last_name) if last_name else None,
+                creation_mode=creation_mode,
+                local_username=local_username,
+                job_title=str(job_title) if job_title else None,
+            )
 
-            if existing_user:
-                # Vérifier s'il est déjà dans cette institution
-                if existing_user.institution_id == institution.id:
-                    error_msg = (
-                        "Cet utilisateur est désactivé. Utilisez 'Renvoyer invitation' pour le réactiver."
-                        if existing_user.account_status == "disabled"
-                        else "Cet utilisateur fait déjà partie de l'institution"
-                    )
-                    return {"error": error_msg}, 409
+            if result.error and result.http_status >= 400:
+                return {"error": result.error}, result.http_status
 
-                # Vérifier s'il est dans une autre institution
-                if existing_user.institution_id is not None:
-                    return {
-                        "error": "Cet utilisateur appartient déjà à une autre institution"
-                    }, 409
-
-                # User existant sans institution → rattacher + invitation
-                existing_user.institution_id = institution.id
-                existing_user.institution_role = role_value
-                existing_user.role = UserRole.INSTITUTION
-                existing_user.account_status = "active"  # Déjà un compte
-                if first_name:
-                    existing_user.first_name = first_name
-                if last_name:
-                    existing_user.last_name = last_name
-
-                db.session.commit()
-
-                # Audit log
+            if result.user and result.audit_details:
+                event_type = (
+                    "user_created"
+                    if result.path in ("new_user", "new_username")
+                    else "institution_user_added"
+                )
                 try:
                     AuditLogger.log_institution_action(
-                        action_type="institution_user_added",
+                        action_type=f"institution_{result.path}",
                         institution_id=institution.id,
                         user_id=admin_user.id,
                         result_status="success",
-                        action_details={
-                            "target_user_id": existing_user.id,
-                            "target_email": email,
-                            "institution_role": role_value,
-                            "method": "existing_user",
-                        },
+                        action_details=result.audit_details,
                         ip_address=request.remote_addr,
                         user_agent=request.headers.get("User-Agent"),
                     )
                 except Exception as audit_err:
                     logger.warning("[Institution] Audit log failed: %s", audit_err)
 
-                return {
-                    "message": "Utilisateur existant ajouté à l'institution",
-                    "user": _serialize_institution_user(existing_user),
-                }, 200
+                if result.path in ("new_user", "new_username", "existing_user"):
+                    audit_event = (
+                        "user_created"
+                        if result.path in ("new_user", "new_username")
+                        else "institution_user_added"
+                    )
+                    _record_institution_user_audit(
+                        institution_id=institution.id,
+                        target_user_id=result.user.id,
+                        performed_by_user_id=admin_user.id,
+                        event_type=audit_event,
+                        metadata=result.audit_details,
+                    )
 
-            # Créer un nouveau utilisateur avec invitation par email
-            raw_token, token_hash = generate_invite_token()
-            placeholder_password = secrets.token_urlsafe(32)
-
-            new_user = User()
-            new_user.public_id = str(uuid.uuid4())
-            new_user.username = email
-            new_user.email = email
-            new_user.first_name = first_name or ""
-            new_user.last_name = last_name or ""
-            new_user.role = UserRole.INSTITUTION
-            new_user.institution_id = institution.id
-            new_user.institution_role = role_value
-            new_user.account_status = "invited"
-            new_user.invite_token_hash = token_hash
-            new_user.invite_expires_at = get_invite_expiry()
-            new_user.invite_sent_at = datetime.now(UTC)
-            new_user.force_password_change = True
-            new_user.set_password(  # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
-                placeholder_password
-            )
-
-            db.session.add(new_user)
-            db.session.commit()
-
-            # Envoyer l'email d'invitation (ne bloque pas si échec)
-            admin_name = str(
-                admin_user.full_name or admin_user.email or "L'administrateur"
-            )
-            invite_result = send_invitation_email(
-                to_email=email,
-                first_name=str(first_name) if first_name else None,
-                institution_name=str(institution.name or "Institution"),
-                inviter_name=admin_name,
-                role=role_value,
-                raw_token=raw_token,
-            )
-
-            if not invite_result.success:
-                logger.warning(
-                    "[Institution] Invitation créée mais email non envoyé: %s",
-                    invite_result.error,
-                )
-
-            # Construire le lien d'invitation (fallback si email échoue)
-            invite_link = build_invite_url(raw_token)
-
-            # Audit log
-            try:
-                AuditLogger.log_institution_action(
-                    action_type="institution_user_invited",
-                    institution_id=institution.id,
-                    user_id=admin_user.id,
-                    result_status="success",
-                    action_details={
-                        "target_user_id": new_user.id,
-                        "target_email": email,
-                        "institution_role": role_value,
-                        "method": "email_invitation",
-                        "email_sent": invite_result.success,
-                    },
-                    ip_address=request.remote_addr,
-                    user_agent=request.headers.get("User-Agent"),
-                )
-            except Exception as audit_err:
-                logger.warning("[Institution] Audit log failed: %s", audit_err)
-
-            return {
-                "message": "Invitation envoyée par email"
-                if invite_result.success
-                else "Utilisateur créé mais l'email n'a pas pu être envoyé",
-                "user": _serialize_institution_user(new_user),
-                "email_sent": invite_result.success,
-                "email_error": invite_result.error
-                if not invite_result.success
-                else None,
-                "invite_link": invite_link,
-            }, 201
+            return _invite_response_payload(result, institution), result.http_status
 
         except Exception as e:
             db.session.rollback()
@@ -1291,6 +1289,93 @@ class InstitutionUserRemove(Resource):
     """Retirer un utilisateur de l'institution."""
 
     @institutions_ns.doc(
+        description="Met à jour les champs descriptifs (fonction/métier) d'un utilisateur.",
+        security="Bearer",
+    )
+    @jwt_required()
+    @role_required(UserRole.INSTITUTION)
+    def patch(self, user_id):
+        """Met à jour la fonction/métier d'un utilisateur (admin only).
+
+        Donnée purement descriptive, sans impact sur les permissions.
+        Autorisé même pour les comptes désactivés/archivés (donnée historique).
+        Audit `job_title_updated` uniquement en cas de changement réel.
+        """
+        from application.institutions.invitation_service import _normalize_job_title
+
+        try:
+            institution, admin_user = AuthorizationService.require_institution_role(
+                InstitutionRole.ADMIN.value
+            )
+
+            data = request.get_json() or {}
+            schema = InstitutionUserUpdateProfileSchema()
+            errors = schema.validate(data)
+            if errors:
+                return {"error": "Données invalides", "details": errors}, 400
+
+            validated = schema.load(data) or {}
+
+            # On charge sans exclure disabled/archived : la fonction est une
+            # donnée descriptive/historique, corrigeable à tout moment.
+            target_user = User.query.filter_by(
+                id=user_id,
+                institution_id=institution.id,
+            ).first()
+
+            if not target_user:
+                return {"error": "Utilisateur non trouvé dans cette institution"}, 404
+
+            old_value = getattr(target_user, "job_title", None)
+            new_value = _normalize_job_title(validated.get("job_title"))
+
+            if old_value == new_value:
+                return {
+                    "message": "Fonction inchangée",
+                    "user": _serialize_institution_user(target_user, institution),
+                }, 200
+
+            target_user.job_title = new_value
+            db.session.commit()
+
+            _record_institution_user_audit(
+                institution_id=institution.id,
+                target_user_id=target_user.id,
+                performed_by_user_id=admin_user.id,
+                event_type="job_title_updated",
+                metadata={"old_value": old_value, "new_value": new_value},
+            )
+
+            try:
+                AuditLogger.log_institution_action(
+                    action_type="institution_user_job_title_updated",
+                    institution_id=institution.id,
+                    user_id=admin_user.id,
+                    result_status="success",
+                    action_details={
+                        "target_user_id": target_user.id,
+                        "target_email": target_user.email,
+                        "old_value": old_value,
+                        "new_value": new_value,
+                    },
+                    ip_address=request.remote_addr,
+                    user_agent=request.headers.get("User-Agent"),
+                )
+            except Exception as audit_err:
+                logger.warning("[Institution] Audit log failed: %s", audit_err)
+
+            return {
+                "message": "Fonction mise à jour",
+                "user": _serialize_institution_user(target_user, institution),
+            }, 200
+
+        except Exception as e:
+            db.session.rollback()
+            sentry_sdk.capture_exception(e)
+            logger.error("[Institution] Erreur PATCH /users/%s: %s", user_id, e)
+            return APIErrorHandler.handle_exception(e, logger)
+
+    @institutions_ns.doc(
         description="Retire un utilisateur de l'institution.",
         security="Bearer",
     )
@@ -1327,16 +1412,27 @@ class InstitutionUserRemove(Resource):
 
             old_role = target_user.institution_role
             old_email = target_user.email
+            now = datetime.now(UTC)
 
-            # Retirer de l'institution (soft: on ne supprime pas le user)
-            target_user.institution_id = None
-            target_user.institution_role = None
+            target_user.archived_at = now
+            target_user.account_status = "disabled"
+            target_user.disabled_at = now
+            target_user.invite_token_hash = None
+
             db.session.commit()
+
+            _record_institution_user_audit(
+                institution_id=institution.id,
+                target_user_id=target_user.id,
+                performed_by_user_id=admin_user.id,
+                event_type="user_archived",
+                metadata={"old_role": old_role, "old_email": old_email},
+            )
 
             # Audit log
             try:
                 AuditLogger.log_institution_action(
-                    action_type="institution_user_removed",
+                    action_type="institution_user_archived",
                     institution_id=institution.id,
                     user_id=admin_user.id,
                     result_status="success",
@@ -1351,11 +1447,155 @@ class InstitutionUserRemove(Resource):
             except Exception as audit_err:
                 logger.warning("[Institution] Audit log failed: %s", audit_err)
 
-            return {"message": "Utilisateur retiré de l'institution"}, 200
+            return {"message": "Utilisateur archivé"}, 200
 
         except Exception as e:
             sentry_sdk.capture_exception(e)
             logger.error("[Institution] Erreur DELETE /users/%s: %s", user_id, e)
+            return APIErrorHandler.handle_exception(e, logger)
+
+
+@institutions_ns.route("/users/import")
+class InstitutionUsersImport(Resource):
+    """Import CSV collaborateurs (roadmap post-Sprint 3)."""
+
+    @institutions_ns.doc(
+        description="Import CSV collaborateurs — non implémenté (roadmap).",
+        security="Bearer",
+    )
+    @jwt_required()
+    @role_required(UserRole.INSTITUTION)
+    def post(self):
+        return {
+            "error": "Import CSV non disponible — fonctionnalité roadmap post-Sprint 3",
+            "status": "not_implemented",
+        }, 501
+
+
+@institutions_ns.route("/users/pending-activation")
+class InstitutionUsersPendingActivation(Resource):
+    """Collaborateurs en attente d'activation."""
+
+    @institutions_ns.doc(
+        description="Liste les utilisateurs en attente d'activation.",
+        security="Bearer",
+    )
+    @jwt_required()
+    @role_required(UserRole.INSTITUTION)
+    def get(self):
+        try:
+            institution, _user = AuthorizationService.require_institution_role(
+                InstitutionRole.ADMIN.value
+            )
+            now = datetime.now(UTC)
+            users = _pending_activation_users(institution.id)
+            items = []
+            for u in users:
+                reason = "invited"
+                if getattr(u, "authentication_method", "email") == "username" and not u.first_login_completed_at:
+                    reason = "never_connected"
+                elif u.force_password_change and u.password_expires_at and u.password_expires_at < now:
+                    reason = "password_expired"
+                elif u.account_status == "invited":
+                    if u.invite_expires_at and u.invite_expires_at < now:
+                        reason = "invitation_expired"
+                    else:
+                        reason = "invitation_pending"
+                serialized = _serialize_institution_user(u, institution)
+                serialized["pending_reason"] = reason
+                items.append(serialized)
+            return {"users": items, "total": len(items)}, 200
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            return APIErrorHandler.handle_exception(e, logger)
+
+
+@institutions_ns.route("/users/<int:user_id>/reset-password")
+class InstitutionUserResetPassword(Resource):
+    """Réinitialiser le mot de passe temporaire (Mode B)."""
+
+    @institutions_ns.doc(
+        description="Génère un nouveau mot de passe temporaire (admin only).",
+        security="Bearer",
+    )
+    @limiter.limit("5 per hour")
+    @jwt_required()
+    @role_required(UserRole.INSTITUTION)
+    def post(self, user_id):
+        from datetime import timedelta
+
+        from application.institutions.invitation_service import (
+            TEMP_PASSWORD_EXPIRY_DAYS,
+            _generate_strong_password,
+        )
+        from models.institution_user_audit_event import InstitutionUserAuditEvent
+
+        try:
+            institution, admin_user = AuthorizationService.require_institution_role(
+                InstitutionRole.ADMIN.value
+            )
+
+            target_user = User.query.filter_by(
+                id=user_id,
+                institution_id=institution.id,
+            ).filter(User.archived_at.is_(None)).first()
+
+            if not target_user:
+                return {"error": "Utilisateur non trouvé dans cette institution"}, 404
+
+            if getattr(target_user, "authentication_method", "email") != "username":
+                return {
+                    "error": "Seuls les comptes créés par identifiant peuvent être réinitialisés ici"
+                }, 400
+
+            recent_resets = (
+                InstitutionUserAuditEvent.query.filter_by(
+                    target_user_id=target_user.id,
+                    event_type="password_reset",
+                )
+                .filter(
+                    InstitutionUserAuditEvent.performed_at
+                    > datetime.now(UTC) - timedelta(hours=2)
+                )
+                .count()
+            )
+            if recent_resets >= 10:
+                return {"error": "Trop de réinitialisations récentes pour cet utilisateur"}, 429
+
+            temp_password = _generate_strong_password()
+            now = datetime.now(UTC)
+            target_user.force_password_change = True
+            target_user.password_expires_at = now + timedelta(days=TEMP_PASSWORD_EXPIRY_DAYS)
+            target_user.temporary_password_created_at = now
+            target_user.last_password_reset_at = now
+            target_user.temp_password_generation_count = (
+                int(getattr(target_user, "temp_password_generation_count", 0) or 0) + 1
+            )
+            target_user.set_password(temp_password, force_change=True)
+            db.session.commit()
+
+            _record_institution_user_audit(
+                institution_id=institution.id,
+                target_user_id=target_user.id,
+                performed_by_user_id=admin_user.id,
+                event_type="password_reset",
+            )
+
+            return {
+                "message": "Mot de passe temporaire régénéré",
+                "user": _serialize_institution_user(target_user, institution),
+                "temporary_credentials": {
+                    "username": target_user.username,
+                    "temporary_password": temp_password,
+                },
+                "credentials_shown_once": True,
+                "email_sent": False,
+                "email_type": None,
+            }, 200
+
+        except Exception as e:
+            db.session.rollback()
+            sentry_sdk.capture_exception(e)
             return APIErrorHandler.handle_exception(e, logger)
 
 
@@ -1394,41 +1634,81 @@ class InstitutionUserResendInvite(Resource):
             if not target_user:
                 return {"error": "Utilisateur non trouvé dans cette institution"}, 404
 
-            # Seuls les utilisateurs "invited" ou "disabled" peuvent recevoir un resend
-            if target_user.account_status not in ("invited", "disabled", None):
+            if getattr(target_user, "authentication_method", "email") == "username":
                 return {
-                    "error": "Seuls les utilisateurs invités ou désactivés peuvent recevoir une nouvelle invitation"
+                    "error": "Utilisez 'Réinitialiser le mot de passe' pour les comptes identifiant"
                 }, 400
 
-            # Générer un nouveau token
-            raw_token, token_hash = generate_invite_token()
-
-            target_user.invite_token_hash = token_hash
-            target_user.invite_expires_at = get_invite_expiry()
-            target_user.invite_sent_at = datetime.now(UTC)
-            # Réactiver si disabled
-            if target_user.account_status == "disabled":
-                target_user.account_status = "invited"
-
-            db.session.commit()
-
-            # Envoyer l'email
             admin_name = str(
                 admin_user.full_name or admin_user.email or "L'administrateur"
             )
-            invite_result = send_invitation_email(
-                to_email=str(target_user.email or ""),
-                first_name=str(target_user.first_name)
-                if target_user.first_name
-                else None,
-                institution_name=str(institution.name or "Institution"),
-                inviter_name=admin_name,
-                role=str(target_user.institution_role or ""),
-                raw_token=raw_token,
-            )
+            email_type = "invitation"
+            raw_token = None
+            invite_result = None
 
-            # Construire le lien d'invitation (fallback)
-            invite_link = build_invite_url(raw_token)
+            # Compte actif sans historique d'invitation → notification d'accès
+            if (
+                target_user.account_status in ("active", None)
+                and not target_user.invite_sent_at
+                and target_user.email
+            ):
+                from application.institutions.invitation_service import (
+                    send_institution_access_email,
+                )
+
+                invite_result = send_institution_access_email(
+                    to_email=str(target_user.email),
+                    first_name=str(target_user.first_name)
+                    if target_user.first_name
+                    else None,
+                    institution_name=str(institution.name or "Institution"),
+                    inviter_name=admin_name,
+                    role=str(target_user.institution_role or ""),
+                )
+                email_type = "access_notification"
+            else:
+                if target_user.account_status not in ("invited", "disabled", None):
+                    if not (
+                        target_user.account_status in ("active", None)
+                        and target_user.invite_sent_at
+                    ):
+                        return {
+                            "error": "Seuls les utilisateurs invités, désactivés ou actifs sans notification peuvent recevoir un renvoi"
+                        }, 400
+
+                raw_token, token_hash = generate_invite_token()
+                target_user.invite_token_hash = token_hash
+                target_user.invite_expires_at = get_invite_expiry()
+                target_user.invite_sent_at = datetime.now(UTC)
+                if target_user.account_status == "disabled":
+                    target_user.account_status = "invited"
+                    target_user.disabled_at = None
+
+                db.session.commit()
+
+                invite_result = send_invitation_email(
+                    to_email=str(target_user.email or ""),
+                    first_name=str(target_user.first_name)
+                    if target_user.first_name
+                    else None,
+                    institution_name=str(institution.name or "Institution"),
+                    inviter_name=admin_name,
+                    role=str(target_user.institution_role or ""),
+                    raw_token=raw_token,
+                )
+
+            if email_type == "access_notification":
+                db.session.commit()
+
+            invite_link = build_invite_url(raw_token) if raw_token else None
+
+            _record_institution_user_audit(
+                institution_id=institution.id,
+                target_user_id=target_user.id,
+                performed_by_user_id=admin_user.id,
+                event_type="invite_resent",
+                metadata={"email_type": email_type, "email_sent": invite_result.success if invite_result else False},
+            )
 
             # Audit log
             try:
@@ -1440,7 +1720,8 @@ class InstitutionUserResendInvite(Resource):
                     action_details={
                         "target_user_id": target_user.id,
                         "target_email": target_user.email,
-                        "email_sent": invite_result.success,
+                        "email_sent": invite_result.success if invite_result else False,
+                        "email_type": email_type,
                     },
                     ip_address=request.remote_addr,
                     user_agent=request.headers.get("User-Agent"),
@@ -1448,17 +1729,26 @@ class InstitutionUserResendInvite(Resource):
             except Exception as audit_err:
                 logger.warning("[Institution] Audit log resend failed: %s", audit_err)
 
-            return {
-                "message": "Invitation renvoyée par email"
-                if invite_result.success
-                else "Le token a été régénéré mais l'email n'a pas pu être envoyé",
-                "user": _serialize_institution_user(target_user),
-                "email_sent": invite_result.success,
+            message = (
+                "Notification d'accès renvoyée par email"
+                if email_type == "access_notification" and invite_result and invite_result.success
+                else "Invitation renvoyée par email"
+                if invite_result and invite_result.success
+                else "L'email n'a pas pu être envoyé"
+            )
+
+            payload = {
+                "message": message,
+                "user": _serialize_institution_user(target_user, institution),
+                "email_sent": invite_result.success if invite_result else False,
+                "email_type": email_type,
                 "email_error": invite_result.error
-                if not invite_result.success
+                if invite_result and not invite_result.success
                 else None,
-                "invite_link": invite_link,
-            }, 200
+            }
+            if invite_link:
+                payload["invite_link"] = invite_link
+            return payload, 200
 
         except Exception as e:
             db.session.rollback()
@@ -1509,10 +1799,18 @@ class InstitutionUserDisable(Resource):
 
             old_status = target_user.account_status
             target_user.account_status = "disabled"
-            # Invalider le token d'invitation s'il existe
+            target_user.disabled_at = datetime.now(UTC)
             target_user.invite_token_hash = None
             target_user.invite_expires_at = None
             db.session.commit()
+
+            _record_institution_user_audit(
+                institution_id=institution.id,
+                target_user_id=target_user.id,
+                performed_by_user_id=admin_user.id,
+                event_type="user_disabled",
+                metadata={"old_status": old_status},
+            )
 
             # Audit log
             try:

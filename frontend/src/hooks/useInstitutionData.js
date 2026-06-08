@@ -28,6 +28,7 @@ export const institutionQueryKeys = {
   eligibleCompanies: () => [...institutionQueryKeys.all, 'eligible-companies'],
   apiKeys: () => [...institutionQueryKeys.all, 'api-keys'],
   users: () => [...institutionQueryKeys.all, 'users'],
+  pendingActivation: () => [...institutionQueryKeys.all, 'users', 'pending-activation'],
   notifications: () => [...institutionQueryKeys.all, 'notifications'],
   permissionRequests: () => [...institutionQueryKeys.all, 'permission-requests'],
   teams: () => [...institutionQueryKeys.all, 'teams'],
@@ -357,6 +358,17 @@ export function useUpdateUserRole() {
   });
 }
 
+export function useUpdateInstitutionUserProfile() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: institutionService.updateUserProfile,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: institutionQueryKeys.users() });
+    },
+  });
+}
+
 export function useRemoveInstitutionUser() {
   const queryClient = useQueryClient();
 
@@ -375,6 +387,27 @@ export function useResendInvite() {
     mutationFn: institutionService.resendInvite,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: institutionQueryKeys.users() });
+      queryClient.invalidateQueries({ queryKey: institutionQueryKeys.pendingActivation() });
+    },
+  });
+}
+
+export function usePendingActivationUsers() {
+  return useQuery({
+    queryKey: institutionQueryKeys.pendingActivation(),
+    queryFn: institutionService.getPendingActivationUsers,
+    staleTime: 60 * 1000,
+  });
+}
+
+export function useResetInstitutionUserPassword() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: institutionService.resetInstitutionUserPassword,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: institutionQueryKeys.users() });
+      queryClient.invalidateQueries({ queryKey: institutionQueryKeys.pendingActivation() });
     },
   });
 }

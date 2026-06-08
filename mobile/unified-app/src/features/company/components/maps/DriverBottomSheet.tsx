@@ -329,14 +329,23 @@ function cycleSnap(level: "collapsed" | "medium" | "expanded"): "collapsed" | "m
   return "collapsed";
 }
 
+/**
+ * Horodatage de tri d'une course.
+ * Les courses sans heure réelle (sentinelle « À définir » T00:00:00, valeur vide ou
+ * invalide) sont renvoyées en fin de liste : on privilégie les courses réellement
+ * planifiées — y compris celles déjà passées mais non effectuées / en cours —
+ * et on n'affiche les « À définir » que pour compléter s'il reste de la place.
+ */
+function missionScheduleSortTs(mission: CompanyDispatchMission): number {
+  if (isPickupSentinel(mission.scheduled_at)) return Number.MAX_SAFE_INTEGER;
+  const ts = Date.parse(mission.scheduled_at as string);
+  return Number.isNaN(ts) ? Number.MAX_SAFE_INTEGER : ts;
+}
+
 function selectUpcomingMissions(missions: CompanyDispatchMission[], limit = 3): CompanyDispatchMission[] {
   const ranked = missions
     .filter((mission) => mission.status !== "completed" && mission.status !== "cancelled")
-    .sort((a, b) => {
-      const aTs = a.scheduled_at ? Date.parse(a.scheduled_at) : Number.MAX_SAFE_INTEGER;
-      const bTs = b.scheduled_at ? Date.parse(b.scheduled_at) : Number.MAX_SAFE_INTEGER;
-      return aTs - bTs;
-    });
+    .sort((a, b) => missionScheduleSortTs(a) - missionScheduleSortTs(b));
   return ranked.slice(0, limit);
 }
 

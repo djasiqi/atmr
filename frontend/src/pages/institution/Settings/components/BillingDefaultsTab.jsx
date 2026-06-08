@@ -18,17 +18,13 @@ import { toast } from 'sonner';
 import { useInstitutionSettings, useUpdateInstitutionSettings } from '../../../../hooks/useInstitutionData';
 import { useInstitutionMe } from '../../../../hooks/useInstitutionData';
 import { isAdmin, canEditBilling } from '../../../../utils/institutionPermissions';
+import ChipSelect from './ChipSelect';
 import styles from '../InstitutionSettings.module.css';
 
 const BILLING_INTENT_OPTIONS = [
   { value: 'patient', label: 'Patient — le patient est facturé directement' },
   { value: 'institution', label: 'Institution — l\'institution prend en charge' },
   { value: 'third_party', label: 'Tiers payeur — un tiers (assurance, commune, curatelle) est facturé' },
-];
-
-const TIMEZONE_OPTIONS = [
-  'Europe/Zurich', 'Europe/Paris', 'Europe/Berlin', 'Europe/London',
-  'Europe/Rome', 'Europe/Vienna', 'Europe/Brussels', 'UTC',
 ];
 
 const BillingDefaultsTab = () => {
@@ -219,17 +215,17 @@ const BillingDefaultsTab = () => {
 
       <div className={styles.profileForm}>
         <div className={styles.field}>
-          <label>Facturé à (par défaut)</label>
-          <select
+          <label htmlFor="default-billing-intent">Facturé à (par défaut)</label>
+          <ChipSelect
+            id="default-billing-intent"
+            name="default_billing_intent"
+            ariaLabel="Facturé à (par défaut)"
+            block
             value={form.default_billing_intent}
-            onChange={(e) => handleChange('default_billing_intent', e.target.value)}
+            options={BILLING_INTENT_OPTIONS}
+            onChange={(val) => handleChange('default_billing_intent', val)}
             disabled={!canEdit}
-            className={styles.selectInput}
-          >
-            {BILLING_INTENT_OPTIONS.map(opt => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
+          />
           <span className={styles.fieldHint}>
             Utilisé lorsqu'aucune règle spécifique ne s'applique.
             Ce choix pré-remplit le champ &laquo;&nbsp;Facturé à&nbsp;&raquo; lors de chaque nouvelle demande.
@@ -383,28 +379,6 @@ const BillingDefaultsTab = () => {
               </div>
             </div>
 
-            <div className={styles.fieldRow}>
-              <div className={styles.field}>
-                <label>Fuseau horaire</label>
-                <select
-                  value={form.timezone}
-                  onChange={(e) => handleChange('timezone', e.target.value)}
-                  disabled={!canEdit}
-                  className={styles.selectInput}
-                >
-                  {TIMEZONE_OPTIONS.map(tz => (
-                    <option key={tz} value={tz}>{tz}</option>
-                  ))}
-                  {form.timezone && !TIMEZONE_OPTIONS.includes(form.timezone) && (
-                    <option value={form.timezone}>(Custom) {form.timezone}</option>
-                  )}
-                </select>
-                <span className={styles.fieldHint}>
-                  Utilisé pour le calcul des dates de facturation et des délais de réponse.
-                </span>
-              </div>
-              <div className={styles.field} />
-            </div>
           </div>
         </>
       )}

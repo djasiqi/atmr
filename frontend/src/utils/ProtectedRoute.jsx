@@ -65,6 +65,16 @@ const clearSession = (keys) => {
   } catch (_) {}
 };
 
+// Resout la destination d'onboarding. Pour l'instant seul le changement
+// de mot de passe est cable. Etendre ici pour CGU / profil / MFA.
+export const resolveOnboardingRedirect = (u, pathname) => {
+  if (u?.force_password_change && !pathname.startsWith('/force-reset-password')) {
+    return `/force-reset-password/${u.public_id || u.sub}`;
+  }
+  // futur : if (u?.must_accept_cgu) return `/onboarding/cgu`;
+  return null;
+};
+
 const ProtectedRoute = ({ allowedRoles, children }) => {
   const location = useLocation();
   const keys = getStorageKeys(allowedRoles);
@@ -94,6 +104,24 @@ const ProtectedRoute = ({ allowedRoles, children }) => {
 
   if (!token && !user) {
     return <Navigate to="/login" replace state={{ from: location }} />;
+  }
+
+  const mustOnboard = user?.must_complete_onboarding ?? user?.force_password_change;
+  const onboardingDestination = resolveOnboardingRedirect(user, location.pathname);
+  if (mustOnboard && !onboardingDestination) {
+    console.warn(
+      'must_complete_onboarding=true mais aucune destination configuree',
+      { reasons: user?.onboarding_reasons }
+    );
+  }
+  if (mustOnboard && onboardingDestination) {
+    return (
+      <Navigate
+        to={onboardingDestination}
+        replace
+        state={{ from: location }}
+      />
+    );
   }
 
   let role = null;

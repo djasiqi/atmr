@@ -8,7 +8,7 @@ const SIGNUP_DISABLED =
       process.env.REACT_APP_SIGNUP_DISABLED === '1'
     : true;
 
-const Header = () => {
+const Header = ({ hideAuthEntry = false }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const toggleMenu = () => {
@@ -62,17 +62,19 @@ const Header = () => {
 
       {/* Auth : une seule entrée — connexion et inscription sur /login */}
       <div className={styles.authAndMenu}>
-        <Link
-          to="/login"
-          className={styles.authEntry}
-          title={
-            SIGNUP_DISABLED
-              ? 'Inscriptions suspendues – contactez info@lirie.ch (connexion toujours possible)'
-              : 'Connexion et création de compte sur la même page'
-          }
-        >
-          {SIGNUP_DISABLED ? 'Connexion' : 'Connexion ou inscription'}
-        </Link>
+        {!hideAuthEntry && (
+          <Link
+            to="/login"
+            className={styles.authEntry}
+            title={
+              SIGNUP_DISABLED
+                ? 'Inscriptions suspendues – contactez info@lirie.ch (connexion toujours possible)'
+                : 'Connexion et création de compte sur la même page'
+            }
+          >
+            {SIGNUP_DISABLED ? 'Connexion' : 'Connexion ou inscription'}
+          </Link>
+        )}
         <button
           className={styles.hamburgerButton}
           onClick={toggleMenu}

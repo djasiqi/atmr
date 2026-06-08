@@ -54,10 +54,10 @@ class User(db.Model):
         nullable=False,
         index=True,
     )
-    username = Column(String(100), nullable=False, unique=True, index=True)
+    username = Column(String(100), nullable=True, index=True)
     first_name: Mapped[str] = mapped_column(String(100), nullable=True)
     last_name: Mapped[str] = mapped_column(String(100), nullable=True)
-    email = Column(String(255), nullable=True, unique=True, index=True)
+    email = Column(String(255), nullable=True, index=True)
 
     # ↓ Champs présents pour tous les rôles (client, driver, etc.)
     phone: Mapped[str] = mapped_column(String(255), nullable=True)
@@ -125,6 +125,10 @@ class User(db.Model):
         String(50), nullable=True
     )  # institution_admin, institution_requester, institution_reader, institution_billing
 
+    # Fonction / metier (descriptif, organisationnel) — independant du role LIRIE.
+    # Aucune permission attachee ; sert aux exports, audits et statistiques.
+    job_title: Mapped[str | None] = mapped_column(String(120), nullable=True)
+
     # ✅ Invitation par email pour institution users
     account_status: Mapped[str | None] = mapped_column(
         String(20), nullable=True, default=None
@@ -134,6 +138,19 @@ class User(db.Model):
     )  # sha256 du token d'invitation
     invite_expires_at = Column(DateTime(timezone=True), nullable=True)
     invite_sent_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Institution identity management
+    authentication_method: Mapped[str | None] = mapped_column(
+        String(20), nullable=True, default="email", server_default="email"
+    )  # email, username, sso, ldap
+    temporary_password_created_at = Column(DateTime(timezone=True), nullable=True)
+    last_password_reset_at = Column(DateTime(timezone=True), nullable=True)
+    temp_password_generation_count: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0", nullable=False
+    )
+    first_login_completed_at = Column(DateTime(timezone=True), nullable=True)
+    disabled_at = Column(DateTime(timezone=True), nullable=True)
+    archived_at = Column(DateTime(timezone=True), nullable=True)
 
     # ✅ Ajout de l'index sur `public_id` pour optimiser les recherches
     __table_args__ = (
@@ -503,6 +520,7 @@ class User(db.Model):
             result["institution_id"] = self.institution_id
             result["institution_role"] = self.institution_role
             result["account_status"] = self.account_status or "active"
+            result["job_title"] = self.job_title
         return result
 
     @property

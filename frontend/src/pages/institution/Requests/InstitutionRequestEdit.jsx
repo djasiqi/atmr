@@ -1,21 +1,30 @@
 import React, { useState } from 'react';
 import { useUpdateRequest } from '../../../hooks/useInstitutionData';
+import InlineDatePicker from '../../../components/ui/InlineDatePicker';
+import InlineTimePicker from '../../../components/ui/InlineTimePicker';
 import s from './RequestDetailPanel.module.css';
 
-const toLocalDateTimeInputValue = (iso) => {
+const pad2 = (n) => String(n).padStart(2, '0');
+
+const parseDate = (iso) => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return String(iso).slice(0, 10);
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+};
+
+const parseTime = (iso) => {
   if (!iso) return '';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
-  const pad = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
 };
 
 const InstitutionRequestEdit = ({ request, onCancel, onSaved }) => {
   const [pickupLocation, setPickupLocation] = useState(request.pickup_location || '');
   const [dropoffLocation, setDropoffLocation] = useState(request.dropoff_location || '');
-  const [scheduledTime, setScheduledTime] = useState(
-    toLocalDateTimeInputValue(request.scheduled_time),
-  );
+  const [scheduledDate, setScheduledDate] = useState(parseDate(request.scheduled_time));
+  const [scheduledTime, setScheduledTime] = useState(parseTime(request.scheduled_time));
   const [notes, setNotes] = useState(request.notes || '');
   const [requiresWheelchair, setRequiresWheelchair] = useState(
     Boolean(request.requires_wheelchair),
@@ -33,8 +42,11 @@ const InstitutionRequestEdit = ({ request, onCancel, onSaved }) => {
       dropoff_location: dropoffLocation.trim(),
       notes: notes || null,
     };
-    if (scheduledTime) {
-      payload.scheduled_time = new Date(scheduledTime).toISOString();
+    if (scheduledDate && scheduledTime) {
+      const combined = new Date(`${scheduledDate}T${scheduledTime}:00`);
+      if (!Number.isNaN(combined.getTime())) {
+        payload.scheduled_time = combined.toISOString();
+      }
     }
     if (typeof requiresWheelchair === 'boolean') {
       payload.mobility = requiresWheelchair ? 'wheelchair' : 'walking';
@@ -70,15 +82,29 @@ const InstitutionRequestEdit = ({ request, onCancel, onSaved }) => {
           onChange={(e) => setDropoffLocation(e.target.value)}
         />
       </label>
-      <label className={s.editLabel}>
-        Horaire
-        <input
-          type="datetime-local"
-          className={s.editInput}
-          value={scheduledTime}
-          onChange={(e) => setScheduledTime(e.target.value)}
-        />
-      </label>
+      <div className={s.editRow}>
+        <div className={s.editField}>
+          <label htmlFor="edit-scheduled-date" className={s.editLabel}>
+            Date
+          </label>
+          <InlineDatePicker
+            inputId="edit-scheduled-date"
+            value={scheduledDate}
+            onChange={(v) => setScheduledDate(v)}
+            placeholder="Date"
+          />
+        </div>
+        <div className={s.editField}>
+          <label htmlFor="edit-scheduled-time" className={s.editLabel}>
+            Heure
+          </label>
+          <InlineTimePicker
+            inputId="edit-scheduled-time"
+            value={scheduledTime}
+            onChange={(v) => setScheduledTime(v)}
+          />
+        </div>
+      </div>
       <label className={s.editLabel}>
         Notes
         <textarea

@@ -553,7 +553,7 @@ const App = () => {
             <Route
               path="/force-reset-password/:token"
               element={
-                <DefaultLayout>
+                <DefaultLayout hideAuthEntry>
                   <ResetPassword resetMode="forced" />
                 </DefaultLayout>
               }

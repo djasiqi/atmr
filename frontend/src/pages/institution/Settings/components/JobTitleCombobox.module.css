@@ -1,0 +1,58 @@
+/* Chip menu — meme format que ReservationFilterBar (cote entreprise transport). */
+
+.wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.chipMenu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 100;
+  min-width: 100%;
+  width: 100%;
+  max-height: 200px;
+  overflow-y: auto;
+  background: var(--bg-primary, #fff);
+  border: 1px solid var(--border-primary, #e0e3e8);
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04);
+  padding: 4px;
+  box-sizing: border-box;
+}
+
+.chipMenu::-webkit-scrollbar {
+  width: 4px;
+}
+
+.chipMenu::-webkit-scrollbar-thumb {
+  background: var(--border-primary, #dde1e6);
+  border-radius: 10px;
+}
+
+.chipOption {
+  display: block;
+  width: 100%;
+  padding: 5px 8px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary, #4b5563);
+  font-size: 12px;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 5px;
+  transition: background 0.1s;
+  white-space: nowrap;
+}
+
+.chipOption:hover {
+  background: var(--bg-tertiary, #f5f7fa);
+}
+
+.chipOptionActive {
+  color: var(--brand-primary, #00796b);
+  font-weight: 600;
+  background: rgba(0, 121, 107, 0.06);
+}

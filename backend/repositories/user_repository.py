@@ -332,18 +332,19 @@ class UserRepository:
         ).first()
 
     def find_by_username(self, username: str) -> UserDTO | None:
-        """Trouve un utilisateur par son username.
-
-        Args:
-            username: Username de l'utilisateur
-
-        Returns:
-            UserDTO ou None si non trouvé
-        """
         user = User.query.filter_by(username=username).first()
         if user is None:
             return None
         return self._to_dto(user)
+
+    def find_model_by_username(self, username: str) -> User | None:
+        """Trouve un utilisateur par username (case-insensitive)."""
+        from sqlalchemy import func
+
+        normalized = username.strip().lower()
+        if not normalized:
+            return None
+        return User.query.filter(func.lower(User.username) == normalized).first()
 
     # Méthodes legacy - retournent des modèles SQLAlchemy pour compatibilité
     def find_model_by_id(self, user_id: int) -> User | None:
@@ -375,15 +376,10 @@ class UserRepository:
         return User.query.filter_by(public_id=public_id).one_or_none()
 
     def find_model_by_email(self, email: str) -> User | None:
-        """Trouve un utilisateur par son email (retourne le modèle SQLAlchemy).
+        """Trouve un utilisateur par son email (case-insensitive)."""
+        from sqlalchemy import func
 
-        Args:
-            email: Email de l'utilisateur
-
-        Returns:
-            User ou None si non trouvé (modèle SQLAlchemy)
-
-        Note:
-            Méthode legacy - utiliser find_by_email() pour obtenir un DTO
-        """
-        return User.query.filter_by(email=email).one_or_none()
+        normalized = email.strip().lower()
+        if not normalized:
+            return None
+        return User.query.filter(func.lower(User.email) == normalized).first()

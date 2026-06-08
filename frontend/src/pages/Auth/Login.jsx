@@ -225,16 +225,19 @@ const Login = () => {
 
   const validateLoginForm = () => {
     const { email, password } = loginFormData;
+    const identifier = email.trim();
 
-    if (!email.trim() || !password) {
+    if (!identifier || !password) {
       setErrorMessage('Veuillez remplir tous les champs.');
       return false;
     }
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      setErrorMessage('Veuillez entrer une adresse email valide.');
-      return false;
+    if (identifier.includes('@')) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(identifier)) {
+        setErrorMessage('Veuillez entrer une adresse email valide.');
+        return false;
+      }
     }
 
     if (password.length < 6) {
@@ -721,18 +724,20 @@ const Login = () => {
               ) : null}
 
               <div className={styles.inputGroup}>
-                <label htmlFor="email" className={styles.label}>Adresse email</label>
+                <label htmlFor="email" className={styles.label}>
+                  {isSignupMode ? 'Adresse email' : 'Email ou identifiant'}
+                </label>
                 <div className={`${styles.inputWrapper} ${styles.inputWrapperPlain} ${styles.inputWrapper30}`}>
                   <input
-                    type="email"
+                    type={isSignupMode ? 'email' : 'text'}
                     name="email"
                     id="email"
                     className={styles.input}
-                    placeholder="nom@entreprise.ch"
+                    placeholder={isSignupMode ? 'nom@entreprise.ch' : 'nom@entreprise.ch ou j.drin'}
                     value={isSignupMode ? signupFormData.email : loginFormData.email}
                     onChange={isSignupMode ? handleSignupInputChange : handleLoginInputChange}
                     required
-                    autoComplete="email"
+                    autoComplete={isSignupMode ? 'email' : 'username'}
                     autoFocus={!isSignupMode}
                   />
                 </div>

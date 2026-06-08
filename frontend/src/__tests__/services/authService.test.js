@@ -36,6 +36,9 @@ describe('authService', () => {
             last_name: 'Dupont',
             role: 'company',
             force_password_change: false,
+            must_complete_onboarding: false,
+            onboarding_reasons: [],
+            password_expires_at: null,
           },
         },
       };
@@ -59,6 +62,36 @@ describe('authService', () => {
 
       const storedUser = JSON.parse(localStorage.getItem('user'));
       expect(storedUser.first_name).toBe('Jean');
+      expect(storedUser.must_complete_onboarding).toBe(false);
+      expect(storedUser.onboarding_reasons).toEqual([]);
+    });
+
+    it('devrait persister must_complete_onboarding et onboarding_reasons au login', async () => {
+      const mockResponse = {
+        data: {
+          token: 'fake-jwt-token',
+          user: {
+            public_id: 'user-invited',
+            role: 'company',
+            force_password_change: false,
+            must_complete_onboarding: true,
+            onboarding_reasons: ['invited'],
+            password_expires_at: null,
+          },
+        },
+      };
+
+      apiClient.post.mockResolvedValue(mockResponse);
+
+      const result = await loginUser({
+        email: 'invited@example.com',
+        password: 'password123',
+      });
+
+      expect(result).toEqual({ success: true });
+      const storedUser = JSON.parse(localStorage.getItem('user'));
+      expect(storedUser.must_complete_onboarding).toBe(true);
+      expect(storedUser.onboarding_reasons).toEqual(['invited']);
     });
 
     it('devrait retourner redirectToReset si force_password_change est true', async () => {

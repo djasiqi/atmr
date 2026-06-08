@@ -286,6 +286,15 @@ export const updateUserRole = async ({ userId, institution_role }) => {
 };
 
 /**
+ * Met à jour les champs descriptifs d'un utilisateur (fonction/métier).
+ * Donnée organisationnelle sans impact sur les permissions.
+ */
+export const updateUserProfile = async ({ userId, job_title }) => {
+  const response = await apiClient.patch(`${BASE_PATH}/users/${userId}`, { job_title });
+  return response.data;
+};
+
+/**
  * Retire un utilisateur de l'institution
  */
 export const removeInstitutionUser = async (userId) => {
@@ -306,6 +315,22 @@ export const resendInvite = async (userId) => {
  */
 export const disableInstitutionUser = async (userId) => {
   const response = await apiClient.post(`${BASE_PATH}/users/${userId}/disable`);
+  return response.data;
+};
+
+/**
+ * Liste les collaborateurs en attente d'activation
+ */
+export const getPendingActivationUsers = async () => {
+  const response = await apiClient.get(`${BASE_PATH}/users/pending-activation`);
+  return response.data;
+};
+
+/**
+ * Réinitialise le mot de passe temporaire (Mode B — identifiant)
+ */
+export const resetInstitutionUserPassword = async (userId) => {
+  const response = await apiClient.post(`${BASE_PATH}/users/${userId}/reset-password`);
   return response.data;
 };
 
@@ -543,9 +568,12 @@ const institutionService = {
   listInstitutionUsers,
   inviteInstitutionUser,
   updateUserRole,
+  updateUserProfile,
   removeInstitutionUser,
   resendInvite,
   disableInstitutionUser,
+  getPendingActivationUsers,
+  resetInstitutionUserPassword,
   // Notifications
   getNotifications,
   markNotificationRead,

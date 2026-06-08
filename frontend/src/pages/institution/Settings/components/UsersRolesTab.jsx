@@ -11,7 +11,7 @@
  */
 
 import React, { useState } from 'react';
-import { FaCopy, FaTrash, FaTimes, FaEnvelope, FaBan, FaRedo, FaLink, FaCheckCircle, FaTimesCircle, FaShieldAlt } from 'react-icons/fa';
+import { FaCopy, FaTrash, FaTimes, FaEnvelope, FaBan, FaRedo, FaLink, FaCheckCircle, FaTimesCircle, FaShieldAlt, FaKey, FaUserPlus } from 'react-icons/fa';
 import {
   useInstitutionUsers,
   useInviteInstitutionUser,
@@ -22,8 +22,13 @@ import {
   useInstitutionMe,
   usePermissionRequests,
   useResolvePermissionRequest,
+  usePendingActivationUsers,
+  useResetInstitutionUserPassword,
+  useUpdateInstitutionUserProfile,
 } from '../../../../hooks/useInstitutionData';
 import { isAdmin } from '../../../../utils/institutionPermissions';
+import JobTitleCombobox from './JobTitleCombobox';
+import ChipSelect from './ChipSelect';
 import { toast } from 'sonner';
 import styles from '../InstitutionSettings.module.css';
 
@@ -92,16 +97,60 @@ const getStatusConfig = (status) => {
   return STATUS_CONFIG[status] || STATUS_CONFIG.active;
 };
 
+const PENDING_REASON_LABELS = {
+  never_connected: 'Jamais connecté',
+  password_expired: 'Mot de passe expiré',
+  invitation_pending: 'Invitation en attente',
+  invitation_expired: 'Invitation expirée',
+  invited: 'Invité',
+};
+
+/** Affiche un toast cohérent avec le contrat API (email_type, creation_mode). */
+const showInviteResultToast = (result) => {
+  if (result.creation_mode === 'username' && result.temporary_credentials) {
+    toast.success('Compte créé — notez les identifiants (affichés une seule fois)');
+    return;
+  }
+  if (result.email_type === 'access_notification') {
+    if (result.email_sent) {
+      toast.success('Notification d\'accès envoyée — le compte existant reste actif');
+    } else {
+      toast.warning('Notification non envoyée — informez l\'utilisateur manuellement');
+    }
+    return;
+  }
+  if (result.email_type === 'invitation') {
+    if (result.email_sent) {
+      toast.success('Invitation envoyée par email');
+    } else {
+      toast.warning('Email non envoyé — utilisez le lien ci-dessous.');
+    }
+    return;
+  }
+  if (result.email_sent === false) {
+    toast.warning('Email non envoyé');
+    return;
+  }
+  if (result.email_sent === true) {
+    toast.success('Email envoyé');
+    return;
+  }
+  toast.success(result.message || 'Utilisateur ajouté');
+};
+
 const UsersRolesTab = () => {
   const { data: meData } = useInstitutionMe();
   const { data: usersData, isLoading } = useInstitutionUsers();
+  const { data: pendingData } = usePendingActivationUsers();
   const { data: permRequestsData } = usePermissionRequests();
   const inviteMutation = useInviteInstitutionUser();
   const updateRoleMutation = useUpdateUserRole();
   const removeMutation = useRemoveInstitutionUser();
   const resendMutation = useResendInvite();
   const disableMutation = useDisableInstitutionUser();
+  const resetPasswordMutation = useResetInstitutionUserPassword();
   const resolvePermMutation = useResolvePermissionRequest();
+  const updateProfileMutation = useUpdateInstitutionUserProfile();
 
   const canEdit = isAdmin(meData?.institution_role);
   const currentUserId = meData?.user?.id;
@@ -116,57 +165,78 @@ const UsersRolesTab = () => {
 
   // Invite form state
   const [showInvite, setShowInvite] = useState(false);
+  const [inviteCreationMode, setInviteCreationMode] = useState('email');
   const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteUsername, setInviteUsername] = useState('');
   const [inviteRole, setInviteRole] = useState('institution_requester');
   const [inviteFirstName, setInviteFirstName] = useState('');
   const [inviteLastName, setInviteLastName] = useState('');
+  const [inviteJobTitle, setInviteJobTitle] = useState('');
 
   // Confirmation modal state
   const [confirmAction, setConfirmAction] = useState(null);
 
-  // Résultat de la dernière invitation (pour afficher le lien fallback)
+  // Résultat de la dernière invitation (lien fallback ou credentials one-shot)
   const [lastInviteResult, setLastInviteResult] = useState(null);
+  const [credentialsModal, setCredentialsModal] = useState(null);
 
   const users = usersData?.users || [];
+  const pendingUsers = pendingData?.users || [];
 
   const handleInvite = async (e) => {
     e.preventDefault();
-    if (!inviteEmail.trim()) {
+
+    if (inviteCreationMode === 'email' && !inviteEmail.trim()) {
       toast.error('L\'email est requis');
+      return;
+    }
+    if (inviteCreationMode === 'username' && !inviteUsername.trim()) {
+      toast.error('L\'identifiant est requis');
       return;
     }
 
     try {
-      const result = await inviteMutation.mutateAsync({
-        email: inviteEmail.trim().toLowerCase(),
+      const jobTitle = inviteJobTitle.trim();
+      const payload = {
+        creation_mode: inviteCreationMode,
         institution_role: inviteRole,
         first_name: inviteFirstName.trim() || undefined,
         last_name: inviteLastName.trim() || undefined,
-      });
-
-      if (result.email_sent) {
-        toast.success('Invitation envoyée par email');
-      } else if (result.email_sent === false) {
-        toast.warning('Email non envoyé — utilisez le lien ci-dessous.');
+        job_title: jobTitle || undefined,
+      };
+      if (inviteCreationMode === 'email') {
+        payload.email = inviteEmail.trim().toLowerCase();
       } else {
-        toast.success(result.message || 'Utilisateur ajouté');
+        payload.username = inviteUsername.trim().toLowerCase();
       }
 
-      // Afficher le résultat avec le lien (toujours, même si email OK)
+      const result = await inviteMutation.mutateAsync(payload);
+
+      showInviteResultToast(result);
+
+      if (result.temporary_credentials) {
+        setCredentialsModal({
+          ...result.temporary_credentials,
+          credentialsShownOnce: result.credentials_shown_once,
+        });
+      }
+
       if (result.invite_link) {
         setLastInviteResult({
-          email: inviteEmail.trim().toLowerCase(),
+          email: inviteCreationMode === 'email' ? inviteEmail.trim().toLowerCase() : null,
           emailSent: result.email_sent,
           emailError: result.email_error,
+          emailType: result.email_type,
           inviteLink: result.invite_link,
         });
       }
 
-      // Reset form
       setInviteEmail('');
+      setInviteUsername('');
       setInviteRole('institution_requester');
       setInviteFirstName('');
       setInviteLastName('');
+      setInviteJobTitle('');
       setShowInvite(false);
     } catch (err) {
       const msg = err.response?.data?.error || 'Erreur lors de l\'invitation';
@@ -180,6 +250,22 @@ const UsersRolesTab = () => {
       toast.success('Rôle mis à jour');
     } catch (err) {
       const msg = err.response?.data?.error || 'Erreur lors de la mise à jour du rôle';
+      toast.error(msg);
+    }
+  };
+
+  const handleJobTitleSave = async (user, rawValue) => {
+    const next = (rawValue || '').replace(/\s+/g, ' ').trim();
+    const current = (user.job_title || '').trim();
+    if (next === current) return;
+    try {
+      await updateProfileMutation.mutateAsync({
+        userId: user.id,
+        job_title: next || null,
+      });
+      toast.success('Fonction mise à jour');
+    } catch (err) {
+      const msg = err.response?.data?.error || 'Erreur lors de la mise à jour de la fonction';
       toast.error(msg);
     }
   };
@@ -200,23 +286,45 @@ const UsersRolesTab = () => {
     try {
       const result = await resendMutation.mutateAsync(userId);
 
-      if (result.email_sent) {
+      if (result.email_type === 'access_notification') {
+        if (result.email_sent) {
+          toast.success('Notification d\'accès renvoyée');
+        } else {
+          toast.warning('Notification non envoyée');
+        }
+      } else if (result.email_sent) {
         toast.success('Invitation renvoyée par email');
       } else {
         toast.warning('Email non envoyé — utilisez le lien ci-dessous.');
       }
 
-      // Afficher le lien fallback
       if (result.invite_link) {
         setLastInviteResult({
           email: result.user?.email || '',
           emailSent: result.email_sent,
           emailError: result.email_error,
+          emailType: result.email_type,
           inviteLink: result.invite_link,
         });
       }
     } catch (err) {
       const msg = err.response?.data?.error || 'Erreur lors du renvoi de l\'invitation';
+      toast.error(msg);
+    }
+  };
+
+  const handleResetPassword = async (userId) => {
+    try {
+      const result = await resetPasswordMutation.mutateAsync(userId);
+      if (result.temporary_credentials) {
+        setCredentialsModal({
+          ...result.temporary_credentials,
+          credentialsShownOnce: result.credentials_shown_once,
+        });
+        toast.success('Mot de passe temporaire régénéré');
+      }
+    } catch (err) {
+      const msg = err.response?.data?.error || 'Erreur lors de la réinitialisation';
       toast.error(msg);
     }
   };
@@ -289,8 +397,8 @@ const UsersRolesTab = () => {
             className={styles.saveBtn}
             onClick={() => setShowInvite(!showInvite)}
           >
-            {showInvite ? <FaTimes /> : <FaEnvelope />}
-            {showInvite ? ' Annuler' : ' Inviter par email'}
+            {showInvite ? <FaTimes /> : <FaUserPlus />}
+            {showInvite ? ' Annuler' : ' Ajouter un collaborateur'}
           </button>
         </div>
       )}
@@ -304,66 +412,140 @@ const UsersRolesTab = () => {
           marginBottom: 20,
           border: '1px solid #e0e0e0',
         }}>
-          <div style={{ marginBottom: 12, fontSize: 13, color: '#666' }}>
-            <FaEnvelope style={{ marginRight: 6, verticalAlign: 'middle' }} />
-            Un email d'invitation sera envoyé avec un lien d'activation (valable 48h).
+          <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+            <button
+              type="button"
+              onClick={() => setInviteCreationMode('email')}
+              style={{
+                padding: '8px 16px',
+                borderRadius: 6,
+                border: inviteCreationMode === 'email' ? '2px solid #667eea' : '1px solid #ddd',
+                background: inviteCreationMode === 'email' ? '#eef0ff' : '#fff',
+                cursor: 'pointer',
+                fontSize: 13,
+                fontWeight: inviteCreationMode === 'email' ? 600 : 400,
+              }}
+            >
+              <FaEnvelope style={{ marginRight: 6 }} />
+              Par email
+            </button>
+            <button
+              type="button"
+              onClick={() => setInviteCreationMode('username')}
+              style={{
+                padding: '8px 16px',
+                borderRadius: 6,
+                border: inviteCreationMode === 'username' ? '2px solid #667eea' : '1px solid #ddd',
+                background: inviteCreationMode === 'username' ? '#eef0ff' : '#fff',
+                cursor: 'pointer',
+                fontSize: 13,
+                fontWeight: inviteCreationMode === 'username' ? 600 : 400,
+              }}
+            >
+              <FaKey style={{ marginRight: 6 }} />
+              Par identifiant
+            </button>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
-            <div>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 4 }}>
-                Email *
-              </label>
-              <input
-                type="email"
-                value={inviteEmail}
-                onChange={(e) => setInviteEmail(e.target.value)}
-                placeholder="email@exemple.ch"
-                required
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  border: '1px solid #ddd',
-                  borderRadius: 6,
-                  fontSize: 14,
-                  boxSizing: 'border-box',
-                }}
-              />
+
+          {inviteCreationMode === 'email' ? (
+            <div style={{ marginBottom: 12, fontSize: 13, color: '#666' }}>
+              <FaEnvelope style={{ marginRight: 6, verticalAlign: 'middle' }} />
+              Un email d'invitation sera envoyé avec un lien d'activation (valable 48h).
             </div>
+          ) : (
+            <div style={{ marginBottom: 12, fontSize: 13, color: '#666' }}>
+              <FaKey style={{ marginRight: 6, verticalAlign: 'middle' }} />
+              Création d'un compte avec identifiant et mot de passe temporaire (14 jours).
+              {inviteUsername.trim() && (
+                <span style={{ display: 'block', marginTop: 4, fontFamily: 'monospace', color: '#333' }}>
+                  Aperçu : {inviteUsername.trim().toLowerCase()}
+                </span>
+              )}
+            </div>
+          )}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+            {inviteCreationMode === 'email' ? (
+              <div>
+                <label htmlFor="invite-email" style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 4 }}>
+                  Email *
+                </label>
+                <input
+                  id="invite-email"
+                  name="email"
+                  type="email"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  placeholder="email@exemple.ch"
+                  autoComplete="off"
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    border: '1px solid #ddd',
+                    borderRadius: 6,
+                    fontSize: 14,
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+            ) : (
+              <div>
+                <label htmlFor="invite-username" style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 4 }}>
+                  Identifiant local *
+                </label>
+                <input
+                  id="invite-username"
+                  name="username"
+                  type="text"
+                  value={inviteUsername}
+                  onChange={(e) => setInviteUsername(e.target.value.toLowerCase())}
+                  placeholder="s.dupont"
+                  autoComplete="off"
+                  required
+                  minLength={3}
+                  pattern="[a-z0-9._-]+"
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    border: '1px solid #ddd',
+                    borderRadius: 6,
+                    fontSize: 14,
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+            )}
             <div>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 4 }}>
+              <label htmlFor="invite-role" style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 4 }}>
                 Rôle *
               </label>
-              <select
+              <ChipSelect
+                id="invite-role"
+                name="institution_role"
+                ariaLabel="Rôle"
+                block
                 value={inviteRole}
-                onChange={(e) => setInviteRole(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  border: '1px solid #ddd',
-                  borderRadius: 6,
-                  fontSize: 14,
-                  boxSizing: 'border-box',
-                }}
-              >
-                {roleOptions.map((r) => (
-                  <option key={r.value} value={r.value} title={r.desc}>{r.label}</option>
-                ))}
-              </select>
+                options={roleOptions}
+                onChange={setInviteRole}
+              />
               <div style={{ fontSize: 11, color: '#888', marginTop: 4 }}>
                 {roleOptions.find((r) => r.value === inviteRole)?.desc || ''}
               </div>
             </div>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
             <div>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 4 }}>
+              <label htmlFor="invite-first-name" style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 4 }}>
                 Prénom
               </label>
               <input
+                id="invite-first-name"
+                name="first_name"
                 type="text"
                 value={inviteFirstName}
                 onChange={(e) => setInviteFirstName(e.target.value)}
                 placeholder="Prénom"
+                autoComplete="off"
                 style={{
                   width: '100%',
                   padding: '8px 12px',
@@ -375,14 +557,17 @@ const UsersRolesTab = () => {
               />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 4 }}>
+              <label htmlFor="invite-last-name" style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 4 }}>
                 Nom
               </label>
               <input
+                id="invite-last-name"
+                name="last_name"
                 type="text"
                 value={inviteLastName}
                 onChange={(e) => setInviteLastName(e.target.value)}
                 placeholder="Nom"
+                autoComplete="off"
                 style={{
                   width: '100%',
                   padding: '8px 12px',
@@ -392,6 +577,31 @@ const UsersRolesTab = () => {
                   boxSizing: 'border-box',
                 }}
               />
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16, alignItems: 'start' }}>
+            <div>
+              <label htmlFor="invite-job-title" style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 4 }}>
+                Fonction / Métier
+              </label>
+              <JobTitleCombobox
+                id="invite-job-title"
+                value={inviteJobTitle}
+                onChange={setInviteJobTitle}
+                inputStyle={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  border: '1px solid #ddd',
+                  borderRadius: 6,
+                  fontSize: 14,
+                  boxSizing: 'border-box',
+                }}
+              />
+            </div>
+            <div style={{ fontSize: 12, color: '#888', alignSelf: 'center', paddingTop: 18 }}>
+              Choisissez une suggestion ou saisissez librement.
+              <br />
+              Information organisationnelle, sans impact sur les permissions.
             </div>
           </div>
           <button
@@ -399,10 +609,69 @@ const UsersRolesTab = () => {
             className={styles.saveBtn}
             disabled={inviteMutation.isPending}
           >
-            <FaEnvelope />
-            {inviteMutation.isPending ? ' Envoi en cours...' : ' Envoyer l\'invitation'}
+            {inviteCreationMode === 'email' ? <FaEnvelope /> : <FaKey />}
+            {inviteMutation.isPending
+              ? ' En cours...'
+              : inviteCreationMode === 'email'
+                ? ' Envoyer l\'invitation'
+                : ' Créer le compte'}
           </button>
         </form>
+      )}
+
+      {/* Credentials one-shot modal (Mode B) */}
+      {credentialsModal && (
+        <div className={styles.modal}>
+          <div className={styles.modalContent} style={{ maxWidth: 480 }}>
+            <div className={styles.modalHeader}>
+              <h3>Identifiants de connexion</h3>
+              <button onClick={() => setCredentialsModal(null)}>
+                <FaTimes />
+              </button>
+            </div>
+            <div className={styles.modalBody}>
+              <p style={{ color: '#b71c1c', fontWeight: 600, marginBottom: 12 }}>
+                ⚠️ Ces identifiants ne seront affichés qu'une seule fois. Notez-les maintenant.
+              </p>
+              <p style={{ fontSize: 13, color: '#555', marginBottom: 12 }}>
+                Connexion avec : <strong>Identifiant</strong> (pas d'email)
+              </p>
+              <div style={{ background: '#f5f5f5', padding: 14, borderRadius: 8, fontFamily: 'monospace', fontSize: 13 }}>
+                <div style={{ marginBottom: 8 }}>
+                  <strong>Identifiant :</strong> {credentialsModal.username}
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(credentialsModal.username)}
+                    style={{ marginLeft: 8, padding: '2px 8px', fontSize: 11, cursor: 'pointer' }}
+                  >
+                    <FaCopy />
+                  </button>
+                </div>
+                <div>
+                  <strong>Mot de passe temporaire :</strong> {credentialsModal.temporary_password}
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(credentialsModal.temporary_password)}
+                    style={{ marginLeft: 8, padding: '2px 8px', fontSize: 11, cursor: 'pointer' }}
+                  >
+                    <FaCopy />
+                  </button>
+                </div>
+              </div>
+              <p style={{ fontSize: 12, color: '#666', marginTop: 12 }}>
+                Le collaborateur devra changer son mot de passe à la première connexion.
+              </p>
+            </div>
+            <div className={styles.modalActions}>
+              <button
+                onClick={() => setCredentialsModal(null)}
+                style={{ backgroundColor: '#667eea', color: 'white' }}
+              >
+                J'ai noté les identifiants
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Invite result banner (lien fallback) */}
@@ -417,9 +686,13 @@ const UsersRolesTab = () => {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
               <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>
-                {lastInviteResult.emailSent
-                  ? `✅ Invitation envoyée à ${lastInviteResult.email}`
-                  : `⚠️ Email non envoyé à ${lastInviteResult.email}`}
+                {lastInviteResult.emailType === 'access_notification'
+                  ? (lastInviteResult.emailSent
+                    ? '✅ Notification d\'accès envoyée'
+                    : '⚠️ Notification d\'accès non envoyée')
+                  : lastInviteResult.emailSent
+                    ? `✅ Invitation envoyée${lastInviteResult.email ? ` à ${lastInviteResult.email}` : ''}`
+                    : `⚠️ Email non envoyé${lastInviteResult.email ? ` à ${lastInviteResult.email}` : ''}`}
               </div>
               {!lastInviteResult.emailSent && lastInviteResult.emailError && (
                 <div style={{ fontSize: 12, color: '#b71c1c', marginBottom: 6 }}>
@@ -479,6 +752,67 @@ const UsersRolesTab = () => {
               <FaTimes />
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Collaborateurs en attente d'activation */}
+      {canEdit && pendingUsers.length > 0 && (
+        <div style={{
+          marginBottom: 20,
+          padding: 16,
+          background: '#e3f2fd',
+          border: '1px solid #90caf9',
+          borderRadius: 8,
+        }}>
+          <h4 style={{ margin: '0 0 12px', fontSize: 14, color: '#1565c0' }}>
+            En attente d'activation ({pendingUsers.length})
+          </h4>
+          {pendingUsers.map((u) => (
+            <div key={u.id} style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              padding: '8px 12px',
+              background: '#fff',
+              borderRadius: 6,
+              marginBottom: 6,
+              fontSize: 13,
+            }}>
+              <div style={{ flex: 1 }}>
+                <strong>{u.first_name || u.last_name ? `${u.first_name || ''} ${u.last_name || ''}`.trim() : u.username}</strong>
+                {u.username && (
+                  <span style={{ marginLeft: 8, color: '#666', fontFamily: 'monospace', fontSize: 12 }}>
+                    {u.username}
+                  </span>
+                )}
+                <span style={{ marginLeft: 8, fontSize: 11, color: '#e65100' }}>
+                  {PENDING_REASON_LABELS[u.pending_reason] || u.pending_reason}
+                </span>
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                {u.authentication_method === 'username' && (
+                  <button
+                    onClick={() => handleResetPassword(u.id)}
+                    disabled={resetPasswordMutation.isPending}
+                    title="Réinitialiser le mot de passe"
+                    style={actionBtnStyle('#1565c0', '#e3f2fd')}
+                  >
+                    <FaKey style={{ fontSize: 11 }} />
+                  </button>
+                )}
+                {(u.account_status === 'invited' || u.account_status === 'expired') && (
+                  <button
+                    onClick={() => handleResendInvite(u.id)}
+                    disabled={resendMutation.isPending}
+                    title="Renvoyer l'invitation"
+                    style={actionBtnStyle('#1565c0', '#e3f2fd')}
+                  >
+                    <FaRedo style={{ fontSize: 11 }} />
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
@@ -580,6 +914,7 @@ const UsersRolesTab = () => {
           <thead>
             <tr style={{ borderBottom: '2px solid #eee' }}>
               <th style={thStyle}>Utilisateur</th>
+              <th style={thStyle}>Fonction</th>
               <th style={thStyle}>Rôle</th>
               <th style={thStyle}>Statut</th>
               <th style={thStyle}>Ajouté le</th>
@@ -593,6 +928,7 @@ const UsersRolesTab = () => {
               const status = getStatusConfig(user.account_status);
               const isInvited = user.account_status === 'invited' || user.account_status === 'expired';
               const isDisabled = user.account_status === 'disabled';
+              const isUsernameAuth = user.authentication_method === 'username';
 
               return (
                 <tr
@@ -613,27 +949,60 @@ const UsersRolesTab = () => {
                         </span>
                       )}
                     </div>
-                    <div style={{ fontSize: 13, color: '#888' }}>{user.email}</div>
+                    <div style={{ fontSize: 13, color: '#888' }}>
+                      {user.email || user.username}
+                    </div>
+                    {user.authentication_method === 'username' && user.force_password_change && (
+                      <span style={{
+                        display: 'inline-block',
+                        marginTop: 4,
+                        padding: '2px 6px',
+                        borderRadius: 4,
+                        fontSize: 10,
+                        background: '#fff3e0',
+                        color: '#e65100',
+                      }}>
+                        {user.first_login_completed_at ? 'MDP temporaire' : 'Jamais connecté'}
+                      </span>
+                    )}
                   </td>
                   <td style={{ padding: '12px' }}>
-                    {canEdit && !isSelf && !isDisabled ? (
-                      <select
-                        value={user.institution_role || ''}
-                        onChange={(e) => handleRoleChange(user.id, e.target.value)}
-                        disabled={updateRoleMutation.isPending}
-                        title={roleOptions.find((r) => r.value === user.institution_role)?.desc || ''}
-                        style={{
+                    {canEdit ? (
+                      <JobTitleCombobox
+                        id={`job-title-${user.id}`}
+                        ariaLabel={`Fonction / métier de ${user.first_name || user.username || 'utilisateur'}`}
+                        value={user.job_title || ''}
+                        onCommit={(val) => handleJobTitleSave(user, val)}
+                        disabled={updateProfileMutation.isPending}
+                        placeholder="—"
+                        inputStyle={{
+                          width: '100%',
+                          minWidth: 140,
                           padding: '6px 10px',
                           border: '1px solid #ddd',
                           borderRadius: 6,
                           fontSize: 13,
                           background: 'white',
+                          boxSizing: 'border-box',
                         }}
-                      >
-                        {roleOptions.map((r) => (
-                          <option key={r.value} value={r.value} title={r.desc}>{r.label}</option>
-                        ))}
-                      </select>
+                      />
+                    ) : (
+                      <span style={{ fontSize: 13, color: '#555' }}>
+                        {user.job_title || '-'}
+                      </span>
+                    )}
+                  </td>
+                  <td style={{ padding: '12px' }}>
+                    {canEdit && !isSelf && !isDisabled ? (
+                      <ChipSelect
+                        id={`role-${user.id}`}
+                        name="institution_role"
+                        ariaLabel={`Rôle de ${user.first_name || user.username || 'utilisateur'}`}
+                        value={user.institution_role || ''}
+                        options={roleOptions}
+                        onChange={(val) => handleRoleChange(user.id, val)}
+                        disabled={updateRoleMutation.isPending}
+                      />
                     ) : (
                       <span
                         title={roleOptions.find((r) => r.value === user.institution_role)?.desc || ''}
@@ -679,8 +1048,8 @@ const UsersRolesTab = () => {
                   {canEdit && (
                     <td style={{ padding: '12px', textAlign: 'right' }}>
                       <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                        {/* Renvoyer invitation - seulement pour invited/disabled */}
-                        {(isInvited || isDisabled) && (
+                        {/* Renvoyer invitation - email mode only */}
+                        {!isUsernameAuth && (isInvited || isDisabled) && (
                           <button
                             onClick={() => handleResendInvite(user.id)}
                             disabled={resendMutation.isPending}
@@ -688,6 +1057,17 @@ const UsersRolesTab = () => {
                             style={actionBtnStyle('#1565c0', '#e3f2fd')}
                           >
                             <FaRedo style={{ fontSize: 11 }} />
+                          </button>
+                        )}
+                        {/* Reset MDP - Mode B */}
+                        {isUsernameAuth && !isSelf && !isDisabled && (
+                          <button
+                            onClick={() => handleResetPassword(user.id)}
+                            disabled={resetPasswordMutation.isPending}
+                            title="Réinitialiser le mot de passe temporaire"
+                            style={actionBtnStyle('#1565c0', '#e3f2fd')}
+                          >
+                            <FaKey style={{ fontSize: 11 }} />
                           </button>
                         )}
                         {/* Désactiver - pas soi-même, pas déjà disabled */}

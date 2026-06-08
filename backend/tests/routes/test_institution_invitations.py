@@ -77,7 +77,7 @@ class TestInstitutionInvitation:
     # POST /institutions/users - Invite
     # ================================================================
 
-    @patch("routes.institutions.send_invitation_email")
+    @patch("application.institutions.invitation_service.dispatch_institution_email")
     def test_invite_new_user_creates_invited_status(
         self, mock_send, client, db, institution, admin_user, admin_headers
     ):
@@ -86,10 +86,13 @@ class TestInstitutionInvitation:
 
         mock_send.return_value = InviteResult(success=True, token="fake")
 
+        uid = str(uuid.uuid4())[:8]
+        new_email = f"newuser-{uid}@test.ch"
+
         response = client.post(
             "/api/v1/institutions/users",
             json={
-                "email": "newuser@test.ch",
+                "email": new_email,
                 "institution_role": "institution_requester",
                 "first_name": "Jean",
                 "last_name": "Test",
@@ -103,17 +106,17 @@ class TestInstitutionInvitation:
         assert data["invite_link"] is not None
         assert "/invite/" in data["invite_link"]
         assert data["user"]["account_status"] == "invited"
-        assert data["user"]["email"] == "newuser@test.ch"
+        assert data["user"]["email"] == new_email
 
         # Vérifier en DB
-        invited_user = User.query.filter_by(email="newuser@test.ch").first()
+        invited_user = User.query.filter_by(email=new_email).first()
         assert invited_user is not None
         assert invited_user.account_status == "invited"
         assert invited_user.invite_token_hash is not None
         assert invited_user.invite_expires_at is not None
         assert invited_user.institution_id == institution.id
 
-    @patch("routes.institutions.send_invitation_email")
+    @patch("application.institutions.invitation_service.dispatch_institution_email")
     def test_invite_duplicate_email_in_institution_returns_409(
         self, mock_send, client, db, institution, admin_user, admin_headers
     ):
@@ -137,10 +140,12 @@ class TestInstitutionInvitation:
         """Test: un token valide retourne les infos de base."""
         raw_token = secrets.token_urlsafe(32)
         token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+        uid = str(uuid.uuid4())[:8]
+        email = f"invited-verify-{uid}@test.ch"
 
         user = User()
-        user.username = "invited_verify@test.ch"
-        user.email = "invited_verify@test.ch"
+        user.username = email
+        user.email = email
         user.role = UserRole.INSTITUTION
         user.public_id = str(uuid.uuid4())
         user.institution_id = institution.id
@@ -157,7 +162,7 @@ class TestInstitutionInvitation:
         assert response.status_code == 200
         data = response.get_json()
         assert data["valid"] is True
-        assert data["email"] == "invited_verify@test.ch"
+        assert data["email"] == email
         assert data["institution_name"] == "Clinique Invitation Test"
 
     def test_verify_invalid_token_returns_400(self, client):
@@ -172,10 +177,12 @@ class TestInstitutionInvitation:
         """Test: un token expiré retourne 400."""
         raw_token = secrets.token_urlsafe(32)
         token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+        uid = str(uuid.uuid4())[:8]
+        email = f"expired-{uid}@test.ch"
 
         user = User()
-        user.username = "expired@test.ch"
-        user.email = "expired@test.ch"
+        user.username = email
+        user.email = email
         user.role = UserRole.INSTITUTION
         user.public_id = str(uuid.uuid4())
         user.institution_id = institution.id
@@ -200,10 +207,12 @@ class TestInstitutionInvitation:
         """Test: activation réussie avec token valide et mot de passe."""
         raw_token = secrets.token_urlsafe(32)
         token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+        uid = str(uuid.uuid4())[:8]
+        email = f"activate-ok-{uid}@test.ch"
 
         user = User()
-        user.username = "activate_ok@test.ch"
-        user.email = "activate_ok@test.ch"
+        user.username = email
+        user.email = email
         user.role = UserRole.INSTITUTION
         user.public_id = str(uuid.uuid4())
         user.institution_id = institution.id
@@ -220,7 +229,7 @@ class TestInstitutionInvitation:
             "/api/v1/auth/activate-account",
             json={
                 "token": raw_token,
-                "password": "SecurePassword123!",
+                "password": "Xk9!mZq2Lp7vRw4nT8yB",
             },
         )
 
@@ -233,7 +242,7 @@ class TestInstitutionInvitation:
         assert user.account_status == "active"
         assert user.invite_token_hash is None  # Token invalidé (one-time use)
         assert user.force_password_change is False
-        assert user.check_password("SecurePassword123!")
+        assert user.check_password("Xk9!mZq2Lp7vRw4nT8yB")
 
     def test_activate_account_invalid_token_returns_400(self, client):
         """Test: activation avec token invalide retourne 400."""
@@ -241,7 +250,7 @@ class TestInstitutionInvitation:
             "/api/v1/auth/activate-account",
             json={
                 "token": "completely_invalid_token",
-                "password": "SecurePassword123!",
+                "password": "Xk9!mZq2Lp7vRw4nT8yB",
             },
         )
 
@@ -251,10 +260,12 @@ class TestInstitutionInvitation:
         """Test: activation avec mot de passe trop court retourne 400."""
         raw_token = secrets.token_urlsafe(32)
         token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+        uid = str(uuid.uuid4())[:8]
+        email = f"short-pwd-{uid}@test.ch"
 
         user = User()
-        user.username = "short_pwd@test.ch"
-        user.email = "short_pwd@test.ch"
+        user.username = email
+        user.email = email
         user.role = UserRole.INSTITUTION
         user.public_id = str(uuid.uuid4())
         user.institution_id = institution.id
@@ -281,10 +292,12 @@ class TestInstitutionInvitation:
         """Test: activation d'un compte déjà actif retourne 400."""
         raw_token = secrets.token_urlsafe(32)
         token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+        uid = str(uuid.uuid4())[:8]
+        email = f"already-active-{uid}@test.ch"
 
         user = User()
-        user.username = "already_active@test.ch"
-        user.email = "already_active@test.ch"
+        user.username = email
+        user.email = email
         user.role = UserRole.INSTITUTION
         user.public_id = str(uuid.uuid4())
         user.institution_id = institution.id
@@ -383,7 +396,7 @@ class TestInstitutionInvitation:
     # POST /institutions/users/<id>/resend-invite
     # ================================================================
 
-    @patch("routes.institutions.send_invitation_email")
+    @patch("application.institutions.invitation_service.send_invitation_email")
     def test_resend_invite_success(
         self, mock_send, client, db, institution, admin_user, admin_headers
     ):
@@ -456,7 +469,7 @@ class TestInstitutionInvitation:
     # Fallback invite_link quand email échoue
     # ================================================================
 
-    @patch("routes.institutions.send_invitation_email")
+    @patch("application.institutions.invitation_service.dispatch_institution_email")
     def test_invite_email_fail_returns_invite_link(
         self, mock_send, client, db, institution, admin_user, admin_headers
     ):
@@ -465,10 +478,13 @@ class TestInstitutionInvitation:
 
         mock_send.return_value = InviteResult(success=False, error="SMTP timeout")
 
+        uid = str(uuid.uuid4())[:8]
+        fail_email = f"fail-email-{uid}@test.ch"
+
         response = client.post(
             "/api/v1/institutions/users",
             json={
-                "email": "fail-email@test.ch",
+                "email": fail_email,
                 "institution_role": "institution_reader",
             },
             headers=admin_headers,
@@ -484,12 +500,12 @@ class TestInstitutionInvitation:
         assert "/invite/" in data["invite_link"]
 
         # Le user est bien en DB avec status invited
-        user = User.query.filter_by(email="fail-email@test.ch").first()
+        user = User.query.filter_by(email=fail_email).first()
         assert user is not None
         assert user.account_status == "invited"
         assert user.invite_token_hash is not None
 
-    @patch("routes.institutions.send_invitation_email")
+    @patch("application.institutions.invitation_service.dispatch_institution_email")
     def test_invite_email_success_also_returns_invite_link(
         self, mock_send, client, db, institution, admin_user, admin_headers
     ):
@@ -498,10 +514,13 @@ class TestInstitutionInvitation:
 
         mock_send.return_value = InviteResult(success=True, token="fake")
 
+        uid = str(uuid.uuid4())[:8]
+        success_email = f"success-link-{uid}@test.ch"
+
         response = client.post(
             "/api/v1/institutions/users",
             json={
-                "email": "success-link@test.ch",
+                "email": success_email,
                 "institution_role": "institution_requester",
             },
             headers=admin_headers,
@@ -515,7 +534,7 @@ class TestInstitutionInvitation:
         assert data["invite_link"] is not None
         assert "/invite/" in data["invite_link"]
 
-    @patch("routes.institutions.send_invitation_email")
+    @patch("application.institutions.invitation_service.send_invitation_email")
     def test_resend_email_fail_returns_invite_link(
         self, mock_send, client, db, institution, admin_user, admin_headers
     ):
@@ -554,3 +573,564 @@ class TestInstitutionInvitation:
         assert data["invite_link"] is not None
         assert "/invite/" in data["invite_link"]
         assert data["user"]["account_status"] == "invited"
+
+    # ================================================================
+    # Sprint 1+ — Compte existant, Mode B, auth composée
+    # ================================================================
+
+    @patch("application.institutions.invitation_service.dispatch_institution_email")
+    def test_invite_existing_user_sends_access_email(
+        self, mock_dispatch, client, db, institution, admin_user, admin_headers
+    ):
+        """Compte existant → access_notification, statut active."""
+        from application.institutions.invitation_service import InviteResult
+
+        mock_dispatch.return_value = InviteResult(success=True)
+
+        uid = str(uuid.uuid4())[:8]
+        existing = User()
+        existing.username = f"existing_{uid}"
+        existing.email = f"existing-{uid}@test.ch"
+        existing.role = UserRole.CLIENT
+        existing.public_id = str(uuid.uuid4())
+        existing.institution_id = None
+        existing.account_status = "active"
+        existing.set_password("password123", force_change=False)
+        db.session.add(existing)
+        db.session.commit()
+
+        response = client.post(
+            "/api/v1/institutions/users",
+            json={
+                "email": existing.email,
+                "institution_role": "institution_requester",
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["email_type"] == "access_notification"
+        assert data["email_sent"] is True
+        assert data["user"]["account_status"] == "active"
+        mock_dispatch.assert_called_once()
+        call_kwargs = mock_dispatch.call_args.kwargs
+        assert call_kwargs["email_type"] == "access_notification"
+
+        db.session.refresh(existing)
+        assert existing.institution_id == institution.id
+        assert existing.account_status == "active"
+
+    @patch("application.institutions.invitation_service.dispatch_institution_email")
+    def test_invite_existing_user_preserves_driver_role(
+        self, mock_dispatch, client, db, institution, admin_user, admin_headers
+    ):
+        """Le rôle DRIVER n'est pas écrasé lors du rattachement."""
+        from application.institutions.invitation_service import InviteResult
+
+        mock_dispatch.return_value = InviteResult(success=True)
+
+        uid = str(uuid.uuid4())[:8]
+        driver = User()
+        driver.username = f"driver_{uid}"
+        driver.email = f"driver-{uid}@test.ch"
+        driver.role = UserRole.DRIVER
+        driver.public_id = str(uuid.uuid4())
+        driver.institution_id = None
+        driver.account_status = "active"
+        driver.set_password("password123", force_change=False)
+        db.session.add(driver)
+        db.session.commit()
+
+        response = client.post(
+            "/api/v1/institutions/users",
+            json={
+                "email": driver.email,
+                "institution_role": "institution_reader",
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        db.session.refresh(driver)
+        assert driver.role == UserRole.DRIVER
+        assert driver.institution_id == institution.id
+
+    def test_create_username_mode(
+        self, client, db, institution, admin_user, admin_headers
+    ):
+        """Mode B — création avec identifiant global et credentials one-shot."""
+        uid = str(uuid.uuid4())[:8]
+        local_username = f"s.dupont.{uid}"
+
+        response = client.post(
+            "/api/v1/institutions/users",
+            json={
+                "creation_mode": "username",
+                "username": local_username,
+                "institution_role": "institution_requester",
+                "first_name": "Sophie",
+                "last_name": "Dupont",
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 201
+        data = response.get_json()
+        assert data["creation_mode"] == "username"
+        assert data["credentials_shown_once"] is True
+        assert data["temporary_credentials"]["username"] == local_username
+        assert data["temporary_credentials"]["temporary_password"]
+        assert "login_identifier" not in data["temporary_credentials"]
+        assert data["user"]["authentication_method"] == "username"
+        assert data["user"]["force_password_change"] is True
+        assert data["user"]["account_status"] == "active"
+
+    def test_login_by_username(self, client, db, institution):
+        """Login via identifiant username global."""
+        from datetime import UTC, datetime, timedelta
+
+        uid = str(uuid.uuid4())[:8]
+        local_username = f"m.rey.{uid}"
+        temp_password = "TempPass123!Xy"
+        user = User()
+        user.username = local_username
+        user.email = None
+        user.role = UserRole.INSTITUTION
+        user.public_id = str(uuid.uuid4())
+        user.institution_id = institution.id
+        user.institution_role = InstitutionRole.REQUESTER.value
+        user.account_status = "active"
+        if hasattr(user, "authentication_method"):
+            user.authentication_method = "username"
+        if hasattr(user, "password_expires_at"):
+            user.password_expires_at = datetime.now(UTC) + timedelta(days=14)
+        user.set_password(temp_password, force_change=True)
+        db.session.add(user)
+        db.session.commit()
+
+        ok = client.post(
+            "/api/v1/auth/login",
+            json={"email": local_username, "password": temp_password},
+        )
+        assert ok.status_code == 200
+        assert ok.get_json()["user"]["force_password_change"] is True
+
+        bad_email = client.post(
+            "/api/v1/auth/login",
+            json={"email": "m.rey@test.ch", "password": temp_password},
+        )
+        assert bad_email.status_code == 401
+
+    def test_force_password_change_blocks_protected_routes_and_bootstrap_exposes_flag(
+        self, client, db, institution
+    ):
+        """Un compte Mode B doit être forcé vers le changement de mot de passe."""
+        from datetime import UTC, datetime, timedelta
+
+        uid = str(uuid.uuid4())[:8]
+        user = User()
+        user.username = f"force.reset.{uid}"
+        user.email = None
+        user.role = UserRole.INSTITUTION
+        user.public_id = str(uuid.uuid4())
+        user.institution_id = institution.id
+        user.institution_role = InstitutionRole.REQUESTER.value
+        user.account_status = "active"
+        user.authentication_method = "username"
+        user.password_expires_at = datetime.now(UTC) + timedelta(days=14)
+        user.set_password("TempPass123!Xy", force_change=True)
+        db.session.add(user)
+        db.session.commit()
+
+        claims = {
+            "role": user.role.value,
+            "institution_id": institution.id,
+            "institution_role": user.institution_role,
+            "aud": "atmr-api",
+        }
+        with client.application.app_context():
+            token = create_access_token(
+                identity=str(user.public_id),
+                additional_claims=claims,
+            )
+        headers = {"Authorization": f"Bearer {token}"}
+
+        bootstrap = client.get("/api/v1/auth/bootstrap", headers=headers)
+        assert bootstrap.status_code == 200
+        assert bootstrap.get_json()["user"]["force_password_change"] is True
+
+        protected = client.get("/api/v1/institutions/me", headers=headers)
+        assert protected.status_code == 403
+        data = protected.get_json()
+        assert data["error"] == "password_change_required"
+        assert data["redirect_to"] == f"/force-reset-password/{user.public_id}"
+
+    def test_force_password_change_full_cycle(
+        self, client, db, institution, admin_user, admin_headers
+    ):
+        """E2E: création Mode B -> login forcé -> changement MDP -> accès rétabli."""
+        uid = str(uuid.uuid4())[:8]
+        local_username = f"cycle.{uid}"
+
+        # 1. Création Mode B (account_status doit être active, pas disabled)
+        create = client.post(
+            "/api/v1/institutions/users",
+            json={
+                "creation_mode": "username",
+                "username": local_username,
+                "institution_role": "institution_requester",
+                "first_name": "Cycle",
+                "last_name": "Test",
+            },
+            headers=admin_headers,
+        )
+        assert create.status_code == 201
+        created = create.get_json()
+        assert created["user"]["account_status"] == "active"
+        assert created["user"]["force_password_change"] is True
+        temp_password = created["temporary_credentials"]["temporary_password"]
+
+        created_user = User.query.filter(
+            db.func.lower(User.username) == local_username
+        ).first()
+        assert created_user.account_status == "active"
+        public_id = created_user.public_id
+
+        # 2. Login avec MDP temporaire -> flag exposé
+        login = client.post(
+            "/api/v1/auth/login",
+            json={"email": local_username, "password": temp_password},
+        )
+        assert login.status_code == 200
+        assert login.get_json()["user"]["force_password_change"] is True
+
+        # 3. Changement de mot de passe (endpoint non bloqué par le guard)
+        new_password = "Brandnew!Pwd2026Xyz"
+        change = client.post(
+            f"/api/v1/auth/reset-password/{public_id}",
+            json={"new_password": new_password, "confirm_password": new_password},
+        )
+        assert change.status_code == 200
+
+        db.session.refresh(created_user)
+        assert created_user.force_password_change is False
+        assert created_user.first_login_completed_at is not None
+
+        # 4. Login final -> flag retombé à False
+        relogin = client.post(
+            "/api/v1/auth/login",
+            json={"email": local_username, "password": new_password},
+        )
+        assert relogin.status_code == 200
+        assert relogin.get_json()["user"]["force_password_change"] is False
+
+        # 5. Endpoint métier désormais accessible
+        claims = {
+            "role": created_user.role.value,
+            "institution_id": institution.id,
+            "institution_role": created_user.institution_role,
+            "aud": "atmr-api",
+        }
+        with client.application.app_context():
+            token = create_access_token(
+                identity=str(public_id), additional_claims=claims
+            )
+        protected = client.get(
+            "/api/v1/institutions/me",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert protected.status_code == 200
+
+    def test_csv_import_returns_501(self, client, admin_headers):
+        """Stub roadmap — import CSV retourne 501."""
+        response = client.post(
+            "/api/v1/institutions/users/import",
+            headers=admin_headers,
+        )
+        assert response.status_code == 501
+        assert response.get_json()["status"] == "not_implemented"
+
+
+class TestInstitutionUserJobTitle:
+    """Tests pour le champ descriptif job_title (fonction/métier).
+
+    job_title est une donnée organisationnelle libre, indépendante du rôle LIRIE :
+    elle n'accorde aucune permission, est éditable même pour les comptes
+    désactivés/archivés, et n'est auditée qu'en cas de changement réel.
+    """
+
+    @pytest.fixture
+    def institution(self, db):
+        inst = Institution()
+        inst.name = "Clinique Job Title Test"
+        inst.institution_type = "clinic"
+        inst.address = "Rue du Métier 1"
+        inst.public_id = str(uuid.uuid4())
+        db.session.add(inst)
+        db.session.flush()
+        db.session.refresh(inst)
+        return inst
+
+    @pytest.fixture
+    def admin_user(self, db, institution):
+        uid = str(uuid.uuid4())[:8]
+        user = User()
+        user.username = f"jt_admin_{uid}"
+        user.email = f"jt-admin-{uid}@test.ch"
+        user.role = UserRole.INSTITUTION
+        user.public_id = str(uuid.uuid4())
+        user.institution_id = institution.id
+        user.institution_role = InstitutionRole.ADMIN.value
+        user.account_status = "active"
+        user.set_password("password123", force_change=False)
+        db.session.add(user)
+        db.session.flush()
+        db.session.refresh(user)
+        return user
+
+    @pytest.fixture
+    def admin_headers(self, client, admin_user, institution):
+        claims = {
+            "role": admin_user.role.value,
+            "institution_id": institution.id,
+            "institution_role": admin_user.institution_role,
+            "aud": "atmr-api",
+        }
+        with client.application.app_context():
+            token = create_access_token(
+                identity=str(admin_user.public_id),
+                additional_claims=claims,
+            )
+        return {"Authorization": f"Bearer {token}"}
+
+    def _make_target(self, db, institution, *, status="active", job_title=None, role=None):
+        uid = str(uuid.uuid4())[:8]
+        target = User()
+        target.username = f"jt_target_{uid}"
+        target.email = f"jt-target-{uid}@test.ch"
+        target.role = UserRole.INSTITUTION
+        target.public_id = str(uuid.uuid4())
+        target.institution_id = institution.id
+        target.institution_role = role or InstitutionRole.READER.value
+        target.account_status = status
+        target.job_title = job_title
+        target.set_password("password123", force_change=False)
+        db.session.add(target)
+        db.session.flush()
+        db.session.refresh(target)
+        return target
+
+    def _count_job_title_audits(self, target_user_id):
+        from models.institution_user_audit_event import InstitutionUserAuditEvent
+
+        return InstitutionUserAuditEvent.query.filter_by(
+            target_user_id=target_user_id,
+            event_type="job_title_updated",
+        ).count()
+
+    # ----------------------------------------------------------------
+    # Création
+    # ----------------------------------------------------------------
+
+    def test_create_username_mode_with_job_title(
+        self, client, db, institution, admin_user, admin_headers
+    ):
+        """Mode B : job_title fourni est persisté et renvoyé."""
+        uid = str(uuid.uuid4())[:8]
+        response = client.post(
+            "/api/v1/institutions/users",
+            json={
+                "creation_mode": "username",
+                "username": f"a.aupretre.{uid}",
+                "institution_role": "institution_reader",
+                "first_name": "Adèle",
+                "last_name": "Aupretre",
+                "job_title": "Infirmier diplômé(e)",
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 201
+        data = response.get_json()
+        assert data["user"]["job_title"] == "Infirmier diplômé(e)"
+
+        created = User.query.filter_by(id=data["user"]["id"]).first()
+        assert created.job_title == "Infirmier diplômé(e)"
+        # Indépendance : le rôle reste celui demandé
+        assert created.institution_role == "institution_reader"
+
+    @patch("application.institutions.invitation_service.dispatch_institution_email")
+    def test_invite_email_with_job_title(
+        self, mock_send, client, db, institution, admin_user, admin_headers
+    ):
+        """Mode email : job_title est persisté sur le nouvel utilisateur."""
+        from application.institutions.invitation_service import InviteResult
+
+        mock_send.return_value = InviteResult(success=True, token="fake")
+
+        uid = str(uuid.uuid4())[:8]
+        email = f"jt-new-{uid}@test.ch"
+        response = client.post(
+            "/api/v1/institutions/users",
+            json={
+                "email": email,
+                "institution_role": "institution_requester",
+                "job_title": "Secrétaire médicale",
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 201
+        assert response.get_json()["user"]["job_title"] == "Secrétaire médicale"
+        created = User.query.filter_by(email=email).first()
+        assert created.job_title == "Secrétaire médicale"
+
+    def test_create_normalizes_internal_whitespace(
+        self, client, db, institution, admin_user, admin_headers
+    ):
+        """Les espaces multiples/de bord sont normalisés à la création."""
+        uid = str(uuid.uuid4())[:8]
+        response = client.post(
+            "/api/v1/institutions/users",
+            json={
+                "creation_mode": "username",
+                "username": f"e.teixeira.{uid}",
+                "institution_role": "institution_reader",
+                "job_title": "  Infirmier    diplômé(e)  ",
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 201
+        assert response.get_json()["user"]["job_title"] == "Infirmier diplômé(e)"
+
+    # ----------------------------------------------------------------
+    # Édition (PATCH)
+    # ----------------------------------------------------------------
+
+    def test_patch_updates_job_title_and_audits(
+        self, client, db, institution, admin_user, admin_headers
+    ):
+        """PATCH met à jour job_title, renvoie le user et écrit un audit."""
+        target = self._make_target(db, institution, job_title="ASSC")
+        db.session.commit()
+
+        response = client.patch(
+            f"/api/v1/institutions/users/{target.id}",
+            json={"job_title": "Infirmier diplômé(e)"},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["message"] == "Fonction mise à jour"
+        assert data["user"]["job_title"] == "Infirmier diplômé(e)"
+
+        db.session.refresh(target)
+        assert target.job_title == "Infirmier diplômé(e)"
+        assert self._count_job_title_audits(target.id) == 1
+
+    def test_patch_same_value_does_not_audit(
+        self, client, db, institution, admin_user, admin_headers
+    ):
+        """PATCH avec la même valeur ne crée aucun audit (changement inexistant)."""
+        target = self._make_target(db, institution, job_title="Réceptionniste")
+        db.session.commit()
+
+        response = client.patch(
+            f"/api/v1/institutions/users/{target.id}",
+            json={"job_title": "Réceptionniste"},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        assert response.get_json()["message"] == "Fonction inchangée"
+        assert self._count_job_title_audits(target.id) == 0
+
+    def test_patch_whitespace_only_change_is_no_op(
+        self, client, db, institution, admin_user, admin_headers
+    ):
+        """Une valeur identique après normalisation n'est pas considérée comme un changement."""
+        target = self._make_target(db, institution, job_title="Médecin")
+        db.session.commit()
+
+        response = client.patch(
+            f"/api/v1/institutions/users/{target.id}",
+            json={"job_title": "  Médecin  "},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        assert response.get_json()["message"] == "Fonction inchangée"
+        assert self._count_job_title_audits(target.id) == 0
+
+    def test_patch_works_for_disabled_user(
+        self, client, db, institution, admin_user, admin_headers
+    ):
+        """job_title est éditable même pour un compte désactivé/archivé."""
+        target = self._make_target(
+            db, institution, status="disabled", job_title="ASSC"
+        )
+        target.archived_at = datetime.now(UTC)
+        db.session.commit()
+
+        response = client.patch(
+            f"/api/v1/institutions/users/{target.id}",
+            json={"job_title": "Aide-soignant(e)"},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        db.session.refresh(target)
+        assert target.job_title == "Aide-soignant(e)"
+
+    def test_patch_clear_job_title(
+        self, client, db, institution, admin_user, admin_headers
+    ):
+        """Envoyer une chaîne vide remet job_title à None."""
+        target = self._make_target(db, institution, job_title="Médecin")
+        db.session.commit()
+
+        response = client.patch(
+            f"/api/v1/institutions/users/{target.id}",
+            json={"job_title": ""},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        db.session.refresh(target)
+        assert target.job_title is None
+        assert self._count_job_title_audits(target.id) == 1
+
+    def test_patch_does_not_change_role(
+        self, client, db, institution, admin_user, admin_headers
+    ):
+        """job_title est indépendant du rôle : le rôle n'est jamais modifié."""
+        target = self._make_target(
+            db, institution, role=InstitutionRole.REQUESTER.value, job_title="ASSC"
+        )
+        db.session.commit()
+
+        response = client.patch(
+            f"/api/v1/institutions/users/{target.id}",
+            json={"job_title": "Infirmier diplômé(e)", "institution_role": "institution_admin"},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        db.session.refresh(target)
+        assert target.job_title == "Infirmier diplômé(e)"
+        # Le rôle reste inchangé (le schéma ignore institution_role)
+        assert target.institution_role == InstitutionRole.REQUESTER.value
+
+    def test_patch_unknown_user_returns_404(
+        self, client, db, institution, admin_user, admin_headers
+    ):
+        """PATCH sur un id inexistant retourne 404."""
+        response = client.patch(
+            "/api/v1/institutions/users/999999",
+            json={"job_title": "Médecin"},
+            headers=admin_headers,
+        )
+        assert response.status_code == 404

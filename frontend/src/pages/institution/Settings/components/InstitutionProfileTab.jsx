@@ -13,6 +13,7 @@ import { useInstitutionMe, useUpdateInstitution } from '../../../../hooks/useIns
 import { isAdmin } from '../../../../utils/institutionPermissions';
 import AddressAutocomplete from '../../../../components/common/AddressAutocomplete';
 import { toast } from 'sonner';
+import ChipSelect from './ChipSelect';
 import styles from '../InstitutionSettings.module.css';
 
 const FIELDS = ['name', 'institution_type', 'address', 'contact_email', 'contact_phone', 'notes'];
@@ -153,21 +154,18 @@ const InstitutionProfileTab = () => {
 
         {/* Type d'institution */}
         <div className={styles.field}>
-          <label>Type d'institution</label>
+          <label htmlFor="institution-type">Type d'institution</label>
           {canEdit ? (
-            <select
-              value={form.institution_type}
-              onChange={(e) => handleChange('institution_type', e.target.value)}
-            >
-              <option value="" disabled>
-                Sélectionner un type
-              </option>
-              {INSTITUTION_TYPES.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.label}
-                </option>
-              ))}
-            </select>
+            <ChipSelect
+              id="institution-type"
+              name="institution_type"
+              ariaLabel="Type d'institution"
+              block
+              placeholder="Sélectionner un type"
+              value={form.institution_type || ''}
+              options={INSTITUTION_TYPES}
+              onChange={(val) => handleChange('institution_type', val)}
+            />
           ) : (
             <input
               type="text"

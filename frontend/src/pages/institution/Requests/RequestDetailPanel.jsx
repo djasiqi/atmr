@@ -6,6 +6,7 @@
 
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import ConfirmSendModal from './ConfirmSendModal';
+import ChipSelect from '../../../components/ui/ChipSelect';
 import {
   FaTimes, FaEdit, FaPaperPlane,
   FaTruck, FaRoute, FaFileInvoiceDollar,
@@ -283,15 +284,15 @@ const BillingSection = ({ request, canBilling, billingMutation, bookingBillingMu
             value={overrideReason}
             onChange={(e) => setOverrideReason(e.target.value)}
           />
-          <select
+          <ChipSelect
+            options={[
+              { value: 'patient', label: 'Patient' },
+              { value: 'institution', label: 'Institution' },
+            ]}
             value={selectedIntent}
-            onChange={(e) => setSelectedIntent(e.target.value)}
+            onChange={(val) => setSelectedIntent(val)}
             disabled={isPending}
-            className={s.billingSelect}
-          >
-            <option value="patient">Patient</option>
-            <option value="institution">Institution</option>
-          </select>
+          />
           <button
             onClick={handleSave}
             disabled={!hasChanged || isPending}

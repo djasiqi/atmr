@@ -475,8 +475,31 @@ def _reset_user_password_with_policy(user: User, new_password: str):
             logger_instance=logger,
         )
 
+    was_forced = bool(getattr(user, "force_password_change", False))
     user.set_password(new_password)  # nosem
     user.force_password_change = False
+    if hasattr(user, "password_expires_at"):
+        user.password_expires_at = None
+    if hasattr(user, "temporary_password_created_at"):
+        user.temporary_password_created_at = None
+    if was_forced and hasattr(user, "first_login_completed_at") and not user.first_login_completed_at:
+        user.first_login_completed_at = datetime.now(UTC)
+        if user.institution_id:
+            try:
+                from models.institution_user_audit_event import InstitutionUserAuditEvent
+
+                InstitutionUserAuditEvent.record(
+                    institution_id=user.institution_id,
+                    target_user_id=user.id,
+                    performed_by_user_id=user.id,
+                    event_type="first_password_change_completed",
+                    ip_address=request.remote_addr if request else None,
+                    user_agent=request.headers.get("User-Agent") if request else None,
+                )
+            except Exception as audit_err:
+                logger.warning(
+                    "Audit first_password_change_completed failed: %s", audit_err
+                )
 
     try:
         from security.security_metrics import (
@@ -1063,6 +1086,11 @@ def _login_post_body():
             "email": user.email,
             "role": user.role.value,
             "force_password_change": user.force_password_change,
+            "must_complete_onboarding": _must_complete_onboarding(user),
+            "onboarding_reasons": _onboarding_reasons(user),
+            "password_expires_at": user.password_expires_at.isoformat()
+            if getattr(user, "password_expires_at", None)
+            else None,
         },
         "trace_id": trace_id,
     }
@@ -1218,8 +1246,15 @@ def _feature_flags_config() -> dict[str, object]:
     return cast("dict[str, object]", flags)
 
 
+def _account_status_value(user: User) -> str:
+    status = getattr(user, "account_status", None)
+    if hasattr(status, "value"):
+        status = status.value
+    return str(status or "").strip().lower()
+
+
 def _normalized_account_status(user: User) -> str:
-    status = str(getattr(user, "account_status", "") or "").strip().lower()
+    status = _account_status_value(user)
     if status in {"disabled", "suspended"}:
         return "suspended"
     if status in {"pending_activation", "invited", "inactive"}:
@@ -1228,8 +1263,26 @@ def _normalized_account_status(user: User) -> str:
 
 
 def _onboarding_required(user: User) -> bool:
-    status = str(getattr(user, "account_status", "") or "").strip().lower()
+    status = _account_status_value(user)
     return status in {"pending_activation", "invited"}
+
+
+def _onboarding_reasons(user: User) -> list[str]:
+    reasons: list[str] = []
+    if bool(getattr(user, "force_password_change", False)):
+        reasons.append("force_password_change")
+    status = _account_status_value(user)
+    if status == "invited":
+        reasons.append("invited")
+    elif status == "pending_activation":
+        reasons.append("pending_activation")
+    # futur : if getattr(user, "must_accept_cgu", False): reasons.append("cgu")
+    # futur : if getattr(user, "must_setup_mfa", False): reasons.append("mfa")
+    return reasons
+
+
+def _must_complete_onboarding(user: User) -> bool:
+    return bool(_onboarding_reasons(user))
 
 
 def _permissions_for_context(context_type: str) -> list[str]:
@@ -1604,11 +1657,25 @@ def _check_user_profile_active(user: User) -> tuple[bool, str | None]:
             return False, "Compte désactivé"
 
     # Institution: vérifier account_status
-    if user.role == UserRole.INSTITUTION:
+    if user.role == UserRole.INSTITUTION or user.institution_id:
+        if getattr(user, "archived_at", None):
+            return False, "Compte archivé"
         if getattr(user, "account_status", None) == "disabled":
             return False, "Compte désactivé"
         if getattr(user, "account_status", None) == "invited":
             return False, "Compte non encore activé. Vérifiez votre email d'invitation."
+        password_expires_at = getattr(user, "password_expires_at", None)
+        if password_expires_at and password_expires_at.tzinfo is None:
+            password_expires_at = password_expires_at.replace(tzinfo=UTC)
+        if (
+            getattr(user, "force_password_change", False)
+            and password_expires_at
+            and password_expires_at < datetime.now(UTC)
+        ):
+            return (
+                False,
+                "Mot de passe temporaire expiré. Contactez votre administrateur.",
+            )
 
     # Comptes demo: validité stricte alignée sur la fenêtre d'accès démo.
     demo_valid, demo_error = enforce_demo_user_access_validity(user)
@@ -2640,12 +2707,19 @@ class AuthBootstrap(Resource):
                     "first_name": user.first_name,
                     "last_name": user.last_name,
                     "role": user.role.value,
+                    "force_password_change": bool(
+                        getattr(user, "force_password_change", False)
+                    ),
+                    "password_expires_at": user.password_expires_at.isoformat()
+                    if getattr(user, "password_expires_at", None)
+                    else None,
                 },
                 "account_status": account_status,
                 "onboarding_status": {
-                    "required": _onboarding_required(user),
                     "status": getattr(user, "account_status", None) or "active",
-                    "reason": denial_message if _onboarding_required(user) else None,
+                    "must_complete_onboarding": _must_complete_onboarding(user),
+                    "reasons": _onboarding_reasons(user),
+                    "required": _must_complete_onboarding(user),
                 },
                 "available_contexts": contexts,
                 "active_context_id": active_context_id,

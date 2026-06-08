@@ -2,10 +2,10 @@ import React from 'react';
 import Header from '../../components/layout/Header/Header';
 import Footer from '../../components/layout/Footer/Footer';
 
-const DefaultLayout = ({ children, compactMain = false }) => {
+const DefaultLayout = ({ children, compactMain = false, hideAuthEntry = false }) => {
   return (
     <div style={styles.container}>
-      <Header />
+      <Header hideAuthEntry={hideAuthEntry} />
       <main style={compactMain ? styles.mainCompact : styles.main}>{children}</main>
       <Footer />
     </div>

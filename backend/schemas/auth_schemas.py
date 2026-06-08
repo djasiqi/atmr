@@ -16,7 +16,8 @@ from schemas.validation_utils import (
 class LoginSchema(Schema):
     """Schema pour validation login (POST /api/auth/login)."""
 
-    email = fields.Email(required=True, validate=EMAIL_VALIDATOR)
+    # Email ou identifiant institution composé (slug/username)
+    email = fields.Str(required=True, validate=validate.Length(min=3, max=255))
     password = fields.Str(required=True, validate=PASSWORD_VALIDATOR)
     # Optionnel: si True (côté web), demande un refresh token long-lived (ex: 30j)
     # avec cookie persistant. Si False/absent: refresh token court (ex: 1h) et

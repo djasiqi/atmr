@@ -873,6 +873,20 @@ def role_required(*roles):
                 )
                 abort(404, description="Utilisateur non trouvé")
 
+            if getattr(user, "force_password_change", False):
+                allowed_prefixes = (
+                    "/api/v1/auth/reset-password",
+                    "/api/v1/auth/logout",
+                    "/api/v1/auth/bootstrap",
+                    "/api/v1/auth/refresh",
+                )
+                if not request.path.startswith(allowed_prefixes):
+                    return {
+                        "error": "password_change_required",
+                        "message": "Vous devez modifier votre mot de passe avant de continuer.",
+                        "redirect_to": f"/force-reset-password/{user.public_id}",
+                    }, 403
+
             # Convertir les rôles en objets UserRole pour la comparaison
             from models import UserRole
 

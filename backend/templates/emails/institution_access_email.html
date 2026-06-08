@@ -1,0 +1,43 @@
+{% extends "emails/base_email.html" %}
+
+{% block title %}Accès institution - {{ institution_name }}{% endblock %}
+
+{% block header_title %}{{ institution_name|default('Portail Institution') }}{% endblock %}
+
+{% block content %}
+<h2>Vous avez été ajouté(e) à une institution</h2>
+
+<p>Bonjour{{ ' ' + first_name if first_name else '' }},</p>
+
+<p>
+    <span class="text-bold">{{ inviter_name }}</span> vous a ajouté(e) à
+    <span class="text-bold">{{ institution_name }}</span> sur le portail de transport Lirie.
+</p>
+
+<div class="info-box">
+    <p style="margin: 0;">
+        <strong>Votre rôle :</strong> {{ role_label }}<br>
+        <strong>Institution :</strong> {{ institution_name }}
+    </p>
+</div>
+
+<p>
+    Vous pouvez vous connecter dès maintenant avec votre compte Lirie existant
+    (même adresse email et mot de passe).
+</p>
+
+<div style="text-align: center;">
+    <a href="{{ login_url }}" class="button">Accéder au portail</a>
+</div>
+
+<p class="text-muted" style="text-align: center; font-size: 12px; word-break: break-all;">
+    Si le bouton ne fonctionne pas, copiez ce lien dans votre navigateur :<br>
+    <a href="{{ login_url }}" style="color: #667eea;">{{ login_url }}</a>
+</p>
+
+<div class="divider"></div>
+
+<p class="text-muted">
+    Si vous n'êtes pas à l'origine de cette demande, contactez votre administrateur institutionnel.
+</p>
+{% endblock %}
