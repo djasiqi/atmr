@@ -39,8 +39,16 @@ from services.geolocation.presence import (
 from services.geolocation.location import get_location_service
 from services.monitoring.driver_location_metrics import (
     inc_batch_fallback_individual,
+    inc_batch_points_canonical,
+    inc_batch_points_observability,
+    inc_batch_points_received,
+    inc_batch_points_skipped,
+    inc_batch_rate_limited,
     inc_received,
+    inc_tracking_id_propagated,
+    observe_batch_latency_seconds,
     observe_driver_location_batch_ingest_size,
+    observe_gps_quality,
 )
 from services.monitoring.location_correlation_log import log_driver_location_processed
 from services.monitoring.websocket_rate_limiter import ws_rate_limiter
@@ -2403,6 +2411,8 @@ def init_chat_socket(socketio: SocketIO):
         driver_id_log: int | None = None
         company_id_log: int | None = None
         payload_driver_id_log: Any = None
+        batch_t0 = time.perf_counter()
+        batch_platform = "unknown"
         try:
             current_sid = _get_sid()
             current_sid_log = current_sid
@@ -2488,6 +2498,7 @@ def init_chat_socket(socketio: SocketIO):
                     driver.id,
                     retry_after or 0,
                 )
+                inc_batch_rate_limited()
                 emit(
                     "rate_limit_exceeded",
                     {
@@ -2540,6 +2551,36 @@ def init_chat_socket(socketio: SocketIO):
                 return {"success": False, "error": "Batch vide"}
 
             observe_driver_location_batch_ingest_size(size=len(positions))
+
+            first_pos_for_platform = positions[0] if positions else {}
+            raw_platform = first_pos_for_platform.get("platform")
+            if isinstance(raw_platform, str) and raw_platform.strip():
+                batch_platform = raw_platform.strip().lower()
+            else:
+                ua = request.headers.get("User-Agent", "").lower()
+                if "iphone" in ua or "ipad" in ua or "ios" in ua:
+                    batch_platform = "ios"
+                elif "android" in ua:
+                    batch_platform = "android"
+
+            for pos in positions:
+                norm_mode_pre = normalize_location_mode(
+                    tcast("str | None", pos.get("location_mode"))
+                )
+                inc_batch_points_received(location_mode=norm_mode_pre)
+                observe_gps_quality(
+                    platform=batch_platform,
+                    location_mode=norm_mode_pre,
+                    transport="socket_batch",
+                    accuracy=float(pos["accuracy"])
+                    if pos.get("accuracy") is not None
+                    else None,
+                    speed=float(pos["speed"]) if pos.get("speed") is not None else None,
+                    heading=float(pos["heading"])
+                    if pos.get("heading") is not None
+                    else None,
+                    provider=tcast("str | None", pos.get("provider")),
+                )
 
             # Instrumentation: tracer les clés reçues pour diagnostiquer payload cassé
             first_pos = positions[0] if positions else {}
@@ -2671,6 +2712,10 @@ def init_chat_socket(socketio: SocketIO):
                                 "position": pos,
                             }
                         )
+                        inc_batch_points_skipped(
+                            reason="forbidden_mode",
+                            location_mode=location_mode,
+                        )
                         continue
 
                     raw_mode_batch = str(pos.get("location_mode") or "mission_live")
@@ -2712,6 +2757,10 @@ def init_chat_socket(socketio: SocketIO):
                             location_mode=norm_mode_batch,
                             transport="socket_batch",
                         )
+                        inc_batch_points_skipped(
+                            reason="dedup",
+                            location_mode=norm_mode_batch,
+                        )
                         processed_count += 1
                         continue
 
@@ -2748,6 +2797,10 @@ def init_chat_socket(socketio: SocketIO):
                         snapped_lon = result.snapped_lon
                         accept_status = result.accept_status
                         received_at = result.received_at or received_at
+                        if accept_status == "accepted_canonical":
+                            inc_batch_points_canonical(location_mode=norm_mode_batch)
+                        elif accept_status == "accepted_observability_only":
+                            inc_batch_points_observability(location_mode=norm_mode_batch)
 
                         log_driver_location_processed(
                             driver_id=driver.id,
@@ -2812,41 +2865,58 @@ def init_chat_socket(socketio: SocketIO):
                     )
                     from services.realtime.socketio import fanout_driver_location_update
 
+                    tracking_event_id_fanout = pos.get("tracking_event_id")
+                    tracking_event_id_str = (
+                        str(tracking_event_id_fanout).strip()
+                        if isinstance(tracking_event_id_fanout, str)
+                        else None
+                    )
+                    inc_tracking_id_propagated(
+                        transport="socket_batch",
+                        propagated=bool(tracking_event_id_str),
+                    )
+
+                    location_payload = {
+                        "driver_id": driver.id,
+                        "company_id": company_id_val,
+                        "first_name": getattr(
+                            getattr(driver, "user", None), "first_name", None
+                        ),
+                        "latitude": snapped_lat,
+                        "longitude": snapped_lon,
+                        "timestamp": ts_str,
+                        "recorded_at": ts_str,
+                        "received_at": received_at,
+                        "location_mode": location_mode,
+                    }
+                    live_state_payload = {
+                        "driver_id": driver.id,
+                        "company_id": company_id_val,
+                        "lat": snapped_lat,
+                        "lng": snapped_lon,
+                        "timestamp": ts_str,
+                        "status": driver_status,
+                        "mission_status": mission_status,
+                        "presence_status": presence_status,
+                        "location_status": location_status,
+                        "is_available": driver_status == "available",
+                        "offline_reason": "location_stale"
+                        if location_status == "stale"
+                        else "",
+                        "last_seen_seconds": last_seen_seconds,
+                        "location_mode": location_mode,
+                        "mission_id": fanout_mission_id,
+                        "recorded_at": ts_str,
+                        "received_at": received_at,
+                    }
+                    if tracking_event_id_str:
+                        location_payload["tracking_event_id"] = tracking_event_id_str
+                        live_state_payload["tracking_event_id"] = tracking_event_id_str
+
                     fanout_driver_location_update(
                         company_id_val,
-                        {
-                            "driver_id": driver.id,
-                            "company_id": company_id_val,
-                            "first_name": getattr(
-                                getattr(driver, "user", None), "first_name", None
-                            ),
-                            "latitude": snapped_lat,
-                            "longitude": snapped_lon,
-                            "timestamp": ts_str,
-                            "recorded_at": ts_str,
-                            "received_at": received_at,
-                            "location_mode": location_mode,
-                        },
-                        {
-                            "driver_id": driver.id,
-                            "company_id": company_id_val,
-                            "lat": snapped_lat,
-                            "lng": snapped_lon,
-                            "timestamp": ts_str,
-                            "status": driver_status,
-                            "mission_status": mission_status,
-                            "presence_status": presence_status,
-                            "location_status": location_status,
-                            "is_available": driver_status == "available",
-                            "offline_reason": "location_stale"
-                            if location_status == "stale"
-                            else "",
-                            "last_seen_seconds": last_seen_seconds,
-                            "location_mode": location_mode,
-                            "mission_id": fanout_mission_id,
-                            "recorded_at": ts_str,
-                            "received_at": received_at,
-                        },
+                        location_payload,
+                        live_state_payload,
                         accept_status=accept_status,
                     )
 
@@ -2911,6 +2981,7 @@ def init_chat_socket(socketio: SocketIO):
             if rejected_positions:
                 ack_response["rejected"] = rejected_positions
                 ack_response["rejected_count"] = len(rejected_positions)
+            observe_batch_latency_seconds(seconds=time.perf_counter() - batch_t0)
             emit("driver_location_batch_ack", ack_response)
             return ack_response
 

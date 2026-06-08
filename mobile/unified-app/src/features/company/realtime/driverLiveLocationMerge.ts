@@ -1,7 +1,20 @@
 import type { CompanyDriverLiveLocation } from "../api/contracts";
+import { isCompanyMapDynamicFilterEnabled } from "./companyMapRuntimeConfig";
 
-/** Seuil minimal de déplacement GPS avant publication UI (évite jitter stationnaire). */
+/** Seuil minimal de déplacement GPS avant publication UI (legacy fixe 5 m). */
 export const FLEET_GPS_MIN_MOVE_METERS = 5;
+
+export function resolveMinMoveMeters(incoming: CompanyDriverLiveLocation): number {
+  if (!isCompanyMapDynamicFilterEnabled()) {
+    return FLEET_GPS_MIN_MOVE_METERS;
+  }
+  const accuracy = incoming.accuracy;
+  if (typeof accuracy === "number" && accuracy > 0) {
+    return Math.max(1.5, accuracy * 0.25);
+  }
+  const speed = incoming.speed ?? 0;
+  return speed > 5 ? 1.5 : 4;
+}
 
 const HEADING_EPSILON_DEG = 3;
 const SPEED_EPSILON_KMH = 1;
@@ -54,7 +67,8 @@ export function hasMeaningfulDriverLocationChange(
     incoming.latitude,
     incoming.longitude
   );
-  if (movedMeters >= FLEET_GPS_MIN_MOVE_METERS) return true;
+  const minMove = resolveMinMoveMeters(incoming);
+  if (movedMeters >= minMove) return true;
 
   if (headingDelta(current.heading, incoming.heading) >= HEADING_EPSILON_DEG) return true;
   if (speedDelta(current.speed, incoming.speed) >= SPEED_EPSILON_KMH) return true;

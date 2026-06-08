@@ -187,3 +187,41 @@ groups:
           sum(rate(driver_device_health_reports_total{battery_optimized="true"}[5m]))
           /
           clamp_min(sum(rate(driver_device_health_reports_total[5m])), 0.001)
+
+  - name: location_recording
+    interval: 1m
+    rules:
+      - record: location:batch_latency_p95_5m
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum(rate(driver_location_batch_latency_seconds_bucket[5m])) by (le)
+          )
+        labels:
+          metric_type: location
+      - record: location:batch_rate_limit_rate_5m
+        expr: sum(rate(driver_location_batch_rate_limited_total[5m]))
+        labels:
+          metric_type: location
+      - record: location:canonical_share_by_transport_5m
+        expr: |
+          sum(rate(driver_location_processed_total{accept_status="accepted_canonical"}[5m])) by (transport)
+          /
+          clamp_min(sum(rate(driver_location_processed_total[5m])) by (transport), 1e-9)
+        labels:
+          metric_type: location
+      - record: location:gps_accuracy_p95_by_platform_5m
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum(rate(driver_location_gps_accuracy_meters_bucket[5m])) by (le, platform)
+          )
+        labels:
+          metric_type: location
+      - record: location:tracking_id_propagation_ratio_5m
+        expr: |
+          sum(rate(driver_location_tracking_id_propagated_total[5m]))
+          /
+          clamp_min(sum(rate(driver_location_batch_points_received_total[5m])), 1e-9)
+        labels:
+          metric_type: location

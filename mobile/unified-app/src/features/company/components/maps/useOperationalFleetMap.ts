@@ -38,7 +38,8 @@ import {
   type MapSignalsSnapshot,
 } from "./fleetMapTypes";
 import type { CameraPolicy } from "../../dashboard/cockpit/cameraPolicyManager";
-import { buildDriversBoundsSignature } from "./fleetMapFitPadding";
+import { buildDriversBoundsSignature, buildDriversStructuralSignature } from "./fleetMapFitPadding";
+import { isCompanyMapAutofitStructuralOnly } from "../../realtime/companyMapRuntimeConfig";
 import type { ImminentDeparturesResult } from "../../dashboard/cockpit/imminentDepartures";
 import { buildImminentDepartures } from "../../dashboard/cockpit/imminentDepartures";
 
@@ -586,17 +587,18 @@ export function useOperationalFleetMap({
     setRecenterToken(recenterTokenRef.current);
   }, [enriched.length]);
 
-  const driversBoundsSignature = useMemo(
-    () =>
-      buildDriversBoundsSignature(
-        filtered.map((d) => ({
-          driver_id: d.driver_id,
-          latitude: d.latitude,
-          longitude: d.longitude,
-        }))
-      ),
-    [filtered]
-  );
+  const driversBoundsSignature = useMemo(() => {
+    if (isCompanyMapAutofitStructuralOnly()) {
+      return buildDriversStructuralSignature(filtered.map((d) => ({ driver_id: d.driver_id })));
+    }
+    return buildDriversBoundsSignature(
+      filtered.map((d) => ({
+        driver_id: d.driver_id,
+        latitude: d.latitude,
+        longitude: d.longitude,
+      }))
+    );
+  }, [filtered]);
   const lastAutoFitBoundsRef = useRef("");
   useEffect(() => {
     if (filtered.length === 0) return;

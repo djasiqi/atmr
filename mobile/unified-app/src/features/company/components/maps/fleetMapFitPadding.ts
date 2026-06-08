@@ -53,6 +53,16 @@ export function buildDriversBoundsSignature(
     .join("|");
 }
 
+/** Signature structurelle (IDs only) — auto-fit sans jitter GPS. */
+export function buildDriversStructuralSignature(
+  drivers: Array<{ driver_id: number }>
+): string {
+  return drivers
+    .map((d) => String(d.driver_id))
+    .sort()
+    .join("|");
+}
+
 /** Limite le dézoom manuel au-delà du cadre flotte (évite de « descendre » dans le vide). */
 export function computeFleetMaxRegionDelta(
   drivers: Array<{ latitude: number; longitude: number }>,

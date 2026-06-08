@@ -15,10 +15,14 @@ import {
   resolveFlushDelayMs,
   resolveGpsEventFlushPriority,
   type GpsFlushPriority,
+  getEffectiveMaxBatchAgeMs,
 } from "./gpsFlushScheduler";
-import { MAX_BATCH_AGE_MS, REALTIME_FLUSH_MS } from "./gpsFlushConstants";
+import { REALTIME_FLUSH_MS } from "./gpsFlushConstants";
+import { resolveRealtimeFlushMs } from "./companyMapRuntimeConfig";
 
-export { MAX_BATCH_AGE_MS, REALTIME_FLUSH_MS };
+export { REALTIME_FLUSH_MS };
+export const MAX_BATCH_AGE_MS = 1_000;
+export { resolveRealtimeFlushMs as REALTIME_FLUSH_MS_RESOLVED };
 export const MAP_SILENCE_RESYNC_MS = 120_000;
 const STALE_SECONDS_THRESHOLD = 120;
 
@@ -252,7 +256,7 @@ export function useCompanyDriverLiveTracking() {
   const scheduleMaxAgeFlush = useCallback(() => {
     if (maxAgeTimerRef.current != null || batchStartedAtRef.current == null) return;
     const elapsed = Date.now() - batchStartedAtRef.current;
-    const remaining = Math.max(0, MAX_BATCH_AGE_MS - elapsed);
+    const remaining = Math.max(0, getEffectiveMaxBatchAgeMs() - elapsed);
     maxAgeTimerRef.current = setTimeout(() => {
       maxAgeTimerRef.current = null;
       flushPending();

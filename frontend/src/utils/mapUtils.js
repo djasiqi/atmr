@@ -157,10 +157,10 @@ export const normaliseCoords = (lat, lon) => {
  */
 export const resolveDriverCoords = (d, companyFallback) => {
   const candidates = [
-    [d.current_lat, d.current_lon],
     [d.latitude, d.longitude],
     [d.lat, d.lon],
     [d.lat, d.lng],
+    [d.current_lat, d.current_lon],
     [d.last_latitude, d.last_longitude],
   ];
   if (d.last_position) candidates.push([d.last_position.lat, d.last_position.lon]);

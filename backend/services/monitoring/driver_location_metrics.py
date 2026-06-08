@@ -78,6 +78,16 @@ _TRACKING_KAFKA_REBALANCE = None
 _TRACKING_PROCESSED_FANOUT_FAILURES = None
 _TRACKING_KAFKA_E2E_LATENCY = None
 _DRIVER_DEVICE_HEALTH_RECEIVED = None
+_BATCH_RATE_LIMITED = None
+_BATCH_POINTS_RECEIVED = None
+_BATCH_POINTS_CANONICAL = None
+_BATCH_POINTS_OBSERVABILITY = None
+_BATCH_POINTS_SKIPPED = None
+_TRACKING_ID_PROPAGATED = None
+_TRACKING_ID_MISSING = None
+_CANONICAL_REDIS_WRITE = None
+_CANONICAL_OVERWRITE = None
+_GPS_PROVIDER = None
 
 if Counter is not None:
     _DEDUP_SKIPPED = Counter(
@@ -156,6 +166,55 @@ if Counter is not None:
         ),
         ["constraint_reason"],
     )
+    _BATCH_RATE_LIMITED = Counter(
+        "driver_location_batch_rate_limited_total",
+        "Batches driver_location_batch rejetés par rate limiter WebSocket",
+    )
+    _BATCH_POINTS_RECEIVED = Counter(
+        "driver_location_batch_points_received_total",
+        "Points GPS dans batches acceptés (après filtre pipeline, avant traitement)",
+        ["location_mode"],
+    )
+    _BATCH_POINTS_CANONICAL = Counter(
+        "driver_location_batch_points_canonical_total",
+        "Points batch aboutissant à accepted_canonical",
+        ["location_mode"],
+    )
+    _BATCH_POINTS_OBSERVABILITY = Counter(
+        "driver_location_batch_points_observability_total",
+        "Points batch aboutissant à accepted_observability_only",
+        ["location_mode"],
+    )
+    _BATCH_POINTS_SKIPPED = Counter(
+        "driver_location_batch_points_skipped_total",
+        "Points batch ignorés (dedup, validation, rejet)",
+        ["reason", "location_mode"],
+    )
+    _TRACKING_ID_PROPAGATED = Counter(
+        "driver_location_tracking_id_propagated_total",
+        "Points batch avec tracking_event_id propagé jusqu'au fanout",
+        ["transport"],
+    )
+    _TRACKING_ID_MISSING = Counter(
+        "driver_location_tracking_id_missing_total",
+        "Points batch sans tracking_event_id au fanout",
+        ["transport"],
+    )
+    _CANONICAL_REDIS_WRITE = Counter(
+        "driver_location_canonical_redis_write_total",
+        "Écritures Redis driver:{id}:loc:canonical acceptées",
+        ["location_mode", "transport"],
+    )
+    _CANONICAL_OVERWRITE = Counter(
+        "driver_location_canonical_overwrite_total",
+        "Décisions d'arbitrage canonical (accepté vs rejeté plus ancien)",
+        ["outcome", "location_mode"],
+    )
+    _GPS_PROVIDER = Counter(
+        "driver_location_gps_provider_total",
+        "Provider GPS déclaré dans le payload chauffeur",
+        ["provider", "platform"],
+    )
 
 if Histogram is not None:
     _CLOCK_SKEW = Histogram(
@@ -186,12 +245,39 @@ if Histogram is not None:
         ["location_mode"],
         buckets=(0.5, 1, 2, 5, 10, 20, 60, 120, 300, 600, 1200),
     )
+    _BATCH_LATENCY = Histogram(
+        "driver_location_batch_latency_seconds",
+        "Durée traitement handler driver_location_batch (entrée → ACK)",
+        buckets=(0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0),
+    )
+    _GPS_ACCURACY = Histogram(
+        "driver_location_gps_accuracy_meters",
+        "Précision GPS déclarée (accuracy) à l'ingestion",
+        ["platform", "location_mode", "transport"],
+        buckets=(1, 3, 5, 8, 12, 20, 30, 50, 75, 100, 150),
+    )
+    _GPS_SPEED = Histogram(
+        "driver_location_gps_speed_kmh",
+        "Vitesse GPS déclarée (m/s converti en km/h si besoin)",
+        ["platform", "location_mode", "transport"],
+        buckets=(0, 5, 15, 30, 50, 70, 90, 110, 130),
+    )
+    _GPS_HEADING = Histogram(
+        "driver_location_gps_heading_deg",
+        "Cap GPS déclaré (degrés)",
+        ["platform", "location_mode", "transport"],
+        buckets=(0, 45, 90, 135, 180, 225, 270, 315, 360),
+    )
 else:
     _CLOCK_SKEW = None
     _BATCH_INGEST_SIZE = None
     _TRACKING_KAFKA_E2E_LATENCY = None
     _CANONICAL_UPDATE_LATENCY = None
     _CANONICAL_STALENESS_READ = None
+    _BATCH_LATENCY = None
+    _GPS_ACCURACY = None
+    _GPS_SPEED = None
+    _GPS_HEADING = None
 
 
 def inc_dedup_skipped(
@@ -426,6 +512,133 @@ _KNOWN_CONSTRAINT_REASONS: frozenset[str] = frozenset(
         "low_fix_success_rate",
     }
 )
+
+
+def _norm_platform(platform: str | None) -> str:
+    p = (platform or "").strip().lower()
+    if p in ("ios", "android"):
+        return p
+    return "unknown"
+
+
+def _norm_gps_provider(provider: str | None) -> str:
+    p = (provider or "").strip().lower()
+    if p in ("gps", "network", "passive", "fused", "cell", "wifi"):
+        return p if p != "cell" else "network"
+    return "unknown"
+
+
+def inc_batch_rate_limited() -> None:
+    if not _metrics_enabled() or _BATCH_RATE_LIMITED is None:
+        return
+    _BATCH_RATE_LIMITED.inc()
+
+
+def inc_batch_points_received(*, location_mode: str, count: int = 1) -> None:
+    if not _metrics_enabled() or _BATCH_POINTS_RECEIVED is None:
+        return
+    lm = _norm_mode(location_mode)
+    _BATCH_POINTS_RECEIVED.labels(location_mode=lm).inc(count)
+
+
+def inc_batch_points_canonical(*, location_mode: str) -> None:
+    if not _metrics_enabled() or _BATCH_POINTS_CANONICAL is None:
+        return
+    _BATCH_POINTS_CANONICAL.labels(location_mode=_norm_mode(location_mode)).inc()
+
+
+def inc_batch_points_observability(*, location_mode: str) -> None:
+    if not _metrics_enabled() or _BATCH_POINTS_OBSERVABILITY is None:
+        return
+    _BATCH_POINTS_OBSERVABILITY.labels(location_mode=_norm_mode(location_mode)).inc()
+
+
+def inc_batch_points_skipped(*, reason: str, location_mode: str) -> None:
+    if not _metrics_enabled() or _BATCH_POINTS_SKIPPED is None:
+        return
+    r = reason if reason in ("dedup", "validation", "forbidden_mode", "location_service") else "_unknown"
+    _BATCH_POINTS_SKIPPED.labels(reason=r, location_mode=_norm_mode(location_mode)).inc()
+
+
+def inc_tracking_id_propagated(*, transport: str, propagated: bool) -> None:
+    if not _metrics_enabled():
+        return
+    t = transport if transport in ("http", "socket", "socket_batch") else "http"
+    if propagated and _TRACKING_ID_PROPAGATED is not None:
+        _TRACKING_ID_PROPAGATED.labels(transport=t).inc()
+    elif not propagated and _TRACKING_ID_MISSING is not None:
+        _TRACKING_ID_MISSING.labels(transport=t).inc()
+
+
+def inc_canonical_redis_write(*, location_mode: str, transport: str) -> None:
+    if not _metrics_enabled() or _CANONICAL_REDIS_WRITE is None:
+        return
+    t = transport if transport in ("http", "socket", "socket_batch") else "http"
+    _CANONICAL_REDIS_WRITE.labels(location_mode=_norm_mode(location_mode), transport=t).inc()
+
+
+def inc_canonical_overwrite(*, outcome: str, location_mode: str) -> None:
+    if not _metrics_enabled() or _CANONICAL_OVERWRITE is None:
+        return
+    oc = outcome if outcome in ("accepted", "rejected_older_than_canonical") else "_unknown"
+    _CANONICAL_OVERWRITE.labels(outcome=oc, location_mode=_norm_mode(location_mode)).inc()
+
+
+def observe_batch_latency_seconds(*, seconds: float) -> None:
+    if not _metrics_enabled() or _BATCH_LATENCY is None:
+        return
+    try:
+        s = float(seconds)
+    except (TypeError, ValueError):
+        return
+    if s < 0 or s > 120.0:
+        return
+    _BATCH_LATENCY.observe(s)
+
+
+def observe_gps_quality(
+    *,
+    platform: str | None,
+    location_mode: str,
+    transport: str,
+    accuracy: float | None = None,
+    speed: float | None = None,
+    heading: float | None = None,
+    provider: str | None = None,
+) -> None:
+    if not _metrics_enabled():
+        return
+    plat = _norm_platform(platform)
+    lm = _norm_mode(location_mode)
+    t = transport if transport in ("http", "socket", "socket_batch") else "http"
+    if accuracy is not None and _GPS_ACCURACY is not None:
+        try:
+            acc = float(accuracy)
+            if 0 < acc <= 500:
+                _GPS_ACCURACY.labels(platform=plat, location_mode=lm, transport=t).observe(acc)
+        except (TypeError, ValueError):
+            pass
+    if speed is not None and _GPS_SPEED is not None:
+        try:
+            spd = float(speed)
+            # Expo speed often m/s — convert if plausible m/s range
+            if 0 <= abs(spd) <= 60:
+                spd_kmh = abs(spd) * 3.6
+            else:
+                spd_kmh = abs(spd)
+            if spd_kmh <= 200:
+                _GPS_SPEED.labels(platform=plat, location_mode=lm, transport=t).observe(spd_kmh)
+        except (TypeError, ValueError):
+            pass
+    if heading is not None and _GPS_HEADING is not None:
+        try:
+            hdg = float(heading)
+            if 0 <= hdg <= 360:
+                _GPS_HEADING.labels(platform=plat, location_mode=lm, transport=t).observe(hdg)
+        except (TypeError, ValueError):
+            pass
+    if provider is not None and _GPS_PROVIDER is not None:
+        _GPS_PROVIDER.labels(provider=_norm_gps_provider(provider), platform=plat).inc()
 
 
 def inc_driver_device_health_received(*, constraint_reason: str | None) -> None:

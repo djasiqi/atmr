@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { AppStateStatus } from "react-native";
+import { AppStateStatus, Platform } from "react-native";
 import { DriverLocationPayload } from "../types";
 import { sendDriverLocation } from "../api/driverHttp";
 import { emitDriverTelemetry } from "../../../core/observability/driverTelemetry";
@@ -396,6 +396,7 @@ class DriverTrackingQueue {
               timestamp: item.payload.timestamp,
               location_mode: item.locationMode,
               is_background: item.payload.isBackground,
+              platform: Platform.OS === "ios" ? "ios" : "android",
             }))
           );
           if (!sentViaSocket) break;
@@ -456,6 +457,7 @@ class DriverTrackingQueue {
                 timestamp: item.payload.timestamp,
                 location_mode: item.locationMode,
                 is_background: item.payload.isBackground,
+                platform: Platform.OS === "ios" ? "ios" : "android",
               },
             ]);
             if (socketSent) {

@@ -28,15 +28,22 @@ import {
 import { canUseBackgroundLocation } from "./backgroundRuntimeCompat";
 import { formatTrackingSendError } from "./driverTrackingSendErrorFormat";
 import { isLiveTrackingDisclosureAccepted } from "./liveTrackingDisclosureSession";
+import { emitBatteryBaselineIfTracing } from "../../../core/observability/gpsFidelityTrace";
 
 const FOREGROUND_INTERVAL_MS = Number(process.env.EXPO_PUBLIC_DRIVER_GPS_FOREGROUND_INTERVAL_MS ?? "8000");
+const AGGRESSIVE_FOREGROUND_INTERVAL_MS = Number(
+  process.env.EXPO_PUBLIC_DRIVER_GPS_AGGRESSIVE_FOREGROUND_INTERVAL_MS ?? "4000"
+);
 const BACKGROUND_INTERVAL_MS = Number(process.env.EXPO_PUBLIC_DRIVER_GPS_BACKGROUND_INTERVAL_MS ?? "20000");
 const MAX_BACKOFF_MS = 60_000;
 /** Dernière exception du tick tracking (pour logs __DEV__ / télémétrie, sans PII). */
 let lastTrackingTickFailure: unknown = null;
 
 const WATCH_STALE_MS = 25_000;
-const WATCH_DISTANCE_METERS = 10;
+const WATCH_DISTANCE_METERS = Number(process.env.EXPO_PUBLIC_DRIVER_GPS_WATCH_DISTANCE_METERS ?? "10");
+const AGGRESSIVE_WATCH_DISTANCE_METERS = Number(
+  process.env.EXPO_PUBLIC_DRIVER_GPS_AGGRESSIVE_WATCH_DISTANCE_METERS ?? "5"
+);
 const POSITION_TIMEOUT_MS = Number(process.env.EXPO_PUBLIC_DRIVER_POSITION_TIMEOUT_MS ?? "7000");
 const STALE_FALLBACK_COOLDOWN_MS = Number(
   process.env.EXPO_PUBLIC_DRIVER_STALE_FALLBACK_COOLDOWN_MS ?? "20000"
@@ -46,6 +53,20 @@ const STALE_FALLBACK_BREAKER_MS = Number(
 );
 let permissionRequestInFlight: Promise<boolean> | null = null;
 let nativeTrackingAppStateSubscribed = false;
+
+function resolveForegroundIntervalMs(): number {
+  if (isFeatureEnabled("driver_capture_aggressive_enabled")) {
+    return AGGRESSIVE_FOREGROUND_INTERVAL_MS;
+  }
+  return FOREGROUND_INTERVAL_MS;
+}
+
+function resolveWatchDistanceMeters(): number {
+  if (isFeatureEnabled("driver_capture_aggressive_enabled")) {
+    return AGGRESSIVE_WATCH_DISTANCE_METERS;
+  }
+  return WATCH_DISTANCE_METERS;
+}
 
 function ensureNativeTrackingAppStateListener(): void {
   if (nativeTrackingAppStateSubscribed || Platform.OS === "web") return;
@@ -239,7 +260,7 @@ function getCadenceForTick(appState: AppStateStatus, mode: DriverTrackingMode) {
   if (!isFeatureEnabled("tracking_adaptive_cadence_enabled")) {
     return {
       networkProfile: "normal" as TrackingNetworkProfile,
-      foregroundIntervalMs: FOREGROUND_INTERVAL_MS,
+      foregroundIntervalMs: resolveForegroundIntervalMs(),
       backgroundIntervalMs: BACKGROUND_INTERVAL_MS,
       ackStaleMs: 75_000,
     };
@@ -334,6 +355,7 @@ async function getCurrentPositionWithTimeout(
 
 async function flushPoint(appState: AppStateStatus) {
   if (!isEligible()) return;
+  void emitBatteryBaselineIfTracing("driver.tracking.bridge");
   const granted = await ensurePermission(appState);
   if (!granted) return;
   const position = await resolvePositionFromWatchOrFallback(appState);
@@ -463,8 +485,8 @@ async function ensureLocationWatch() {
     state.watchSubscription = await Location.watchPositionAsync(
       {
         accuracy: Location.Accuracy.Balanced,
-        distanceInterval: WATCH_DISTANCE_METERS,
-        timeInterval: appState === "active" ? FOREGROUND_INTERVAL_MS : BACKGROUND_INTERVAL_MS,
+        distanceInterval: resolveWatchDistanceMeters(),
+        timeInterval: appState === "active" ? resolveForegroundIntervalMs() : BACKGROUND_INTERVAL_MS,
         mayShowUserSettingsDialog: true,
       },
       (position) => {
@@ -477,7 +499,7 @@ async function ensureLocationWatch() {
       source: "driver.tracking.bridge",
       mission_id: state.missionId,
       app_state: appState,
-      distance_m: WATCH_DISTANCE_METERS,
+      distance_m: resolveWatchDistanceMeters(),
     });
   } catch (error) {
     emitDriverTelemetry("tracking.watch.unavailable", {
@@ -555,7 +577,7 @@ async function sendLegacyPoint(appState: AppStateStatus, nowIso: string) {
 }
 
 const trackingManager = new TrackingManager({
-  foregroundIntervalMs: FOREGROUND_INTERVAL_MS,
+  foregroundIntervalMs: resolveForegroundIntervalMs(),
   backgroundIntervalMs: BACKGROUND_INTERVAL_MS,
   maxBackoffMs: MAX_BACKOFF_MS,
   onTick: async ({ appState }) => {

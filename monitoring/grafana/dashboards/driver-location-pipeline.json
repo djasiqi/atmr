@@ -229,9 +229,119 @@
       "options": {
         "legend": { "displayMode": "table", "placement": "bottom", "showLegend": true },
         "tooltip": { "mode": "multi" }
-      }
+      },
+      "description": "DEPRECATED — chemin socket unitaire uniquement. Utiliser driver_location_batch_latency_seconds."
+    },
+    {
+      "id": 8,
+      "title": "Batch latency p50/p95 (driver_location_batch)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 31, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(driver_location_batch_latency_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p95",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(driver_location_batch_latency_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p50",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s", "decimals": 3 } }
+    },
+    {
+      "id": 9,
+      "title": "Rate limit batch (driver_location_batch)",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 31, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "sum(rate(driver_location_batch_rate_limited_total[5m]))",
+          "legendFormat": "rate_limited/s",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ops", "decimals": 4 } }
+    },
+    {
+      "id": 10,
+      "title": "Funnel batch points",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 39, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "sum(rate(driver_location_batch_points_received_total[5m]))",
+          "legendFormat": "received",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(driver_location_batch_points_canonical_total[5m]))",
+          "legendFormat": "canonical",
+          "refId": "B"
+        },
+        {
+          "expr": "sum(rate(driver_location_batch_points_observability_total[5m]))",
+          "legendFormat": "observability",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ops" } }
+    },
+    {
+      "id": 11,
+      "title": "Tracking ID propagation (Stop Gate G2)",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 39, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "sum(rate(driver_location_tracking_id_propagated_total[5m])) / clamp_min(sum(rate(driver_location_batch_points_received_total[5m])), 1e-9)",
+          "legendFormat": "ratio propagated",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "percentunit", "min": 0, "max": 1 } }
+    },
+    {
+      "id": 12,
+      "title": "GPS accuracy p95 by platform",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 47, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(driver_location_gps_accuracy_meters_bucket[5m])) by (le, platform))",
+          "legendFormat": "{{platform}} p95",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "lengthm", "decimals": 1 } }
+    },
+    {
+      "id": 13,
+      "title": "Coût tracking (received / fanout / redis write)",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 47, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "sum(rate(driver_location_received_total[5m]))",
+          "legendFormat": "received",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(driver_location_fanout_events_total[5m]))",
+          "legendFormat": "fanout",
+          "refId": "B"
+        },
+        {
+          "expr": "sum(rate(driver_location_canonical_redis_write_total[5m]))",
+          "legendFormat": "redis canonical write",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ops" } }
     }
   ],
   "schemaVersion": 38,
-  "version": 2
+  "version": 3
 }

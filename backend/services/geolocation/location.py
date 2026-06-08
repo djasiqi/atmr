@@ -595,6 +595,23 @@ class LocationService:
                     recorded_at=recorded_at,
                     accuracy=accuracy,
                 )
+                try:
+                    from services.monitoring.driver_location_metrics import (
+                        inc_canonical_overwrite,
+                    )
+
+                    had_existing = bool(existing.get("recorded_at") or existing.get("ts"))
+                    if accept_status == "accepted_canonical" and had_existing:
+                        inc_canonical_overwrite(
+                            outcome="accepted", location_mode=location_mode
+                        )
+                    elif accept_reason == "older_than_canonical":
+                        inc_canonical_overwrite(
+                            outcome="rejected_older_than_canonical",
+                            location_mode=location_mode,
+                        )
+                except Exception:
+                    pass
                 existing_company = existing.get("company_id")
                 if (
                     existing_company
@@ -665,6 +682,16 @@ class LocationService:
                     # Compatibilité transitoire: maintenir l'ancienne clé.
                     self.redis_client.hset(legacy_key, mapping=canonical_mapping)
                     self.redis_client.expire(legacy_key, DEFAULT_DRIVER_LOC_TTL_SEC)
+                    try:
+                        from services.monitoring.driver_location_metrics import (
+                            inc_canonical_redis_write,
+                        )
+
+                        inc_canonical_redis_write(
+                            location_mode=location_mode, transport=transport
+                        )
+                    except Exception:
+                        pass
                     try:
                         from services.monitoring.driver_location_metrics import (
                             MAX_CLOCK_SKEW_RECORD_SEC,

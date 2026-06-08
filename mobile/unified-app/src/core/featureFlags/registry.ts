@@ -182,6 +182,43 @@ export const featureFlags = {
     description:
       "Active les lanes de flush GPS (critical/visible/background). Désactivé : pipeline P0 (critical immédiat, reste en batch 300ms).",
   } satisfies FeatureFlagDefinition,
+  company_map_realtime_flush_ms: {
+    key: "company_map_realtime_flush_ms",
+    source: "external",
+    enabled: true,
+    description:
+      "Kill switch : délai flush carte entreprise (ms). Override numérique via bootstrap feature_flags.",
+  } satisfies FeatureFlagDefinition,
+  company_map_dynamic_filter_enabled: {
+    key: "company_map_dynamic_filter_enabled",
+    source: "external",
+    enabled: envEnabled("EXPO_PUBLIC_COMPANY_MAP_DYNAMIC_FILTER_ENABLED"),
+    description:
+      "Filtre GPS dynamique max(1.5, accuracy*0.25). Désactivable via bootstrap ou EXPO_PUBLIC=0.",
+  } satisfies FeatureFlagDefinition,
+  company_map_autofit_structural_only: {
+    key: "company_map_autofit_structural_only",
+    source: "external",
+    enabled:
+      process.env.EXPO_PUBLIC_COMPANY_MAP_AUTOFIT_STRUCTURAL_ONLY === undefined
+        ? true
+        : envEnabled("EXPO_PUBLIC_COMPANY_MAP_AUTOFIT_STRUCTURAL_ONLY"),
+    description:
+      "Auto-fit caméra sur join/leave chauffeur uniquement (pas sur chaque tick GPS).",
+  } satisfies FeatureFlagDefinition,
+  mobile_map_parity_mode: {
+    key: "mobile_map_parity_mode",
+    source: "external",
+    enabled: envEnabled("EXPO_PUBLIC_MOBILE_MAP_PARITY_MODE"),
+    description: "Mode parité perception mobile aligné Web (debug / QA).",
+  } satisfies FeatureFlagDefinition,
+  driver_capture_aggressive_enabled: {
+    key: "driver_capture_aggressive_enabled",
+    source: "external",
+    enabled: envEnabled("EXPO_PUBLIC_DRIVER_CAPTURE_AGGRESSIVE_ENABLED"),
+    description:
+      "Profil capture GPS agressif (intervalle/distance réduits). Gate PR5 + bootstrap.",
+  } satisfies FeatureFlagDefinition,
   realtime_adaptive_polling_enabled: {
     key: "realtime_adaptive_polling_enabled",
     source: "env",
@@ -438,4 +475,14 @@ export function getFeatureFlagSource(key: FeatureFlagKey): FeatureFlagSource {
 
 export function getRuntimeFlagsVersion(): string | null {
   return runtimeFlagsVersion;
+}
+
+export function getRuntimeNumericFlag(key: FeatureFlagKey): number | null {
+  const raw = runtimeOverrides[key];
+  if (typeof raw === "number" && Number.isFinite(raw)) return raw;
+  if (typeof raw === "string") {
+    const parsed = parseInt(raw.trim(), 10);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
 }

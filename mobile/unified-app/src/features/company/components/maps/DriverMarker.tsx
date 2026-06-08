@@ -9,6 +9,7 @@ import { shouldFleetMarkerLivePulse } from "./fleetMapLiveMarker";
 import { FLEET_STATUS_THEME } from "./mapStatusTheme";
 import { driverFleetMarkerTitle } from "../../utils/companyDriverMapStatus";
 import { buildFleetDriverMarkerImageSource } from "./fleetNativeMarkerImage";
+import { resolveFleetMarkerAnchor } from "./resolveFleetMarkerAnchor";
 import { countDriverMarkerRender } from "./fleetMapDevInstrumentation";
 import { recordDriverMarkerRender } from "../../../../core/observability/perfInstrumentation";
 import { IOS_MAP_NO_CUSTOM_MARKER_CHILDREN, isValidMapCoord } from "./mapsIosNewArchSafeMode";
@@ -39,6 +40,10 @@ function DriverMarkerComponent({
   const imageSource = useMemo(
     () => buildFleetDriverMarkerImageSource(status, selected),
     [selected, status]
+  );
+  const markerAnchor = useMemo(
+    () => resolveFleetMarkerAnchor(imageSource),
+    [imageSource]
   );
 
   const coordinate = useMemo(
@@ -95,7 +100,7 @@ function DriverMarkerComponent({
       <FleetMapRasterMarker
         coordinate={coordinate}
         imageSource={imageSource}
-        anchor={{ x: 0.5, y: 1 }}
+        anchor={markerAnchor}
         title={driverFleetMarkerTitle(item)}
         onPress={handlePress}
         zIndex={selected ? 999 : theme.priority}

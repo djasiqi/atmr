@@ -30,11 +30,29 @@ def is_ios_startup_fatal_recovery_disabled() -> bool:
     return env_truthy(IOS_STARTUP_FATAL_RECOVERY_DISABLED_ENV)
 
 
-def get_mobile_startup_runtime_flags() -> dict[str, bool]:
+def get_mobile_startup_runtime_flags() -> dict[str, bool | int]:
     """Flags startup mobile exposés via bootstrap/version-check."""
-    return {
+    flags: dict[str, bool | int] = {
         "ios_startup_fatal_recovery_disabled": is_ios_startup_fatal_recovery_disabled(),
     }
+    flush_ms = os.getenv("COMPANY_MAP_REALTIME_FLUSH_MS", "").strip()
+    if flush_ms.isdigit():
+        flags["company_map_realtime_flush_ms"] = int(flush_ms)
+    if os.getenv("COMPANY_MAP_DYNAMIC_FILTER_ENABLED") is not None:
+        flags["company_map_dynamic_filter_enabled"] = env_truthy(
+            "COMPANY_MAP_DYNAMIC_FILTER_ENABLED", "true"
+        )
+    if os.getenv("COMPANY_MAP_AUTOFIT_STRUCTURAL_ONLY") is not None:
+        flags["company_map_autofit_structural_only"] = env_truthy(
+            "COMPANY_MAP_AUTOFIT_STRUCTURAL_ONLY", "true"
+        )
+    if os.getenv("DRIVER_CAPTURE_AGGRESSIVE_ENABLED") is not None:
+        flags["driver_capture_aggressive_enabled"] = env_truthy(
+            "DRIVER_CAPTURE_AGGRESSIVE_ENABLED", "false"
+        )
+    if os.getenv("MOBILE_MAP_PARITY_MODE") is not None:
+        flags["mobile_map_parity_mode"] = env_truthy("MOBILE_MAP_PARITY_MODE", "false")
+    return flags
 
 
 def get_runtime_flags_status() -> dict[str, Any]:

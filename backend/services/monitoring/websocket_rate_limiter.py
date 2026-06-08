@@ -4,9 +4,16 @@
 
 Étend le rate limiting existant (connexions) pour couvrir tous les events.
 Utilise Redis sliding window si disponible, sinon cache mémoire.
+
+Variables d'environnement (PR4 — défauts = comportement historique) :
+- ``WS_DRIVER_LOCATION_BATCH_LIMIT`` (défaut ``1``)
+- ``WS_DRIVER_LOCATION_BATCH_WINDOW_SEC`` (défaut ``5``)
+- ``WS_DRIVER_LOCATION_LIMIT`` (défaut ``1``)
+- ``WS_DRIVER_LOCATION_WINDOW_SEC`` (défaut ``1``)
 """
 
 import logging
+import os
 from collections import defaultdict
 from datetime import UTC, datetime, timedelta
 
@@ -35,18 +42,32 @@ redis.call("EXPIRE", key, window + 1)
 return {1, 0, count + 1}
 """
 
+def _env_int(name: str, default: int) -> int:
+    raw = os.getenv(name)
+    if raw is None or not str(raw).strip().isdigit():
+        return default
+    return max(1, int(str(raw).strip()))
+
+
+def _build_rate_limits() -> dict[str, tuple[int, int]]:
+    return {
+        "connect": (50, 60),
+        "driver_location": (
+            _env_int("WS_DRIVER_LOCATION_LIMIT", 1),
+            _env_int("WS_DRIVER_LOCATION_WINDOW_SEC", 1),
+        ),
+        "driver_location_batch": (
+            _env_int("WS_DRIVER_LOCATION_BATCH_LIMIT", 1),
+            _env_int("WS_DRIVER_LOCATION_BATCH_WINDOW_SEC", 5),
+        ),
+        "team_chat_message": (10, 60),
+        "typing_start": (20, 60),
+        "typing_stop": (20, 60),
+    }
+
+
 # Limites par event (event_name -> (limit, window_seconds))
-RATE_LIMITS = {
-    "connect": (
-        50,
-        60,
-    ),  # ✅ 50 req/min par IP (augmenté de 20 à 50 pour supporter reconnexions multiples lors de problèmes réseau)
-    "driver_location": (1, 1),  # 1 req/s par driver
-    "driver_location_batch": (1, 5),  # 1 req/5s par driver
-    "team_chat_message": (10, 60),  # 10 req/min par user
-    "typing_start": (20, 60),  # 20 req/min par user
-    "typing_stop": (20, 60),  # 20 req/min par user
-}
+RATE_LIMITS = _build_rate_limits()
 
 # Cache mémoire fallback (si Redis indisponible)
 # defaultdict(list) est correct, basedpyright a un faux positif

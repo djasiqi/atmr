@@ -52,3 +52,37 @@ def test_inc_received_increments_received_and_ingested_same_labels() -> None:
     )
     r_inc.assert_called_once()
     i_inc.assert_called_once()
+
+
+def test_inc_batch_rate_limited() -> None:
+    if m._BATCH_RATE_LIMITED is None:
+        pytest.skip("prometheus_client Counter unavailable")
+    with patch.object(m, "_BATCH_RATE_LIMITED") as mock_counter:
+        mock_counter.inc = MagicMock()
+        m.inc_batch_rate_limited()
+    mock_counter.inc.assert_called_once()
+
+
+def test_observe_gps_quality_accuracy() -> None:
+    if m._GPS_ACCURACY is None:
+        pytest.skip("prometheus_client Histogram unavailable")
+    observe = MagicMock()
+    with patch.object(m, "_GPS_ACCURACY") as mock_hist:
+        mock_hist.labels.return_value = MagicMock(observe=observe)
+        m.observe_gps_quality(
+            platform="ios",
+            location_mode="mission_live",
+            transport="socket_batch",
+            accuracy=12.5,
+        )
+    observe.assert_called_once_with(12.5)
+
+
+def test_inc_tracking_id_propagated() -> None:
+    if m._TRACKING_ID_PROPAGATED is None:
+        pytest.skip("prometheus_client Counter unavailable")
+    inc = MagicMock()
+    with patch.object(m, "_TRACKING_ID_PROPAGATED") as mock_counter:
+        mock_counter.labels.return_value = MagicMock(inc=inc)
+        m.inc_tracking_id_propagated(transport="socket_batch", propagated=True)
+    inc.assert_called_once()

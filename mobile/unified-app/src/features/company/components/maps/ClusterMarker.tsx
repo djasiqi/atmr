@@ -4,6 +4,7 @@ import type { FleetDriverMapItem } from "./fleetMapTypes";
 import { ClusterCountBadgeMarker } from "./ClusterCountBadgeMarker";
 import { FleetMapRasterMarker } from "./FleetMapRasterMarker";
 import { buildFleetDriverMarkerImageSource } from "./fleetNativeMarkerImage";
+import { resolveFleetMarkerAnchor } from "./resolveFleetMarkerAnchor";
 import { pickClusterRepresentativeStatus } from "./fleetLirieClusterMarker";
 import { FLEET_MAP_MARKER_DIMMED_OPACITY } from "./fleetMapTypes";
 import { isValidMapCoord } from "./mapsIosNewArchSafeMode";
@@ -31,6 +32,10 @@ export function ClusterMarker({ latitude, longitude, count, drivers, onPress, di
     () => buildFleetDriverMarkerImageSource(status, false),
     [status]
   );
+  const markerAnchor = useMemo(
+    () => resolveFleetMarkerAnchor(iconSource),
+    [iconSource]
+  );
 
   if (!iconSource.uri?.trim()) {
     return null;
@@ -45,7 +50,7 @@ export function ClusterMarker({ latitude, longitude, count, drivers, onPress, di
       <FleetMapRasterMarker
         coordinate={coordinate}
         imageSource={iconSource}
-        anchor={{ x: 0.5, y: 1 }}
+        anchor={markerAnchor}
         onPress={onPress}
         zIndex={500}
         opacity={opacity}

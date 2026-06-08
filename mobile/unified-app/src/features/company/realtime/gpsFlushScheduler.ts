@@ -1,12 +1,12 @@
-import { MAX_BATCH_AGE_MS, REALTIME_FLUSH_MS } from "./gpsFlushConstants";
+import { resolveMaxBatchAgeMs, resolveRealtimeFlushMs } from "./companyMapRuntimeConfig";
 
 export type GpsFlushPriority = "critical" | "visible" | "background";
 
-export const GPS_FLUSH_DELAY_MS: Record<GpsFlushPriority, number> = {
-  critical: 0,
-  visible: REALTIME_FLUSH_MS,
-  background: 800,
-};
+export function gpsFlushDelayMsForPriority(priority: GpsFlushPriority): number {
+  if (priority === "critical") return 0;
+  if (priority === "background") return 800;
+  return resolveRealtimeFlushMs();
+}
 
 /** Priorité d'un événement temps réel carte (lanes optionnelles Phase 3). */
 export function resolveGpsEventFlushPriority(
@@ -25,12 +25,12 @@ export function resolveFlushDelayMs(
   lanesEnabled: boolean
 ): number {
   if (!lanesEnabled) {
-    return priority === "critical" ? 0 : REALTIME_FLUSH_MS;
+    return priority === "critical" ? 0 : resolveRealtimeFlushMs();
   }
-  return GPS_FLUSH_DELAY_MS[priority];
+  return gpsFlushDelayMsForPriority(priority);
 }
 
 /** maxBatchAge reste global ; les lanes n'augmentent pas la latence max. */
 export function getEffectiveMaxBatchAgeMs(): number {
-  return MAX_BATCH_AGE_MS;
+  return resolveMaxBatchAgeMs();
 }
