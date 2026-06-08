@@ -83,6 +83,7 @@ function ManualBookingClientSelect({
         classNamePrefix="react-select"
         openMenuOnFocus={false}
         blurInputOnSelect
+        tabSelectsValue={false}
       />
 
       {activeStay && activeStay.clinic && (
