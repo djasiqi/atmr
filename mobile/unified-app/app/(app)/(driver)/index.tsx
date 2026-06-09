@@ -278,10 +278,10 @@ export default function DriverHomeScreen() {
               />
             ) : null}
 
-            {!bootstrapPending && allowMissionActions ? (
+            {!bootstrapPending ? (
               <DriverUpcomingMissions
                 missions={upcomingMissions}
-                onOpenMission={guardedOpenMission}
+                onOpenMission={onOpenMission}
                 onOpenAll={onAllMissions}
               />
             ) : null}
