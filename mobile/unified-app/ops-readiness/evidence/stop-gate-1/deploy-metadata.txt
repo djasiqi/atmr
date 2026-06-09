@@ -1,6 +1,20 @@
-# Remplir après déploiement app.lirie.ch
-deploy_date: YYYY-MM-DD
-git_commit: 
-git_tag: 
-rollback_procedure: Re-déployer le commit/tag ci-dessus sur app.lirie.ch/.well-known/
+# STOP GATE #1 — métadonnées déploiement app.lirie.ch + build Android
+deploy_date: 2026-06-09
+git_commit: 7a05aa69ee25682194b94581caee4116896be1b1
+git_tag: (aucun tag au moment de la clôture)
+vercel_project: lirie-app (Root: mobile/unified-app, Output: dist)
+vercel_commits_infra: dd0f9b86, dd22222a, 7a05aa69
+eas_build_id: ab7192c6-cc4c-4426-b0f2-1061a77d5e6a
+eas_build_profile: production
+android_version: 1.0.5
+android_version_code: 109
+aab_artifact_url: https://expo.dev/artifacts/eas/naTSB3KnX69oUdnfSwHsxU.aab
+aab_local_snapshot: ops-readiness/evidence/stop-gate-1/ch.liri.operations-v109.aab
+device_validation: Samsung S23 (SM_S911B), ADB 192.168.1.33:42103
 play_app_signing_sha256: 4D:3C:C4:CE:6B:6A:AE:99:76:19:8A:C1:93:DA:64:61:B0:9B:5A:AA:63:D3:FF:C3:3B:73:AD:84:DC:27:03:C0
+rollback_procedure: |
+  1. Vercel: re-déployer le commit git_commit (ou tag) sur le projet lirie-app.
+  2. Vérifier curl https://app.lirie.ch/.well-known/assetlinks.json
+  3. Restaurer assetlinks-production-snapshot.json si le JSON a changé.
+  4. Android: adb shell pm verify-app-links --re-verify ch.liri.operations
+closed_by: drinjasiqi (session Cursor 2026-06-09)

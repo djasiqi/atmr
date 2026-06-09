@@ -1,0 +1,10 @@
+﻿Audit STOP GATE Manifest — ch.liri.operations-v109.aab
+Date: 2026-06-09
+Outil: bundletool 1.17.2 (tools/bundletool.jar)
+
+[PASS] RECORD_AUDIO absent du manifest
+[PASS] host app.lirie.ch present (intent-filter autoVerify=true)
+[PASS] foregroundServiceType present (LocationTaskService 0x08, Notifee 0x800)
+[WARN] AudioControlsService / AudioRecordingService presents (expo.modules.audio) — hors scope App Links
+
+OK: audit manifest de base passe

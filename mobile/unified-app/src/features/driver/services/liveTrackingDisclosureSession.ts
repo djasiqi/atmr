@@ -1,22 +1,42 @@
 /**
- * Flag session : l'utilisateur a accepté la disclosure avant demande permission BG.
- * Évite requestBackgroundPermissionsAsync hors contexte (review Apple / Google).
+ * Flags session : disclosure mission vs disponibilité flotte avant permission BG.
  */
-let disclosureAccepted = false;
+let missionDisclosureAccepted = false;
+let presenceDisclosureAccepted = false;
+let presenceDisclosureDeclined = false;
 
 export function isLiveTrackingDisclosureAccepted(): boolean {
-  return disclosureAccepted;
+  return missionDisclosureAccepted;
 }
 
 export function markLiveTrackingDisclosureAccepted(): void {
-  disclosureAccepted = true;
+  missionDisclosureAccepted = true;
+}
+
+export function isPresenceDisclosureAccepted(): boolean {
+  return presenceDisclosureAccepted;
+}
+
+export function markPresenceDisclosureAccepted(): void {
+  presenceDisclosureAccepted = true;
+  presenceDisclosureDeclined = false;
+}
+
+export function isPresenceDisclosureDeclined(): boolean {
+  return presenceDisclosureDeclined;
+}
+
+export function markPresenceDisclosureDeclined(): void {
+  presenceDisclosureDeclined = true;
 }
 
 export function resetLiveTrackingDisclosureSession(): void {
-  disclosureAccepted = false;
+  missionDisclosureAccepted = false;
+  presenceDisclosureAccepted = false;
+  presenceDisclosureDeclined = false;
 }
 
 /** Test-only */
 export function __resetLiveTrackingDisclosureSessionForTests(): void {
-  disclosureAccepted = false;
+  resetLiveTrackingDisclosureSession();
 }

@@ -63,7 +63,7 @@
           ]
         }
       ],
-      "versionCode": 108
+      "versionCode": 109
     },
     "ios": {
       "supportsTablet": false,
@@ -83,9 +83,9 @@
           "tel",
           "comgooglemaps"
         ],
-        "NSLocationWhenInUseUsageDescription": "Location is used to provide real-time mission tracking during active transport.",
-        "NSLocationAlwaysUsageDescription": "Location is used to provide real-time mission tracking during active transport, including in background while a mission is running.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "Location is used to provide real-time mission tracking during active transport, including in background while a mission is running.",
+        "NSLocationWhenInUseUsageDescription": "Location is used for real-time mission tracking during active transport, and when you are marked available during the operational window so your company can dispatch fleet missions.",
+        "NSLocationAlwaysUsageDescription": "Location is used for real-time mission tracking and, when you are marked available during the operational window (typically 07:00–19:00), for fleet availability so your company can assign missions efficiently.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Location is used for real-time mission tracking and, when you are marked available during the operational window (typically 07:00–19:00), for fleet availability so your company can assign missions efficiently.",
         "NSPhotoLibraryUsageDescription": "Photo access is required to send attachments.",
         "NSCameraUsageDescription": "Camera access is required for mission/photo capture.",
         "NSMicrophoneUsageDescription": "Le micro sert a enregistrer des messages vocaux dans le chat."

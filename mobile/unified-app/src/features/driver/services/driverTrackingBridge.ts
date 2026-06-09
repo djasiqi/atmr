@@ -27,7 +27,10 @@ import {
 } from "./backgroundLocationTask";
 import { canUseBackgroundLocation } from "./backgroundRuntimeCompat";
 import { formatTrackingSendError } from "./driverTrackingSendErrorFormat";
-import { isLiveTrackingDisclosureAccepted } from "./liveTrackingDisclosureSession";
+import {
+  isLiveTrackingDisclosureAccepted,
+  isPresenceDisclosureAccepted,
+} from "./liveTrackingDisclosureSession";
 import { emitBatteryBaselineIfTracing } from "../../../core/observability/gpsFidelityTrace";
 
 const FOREGROUND_INTERVAL_MS = Number(process.env.EXPO_PUBLIC_DRIVER_GPS_FOREGROUND_INTERVAL_MS ?? "8000");
@@ -82,7 +85,11 @@ function ensureNativeTrackingAppStateListener(): void {
           {},
           "app_resume"
         );
-      } else if (state.presenceWindowActive && isFeatureEnabled("tracking_background_enabled")) {
+      } else if (
+        state.presenceWindowActive &&
+        isPresenceDisclosureAccepted() &&
+        isFeatureEnabled("tracking_background_enabled")
+      ) {
         void ensureNativeTrackingWhileForeground(
           null,
           null,
@@ -685,7 +692,7 @@ function ensureManagerState() {
         "ensure_manager_state"
       );
     }
-  } else if (state.presenceWindowActive) {
+  } else if (state.presenceWindowActive && isPresenceDisclosureAccepted()) {
     void setBackgroundTrackingMissionContext(null, null, "presence_window");
     ensureNativeTrackingAppStateListener();
     if (isFeatureEnabled("tracking_background_enabled")) {
@@ -801,6 +808,12 @@ export function setDriverTrackingPresenceWindow(active: boolean) {
 
 export function getDriverTrackingPresenceWindowActive(): boolean {
   return state.presenceWindowActive;
+}
+
+/** Re-applique le pipeline natif après acceptation disclosure présence. */
+export function refreshDriverTrackingBridgeState(): void {
+  ensureManagerState();
+  notifyTrackingBridgeListeners();
 }
 
 export function getDriverTrackingBridgeSnapshot() {

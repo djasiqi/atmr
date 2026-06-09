@@ -2273,6 +2273,11 @@ class DeleteAccount(Resource):
                     "Client profile not found",
                     logger_instance=logger,
                 )
+            if not getattr(client, "is_active", True):
+                return APIErrorHandler.handle_permission_error(
+                    "Account is deactivated",
+                    logger_instance=logger,
+                )
             return cast("Any", client).serialize, 200
         except Exception as e:
             sentry_sdk.capture_exception(e)
@@ -2311,7 +2316,26 @@ class DeleteAccount(Resource):
                     logger_instance=logger,
                 )
             client_model.is_active = False
-            current_user.is_active = False
+            user_id = current_user.id
+            try:
+                from security.refresh_token_service import revoke_all_user_tokens
+                from security.token_blacklist import revoke_token
+                from services.security.authentication import RefreshTokenService
+
+                revoke_all_user_tokens(user_id, reason="Account deactivated")
+                try:
+                    RefreshTokenService().revoke_all_user_tokens(user_id)
+                except Exception as redis_revoke_error:
+                    logger.warning(
+                        "Échec révocation refresh tokens Redis (account delete): %s",
+                        redis_revoke_error,
+                    )
+                revoke_token()
+            except Exception as revoke_error:
+                logger.warning(
+                    "Échec révocation tokens lors suppression compte (ignoré): %s",
+                    revoke_error,
+                )
             db.session.commit()
             return {"message": "Account deactivated successfully"}, 200
         except Exception as e:

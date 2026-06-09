@@ -31,6 +31,7 @@ import {
 import { useAppViewport } from "../../../src/design/responsive";
 import { useReduceMotion } from "../../../src/design/navigation/useReduceMotion";
 import { usePerfRouteTracking } from "../../../src/core/observability/usePerfRouteTracking";
+import { DriverPresenceDisclosureHost } from "../../../src/features/driver/components/DriverPresenceDisclosureHost";
 import { DriverTrackingBannerHost } from "../../../src/features/driver/components/DriverTrackingBannerHost";
 
 /**
@@ -127,6 +128,7 @@ export default function DriverLayout() {
       <View style={{ flex: 1, backgroundColor: FLOATING_TAB_PAGE_BG.driver }}>
         <DriverTrackingHost />
         <DriverRealtimeSyncHost />
+        <DriverPresenceDisclosureHost />
         <DriverTrackingBannerHost />
         <Tabs
           implementation={FLOATING_TAB_IMPLEMENTATION}
