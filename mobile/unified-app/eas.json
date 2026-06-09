@@ -149,6 +149,17 @@
         "simulator": false,
         "autoIncrement": true
       }
+    },
+    "production-apk": {
+      "extends": "production",
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk",
+        "autoIncrement": false
+      },
+      "ios": {
+        "simulator": false
+      }
     }
   },
   "submit": {
