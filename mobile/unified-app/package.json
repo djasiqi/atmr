@@ -8,6 +8,7 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
+    "build:web": "expo export --platform web",
     "prebuild": "expo prebuild --clean",
     "build:dev": "eas build -p android --profile development",
     "build:dev:ios": "eas build -p ios --profile development",
