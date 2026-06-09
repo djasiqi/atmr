@@ -32,6 +32,9 @@ export function MonitoringProvider({ children }: PropsWithChildren) {
         enableNativeNagger: false,
         tracesSampleRate: 0.2,
         environment: process.env.EXPO_PUBLIC_APP_ENV ?? "development",
+        // expo-updates peut rejeter "Failed to load all assets" en arrière-plan
+        // (réseau instable, bascule Wi‑Fi/4G) alors que l'app continue sur le bundle embarqué.
+        ignoreErrors: ["Failed to load all assets"],
       });
       applyFleetMapSentryContext();
     }

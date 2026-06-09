@@ -1,3 +1,5 @@
+require("expo-asset");
+
 const {
   registerDriverFcmBackgroundHandler,
 } = require("./src/features/driver/firebaseMessaging");

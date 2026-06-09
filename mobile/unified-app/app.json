@@ -181,7 +181,9 @@
     },
     "owner": "drinjasiqi",
     "updates": {
-      "url": "https://u.expo.dev/3be107c7-29d2-4987-91a0-8d7c31604891"
+      "url": "https://u.expo.dev/3be107c7-29d2-4987-91a0-8d7c31604891",
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 30000
     }
   }
 }

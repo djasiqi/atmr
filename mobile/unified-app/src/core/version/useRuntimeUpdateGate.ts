@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as Updates from "expo-updates";
 import Constants from "expo-constants";
 
 type UpdateGateState = {
   checking: boolean;
+  applying: boolean;
   updateAvailable: boolean;
   requiresUpdate: boolean;
   recommendedUpdate: boolean;
@@ -13,6 +14,9 @@ type UpdateGateState = {
   killSwitch: boolean;
   error: string | null;
 };
+
+const OTA_ASSET_LOAD_ERROR =
+  "Impossible de télécharger la mise à jour. Vérifiez votre connexion (Wi‑Fi de préférence) et réessayez.";
 
 function parseVersion(value: string): number[] {
   return value
@@ -50,6 +54,7 @@ export function useRuntimeUpdateGate() {
 
   const [state, setState] = useState<UpdateGateState>({
     checking: true,
+    applying: false,
     updateAvailable: false,
     requiresUpdate: false,
     recommendedUpdate: false,
@@ -59,6 +64,8 @@ export function useRuntimeUpdateGate() {
     killSwitch: policy.killSwitch,
     error: null,
   });
+
+  const applyingRef = useRef(false);
 
   useEffect(() => {
     let mounted = true;
@@ -73,7 +80,8 @@ export function useRuntimeUpdateGate() {
         const recommendedUpdate =
           !!policy.recommendedVersion &&
           compareVersions(appVersion, policy.recommendedVersion) < 0;
-        setState({
+        setState((prev) => ({
+          ...prev,
           checking: false,
           updateAvailable: result.isAvailable,
           requiresUpdate,
@@ -83,10 +91,11 @@ export function useRuntimeUpdateGate() {
           recommendedVersion: policy.recommendedVersion,
           killSwitch: policy.killSwitch,
           error: null,
-        });
+        }));
       } catch (error) {
         if (!mounted) return;
-        setState({
+        setState((prev) => ({
+          ...prev,
           checking: false,
           updateAvailable: false,
           requiresUpdate: false,
@@ -96,7 +105,7 @@ export function useRuntimeUpdateGate() {
           recommendedVersion: policy.recommendedVersion,
           killSwitch: policy.killSwitch,
           error: error instanceof Error ? error.message : "update_check_failed",
-        });
+        }));
       }
     };
     void check();
@@ -106,8 +115,33 @@ export function useRuntimeUpdateGate() {
   }, [appVersion, policy.blockingScope, policy.killSwitch, policy.minimumSupportedVersion, policy.recommendedVersion]);
 
   const applyUpdate = async () => {
-    await Updates.fetchUpdateAsync();
-    await Updates.reloadAsync();
+    if (applyingRef.current) {
+      return;
+    }
+    applyingRef.current = true;
+    setState((prev) => ({ ...prev, applying: true, error: null }));
+    try {
+      const fetchResult = await Updates.fetchUpdateAsync();
+      if (!fetchResult.isNew) {
+        applyingRef.current = false;
+        setState((prev) => ({
+          ...prev,
+          applying: false,
+          updateAvailable: false,
+        }));
+        return;
+      }
+      await Updates.reloadAsync();
+    } catch (error) {
+      applyingRef.current = false;
+      const message =
+        error instanceof Error && error.message.includes("Failed to load all assets")
+          ? OTA_ASSET_LOAD_ERROR
+          : error instanceof Error
+            ? error.message
+            : "update_apply_failed";
+      setState((prev) => ({ ...prev, applying: false, error: message }));
+    }
   };
 
   return {

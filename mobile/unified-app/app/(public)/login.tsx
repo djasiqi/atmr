@@ -212,10 +212,11 @@ export default function LoginScreen() {
             <AppNotice
               variant="danger"
               title="Mise à jour obligatoire"
-              ctaLabel="Mettre à jour pour continuer"
+              ctaLabel={updateGate.applying ? "Téléchargement…" : "Mettre à jour pour continuer"}
               onCtaPress={() => void updateGate.applyUpdate()}
             >
-              {`Version minimum requise: ${updateGate.minimumSupportedVersion ?? "n/a"}`}
+              {updateGate.error ??
+                `Version minimum requise: ${updateGate.minimumSupportedVersion ?? "n/a"}`}
             </AppNotice>
           ) : null}
 
@@ -300,11 +301,12 @@ export default function LoginScreen() {
           {!updateGate.requiresUpdate && (updateGate.updateAvailable || updateGate.recommendedUpdate) ? (
             <AppNotice
               variant="warning"
-              ctaLabel="Mettre à jour maintenant"
+              ctaLabel={updateGate.applying ? "Téléchargement…" : "Mettre à jour maintenant"}
               onCtaPress={() => void updateGate.applyUpdate()}
               style={{ marginTop: 18 }}
             >
-              {`Une mise à jour est disponible et recommandée (cible: ${updateGate.recommendedVersion ?? "latest"}).`}
+              {updateGate.error ??
+                `Une mise à jour est disponible et recommandée (cible: ${updateGate.recommendedVersion ?? "latest"}).`}
             </AppNotice>
           ) : null}
 

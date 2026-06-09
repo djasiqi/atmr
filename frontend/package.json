@@ -36,7 +36,7 @@
     "react-hot-toast": "^2.6.0",
     "react-icons": "^5.4.0",
     "react-redux": "^9.2.0",
-    "react-router-dom": "^6.30.3",
+    "react-router-dom": "^6.30.4",
     "react-select": "^5.10.1",
     "react-slick": "^0.30.3",
     "react-toastify": "^11.0.5",
@@ -153,7 +153,8 @@
     "path-to-regexp": "0.1.13",
     "uuid": "14.0.0",
     "fast-uri": ">=3.1.2",
-    "@babel/plugin-transform-modules-systemjs": ">=7.29.4"
+    "@babel/plugin-transform-modules-systemjs": ">=7.29.4",
+    "tmp": ">=0.2.6"
   },
   "_comment": {
     "glob-override": "Override glob to ^11.1.0 to fix GHSA-ww39-953v-wcq6 (command injection in CLI -c/--cmd option). This forces all transitive dependencies (react-scripts, etc.) to use the patched version. See: https://github.com/isaacs/node-glob/security/advisories/GHSA-ww39-953v-wcq6",
@@ -162,6 +163,7 @@
     "jsonpath-risk": "jsonpath 1.1.1 (via react-scripts) has CVE-2026-1615 (arbitrary code injection). No patch available. jsonpath-plus is not API-compatible. Risk mitigated: react-scripts uses it for internal config only, not user input. Consider migrating to Vite long-term.",
     "axios-lodash-path-override": "axios 1.16+, lodash 4.18.1, follow-redirects 1.16+, path-to-regexp 0.1.13 (GHSA axios/SSRF, lodash template & omit, ReDoS express).",
     "socket-io-parser-override": "Force 4.2.6+ for GHSA-677m-j7p3-52f9 (CVE-2026-33151) via socket.io-client transitive dep.",
-    "flatted-override": "Force >=3.4.2 for GHSA-rf6f-7fwh-wjgh (prototype pollution in parse)."
+    "flatted-override": "Force >=3.4.2 for GHSA-rf6f-7fwh-wjgh (prototype pollution in parse).",
+    "tmp-override": "Force >=0.2.6 for GHSA-ph9p-34f9-6g65 (path traversal via unsanitized prefix/postfix). Transitive via source-map-explorer/external-editor."
   }
 }
