@@ -1,0 +1,3 @@
+LIRIE collecte la position de l'appareil en arrière-plan uniquement pendant une mission de transport active assignée au chauffeur, afin de permettre le suivi opérationnel temps réel pour l'entreprise et le client. Une notification persistante indique que la localisation est active. L'application reste utilisable sans cette autorisation pour consulter les missions.
+
+[HOLD LOC-01 — si Cas A retenu, ajouter paragraphe disponibilité flotte 07h–19h]

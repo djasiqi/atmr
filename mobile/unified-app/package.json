@@ -29,6 +29,7 @@
     "audit:layout-magic-numbers": "node ./scripts/auditMagicLayoutNumbers.cjs",
     "audit:layout-font-sizes": "node ./scripts/auditLayoutFontSizes.cjs",
     "check-instrumentation-events": "node ./scripts/checkInstrumentationEvents.cjs",
+    "check:play-compliance": "node ./scripts/check-play-compliance.cjs",
     "prefill-pilot-log": "node ./scripts/prefillPilotExecutionLog.cjs",
     "prefill-pilot-log:dry-run": "node ./scripts/prefillPilotExecutionLog.cjs --dry-run",
     "phase1:harden-committee": "node ./scripts/hardenPhase1Committee.cjs",

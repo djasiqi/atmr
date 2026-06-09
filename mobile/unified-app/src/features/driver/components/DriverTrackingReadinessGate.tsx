@@ -23,16 +23,20 @@ import {
 import * as Location from "expo-location";
 
 import { semanticDanger, semanticSuccess, semanticWarning } from "../../../design/responsive/colors";
+import { markNotificationDisclosureAccepted } from "../../../core/notifications/notificationDisclosurePersistence";
 import {
   checkBatteryOptimizationStatus,
   getOemBatteryGuidance,
   openOemBatterySettings,
   requestIgnoreBatteryOptimizations,
 } from "../services/batteryOptimization";
+import { markLiveTrackingDisclosureAccepted } from "../services/liveTrackingDisclosureSession";
 import {
   markTrackingOnboarded,
   setTrackingNeedsAttention,
 } from "../services/trackingReadinessPersistence";
+import { MissionLiveTrackingDisclosureModal } from "./MissionLiveTrackingDisclosureModal";
+import { NotificationPermissionDisclosure } from "./NotificationPermissionDisclosure";
 
 export type TrackingReadinessSnapshot = {
   ready: boolean;
@@ -99,15 +103,20 @@ type Props = {
 };
 
 export function DriverTrackingReadinessGate(props: Props) {
+  const { onReadyChange, silent } = props;
   const [loading, setLoading] = useState(true);
   const [snapshot, setSnapshot] = useState<TrackingReadinessSnapshot | null>(null);
+  const [bgDisclosureVisible, setBgDisclosureVisible] = useState(false);
+  const [bgDisclosurePending, setBgDisclosurePending] = useState(false);
+  const [notifDisclosureVisible, setNotifDisclosureVisible] = useState(false);
+  const [notifDisclosurePending, setNotifDisclosurePending] = useState(false);
   const onboardedRef = useRef(false);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     const next = await evaluateTrackingReadiness();
     setSnapshot(next);
-    props.onReadyChange?.(next.ready);
+    onReadyChange?.(next.ready);
     if (next.ready) {
       if (!onboardedRef.current) {
         onboardedRef.current = true;
@@ -118,7 +127,7 @@ export function DriverTrackingReadinessGate(props: Props) {
       void setTrackingNeedsAttention(true).catch(() => undefined);
     }
     setLoading(false);
-  }, [props.onReadyChange]);
+  }, [onReadyChange]);
 
   useEffect(() => {
     void refresh();
@@ -126,6 +135,34 @@ export function DriverTrackingReadinessGate(props: Props) {
       if (next === "active") void refresh();
     });
     return () => sub.remove();
+  }, [refresh]);
+
+  const requestBgWithDisclosure = useCallback(async () => {
+    setBgDisclosureVisible(true);
+  }, []);
+
+  const handleBgDisclosureContinue = useCallback(async () => {
+    setBgDisclosurePending(true);
+    markLiveTrackingDisclosureAccepted();
+    const fg = await Location.requestForegroundPermissionsAsync().catch(() => ({ granted: false }));
+    if (!fg.granted) {
+      setBgDisclosurePending(false);
+      setBgDisclosureVisible(false);
+      await refresh();
+      return;
+    }
+    await Location.requestBackgroundPermissionsAsync().catch(() => undefined);
+    setBgDisclosurePending(false);
+    setBgDisclosureVisible(false);
+    await refresh();
+  }, [refresh]);
+
+  const handleNotifDisclosureAccept = useCallback(async () => {
+    setNotifDisclosurePending(true);
+    await markNotificationDisclosureAccepted();
+    setNotifDisclosurePending(false);
+    setNotifDisclosureVisible(false);
+    await refresh();
   }, [refresh]);
 
   const checklist = useMemo(() => {
@@ -154,7 +191,7 @@ export function DriverTrackingReadinessGate(props: Props) {
     ];
   }, [snapshot]);
 
-  if (props.silent) return null;
+  if (silent) return null;
 
   if (loading && !snapshot) {
     return (
@@ -189,9 +226,14 @@ export function DriverTrackingReadinessGate(props: Props) {
         </Text>
       ) : null}
       <View style={styles.actions}>
-        <Pressable style={styles.button} onPress={() => void Location.requestBackgroundPermissionsAsync()}>
+        <Pressable style={styles.button} onPress={() => void requestBgWithDisclosure()}>
           <Text style={styles.buttonText}>Autoriser localisation</Text>
         </Pressable>
+        {!snapshot?.notificationsGranted ? (
+          <Pressable style={styles.button} onPress={() => setNotifDisclosureVisible(true)}>
+            <Text style={styles.buttonText}>Autoriser notifications</Text>
+          </Pressable>
+        ) : null}
         <Pressable style={styles.button} onPress={() => void requestIgnoreBatteryOptimizations()}>
           <Text style={styles.buttonText}>Exemption batterie</Text>
         </Pressable>
@@ -213,6 +255,27 @@ export function DriverTrackingReadinessGate(props: Props) {
           Vous pouvez continuer à consulter vos missions.
         </Text>
       </View>
+
+      <MissionLiveTrackingDisclosureModal
+        visible={bgDisclosureVisible}
+        pending={bgDisclosurePending}
+        showOpenSettings={false}
+        onCancel={() => {
+          setBgDisclosureVisible(false);
+          setBgDisclosurePending(false);
+        }}
+        onContinue={() => void handleBgDisclosureContinue()}
+        onOpenSettings={() => void Linking.openSettings()}
+      />
+      <NotificationPermissionDisclosure
+        visible={notifDisclosureVisible}
+        pending={notifDisclosurePending}
+        onCancel={() => {
+          setNotifDisclosureVisible(false);
+          setNotifDisclosurePending(false);
+        }}
+        onAccept={() => void handleNotifDisclosureAccept()}
+      />
     </View>
   );
 }

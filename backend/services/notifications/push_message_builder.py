@@ -281,8 +281,8 @@ def _get_amount_chf(booking_or_context: Any) -> str:
 
 def _build_deep_link(booking_id: int, recipient_role: RecipientRole) -> str:
     if recipient_role == "company":
-        return f"atmr://enterprise/rides/{booking_id}"
-    return f"atmr://booking/{booking_id}"
+        return f"lirie://enterprise/rides/{booking_id}"
+    return f"lirie://booking/{booking_id}"
 
 
 def _get_status_label(status: str | None) -> str:
@@ -383,13 +383,13 @@ def build_chat_push(
     )
 
     if recipient_role == "company":
-        deep_link = "atmr://enterprise/chat"
+        deep_link = "lirie://enterprise/chat"
     elif msg_id:
-        deep_link = f"atmr://chat/message/{msg_id}"
+        deep_link = f"lirie://chat/message/{msg_id}"
     elif tid and tid != "team":
-        deep_link = f"atmr://chat/thread/{tid}"
+        deep_link = f"lirie://chat/thread/{tid}"
     else:
-        deep_link = "atmr://chat"
+        deep_link = "lirie://chat"
 
     data: dict[str, Any] = {
         "type": "chat_message",
@@ -752,7 +752,7 @@ def build_push_message(
                 if client
                 else "La course a été réassignée."
             )
-        data["deep_link"] = data["deepLink"] = "atmr://bookings"
+        data["deep_link"] = data["deepLink"] = "lirie://bookings"
 
     else:
         title = "Mise à jour de course"

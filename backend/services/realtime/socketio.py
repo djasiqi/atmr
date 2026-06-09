@@ -955,7 +955,7 @@ def emit_delay_detected(
                             "booking_id": booking_id,
                             "assignment_id": assignment_id,
                             "delay_minutes": float(delay_minutes),
-                            "deepLink": f"atmr://booking/{booking_id}?alert=delay",
+                            "deepLink": f"lirie://booking/{booking_id}?alert=delay",
                         },
                         timeout=5,
                         driver_id=driver.id,

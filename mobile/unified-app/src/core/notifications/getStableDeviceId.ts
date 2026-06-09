@@ -5,6 +5,10 @@ const DEVICE_ID_KEY = "@atmr/device_id";
 
 let cachedDeviceId: string | null = null;
 
+type ApplicationWithInstallationId = typeof Application & {
+  getInstallationIdAsync?: () => Promise<string | null>;
+};
+
 /**
  * Identifiant d'installation stable (survit aux redémarrages, change après réinstallation).
  */
@@ -12,8 +16,9 @@ export async function getStableDeviceId(): Promise<string> {
   if (cachedDeviceId) return cachedDeviceId;
 
   try {
-    const installationId = Application.getInstallationIdAsync
-      ? await Application.getInstallationIdAsync()
+    const application = Application as ApplicationWithInstallationId;
+    const installationId = application.getInstallationIdAsync
+      ? await application.getInstallationIdAsync()
       : null;
     if (installationId && installationId.length > 0) {
       cachedDeviceId = installationId;

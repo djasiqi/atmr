@@ -1,0 +1,11 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appIDs": ["6WULBZ4X7W.ch.liri.operations"],
+        "paths": ["/activate-account", "/activate-account/*", "/reset-password", "/reset-password/*"]
+      }
+    ]
+  }
+}

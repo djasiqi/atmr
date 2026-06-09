@@ -26,7 +26,7 @@ from services.notifications.push_message_builder import (
 
 
 def test_build_push_message_assigned_driver():
-    """Assignation chauffeur : titre + body avec nom client + heure + lieu."""
+    """Assignation chauffeur : titre + body avec nom client + heure."""
     ctx = {
         "id": 3253,
         "client_name": "Drin Jasiqi",
@@ -37,12 +37,11 @@ def test_build_push_message_assigned_driver():
     assert out["title"] == "Nouvelle course • Assignée"
     assert "Drin Jasiqi" in out["body"]
     assert "13:00" in out["body"]
-    assert "HUG" in out["body"]
     assert out["data"]["booking_id"] == 3253
     assert out["data"]["event"] == EVENT_ASSIGNED
     assert out["data"]["client_display_name"] == "Drin Jasiqi"
-    assert out["data"]["deep_link"] == "atmr://booking/3253"
-    assert out["data"]["deepLink"] == "atmr://booking/3253"
+    assert out["data"]["deep_link"] == "lirie://booking/3253"
+    assert out["data"]["deepLink"] == "lirie://booking/3253"
 
 
 def test_build_push_message_assigned_company():
@@ -56,8 +55,8 @@ def test_build_push_message_assigned_company():
     out = build_push_message(EVENT_ASSIGNED, ctx, "company", discrete_mode=False)
     assert out["title"] == "Nouvelle course • Assignée"
     assert "Drin Jasiqi" in out["body"]
-    assert out["data"]["deep_link"] == "atmr://enterprise/rides/3253"
-    assert out["data"]["deepLink"] == "atmr://enterprise/rides/3253"
+    assert out["data"]["deep_link"] == "lirie://enterprise/rides/3253"
+    assert out["data"]["deepLink"] == "lirie://enterprise/rides/3253"
 
 
 # ---------- 2) Statut en_route ----------
@@ -81,7 +80,7 @@ def test_build_push_message_status_en_route():
         changes_preview="Départ: Ernest-Pictet 9",
         discrete_mode=False,
     )
-    assert out["title"] == "Statut : Mise à jour de course"
+    assert out["title"] == "Course • En route"
     assert "Driss" in out["body"]
     assert "Drin Jasiqi" in out["body"]
     assert "Ernest-Pictet" in out["body"] or "Départ" in out["body"]
@@ -115,7 +114,7 @@ def test_build_push_message_completed():
         "amount": 45.0,
     }
     out = build_push_message(EVENT_COMPLETED, ctx, "company", discrete_mode=False)
-    assert out["title"] == "Terminé : Course terminée"
+    assert out["title"] == "Course • Terminée"
     assert "Drin Jasiqi" in out["body"]
     assert "45 CHF" in out["body"]
     assert out["data"]["event"] == EVENT_COMPLETED
@@ -175,13 +174,13 @@ def test_build_push_message_discrete_no_client_in_data():
 
 
 def test_build_push_message_reassigned():
-    """Réassignation : deep_link = atmr://bookings."""
+    """Réassignation : deep_link = lirie://bookings."""
     ctx = {"id": 3253, "client_name": "Drin Jasiqi"}
     out = build_push_message(EVENT_REASSIGNED, ctx, "driver", discrete_mode=False)
     assert out["title"] == "Course réassignée"
     assert "Drin Jasiqi" in out["body"]
-    assert out["data"]["deep_link"] == "atmr://bookings"
-    assert out["data"]["deepLink"] == "atmr://bookings"
+    assert out["data"]["deep_link"] == "lirie://bookings"
+    assert out["data"]["deepLink"] == "lirie://bookings"
 
 
 # ---------- 6) Booking model-like (dict avec client_name) ----------
@@ -192,7 +191,7 @@ def test_build_push_message_accepts_booking_id_key():
     ctx = {"booking_id": 999, "client_name": "Test", "dropoff_location": "HUG"}
     out = build_push_message(EVENT_ASSIGNED, ctx, "driver", discrete_mode=False)
     assert out["data"]["booking_id"] == 999
-    assert "atmr://booking/999" in (out["data"]["deep_link"], out["data"]["deepLink"])
+    assert "lirie://booking/999" in (out["data"]["deep_link"], out["data"]["deepLink"])
 
 
 # ---------- 7) P0 : Jamais de body "ID-only" ----------
@@ -294,7 +293,7 @@ def test_build_chat_push_team():
     assert "collapse_key" in out
     assert out["collapse_key"] == "chat:team:10"  # company_id pour multi-company
     assert "dedupe_key" in out
-    assert out["data"]["deep_link"] == "atmr://chat/message/42"
+    assert out["data"]["deep_link"] == "lirie://chat/message/42"
 
 
 def test_build_chat_push_team_no_company_id():
@@ -319,7 +318,7 @@ def test_build_chat_push_deep_link_thread():
         thread_id=42,
         company_id=10,
     )
-    assert out["data"]["deep_link"] == "atmr://chat/thread/42"
+    assert out["data"]["deep_link"] == "lirie://chat/thread/42"
 
 
 def test_build_chat_push_booking():

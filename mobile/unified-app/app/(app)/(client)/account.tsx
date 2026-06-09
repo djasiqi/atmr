@@ -1,16 +1,23 @@
-import { View } from "react-native";
+import { useState } from "react";
+import { Pressable, View } from "react-native";
+import * as ExpoLinking from "expo-linking";
 import { PermissionGuard } from "../../../src/core/guards";
 import { useSession } from "../../../src/core/sessionProvider";
+import { deleteClientAccount } from "../../../src/features/client/api";
 import { useClientProfileQuery } from "../../../src/features/client/hooks";
 import { useClientBottomContentPadding } from "../../../src/features/client/navigation/ClientFloatingAppBar";
 import {
   AppButton,
   AppCard,
   AppText,
+  Modal,
   Screen,
   useAppViewport,
   useResponsiveTokens,
 } from "../../../src/design/responsive";
+
+const TERMS_URL = "https://www.lirie.ch/conditions";
+const PRIVACY_URL = "https://www.lirie.ch/privacy";
 
 export default function ClientAccountScreen() {
   const { logout } = useSession();
@@ -18,6 +25,25 @@ export default function ClientAccountScreen() {
   const profileQuery = useClientProfileQuery();
   const { horizontalPadding } = useAppViewport();
   const t = useResponsiveTokens();
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [deletePending, setDeletePending] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const handleDeleteAccount = async () => {
+    setDeletePending(true);
+    setDeleteError(null);
+    try {
+      await deleteClientAccount();
+      setDeleteModalVisible(false);
+      await logout();
+    } catch (error) {
+      setDeleteError(
+        error instanceof Error ? error.message : "Impossible de supprimer le compte."
+      );
+    } finally {
+      setDeletePending(false);
+    }
+  };
 
   return (
     <PermissionGuard permission="profile:read:self">
@@ -61,11 +87,67 @@ export default function ClientAccountScreen() {
           </AppCard>
         ) : null}
 
+        <AppCard variant="surface">
+          <View style={{ gap: t.fieldGap }}>
+            <AppText variant="sectionTitle">Informations légales</AppText>
+            <Pressable onPress={() => void ExpoLinking.openURL(PRIVACY_URL)}>
+              <AppText variant="body" style={{ color: "#0A7F59", textDecorationLine: "underline" }}>
+                Politique de confidentialité
+              </AppText>
+            </Pressable>
+            <Pressable onPress={() => void ExpoLinking.openURL(TERMS_URL)}>
+              <AppText variant="body" style={{ color: "#0A7F59", textDecorationLine: "underline" }}>
+                Conditions d&apos;utilisation
+              </AppText>
+            </Pressable>
+          </View>
+        </AppCard>
+
         <AppButton title="Déconnexion" variant="primary" onPress={() => logout()} />
+        <AppButton
+          title="Supprimer mon compte"
+          variant="secondary"
+          onPress={() => {
+            setDeleteError(null);
+            setDeleteModalVisible(true);
+          }}
+        />
         <AppText variant="caption">
           Besoin d&apos;aide ? Contactez le support depuis l&apos;écran public d&apos;aide.
         </AppText>
       </Screen>
+
+      <Modal
+        visible={deleteModalVisible}
+        title="Supprimer le compte"
+        subtitle="Action irréversible"
+        onClose={() => {
+          if (!deletePending) setDeleteModalVisible(false);
+        }}
+        footer={
+          <View style={{ gap: 10, width: "100%" }}>
+            {deleteError ? <AppText variant="error">{deleteError}</AppText> : null}
+            <AppButton
+              title={deletePending ? "Suppression…" : "Confirmer la suppression"}
+              variant="primary"
+              loading={deletePending}
+              disabled={deletePending}
+              onPress={() => void handleDeleteAccount()}
+            />
+            <AppButton
+              title="Annuler"
+              variant="secondary"
+              disabled={deletePending}
+              onPress={() => setDeleteModalVisible(false)}
+            />
+          </View>
+        }
+      >
+        <AppText variant="body">
+          Votre compte client sera désactivé et vous serez déconnecté. Cette action est conforme
+          aux exigences Google Play pour la suppression de compte in-app.
+        </AppText>
+      </Modal>
     </PermissionGuard>
   );
 }

@@ -88,6 +88,14 @@ export async function getClientMe(): Promise<ClientProfile> {
   }
 }
 
+export async function deleteClientAccount(): Promise<void> {
+  try {
+    await apiClient.delete("/clients/me");
+  } catch (error) {
+    throw normalizeError(error);
+  }
+}
+
 export async function getClientBookings(params?: {
   limit?: number;
 }): Promise<Booking[]> {

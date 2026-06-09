@@ -66,6 +66,11 @@ jest.mock("../featureFlags/registry", () => ({
   isFeatureEnabled: (flag: string) => mockIsFeatureEnabled(flag),
 }));
 
+jest.mock("../notifications/notificationDisclosurePersistence", () => ({
+  readNotificationDisclosureAccepted: jest.fn(async () => true),
+  subscribeNotificationDisclosureAccepted: jest.fn(() => () => undefined),
+}));
+
 jest.mock("../sessionProvider", () => ({
   useSession: () => mockUseSession(),
 }));

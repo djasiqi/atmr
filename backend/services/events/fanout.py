@@ -1168,7 +1168,7 @@ def fanout_driver_booking_reassigned(
             "type": "booking_reassigned",
             "booking_id": booking_id,
             "new_driver_id": new_driver_id,
-            "deepLink": "atmr://bookings",
+            "deepLink": "lirie://bookings",
             "recipient_role": "driver",
             "actor_role": "company",
         },
@@ -1203,7 +1203,7 @@ def fanout_delay_detected(
             "booking_id": booking_id,
             "assignment_id": assignment_id,
             "delay_minutes": float(delay_minutes),
-            "deepLink": f"atmr://booking/{booking_id}?alert=delay",
+            "deepLink": f"lirie://booking/{booking_id}?alert=delay",
             "recipient_role": "driver",
             "actor_role": "system",
         },
@@ -1268,7 +1268,7 @@ def fanout_dispatch_run_completed(
                 "dispatch_run_id": str(dispatch_run_id),
                 "assignments_count": int(assignments_count),
                 "date": date_str,
-                "deepLink": f"atmr://dispatch/run/{dispatch_run_id}",
+                "deepLink": f"lirie://dispatch/run/{dispatch_run_id}",
             },
         )
 
@@ -1328,7 +1328,7 @@ def fanout_urgent_alert(
         "severity": severity,
         "booking_id": booking_id,
         "driver_id": driver_id,
-        "deepLink": f"atmr://alerts/{alert_id}",
+        "deepLink": f"lirie://alerts/{alert_id}",
         "actor_role": "system",
         "event_id": _urgent_event_id,
         "dedupe_key": f"urgent:{_urgent_event_id}",
@@ -1833,7 +1833,7 @@ def send_critical_alert_ios(
             "type": "critical_alert",
             "alert_type": alert_type,
             "timestamp": int(datetime.now().timestamp()),
-            "deepLink": f"atmr://alerts/{alert_type}",
+            "deepLink": f"lirie://alerts/{alert_type}",
         }
 
         # Ajouter données custom

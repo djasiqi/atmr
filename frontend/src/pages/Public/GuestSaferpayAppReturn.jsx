@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 
 const APP_SCHEME = 'lirie';
 /** Aligner avec mobile/unified-app app.json `android.package` (ouverture intent) */
-const ANDROID_PACKAGE = 'ch.lirie.app';
+const ANDROID_PACKAGE = 'ch.liri.operations';
 
 /**
  * Ouvre l’appli (schéma lirie). Les navigateurs intégrés (Safari View, Custom Tabs) bloquent

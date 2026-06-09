@@ -1,17 +1,36 @@
-import { Platform, StyleSheet, View } from "react-native";
+import { useCallback, useState } from "react";
+import { Linking, Platform, StyleSheet, View } from "react-native";
 import * as Location from "expo-location";
 
 import { useDriverBackgroundTrackingUi } from "../hooks/useDriverBackgroundTrackingUi";
 import { useTransientTrackingBanner } from "../hooks/useTransientTrackingBanner";
+import { markLiveTrackingDisclosureAccepted } from "../services/liveTrackingDisclosureSession";
 import { DriverTrackingBanner } from "./DriverTrackingBanner";
+import { MissionLiveTrackingDisclosureModal } from "./MissionLiveTrackingDisclosureModal";
 
 export function DriverTrackingBannerHost() {
   const trackingUi = useDriverBackgroundTrackingUi();
   const visible = useTransientTrackingBanner(trackingUi.showBanner, trackingUi.bannerKind);
+  const [disclosureVisible, setDisclosureVisible] = useState(false);
+  const [disclosurePending, setDisclosurePending] = useState(false);
 
-  const handleRequestBgPermission = async () => {
+  const handleRequestBgPermission = useCallback(() => {
+    setDisclosureVisible(true);
+  }, []);
+
+  const handleDisclosureContinue = useCallback(async () => {
+    setDisclosurePending(true);
+    markLiveTrackingDisclosureAccepted();
+    const fg = await Location.requestForegroundPermissionsAsync().catch(() => ({ granted: false }));
+    if (!fg.granted) {
+      setDisclosurePending(false);
+      setDisclosureVisible(false);
+      return;
+    }
     await Location.requestBackgroundPermissionsAsync().catch(() => undefined);
-  };
+    setDisclosurePending(false);
+    setDisclosureVisible(false);
+  }, []);
 
   if (!visible) return null;
 
@@ -20,6 +39,17 @@ export function DriverTrackingBannerHost() {
       <DriverTrackingBanner
         ui={{ ...trackingUi, showBanner: true }}
         onRequestPermission={handleRequestBgPermission}
+      />
+      <MissionLiveTrackingDisclosureModal
+        visible={disclosureVisible}
+        pending={disclosurePending}
+        showOpenSettings={false}
+        onCancel={() => {
+          setDisclosureVisible(false);
+          setDisclosurePending(false);
+        }}
+        onContinue={() => void handleDisclosureContinue()}
+        onOpenSettings={() => void Linking.openSettings()}
       />
     </View>
   );

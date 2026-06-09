@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Animated, Easing, Platform, StyleSheet, View } from "react-native";
+import { Animated, Easing, Platform, Pressable, StyleSheet, View } from "react-native";
+import * as ExpoLinking from "expo-linking";
 import { useRevealFallback } from "../../../src/core/boot/useRevealFallback";
 import * as ImagePicker from "expo-image-picker";
 import { DriverContextGuard } from "../../../src/core/guards";
@@ -29,6 +30,10 @@ import {
 } from "../../../src/design/responsive";
 import { DRIVER_FLOATING_TAB_SCROLL_PADDING } from "../../../src/features/driver/navigation/DriverFloatingTabBar";
 
+const TERMS_URL = "https://www.lirie.ch/conditions";
+const PRIVACY_URL = "https://www.lirie.ch/privacy";
+const SUPPORT_URL = "https://www.lirie.ch/contact";
+
 export default function DriverProfileScreen() {
   const { bootstrap, activeContext, error: sessionError } = useSession();
   const user = bootstrap?.user ?? null;
@@ -55,6 +60,7 @@ export default function DriverProfileScreen() {
   const [routePending, setRoutePending] = useState(false);
   const t = useResponsiveTokens();
   const sectionEntrance = useRef([
+    new Animated.Value(0),
     new Animated.Value(0),
     new Animated.Value(0),
     new Animated.Value(0),
@@ -335,6 +341,27 @@ export default function DriverProfileScreen() {
 
             <Animated.View style={[styles.card, styles.elevatedCard, entranceStyle(3)]}>
               <AppText variant="body" style={styles.sectionTitle}>
+                Informations légales
+              </AppText>
+              <Pressable onPress={() => void ExpoLinking.openURL(PRIVACY_URL)}>
+                <AppText variant="body" style={styles.legalLink}>
+                  Politique de confidentialité
+                </AppText>
+              </Pressable>
+              <Pressable onPress={() => void ExpoLinking.openURL(TERMS_URL)}>
+                <AppText variant="body" style={styles.legalLink}>
+                  Conditions d&apos;utilisation
+                </AppText>
+              </Pressable>
+              <Pressable onPress={() => void ExpoLinking.openURL(SUPPORT_URL)}>
+                <AppText variant="body" style={styles.legalLink}>
+                  Contacter le support (suppression compte chauffeur)
+                </AppText>
+              </Pressable>
+            </Animated.View>
+
+            <Animated.View style={[styles.card, styles.elevatedCard, entranceStyle(4)]}>
+              <AppText variant="body" style={styles.sectionTitle}>
                 Actions
               </AppText>
               <View style={styles.actionsColumn}>
@@ -408,13 +435,13 @@ export default function DriverProfileScreen() {
             </Animated.View>
 
             {sessionError ? (
-              <Animated.View style={[styles.messageCardError, styles.elevatedCard, entranceStyle(4), messageEntranceStyle]}>
+              <Animated.View style={[styles.messageCardError, styles.elevatedCard, entranceStyle(5), messageEntranceStyle]}>
                 <AppText variant="error">Session : {sessionError}</AppText>
               </Animated.View>
             ) : null}
             {securityMessage ? (
               <Animated.View
-                style={[styles.messageCardSuccess, styles.elevatedCard, entranceStyle(5), messageEntranceStyle]}
+                style={[styles.messageCardSuccess, styles.elevatedCard, entranceStyle(6), messageEntranceStyle]}
               >
                 <AppText variant="body" style={styles.messageSuccessText}>
                   {securityMessage}
@@ -520,6 +547,10 @@ const styles = StyleSheet.create({
   sectionTitle: {
     color: "#163A34",
     fontWeight: "700",
+  },
+  legalLink: {
+    color: "#0A7F59",
+    textDecorationLine: "underline",
   },
   infoRow: {
     flexDirection: "row",

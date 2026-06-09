@@ -10,6 +10,10 @@ import { useEffect } from "../reactCompat";
 import { getExpoNotificationsModule } from "./expoNotificationsCompat";
 import { getStableDeviceId } from "./getStableDeviceId";
 import {
+  readNotificationDisclosureAccepted,
+  subscribeNotificationDisclosureAccepted,
+} from "./notificationDisclosurePersistence";
+import {
   clearPendingPushTokenRegistration,
   flushPendingPushTokenRegistrations,
   persistPendingPushTokenRegistration,
@@ -66,6 +70,16 @@ async function registerPushTokenWithPersistence(
   }
 }
 
+async function hasAcceptedNotificationDisclosure(telemetrySource: string): Promise<boolean> {
+  const disclosureAccepted = await readNotificationDisclosureAccepted();
+  if (!disclosureAccepted) {
+    emitDriverTelemetry("push.token.disclosure_required", {
+      source: telemetrySource,
+    });
+  }
+  return disclosureAccepted;
+}
+
 /**
  * Enregistre Expo + FCM avec device_id stable et listeners de rotation.
  */
@@ -83,6 +97,8 @@ export function useRegisterPushTokenEffect(options: RegisterPushTokenOptions): v
       try {
         await flushPendingPushTokenRegistrations(callbacks);
 
+        if (!(await hasAcceptedNotificationDisclosure(telemetrySource))) return;
+
         const perm = await Notifications.requestPermissionsAsync();
         if (!perm.granted) {
           emitDriverTelemetry("push.token.permission_denied", {
@@ -96,7 +112,12 @@ export function useRegisterPushTokenEffect(options: RegisterPushTokenOptions): v
         if (!tokenResult?.data || cancelled) return;
         const platform = Platform.OS === "ios" ? "ios" : "android";
         const payload = { token: tokenResult.data, deviceId, platform };
-        await registerPushTokenWithPersistence("expo", payload, () => callbacks.registerExpo(payload), telemetrySource);
+        await registerPushTokenWithPersistence(
+          "expo",
+          payload,
+          () => callbacks.registerExpo(payload),
+          telemetrySource
+        );
       } catch (error) {
         emitDriverTelemetry("push.token.register_failed", {
           source: telemetrySource,
@@ -108,10 +129,15 @@ export function useRegisterPushTokenEffect(options: RegisterPushTokenOptions): v
 
     void registerExpo();
 
+    const unsubscribeDisclosure = subscribeNotificationDisclosureAccepted(() => {
+      void registerExpo();
+    });
+
     expoSubscription = Notifications.addPushTokenListener?.(({ data }) => {
       if (!data || cancelled) return;
       void (async () => {
         try {
+          if (!(await hasAcceptedNotificationDisclosure(telemetrySource))) return;
           const deviceId = await getStableDeviceId();
           const platform = Platform.OS === "ios" ? "ios" : "android";
           const payload = { token: data, deviceId, platform };
@@ -133,6 +159,7 @@ export function useRegisterPushTokenEffect(options: RegisterPushTokenOptions): v
 
     return () => {
       cancelled = true;
+      unsubscribeDisclosure();
       expoSubscription?.remove();
     };
   }, [Notifications, callbacks, enabled, onPermissionDenied, telemetrySource]);
@@ -145,6 +172,7 @@ export function useRegisterPushTokenEffect(options: RegisterPushTokenOptions): v
 
     const registerFcm = async (token: string) => {
       if (!token || cancelled || fcmRegistrationInFlight) return;
+      if (!(await hasAcceptedNotificationDisclosure(telemetrySource))) return;
       fcmRegistrationInFlight = true;
       try {
         const deviceId = await getStableDeviceId();
@@ -170,10 +198,17 @@ export function useRegisterPushTokenEffect(options: RegisterPushTokenOptions): v
     const unsubscribeRefresh = subscribeDriverFcmTokenRefresh((token) => {
       void registerFcm(token);
     });
+    const unsubscribeDisclosure = subscribeNotificationDisclosureAccepted(() => {
+      void (async () => {
+        const token = await getDriverFcmToken();
+        if (token) await registerFcm(token);
+      })();
+    });
 
     return () => {
       cancelled = true;
       unsubscribeRefresh();
+      unsubscribeDisclosure();
     };
   }, [callbacks, enabled, fcmEnabled, telemetrySource]);
 }

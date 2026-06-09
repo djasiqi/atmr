@@ -1,0 +1,6 @@
+# Remplir après déploiement app.lirie.ch
+deploy_date: YYYY-MM-DD
+git_commit: 
+git_tag: 
+rollback_procedure: Re-déployer le commit/tag ci-dessus sur app.lirie.ch/.well-known/
+play_app_signing_sha256: 4D:3C:C4:CE:6B:6A:AE:99:76:19:8A:C1:93:DA:64:61:B0:9B:5A:AA:63:D3:FF:C3:3B:73:AD:84:DC:27:03:C0

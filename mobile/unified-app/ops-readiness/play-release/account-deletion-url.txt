@@ -1,0 +1,2 @@
+Suppression compte client : in-app — Mon compte → Supprimer mon compte (3 taps)
+Package : ch.liri.operations

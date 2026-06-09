@@ -40,10 +40,6 @@ import { reportBootFallback } from "../observability/bootDiagnostics";
 import { shouldIgnoreNotification } from "../notifications/shouldIgnoreNotification";
 import { getExpoNotificationsModule } from "../notifications/expoNotificationsCompat";
 import {
-  clearPushPermissionDenied,
-  setPushPermissionDenied,
-} from "../notifications/pushPermissionState";
-import {
   buildNotificationDedupKey,
   markNotificationHandled,
 } from "../notifications/notificationDedupStore";
@@ -835,24 +831,6 @@ export function NotificationsProvider({ children }: PropsWithChildren) {
       });
       registerMissionBarBackgroundHandlers();
     }
-    void Notifications.requestPermissionsAsync()
-      .then((perm) => {
-        if (!perm.granted) {
-          setPushPermissionDenied(true);
-          emitDriverTelemetry("push.token.permission_denied", {
-            source: "core.notifications.provider",
-          });
-          return;
-        }
-        clearPushPermissionDenied();
-      })
-      .catch((err) => {
-        console.error("[Notifications] requestPermissionsAsync failed:", err);
-        emitDriverTelemetry("push.permission.request_failed", {
-          source: "core.notifications.provider",
-          error: err instanceof Error ? err.message : "unknown",
-        });
-      });
     const received = Notifications.addNotificationReceivedListener((notification) => {
       const data = notification.request.content.data;
       const notificationId = notification.request.identifier;

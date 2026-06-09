@@ -62,9 +62,27 @@ const BACKGROUND_DISTANCE_METERS = Number(
 );
 const FOREGROUND_SERVICE_TITLE =
   process.env.EXPO_PUBLIC_DRIVER_BG_NOTIFICATION_TITLE ?? "Lirie Unified est active";
-const FOREGROUND_SERVICE_BODY =
+const FOREGROUND_SERVICE_BODY_MISSION =
   process.env.EXPO_PUBLIC_DRIVER_BG_NOTIFICATION_BODY ??
-  "Suivi de la localisation en cours pour votre mission active.";
+  "Mission en cours — localisation active";
+const FOREGROUND_SERVICE_BODY_PRESENCE =
+  process.env.EXPO_PUBLIC_DRIVER_BG_NOTIFICATION_BODY_PRESENCE ??
+  "Disponibilité active — localisation en cours";
+
+function resolveForegroundServiceNotification(
+  taskMode: BackgroundTrackingTaskMode
+): { title: string; body: string } {
+  if (taskMode === "presence_window") {
+    return {
+      title: FOREGROUND_SERVICE_TITLE,
+      body: FOREGROUND_SERVICE_BODY_PRESENCE,
+    };
+  }
+  return {
+    title: FOREGROUND_SERVICE_TITLE,
+    body: FOREGROUND_SERVICE_BODY_MISSION,
+  };
+}
 const FOREGROUND_SERVICE_COLOR =
   process.env.EXPO_PUBLIC_DRIVER_BG_NOTIFICATION_COLOR ?? "#0A7F59";
 const LOW_BATTERY_THRESHOLD = Number(process.env.EXPO_PUBLIC_DRIVER_LOW_BATTERY_THRESHOLD ?? "0.2");
@@ -510,12 +528,15 @@ async function startBackgroundLocationTaskIfEligibleInternal(
     distanceInterval: BACKGROUND_DISTANCE_METERS,
     pausesUpdatesAutomatically: false,
     showsBackgroundLocationIndicator: true,
-    foregroundService: {
-      notificationTitle: FOREGROUND_SERVICE_TITLE,
-      notificationBody: FOREGROUND_SERVICE_BODY,
-      notificationColor: FOREGROUND_SERVICE_COLOR,
-      killServiceOnDestroy: false,
-    },
+    foregroundService: (() => {
+      const fgsNotification = resolveForegroundServiceNotification(taskMode);
+      return {
+        notificationTitle: fgsNotification.title,
+        notificationBody: fgsNotification.body,
+        notificationColor: FOREGROUND_SERVICE_COLOR,
+        killServiceOnDestroy: false,
+      };
+    })(),
   };
   if (Platform.OS === "ios") {
     locationOptions.activityType = Location.ActivityType.AutomotiveNavigation;
