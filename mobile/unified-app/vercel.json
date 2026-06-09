@@ -1,5 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "npm run build:web",
+  "outputDirectory": "dist",
+  "installCommand": "npm ci",
   "headers": [
     {
       "source": "/.well-known/(.*)",
@@ -16,6 +19,10 @@
     }
   ],
   "rewrites": [
+    {
+      "source": "/",
+      "destination": "/index.html"
+    },
     {
       "source": "/activate-account",
       "destination": "/activate.html"
