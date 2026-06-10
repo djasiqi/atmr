@@ -37,6 +37,20 @@ export function DriverTrackingQaPanel({ ui }: Props) {
         Last error: {ui.lastNativeStartError ?? "none"}
       </AppText>
       <AppText variant="bodyMuted" style={styles.line}>
+        Native phase: {ui.nativeStartPhase ?? "none"}
+      </AppText>
+      <AppText variant="bodyMuted" style={styles.line}>
+        Native error: {ui.nativeStartError ?? "none"}
+      </AppText>
+      <AppText variant="bodyMuted" style={styles.line}>
+        TM defined: {ui.nativeTaskDefined == null ? "?" : ui.nativeTaskDefined ? "yes" : "no"}
+      </AppText>
+      <AppText variant="bodyMuted" style={styles.line}>
+        Started before/after:{" "}
+        {ui.nativeStartedBefore == null ? "?" : ui.nativeStartedBefore ? "1" : "0"} /{" "}
+        {ui.nativeStartedAfter == null ? "?" : ui.nativeStartedAfter ? "1" : "0"}
+      </AppText>
+      <AppText variant="bodyMuted" style={styles.line}>
         Last invoked: {formatTs(ui.lastTaskInvokedAt)}
       </AppText>
     </View>

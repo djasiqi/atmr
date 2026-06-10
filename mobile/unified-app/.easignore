@@ -14,3 +14,11 @@ web-build/
 /ios
 android/
 ios/
+
+# Preuves QA et outils locaux : ne doivent pas gonfler l'archive EAS.
+ops-readiness/evidence/
+tools/
+/ops-readiness/evidence/
+/tools/
+ops-readiness/evidence/**
+tools/**

@@ -153,6 +153,9 @@
     "production-apk": {
       "extends": "production",
       "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_TRACKING_QA_PANEL": "1"
+      },
       "android": {
         "buildType": "apk",
         "autoIncrement": false

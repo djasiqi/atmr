@@ -14,6 +14,8 @@ import {
   refreshDriverTrackingBridgeState,
   subscribeDriverTrackingBridge,
 } from "../services/driverTrackingBridge";
+import { ensureNativeTrackingWhileForeground } from "../services/backgroundLocationTask";
+import { setDriverPresenceWindowActive } from "../tracking";
 import {
   isPresenceDisclosureAccepted,
   isPresenceDisclosureDeclined,
@@ -79,8 +81,17 @@ export function DriverPresenceDisclosureHost() {
     setDisclosurePending(false);
     setDisclosureVisible(false);
     setShowOpenSettings(false);
+    if (presenceWindowWanted) {
+      setDriverPresenceWindowActive(true);
+      await ensureNativeTrackingWhileForeground(
+        null,
+        null,
+        { presenceWindow: true },
+        "presence_disclosure_accept"
+      );
+    }
     refreshDriverTrackingBridgeState();
-  }, []);
+  }, [presenceWindowWanted]);
 
   const handleDisclosureCancel = useCallback(() => {
     markPresenceDisclosureDeclined();

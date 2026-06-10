@@ -21,6 +21,11 @@ export type DriverBackgroundTrackingUiState = {
   lastNativeStartError: string | null;
   lastTaskInvokedAt: number | null;
   pendingFgsStart: boolean;
+  nativeStartPhase: string | null;
+  nativeStartError: string | null;
+  nativeTaskDefined: boolean | null;
+  nativeStartedBefore: boolean | null;
+  nativeStartedAfter: boolean | null;
 };
 
 const EMPTY: DriverBackgroundTrackingUiState = {
@@ -33,6 +38,11 @@ const EMPTY: DriverBackgroundTrackingUiState = {
   lastNativeStartError: null,
   lastTaskInvokedAt: null,
   pendingFgsStart: false,
+  nativeStartPhase: null,
+  nativeStartError: null,
+  nativeTaskDefined: null,
+  nativeStartedBefore: null,
+  nativeStartedAfter: null,
 };
 
 export function isTrackingQaPanelEnabled(): boolean {
@@ -80,6 +90,12 @@ async function loadDiagnostics(): Promise<DriverBackgroundTrackingUiState> {
     lastNativeStartError: runtime.lastNativeStartError,
     lastTaskInvokedAt: runtime.lastTaskInvokedAt,
     pendingFgsStart: runtime.pendingFgsStart.active,
+    nativeStartPhase: runtime.nativeStartDiagnostics.native_start_phase,
+    nativeStartError:
+      runtime.nativeStartDiagnostics.native_start_error ?? runtime.lastNativeStartError,
+    nativeTaskDefined: runtime.nativeStartDiagnostics.native_task_defined,
+    nativeStartedBefore: runtime.nativeStartDiagnostics.native_started_before,
+    nativeStartedAfter: runtime.nativeStartDiagnostics.native_started_after,
   };
 }
 

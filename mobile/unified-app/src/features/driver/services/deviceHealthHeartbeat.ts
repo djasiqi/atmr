@@ -18,6 +18,7 @@ import * as Location from "expo-location";
 import { AppState, AppStateStatus, Platform } from "react-native";
 
 import { emitDriverTelemetry } from "../../../core/observability/driverTelemetry";
+import { getTrackingRuntimeSnapshot } from "./trackingRuntime";
 
 export type DevicePermissionStatus = "granted" | "denied" | "undetermined";
 
@@ -40,6 +41,11 @@ export type DeviceHealthPayload = {
   fix_success_rate_last_5min: number | null;
   constraint_reason: string | null;
   app_state?: AppStateStatus | string | null;
+  native_start_phase?: string | null;
+  native_start_error?: string | null;
+  native_task_defined?: boolean | null;
+  native_started_before?: boolean | null;
+  native_started_after?: boolean | null;
 };
 
 export type DeviceHealthRequestPayload = DeviceHealthPayload & {
@@ -288,6 +294,11 @@ export async function collectDeviceHealth(): Promise<DeviceHealthPayload> {
         ? "when_in_use"
         : fgPermission;
 
+  const trackingRuntime = getTrackingRuntimeSnapshot();
+  const nativeDiag = trackingRuntime.nativeStartDiagnostics;
+  const nativeStartError =
+    nativeDiag.native_start_error ?? trackingRuntime.lastNativeStartError ?? null;
+
   return {
     kind: "tracking_health",
     manufacturer: identity.manufacturer,
@@ -307,6 +318,11 @@ export async function collectDeviceHealth(): Promise<DeviceHealthPayload> {
     fix_success_rate_last_5min: null,
     constraint_reason: constraintReason,
     app_state: AppState.currentState,
+    native_start_phase: nativeDiag.native_start_phase,
+    native_start_error: nativeStartError,
+    native_task_defined: nativeDiag.native_task_defined,
+    native_started_before: nativeDiag.native_started_before,
+    native_started_after: nativeDiag.native_started_after,
   };
 }
 

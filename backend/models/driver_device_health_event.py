@@ -37,6 +37,11 @@ class DriverDeviceHealthEvent(db.Model):
     constraint_reason = db.Column(db.String(64), nullable=True)
     fgs_running = db.Column(db.Boolean, nullable=True)
     trigger_reason = db.Column(db.String(128), nullable=True)
+    native_start_phase = db.Column(db.String(64), nullable=True)
+    native_start_error = db.Column(db.String(512), nullable=True)
+    native_task_defined = db.Column(db.Boolean, nullable=True)
+    native_started_before = db.Column(db.Boolean, nullable=True)
+    native_started_after = db.Column(db.Boolean, nullable=True)
 
     driver = db.relationship("Driver", backref=db.backref("device_health_events", lazy="dynamic"))
 
@@ -57,4 +62,9 @@ class DriverDeviceHealthEvent(db.Model):
             "constraint_reason": self.constraint_reason,
             "fgs_running": self.fgs_running,
             "trigger_reason": self.trigger_reason,
+            "native_start_phase": self.native_start_phase,
+            "native_start_error": self.native_start_error,
+            "native_task_defined": self.native_task_defined,
+            "native_started_before": self.native_started_before,
+            "native_started_after": self.native_started_after,
         }

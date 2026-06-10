@@ -426,7 +426,20 @@ def ingest_driver_device_health(
 
     location_permission = _resolve_location_permission(payload)
 
+    native_start_phase = str(payload.get("native_start_phase") or "").strip() or None
+    native_start_error = str(payload.get("native_start_error") or "").strip() or None
+    if native_start_error:
+        native_start_error = native_start_error[:512]
 
+    def _optional_bool(key: str) -> bool | None:
+        raw = payload.get(key)
+        if raw is None:
+            return None
+        return bool(raw)
+
+    native_task_defined = _optional_bool("native_task_defined")
+    native_started_before = _optional_bool("native_started_before")
+    native_started_after = _optional_bool("native_started_after")
 
     event = DriverDeviceHealthEvent(
 
@@ -457,6 +470,16 @@ def ingest_driver_device_health(
         fgs_running=fgs_running,
 
         trigger_reason=trigger_reason,
+
+        native_start_phase=native_start_phase,
+
+        native_start_error=native_start_error,
+
+        native_task_defined=native_task_defined,
+
+        native_started_before=native_started_before,
+
+        native_started_after=native_started_after,
 
     )
 
@@ -493,6 +516,16 @@ def ingest_driver_device_health(
         "fgs_running": _bool_to_redis(fgs_running),
 
         "trigger_reason": trigger_reason or "",
+
+        "native_start_phase": native_start_phase or "",
+
+        "native_start_error": native_start_error or "",
+
+        "native_task_defined": _bool_to_redis(native_task_defined),
+
+        "native_started_before": _bool_to_redis(native_started_before),
+
+        "native_started_after": _bool_to_redis(native_started_after),
 
         "last_heartbeat_at": str(int(now.timestamp() * 1000)),
 

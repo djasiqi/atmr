@@ -18,6 +18,14 @@ export type TrackingRuntimeState = {
   mode: DriverTrackingMode;
 };
 
+export type NativeStartDiagnostics = {
+  native_start_phase: string | null;
+  native_start_error: string | null;
+  native_task_defined: boolean | null;
+  native_started_before: boolean | null;
+  native_started_after: boolean | null;
+};
+
 export type TrackingRuntimeSnapshot = {
   lastNativeStartError: string | null;
   lastNativeStartErrorAt: number | null;
@@ -25,6 +33,7 @@ export type TrackingRuntimeSnapshot = {
   pendingFgsStart: PendingFgsStartState;
   missionId: number | null;
   mode: DriverTrackingMode;
+  nativeStartDiagnostics: NativeStartDiagnostics;
 };
 
 type TrackingRuntimeListener = (snapshot: TrackingRuntimeSnapshot) => void;
@@ -36,6 +45,13 @@ let lastNativeStartErrorAt: number | null = null;
 let lastTaskInvokedAt: number | null = null;
 let pendingFgsStart: PendingFgsStartState = { active: false };
 let currentState: TrackingRuntimeState = { missionId: null, mode: "off" };
+let nativeStartDiagnostics: NativeStartDiagnostics = {
+  native_start_phase: null,
+  native_start_error: null,
+  native_task_defined: null,
+  native_started_before: null,
+  native_started_after: null,
+};
 
 function buildSnapshot(): TrackingRuntimeSnapshot {
   return {
@@ -45,6 +61,7 @@ function buildSnapshot(): TrackingRuntimeSnapshot {
     pendingFgsStart: { ...pendingFgsStart },
     missionId: currentState.missionId,
     mode: currentState.mode,
+    nativeStartDiagnostics: { ...nativeStartDiagnostics },
   };
 }
 
@@ -84,6 +101,28 @@ export function clearNativeStartFailure(): void {
   if (lastNativeStartError === null && lastNativeStartErrorAt === null) return;
   lastNativeStartError = null;
   lastNativeStartErrorAt = null;
+  notifyListeners();
+}
+
+export function getNativeStartDiagnostics(): NativeStartDiagnostics {
+  return { ...nativeStartDiagnostics };
+}
+
+export function recordNativeStartDiagnostics(
+  partial: Partial<NativeStartDiagnostics>
+): void {
+  nativeStartDiagnostics = { ...nativeStartDiagnostics, ...partial };
+  notifyListeners();
+}
+
+export function clearNativeStartDiagnostics(): void {
+  nativeStartDiagnostics = {
+    native_start_phase: null,
+    native_start_error: null,
+    native_task_defined: null,
+    native_started_before: null,
+    native_started_after: null,
+  };
   notifyListeners();
 }
 
@@ -134,5 +173,6 @@ export function __resetTrackingRuntimeForTests(): void {
   lastTaskInvokedAt = null;
   pendingFgsStart = { active: false };
   currentState = { missionId: null, mode: "off" };
+  clearNativeStartDiagnostics();
   listeners.clear();
 }

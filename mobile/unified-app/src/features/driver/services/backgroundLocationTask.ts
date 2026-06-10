@@ -16,6 +16,8 @@ import {
   clearNativeStartFailure,
   clearPendingFgsStart,
   getPendingFgsStart,
+  clearNativeStartDiagnostics,
+  recordNativeStartDiagnostics,
   recordNativeStartFailure,
   setLastTaskInvokedAt,
   setPendingFgsStart,
@@ -199,17 +201,32 @@ export function isBackgroundLocationTaskDefined(): boolean {
   return taskDefined;
 }
 
+function isTaskManagerTaskDefined(): boolean {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const TaskManager = require("expo-task-manager") as {
+      isTaskDefined?: (taskName: string) => boolean;
+    };
+    if (typeof TaskManager?.isTaskDefined === "function") {
+      return TaskManager.isTaskDefined(BACKGROUND_LOCATION_TASK_NAME);
+    }
+  } catch {
+    /* noop */
+  }
+  return false;
+}
+
+async function readNativeLocationUpdatesStarted(): Promise<boolean> {
+  if (typeof Location.hasStartedLocationUpdatesAsync !== "function") return false;
+  return Location.hasStartedLocationUpdatesAsync(BACKGROUND_LOCATION_TASK_NAME).catch(() => false);
+}
+
 export async function getNativeTaskLifecycleStatus(): Promise<{
   taskDefined: boolean;
   taskStarted: boolean;
 }> {
-  const defined = taskDefined;
-  let started = false;
-  if (typeof Location.hasStartedLocationUpdatesAsync === "function") {
-    started = await Location.hasStartedLocationUpdatesAsync(BACKGROUND_LOCATION_TASK_NAME).catch(
-      () => false
-    );
-  }
+  const defined = taskDefined || isTaskManagerTaskDefined();
+  const started = await readNativeLocationUpdatesStarted();
   return { taskDefined: defined, taskStarted: started };
 }
 
@@ -467,6 +484,13 @@ async function startBackgroundLocationTaskIfEligibleInternal(
 
   const granted = await ensurePermissions();
   if (!granted) {
+    recordNativeStartDiagnostics({
+      native_start_phase: "ensurePermissions",
+      native_start_error: "background or foreground location not granted",
+      native_task_defined: lifecycleBefore.taskDefined || isTaskManagerTaskDefined(),
+      native_started_before: lifecycleBefore.taskStarted,
+      native_started_after: false,
+    });
     emitDriverTelemetry("tracking.permission.denied", {
       source: "driver.services.backgroundLocationTask",
       mission_id: missionId,
@@ -496,6 +520,7 @@ async function startBackgroundLocationTaskIfEligibleInternal(
   const hasStarted = await Location.hasStartedLocationUpdatesAsync(BACKGROUND_LOCATION_TASK_NAME);
   if (hasStarted) {
     clearNativeStartFailure();
+    clearNativeStartDiagnostics();
     clearPendingFgsStart();
     return true;
   }
@@ -542,10 +567,24 @@ async function startBackgroundLocationTaskIfEligibleInternal(
     locationOptions.activityType = Location.ActivityType.AutomotiveNavigation;
   }
 
+  recordNativeStartDiagnostics({
+    native_start_phase: "before_startLocationUpdatesAsync",
+    native_task_defined: lifecycleBefore.taskDefined || isTaskManagerTaskDefined(),
+    native_started_before: lifecycleBefore.taskStarted,
+    native_started_after: null,
+    native_start_error: null,
+  });
+
   try {
+    recordNativeStartDiagnostics({ native_start_phase: "startLocationUpdatesAsync" });
     await Location.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK_NAME, locationOptions);
 
     const lifecycleAfter = await getNativeTaskLifecycleStatus();
+    recordNativeStartDiagnostics({
+      native_start_phase: "after_startLocationUpdatesAsync",
+      native_task_defined: lifecycleAfter.taskDefined,
+      native_started_after: lifecycleAfter.taskStarted,
+    });
 
     emitDriverTelemetry("tracking.background.start_success", {
       source: "driver.services.backgroundLocationTask",
@@ -558,15 +597,22 @@ async function startBackgroundLocationTaskIfEligibleInternal(
     });
 
     if (!lifecycleAfter.taskStarted) {
+      const inactiveError = "startLocationUpdatesAsync returned without active native task";
+      recordNativeStartDiagnostics({
+        native_start_phase: "after_startLocationUpdatesAsync",
+        native_start_error: inactiveError,
+        native_started_after: false,
+      });
       recordNativeStartFailure({
         reason: startReason,
-        error: "startLocationUpdatesAsync returned without active native task",
+        error: inactiveError,
       });
       notifyDeviceHealthOnNativeStartFailure("native_task_inactive");
       return false;
     }
 
     clearNativeStartFailure();
+    clearNativeStartDiagnostics();
     clearPendingFgsStart();
 
     emitDriverTelemetry("tracking.background.task.started", {
@@ -680,8 +726,20 @@ export async function ensureNativeTrackingWhileForeground(
   reason = "ensure_native_tracking"
 ): Promise<void> {
   if (Platform.OS === "web") return;
-  if (!isFeatureEnabled("tracking_background_enabled")) return;
-  if (!canUseBackgroundLocation()) return;
+  if (!isFeatureEnabled("tracking_background_enabled")) {
+    recordNativeStartDiagnostics({
+      native_start_phase: "ensureNativeTrackingWhileForeground",
+      native_start_error: "tracking_background_enabled=false",
+    });
+    return;
+  }
+  if (!canUseBackgroundLocation()) {
+    recordNativeStartDiagnostics({
+      native_start_phase: "ensureNativeTrackingWhileForeground",
+      native_start_error: "runtime_unsupported",
+    });
+    return;
+  }
 
   const isPresenceWindow = options.presenceWindow === true;
   if (!isPresenceWindow && (missionId == null || !isTrackingActiveStatus(missionStatus))) {
