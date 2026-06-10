@@ -1,0 +1,54 @@
+﻿===========================================================================
+RUNBOOK — QA FGS PRESENCE EN FENETRE 07h-19h (dernier bloquant SG#2)
+A executer entre 07h00 et 19h00, heure locale du S23.
+===========================================================================
+Pre-requis:
+  - S23 connecte ADB: 192.168.1.33:42103
+  - APK v110 installe (versionCode=110)
+  - Compte chauffeur connecte (Emmenez Moi), Disponible=ON
+  - adb: C:\Users\jasiq\AppData\Local\Android\Sdk\platform-tools\adb.exe
+
+---------------------------------------------------------------------------
+ETAPE 0 — Contexte (verifier qu'on est BIEN en fenetre)
+  adb -s 192.168.1.33:42103 shell date
+  -> l'heure doit etre entre 07:00 et 18:59.
+
+---------------------------------------------------------------------------
+SCENARIO 1 — REFUS disclosure => PAS de FGS
+  1. App ouverte, chauffeur Disponible=ON, sans mission.
+  2. La modal "Disponibilite flotte" doit APPARAITRE (presenceWindowWanted=true).
+     Capture: fgs-window-modal.png
+        adb ... shell screencap -p /sdcard/m.png ; adb ... pull /sdcard/m.png fgs-window-modal.png
+  3. Taper "Annuler" (refus).
+  4. Verifier ABSENCE de FGS + notif:
+        adb ... shell dumpsys activity services ch.liri.operations   (attendu: (nothing) ou pas de FGS location)
+        adb ... shell dumpsys notification --noredact | findstr /C:"Disponibilite active"  (attendu: vide)
+     UI doit montrer "GPS inactif" + bandeau jaune "Disponibilite flotte: localisation pas active".
+  5. Preuve: fgs-window-refus.png + fgs-window-refus.txt (sortie dumpsys)
+  ATTENDU: aucun FGS, aucune notif, GPS inactif. => PASS refus.
+
+---------------------------------------------------------------------------
+SCENARIO 2 — ACCEPTATION disclosure => FGS + notif persistante
+  1. Re-declencher la modal (relancer dispo / rouvrir app si declined memorise).
+     NB: markPresenceDisclosureDeclined memorise le refus; pour re-tester, vider la
+     decision: soit pm clear + relogin chauffeur, soit toggler Disponible OFF->ON.
+  2. Taper "Continuer" => accepter permissions localisation (Foreground puis Background "Toujours autoriser").
+  3. Verifier PRESENCE du FGS + notif:
+        adb ... shell dumpsys activity services ch.liri.operations   (attendu: ServiceRecord foreground location)
+        adb ... shell dumpsys notification --noredact | findstr /C:"Disponibilite active"  (attendu: notif presente)
+     UI: "GPS actif" (tracking presence), notif persistante "Disponibilite active - localisation en cours".
+  4. Preuve: fgs-window-accept.png + fgs-window-accept.txt (dumpsys) + capture de la notif.
+  ATTENDU: FGS location actif + notif persistante. => PASS accept.
+
+---------------------------------------------------------------------------
+CLOTURE
+  - Si Scenario 1 PASS et Scenario 2 PASS:
+      mettre a jour CLOSURE.txt: critere FGS fenetre = PASS,
+      VERDICT global SG#2 = PASS.
+  - Archiver tous les PNG/txt dans evidence/stop-gate-2/.
+  - NE PAS eas submit Play tant que STOP GATE Release (video BG + texte) non prepare.
+
+ETAT AU 2026-06-10 02:13 (deja acquis):
+  Backend DELETE PASS, privacy client/chauffeur PASS, Test C hors fenetre PASS,
+  builds v110 PASS, deep links/AASA PASS. Reste uniquement ce runbook.
+===========================================================================

@@ -1,0 +1,72 @@
+﻿=== FGS WINDOW ACCEPT — 2026-06-10 11:24:51 ===
+--- package permissions ---
+
+      android.permission.POST_NOTIFICATIONS
+      android.permission.ACCESS_FINE_LOCATION
+      android.permission.ACCESS_COARSE_LOCATION
+      android.permission.ACCESS_BACKGROUND_LOCATION
+      com.google.android.finsky.permission.BIND_GET_INSTALL_REFERRER_SERVICE: granted=true
+      com.google.android.c2dm.permission.RECEIVE: granted=true
+      android.permission.MODIFY_AUDIO_SETTINGS: granted=true
+      android.permission.ACCESS_NOTIFICATION_POLICY: granted=true
+      com.sec.android.provider.badge.permission.READ: granted=true
+      android.permission.FOREGROUND_SERVICE: granted=true
+      android.permission.RECEIVE_BOOT_COMPLETED: granted=true
+      android.permission.FOREGROUND_SERVICE_LOCATION: granted=true
+      android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS: granted=true
+      android.permission.INTERNET: granted=true
+      ch.liri.operations.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION: granted=true
+      android.permission.FOREGROUND_SERVICE_DATA_SYNC: granted=true
+      android.permission.ACCESS_NETWORK_STATE: granted=true
+      android.permission.USE_FINGERPRINT: granted=true
+      android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK: granted=true
+      android.permission.VIBRATE: granted=true
+      android.permission.ACCESS_WIFI_STATE: granted=true
+      android.permission.USE_BIOMETRIC: granted=true
+      android.permission.WAKE_LOCK: granted=true
+        android.permission.POST_NOTIFICATIONS: granted=false, flags=[ 
+USER_SENSITIVE_WHEN_GRANTED|USER_SENSITIVE_WHEN_DENIED]
+        android.permission.ACCESS_FINE_LOCATION: granted=true, flags=[ 
+USER_SET|USER_SENSITIVE_WHEN_GRANTED|USER_SENSITIVE_WHEN_DENIED|524288]
+        android.permission.ACCESS_COARSE_LOCATION: granted=true, flags=[ 
+USER_SET|USER_SENSITIVE_WHEN_GRANTED|USER_SENSITIVE_WHEN_DENIED]
+        android.permission.CAMERA: granted=false, flags=[ USER_SENSITIVE_WHEN_GRANTED|USER_SENSITIVE_WHEN_DENIED]
+        android.permission.ACCESS_BACKGROUND_LOCATION: granted=true, flags=[ USER_SET|USER_SENSITIVE_WHEN_GRANTED|USER_
+SENSITIVE_WHEN_DENIED|RESTRICTION_INSTALLER_EXEMPT|RESTRICTION_UPGRADE_EXEMPT]
+        android.permission.ACCESS_BACKGROUND_LOCATION: granted=false, flags=[ 
+RESTRICTION_INSTALLER_EXEMPT|RESTRICTION_UPGRADE_EXEMPT]
+
+
+--- services ---
+ACTIVITY MANAGER SERVICES (dumpsys activity services)
+  (nothing)
+--- notifications presence ---
+
+>       AppSettings: ch.liri.operations (10875) importance=NONE userSet=false
+          NotificationChannel{mId='lock-screen', mName=Lock screen, mDescription=, mImportance=4, mBypassDnd=false, 
+mLockscreenVisibility=-1000, mSound=content://settings/system/notification_sound, mLights=false, mLightColor=0, 
+mVibrationPattern=null, mVibrationEffect=null, mUserLockedFields=0, mUserVisibleTaskShown=false, 
+mVibrationEnabled=false, mShowBadge=true, mDeleted=false, mDeletedTimeMs=-1, mGroup='null', 
+mAudioAttributes=AudioAttributes: usage=USAGE_NOTIFICATION content=CONTENT_TYPE_SONIFICATION 
+flags=0x800(FLAG_MUTE_HAPTIC)  tags= bundle=null, mBlockableSystem=false, mAllowBubbles=-1, 
+mImportanceLockedByOEM=false, mImportanceLockedDefaultApp=false, mOriginalImp=4, mParent=null, mConversationId=null, 
+mDemoted=false, mImportantConvo=false, mLastNotificationUpdateTimeMs=0, mSoundMissingReason=0}
+          NotificationChannel{mId='mission_updates', mName=Mission updates, mDescription=, mImportance=4, 
+mBypassDnd=false, mLockscreenVisibility=-1000, mSound=content://settings/system/notification_sound, mLights=false, 
+mLightColor=0, mVibrationPattern=[0, 180, 100, 180], mVibrationEffect=Composed{segments=[Step{amplitude=0.0, 
+frequencyHz=0.0, duration=0}, Step{amplitude=-1.0, frequencyHz=0.0, duration=180}, Step{amplitude=0.0, 
+frequencyHz=0.0, duration=100}, Step{amplitude=-1.0, frequencyHz=0.0, duration=180}], repeat=-1, 
+mMagnitudeType=TYPE_EXTRA}, mUserLockedFields=0, mUserVisibleTaskShown=false, mVibrationEnabled=true, mShowBadge=true, 
+mDeleted=false, mDeletedTimeMs=-1, mGroup='null', mAudioAttributes=AudioAttributes: usage=USAGE_NOTIFICATION 
+content=CONTENT_TYPE_SONIFICATION flags=0x800(FLAG_MUTE_HAPTIC)  tags= bundle=null, mBlockableSystem=false, 
+mAllowBubbles=-1, mImportanceLockedByOEM=false, mImportanceLockedDefaultApp=false, mOriginalImp=4, mParent=null, 
+mConversationId=null, mDemoted=false, mImportantConvo=false, mLastNotificationUpdateTimeMs=0, mSoundMissingReason=0}
+          NotificationChannel{mId='silent', mName=Silent sync, mDescription=, mImportance=2, mBypassDnd=false, 
+mLockscreenVisibility=-1000, mSound=null, mLights=false, mLightColor=0, mVibrationPattern=[0], mVibrationEffect=null, 
+mUserLockedFields=0, mUserVisibleTaskShown=false, mVibrationEnabled=true, mShowBadge=true, mDeleted=false, 
+mDeletedTimeMs=-1, mGroup='null', mAudioAttributes=AudioAttributes: usage=USAGE_NOTIFICATION 
+content=CONTENT_TYPE_SONIFICATION flags=0x800(FLAG_MUTE_HAPTIC)  tags= bundle=null, mBlockableSystem=false, 
+mAllowBubbles=-1, mImportanceLockedByOEM=false, mImportanceLockedDefaultApp=false, mOriginalImp=2, mParent=null, 
+mConversationId=null, mDemoted=false, mImportantConvo=false, mLastNotificationUpdateTimeMs=0, mSoundMissingReason=0}
+
+

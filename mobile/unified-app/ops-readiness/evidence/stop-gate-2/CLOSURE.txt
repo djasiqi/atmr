@@ -1,0 +1,47 @@
+﻿STOP GATE #2 — CLOSURE — 2026-06-10 11:27
+
+VERDICT: PARTIAL PASS — BLOCKER FGS presence acceptation
+
+PASS:
+  [x] Build EAS prod AAB v110 + APK v110
+  [x] APK installe S23 versionCode=110
+  [x] AASA / assetlinks / privacy HTTP 200
+  [x] Deep links activate-account / reset-password
+  [x] Backend DELETE compte + token revoke (prod)
+  [x] Privacy client capture
+  [x] Privacy chauffeur captures
+  [x] Presence HORS fenetre 07h-19h (code + runtime 02h13)
+  [x] FGS presence en fenetre — refus disclosure => pas de FGS / pas de notif
+
+FAIL / BLOCKER:
+  [ ] FGS presence en fenetre — acceptation disclosure => notif persistante
+      Resultat observe 11:25:
+        permissions location always + notifications granted
+        UI reste "GPS connecte"
+        dumpsys activity services ch.liri.operations = (nothing)
+        aucune notification "Disponibilite active - localisation en cours"
+      Preuves: fgs-window-accept-final.png, fgs-window-accept-final.txt,
+               fgs-window-accept-background-check.txt, fgs-window-accept-logcat.txt
+
+AUDIT TECHNIQUE 2026-06-10 12:50 (v112) — voir fgs-technical-audit.md :
+  - Permissions TOUTES granted (FINE/COARSE/BACKGROUND/POST_NOTIFICATIONS/FGS_LOCATION).
+  - dumpsys activity services = vide ; AUCUN am_create_service / startService LocationTaskService.
+    => Android ne recoit jamais de demande de demarrage du FGS : echec en amont (JS/expo),
+       avant startForeground. Exception avalee dans la telemetrie suspendue en prod.
+  - "position partagee"/"GPS connecte" = conseil rotatif + watch JS foreground (watchPositionAsync),
+    chemin INDEPENDANT du FGS. Pas une preuve de FGS.
+  - Aveuglement prod confirme : ingest suspendu (!__DEV__), QA panel gated off,
+    banniere presence jamais affichee (mission-only).
+  - Hypothese racine : ensurePermissions() (request*) ouvre GrantPermissionsActivity ->
+    app en background -> startLocationUpdatesAsync refuse le FGS (Android 14+).
+
+CORROBORATION BACKEND (driver_device_health_events, prod) — voir fgs-backend-device-health.md :
+  SM-S931B (S23) sur 08:17->10:53 UTC : app_state=active, fgs_running=f, location_permission=always,
+  notifications_enabled=t, battery_optimized=f, constraint_reason=fgs_not_running (constant).
+  => Elimine cote serveur permissions/notif/batterie/background. Verrou = startLocationUpdatesAsync
+     ne demarre aucun FGS meme app active + conditions vertes.
+
+PROCHAINE ETAPE : build INTERNE de diagnostic (QA panel + native_start_error device-health),
+PAS un v113 a l'aveugle. Puis correctif sequencement permissions.
+
+Ne pas eas submit Play. SG#2 reste PARTIAL PASS.

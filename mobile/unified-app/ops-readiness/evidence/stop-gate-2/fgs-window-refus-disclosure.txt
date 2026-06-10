@@ -1,0 +1,8 @@
+﻿=== FGS WINDOW REFUS DISCLOSURE — 2026-06-10 11:22:58 ===
+Action: Annuler sur modal Disponibilite flotte.
+--- services ---
+ACTIVITY MANAGER SERVICES (dumpsys activity services)
+  (nothing)
+--- notifications presence ---
+RESULT: aucune notification presence.
+RESULT_SERVICES: aucun FGS/service location.

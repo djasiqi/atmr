@@ -1,0 +1,4 @@
+﻿=== FGS v112 ACCEPT — 2026-06-10 12:39:59 ===
+ACTIVITY MANAGER SERVICES (dumpsys activity services)
+  (nothing)
+NO_PRESENCE_NOTIF

@@ -1,0 +1,489 @@
+﻿=== FGS WINDOW ACCEPT FINAL — 2026-06-10 11:25:51 ===
+Action: Continuer sur modal, location always + notifications granted.
+--- services ---
+ACTIVITY MANAGER SERVICES (dumpsys activity services)
+  (nothing)
+--- notifications presence ---
+
+>     NotificationRecord(0x0c8a0cfb: pkg=com.microsoft.appmanager user=UserHandle{0} id=101 tag=null importance=2 
+key=0|com.microsoft.appmanager|101|null|10140: Notification(channel=com.mi... shortcut=null contentView=null 
+vibrate=null sound=null tick defaults=0 flags=ONGOING_EVENT|NO_CLEAR|FOREGROUND_SERVICE color=0xff0078d7 
+groupKey=foreground_notification_group actions=2 vis=PRIVATE semFlags=0x0 semPriority=0 semMissedCount=0 
+semScenarioType=0))
+        uid=10140 userId=0
+        opPkg=com.microsoft.appmanager
+        icon=Icon(typ=RESOURCE pkg=com.microsoft.appmanager id=0x7f08032d)
+>       flags=ONGOING_EVENT|NO_CLEAR|FOREGROUND_SERVICE
+>       originalFlags=ONGOING_EVENT|FOREGROUND_SERVICE
+        pri=0
+        key=0|com.microsoft.appmanager|101|null|10140
+        seen=true
+>       groupKey=0|com.microsoft.appmanager|g:foreground_notification_group
+        notification=
+              fullscreenIntent=null
+              contentIntent=PendingIntent{963e8d7: PendingIntentRecord{540dca6 com.microsoft.appmanager startActivity 
+(allowlist: 77063a4:+30s0ms/0/NOTIFICATION_SERVICE/NotificationManagerService)}}
+              deleteIntent=null
+>     StatusBarNotification(pkg=com.wssyncmldm user=UserHandle{0} id=2 tag=null key=0|com.wssyncmldm|2|null|1000: 
+Notification(channel=IDM_NOTIFICATION_CHANNEL_NO_SOUND_NO_VIBRATION shortcut=null contentView=null vibrate=null 
+sound=null defaults=0 flags=ONGOING_EVENT|NO_CLEAR|FOREGROUND_SERVICE|CAN_COLORIZE color=0xff598cff vis=PRIVATE 
+semFlags=0x0 semPriority=0 semMissedCount=0 semScenarioType=0))
+      ...
+  
+    Snoozed notifications:
+  
+>         NotificationChannel{mId='CHANNEL_ID_FOREGROUND_SERVICE', mName=Synchronisations en avant-plan, 
+mDescription=hasDescription , mImportance=0, mBypassDnd=false, mLockscreenVisibility=-1000, 
+mSound=content://settings/system/notification_sound, mLights=false, mLightColor=0, mVibrationPattern=null, 
+mVibrationEffect=null, mUserLockedFields=0, mUserVisibleTaskShown=false, mVibrationEnabled=false, mShowBadge=false, 
+mDeleted=false, mDeletedTimeMs=-1, mGroup='null', mAudioAttributes=AudioAttributes: usage=USAGE_NOTIFICATION 
+content=CONTENT_TYPE_SONIFICATION flags=0x800(FLAG_MUTE_HAPTIC)  tags= bundle=null, mBlockableSystem=false, 
+mAllowBubbles=-1, mImportanceLockedByOEM=false, mImportanceLockedDefaultApp=false, mOriginalImp=0, mParent=null, 
+mConversationId=null, mDemoted=false, mImportantConvo=false, mLastNotificationUpdateTimeMs=0, mSoundMissingReason=0}
+        AppSettings: com.samsung.advp.imssettings (15010175)
+        AppSettings: com.sec.android.gallery3d (15010116) importance=DEFAULT userSet=false
+          Delegate: com.google.android.gms (15010231) enabled=true
+        AppSettings: com.samsung.android.cmfa.framework (7701000)
+>         NotificationChannel{mId='FOREGROUND_CHANNEL_ID', mName=Tracking, mDescription=, mImportance=3, 
+mBypassDnd=false, mLockscreenVisibility=-1000, mSound=content://settings/system/notification_sound, mLights=false, 
+mLightColor=0, mVibrationPattern=null, mVibrationEffect=null, mUserLockedFields=0, mUserVisibleTaskShown=false, 
+mVibrationEnabled=false, mShowBadge=true, mDeleted=false, mDeletedTimeMs=-1, mGroup='null', 
+mAudioAttributes=AudioAttributes: usage=USAGE_NOTIFICATION content=CONTENT_TYPE_SONIFICATION 
+flags=0x800(FLAG_MUTE_HAPTIC)  tags= bundle=null, mBlockableSystem=false, mAllowBubbles=-1, 
+mImportanceLockedByOEM=false, mImportanceLockedDefaultApp=false, mOriginalImp=3, mParent=null, mConversationId=null, 
+mDemoted=false, mImportantConvo=false, mLastNotificationUpdateTimeMs=0, mSoundMissingReason=0}
+          NotificationChannel{mId='BASE_CHANNEL_ID', mName=Infos, mDescription=, mImportance=3, mBypassDnd=false, 
+mLockscreenVisibility=-1000, mSound=content://settings/system/notification_sound, mLights=false, mLightColor=0, 
+mVibrationPattern=null, mVibrationEffect=null, mUserLockedFields=0, mUserVisibleTaskShown=false, 
+mVibrationEnabled=false, mShowBadge=true, mDeleted=false, mDeletedTimeMs=-1, mGroup='null', 
+mAudioAttributes=AudioAttributes: usage=USAGE_NOTIFICATION content=CONTENT_TYPE_SONIFICATION 
+flags=0x800(FLAG_MUTE_HAPTIC)  tags= bundle=null, mBlockableSystem=false, mAllowBubbles=-1, 
+mImportanceLockedByOEM=false, mImportanceLockedDefaultApp=false, mOriginalImp=3, mParent=null, mConversationId=null, 
+mDemoted=false, mImportantConvo=false, mLastNotificationUpdateTimeMs=0, mSoundMissingReason=0}
+        AppSettings: com.samsung.android.cidmanager (7701001)
+        AppSettings: com.samsung.android.scpm (7705009)
+          Delegate: com.google.android.gms (7710231) enabled=true
+>         NotificationChannel{mId='vce_floating_foreground_notichannel', mName=Effets vid├®o, mDescription=, 
+mImportance=2, mBypassDnd=false, mLockscreenVisibility=-1000, mSound=content://settings/system/notification_sound, 
+mLights=false, mLightColor=0, mVibrationPattern=null, mVibrationEffect=null, mUserLockedFields=0, 
+mUserVisibleTaskShown=true, mVibrationEnabled=false, mShowBadge=true, mDeleted=false, mDeletedTimeMs=-1, 
+mGroup='null', mAudioAttributes=AudioAttributes: usage=USAGE_NOTIFICATION content=CONTENT_TYPE_SONIFICATION 
+flags=0x800(FLAG_MUTE_HAPTIC)  tags= bundle=null, mBlockableSystem=false, mAllowBubbles=-1, 
+mImportanceLockedByOEM=false, mImportanceLockedDefaultApp=true, mOriginalImp=2, mParent=null, mConversationId=null, 
+mDemoted=false, mImportantConvo=false, mLastNotificationUpdateTimeMs=0, mSoundMissingReason=0}
+          NotificationChannel{mId='vce_floating_normal_notichannel', mName=Effets vid├®o, mDescription=, 
+mImportance=3, mBypassDnd=false, mLockscreenVisibility=-1000, mSound=content://settings/system/notification_sound, 
+mLights=false, mLightColor=0, mVibrationPattern=null, mVibrationEffect=null, mUserLockedFields=0, 
+mUserVisibleTaskShown=false, mVibrationEnabled=false, mShowBadge=true, mDeleted=false, mDeletedTimeMs=-1, 
+mGroup='null', mAudioAttributes=AudioAttributes: usage=USAGE_NOTIFICATION content=CONTENT_TYPE_SONIFICATION 
+flags=0x800(FLAG_MUTE_HAPTIC)  tags= bundle=null, mBlockableSystem=false, mAllowBubbles=-1, 
+mImportanceLockedByOEM=false, mImportanceLockedDefaultApp=true, mOriginalImp=3, mParent=null, mConversationId=null, 
+mDemoted=false, mImportantConvo=false, mLastNotificationUpdateTimeMs=0, mSoundMissingReason=0}
+          NotificationChannel{mId='vce_floating_headup_notichannel', mName=Effets vid├®o, mDescription=, 
+mImportance=4, mBypassDnd=false, mLockscreenVisibility=-1000, mSound=content://settings/system/notification_sound, 
+mLights=false, mLightColor=0, mVibrationPattern=null, mVibrationEffect=null, mUserLockedFields=0, 
+mUserVisibleTaskShown=false, mVibrationEnabled=false, mShowBadge=true, mDeleted=false, mDeletedTimeMs=-1, 
+mGroup='null', mAudioAttributes=AudioAttributes: usage=USAGE_NOTIFICATION content=CONTENT_TYPE_SONIFICATION 
+flags=0x800(FLAG_MUTE_HAPTIC)  tags= bundle=null, mBlockableSystem=false, mAllowBubbles=-1, 
+mImportanceLockedByOEM=false, mImportanceLockedDefaultApp=true, mOriginalImp=4, mParent=null, mConversationId=null, 
+mDemoted=false, mImportantConvo=false, mLastNotificationUpdateTimeMs=0, mSoundMissingReason=0}
+        AppSettings: com.samsung.android.container (15010159)
+        AppSettings: com.strong.mesh.atria (10382)
+>         NotificationChannel{mId='FOREGROUND_SERVICE', mName=Applications utilisant la batterie, mDescription=, 
+mImportance=2, mBypassDnd=false, mLockscreenVisibility=-1000, mSound=content://settings/system/notification_sound, 
+mLights=false, mLightColor=0, mVibrationPattern=null, mVibrationEffect=null, mUserLockedFields=0, 
+mUserVisibleTaskShown=false, mVibrationEnabled=false, mShowBadge=true, mDeleted=false, mDeletedTimeMs=-1, 
+mGroup='null', mAudioAttributes=AudioAttributes: usage=USAGE_NOTIFICATION content=CONTENT_TYPE_SONIFICATION 
+flags=0x800(FLAG_MUTE_HAPTIC)  tags= bundle=null, mBlockableSystem=true, mAllowBubbles=-1, 
+mImportanceLockedByOEM=false, mImportanceLockedDefaultApp=true, mOriginalImp=2, mParent=null, mConversationId=null, 
+mDemoted=false, mImportantConvo=false, mLastNotificationUpdateTimeMs=0, mSoundMissingReason=0}
+          NotificationChannel{mId='MDO', mName=Applis utilisent donn├®es mobiles, mDescription=, mImportance=2, 
+mBypassDnd=false, mLockscreenVisibility=-1000, mSound=content://settings/system/notification_sound, mLights=false, 
+mLightColor=0, mVibrationPattern=null, mVibrationEffect=null, mUserLockedFields=0, mUserVisibleTaskShown=false, 
+mVibrationEnabled=false, mShowBadge=true, mDeleted=false, mDeletedTimeMs=-1, mGroup='null', 
+mAudioAttributes=AudioAttributes: usage=USAGE_NOTIFICATION content=CONTENT_TYPE_SONIFICATION 
+flags=0x800(FLAG_MUTE_HAPTIC)  tags= bundle=null, mBlockableSystem=true, mAllowBubbles=-1, 
+mImportanceLockedByOEM=false, mImportanceLockedDefaultApp=true, mOriginalImp=2, mParent=null, mConversationId=null, 
+mDemoted=false, mImportantConvo=false, mLastNotificationUpdateTimeMs=0, mSoundMissingReason=0}
+          NotificationChannel{mId='USB', mName=Connexion USB, mDescription=, mImportance=1, mBypassDnd=false, 
+mLockscreenVisibility=-1000, mSound=content://settings/system/notification_sound, mLights=false, mLightColor=0, 
+mVibrationPattern=null, mVibrationEffect=null, mUserLockedFields=0, mUserVisibleTaskShown=false, 
+mVibrationEnabled=false, mShowBadge=true, mDeleted=false, mDeletedTimeMs=-1, mGroup='null', 
+mAudioAttributes=AudioAttributes: usage=USAGE_NOTIFICATION content=CONTENT_TYPE_SONIFICATION 
+flags=0x800(FLAG_MUTE_HAPTIC)  tags= bundle=null, mBlockableSystem=false, mAllowBubbles=-1, 
+mImportanceLockedByOEM=false, mImportanceLockedDefaultApp=true, mOriginalImp=1, mParent=null, mConversationId=null, 
+mDemoted=false, mImportantConvo=false, mLastNotificationUpdateTimeMs=0, mSoundMissingReason=0}
+          NotificationChannel{mId='VPN', mName=├ëtat du VPN, mDescription=, mImportance=2, mBypassDnd=false, 
+mLockscreenVisibility=-1000, mSound=content://settings/system/notification_sound, mLights=false, mLightColor=0, 
+mVibrationPattern=null, mVibrationEffect=null, mUserLockedFields=0, mUserVisibleTaskShown=false, 
+mVibrationEnabled=false, mShowBadge=true, mDeleted=false, mDeletedTimeMs=-1, mGroup='null', 
+mAudioAttributes=AudioAttributes: usage=USAGE_NOTIFICATION content=CONTENT_TYPE_SONIFICATION 
+flags=0x800(FLAG_MUTE_HAPTIC)  tags= bundle=null, mBlockableSystem=false, mAllowBubbles=-1, 
+mImportanceLockedByOEM=false, mImportanceLockedDefaultApp=true, mOriginalImp=2, mParent=null, mConversationId=null, 
+mDemoted=false, mImportantConvo=false, mLastNotificationUpdateTimeMs=0, mSoundMissingReason=0}
+          NotificationChannel{mId='TIME', mName=Heure et fuseaux horaires, mDescription=, mImportance=3, 
+mBypassDnd=false, mLockscreenVisibility=-1000, mSound=content://settings/system/notification_sound, mLights=false, 
+mLightColor=0, mVibrationPattern=null, mVibrationEffect=null, mUserLockedFields=0, mUserVisibleTaskShown=false, 
+mVibrationEnabled=false, mShowBadge=true, mDeleted=false, mDeletedTimeMs=-1, mGroup='null', 
+mAudioAttributes=AudioAttributes: usage=USAGE_NOTIFICATION content=CONTENT_TYPE_SONIFICATION 
+flags=0x800(FLAG_MUTE_HAPTIC)  tags= bundle=null, mBlockableSystem=false, mAllowBubbles=-1, 
+mImportanceLockedByOEM=false, mImportanceLockedDefaultApp=true, mOriginalImp=3, mParent=null, mConversationId=null, 
+mDemoted=false, mImportantConvo=false, mLastNotificationUpdateTimeMs=0, mSoundMissingReason=0}
+>         NotificationChannel{mId='foreground-service', mName=Battery Saving Warning, mDescription=, mImportance=2, 
+mBypassDnd=false, mLockscreenVisibility=-1000, mSound=content://settings/system/notification_sound, mLights=false, 
+mLightColor=0, mVibrationPattern=[0], mVibrationEffect=null, mUserLockedFields=0, mUserVisibleTaskShown=true, 
+mVibrationEnabled=true, mShowBadge=false, mDeleted=false, mDeletedTimeMs=-1, mGroup='null', 
+mAudioAttributes=AudioAttributes: usage=USAGE_NOTIFICATION content=CONTENT_TYPE_SONIFICATION 
+flags=0x800(FLAG_MUTE_HAPTIC)  tags= bundle=null, mBlockableSystem=false, mAllowBubbles=-1, 
+mImportanceLockedByOEM=false, mImportanceLockedDefaultApp=false, mOriginalImp=2, mParent=null, mConversationId=null, 
+mDemoted=false, mImportantConvo=false, mLastNotificationUpdateTimeMs=0, mSoundMissingReason=0}
+        AppSettings: com.samsung.android.app.notes (15010283) importance=NONE userSet=false
+          Delegate: com.google.android.gms (15010231) enabled=true
+        AppSettings: com.android.nfc (15001027) importance=DEFAULT userSet=false permission [pre-grant=true 
+isPreload=true isSigned=true] fixedImportance=true
+        AppSettings: com.skms.android.agent (15001000) fixedImportance=true bubblePreference=1
+>         NotificationChannel{mId='games.foreground_service_notification_channel', mName=Google┬áPlay┬áJeux, 
+mDescription=, mImportance=2, mBypassDnd=true, mLockscreenVisibility=-1000, 
+mSound=content://settings/system/notification_sound, mLights=false, mLightColor=0, mVibrationPattern=null, 
+mVibrationEffect=null, mUserLockedFields=0, mUserVisibleTaskShown=true, mVibrationEnabled=false, mShowBadge=true, 
+mDeleted=false, mDeletedTimeMs=-1, mGroup='null', mAudioAttributes=AudioAttributes: usage=USAGE_NOTIFICATION 
+content=CONTENT_TYPE_SONIFICATION flags=0x800(FLAG_MUTE_HAPTIC)  tags= bundle=null, mBlockableSystem=false, 
+mAllowBubbles=-1, mImportanceLockedByOEM=false, mImportanceLockedDefaultApp=false, mOriginalImp=1, mParent=null, 
+mConversationId=null, mDemoted=false, mImportantConvo=false, mLastNotificationUpdateTimeMs=0, mSoundMissingReason=0}
+          NotificationChannel{mId='com.google.android.gms.multidevice.data.notifications.NEW_DEVICE_CHANNEL_ID', 
+mName=Alertes sur les nouveaux appareils, mDescription=hasDescription , mImportance=4, mBypassDnd=true, 
+mLockscreenVisibility=-1000, mSound=content://settings/system/notification_sound, mLights=false, mLightColor=0, 
+mVibrationPattern=null, mVibrationEffect=null, mUserLockedFields=0, mUserVisibleTaskShown=false, 
+mVibrationEnabled=false, mShowBadge=true, mDeleted=false, mDeletedTimeMs=-1, 
+mGroup='com.google.android.gms.multidevice.NOTIFICATION_GROUP_ID', mAudioAttributes=AudioAttributes: 
+usage=USAGE_NOTIFICATION content=CONTENT_TYPE_SONIFICATION flags=0x800(FLAG_MUTE_HAPTIC)  tags= bundle=null, 
+mBlockableSystem=false, mAllowBubbles=-1, mImportanceLockedByOEM=false, mImportanceLockedDefaultApp=false, 
+mOriginalImp=4, mParent=null, mConversationId=null, mDemoted=false, mImportantConvo=false, 
+mLastNotificationUpdateTimeMs=0, mSoundMissingReason=0}
+          NotificationChannel{mId='cast_rcn_notification', mName=Cast, mDescription=, mImportance=2, mBypassDnd=true, 
+mLockscreenVisibility=-1000, mSound=content://settings/system/notification_sound, mLights=false, mLightColor=0, 
+mVibrationPattern=null, mVibrationEffect=null, mUserLockedFields=0, mUserVisibleTaskShown=false, 
+mVibrationEnabled=false, mShowBadge=false, mDeleted=false, mDeletedTimeMs=-1, mGroup='null', 
+mAudioAttributes=AudioAttributes: usage=USAGE_NOTIFICATION content=CONTENT_TYPE_SONIFICATION 
+flags=0x800(FLAG_MUTE_HAPTIC)  tags= bundle=null, mBlockableSystem=false, mAllowBubbles=-1, 
+mImportanceLockedByOEM=false, mImportanceLockedDefaultApp=false, mOriginalImp=-1000, mParent=null, 
+mConversationId=null, mDemoted=false, mImportantConvo=false, mLastNotificationUpdateTimeMs=0, mSoundMissingReason=0}
+          NotificationChannel{mId='DEVICES_REBRANDED', mName=Appareils, mDescription=, mImportance=2, mBypassDnd=true, 
+mLockscreenVisibility=-1000, mSound=content://settings/system/notification_sound, mLights=false, mLightColor=0, 
+mVibrationPattern=null, mVibrationEffect=null, mUserLockedFields=0, mUserVisibleTaskShown=false, 
+mVibrationEnabled=false, mShowBadge=true, mDeleted=false, mDeletedTimeMs=-1, mGroup='DEVICES_CHANNEL_GROUP_ID', 
+mAudioAttributes=AudioAttributes: usage=USAGE_NOTIFICATION content=CONTENT_TYPE_SONIFICATION 
+flags=0x800(FLAG_MUTE_HAPTIC)  tags= bundle=null, mBlockableSystem=false, mAllowBubbles=-1, 
+mImportanceLockedByOEM=false, mImportanceLockedDefaultApp=false, mOriginalImp=2, mParent=null, mConversationId=null, 
+mDemoted=false, mImportantConvo=false, mLastNotificationUpdateTimeMs=0, mSoundMissingReason=0}
+          NotificationChannel{mId='Auto lock promo', mName=Activation de la protection contre le vol, 
+mDescription=hasDescription , mImportance=2, mBypassDnd=true, mLockscreenVisibility=-1000, 
+mSound=content://settings/system/notification_sound, mLights=false, mLightColor=0, mVibrationPattern=null, 
+mVibrationEffect=null, mUserLockedFields=0, mUserVisibleTaskShown=false, mVibrationEnabled=false, mShowBadge=true, 
+mDeleted=false, mDeletedTimeMs=-1, mGroup='Personal_Safety_Id', mAudioAttributes=AudioAttributes: 
+usage=USAGE_NOTIFICATION content=CONTENT_TYPE_SONIFICATION flags=0x800(FLAG_MUTE_HAPTIC)  tags= bundle=null, 
+mBlockableSystem=false, mAllowBubbles=-1, mImportanceLockedByOEM=false, mImportanceLockedDefaultApp=false, 
+mOriginalImp=2, mParent=null, mConversationId=null, mDemoted=false, mImportantConvo=false, 
+mLastNotificationUpdateTimeMs=0, mSoundMissingReason=0}
+>         NotificationChannel{mId='notification_shazam_foreground_match_v2', mName=R├®sultats des titres identifi├®s 
+au premier plan, mDescription=hasDescription , mImportance=3, mBypassDnd=false, mLockscreenVisibility=-1000, 
+mSound=null, mLights=false, mLightColor=0, mVibrationPattern=null, mVibrationEffect=null, mUserLockedFields=0, 
+mUserVisibleTaskShown=false, mVibrationEnabled=false, mShowBadge=false, mDeleted=false, mDeletedTimeMs=-1, 
+mGroup='null', mAudioAttributes=AudioAttributes: usage=USAGE_NOTIFICATION content=CONTENT_TYPE_SONIFICATION 
+flags=0x800(FLAG_MUTE_HAPTIC)  tags= bundle=null, mBlockableSystem=false, mAllowBubbles=-1, 
+mImportanceLockedByOEM=false, mImportanceLockedDefaultApp=false, mOriginalImp=3, mParent=null, mConversationId=null, 
+mDemoted=false, mImportantConvo=false, mLastNotificationUpdateTimeMs=0, mSoundMissingReason=0}
+          NotificationChannel{mId='notification_shazam_v1', mName=Touchez pour Shazamer, mDescription=hasDescription , 
+mImportance=3, mBypassDnd=false, mLockscreenVisibility=-1000, mSound=null, mLights=false, mLightColor=0, 
+mVibrationPattern=null, mVibrationEffect=null, mUserLockedFields=0, mUserVisibleTaskShown=true, 
+mVibrationEnabled=false, mShowBadge=false, mDeleted=false, mDeletedTimeMs=-1, 
+mGroup='com.shazam.system.android.notification.CHANNEL_GROUP_NOTIFICATION_SHAZAM', mAudioAttributes=AudioAttributes: 
+usage=USAGE_NOTIFICATION content=CONTENT_TYPE_SONIFICATION flags=0x800(FLAG_MUTE_HAPTIC)  tags= bundle=null, 
+mBlockableSystem=false, mAllowBubbles=-1, mImportanceLockedByOEM=false, mImportanceLockedDefaultApp=false, 
+mOriginalImp=3, mParent=null, mConversationId=null, mDemoted=false, mImportantConvo=false, 
+mLastNotificationUpdateTimeMs=0, mSoundMissingReason=0}
+          NotificationChannel{mId='music_player_controls_v2', mName=Contr├┤les du lecteur de musique, 
+mDescription=hasDescription , mImportance=2, mBypassDnd=false, mLockscreenVisibility=-1000, mSound=null, 
+mLights=false, mLightColor=0, mVibrationPattern=null, mVibrationEffect=null, mUserLockedFields=0, 
+mUserVisibleTaskShown=true, mVibrationEnabled=false, mShowBadge=false, mDeleted=false, mDeletedTimeMs=-1, 
+mGroup='null', mAudioAttributes=AudioAttributes: usage=USAGE_NOTIFICATION content=CONTENT_TYPE_SONIFICATION 
+flags=0x800(FLAG_MUTE_HAPTIC)  tags= bundle=null, mBlockableSystem=false, mAllowBubbles=-1, 
+mImportanceLockedByOEM=false, mImportanceLockedDefaultApp=false, mOriginalImp=2, mParent=null, mConversationId=null, 
+mDemoted=false, mImportantConvo=false, mLastNotificationUpdateTimeMs=0, mSoundMissingReason=0}
+          NotificationChannelGroup{mId='com.shazam.system.android.notification.CHANNEL_GROUP_NOTIFICATION_SHAZAM', 
+mName=Shazam via la notification, mDescription=, mBlocked=false, mChannels=[], mUserLockedFields=0}
+        AppSettings: com.sec.android.app.billing (15010101) importance=DEFAULT userSet=false
+>         NotificationChannel{mId='location_foreground_service_uber_feature_channels', mName=Notifications 
+d'utilisation du service de localisation, mDescription=hasDescription , mImportance=2, mBypassDnd=false, 
+mLockscreenVisibility=-1000, mSound=content://settings/system/notification_sound, mLights=false, mLightColor=0, 
+mVibrationPattern=null, mVibrationEffect=null, mUserLockedFields=0, mUserVisibleTaskShown=true, 
+mVibrationEnabled=false, mShowBadge=false, mDeleted=false, mDeletedTimeMs=-1, mGroup='uber_feature_channels', 
+mAudioAttributes=AudioAttributes: usage=USAGE_NOTIFICATION content=CONTENT_TYPE_SONIFICATION 
+flags=0x800(FLAG_MUTE_HAPTIC)  tags= bundle=null, mBlockableSystem=false, mAllowBubbles=-1, 
+mImportanceLockedByOEM=false, mImportanceLockedDefaultApp=false, mOriginalImp=2, mParent=null, mConversationId=null, 
+mDemoted=false, mImportantConvo=false, mLastNotificationUpdateTimeMs=0, mSoundMissingReason=0}
+>         NotificationChannel{mId='microphone_foreground_service_uber_feature_channels', mName=Notifications 
+d'utilisation du microphone, mDescription=hasDescription , mImportance=2, mBypassDnd=false, 
+mLockscreenVisibility=-1000, mSound=content://settings/system/notification_sound, mLights=false, mLightColor=0, 
+mVibrationPattern=null, mVibrationEffect=null, mUserLockedFields=0, mUserVisibleTaskShown=false, 
+mVibrationEnabled=false, mShowBadge=false, mDeleted=false, mDeletedTimeMs=-1, mGroup='uber_feature_channels', 
+mAudioAttributes=AudioAttributes: usage=USAGE_NOTIFICATION content=CONTENT_TYPE_SONIFICATION 
+flags=0x800(FLAG_MUTE_HAPTIC)  tags= bundle=null, mBlockableSystem=false, mAllowBubbles=-1, 
+mImportanceLockedByOEM=false, mImportanceLockedDefaultApp=false, mOriginalImp=2, mParent=null, mConversationId=null, 
+mDemoted=false, mImportantConvo=false, mLastNotificationUpdateTimeMs=0, mSoundMissingReason=0}
+          NotificationChannel{mId='driver_nearby_take_ride_channels', mName=Mises ├á jour sur la proximit├® du 
+chauffeur, mDescription=hasDescription , mImportance=4, mBypassDnd=false, mLockscreenVisibility=-1000, 
+mSound=content://settings/system/notification_sound, mLights=true, mLightColor=0, mVibrationPattern=null, 
+mVibrationEffect=null, mUserLockedFields=0, mUserVisibleTaskShown=false, mVibrationEnabled=false, mShowBadge=true, 
+mDeleted=false, mDeletedTimeMs=-1, mGroup='take_ride_channels', mAudioAttributes=AudioAttributes: 
+usage=USAGE_NOTIFICATION content=CONTENT_TYPE_SONIFICATION flags=0x800(FLAG_MUTE_HAPTIC)  tags= bundle=null, 
+mBlockableSystem=false, mAllowBubbles=-1, mImportanceLockedByOEM=false, mImportanceLockedDefaultApp=false, 
+mOriginalImp=5, mParent=null, mConversationId=null, mDemoted=false, mImportantConvo=false, 
+mLastNotificationUpdateTimeMs=0, mSoundMissingReason=0}
+          NotificationChannel{mId='trip_low_priority_take_ride_channels', mName=Mises ├á jour des courses de faible 
+priorit├®, mDescription=hasDescription , mImportance=2, mBypassDnd=false, mLockscreenVisibility=-1000, 
+mSound=content://settings/system/notification_sound, mLights=false, mLightColor=0, mVibrationPattern=null, 
+mVibrationEffect=null, mUserLockedFields=0, mUserVisibleTaskShown=false, mVibrationEnabled=false, mShowBadge=false, 
+mDeleted=false, mDeletedTimeMs=-1, mGroup='uber_feature_channels', mAudioAttributes=AudioAttributes: 
+usage=USAGE_NOTIFICATION content=CONTENT_TYPE_SONIFICATION flags=0x800(FLAG_MUTE_HAPTIC)  tags= bundle=null, 
+mBlockableSystem=false, mAllowBubbles=-1, mImportanceLockedByOEM=false, mImportanceLockedDefaultApp=false, 
+mOriginalImp=2, mParent=null, mConversationId=null, mDemoted=false, mImportantConvo=false, 
+mLastNotificationUpdateTimeMs=0, mSoundMissingReason=0}
+          NotificationChannel{mId='messsages_promo_recommend_channels', mName=R├®ductions et actualit├®s, 
+mDescription=hasDescription , mImportance=4, mBypassDnd=false, mLockscreenVisibility=-1000, 
+mSound=content://settings/system/notification_sound, mLights=true, mLightColor=0, mVibrationPattern=null, 
+mVibrationEffect=null, mUserLockedFields=0, mUserVisibleTaskShown=false, mVibrationEnabled=true, mShowBadge=true, 
+mDeleted=false, mDeletedTimeMs=-1, mGroup='promo_recommend_channels', mAudioAttributes=AudioAttributes: 
+usage=USAGE_NOTIFICATION content=CONTENT_TYPE_SONIFICATION flags=0x800(FLAG_MUTE_HAPTIC)  tags= bundle=null, 
+mBlockableSystem=false, mAllowBubbles=-1, mImportanceLockedByOEM=false, mImportanceLockedDefaultApp=false, 
+mOriginalImp=5, mParent=null, mConversationId=null, mDemoted=false, mImportantConvo=false, 
+mLastNotificationUpdateTimeMs=0, mSoundMissingReason=0}
+          NotificationChannelGroup{mId='take_ride_channels', mName=Commander une course, mDescription=, 
+mBlocked=false, mChannels=[], mUserLockedFields=0}
+>         NotificationChannel{mId='SDKForegroundServiceRepository', mName=App status, mDescription=, mImportance=2, 
+mBypassDnd=false, mLockscreenVisibility=-1000, mSound=null, mLights=false, mLightColor=0, mVibrationPattern=null, 
+mVibrationEffect=null, mUserLockedFields=0, mUserVisibleTaskShown=true, mVibrationEnabled=false, mShowBadge=false, 
+mDeleted=false, mDeletedTimeMs=-1, mGroup='null', mAudioAttributes=AudioAttributes: usage=USAGE_NOTIFICATION 
+content=CONTENT_TYPE_SONIFICATION flags=0x800(FLAG_MUTE_HAPTIC)  tags= bundle=null, mBlockableSystem=false, 
+mAllowBubbles=-1, mImportanceLockedByOEM=false, mImportanceLockedDefaultApp=false, mOriginalImp=2, mParent=null, 
+mConversationId=null, mDemoted=false, mImportantConvo=false, mLastNotificationUpdateTimeMs=0, mSoundMissingReason=0}
+          NotificationChannel{mId='bbbe26ed6a7373cec02e77095c57eda06978e3ec', mName=@{messages}, mDescription=, 
+mImportance=4, mBypassDnd=false, mLockscreenVisibility=-1000, mSound=null, mLights=true, mLightColor=0, 
+mVibrationPattern=null, mVibrationEffect=null, mUserLockedFields=0, mUserVisibleTaskShown=false, 
+mVibrationEnabled=true, mShowBadge=true, mDeleted=false, mDeletedTimeMs=-1, mGroup='null', 
+mAudioAttributes=AudioAttributes: usage=USAGE_NOTIFICATION content=CONTENT_TYPE_SONIFICATION 
+flags=0x800(FLAG_MUTE_HAPTIC)  tags= bundle=null, mBlockableSystem=false, mAllowBubbles=-1, 
+mImportanceLockedByOEM=false, mImportanceLockedDefaultApp=false, mOriginalImp=4, mParent=null, mConversationId=null, 
+mDemoted=false, mImportantConvo=false, mLastNotificationUpdateTimeMs=0, mSoundMissingReason=0}
+          NotificationChannel{mId='62eb614d6a873fcef3997e74198ba8996b84a009', mName=@{missed_calls}, mDescription=, 
+mImportance=3, mBypassDnd=false, mLockscreenVisibility=-1000, mSound=null, mLights=true, mLightColor=0, 
+mVibrationPattern=null, mVibrationEffect=null, mUserLockedFields=0, mUserVisibleTaskShown=false, 
+mVibrationEnabled=true, mShowBadge=true, mDeleted=false, mDeletedTimeMs=-1, mGroup='null', 
+mAudioAttributes=AudioAttributes: usage=USAGE_NOTIFICATION content=CONTENT_TYPE_SONIFICATION 
+flags=0x800(FLAG_MUTE_HAPTIC)  tags= bundle=null, mBlockableSystem=false, mAllowBubbles=-1, 
+mImportanceLockedByOEM=false, mImportanceLockedDefaultApp=false, mOriginalImp=3, mParent=null, mConversationId=null, 
+mDemoted=false, mImportantConvo=false, mLastNotificationUpdateTimeMs=0, mSoundMissingReason=0}
+        AppSettings: com.google.android.apps.turbo (15010230) importance=NONE userSet=false
+        AppSettings: com.google.android.overlay.gmsconfig.geotz (15010012)
+>         NotificationChannel{mId='FOREGROUND_SERVICE_NOTIFICATION_CHANNEL_ID', mName=Rest Timer, 
+mDescription=hasDescription , mImportance=2, mBypassDnd=false, mLockscreenVisibility=-1000, mSound=null, 
+mLights=false, mLightColor=0, mVibrationPattern=null, mVibrationEffect=null, mUserLockedFields=0, 
+mUserVisibleTaskShown=true, mVibrationEnabled=false, mShowBadge=true, mDeleted=false, mDeletedTimeMs=-1, 
+mGroup='null', mAudioAttributes=AudioAttributes: usage=USAGE_NOTIFICATION content=CONTENT_TYPE_SONIFICATION 
+flags=0x800(FLAG_MUTE_HAPTIC)  tags= bundle=null, mBlockableSystem=false, mAllowBubbles=-1, 
+mImportanceLockedByOEM=false, mImportanceLockedDefaultApp=false, mOriginalImp=2, mParent=null, mConversationId=null, 
+mDemoted=false, mImportantConvo=false, mLastNotificationUpdateTimeMs=0, mSoundMissingReason=0}
+        AppSettings: com.samsung.android.camerasdkservice (7701000)
+        AppSettings: com.tribab.tricount.android (10344) importance=DEFAULT userSet=true
+          Delegate: com.google.android.gms (10231) enabled=true
+          NotificationChannel{mId='SUPPORT', mName=Support, mDescription=, mImportance=4, mBypassDnd=false, 
+mLockscreenVisibility=-1000, mSound=content://settings/system/notification_sound, mLights=true, mLightColor=-14575885, 
+mVibrationPattern=null, mVibrationEffect=null, mUserLockedFields=0, mUserVisibleTaskShown=false, 
+mVibrationEnabled=true, mShowBadge=true, mDeleted=false, mDeletedTimeMs=-1, mGroup='null', 
+mAudioAttributes=AudioAttributes: usage=USAGE_NOTIFICATION content=CONTENT_TYPE_SONIFICATION 
+flags=0x800(FLAG_MUTE_HAPTIC)  tags= bundle=null, mBlockableSystem=false, mAllowBubbles=-1, 
+mImportanceLockedByOEM=false, mImportanceLockedDefaultApp=false, mOriginalImp=4, mParent=null, mConversationId=null, 
+mDemoted=false, mImportantConvo=false, mLastNotificationUpdateTimeMs=0, mSoundMissingReason=0}
+>         NotificationChannel{mId='CHANNEL_ID_FOREGROUND_SERVICE', mName=Synchronisations en avant-plan, 
+mDescription=hasDescription , mImportance=0, mBypassDnd=false, mLockscreenVisibility=-1000, 
+mSound=content://settings/system/notification_sound, mLights=false, mLightColor=0, mVibrationPattern=null, 
+mVibrationEffect=null, mUserLockedFields=4, mUserVisibleTaskShown=true, mVibrationEnabled=false, mShowBadge=false, 
+mDeleted=false, mDeletedTimeMs=-1, mGroup='null', mAudioAttributes=AudioAttributes: usage=USAGE_NOTIFICATION 
+content=CONTENT_TYPE_SONIFICATION flags=0x800(FLAG_MUTE_HAPTIC)  tags= bundle=null, mBlockableSystem=false, 
+mAllowBubbles=-1, mImportanceLockedByOEM=false, mImportanceLockedDefaultApp=false, mOriginalImp=0, mParent=null, 
+mConversationId=null, mDemoted=false, mImportantConvo=false, mLastNotificationUpdateTimeMs=0, mSoundMissingReason=0}
+        AppSettings: com.samsung.videoscan (15010310)
+        AppSettings: com.samsung.sec.android.application.csc (7701001)
+        AppSettings: com.google.android.apps.cloudconsole (10794) importance=NONE userSet=false
+          Delegate: com.google.android.gms (10231) enabled=true
+>         NotificationChannel{mId='1_foreground_1', mName=Navigation, mDescription=, mImportance=3, mBypassDnd=false, 
+mLockscreenVisibility=-1000, mSound=null, mLights=false, mLightColor=0, mVibrationPattern=null, mVibrationEffect=null, 
+mUserLockedFields=0, mUserVisibleTaskShown=true, mVibrationEnabled=false, mShowBadge=false, mDeleted=false, 
+mDeletedTimeMs=-1, mGroup='NAVIGATION', mAudioAttributes=AudioAttributes: usage=USAGE_NOTIFICATION 
+content=CONTENT_TYPE_SONIFICATION flags=0x800(FLAG_MUTE_HAPTIC)  tags= bundle=null, mBlockableSystem=false, 
+mAllowBubbles=-1, mImportanceLockedByOEM=false, mImportanceLockedDefaultApp=false, mOriginalImp=-1000, mParent=null, 
+mConversationId=null, mDemoted=false, mImportantConvo=false, mLastNotificationUpdateTimeMs=0, mSoundMissingReason=0}
+          NotificationChannel{mId='196176691_1', mName=Messages d'├®tablissements, mDescription=hasDescription , 
+mImportance=4, mBypassDnd=false, mLockscreenVisibility=-1000, mSound=content://settings/system/notification_sound, 
+mLights=false, mLightColor=0, mVibrationPattern=null, mVibrationEffect=null, mUserLockedFields=0, 
+mUserVisibleTaskShown=false, mVibrationEnabled=true, mShowBadge=false, mDeleted=false, mDeletedTimeMs=-1, 
+mGroup='GROUP_PLANNING', mAudioAttributes=AudioAttributes: usage=USAGE_NOTIFICATION content=CONTENT_TYPE_UNKNOWN 
+flags=0x800(FLAG_MUTE_HAPTIC)  tags= bundle=null, mBlockableSystem=false, mAllowBubbles=-1, 
+mImportanceLockedByOEM=false, mImportanceLockedDefaultApp=false, mOriginalImp=4, mParent=null, mConversationId=null, 
+mDemoted=false, mImportantConvo=false, mLastNotificationUpdateTimeMs=0, mSoundMissingReason=0}
+          NotificationChannel{mId='174000404_1', mName="J'aime", ├®tapes r├®ussies et badges, 
+mDescription=hasDescription , mImportance=3, mBypassDnd=false, mLockscreenVisibility=-1000, mSound=null, 
+mLights=false, mLightColor=0, mVibrationPattern=null, mVibrationEffect=null, mUserLockedFields=0, 
+mUserVisibleTaskShown=false, mVibrationEnabled=false, mShowBadge=false, mDeleted=false, mDeletedTimeMs=-1, 
+mGroup='YOUR_CONTRIBUTIONS', mAudioAttributes=AudioAttributes: usage=USAGE_NOTIFICATION 
+content=CONTENT_TYPE_SONIFICATION flags=0x800(FLAG_MUTE_HAPTIC)  tags= bundle=null, mBlockableSystem=false, 
+mAllowBubbles=-1, mImportanceLockedByOEM=false, mImportanceLockedDefaultApp=false, mOriginalImp=3, mParent=null, 
+mConversationId=null, mDemoted=false, mImportantConvo=false, mLastNotificationUpdateTimeMs=0, mSoundMissingReason=0}
+          NotificationChannel{mId='185490034:2', mName=Nouveaux lieux populaires, mDescription=hasDescription , 
+mImportance=2, mBypassDnd=false, mLockscreenVisibility=-1000, mSound=null, mLights=false, mLightColor=0, 
+mVibrationPattern=null, mVibrationEffect=null, mUserLockedFields=0, mUserVisibleTaskShown=false, 
+mVibrationEnabled=false, mShowBadge=false, mDeleted=false, mDeletedTimeMs=-1, mGroup='LOCAL_DISCOVERY', 
+mAudioAttributes=AudioAttributes: usage=USAGE_NOTIFICATION content=CONTENT_TYPE_SONIFICATION 
+flags=0x800(FLAG_MUTE_HAPTIC)  tags= bundle=null, mBlockableSystem=false, mAllowBubbles=-1, 
+mImportanceLockedByOEM=false, mImportanceLockedDefaultApp=false, mOriginalImp=2, mParent=null, mConversationId=null, 
+mDemoted=false, mImportantConvo=false, mLastNotificationUpdateTimeMs=0, mSoundMissingReason=0}
+          NotificationChannel{mId='185490034:4', mName=Lieux et ├®v├®nements ├á proximit├®, 
+mDescription=hasDescription , mImportance=3, mBypassDnd=false, mLockscreenVisibility=-1000, mSound=null, 
+mLights=false, mLightColor=0, mVibrationPattern=null, mVibrationEffect=null, mUserLockedFields=0, 
+mUserVisibleTaskShown=false, mVibrationEnabled=false, mShowBadge=false, mDeleted=false, mDeletedTimeMs=-1, 
+mGroup='LOCAL_DISCOVERY', mAudioAttributes=AudioAttributes: usage=USAGE_NOTIFICATION content=CONTENT_TYPE_SONIFICATION 
+flags=0x800(FLAG_MUTE_HAPTIC)  tags= bundle=null, mBlockableSystem=false, mAllowBubbles=-1, 
+mImportanceLockedByOEM=false, mImportanceLockedDefaultApp=false, mOriginalImp=3, mParent=null, mConversationId=null, 
+mDemoted=false, mImportantConvo=false, mLastNotificationUpdateTimeMs=0, mSoundMissingReason=0}
+>       AppSettings: ch.liri.operations (10875) importance=DEFAULT userSet=false
+          NotificationChannel{mId='lock-screen', mName=Lock screen, mDescription=, mImportance=4, mBypassDnd=false, 
+mLockscreenVisibility=-1000, mSound=content://settings/system/notification_sound, mLights=false, mLightColor=0, 
+mVibrationPattern=null, mVibrationEffect=null, mUserLockedFields=0, mUserVisibleTaskShown=false, 
+mVibrationEnabled=false, mShowBadge=true, mDeleted=false, mDeletedTimeMs=-1, mGroup='null', 
+mAudioAttributes=AudioAttributes: usage=USAGE_NOTIFICATION content=CONTENT_TYPE_SONIFICATION 
+flags=0x800(FLAG_MUTE_HAPTIC)  tags= bundle=null, mBlockableSystem=false, mAllowBubbles=-1, 
+mImportanceLockedByOEM=false, mImportanceLockedDefaultApp=false, mOriginalImp=4, mParent=null, mConversationId=null, 
+mDemoted=false, mImportantConvo=false, mLastNotificationUpdateTimeMs=0, mSoundMissingReason=0}
+          NotificationChannel{mId='mission_updates', mName=Mission updates, mDescription=, mImportance=4, 
+mBypassDnd=false, mLockscreenVisibility=-1000, mSound=content://settings/system/notification_sound, mLights=false, 
+mLightColor=0, mVibrationPattern=[0, 180, 100, 180], mVibrationEffect=Composed{segments=[Step{amplitude=0.0, 
+frequencyHz=0.0, duration=0}, Step{amplitude=-1.0, frequencyHz=0.0, duration=180}, Step{amplitude=0.0, 
+frequencyHz=0.0, duration=100}, Step{amplitude=-1.0, frequencyHz=0.0, duration=180}], repeat=-1, 
+mMagnitudeType=TYPE_EXTRA}, mUserLockedFields=0, mUserVisibleTaskShown=false, mVibrationEnabled=true, mShowBadge=true, 
+mDeleted=false, mDeletedTimeMs=-1, mGroup='null', mAudioAttributes=AudioAttributes: usage=USAGE_NOTIFICATION 
+content=CONTENT_TYPE_SONIFICATION flags=0x800(FLAG_MUTE_HAPTIC)  tags= bundle=null, mBlockableSystem=false, 
+mAllowBubbles=-1, mImportanceLockedByOEM=false, mImportanceLockedDefaultApp=false, mOriginalImp=4, mParent=null, 
+mConversationId=null, mDemoted=false, mImportantConvo=false, mLastNotificationUpdateTimeMs=0, mSoundMissingReason=0}
+          NotificationChannel{mId='silent', mName=Silent sync, mDescription=, mImportance=2, mBypassDnd=false, 
+mLockscreenVisibility=-1000, mSound=null, mLights=false, mLightColor=0, mVibrationPattern=[0], mVibrationEffect=null, 
+mUserLockedFields=0, mUserVisibleTaskShown=false, mVibrationEnabled=true, mShowBadge=true, mDeleted=false, 
+mDeletedTimeMs=-1, mGroup='null', mAudioAttributes=AudioAttributes: usage=USAGE_NOTIFICATION 
+content=CONTENT_TYPE_SONIFICATION flags=0x800(FLAG_MUTE_HAPTIC)  tags= bundle=null, mBlockableSystem=false, 
+mAllowBubbles=-1, mImportanceLockedByOEM=false, mImportanceLockedDefaultApp=false, mOriginalImp=2, mParent=null, 
+mConversationId=null, mDemoted=false, mImportantConvo=false, mLastNotificationUpdateTimeMs=0, mSoundMissingReason=0}
+          NotificationChannel{mId='urgent', mName=Urgent, mDescription=, mImportance=5, mBypassDnd=false, 
+mLockscreenVisibility=-1000, mSound=content://settings/system/notification_sound, mLights=false, mLightColor=0, 
+mVibrationPattern=[0, 300, 150, 300], mVibrationEffect=Composed{segments=[Step{amplitude=0.0, frequencyHz=0.0, 
+duration=0}, Step{amplitude=-1.0, frequencyHz=0.0, duration=300}, Step{amplitude=0.0, frequencyHz=0.0, duration=150}, 
+Step{amplitude=-1.0, frequencyHz=0.0, duration=300}], repeat=-1, mMagnitudeType=TYPE_EXTRA}, mUserLockedFields=0, 
+mUserVisibleTaskShown=false, mVibrationEnabled=true, mShowBadge=true, mDeleted=false, mDeletedTimeMs=-1, 
+mGroup='null', mAudioAttributes=AudioAttributes: usage=USAGE_NOTIFICATION content=CONTENT_TYPE_SONIFICATION 
+flags=0x800(FLAG_MUTE_HAPTIC)  tags= bundle=null, mBlockableSystem=false, mAllowBubbles=-1, 
+mImportanceLockedByOEM=false, mImportanceLockedDefaultApp=false, mOriginalImp=5, mParent=null, mConversationId=null, 
+mDemoted=false, mImportantConvo=false, mLastNotificationUpdateTimeMs=0, mSoundMissingReason=0}
+>         NotificationChannel{mId='suw_consolidate_foreground_notification', mName=Setup Portal, mDescription=, 
+mImportance=3, mBypassDnd=false, mLockscreenVisibility=-1000, mSound=null, mLights=false, mLightColor=0, 
+mVibrationPattern=null, mVibrationEffect=null, mUserLockedFields=0, mUserVisibleTaskShown=true, 
+mVibrationEnabled=false, mShowBadge=true, mDeleted=false, mDeletedTimeMs=-1, mGroup='null', 
+mAudioAttributes=AudioAttributes: usage=USAGE_NOTIFICATION content=CONTENT_TYPE_SONIFICATION 
+flags=0x800(FLAG_MUTE_HAPTIC)  tags= bundle=null, mBlockableSystem=false, mAllowBubbles=-1, 
+mImportanceLockedByOEM=false, mImportanceLockedDefaultApp=true, mOriginalImp=3, mParent=null, mConversationId=null, 
+mDemoted=false, mImportantConvo=false, mLastNotificationUpdateTimeMs=0, mSoundMissingReason=0}
+          NotificationChannel{mId='deferred', mName=Configuration suppl├®mentaire, mDescription=, mImportance=3, 
+mBypassDnd=false, mLockscreenVisibility=-1000, mSound=null, mLights=false, mLightColor=0, mVibrationPattern=null, 
+mVibrationEffect=null, mUserLockedFields=0, mUserVisibleTaskShown=true, mVibrationEnabled=false, mShowBadge=true, 
+mDeleted=false, mDeletedTimeMs=-1, mGroup='null', mAudioAttributes=AudioAttributes: usage=USAGE_NOTIFICATION 
+content=CONTENT_TYPE_SONIFICATION flags=0x800(FLAG_MUTE_HAPTIC)  tags= bundle=null, mBlockableSystem=false, 
+mAllowBubbles=-1, mImportanceLockedByOEM=false, mImportanceLockedDefaultApp=true, mOriginalImp=-1000, mParent=null, 
+mConversationId=null, mDemoted=false, mImportantConvo=false, mLastNotificationUpdateTimeMs=0, mSoundMissingReason=0}
+          NotificationChannel{mId='initial', mName=Setup, mDescription=, mImportance=2, mBypassDnd=false, 
+mLockscreenVisibility=-1000, mSound=null, mLights=false, mLightColor=0, mVibrationPattern=null, mVibrationEffect=null, 
+mUserLockedFields=0, mUserVisibleTaskShown=true, mVibrationEnabled=false, mShowBadge=true, mDeleted=false, 
+mDeletedTimeMs=-1, mGroup='null', mAudioAttributes=AudioAttributes: usage=USAGE_NOTIFICATION 
+content=CONTENT_TYPE_SONIFICATION flags=0x800(FLAG_MUTE_HAPTIC)  tags= bundle=null, mBlockableSystem=false, 
+mAllowBubbles=-1, mImportanceLockedByOEM=false, mImportanceLockedDefaultApp=true, mOriginalImp=-1000, mParent=null, 
+mConversationId=null, mDemoted=false, mImportantConvo=false, mLastNotificationUpdateTimeMs=0, mSoundMissingReason=0}
+        AppSettings: com.google.android.verifier (15010422)
+        AppSettings: com.samsung.android.kidsinstaller (15010176)
+>       numForegroundService=0
+        numUserInitiatedJob=0
+        numOngoing=0
+        numAutoCancel=0
+        numWithLargeIcon=7
+>       numForegroundService=2
+        numUserInitiatedJob=0
+        numOngoing=2
+        numAutoCancel=0
+        numWithLargeIcon=2
+>       numForegroundService=0
+        numUserInitiatedJob=0
+        numOngoing=0
+        numAutoCancel=0
+        numWithLargeIcon=0
+>       numForegroundService=0
+        numUserInitiatedJob=0
+        numOngoing=0
+        numAutoCancel=0
+        numWithLargeIcon=0
+>       numForegroundService=0
+        numUserInitiatedJob=0
+        numOngoing=0
+        numAutoCancel=1
+        numWithLargeIcon=2
+>       numForegroundService=0
+        numUserInitiatedJob=0
+        numOngoing=30
+        numAutoCancel=0
+        numWithLargeIcon=0
+>       numForegroundService=0
+        numUserInitiatedJob=0
+        numOngoing=0
+        numAutoCancel=0
+        numWithLargeIcon=0
+>       numForegroundService=1
+        numUserInitiatedJob=0
+        numOngoing=4
+        numAutoCancel=0
+        numWithLargeIcon=0
+>       numForegroundService=3
+        numUserInitiatedJob=0
+        numOngoing=37
+        numAutoCancel=3
+        numWithLargeIcon=13
+>       numForegroundService=0
+        numUserInitiatedJob=0
+        numOngoing=0
+        numAutoCancel=0
+        numWithLargeIcon=0
+>       numForegroundService=0
+        numUserInitiatedJob=0
+        numOngoing=0
+        numAutoCancel=1
+        numWithLargeIcon=1
+>       numForegroundService=0
+        numUserInitiatedJob=0
+        numOngoing=1
+        numAutoCancel=0
+        numWithLargeIcon=0
+>       numForegroundService=0
+        numUserInitiatedJob=0
+        numOngoing=0
+        numAutoCancel=1
+        numWithLargeIcon=1
+>       numForegroundService=0
+        numUserInitiatedJob=0
+        numOngoing=0
+        numAutoCancel=0
+        numWithLargeIcon=0
+
+

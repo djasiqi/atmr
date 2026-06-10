@@ -1,0 +1,5 @@
+﻿  ch.liri.operations:
+    ID: e17d4d35-494e-47dd-bfdc-73b16e399cad
+    Signatures: [B6:9F:A2:72:A9:C6:58:00:3B:53:A8:C8:61:2E:FF:E1:62:25:1D:EF:21:DD:D6:BC:64:40:E0:B7:2B:8D:65:3D]
+    Domain verification state:
+      app.lirie.ch: 1024

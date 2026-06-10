@@ -1,0 +1,767 @@
+﻿
+06-10 12:44:55.901  2620  5181 D InputDispatcher: Focus left window (0): f3052a4 
+ch.liri.operations/ch.liri.operations.MainActivity
+06-10 12:44:55.910  2620  4708 D WindowManager: updateSystemBarAttributes: displayId=0, focusedCanBeNavColorWin=false, 
+win=Window{ccf7523 u0 
+com.google.android.permissioncontroller/com.android.permissioncontroller.permission.ui.GrantPermissionsActivity}, 
+navColorWin=Window{f3052a4 u0 ch.liri.operations/ch.liri.operations.MainActivity}, 
+caller=com.android.server.wm.WindowManagerService.updateFocusedWindowLocked:358 
+com.android.server.wm.WindowManagerService.relayoutWindow:1350 com.android.server.wm.Session.relayout:30 
+06-10 12:44:55.915  2620  2667 D ChangeTransitionController:    ChangeInfo{cf2e90 container=Task{162281b #16409 
+type=standard A=10875:ch.liri.operations} flags=0x0}
+06-10 12:44:55.924  2620  8442 D SGM:GameManager: identifyGamePackage. ch.liri.operations, mCurrentUserId: 0, 
+callingMethodInfo: com.samsung.android.game.IGameManagerService$Stub.onTransact(IGameManagerService.java:247)
+06-10 12:44:55.925  2620  2662 V WindowManager: Sent Transition (#641) createdAt=06-10 12:44:55.863 via 
+request=TransitionRequestInfo { type = OPEN, triggerTask = TaskInfo{userId=0 taskId=16409 effectiveUid=10875 
+displayId=0 isRunning=true baseIntent=Intent { act=android.intent.action.MAIN cat=[android.intent.category.LAUNCHER] 
+flg=0x10200000 cmp=ch.liri.operations/.MainActivity } 
+baseActivity=ComponentInfo{ch.liri.operations/ch.liri.operations.MainActivity} topActivity=ComponentInfo{com.google.and
+roid.permissioncontroller/com.android.permissioncontroller.permission.ui.GrantPermissionsActivity} origActivity=null 
+realActivity=ComponentInfo{ch.liri.operations/ch.liri.operations.MainActivity} numActivities=2 lastActiveTime=10293009 
+supportsMultiWindow=true resizeMode=1 isResizeable=true minWidth=-1 minHeight=-1 maxWidth=-1 maxHeight=-1 
+defaultMinSize=220 desktopDefaultMinSize=304 token=WCT{RemoteToken{99c6280 Task{162281b #16409 type=standard 
+A=10875:ch.liri.operations}}} topActivityType=1 pictureInPictureParams=null shouldDockBigOverlays=false 
+launchIntoPipHostTaskId=-1 lastParentTaskIdBeforePip=-1 displayCutoutSafeInsets=Rect(0, 0 - 0, 0) 
+topActivityInfo=ActivityInfo{f0a476f com.android.permissioncontroller.permission.ui.GrantPermissionsActivity} 
+launchCookies=[] positionInParent=Point(0, 0) parentTaskId=-1 isFocused=true isVisible=true isVisibleRequested=true 
+isTopActivityNoDisplay=false isSleeping=false locusId=null displayAreaFeatureId=1 isTopActivityTransparent=true 
+isActivityStackTransparent=false lastNonFullscreenBounds=Rect(81, 611 - 999, 1781) capturedLink=null 
+capturedLinkTimestamp=0 requestedVisibleTypes=503 topActivityRequestOpenInBrowserEducationTimestamp=0 
+appCompatTaskInfo=AppCompatTaskInfo { topActivityInSizeCompat=false isLeafTask= true eligibleForLetterboxEducation= 
+false isLetterboxEducationEnabled= false isLetterboxDoubleTapEnabled= false eligibleForUserAspectRatioButton= false 
+topActivityBoundsLetterboxed= false isFromLetterboxDoubleTap= false topActivityLetterboxVerticalPosition= -1 
+topActivityLetterboxHorizontalPosition= -1 topActivityLetterboxWidth=-1 topActivityLetterboxHeight=-1 
+topActivityAppBounds=Rect(0, 0 - 1080, 2340) isUserFullscreenOverrideEnabled=false 
+isSystemFullscreenOverrideEnabled=false hasMinAspectRatioOverride=false topActivityLetterboxBounds=null 
+cameraCompatTaskInfo=CameraCompatTaskInfo { cameraCompatMode=undefinedundefined} topActivityBounds=null 
+topActivityInDisplayCompat=false showForceRotationButton=false forceRotationButtonState=0aspectRatioToRestore0 
+singleTapFromLetterbox=false topNonResizableActivityAspectRatio=-1.0} topActivityMainWindowFrame=null 
+originallySupportedMultiWindow=true hasWallpaper=false rootAffinity=10875:ch.liri.operations isTopTaskInStage=false 
+CoverLauncherWidgetTask=false LaunchedFromAppsCoverLauncherTask=false LaunchedFromMultistarCoverLauncherTask=false 
+isAllowedSeamlessRotation=false isTopTransparentActivity=false isAliasManaged=false hasConfigChanged=false 
+isAiKeyRemoveAppTask=false lastDesktopWindowingBounds=null lastExternalDesktopWindowingBounds=null 
+safeCutoutInsets=null isAppBubble=false}, pipChange = null, remoteTransition = null, displayChange = null, 
+requestedLocation = null, userChange = null, windowingLayerChange = null, flags = 0, debugId = 641 }
+06-10 12:44:55.927  2620  4708 V WindowManager:    ChangeInfo{cf2e90 container=Task{162281b #16409 type=standard 
+A=10875:ch.liri.operations} flags=0x0}
+06-10 12:44:55.928  2620  4708 D ChangeTransitionController:    ChangeInfo{cf2e90 container=Task{162281b #16409 
+type=standard A=10875:ch.liri.operations} flags=0x0}
+06-10 12:44:55.931  2620  6753 D InputDispatcher: Focused application(0): ActivityRecord{89185023 u0 
+ch.liri.operations/.MainActivity t16409}
+06-10 12:44:55.932  2620  6753 D WindowManager: Changing focus from Window{ccf7523 u0 
+com.google.android.permissioncontroller/com.android.permissioncontroller.permission.ui.GrantPermissionsActivity} to 
+Window{f3052a4 u0 ch.liri.operations/ch.liri.operations.MainActivity} displayId=0 
+Callers=com.android.server.wm.ActivityTaskManagerService.setLastResumedActivityUncheckLocked:264 
+com.android.server.wm.ActivityTaskSupervisor.updateTopResumedActivityIfNeeded:91 
+com.android.server.wm.TaskFragment.setResumedActivity:29 com.android.server.wm.ActivityRecord.setState:100 
+06-10 12:44:55.933  2620  6753 D InsetsSourceProvider: updateControlForTarget: control=InsetsSourceControl: {73790001 
+mType=navigationBars initiallyVisible mSurfacePosition=Point(0, 2196) mInsetsHint=Insets{left=0, top=0, right=0, 
+bottom=45}}, target=Window{f3052a4 u0 ch.liri.operations/ch.liri.operations.MainActivity}, 
+from=com.android.server.wm.InsetsStateController.onControlTargetChanged:82 
+com.android.server.wm.InsetsPolicy.updateBarControlTarget:216 
+com.android.server.wm.DisplayPolicy.updateSystemBarAttributes:439 
+com.android.server.wm.WindowManagerService.updateFocusedWindowLocked:358 
+com.android.server.wm.ActivityTaskManagerService.setLastResumedActivityUncheckLocked:264 
+06-10 12:44:55.934  2620  6753 D InsetsSourceProvider: updateControlForTarget: control=InsetsSourceControl: {34900000 
+mType=statusBars initiallyVisible mSurfacePosition=Point(0, 0) mInsetsHint=Insets{left=0, top=98, right=0, bottom=0}}, 
+target=Window{f3052a4 u0 ch.liri.operations/ch.liri.operations.MainActivity}, 
+from=com.android.server.wm.InsetsStateController.onControlTargetChanged:82 
+com.android.server.wm.InsetsPolicy.updateBarControlTarget:203 
+com.android.server.wm.DisplayPolicy.updateSystemBarAttributes:439 
+com.android.server.wm.WindowManagerService.updateFocusedWindowLocked:358 
+com.android.server.wm.ActivityTaskManagerService.setLastResumedActivityUncheckLocked:264 
+06-10 12:44:55.934  2620  6753 D WindowManager: updateSystemBarAttributes: displayId=0, focusedCanBeNavColorWin=false, 
+win=Window{f3052a4 u0 ch.liri.operations/ch.liri.operations.MainActivity}, navColorWin=Window{ccf7523 u0 
+com.google.android.permissioncontroller/com.android.permissioncontroller.permission.ui.GrantPermissionsActivity}, 
+caller=com.android.server.wm.WindowManagerService.updateFocusedWindowLocked:358 
+com.android.server.wm.ActivityTaskManagerService.setLastResumedActivityUncheckLocked:264 
+com.android.server.wm.ActivityTaskSupervisor.updateTopResumedActivityIfNeeded:91 
+06-10 12:44:55.934  2620  6753 V SystemKeyManager: updateFocusedWindow() is called, 
+ch.liri.operations/ch.liri.operations.MainActivity
+06-10 12:44:55.935  2620  6753 D ActivityTaskManager: scheduleTopResumedActivityChanged, onTop=true, 
+r=ActivityRecord{89185023 u0 ch.liri.operations/.MainActivity t16409}, 
+caller=com.android.server.wm.ActivityTaskSupervisor.scheduleTopResumedActivityStateIfNeeded:18 
+com.android.server.wm.ActivityTaskSupervisor.handleTopResumedStateReleasedIfNeeded:57 
+com.android.server.wm.ActivityRecord.activityPaused:94 
+com.android.server.wm.ActivityClientController.activityPaused:26 
+android.app.IActivityClientController$Stub.onTransact:812 com.android.server.wm.ActivityClientController.onTransact:1 
+06-10 12:44:55.936  5073  5073 D NavigationBar: onSystemBarAttributesChanged() -  displayId:0, appearance:8, 
+packageName: ch.liri.operations (APPEARANCE_LIGHT_STATUS_BARS ), navbarColorManagedByIme:false
+06-10 12:44:55.936  2259  2259 D SurfaceFlinger:        DEVICE |           15766824943617 | 00002102 | RGBA_8888    |  
+  0.0    0.0 1080.0 2340.0 |    0    0 1080 2340 | ch.liri.operations/ch.liri.operations.MainActivity$_3671#4464 (671)
+06-10 12:44:55.936  2259  2259 D SurfaceFlinger:        DEVICE |           15766824943620 | 00002100 | RGBA_8888    |  
+  0.0    0.0 1080.0 2340.0 |    0    0 1080 2340 | ch.liri.operations/ch.liri.operations.MainActivity$_3671#4480 (5)
+06-10 12:44:55.939  2620  2667 D ChangeTransitionController:    ChangeInfo{e21d8dc container=Task{162281b #16409 
+type=standard A=10875:ch.liri.operations} flags=0x0}
+06-10 12:44:55.940  2259  2259 I SurfaceFlinger: [LayerHierarchy{RequestedLayerState{ImeContainer#15 parentId=4456 
+relativeParentId=4479 z=1} 1 children}] RelativeParent to LayerHierarchy{RequestedLayerState{f3052a4 
+ch.liri.operations/ch.liri.operations.MainActivity#4479 parentId=4456 z=1} 2 children}
+06-10 12:44:55.940  2620  5181 D SGM:GameManager: identifyGamePackage. ch.liri.operations, mCurrentUserId: 0, 
+callingMethodInfo: com.samsung.android.game.IGameManagerService$Stub.onTransact(IGameManagerService.java:247)
+06-10 12:44:55.941  2620  2666 D SGM:FgCheckThread: noteResumeComponent(), received pkgName: ch.liri.operations, 
+userId: 0
+06-10 12:44:55.944  8008 28233 I SDHMS:k : handleResumeComponent : put = ch.liri.operations, userid = 0 instanceid 
+=249920952
+06-10 12:44:55.944  2620  2666 D SGM:GameManager: identifyGamePackage. ch.liri.operations, mCurrentUserId: 0, 
+callingMethodInfo: com.samsung.android.game.SemGameManager.isGamePackage(SemGameManager.java:106)
+06-10 12:44:55.944  2620  2666 D SGM:SemGameManager: isGamePackage(), pkgName=ch.liri.operations, ret=false
+06-10 12:44:55.945  2620  2667 I SurfaceControl: apply, lowDebugName=Focus request: f3052a4 
+ch.liri.operations/ch.liri.operations.MainActivity, caller=android.view.SurfaceControl$Transaction.apply:3569 
+android.view.SurfaceControl$Transaction.apply:3519 com.android.server.wm.WindowAnimator.animate:468 
+com.android.server.wm.WindowAnimator$$ExternalSyntheticLambda1.doFrame:14 
+android.view.Choreographer$CallbackRecord.run:1959 android.view.Choreographer$CallbackRecord.run:1970 
+06-10 12:44:55.947  2620  4485 D SGM:FgCheckThread: onLooperPrepared(), msg: MSG_APP_RESUME, pkgName: 
+ch.liri.operations, userid: 0
+06-10 12:44:55.948  2620  6753 I WindowManager: Relayout Window{f3052a4 u0 
+ch.liri.operations/ch.liri.operations.MainActivity}: viewVisibility=0 req=1080x2340 ty=2 d0
+06-10 12:44:55.949  2259  2528 D SurfaceFlinger: [input] setFocusedWindow: f3052a4 
+ch.liri.operations/ch.liri.operations.MainActivity
+06-10 12:44:55.950  2620  6753 D InputDispatcher: Once focus requested (0): f3052a4 
+ch.liri.operations/ch.liri.operations.MainActivity
+06-10 12:44:55.950  2620  6753 D InputDispatcher: Focus entered window (0): f3052a4 
+ch.liri.operations/ch.liri.operations.MainActivity
+06-10 12:44:55.950  3671  3671 I InsetsSourceConsumer: applyRequestedVisibilityToControl: visible=true, 
+type=navigationBars, host=ch.liri.operations/ch.liri.operations.MainActivity
+06-10 12:44:55.950  3671  3671 I InsetsSourceConsumer: applyRequestedVisibilityToControl: visible=true, 
+type=statusBars, host=ch.liri.operations/ch.liri.operations.MainActivity
+06-10 12:44:55.950  2620  5771 V WindowManager:    ChangeInfo{e21d8dc container=Task{162281b #16409 type=standard 
+A=10875:ch.liri.operations} flags=0x0}
+06-10 12:44:55.952  2620  5771 D ChangeTransitionController:    ChangeInfo{e21d8dc container=Task{162281b #16409 
+type=standard A=10875:ch.liri.operations} flags=0x0}
+06-10 12:44:55.954  2620  2663 D SGM:GameManager: identifyForegroundApp. ch.liri.operations, mCurrentUserId: 0, 
+callerUserId: 0
+06-10 12:44:55.954  2620  2663 D SGM:GameManager: identifyForegroundApp. ch.liri.operations, mCurrentUserId: 0, 
+callerUserId: 0
+06-10 12:44:55.957  2620  8442 V WindowManager: DesktopModeLaunchParamsModifier: phase= 3 task=Task{162281b #16409 
+type=standard A=10875:ch.liri.operations} activity=ActivityRecord{63725321 u0 
+com.google.android.permissioncontroller/com.android.permissioncontroller.permission.ui.GrantPermissionsActivity t-1} 
+display-area-from-source=DefaultTaskDisplayArea_d0@255683277 display-id=0 task-display-area-windowing-mode=1 
+suggested-display-area=DefaultTaskDisplayArea_d0@255683277 non-desktop, skipping
+06-10 12:44:55.957  2620  8442 V WindowManager: TaskLaunchParamsModifier:phase=3 task=Task{162281b #16409 
+type=standard A=10875:ch.liri.operations} activity=ActivityRecord{63725321 u0 
+com.google.android.permissioncontroller/com.android.permissioncontroller.permission.ui.GrantPermissionsActivity t-1} 
+display-area-from-source=DefaultTaskDisplayArea_d0@255683277 display-id=0 task-display-area-windowing-mode=1 
+suggested-display-area=DefaultTaskDisplayArea_d0@255683277 inherit-from-source=fullscreen 
+non-freeform-task-display-area display-area=DefaultTaskDisplayArea_d0@255683277 activity-requested-portrait 
+freeform-size-mismatch=Rect(81, 611 - 999, 1781)
+06-10 12:44:55.957  2620  8442 V WindowManager: DesktopModeLaunchParamsModifier: phase= 3 task=Task{162281b #16409 
+type=standard A=10875:ch.liri.operations} activity=ActivityRecord{63725321 u0 
+com.google.android.permissioncontroller/com.android.permissioncontroller.permission.ui.GrantPermissionsActivity t-1} 
+display-area-from-source=DefaultTaskDisplayArea_d0@255683277 display-id=0 task-display-area-windowing-mode=1 
+suggested-display-area=DefaultTaskDisplayArea_d0@255683277 non-desktop, skipping
+06-10 12:44:55.957  2620  8442 V WindowManager: TaskLaunchParamsModifier:phase=3 task=Task{162281b #16409 
+type=standard A=10875:ch.liri.operations} activity=ActivityRecord{63725321 u0 
+com.google.android.permissioncontroller/com.android.permissioncontroller.permission.ui.GrantPermissionsActivity t-1} 
+display-area-from-source=DefaultTaskDisplayArea_d0@255683277 display-id=0 task-display-area-windowing-mode=1 
+suggested-display-area=DefaultTaskDisplayArea_d0@255683277 inherit-from-source=fullscreen 
+non-freeform-task-display-area display-area=DefaultTaskDisplayArea_d0@255683277 activity-requested-portrait 
+freeform-size-mismatch=Rect(81, 611 - 999, 1781)
+06-10 12:44:55.957  2620  8442 V WindowManager: DesktopModeLaunchParamsModifier: phase= 3 task=Task{162281b #16409 
+type=standard A=10875:ch.liri.operations} activity=ActivityRecord{63725321 u0 
+com.google.android.permissioncontroller/com.android.permissioncontroller.permission.ui.GrantPermissionsActivity t-1} 
+display-area-from-source=DefaultTaskDisplayArea_d0@255683277 display-id=0 task-display-area-windowing-mode=1 
+suggested-display-area=DefaultTaskDisplayArea_d0@255683277 non-desktop, skipping
+06-10 12:44:55.958  2620  8442 V WindowManager: TaskLaunchParamsModifier:phase=3 task=Task{162281b #16409 
+type=standard A=10875:ch.liri.operations} activity=ActivityRecord{63725321 u0 
+com.google.android.permissioncontroller/com.android.permissioncontroller.permission.ui.GrantPermissionsActivity t-1} 
+display-area-from-source=DefaultTaskDisplayArea_d0@255683277 display-id=0 task-display-area-windowing-mode=1 
+suggested-display-area=DefaultTaskDisplayArea_d0@255683277 inherit-from-source=fullscreen 
+non-freeform-task-display-area display-area=DefaultTaskDisplayArea_d0@255683277 activity-requested-portrait 
+freeform-size-mismatch=Rect(81, 611 - 999, 1781)
+06-10 12:44:55.960  2620  8442 D ActivityTaskManager: scheduleTopResumedActivityChanged, onTop=false, 
+r=ActivityRecord{89185023 u0 ch.liri.operations/.MainActivity t16409}, 
+caller=com.android.server.wm.ActivityTaskSupervisor.scheduleTopResumedActivityStateLossIfNeeded:19 
+com.android.server.wm.ActivityTaskSupervisor.updateTopResumedActivityIfNeeded:44 
+com.android.server.wm.TaskFragment.setResumedActivity:29 com.android.server.wm.ActivityRecord.setState:91 
+com.android.server.wm.TaskFragment.startPausing$1:231 com.android.server.wm.TaskFragment.resumeTopActivity:772 
+06-10 12:44:55.961  2620  8442 V WindowManager:    ChangeInfo{4582928 container=Task{162281b #16409 type=standard 
+A=10875:ch.liri.operations} flags=0x0}
+06-10 12:44:55.962  2259  2259 D SurfaceFlinger:        DEVICE |           15766824943619 | 00002102 | RGBA_8888    |  
+  0.0    0.0 1080.0 2340.0 |    0    0 1080 2340 | ch.liri.operations/ch.liri.operations.MainActivity$_3671#4464 (673)
+06-10 12:44:55.962  2259  2259 D SurfaceFlinger:        DEVICE |           15766824943623 | 00002100 | RGBA_8888    |  
+  0.0    0.0 1080.0 2340.0 |    0    0 1080 2340 | ch.liri.operations/ch.liri.operations.MainActivity$_3671#4480 (6)
+06-10 12:44:55.962  2620  8442 I ActivityTaskManager: START u0 {act=android.content.pm.action.REQUEST_PERMISSIONS 
+xflg=0x4 pkg=com.google.android.permissioncontroller 
+cmp=com.google.android.permissioncontroller/com.android.permissioncontroller.permission.ui.GrantPermissionsActivity 
+(has extras)} with LAUNCH_MULTIPLE from uid 10875 (ch.liri.operations) (rr=89185023) (BAL_ALLOW_VISIBLE_WINDOW) result 
+code=0
+06-10 12:44:55.962  5073  5112 V WindowManagerShell: Transition requested (#643): android.os.BinderProxy@6aa4ac2 
+TransitionRequestInfo { type = OPEN, triggerTask = TaskInfo{userId=0 taskId=16409 effectiveUid=10875 displayId=0 
+isRunning=true baseIntent=Intent { act=android.intent.action.MAIN cat=[android.intent.category.LAUNCHER] 
+flg=0x10200000 cmp=ch.liri.operations/.MainActivity } 
+baseActivity=ComponentInfo{ch.liri.operations/ch.liri.operations.MainActivity} topActivity=ComponentInfo{com.google.and
+roid.permissioncontroller/com.android.permissioncontroller.permission.ui.GrantPermissionsActivity} origActivity=null 
+realActivity=ComponentInfo{ch.liri.operations/ch.liri.operations.MainActivity} numActivities=2 lastActiveTime=10293103 
+supportsMultiWindow=true resizeMode=1 isResizeable=true minWidth=-1 minHeight=-1 maxWidth=-1 maxHeight=-1 
+defaultMinSize=220 desktopDefaultMinSize=304 token=WCT{android.os.BinderProxy@e01ea18} topActivityType=1 
+pictureInPictureParams=null shouldDockBigOverlays=false launchIntoPipHostTaskId=-1 lastParentTaskIdBeforePip=-1 
+displayCutoutSafeInsets=Rect(0, 0 - 0, 0) topActivityInfo=ActivityInfo{d5520d3 
+com.android.permissioncontroller.permission.ui.GrantPermissionsActivity} launchCookies=[] positionInParent=Point(0, 0) 
+parentTaskId=-1 isFocused=true isVisible=true isVisibleRequested=true isTopActivityNoDisplay=false isSleeping=false 
+locusId=null displayAreaFeatureId=1 isTopActivityTransparent=true isActivityStackTransparent=false 
+lastNonFullscreenBounds=Rect(81, 611 - 999, 1781) capturedLink=null capturedLinkTimestamp=0 requestedVisibleTypes=503 
+topActivityRequestOpenInBrowserEducationTimestamp=0 appCompatTaskInfo=AppCompatTaskInfo { 
+topActivityInSizeCompat=false isLeafTask= true eligibleForLetterboxEducation= false isLetterboxEducationEnabled= false 
+isLetterboxDoubleTapEnabled= false eligibleForUserAspectRatioButton= false topActivityBoundsLetterboxed= false 
+isFromLetterboxDoubleTap= false topActivityLetterboxVerticalPosition= -1 topActivityLetterboxHorizontalPosition= -1 
+topActivityLetterboxWidth=-1 topActivityLetterboxHeight=-1 topActivityAppBounds=Rect(0, 0 - 1080, 2340) 
+isUserFullscreenOverrideEnabled=false isSystemFullscreenOverrideEnabled=false hasMinAspectRatioOverride=false 
+topActivityLetterboxBounds=null cameraCompatTaskInfo=CameraCompatTaskInfo { cameraCompatMode=undefinedundefined} 
+topActivityBounds=null topActivityInDisplayCompat=false showForceRotationButton=false 
+forceRotationButtonState=0aspectRatioToRestore0 singleTapFromLetterbox=false topNonResizableActivityAspectRatio=-1.0} 
+topActivityMainWindowFrame=null originallySupportedMultiWindow=true hasWallpaper=false 
+rootAffinity=10875:ch.liri.operations isTopTaskInStage=false CoverLauncherWidgetTask=false 
+LaunchedFromAppsCoverLauncherTask=false LaunchedFromMultistarCoverLauncherTask=false isAllowedSeamlessRotation=false 
+isTopTransparentActivity=false isAliasManaged=false hasConfigChanged=false isAiKeyRemoveAppTask=false 
+lastDesktopWindowingBounds=null lastExternalDesktopWindowingBounds=null safeCutoutInsets=null isAppBubble=false}, 
+pipChange = null, remoteTransition = null, displayChange = null, requestedLocation = null, userChange = null, 
+windowingLayerChange = null, flags = 0, debugId = 643 }
+06-10 12:44:55.963  2620  5771 D WindowManager: updateSystemBarAttributes: displayId=0, focusedCanBeNavColorWin=false, 
+win=Window{f3052a4 u0 ch.liri.operations/ch.liri.operations.MainActivity}, navColorWin=Window{f3052a4 u0 
+ch.liri.operations/ch.liri.operations.MainActivity}, 
+caller=com.android.server.wm.DisplayPolicy.finishPostLayoutPolicyLw:17 
+com.android.server.wm.RootWindowContainer.applySurfaceChangesTransaction$1:188 
+com.android.server.wm.RootWindowContainer.performSurfacePlacement:59 
+06-10 12:44:55.969  2620  2666 D SGM:FgCheckThread: notePauseComponent(), received pkgName: ch.liri.operations, 
+userId: 0
+06-10 12:44:55.971  2620  5771 D WindowManager: Changing focus from Window{f3052a4 u0 
+ch.liri.operations/ch.liri.operations.MainActivity} to null displayId=0 
+Callers=com.android.server.wm.ActivityTaskManagerService.setLastResumedActivityUncheckLocked:264 
+com.android.server.wm.ActivityTaskSupervisor.updateTopResumedActivityIfNeeded:91 
+com.android.server.wm.TaskFragment.setResumedActivity:29 com.android.server.wm.ActivityRecord.setState:100 
+06-10 12:44:55.971  5073  5073 D NavigationBar: onSystemBarAttributesChanged() -  displayId:0, appearance:24, 
+packageName: ch.liri.operations (APPEARANCE_LIGHT_STATUS_BARS APPEARANCE_LIGHT_NAVIGATION_BARS ), 
+navbarColorManagedByIme:false
+06-10 12:44:55.975  2620  8442 D SGM:GameManager: identifyGamePackage. ch.liri.operations, mCurrentUserId: 0, 
+callingMethodInfo: com.samsung.android.game.IGameManagerService$Stub.onTransact(IGameManagerService.java:247)
+06-10 12:44:55.979  2620  2663 D SGM:GameManager: identifyForegroundApp. ch.liri.operations, mCurrentUserId: 0, 
+callerUserId: 0
+06-10 12:44:55.979  2620  2663 D SGM:GameManager: identifyForegroundApp. ch.liri.operations, mCurrentUserId: 0, 
+callerUserId: 0
+06-10 12:44:55.983  2620  4477 I ImeTracker: ch.liri.operations:5a6a0eaf: onRequestHide at ORIGIN_SERVER reason 
+HIDE_SAME_WINDOW_FOCUSED_WITHOUT_EDITOR fromUser false
+06-10 12:44:55.985  2620  8148 D InputDispatcher: Focus left window (0): f3052a4 
+ch.liri.operations/ch.liri.operations.MainActivity
+06-10 12:44:55.997  3671  3671 I ImeTracker: ch.liri.operations:5a6a0eaf: onCancelled at PHASE_CLIENT_ALREADY_HIDDEN
+06-10 12:44:56.002  2620  2666 D SGM:FgCheckThread: getForegroundApp(), foregroundPkgName=ch.liri.operations
+06-10 12:44:56.011  8865  8865 I HBD     : c [AiWriter] setContact : ch.liri.operations
+06-10 12:44:56.041  2620  8148 D WindowManager: updateSystemBarAttributes: displayId=0, focusedCanBeNavColorWin=false, 
+win=Window{804b6b8 u0 
+com.google.android.permissioncontroller/com.android.permissioncontroller.permission.ui.GrantPermissionsActivity}, 
+navColorWin=Window{f3052a4 u0 ch.liri.operations/ch.liri.operations.MainActivity}, 
+caller=com.android.server.wm.WindowManagerService.updateFocusedWindowLocked:358 
+com.android.server.wm.WindowManagerService.relayoutWindow:1350 com.android.server.wm.Session.relayout:30 
+06-10 12:44:56.049  2620  2667 D ChangeTransitionController:    ChangeInfo{4582928 container=Task{162281b #16409 
+type=standard A=10875:ch.liri.operations} flags=0x0}
+06-10 12:44:56.059  2620  2662 V WindowManager: Sent Transition (#643) createdAt=06-10 12:44:55.956 via 
+request=TransitionRequestInfo { type = OPEN, triggerTask = TaskInfo{userId=0 taskId=16409 effectiveUid=10875 
+displayId=0 isRunning=true baseIntent=Intent { act=android.intent.action.MAIN cat=[android.intent.category.LAUNCHER] 
+flg=0x10200000 cmp=ch.liri.operations/.MainActivity } 
+baseActivity=ComponentInfo{ch.liri.operations/ch.liri.operations.MainActivity} topActivity=ComponentInfo{com.google.and
+roid.permissioncontroller/com.android.permissioncontroller.permission.ui.GrantPermissionsActivity} origActivity=null 
+realActivity=ComponentInfo{ch.liri.operations/ch.liri.operations.MainActivity} numActivities=2 lastActiveTime=10293103 
+supportsMultiWindow=true resizeMode=1 isResizeable=true minWidth=-1 minHeight=-1 maxWidth=-1 maxHeight=-1 
+defaultMinSize=220 desktopDefaultMinSize=304 token=WCT{RemoteToken{99c6280 Task{162281b #16409 type=standard 
+A=10875:ch.liri.operations}}} topActivityType=1 pictureInPictureParams=null shouldDockBigOverlays=false 
+launchIntoPipHostTaskId=-1 lastParentTaskIdBeforePip=-1 displayCutoutSafeInsets=Rect(0, 0 - 0, 0) 
+topActivityInfo=ActivityInfo{544ccfb com.android.permissioncontroller.permission.ui.GrantPermissionsActivity} 
+launchCookies=[] positionInParent=Point(0, 0) parentTaskId=-1 isFocused=true isVisible=true isVisibleRequested=true 
+isTopActivityNoDisplay=false isSleeping=false locusId=null displayAreaFeatureId=1 isTopActivityTransparent=true 
+isActivityStackTransparent=false lastNonFullscreenBounds=Rect(81, 611 - 999, 1781) capturedLink=null 
+capturedLinkTimestamp=0 requestedVisibleTypes=503 topActivityRequestOpenInBrowserEducationTimestamp=0 
+appCompatTaskInfo=AppCompatTaskInfo { topActivityInSizeCompat=false isLeafTask= true eligibleForLetterboxEducation= 
+false isLetterboxEducationEnabled= false isLetterboxDoubleTapEnabled= false eligibleForUserAspectRatioButton= false 
+topActivityBoundsLetterboxed= false isFromLetterboxDoubleTap= false topActivityLetterboxVerticalPosition= -1 
+topActivityLetterboxHorizontalPosition= -1 topActivityLetterboxWidth=-1 topActivityLetterboxHeight=-1 
+topActivityAppBounds=Rect(0, 0 - 1080, 2340) isUserFullscreenOverrideEnabled=false 
+isSystemFullscreenOverrideEnabled=false hasMinAspectRatioOverride=false topActivityLetterboxBounds=null 
+cameraCompatTaskInfo=CameraCompatTaskInfo { cameraCompatMode=undefinedundefined} topActivityBounds=null 
+topActivityInDisplayCompat=false showForceRotationButton=false forceRotationButtonState=0aspectRatioToRestore0 
+singleTapFromLetterbox=false topNonResizableActivityAspectRatio=-1.0} topActivityMainWindowFrame=null 
+originallySupportedMultiWindow=true hasWallpaper=false rootAffinity=10875:ch.liri.operations isTopTaskInStage=false 
+CoverLauncherWidgetTask=false LaunchedFromAppsCoverLauncherTask=false LaunchedFromMultistarCoverLauncherTask=false 
+isAllowedSeamlessRotation=false isTopTransparentActivity=false isAliasManaged=false hasConfigChanged=false 
+isAiKeyRemoveAppTask=false lastDesktopWindowingBounds=null lastExternalDesktopWindowingBounds=null 
+safeCutoutInsets=null isAppBubble=false}, pipChange = null, remoteTransition = null, displayChange = null, 
+requestedLocation = null, userChange = null, windowingLayerChange = null, flags = 0, debugId = 643 }
+06-10 12:44:56.069  2620  8284 V WindowManager:    ChangeInfo{4582928 container=Task{162281b #16409 type=standard 
+A=10875:ch.liri.operations} flags=0x0}
+06-10 12:44:56.073  2620  8284 D ChangeTransitionController:    ChangeInfo{4582928 container=Task{162281b #16409 
+type=standard A=10875:ch.liri.operations} flags=0x0}
+06-10 12:44:56.079  2259  2259 D SurfaceFlinger:        DEVICE |           15766824943619 | 00002102 | RGBA_8888    |  
+  0.0    0.0 1080.0 2340.0 |    0    0 1080 2340 | ch.liri.operations/ch.liri.operations.MainActivity$_3671#4464 (685)
+06-10 12:44:56.079  2259  2259 D SurfaceFlinger:        DEVICE |           15766824943623 | 00002100 | RGBA_8888    |  
+  0.0    0.0 1080.0 2340.0 |    0    0 1080 2340 | ch.liri.operations/ch.liri.operations.MainActivity$_3671#4480 (6)
+06-10 12:44:56.088  2620  7093 D InputDispatcher: Focused application(0): ActivityRecord{89185023 u0 
+ch.liri.operations/.MainActivity t16409}
+06-10 12:44:56.088  2620  7093 D WindowManager: Changing focus from Window{804b6b8 u0 
+com.google.android.permissioncontroller/com.android.permissioncontroller.permission.ui.GrantPermissionsActivity} to 
+Window{f3052a4 u0 ch.liri.operations/ch.liri.operations.MainActivity} displayId=0 
+Callers=com.android.server.wm.ActivityTaskManagerService.setLastResumedActivityUncheckLocked:264 
+com.android.server.wm.ActivityTaskSupervisor.updateTopResumedActivityIfNeeded:91 
+com.android.server.wm.TaskFragment.setResumedActivity:29 com.android.server.wm.ActivityRecord.setState:100 
+06-10 12:44:56.090  2620  7093 D InsetsSourceProvider: updateControlForTarget: control=InsetsSourceControl: {73790001 
+mType=navigationBars initiallyVisible mSurfacePosition=Point(0, 2196) mInsetsHint=Insets{left=0, top=0, right=0, 
+bottom=45}}, target=Window{f3052a4 u0 ch.liri.operations/ch.liri.operations.MainActivity}, 
+from=com.android.server.wm.InsetsStateController.onControlTargetChanged:82 
+com.android.server.wm.InsetsPolicy.updateBarControlTarget:216 
+com.android.server.wm.DisplayPolicy.updateSystemBarAttributes:439 
+com.android.server.wm.WindowManagerService.updateFocusedWindowLocked:358 
+com.android.server.wm.ActivityTaskManagerService.setLastResumedActivityUncheckLocked:264 
+06-10 12:44:56.090  2620  7093 D InsetsSourceProvider: updateControlForTarget: control=InsetsSourceControl: {34900000 
+mType=statusBars initiallyVisible mSurfacePosition=Point(0, 0) mInsetsHint=Insets{left=0, top=98, right=0, bottom=0}}, 
+target=Window{f3052a4 u0 ch.liri.operations/ch.liri.operations.MainActivity}, 
+from=com.android.server.wm.InsetsStateController.onControlTargetChanged:82 
+com.android.server.wm.InsetsPolicy.updateBarControlTarget:203 
+com.android.server.wm.DisplayPolicy.updateSystemBarAttributes:439 
+com.android.server.wm.WindowManagerService.updateFocusedWindowLocked:358 
+com.android.server.wm.ActivityTaskManagerService.setLastResumedActivityUncheckLocked:264 
+06-10 12:44:56.090  2620  7093 D WindowManager: updateSystemBarAttributes: displayId=0, focusedCanBeNavColorWin=false, 
+win=Window{f3052a4 u0 ch.liri.operations/ch.liri.operations.MainActivity}, navColorWin=Window{804b6b8 u0 
+com.google.android.permissioncontroller/com.android.permissioncontroller.permission.ui.GrantPermissionsActivity}, 
+caller=com.android.server.wm.WindowManagerService.updateFocusedWindowLocked:358 
+com.android.server.wm.ActivityTaskManagerService.setLastResumedActivityUncheckLocked:264 
+com.android.server.wm.ActivityTaskSupervisor.updateTopResumedActivityIfNeeded:91 
+06-10 12:44:56.091  2620  7093 V SystemKeyManager: updateFocusedWindow() is called, 
+ch.liri.operations/ch.liri.operations.MainActivity
+06-10 12:44:56.092  2620  7093 D ActivityTaskManager: scheduleTopResumedActivityChanged, onTop=true, 
+r=ActivityRecord{89185023 u0 ch.liri.operations/.MainActivity t16409}, 
+caller=com.android.server.wm.ActivityTaskSupervisor.scheduleTopResumedActivityStateIfNeeded:18 
+com.android.server.wm.ActivityTaskSupervisor.handleTopResumedStateReleasedIfNeeded:57 
+com.android.server.wm.ActivityRecord.activityPaused:94 
+com.android.server.wm.ActivityClientController.activityPaused:26 
+android.app.IActivityClientController$Stub.onTransact:812 com.android.server.wm.ActivityClientController.onTransact:1 
+06-10 12:44:56.096  2620  4708 D SGM:GameManager: identifyGamePackage. ch.liri.operations, mCurrentUserId: 0, 
+callingMethodInfo: com.samsung.android.game.IGameManagerService$Stub.onTransact(IGameManagerService.java:247)
+06-10 12:44:56.097  5073  5073 D NavigationBar: onSystemBarAttributesChanged() -  displayId:0, appearance:8, 
+packageName: ch.liri.operations (APPEARANCE_LIGHT_STATUS_BARS ), navbarColorManagedByIme:false
+06-10 12:44:56.098  2259  2259 I SurfaceFlinger: [LayerHierarchy{RequestedLayerState{ImeContainer#15 parentId=4456 
+relativeParentId=4479 z=1} 1 children}] RelativeParent to LayerHierarchy{RequestedLayerState{f3052a4 
+ch.liri.operations/ch.liri.operations.MainActivity#4479 parentId=4456 z=1} 2 children}
+06-10 12:44:56.100  2620  2667 D ChangeTransitionController:    ChangeInfo{9cf4ab6 container=Task{162281b #16409 
+type=standard A=10875:ch.liri.operations} flags=0x0}
+06-10 12:44:56.104  2620  2667 I SurfaceControl: apply, lowDebugName=Focus request: f3052a4 
+ch.liri.operations/ch.liri.operations.MainActivity, caller=android.view.SurfaceControl$Transaction.apply:3569 
+android.view.SurfaceControl$Transaction.apply:3519 com.android.server.wm.WindowAnimator.animate:468 
+com.android.server.wm.WindowAnimator$$ExternalSyntheticLambda1.doFrame:14 
+android.view.Choreographer$CallbackRecord.run:1959 android.view.Choreographer$CallbackRecord.run:1970 
+06-10 12:44:56.106  2620  4401 I WindowManager: Relayout Window{f3052a4 u0 
+ch.liri.operations/ch.liri.operations.MainActivity}: viewVisibility=0 req=1080x2340 ty=2 d0
+06-10 12:44:56.107  2620  2666 D SGM:FgCheckThread: noteResumeComponent(), received pkgName: ch.liri.operations, 
+userId: 0
+06-10 12:44:56.108  2259  2528 D SurfaceFlinger: [input] setFocusedWindow: f3052a4 
+ch.liri.operations/ch.liri.operations.MainActivity
+06-10 12:44:56.108  2620  4485 D SGM:FgCheckThread: onLooperPrepared(), msg: MSG_APP_RESUME, pkgName: 
+ch.liri.operations, userid: 0
+06-10 12:44:56.110  3671  3671 I InsetsSourceConsumer: applyRequestedVisibilityToControl: visible=true, 
+type=navigationBars, host=ch.liri.operations/ch.liri.operations.MainActivity
+06-10 12:44:56.110  3671  3671 I InsetsSourceConsumer: applyRequestedVisibilityToControl: visible=true, 
+type=statusBars, host=ch.liri.operations/ch.liri.operations.MainActivity
+06-10 12:44:56.113  2620  8441 D InputDispatcher: Once focus requested (0): f3052a4 
+ch.liri.operations/ch.liri.operations.MainActivity
+06-10 12:44:56.113  2620  8441 D InputDispatcher: Focus entered window (0): f3052a4 
+ch.liri.operations/ch.liri.operations.MainActivity
+06-10 12:44:56.114  2620  7093 V WindowManager:    ChangeInfo{9cf4ab6 container=Task{162281b #16409 type=standard 
+A=10875:ch.liri.operations} flags=0x0}
+06-10 12:44:56.115  2620  7093 D ChangeTransitionController:    ChangeInfo{9cf4ab6 container=Task{162281b #16409 
+type=standard A=10875:ch.liri.operations} flags=0x0}
+06-10 12:44:56.115  2620  4698 D MdnieScenarioControlService:  packageName : ch.liri.operations    className : 
+ch.liri.operations.MainActivity
+06-10 12:44:56.116  8008 28237 I SDHMS:k : handleResumeComponent : put = ch.liri.operations, userid = 0 instanceid 
+=249920952
+06-10 12:44:56.117  2620  2666 D SGM:GameManager: identifyGamePackage. ch.liri.operations, mCurrentUserId: 0, 
+callingMethodInfo: com.samsung.android.game.SemGameManager.isGamePackage(SemGameManager.java:106)
+06-10 12:44:56.117  2620  2666 D SGM:SemGameManager: isGamePackage(), pkgName=ch.liri.operations, ret=false
+06-10 12:44:56.117  2620  4477 I ImeTracker: ch.liri.operations:89d6ec84: onRequestHide at ORIGIN_SERVER reason 
+HIDE_SAME_WINDOW_FOCUSED_WITHOUT_EDITOR fromUser false
+06-10 12:44:56.117  3671  3671 I ImeTracker: ch.liri.operations:89d6ec84: onCancelled at PHASE_CLIENT_ALREADY_HIDDEN
+06-10 12:44:56.120  2620  2663 D SGM:GameManager: identifyForegroundApp. ch.liri.operations, mCurrentUserId: 0, 
+callerUserId: 0
+06-10 12:44:56.121  2259  2259 D SurfaceFlinger:        DEVICE |           15766824943618 | 00002102 | RGBA_8888    |  
+  0.0    0.0 1080.0 2340.0 |    0    0 1080 2340 | ch.liri.operations/ch.liri.operations.MainActivity$_3671#4464 (690)
+06-10 12:44:56.121  2259  2259 D SurfaceFlinger:        DEVICE |           15766824943622 | 00002100 | RGBA_8888    |  
+  0.0    0.0 1080.0 2340.0 |    0    0 1080 2340 | ch.liri.operations/ch.liri.operations.MainActivity$_3671#4480 (7)
+06-10 12:44:56.121  2620  2667 D WindowManager: updateSystemBarAttributes: displayId=0, focusedCanBeNavColorWin=false, 
+win=Window{f3052a4 u0 ch.liri.operations/ch.liri.operations.MainActivity}, navColorWin=Window{f3052a4 u0 
+ch.liri.operations/ch.liri.operations.MainActivity}, 
+caller=com.android.server.wm.DisplayPolicy.finishPostLayoutPolicyLw:17 
+com.android.server.wm.RootWindowContainer.applySurfaceChangesTransaction$1:188 
+com.android.server.wm.RootWindowContainer.performSurfacePlacement:59 
+06-10 12:44:56.121  2620  2663 D SGM:GameManager: identifyForegroundApp. ch.liri.operations, mCurrentUserId: 0, 
+callerUserId: 0
+06-10 12:44:56.127  2620  4401 V WindowManager: Remove Window{f3052a4 u0 
+ch.liri.operations/ch.liri.operations.MainActivity}: 
+mSurfaceControl=Surface(name=ch.liri.operations/ch.liri.operations.MainActivity$_3671#4480)/@0xb7eb833 
+mAnimatingExit=false mRemoveOnExit=false mHasSurface=true surfaceShowing=true animating=false app-animation=false 
+callers=com.android.server.wm.Session.remove:15 android.view.IWindowSession$Stub.onTransact:813 
+com.android.server.wm.Session.onTransact:1 android.os.Binder.execTransactInternal:1509 
+android.os.Binder.execTransact:1454 <bottom of call stack> 
+06-10 12:44:56.127  2620  4401 V WindowManager: Loading animations: picked package=ch.liri.operations
+06-10 12:44:56.127  2620  4401 I WindowManager: Reparenting to leash, surface=Surface(name=f3052a4 
+ch.liri.operations/ch.liri.operations.MainActivity#4479)/@0x66a4ab1, leashParent=Surface(name=ActivityRecord{89185023 
+u0 ch.liri.operations/.MainActivity t16409}#4456)/@0xdfc8d0b
+06-10 12:44:56.127  2259  2585 I SurfaceFlinger: id=4505 createSurf, flag=24000, Surface(name=f3052a4 
+ch.liri.operations/ch.liri.operations.MainActivity#4479)/@0x66a4ab1 - animation-leash of window_animation#4505
+06-10 12:44:56.127  2620  4401 D WindowManager: makeSurface duration=0 leash=Surface(name=Surface(name=f3052a4 
+ch.liri.operations/ch.liri.operations.MainActivity#4479)/@0x66a4ab1 - animation-leash of 
+window_animation#4505)/@0xb8627f0
+06-10 12:44:56.129  2620  4401 D WindowManager: Changing focus from Window{f3052a4 u0 
+ch.liri.operations/ch.liri.operations.MainActivity EXITING} to Window{d0b28c2 u0 
+ch.liri.operations/ch.liri.operations.MainActivity} displayId=0 
+Callers=com.android.server.wm.WindowState.removeIfPossible:659 com.android.server.wm.Session.remove:15 
+android.view.IWindowSession$Stub.onTransact:813 com.android.server.wm.Session.onTransact:1 
+06-10 12:44:56.130  2620  4401 D InsetsSourceProvider: updateControlForTarget: control=InsetsSourceControl: {73790001 
+mType=navigationBars initiallyVisible mSurfacePosition=Point(0, 2196) mInsetsHint=Insets{left=0, top=0, right=0, 
+bottom=45}}, target=Window{d0b28c2 u0 ch.liri.operations/ch.liri.operations.MainActivity}, 
+from=com.android.server.wm.InsetsStateController.onControlTargetChanged:82 
+com.android.server.wm.InsetsPolicy.updateBarControlTarget:216 
+com.android.server.wm.DisplayPolicy.updateSystemBarAttributes:439 
+com.android.server.wm.WindowManagerService.updateFocusedWindowLocked:358 
+com.android.server.wm.WindowState.removeIfPossible:659 
+06-10 12:44:56.131  2620  4401 D InsetsSourceProvider: updateControlForTarget: control=InsetsSourceControl: {34900000 
+mType=statusBars initiallyVisible mSurfacePosition=Point(0, 0) mInsetsHint=Insets{left=0, top=98, right=0, bottom=0}}, 
+target=Window{d0b28c2 u0 ch.liri.operations/ch.liri.operations.MainActivity}, 
+from=com.android.server.wm.InsetsStateController.onControlTargetChanged:82 
+com.android.server.wm.InsetsPolicy.updateBarControlTarget:203 
+com.android.server.wm.DisplayPolicy.updateSystemBarAttributes:439 
+com.android.server.wm.WindowManagerService.updateFocusedWindowLocked:358 
+com.android.server.wm.WindowState.removeIfPossible:659 
+06-10 12:44:56.131  2620  4401 V SystemKeyManager: updateFocusedWindow() is called, 
+ch.liri.operations/ch.liri.operations.MainActivity
+06-10 12:44:56.131  2259  2259 I SurfaceFlinger: [Surface(name=f3052a4 
+ch.liri.operations/ch.liri.operations.MainActivity#4479)/@0x66a4ab1 - animation-leash of window_animation#4505] attach 
+to parent LayerHierarchy{RequestedLayerState{ActivityRecord{89185023 u0 ch.liri.operations/.MainActivity t16409}#4456 
+parentId=4455} 5 children}
+06-10 12:44:56.133  2620  8148 D CoreBackPreview: Window{f3052a4 u0 ch.liri.operations/ch.liri.operations.MainActivity 
+EXITING}: Setting back callback null
+06-10 12:44:56.133  5073  5073 D NavigationBar: onSystemBarAttributesChanged() -  displayId:0, appearance:24, 
+packageName: ch.liri.operations (APPEARANCE_LIGHT_STATUS_BARS APPEARANCE_LIGHT_NAVIGATION_BARS ), 
+navbarColorManagedByIme:false
+06-10 12:44:56.135  2620  4401 D InputDispatcher: Focus left window (0): f3052a4 
+ch.liri.operations/ch.liri.operations.MainActivity
+06-10 12:44:56.136 24821 25326 I SAMSUNGWALLET: [Hint_SimpleHintProcessMonitor] isHomePackageRunning topPkgName = 
+ch.liri.operations, topClsName = ch.liri.operations.MainActivity, return false , se : false
+06-10 12:44:56.140  2259  2259 I SurfaceFlinger: [LayerHierarchy{RequestedLayerState{ImeContainer#15 parentId=4456 
+relativeParentId=4463 z=1} 1 children}] RelativeParent to LayerHierarchy{RequestedLayerState{d0b28c2 
+ch.liri.operations/ch.liri.operations.MainActivity#4463 parentId=4456} 2 children}
+06-10 12:44:56.140  2259  2259 I SurfaceFlinger: [LayerHierarchy{RequestedLayerState{f3052a4 
+ch.liri.operations/ch.liri.operations.MainActivity#4479 parentId=4505 z=1} 1 children}] reparent to 
+LayerHierarchy{RequestedLayerState{Surface(name=f3052a4 
+ch.liri.operations/ch.liri.operations.MainActivity#4479)/@0x66a4ab1 - animation-leash of window_animation#4505 
+parentId=4456 z=1} 1 children}
+06-10 12:44:56.140  2620  2667 I SurfaceControl: apply, lowDebugName=Focus request: d0b28c2 
+ch.liri.operations/ch.liri.operations.MainActivity, caller=android.view.SurfaceControl$Transaction.apply:3569 
+android.view.SurfaceControl$Transaction.apply:3519 com.android.server.wm.WindowAnimator.animate:468 
+com.android.server.wm.WindowAnimator$$ExternalSyntheticLambda1.doFrame:14 
+android.view.Choreographer$CallbackRecord.run:1959 android.view.Choreographer$CallbackRecord.run:1970 
+06-10 12:44:56.142  3671  3671 I InsetsController: onStateChanged: 
+host=ch.liri.operations/ch.liri.operations.MainActivity, from=android.view.ViewRootImpl.onInsetsStateChanged:3038, 
+state=InsetsState: {mDisplayFrame=Rect(0, 0 - 1080, 2340), mDisplayCutout=DisplayCutout{insets=Rect(0, 98 - 0, 0) 
+waterfall=Insets{left=0, top=0, right=0, bottom=0} boundingRect={Bounds=[Rect(0, 0 - 0, 0), Rect(510, 0 - 570, 98), 
+Rect(0, 0 - 0, 0), Rect(0, 0 - 0, 0)]} cutoutPathParserInfo={CutoutPathParserInfo{displayWidth=1080 displayHeight=2340 
+physicalDisplayWidth=1080 physicalDisplayHeight=2340 density={3.0} cutoutSpec={M 0,0 H -10 V 32.66666666666667 H 10 V 
+0 H 0 Z @dp} rotation={0} scale={1.0} physicalPixelDisplaySizeRatio={1.0}}} sideOverrides={}}, 
+mRoundedCorners=RoundedCorners{[RoundedCorner{position=TopLeft, radius=108, center=Point(108, 108)}, 
+RoundedCorner{position=TopRight, radius=108, center=Point(972, 108)}, RoundedCorner{position=BottomRight, radius=108, 
+center=Point(972, 2232)}, RoundedCorner{position=BottomLeft, radius=108, center=Point(108, 2232)}]}  
+mRoundedCornerFrame=Rect(0, 0 - 1080, 2340), mPrivacyIndicatorBounds=PrivacyIndicatorBounds {static bounds=Rect(948, 0 
+- 1080, 98) rotation=0}, mDisplayShape=DisplayShape{ spec=-311912193 displayWidth=1080 displayHeight=2340 
+physicalPixelDisplaySizeRatio=1.0 rotation=0 offsetX=0 offsetY=0 scale=1.0}, mSources= { InsetsSource: {27 
+mType=displayCutout mFrame=[0,0][1080,98] mAttachedInsets=null mVisible=true mFlags= mSideHint=TOP 
+mBoundingRects=null}, InsetsSource: {34900000 mType=statusBars mFrame=[0,0][1080,98] mAttachedInsets=null 
+mVisible=true mFlags= mSideHint=TOP mBoundingRects=null}, InsetsSource: {34900005 mType=mandatorySystemGestures 
+mFrame=[0,0][1080,134] mAttachedInsets=null mVisible=true mFlags= mSideHint=TOP mBoundingRects=null}, InsetsSource: 
+{34900006 mType=tappableElement mFrame=[0,0][1080,98] mAttachedInsets=null mVisible=true mFlags= mSideHint=TOP 
+mBoundingRects=null}, InsetsSource: {73790001 mType=navigationBars mFrame=[0,2295][1080,2340] mAttachedInsets=null 
+mVisible=true mFlags=SUPPRESS_SCRIM mSideHint=BOTTOM mBoundingRects=null}, InsetsSource: {73790004 
+mType=systemGestures mFrame=[0,0][90,2340] mAttachedInsets=null mVisible=true mFlags= mSideHint=LEFT 
+mBoundingRects=null}, InsetsSource: {73790005 mType=mandatorySystemGestures mFrame=[0,2244][1080,2340] 
+mAttachedInsets=null mVisible=true mFlags= mSideHint=BOTTOM mBoundingRects=null}, InsetsSource: {73790006 
+mType=tappableElement mFrame=[0,0][0,0] mAttachedInsets=null mVisible=true mFlags= mSideHint=NONE 
+mBoundingRects=null}, InsetsSource: {73790024 mType=systemGestures mFrame=[990,0][1080,2340] mAttachedInsets=null 
+mVisible=true mFlags= mSideHint=RIGHT mBoundingRects=null} }
+06-10 12:44:56.143  3671  3671 I InsetsSourceConsumer: applyRequestedVisibilityToControl: visible=true, 
+type=navigationBars, host=ch.liri.operations/ch.liri.operations.MainActivity
+06-10 12:44:56.143  3671  3671 I InsetsSourceConsumer: applyRequestedVisibilityToControl: visible=true, 
+type=statusBars, host=ch.liri.operations/ch.liri.operations.MainActivity
+06-10 12:44:56.152  2259  2528 D SurfaceFlinger: [input] setFocusedWindow: d0b28c2 
+ch.liri.operations/ch.liri.operations.MainActivity
+06-10 12:44:56.152  2620  4401 D InputDispatcher: Once focus requested (0): d0b28c2 
+ch.liri.operations/ch.liri.operations.MainActivity
+06-10 12:44:56.152  2620  4401 D InputDispatcher: Focus entered window (0): d0b28c2 
+ch.liri.operations/ch.liri.operations.MainActivity
+06-10 12:44:56.154  2620  4477 I ImeTracker: ch.liri.operations:108b3e3d: onRequestHide at ORIGIN_SERVER reason 
+HIDE_UNSPECIFIED_WINDOW fromUser false
+06-10 12:44:56.154  3671  3671 I ImeTracker: ch.liri.operations:108b3e3d: onCancelled at PHASE_CLIENT_ALREADY_HIDDEN
+06-10 12:44:56.154  2620  2666 D SGM:FgCheckThread: getForegroundApp(), foregroundPkgName=ch.liri.operations
+06-10 12:44:56.155  2620  2666 D SGM:FgCheckThread: noteStopComponent(), received pkgName: 
+com.google.android.permissioncontroller, focusedPkgName: ch.liri.operations, userId: 0
+06-10 12:44:56.156  2620  8148 D InsetsSourceProvider: updateControlForTarget: control=InsetsSourceControl: {3 
+mType=ime mSurfacePosition=Point(0, 98) mInsetsHint=Insets{left=0, top=0, right=0, bottom=1026}}, 
+target=Window{d0b28c2 u0 ch.liri.operations/ch.liri.operations.MainActivity}, 
+from=com.android.server.wm.ImeInsetsSourceProvider.updateControlForTarget:23 
+com.android.server.wm.InsetsStateController.onControlTargetChanged:82 
+com.android.server.wm.DisplayContent.updateImeControlTarget:48 
+com.android.server.wm.DisplayContent.updateImeInputAndControlTarget:273 
+com.android.server.wm.WindowManagerService$LocalService.updateImeTargetWindow:81 
+06-10 12:44:56.165  2259  2259 I SurfaceFlinger: [LayerHierarchy{RequestedLayerState{ImeContainer#15 parentId=4456 
+relativeParentId=4463 z=1} 1 children}] RelativeParent to LayerHierarchy{RequestedLayerState{d0b28c2 
+ch.liri.operations/ch.liri.operations.MainActivity#4463 parentId=4456} 2 children}
+06-10 12:44:56.251  2620  4698 D MdnieScenarioControlService:  packageName : ch.liri.operations    className : 
+ch.liri.operations.MainActivity
+06-10 12:44:56.332  2620  2667 I WindowManager: Reparenting to original parent: Surface(name=ActivityRecord{89185023 
+u0 ch.liri.operations/.MainActivity t16409}#4456)/@0xdfc8d0b, destroy=true, surface=Surface(name=f3052a4 
+ch.liri.operations/ch.liri.operations.MainActivity#4479)/@0x66a4ab1
+06-10 12:44:56.332  2620  2667 E WindowManager: win=Window{f3052a4 u0 
+ch.liri.operations/ch.liri.operations.MainActivity EXITING} destroySurfaces: appStopped=false cleanupOnResume=false 
+win.mWindowRemovalAllowed=true win.mRemoveOnExit=true win.mViewVisibility=0 
+caller=com.android.server.wm.WindowState.onExitAnimationDone:224 
+com.android.server.wm.WindowState.onAnimationFinished:174 
+com.android.server.wm.WindowContainer$$ExternalSyntheticLambda8.onAnimationFinished:3 
+com.android.server.wm.SurfaceAnimator$$ExternalSyntheticLambda0.onAnimationFinished:69 
+com.android.server.wm.LocalAnimationAdapter$$ExternalSyntheticLambda0.run:10 android.os.Handler.handleCallback:1070 
+android.os.Handler.dispatchMessage:125 
+06-10 12:44:56.340  2259  2259 I SurfaceFlinger: 
+[LayerHierarchy{RequestedLayerState{ch.liri.operations/ch.liri.operations.MainActivity$_3671#4480} no children}] 
+reparent to OffscreenRoot
+06-10 12:44:56.340  2259  2259 I SurfaceFlinger: 
+[LayerHierarchy{RequestedLayerState{ch.liri.operations/ch.liri.operations.MainActivity$_3671#4480} no children}] 
+RelativeParent to null
+06-10 12:44:56.345  2259  2259 D SurfaceFlinger:        DEVICE |           15766824943619 | 00002102 | RGBA_8888    |  
+  0.0    0.0 1080.0 2340.0 |    0    0 1080 2340 | ch.liri.operations/ch.liri.operations.MainActivity$_3671#4464 (717)
+06-10 12:44:56.349  2259  2259 I SurfaceFlinger: RequestedLayer 
+[ch.liri.operations/ch.liri.operations.MainActivity$_3671#4480] hidden!! flag  from(0) --> to(1)
+06-10 12:44:56.349  2259  2259 I SurfaceFlinger: [LayerHierarchy{RequestedLayerState{f3052a4 
+ch.liri.operations/ch.liri.operations.MainActivity#4479 z=1} no children}] reparent to OffscreenRoot
+06-10 12:44:56.349  2259  2259 I SurfaceFlinger: [LayerHierarchy{RequestedLayerState{f3052a4 
+ch.liri.operations/ch.liri.operations.MainActivity#4479 z=1} no children}] RelativeParent to null
+06-10 12:44:56.349  2259  2259 I SurfaceFlinger: [LayerHierarchy{RequestedLayerState{Surface(name=f3052a4 
+ch.liri.operations/ch.liri.operations.MainActivity#4479)/@0x66a4ab1 - animation-leash of window_animation#4505 z=1} no 
+children}] reparent to OffscreenRoot
+06-10 12:44:56.349  2259  2259 I SurfaceFlinger: [LayerHierarchy{RequestedLayerState{Surface(name=f3052a4 
+ch.liri.operations/ch.liri.operations.MainActivity#4479)/@0x66a4ab1 - animation-leash of window_animation#4505 z=1} no 
+children}] RelativeParent to null
+06-10 12:44:56.350  2259  2259 I SurfaceFlinger: id=4480 Removed 
+ch.liri.operations/ch.liri.operations.MainActivity$_3671#4480 (169)
+06-10 12:44:56.350  2259  2259 I SurfaceFlinger: id=4505 Removed Surface(name=f3052a4 
+ch.liri.operations/ch.liri.operations.MainActivity#4479)/@0x66a4ab1 - animation-leash of window_animation#4505 (169)
+06-10 12:44:56.350  2259  2259 I SurfaceFlinger: id=4479 Removed f3052a4 
+ch.liri.operations/ch.liri.operations.MainActivity#4479 (169)
+06-10 12:44:56.357  2259  2259 I SurfaceFlinger: destroyed 
+ch.liri.operations/ch.liri.operations.MainActivity$_3671#4480 form LifecycleManager
+06-10 12:44:56.357  2259  2259 I SurfaceFlinger: destroyed f3052a4 
+ch.liri.operations/ch.liri.operations.MainActivity#4479 form LifecycleManager
+06-10 12:44:56.357  2259  2259 I SurfaceFlinger: destroyed Surface(name=f3052a4 
+ch.liri.operations/ch.liri.operations.MainActivity#4479)/@0x66a4ab1 - animation-leash of window_animation#4505 form 
+LifecycleManager
+06-10 12:44:56.357  2259  2259 I SurfaceFlinger: id=4480 onLayerDestroyed from 
+LayerHierarchyBuilder(RequestedLayerState{ch.liri.operations/ch.liri.operations.MainActivity$_3671#4480 !handle})
+06-10 12:44:56.357  2259  2259 I SurfaceFlinger: id=4479 onLayerDestroyed from 
+LayerHierarchyBuilder(RequestedLayerState{f3052a4 ch.liri.operations/ch.liri.operations.MainActivity#4479 !handle z=1})
+06-10 12:44:56.357  2259  2259 I SurfaceFlinger: id=4505 onLayerDestroyed from 
+LayerHierarchyBuilder(RequestedLayerState{Surface(name=f3052a4 
+ch.liri.operations/ch.liri.operations.MainActivity#4479)/@0x66a4ab1 - animation-leash of window_animation#4505 !handle 
+z=1})
+06-10 12:44:56.358  2259  2259 I SurfaceFlinger: id=4480 Destroyed 
+ch.liri.operations/ch.liri.operations.MainActivity$_3671#4480
+06-10 12:44:56.358  2259  2259 I SurfaceFlinger: id=4479 Destroyed f3052a4 
+ch.liri.operations/ch.liri.operations.MainActivity#4479
+06-10 12:44:56.358  2259  2259 I SurfaceFlinger: id=4505 Destroyed Surface(name=f3052a4 
+ch.liri.operations/ch.liri.operations.MainActivity#4479)/@0x66a4ab1 - animation-leash of window_animation#4505
+06-10 12:44:56.657  2620  2666 D SGM:GameManager: identifyForegroundApp. ch.liri.operations, mCurrentUserId: 0, 
+callerUserId: 0
+06-10 12:45:02.493  3023  3133 E GoogleApiManager: java.lang.SecurityException: Unknown calling package name 
+'com.google.android.gms'.
+06-10 12:45:04.133  2620  7093 V WindowManager: DesktopModeLaunchParamsModifier: phase= 3 task=Task{162281b #16409 
+type=standard A=10875:ch.liri.operations} activity=ActivityRecord{164231026 u0 
+com.google.android.permissioncontroller/com.android.permissioncontroller.permission.ui.GrantPermissionsActivity t-1} 
+display-area-from-source=DefaultTaskDisplayArea_d0@255683277 display-id=0 task-display-area-windowing-mode=1 
+suggested-display-area=DefaultTaskDisplayArea_d0@255683277 non-desktop, skipping
+06-10 12:45:04.134  2620  7093 V WindowManager: TaskLaunchParamsModifier:phase=3 task=Task{162281b #16409 
+type=standard A=10875:ch.liri.operations} activity=ActivityRecord{164231026 u0 
+com.google.android.permissioncontroller/com.android.permissioncontroller.permission.ui.GrantPermissionsActivity t-1} 
+display-area-from-source=DefaultTaskDisplayArea_d0@255683277 display-id=0 task-display-area-windowing-mode=1 
+suggested-display-area=DefaultTaskDisplayArea_d0@255683277 inherit-from-source=fullscreen 
+non-freeform-task-display-area display-area=DefaultTaskDisplayArea_d0@255683277 activity-requested-portrait 
+freeform-size-mismatch=Rect(81, 611 - 999, 1781)
+06-10 12:45:04.135  2620  7093 V WindowManager: DesktopModeLaunchParamsModifier: phase= 3 task=Task{162281b #16409 
+type=standard A=10875:ch.liri.operations} activity=ActivityRecord{164231026 u0 
+com.google.android.permissioncontroller/com.android.permissioncontroller.permission.ui.GrantPermissionsActivity t-1} 
+display-area-from-source=DefaultTaskDisplayArea_d0@255683277 display-id=0 task-display-area-windowing-mode=1 
+suggested-display-area=DefaultTaskDisplayArea_d0@255683277 non-desktop, skipping
+06-10 12:45:04.135  2620  7093 V WindowManager: TaskLaunchParamsModifier:phase=3 task=Task{162281b #16409 
+type=standard A=10875:ch.liri.operations} activity=ActivityRecord{164231026 u0 
+com.google.android.permissioncontroller/com.android.permissioncontroller.permission.ui.GrantPermissionsActivity t-1} 
+display-area-from-source=DefaultTaskDisplayArea_d0@255683277 display-id=0 task-display-area-windowing-mode=1 
+suggested-display-area=DefaultTaskDisplayArea_d0@255683277 inherit-from-source=fullscreen 
+non-freeform-task-display-area display-area=DefaultTaskDisplayArea_d0@255683277 activity-requested-portrait 
+freeform-size-mismatch=Rect(81, 611 - 999, 1781)
+06-10 12:45:04.136  2620  7093 V WindowManager: DesktopModeLaunchParamsModifier: phase= 3 task=Task{162281b #16409 
+type=standard A=10875:ch.liri.operations} activity=ActivityRecord{164231026 u0 
+com.google.android.permissioncontroller/com.android.permissioncontroller.permission.ui.GrantPermissionsActivity t-1} 
+display-area-from-source=DefaultTaskDisplayArea_d0@255683277 display-id=0 task-display-area-windowing-mode=1 
+suggested-display-area=DefaultTaskDisplayArea_d0@255683277 non-desktop, skipping
+06-10 12:45:04.136  2620  7093 V WindowManager: TaskLaunchParamsModifier:phase=3 task=Task{162281b #16409 
+type=standard A=10875:ch.liri.operations} activity=ActivityRecord{164231026 u0 
+com.google.android.permissioncontroller/com.android.permissioncontroller.permission.ui.GrantPermissionsActivity t-1} 
+display-area-from-source=DefaultTaskDisplayArea_d0@255683277 display-id=0 task-display-area-windowing-mode=1 
+suggested-display-area=DefaultTaskDisplayArea_d0@255683277 inherit-from-source=fullscreen 
+non-freeform-task-display-area display-area=DefaultTaskDisplayArea_d0@255683277 activity-requested-portrait 
+freeform-size-mismatch=Rect(81, 611 - 999, 1781)
+06-10 12:45:04.145  2620  7093 D ActivityTaskManager: scheduleTopResumedActivityChanged, onTop=false, 
+r=ActivityRecord{89185023 u0 ch.liri.operations/.MainActivity t16409}, 
+caller=com.android.server.wm.ActivityTaskSupervisor.scheduleTopResumedActivityStateLossIfNeeded:19 
+com.android.server.wm.ActivityTaskSupervisor.updateTopResumedActivityIfNeeded:44 
+com.android.server.wm.TaskFragment.setResumedActivity:29 com.android.server.wm.ActivityRecord.setState:91 
+com.android.server.wm.TaskFragment.startPausing$1:231 com.android.server.wm.TaskFragment.resumeTopActivity:772 
+06-10 12:45:04.149  2620  7093 V WindowManager:    ChangeInfo{83578b1 container=Task{162281b #16409 type=standard 
+A=10875:ch.liri.operations} flags=0x0}
+06-10 12:45:04.149  2620  7093 I ActivityTaskManager: START u0 {act=android.content.pm.action.REQUEST_PERMISSIONS 
+xflg=0x4 pkg=com.google.android.permissioncontroller 
+cmp=com.google.android.permissioncontroller/com.android.permissioncontroller.permission.ui.GrantPermissionsActivity 
+(has extras)} with LAUNCH_MULTIPLE from uid 10875 (ch.liri.operations) (rr=89185023) (BAL_ALLOW_VISIBLE_WINDOW) result 
+code=0
+06-10 12:45:04.149  5073  5112 V WindowManagerShell: Transition requested (#645): android.os.BinderProxy@4949519 
+TransitionRequestInfo { type = OPEN, triggerTask = TaskInfo{userId=0 taskId=16409 effectiveUid=10875 displayId=0 
+isRunning=true baseIntent=Intent { act=android.intent.action.MAIN cat=[android.intent.category.LAUNCHER] 
+flg=0x10200000 cmp=ch.liri.operations/.MainActivity } 
+baseActivity=ComponentInfo{ch.liri.operations/ch.liri.operations.MainActivity} topActivity=ComponentInfo{com.google.and
+roid.permissioncontroller/com.android.permissioncontroller.permission.ui.GrantPermissionsActivity} origActivity=null 
+realActivity=ComponentInfo{ch.liri.operations/ch.liri.operations.MainActivity} numActivities=2 lastActiveTime=10301287 
+supportsMultiWindow=true resizeMode=1 isResizeable=true minWidth=-1 minHeight=-1 maxWidth=-1 maxHeight=-1 
+defaultMinSize=220 desktopDefaultMinSize=304 token=WCT{android.os.BinderProxy@e01ea18} topActivityType=1 
+pictureInPictureParams=null shouldDockBigOverlays=false launchIntoPipHostTaskId=-1 lastParentTaskIdBeforePip=-1 
+displayCutoutSafeInsets=Rect(0, 0 - 0, 0) topActivityInfo=ActivityInfo{30749de 
+com.android.permissioncontroller.permission.ui.GrantPermissionsActivity} launchCookies=[] positionInParent=Point(0, 0) 
+parentTaskId=-1 isFocused=true isVisible=true isVisibleRequested=true isTopActivityNoDisplay=false isSleeping=false 
+locusId=null displayAreaFeatureId=1 isTopActivityTransparent=true isActivityStackTransparent=false 
+lastNonFullscreenBounds=Rect(81, 611 - 999, 1781) capturedLink=null capturedLinkTimestamp=0 requestedVisibleTypes=503 
+topActivityRequestOpenInBrowserEducationTimestamp=0 appCompatTaskInfo=AppCompatTaskInfo { 
+topActivityInSizeCompat=false isLeafTask= true eligibleForLetterboxEducation= false isLetterboxEducationEnabled= false 
+isLetterboxDoubleTapEnabled= false eligibleForUserAspectRatioButton= false topActivityBoundsLetterboxed= false 
+isFromLetterboxDoubleTap= false topActivityLetterboxVerticalPosition= -1 topActivityLetterboxHorizontalPosition= -1 
+topActivityLetterboxWidth=-1 topActivityLetterboxHeight=-1 topActivityAppBounds=Rect(0, 0 - 1080, 2340) 
+isUserFullscreenOverrideEnabled=false isSystemFullscreenOverrideEnabled=false hasMinAspectRatioOverride=false 
+topActivityLetterboxBounds=null cameraCompatTaskInfo=CameraCompatTaskInfo { cameraCompatMode=undefinedundefined} 
+topActivityBounds=null topActivityInDisplayCompat=false showForceRotationButton=false 
+forceRotationButtonState=0aspectRatioToRestore0 singleTapFromLetterbox=false topNonResizableActivityAspectRatio=-1.0} 
+topActivityMainWindowFrame=null originallySupportedMultiWindow=true hasWallpaper=false 
+rootAffinity=10875:ch.liri.operations isTopTaskInStage=false CoverLauncherWidgetTask=false 
+LaunchedFromAppsCoverLauncherTask=false LaunchedFromMultistarCoverLauncherTask=false isAllowedSeamlessRotation=false 
+isTopTransparentActivity=false isAliasManaged=false hasConfigChanged=false isAiKeyRemoveAppTask=false 
+lastDesktopWindowingBounds=null lastExternalDesktopWindowingBounds=null safeCutoutInsets=null isAppBubble=false}, 
+pipChange = null, remoteTransition = null, displayChange = null, requestedLocation = null, userChange = null, 
+windowingLayerChange = null, flags = 0, debugId = 645 }
+06-10 12:45:04.153  2620  2666 D SGM:FgCheckThread: notePauseComponent(), received pkgName: ch.liri.operations, 
+userId: 0
+06-10 12:45:04.155  2620  8148 D WindowManager: Changing focus from Window{d0b28c2 u0 
+ch.liri.operations/ch.liri.operations.MainActivity} to null displayId=0 
+Callers=com.android.server.wm.ActivityTaskManagerService.setLastResumedActivityUncheckLocked:264 
+com.android.server.wm.ActivityTaskSupervisor.updateTopResumedActivityIfNeeded:91 
+com.android.server.wm.TaskFragment.setResumedActivity:29 com.android.server.wm.ActivityRecord.setState:100 
+06-10 12:45:04.161  2620  2663 D SGM:GameManager: identifyForegroundApp. ch.liri.operations, mCurrentUserId: 0, 
+callerUserId: 0
+06-10 12:45:04.161  2620  2663 D SGM:GameManager: identifyForegroundApp. ch.liri.operations, mCurrentUserId: 0, 
+callerUserId: 0
+06-10 12:45:04.169  2620  8148 D InputDispatcher: Focus left window (0): d0b28c2 
+ch.liri.operations/ch.liri.operations.MainActivity
+06-10 12:45:04.194  2620  7094 D InputDispatcher: Focused application(0): ActivityRecord{89185023 u0 
+ch.liri.operations/.MainActivity t16409}
+06-10 12:45:04.194  2620  7094 D WindowManager: Changing focus from null to Window{d0b28c2 u0 
+ch.liri.operations/ch.liri.operations.MainActivity} displayId=0 
+Callers=com.android.server.wm.ActivityTaskManagerService.setLastResumedActivityUncheckLocked:264 
+com.android.server.wm.ActivityTaskSupervisor.updateTopResumedActivityIfNeeded:91 
+com.android.server.wm.TaskFragment.setResumedActivity:29 com.android.server.wm.ActivityRecord.setState:100 
+06-10 12:45:04.195  2620  7094 V SystemKeyManager: updateFocusedWindow() is called, 
+ch.liri.operations/ch.liri.operations.MainActivity
+06-10 12:45:04.195  2620  7094 D ActivityTaskManager: scheduleTopResumedActivityChanged, onTop=true, 
+r=ActivityRecord{89185023 u0 ch.liri.operations/.MainActivity t16409}, 
+caller=com.android.server.wm.ActivityTaskSupervisor.scheduleTopResumedActivityStateIfNeeded:18 
+com.android.server.wm.ActivityTaskSupervisor.handleTopResumedStateReleasedIfNeeded:57 
+com.android.server.wm.ActivityRecord.activityPaused:94 
+com.android.server.wm.ActivityClientController.activityPaused:26 
+android.app.IActivityClientController$Stub.onTransact:812 com.android.server.wm.ActivityClientController.onTransact:1 
+06-10 12:45:04.196  2620  7094 D ChangeTransitionController:    ChangeInfo{83578b1 container=Task{162281b #16409 
+type=standard A=10875:ch.liri.operations} flags=0x0}
+06-10 12:45:04.198  2620  2662 V WindowManager: Sent Transition (#645) createdAt=06-10 12:45:04.130 via 
+request=TransitionRequestInfo { type = OPEN, triggerTask = TaskInfo{userId=0 taskId=16409 effectiveUid=10875 
+displayId=0 isRunning=true baseIntent=Intent { act=android.intent.action.MAIN cat=[android.intent.category.LAUNCHER] 
+flg=0x10200000 cmp=ch.liri.operations/.MainActivity } 
+baseActivity=ComponentInfo{ch.liri.operations/ch.liri.operations.MainActivity} topActivity=ComponentInfo{com.google.and
+roid.permissioncontroller/com.android.permissioncontroller.permission.ui.GrantPermissionsActivity} origActivity=null 
+realActivity=ComponentInfo{ch.liri.operations/ch.liri.operations.MainActivity} numActivities=2 lastActiveTime=10301287 
+supportsMultiWindow=true resizeMode=1 isResizeable=true minWidth=-1 minHeight=-1 maxWidth=-1 maxHeight=-1 
+defaultMinSize=220 desktopDefaultMinSize=304 token=WCT{RemoteToken{99c6280 Task{162281b #16409 type=standard 
+A=10875:ch.liri.operations}}} topActivityType=1 pictureInPictureParams=null shouldDockBigOverlays=false 
+launchIntoPipHostTaskId=-1 lastParentTaskIdBeforePip=-1 displayCutoutSafeInsets=Rect(0, 0 - 0, 0) 
+topActivityInfo=ActivityInfo{b574587 com.android.permissioncontroller.permission.ui.GrantPermissionsActivity} 
+launchCookies=[] positionInParent=Point(0, 0) parentTaskId=-1 isFocused=true isVisible=true isVisibleRequested=true 
+isTopActivityNoDisplay=false isSleeping=false locusId=null displayAreaFeatureId=1 isTopActivityTransparent=true 
+isActivityStackTransparent=false lastNonFullscreenBounds=Rect(81, 611 - 999, 1781) capturedLink=null 
+capturedLinkTimestamp=0 requestedVisibleTypes=503 topActivityRequestOpenInBrowserEducationTimestamp=0 
+appCompatTaskInfo=AppCompatTaskInfo { topActivityInSizeCompat=false isLeafTask= true eligibleForLetterboxEducation= 
+false isLetterboxEducationEnabled= false isLetterboxDoubleTapEnabled= false eligibleForUserAspectRatioButton= false 
+topActivityBoundsLetterboxed= false isFromLetterboxDoubleTap= false topActivityLetterboxVerticalPosition= -1 
+topActivityLetterboxHorizontalPosition= -1 topActivityLetterboxWidth=-1 topActivityLetterboxHeight=-1 
+topActivityAppBounds=Rect(0, 0 - 1080, 2340) isUserFullscreenOverrideEnabled=false 
+isSystemFullscreenOverrideEnabled=false hasMinAspectRatioOverride=false topActivityLetterboxBounds=null 
+cameraCompatTaskInfo=CameraCompatTaskInfo { cameraCompatMode=undefinedundefined} topActivityBounds=null 
+topActivityInDisplayCompat=false showForceRotationButton=false forceRotationButtonState=0aspectRatioToRestore0 
+singleTapFromLetterbox=false topNonResizableActivityAspectRatio=-1.0} topActivityMainWindowFrame=null 
+originallySupportedMultiWindow=true hasWallpaper=false rootAffinity=10875:ch.liri.operations isTopTaskInStage=false 
+CoverLauncherWidgetTask=false LaunchedFromAppsCoverLauncherTask=false LaunchedFromMultistarCoverLauncherTask=false 
+isAllowedSeamlessRotation=false isTopTransparentActivity=false isAliasManaged=false hasConfigChanged=false 
+isAiKeyRemoveAppTask=false lastDesktopWindowingBounds=null lastExternalDesktopWindowingBounds=null 
+safeCutoutInsets=null isAppBubble=false}, pipChange = null, remoteTransition = null, displayChange = null, 
+requestedLocation = null, userChange = null, windowingLayerChange = null, flags = 0, debugId = 645 }
+06-10 12:45:04.200  2620  2667 I SurfaceControl: apply, lowDebugName=Focus request: d0b28c2 
+ch.liri.operations/ch.liri.operations.MainActivity, caller=android.view.SurfaceControl$Transaction.apply:3569 
+android.view.SurfaceControl$Transaction.apply:3519 com.android.server.wm.WindowAnimator.animate:468 
+com.android.server.wm.WindowAnimator$$ExternalSyntheticLambda1.doFrame:14 
+android.view.Choreographer$CallbackRecord.run:1959 android.view.Choreographer$CallbackRecord.run:1970 
+06-10 12:45:04.201  2620  5230 I WindowManager: Relayout Window{d0b28c2 u0 
+ch.liri.operations/ch.liri.operations.MainActivity}: viewVisibility=0 req=1080x2340 ty=1 d0
+06-10 12:45:04.204  2620  8284 V WindowManager:    ChangeInfo{83578b1 container=Task{162281b #16409 type=standard 
+A=10875:ch.liri.operations} flags=0x0}
+06-10 12:45:04.204  2620  8284 D ChangeTransitionController:    ChangeInfo{83578b1 container=Task{162281b #16409 
+type=standard A=10875:ch.liri.operations} flags=0x0}
+06-10 12:45:04.206  2620  5230 D SGM:GameManager: identifyGamePackage. ch.liri.operations, mCurrentUserId: 0, 
+callingMethodInfo: com.samsung.android.game.IGameManagerService$Stub.onTransact(IGameManagerService.java:247)
+06-10 12:45:04.208  2620  2666 D SGM:FgCheckThread: noteResumeComponent(), received pkgName: ch.liri.operations, 
+userId: 0
+06-10 12:45:04.208  2620  4485 D SGM:FgCheckThread: onLooperPrepared(), msg: MSG_APP_RESUME, pkgName: 
+ch.liri.operations, userid: 0
+06-10 12:45:04.210  2259  2528 D SurfaceFlinger: [input] setFocusedWindow: d0b28c2 
+ch.liri.operations/ch.liri.operations.MainActivity
+06-10 12:45:04.211  2620  8065 D InputDispatcher: Once focus requested (0): d0b28c2 
+ch.liri.operations/ch.liri.operations.MainActivity
+06-10 12:45:04.211  2620  8065 D InputDispatcher: Focus entered window (0): d0b28c2 
+ch.liri.operations/ch.liri.operations.MainActivity
+06-10 12:45:04.211  2620  7094 D SGM:GameManager: identifyGamePackage. ch.liri.operations, mCurrentUserId: 0, 
+callingMethodInfo: com.samsung.android.game.IGameManagerService$Stub.onTransact(IGameManagerService.java:247)
+06-10 12:45:04.212  8008 28237 I SDHMS:k : handleResumeComponent : put = ch.liri.operations, userid = 0 instanceid 
+=249920952
+06-10 12:45:04.212  2620  2666 D SGM:GameManager: identifyGamePackage. ch.liri.operations, mCurrentUserId: 0, 
+callingMethodInfo: com.samsung.android.game.SemGameManager.isGamePackage(SemGameManager.java:106)
+06-10 12:45:04.212  2620  2666 D SGM:SemGameManager: isGamePackage(), pkgName=ch.liri.operations, ret=false
+06-10 12:45:04.214  2620  4477 I ImeTracker: ch.liri.operations:ce2a2b4c: onRequestHide at ORIGIN_SERVER reason 
+HIDE_SAME_WINDOW_FOCUSED_WITHOUT_EDITOR fromUser false
+06-10 12:45:04.215 24821 25326 I SAMSUNGWALLET: [Hint_SimpleHintProcessMonitor] isHomePackageRunning topPkgName = 
+ch.liri.operations, topClsName = ch.liri.operations.MainActivity, return false , se : false
+06-10 12:45:04.218  3671  3671 I ImeTracker: ch.liri.operations:ce2a2b4c: onCancelled at PHASE_CLIENT_ALREADY_HIDDEN
+06-10 12:45:04.222  2620  2663 D SGM:GameManager: identifyForegroundApp. ch.liri.operations, mCurrentUserId: 0, 
+callerUserId: 0
+06-10 12:45:04.222  2620  2663 D SGM:GameManager: identifyForegroundApp. ch.liri.operations, mCurrentUserId: 0, 
+callerUserId: 0
+06-10 12:45:04.223 24821 25326 I SAMSUNGWALLET: [Hint_SimpleHintProcessMonitor] isHomePackageRunning topPkgName = 
+ch.liri.operations, topClsName = ch.liri.operations.MainActivity, return false , se : false
+06-10 12:45:04.226  2620  2666 D SGM:FgCheckThread: getForegroundApp(), foregroundPkgName=ch.liri.operations
+06-10 12:45:04.226  2620  2666 D SGM:FgCheckThread: noteStopComponent(), received pkgName: 
+com.google.android.permissioncontroller, focusedPkgName: ch.liri.operations, userId: 0
+06-10 12:45:04.237  8865  8865 I HBD     : c [AiWriter] setContact : ch.liri.operations
+06-10 12:45:04.353  2620  4698 D MdnieScenarioControlService:  packageName : ch.liri.operations    className : 
+ch.liri.operations.MainActivity
+06-10 12:45:04.720  2620  2666 D SGM:GameManager: identifyForegroundApp. ch.liri.operations, mCurrentUserId: 0, 
+callerUserId: 0
+
+
