@@ -5,7 +5,7 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "20260610_device_health_native_start"
+revision = "20260610_native_start_diag"
 down_revision = "20260609_user_job_title"
 branch_labels = None
 depends_on = None
