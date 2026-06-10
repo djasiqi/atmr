@@ -2,6 +2,7 @@
 
 **Dernière mise à jour :** 2026-06-10
 **App :** `ch.liri.operations`
+**Statut :** FIGÉ (4 points tranchés et vérifiés — voir §4). Reste 1 acte legal : confirmer Sentry comme sous-traitant.
 **Transport :** HTTPS uniquement (`https://api.lirie.ch`) → chiffrement en transit = OUI.
 
 ## 1. Mapping technique (donnée ↔ source)
@@ -23,27 +24,32 @@ Légende : **C** = Collected, **S** = Shared (transféré à un tiers), **R/O** 
 
 | Catégorie Play | Type de donnée | C | S | R/O | Éph. | Finalités Play |
 | -------------- | -------------- | - | - | --- | ---- | -------------- |
-| Location | Approximate location | Oui | Non | R* | Non | App functionality |
-| Location | Precise location | Oui | Non | R* | Non | App functionality (suivi mission + disponibilité flotte) |
+| Location | Approximate location | Oui | Non | **R** | Non | App functionality |
+| Location | Precise location | Oui | Non | **R** | Non | App functionality (suivi mission + disponibilité flotte) |
 | Personal info | Name | Oui | Non | R | Non | Account management |
 | Personal info | Email address | Oui | Non | R | Non | Account management, communications |
 | Personal info | Phone number | Oui | Non | R | Non | App functionality (contact course) |
 | Personal info | User IDs | Oui | Non | R | Non | Account management |
 | Messages | In-app messages | Oui | Non | R | Non | App functionality (coordination dispatch) |
-| App activity | App interactions | Oui | Non | O | Non | Analytics / app functionality |
-| App info & perf | Crash logs | Oui | Oui** | O | Non | Crash prevention / diagnostics |
-| App info & perf | Diagnostics | Oui | Oui** | O | Non | Performance / diagnostics |
-| Device or other IDs | Device/push token | Oui | Oui*** | R | Non | App functionality (notifications) |
+| App info & perf | Crash logs | Oui | **Non**¹ | O | Non | Crash prevention / diagnostics |
+| App info & perf | Diagnostics | Oui | **Non**¹ | O | Non | Performance / diagnostics |
+| Device or other IDs | Device/push token | Oui | **Non**² | R | Non | App functionality (notifications) |
 
-\* **R\*** (Location) : requis pour la fonctionnalité de suivi/présence, mais l'app reste
-utilisable pour consulter les missions sans accorder la localisation arrière-plan (le chauffeur
-n'est alors pas visible au dispatch). À déclarer « Required » pour la feature, refus géré côté app.
+> **Ligne App activity / Analytics : SUPPRIMÉE** — aucun SDK analytics utilisateur présent
+> (vérifié 2026-06-10, voir §4). Les logs opérationnels / device-health sont de la télémétrie
+> interne, pas des « Analytics » au sens Play.
 
-\** **Sharing Sentry** : Sentry est un sous-traitant (service provider) pour les diagnostics
-crash/perf. Play traite généralement les service providers à part, mais par prudence on peut
-déclarer « Shared » si le transfert sort de l'organisation. **À confirmer juridiquement.**
+**Location = Required** (décision figée) : la fonctionnalité cœur chauffeur (dispatch, suivi
+mission, disponibilité flotte) repose sur la géolocalisation. Certaines vues restent consultables
+sans GPS, mais l'app n'est pas utilisable normalement sans localisation → « Required ».
 
-\*** **Push token** : transmis à Expo Push / FCM (Google) pour l'acheminement des notifications.
+¹ **Sentry (crash/diagnostics) = Collected / Not Shared** (décision figée) : Sentry est utilisé
+strictement comme sous-traitant technique (processor) traitant les données pour le compte de
+LIRIE, sans revente ni partage avec des tiers indépendants. ⚠️ Validation juridique interne
+finale recommandée avant soumission.
+
+² **Push token = Collected / Not Shared** : transmis à Expo Push / FCM (Google) comme
+infrastructure d'acheminement (service provider), pas un partage commercial/publicitaire.
 
 ## 3. Pratiques de sécurité (section Security practices)
 
@@ -54,15 +60,20 @@ déclarer « Shared » si le transfert sort de l'organisation. **À confirmer ju
 | Données supprimables sur demande ? | **Oui** | idem |
 | Engagement Play Families Policy ? | N/A | App professionnelle, pas destinée aux enfants |
 
-## 4. Points à confirmer avant saisie (human-in-the-loop)
+## 4. Points figés (vérifiés 2026-06-10)
 
-- [ ] **Sentry = « Shared » ou non ?** Trancher selon la politique (service provider vs tiers).
-- [ ] **Location Required vs Optional** dans le formulaire (refus supporté côté app → cohérent
-      avec « Required pour la feature, app utilisable sans »).
-- [ ] **App interactions / analytics** : confirmer s'il y a une collecte analytics réelle (sinon
-      retirer la ligne App activity).
-- [ ] Vérifier qu'aucun SDK ajouté depuis le gel permissions (2026-06-09) n'introduit de nouvelle
-      collecte (voir `play-compliance.md` — gel SDK).
+- [x] **Sentry = Collected / Not Shared.** Sous-traitant technique. ⚠️ Validation juridique
+      interne finale recommandée avant soumission (seul résidu à acter côté legal).
+- [x] **Location = Required.** Fonctionnalité cœur (dispatch, mission, disponibilité flotte).
+- [x] **Analytics = Non.** Vérifié dans `package.json` : aucun SDK analytics utilisateur
+      (pas de Firebase Analytics, Amplitude, Mixpanel, PostHog, Segment, AppsFlyer, Adjust).
+      Présents : `@sentry/react-native` (diagnostics), `@react-native-firebase/app` +
+      `messaging` (FCM push uniquement, PAS analytics).
+- [x] **Aucun nouveau SDK / permission depuis le gel (2026-06-09).** Vérifié via git :
+      depuis le gel, `app.json` n'a changé que par des bumps `versionCode` (108→112) et la
+      reformulation des `NSLocation*UsageDescription` iOS (texte Cas A, pas une nouvelle
+      collecte). `package.json` / `package-lock.json` : aucune dépendance ajoutée/modifiée.
+      → Aucune nouvelle collecte de données.
 
 ## 5. Cohérence
 
