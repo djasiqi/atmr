@@ -1,47 +1,57 @@
-﻿STOP GATE #2 — CLOSURE — 2026-06-10 11:27
+﻿STOP GATE #2 — CLOSURE — 2026-06-10 16:45
 
-VERDICT: PARTIAL PASS — BLOCKER FGS presence acceptation
+VERDICT: PASS
 
-PASS:
-  [x] Build EAS prod AAB v110 + APK v110
-  [x] APK installe S23 versionCode=110
-  [x] AASA / assetlinks / privacy HTTP 200
-  [x] Deep links activate-account / reset-password
+CRITERE OFFICIEL (atteint):
+  Acceptation disclosure -> FGS actif -> Notification persistante.
+
+PREUVE DE NIVEAU SYSTEME ANDROID (2026-06-10 16:06, S23 SM-S911B, build production-apk
+v112 commit f3d22fe9, avec override runtime tracking_background_enabled=true):
+  ServiceRecord{ch.liri.operations/expo.modules.location.services.LocationTaskService}
+    isForeground=true  foregroundId=481756  types=0x00000008 (FOREGROUND_SERVICE_TYPE_LOCATION)
+    foregroundNoti flags=NO_CLEAR|FOREGROUND_SERVICE color=0xff0a7f59 category=service
+    createTime stable > 8 min, persiste a travers cycles background/foreground.
+  Notification persistante:
+    android.title = "Lirie Unified est active"
+    android.text  = "Disponibilite active - localisation en cours"
+  Preuves: fgs-active-after-flag-override.txt, diag-06-relaunch-flagon.png,
+           diag-07-after-continuer-flagon.png, diag-08-notification-shade.png.
+
+ROOT CAUSE:
+  tracking_background_enabled=false
+    -> guard en tete de ensureNativeTrackingWhileForeground()
+    -> chemin FGS jamais tente (startLocationUpdatesAsync jamais appele)
+    -> aucun ServiceRecord, aucune notification, fgs_running=false.
+  Ce N'EST PAS un bug du moteur de tracking ni un refus Android 14+.
+  Le flag derive de EXPO_PUBLIC_ENABLE_BG_LOCATION, non inline a "1" dans le build
+  production-apk malgre sa presence dans eas.json ET l'environnement EAS dashboard.
+  Preuve in-app (panneau QA, diag-04-missions-deeplink.png):
+    BG flag: no | Native error: tracking_background_enabled=false.
+  Detail complet: fgs-diagnostic-rootcause.md.
+
+VALIDATION:
+  Code Android      : OK (FGS demarre des que le flag est true)
+  Android 14+       : OK (FOREGROUND_SERVICE_TYPE_LOCATION accorde)
+  Expo Location     : OK (LocationTaskService foreground stable)
+  Notification      : OK (NO_CLEAR, libelle conforme disclosure)
+
+MITIGATION PRODUCTION (en place, conservee):
+  Backend prod /srv/atmr/.env.production:
+    MOBILE_FEATURE_FLAGS={"tracking_background_enabled":true}
+  Override runtime via bootstrap feature_flags -> gagne sur l'env build.
+  A conserver jusqu'a ce qu'un build embarque correctement le flag sans override.
+
+POINTS PASSES (rappel):
+  [x] Build EAS prod AAB + APK ; APK installe S23
+  [x] AASA / assetlinks / privacy HTTP 200 ; deep links activate/reset
   [x] Backend DELETE compte + token revoke (prod)
-  [x] Privacy client capture
-  [x] Privacy chauffeur captures
-  [x] Presence HORS fenetre 07h-19h (code + runtime 02h13)
+  [x] Privacy client + chauffeur captures
+  [x] Presence HORS fenetre 07h-19h (code + runtime)
   [x] FGS presence en fenetre — refus disclosure => pas de FGS / pas de notif
+  [x] FGS presence en fenetre — acceptation disclosure => FGS + notif persistante (PREUVE SYSTEME)
 
-FAIL / BLOCKER:
-  [ ] FGS presence en fenetre — acceptation disclosure => notif persistante
-      Resultat observe 11:25:
-        permissions location always + notifications granted
-        UI reste "GPS connecte"
-        dumpsys activity services ch.liri.operations = (nothing)
-        aucune notification "Disponibilite active - localisation en cours"
-      Preuves: fgs-window-accept-final.png, fgs-window-accept-final.txt,
-               fgs-window-accept-background-check.txt, fgs-window-accept-logcat.txt
-
-AUDIT TECHNIQUE 2026-06-10 12:50 (v112) — voir fgs-technical-audit.md :
-  - Permissions TOUTES granted (FINE/COARSE/BACKGROUND/POST_NOTIFICATIONS/FGS_LOCATION).
-  - dumpsys activity services = vide ; AUCUN am_create_service / startService LocationTaskService.
-    => Android ne recoit jamais de demande de demarrage du FGS : echec en amont (JS/expo),
-       avant startForeground. Exception avalee dans la telemetrie suspendue en prod.
-  - "position partagee"/"GPS connecte" = conseil rotatif + watch JS foreground (watchPositionAsync),
-    chemin INDEPENDANT du FGS. Pas une preuve de FGS.
-  - Aveuglement prod confirme : ingest suspendu (!__DEV__), QA panel gated off,
-    banniere presence jamais affichee (mission-only).
-  - Hypothese racine : ensurePermissions() (request*) ouvre GrantPermissionsActivity ->
-    app en background -> startLocationUpdatesAsync refuse le FGS (Android 14+).
-
-CORROBORATION BACKEND (driver_device_health_events, prod) — voir fgs-backend-device-health.md :
-  SM-S931B (S23) sur 08:17->10:53 UTC : app_state=active, fgs_running=f, location_permission=always,
-  notifications_enabled=t, battery_optimized=f, constraint_reason=fgs_not_running (constant).
-  => Elimine cote serveur permissions/notif/batterie/background. Verrou = startLocationUpdatesAsync
-     ne demarre aucun FGS meme app active + conditions vertes.
-
-PROCHAINE ETAPE : build INTERNE de diagnostic (QA panel + native_start_error device-health),
-PAS un v113 a l'aveugle. Puis correctif sequencement permissions.
-
-Ne pas eas submit Play. SG#2 reste PARTIAL PASS.
+SUITE:
+  - Ticket separe BUILD-EXPO-001 : audit inlining EXPO_PUBLIC_* (BG_LOCATION, DRIVER_PUSH, ...).
+    Probleme de chaine de build EAS, hors scope conformite Play. Voir BUILD-EXPO-001.md.
+  - Passer a STOP GATE Release : video BG location, captures disclosure, justification BG,
+    export Play Console, soumission.

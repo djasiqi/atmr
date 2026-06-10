@@ -1,0 +1,18 @@
+=== STOP GATE #2 — FGS ACTIF (apres override tracking_background_enabled=true) ===
+Device: Samsung S23 (SM-S911B, RFCW20QC53W), Android 14+
+Build: production-apk 1.0.5 (112), commit f3d22fe9
+Override backend: MOBILE_FEATURE_FLAGS={"tracking_background_enabled":true}
+
+ServiceRecord{eed09dd u0 ch.liri.operations/expo.modules.location.services.LocationTaskService}
+  isForeground=true  foregroundId=481756  types=0x00000008 (FOREGROUND_SERVICE_TYPE_LOCATION)
+  foregroundNoti=Notification(channel=ch.liri.operations:background-location-task
+                 flags=NO_CLEAR|FOREGROUND_SERVICE color=0xff0a7f59 category=service)
+  createTime=-8m46s (service stable a travers cycles background/foreground)
+
+Notification persistante:
+  id=481756  flags=NO_CLEAR|FOREGROUND_SERVICE
+  android.title = "Lirie Unified est active"
+  android.text  = "Disponibilite active — localisation en cours"
+
+VERDICT: FGS Android present + notification persistante confirmes.
+Cause racine confirmee: feature flag tracking_background_enabled etait false dans le build production-apk.
