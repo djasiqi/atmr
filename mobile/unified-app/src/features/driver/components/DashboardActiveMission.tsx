@@ -193,7 +193,6 @@ export function DashboardActiveMission({
   const forwardTransition = FORWARD_TRANSITION_PRIORITY.find((t) =>
     statusUx.nextTransitions.includes(t)
   );
-  const canCancel = Boolean(showTransitionActions && statusUx.nextTransitions.includes("CANCELLED"));
   const canRelease = Boolean(
     can("mission:update_status") &&
       typeof onMissionRelease === "function" &&
@@ -204,8 +203,7 @@ export function DashboardActiveMission({
 
   const showNavigation = showGps && dest.length > 0;
   const showCallAction = showCall && Boolean(phone);
-  const showQuickActions =
-    showNavigation || showCallAction || canRelease || canCancel;
+  const showQuickActions = showNavigation || showCallAction || canRelease;
 
   const clientTitle = getMissionClientDisplayName(mission);
   const birthDateDisplay = getClientBirthDateDisplay(mission);
@@ -452,14 +450,6 @@ export function DashboardActiveMission({
                 label="LIBÉRER"
                 icon="refresh-outline"
                 onPress={() => onMissionRelease?.()}
-                disabled={pending}
-              />
-            ) : null}
-            {canCancel ? (
-              <QuickAction
-                label="ANNULER"
-                icon="close-circle-outline"
-                onPress={() => onMissionTransition?.("CANCELLED")}
                 disabled={pending}
               />
             ) : null}
