@@ -98,6 +98,75 @@ class UpdateDriverBookingStatusUseCase:
         self._maybe_trigger_dispatch = maybe_trigger_dispatch_fn
         self._now_utc = now_utc_fn or (lambda: datetime.now(UTC))
 
+    @staticmethod
+    def _record_timeline_events(
+        *,
+        booking: _BookingLike,
+        driver_id: int,
+        status_before: str | None,
+        status_after: str | None,
+        new_status_str: str | None,
+    ) -> None:
+        """Historise les transitions chauffeur dans la timeline transport.
+
+        Limité aux courses institution (présence d'une TransportRequest liée).
+        """
+        try:
+            from models import TransportRequest
+            from services.institutions.transport_timeline_service import (
+                TimelineActor,
+                record_event,
+            )
+
+            transport_req = TransportRequest.query.filter_by(
+                booking_id=booking.id
+            ).first()
+            if transport_req is None:
+                parent_id = getattr(booking, "parent_booking_id", None)
+                if parent_id:
+                    transport_req = TransportRequest.query.filter_by(
+                        booking_id=parent_id
+                    ).first()
+            if transport_req is None:
+                return
+
+            institution_id = transport_req.institution_id
+            actor = TimelineActor(actor_type="driver", driver_id=driver_id)
+
+            record_event(
+                "status_changed",
+                institution_id=institution_id,
+                transport_request_id=transport_req.id,
+                booking_id=booking.id,
+                actor=actor,
+                payload={"old_status": status_before, "new_status": status_after},
+                correlation_id=f"status_changed:{booking.id}:{status_after}",
+            )
+
+            if new_status_str == "in_progress":
+                record_event(
+                    "patient_boarded",
+                    institution_id=institution_id,
+                    transport_request_id=transport_req.id,
+                    booking_id=booking.id,
+                    actor=actor,
+                    correlation_id=f"patient_boarded:{booking.id}",
+                )
+            elif new_status_str in ("completed", "return_completed"):
+                record_event(
+                    "patient_completed",
+                    institution_id=institution_id,
+                    transport_request_id=transport_req.id,
+                    booking_id=booking.id,
+                    actor=actor,
+                    correlation_id=f"patient_completed:{booking.id}",
+                )
+        except Exception as timeline_err:
+            logger.warning(
+                "[UpdateDriverBookingStatus] Timeline recording failed: %s",
+                timeline_err,
+            )
+
     def execute(
         self, cmd: UpdateDriverBookingStatusCommand
     ) -> UpdateDriverBookingStatusResult:
@@ -680,6 +749,15 @@ class UpdateDriverBookingStatusUseCase:
                         booking.id,
                         e,
                     )
+
+            # Timeline transport: status_changed + jalons patient (institution)
+            self._record_timeline_events(
+                booking=booking,
+                driver_id=cmd.driver_id,
+                status_before=locals().get("status_before"),
+                status_after=status_val_after,
+                new_status_str=locals().get("new_status_str"),
+            )
 
             self._db.commit()
             try:

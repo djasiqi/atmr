@@ -312,7 +312,7 @@ const InstitutionDashboard = () => {
               )}
             </div>
             <Link
-              to={`/dashboard/institution/${public_id}/requests`}
+              to={`/dashboard/institution/${public_id}/requests?day=today`}
               className={s.cardLink}
             >
               Tout voir <FaChevronRight />

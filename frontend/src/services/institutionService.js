@@ -96,6 +96,32 @@ export const cancelRequest = async (requestId, reason = '') => {
 };
 
 /**
+ * Affecte un transporteur externe à une demande.
+ * @param {number} requestId
+ * @param {{ name: string, phone?: string, reference?: string, reason?: string }} data
+ */
+export const assignExternalCarrier = async (requestId, data) => {
+  const response = await apiClient.post(
+    `${BASE_PATH}/requests/${requestId}/external-carrier`,
+    data,
+  );
+  return response.data;
+};
+
+/**
+ * Déclare une mission externe comme réalisée.
+ * @param {number} requestId
+ * @param {{ executed_at?: string, notes?: string }} data
+ */
+export const completeExternalMission = async (requestId, data = {}) => {
+  const response = await apiClient.post(
+    `${BASE_PATH}/requests/${requestId}/external-completion`,
+    data,
+  );
+  return response.data;
+};
+
+/**
  * Récupère une demande par sa référence externe
  */
 export const getRequestByReference = async (externalReference) => {
@@ -257,6 +283,59 @@ export const fetchBookingChangeEvents = async (bookingId) => {
   return response.data;
 };
 
+/**
+ * Timeline immutable — demande de transport
+ */
+export const getRequestTimeline = async (requestId, { from, to, limit, cursor } = {}) => {
+  const params = {};
+  if (from) params.from = from;
+  if (to) params.to = to;
+  if (limit) params.limit = limit;
+  if (cursor) params.cursor = cursor;
+  const response = await apiClient.get(`${BASE_PATH}/requests/${requestId}/timeline`, { params });
+  return response.data;
+};
+
+/**
+ * Timeline immutable — booking
+ */
+export const getBookingTimeline = async (bookingId, { from, to, limit, cursor } = {}) => {
+  const params = {};
+  if (from) params.from = from;
+  if (to) params.to = to;
+  if (limit) params.limit = limit;
+  if (cursor) params.cursor = cursor;
+  const response = await apiClient.get(`${BASE_PATH}/bookings/${bookingId}/timeline`, { params });
+  return response.data;
+};
+
+/**
+ * Historique transports patient (timeline agrégée)
+ */
+export const getPatientTransportHistory = async (patientId, { from, to, limit, cursor } = {}) => {
+  const params = {};
+  if (from) params.from = from;
+  if (to) params.to = to;
+  if (limit) params.limit = limit;
+  if (cursor) params.cursor = cursor;
+  const response = await apiClient.get(
+    `${BASE_PATH}/patients/${patientId}/transport-history`,
+    { params }
+  );
+  return response.data;
+};
+
+/**
+ * Remet une course en diffusion après refus/escalade transporteur
+ */
+export const releaseBookingForRedispatch = async (bookingId, data = {}) => {
+  const response = await apiClient.post(
+    `${BASE_PATH}/bookings/${bookingId}/release-for-redispatch`,
+    data
+  );
+  return response.data;
+};
+
 // ============================================================================
 // Users Management
 // ============================================================================
@@ -289,8 +368,13 @@ export const updateUserRole = async ({ userId, institution_role }) => {
  * Met à jour les champs descriptifs d'un utilisateur (fonction/métier).
  * Donnée organisationnelle sans impact sur les permissions.
  */
-export const updateUserProfile = async ({ userId, job_title }) => {
-  const response = await apiClient.patch(`${BASE_PATH}/users/${userId}`, { job_title });
+export const updateUserProfile = async ({ userId, job_title, first_name, last_name, email }) => {
+  const body = {};
+  if (job_title !== undefined) body.job_title = job_title;
+  if (first_name !== undefined) body.first_name = first_name;
+  if (last_name !== undefined) body.last_name = last_name;
+  if (email !== undefined) body.email = email;
+  const response = await apiClient.patch(`${BASE_PATH}/users/${userId}`, body);
   return response.data;
 };
 
@@ -528,6 +612,177 @@ export const sendBookingMessage = async (bookingId, content) => {
 };
 
 // ============================================================================
+// Exports transports (PDF patient, PDF/CSV journalier)
+// ============================================================================
+
+const _filenameFromResponse = (response, fallback) => {
+  const cd = response?.headers?.['content-disposition'];
+  if (!cd || typeof cd !== 'string') return fallback;
+  const utf8Match = cd.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match?.[1]) {
+    try {
+      return decodeURIComponent(utf8Match[1].replace(/"/g, ''));
+    } catch {
+      // ignore
+    }
+  }
+  const plainMatch = cd.match(/filename="?([^";]+)"?/i);
+  return plainMatch?.[1] || fallback;
+};
+
+/**
+ * Déclenche le téléchargement d'un blob dans le navigateur.
+ * @param {Blob} blob
+ * @param {string} filename
+ * @param {string} mimeType
+ */
+const _downloadBlob = (data, filename, mimeType) => {
+  const blob = new Blob([data], { type: mimeType });
+  const href = window.URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = href;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.URL.revokeObjectURL(href);
+};
+
+/**
+ * Lit le message d'erreur d'une réponse blob (le serveur renvoie du JSON en cas d'erreur).
+ */
+const _readBlobError = async (error) => {
+  const data = error?.response?.data;
+  if (data && typeof data.text === 'function') {
+    try {
+      const parsed = JSON.parse((await data.text()) || '{}');
+      if (parsed?.error) {
+        const apiError = new Error(parsed.error);
+        apiError.status = error?.response?.status;
+        return apiError;
+      }
+    } catch {
+      // Ignore: on retombe sur l'erreur d'origine
+    }
+  }
+  return error;
+};
+
+/**
+ * Exporte l'historique des transports d'un patient en PDF.
+ * @param {number} patientId
+ * @param {Object} opts - { from, to } (dates ISO8601 optionnelles)
+ */
+export const exportPatientTransportsPdf = async (patientId, { from, to } = {}) => {
+  const params = {};
+  if (from) params.from = from;
+  if (to) params.to = to;
+  try {
+    const response = await apiClient.get(
+      `${BASE_PATH}/exports/patients/${patientId}/pdf`,
+      {
+        params,
+        responseType: 'blob',
+        headers: { Accept: 'application/pdf, application/json' },
+      }
+    );
+    _downloadBlob(response.data, `transports_patient_${patientId}.pdf`, 'application/pdf');
+    return { rowsCount: response?.headers?.['x-rows-count'] || null };
+  } catch (error) {
+    throw await _readBlobError(error);
+  }
+};
+
+/**
+ * Exporte les rapports de mission (PDF audit) d'une journée dans une archive ZIP.
+ * @param {string} [date] - Date YYYY-MM-DD (défaut: aujourd'hui côté serveur)
+ */
+export const exportDailyMissionReportsZip = async (date) => {
+  const params = {};
+  if (date) params.date = date;
+  try {
+    const response = await apiClient.get(`${BASE_PATH}/exports/daily/rapports.zip`, {
+      params,
+      responseType: 'blob',
+      headers: { Accept: 'application/zip, application/json' },
+    });
+    const suffix = date || 'jour';
+    _downloadBlob(response.data, `rapports_mission_${suffix}.zip`, 'application/zip');
+    return { rowsCount: response?.headers?.['x-rows-count'] || null };
+  } catch (error) {
+    throw await _readBlobError(error);
+  }
+};
+
+/**
+ * Exporte les transports d'une journée en PDF (synthèse + détail).
+ * @param {string} [date] - Date YYYY-MM-DD (défaut: aujourd'hui côté serveur)
+ */
+export const exportDailyTransportsPdf = async (date) => {
+  const params = {};
+  if (date) params.date = date;
+  try {
+    const response = await apiClient.get(`${BASE_PATH}/exports/daily/pdf`, {
+      params,
+      responseType: 'blob',
+      headers: { Accept: 'application/pdf, application/json' },
+    });
+    const suffix = date || 'jour';
+    _downloadBlob(response.data, `transports_${suffix}.pdf`, 'application/pdf');
+    return { rowsCount: response?.headers?.['x-rows-count'] || null };
+  } catch (error) {
+    throw await _readBlobError(error);
+  }
+};
+
+/**
+ * Exporte une demande en PDF (bon de transport ou rapport de mission).
+ * @param {number} requestId
+ * @param {{ variant?: 'operational'|'audit' }} opts
+ */
+export const exportRequestMissionPdf = async (requestId, { variant = 'audit' } = {}) => {
+  const params = { variant };
+  try {
+    const response = await apiClient.get(
+      `${BASE_PATH}/exports/requests/${requestId}/pdf`,
+      {
+        params,
+        responseType: 'blob',
+        headers: { Accept: 'application/pdf, application/json' },
+      }
+    );
+    const prefix = variant === 'operational' ? 'bon_transport' : 'rapport_mission';
+    const fallback = `${prefix}_demande_${requestId}.pdf`;
+    const filename = _filenameFromResponse(response, fallback);
+    _downloadBlob(response.data, filename, 'application/pdf');
+    return { ok: true };
+  } catch (error) {
+    throw await _readBlobError(error);
+  }
+};
+
+/**
+ * Exporte les transports d'une journée en CSV.
+ * @param {string} [date] - Date YYYY-MM-DD (défaut: aujourd'hui côté serveur)
+ */
+export const exportDailyTransportsCsv = async (date) => {
+  const params = {};
+  if (date) params.date = date;
+  try {
+    const response = await apiClient.get(`${BASE_PATH}/exports/daily/csv`, {
+      params,
+      responseType: 'blob',
+      headers: { Accept: 'text/csv, application/json' },
+    });
+    const suffix = date || 'jour';
+    _downloadBlob(response.data, `transports_${suffix}.csv`, 'text/csv;charset=utf-8');
+    return { rowsCount: response?.headers?.['x-rows-count'] || null };
+  } catch (error) {
+    throw await _readBlobError(error);
+  }
+};
+
+// ============================================================================
 // Export default pour import simplifié
 // ============================================================================
 
@@ -543,6 +798,8 @@ const institutionService = {
   updateRequest,
   sendRequest,
   cancelRequest,
+  assignExternalCarrier,
+  completeExternalMission,
   getRequestByReference,
   // Patients
   listPatients,
@@ -564,6 +821,10 @@ const institutionService = {
   patchInstitutionBooking,
   cancelInstitutionBooking,
   fetchBookingChangeEvents,
+  getRequestTimeline,
+  getBookingTimeline,
+  getPatientTransportHistory,
+  releaseBookingForRedispatch,
   // Users
   listInstitutionUsers,
   inviteInstitutionUser,
@@ -606,6 +867,12 @@ const institutionService = {
   // Booking Messages
   fetchBookingMessages,
   sendBookingMessage,
+  // Exports transports
+  exportPatientTransportsPdf,
+  exportDailyTransportsPdf,
+  exportDailyMissionReportsZip,
+  exportDailyTransportsCsv,
+  exportRequestMissionPdf,
 };
 
 export default institutionService;

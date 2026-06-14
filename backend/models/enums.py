@@ -27,6 +27,7 @@ class InstitutionRole(str, PyEnum):
     - READER: Lecture seule (suivi des demandes)
     - BILLING: Accès aux fonctions de facturation
     - CURATOR: Curateur (curatelle) — gère demandes + facturation pour ses protégés assignés
+    - RECEPTION: Réception — lecture + export transports
     """
 
     ADMIN = "institution_admin"
@@ -34,6 +35,7 @@ class InstitutionRole(str, PyEnum):
     READER = "institution_reader"
     BILLING = "institution_billing"
     CURATOR = "institution_curator"
+    RECEPTION = "institution_reception"
 
     @classmethod
     def choices(cls):
@@ -49,6 +51,8 @@ class RequestStatus(str, PyEnum):
     - EXPIRED: Aucune réponse dans le délai imparti
     - ACCEPTED: Accepté par un transporteur
     - CONVERTED: Converti en Booking
+    - EXTERNAL_ASSIGNED: Transporteur externe affecté (sans Booking)
+    - EXTERNAL_DECLARED_COMPLETED: Déclarée réalisée par l'institution (externe)
     """
 
     DRAFT = "DRAFT"
@@ -57,6 +61,8 @@ class RequestStatus(str, PyEnum):
     EXPIRED = "EXPIRED"
     ACCEPTED = "ACCEPTED"
     CONVERTED = "CONVERTED"
+    EXTERNAL_ASSIGNED = "EXTERNAL_ASSIGNED"
+    EXTERNAL_DECLARED_COMPLETED = "EXTERNAL_DECLARED_COMPLETED"
 
     @classmethod
     def choices(cls):
@@ -67,14 +73,54 @@ class RequestStatus(str, PyEnum):
         """Statuts permettant la modification de la demande.
 
         DRAFT/SENT/ACCEPTED : pas encore convertie en booking, édition autorisée.
+        EXTERNAL_ASSIGNED : modifiable tant que non complétée.
         Une fois CONVERTED, l'édition passe par l'endpoint booking institution.
         """
-        return [cls.DRAFT, cls.SENT, cls.ACCEPTED]
+        return [cls.DRAFT, cls.SENT, cls.ACCEPTED, cls.EXTERNAL_ASSIGNED]
 
     @classmethod
     def cancellable_statuses(cls) -> list["RequestStatus"]:
         """Statuts permettant l'annulation."""
-        return [cls.DRAFT, cls.SENT, cls.ACCEPTED]
+        return [cls.DRAFT, cls.SENT, cls.ACCEPTED, cls.EXTERNAL_ASSIGNED]
+
+    @classmethod
+    def display_label(cls, status: str) -> str:
+        """Libellé utilisateur pour un statut de demande (UI/PDF/API)."""
+        labels = {
+            cls.DRAFT.value: "Brouillon",
+            cls.SENT.value: "Envoyée",
+            cls.CANCELLED.value: "Annulée",
+            cls.EXPIRED.value: "Expirée",
+            cls.ACCEPTED.value: "Acceptée",
+            cls.CONVERTED.value: "Confirmée",
+            cls.EXTERNAL_ASSIGNED.value: "Transporteur externe affecté",
+            cls.EXTERNAL_DECLARED_COMPLETED.value: "Déclarée réalisée par l'institution",
+        }
+        return labels.get(status, status)
+
+
+class CarrierSource(str, PyEnum):
+    """Mode d'exécution du transport (orthogonal au statut).
+
+    - LIRIE: Transporteur inscrit sur la plateforme (flux offres/booking)
+    - EXTERNAL: Transporteur externe (snapshot, sans Booking)
+    """
+
+    LIRIE = "lirie"
+    EXTERNAL = "external"
+
+    @classmethod
+    def choices(cls):
+        return [e.value for e in cls]
+
+    @classmethod
+    def display_label(cls, source: str) -> str:
+        """Libellé utilisateur pour le mode d'exécution."""
+        labels = {
+            cls.LIRIE.value: "Transporteur LIRIE",
+            cls.EXTERNAL.value: "Transporteur externe",
+        }
+        return labels.get(source, source)
 
 
 class MissionType(str, PyEnum):

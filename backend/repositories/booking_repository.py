@@ -195,15 +195,19 @@ class BookingRepository:
             .all()
         )
 
-        # Filtrer uniquement les retours avec time_confirmed=False (mais garder ceux avec scheduled_time=None)
+        # Exclure du dispatch auto les courses dont l'heure n'est pas confirmée
+        # ("heure à définir"). Cela couvre :
+        #   - les retours A/R avec heure non confirmée (comportement historique) ;
+        #   - les legs multi-destinations "à définir" (sentinelle 00:00, non-retour).
+        # Les retours SANS heure du tout (scheduled_time=None) restent inclus.
         filtered_bookings = []
         for booking in bookings:
-            is_return = bool(getattr(booking, "is_return", False))
             time_confirmed = bool(getattr(booking, "time_confirmed", True))
 
-            # Exclure seulement les retours avec time_confirmed=False ET scheduled_time défini
-            # (les retours sans heure sont OK)
-            if is_return and not time_confirmed and booking.scheduled_time is not None:
+            if not time_confirmed and booking.scheduled_time is not None:
+                continue
+
+            if not time_confirmed and booking.scheduled_time is None:
                 continue
 
             filtered_bookings.append(booking)

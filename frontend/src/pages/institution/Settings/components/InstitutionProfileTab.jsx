@@ -125,10 +125,10 @@ const InstitutionProfileTab = () => {
     <div className={styles.section}>
       <div className={styles.sectionHeader}>
         <h3>
-          <FaBuilding style={{ marginRight: 8 }} />
+          <FaBuilding aria-hidden="true" />
           Informations de l'institution
         </h3>
-        <p style={{ color: '#666', fontSize: 13, lineHeight: 1.5 }}>
+        <p>
           Ces informations identifient votre institution dans le portail et sont
           utilisées pour les échanges, notifications et documents associés aux
           transports.

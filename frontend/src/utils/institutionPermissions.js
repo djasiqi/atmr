@@ -42,6 +42,9 @@ export const INSTITUTION_ACTIONS = {
 
   // Édition partielle patient (coordonnées, assurance, curatelle) — rôle billing
   EDIT_PATIENT_BILLING_DATA: 'edit_patient_billing_data',
+
+  // Export des transports (PDF patient, PDF/CSV journalier) — admin + billing + reception
+  EXPORT_TRANSPORTS: 'export_transports',
 };
 
 // ============================================================================
@@ -67,6 +70,7 @@ const ROLE_PERMISSIONS = {
     INSTITUTION_ACTIONS.VIEW_ADMIN_DATA,
     INSTITUTION_ACTIONS.EDIT_ADMIN_DATA,
     INSTITUTION_ACTIONS.EDIT_PATIENT_BILLING_DATA,
+    INSTITUTION_ACTIONS.EXPORT_TRANSPORTS,
   ],
   
   institution_requester: [
@@ -99,6 +103,15 @@ const ROLE_PERMISSIONS = {
     INSTITUTION_ACTIONS.VIEW_ADMIN_DATA,
     INSTITUTION_ACTIONS.EDIT_ADMIN_DATA,
     INSTITUTION_ACTIONS.EDIT_PATIENT_BILLING_DATA,
+    INSTITUTION_ACTIONS.EXPORT_TRANSPORTS,
+  ],
+
+  institution_reception: [
+    // Réception : lecture + export transports (aucun droit opérationnel/facturation)
+    INSTITUTION_ACTIONS.VIEW_REQUEST,
+    INSTITUTION_ACTIONS.VIEW_PATIENT,
+    INSTITUTION_ACTIONS.VIEW_SETTINGS,
+    INSTITUTION_ACTIONS.EXPORT_TRANSPORTS,
   ],
 
   institution_curator: [
@@ -238,6 +251,15 @@ export function canEditPatientBillingData(institutionRole) {
 }
 
 /**
+ * Vérifie si l'utilisateur peut exporter les transports (PDF patient, PDF/CSV journalier)
+ * @param {string} institutionRole
+ * @returns {boolean}
+ */
+export function canExportTransports(institutionRole) {
+  return can(institutionRole, INSTITUTION_ACTIONS.EXPORT_TRANSPORTS);
+}
+
+/**
  * Vérifie si l'utilisateur peut accéder aux settings
  * @param {string} institutionRole
  * @returns {boolean}
@@ -258,6 +280,7 @@ export function getRoleLabel(institutionRole) {
     institution_reader: 'Lecteur',
     institution_billing: 'Facturation',
     institution_curator: 'Curateur',
+    institution_reception: 'Réception',
   };
   return labels[institutionRole?.toLowerCase()] || institutionRole || 'Inconnu';
 }
@@ -275,6 +298,7 @@ export function getRoleBadgeColor(institutionRole) {
     institution_reader: '#94A3B8',   // Brand text-muted
     institution_billing: '#0A88EF',  // Brand accent blue
     institution_curator: '#7C3AED',  // Curator purple
+    institution_reception: '#D97706', // Reception amber
   };
   return colors[institutionRole?.toLowerCase()] || '#94A3B8';
 }
@@ -293,6 +317,7 @@ const institutionPermissions = {
   canViewAdminData,
   canEditAdminData,
   canEditPatientBillingData,
+  canExportTransports,
   canViewSettings,
   getRoleLabel,
   getRoleBadgeColor,

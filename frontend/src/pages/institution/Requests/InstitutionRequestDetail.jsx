@@ -3,23 +3,39 @@
  * Fiche détaillée d'un transport — design professionnel SaaS B2B
  */
 
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import ConfirmSendModal from './ConfirmSendModal';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   FaArrowLeft, FaEdit, FaPaperPlane, FaTimes,
   FaTruck, FaRoute, FaFileInvoiceDollar,
   FaHistory, FaWheelchair, FaInfoCircle, FaNotesMedical,
+  FaEnvelope,
 } from 'react-icons/fa';
 import {
   useInstitutionRequest, useInstitutionMe,
   useSendRequest, useCancelRequest,
+  useAssignExternalCarrier, useCompleteExternalMission,
   useUpdateRequestBilling, useUpdateBookingBilling,
 } from '../../../hooks/useInstitutionData';
+import ExternalCarrierFields, {
+  EMPTY_EXTERNAL_CARRIER_FORM,
+  validateExternalCarrierForm,
+  buildExternalCarrierPayload,
+} from '../../../components/institution/ExternalCarrierFields';
+import {
+  isExternalRequest,
+  hasBooking,
+  canAssignExternalCarrier,
+  canCompleteExternalMission,
+  getRequestStatusLabel,
+  EXTERNAL_STATUSES,
+} from '../../../utils/requestStatus';
 import { canManageRequests, canEditBilling } from '../../../utils/institutionPermissions';
 import { toast } from 'sonner';
 import { getInstitutionSocket } from '../../../services/institutionSocket';
-import { fetchBookingMessages, sendBookingMessage } from '../../../services/institutionService';
+import { fetchBookingMessages, sendBookingMessage, exportRequestMissionPdf } from '../../../services/institutionService';
+import { buildCarrierMailto } from '../../../utils/externalCarrierEmail';
 import BookingChat from '../../company/Reservations/components/BookingChat';
 import s from './InstitutionRequestDetail.module.css';
 
@@ -43,6 +59,14 @@ const REQUEST_STATUS_MAP = {
   CONVERTED: { label: 'Confirmée', css: 'statusConverted' },
   CANCELLED: { label: 'Annulée',   css: 'statusCancelled' },
   EXPIRED:   { label: 'Expirée',   css: 'statusExpired' },
+  [EXTERNAL_STATUSES.ASSIGNED]: {
+    label: 'Transporteur externe affecté',
+    css: 'statusExternalAssigned',
+  },
+  [EXTERNAL_STATUSES.COMPLETED]: {
+    label: 'Déclarée réalisée par l\'institution',
+    css: 'statusExternalCompleted',
+  },
 };
 
 const MISSION_LABELS = {
@@ -107,7 +131,14 @@ const resolveBookingStatusKey = (bookingSummary) => {
 
 // ─── Status badge ──────────────────────────────────────────
 const StatusBadge = ({ request }) => {
-  if (request.status === 'CONVERTED' && request.booking_summary?.status) {
+  if (isExternalRequest(request)) {
+    const info = REQUEST_STATUS_MAP[request.status] || {
+      label: getRequestStatusLabel(request),
+      css: 'statusExternalAssigned',
+    };
+    return <span className={`${s.statusBadge} ${s[info.css]}`}>{info.label}</span>;
+  }
+  if (hasBooking(request) && request.status === 'CONVERTED' && request.booking_summary?.status) {
     const info = BOOKING_STATUS_MAP[resolveBookingStatusKey(request.booking_summary)];
     if (info) return <span className={`${s.statusBadge} ${s[info.css]}`}>{info.label}</span>;
   }
@@ -117,8 +148,8 @@ const StatusBadge = ({ request }) => {
 
 // ─── Billing Section ───────────────────────────────────────
 const BillingSection = ({ request, canBilling, billingMutation, bookingBillingMutation }) => {
-  const isConverted = request.status === 'CONVERTED' && request.booking_summary;
-  const bs = request.booking_summary;
+  const isConverted = hasBooking(request);
+  const bs = isConverted ? request.booking_summary : null;
   const isInvoiced = isConverted && bs?.is_invoiced;
 
   const isCancelled = isConverted
@@ -130,6 +161,9 @@ const BillingSection = ({ request, canBilling, billingMutation, bookingBillingMu
     : (request.billing_intent || 'patient');
 
   const [selectedIntent, setSelectedIntent] = useState(currentBilledTo);
+  useEffect(() => {
+    setSelectedIntent(currentBilledTo);
+  }, [currentBilledTo]);
   const hasChanged = selectedIntent !== currentBilledTo;
 
   const billingLabels = {
@@ -270,6 +304,8 @@ const InstitutionRequestDetail = () => {
   const { data: request, isLoading, error } = useInstitutionRequest(requestId);
   const sendMutation = useSendRequest();
   const cancelMutation = useCancelRequest();
+  const assignExternalMutation = useAssignExternalCarrier();
+  const completeExternalMutation = useCompleteExternalMission();
   const billingMutation = useUpdateRequestBilling();
   const bookingBillingMutation = useUpdateBookingBilling();
 
@@ -278,9 +314,69 @@ const InstitutionRequestDetail = () => {
   const canBillingEdit = canEditBilling(institutionRole);
   const institutionSocket = useMemo(() => getInstitutionSocket(), []);
 
+  const [showSendModal, setShowSendModal] = useState(false);
+  const [showAssignExternalForm, setShowAssignExternalForm] = useState(false);
+  const [showCompleteExternalForm, setShowCompleteExternalForm] = useState(false);
+  const [externalCarrierForm, setExternalCarrierForm] = useState(EMPTY_EXTERNAL_CARRIER_FORM);
+  const [externalCompleteNotes, setExternalCompleteNotes] = useState('');
+  const [composingEmail, setComposingEmail] = useState(false);
+
   const goBack = () => navigate(`/dashboard/institution/${public_id}/requests`);
 
-  const [showSendModal, setShowSendModal] = useState(false);
+  const handleComposeCarrierEmail = useCallback(async () => {
+    const email = request?.external_carrier?.email;
+    if (!email || !request?.id) return;
+    setComposingEmail(true);
+    try {
+      await exportRequestMissionPdf(request.id, { variant: 'operational' });
+      toast.success('Bon téléchargé — joignez-le à l\'e-mail');
+    } catch (err) {
+      toast.error(err?.message || 'Erreur lors de l\'export du bon');
+    } finally {
+      setComposingEmail(false);
+    }
+    const institutionName = meData?.institution?.name || meData?.name || '';
+    window.location.href = buildCarrierMailto(email, request, {
+      institutionName,
+      institutionPhone: meData?.contact_phone,
+    });
+  }, [request, meData]);
+
+  const handleAssignExternalCarrier = async () => {
+    const validationError = validateExternalCarrierForm(externalCarrierForm);
+    if (validationError) {
+      toast.error(validationError);
+      return;
+    }
+    try {
+      await assignExternalMutation.mutateAsync({
+        requestId: request.id,
+        data: buildExternalCarrierPayload(externalCarrierForm),
+      });
+      setShowAssignExternalForm(false);
+      setExternalCarrierForm(EMPTY_EXTERNAL_CARRIER_FORM);
+      toast.success('Transporteur externe affecté');
+    } catch (err) {
+      toast.error(err?.response?.data?.error || 'Erreur lors de l\'affectation externe');
+    }
+  };
+
+  const handleCompleteExternalMission = async () => {
+    try {
+      await completeExternalMutation.mutateAsync({
+        requestId: request.id,
+        data: {
+          executed_at: new Date().toISOString(),
+          notes: externalCompleteNotes.trim() || undefined,
+        },
+      });
+      setShowCompleteExternalForm(false);
+      setExternalCompleteNotes('');
+      toast.success('Mission déclarée réalisée par l\'institution');
+    } catch (err) {
+      toast.error(err?.response?.data?.error || 'Erreur lors de la déclaration');
+    }
+  };
 
   const handleSend = useCallback(async () => {
     try {
@@ -320,10 +416,20 @@ const InstitutionRequestDetail = () => {
       events.push({ event: `Acceptée${company ? ` par ${company}` : ''}`, date: request.accepted_at });
     if (request?.converted_at)
       events.push({ event: 'Convertie en booking', date: request.converted_at });
-    if (bs?.boarded_at)
-      events.push({ event: 'Patient pris en charge', date: bs.boarded_at });
-    if (bs?.completed_at)
-      events.push({ event: 'Transport terminé', date: bs.completed_at });
+
+    // Historique opérationnel consolidé du transport (legs multi-étapes +
+    // retours) si disponible, sinon le booking unique du résumé.
+    const journey = Array.isArray(bs?.route_journey) ? bs.route_journey : null;
+    if (journey && journey.length) {
+      journey.forEach((ev) => {
+        if (ev?.date) events.push({ event: ev.event, date: ev.date, type: ev.type });
+      });
+    } else {
+      if (bs?.boarded_at)
+        events.push({ event: 'Patient pris en charge', date: bs.boarded_at });
+      if (bs?.completed_at)
+        events.push({ event: 'Transport terminé', date: bs.completed_at });
+    }
     const bsCancelled = bs?.cancelled_at;
     if (bsCancelled) {
       const roleMap = { company: 'Entreprise', driver: 'Chauffeur', admin: 'Admin', system: 'Système' };
@@ -342,6 +448,22 @@ const InstitutionRequestDetail = () => {
       events.push({ event: 'Annulée', date: request.cancelled_at, type: 'cancel' });
     }
 
+    if (isExternalRequest(request)) {
+      const ext = request.external_carrier || {};
+      if (ext.assigned_at) {
+        events.push({
+          event: `Transporteur externe affecté${ext.name ? ` — ${ext.name}` : ''}`,
+          date: ext.assigned_at,
+        });
+      }
+      if (ext.executed_at) {
+        events.push({
+          event: 'Déclarée réalisée par l\'institution',
+          date: ext.executed_at,
+        });
+      }
+    }
+
     return events.sort((a, b) => new Date(b.date) - new Date(a.date));
   };
 
@@ -354,8 +476,14 @@ const InstitutionRequestDetail = () => {
     </div>
   );
 
-  const isConverted = request.status === 'CONVERTED' && request.booking_id;
-  const bs = request.booking_summary;
+  const isExternal = isExternalRequest(request);
+  const isConverted = hasBooking(request);
+  const bs = isConverted ? request.booking_summary : null;
+  const showAssignExternalAction = canManage && canAssignExternalCarrier(request);
+  const showCompleteExternalAction = canManage && canCompleteExternalMission(request);
+  const canCancelRequest = canManage && (
+    ['DRAFT', 'SENT', 'ACCEPTED', EXTERNAL_STATUSES.ASSIGNED].includes(request.status)
+  );
 
   return (
     <div className={s.page}>
@@ -373,7 +501,7 @@ const InstitutionRequestDetail = () => {
         </div>
 
         <div className={s.headerActions}>
-          {canManage && request.status === 'DRAFT' && (
+          {canManage && request.status === 'DRAFT' && !isExternal && (
             <>
               <button
                 className={`${s.actionBtn} ${s.btnSecondary}`}
@@ -390,7 +518,25 @@ const InstitutionRequestDetail = () => {
               </button>
             </>
           )}
-          {canManage && ['DRAFT', 'SENT', 'ACCEPTED'].includes(request.status) && (
+          {showAssignExternalAction && !showAssignExternalForm && (
+            <button
+              type="button"
+              className={`${s.actionBtn} ${s.btnSecondary}`}
+              onClick={() => setShowAssignExternalForm(true)}
+            >
+              <FaTruck size={12} /> Affecter transporteur externe
+            </button>
+          )}
+          {showCompleteExternalAction && !showCompleteExternalForm && (
+            <button
+              type="button"
+              className={`${s.actionBtn} ${s.btnPrimary}`}
+              onClick={() => setShowCompleteExternalForm(true)}
+            >
+              <FaTruck size={12} /> Déclarer réalisée
+            </button>
+          )}
+          {canCancelRequest && (
             <button
               className={`${s.actionBtn} ${s.btnDanger}`}
               onClick={handleCancel}
@@ -402,8 +548,73 @@ const InstitutionRequestDetail = () => {
         </div>
       </div>
 
+      {showAssignExternalAction && showAssignExternalForm && (
+        <div className={s.card}>
+          <ExternalCarrierFields
+            value={externalCarrierForm}
+            onChange={setExternalCarrierForm}
+            idPrefix={`detail-assign-external-${request.id}`}
+          />
+          <div className={s.headerActions}>
+            <button
+              type="button"
+              className={`${s.actionBtn} ${s.btnSecondary}`}
+              onClick={() => {
+                setShowAssignExternalForm(false);
+                setExternalCarrierForm(EMPTY_EXTERNAL_CARRIER_FORM);
+              }}
+            >
+              Annuler
+            </button>
+            <button
+              type="button"
+              className={`${s.actionBtn} ${s.btnPrimary}`}
+              onClick={handleAssignExternalCarrier}
+              disabled={assignExternalMutation.isPending}
+            >
+              Confirmer l&apos;affectation
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showCompleteExternalAction && showCompleteExternalForm && (
+        <div className={s.card}>
+          <p className={s.billingMuted}>
+            Déclaration manuelle : la mission sera marquée comme réalisée par l&apos;institution.
+          </p>
+          <textarea
+            rows={3}
+            value={externalCompleteNotes}
+            onChange={(e) => setExternalCompleteNotes(e.target.value)}
+            placeholder="Notes (optionnel)"
+            className={s.billingSelect}
+          />
+          <div className={s.headerActions}>
+            <button
+              type="button"
+              className={`${s.actionBtn} ${s.btnSecondary}`}
+              onClick={() => {
+                setShowCompleteExternalForm(false);
+                setExternalCompleteNotes('');
+              }}
+            >
+              Annuler
+            </button>
+            <button
+              type="button"
+              className={`${s.actionBtn} ${s.btnPrimary}`}
+              onClick={handleCompleteExternalMission}
+              disabled={completeExternalMutation.isPending}
+            >
+              Confirmer la déclaration
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ═══ CARD 1 — Transport summary (hero) ═══ */}
-      {isConverted && bs && (
+      {isConverted && !isExternal && bs && (
         <div className={s.summaryCard}>
           <div className={s.summaryTop}>
             <div className={s.summaryTopIcon}><FaTruck /></div>
@@ -446,6 +657,71 @@ const InstitutionRequestDetail = () => {
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {isExternal && (
+        <div className={s.summaryCard}>
+          <div className={s.summaryTop}>
+            <div className={s.summaryTopIcon}><FaTruck /></div>
+            <div className={s.summaryTopInfo}>
+              <p className={s.summaryCompany}>Transporteur externe</p>
+              <p className={s.summaryMeta}>{request.external_carrier?.name || '—'}</p>
+            </div>
+          </div>
+          <div className={s.summaryBody}>
+            <div className={s.summaryGrid}>
+              {request.external_carrier?.phone && (
+                <div className={s.summaryItem}>
+                  <span className={s.summaryLabel}>Téléphone</span>
+                  <span className={s.summaryValue}>{request.external_carrier.phone}</span>
+                </div>
+              )}
+              {request.external_carrier?.email && (
+                <div className={s.summaryItem}>
+                  <span className={s.summaryLabel}>Email</span>
+                  <span className={s.summaryValue}>
+                    <a href={`mailto:${request.external_carrier.email}`}>{request.external_carrier.email}</a>
+                  </span>
+                </div>
+              )}
+              {request.external_carrier?.reference && (
+                <div className={s.summaryItem}>
+                  <span className={s.summaryLabel}>Référence</span>
+                  <span className={s.summaryValue}>{request.external_carrier.reference}</span>
+                </div>
+              )}
+              {request.external_carrier?.reason && (
+                <div className={s.summaryItem}>
+                  <span className={s.summaryLabel}>Raison</span>
+                  <span className={s.summaryValue}>{request.external_carrier.reason}</span>
+                </div>
+              )}
+              {request.external_carrier?.executed_at && (
+                <div className={s.summaryItem}>
+                  <span className={s.summaryLabel}>Déclarée réalisée le</span>
+                  <span className={s.summaryValue}>{fmt(request.external_carrier.executed_at)}</span>
+                </div>
+              )}
+            </div>
+            {request.external_carrier?.email && (
+              <div className={s.carrierEmailActions}>
+                <button
+                  type="button"
+                  className={s.carrierEmailBtn}
+                  onClick={handleComposeCarrierEmail}
+                  disabled={composingEmail}
+                  title="Télécharge le bon de transport et ouvre un e-mail pré-rempli pour le transporteur"
+                >
+                  <FaEnvelope size={12} />
+                  {composingEmail ? 'Préparation…' : 'Ouvrir dans ma messagerie'}
+                </button>
+                <span className={s.carrierEmailHint}>
+                  Le bon (PDF) est téléchargé : joignez-le à l&apos;e-mail avant l&apos;envoi.
+                </span>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -550,6 +826,7 @@ const InstitutionRequestDetail = () => {
       {/* ═══ CARD 6 — Facturation ═══ */}
       {(canBillingEdit || request.billing_intent) && (
         <BillingSection
+          key={request.id}
           request={request}
           canBilling={canBillingEdit}
           billingMutation={billingMutation}
@@ -558,7 +835,7 @@ const InstitutionRequestDetail = () => {
       )}
 
       {/* ═══ Communication (si booking converti et chauffeur assigné ou en course) ═══ */}
-      {isConverted && request.booking_id && (() => {
+      {isConverted && !isExternal && request.booking_id && (() => {
         const chatActiveStatuses = ['ASSIGNED', 'EN_ROUTE', 'IN_PROGRESS'];
         const statusNorm = resolveBookingStatusKey(bs);
         const canShowChat = chatActiveStatuses.includes(statusNorm);

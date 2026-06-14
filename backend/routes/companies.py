@@ -1472,11 +1472,27 @@ def _reservations_base_query_for_company_day(company_id: int, day_str: str):
         .all()
     )
     outbound_ids = [b_id for (b_id,) in outbound_ids]
-    if outbound_ids:
+    route_group_ids = [
+        group_id
+        for (group_id,) in Booking.query.filter(
+            visibility_filter,
+            Booking.scheduled_time >= start_local,
+            Booking.scheduled_time < end_local,
+            Booking.route_group_id.isnot(None),
+        )
+        .with_entities(Booking.route_group_id)
+        .distinct()
+        .all()
+        if group_id
+    ]
+    if outbound_ids or route_group_ids:
         base_query = base_query.filter(
             or_(
                 (Booking.scheduled_time >= start_local)
                 & (Booking.scheduled_time < end_local),
+                Booking.route_group_id.in_(route_group_ids)
+                if route_group_ids
+                else False,
                 Booking.is_return
                 & or_(
                     Booking.scheduled_time.is_(None),
@@ -1783,11 +1799,27 @@ class CompanyReservations(Resource):
                 .all()
             )
             outbound_ids = [b_id for (b_id,) in outbound_ids]
-            if outbound_ids:
+            route_group_ids = [
+                group_id
+                for (group_id,) in Booking.query.filter(
+                    visibility_filter,
+                    Booking.scheduled_time >= start_local,
+                    Booking.scheduled_time < end_local,
+                    Booking.route_group_id.isnot(None),
+                )
+                .with_entities(Booking.route_group_id)
+                .distinct()
+                .all()
+                if group_id
+            ]
+            if outbound_ids or route_group_ids:
                 base_query = base_query.filter(
                     or_(
                         (Booking.scheduled_time >= start_local)
                         & (Booking.scheduled_time < end_local),
+                        Booking.route_group_id.in_(route_group_ids)
+                        if route_group_ids
+                        else False,
                         Booking.is_return
                         & or_(
                             Booking.scheduled_time.is_(None),
@@ -2005,10 +2037,14 @@ class CompanyReservations(Resource):
         reservations = query.offset((page - 1) * per_page).limit(per_page).all()
 
         from services.companies.booking_transfer_cache import (
+            attach_route_group_leg_counts_to_bookings,
+            attach_serialize_context_to_bookings,
             attach_transfer_cache_to_bookings,
         )
 
         attach_transfer_cache_to_bookings(reservations)
+        attach_route_group_leg_counts_to_bookings(reservations)
+        attach_serialize_context_to_bookings(reservations, company_id)
 
         # Retourner les données dans le format attendu par le frontend
         try:
@@ -2368,6 +2404,122 @@ class RejectReservation(Resource):
             sentry_sdk.capture_exception(e)
             db.session.rollback()
 
+            return APIErrorHandler.handle_exception(e, logger)
+
+
+# ======================================================
+# 3bis. Révalidation transporteur : réponse aux demandes de modification
+# ======================================================
+
+
+def _respond_to_change_request(reservation_id: int, change_id: int, action: str):
+    """Logique partagée accept/refuse d'une demande de validation (PR2)."""
+    from application.institutions.respond_to_change_request import (
+        RespondToChangeRequestInput,
+        RespondToChangeRequestUseCase,
+    )
+
+    company, error_response, status_code = _get_current_company_via_use_case()
+    if error_response:
+        return error_response, status_code
+
+    company_id_obj = getattr(company, "id", None)
+    try:
+        company_id = int(company_id_obj) if company_id_obj is not None else None
+    except Exception:
+        company_id = None
+    if company_id is None:
+        return APIErrorHandler.handle_exception(
+            Exception("Entreprise introuvable (ID invalide)."),
+            logger,
+        )
+
+    data = request.get_json(silent=True) or {}
+    version = data.get("version")
+    if version is None:
+        return APIErrorHandler.handle_validation_error(
+            "Le champ 'version' est obligatoire pour la validation optimiste.",
+            field="version",
+            logger_instance=logger,
+        )
+    try:
+        version_int = int(version)
+    except (TypeError, ValueError):
+        return APIErrorHandler.handle_validation_error(
+            "Le champ 'version' doit être un entier.",
+            field="version",
+            logger_instance=logger,
+        )
+
+    user_id = None
+    try:
+        from flask import g as flask_g
+
+        current_user = getattr(flask_g, "current_user", None)
+        user_id = int(current_user.id) if current_user else None
+    except Exception:
+        user_id = None
+
+    uc = RespondToChangeRequestUseCase()
+    result = uc.execute(
+        RespondToChangeRequestInput(
+            booking_id=reservation_id,
+            change_request_id=change_id,
+            company_id=company_id,
+            user_id=user_id,
+            action=action,
+            version=version_int,
+            reason=(data.get("reason") or None),
+        )
+    )
+
+    if not result.success:
+        body: dict[str, Any] = {"error": result.error}
+        if result.payload:
+            body.update(result.payload)
+        return body, result.status_code
+
+    return {
+        "success": True,
+        "booking_id": result.booking_id,
+        "change_request_id": result.change_request_id,
+        "status": result.status,
+        "redispatched": result.redispatched,
+        **(result.payload or {}),
+    }, result.status_code
+
+
+@companies_ns.route(
+    "/me/reservations/<int:reservation_id>/change-requests/<int:change_id>/accept"
+)
+class AcceptBookingChangeRequest(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    @limiter.limit("200 per hour")
+    def post(self, reservation_id: int, change_id: int):
+        """Le transporteur accepte une modification institution (révalidation)."""
+        try:
+            return _respond_to_change_request(reservation_id, change_id, "accept")
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            db.session.rollback()
+            return APIErrorHandler.handle_exception(e, logger)
+
+
+@companies_ns.route(
+    "/me/reservations/<int:reservation_id>/change-requests/<int:change_id>/refuse"
+)
+class RefuseBookingChangeRequest(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    @limiter.limit("200 per hour")
+    def post(self, reservation_id: int, change_id: int):
+        """Le transporteur refuse une modification → remise en diffusion."""
+        try:
+            return _respond_to_change_request(reservation_id, change_id, "refuse")
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            db.session.rollback()
             return APIErrorHandler.handle_exception(e, logger)
 
 
@@ -3832,11 +3984,15 @@ class TriggerReturnBooking(Resource):
             )
 
         return_time = uc_result.decision.return_time
-        return_time_confirmed = not (
-            return_time.hour == 0
-            and return_time.minute == 0
-            and return_time.second == 0
-        )
+        explicit_confirmed = data.get("time_confirmed")
+        if explicit_confirmed is not None:
+            return_time_confirmed = bool(explicit_confirmed)
+        else:
+            return_time_confirmed = not (
+                return_time.hour == 0
+                and return_time.minute == 0
+                and return_time.second == 0
+            )
 
         # 3) Créer / mettre à jour le retour (toujours ACCEPTED ici)
         if uc_result.decision.action == "modify_current":
@@ -5727,6 +5883,7 @@ class ScheduleReservation(Resource):
             booking,
             scheduled_time_iso=str(iso),
             is_outbound_completed=True,
+            time_confirmed=data.get("time_confirmed"),
         )
         if not uc_result.ok:
             return APIErrorHandler.handle_validation_error(

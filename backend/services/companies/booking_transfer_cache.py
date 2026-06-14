@@ -91,3 +91,39 @@ def attach_transfer_cache_to_bookings(bookings: list[Booking]) -> None:
             bid,
             {"is_transferred": False, "active_transfer": None},
         )
+
+
+def attach_route_group_leg_counts_to_bookings(bookings: list[Booking]) -> None:
+    """Précharge le nombre de legs par route_group_id (badges multi-étapes)."""
+    if not bookings:
+        return
+    group_ids = {
+        str(b.route_group_id)
+        for b in bookings
+        if getattr(b, "route_group_id", None)
+    }
+    if not group_ids:
+        return
+    from sqlalchemy import func
+
+    from ext import db
+
+    rows = (
+        db.session.query(Booking.route_group_id, func.count(Booking.id))
+        .filter(Booking.route_group_id.in_(group_ids))
+        .group_by(Booking.route_group_id)
+        .all()
+    )
+    counts = {str(gid): int(count) for gid, count in rows}
+    for booking in bookings:
+        gid = getattr(booking, "route_group_id", None)
+        if gid:
+            booking._route_group_leg_count = counts.get(str(gid), 1)  # noqa: SLF001
+
+
+def attach_serialize_context_to_bookings(
+    bookings: list[Booking],
+    viewer_company_id: int | None,
+) -> None:
+    for booking in bookings:
+        booking._serialize_viewer_company_id = viewer_company_id  # noqa: SLF001

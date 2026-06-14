@@ -228,8 +228,10 @@ class BookingUpdateSchema(Schema):
     scheduled_time = fields.Str(
         validate=validate.Regexp(
             ISO8601_DATETIME_REGEX, error="scheduled_time doit être au format ISO 8601"
-        )
+        ),
+        allow_none=True,
     )
+    time_confirmed = fields.Bool(allow_none=True)
     amount = fields.Float(
         validate=validate.Range(min=0.5, error="Le montant minimum accepté est 0.5")
     )

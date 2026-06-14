@@ -119,6 +119,36 @@ class SendTransportRequestUseCase:
                     status_code=400,
                 )
 
+            from models.enums import CarrierSource
+
+            if transport_request.carrier_source == CarrierSource.EXTERNAL.value:
+                return SendTransportRequestResult(
+                    success=False,
+                    transport_request_id=input_data.transport_request_id,
+                    error=(
+                        "Mission externalisée : retour au flux LIRIE non supporté en V1"
+                    ),
+                    status_code=409,
+                )
+
+            from services.institutions.mission_schedule import (
+                get_effective_dispatch_time,
+                has_at_least_one_confirmed_time,
+            )
+
+            if not has_at_least_one_confirmed_time(transport_request):
+                return SendTransportRequestResult(
+                    success=False,
+                    transport_request_id=input_data.transport_request_id,
+                    error=(
+                        "Pour envoyer aux transporteurs, confirmez au moins une heure "
+                        "(départ, rendez-vous ou retour)."
+                    ),
+                    status_code=400,
+                )
+
+            dispatch_time = get_effective_dispatch_time(transport_request)
+
             # 4. Vérifier s'il y a déjà des offres PENDING
             existing_pending = RequestOffer.query.filter_by(
                 transport_request_id=transport_request.id,
@@ -171,7 +201,7 @@ class SendTransportRequestUseCase:
             settings = get_or_create_settings(input_data.institution_id)
             timeout_minutes = calculate_timeout(
                 input_data.institution_id,
-                transport_request.scheduled_time,
+                dispatch_time,
             )
             now = datetime.now(UTC)
             expires_at = now + timedelta(minutes=timeout_minutes)
@@ -240,6 +270,12 @@ class SendTransportRequestUseCase:
             if transport_request.status == RequestStatus.DRAFT.value:
                 transport_request.status = RequestStatus.SENT.value
                 transport_request.sent_at = now
+
+            # Timeline transport: request_sent + offer_sent par offre
+            self._record_send_timeline(
+                transport_request=transport_request,
+                user_id=input_data.user_id,
+            )
 
             db.session.commit()
 
@@ -322,6 +358,64 @@ class SendTransportRequestUseCase:
                 transport_request_id=input_data.transport_request_id,
                 error=f"Erreur inattendue: {e!s}",
                 status_code=500,
+            )
+
+    @staticmethod
+    def _record_send_timeline(
+        *,
+        transport_request: TransportRequest,
+        user_id: int | None,
+    ) -> None:
+        """Historise l'envoi (request_sent) et chaque offre émise (offer_sent)."""
+        try:
+            from services.institutions.transport_timeline_service import (
+                TimelineActor,
+                record_event,
+            )
+
+            actor = TimelineActor(
+                actor_type="institution_user" if user_id else "api_key",
+                actor_user_id=user_id,
+            )
+            sent_event = record_event(
+                "request_sent",
+                institution_id=transport_request.institution_id,
+                transport_request_id=transport_request.id,
+                actor=actor,
+                correlation_id=f"request_sent:{transport_request.id}",
+            )
+
+            # Flush pour obtenir les ids d'offres fraîchement créées
+            db.session.flush()
+            pending_offers = RequestOffer.query.filter_by(
+                transport_request_id=transport_request.id,
+                status=OfferStatus.PENDING.value,
+            ).all()
+            source_event_id = sent_event.id if sent_event else None
+            for offer in pending_offers:
+                company = Company.query.get(offer.company_id)
+                record_event(
+                    "offer_sent",
+                    institution_id=transport_request.institution_id,
+                    transport_request_id=transport_request.id,
+                    actor=TimelineActor(
+                        actor_type="system", company_id=offer.company_id
+                    ),
+                    payload={
+                        "company_id": offer.company_id,
+                        "company_name": company.name if company else None,
+                        "offer_id": offer.id,
+                        "expires_at": offer.expires_at.isoformat()
+                        if offer.expires_at
+                        else None,
+                        "dispatch_mode": offer.mode,
+                    },
+                    correlation_id=f"offer_sent:{offer.id}",
+                    source_event_id=source_event_id,
+                )
+        except Exception as timeline_err:
+            logger.warning(
+                "[SendTransportRequest] Timeline recording failed: %s", timeline_err
             )
 
     def _create_sequential_offer(
@@ -424,6 +518,9 @@ class SendTransportRequestUseCase:
             from services.events.institution_events import (
                 persist_company_notification,
             )
+            from services.institutions.mission_schedule import (
+                get_effective_dispatch_time,
+            )
 
             pending_offers = RequestOffer.query.filter_by(
                 transport_request_id=transport_request.id,
@@ -438,8 +535,10 @@ class SendTransportRequestUseCase:
                 f"{patient.first_name} {patient.last_name}" if patient else ""
             )
 
-            sched = transport_request.scheduled_time
-            time_str = sched.strftime("%d.%m.%Y %H:%M")
+            sched = get_effective_dispatch_time(transport_request)
+            time_str = (
+                sched.strftime("%d.%m.%Y %H:%M") if sched else "Date à confirmer"
+            )
             round_trip = " (A/R)" if transport_request.is_round_trip else ""
 
             title = "Nouvelle demande de transport"

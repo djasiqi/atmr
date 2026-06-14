@@ -62,22 +62,16 @@ function formatDateOnly(value) {
 export function renderBookingDateTime(booking) {
   if (!booking) return 'Non spécifié';
 
-  const isReturn = booking.is_return;
-  const scheduledTime = booking.scheduled_time;
-  const timeConfirmed = booking.time_confirmed;
-
-  // Si c'est un retour avec heure non confirmée (time_confirmed = false)
-  if (isReturn && scheduledTime && timeConfirmed !== true) {
-    const date = new Date(scheduledTime);
-    const pad = (n) => String(n).padStart(2, '0');
-    const day = pad(date.getDate());
-    const month = pad(date.getMonth() + 1);
-    const year = date.getFullYear();
-    return `${day}.${month}.${year} • À définir`;
+  const scheduling = booking.scheduling;
+  if (scheduling?.display_datetime) {
+    return scheduling.display_datetime;
+  }
+  if (scheduling && scheduling.time_defined === false) {
+    return scheduling.display_time || 'À définir';
   }
 
-  // Si c'est un retour sans scheduled_time du tout
-  if (isReturn && !scheduledTime) {
+  const timeConfirmed = booking.time_confirmed;
+  if (timeConfirmed === false) {
     const returnDateLabel =
       formatDateOnly(booking.return_date) ||
       formatDateOnly(booking.scheduled_date) ||
@@ -86,25 +80,10 @@ export function renderBookingDateTime(booking) {
     return returnDateLabel ? `${returnDateLabel} • À définir` : 'À définir';
   }
 
-  // 🔍 Détecter les heures à 00:00 (heure par défaut à confirmer)
-  if (scheduledTime) {
-    const date = new Date(scheduledTime);
-    const hours = date.getHours();
-    const minutes = date.getMinutes();
-
-    // Si l'heure est exactement 00:00, c'est probablement une heure à confirmer
-    if (hours === 0 && minutes === 0) {
-      const pad = (n) => String(n).padStart(2, '0');
-      const day = pad(date.getDate());
-      const month = pad(date.getMonth() + 1);
-      const year = date.getFullYear();
-      return `${day}.${month}.${year} • À définir`;
-    }
+  if (!booking.scheduled_time) {
+    return 'À définir';
   }
 
-  // ✅ Toujours utiliser le format suisse (dd.MM.yyyy) même si date_formatted est présent
-  // Ignorer date_formatted du backend pour uniformiser l'affichage
-  // Utiliser directement scheduled_time pour garantir le format suisse
   return formatLocalNaive(booking.scheduled_time);
 }
 

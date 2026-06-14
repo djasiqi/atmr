@@ -94,6 +94,7 @@ from .enums import (
     RealtimeEntityType,
     RealtimeEventType,
     RequestStatus,
+    CarrierSource,
     SenderRole,
     ServiceCoverageMode,
     ShiftStatus,
@@ -107,6 +108,7 @@ from .enums import (
 from .billing_profile import CompanyBillingProfile
 from .billing_audit_log import BillingAuditLog
 from .booking_change_event import BookingChangeAcknowledgement, BookingChangeEvent
+from .booking_change_request import BookingChangeRequest
 from .billing_party import BillingParty, ClientBillingParty
 from .contact_request import ContactRequest
 from .curator_team import CuratorTeam, CuratorTeamMember
@@ -147,6 +149,8 @@ from .service_area_pricing import (
     ServiceArea,
 )
 from .transport_request import TransportRequest
+from .transport_request_leg import TransportRequestLeg
+from .transport_timeline_event import TransportTimelineEvent
 from .eta_accuracy_log import EtaAccuracyLog
 from .invoice import (
     CompanyBillingSettings,
@@ -218,6 +222,7 @@ __all__ = [
     "BillingAuditLog",
     "BookingChangeAcknowledgement",
     "BookingChangeEvent",
+    "BookingChangeRequest",
     "BillingReviewStatus",
     "BillingSource",
     "ClientBillingParty",
@@ -340,6 +345,7 @@ __all__ = [
     "RefreshToken",
     "RequestOffer",  # ✅ ÉTAPE 4: Offres de transport
     "RequestStatus",  # ✅ Statut demande transport
+    "CarrierSource",  # ✅ Mode d'exécution LIRIE / externe
     "SecretRotation",
     "SenderRole",
     "ServiceArea",
@@ -348,6 +354,8 @@ __all__ = [
     "ShiftType",
     "TaskFailure",
     "TransportRequest",  # ✅ Demandes transport institution
+    "TransportRequestLeg",
+    "TransportTimelineEvent",
     "TransportVoucher",
     "TransportVoucherFile",
     "TransportVoucherStatus",

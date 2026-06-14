@@ -17,7 +17,7 @@ import requests
 
 from ext import db
 from models import Booking
-from models.enums import BillingSource, BookingStatus
+from models.enums import BillingSource, BookingCreatedVia, BookingStatus
 from shared.constants import ErrorCodes
 from shared.time_utils import parse_local_naive
 
@@ -226,8 +226,7 @@ class CreateManualBookingUseCase:
                     return_dt = parse_local_naive(combined)
                     return_time_confirmed = True
                 else:
-                    combined = f"{return_date_str}T00:00:00"
-                    return_dt = parse_local_naive(combined)
+                    return_dt = None
                     return_time_confirmed = False
             except Exception as e:
                 raise CreateManualBookingError(
@@ -617,6 +616,7 @@ class CreateManualBookingUseCase:
             outbound.status = BookingStatus.ACCEPTED
             outbound.company_id = cid
             outbound.booking_type = "manual"
+            outbound.created_via = BookingCreatedVia.DISPATCHER
             outbound.user_id = user.id if user else None
             outbound.is_return = False
             outbound.duration_seconds = dur_s
@@ -700,6 +700,7 @@ class CreateManualBookingUseCase:
                 return_booking.amount = amount_to_use
                 return_booking.company_id = cid
                 return_booking.booking_type = "manual"
+                return_booking.created_via = BookingCreatedVia.DISPATCHER
                 return_booking.mission_type = mission_type
                 return_booking.delivery_description = delivery_description
                 return_booking.user_id = user.id if user else None

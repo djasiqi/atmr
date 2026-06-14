@@ -80,6 +80,46 @@
   --info-bg: #dbeafe;
   --info-border: #93c5fd;
 
+  /* ============ NEUTRES (métier, cartes) ============ */
+  --neutral-100: #f8fafc;
+  --neutral-200: #e2e8f0;
+  --neutral-300: #cbd5e1;
+  --neutral-400: #94a3b8;
+  --neutral-500: #64748b;
+  --neutral-600: #475569;
+  --meta-text: var(--text-secondary);
+  --meta-text-secondary: var(--text-tertiary);
+
+  /* ============ STATUTS (STOP GATE UX Couleurs) ============ */
+  --status-neutral-bg: var(--bg-tertiary);
+  --status-neutral-text: var(--text-tertiary);
+  --status-neutral-border: var(--border-primary);
+
+  --status-info-bg: var(--info-bg);
+  --status-info-text: #1d4ed8;
+  --status-info-border: var(--info-border);
+
+  --status-success-bg: var(--success-bg);
+  --status-success-text: #15803d;
+  --status-success-border: var(--success-border);
+
+  --status-warning-bg: var(--warning-bg);
+  --status-warning-text: #92400e;
+  --status-warning-border: var(--warning-border);
+
+  --status-error-bg: var(--error-bg);
+  --status-error-text: #991b1b;
+  --status-error-border: var(--error-border);
+
+  /* Alertes transverses (retard — distinct du statut) */
+  --alert-warning-bg: var(--warning-bg);
+  --alert-warning-text: #92400e;
+  --alert-warning-border: var(--warning-border);
+
+  --alert-error-bg: var(--error-bg);
+  --alert-error-text: #991b1b;
+  --alert-error-border: var(--error-border);
+
   /* ============ DISPATCH & MONITORING ============ */
   --priority-critical: #dc3545;
   --priority-high: #fd7e14;

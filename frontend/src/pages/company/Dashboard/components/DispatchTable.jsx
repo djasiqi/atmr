@@ -1,8 +1,13 @@
 // src/pages/company/Dashboard/components/DispatchTable.jsx
 import React, { useState, useCallback } from 'react';
 import styles from './ReservationTable.module.css';
-import { FiCheckCircle, FiXCircle, FiAlertTriangle, FiRefreshCw, FiEye, FiClock } from 'react-icons/fi';
+import { FiCheckCircle, FiXCircle, FiAlertTriangle, FiEye, FiClock } from 'react-icons/fi';
 import ReservationActions from '../../../../components/reservations/ReservationActions';
+import BookingIdentityCell from '../../../../components/booking/BookingIdentityCell';
+import BookingTripBadges from '../../../../components/booking/BookingTripBadges';
+import BookingStatusBadge from '../../../../components/booking/BookingStatusBadge';
+import { isAppointmentTimeDefined } from '../../../../utils/bookingScheduling';
+import BookingScheduleCell from '../../../../components/booking/BookingScheduleCell';
 import DriverInlineSelect from '../../Dispatch/components/DriverInlineSelect';
 import { pickupArrivalHint } from '../../../../utils/formatPickupEta';
 import {
@@ -28,8 +33,8 @@ export const STATUS_FR = {
   return_completed: 'Retour terminé',
 };
 
-// V7: Statut composite — coherent avec le dashboard
-const getCompositeStatus = (r) => {
+// V7: Statut composite — conservé pour exports / compatibilité externe
+export const getCompositeStatus = (r) => {
   const status = r.status?.toLowerCase() || 'unknown';
   return STATUS_FR[status] || (r.status || '').replace('_', ' ') || status;
 };
@@ -42,33 +47,11 @@ const getDelayLevel = (minutes) => {
   return 'critical';
 };
 
-// Detecter si un retour necessite confirmation d'heure avant assignation
+// Retour nécessitant confirmation d'heure avant assignation (INV-2)
 const checkNeedsTimeConfirmation = (r) => {
   const isReturn = !!(r.is_return || r.booking_type === 'return' || r.type === 'return');
   if (!isReturn) return false;
-
-  const hasScheduledTime = !!r.scheduled_time;
-  const timeConfirmed = r.time_confirmed === true;
-
-  let isDefaultTime = false;
-  if (r.scheduled_time) {
-    const timeStr = r.scheduled_time.toString();
-    // Retour "heure à définir" peut arriver en `00:00` avec ou sans secondes.
-    isDefaultTime =
-      /[T ]00:00(?::00)?(?:[.,]\d+)?(?:Z|[+-]\d{2}:?\d{2})?$/i.test(timeStr) ||
-      timeStr.includes('T00:00:00') ||
-      timeStr.includes(' 00:00:00') ||
-      timeStr.includes('T00:00') ||
-      timeStr.includes(' 00:00');
-    if (!isDefaultTime) {
-      const parsed = new Date(timeStr.replace(' ', 'T'));
-      if (!Number.isNaN(parsed.getTime())) {
-        isDefaultTime = parsed.getHours() === 0 && parsed.getMinutes() === 0;
-      }
-    }
-  }
-
-  return !timeConfirmed || !hasScheduledTime || isDefaultTime;
+  return !isAppointmentTimeDefined(r);
 };
 
 // V17: Hierarchie visuelle stricte danger > warning
@@ -98,13 +81,15 @@ const DELAY_BADGE_CLASS = {
   critical: styles.delayBadgeCritical,
 };
 
+const EMPTY_ROWS = [];
+
 /**
  * Tableau Dispatch refactore (Zone D)
- * 6 colonnes : Client, Heure, Trajet, Chauffeur, Statut, Actions
+ * 6 colonnes : Passager, Heure, Trajet, Chauffeur, Statut, Actions
  */
 const DispatchTable = ({
-  reservations = [],
-  dispatches,
+  reservations = EMPTY_ROWS,
+  dispatches = null,
   delays = [],
   delayMap: externalDelayMap,
   onRowClick,
@@ -128,7 +113,10 @@ const DispatchTable = ({
   const [localAutoOpenId, _setLocalAutoOpenId] = useState(null);
   const effectiveAutoOpenId = autoOpenId ?? localAutoOpenId;
 
-  const data = dispatches || reservations || [];
+  const data = React.useMemo(
+    () => dispatches || reservations || EMPTY_ROWS,
+    [dispatches, reservations]
+  );
   const firstUnassignedIndex = data.findIndex((r) => !r.driver_id && !r.driver);
   const fallbackDriverAnchorIndex = firstUnassignedIndex >= 0 ? firstUnassignedIndex : 0;
   const firstStatusAnchorIndex = data.length > 0 ? 0 : -1;
@@ -152,14 +140,6 @@ const DispatchTable = ({
     return map;
   })();
 
-  // Formater heure
-  const formatTime = useCallback((timeString) => {
-    if (!timeString) return '\u2014';
-    const date = new Date(timeString);
-    if (isNaN(date.getTime())) return '\u2014';
-    return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-  }, []);
-
   // Handler clic sur ligne -> ouvre le panel lateral de details
   const handleRowClick = useCallback((r) => {
     onRowClick?.(r);
@@ -175,12 +155,21 @@ const DispatchTable = ({
       null;
   };
 
+  const routeGroupSizes = React.useMemo(() => {
+    const sizes = {};
+    data.forEach((r) => {
+      const g = r?.route_group_id;
+      if (g) sizes[g] = (sizes[g] || 0) + 1;
+    });
+    return sizes;
+  }, [data]);
+
   return (
     <div className={styles.tableContainer} data-tour-id="dispatch-table">
       <table className={styles.table}>
         <thead>
           <tr>
-            <th>Client</th>
+            <th>Passager</th>
             <th>Heure</th>
             <th>Trajet</th>
             <th>Chauffeur</th>
@@ -212,6 +201,14 @@ const DispatchTable = ({
             const noActionStatuses = ['canceled', 'cancelled', 'completed', 'return_completed', 'rejected', 'no_show'];
             const hasActions = !noActionStatuses.includes(status);
 
+            // Parcours multi-étapes : un leg accepté/assigné sans heure définie doit
+            // pouvoir être planifié (action « Planifier l'heure »), comme un retour.
+            const isMultiStopUnscheduled =
+              !!r.route_group_id &&
+              !isAppointmentTimeDefined(r) &&
+              ['accepted', 'assigned'].includes(status);
+            const needsTimeScheduling = needsTimeConfirmation || isMultiStopUnscheduled;
+
             const isTransferredSender = currentCompanyId && r.is_transferred && r.active_transfer && r.active_transfer.owner_company_id === currentCompanyId;
             const canManageReservation = !isTransferredSender || status === 'pending';
 
@@ -222,28 +219,21 @@ const DispatchTable = ({
                 className={`${styles.tableRow} ${ROW_PRIORITY_CLASS[priority] || ''} ${onRowClick ? styles.rowClickable : ''}`}
                 data-tour-id={index === firstRowClickableIndex ? 'dispatch-row-clickable' : undefined}
               >
-                {/* Colonne Client */}
                 <td className={styles.clientCell}>
-                  <span className={styles.clientName}>{r.client?.full_name || r.client_name || '\u2014'}</span>
-                  {r.client?.institution_name && (
-                    <span className={styles.clientInstitution}>{r.client.institution_name}</span>
-                  )}
-                  {r.is_return && <span className={styles.clientSub}>Retour</span>}
-                  {r.is_transferred && <span className={styles.clientSub}>
-                    <FiRefreshCw size={10} /> Transfert
-                  </span>}
+                  <BookingIdentityCell booking={r} />
+                  <BookingTripBadges booking={r} routeGroupSizes={routeGroupSizes} />
                 </td>
 
                 {/* Colonne Heure + badge retard */}
                 <td className={styles.timeCell}>
-                  {needsTimeConfirmation ? (
+                  {!isAppointmentTimeDefined(r) && (r.is_return || checkNeedsTimeConfirmation(r)) ? (
                     <span className={styles.timeToDefine} title="Heure de retour a definir">
                       <FiClock size={12} /> A definir
                     </span>
                   ) : (
                     <div className={styles.timeCellStack}>
                       <div className={styles.timePrimaryRow}>
-                        <span className={styles.timeBold}>{formatTime(r.scheduled_time)}</span>
+                        <BookingScheduleCell booking={r} mode="time" className={styles.timeBold} />
                         {delayLevel && (
                           <span
                             className={`${styles.delayBadge} ${DELAY_BADGE_CLASS[delayLevel] || ''}`}
@@ -307,36 +297,9 @@ const DispatchTable = ({
 
                 {/* Colonne Statut FR V7 */}
                 <td>
-                  <span
-                    className={`${styles.statusBadge} ${styles[status] || ''}`}
-                    data-tour-id={index === firstStatusAnchorIndex ? 'dispatch-status-anchor' : undefined}
-                  >
-                    {getCompositeStatus(r)}
+                  <span data-tour-id={index === firstStatusAnchorIndex ? 'dispatch-status-anchor' : undefined}>
+                    <BookingStatusBadge status={status} />
                   </span>
-                  {r.is_transferred && r.active_transfer && (() => {
-                    const isSender = currentCompanyId && r.active_transfer.owner_company_id === currentCompanyId;
-                    const isReceiver = currentCompanyId && r.active_transfer.executing_company_id === currentCompanyId;
-                    let direction = '';
-                    let partnerName = '';
-                    if (isSender) {
-                      direction = 'a';
-                      partnerName = r.active_transfer.executing_company_name || r.executing_company_name || 'partenaire';
-                    } else if (isReceiver) {
-                      direction = 'de';
-                      partnerName = r.active_transfer.owner_company_name || 'partenaire';
-                    } else {
-                      direction = 'vers';
-                      partnerName = r.executing_company_name || r.company_name || 'partenaire';
-                    }
-                    return (
-                      <span
-                        className={styles.transferBadge}
-                        title={`Transferee ${direction} ${partnerName}`}
-                      >
-                        <FiRefreshCw size={10} /> Transferee
-                      </span>
-                    );
-                  })()}
                 </td>
 
                 {/* Colonne Actions */}
@@ -372,7 +335,7 @@ const DispatchTable = ({
                       )}
                       <ReservationActions
                         reservation={r}
-                        needsTimeConfirmationOverride={needsTimeConfirmation}
+                        needsTimeConfirmationOverride={needsTimeScheduling}
                         onSchedule={onSchedule}
                         onDispatchNow={onDispatchNow}
                         onAssign={onAssign}

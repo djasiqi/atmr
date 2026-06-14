@@ -469,8 +469,8 @@ const AdminReservations = () => {
                       <span className={styles.idBadge}>{row.id}</span>
                     </td>
                     <td>{row.created_at ? new Date(row.created_at).toLocaleString('fr-CH') : '—'}</td>
-                    <td>{row.scheduled_at ? new Date(row.scheduled_at).toLocaleString('fr-CH') : '—'}</td>
-                    <td>{row.client_name ?? '—'}</td>
+                    <td>{row.scheduling?.display_datetime || (row.scheduled_at ? new Date(row.scheduled_at).toLocaleString('fr-CH') : '—')}</td>
+                    <td>{row.identity?.primary_label || row.client_name || '—'}</td>
                     <td className={styles.locationCell} title={row.institution_name || ''}>
                       {row.institution_name ?? '—'}
                     </td>

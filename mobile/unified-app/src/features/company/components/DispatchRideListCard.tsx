@@ -23,7 +23,8 @@ import {
   uiForDispatchDelayMinutes,
 } from "../utils/dispatchWebAlignment";
 import { isDispatchCompleted, isDispatchCancelled } from "../utils/companyDispatchStatus";
-import { isPickupSentinel } from "../utils/pickupSentinel";
+import { isTimeUndefined } from "../utils/pickupSentinel";
+import { buildIdentityFromMission } from "../utils/bookingIdentity";
 import { createShadow } from "../../../styles/shadowStyles";
 
 /** Même coque que `operations-app` `EnterpriseCard` + `RideSnippetCard`. */
@@ -95,7 +96,7 @@ function MarqueeBadgeRowInner({
       {isCritical ? (
         <Ionicons name="warning-outline" size={10} color={accent} accessibilityElementsHidden />
       ) : null}
-      <AppText style={[styles.badgeDelayMinutes, { color: accent }]} numberOfLines={1}>
+      <AppText variant="caption" style={[styles.badgeDelayMinutes, { color: accent }]} numberOfLines={1}>
         {`+${delayMinutes}min`}
       </AppText>
       <AppText variant="caption" style={[styles.badgeLabelInline, { color: accent }]} numberOfLines={1}>
@@ -250,10 +251,12 @@ export function DispatchRideListCard({
   unassignedPressDisabled,
   footer,
 }: DispatchRideListCardProps) {
-  const hasSchedule = mission.scheduled_at && !isPickupSentinel(mission.scheduled_at);
+  const hasSchedule = mission.scheduled_at && !isTimeUndefined(mission);
   const pickupTime = hasSchedule ? formatDispatchScheduledTime(mission.scheduled_at) : "";
   const showTimeUndefined = !hasSchedule;
-  const client = mission.client_name?.trim() || `Course #${mission.mission_id}`;
+  const missionIdentity = buildIdentityFromMission(mission);
+  const client = missionIdentity.passengerLabel?.trim() || `Course #${mission.mission_id}`;
+  const sourceLine = missionIdentity.source?.name?.trim() || null;
 
   const normStatus = mission.status ? String(mission.status).toLowerCase().trim() : undefined;
   const isCompleted = isDispatchCompleted(mission);
@@ -335,6 +338,11 @@ export function DispatchRideListCard({
               <AppText variant="body" style={styles.client} numberOfLines={1} ellipsizeMode="tail">
                 {client}
               </AppText>
+              {sourceLine ? (
+                <AppText variant="caption" style={styles.sourceLine} numberOfLines={1} ellipsizeMode="tail">
+                  {sourceLine}
+                </AppText>
+              ) : null}
             </TouchableOpacity>
             <View style={styles.badgeContainer}>
               <Pressable
@@ -373,6 +381,11 @@ export function DispatchRideListCard({
               <AppText variant="body" style={styles.client} numberOfLines={1} ellipsizeMode="tail">
                 {client}
               </AppText>
+              {sourceLine ? (
+                <AppText variant="caption" style={styles.sourceLine} numberOfLines={1} ellipsizeMode="tail">
+                  {sourceLine}
+                </AppText>
+              ) : null}
             </TouchableOpacity>
             <View style={styles.badgeContainer}>
               {isCompleted ? (
@@ -514,9 +527,9 @@ const styles = StyleSheet.create({
     ...cardSurfaceShadow,
   },
   summaryRow: { flexDirection: "row", alignItems: "center", minWidth: 0 },
-  /** Client seul (tap) + pastille séparée — évite ScrollView / CTA imbriqués dans le tap déplier */
+  /** Passager seul (tap) + pastille séparée — évite ScrollView / CTA imbriqués dans le tap déplier */
   summaryMain: { flex: 1, flexDirection: "row", alignItems: "center", minWidth: 0 },
-  summaryTapSolo: { flex: 1, minWidth: 0, marginRight: 0, flexDirection: "row", alignItems: "center" },
+  summaryTapSolo: { flex: 1, minWidth: 0, marginRight: 0, flexDirection: "column", justifyContent: "center" },
   timeContainer: {
     width: 54,
     minHeight: 32,
@@ -532,7 +545,8 @@ const styles = StyleSheet.create({
     color: E.TEXT_MUTED,
     maxWidth: 54,
   },
-  client: { color: palette.client, fontWeight: "600", fontSize: FONT_SIZE.px14, width: 120, marginRight: 10, flexShrink: 0 },
+  client: { color: palette.client, fontWeight: "600", fontSize: FONT_SIZE.px14, flexShrink: 1 },
+  sourceLine: { color: palette.routeText, fontSize: FONT_SIZE.px11, marginTop: 1, flexShrink: 1 },
   chevronContainer: {
     width: 24,
     alignItems: "center",

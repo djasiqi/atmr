@@ -92,30 +92,48 @@ class UpdateCompanyReservationUseCase:
             updated_fields.append("dropoff_lon")
 
         if "scheduled_time" in validated_data:
-            try:
-                scheduled_local = parse_local_naive(validated_data["scheduled_time"])
-            except Exception as e:
-                return UpdateCompanyReservationResult(
-                    ok=False,
-                    error={"error": f"Format de date invalide: {e}"},
-                    status_code=400,
-                )
-            if scheduled_local is None:
-                return UpdateCompanyReservationResult(
-                    ok=False,
-                    error={"error": "Heure planifiée invalide ou manquante."},
-                    status_code=400,
-                )
-            booking.scheduled_time = scheduled_local
-            updated_fields.append("scheduled_time")
-            # Règle métier: 00:00 => heure à confirmer, sinon heure confirmée.
+            raw_st = validated_data["scheduled_time"]
+            if raw_st is None:
+                booking.scheduled_time = None
+                updated_fields.append("scheduled_time")
+                if hasattr(booking, "time_confirmed"):
+                    if "time_confirmed" in validated_data:
+                        booking.time_confirmed = bool(validated_data["time_confirmed"])
+                    else:
+                        booking.time_confirmed = False
+                    updated_fields.append("time_confirmed")
+            else:
+                try:
+                    scheduled_local = parse_local_naive(raw_st)
+                except Exception as e:
+                    return UpdateCompanyReservationResult(
+                        ok=False,
+                        error={"error": f"Format de date invalide: {e}"},
+                        status_code=400,
+                    )
+                if scheduled_local is None:
+                    return UpdateCompanyReservationResult(
+                        ok=False,
+                        error={"error": "Heure planifiée invalide ou manquante."},
+                        status_code=400,
+                    )
+                booking.scheduled_time = scheduled_local
+                updated_fields.append("scheduled_time")
+                if hasattr(booking, "time_confirmed"):
+                    if "time_confirmed" in validated_data:
+                        booking.time_confirmed = bool(validated_data["time_confirmed"])
+                    else:
+                        is_sentinel_midnight = (
+                            scheduled_local.hour == 0
+                            and scheduled_local.minute == 0
+                            and scheduled_local.second == 0
+                        )
+                        booking.time_confirmed = not is_sentinel_midnight
+                    updated_fields.append("time_confirmed")
+
+        if "time_confirmed" in validated_data and "scheduled_time" not in validated_data:
             if hasattr(booking, "time_confirmed"):
-                is_sentinel_midnight = (
-                    scheduled_local.hour == 0
-                    and scheduled_local.minute == 0
-                    and scheduled_local.second == 0
-                )
-                booking.time_confirmed = not is_sentinel_midnight
+                booking.time_confirmed = bool(validated_data["time_confirmed"])
                 updated_fields.append("time_confirmed")
 
         if "medical_facility" in validated_data:

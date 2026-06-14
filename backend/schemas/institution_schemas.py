@@ -6,6 +6,8 @@ Inclut les schemas pour:
 - TransportRequest (CRUD demandes de transport)
 """
 
+from datetime import date, timedelta
+
 import pytz
 from marshmallow import (
     EXCLUDE,
@@ -19,12 +21,23 @@ from marshmallow import (
 
 from models.enums import (
     BillingIntent,
+    CarrierSource,
     GenderEnum,
     InstitutionRole,
     LocationType,
     MissionType,
     RequestStatus,
 )
+from shared.time_utils import (
+    api_scheduled_iso_to_naive_geneva,
+    now_utc,
+    parse_iso8601,
+)
+
+# Délai minimal entre maintenant et un rendez-vous / arrivée (création).
+ARRIVAL_LEAD = timedelta(minutes=60)
+# Tolérance pour accepter un départ « maintenant » (raccourci Urgent).
+PICKUP_PAST_GRACE = timedelta(minutes=2)
 
 # ========== Constants ==========
 
@@ -32,6 +45,7 @@ VALID_GENDERS = [g.value for g in GenderEnum] + [g.name for g in GenderEnum]
 VALID_MISSION_TYPES = MissionType.choices()
 VALID_BILLING_INTENTS = BillingIntent.choices()
 VALID_REQUEST_STATUSES = RequestStatus.choices()
+VALID_CARRIER_SOURCES = CarrierSource.choices()
 VALID_INSTITUTION_ROLES = [r.value for r in InstitutionRole]
 VALID_LOCATION_TYPES = LocationType.choices()
 
@@ -503,8 +517,12 @@ class MobilitySchema(Schema):
         unknown = EXCLUDE
 
     wheelchair = fields.Bool(load_default=False)
+    vehicle_wheelchair = fields.Bool(load_default=False)
     stretcher = fields.Bool(load_default=False)
     needs_assistance = fields.Bool(load_default=False)
+    assistance_type = fields.Str(
+        validate=validate.Length(max=255), allow_none=True, load_default=None
+    )
     oxygen = fields.Bool(load_default=False)
     walking = fields.Bool(load_default=True)
 
@@ -620,15 +638,23 @@ class TransportRequestCreateSchema(Schema):
         },
     )
 
-    # Horaire (OBLIGATOIRE)
+    # Horaire
+    mission_date = fields.Date(
+        required=False,
+        allow_none=True,
+        metadata={"description": "Date de la mission (YYYY-MM-DD)"},
+    )
     scheduled_time = fields.Str(
-        required=True,
+        required=False,
+        allow_none=True,
         validate=validate.Regexp(
             ISO8601_DATETIME_REGEX,
             error="scheduled_time doit être au format ISO8601 (ex: 2026-02-04T14:30:00+01:00)",
         ),
-        metadata={"description": "Date/heure prévue (ISO8601 avec timezone)"},
+        metadata={"description": "Heure de départ (ISO8601) si pickup_time_confirmed"},
     )
+    pickup_time_confirmed = fields.Bool(load_default=None, allow_none=True)
+    appointment_time_confirmed = fields.Bool(load_default=None, allow_none=True)
     scheduled_time_type = fields.Str(
         load_default="departure",
         validate=validate.OneOf(["departure", "arrival"]),
@@ -655,8 +681,9 @@ class TransportRequestCreateSchema(Schema):
     pickup_door_code = fields.Str(validate=validate.Length(max=50), allow_none=True)
 
     dropoff_location = fields.Str(
-        required=True,
-        validate=validate.Length(min=1, max=255),
+        required=False,
+        allow_none=True,
+        validate=validate.Length(max=255),
     )
     dropoff_lat = fields.Float(
         validate=validate.Range(min=-90, max=90),
@@ -702,6 +729,22 @@ class TransportRequestCreateSchema(Schema):
         ),
         allow_none=True,
     )
+    return_date = fields.Str(
+        load_default=None,
+        allow_none=True,
+        validate=validate.Regexp(
+            ISO8601_DATE_REGEX,
+            error="return_date doit être au format YYYY-MM-DD",
+        ),
+    )
+    return_time_confirmed = fields.Bool(load_default=None, allow_none=True)
+    return_scheduled_time = fields.Str(
+        allow_none=True,
+        validate=validate.Regexp(
+            ISO8601_DATETIME_REGEX,
+            error="return_scheduled_time doit être au format ISO8601",
+        ),
+    )
 
     # Mobilité
     mobility = fields.Nested(MobilitySchema, allow_none=True)
@@ -731,6 +774,138 @@ class TransportRequestCreateSchema(Schema):
     )
     billing_details = fields.Nested(BillingDetailsSchema, allow_none=True)
 
+    # Multi-stop (PR5 V1)
+    multi_stop = fields.Bool(load_default=False)
+    return_to_institution = fields.Bool(load_default=True)
+    intermediate_stops = fields.List(
+        fields.Nested(
+            Schema.from_dict(
+                {
+                    "dropoff_location": fields.Str(
+                        required=True, validate=validate.Length(min=1, max=255)
+                    ),
+                    "dropoff_lat": fields.Float(
+                        validate=validate.Range(min=-90, max=90), allow_none=True
+                    ),
+                    "dropoff_lng": fields.Float(
+                        validate=validate.Range(min=-180, max=180), allow_none=True
+                    ),
+                    "sequence": fields.Int(allow_none=True),
+                    "scheduled_time": fields.Str(allow_none=True),
+                    "time_confirmed": fields.Bool(load_default=False, allow_none=True),
+                    "dropoff_establishment": fields.Str(
+                        allow_none=True, validate=validate.Length(max=255)
+                    ),
+                    "dropoff_service": fields.Str(
+                        allow_none=True, validate=validate.Length(max=255)
+                    ),
+                    "dropoff_doctor": fields.Str(
+                        allow_none=True, validate=validate.Length(max=255)
+                    ),
+                },
+                name="IntermediateStopInput",
+            )
+        ),
+        load_default=list,
+    )
+
+    @validates_schema
+    def validate_mission_schedule(self, data, **_kwargs):
+        """mission_date obligatoire ; invariants time_confirmed / scheduled_time."""
+        mission_date = data.get("mission_date")
+        scheduled = data.get("scheduled_time")
+        if mission_date is None and not scheduled:
+            raise ValidationError(
+                "mission_date est obligatoire (ou scheduled_time legacy).",
+                field_name="mission_date",
+            )
+        pickup_confirmed = data.get("pickup_time_confirmed")
+        if pickup_confirmed is True and not scheduled:
+            raise ValidationError(
+                "pickup_time_confirmed=true requiert scheduled_time (départ).",
+                field_name="scheduled_time",
+            )
+        if pickup_confirmed is True and scheduled:
+            from services.institutions.mission_schedule import validate_time_pair
+
+            validate_time_pair(
+                scheduled_time=scheduled,
+                time_confirmed=True,
+            )
+        for _idx, stop in enumerate(data.get("intermediate_stops") or []):
+            if not isinstance(stop, dict):
+                continue
+            if stop.get("time_confirmed") and not stop.get("scheduled_time"):
+                raise ValidationError(
+                    "time_confirmed=true requiert scheduled_time sur l'étape.",
+                    field_name="intermediate_stops",
+                )
+        if data.get("return_time_confirmed") and not (
+            data.get("return_scheduled_time") or data.get("return_time")
+        ):
+            raise ValidationError(
+                "return_time_confirmed=true requiert return_scheduled_time.",
+                field_name="return_scheduled_time",
+            )
+
+    @validates_schema
+    def validate_schedule_not_in_past(self, data, **_kwargs):
+        """Refuse une demande dans le passé : départ ≥ maintenant, RDV ≥ +1h."""
+        now = now_utc()
+
+        scheduled = data.get("scheduled_time")
+        st_type = data.get("scheduled_time_type") or "departure"
+        if scheduled:
+            parsed = parse_iso8601(str(scheduled))
+            if parsed is not None:
+                if st_type == "arrival":
+                    if parsed < now + ARRIVAL_LEAD:
+                        raise ValidationError(
+                            "Le rendez-vous doit être au minimum 1h après "
+                            "l'heure actuelle.",
+                            field_name="scheduled_time",
+                        )
+                elif parsed < now - PICKUP_PAST_GRACE:
+                    raise ValidationError(
+                        "Le départ ne peut pas être dans le passé.",
+                        field_name="scheduled_time",
+                    )
+
+        for stop in data.get("intermediate_stops") or []:
+            if not isinstance(stop, dict):
+                continue
+            stop_time = stop.get("scheduled_time")
+            if not stop_time:
+                continue
+            parsed = parse_iso8601(str(stop_time))
+            if parsed is not None and parsed < now + ARRIVAL_LEAD:
+                raise ValidationError(
+                    "Chaque rendez-vous doit être au minimum 1h après "
+                    "l'heure actuelle.",
+                    field_name="intermediate_stops",
+                )
+
+        ret = data.get("return_scheduled_time") or data.get("return_time")
+        if ret:
+            parsed = parse_iso8601(str(ret))
+            if parsed is not None and parsed < now + ARRIVAL_LEAD:
+                raise ValidationError(
+                    "Le retour doit être au minimum 1h après l'heure actuelle.",
+                    field_name="return_scheduled_time",
+                )
+
+    @validates_schema
+    def validate_dropoff_location(self, data, **_kwargs):
+        """dropoff_location obligatoire en mode simple (non multi-stop)."""
+        if data.get("multi_stop"):
+            return
+        dropoff = (data.get("dropoff_location") or "").strip()
+        if not dropoff:
+            raise ValidationError(
+                "dropoff_location est requis pour un trajet simple.",
+                field_name="dropoff_location",
+            )
+
     @validates_schema
     def validate_delivery_description(self, data, **_kwargs):
         """Valide que delivery_description est présent si mission_type != patient_transport."""
@@ -746,13 +921,72 @@ class TransportRequestCreateSchema(Schema):
                 field_name="delivery_description",
             )
 
+    @pre_load
+    def _normalize_return_date(self, data, **_kwargs):
+        if not isinstance(data, dict):
+            return data
+        raw = dict(data)
+        rd = raw.get("return_date")
+        if isinstance(rd, str) and not rd.strip():
+            raw["return_date"] = None
+        return raw
+
     @validates_schema
-    def validate_round_trip(self, data, **_kwargs):
-        """Valide que return_time est fourni si is_round_trip=True."""
-        if data.get("is_round_trip") and not data.get("return_time"):
+    def validate_round_trip_return_plan(self, data, **_kwargs):
+        """Aller-retour : au moins return_date ou return_time (aligné portail client)."""
+        if not data.get("is_round_trip"):
+            return
+        rt = data.get("return_time")
+        rd_raw = data.get("return_date")
+        if rd_raw is None:
+            rd = None
+        elif isinstance(rd_raw, str):
+            rd = rd_raw.strip() or None
+        else:
+            rd = None
+        if not rt and not rd:
             raise ValidationError(
-                "L'heure de retour est requise pour un trajet aller/retour.",
-                field_name="return_time",
+                "Pour un aller-retour, indiquez return_date (YYYY-MM-DD) ou return_time (ISO 8601)."
+            )
+        if rd and not rt:
+            st_str = data.get("scheduled_time")
+            if not st_str:
+                return
+            outbound = api_scheduled_iso_to_naive_geneva(st_str)
+            if outbound is None:
+                return
+            try:
+                rday = date.fromisoformat(str(rd))
+            except ValueError:
+                return
+            if rday < outbound.date():
+                raise ValidationError(
+                    {
+                        "return_date": [
+                            "return_date ne peut pas précéder la date du départ."
+                        ]
+                    }
+                )
+
+    @validates_schema
+    def validate_multi_stop(self, data, **_kwargs):
+        """Valide la cohérence multi-stop vs A/R classique."""
+        if not data.get("multi_stop"):
+            return
+        if data.get("is_round_trip"):
+            raise ValidationError(
+                "multi_stop est incompatible avec is_round_trip (utiliser return_to_institution).",
+                field_name="multi_stop",
+            )
+        valid_stops = [
+            s
+            for s in (data.get("intermediate_stops") or [])
+            if isinstance(s, dict) and (s.get("dropoff_location") or "").strip()
+        ]
+        if not valid_stops:
+            raise ValidationError(
+                "Au moins une destination est requise pour multi_stop.",
+                field_name="intermediate_stops",
             )
 
 
@@ -782,12 +1016,16 @@ class TransportRequestUpdateSchema(Schema):
     )
 
     # Horaire
+    mission_date = fields.Date(allow_none=True)
     scheduled_time = fields.Str(
+        allow_none=True,
         validate=validate.Regexp(
             ISO8601_DATETIME_REGEX,
             error="scheduled_time doit être au format ISO8601",
         ),
     )
+    pickup_time_confirmed = fields.Bool(allow_none=True)
+    appointment_time_confirmed = fields.Bool(allow_none=True)
     scheduled_time_type = fields.Str(
         validate=validate.OneOf(["departure", "arrival"]),
     )
@@ -810,6 +1048,11 @@ class TransportRequestUpdateSchema(Schema):
     )
     dropoff_floor = fields.Str(validate=validate.Length(max=50), allow_none=True)
     dropoff_door_code = fields.Str(validate=validate.Length(max=50), allow_none=True)
+    dropoff_establishment = fields.Str(
+        validate=validate.Length(max=255), allow_none=True
+    )
+    dropoff_service = fields.Str(validate=validate.Length(max=255), allow_none=True)
+    dropoff_doctor = fields.Str(validate=validate.Length(max=255), allow_none=True)
 
     # Type de lieu
     pickup_type = fields.Str(
@@ -835,6 +1078,18 @@ class TransportRequestUpdateSchema(Schema):
         validate=validate.Regexp(ISO8601_DATETIME_REGEX),
         allow_none=True,
     )
+    return_date = fields.Str(
+        allow_none=True,
+        validate=validate.Regexp(
+            ISO8601_DATE_REGEX,
+            error="return_date doit être au format YYYY-MM-DD",
+        ),
+    )
+    return_time_confirmed = fields.Bool(allow_none=True)
+    return_scheduled_time = fields.Str(
+        allow_none=True,
+        validate=validate.Regexp(ISO8601_DATETIME_REGEX),
+    )
 
     # Mobilité
     mobility = fields.Nested(MobilitySchema, allow_none=True)
@@ -852,6 +1107,98 @@ class TransportRequestUpdateSchema(Schema):
     billing_intent = fields.Str(validate=validate.OneOf(VALID_BILLING_INTENTS))
     billing_details = fields.Nested(BillingDetailsSchema, allow_none=True)
 
+    # Multi-stop (PR5 V1)
+    multi_stop = fields.Bool(allow_none=True)
+    return_to_institution = fields.Bool()
+    acknowledge_carrier_impact = fields.Bool(allow_none=True)
+    intermediate_stops = fields.List(
+        fields.Nested(
+            Schema.from_dict(
+                {
+                    "dropoff_location": fields.Str(
+                        required=True, validate=validate.Length(min=1, max=255)
+                    ),
+                    "dropoff_lat": fields.Float(
+                        validate=validate.Range(min=-90, max=90), allow_none=True
+                    ),
+                    "dropoff_lng": fields.Float(
+                        validate=validate.Range(min=-180, max=180), allow_none=True
+                    ),
+                    "sequence": fields.Int(allow_none=True),
+                    "scheduled_time": fields.Str(allow_none=True),
+                    "time_confirmed": fields.Bool(allow_none=True),
+                    "dropoff_establishment": fields.Str(
+                        allow_none=True, validate=validate.Length(max=255)
+                    ),
+                    "dropoff_service": fields.Str(
+                        allow_none=True, validate=validate.Length(max=255)
+                    ),
+                    "dropoff_doctor": fields.Str(
+                        allow_none=True, validate=validate.Length(max=255)
+                    ),
+                },
+                name="IntermediateStopUpdateInput",
+            )
+        )
+    )
+
+    @pre_load
+    def _normalize_return_date_update(self, data, **_kwargs):
+        if not isinstance(data, dict):
+            return data
+        raw = dict(data)
+        if "return_date" in raw:
+            rd = raw.get("return_date")
+            if isinstance(rd, str) and not rd.strip():
+                raw["return_date"] = None
+        return raw
+
+    @validates_schema
+    def validate_round_trip_return_plan_update(self, data, **_kwargs):
+        """Aller-retour : au moins return_date ou return_time si is_round_trip est activé."""
+        if not data.get("is_round_trip"):
+            return
+        rt = data.get("return_time")
+        rd_raw = data.get("return_date")
+        if rd_raw is None:
+            rd = None
+        elif isinstance(rd_raw, str):
+            rd = rd_raw.strip() or None
+        else:
+            rd = None
+        if not rt and not rd:
+            raise ValidationError(
+                "Pour un aller-retour, indiquez return_date (YYYY-MM-DD) ou return_time (ISO 8601)."
+            )
+        if rd and not rt:
+            st_str = data.get("scheduled_time")
+            if not st_str:
+                return
+            outbound = api_scheduled_iso_to_naive_geneva(st_str)
+            if outbound is None:
+                return
+            try:
+                rday = date.fromisoformat(str(rd))
+            except ValueError:
+                return
+            if rday < outbound.date():
+                raise ValidationError(
+                    {
+                        "return_date": [
+                            "return_date ne peut pas précéder la date du départ."
+                        ]
+                    }
+                )
+
+    @validates_schema
+    def validate_multi_stop_update(self, data, **_kwargs):
+        """Interdit is_round_trip sur une demande multi-stop."""
+        if data.get("is_round_trip") and data.get("multi_stop"):
+            raise ValidationError(
+                "multi_stop est incompatible avec is_round_trip (utiliser return_to_institution).",
+                field_name="is_round_trip",
+            )
+
 
 class TransportRequestQuerySchema(Schema):
     """Schema pour recherche de demandes."""
@@ -861,6 +1208,11 @@ class TransportRequestQuerySchema(Schema):
 
     status = fields.Str(
         validate=validate.OneOf(VALID_REQUEST_STATUSES),
+        allow_none=True,
+        load_default=None,
+    )
+    carrier_source = fields.Str(
+        validate=validate.OneOf(VALID_CARRIER_SOURCES),
         allow_none=True,
         load_default=None,
     )
@@ -898,6 +1250,46 @@ class TransportRequestQuerySchema(Schema):
                 cleaned[key] = None
             else:
                 cleaned[key] = value
+        return cleaned
+
+
+class AssignExternalCarrierSchema(Schema):
+    """Schema pour affecter un transporteur externe."""
+
+    class Meta:
+        unknown = EXCLUDE
+
+    name = fields.Str(required=True, validate=validate.Length(min=1, max=255))
+    phone = fields.Str(allow_none=True, load_default=None, validate=validate.Length(max=50))
+    email = fields.Str(allow_none=True, load_default=None, validate=validate.Length(max=255))
+    reference = fields.Str(
+        allow_none=True, load_default=None, validate=validate.Length(max=100)
+    )
+    reason = fields.Str(allow_none=True, load_default=None, validate=validate.Length(max=120))
+
+    @pre_load
+    def strip_strings(self, data, **_kwargs):
+        cleaned = dict(data or {})
+        for key in ("name", "phone", "email", "reference", "reason"):
+            if key in cleaned and isinstance(cleaned[key], str):
+                cleaned[key] = cleaned[key].strip()
+        return cleaned
+
+
+class CompleteExternalMissionSchema(Schema):
+    """Schema pour déclarer une mission externe réalisée."""
+
+    class Meta:
+        unknown = EXCLUDE
+
+    executed_at = fields.DateTime(allow_none=True, load_default=None)
+    notes = fields.Str(allow_none=True, load_default=None)
+
+    @pre_load
+    def strip_notes(self, data, **_kwargs):
+        cleaned = dict(data or {})
+        if isinstance(cleaned.get("notes"), str):
+            cleaned["notes"] = cleaned["notes"].strip()
         return cleaned
 
 
@@ -959,11 +1351,10 @@ class InstitutionUserInviteSchema(Schema):
         if mode == "email":
             if not email:
                 return {"email": ["L'email est requis en mode invitation par email"]}
-        elif mode == "username":
-            if not username or not str(username).strip():
-                return {
-                    "username": ["L'identifiant est requis en mode création par identifiant"]
-                }
+        elif mode == "username" and (not username or not str(username).strip()):
+            return {
+                "username": ["L'identifiant est requis en mode création par identifiant"]
+            }
         return None
 
 
@@ -985,18 +1376,58 @@ class InstitutionUserUpdateRoleSchema(Schema):
 class InstitutionUserUpdateProfileSchema(Schema):
     """Schema pour modifier les champs descriptifs d'un utilisateur (admin).
 
-    Champs purement organisationnels, sans impact sur les permissions.
+    Champs purement organisationnels / identité affichée, sans impact sur les permissions.
     """
 
     class Meta:
         unknown = EXCLUDE
 
+    first_name = fields.Str(
+        validate=validate.Length(max=100),
+        load_default=None,
+        allow_none=True,
+        metadata={"description": "Prénom"},
+    )
+    last_name = fields.Str(
+        validate=validate.Length(max=100),
+        load_default=None,
+        allow_none=True,
+        metadata={"description": "Nom de famille"},
+    )
+    email = fields.Email(
+        required=False,
+        allow_none=True,
+        error_messages={"invalid": "Email invalide"},
+        metadata={"description": "Email de contact (Mode B) ou email (Mode email)"},
+    )
     job_title = fields.Str(
         validate=validate.Length(max=120),
         allow_none=True,
         load_default=None,
         metadata={"description": "Fonction / metier (descriptif, sans permission)"},
     )
+
+    FORBIDDEN_FIELDS = frozenset(
+        {"username", "authentication_method", "institution_role", "password", "role"}
+    )
+
+    @pre_load
+    def normalize_empty_email(self, data, **_kwargs):
+        if isinstance(data, dict) and data.get("email") == "":
+            data = dict(data)
+            data["email"] = None
+        return data
+
+    @staticmethod
+    def validate_forbidden_fields(data: dict) -> dict | None:
+        """Rejette les champs d'authentification / permissions."""
+        forbidden = InstitutionUserUpdateProfileSchema.FORBIDDEN_FIELDS & set(data.keys())
+        if forbidden:
+            return {
+                field: ["Champ non modifiable via cet endpoint"]
+                for field in sorted(forbidden)
+            }
+        return None
 
 
 # ========== User Profile Schema ==========

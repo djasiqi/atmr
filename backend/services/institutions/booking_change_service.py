@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import logging
+import os
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from application.bookings.cancellation_rules import (
@@ -17,14 +18,59 @@ from models import (
     Booking,
     BookingChangeAcknowledgement,
     BookingChangeEvent,
+    BookingChangeRequest,
     TransportRequest,
 )
+from models.booking_change_request import BookingChangeRequestStatus
 from models.enums import BookingStatus, InstitutionRole
 from shared.time_utils import parse_local_naive
 
 logger = logging.getLogger(__name__)
 
 MIN_CRITICAL_REASON_LEN = 10
+
+# Durée de vie par défaut d'une demande de validation transporteur (en minutes).
+DEFAULT_CHANGE_REQUEST_TTL_MINUTES = 120
+
+# Statuts booking pour lesquels un transporteur est « engagé » mais la course
+# n'a pas encore démarré : une modification critique doit être révalidée.
+COMMITTED_STATUSES = frozenset(
+    {
+        BookingStatus.ACCEPTED.value,
+        BookingStatus.ASSIGNED.value,
+    }
+)
+
+
+def is_revalidation_enabled() -> bool:
+    """Feature flag : révalidation transporteur après modification critique.
+
+    Activé par défaut (dev) ; désactivable via
+    INSTITUTION_CHANGE_REVALIDATION_ENABLED=false.
+    """
+    return os.getenv("INSTITUTION_CHANGE_REVALIDATION_ENABLED", "true").lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+
+
+def get_change_request_ttl_minutes() -> int:
+    """TTL (minutes) avant expiration d'une demande de validation transporteur."""
+    raw = os.getenv("INSTITUTION_CHANGE_REQUEST_TTL_MINUTES")
+    if not raw:
+        return DEFAULT_CHANGE_REQUEST_TTL_MINUTES
+    try:
+        value = int(raw)
+        return value if value > 0 else DEFAULT_CHANGE_REQUEST_TTL_MINUTES
+    except (TypeError, ValueError):
+        return DEFAULT_CHANGE_REQUEST_TTL_MINUTES
+
+
+# Champs « critiques » dont la modification après acceptation transporteur
+# nécessite une révalidation (réutilise MAJOR_FIELDS, défini plus bas).
+def _revalidation_trigger_fields() -> frozenset[str]:
+    return MAJOR_FIELDS
 
 INSTITUTION_OPERATIONAL_FIELDS = frozenset(
     {
@@ -323,7 +369,58 @@ def record_change_event(
     event.ack_required = ack_required
     event.correlation_id = correlation_id or str(uuid.uuid4())
     db.session.add(event)
+
+    # Dual-write timeline transport pour les modifications/annulations opérationnelles
+    if action_type in ("field_updated", "cancelled"):
+        _record_change_timeline(
+            booking=booking,
+            transport_request=transport_request,
+            institution_id=institution_id,
+            actor_user_id=actor_user_id,
+            actor_type=actor_type,
+            action_type=action_type,
+            changed_fields=changed_fields,
+            reason=reason,
+            correlation_id=event.correlation_id,
+        )
+
     return event
+
+
+def _record_change_timeline(
+    *,
+    booking: Booking,
+    transport_request: TransportRequest | None,
+    institution_id: int | None,
+    actor_user_id: int | None,
+    actor_type: str,
+    action_type: str,
+    changed_fields: dict[str, bool] | None,
+    reason: str | None,
+    correlation_id: str | None,
+) -> None:
+    """Réplique une modification/annulation booking dans la timeline transport."""
+    try:
+        from services.institutions.transport_timeline_service import (
+            TimelineActor,
+            record_event,
+        )
+
+        record_event(
+            action_type,
+            institution_id=institution_id,
+            transport_request_id=transport_request.id if transport_request else None,
+            booking_id=booking.id,
+            actor=TimelineActor(
+                actor_type=actor_type, actor_user_id=actor_user_id
+            ),
+            payload={"changed_fields": changed_fields, "reason": reason},
+            correlation_id=f"{action_type}:{correlation_id}",
+        )
+    except Exception as timeline_err:
+        logger.warning(
+            "[BookingChange] Timeline recording failed: %s", timeline_err
+        )
 
 
 def bump_edit_version(booking: Booking) -> int:
@@ -343,17 +440,236 @@ def apply_operational_patch(booking: Booking, validated: dict[str, Any]) -> list
                 raise ValueError("Heure planifiée invalide.")
             booking.scheduled_time = scheduled_local
             if hasattr(booking, "time_confirmed"):
-                is_midnight = (
-                    scheduled_local.hour == 0
-                    and scheduled_local.minute == 0
-                    and scheduled_local.second == 0
-                )
-                booking.time_confirmed = not is_midnight
+                if "time_confirmed" in validated:
+                    booking.time_confirmed = bool(validated["time_confirmed"])
+                else:
+                    is_midnight = (
+                        scheduled_local.hour == 0
+                        and scheduled_local.minute == 0
+                        and scheduled_local.second == 0
+                    )
+                    booking.time_confirmed = not is_midnight
                 updated.append("time_confirmed")
         else:
             setattr(booking, key, value)
         updated.append(key)
     return updated
+
+
+def _company_is_committed(booking: Booking, status: str) -> bool:
+    """Un transporteur est engagé (course pas encore démarrée)."""
+    has_company = bool(booking.company_id or booking.executing_company_id)
+    return has_company and status in COMMITTED_STATUSES
+
+
+def _simulate_after_snapshot(
+    booking: Booking, patch: dict[str, Any]
+) -> dict[str, Any]:
+    """Calcule un snapshot opérationnel « après patch » sans muter le booking."""
+    after = _booking_operational_snapshot(booking)
+    for key, value in patch.items():
+        if key not in INSTITUTION_OPERATIONAL_FIELDS:
+            continue
+        if key == "scheduled_time":
+            parsed = parse_local_naive(value)
+            after["scheduled_time"] = parsed.isoformat() if parsed else value
+        elif key in ("wheelchair_client_has", "wheelchair_need"):
+            after[key] = bool(value)
+        else:
+            after[key] = value
+    return after
+
+
+def supersede_pending_change_requests(
+    booking: Booking,
+    *,
+    excluding_id: int | None = None,
+) -> int:
+    """Marque comme SUPERSEDED les BCR PENDING existantes d'un booking."""
+    query = BookingChangeRequest.query.filter(
+        BookingChangeRequest.booking_id == booking.id,
+        BookingChangeRequest.status == BookingChangeRequestStatus.PENDING,
+    )
+    if excluding_id is not None:
+        query = query.filter(BookingChangeRequest.id != excluding_id)
+
+    count = 0
+    for existing in query.all():
+        existing.status = BookingChangeRequestStatus.SUPERSEDED
+        existing.version = int(existing.version or 1) + 1
+        existing.updated_at = datetime.now(UTC)
+        count += 1
+    return count
+
+
+def _notify_company_change_request(
+    booking: Booking,
+    change_request: BookingChangeRequest,
+) -> None:
+    """Notifie l'entreprise qu'une validation de modification est requise."""
+    try:
+        from services.events.institution_events import persist_company_notification
+
+        company_id = booking.company_id or booking.executing_company_id
+        if not company_id:
+            return
+        patient = booking.customer_name or "Patient"
+        fields = list((change_request.changed_fields or {}).keys())
+        msg = (
+            f"Validation requise — modification institution sur la course "
+            f"#{booking.id} ({patient}). Champs : {', '.join(fields) or 'n/a'}."
+        )
+        persist_company_notification(
+            company_id=int(company_id),
+            event_type="institution_change_request",
+            title="Validation de modification requise",
+            message=msg,
+            metadata={
+                "booking_id": booking.id,
+                "change_request_id": change_request.id,
+                "changed_fields": change_request.changed_fields,
+                "expires_at": change_request.expires_at.isoformat()
+                if change_request.expires_at
+                else None,
+            },
+            dedupe_key=f"inst_change_req_{change_request.id}",
+        )
+    except Exception as notif_err:
+        logger.warning(
+            "[BookingChange] notify company change_request failed: %s", notif_err
+        )
+
+
+def create_change_request(
+    ctx: InstitutionBookingContext,
+    *,
+    patch: dict[str, Any],
+    reason: str | None,
+    actor_user_id: int | None,
+    actor_role: str | None,
+    actor_display_name: str | None,
+) -> tuple[dict[str, Any], int]:
+    """Crée une demande de validation transporteur au lieu d'appliquer le patch.
+
+    - Supersede les BCR PENDING existantes
+    - Met à jour booking.active_change_request_id
+    - Historise un événement timeline change_confirmation_requested
+    """
+    booking = ctx.booking
+    before = _booking_operational_snapshot(booking)
+    after = _simulate_after_snapshot(booking, patch)
+    changed_fields = _changed_fields_map(before, after)
+
+    if not changed_fields:
+        return {"error": "Aucun champ modifié."}, 400
+
+    expires_at = datetime.now(UTC) + timedelta(minutes=get_change_request_ttl_minutes())
+
+    change_request = BookingChangeRequest()
+    change_request.booking_id = booking.id
+    change_request.transport_request_id = (
+        ctx.transport_request.id if ctx.transport_request else None
+    )
+    change_request.institution_id = ctx.institution_id
+    change_request.status = BookingChangeRequestStatus.PENDING
+    change_request.version = 1
+    change_request.proposed_patch = patch
+    change_request.before_snapshot = before
+    change_request.after_snapshot = after
+    change_request.changed_fields = changed_fields
+    change_request.reason = reason or None
+    change_request.requested_by_user_id = actor_user_id
+    change_request.requested_by_role = actor_role
+    change_request.expires_at = expires_at
+    db.session.add(change_request)
+    db.session.flush()
+
+    superseded = supersede_pending_change_requests(
+        booking, excluding_id=change_request.id
+    )
+    booking.active_change_request_id = change_request.id
+    booking.updated_at = datetime.now(UTC)
+
+    # Audit booking_change_event (append-only)
+    record_change_event(
+        booking=booking,
+        transport_request=ctx.transport_request,
+        institution_id=ctx.institution_id,
+        actor_user_id=actor_user_id,
+        actor_role=actor_role,
+        actor_type="institution_user",
+        actor_display_name=actor_display_name,
+        action_type="change_request_created",
+        change_scope="operational",
+        source="institution_portal",
+        before_snapshot=before,
+        after_snapshot=after,
+        reason=reason or None,
+        change_class="major",
+        severity="WARNING",
+        ack_required=False,
+        operational_impact={"revalidation_required": True},
+    )
+
+    _record_change_request_timeline(ctx=ctx, change_request=change_request)
+    db.session.flush()
+
+    _notify_company_change_request(booking, change_request)
+
+    db.session.commit()
+    return {
+        "success": True,
+        "status": "pending_revalidation",
+        "booking_id": booking.id,
+        "edit_version": int(booking.edit_version or 1),
+        "superseded_change_requests": superseded,
+        "change_request": change_request.serialize(),
+    }, 202
+
+
+def _record_change_request_timeline(
+    *,
+    ctx: InstitutionBookingContext,
+    change_request: BookingChangeRequest,
+) -> None:
+    """Historise change_confirmation_requested dans la timeline transport."""
+    try:
+        from services.institutions.transport_timeline_service import (
+            TimelineActor,
+            find_latest_event,
+            record_event,
+        )
+
+        source = find_latest_event(
+            booking_id=ctx.booking.id,
+            event_type="booking_created",
+        )
+        record_event(
+            "change_confirmation_requested",
+            institution_id=ctx.institution_id,
+            transport_request_id=(
+                ctx.transport_request.id if ctx.transport_request else None
+            ),
+            booking_id=ctx.booking.id,
+            actor=TimelineActor(
+                actor_type="institution_user",
+                actor_user_id=change_request.requested_by_user_id,
+            ),
+            payload={
+                "change_request_id": change_request.id,
+                "proposed_patch": change_request.proposed_patch,
+                "before_snapshot": change_request.before_snapshot,
+                "after_snapshot": change_request.after_snapshot,
+                "changed_fields": change_request.changed_fields,
+                "reason": change_request.reason,
+            },
+            correlation_id=f"change_confirmation_requested:{change_request.id}",
+            source_event_id=source.id if source else None,
+        )
+    except Exception as timeline_err:
+        logger.warning(
+            "[BookingChange] change_request timeline failed: %s", timeline_err
+        )
 
 
 def fanout_critical_change(
@@ -419,6 +735,40 @@ def fanout_critical_change(
         ack_required=False,
         correlation_id=event.correlation_id,
     )
+
+
+def _collect_linked_bookings(booking: Booking) -> list[Booking]:
+    """Retourne les bookings liés à annuler en cascade avec `booking`.
+
+    Couvre deux cas :
+      - parcours multi-destinations : tous les legs partageant le même
+        `route_group_id` (ex. A→B, B→C, C→A) ;
+      - aller-retour classique : la course retour rattachée via
+        `parent_booking_id`.
+
+    Le booking source n'est jamais inclus dans la liste retournée.
+    """
+    linked: dict[int, Booking] = {}
+
+    route_group_id = getattr(booking, "route_group_id", None)
+    if route_group_id:
+        siblings = Booking.query.filter(
+            Booking.route_group_id == route_group_id,
+            Booking.id != booking.id,
+        ).all()
+        for sib in siblings:
+            linked[sib.id] = sib
+
+    # Retours rattachés (A/R) au booking source ou à un de ses legs.
+    parent_ids = {booking.id, *linked.keys()}
+    returns = Booking.query.filter(
+        Booking.parent_booking_id.in_(parent_ids),
+        Booking.id != booking.id,
+    ).all()
+    for ret in returns:
+        linked[ret.id] = ret
+
+    return list(linked.values())
 
 
 def cancel_institution_booking(
@@ -509,6 +859,52 @@ def cancel_institution_booking(
     if ack_required:
         fanout_critical_change(booking, event, ctx.transport_request)
 
+    # ── Cascade : annuler les legs liés (multi-destinations) et retours A/R ──
+    # La facturation est portée par le booking principal ; les legs/retours liés
+    # sont marqués NON facturables pour éviter une double facturation (cohérent
+    # avec la cascade aller → retour).
+    cancelled_linked_ids: list[int] = []
+    terminal_statuses = {"COMPLETED", "RETURN_COMPLETED", "CANCELED"}
+    for linked in _collect_linked_bookings(booking):
+        if _status_value(linked.status) in terminal_statuses:
+            continue
+        linked_before = _booking_operational_snapshot(linked)
+        linked.status = BookingStatus.CANCELED
+        linked.cancellation_reason_code = booking.cancellation_reason_code
+        linked.cancellation_reason_text = reason
+        linked.is_cancellation_billable = False
+        linked.cancellation_display_label = booking.cancellation_display_label
+        bump_edit_version(linked)
+        linked_after = _booking_operational_snapshot(linked)
+        record_change_event(
+            booking=linked,
+            transport_request=ctx.transport_request,
+            institution_id=ctx.institution_id,
+            actor_user_id=actor_user_id,
+            actor_role=actor_role,
+            actor_type="institution_user",
+            actor_display_name=actor_display_name,
+            action_type="cancelled",
+            change_scope="cancellation",
+            source="institution_portal",
+            before_snapshot=linked_before,
+            after_snapshot=linked_after,
+            reason=reason,
+            change_class=change_class,
+            severity=severity,
+            ack_required=ack_required,
+            operational_impact=impact,
+        )
+        cancelled_linked_ids.append(linked.id)
+
+    if cancelled_linked_ids:
+        db.session.flush()
+        logger.info(
+            "[InstitutionCancel] Cascade annulation booking=%s, legs/retours liés=%s",
+            booking.id,
+            cancelled_linked_ids,
+        )
+
     db.session.commit()
     return {
         "success": True,
@@ -517,6 +913,7 @@ def cancel_institution_booking(
         "is_cancellation_billable": is_billable,
         "edit_version": booking.edit_version,
         "change_event_id": event.id,
+        "cancelled_linked_booking_ids": cancelled_linked_ids,
     }, 200
 
 
@@ -559,11 +956,32 @@ def update_institution_booking(
     reason = (payload.get("reason") or "").strip()
     changed_preview = set(patch.keys())
     _cc, _sev, ack_required = classify_change(changed_preview, is_en_route=is_en_route)
-    if is_en_route and (changed_preview & CRITICAL_EN_ROUTE_FIELDS):
-        if len(reason) < MIN_CRITICAL_REASON_LEN:
-            return {
-                "error": f"Motif obligatoire (min. {MIN_CRITICAL_REASON_LEN} caractères) pour modification en route.",
-            }, 400
+    if (
+        is_en_route
+        and (changed_preview & CRITICAL_EN_ROUTE_FIELDS)
+        and len(reason) < MIN_CRITICAL_REASON_LEN
+    ):
+        return {
+            "error": f"Motif obligatoire (min. {MIN_CRITICAL_REASON_LEN} caractères) pour modification en route.",
+        }, 400
+
+    # Révalidation transporteur : modification critique sur une course déjà
+    # acceptée/assignée (mais pas encore démarrée). On crée une demande de
+    # validation au lieu d'appliquer le patch immédiatement.
+    needs_revalidation = (
+        is_revalidation_enabled()
+        and bool(changed_preview & _revalidation_trigger_fields())
+        and _company_is_committed(booking, status)
+    )
+    if needs_revalidation:
+        return create_change_request(
+            ctx,
+            patch=patch,
+            reason=reason or None,
+            actor_user_id=actor_user_id,
+            actor_role=actor_role,
+            actor_display_name=actor_display_name,
+        )
 
     before = _booking_operational_snapshot(booking)
     try:
@@ -697,6 +1115,39 @@ def list_change_events(
         )
     rows = q.order_by(BookingChangeEvent.created_at.desc()).limit(limit).all()
     return [r.serialize() for r in rows]
+
+
+def get_pending_change_request_view(booking: Any) -> dict[str, Any] | None:
+    """Vue synthétique de la demande de validation active d'un booking.
+
+    Utilisé dans booking_summary (portail institution). Retourne None si aucune
+    demande active.
+    """
+    if booking is None:
+        return None
+    active_id = getattr(booking, "active_change_request_id", None)
+    if not active_id:
+        return None
+    try:
+        cr = BookingChangeRequest.query.get(active_id)
+    except Exception:
+        return None
+    if not cr or cr.status != BookingChangeRequestStatus.PENDING:
+        return None
+    return {
+        "id": cr.id,
+        "status": cr.status,
+        "version": int(cr.version or 1),
+        "changed_fields": cr.changed_fields,
+        "proposed_patch": cr.proposed_patch,
+        "before_snapshot": cr.before_snapshot,
+        "after_snapshot": cr.after_snapshot,
+        "reason": cr.reason,
+        "requested_by_user_id": cr.requested_by_user_id,
+        "requested_by_role": cr.requested_by_role,
+        "expires_at": cr.expires_at.isoformat() if cr.expires_at else None,
+        "created_at": cr.created_at.isoformat() if cr.created_at else None,
+    }
 
 
 def mask_financial_fields(data: dict[str, Any], role: str | None) -> dict[str, Any]:

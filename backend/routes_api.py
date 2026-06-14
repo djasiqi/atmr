@@ -212,6 +212,12 @@ def init_namespaces(app):
     from routes.institution_bookings import (
         institution_bookings_ns,
     )  # ✅ RBAC audit trail bookings institution
+    from routes.institution_exports import (
+        institution_exports_ns,
+    )  # ✅ Export transports institution (PDF/CSV)
+    from routes.institution_timeline import (
+        institution_timeline_ns,
+    )  # ✅ Timeline immutable institution
     from routes.institution_teams import institution_teams_ns  # ✅ Curatelle: équipes
     from routes.institution_notifications import (
         institution_notifications_ns,
@@ -348,6 +354,12 @@ def init_namespaces(app):
         institution_bookings_ns, path="/institutions/bookings"
     )  # ✅ ÉTAPE 5
     api_v1.add_namespace(
+        institution_exports_ns, path="/institutions/exports"
+    )  # ✅ Export transports (PDF/CSV)
+    api_v1.add_namespace(
+        institution_timeline_ns, path="/institutions"
+    )  # ✅ Timeline transport
+    api_v1.add_namespace(
         institution_notifications_ns, path="/institutions/notifications"
     )
     api_v1.add_namespace(
@@ -461,6 +473,8 @@ def init_namespaces(app):
         api_legacy.add_namespace(institution_settings_ns, path="/institutions/settings")
         api_legacy.add_namespace(institution_billing_ns, path="/institutions/billing")
         api_legacy.add_namespace(institution_bookings_ns, path="/institutions/bookings")
+        api_legacy.add_namespace(institution_exports_ns, path="/institutions/exports")
+        api_legacy.add_namespace(institution_timeline_ns, path="/institutions")
         api_legacy.add_namespace(
             institution_notifications_ns, path="/institutions/notifications"
         )

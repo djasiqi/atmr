@@ -1,3 +1,6 @@
+import { buildIdentityFromApi } from './bookingIdentity';
+import { formatAppointmentTime } from './bookingScheduling';
+
 const STATUS_LABELS = {
   pending: 'En attente',
   accepted: 'Acceptee',
@@ -30,19 +33,21 @@ function formatDateExcel(dateStr) {
   }
 }
 
-function formatTimeExcel(dateStr) {
-  if (!dateStr) return '';
-  try {
-    const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return '';
-    const pad = (n) => String(n).padStart(2, '0');
-    const h = d.getHours();
-    const m = d.getMinutes();
-    if (h === 0 && m === 0) return 'A confirmer';
-    return `${pad(h)}:${pad(m)}`;
-  } catch {
-    return '';
-  }
+function resolvePayeur(r, identity) {
+  if (r.billing?.billed_to_company?.name) return r.billing.billed_to_company.name;
+  if (identity.upstream?.name) return identity.upstream.name;
+  if (identity.source?.type === 'institution') return identity.source.name;
+  const type = r.billed_to_type || 'patient';
+  const labels = { patient: 'Patient', institution: 'Institution', company: 'Entreprise' };
+  return labels[type] || type;
+}
+
+function tripTypeLabel(r) {
+  const flags = r.trip_flags;
+  if (flags?.return_leg) return 'Retour';
+  if (flags?.multi_stop) return 'Multi-etapes';
+  if (flags?.round_trip) return 'Aller-retour';
+  return r.is_return ? 'Retour' : 'Aller';
 }
 
 /**
@@ -52,6 +57,7 @@ function formatTimeExcel(dateStr) {
  * @param {string} options.companyName - Nom de l'entreprise
  * @param {string} options.periodLabel - Label de la periode (ex: "Toutes", "17.02.2026")
  * @param {Object} options.stats - Stats KPI {total, inProgress, completed, revenue}
+ * @param {'operational'|'accounting'} options.profile - Profil colonnes (defaut: operational)
  */
 export async function exportReservationsExcel(reservations, options = {}) {
   const [{ default: ExcelJS }, { saveAs }] = await Promise.all([
@@ -63,25 +69,19 @@ export async function exportReservationsExcel(reservations, options = {}) {
     companyName = 'Entreprise',
     periodLabel = '',
     stats = {},
+    profile = 'operational',
   } = options;
 
-  const wb = new ExcelJS.Workbook();
-  wb.creator = 'Lirie - Plateforme Transport Medical';
-  wb.created = new Date();
+  const isAccounting = profile === 'accounting';
 
-  // --- Feuille principale : Reservations ---
-  const ws = wb.addWorksheet('Reservations', {
-    properties: { defaultRowHeight: 22 },
-    views: [{ state: 'frozen', ySplit: 5 }],
-  });
-
-  // Colonnes avec largeurs optimisees
-  ws.columns = [
+  const operationalColumns = [
     { key: 'id', width: 10 },
     { key: 'date', width: 14 },
     { key: 'heure', width: 10 },
-    { key: 'client', width: 26 },
-    { key: 'institution', width: 22 },
+    { key: 'passager', width: 26 },
+    { key: 'origine_type', width: 14 },
+    { key: 'origine_code', width: 12 },
+    { key: 'origine_nom', width: 22 },
     { key: 'depart', width: 38 },
     { key: 'arrivee', width: 38 },
     { key: 'chauffeur', width: 22 },
@@ -90,11 +90,38 @@ export async function exportReservationsExcel(reservations, options = {}) {
     { key: 'type', width: 14 },
   ];
 
-  // --- En-tete du rapport ---
-  const titleRow = ws.addRow([`Rapport des reservations - ${companyName}`]);
+  const accountingExtra = [
+    { key: 'institution_amont', width: 22 },
+    { key: 'proprietaire', width: 22 },
+    { key: 'executant', width: 22 },
+    { key: 'payeur', width: 18 },
+  ];
+
+  const columns = isAccounting
+    ? [...operationalColumns, ...accountingExtra]
+    : operationalColumns;
+
+  const colCount = columns.length;
+  const lastColLetter = String.fromCharCode(64 + colCount);
+
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'Lirie - Plateforme Transport Medical';
+  wb.created = new Date();
+
+  const sheetLabel = isAccounting ? 'Reservations compta' : 'Reservations';
+  const ws = wb.addWorksheet(sheetLabel, {
+    properties: { defaultRowHeight: 22 },
+    views: [{ state: 'frozen', ySplit: 5 }],
+  });
+
+  ws.columns = columns;
+
+  const titleRow = ws.addRow([
+    `Rapport des reservations${isAccounting ? ' (comptabilite)' : ''} - ${companyName}`,
+  ]);
   titleRow.height = 32;
   titleRow.getCell(1).font = { size: 16, bold: true, color: { argb: BRAND_COLOR } };
-  ws.mergeCells('A1:K1');
+  ws.mergeCells(`A1:${lastColLetter}1`);
   titleRow.getCell(1).alignment = { vertical: 'middle' };
 
   const subtitleParts = [`Genere le ${new Date().toLocaleDateString('fr-CH')}`];
@@ -103,9 +130,8 @@ export async function exportReservationsExcel(reservations, options = {}) {
   }
   const subtitleRow = ws.addRow([subtitleParts.join(' | ')]);
   subtitleRow.getCell(1).font = { size: 10, italic: true, color: { argb: '64748B' } };
-  ws.mergeCells('A2:K2');
+  ws.mergeCells(`A2:${lastColLetter}2`);
 
-  // --- Ligne KPI resume ---
   const kpiParts = [];
   if (stats.total !== undefined) kpiParts.push(`Total : ${stats.total}`);
   if (stats.inProgress !== undefined) kpiParts.push(`En cours : ${stats.inProgress}`);
@@ -115,16 +141,22 @@ export async function exportReservationsExcel(reservations, options = {}) {
   if (kpiParts.length > 0) {
     const kpiRow = ws.addRow([kpiParts.join('  |  ')]);
     kpiRow.getCell(1).font = { size: 10, bold: true, color: { argb: '334155' } };
-    ws.mergeCells('A3:K3');
+    ws.mergeCells(`A3:${lastColLetter}3`);
   } else {
     ws.addRow([]);
   }
 
-  // Ligne vide separatrice
   ws.addRow([]);
 
-  // --- En-tetes colonnes ---
-  const headers = ['N', 'Date', 'Heure', 'Client', 'Institution', 'Depart', 'Arrivee', 'Chauffeur', 'Montant (CHF)', 'Statut', 'Type'];
+  const operationalHeaders = [
+    'N', 'Date', 'Heure', 'Passager', 'Origine (type)', 'Origine (code)', 'Origine (nom)',
+    'Depart', 'Arrivee', 'Chauffeur', 'Montant (CHF)', 'Statut', 'Type',
+  ];
+  const accountingHeaders = ['Institution amont', 'Proprietaire', 'Executant', 'Payeur'];
+  const headers = isAccounting
+    ? [...operationalHeaders, ...accountingHeaders]
+    : operationalHeaders;
+
   const headerRow = ws.addRow(headers);
   headerRow.height = 28;
 
@@ -141,28 +173,40 @@ export async function exportReservationsExcel(reservations, options = {}) {
     };
   });
 
-  // --- Donnees ---
+  const montantColIndex = operationalHeaders.indexOf('Montant (CHF)') + 1;
+
   reservations.forEach((r, index) => {
     const status = r.status?.toLowerCase() || '';
-    const clientName = r.client?.full_name || r.client_name || '';
-    const institution = r.client?.institution_name || r.institution_name || '';
+    const identity = buildIdentityFromApi(r);
     const driverName = r.driver?.full_name || r.driver_name || '';
     const montant = Number(r.amount || 0);
-    const type = r.is_return ? 'Retour' : 'Aller';
 
-    const row = ws.addRow([
+    const operationalRow = [
       r.id || '',
-      formatDateExcel(r.scheduled_time),
-      formatTimeExcel(r.scheduled_time),
-      clientName,
-      institution,
+      r.scheduling?.display_datetime || formatDateExcel(r.scheduled_time),
+      r.scheduling?.display_time || formatAppointmentTime(r),
+      r.identity?.primary_label || identity.passengerLabel,
+      identity.source?.type || '',
+      identity.source?.code || '',
+      identity.source?.name || '',
       r.pickup_location || '',
       r.dropoff_location || '',
       driverName,
       montant,
       STATUS_LABELS[status] || status,
-      type,
-    ]);
+      tripTypeLabel(r),
+    ];
+
+    const accountingRow = isAccounting
+      ? [
+          identity.upstream?.name || '',
+          identity.ownership?.owner_company_name || '',
+          identity.execution?.executing_company_name || '',
+          resolvePayeur(r, identity),
+        ]
+      : [];
+
+    const row = ws.addRow([...operationalRow, ...accountingRow]);
 
     row.height = 24;
 
@@ -197,19 +241,19 @@ export async function exportReservationsExcel(reservations, options = {}) {
       if (colNum === 5) {
         cell.font = { ...cell.font, color: { argb: '64748B' }, italic: true };
       }
-      if (colNum === 9) {
+      if (colNum === montantColIndex) {
         cell.numFmt = '#,##0.00';
         cell.alignment = { ...cell.alignment, horizontal: 'right' };
         cell.font = { ...cell.font, bold: true };
       }
-      if (colNum === 10) {
+      if (colNum === montantColIndex + 1) {
         cell.alignment = { ...cell.alignment, horizontal: 'center' };
         const statusColor = getStatusColor(status);
         if (statusColor) {
           cell.font = { ...cell.font, bold: true, color: { argb: statusColor } };
         }
       }
-      if (colNum === 11) {
+      if (colNum === montantColIndex + 2) {
         cell.alignment = { ...cell.alignment, horizontal: 'center' };
       }
     });
@@ -220,15 +264,16 @@ export async function exportReservationsExcel(reservations, options = {}) {
   const totalRow = ws.addRow([]);
   totalRow.height = 28;
 
-  const totalLabelCell = totalRow.getCell(8);
+  const totalLabelCell = totalRow.getCell(Math.max(1, montantColIndex - 1));
   totalLabelCell.value = 'TOTAL';
   totalLabelCell.font = { bold: true, size: 11, color: { argb: BRAND_COLOR } };
   totalLabelCell.alignment = { horizontal: 'right', vertical: 'middle' };
 
-  const totalValueCell = totalRow.getCell(9);
+  const totalValueCell = totalRow.getCell(montantColIndex);
   const firstDataRow = 6;
   const lastDataRow = totalRowNum - 1;
-  totalValueCell.value = { formula: `SUM(I${firstDataRow}:I${lastDataRow})` };
+  const montantColLetter = String.fromCharCode(64 + montantColIndex);
+  totalValueCell.value = { formula: `SUM(${montantColLetter}${firstDataRow}:${montantColLetter}${lastDataRow})` };
   totalValueCell.numFmt = '#,##0.00';
   totalValueCell.font = { bold: true, size: 12, color: { argb: BRAND_COLOR } };
   totalValueCell.alignment = { horizontal: 'right', vertical: 'middle' };
@@ -237,7 +282,7 @@ export async function exportReservationsExcel(reservations, options = {}) {
     bottom: { style: 'double', color: { argb: BRAND_COLOR } },
   };
 
-  const totalCountCell = totalRow.getCell(10);
+  const totalCountCell = totalRow.getCell(montantColIndex + 1);
   totalCountCell.value = `${reservations.length} reservations`;
   totalCountCell.font = { size: 10, italic: true, color: { argb: '64748B' } };
   totalCountCell.alignment = { horizontal: 'center', vertical: 'middle' };
@@ -245,16 +290,15 @@ export async function exportReservationsExcel(reservations, options = {}) {
   // --- Auto-filtre sur les en-tetes ---
   ws.autoFilter = {
     from: { row: 5, column: 1 },
-    to: { row: 5, column: 11 },
+    to: { row: 5, column: colCount },
   };
 
   // --- Pied de page ---
   ws.addRow([]);
   const footerRow = ws.addRow([`Exporte depuis Lirie - ${new Date().toLocaleString('fr-CH')}`]);
   footerRow.getCell(1).font = { size: 9, italic: true, color: { argb: '94A3B8' } };
-  ws.mergeCells(`A${footerRow.number}:K${footerRow.number}`);
+  ws.mergeCells(`A${footerRow.number}:${lastColLetter}${footerRow.number}`);
 
-  // --- Mise en page impression ---
   ws.pageSetup = {
     orientation: 'landscape',
     fitToPage: true,
@@ -276,7 +320,8 @@ export async function exportReservationsExcel(reservations, options = {}) {
   // --- Generation et telechargement ---
   const buffer = await wb.xlsx.writeBuffer();
   const dateStr = new Date().toISOString().split('T')[0].replace(/-/g, '');
-  const fileName = `reservations_${companyName.toLowerCase().replace(/\s+/g, '_')}_${dateStr}.xlsx`;
+  const profileSuffix = isAccounting ? '_compta' : '';
+  const fileName = `reservations${profileSuffix}_${companyName.toLowerCase().replace(/\s+/g, '_')}_${dateStr}.xlsx`;
 
   const blob = new Blob([buffer], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

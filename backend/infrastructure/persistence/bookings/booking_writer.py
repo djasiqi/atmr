@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any, Protocol, cast
 
 from ext import db
-from models import Booking, BookingStatus
+from models.enums import BookingCreatedVia, BookingStatus
 
 
 def _split_round_trip_total_amount(total: float) -> tuple[float, float]:
@@ -175,6 +175,7 @@ class SqlAlchemyBookingWriter:
             pricing_profile_version_id=pricing_profile_version_id,
             price_amount=outbound_price_amount,
             price_breakdown_json=price_breakdown_json,
+            created_via=BookingCreatedVia.CLIENT_APP,
         )
 
         def _write_core() -> None:
@@ -237,6 +238,7 @@ class SqlAlchemyBookingWriter:
             duration_seconds=duration_seconds,
             distance_meters=distance_meters,
             price_amount=return_price_amount,
+            created_via=BookingCreatedVia.CLIENT_APP,
         )
 
         # Best effort coords

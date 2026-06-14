@@ -108,6 +108,7 @@ celery: Celery = Celery(
         "tasks.analytics_tasks",  # ✅ Analytics et rapports automatiques
         "tasks.osrm_precompute_tasks",  # ✅ P1: Pré-calcul matrices OSRM pour zones fréquentes
         "tasks.request_offer_tasks",  # ✅ ÉTAPE 4: Expiration/escalade offres institution
+        "tasks.change_request_tasks",  # ✅ PR2: Expiration demandes de validation modification
         "tasks.patient_sync_tasks",  # ✅ Curatelle: sync patient cross-plateforme
         "tasks.security_tasks",  # ✅ Security Tab V2: purge audit logs
         "tasks.demo_access_tasks",  # ✅ Demo 24h: expiration automatique des acces demo
@@ -295,6 +296,15 @@ celery.conf.beat_schedule = {
         "options": {
             "expires": 120,  # Expire après 2 min
             "jitter": 10,  # ✅ Jitter jusqu'à 10 secondes
+        },
+    },
+    # ✅ PR2: Expiration des demandes de validation de modification (toutes les minutes)
+    "expire-pending-change-requests": {
+        "task": "tasks.change_request_tasks.expire_pending_change_requests",
+        "schedule": 60.0,  # 1 minute
+        "options": {
+            "expires": 120,  # Expire après 2 min
+            "jitter": 10,
         },
     },
     # ✅ GO-LIVE: Métriques métier institution (toutes les heures)

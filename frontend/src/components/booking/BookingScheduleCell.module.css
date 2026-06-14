@@ -1,0 +1,8 @@
+.root {
+  white-space: nowrap;
+}
+
+.undefined {
+  font-style: italic;
+  opacity: 0.85;
+}

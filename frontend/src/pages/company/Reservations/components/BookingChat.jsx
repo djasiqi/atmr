@@ -28,6 +28,8 @@ export default function BookingChat({
   const [sending, setSending] = useState(false);
   const [text, setText] = useState('');
   const [unavailable, setUnavailable] = useState(false);
+  // booking_id canonique du fil (A/R + multi-étapes unifiés côté backend).
+  const [threadBookingId, setThreadBookingId] = useState(bookingId);
   const messagesEndRef = useRef(null);
   const messagesWrapRef = useRef(null);
   const debounceRef = useRef(null);
@@ -57,6 +59,7 @@ export default function BookingChat({
         if (!cancelled) {
           setMessages(data.messages || []);
           setHasMore(data.has_more || false);
+          if (data.booking_id) setThreadBookingId(data.booking_id);
           setTimeout(scrollToBottom, 50);
         }
       } catch (err) {
@@ -77,7 +80,11 @@ export default function BookingChat({
     if (!socket || !bookingId) return;
 
     const handler = (payload) => {
-      if (payload?.booking_id !== bookingId) return;
+      // Accepte l'id du leg demandé OU le booking_id canonique du fil unifié.
+      const incomingBookingId = payload?.booking_id;
+      if (incomingBookingId !== bookingId && incomingBookingId !== threadBookingId) {
+        return;
+      }
       const incoming = payload.message;
       if (!incoming?.id) return;
 
@@ -93,7 +100,7 @@ export default function BookingChat({
 
     socket.on('booking_message', handler);
     return () => { socket.off('booking_message', handler); };
-  }, [socket, bookingId, isNearBottom, scrollToBottom]);
+  }, [socket, bookingId, threadBookingId, isNearBottom, scrollToBottom]);
 
   // Send message with debounce
   const handleSend = useCallback(async () => {

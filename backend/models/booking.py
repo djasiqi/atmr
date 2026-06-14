@@ -38,9 +38,24 @@ from shared.time_utils import (
 )
 
 from .base import _as_bool, _as_dt, _as_float, _as_int, _as_str
-from .enums import BillingReviewStatus, BillingSource, BookingStatus
+from .enums import (
+    BillingReviewStatus,
+    BillingSource,
+    BookingCreatedVia,
+    BookingStatus,
+)
 
 logger = logging.getLogger(__name__)
+
+
+def _created_via_value(booking: Booking) -> str:
+    raw = getattr(booking, "created_via", None)
+    if raw is None:
+        return BookingCreatedVia.LEGACY.value
+    if isinstance(raw, BookingCreatedVia):
+        return raw.value
+    return str(raw).lower()
+
 
 USER_ID_ZERO = 0
 AMOUNT_ZERO = 0
@@ -262,6 +277,14 @@ class Booking(db.Model):
         default=1,
     )
 
+    active_change_request_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("booking_change_requests.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    route_group_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    route_sequence_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
     billed_to_type = Column(String(50), nullable=False, server_default="patient")
     billed_to_company_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("company.id", ondelete="SET NULL"), nullable=True
@@ -327,6 +350,17 @@ class Booking(db.Model):
     cancellation_fee_percent = Column(Integer, nullable=True)
     cancellation_fee_tier_id = Column(String(50), nullable=True)
 
+    created_via: Mapped[BookingCreatedVia] = mapped_column(
+        SAEnum(
+            BookingCreatedVia,
+            name="booking_created_via",
+            values_callable=lambda enum_cls: [e.value for e in enum_cls],
+        ),
+        nullable=False,
+        default=BookingCreatedVia.LEGACY,
+        server_default=BookingCreatedVia.LEGACY.value,
+    )
+
     # Relations
     client = relationship("Client", back_populates="bookings", passive_deletes=True)
     company = relationship(
@@ -372,6 +406,16 @@ class Booking(db.Model):
         "TransportVoucher",
         back_populates="booking",
         passive_deletes=True,
+    )
+    change_requests = relationship(
+        "BookingChangeRequest",
+        back_populates="booking",
+        foreign_keys="BookingChangeRequest.booking_id",
+    )
+    active_change_request = relationship(
+        "BookingChangeRequest",
+        foreign_keys=[active_change_request_id],
+        uselist=False,
     )
 
     # Propriétés
@@ -496,15 +540,22 @@ class Booking(db.Model):
             "date_formatted": date_local or "Non spécifié",
             "time_formatted": time_local or "Non spécifié",
             "status": getattr(status_val, "value", "unknown").lower(),
-            "created_via": getattr(
-                getattr(self, "created_via", None), "value", "legacy"
-            ),
+            "created_via": _created_via_value(self),
+            "booking_type": _as_str(getattr(self, "booking_type", None)) or "standard",
             "client": {
                 "id": getattr(cli, "id", None),
                 "first_name": getattr(cli_user, "first_name", "") if cli_user else "",
                 "last_name": getattr(cli_user, "last_name", "") if cli_user else "",
                 "email": getattr(cli_user, "email", "") if cli_user else "",
                 "full_name": self.customer_full_name,
+                "client_type": (
+                    cli.client_type.value
+                    if cli and getattr(cli, "client_type", None) is not None
+                    else None
+                ),
+                "linked_institution_id": (
+                    getattr(cli, "linked_institution_id", None) if cli else None
+                ),
                 "birth_date": (
                     cli_user.birth_date.strftime("%Y-%m-%d")
                     if cli_user and cli_user.birth_date
@@ -658,7 +709,18 @@ class Booking(db.Model):
             "cancellation_fee_tier_id": self.cancellation_fee_tier_id,
             # ✅ Timeline institution (si booking issu d'une demande institution)
             "institution_timeline": self._get_institution_timeline(),
+            # ✅ Historique opérationnel consolidé (tous les legs + retours)
+            "route_journey": self._get_route_journey(),
             "online_payment": self._online_client_payment_brief(),
+            "active_change_request_id": self.active_change_request_id,
+            "active_change_request": (
+                self.active_change_request.serialize()
+                if getattr(self, "active_change_request", None)
+                else None
+            ),
+            "route_group_id": getattr(self, "route_group_id", None),
+            "route_sequence_number": getattr(self, "route_sequence_number", None),
+            **self._canonical_display_payload(),
         }
 
     @property
@@ -731,16 +793,41 @@ class Booking(db.Model):
                 "is_institution": bool(getattr(cli, "is_institution", False))
                 if cli
                 else False,
+                "institution_name": getattr(cli, "institution_name", None)
+                if cli
+                else None,
+                "client_type": (
+                    cli.client_type.value
+                    if cli and getattr(cli, "client_type", None) is not None
+                    else None
+                ),
+                "linked_institution_id": (
+                    getattr(cli, "linked_institution_id", None) if cli else None
+                ),
             },
             "is_return": _as_bool(self.is_return),
+            "is_round_trip": _as_bool(self.is_round_trip),
             "parent_booking_id": self.parent_booking_id,
             "has_return": self.return_trip is not None,
             "time_confirmed": _as_bool(self.time_confirmed),
+            "created_via": _created_via_value(self),
+            "booking_type": _as_str(getattr(self, "booking_type", None)) or "standard",
             "mission_type": getattr(self, "mission_type", None) or "patient_transport",
             "wheelchair_need": _as_bool(self.wheelchair_need),
             "amount": round(_as_float(self.amount), 2),
             "billed_to_type": (_as_str(self.billed_to_type) or "patient"),
             "billed_to_company_id": self.billed_to_company_id,
+            "route_group_id": getattr(self, "route_group_id", None),
+            "route_sequence_number": getattr(self, "route_sequence_number", None),
+            "institution_timeline": self._get_institution_timeline(),
+            "route_journey": self._get_route_journey(),
+            "active_change_request_id": self.active_change_request_id,
+            "active_change_request": (
+                self.active_change_request.serialize()
+                if getattr(self, "active_change_request", None)
+                else None
+            ),
+            **self._canonical_display_payload(),
         }
 
     def _online_client_payment_brief(self):
@@ -782,6 +869,13 @@ class Booking(db.Model):
             )
             return None
 
+    def _canonical_display_payload(self) -> dict[str, Any]:
+        """Blocs BookingDisplayModel v1 (identity, scheduling, trip_flags, search_index)."""
+        from services.companies.booking_display import build_booking_display_blocks
+
+        viewer_id = getattr(self, "_serialize_viewer_company_id", None)
+        return build_booking_display_blocks(self, viewer_company_id=viewer_id)
+
     def _get_institution_timeline(self):
         """Retourne les dates cles de la demande institution source, si elle existe.
 
@@ -798,6 +892,16 @@ class Booking(db.Model):
                 parent = getattr(self, "return_trip", None)
                 if parent:
                     reqs = getattr(parent, "source_request", None)
+            # Multi-étapes : seuls les legs primaires sont liés à la TransportRequest
+            # (lien via transport_request.booking_id). Les legs suivants partagent le
+            # même parcours via route_group_id → on résout la demande source par groupe
+            # pour exposer un historique unique commun à tout le parcours.
+            if not reqs and getattr(self, "route_group_id", None):
+                from models.transport_request import TransportRequest
+
+                reqs = TransportRequest.query.filter_by(
+                    route_group_id=self.route_group_id
+                ).first()
             if not reqs:
                 return None
             req = reqs[0] if isinstance(reqs, list) else reqs
@@ -826,6 +930,118 @@ class Booking(db.Model):
                 if req.cancelled_at
                 else None,
             }
+        except Exception:
+            return None
+
+    def _collect_journey_legs(self):
+        """Construit la liste ordonnée des trajets composant un même transport.
+
+        Un transport partage un seul historique :
+        - aller simple : 1 trajet ;
+        - aller/retour : aller + retour ;
+        - multi-étapes : tous les legs du ``route_group_id`` + leurs retours.
+
+        L'ancrage se fait toujours sur l'aller (si l'on consulte un retour, on
+        remonte au parent), puis on agrège les legs du groupe et, pour chaque
+        leg, ses retours (enfants liés par ``parent_booking_id``).
+
+        Retourne une liste de tuples ``(booking, is_return)``.
+        """
+        from models.booking import Booking
+
+        # Ancrer sur l'aller si l'on consulte un retour.
+        base = self
+        if getattr(self, "is_return", False) and getattr(
+            self, "parent_booking_id", None
+        ):
+            parent = Booking.query.get(self.parent_booking_id)
+            if parent is not None:
+                base = parent
+
+        # Legs du parcours (multi-étapes) ou aller unique.
+        group_id = getattr(base, "route_group_id", None)
+        if group_id:
+            legs = (
+                Booking.query.filter_by(route_group_id=group_id)
+                .order_by(Booking.route_sequence_number.asc(), Booking.id.asc())
+                .all()
+            )
+        else:
+            legs = [base]
+
+        pairs: list[tuple[Any, bool]] = []
+        for leg in legs:
+            pairs.append((leg, False))
+            returns = (
+                Booking.query.filter_by(parent_booking_id=leg.id)
+                .order_by(Booking.id.asc())
+                .all()
+            )
+            for rt in returns:
+                pairs.append((rt, True))
+        return pairs
+
+    def _get_route_journey(self):
+        """Historique opérationnel consolidé et partagé d'un transport.
+
+        Couvre la prise en charge (``boarded_at``) et la dépose / fin de course
+        (``completed_at``) de chaque trajet du transport (legs multi-étapes +
+        retours), afin d'afficher un historique unique quel que soit le trajet
+        consulté.
+
+        Retourne une liste d'événements ``{event, date, type}`` triée par date,
+        ou ``None`` si aucun événement opérationnel.
+        """
+        try:
+            # Chemin rapide : course simple sans groupe ni retour → pas de requête.
+            if (
+                not getattr(self, "route_group_id", None)
+                and not getattr(self, "parent_booking_id", None)
+                and not getattr(self, "is_round_trip", False)
+            ):
+                pairs: list[tuple[Any, bool]] = [(self, False)]
+            else:
+                pairs = self._collect_journey_legs()
+
+            non_return_legs = [b for b, is_ret in pairs if not is_ret]
+            multi = len(non_return_legs) > 1
+            events: list[dict[str, Any]] = []
+
+            def _add_leg(leg, base_label, *, is_return):
+                if base_label and is_return:
+                    suffix = f" — {base_label} (retour)"
+                elif base_label:
+                    suffix = f" — {base_label}"
+                elif is_return:
+                    suffix = " — Retour"
+                else:
+                    suffix = ""
+                boarded = _as_dt(getattr(leg, "boarded_at", None))
+                if boarded:
+                    events.append(
+                        {
+                            "event": f"Prise en charge{suffix}",
+                            "date": iso_utc_z(to_utc_from_db(boarded)),
+                            "type": "pickup",
+                        }
+                    )
+                completed = _as_dt(getattr(leg, "completed_at", None))
+                if completed:
+                    events.append(
+                        {
+                            "event": f"Dépose / course terminée{suffix}",
+                            "date": iso_utc_z(to_utc_from_db(completed)),
+                            "type": "dropoff",
+                        }
+                    )
+
+            for leg, is_return in pairs:
+                seq = getattr(leg, "route_sequence_number", None)
+                base_label = f"Trajet {seq}" if (multi and seq) else None
+                _add_leg(leg, base_label, is_return=is_return)
+
+            events.sort(key=lambda e: e.get("date") or "")
+            return events or None
         except Exception:
             return None
 
@@ -953,11 +1169,9 @@ class Booking(db.Model):
         # SAUF pour les courses retour (is_return=True) qui peuvent avoir scheduled_time=None
         # Le dispatch gère déjà ce cas (voir get_bookings_for_dispatch dans booking_repository)
         is_return = getattr(self, "is_return", False)
+        time_confirmed = getattr(self, "time_confirmed", True)
         if scheduled_time is None:
-            if is_return:
-                # ✅ Permettre scheduled_time=None pour les courses retour
-                # L'heure pourra être définie plus tard via l'endpoint /schedule
-                # (instancier is_return=True avant scheduled_time dans le constructeur.)
+            if is_return or not time_confirmed:
                 return None
             msg = "scheduled_time est obligatoire. Le dispatch nécessite cette valeur."
             raise ValueError(msg)

@@ -50,7 +50,7 @@ import {
   pickupDelaysByBookingLastWins,
   pickupEtaIsoByBookingId,
 } from "../../../src/features/company/utils/dispatchWebAlignment";
-import { isPickupSentinel } from "../../../src/features/company/utils/pickupSentinel";
+import { isTimeUndefined } from "../../../src/features/company/utils/pickupSentinel";
 import { TransferRideModal } from "../../../src/features/company/components/transfers/TransferRideModal";
 import {
   cancelCompanyRide,
@@ -612,7 +612,7 @@ export default function CompanyRidesScreen() {
   const filteredMissions = useMemo(() => {
     const hasRenderableSchedule = (mission: CompanyDispatchMission) => {
       if (!mission.scheduled_at) return false;
-      if (isPickupSentinel(mission.scheduled_at)) return true;
+      if (isTimeUndefined(mission)) return true;
       const parsed = Date.parse(mission.scheduled_at);
       return Number.isFinite(parsed);
     };
@@ -647,7 +647,7 @@ export default function CompanyRidesScreen() {
       return missionsWithSchedule.filter((m) => {
         if (m.status === "completed" || m.status === "cancelled") return false;
         // Exclure les courses « À définir » (sentinelle T00:00:00) du calcul des retards.
-        if (isPickupSentinel(m.scheduled_at)) return false;
+        if (isTimeUndefined(m)) return false;
         const t = Date.parse(m.scheduled_at);
         if (!Number.isFinite(t)) return false;
         return t < now;

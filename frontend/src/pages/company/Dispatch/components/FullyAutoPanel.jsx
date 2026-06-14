@@ -519,7 +519,7 @@ const FullyAutoPanel = ({
                 <thead>
                   <tr>
                     <th>Heure</th>
-                    <th>Client</th>
+                    <th>Passager</th>
                     <th>Chauffeur</th>
                     <th>Pickup → Dropoff</th>
                     <th>Statut</th>
@@ -533,7 +533,7 @@ const FullyAutoPanel = ({
                         {formatTime(dispatch.scheduled_time) || '⏱️ À définir'}
                       </td>
                       <td className={styles.clientCell}>
-                        <strong>{dispatch.client_name || 'Client inconnu'}</strong>
+                        <strong>{dispatch.client_name || 'Passager inconnu'}</strong>
                         {dispatch.booking_id && (
                           <span className={styles.bookingId}>#{dispatch.booking_id}</span>
                         )}

@@ -19,24 +19,76 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { FaArrowLeft, FaSave, FaPaperPlane, FaTimes } from 'react-icons/fa';
+import { FaArrowLeft, FaSave, FaPaperPlane, FaTimes, FaPlus, FaGripVertical, FaTruck } from 'react-icons/fa';
 import AsyncCreatableSelect from 'react-select/async-creatable';
 import {
   useCreateRequest,
   useSendRequest,
+  useAssignExternalCarrier,
   useInstitutionPatients,
   useInstitutionMe,
   useInstitutionSettings,
 } from '../../../hooks/useInstitutionData';
-import { listPatients } from '../../../services/institutionService';
+import { listPatients, exportRequestMissionPdf } from '../../../services/institutionService';
+import { buildCarrierMailto } from '../../../utils/externalCarrierEmail';
 import { canEditBilling } from '../../../utils/institutionPermissions';
 import AddressAutocomplete from '../../../components/common/AddressAutocomplete';
 import PatientFormModal from '../Patients/PatientFormModal';
 import { toast } from 'sonner';
 import InlineDatePicker from '../../../components/ui/InlineDatePicker';
-import InlineTimePicker from '../../../components/ui/InlineTimePicker';
 import ChipSelect from '../../../components/ui/ChipSelect';
 import styles from './InstitutionRequestForm.module.css';
+import {
+  buildMultiStopPayloadStops,
+  filterValidMultiStopDestinations,
+} from '../../../utils/buildMultiStopLegsPreview';
+import RouteStepTimeField from '../../../components/institution/RouteStepTimeField';
+import ExternalCarrierFields, {
+  EMPTY_EXTERNAL_CARRIER_FORM,
+  validateExternalCarrierForm,
+  buildExternalCarrierPayload,
+} from '../../../components/institution/ExternalCarrierFields';
+import {
+  normalizeMissionDate,
+  combineMissionDateTime,
+  derivePickupTimeConfirmed,
+  applyDepartureToPayload,
+  isInstantInPast,
+  isInstantBeforeLead,
+  extractHHMM,
+  MIN_ARRIVAL_LEAD_MINUTES,
+} from '../../../utils/missionScheduleForm';
+
+const pad2 = (n) => String(n).padStart(2, '0');
+
+const parseTimeFromIso = (iso) => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+};
+
+const TRAVEL_MINUTES_BETWEEN_STOPS = 20;
+
+const detectScheduleIncoherence = (timesInOrder) => {
+  const parsed = timesInOrder
+    .filter((t) => t?.time)
+    .map((t) => ({
+      label: t.label,
+      minutes: (() => {
+        const [h, m] = t.time.split(':').map(Number);
+        return h * 60 + m;
+      })(),
+    }));
+  for (let i = 1; i < parsed.length; i += 1) {
+    const prev = parsed[i - 1];
+    const cur = parsed[i];
+    if (cur.minutes < prev.minutes + TRAVEL_MINUTES_BETWEEN_STOPS) {
+      return `Incohérence horaire : ${cur.label} (${timesInOrder[i].time}) trop tôt après ${prev.label} (${timesInOrder[i - 1].time}) (~${TRAVEL_MINUTES_BETWEEN_STOPS} min de trajet).`;
+    }
+  }
+  return null;
+};
 
 const BILLING_INTENTS = [
   { value: 'patient', label: 'Patient' },
@@ -56,8 +108,15 @@ const EMPTY_FORM = {
   mission_type: 'patient_transport',
   patient_id: '',
   external_reference: '',
+  mission_date: '',
+  pickup_time: '',
+  pickup_time_confirmed: false,
+  dropoff_time: '',
+  dropoff_time_confirmed: false,
+  return_time: '',
+  return_time_confirmed: false,
   scheduled_time: '',
-  scheduled_time_type: 'arrival',
+  scheduled_time_type: 'departure',
   // Trip routing
   trip_type: 'inst_to_dest',
   pickup_type: 'institution',
@@ -79,10 +138,7 @@ const EMPTY_FORM = {
   dropoff_service: '',
   dropoff_doctor: '',
   floor_elevator_info: '',
-  round_trip: true,
-  return_time: '',
-  return_date: '',
-  return_hour: '',
+  round_trip: false,
   requires_wheelchair: false,
   requires_stretcher: false,
   requires_vehicle_wheelchair: false,
@@ -99,6 +155,9 @@ const EMPTY_FORM = {
   delivery_description: '',
   billing_intent: 'patient',
   is_urgent: false,
+  multi_stop: false,
+  return_to_institution: false,
+  intermediate_stops: [],
 };
 
 const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
@@ -111,6 +170,7 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
   const { data: settingsData } = useInstitutionSettings();
   const createMutation = useCreateRequest();
   const sendMutation = useSendRequest();
+  const assignExternalMutation = useAssignExternalCarrier();
 
   const institutionRole = meData?.institution_role;
   const canBilling = canEditBilling(institutionRole);
@@ -120,11 +180,87 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
   // Refs for focus management
   const destinationRef = useRef(null);
   const datetimeRef = useRef(null);
+  const missionDateRef = useRef(null);
+  const pickupTimeRef = useRef(null);
+  const dropoffTimeRef = useRef(null);
+  const returnTimeRef = useRef(null);
 
   // Form state
   const [formData, setFormData] = useState({ ...EMPTY_FORM });
   const [showQuickPatient, setShowQuickPatient] = useState(false);
   const [selectedPatientOption, setSelectedPatientOption] = useState(null);
+
+  // ── Multi-étapes : réorganisation par glisser-déposer ──
+  const [dragIndex, setDragIndex] = useState(null);
+  const [dragOverIndex, setDragOverIndex] = useState(null);
+
+  // Réordonne TOUS les points du parcours.
+  // index 0 = Départ (origine), 1 = Destination, 2.. = étapes supplémentaires.
+  const moveRoutePoint = useCallback((from, to) => {
+    setFormData((prev) => {
+      const instAddr = meData?.address || '';
+      const pickup = {
+        kind: 'pickup',
+        address: prev.pickup_location || (prev.pickup_type === 'institution' ? instAddr : ''),
+        establishment: prev.pickup_establishment || '',
+        service: prev.pickup_service || '',
+        doctor: prev.pickup_doctor || '',
+      };
+      const dropoff = {
+        kind: 'dropoff',
+        address: prev.dropoff_location || (prev.dropoff_type === 'institution' ? instAddr : ''),
+        establishment: prev.dropoff_establishment || '',
+        service: prev.dropoff_service || '',
+        doctor: prev.dropoff_doctor || '',
+      };
+      const extras = (prev.intermediate_stops || []).map((s) => ({
+        kind: 'extra',
+        address: s.dropoff_location || '',
+        scheduled_time: s.scheduled_time || '',
+        time_confirmed: Boolean(s.time_confirmed),
+        establishment: s.dropoff_establishment || '',
+        service: s.dropoff_service || '',
+        doctor: s.dropoff_doctor || '',
+      }));
+      const combined = [pickup, dropoff, ...extras];
+      if (from === to || from < 0 || to < 0 || from >= combined.length || to >= combined.length) {
+        return prev;
+      }
+      const [moved] = combined.splice(from, 1);
+      combined.splice(to, 0, moved);
+      const [n0, n1, ...rest] = combined;
+      const next = {
+        ...prev,
+        pickup_location: n0.address || '',
+        pickup_establishment: n0.establishment || '',
+        pickup_service: n0.service || '',
+        pickup_doctor: n0.doctor || '',
+        dropoff_location: n1.address || '',
+        dropoff_establishment: n1.establishment || '',
+        dropoff_service: n1.service || '',
+        dropoff_doctor: n1.doctor || '',
+        intermediate_stops: rest.map((r) => ({
+          dropoff_location: r.address || '',
+          scheduled_time: r.scheduled_time || '',
+          time_confirmed: Boolean(r.time_confirmed),
+          dropoff_establishment: r.establishment || '',
+          dropoff_service: r.service || '',
+          dropoff_doctor: r.doctor || '',
+        })),
+      };
+      // Si l'origine change de nature, elle devient une adresse libre.
+      if (n0.kind !== 'pickup') {
+        next.pickup_type = 'other';
+        next.pickup_entry_point = '';
+      }
+      // Idem pour la destination principale.
+      if (n1.kind !== 'dropoff') {
+        next.dropoff_type = 'other';
+        next.dropoff_entry_point = '';
+      }
+      return next;
+    });
+  }, [meData]);
 
   // ── Patient search (AsyncCreatableSelect) ──
   const formatDob = useCallback((dobStr) => {
@@ -165,8 +301,13 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
       return [];
     }
   }, [formatPatientOption, defaultPatientOptions]);
-  const [sendAfterCreate, setSendAfterCreate] = useState(true);
+  const [executionMode, setExecutionMode] = useState('lirie');
+  const [externalCarrierForm, setExternalCarrierForm] = useState(EMPTY_EXTERNAL_CARRIER_FORM);
   const [patientPrefilled, setPatientPrefilled] = useState(false);
+
+  const isLirieSendMode = executionMode === 'lirie';
+  const isExternalMode = executionMode === 'external';
+  const isDraftMode = executionMode === 'draft';
 
   // Selected patient object
   const selectedPatient = useMemo(() => {
@@ -176,6 +317,23 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
 
   // Derived: institution address from meData
   const institutionAddress = meData?.address || '';
+
+  const multiStopOrigin = useMemo(
+    () => formData.pickup_location
+      || (formData.pickup_type === 'institution' ? institutionAddress : '')
+      || institutionAddress
+      || '',
+    [formData.pickup_location, formData.pickup_type, institutionAddress],
+  );
+
+  // Parcours : la « Destination » principale reste dropoff_location ;
+  // les étapes supplémentaires vivent dans intermediate_stops. Aucun « mode ».
+  const extraStops = formData.intermediate_stops || [];
+  const hasExtraStops = extraStops.length > 0;
+  const journeyReturnEnabled = formData.return_to_institution === true;
+  // Retour domicile : départ = institution, dernière étape = domicile patient.
+  // Les destinations ajoutées s'insèrent obligatoirement entre les deux.
+  const isReturnHome = formData.dropoff_type === 'domicile';
 
   // ── Pre-fill billing_intent + trip type + contacts from institution settings ──
   useEffect(() => {
@@ -316,6 +474,177 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
+  // ── Champ « Départ » réutilisable (mode simple + carte parcours) ──
+  const renderPickupField = (inputClassName, { editable = false } = {}) => {
+    const isFixedType = formData.pickup_type === 'institution' || formData.pickup_type === 'domicile';
+    if (isFixedType && !editable) {
+      return (
+        <input
+          type="text"
+          id="pickup_location"
+          value={formData.pickup_location || (formData.pickup_type === 'institution' ? institutionAddress : '')}
+          readOnly
+          className={`${inputClassName} ${styles.routeReadonly}`}
+          placeholder={formData.pickup_type === 'domicile' && !formData.pickup_location ? 'Sélectionnez un patient' : ''}
+        />
+      );
+    }
+    return (
+      <AddressAutocomplete
+        name="pickup_location"
+        inputId="pickup_location"
+        value={formData.pickup_location || (editable && formData.pickup_type === 'institution' ? institutionAddress : '')}
+        onChange={(e) => handleChange('pickup_location', e.target.value)}
+        onSelect={(item) => {
+          const address = item.label || item.address || '';
+          const placeName = item.name || '';
+          const isDoctorPattern = /^(dr\.?|prof\.?|méd\.?|med\.?|docteur|professeur)\s/i;
+          setFormData(prev => {
+            const updates = { ...prev, pickup_location: address, pickup_establishment: '', pickup_doctor: '' };
+            if (placeName && placeName !== item.address) {
+              if (isDoctorPattern.test(placeName)) {
+                updates.pickup_doctor = placeName;
+              } else {
+                updates.pickup_establishment = placeName;
+              }
+            }
+            return updates;
+          });
+        }}
+        placeholder="Saisir ou choisir l'adresse"
+        inputClassName={inputClassName}
+        required
+      />
+    );
+  };
+
+  // ── Champ « Destination » réutilisable (destination principale) ──
+  const renderDropoffField = (inputClassName) => {
+    if (formData.dropoff_type === 'institution' || formData.dropoff_type === 'domicile') {
+      return (
+        <input
+          type="text"
+          id="dropoff_location"
+          value={formData.dropoff_location || (formData.dropoff_type === 'institution' ? institutionAddress : '')}
+          readOnly
+          className={`${inputClassName} ${styles.routeReadonly}`}
+          placeholder={formData.dropoff_type === 'domicile' && !formData.dropoff_location ? 'Sélectionnez un patient' : ''}
+        />
+      );
+    }
+    return (
+      <AddressAutocomplete
+        name="dropoff_location"
+        inputId="dropoff_location"
+        value={formData.dropoff_location}
+        onChange={(e) => handleChange('dropoff_location', e.target.value)}
+        onSelect={(item) => {
+          const address = item.label || item.address || '';
+          const placeName = item.name || '';
+          const isDoctorPattern = /^(dr\.?|prof\.?|méd\.?|med\.?|docteur|professeur)\s/i;
+          setFormData(prev => {
+            const updates = { ...prev, dropoff_location: address, dropoff_establishment: '', dropoff_doctor: '' };
+            if (placeName && placeName !== item.address) {
+              if (isDoctorPattern.test(placeName)) {
+                updates.dropoff_doctor = placeName;
+              } else {
+                updates.dropoff_establishment = placeName;
+              }
+            }
+            return updates;
+          });
+        }}
+        placeholder="Adresse d'arrivée"
+        inputClassName={inputClassName}
+        required
+      />
+    );
+  };
+
+  // ── Met à jour une étape supplémentaire (destination N) ──
+  const setStopAddress = (idx, value) => {
+    const nextValue = value?.target?.value ?? value ?? '';
+    setFormData((prev) => {
+      const next = [...(prev.intermediate_stops || [])];
+      next[idx] = { ...next[idx], dropoff_location: nextValue };
+      return { ...prev, intermediate_stops: next };
+    });
+  };
+
+  // Met à jour un champ détail (establishment / service / doctor) d'une étape.
+  const setStopField = (idx, field, value) => {
+    const nextValue = value?.target?.value ?? value ?? '';
+    setFormData((prev) => {
+      const next = [...(prev.intermediate_stops || [])];
+      next[idx] = { ...next[idx], [field]: nextValue };
+      return { ...prev, intermediate_stops: next };
+    });
+  };
+
+  const setStopTime = (idx, timeHHMM) => {
+    setFormData((prev) => {
+      const missionDate = prev.mission_date || prev.scheduled_time?.split('T')[0] || '';
+      const iso = combineMissionDateTime(missionDate, timeHHMM);
+      const next = [...(prev.intermediate_stops || [])];
+      next[idx] = {
+        ...next[idx],
+        scheduled_time: iso || '',
+        time_confirmed: Boolean(timeHHMM?.trim()),
+      };
+      return { ...prev, intermediate_stops: next };
+    });
+  };
+
+  // Sélection d'adresse pour une étape : auto-remplit établissement / médecin
+  // à partir du lieu nommé (même logique que la Destination principale).
+  const setStopFromSelection = (idx, item) => {
+    const address = item?.label || item?.address || item?.formatted_address || item?.description || '';
+    const placeName = item?.name || '';
+    const isDoctorPattern = /^(dr\.?|prof\.?|méd\.?|med\.?|docteur|professeur)\s/i;
+    setFormData((prev) => {
+      const next = [...(prev.intermediate_stops || [])];
+      const entry = {
+        ...next[idx],
+        dropoff_location: address,
+        dropoff_establishment: '',
+        dropoff_doctor: '',
+      };
+      if (placeName && placeName !== item?.address) {
+        if (isDoctorPattern.test(placeName)) {
+          entry.dropoff_doctor = placeName;
+        } else {
+          entry.dropoff_establishment = placeName;
+        }
+      }
+      next[idx] = entry;
+      return { ...prev, intermediate_stops: next };
+    });
+  };
+
+  const addExtraStop = () => {
+    setFormData((prev) => ({
+      ...prev,
+      intermediate_stops: [
+        ...(prev.intermediate_stops || []),
+        {
+          dropoff_location: '',
+          scheduled_time: '',
+          time_confirmed: false,
+          dropoff_establishment: '',
+          dropoff_service: '',
+          dropoff_doctor: '',
+        },
+      ],
+    }));
+  };
+
+  const removeExtraStop = (idx) => {
+    setFormData((prev) => ({
+      ...prev,
+      intermediate_stops: (prev.intermediate_stops || []).filter((_, i) => i !== idx),
+    }));
+  };
+
   // ── Trip type change handler ──
   const getPatientAddress = useCallback(() => {
     if (!selectedPatient) return '';
@@ -387,13 +716,16 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
   const setTimeShortcut = useCallback((minutesFromNow) => {
     const d = new Date();
     d.setMinutes(d.getMinutes() + minutesFromNow);
-    const pad = (n) => String(n).padStart(2, '0');
-    const val = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    const dateVal = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+    const timeVal = `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
     setFormData(prev => ({
       ...prev,
-      scheduled_time: val,
+      mission_date: dateVal,
+      pickup_time: timeVal,
+      pickup_time_confirmed: minutesFromNow === 0,
+      scheduled_time: `${dateVal}T${timeVal}`,
       is_urgent: minutesFromNow === 0,
-      ...(minutesFromNow === 0 ? { scheduled_time_type: 'departure' } : {}),
+      scheduled_time_type: 'departure',
     }));
   }, []);
 
@@ -401,21 +733,16 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
     const d = new Date();
     d.setDate(d.getDate() + 1);
     d.setHours(9, 0, 0, 0);
-    const pad = (n) => String(n).padStart(2, '0');
-    const val = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T09:00`;
-    setFormData(prev => ({ ...prev, scheduled_time: val }));
+    const dateVal = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+    setFormData(prev => ({
+      ...prev,
+      mission_date: dateVal,
+      pickup_time: '09:00',
+      pickup_time_confirmed: true,
+      scheduled_time: `${dateVal}T09:00`,
+      scheduled_time_type: 'departure',
+    }));
   }, []);
-
-  // ── Auto-fill return date (sans heure) quand A/R activé ──
-  useEffect(() => {
-    if (!formData.round_trip || !formData.scheduled_time) return;
-    setFormData(prev => {
-      if (prev.return_date) return prev; // ne pas écraser si déjà rempli
-      const d = new Date(prev.scheduled_time);
-      const pad = (n) => String(n).padStart(2, '0');
-      return { ...prev, return_date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` };
-    });
-  }, [formData.round_trip, formData.scheduled_time]);
 
   // ── Phone normalizer (accepts Swiss formats, cleans for storage) ──
   const cleanPhone = (raw) => {
@@ -429,25 +756,84 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
     return cleaned;
   };
 
+  const hasConfirmedTime = useCallback((data, extraStops, returnEnabled) => {
+    if (derivePickupTimeConfirmed(data.pickup_time)) return true;
+    if (data.dropoff_time?.trim()) return true;
+    if (returnEnabled && data.return_time?.trim()) return true;
+    return extraStops.some((s) => s.scheduled_time?.trim());
+  }, []);
+
+  /** Flush synchrone des pickers avant validation/payload (scénarios B/C sans blur). */
+  const flushScheduleFields = useCallback(() => {
+    const missionDate = missionDateRef.current?.flushPending?.()
+      ?? formData.mission_date
+      ?? (formData.scheduled_time ? formData.scheduled_time.split('T')[0] : '');
+    const pickupTime = pickupTimeRef.current?.flushPending?.() ?? formData.pickup_time;
+    const dropoffTime = dropoffTimeRef.current?.flushPending?.() ?? formData.dropoff_time;
+    const returnTime = returnTimeRef.current?.flushPending?.() ?? formData.return_time;
+    return {
+      mission_date: missionDate,
+      pickup_time: pickupTime,
+      pickup_time_confirmed: derivePickupTimeConfirmed(pickupTime),
+      dropoff_time: dropoffTime,
+      dropoff_time_confirmed: Boolean(dropoffTime?.trim()),
+      return_time: returnTime,
+      return_time_confirmed: Boolean(returnTime?.trim()),
+    };
+  }, [formData]);
+
+  const scheduleIncoherence = useMemo(() => {
+    const extraValid = filterValidMultiStopDestinations(formData.intermediate_stops);
+    const returnEnabled = formData.return_to_institution === true;
+    const isMulti = extraValid.length >= 1 || returnEnabled;
+    const times = [];
+    if (formData.pickup_time?.trim()) {
+      times.push({ label: 'Départ', time: formData.pickup_time.trim() });
+    }
+    if (formData.dropoff_time?.trim()) {
+      times.push({ label: isMulti ? 'Destination 1' : 'RDV', time: formData.dropoff_time.trim() });
+    }
+    extraValid.forEach((stop, idx) => {
+      const t = parseTimeFromIso(stop.scheduled_time) || stop.scheduled_time?.split('T')[1]?.slice(0, 5);
+      if (t) times.push({ label: `Destination ${idx + 2}`, time: t });
+    });
+    if (returnEnabled && formData.return_time?.trim()) {
+      times.push({ label: 'Retour', time: formData.return_time.trim() });
+    }
+    return detectScheduleIncoherence(times);
+  }, [formData]);
+
   // ── Build payload for backend ──
-  const buildPayload = () => {
-    // Convention métier retour : sans return_hour → 00:00 = « heure retour à définir » (sentinelle)
-    const returnHourPart = formData.return_hour?.trim() || '00:00';
+  const buildPayload = (scheduleOverrides = {}) => {
+    const missionDate = normalizeMissionDate(
+      scheduleOverrides.mission_date
+        ?? formData.mission_date
+        ?? (formData.scheduled_time ? formData.scheduled_time.split('T')[0] : ''),
+    );
+    const pickupTime = scheduleOverrides.pickup_time ?? formData.pickup_time;
+    const dropoffTime = scheduleOverrides.dropoff_time ?? formData.dropoff_time;
+    const returnTime = scheduleOverrides.return_time ?? formData.return_time;
+    const pickupIso = combineMissionDateTime(missionDate, pickupTime);
+    const dropoffIso = combineMissionDateTime(missionDate, dropoffTime);
+    const returnIso = combineMissionDateTime(missionDate, returnTime);
+
     const payload = {
       mission_type: formData.mission_type,
       patient_id: formData.patient_id ? Number(formData.patient_id) : null,
-      scheduled_time: new Date(formData.scheduled_time).toISOString(),
-      scheduled_time_type: formData.scheduled_time_type || 'departure',
+      mission_date: missionDate,
+      pickup_time_confirmed: derivePickupTimeConfirmed(pickupTime),
       pickup_location: formData.pickup_location || (formData.pickup_type === 'institution' ? institutionAddress : ''),
       dropoff_location: formData.dropoff_location || (formData.dropoff_type === 'institution' ? institutionAddress : ''),
-      is_round_trip: formData.round_trip,
+      is_round_trip: false,
       is_urgent: formData.is_urgent || false,
-      return_time: formData.round_trip && formData.return_date
-        ? new Date(`${formData.return_date}T${returnHourPart}`).toISOString()
-        : null,
+      return_time: null,
       billing_intent: formData.billing_intent,
       notes: formData.notes || null,
     };
+    if (payload.pickup_time_confirmed && pickupIso) {
+      payload.scheduled_time = pickupIso;
+      payload.scheduled_time_type = 'departure';
+    }
     if (formData.external_reference?.trim()) {
       payload.external_reference = formData.external_reference.trim();
     }
@@ -516,25 +902,130 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
       payload.delivery_description = formData.delivery_description;
     }
 
+    const extraValidStops = filterValidMultiStopDestinations(formData.intermediate_stops);
+    const returnEnabled = formData.return_to_institution === true;
+    const isMultiRoute = extraValidStops.length >= 1 || returnEnabled;
+
+    if (isMultiRoute) {
+      const principalDropoff = (
+        formData.dropoff_location
+        || (formData.dropoff_type === 'institution' ? institutionAddress : '')
+        || ''
+      ).trim();
+      const principalStop = {
+        dropoff_location: principalDropoff,
+        scheduled_time: dropoffIso || '',
+        time_confirmed: Boolean(dropoffTime?.trim()),
+        dropoff_establishment: formData.dropoff_establishment || '',
+        dropoff_service: formData.dropoff_service || '',
+        dropoff_doctor: formData.dropoff_doctor || '',
+      };
+      payload.multi_stop = true;
+      payload.return_to_institution = returnEnabled;
+      payload.is_round_trip = false;
+      payload.return_time = null;
+      // Retour domicile : domicile = dernière étape, destinations insérées avant.
+      const orderedStops = isReturnHome
+        ? [...extraValidStops, principalStop]
+        : [principalStop, ...extraValidStops];
+      payload.intermediate_stops = buildMultiStopPayloadStops(orderedStops);
+      payload.dropoff_location = isReturnHome
+        ? (orderedStops[0]?.dropoff_location || principalDropoff)
+        : principalDropoff;
+      if (pickupIso) {
+        payload.scheduled_time = pickupIso;
+        payload.scheduled_time_type = 'departure';
+      }
+      if (returnEnabled) {
+        if (returnIso) payload.return_scheduled_time = returnIso;
+        payload.return_time_confirmed = Boolean(returnTime?.trim());
+      }
+    } else {
+      const hasPickup = Boolean(pickupTime?.trim());
+      const hasDropoff = Boolean(dropoffTime?.trim());
+      if (hasPickup && (!hasDropoff || derivePickupTimeConfirmed(pickupTime))) {
+        applyDepartureToPayload(payload, { missionDate, pickupTime });
+      } else if (hasDropoff) {
+        payload.scheduled_time_type = 'arrival';
+        payload.pickup_time_confirmed = false;
+        if (dropoffIso) payload.scheduled_time = dropoffIso;
+        payload.appointment_time_confirmed = Boolean(dropoffTime?.trim());
+      }
+    }
+
     return payload;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (createMutation.isPending || sendMutation.isPending) {
+    if (createMutation.isPending || sendMutation.isPending || assignExternalMutation.isPending) {
       return;
     }
 
-    // Validation
-    if (!formData.scheduled_time) {
-      toast.error('Date et heure requises');
+    // Flush synchrone des pickers (scénarios sans blur avant Envoyer)
+    const flushedSchedule = flushScheduleFields();
+
+    // Validation — Enregistrer : date mission ; Envoyer : ≥1 heure confirmée
+    const missionDateForValidation = normalizeMissionDate(
+      flushedSchedule.mission_date
+        || (formData.scheduled_time ? formData.scheduled_time.split('T')[0] : ''),
+    );
+    if (!missionDateForValidation) {
+      toast.error('Date de mission requise');
+      return;
+    }
+    if (
+      derivePickupTimeConfirmed(flushedSchedule.pickup_time)
+      && !combineMissionDateTime(missionDateForValidation, flushedSchedule.pickup_time)
+    ) {
+      toast.error("Date de mission invalide pour l'heure de départ.");
+      return;
+    }
+    const extraValid = filterValidMultiStopDestinations(formData.intermediate_stops);
+    const returnEnabled = formData.return_to_institution === true;
+
+    // Validation temporelle — départ ≥ maintenant, rendez-vous ≥ maintenant + 1h.
+    const pickupIsoCheck = combineMissionDateTime(missionDateForValidation, flushedSchedule.pickup_time);
+    if (pickupIsoCheck && isInstantInPast(pickupIsoCheck)) {
+      toast.error('Le départ ne peut pas être dans le passé.');
+      return;
+    }
+    const dropoffIsoCheck = combineMissionDateTime(missionDateForValidation, flushedSchedule.dropoff_time);
+    if (dropoffIsoCheck && isInstantBeforeLead(dropoffIsoCheck)) {
+      toast.error(`Le rendez-vous doit être au minimum ${MIN_ARRIVAL_LEAD_MINUTES / 60}h après l'heure actuelle.`);
+      return;
+    }
+    const stopIncoherent = extraValid.some((stop) => {
+      const stopIso = combineMissionDateTime(missionDateForValidation, extractHHMM(stop.scheduled_time));
+      return stopIso && isInstantBeforeLead(stopIso);
+    });
+    if (stopIncoherent) {
+      toast.error(`Chaque rendez-vous doit être au minimum ${MIN_ARRIVAL_LEAD_MINUTES / 60}h après l'heure actuelle.`);
+      return;
+    }
+    if (returnEnabled) {
+      const returnIsoCheck = combineMissionDateTime(missionDateForValidation, flushedSchedule.return_time);
+      if (returnIsoCheck && isInstantBeforeLead(returnIsoCheck)) {
+        toast.error(`Le retour doit être au minimum ${MIN_ARRIVAL_LEAD_MINUTES / 60}h après l'heure actuelle.`);
+        return;
+      }
+    }
+
+    const validationData = { ...formData, ...flushedSchedule };
+    if (isLirieSendMode && !hasConfirmedTime(validationData, extraValid, returnEnabled)) {
+      toast.error('Pour envoyer aux transporteurs, confirmez au moins une heure (départ, rendez-vous ou retour).');
       return;
     }
     const effectivePickup = formData.pickup_location || (formData.pickup_type === 'institution' ? institutionAddress : '');
+    if (!effectivePickup) {
+      toast.error('Adresse de départ requise');
+      return;
+    }
+    // La « Destination » principale est toujours requise (étapes supplémentaires optionnelles).
     const effectiveDropoff = formData.dropoff_location || (formData.dropoff_type === 'institution' ? institutionAddress : '');
-    if (!effectivePickup || !effectiveDropoff) {
-      toast.error('Adresses de départ et arrivée requises');
+    if (!effectiveDropoff) {
+      toast.error('Adresse d\'arrivée requise');
       return;
     }
     if (formData.mission_type === 'material_delivery' && !formData.delivery_description) {
@@ -545,24 +1036,63 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
       toast.error('Décrivez le besoin d\'assistance (Pathologie / Difficultés)');
       return;
     }
-    if (formData.round_trip && !formData.return_date) {
-      toast.error('Date de retour requise pour un trajet aller-retour');
-      return;
-    }
-
     // Billing validation: bloquer si erreur critique et envoi immédiat
-    if (sendAfterCreate && billingWarnings.some(w => w.level === 'error')) {
+    if (isLirieSendMode && billingWarnings.some(w => w.level === 'error')) {
       toast.error('Corrigez les problèmes de facturation avant d\'envoyer la demande.');
       return;
+    }
+    if (isExternalMode) {
+      const externalValidationError = validateExternalCarrierForm(externalCarrierForm);
+      if (externalValidationError) {
+        toast.error(externalValidationError);
+        return;
+      }
     }
 
     try {
       const payload = buildPayload();
       const result = await createMutation.mutateAsync(payload);
 
-      if (sendAfterCreate) {
+      if (isLirieSendMode) {
         await sendMutation.mutateAsync({ requestId: result.id, options: {} });
         toast.success('Demande créée et envoyée');
+      } else if (isExternalMode) {
+        try {
+          const assignResult = await assignExternalMutation.mutateAsync({
+            requestId: result.id,
+            data: buildExternalCarrierPayload(externalCarrierForm),
+          });
+          toast.success('Demande créée et transporteur externe affecté');
+
+          // Si une adresse e-mail transporteur est fournie : télécharger le bon
+          // de transport puis ouvrir le client de messagerie pré-rempli.
+          const carrierEmail = (externalCarrierForm.email || '').trim();
+          if (carrierEmail) {
+            try {
+              await exportRequestMissionPdf(result.id, { variant: 'operational' });
+              toast.success('Bon téléchargé — joignez-le à l\'e-mail');
+            } catch (pdfErr) {
+              toast.error(pdfErr?.message || 'Erreur lors de l\'export du bon');
+            }
+            const requestForEmail = assignResult?.id ? assignResult : result;
+            const institutionName = meData?.name || meData?.institution?.name || '';
+            window.location.href = buildCarrierMailto(carrierEmail, requestForEmail, {
+              institutionName,
+              institutionPhone: meData?.contact_phone,
+            });
+          }
+        } catch (assignErr) {
+          toast.error(
+            assignErr?.response?.data?.error
+              || 'La demande a été créée, mais le transporteur externe n\'a pas été affecté.',
+          );
+          if (isModal && onSuccess) {
+            onSuccess(result);
+          } else {
+            navigate(`/dashboard/institution/${public_id}/requests/${result.id}`);
+          }
+          return;
+        }
       } else {
         toast.success('Demande créée en brouillon');
       }
@@ -759,192 +1289,264 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
             </div>
           </div>
 
-          {/* Addresses with visual route */}
-          <div className={styles.formGroup} data-tour-id="institution-request-destination">
-            <div className={styles.routeBlock}>
-              {/* Row 1: label Départ */}
-              <label htmlFor="pickup_location" className={styles.routeLabel}>Départ</label>
-
-              {/* Row 2: green dot + pickup input */}
-              <span className={styles.routeDot} />
-              {(formData.pickup_type === 'institution' || formData.pickup_type === 'domicile') ? (
-                <input type="text" id="pickup_location"
-                  value={formData.pickup_location || (formData.pickup_type === 'institution' ? institutionAddress : '')}
-                  readOnly
-                  className={`${styles.routeInput} ${styles.routeReadonly}`}
-                  placeholder={formData.pickup_type === 'domicile' && !formData.pickup_location ? 'Sélectionnez un patient' : ''} />
-              ) : (
-                <AddressAutocomplete
-                  name="pickup_location"
-                  inputId="pickup_location"
-                  value={formData.pickup_location}
-                  onChange={(e) => handleChange('pickup_location', e.target.value)}
-                  onSelect={(item) => {
-                    const address = item.label || item.address || '';
-                    const placeName = item.name || '';
-                    const isDoctorPattern = /^(dr\.?|prof\.?|méd\.?|med\.?|docteur|professeur)\s/i;
-                    setFormData(prev => {
-                      const updates = { ...prev, pickup_location: address, pickup_establishment: '', pickup_doctor: '' };
-                      if (placeName && placeName !== item.address) {
-                        if (isDoctorPattern.test(placeName)) {
-                          updates.pickup_doctor = placeName;
-                        } else {
-                          updates.pickup_establishment = placeName;
-                        }
-                      }
-                      return updates;
-                    });
-                  }}
-                  placeholder="Saisir ou choisir l'adresse"
-                  inputClassName={styles.routeInput}
-                  required
-                />
-              )}
-
-              {/* Row 3: connector + label Destination */}
-              <span className={styles.routeConnector} />
-              <label htmlFor="dropoff_location" className={styles.routeLabel}>Destination</label>
-
-              {/* Row 4: red dot + dropoff input */}
-              <span className={`${styles.routeDot} ${styles.routeDotEnd}`} />
-              {(formData.dropoff_type === 'institution' || formData.dropoff_type === 'domicile') ? (
-                <input type="text" id="dropoff_location"
-                  value={formData.dropoff_location || (formData.dropoff_type === 'institution' ? institutionAddress : '')}
-                  readOnly
-                  className={`${styles.routeInput} ${styles.routeReadonly}`}
-                  placeholder={formData.dropoff_type === 'domicile' && !formData.dropoff_location ? 'Sélectionnez un patient' : ''} />
-              ) : (
-                <AddressAutocomplete
-                  name="dropoff_location"
-                  inputId="dropoff_location"
-                  value={formData.dropoff_location}
-                  onChange={(e) => handleChange('dropoff_location', e.target.value)}
-                  onSelect={(item) => {
-                    const address = item.label || item.address || '';
-                    const placeName = item.name || '';
-                    const isDoctorPattern = /^(dr\.?|prof\.?|méd\.?|med\.?|docteur|professeur)\s/i;
-                    setFormData(prev => {
-                      // Reset both fields, then fill the correct one
-                      const updates = { ...prev, dropoff_location: address, dropoff_establishment: '', dropoff_doctor: '' };
-                      if (placeName && placeName !== item.address) {
-                        if (isDoctorPattern.test(placeName)) {
-                          updates.dropoff_doctor = placeName;
-                        } else {
-                          updates.dropoff_establishment = placeName;
-                        }
-                      }
-                      return updates;
-                    });
-                  }}
-                  placeholder="Adresse d'arrivée"
-                  inputClassName={styles.routeInput}
-                  required
-                />
-              )}
-
-              {/* Swap button (3rd column, spans all rows, centered) */}
-              <button type="button" className={styles.swapBtn} title="Inverser"
-                onClick={() => {
-                  setFormData(prev => ({
-                    ...prev,
-                    pickup_location: prev.dropoff_location,
-                    dropoff_location: prev.pickup_location,
-                    pickup_type: prev.dropoff_type,
-                    dropoff_type: prev.pickup_type,
-                    pickup_entry_point: prev.dropoff_entry_point,
-                    dropoff_entry_point: prev.pickup_entry_point,
-                    pickup_instructions: prev.dropoff_instructions,
-                    dropoff_instructions: prev.pickup_instructions,
-                    pickup_floor: prev.dropoff_floor,
-                    dropoff_floor: prev.pickup_floor,
-                    pickup_door_code: prev.dropoff_door_code,
-                    dropoff_door_code: prev.pickup_door_code,
-                    pickup_establishment: prev.dropoff_establishment,
-                    dropoff_establishment: prev.pickup_establishment,
-                    pickup_service: prev.dropoff_service,
-                    dropoff_service: prev.pickup_service,
-                    pickup_doctor: prev.dropoff_doctor,
-                    dropoff_doctor: prev.pickup_doctor,
-                  }));
-                }}>↕</button>
-            </div>
-          </div>
-
-          {/* Datetime + time type toggle + AR, shortcuts below */}
+          {/* Date mission + raccourcis */}
           <div className={styles.formGroup}>
             <div className={styles.dateTimeLabelRow}>
-              <label htmlFor="scheduled_time" className={styles.formLabel} style={{ margin: 0 }}>Date & heure *</label>
-              <div className={styles.timeTypeRow}>
-              <button
-                type="button"
-                className={`${styles.timeTypeBtn} ${formData.scheduled_time_type === 'departure' ? styles.timeTypeBtnActive : ''}`}
-                onClick={() => handleChange('scheduled_time_type', 'departure')}
-              >
-                Départ
-              </button>
-              <button
-                type="button"
-                className={`${styles.timeTypeBtn} ${formData.scheduled_time_type === 'arrival' ? styles.timeTypeBtnActive : ''}`}
-                onClick={() => handleChange('scheduled_time_type', 'arrival')}
-              >
-                Rendez-vous
-              </button>
-              </div>
+              <label htmlFor="mission_date" className={styles.formLabel} style={{ margin: 0 }}>Date de mission *</label>
             </div>
 
             <div className={styles.whenRow} data-tour-id="institution-request-datetime">
-              <InlineDatePicker
-                value={formData.scheduled_time ? formData.scheduled_time.split('T')[0] : ''}
-                onChange={(dateVal) => {
-                  const timePart = formData.scheduled_time?.split('T')[1] || '';
-                  handleChange('scheduled_time', dateVal && timePart ? `${dateVal}T${timePart}` : dateVal ? `${dateVal}T` : '');
+              <div className={styles.missionDateField}>
+                <InlineDatePicker
+                  ref={missionDateRef}
+                  inputId="mission_date"
+                  value={formData.mission_date || (formData.scheduled_time ? formData.scheduled_time.split('T')[0] : '')}
+                  onChange={(dateVal) => handleChange('mission_date', dateVal)}
+                  placeholder="Date"
+                />
+              </div>
+              <div className={styles.tripPills}>
+                <button type="button" className={styles.whenShortcut} onClick={() => setTimeShortcut(0)} aria-label="Urgent"
+                  style={formData.is_urgent ? { borderColor: 'var(--danger)', background: '#FEE2E2', color: 'var(--danger)', fontWeight: 600 } : undefined}
+                  >🚨 Urgent</button>
+                <button type="button" className={styles.whenShortcut} onClick={setTimeTomorrow9} aria-label="Demain 9h">Demain 9h</button>
+              </div>
+            </div>
+
+            {scheduleIncoherence && (
+              <div className={styles.scheduleCoherenceWarning} role="status">
+                ⚠ {scheduleIncoherence}
+              </div>
+            )}
+          </div>
+
+          {/* Addresses with visual route */}
+          <div className={styles.formGroup} data-tour-id="institution-request-destination">
+            <div className={styles.routeBlock}>
+              {/* Départ (origine) — draggable et éditable comme les autres points */}
+              <label htmlFor="pickup_location" className={styles.routeLabel}>Départ</label>
+              <span className={styles.routeDot} />
+              <div
+                className={`${styles.routeStepRow} ${dragIndex === 0 ? styles.routeStepDragging : ''} ${dragOverIndex === 0 && dragIndex !== null && dragIndex !== 0 ? styles.routeStepDropTarget : ''}`}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  if (dragOverIndex !== 0) setDragOverIndex(0);
                 }}
-                placeholder="Date"
-              />
-              <InlineTimePicker
-                value={formData.scheduled_time ? formData.scheduled_time.split('T')[1] || '' : ''}
-                onChange={(timeVal) => {
-                  const datePart = formData.scheduled_time?.split('T')[0] || '';
-                  handleChange('scheduled_time', datePart && timeVal ? `${datePart}T${timeVal}` : datePart ? `${datePart}T${timeVal}` : '');
+                onDrop={(e) => {
+                  e.preventDefault();
+                  if (dragIndex !== null) moveRoutePoint(dragIndex, 0);
+                  setDragIndex(null);
+                  setDragOverIndex(null);
                 }}
-                placeholder="Heure"
-              />
-              <button type="button"
-                className={`${styles.needsChip} ${formData.round_trip ? styles.needsChipActive : ''}`}
-                aria-pressed={formData.round_trip}
-                onClick={() => handleChange('round_trip', !formData.round_trip)}>
+              >
+                <span
+                  className={styles.routeStepHandle}
+                  role="button"
+                  tabIndex={0}
+                  draggable
+                  title="Faire glisser pour réorganiser"
+                  aria-label="Réorganiser le départ"
+                  onDragStart={() => setDragIndex(0)}
+                  onDragEnd={() => { setDragIndex(null); setDragOverIndex(null); }}
+                >
+                  <FaGripVertical size={11} />
+                </span>
+                {renderPickupField(styles.routeInput, { editable: true })}
+                <RouteStepTimeField
+                  ref={pickupTimeRef}
+                  inputId="pickup_time"
+                  label="Heure de départ"
+                  timeValue={formData.pickup_time}
+                  onTimeChange={(v) => {
+                    handleChange('pickup_time', v);
+                    handleChange('pickup_time_confirmed', derivePickupTimeConfirmed(v));
+                  }}
+                />
+                <span className={styles.routeStepRemoveSpacer} aria-hidden="true" />
+              </div>
+
+              {/* Destinations intermédiaires (rendues avant le domicile en mode Retour domicile). */}
+              {(() => {
+                const extrasNodes = extraStops.map((stop, idx) => {
+                  const combinedIdx = idx + 2;
+                  const isLastExtra = idx === extraStops.length - 1;
+                  // En mode domicile, le domicile reste l'étape finale → jamais dotEnd ici.
+                  const dotEnd = !isReturnHome && isLastExtra && !journeyReturnEnabled;
+                  // Numérotation : 1..N en mode domicile (pas de destination principale avant), sinon 2..N.
+                  const destNumber = isReturnHome ? idx + 1 : idx + 2;
+                  const isDragging = dragIndex === combinedIdx;
+                  const isDropTarget = dragOverIndex === combinedIdx && dragIndex !== null && dragIndex !== combinedIdx;
+                  return (
+                    <React.Fragment key={idx}>
+                      <span className={styles.routeConnector} />
+                      <label className={styles.routeLabel}>Destination {destNumber}</label>
+                      <span className={`${styles.routeDot} ${dotEnd ? styles.routeDotEnd : ''}`} />
+                      <div
+                        className={`${styles.routeStepRow} ${isDragging ? styles.routeStepDragging : ''} ${isDropTarget ? styles.routeStepDropTarget : ''}`}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          if (dragOverIndex !== combinedIdx) setDragOverIndex(combinedIdx);
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          if (dragIndex !== null) moveRoutePoint(dragIndex, combinedIdx);
+                          setDragIndex(null);
+                          setDragOverIndex(null);
+                        }}
+                      >
+                        <span
+                          className={styles.routeStepHandle}
+                          role="button"
+                          tabIndex={0}
+                          draggable
+                          title="Faire glisser pour réorganiser"
+                          aria-label={`Réorganiser la destination ${destNumber}`}
+                          onDragStart={() => setDragIndex(combinedIdx)}
+                          onDragEnd={() => { setDragIndex(null); setDragOverIndex(null); }}
+                        >
+                          <FaGripVertical size={11} />
+                        </span>
+                        <AddressAutocomplete
+                          name={`intermediate_stop_${idx}`}
+                          value={stop.dropoff_location || ''}
+                          onChange={(e) => setStopAddress(idx, e)}
+                          onSelect={(place) => setStopFromSelection(idx, place)}
+                          placeholder={`Adresse destination ${destNumber}`}
+                          inputClassName={styles.routeInput}
+                        />
+                      <RouteStepTimeField
+                        inputId={`intermediate_stop_time_${idx}`}
+                        label={`Heure du rendez-vous ${destNumber}`}
+                        timeValue={parseTimeFromIso(stop.scheduled_time) || stop.scheduled_time?.split('T')[1]?.slice(0, 5) || ''}
+                        timeConfirmed={Boolean(stop.time_confirmed)}
+                        onTimeChange={(v) => setStopTime(idx, v)}
+                      />
+                        <button
+                          type="button"
+                          className={styles.routeStepRemove}
+                          title="Supprimer cette destination"
+                          aria-label={`Supprimer la destination ${destNumber}`}
+                          onClick={() => removeExtraStop(idx)}
+                        >
+                          <FaTimes size={12} />
+                        </button>
+                      </div>
+                    </React.Fragment>
+                  );
+                });
+
+                const dropoffNode = (
+                  <React.Fragment key="dropoff">
+                    <span className={styles.routeConnector} />
+                    <label htmlFor="dropoff_location" className={styles.routeLabel}>
+                      {isReturnHome ? 'Domicile' : 'Destination'}
+                    </label>
+                    <span className={`${styles.routeDot} ${((isReturnHome || (!hasExtraStops && !journeyReturnEnabled))) ? styles.routeDotEnd : ''}`} />
+                    <div
+                      className={`${styles.routeStepRow} ${dragIndex === 1 ? styles.routeStepDragging : ''} ${dragOverIndex === 1 && dragIndex !== null && dragIndex !== 1 ? styles.routeStepDropTarget : ''}`}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        if (dragOverIndex !== 1) setDragOverIndex(1);
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        if (dragIndex !== null) moveRoutePoint(dragIndex, 1);
+                        setDragIndex(null);
+                        setDragOverIndex(null);
+                      }}
+                    >
+                      <span
+                        className={styles.routeStepHandle}
+                        role="button"
+                        tabIndex={0}
+                        draggable
+                        title="Faire glisser pour réorganiser"
+                        aria-label={isReturnHome ? 'Réorganiser le domicile' : 'Réorganiser la destination'}
+                        onDragStart={() => setDragIndex(1)}
+                        onDragEnd={() => { setDragIndex(null); setDragOverIndex(null); }}
+                      >
+                        <FaGripVertical size={11} />
+                      </span>
+                      {renderDropoffField(styles.routeInput)}
+                      <RouteStepTimeField
+                        ref={dropoffTimeRef}
+                        inputId="dropoff_time"
+                        label={isReturnHome ? "Heure d'arrivée au domicile" : 'Heure du rendez-vous'}
+                        timeValue={formData.dropoff_time}
+                        onTimeChange={(v) => {
+                          handleChange('dropoff_time', v);
+                          handleChange('dropoff_time_confirmed', Boolean(v?.trim()));
+                        }}
+                      />
+                      <span className={styles.routeStepRemoveSpacer} aria-hidden="true" />
+                    </div>
+                  </React.Fragment>
+                );
+
+                // Retour domicile : étapes intermédiaires AVANT le domicile (étape finale).
+                // Sinon : destination principale puis étapes supplémentaires.
+                return isReturnHome
+                  ? <>{extrasNodes}{dropoffNode}</>
+                  : <>{dropoffNode}{extrasNodes}</>;
+              })()}
+
+              {/* Retour institution — ligne identique, lecture seule */}
+              {journeyReturnEnabled && (
+                <>
+                  <span className={styles.routeConnector} />
+                  <label className={styles.routeLabel}>Retour</label>
+                  <span className={`${styles.routeDot} ${styles.routeDotEnd}`} />
+                  <div className={styles.routeStepRow}>
+                    <span className={styles.routeStepHandleSpacer} aria-hidden="true" />
+                    <input
+                      type="text"
+                      value={multiStopOrigin || ''}
+                      readOnly
+                      title={multiStopOrigin}
+                      className={`${styles.routeInput} ${styles.routeReadonly}`}
+                      placeholder="Adresse de l'institution"
+                    />
+                    <RouteStepTimeField
+                      ref={returnTimeRef}
+                      inputId="return_time"
+                      label="Heure de retour"
+                      timeValue={formData.return_time}
+                      onTimeChange={(v) => {
+                        handleChange('return_time', v);
+                        handleChange('return_time_confirmed', Boolean(v?.trim()));
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className={styles.routeStepRemove}
+                      title="Retirer le retour à l'institution"
+                      aria-label="Retirer le retour à l'institution"
+                      onClick={() => handleChange('return_to_institution', false)}
+                    >
+                      <FaTimes size={12} />
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Actions itinéraire : ajouter une destination / retour — sans changement de mode */}
+            <div className={styles.routeActions}>
+              <button type="button" className={styles.addStepBtn} onClick={addExtraStop}>
+                <span className={styles.journeyAddIcon}><FaPlus size={11} /></span>
+                Ajouter une destination
+              </button>
+              <button
+                type="button"
+                className={`${styles.routeReturnBtn} ${journeyReturnEnabled ? styles.routeReturnBtnActive : ''}`}
+                aria-pressed={journeyReturnEnabled}
+                title="Aller / retour : ajoute le retour à l'institution en fin de parcours"
+                onClick={() => handleChange('return_to_institution', !journeyReturnEnabled)}
+              >
                 ⇄ A/R
               </button>
             </div>
-
-            <div className={styles.tripPills}>
-              <button type="button" className={styles.whenShortcut} onClick={() => setTimeShortcut(0)} aria-label="Urgent"
-                style={formData.is_urgent ? { borderColor: 'var(--danger)', background: '#FEE2E2', color: 'var(--danger)', fontWeight: 600 } : undefined}
-                >🚨 Urgent</button>
-              <button type="button" className={styles.whenShortcut} onClick={setTimeTomorrow9} aria-label="Demain 9h">Demain 9h</button>
-            </div>
           </div>
-
-          {formData.round_trip && (
-            <div className={styles.formGroup}>
-              <label className={styles.formLabel}>Retour</label>
-              <p className={styles.billingHint} style={{ marginBottom: 6 }}>
-                L&apos;heure de retour est facultative. Sans heure, le retour sera enregistré comme « à définir ».
-              </p>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <InlineDatePicker
-                  value={formData.return_date}
-                  onChange={(v) => handleChange('return_date', v)}
-                  placeholder="Date retour"
-                />
-                <InlineTimePicker
-                  value={formData.return_hour}
-                  onChange={(v) => handleChange('return_hour', v)}
-                  placeholder="HH:MM"
-                />
-              </div>
-            </div>
-          )}
 
           {/* Billing inline (left column, compact) */}
           <div className={styles.formGroup}>
@@ -1068,7 +1670,7 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
 
             <hr className={styles.detailsDivider} />
 
-            {/* ═══ SECTION 2 — Infos arrivée ═══ */}
+            {/* ═══ SECTION 2 — Infos arrivée (destination principale) ═══ */}
             <h2 className={styles.detailsPanelTitle}>
               {formData.dropoff_type === 'domicile' ? '🏠 Arrivée — Domicile' : '🏥 Arrivée'}
             </h2>
@@ -1133,6 +1735,32 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
               </>
             )}
 
+            {/* ═══ SECTION 2bis — Détails des destinations supplémentaires ═══ */}
+            {extraStops.map((stop, idx) => (
+              <React.Fragment key={`extra-details-${idx}`}>
+                <hr className={styles.detailsDivider} />
+                <h2 className={styles.detailsPanelTitle}>🏥 Destination {idx + 2}</h2>
+                <div className={styles.detailsGroup}>
+                  <label htmlFor={`stop_establishment_${idx}`} className={styles.detailsLabel}>Établissement / Lieu</label>
+                  <input type="text" id={`stop_establishment_${idx}`} value={stop.dropoff_establishment || ''}
+                    onChange={(e) => setStopField(idx, 'dropoff_establishment', e.target.value)}
+                    placeholder="Ex: HUG, Clinique des Grangettes" className={styles.detailsInput} />
+                </div>
+                <div className={styles.detailsGroup}>
+                  <label htmlFor={`stop_service_${idx}`} className={styles.detailsLabel}>Service</label>
+                  <input type="text" id={`stop_service_${idx}`} value={stop.dropoff_service || ''}
+                    onChange={(e) => setStopField(idx, 'dropoff_service', e.target.value)}
+                    placeholder="Ex: Radiologie, Urgences, Cardiologie" className={styles.detailsInput} />
+                </div>
+                <div className={styles.detailsGroup}>
+                  <label htmlFor={`stop_doctor_${idx}`} className={styles.detailsLabel}>Médecin</label>
+                  <input type="text" id={`stop_doctor_${idx}`} value={stop.dropoff_doctor || ''}
+                    onChange={(e) => setStopField(idx, 'dropoff_doctor', e.target.value)}
+                    placeholder="Ex: Dr. Martin, Prof. Dupont" className={styles.detailsInput} />
+                </div>
+              </React.Fragment>
+            ))}
+
 
             <hr className={styles.detailsDivider} />
 
@@ -1189,30 +1817,78 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
         </div>
         </div>
 
+        {/* Champs transporteur externe (au-dessus du footer) */}
+        {isExternalMode && (
+          <div className={styles.externalFieldsWrap}>
+            <ExternalCarrierFields
+              value={externalCarrierForm}
+              onChange={setExternalCarrierForm}
+              idPrefix="create-external-carrier"
+            />
+          </div>
+        )}
+
         {/* ═══ Footer (ManualBookingForm pattern) ═══ */}
         <div className={styles.formFooter}>
-          <div className={styles.footerSummary}>
-            <span className={styles.footerSummaryText}>
-              {selectedPatient ? `${selectedPatient.first_name} ${selectedPatient.last_name}` : 'Patient non sélectionné'}
-              {formData.scheduled_time ? ` · ${new Date(formData.scheduled_time).toLocaleString('fr-CH', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}` : ''}
-            </span>
-            <span className={styles.footerBadges}>
-              {formData.round_trip && <span className={styles.footerBadge}>A/R</span>}
-              {sendAfterCreate && <span className={styles.footerBadge}>Envoi auto</span>}
-              {advancedFilledCount > 0 && <span className={styles.footerBadge}>{advancedFilledCount} détail{advancedFilledCount > 1 ? 's' : ''}</span>}
-            </span>
-          </div>
           <div className={styles.footerBody}>
             <div className={styles.footerLeft}>
               <button type="button" className={styles.btnGhost} onClick={handleClose}>Annuler</button>
+              <span className={styles.footerSummaryText}>
+                {selectedPatient ? `${selectedPatient.first_name} ${selectedPatient.last_name}` : 'Patient non sélectionné'}
+                {formData.mission_date
+                  ? ` · ${new Date(formData.mission_date).toLocaleDateString('fr-CH', { day: '2-digit', month: 'short' })}`
+                  : (formData.scheduled_time
+                    ? ` · ${new Date(formData.scheduled_time).toLocaleString('fr-CH', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}`
+                    : '')}
+              </span>
+              <span className={styles.footerBadges}>
+                {isLirieSendMode && <span className={styles.footerBadge}>Envoi auto</span>}
+                {isExternalMode && <span className={styles.footerBadge}>Externe</span>}
+                {advancedFilledCount > 0 && <span className={styles.footerBadge}>{advancedFilledCount} détail{advancedFilledCount > 1 ? 's' : ''}</span>}
+              </span>
             </div>
             <div className={styles.footerRight}>
-              <label className={styles.sendToggle}>
-                <input type="checkbox" id="send_after_create" checked={sendAfterCreate} onChange={(e) => setSendAfterCreate(e.target.checked)} />
-                <span>Envoyer aux transporteurs</span>
-              </label>
-              <button type="submit" className={styles.btnPrimary} disabled={createMutation.isPending || sendMutation.isPending} data-tour-id="institution-request-submit">
-                {sendAfterCreate ? <><FaPaperPlane /> Envoyer</> : <><FaSave /> Enregistrer</>}
+              <div className={styles.executionModeOptions} role="radiogroup" aria-label="Mode d'exécution">
+                <label className={styles.executionModeOption}>
+                  <input
+                    type="radio"
+                    name="execution_mode"
+                    value="draft"
+                    checked={isDraftMode}
+                    onChange={() => setExecutionMode('draft')}
+                  />
+                  <span>Brouillon</span>
+                </label>
+                <label className={styles.executionModeOption}>
+                  <input
+                    type="radio"
+                    name="execution_mode"
+                    value="lirie"
+                    checked={isLirieSendMode}
+                    onChange={() => setExecutionMode('lirie')}
+                  />
+                  <span>LIRIE</span>
+                </label>
+                <label className={styles.executionModeOption}>
+                  <input
+                    type="radio"
+                    name="execution_mode"
+                    value="external"
+                    checked={isExternalMode}
+                    onChange={() => setExecutionMode('external')}
+                  />
+                  <span>Externe</span>
+                </label>
+              </div>
+              <button
+                type="submit"
+                className={styles.btnPrimary}
+                disabled={createMutation.isPending || sendMutation.isPending || assignExternalMutation.isPending}
+                data-tour-id="institution-request-submit"
+              >
+                {isDraftMode && <><FaSave /> Créer le brouillon</>}
+                {isLirieSendMode && <><FaPaperPlane /> Envoyer aux transporteurs LIRIE</>}
+                {isExternalMode && 'Enregistrer'}
               </button>
             </div>
           </div>

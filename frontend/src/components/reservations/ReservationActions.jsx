@@ -92,6 +92,9 @@ const ReservationActions = ({
   // Déterminer quelles actions afficher
   // Planifier et Urgent : uniquement pour les retours nécessitant confirmation
   const showSchedule = !hideSchedule && needsTimeConfirmation && !!onSchedule;
+  // « Urgent (+15 min) » utilise onDispatchNow (endpoint /dispatch-now générique :
+  // fixe scheduled_time = maintenant + offset). Valable aussi bien pour un retour
+  // que pour un leg aller sans heure définie.
   const showUrgent = !hideUrgent && needsTimeConfirmation && !!onDispatchNow;
   // Assigner : pour les retours à confirmer OU pour accepted/assigned normaux (peut être caché)
   const showAssign =
@@ -132,7 +135,7 @@ const ReservationActions = ({
       {showSchedule && (
         <button
           onClick={() => onSchedule?.(reservation)}
-          title="Planifier l'heure de retour"
+          title={isReturn ? "Planifier l'heure de retour" : "Planifier l'heure"}
           className={styles.actionButton}
         >
           <FiClock />

@@ -44,6 +44,7 @@ class ScheduleCompanyReservationUseCase:
         *,
         scheduled_time_iso: str,
         is_outbound_completed: bool = True,
+        time_confirmed: bool | None = None,
     ) -> ScheduleCompanyReservationResult:
         st = status_value(getattr(booking, "status", None)).lower()
         if st not in self._ALLOWED:
@@ -91,13 +92,16 @@ class ScheduleCompanyReservationUseCase:
             )
 
         booking.scheduled_time = sched_local
-        # Règle métier: 00:00 signifie "heure à confirmer".
-        is_sentinel_midnight = (
-            sched_local.hour == 0
-            and sched_local.minute == 0
-            and sched_local.second == 0
-        )
-        booking.time_confirmed = not is_sentinel_midnight
+        if time_confirmed is not None:
+            booking.time_confirmed = bool(time_confirmed)
+        else:
+            # Compat legacy : sentinelle 00:00 = heure à confirmer
+            is_sentinel_midnight = (
+                sched_local.hour == 0
+                and sched_local.minute == 0
+                and sched_local.second == 0
+            )
+            booking.time_confirmed = not is_sentinel_midnight
 
         if st == "pending":
             set_status(booking, "status", "ACCEPTED")

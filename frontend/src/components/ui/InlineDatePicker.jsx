@@ -1,4 +1,6 @@
-import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
+import React, {
+  useState, useRef, useEffect, useLayoutEffect, useCallback, forwardRef, useImperativeHandle,
+} from 'react';
 import { createPortal } from 'react-dom';
 import { FiChevronLeft, FiChevronRight, FiCalendar } from 'react-icons/fi';
 import dp from './InlineDatePicker.module.css';
@@ -107,7 +109,7 @@ function smartComplete(digits) {
   return null;
 }
 
-export default function InlineDatePicker({
+const InlineDatePicker = forwardRef(function InlineDatePicker({
   value,
   onChange,
   placeholder: _placeholder,
@@ -117,7 +119,7 @@ export default function InlineDatePicker({
   inputId,
   ariaLabel,
   title,
-}) {
+}, ref) {
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef(null);
   const popoverRef = useRef(null);
@@ -147,6 +149,32 @@ export default function InlineDatePicker({
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const close = useCallback(() => setOpen(false), []);
+
+  const resolvePendingIso = useCallback(() => {
+    const digits = (masked || '').replace(/\D/g, '');
+    if (digits.length === 0) return value || '';
+    if (digits.length === 8) {
+      const iso = displayToISO(masked);
+      return iso || value || '';
+    }
+    const suggestion = smartComplete(digits);
+    if (suggestion) {
+      const iso = displayToISO(suggestion);
+      return iso || value || '';
+    }
+    return value || '';
+  }, [masked, value]);
+
+  useImperativeHandle(ref, () => ({
+    /** Commit synchrone de la saisie en cours (ex. avant submit sans blur). */
+    flushPending: () => {
+      const resolved = resolvePendingIso();
+      if (resolved !== (value || '')) {
+        onChange(resolved);
+      }
+      return resolved;
+    },
+  }), [resolvePendingIso, value, onChange]);
 
   const handleInputChange = (e) => {
     const raw = e.target.value;
@@ -372,4 +400,6 @@ export default function InlineDatePicker({
       )}
     </>
   );
-}
+});
+
+export default InlineDatePicker;

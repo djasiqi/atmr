@@ -1295,29 +1295,43 @@ class InstitutionUserRemove(Resource):
     @jwt_required()
     @role_required(UserRole.INSTITUTION)
     def patch(self, user_id):
-        """Met à jour la fonction/métier d'un utilisateur (admin only).
+        """Met à jour les champs descriptifs d'un utilisateur (admin only).
 
-        Donnée purement descriptive, sans impact sur les permissions.
-        Autorisé même pour les comptes désactivés/archivés (donnée historique).
-        Audit `job_title_updated` uniquement en cas de changement réel.
+        Champs : first_name, last_name, email (contact), job_title.
+        Ne modifie jamais username, authentication_method, institution_role.
+        Autorisé même pour les comptes désactivés/archivés.
         """
         from application.institutions.invitation_service import _normalize_job_title
+        from application.users.normalization import (
+            find_user_by_normalized_email,
+            normalize_contact_email,
+        )
+
+        def _normalize_name(value: str | None) -> str | None:
+            if value is None:
+                return None
+            stripped = str(value).strip()
+            return stripped or None
 
         try:
             institution, admin_user = AuthorizationService.require_institution_role(
                 InstitutionRole.ADMIN.value
             )
 
-            data = request.get_json() or {}
+            raw_data = request.get_json() or {}
+            forbidden_errors = InstitutionUserUpdateProfileSchema.validate_forbidden_fields(
+                raw_data
+            )
+            if forbidden_errors:
+                return {"error": "Données invalides", "details": forbidden_errors}, 400
+
             schema = InstitutionUserUpdateProfileSchema()
-            errors = schema.validate(data)
+            errors = schema.validate(raw_data)
             if errors:
                 return {"error": "Données invalides", "details": errors}, 400
 
-            validated = schema.load(data) or {}
+            validated = schema.load(raw_data) or {}
 
-            # On charge sans exclure disabled/archived : la fonction est une
-            # donnée descriptive/historique, corrigeable à tout moment.
             target_user = User.query.filter_by(
                 id=user_id,
                 institution_id=institution.id,
@@ -1326,46 +1340,118 @@ class InstitutionUserRemove(Resource):
             if not target_user:
                 return {"error": "Utilisateur non trouvé dans cette institution"}, 404
 
-            old_value = getattr(target_user, "job_title", None)
-            new_value = _normalize_job_title(validated.get("job_title"))
+            profile_changes: dict[str, dict[str, object | None]] = {}
+            job_title_changed = False
+            old_job_title = getattr(target_user, "job_title", None)
+            new_job_title = old_job_title
 
-            if old_value == new_value:
+            if "first_name" in raw_data:
+                new_first = _normalize_name(validated.get("first_name"))
+                old_first = _normalize_name(target_user.first_name)
+                if new_first != old_first:
+                    profile_changes["first_name"] = {"old": old_first, "new": new_first}
+                    target_user.first_name = new_first
+
+            if "last_name" in raw_data:
+                new_last = _normalize_name(validated.get("last_name"))
+                old_last = _normalize_name(target_user.last_name)
+                if new_last != old_last:
+                    profile_changes["last_name"] = {"old": old_last, "new": new_last}
+                    target_user.last_name = new_last
+
+            if "email" in raw_data:
+                new_email = normalize_contact_email(validated.get("email"))
+                old_email = normalize_contact_email(target_user.email)
+                if new_email != old_email:
+                    if new_email:
+                        conflict = find_user_by_normalized_email(
+                            new_email, exclude_user_id=target_user.id
+                        )
+                        if conflict:
+                            return {
+                                "error": "Cet email est déjà utilisé sur la plateforme"
+                            }, 409
+                    profile_changes["email"] = {"old": old_email, "new": new_email}
+                    target_user.email = new_email
+
+            if "job_title" in raw_data:
+                new_job_title = _normalize_job_title(validated.get("job_title"))
+                if old_job_title != new_job_title:
+                    job_title_changed = True
+                    target_user.job_title = new_job_title
+
+            if not profile_changes and not job_title_changed:
+                if "job_title" in raw_data and "first_name" not in raw_data and "last_name" not in raw_data and "email" not in raw_data:
+                    message = "Fonction inchangée"
+                else:
+                    message = "Profil inchangé"
                 return {
-                    "message": "Fonction inchangée",
+                    "message": message,
                     "user": _serialize_institution_user(target_user, institution),
                 }, 200
 
-            target_user.job_title = new_value
             db.session.commit()
 
-            _record_institution_user_audit(
-                institution_id=institution.id,
-                target_user_id=target_user.id,
-                performed_by_user_id=admin_user.id,
-                event_type="job_title_updated",
-                metadata={"old_value": old_value, "new_value": new_value},
-            )
-
-            try:
-                AuditLogger.log_institution_action(
-                    action_type="institution_user_job_title_updated",
+            if profile_changes:
+                _record_institution_user_audit(
                     institution_id=institution.id,
-                    user_id=admin_user.id,
-                    result_status="success",
-                    action_details={
-                        "target_user_id": target_user.id,
-                        "target_email": target_user.email,
-                        "old_value": old_value,
-                        "new_value": new_value,
-                    },
-                    ip_address=request.remote_addr,
-                    user_agent=request.headers.get("User-Agent"),
+                    target_user_id=target_user.id,
+                    performed_by_user_id=admin_user.id,
+                    event_type="profile_updated",
+                    metadata={"changes": profile_changes},
                 )
-            except Exception as audit_err:
-                logger.warning("[Institution] Audit log failed: %s", audit_err)
+                try:
+                    AuditLogger.log_institution_action(
+                        action_type="institution_user_profile_updated",
+                        institution_id=institution.id,
+                        user_id=admin_user.id,
+                        result_status="success",
+                        action_details={
+                            "target_user_id": target_user.id,
+                            "target_email": target_user.email,
+                            "changes": profile_changes,
+                        },
+                        ip_address=request.remote_addr,
+                        user_agent=request.headers.get("User-Agent"),
+                    )
+                except Exception as audit_err:
+                    logger.warning("[Institution] Audit log failed: %s", audit_err)
+
+            if job_title_changed:
+                _record_institution_user_audit(
+                    institution_id=institution.id,
+                    target_user_id=target_user.id,
+                    performed_by_user_id=admin_user.id,
+                    event_type="job_title_updated",
+                    metadata={"old_value": old_job_title, "new_value": new_job_title},
+                )
+                try:
+                    AuditLogger.log_institution_action(
+                        action_type="institution_user_job_title_updated",
+                        institution_id=institution.id,
+                        user_id=admin_user.id,
+                        result_status="success",
+                        action_details={
+                            "target_user_id": target_user.id,
+                            "target_email": target_user.email,
+                            "old_value": old_job_title,
+                            "new_value": new_job_title,
+                        },
+                        ip_address=request.remote_addr,
+                        user_agent=request.headers.get("User-Agent"),
+                    )
+                except Exception as audit_err:
+                    logger.warning("[Institution] Audit log failed: %s", audit_err)
+
+            if profile_changes and job_title_changed:
+                message = "Profil mis à jour"
+            elif profile_changes:
+                message = "Profil mis à jour"
+            else:
+                message = "Fonction mise à jour"
 
             return {
-                "message": "Fonction mise à jour",
+                "message": message,
                 "user": _serialize_institution_user(target_user, institution),
             }, 200
 

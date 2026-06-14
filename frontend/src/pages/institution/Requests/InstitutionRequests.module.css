@@ -127,109 +127,251 @@
 
 .filtersPanel {
   display: flex;
-  gap: 12px;
+  flex-wrap: nowrap;
+  gap: 8px;
   align-items: flex-end;
-  flex-wrap: wrap;
-  padding: 14px 16px;
+  padding: 10px 12px;
   margin-bottom: 16px;
   background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.filtersPanel::-webkit-scrollbar {
+  height: 4px;
+}
+
+.filtersPanel::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
 }
 
 .filterGroup {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.filterGroupStatus {
+  flex: 1 1 108px;
+  max-width: 140px;
+}
+
+.filterChipSelect {
+  width: 100%;
+}
+
+.filterChipSelect :global([class*='ChipSelect_btn__']) {
+  height: 32px;
+  font-size: 12px;
+  padding: 0 8px 0 10px;
+}
+
+.filterChipSelect :global([class*='ChipSelect_text__']) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.filterGroupMode {
+  flex: 0 0 88px;
 }
 
 .filterGroup label {
-  font-size: 0.68rem;
+  font-size: 0.65rem;
   font-weight: 600;
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.4px;
+  white-space: nowrap;
 }
 
-.filterGroup select,
-.filterGroup input {
-  height: 34px;
-  padding: 0 10px;
+.filterGroup select {
+  width: 100%;
+  height: 32px;
+  padding: 0 8px;
   border: 1px solid var(--border);
   border-radius: 6px;
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   color: var(--text-primary);
-  min-width: 130px;
+  min-width: 0;
   outline: none;
+  box-sizing: border-box;
 }
 
-.filterGroup select:focus,
-.filterGroup input:focus { border-color: var(--brand); }
+.filterDateRange {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.filterDateSep {
+  flex-shrink: 0;
+  padding-bottom: 9px;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  line-height: 1;
+}
+
+.filterDateField {
+  width: 116px;
+  min-width: 116px;
+  max-width: 116px;
+}
+
+.filterDateField :global([class*='InlineDatePicker_input__']) {
+  height: 32px !important;
+  min-height: 32px !important;
+  font-size: 12px !important;
+  padding: 0 28px 0 8px !important;
+}
+
+.filterGroup select:focus { border-color: var(--brand); }
 
 .clearBtn {
-  height: 34px;
-  padding: 0 14px;
+  flex: 0 0 auto;
+  height: 32px;
+  padding: 0 12px;
   border: 1px solid var(--border);
   border-radius: 6px;
   background: transparent;
   color: var(--text-muted);
-  font-size: 0.78rem;
-  cursor: pointer;
-  transition: all var(--transition);
-}
-
-.clearBtn:hover { background: var(--bg-muted); color: var(--text-primary); }
-
-/* ═══ STATUS PILLS (quick filter) ═══ */
-.statusPills {
-  display: flex;
-  gap: 6px;
-  margin-bottom: 16px;
-  flex-wrap: wrap;
-}
-
-.statusPill {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: 30px;
-  padding: 0 12px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--bg-surface);
-  font-size: 0.72rem;
-  font-weight: 600;
-  color: var(--text-secondary);
+  font-size: 0.75rem;
   cursor: pointer;
   transition: all var(--transition);
   white-space: nowrap;
 }
 
-.statusPill:hover { border-color: var(--border-hover); background: var(--bg-muted); }
+.clearBtn:hover { background: var(--bg-muted); color: var(--text-primary); }
+
+/* ═══ EXPORT JOURNALIER ═══ */
+.exportBar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.exportBarLabel {
+  font-size: 12px;
+  color: #475569;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.exportDateField {
+  flex: 0 1 168px;
+  min-width: 140px;
+  max-width: 200px;
+}
+
+.exportBtnPdf,
+.exportBtnCsv {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.exportBtnPdf {
+  border: none;
+  background: #0A88EF;
+  color: #fff;
+}
+
+.exportBtnPdf:disabled {
+  background: #94a3b8;
+  cursor: default;
+}
+
+.exportBtnCsv {
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #0f766e;
+}
+
+.exportBtnCsv:disabled {
+  background: #e2e8f0;
+  cursor: default;
+}
+
+/* ═══ STATUS PILLS (segment control — même UX que tripSegment) ═══ */
+.statusPills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  width: 100%;
+  padding: 2px;
+  border: 1.5px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-muted);
+  box-sizing: border-box;
+  margin-bottom: 16px;
+}
+
+.statusPill {
+  flex: 1 1 100px;
+  min-width: 88px;
+  height: 30px;
+  padding: 0 10px;
+  border: none;
+  background: transparent;
+  font-size: 0.76rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  user-select: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  box-sizing: border-box;
+}
+
+.statusPill:hover { color: var(--text-primary); }
 
 .statusPillActive {
-  border-color: var(--brand);
-  background: var(--brand-light);
+  background: var(--bg-surface);
   color: var(--brand);
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  border-radius: 999px;
 }
 
 .pillCount {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
   border-radius: 999px;
-  background: var(--bg-muted);
-  font-size: 0.65rem;
+  background: rgba(15, 23, 42, 0.06);
+  font-size: 0.62rem;
   font-weight: 700;
   color: var(--text-muted);
+  line-height: 1;
 }
 
 .statusPillActive .pillCount {
-  background: var(--brand);
-  color: #fff;
+  background: rgba(0, 121, 107, 0.12);
+  color: var(--brand);
 }
 
 /* ═══ DATE GROUP ═══ */
@@ -281,22 +423,16 @@
   flex-shrink: 0;
 }
 
-.indicatorCompleted { background: var(--success); }
-.indicatorReturnCompleted { background: var(--success); }
-.indicatorInProgress { background: #2563EB; }
-.indicatorEnRoute { background: #2563EB; }
-.indicatorAssigned { background: var(--brand); }
-.indicatorAccepted { background: var(--brand); }
-.indicatorPending { background: var(--text-muted); }
-.indicatorDraft { background: var(--text-muted); }
-.indicatorSent { background: #2563EB; }
-.indicatorConverted { background: var(--success); }
-.indicatorCancelled { background: var(--danger); }
-.indicatorExpired { background: var(--text-muted); }
+.indicatorStatusNeutral { background: var(--status-neutral-text, var(--text-muted)); }
+.indicatorStatusInfo { background: var(--status-info-text, #2563eb); }
+.indicatorStatusSuccess { background: var(--status-success-text, var(--success)); }
+.indicatorStatusWarning { background: var(--status-warning-text, var(--warning)); }
+.indicatorStatusError { background: var(--status-error-text, var(--danger)); }
 
-/* Col 1 — nom patient + statut (2 lignes, aligné en haut) */
+/* Col 1 — nom patient + statut (hiérarchie 3 niveaux) */
 .colLeft {
-  min-width: 130px;
+  width: 200px;
+  min-width: 200px;
   max-width: 200px;
   flex-shrink: 0;
   display: flex;
@@ -314,11 +450,44 @@
   text-overflow: ellipsis;
 }
 
+.statusBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.badgeRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+
+.metaCarrier {
+  font-size: 0.8rem;
+  color: var(--meta-text, var(--text-secondary));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.metaDetails {
+  font-size: 0.75rem;
+  color: var(--meta-text-secondary, var(--text-muted));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  text-align: right;
+}
+
+/* legacy alias — conservé pour compat responsive */
 .statusLine {
   display: flex;
-  align-items: center;
-  gap: 5px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 
 /* Col 2 — trajet (départ / destination sur 2 lignes) */
@@ -349,51 +518,39 @@
   cursor: pointer;
   user-select: none;
   flex-shrink: 0;
-  align-self: center;
+  align-self: flex-end;
   transition: all 0.2s ease;
   border: 1px solid transparent;
 }
 
 .billingSwitch:hover:not(.billLocked) {
-  box-shadow: 0 0 0 2px rgba(10, 136, 239, 0.15);
+  box-shadow: 0 0 0 2px rgba(0, 121, 107, 0.12);
 }
 
-/* Patient = bleu clair */
-.billPatient {
-  background: #EFF6FF;
-  border-color: #BFDBFE;
+.billPatient,
+.billClinic {
+  background: var(--neutral-100, #f8fafc);
+  border-color: var(--neutral-200, #e2e8f0);
 }
 
-.billPatient .billLabel {
-  color: #1D4ED8;
+.billPatient .billLabel,
+.billClinic .billLabel {
+  color: var(--meta-text, var(--text-secondary));
 }
 
-.billPatient .billToggle {
-  background: #93C5FD;
+.billPatient .billToggle,
+.billClinic .billToggle {
+  background: var(--neutral-300, #cbd5e1);
 }
 
 .billPatient .billDot {
   transform: translateX(0);
-  background: #1D4ED8;
-}
-
-/* Clinique = teal */
-.billClinic {
-  background: #F0FDFA;
-  border-color: #99F6E4;
-}
-
-.billClinic .billLabel {
-  color: #0F766E;
-}
-
-.billClinic .billToggle {
-  background: #5EEAD4;
+  background: var(--brand-primary, var(--brand));
 }
 
 .billClinic .billDot {
   transform: translateX(12px);
-  background: #0F766E;
+  background: var(--brand-primary, var(--brand));
 }
 
 /* Locked (déjà facturé) */
@@ -447,48 +604,12 @@
 }
 
 .cardMetaBadges {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 4px;
-}
-
-.tripTypeBadge {
-  font-size: 0.62rem;
-  font-weight: 700;
-  border-radius: 999px;
-  padding: 1px 7px;
-  white-space: nowrap;
-  letter-spacing: 0.02em;
-}
-
-.tripTypeOneWay {
-  color: #475569;
-  background: #F1F5F9;
-  border: 1px solid #CBD5E1;
-}
-
-.tripTypeRoundTrip {
-  color: #0F766E;
-  background: #ECFDF5;
-  border: 1px solid #99F6E4;
+  display: none;
 }
 
 .returnTimeInline {
-  color: #0F766E;
+  color: var(--meta-text-secondary, var(--text-muted));
   font-weight: 600;
-}
-
-.timeTypeBadge {
-  font-size: 0.62rem;
-  font-weight: 600;
-  color: #1D4ED8;
-  background: #EFF6FF;
-  border: 1px solid #BFDBFE;
-  border-radius: 999px;
-  padding: 1px 7px;
-  white-space: nowrap;
-  letter-spacing: 0.02em;
 }
 
 .routeDot {
@@ -496,10 +617,13 @@
   height: 6px;
   border-radius: 50%;
   flex-shrink: 0;
+  background: var(--neutral-400, #94a3b8);
 }
 
-.routeDotStart { background: var(--brand); }
-.routeDotEnd { background: var(--danger); }
+.routeTextPrimary {
+  font-weight: 500;
+  color: var(--text-primary);
+}
 
 .routeText {
   font-size: 0.76rem;
@@ -511,40 +635,16 @@
   flex: 1;
 }
 
-.companyTag {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: #DBEAFE;
-  color: #1E40AF;
-  font-size: 0.68rem;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.waitingTag {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: #FEF3C7;
-  color: #92400E;
-  font-size: 0.68rem;
-  font-weight: 500;
-  white-space: nowrap;
-}
-
-/* ═══ Retards / appel transporteur ═══ */
+/* ═══ Retards / appel transporteur (alertes transverses) ═══ */
 .lateBadge {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   padding: 2px 8px;
   border-radius: 999px;
-  background: #FEF3C7;
-  color: #92400E;
-  border: 1px solid #FDE68A;
+  background: var(--alert-warning-bg, #fef3c7);
+  color: var(--alert-warning-text, #92400e);
+  border: 1px solid var(--alert-warning-border, #fde68a);
   font-size: 0.68rem;
   font-weight: 700;
   white-space: nowrap;
@@ -555,22 +655,14 @@
   height: 11px;
 }
 .lateBadgeSevere {
-  background: #FEE2E2;
-  color: #991B1B;
-  border-color: #FCA5A5;
+  background: var(--alert-error-bg, #fee2e2);
+  color: var(--alert-error-text, #991b1b);
+  border-color: var(--alert-error-border, #fca5a5);
   animation: lateBlink 1.6s ease-in-out infinite;
 }
 @keyframes lateBlink {
   0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.0); }
   50%      { box-shadow: 0 0 0 4px rgba(239,68,68,0.18); }
-}
-
-.requestCardLate {
-  background: linear-gradient(0deg, rgba(254,243,199,0.35), rgba(254,243,199,0.35)), #fff;
-}
-.requestCardLateSevere {
-  background: linear-gradient(0deg, rgba(254,226,226,0.45), rgba(254,226,226,0.45)), #fff;
-  box-shadow: inset 3px 0 0 #DC2626;
 }
 
 .callBtn {
@@ -579,9 +671,9 @@
   gap: 6px;
   padding: 4px 10px;
   border-radius: 999px;
-  background: #ECFDF5;
-  color: #047857;
-  border: 1px solid #A7F3D0;
+  background: var(--bg-surface, #fff);
+  color: var(--meta-text, var(--text-secondary));
+  border: 1px solid var(--neutral-200, #e2e8f0);
   font-size: 0.72rem;
   font-weight: 700;
   white-space: nowrap;
@@ -590,8 +682,8 @@
   cursor: pointer;
 }
 .callBtn:hover {
-  background: #D1FAE5;
-  border-color: #6EE7B7;
+  background: var(--neutral-100, #f8fafc);
+  border-color: var(--neutral-300, #cbd5e1);
   transform: translateY(-1px);
 }
 .callBtn svg {
@@ -599,19 +691,19 @@
   height: 11px;
 }
 .callBtnSevere {
-  background: #FEE2E2;
-  color: #991B1B;
-  border-color: #FCA5A5;
+  background: var(--alert-error-bg, #fee2e2);
+  color: var(--alert-error-text, #991b1b);
+  border-color: var(--alert-error-border, #fca5a5);
 }
 .callBtnSevere:hover {
-  background: #FECACA;
-  border-color: #F87171;
+  background: #fecaca;
+  border-color: #f87171;
 }
 .callBtnLabel {
   font-variant-numeric: tabular-nums;
 }
 
-/* Status badge */
+/* Status badge — buckets unifiés */
 .badge {
   display: inline-flex;
   align-items: center;
@@ -620,20 +712,38 @@
   font-size: 0.68rem;
   font-weight: 600;
   white-space: nowrap;
+  border: 1px solid transparent;
 }
 
-.badgeCompleted { background: #ECFDF5; color: #15803D; }
-.badgeReturnCompleted { background: #ECFDF5; color: #15803D; }
-.badgeInProgress { background: #EFF6FF; color: #2563EB; }
-.badgeEnRoute { background: #EFF6FF; color: #2563EB; }
-.badgeAssigned { background: #F0FDFA; color: var(--brand); }
-.badgeAccepted { background: #F0FDFA; color: var(--brand); }
-.badgePending { background: #FEF9C3; color: #92400E; }
-.badgeDraft { background: var(--bg-muted); color: var(--text-muted); }
-.badgeSent { background: #EFF6FF; color: #2563EB; }
-.badgeConverted { background: #ECFDF5; color: #15803D; }
-.badgeCancelled { background: #FEF2F2; color: var(--danger); }
-.badgeExpired { background: var(--bg-muted); color: var(--text-muted); }
+.badgeStatusNeutral {
+  background: var(--status-neutral-bg, var(--bg-muted));
+  color: var(--status-neutral-text, var(--text-muted));
+  border-color: var(--status-neutral-border, var(--border));
+}
+
+.badgeStatusInfo {
+  background: var(--status-info-bg, #eff6ff);
+  color: var(--status-info-text, #2563eb);
+  border-color: var(--status-info-border, #93c5fd);
+}
+
+.badgeStatusSuccess {
+  background: var(--status-success-bg, #ecfdf5);
+  color: var(--status-success-text, #15803d);
+  border-color: var(--status-success-border, #86efac);
+}
+
+.badgeStatusWarning {
+  background: var(--status-warning-bg, #fef3c7);
+  color: var(--status-warning-text, #92400e);
+  border-color: var(--status-warning-border, #fcd34d);
+}
+
+.badgeStatusError {
+  background: var(--status-error-bg, #fef2f2);
+  color: var(--status-error-text, var(--danger));
+  border-color: var(--status-error-border, #fca5a5);
+}
 
 /* ═══ ACTIONS (inline) ═══ */
 .cardActions {
@@ -769,6 +879,7 @@
 
   .colLeft {
     flex: 1 1 auto;
+    width: auto;
     max-width: none;
     min-width: 0;
   }
@@ -841,27 +952,28 @@
   .searchBox { flex: 1 1 100%; }
   .filterBtn { flex: 0 0 auto; }
 
-  /* Pills horizontales scrollables */
+  /* Pills segment — wrap sur 2 colonnes comme tripSegment */
   .statusPills {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    padding-bottom: 4px;
+    gap: 3px;
+    padding: 2px;
     margin-bottom: 12px;
-    scrollbar-width: none;
   }
-  .statusPills::-webkit-scrollbar { display: none; }
-  .statusPill { flex-shrink: 0; }
 
-  /* Filtres empiles */
-  .filtersPanel {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 10px;
-    padding: 12px;
+  .statusPill {
+    flex: 1 1 calc(50% - 4px);
+    font-size: 0.7rem;
+    padding: 0 6px;
+    height: 28px;
   }
-  .filterGroup select,
-  .filterGroup input { min-width: 100%; width: 100%; box-sizing: border-box; }
+
+  /* Filtres — une ligne, scroll horizontal si besoin */
+  .filtersPanel {
+    gap: 6px;
+    padding: 10px;
+  }
+
+  .filterGroupStatus { max-width: 120px; }
+  .filterDateField { width: 108px; min-width: 108px; max-width: 108px; }
 
   /* Card: full stack on mobile */
   .requestCard {
@@ -899,8 +1011,8 @@
 @media (max-width: 400px) {
   .searchBox input { font-size: 0.78rem; height: 36px; }
   .filterBtn { height: 36px; font-size: 0.72rem; padding: 0 10px; }
-  .statusPill { height: 28px; padding: 0 10px; font-size: 0.68rem; }
-  .pillCount { min-width: 16px; height: 16px; font-size: 0.6rem; }
+  .statusPill { height: 26px; padding: 0 6px; font-size: 0.68rem; }
+  .pillCount { min-width: 14px; height: 14px; font-size: 0.58rem; padding: 0 3px; }
   .requestCard { padding: 10px; }
   .patientName { font-size: 0.82rem; }
   .badge { font-size: 0.64rem; padding: 2px 8px; }

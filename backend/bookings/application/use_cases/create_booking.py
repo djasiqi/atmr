@@ -28,10 +28,7 @@ from shared.booking_company_resolution import (
 )
 from shared.client_portal_notes import compose_client_portal_notes_medical
 from shared.geo_utils import GeoValidator
-from shared.time_utils import (
-    api_scheduled_iso_to_naive_geneva,
-    geneva_naive_midnight_from_date_ymd,
-)
+from shared.time_utils import api_scheduled_iso_to_naive_geneva
 
 logger = logging.getLogger(__name__)
 
@@ -202,9 +199,8 @@ class CreateBookingUseCase:
         elif bool(validated_data.get("is_round_trip")) and rd_raw:
             rd_str = str(rd_raw).strip() if isinstance(rd_raw, str) else ""
             if rd_str:
-                return_scheduled_time = geneva_naive_midnight_from_date_ymd(rd_str)
-                if return_scheduled_time is None:
-                    raise ValueError("Invalid return_date format")
+                return_scheduled_time = None
+                return_time_exact = False
 
         notes_medical = compose_client_portal_notes_medical(validated_data)
 

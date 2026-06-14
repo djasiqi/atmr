@@ -144,6 +144,19 @@ export const fetchCompanyReservationsPaginated = async ({
   }
 };
 
+/** Charge une réservation par ID (recherche paginée côté API). */
+export const fetchCompanyReservationById = async (bookingId) => {
+  const id = Number(bookingId);
+  if (!id) return null;
+  const data = await fetchCompanyReservationsPaginated({
+    search: String(id),
+    page: 1,
+    perPage: 5,
+    sortOrder: 'desc',
+  });
+  return (data?.reservations || []).find((r) => r.id === id) || null;
+};
+
 export const acceptReservation = async (reservationId) => {
   try {
     const { data } = await apiClient.post(`/companies/me/reservations/${reservationId}/accept`);
@@ -196,6 +209,16 @@ export const acknowledgeBookingChangeEvent = async (bookingId, eventId) => {
   const { data } = await apiClient.post(
     `/companies/me/reservations/${bookingId}/change-events/${eventId}/ack`
   );
+  return data;
+};
+
+/** Accepte ou refuse une demande de modification institution (révalidation PR2) */
+export const respondToChangeRequest = async (bookingId, changeId, action) => {
+  const path =
+    action === 'accept'
+      ? `/companies/me/reservations/${bookingId}/change-requests/${changeId}/accept`
+      : `/companies/me/reservations/${bookingId}/change-requests/${changeId}/refuse`;
+  const { data } = await apiClient.post(path, {});
   return data;
 };
 
@@ -1164,12 +1187,24 @@ export const fetchAssignedReservations = async (forDate, { reservations: prefetc
 
     console.log(`Filtering bookings for target day: ${targetDay}`);
 
-    // 🔧 filtre plus tolérant : accepte scheduled_time, pickup_time, date_time, datetime
+    const routeGroupsOfDay = new Set();
+    reservations.forEach((r) => {
+      const ymd = toYMD(pickBestDateField(r));
+      if (targetDay && ymd === targetDay && r.route_group_id) {
+        routeGroupsOfDay.add(r.route_group_id);
+      }
+    });
+
+    // 🔧 filtre plus tolérant : accepte scheduled_time, pickup_time, date_time, datetime.
+    // Pour les parcours multi-destinations, les legs suivants peuvent être "À définir"
+    // (scheduled_time null) : on les garde si le groupe a un leg dans le jour cible.
     const bookingsOfDay = reservations.filter((r) => {
       try {
         const rawWhen = pickBestDateField(r);
         const ymd = toYMD(rawWhen);
-        return !targetDay || ymd === targetDay;
+        return !targetDay || ymd === targetDay || (
+          r.route_group_id && routeGroupsOfDay.has(r.route_group_id)
+        );
       } catch (e) {
         console.error('Error filtering booking:', e);
         return false;

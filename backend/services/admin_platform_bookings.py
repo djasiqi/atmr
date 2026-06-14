@@ -391,13 +391,28 @@ def admin_booking_list_item(
     scheduled_time = getattr(booking, "scheduled_time", None)
     amount = getattr(booking, "amount", None)
 
+    from services.companies.booking_display import build_booking_display_blocks
+
+    viewer_id = current_company.id if current_company else None
+    display_blocks = build_booking_display_blocks(
+        booking, viewer_company_id=viewer_id
+    )
+    scheduling = display_blocks.get("scheduling") or {}
+    identity = display_blocks.get("identity") or {}
+
     return {
         "id": booking.id,
+        "display_model": display_blocks.get("display_model"),
+        "display_model_version": display_blocks.get("display_model_version"),
+        "identity": identity,
+        "scheduling": scheduling,
+        "trip_flags": display_blocks.get("trip_flags"),
+        "search_index": display_blocks.get("search_index"),
         "created_at": created_at.isoformat() if created_at is not None else None,
         "scheduled_at": (
             scheduled_time.isoformat() if scheduled_time is not None else None
         ),
-        "client_name": booking.customer_full_name,
+        "client_name": identity.get("primary_label") or booking.customer_full_name,
         "institution_name": inst_name,
         "current_company_name": current_company_name,
         "current_company_id": current_company.id if current_company else None,

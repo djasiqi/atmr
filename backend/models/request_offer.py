@@ -257,6 +257,11 @@ class RequestOffer(db.Model):
                 else None,
                 "is_round_trip": request.is_round_trip,
                 "return_time": _iso(request.return_time),
+                "multi_stop": getattr(request, "multi_stop", False),
+                "return_to_institution": getattr(
+                    request, "return_to_institution", False
+                ),
+                "legs": [leg.serialize() for leg in (request.legs or [])],
                 "mobility": request.get_mobility(),
                 "contact_on_site": request.contact_on_site,
                 "notes": request.notes,

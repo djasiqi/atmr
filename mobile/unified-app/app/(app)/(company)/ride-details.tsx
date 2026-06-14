@@ -22,6 +22,8 @@ import {
   getCompanyPartnershipsForTransfer,
 } from "../../../src/features/company/api/companyApi";
 import { normalizeCompanyEventType } from "../../../src/core/realtime/eventContracts";
+import { buildIdentityFromMission } from "../../../src/features/company/utils/bookingIdentity";
+import type { CompanyDispatchMission } from "../../../src/features/company/api/contracts";
 import { TransferRideModal } from "../../../src/features/company/components/transfers/TransferRideModal";
 import {
   EnterpriseActionChip,
@@ -47,6 +49,30 @@ function resolveMissionIdFromEvent(payload: {
     return Number.isFinite(parsed) ? parsed : undefined;
   }
   return undefined;
+}
+
+function readPassengerLabel(data: Record<string, unknown> | null | undefined): string | null {
+  if (!data) return null;
+  const identity = data.identity;
+  if (identity && typeof identity === "object") {
+    const passenger = (identity as { passenger?: { name?: string } }).passenger;
+    if (passenger && typeof passenger.name === "string" && passenger.name.trim()) {
+      return passenger.name.trim();
+    }
+  }
+  return readClientName(data);
+}
+
+function readIdentitySourceName(data: Record<string, unknown> | null | undefined): string | null {
+  if (!data) return null;
+  const identity = data.identity;
+  if (identity && typeof identity === "object") {
+    const source = (identity as { source?: { name?: string } }).source;
+    if (source && typeof source.name === "string" && source.name.trim()) {
+      return source.name.trim();
+    }
+  }
+  return null;
 }
 
 function readClientName(data: Record<string, unknown> | null | undefined): string | null {
@@ -386,7 +412,11 @@ export default function CompanyRideDetailsScreen() {
   const d = (missionQuery.data as Record<string, unknown> | null | undefined) ?? null;
   const statusStr = d ? String((d as { status?: string }).status ?? "pending") : "pending";
   const statusStyle = getEnterpriseStatusColors(statusStr);
-  const clientTitle = d ? readClientName(d) : null;
+  const clientTitle = d ? readPassengerLabel(d) : null;
+  const sourceTitle = d ? readIdentitySourceName(d) : null;
+  const detailIdentity = d
+    ? buildIdentityFromMission(d as unknown as CompanyDispatchMission)
+    : null;
   const scheduledIso = readScheduledIso(d);
   const titleLine = clientTitle
     ? `${clientTitle} · ${
@@ -492,6 +522,23 @@ export default function CompanyRideDetailsScreen() {
                 Informations
               </AppText>
               {[
+                ...(detailIdentity?.passengerLabel
+                  ? [{ label: "Passager", value: detailIdentity.passengerLabel }] as const
+                  : []),
+                ...(detailIdentity?.source?.name
+                  ? [{ label: "Origine", value: detailIdentity.source.name }] as const
+                  : sourceTitle
+                    ? [{ label: "Origine", value: sourceTitle }] as const
+                    : []),
+                ...(detailIdentity?.ownership?.owner_company_name
+                  ? [{ label: "Propriétaire", value: detailIdentity.ownership.owner_company_name }] as const
+                  : []),
+                ...(detailIdentity?.execution?.executing_company_name
+                  ? [{ label: "Exécutant", value: detailIdentity.execution.executing_company_name }] as const
+                  : []),
+                ...(detailIdentity?.upstream?.name
+                  ? [{ label: "Source amont", value: detailIdentity.upstream.name }] as const
+                  : []),
                 { label: "Statut", value: mapStatusToLabel(statusStr) },
                 { label: "Prévue", value: scheduled },
                 { label: "Chauffeur", value: driverDisplay },

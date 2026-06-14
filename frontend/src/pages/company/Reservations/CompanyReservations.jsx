@@ -549,7 +549,7 @@ const CompanyReservations = () => {
   };
 
   // Export Excel handler
-  const handleExport = useCallback(async () => {
+  const handleExport = useCallback(async (profile = 'operational') => {
     if (exporting) return;
     setExporting(true);
     try {
@@ -565,6 +565,7 @@ const CompanyReservations = () => {
         companyName: company?.name || 'Entreprise',
         periodLabel,
         stats,
+        profile,
       });
       toast.success(`Export termine : ${fileName}`);
     } catch (err) {
@@ -612,12 +613,21 @@ const CompanyReservations = () => {
               <button
                 type="button"
                 className={styles.btnSecondary}
-                onClick={handleExport}
+                onClick={() => handleExport('operational')}
                 disabled={exporting || (totalReservations === 0 && showListSkeleton)}
-                title={totalReservations === 0 ? 'Aucune donnee a exporter' : 'Exporter en Excel'}
+                title={totalReservations === 0 ? 'Aucune donnee a exporter' : 'Export operationnel (Passager + Origine)'}
               >
                 <FiDownload size={16} className={exporting ? styles.exportSpin : ''} />
                 {exporting ? 'Export...' : 'Exporter'}
+              </button>
+              <button
+                type="button"
+                className={styles.btnSecondary}
+                onClick={() => handleExport('accounting')}
+                disabled={exporting || (totalReservations === 0 && showListSkeleton)}
+                title="Export comptable (amont, proprietaire, executant, payeur)"
+              >
+                Export compta
               </button>
             </div>
           </div>

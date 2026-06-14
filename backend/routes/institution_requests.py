@@ -8,15 +8,18 @@ Endpoints:
 - GET /api/v1/institutions/requests/{id} - Détail demande
 - PUT /api/v1/institutions/requests/{id} - Modifier demande
 - POST /api/v1/institutions/requests/{id}/send - Envoyer aux transporteurs
+- POST /api/v1/institutions/requests/{id}/external-carrier - Affecter transporteur externe
+- POST /api/v1/institutions/requests/{id}/external-completion - Déclarer mission externe réalisée
 - POST /api/v1/institutions/requests/{id}/cancel - Annuler demande
 """
 
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Any, cast
 
 import sentry_sdk
 from flask import g, request
+from flask_jwt_extended import get_jwt
 from flask_restx import Namespace, Resource, fields
 from marshmallow import ValidationError
 
@@ -30,6 +33,8 @@ from routes.api_error_models import (
     create_validation_error_model,
 )
 from schemas.institution_schemas import (
+    AssignExternalCarrierSchema,
+    CompleteExternalMissionSchema,
     TransportRequestCreateSchema,
     TransportRequestQuerySchema,
     TransportRequestUpdateSchema,
@@ -41,6 +46,266 @@ from shared.error_handlers import APIErrorHandler
 from shared.time_utils import parse_iso8601
 
 logger = logging.getLogger(__name__)
+
+
+def _apply_return_fields(transport_req: TransportRequest, validated: dict[str, Any]) -> None:
+    """Persiste return_date, return_time et return_time_confirmed sur une demande."""
+    if validated.get("return_time"):
+        transport_req.return_time = parse_iso8601(validated["return_time"])
+        explicit = validated.get("return_time_confirmed")
+        transport_req.return_time_confirmed = (
+            bool(explicit) if explicit is not None else True
+        )
+        if transport_req.return_time is not None:
+            transport_req.return_date = transport_req.return_time.date()
+    elif validated.get("return_date"):
+        try:
+            transport_req.return_date = date.fromisoformat(str(validated["return_date"]))
+        except ValueError:
+            transport_req.return_date = None
+        transport_req.return_time = None
+        explicit = validated.get("return_time_confirmed")
+        transport_req.return_time_confirmed = (
+            bool(explicit) if explicit is not None else False
+        )
+    elif "return_time" in validated or "return_date" in validated:
+        transport_req.return_time = None
+        transport_req.return_date = None
+        if "return_time_confirmed" in validated:
+            transport_req.return_time_confirmed = bool(
+                validated.get("return_time_confirmed")
+            )
+
+
+def _derive_multi_stop_return_fields(
+    transport_req: TransportRequest, scheduled_time: datetime | None
+) -> None:
+    """Multi-stop + retour institution : synchronise depuis mission_date."""
+    mission_day = getattr(transport_req, "mission_date", None)
+    if mission_day is not None:
+        transport_req.return_date = mission_day
+    elif scheduled_time is not None:
+        transport_req.return_date = scheduled_time.date()
+    transport_req.return_time = None
+    transport_req.return_time_confirmed = False
+
+
+def _return_leg_schedule(validated: dict[str, Any]) -> tuple[Any, bool]:
+    """Extrait horaire retour institution depuis le payload."""
+    raw = validated.get("return_scheduled_time") or validated.get("return_time")
+    confirmed = validated.get("return_time_confirmed")
+    if confirmed is None:
+        confirmed = bool(raw)
+    return raw, bool(confirmed)
+
+
+_CARRIER_IMPACT_FIELDS = frozenset(
+    {
+        "pickup_location",
+        "dropoff_location",
+        "dropoff_establishment",
+        "dropoff_service",
+        "dropoff_doctor",
+        "intermediate_stops",
+        "multi_stop",
+        "return_to_institution",
+        "scheduled_time",
+        "scheduled_time_type",
+        "mission_date",
+        "pickup_time_confirmed",
+        "appointment_time_confirmed",
+        "return_scheduled_time",
+        "return_time",
+        "return_date",
+        "return_time_confirmed",
+        "mobility",
+        "is_round_trip",
+    }
+)
+
+
+def _requires_carrier_acknowledgement(
+    transport_req: TransportRequest, validated: dict[str, Any]
+) -> bool:
+    if transport_req.status not in (
+        RequestStatus.SENT.value,
+        RequestStatus.ACCEPTED.value,
+    ):
+        return False
+    return bool(set(validated.keys()) & _CARRIER_IMPACT_FIELDS)
+
+
+def _notify_companies_request_updated(
+    transport_req: TransportRequest,
+    *,
+    updated_fields: list[str],
+) -> None:
+    """Informe les entreprises avec offre PENDING qu'une demande envoyée a changé."""
+    from models import OfferStatus, RequestOffer
+    from services.events.institution_events import persist_company_notification
+
+    pending_offers = RequestOffer.query.filter_by(
+        transport_request_id=transport_req.id,
+        status=OfferStatus.PENDING.value,
+    ).all()
+    if not pending_offers:
+        return
+
+    institution = transport_req.institution
+    inst_name = institution.name if institution else "Institution"
+    patient = transport_req.patient
+    patient_name = (
+        f"{patient.first_name} {patient.last_name}".strip() if patient else ""
+    )
+    sched = transport_req.scheduled_time
+    time_str = sched.strftime("%d.%m.%Y %H:%M") if sched else ""
+    message = f"{inst_name} — {patient_name} — parcours modifié"
+    if time_str:
+        message = f"{message} — {time_str}"
+
+    for offer in pending_offers:
+        metadata = {
+            "request_id": transport_req.id,
+            "public_id": str(transport_req.public_id),
+            "offer_id": offer.id,
+            "institution_name": inst_name,
+            "updated_fields": updated_fields,
+        }
+        if transport_req.booking_id:
+            metadata["booking_id"] = transport_req.booking_id
+
+        try:
+            persist_company_notification(
+                company_id=offer.company_id,
+                event_type="request_updated",
+                title="Demande modifiée par l'institution",
+                message=message.strip(" —"),
+                metadata=metadata,
+                dedupe_key=(
+                    f"request_updated:{transport_req.id}:{offer.company_id}:"
+                    f"{int(datetime.now(UTC).timestamp())}"
+                ),
+            )
+        except Exception as notify_err:
+            logger.warning(
+                "[TransportRequests] Notification update company=%s request=%s: %s",
+                offer.company_id,
+                transport_req.id,
+                notify_err,
+            )
+
+
+def _record_request_updated_timeline(
+    transport_req: TransportRequest,
+    *,
+    updated_fields: list[str],
+    user_id: int | None,
+    carrier_notified: bool,
+) -> None:
+    from services.institutions.transport_timeline_service import (
+        TimelineActor,
+        record_event,
+    )
+
+    record_event(
+        "field_updated",
+        institution_id=transport_req.institution_id,
+        transport_request_id=transport_req.id,
+        actor=TimelineActor(actor_type="institution_user", actor_user_id=user_id),
+        payload={
+            "changed_fields": updated_fields,
+            "carrier_notified": carrier_notified,
+            "after_send": transport_req.status
+            in (RequestStatus.SENT.value, RequestStatus.ACCEPTED.value),
+        },
+        correlation_id=f"request_field_updated:{transport_req.id}:{int(datetime.now(UTC).timestamp())}",
+    )
+
+
+def _persist_legs_from_validated(
+    transport_req: TransportRequest, validated: dict[str, Any]
+) -> None:
+    """Construit et persiste les legs (multi-stop ou trajet simple legacy RDV)."""
+    from services.institutions.mission_schedule import legacy_arrival_schedule
+    from services.institutions.transport_request_legs_service import (
+        build_legs_chain,
+        build_simple_trip_leg,
+        is_multi_stop_enabled,
+        new_route_group_id,
+        persist_legs,
+        stops_from_validated,
+        sync_return_fields_from_legs,
+    )
+
+    return_raw, return_confirmed = _return_leg_schedule(validated)
+
+    if validated.get("multi_stop"):
+        if not is_multi_stop_enabled():
+            raise PermissionError("Parcours multi-étapes non activé sur ce serveur.")
+
+        transport_req.multi_stop = True
+        transport_req.return_to_institution = validated.get(
+            "return_to_institution", True
+        )
+        transport_req.route_group_id = new_route_group_id()
+        transport_req.is_round_trip = False
+        transport_req.return_time = None
+
+        stops = stops_from_validated(validated)
+        legs_data = build_legs_chain(
+            origin_location=validated["pickup_location"],
+            origin_lat=validated.get("pickup_lat"),
+            origin_lng=validated.get("pickup_lng"),
+            stops=stops,
+            return_to_institution=transport_req.return_to_institution,
+            institution_return_location=validated["pickup_location"],
+            institution_return_lat=validated.get("pickup_lat"),
+            institution_return_lng=validated.get("pickup_lng"),
+            return_scheduled_time=return_raw,
+            return_time_confirmed=return_confirmed,
+        )
+        persist_legs(transport_req.id, legs_data)
+
+        if transport_req.return_to_institution:
+            sync_return_fields_from_legs(transport_req)
+        else:
+            transport_req.return_date = None
+            transport_req.return_time_confirmed = False
+
+        if legs_data:
+            first = legs_data[0]
+            transport_req.dropoff_location = first["dropoff_location"]
+            transport_req.dropoff_lat = first.get("dropoff_lat")
+            transport_req.dropoff_lng = first.get("dropoff_lng")
+        return
+
+    arrival, arrival_confirmed = legacy_arrival_schedule(validated)
+    if arrival is not None or (
+        validated.get("scheduled_time_type") == "arrival"
+        and validated.get("scheduled_time")
+    ):
+        dropoff = (validated.get("dropoff_location") or "").strip()
+        if dropoff:
+            appt_time = arrival
+            if appt_time is None and validated.get("scheduled_time"):
+                from shared.time_utils import parse_iso8601
+
+                appt_time = parse_iso8601(str(validated["scheduled_time"]))
+            legs_data = build_simple_trip_leg(
+                pickup_location=validated["pickup_location"],
+                pickup_lat=validated.get("pickup_lat"),
+                pickup_lng=validated.get("pickup_lng"),
+                dropoff_location=dropoff,
+                dropoff_lat=validated.get("dropoff_lat"),
+                dropoff_lng=validated.get("dropoff_lng"),
+                appointment_time=appt_time,
+                time_confirmed=arrival_confirmed,
+                dropoff_establishment=validated.get("dropoff_establishment"),
+                dropoff_service=validated.get("dropoff_service"),
+                dropoff_doctor=validated.get("dropoff_doctor"),
+            )
+            if legs_data:
+                persist_legs(transport_req.id, legs_data)
 
 # Namespace
 institution_requests_ns = Namespace(
@@ -58,6 +323,8 @@ validation_error_model = create_validation_error_model(institution_requests_ns)
 request_create_schema = TransportRequestCreateSchema()
 request_update_schema = TransportRequestUpdateSchema()
 request_query_schema = TransportRequestQuerySchema()
+assign_external_carrier_schema = AssignExternalCarrierSchema()
+complete_external_mission_schema = CompleteExternalMissionSchema()
 
 # Modèle de réponse demande
 transport_request_model = institution_requests_ns.model(
@@ -126,14 +393,14 @@ def get_institution_context():
 def get_institution_read_context():
     """Récupère le contexte institution pour lecture seule (JWT ou API Key).
 
-    Rôles autorisés: admin, requester, billing, reader, curator.
+    Rôles autorisés: admin, requester, billing, reader, curator, reception.
 
     Returns:
-        Tuple (institution_id, user_id_or_none)
+        Tuple (institution_id, user_id_or_none, role_or_none)
     """
     # Si authentifié par API Key
     if hasattr(g, "institution_id") and g.get("auth_method") == "api_key":
-        return g.institution_id, None
+        return g.institution_id, None, None
 
     # Sinon JWT — tous les rôles institution peuvent lire
     institution, user = AuthorizationService.require_institution_role(
@@ -142,8 +409,9 @@ def get_institution_read_context():
         InstitutionRole.BILLING.value,
         InstitutionRole.READER.value,
         InstitutionRole.CURATOR.value,
+        InstitutionRole.RECEPTION.value,
     )
-    return institution.id, user.id
+    return institution.id, user.id, user.institution_role
 
 
 def resolve_patient(institution_id: int, data: dict[str, Any]) -> int | None:
@@ -213,7 +481,7 @@ class TransportRequestList(Resource):
         Auth: JWT (tous rôles institution) ou API Key (scope requests:read)
         """
         try:
-            institution_id, _ = get_institution_read_context()
+            institution_id, _, _ = get_institution_read_context()
 
             # Valider query params
             try:
@@ -256,6 +524,9 @@ class TransportRequestList(Resource):
             if params.get("status"):
                 query = query.filter_by(status=params["status"])
 
+            if params.get("carrier_source"):
+                query = query.filter_by(carrier_source=params["carrier_source"])
+
             if params.get("external_reference"):
                 query = query.filter_by(external_reference=params["external_reference"])
 
@@ -263,14 +534,12 @@ class TransportRequestList(Resource):
                 query = query.filter_by(patient_id=params["patient_id"])
 
             if params.get("date_from"):
-                date_from = datetime.strptime(params["date_from"], "%Y-%m-%d")
-                query = query.filter(TransportRequest.scheduled_time >= date_from)
+                date_from = datetime.strptime(params["date_from"], "%Y-%m-%d").date()
+                query = query.filter(TransportRequest.mission_date >= date_from)
 
             if params.get("date_to"):
-                date_to = datetime.strptime(params["date_to"], "%Y-%m-%d")
-                # Inclure toute la journée
-                date_to = date_to.replace(hour=23, minute=59, second=59)
-                query = query.filter(TransportRequest.scheduled_time <= date_to)
+                date_to = datetime.strptime(params["date_to"], "%Y-%m-%d").date()
+                query = query.filter(TransportRequest.mission_date <= date_to)
 
             # Pagination
             page = params.get("page", 1)
@@ -279,7 +548,10 @@ class TransportRequestList(Resource):
             pages = (total + per_page - 1) // per_page
 
             requests = (
-                query.order_by(TransportRequest.scheduled_time.desc())
+                query.order_by(
+                    TransportRequest.mission_date.desc(),
+                    TransportRequest.id.desc(),
+                )
                 .offset((page - 1) * per_page)
                 .limit(per_page)
                 .all()
@@ -348,12 +620,6 @@ class TransportRequestList(Resource):
             except ValueError as err:
                 return {"error": str(err)}, 400
 
-            # Parser scheduled_time
-            scheduled_time = parse_iso8601(validated["scheduled_time"])
-            if not scheduled_time:
-                return {"error": "scheduled_time invalide"}, 400
-
-            # Créer la demande
             transport_req = TransportRequest()
             transport_req.institution_id = institution_id
             transport_req.created_by_user_id = user_id
@@ -363,10 +629,13 @@ class TransportRequestList(Resource):
                 "mission_type", MissionType.PATIENT_TRANSPORT.value
             )
             transport_req.delivery_description = validated.get("delivery_description")
-            transport_req.scheduled_time = scheduled_time
-            transport_req.scheduled_time_type = validated.get(
-                "scheduled_time_type", "departure"
-            )
+
+            from services.institutions.mission_schedule import apply_departure_schedule
+
+            try:
+                apply_departure_schedule(transport_req, validated)
+            except ValueError as sched_err:
+                return {"error": str(sched_err)}, 400
 
             # Lieux
             transport_req.pickup_location = validated["pickup_location"]
@@ -389,13 +658,14 @@ class TransportRequestList(Resource):
 
             # Options
             transport_req.is_round_trip = validated.get("is_round_trip", False)
-            if validated.get("return_time"):
-                transport_req.return_time = parse_iso8601(validated["return_time"])
+            if transport_req.is_round_trip:
+                _apply_return_fields(transport_req, validated)
             logger.info(
-                "[CreateRequest] is_round_trip=%s, raw_return_time=%r, parsed=%s",
+                "[CreateRequest] is_round_trip=%s, return_date=%r, return_time=%r, return_time_confirmed=%s",
                 transport_req.is_round_trip,
-                validated.get("return_time"),
+                transport_req.return_date,
                 transport_req.return_time,
+                transport_req.return_time_confirmed,
             )
 
             # Mobilité
@@ -418,6 +688,39 @@ class TransportRequestList(Resource):
             transport_req.status = RequestStatus.DRAFT.value
 
             db.session.add(transport_req)
+            db.session.flush()
+
+            try:
+                _persist_legs_from_validated(transport_req, validated)
+            except PermissionError as perm_err:
+                db.session.rollback()
+                return {"error": str(perm_err)}, 403
+            except ValueError as leg_err:
+                db.session.rollback()
+                return {"error": str(leg_err)}, 400
+
+            # Timeline transport: request_created
+            try:
+                from services.institutions.transport_timeline_service import (
+                    TimelineActor,
+                    record_event,
+                )
+
+                record_event(
+                    "request_created",
+                    institution_id=institution_id,
+                    transport_request_id=transport_req.id,
+                    actor=TimelineActor(
+                        actor_type="institution_user" if user_id else "api_key",
+                        actor_user_id=user_id,
+                    ),
+                    correlation_id=f"request_created:{transport_req.id}",
+                )
+            except Exception as timeline_err:
+                logger.warning(
+                    "[TransportRequests] Timeline recording failed: %s", timeline_err
+                )
+
             db.session.commit()
 
             # Audit log
@@ -475,7 +778,7 @@ class TransportRequestDetail(Resource):
         Auth: JWT (tous rôles institution) ou API Key (scope requests:read)
         """
         try:
-            institution_id, _ = get_institution_read_context()
+            institution_id, _, _ = get_institution_read_context()
 
             transport_req = TransportRequest.query.filter_by(
                 id=request_id,
@@ -503,8 +806,6 @@ class TransportRequestDetail(Resource):
                     ):
                         return {"error": "Demande non trouvée"}, 404
 
-            from flask import g
-            from flask_jwt_extended import get_jwt
             from services.institutions.booking_change_service import (
                 mask_financial_fields,
             )
@@ -566,6 +867,22 @@ class TransportRequestDetail(Resource):
             except ValidationError as err:
                 return {"error": "Données invalides", "details": err.messages}, 400
 
+            carrier_ack_required = _requires_carrier_acknowledgement(
+                transport_req, validated
+            )
+            if carrier_ack_required and not validated.get("acknowledge_carrier_impact"):
+                return {
+                    "error": (
+                        "Confirmation requise : cette modification impacte "
+                        "les transporteurs consultés."
+                    ),
+                    "code": "carrier_ack_required",
+                }, 400
+
+            operational_fields = [
+                k for k in validated.keys() if k != "acknowledge_carrier_impact"
+            ]
+
             # Résoudre patient si changé
             if "patient_id" in validated or "patient_external_reference" in validated:
                 try:
@@ -581,12 +898,35 @@ class TransportRequestDetail(Resource):
             if "delivery_description" in validated:
                 transport_req.delivery_description = validated["delivery_description"]
 
-            if "scheduled_time" in validated:
-                transport_req.scheduled_time = parse_iso8601(
-                    validated["scheduled_time"]
+            if any(
+                k in validated
+                for k in (
+                    "mission_date",
+                    "scheduled_time",
+                    "scheduled_time_type",
+                    "pickup_time_confirmed",
                 )
-            if "scheduled_time_type" in validated:
-                transport_req.scheduled_time_type = validated["scheduled_time_type"]
+            ):
+                from services.institutions.mission_schedule import (
+                    apply_departure_schedule,
+                )
+
+                merged = {
+                    "mission_date": transport_req.mission_date,
+                    "scheduled_time": (
+                        transport_req.scheduled_time.isoformat()
+                        if transport_req.scheduled_time
+                        else None
+                    ),
+                    "scheduled_time_type": transport_req.scheduled_time_type,
+                    "pickup_time_confirmed": transport_req.pickup_time_confirmed,
+                }
+                merged.update(validated)
+                try:
+                    apply_departure_schedule(transport_req, merged)
+                except ValueError as sched_err:
+                    db.session.rollback()
+                    return {"error": str(sched_err)}, 400
 
             # Lieux + types de lieu + points d'accueil
             for field in [
@@ -611,12 +951,11 @@ class TransportRequestDetail(Resource):
             # Options
             if "is_round_trip" in validated:
                 transport_req.is_round_trip = validated["is_round_trip"]
-            if "return_time" in validated:
-                transport_req.return_time = (
-                    parse_iso8601(validated["return_time"])
-                    if validated["return_time"]
-                    else None
-                )
+            if any(
+                k in validated
+                for k in ("return_time", "return_date", "return_time_confirmed")
+            ):
+                _apply_return_fields(transport_req, validated)
 
             # Mobilité, contact, notes
             if "mobility" in validated:
@@ -634,7 +973,116 @@ class TransportRequestDetail(Resource):
             if "billing_details" in validated:
                 transport_req.billing_details = validated["billing_details"]
 
+            # Multi-stop : création ou réorganisation legs (DRAFT/SENT)
+            if "intermediate_stops" in validated and (
+                getattr(transport_req, "multi_stop", False)
+                or validated.get("multi_stop")
+            ):
+                from services.institutions.transport_request_legs_service import (
+                    is_multi_stop_enabled,
+                    new_route_group_id,
+                    reorganize_multi_stop_legs,
+                    stops_from_validated,
+                )
+
+                if not is_multi_stop_enabled():
+                    db.session.rollback()
+                    return {
+                        "error": "Parcours multi-étapes non activé sur ce serveur."
+                    }, 403
+
+                if validated.get("multi_stop") and not getattr(
+                    transport_req, "multi_stop", False
+                ):
+                    transport_req.multi_stop = True
+                    transport_req.is_round_trip = False
+                    transport_req.return_time = None
+                    if not getattr(transport_req, "route_group_id", None):
+                        transport_req.route_group_id = new_route_group_id()
+
+                return_to_inst = validated.get(
+                    "return_to_institution",
+                    getattr(transport_req, "return_to_institution", False),
+                )
+                stops = stops_from_validated(validated)
+                if not stops:
+                    db.session.rollback()
+                    return {
+                        "error": "Au moins une étape intermédiaire requise."
+                    }, 400
+
+                return_raw, return_confirmed = _return_leg_schedule(validated)
+                reorganize_multi_stop_legs(
+                    transport_req,
+                    intermediate_stops=stops,
+                    return_to_institution=bool(return_to_inst),
+                    return_scheduled_time=return_raw,
+                    return_time_confirmed=return_confirmed,
+                    actor_user_id=user_id,
+                )
+            elif "return_to_institution" in validated and getattr(
+                transport_req, "multi_stop", False
+            ):
+                transport_req.return_to_institution = validated["return_to_institution"]
+
+            # Trajet simple : resynchroniser le leg unique (RDV destination)
+            elif not getattr(transport_req, "multi_stop", False) and any(
+                k in validated
+                for k in (
+                    "pickup_location",
+                    "dropoff_location",
+                    "dropoff_establishment",
+                    "dropoff_service",
+                    "dropoff_doctor",
+                    "scheduled_time",
+                    "scheduled_time_type",
+                    "mission_date",
+                    "pickup_time_confirmed",
+                    "appointment_time_confirmed",
+                )
+            ):
+                merged: dict[str, Any] = {
+                    "pickup_location": transport_req.pickup_location,
+                    "pickup_lat": transport_req.pickup_lat,
+                    "pickup_lng": transport_req.pickup_lng,
+                    "dropoff_location": transport_req.dropoff_location,
+                    "dropoff_lat": transport_req.dropoff_lat,
+                    "dropoff_lng": transport_req.dropoff_lng,
+                    "scheduled_time": (
+                        transport_req.scheduled_time.isoformat()
+                        if transport_req.scheduled_time
+                        else None
+                    ),
+                    "scheduled_time_type": transport_req.scheduled_time_type,
+                    "pickup_time_confirmed": transport_req.pickup_time_confirmed,
+                    "appointment_time_confirmed": getattr(
+                        transport_req, "appointment_time_confirmed", None
+                    ),
+                    "mission_date": transport_req.mission_date,
+                }
+                merged.update(validated)
+                try:
+                    _persist_legs_from_validated(transport_req, merged)
+                except PermissionError as perm_err:
+                    db.session.rollback()
+                    return {"error": str(perm_err)}, 403
+                except ValueError as val_err:
+                    db.session.rollback()
+                    return {"error": str(val_err)}, 400
+
             db.session.commit()
+
+            if carrier_ack_required:
+                _notify_companies_request_updated(
+                    transport_req,
+                    updated_fields=operational_fields,
+                )
+                _record_request_updated_timeline(
+                    transport_req,
+                    updated_fields=operational_fields,
+                    user_id=user_id,
+                    carrier_notified=True,
+                )
 
             # Audit log
             try:
@@ -647,7 +1095,8 @@ class TransportRequestDetail(Resource):
                     result_status="success",
                     action_details={
                         "request_id": transport_req.id,
-                        "updated_fields": list(validated.keys()),
+                        "updated_fields": operational_fields,
+                        "carrier_notified": carrier_ack_required,
                     },
                     ip_address=request.remote_addr,
                     user_agent=request.headers.get("User-Agent"),
@@ -739,6 +1188,123 @@ class TransportRequestSend(Resource):
             db.session.rollback()
             sentry_sdk.capture_exception(e)
             logger.error("[TransportRequests] POST /%s/send error: %s", request_id, e)
+            return APIErrorHandler.handle_exception(e, logger)
+
+
+@institution_requests_ns.route("/<int:request_id>/external-carrier")
+class TransportRequestExternalCarrier(Resource):
+    """Endpoint pour affecter un transporteur externe."""
+
+    @institution_requests_ns.doc(
+        description="Bascule la demande vers un transporteur externe (snapshot).",
+    )
+    @institution_requests_ns.response(200, "Transporteur externe affecté", transport_request_model)
+    @institution_requests_ns.response(400, "Données invalides", validation_error_model)
+    @institution_requests_ns.response(401, "Non authentifié", permission_error_model)
+    @institution_requests_ns.response(403, "Accès refusé", permission_error_model)
+    @institution_requests_ns.response(404, "Demande non trouvée", not_found_error_model)
+    @institution_requests_ns.response(409, "Transition impossible", api_error_model)
+    @api_key_or_jwt_required(scopes=["requests:write"])
+    def post(self, request_id: int):
+        try:
+            from application.institutions import AssignExternalCarrierUseCase
+            from application.institutions.assign_external_carrier import (
+                AssignExternalCarrierInput,
+            )
+
+            institution_id, user_id = get_institution_context()
+            data = request.get_json() or {}
+            try:
+                validated = cast(dict[str, Any], assign_external_carrier_schema.load(data))
+            except ValidationError as err:
+                return {"error": "Données invalides", "details": err.messages}, 400
+
+            result = AssignExternalCarrierUseCase().execute(
+                AssignExternalCarrierInput(
+                    transport_request_id=request_id,
+                    institution_id=institution_id,
+                    user_id=user_id,
+                    name=validated["name"],
+                    phone=validated.get("phone"),
+                    email=validated.get("email"),
+                    reference=validated.get("reference"),
+                    reason=validated.get("reason"),
+                )
+            )
+            if not result.success:
+                return {"error": result.error}, result.status_code
+
+            transport_req = TransportRequest.query.get(request_id)
+            if not transport_req:
+                return {"error": "Demande non trouvée après affectation"}, 500
+            return transport_req.serialize, 200
+        except Exception as e:
+            db.session.rollback()
+            sentry_sdk.capture_exception(e)
+            logger.error(
+                "[TransportRequests] POST /%s/external-carrier error: %s",
+                request_id,
+                e,
+            )
+            return APIErrorHandler.handle_exception(e, logger)
+
+
+@institution_requests_ns.route("/<int:request_id>/external-completion")
+class TransportRequestExternalCompletion(Resource):
+    """Endpoint pour déclarer une mission externe réalisée."""
+
+    @institution_requests_ns.doc(
+        description="Déclare une mission externe comme réalisée par l'institution.",
+    )
+    @institution_requests_ns.response(
+        200, "Mission externe déclarée réalisée", transport_request_model
+    )
+    @institution_requests_ns.response(400, "Données invalides", validation_error_model)
+    @institution_requests_ns.response(401, "Non authentifié", permission_error_model)
+    @institution_requests_ns.response(403, "Accès refusé", permission_error_model)
+    @institution_requests_ns.response(404, "Demande non trouvée", not_found_error_model)
+    @institution_requests_ns.response(409, "Transition impossible", api_error_model)
+    @api_key_or_jwt_required(scopes=["requests:write"])
+    def post(self, request_id: int):
+        try:
+            from application.institutions import CompleteExternalMissionUseCase
+            from application.institutions.complete_external_mission import (
+                CompleteExternalMissionInput,
+            )
+
+            institution_id, user_id = get_institution_context()
+            data = request.get_json() or {}
+            try:
+                validated = cast(
+                    dict[str, Any], complete_external_mission_schema.load(data)
+                )
+            except ValidationError as err:
+                return {"error": "Données invalides", "details": err.messages}, 400
+
+            result = CompleteExternalMissionUseCase().execute(
+                CompleteExternalMissionInput(
+                    transport_request_id=request_id,
+                    institution_id=institution_id,
+                    user_id=user_id,
+                    executed_at=validated.get("executed_at"),
+                    notes=validated.get("notes"),
+                )
+            )
+            if not result.success:
+                return {"error": result.error}, result.status_code
+
+            transport_req = TransportRequest.query.get(request_id)
+            if not transport_req:
+                return {"error": "Demande non trouvée après déclaration"}, 500
+            return transport_req.serialize, 200
+        except Exception as e:
+            db.session.rollback()
+            sentry_sdk.capture_exception(e)
+            logger.error(
+                "[TransportRequests] POST /%s/external-completion error: %s",
+                request_id,
+                e,
+            )
             return APIErrorHandler.handle_exception(e, logger)
 
 
@@ -877,7 +1443,7 @@ class TransportRequestByReference(Resource):
         Auth: JWT (tous rôles institution) ou API Key (scope requests:read)
         """
         try:
-            institution_id, _ = get_institution_read_context()
+            institution_id, _, _ = get_institution_read_context()
 
             transport_req = TransportRequest.find_by_external_reference(
                 institution_id, external_reference

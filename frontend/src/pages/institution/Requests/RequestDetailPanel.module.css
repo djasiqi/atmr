@@ -41,9 +41,10 @@
 .panelTitleRow {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
   flex: 1;
+  overflow: hidden;
 }
 
 .panelTitle {
@@ -51,6 +52,7 @@
   font-weight: 700;
   color: var(--text-primary);
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .closeBtn {
@@ -75,11 +77,46 @@
   border-color: var(--border-hover);
 }
 
+.pdfExportGroup {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+  background: var(--bg-surface);
+}
+
+.pdfExportBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: none;
+  background: rgb(10, 136, 239);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.pdfExportBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.pdfExportBtn:hover:not(:disabled) {
+  filter: brightness(1.05);
+}
+
 /* ── Scrollable body ── */
 
 .panelBody {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 16px 20px 32px;
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
@@ -108,21 +145,28 @@
 
 .actions {
   display: flex;
-  gap: 8px;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
   margin-bottom: 16px;
+  min-width: 0;
+  width: 100%;
 }
 
 .actionBtn {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 6px 12px;
+  justify-content: center;
+  gap: 4px;
+  padding: 5px 8px;
   border-radius: var(--radius-sm);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   cursor: pointer;
   transition: all var(--transition);
   white-space: nowrap;
+  flex: 1 1 0;
+  min-width: 0;
 }
 
 .btnPrimary {
@@ -145,6 +189,7 @@
   background: var(--bg-surface);
   color: var(--danger);
   border: 1px solid var(--danger);
+  flex: 0 0 auto;
 }
 
 .btnDanger:hover { background: #FEF2F2; }
@@ -181,10 +226,13 @@
   flex-shrink: 0;
 }
 
-.sectionIconBrand { background: var(--brand-light); color: var(--brand); }
-.sectionIconWarning { background: #FFFBEB; color: var(--warning); }
-.sectionIconBlue { background: #EFF6FF; color: #2563EB; }
-.sectionIconMuted { background: var(--bg-muted); color: var(--text-muted); }
+.sectionIconBrand,
+.sectionIconWarning,
+.sectionIconBlue,
+.sectionIconMuted {
+  background: var(--neutral-100, #f8fafc);
+  color: var(--neutral-500, #64748b);
+}
 
 .sectionTitle {
   font-size: 13px;
@@ -257,20 +305,70 @@
   color: var(--text-primary);
 }
 
+/* ── Action e-mail transporteur externe ── */
+.carrierEmailActions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin-top: 12px;
+}
+
+.carrierEmailBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--brand);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background var(--transition), opacity var(--transition);
+}
+
+.carrierEmailBtn:hover:not(:disabled) {
+  background: var(--brand-dark, #0f766e);
+}
+
+.carrierEmailBtn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.carrierEmailHint {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
 /* ── Route ── */
 
 .route {
   display: flex;
-  gap: 12px;
+  flex-direction: column;
 }
 
-.routeTrack {
+/* Chaque arrêt = une ligne timeline (marqueur aligné sur son libellé) */
+.routeStop {
+  display: flex;
+  gap: 12px;
+  align-items: stretch;
+}
+
+.routeStop:not(:last-child) .routeStopBody {
+  padding-bottom: 16px;
+}
+
+/* Colonne marqueur : point + connecteur vertical qui descend jusqu'au point suivant */
+.routeMarker {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding-top: 3px;
   flex-shrink: 0;
   width: 12px;
+  padding-top: 3px;
 }
 
 .routeDot {
@@ -280,36 +378,25 @@
   flex-shrink: 0;
 }
 
-.routeDotStart {
-  background: var(--brand);
-  box-shadow: 0 0 0 2px var(--brand-light);
-}
-
+.routeDotStart,
+.routeDotMid,
 .routeDotEnd {
-  background: var(--danger);
-  box-shadow: 0 0 0 2px #FEE2E2;
+  background: var(--neutral-400, #94a3b8);
+  box-shadow: 0 0 0 2px var(--neutral-100, #f8fafc);
 }
 
-.routeLine {
+.routeConnector {
   width: 2px;
   flex: 1;
-  min-height: 16px;
-  background: linear-gradient(to bottom, var(--brand), var(--border) 50%, var(--danger));
+  min-height: 12px;
+  background: var(--border);
   border-radius: 1px;
   margin: 3px 0;
 }
 
-.routeStops {
+.routeStopBody {
   flex: 1;
   min-width: 0;
-}
-
-.routeStop {
-  padding: 0 0 12px;
-}
-
-.routeStop:last-child {
-  padding-bottom: 0;
 }
 
 .routeStopLabel {
@@ -329,23 +416,207 @@
   word-break: break-word;
 }
 
-.roundTripBadge {
-  display: inline-flex;
-  margin-top: 8px;
-  padding: 3px 8px;
-  background: #ECFDF5;
-  color: #0F766E;
-  border-radius: 999px;
+.routeStopDetails {
+  margin-top: 3px;
   font-size: 11px;
-  font-weight: 600;
+  color: var(--text-muted);
+  line-height: 1.3;
 }
 
+/* ---- Éditeur de parcours (timeline éditable en place) ---- */
+.routeEdit {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 12px;
+}
+
+.routeEditRow {
+  display: flex;
+  gap: 12px;
+  align-items: stretch;
+}
+
+.routeEditRow:not(:last-child) .routeEditBody {
+  padding-bottom: 12px;
+}
+
+.routeEditBody {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.routeEditAddressRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.routeEditAddressRow > .editInput,
+.routeEditAddressRow > .editInputWrap {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.routeEditAddressRow > .routeStopAddress {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+}
+
+.routeEditAddressRow > div:last-child {
+  flex: 0 0 64px;
+  width: 64px;
+  min-width: 64px;
+}
+
+.routeEditAddressRow > div:last-child input[type='text'] {
+  min-width: 0 !important;
+  padding: 0 20px 0 8px !important;
+  font-size: 12px !important;
+  text-align: center;
+  height: 34px !important;
+  min-height: 34px !important;
+  border-radius: 999px !important;
+}
+
+.routeEditAddressRow > div:last-child button[type='button'] {
+  right: 2px !important;
+}
+
+.routeEditAddressRow > div:last-child button[type='button'] svg {
+  width: 12px;
+  height: 12px;
+}
+
+.routeEditHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.routeEditRemove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--danger, #dc2626);
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+.routeEditRemove:hover {
+  background: rgba(220, 38, 38, 0.08);
+}
+
+.routeEditAdd {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 0 8px 24px;
+  padding: 5px 10px;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--brand, #00796b);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.routeEditAdd:hover {
+  background: rgba(0, 121, 107, 0.06);
+  border-color: var(--brand, #00796b);
+}
+
+.routeEditActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 2px 0 8px 24px;
+}
+
+.routeEditActions .routeEditAdd {
+  margin: 0;
+}
+
+.routeEditReturnBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  height: 32px;
+  padding: 0 14px;
+  border: 1.5px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-surface, #fff);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.15s ease;
+}
+
+.routeEditReturnBtn:hover {
+  border-color: var(--border-hover, #cbd5e1);
+  color: var(--text-primary);
+}
+
+.routeEditReturnBtn:focus-visible {
+  outline: none;
+  border-color: var(--brand, #00796b);
+  box-shadow: 0 0 0 3px rgba(0, 121, 107, 0.15);
+}
+
+.routeEditReturnBtnActive {
+  border-color: var(--brand, #00796b);
+  background: rgba(0, 121, 107, 0.08);
+  color: var(--brand, #00796b);
+}
+
+/* Détails éditables par destination (établissement / service / médecin) */
+.routeEditDetails {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.routeEditDetails .editInput {
+  height: 30px;
+  font-size: 12px;
+}
+
+/* Chips-boutons réutilisant le style des chips d'affichage */
+button.needsChip {
+  cursor: pointer;
+  font-family: inherit;
+}
+
+button.needsChip:hover {
+  border-color: var(--brand);
+}
+
+.roundTripBadge,
+.multiStopBadge,
 .oneWayBadge {
   display: inline-flex;
   margin-top: 8px;
   padding: 3px 8px;
-  background: #F1F5F9;
-  color: #475569;
+  background: var(--neutral-100, #f8fafc);
+  color: var(--meta-text, var(--text-secondary));
+  border: 1px solid var(--neutral-200, #e2e8f0);
   border-radius: 999px;
   font-size: 11px;
   font-weight: 600;
@@ -392,25 +663,47 @@
 .statusBadge {
   display: inline-flex;
   align-items: center;
-  padding: 3px 10px;
+  padding: 3px 8px;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   white-space: nowrap;
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border: 1px solid transparent;
 }
 
-.statusCompleted { background: #ECFDF5; color: var(--success); }
-.statusReturnCompleted { background: #ECFDF5; color: var(--success); }
-.statusInProgress { background: #EFF6FF; color: #2563EB; }
-.statusEnRoute { background: #EFF6FF; color: #2563EB; }
-.statusAssigned { background: #F0FDFA; color: var(--brand); }
-.statusAccepted { background: #F0FDFA; color: var(--brand); }
-.statusPending { background: var(--bg-muted); color: var(--text-muted); }
-.statusDraft { background: var(--bg-muted); color: var(--text-muted); }
-.statusSent { background: #EFF6FF; color: #2563EB; }
-.statusConverted { background: #ECFDF5; color: var(--success); }
-.statusCancelled { background: #FEF2F2; color: var(--danger); }
-.statusExpired { background: var(--bg-muted); color: var(--text-muted); }
+.badgeStatusNeutral {
+  background: var(--status-neutral-bg, var(--bg-muted));
+  color: var(--status-neutral-text, var(--text-muted));
+  border-color: var(--status-neutral-border, var(--border));
+}
+
+.badgeStatusInfo {
+  background: var(--status-info-bg, #eff6ff);
+  color: var(--status-info-text, #2563eb);
+  border-color: var(--status-info-border, #93c5fd);
+}
+
+.badgeStatusSuccess {
+  background: var(--status-success-bg, #ecfdf5);
+  color: var(--status-success-text, #15803d);
+  border-color: var(--status-success-border, #86efac);
+}
+
+.badgeStatusWarning {
+  background: var(--status-warning-bg, #fef3c7);
+  color: var(--status-warning-text, #92400e);
+  border-color: var(--status-warning-border, #fcd34d);
+}
+
+.badgeStatusError {
+  background: var(--status-error-bg, #fef2f2);
+  color: var(--status-error-text, var(--danger));
+  border-color: var(--status-error-border, #fca5a5);
+}
 
 /* ── Needs chips ── */
 
@@ -434,9 +727,9 @@
 }
 
 .needsChipActive {
-  border-color: var(--brand);
-  background: var(--brand-light);
-  color: var(--brand);
+  border-color: var(--neutral-300, #cbd5e1);
+  background: var(--neutral-100, #f8fafc);
+  color: var(--meta-text, var(--text-secondary));
 }
 
 .needsChipDanger {
@@ -468,22 +761,12 @@
   font-weight: 600;
 }
 
-.billingStatusInstitution {
-  background: #F0FDFA;
-  color: var(--brand);
-  border: 1px solid #99F6E4;
-}
-
-.billingStatusPatient {
-  background: #EFF6FF;
-  color: #2563EB;
-  border: 1px solid #BFDBFE;
-}
-
+.billingStatusInstitution,
+.billingStatusPatient,
 .billingStatusInsurance {
-  background: #FFFBEB;
-  color: var(--warning);
-  border: 1px solid #FCD34D;
+  background: var(--neutral-100, #f8fafc);
+  color: var(--meta-text, var(--text-secondary));
+  border: 1px solid var(--neutral-200, #e2e8f0);
 }
 
 .billingStatusCancelled {
@@ -750,10 +1033,8 @@
   height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
+  background: var(--neutral-400, #94a3b8);
 }
-
-.editRouteDotA { background: var(--brand); }
-.editRouteDotB { background: var(--danger); }
 
 .editRouteLine {
   width: 2px;

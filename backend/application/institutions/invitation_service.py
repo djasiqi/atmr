@@ -17,16 +17,13 @@ import secrets
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, Any, Literal
+from typing import Any, Literal
 
 from flask import current_app, render_template
 
 from ext import db
 from models import Institution, User, UserRole
 from services.email.brevo_provider import BrevoEmailProvider
-
-if TYPE_CHECKING:
-    from models.enums import InstitutionRole
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +37,7 @@ ROLE_LABELS = {
     "institution_reader": "Lecteur",
     "institution_billing": "Facturation",
     "institution_curator": "Curateur",
+    "institution_reception": "Réception",
 }
 
 InvitePath = Literal[
@@ -287,6 +285,9 @@ def invite_or_attach_institution_user(
     )
 
     if creation_mode == "username":
+        from application.users.normalization import normalize_contact_email
+
+        contact_email = normalize_contact_email(email)
         return _create_username_mode_user(
             institution=institution,
             admin_user=admin_user,
@@ -297,6 +298,7 @@ def invite_or_attach_institution_user(
             admin_name=admin_name,
             institution_name=institution_name,
             job_title=job_title,
+            contact_email=contact_email,
         )
 
     if not email:
@@ -487,6 +489,7 @@ def _create_username_mode_user(
     admin_name: str,
     institution_name: str,
     job_title: str | None = None,
+    contact_email: str | None = None,
 ) -> InviteAttachResult:
     local_username = local_username.strip().lower()
     job_title = _normalize_job_title(job_title)
@@ -508,13 +511,24 @@ def _create_username_mode_user(
             error="Cet identifiant est déjà utilisé sur la plateforme",
         )
 
+    if contact_email:
+        from application.users.normalization import find_user_by_normalized_email
+
+        email_conflict = find_user_by_normalized_email(contact_email)
+        if email_conflict:
+            return InviteAttachResult(
+                path="conflict_email",
+                http_status=409,
+                error="Cet email est déjà utilisé sur la plateforme",
+            )
+
     temp_password = _generate_strong_password()
     now = datetime.now(UTC)
 
     new_user = User()
     new_user.public_id = str(uuid.uuid4())
     new_user.username = local_username
-    new_user.email = None
+    new_user.email = contact_email
     new_user.first_name = first_name or None
     new_user.last_name = last_name or None
     new_user.job_title = job_title

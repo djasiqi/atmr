@@ -1372,7 +1372,7 @@
   .formFooter {
     padding: 10px 14px;
   }
-  .footerSummary {
+  .footerLeft {
     gap: 6px;
   }
   .footerSummaryText {
@@ -1699,7 +1699,7 @@
   display: flex !important;
   flex-direction: row !important;
   flex-wrap: nowrap !important;
-  align-items: center !important;
+  align-items: flex-end !important;
   gap: 10px !important;
   width: 100% !important;
 }
@@ -1757,7 +1757,7 @@
 .missionSegment {
   display: inline-flex;
   gap: 0;
-  height: 30px;
+  height: 35px;
   border: 1.5px solid var(--border);
   border-radius: var(--radius-pill);
   overflow: hidden;
@@ -1766,7 +1766,7 @@
 }
 
 .missionBtn {
-  height: 30px;
+  height: 100%;
   padding: 0 16px;
   border: none;
   background: transparent;
@@ -1948,7 +1948,7 @@ select.inputFull {
 .routeBlock {
   display: grid;
   grid-template-columns: 16px 1fr auto;
-  grid-template-rows: auto auto auto auto;
+  grid-auto-rows: auto;
   column-gap: 10px;
   row-gap: 4px;
   align-items: center;
@@ -2074,6 +2074,134 @@ select.inputFull {
 .swapBtn:hover { border-color: var(--brand); background: var(--brand-light); color: var(--brand); transform: rotate(180deg); }
 .swapBtn:focus-visible { outline: none; border-color: var(--brand); box-shadow: var(--brand-ring); }
 
+/* ── Ajout de destinations (sans changement de mode) ── */
+/* Bouton « + Ajouter une destination » sous le bloc itinéraire */
+.addStepBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px 6px 4px;
+  border: none;
+  background: none;
+  color: var(--brand);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  transition: background var(--transition);
+}
+
+.addStepBtn:hover { background: var(--brand-light); }
+.addStepBtn:focus-visible { outline: none; box-shadow: var(--brand-ring); }
+
+/* ── Destinations supplémentaires : lignes intégrées au bloc itinéraire ── */
+/* Pas de "mode" : ce sont juste des lignes comme la Destination. */
+.routeStepRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.routeStepRow > div,
+.routeStepRow > input {
+  flex: 1;
+  min-width: 0;
+}
+
+.routeStepDragging { opacity: 0.45; }
+.routeStepDropTarget > div,
+.routeStepDropTarget > input {
+  box-shadow: 0 0 0 2px var(--brand);
+  border-radius: var(--radius-md);
+}
+
+.routeStepHandle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  flex-shrink: 0;
+  color: var(--text-muted);
+  cursor: grab;
+  touch-action: none;
+}
+
+/* Gouttières vides pour aligner les lignes sans poignée / sans action */
+.routeStepHandleSpacer { width: 18px; flex-shrink: 0; }
+.routeStepRemoveSpacer { width: 28px; flex-shrink: 0; }
+
+.routeStepHandle:hover { color: var(--brand); }
+.routeStepHandle:active { cursor: grabbing; }
+
+.routeStepRemove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: var(--input-h);
+  flex-shrink: 0;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  transition: all var(--transition);
+}
+
+.routeStepRemove:hover { color: var(--danger); background: #FEF2F2; }
+.routeStepRemove:focus-visible { outline: none; color: var(--danger); box-shadow: 0 0 0 3px #FEE2E2; }
+
+/* Actions sous le bloc itinéraire */
+.routeActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+/* Bouton-toggle « ⇄ A/R » (retour à l'institution) */
+.routeReturnBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  height: 32px;
+  padding: 0 14px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+  transition: all var(--transition);
+}
+
+.routeReturnBtn:hover { border-color: var(--border-hover); color: var(--text-primary); }
+.routeReturnBtn:focus-visible { outline: none; border-color: var(--brand); box-shadow: var(--brand-ring); }
+
+.routeReturnBtnActive {
+  border-color: var(--brand);
+  background: var(--brand-light);
+  color: var(--brand);
+}
+
+.journeyAddIcon {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--brand-light);
+  color: var(--brand);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
 /* ── Date/time label row (label left, toggle right) ── */
 .dateTimeLabelRow {
   display: flex;
@@ -2126,22 +2254,27 @@ select.inputFull {
   min-width: 0;
 }
 
-.whenRow > *:first-child {
-  flex: 1.6 1 0;
+.missionDateField {
+  flex: 1 1 auto;
   min-width: 0;
 }
 
-.whenRow > *:nth-child(2) {
-  flex: 1 1 0;
-  min-width: 0;
+.missionDateField input {
+  width: 100% !important;
+  min-width: 0 !important;
+  height: 35px !important;
+  min-height: 35px !important;
 }
 
-.whenRow > *:nth-child(3) {
+.whenRow .tripPills {
+  margin-left: auto;
+  margin-bottom: 0;
   flex: 0 0 auto;
+  align-items: center;
 }
 
 .whenShortcut {
-  height: 30px;
+  height: 35px;
   padding: 0 10px;
   border: 1.5px solid var(--border);
   border-radius: var(--radius-pill);
@@ -2161,6 +2294,86 @@ select.inputFull {
 
 .whenShortcut:hover { border-color: var(--brand); background: var(--brand-light); color: var(--brand); transform: translateY(-1px); }
 .whenShortcut:active { transform: translateY(0); }
+
+/* ── Heure par étape (RouteStepTimeField) ── */
+.routeStepRow > .routeStepTimeBlock,
+.routeStepTimeBlock {
+  flex: 0 0 64px !important;
+  width: 64px;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.routeStepTimeRow {
+  display: flex;
+  align-items: center;
+}
+
+.routeStepTimeRow > div:first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.routeStepTimeRow input {
+  min-width: 0 !important;
+  padding: 0 20px 0 10px !important;
+  font-size: 12px !important;
+  text-align: center;
+  height: 35px !important;
+  min-height: 35px !important;
+  border-radius: var(--radius-pill) !important;
+}
+
+.routeStepTimeRow button {
+  right: 2px !important;
+}
+
+.routeStepTimeRow button svg {
+  width: 12px;
+  height: 12px;
+}
+
+.routeStepTimeConfirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.routeStepTimeConfirm input {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--brand);
+}
+
+.routeStepTimeHint {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.routeStepTimeError {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.68rem;
+  color: var(--danger, #e53935);
+}
+
+.scheduleCoherenceWarning {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: #FEF3C7;
+  color: #92400E;
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
 
 .roundTripToggle {
   display: inline-flex;
@@ -2376,15 +2589,6 @@ details[open] > .detailsSummary::before {
   }
 }
 
-.footerSummary {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 12px;
-  color: var(--text-muted);
-  min-height: 20px;
-}
-
 .footerSummaryText {
   flex: 1;
   min-width: 0;
@@ -2422,7 +2626,12 @@ details[open] > .detailsSummary::before {
 
 .footerLeft {
   display: flex;
-  flex-shrink: 0;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--text-muted);
 }
 
 .footerRight {
@@ -2430,7 +2639,7 @@ details[open] > .detailsSummary::before {
   gap: 10px 12px;
   align-items: center;
   min-width: 0;
-  flex: 1;
+  flex: 0 0 auto;
   justify-content: flex-end;
   flex-wrap: wrap;
 }
@@ -2447,6 +2656,48 @@ details[open] > .detailsSummary::before {
 }
 
 .sendToggle input { width: 15px; height: 15px; accent-color: var(--brand); }
+
+.externalFieldsWrap {
+  margin: 12px 0 0;
+}
+
+/* Sélecteur de mode d'exécution (dans le footer) */
+.executionModeOptions {
+  display: inline-flex;
+  gap: 3px;
+  padding: 3px;
+  border-radius: 8px;
+  background: var(--bg-muted);
+}
+
+.executionModeOption {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  color: var(--text-muted);
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition);
+}
+
+.executionModeOption input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.executionModeOption:has(input:checked) {
+  background: var(--bg-surface);
+  color: var(--brand);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
 
 .formBtns {
   display: flex;
@@ -2552,7 +2803,7 @@ details[open] > .detailsSummary::before {
   /* Footer compact */
   .formFooter { padding: 10px 14px !important; }
   .footerBody { flex-direction: column !important; align-items: stretch !important; gap: 8px !important; }
-  .footerLeft { display: none; }
+  .footerLeft { order: 2; }
   .footerRight {
     width: 100% !important;
     flex-direction: column !important;
@@ -2563,9 +2814,10 @@ details[open] > .detailsSummary::before {
     justify-content: center;
     font-size: 0.78rem;
   }
+  .executionModeOptions { width: 100%; }
+  .executionModeOption { flex: 1; }
   .btnPrimary { width: 100%; }
-  .footerSummary { display: none; }
-  .footerSummaryText { white-space: normal; }
+  .footerSummaryText, .footerBadges { display: none; }
 
   /* Recap modal */
   .recapModal {

@@ -21,7 +21,7 @@ import {
   formatMissionScheduleTimeLabel,
   resolveMissionUiStatus,
 } from "../../dashboard/companyDashboardMissionUi";
-import { isPickupSentinel } from "../../utils/pickupSentinel";
+import { isPickupSentinel, isTimeUndefined } from "../../utils/pickupSentinel";
 import { resolveGoogleMapsNativeApiKey } from "../../../../config/googleMapsKeys";
 
 import { fleetGlassPanel } from "./fleetMapUiTokens";
@@ -874,7 +874,7 @@ function CompactUpcomingMissionsPeek({
         const driverName = formatPeekTableDriverLabel(
           mission.driver_name?.trim() || mission.partner_company_name?.trim() || "Non assigné"
         );
-        const scheduleUndefined = isPickupSentinel(mission.scheduled_at);
+        const scheduleUndefined = isTimeUndefined(mission);
         const plannedDeparture = formatMissionScheduleTimeLabel(mission.scheduled_at);
         return (
           <Pressable
@@ -1045,7 +1045,7 @@ function CompactDriverSheet({
 
   const subtitle = mission
     ? [
-        inProgress ? "Client à bord" : null,
+        inProgress ? "Passager à bord" : null,
         enrichment.etaLabel,
         enrichment.distanceLabel ? `→ ${enrichment.distanceLabel}` : null,
       ]
@@ -1294,7 +1294,7 @@ function FullDriverSheet({
 
             <AppText variant="caption" style={s.clientLine}>
 
-              Client à bord · {mission.client_name}
+              Passager à bord · {mission.client_name}
 
             </AppText>
 
@@ -1607,6 +1607,20 @@ const s = StyleSheet.create({
     fontSize: FONT_SIZE.px10,
     fontWeight: "700",
     lineHeight: 12,
+    maxWidth: 72,
+    textAlign: "right",
+  },
+  peekTravelStack: {
+    alignItems: "flex-end",
+    justifyContent: "center",
+    gap: 1,
+    maxWidth: 78,
+  },
+  peekDistanceCompact: {
+    color: FLEET_MAP_COLORS.textMuted,
+    fontSize: FONT_SIZE.px9,
+    fontWeight: "600",
+    lineHeight: 11,
     maxWidth: 72,
     textAlign: "right",
   },

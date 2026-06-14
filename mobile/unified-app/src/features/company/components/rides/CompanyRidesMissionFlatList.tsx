@@ -9,7 +9,7 @@ import {
 } from "../EnterpriseActionChip";
 import { E } from "../../theme/enterpriseOpsTheme";
 import { isDispatchCompleted, isDispatchCancelled } from "../../utils/companyDispatchStatus";
-import { isPickupSentinel } from "../../utils/pickupSentinel";
+import { isTimeUndefined } from "../../utils/pickupSentinel";
 import type { CompanyDispatchMission } from "../../api/contracts";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -100,7 +100,7 @@ const CompanyRidesMissionRow = memo(function CompanyRidesMissionRow({
   const thisBusy = missionActionPendingId === mission.mission_id;
   const completed = isDispatchCompleted(mission);
   const cancelled = isDispatchCancelled(mission);
-  const showUrgent = isPickupSentinel(mission.scheduled_at);
+  const showUrgent = isTimeUndefined(mission);
   const unassigned = mission.driver_id == null;
 
   const timeSentinelAction =

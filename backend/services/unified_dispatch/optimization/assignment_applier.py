@@ -200,6 +200,71 @@ def increment_db_conflict_counter() -> None:
     DBConflictCounter.get_instance().increment()
 
 
+def _driver_display_name(driver: Any) -> str | None:
+    """Construit un nom lisible chauffeur depuis l'utilisateur lié."""
+    user = getattr(driver, "user", None)
+    if user is None:
+        return None
+    fn = (getattr(user, "first_name", None) or "").strip()
+    ln = (getattr(user, "last_name", None) or "").strip()
+    return f"{fn} {ln}".strip() or getattr(user, "username", None)
+
+
+def _record_driver_assigned_timeline(
+    *,
+    applied_pairs: List[Tuple[int, int]],
+    booking_map: Dict[int, "Booking"],
+    driver_map: Dict[int, "Driver"],
+    company_id: int,
+) -> None:
+    """Historise driver_assigned pour les bookings liés à une TransportRequest."""
+    if not applied_pairs:
+        return
+    try:
+        from models import TransportRequest
+        from services.institutions.transport_timeline_service import (
+            TimelineActor,
+            record_event,
+        )
+
+        booking_ids = [b_id for b_id, _ in applied_pairs]
+        requests = TransportRequest.query.filter(
+            TransportRequest.booking_id.in_(booking_ids)
+        ).all()
+        request_by_booking = {r.booking_id: r for r in requests}
+
+        for b_id, d_id in applied_pairs:
+            transport_req = request_by_booking.get(b_id)
+            if transport_req is None:
+                continue
+            driver = driver_map.get(d_id)
+            company = getattr(driver, "company", None) if driver else None
+            record_event(
+                "driver_assigned",
+                institution_id=transport_req.institution_id,
+                transport_request_id=transport_req.id,
+                booking_id=b_id,
+                actor=TimelineActor(
+                    actor_type="company",
+                    company_id=company_id,
+                    driver_id=d_id,
+                ),
+                payload={
+                    "driver_id": d_id,
+                    "driver_name": _driver_display_name(driver) if driver else None,
+                    "company_id": company_id,
+                    "company_name": getattr(company, "name", None)
+                    if company
+                    else None,
+                },
+                correlation_id=f"driver_assigned:{b_id}:{d_id}",
+            )
+    except Exception as timeline_err:
+        logger.warning(
+            "[Apply] Timeline driver_assigned recording failed: %s", timeline_err
+        )
+
+
 def apply_assignments(
     company_id: int,
     assignments: List[_Assignment],
@@ -866,6 +931,13 @@ def _apply_assignments_inner(
     try:
         if updates:
             db.session.bulk_update_mappings(cast("Any", Booking), updates)
+            # Timeline transport: driver_assigned (courses institution uniquement)
+            _record_driver_assigned_timeline(
+                applied_pairs=applied_pairs,
+                booking_map=booking_map,
+                driver_map=driver_map,
+                company_id=company_id,
+            )
 
         # Upsert côté Assignment (y compris ETA si fournies)
         if desired_assignments:

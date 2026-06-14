@@ -9,6 +9,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import CompanyHeader from '../../../components/layout/Header/CompanyHeader';
 import CompanySidebar from '../../../components/layout/Sidebar/CompanySidebar/CompanySidebar';
 import useCompanySocket from '../../../hooks/useCompanySocket';
@@ -33,6 +34,7 @@ import {
   fetchDispatchStatus,
   updateReservation,
   fetchDispatchDelays,
+  fetchCompanyReservationById,
 } from '../../../services/companyService';
 import { lirieKeys } from '../../../queryKeys/lirie';
 import { normalizeDispatchDelayMapKey } from '../../../utils/dispatchDelayMapKey';
@@ -82,7 +84,19 @@ const makeToday = () => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 };
 
+const bookingDateFromReservation = (reservation) => {
+  const raw = reservation?.scheduled_time || reservation?.scheduled_date || reservation?.date;
+  if (!raw) return null;
+  const dt = new Date(raw);
+  if (Number.isNaN(dt.getTime())) {
+    return typeof raw === 'string' && raw.length >= 10 ? raw.slice(0, 10) : null;
+  }
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`;
+};
+
 const UnifiedDispatchRefactored = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
   // Récupérer les données de l'entreprise et les chauffeurs
   const { company, driver: driversList } = useCompanyData();
 
@@ -364,13 +378,16 @@ const UnifiedDispatchRefactored = () => {
     if (!scheduleModalReservation) return;
 
     const reservationId = scheduleModalReservation?.id ?? scheduleModalReservation;
+    // data string ⇒ simple définition d'heure (aller / leg multi-étapes) ;
+    // data.return_time / data.urgent ⇒ planification de retour.
+    const isGenericSchedule = typeof data === 'string';
     try {
       let payload = {};
       if (data?.urgent) {
         payload = { urgent: true, minutes_offset: data.minutes_offset ?? 15 };
         await triggerReturnBooking(reservationId, payload);
-      } else if (typeof data === 'string') {
-        // Format "YYYY-MM-DD HH:mm" pour scheduleReservation
+      } else if (isGenericSchedule) {
+        // Format "YYYY-MM-DDTHH:mm" pour scheduleReservation
         await scheduleReservation(reservationId, data);
       } else if (data?.return_time) {
         payload = { return_time: data.return_time };
@@ -379,7 +396,7 @@ const UnifiedDispatchRefactored = () => {
 
       setScheduleModalReservation(null);
       loadDispatches();
-      showSuccess('Heure de retour planifiée avec succès');
+      showSuccess(isGenericSchedule ? 'Heure planifiée avec succès' : 'Heure de retour planifiée avec succès');
     } catch (err) {
       console.error('Erreur lors de la planification:', err);
       setScheduleModalReservation(null);
@@ -1142,6 +1159,55 @@ const UnifiedDispatchRefactored = () => {
 
   const dispatchListLoading = dispatchModeLoading || dispatchesLoading;
 
+  // Ouvrir le panneau latéral depuis ?booking= (ex. clic notification cloche)
+  useEffect(() => {
+    const bookingIdParam = searchParams.get('booking');
+    if (!bookingIdParam || dispatchListLoading) return undefined;
+
+    const bookingId = Number(bookingIdParam);
+    if (!bookingId) return undefined;
+
+    const findInList = (list) => (list || []).find(
+      (r) => Number(r.id ?? r.booking_id) === bookingId,
+    );
+
+    const found = findInList(dispatches);
+    if (found) {
+      setSelectedDispatch(found);
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('booking');
+        return next;
+      }, { replace: true });
+      return undefined;
+    }
+
+    let cancelled = false;
+    const fetchAndOpen = async () => {
+      try {
+        const match = await fetchCompanyReservationById(bookingId);
+        if (cancelled || !match) return;
+        const bookingDay = bookingDateFromReservation(match);
+        if (bookingDay && bookingDay !== date) {
+          setDate(bookingDay);
+        }
+        setSelectedDispatch(match);
+      } catch (err) {
+        console.error('[UnifiedDispatch] Auto-open booking error:', err);
+      } finally {
+        if (!cancelled) {
+          setSearchParams((prev) => {
+            const next = new URLSearchParams(prev);
+            next.delete('booking');
+            return next;
+          }, { replace: true });
+        }
+      }
+    };
+    void fetchAndOpen();
+    return () => { cancelled = true; };
+  }, [searchParams, dispatches, dispatchListLoading, date, setSearchParams]);
+
   // Rendu du panneau selon le mode
   const renderModePanel = () => {
     if (dispatchMode == null || dispatchModeLoading) {
@@ -1317,7 +1383,8 @@ const UnifiedDispatchRefactored = () => {
                   payload.scheduled_time = `${payload.scheduled_date}T${payload.scheduled_time}:00`;
                   delete payload.scheduled_date;
                 } else if (payload.scheduled_date && !payload.scheduled_time) {
-                  payload.scheduled_time = `${payload.scheduled_date}T00:00:00`;
+                  payload.scheduled_time = null;
+                  payload.time_confirmed = false;
                   delete payload.scheduled_date;
                 } else {
                   delete payload.scheduled_date;

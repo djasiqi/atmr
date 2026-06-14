@@ -8,6 +8,7 @@ aux transporteurs. Une fois acceptée, la demande est convertie en Booking.
 from __future__ import annotations
 
 import uuid
+from datetime import date
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
@@ -15,6 +16,7 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     Column,
+    Date,
     DateTime,
     ForeignKey,
     Index,
@@ -33,6 +35,7 @@ from ext import db
 from .base import _iso
 from .enums import (
     BillingIntent,
+    CarrierSource,
     LocationType,
     MissionType,
     RequestStatus,
@@ -48,6 +51,18 @@ if TYPE_CHECKING:
 def _status_value(raw: Any) -> str:
     """Extrait la valeur string d'un statut (enum ou str)."""
     return raw.value if hasattr(raw, "value") else str(raw)
+
+
+def _pending_change_request_view(booking: Any) -> dict[str, Any] | None:
+    """Vue de la demande de validation transporteur active (PR2), si présente."""
+    try:
+        from services.institutions.booking_change_service import (
+            get_pending_change_request_view,
+        )
+
+        return get_pending_change_request_view(booking)
+    except Exception:
+        return None
 
 
 def _compute_overall_status(outbound: str, return_: str) -> str:
@@ -94,6 +109,16 @@ class TransportRequest(db.Model):
             "ix_transport_requests_institution_status",
             "institution_id",
             "status",
+        ),
+        Index(
+            "ix_transport_requests_carrier_source",
+            "institution_id",
+            "carrier_source",
+        ),
+        Index(
+            "ix_transport_requests_mission_date",
+            "institution_id",
+            "mission_date",
         ),
         Index(
             "ix_transport_requests_scheduled",
@@ -151,7 +176,15 @@ class TransportRequest(db.Model):
     delivery_description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Horaire
-    scheduled_time = Column(DateTime(timezone=True), nullable=False)
+    mission_date: Mapped[date] = mapped_column(Date, nullable=False)
+    scheduled_time = Column(DateTime(timezone=True), nullable=True)
+    pickup_time_confirmed: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+        comment="Heure de départ confirmée (scheduled_time = départ uniquement)",
+    )
     scheduled_time_type: Mapped[str] = mapped_column(
         String(20),
         nullable=False,
@@ -193,6 +226,20 @@ class TransportRequest(db.Model):
         Boolean, nullable=False, default=False, server_default="false"
     )
     return_time = Column(DateTime(timezone=True), nullable=True)
+    return_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    return_time_confirmed: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+    )
+    multi_stop: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    return_to_institution: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    route_group_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
 
     # Mobilité (JSONB pour flexibilité)
     # Format: {"wheelchair": bool, "stretcher": bool, "needs_assistance": bool, "oxygen": bool, ...}
@@ -220,11 +267,41 @@ class TransportRequest(db.Model):
 
     # Statut
     status: Mapped[str] = mapped_column(
-        String(20),
+        String(32),
         nullable=False,
         default=RequestStatus.DRAFT.value,
         server_default=RequestStatus.DRAFT.value,
     )
+
+    # Mode d'exécution (LIRIE vs transporteur externe)
+    carrier_source: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default=CarrierSource.LIRIE.value,
+        server_default=CarrierSource.LIRIE.value,
+    )
+
+    # Snapshot transporteur externe (historique figé, jamais remplacé par une FK)
+    external_carrier_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    external_carrier_phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    external_carrier_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    external_carrier_reference: Mapped[str | None] = mapped_column(
+        String(100), nullable=True
+    )
+    external_carrier_reason: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    assigned_externally_at = Column(DateTime(timezone=True), nullable=True)
+    externalized_by_user_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("user.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    executed_externally_at = Column(DateTime(timezone=True), nullable=True)
+    executed_externally_by_user_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("user.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    external_execution_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Timestamps
     created_at = Column(
@@ -268,10 +345,24 @@ class TransportRequest(db.Model):
         "User",
         foreign_keys=[created_by_user_id],
     )
+    externalized_by: Mapped[User | None] = relationship(
+        "User",
+        foreign_keys=[externalized_by_user_id],
+    )
+    executed_externally_by: Mapped[User | None] = relationship(
+        "User",
+        foreign_keys=[executed_externally_by_user_id],
+    )
     booking = relationship(
         "Booking",
         foreign_keys=[booking_id],
         backref="source_request",
+    )
+    legs = relationship(
+        "TransportRequestLeg",
+        back_populates="transport_request",
+        cascade="all, delete-orphan",
+        order_by="TransportRequestLeg.sequence_index",
     )
 
     @override
@@ -298,6 +389,15 @@ class TransportRequest(db.Model):
             raise ValueError(f"mission_type must be one of: {', '.join(valid_types)}")
         return value
 
+    @validates("pickup_time_confirmed")
+    def validate_pickup_time_confirmed(self, _key: str, value: bool) -> bool:
+        """time_confirmed départ implique scheduled_time renseigné."""
+        if value and self.scheduled_time is None:
+            raise ValueError(
+                "pickup_time_confirmed=true requiert scheduled_time (départ)."
+            )
+        return value
+
     @validates("scheduled_time_type")
     def validate_scheduled_time_type(self, _key: str, value: str) -> str:
         """Valide le type d'horaire."""
@@ -316,6 +416,14 @@ class TransportRequest(db.Model):
             raise ValueError(
                 f"billing_intent must be one of: {', '.join(valid_intents)}"
             )
+        return value
+
+    @validates("carrier_source")
+    def validate_carrier_source(self, _key: str, value: str) -> str:
+        """Valide le mode d'exécution."""
+        valid_sources = CarrierSource.choices()
+        if value not in valid_sources:
+            raise ValueError(f"carrier_source must be one of: {', '.join(valid_sources)}")
         return value
 
     @validates("status")
@@ -340,8 +448,10 @@ class TransportRequest(db.Model):
         """Retourne les informations de mobilité avec valeurs par défaut."""
         defaults: dict[str, Any] = {
             "wheelchair": False,
+            "vehicle_wheelchair": False,
             "stretcher": False,
             "needs_assistance": False,
+            "assistance_type": "",
             "oxygen": False,
             "walking": True,
         }
@@ -353,9 +463,28 @@ class TransportRequest(db.Model):
         """Retourne les informations de contact sur site."""
         return self.contact_on_site
 
+    def _canonical_display_payload(self) -> dict[str, Any]:
+        """Blocs TransportRequestDisplayModel v1 (additifs au serialize legacy).
+
+        La clé ``legs`` du modèle d'affichage est retirée ici : ``serialize``
+        expose déjà ``legs`` (avec ``pickup_location`` / ``dropoff_location``),
+        consommé par le portail institution. Le contrat d'affichage reste
+        accessible via ``build_transport_request_display_blocks`` directement.
+        """
+        from services.institutions.transport_request_display import (
+            build_transport_request_display_blocks,
+        )
+
+        blocks = build_transport_request_display_blocks(self)
+        blocks.pop("legs", None)
+        return blocks
+
     @property
     def serialize(self) -> dict[str, Any]:
         """Sérialise la demande pour l'API."""
+        from services.institutions.mission_schedule import get_effective_dispatch_time
+
+        next_confirmed = get_effective_dispatch_time(self)
         return {
             "id": self.id,
             "public_id": self.public_id,
@@ -365,7 +494,12 @@ class TransportRequest(db.Model):
             "patient": self.patient.serialize if self.patient else None,
             "mission_type": self.mission_type,
             "delivery_description": self.delivery_description,
+            "mission_date": (
+                self.mission_date.isoformat() if self.mission_date is not None else None
+            ),
             "scheduled_time": _iso(self.scheduled_time),
+            "pickup_time_confirmed": bool(self.pickup_time_confirmed),
+            "next_confirmed_time": _iso(next_confirmed),
             "scheduled_time_type": self.scheduled_time_type,
             "pickup_location": self.pickup_location,
             "pickup_lat": float(self.pickup_lat) if self.pickup_lat else None,
@@ -383,6 +517,14 @@ class TransportRequest(db.Model):
             "dropoff_entry_point": self.dropoff_entry_point,
             "is_round_trip": self.is_round_trip,
             "return_time": _iso(self.return_time),
+            "return_date": (
+                self.return_date.isoformat() if self.return_date is not None else None
+            ),
+            "return_time_confirmed": bool(self.return_time_confirmed),
+            "multi_stop": self.multi_stop,
+            "return_to_institution": self.return_to_institution,
+            "route_group_id": self.route_group_id,
+            "legs": [leg.serialize() for leg in (self.legs or [])],
             "mobility": self.get_mobility(),
             "floor_elevator_info": self.floor_elevator_info,
             "contact_on_site": self.contact_on_site,
@@ -390,6 +532,10 @@ class TransportRequest(db.Model):
             "billing_intent": self.billing_intent,
             "billing_details": self.billing_details,
             "status": self.status,
+            "status_label": RequestStatus.display_label(self.status),
+            "carrier_source": self.carrier_source,
+            "carrier_source_label": CarrierSource.display_label(self.carrier_source),
+            "external_carrier": self._serialize_external_carrier(),
             "is_editable": self.is_editable,
             "is_cancellable": self.is_cancellable,
             "created_at": _iso(self.created_at),
@@ -402,6 +548,7 @@ class TransportRequest(db.Model):
             "booking_id": self.booking_id,
             "accepted_by_company": self._serialize_accepted_company(),
             "booking_summary": self._serialize_booking_summary(),
+            **self._canonical_display_payload(),
         }
 
     def to_dict(self) -> dict[str, Any]:
@@ -418,8 +565,40 @@ class TransportRequest(db.Model):
         name = f"{first} {last}".strip()
         return name or getattr(creator, "username", None) or None
 
+    def _serialize_external_carrier(self) -> dict[str, Any] | None:
+        """Sérialise le bloc transporteur externe (snapshot)."""
+        if self.carrier_source != CarrierSource.EXTERNAL.value:
+            return None
+        externalized_by = getattr(self, "externalized_by", None)
+        executed_by = getattr(self, "executed_externally_by", None)
+        return {
+            "name": self.external_carrier_name,
+            "phone": self.external_carrier_phone,
+            "email": self.external_carrier_email,
+            "reference": self.external_carrier_reference,
+            "reason": self.external_carrier_reason,
+            "assigned_at": _iso(self.assigned_externally_at),
+            "externalized_by_user_id": self.externalized_by_user_id,
+            "externalized_by_name": self._format_user_name(externalized_by),
+            "executed_at": _iso(self.executed_externally_at),
+            "executed_by_user_id": self.executed_externally_by_user_id,
+            "executed_by_name": self._format_user_name(executed_by),
+            "execution_notes": self.external_execution_notes,
+        }
+
+    @staticmethod
+    def _format_user_name(user: Any) -> str | None:
+        if not user:
+            return None
+        first = getattr(user, "first_name", "") or ""
+        last = getattr(user, "last_name", "") or ""
+        name = f"{first} {last}".strip()
+        return name or getattr(user, "username", None) or None
+
     def _serialize_accepted_company(self) -> dict[str, Any] | None:
         """Sérialise les infos de l'entreprise qui a accepté la demande."""
+        if self.carrier_source == CarrierSource.EXTERNAL.value:
+            return None
         company = getattr(self, "accepted_by_company", None)
         if not company:
             return None
@@ -440,6 +619,13 @@ class TransportRequest(db.Model):
             return None
 
         summary = self._build_single_booking_summary(booking)
+
+        # Historique opérationnel consolidé et partagé du transport (legs
+        # multi-étapes + retours), identique à la vue entreprise.
+        try:
+            summary["route_journey"] = booking._get_route_journey()
+        except Exception:
+            summary["route_journey"] = None
 
         # A/R : agréger le retour via la relationship return_trip
         if self.is_round_trip and getattr(booking, "return_trip", None):
@@ -531,6 +717,8 @@ class TransportRequest(db.Model):
             "is_cancellation_billable": getattr(
                 booking, "is_cancellation_billable", None
             ),
+            # ✅ PR2: demande de validation transporteur en attente (révalidation)
+            "pending_change_request": _pending_change_request_view(booking),
         }
 
     @classmethod

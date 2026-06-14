@@ -8,7 +8,7 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   FaUser, FaPhone, FaMapMarkerAlt, FaHome,
   FaTruck, FaShieldAlt, FaGavel, FaStickyNote, FaEdit, FaLock,
-  FaEye, FaEyeSlash, FaEnvelope, FaCheck, FaTimes,
+  FaEye, FaEyeSlash, FaEnvelope, FaCheck, FaTimes, FaFilePdf,
 } from 'react-icons/fa';
 import { FiChevronDown } from 'react-icons/fi';
 import { HiOutlineX } from 'react-icons/hi';
@@ -23,8 +23,10 @@ import {
   usePatientSuggestions,
   useConfirmPatientSuggestion,
   useRejectPatientSuggestion,
+  usePatientTransportHistory,
 } from '../../../hooks/useInstitutionData';
-import { canManageRequests, canViewAdminData, canEditPatientBillingData } from '../../../utils/institutionPermissions';
+import { canManageRequests, canViewAdminData, canEditPatientBillingData, canExportTransports } from '../../../utils/institutionPermissions';
+import { exportPatientTransportsPdf } from '../../../services/institutionService';
 import AddressAutocomplete from '../../../components/common/AddressAutocomplete';
 import InlineDatePicker from '../../../components/ui/InlineDatePicker';
 import s from './PatientDetailPanel.module.css';
@@ -575,10 +577,27 @@ const PatientDetailPanel = ({ patient, onClose }) => {
   const canSeeAdmin = canViewAdminData(institutionRole);
   const canEdit = canManage || canBillingEdit;                // peut afficher le bouton éditer
   const identityEditable = canManage;                         // seuls admin/requester modifient nom/genre/dob
+  const canExport = canExportTransports(institutionRole);     // admin + billing + reception
 
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState(() => buildFormData(patient));
   const [avsRevealed, setAvsRevealed] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const { data: transportHistory, isLoading: transportHistoryLoading } =
+    usePatientTransportHistory(patient?.id, Boolean(patient?.id) && !editing);
+
+  const handleExportPdf = useCallback(async () => {
+    if (!patient?.id) return;
+    setExporting(true);
+    try {
+      await exportPatientTransportsPdf(patient.id);
+      toast.success('Export PDF généré');
+    } catch (err) {
+      toast.error(err?.message || "Erreur lors de l'export");
+    } finally {
+      setExporting(false);
+    }
+  }, [patient?.id]);
 
   // Reset uniquement quand on change de patient (ID différent), pas sur chaque re-render
   const patientId = patient?.id;
@@ -689,6 +708,86 @@ const PatientDetailPanel = ({ patient, onClose }) => {
 
       {/* ── Body ── */}
       <div className={s.panelBody}>
+
+        {/* ▸ Barre d'export transports */}
+        {!editing && canExport && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 8,
+              padding: '8px 10px',
+              marginBottom: 10,
+              background: '#f8fafc',
+              border: '1px solid #e2e8f0',
+              borderRadius: 8,
+            }}
+          >
+            <span style={{ fontSize: 12, color: '#475569' }}>
+              Historique des transports
+            </span>
+            <button
+              type="button"
+              onClick={handleExportPdf}
+              disabled={exporting}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '6px 12px',
+                borderRadius: 6,
+                border: 'none',
+                background: exporting ? '#94a3b8' : '#0A88EF',
+                color: '#fff',
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: exporting ? 'default' : 'pointer',
+              }}
+            >
+              <FaFilePdf size={11} /> {exporting ? 'Export...' : 'Exporter PDF'}
+            </button>
+          </div>
+        )}
+
+        {!editing && canExport && (transportHistory?.events?.length > 0 || transportHistoryLoading) && (
+          <div className={s.section} style={{ marginBottom: 10 }}>
+            <div className={s.sectionHeader}>
+              <FaTruck className={s.sectionIcon} />
+              <span>Événements récents</span>
+            </div>
+            <div className={s.sectionBody}>
+              {transportHistoryLoading && (
+                <p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>Chargement…</p>
+              )}
+              {(transportHistory?.events || []).slice(0, 8).map((ev) => (
+                <div
+                  key={ev.id}
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    gap: 8,
+                    fontSize: 12,
+                    padding: '4px 0',
+                    borderBottom: '1px solid #f1f5f9',
+                  }}
+                >
+                  <span>{ev.label || ev.event_type}</span>
+                  <span style={{ color: '#64748b', whiteSpace: 'nowrap' }}>
+                    {ev.created_at
+                      ? new Date(ev.created_at).toLocaleString('fr-CH', {
+                          day: '2-digit',
+                          month: '2-digit',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })
+                      : ''}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* ▸ Coordonnées */}
         <div className={s.section}>

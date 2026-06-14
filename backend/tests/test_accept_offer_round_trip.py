@@ -9,7 +9,7 @@ TransportRequest pour retour).
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -115,6 +115,8 @@ class _TransportRequest:
     billing_details: dict[str, Any] | None = None
     is_round_trip: bool = False
     return_time: datetime | None = None
+    return_date: date | None = None
+    return_time_confirmed: bool = False
     scheduled_time: datetime = field(
         default_factory=lambda: datetime.now(UTC) + timedelta(hours=2)
     )
@@ -130,9 +132,9 @@ class _TransportRequest:
 
 
 class TestTransportRequestSchemaRoundTrip:
-    """Validation schema : A/R sans return_time doit être refusé."""
+    """Validation schema : A/R avec return_date ou return_time."""
 
-    def test_schema_rejects_round_trip_without_return_time(self):
+    def test_schema_rejects_round_trip_without_return_plan(self):
         schema = TransportRequestCreateSchema()
         data = {
             "external_reference": "REF-001",
@@ -140,13 +142,27 @@ class TestTransportRequestSchemaRoundTrip:
             "pickup_location": "A",
             "dropoff_location": "B",
             "is_round_trip": True,
-            # return_time absent
         }
         from marshmallow import ValidationError
 
         with pytest.raises(ValidationError) as exc_info:
             schema.load(data)
-        assert "return_time" in str(exc_info.value)
+        assert "return_date" in str(exc_info.value) or "return_time" in str(exc_info.value)
+
+    def test_schema_accepts_round_trip_with_return_date_only(self):
+        schema = TransportRequestCreateSchema()
+        data = {
+            "external_reference": "REF-001B",
+            "scheduled_time": "2026-03-01T10:00:00+01:00",
+            "pickup_location": "A",
+            "dropoff_location": "B",
+            "is_round_trip": True,
+            "return_date": "2026-03-01",
+        }
+        result = schema.load(data)
+        assert result["is_round_trip"] is True
+        assert result["return_date"] == "2026-03-01"
+        assert result.get("return_time") is None
 
     def test_schema_accepts_round_trip_with_return_time(self):
         schema = TransportRequestCreateSchema()
@@ -452,14 +468,18 @@ class TestAcceptOfferRoundTrip:
         assert outbound.billed_to_company_id is None
 
     @patch("application.institutions.accept_offer.db")
-    def test_round_trip_sentinel_midnight_time_not_confirmed(self, mock_db: MagicMock):
-        """00:00 = retour à définir → time_confirmed=False, exclu du dispatch."""
+    def test_round_trip_return_date_only_null_time_not_confirmed(self, mock_db: MagicMock):
+        """return_date seul → scheduled_time=null, time_confirmed=false."""
         uc = self._make_uc()
         uc._get_or_create_institution_client = MagicMock(return_value=_Client())  # type: ignore[assignment]
         uc._resolve_billing_party = MagicMock()  # type: ignore[assignment]
 
-        return_dt = datetime(2026, 5, 25, 0, 0, 0)
-        tr = _TransportRequest(is_round_trip=True, return_time=return_dt)
+        tr = _TransportRequest(
+            is_round_trip=True,
+            return_date=date(2026, 5, 25),
+            return_time=None,
+            return_time_confirmed=False,
+        )
 
         _next_id = iter(range(1, 100))
 
@@ -479,6 +499,40 @@ class TestAcceptOfferRoundTrip:
 
         assert return_booking is not None
         assert return_booking.time_confirmed is False
+        assert return_booking.scheduled_time is None
+
+    @patch("application.institutions.accept_offer.db")
+    def test_round_trip_real_midnight_confirmed(self, mock_db: MagicMock):
+        """Minuit réel confirmé → scheduled_time=00:00, time_confirmed=true."""
+        uc = self._make_uc()
+        uc._get_or_create_institution_client = MagicMock(return_value=_Client())  # type: ignore[assignment]
+        uc._resolve_billing_party = MagicMock()  # type: ignore[assignment]
+
+        return_dt = datetime(2026, 5, 25, 0, 0, 0)
+        tr = _TransportRequest(
+            is_round_trip=True,
+            return_time=return_dt,
+            return_time_confirmed=True,
+        )
+
+        _next_id = iter(range(1, 100))
+
+        def _flush_side_effect():
+            for call_args in mock_db.session.add.call_args_list:
+                b = call_args[0][0]
+                if getattr(b, "id", 0) == 0:
+                    b.id = next(_next_id)
+
+        mock_db.session.flush.side_effect = _flush_side_effect
+
+        _outbound, return_booking = uc._create_booking_from_request(
+            transport_request=tr,  # type: ignore[arg-type]
+            company_id=5,
+            user_id=1,
+        )
+
+        assert return_booking is not None
+        assert return_booking.time_confirmed is True
         assert return_booking.scheduled_time.hour == 0
         assert return_booking.scheduled_time.minute == 0
 

@@ -13,6 +13,7 @@ export function useTrackingAttentionState() {
   const [trackingReady, setTrackingReady] = useState(false);
   const [trackingOnboarded, setTrackingOnboarded] = useState<boolean | null>(null);
   const [trackingNeedsAttention, setTrackingNeedsAttentionState] = useState(false);
+  const [panelDismissed, setPanelDismissed] = useState(false);
   const trackingBackgroundEnabled = isFeatureEnabled("tracking_background_enabled");
 
   const refresh = useCallback(async () => {
@@ -49,6 +50,7 @@ export function useTrackingAttentionState() {
 
   const showPedagogicalPanel =
     trackingBackgroundEnabled &&
+    !panelDismissed &&
     ((!trackingOnboarded && !trackingReady) || trackingNeedsAttention);
 
   return {
@@ -58,6 +60,7 @@ export function useTrackingAttentionState() {
     trackingBackgroundEnabled,
     showPedagogicalPanel,
     refreshTrackingAttention: refresh,
+    dismissPedagogicalPanel: () => setPanelDismissed(true),
     onReadinessGateReady: (ready: boolean) => {
       setTrackingReady(ready);
       if (ready) {

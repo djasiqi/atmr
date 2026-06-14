@@ -82,6 +82,22 @@ def _get_booking_with_auth(booking_id: int):  # noqa: RET503
         effective_booking_id = booking.parent_booking_id
         booking = Booking.query.get_or_404(effective_booking_id)
 
+    # Multi-étapes : tous les legs d'un même parcours (route_group_id) partagent
+    # une conversation unique, ancrée sur le leg primaire (séquence la plus basse,
+    # qui porte le lien vers la TransportRequest). Évite N conversations distinctes.
+    if getattr(booking, "route_group_id", None):
+        primary = (
+            Booking.query.filter_by(route_group_id=booking.route_group_id)
+            .order_by(
+                Booking.route_sequence_number.asc(),
+                Booking.id.asc(),
+            )
+            .first()
+        )
+        if primary is not None and primary.id != booking.id:
+            effective_booking_id = primary.id
+            booking = primary
+
     verify_jwt_in_request()
     claims = get_jwt()
 
@@ -233,6 +249,9 @@ class BookingMessageList(Resource):
             return {
                 "messages": [m.serialize for m in messages],
                 "has_more": has_more,
+                # booking_id canonique du fil (peut différer du leg demandé pour
+                # un A/R ou un parcours multi-étapes unifié).
+                "booking_id": booking.id,
             }, 200
 
         except Exception as exc:

@@ -9,7 +9,7 @@ import ConfirmSendModal from './ConfirmSendModal';
 import ChipSelect from '../../../components/ui/ChipSelect';
 import {
   FaTimes, FaEdit, FaPaperPlane,
-  FaTruck, FaRoute, FaFileInvoiceDollar,
+  FaTruck, FaRoute, FaFileInvoiceDollar, FaFilePdf,
   FaHistory, FaWheelchair, FaInfoCircle, FaNotesMedical,
   FaPhoneAlt, FaEnvelope,
 } from 'react-icons/fa';
@@ -19,6 +19,8 @@ import {
   useSendRequest, useCancelRequest,
   useUpdateRequestBilling, useUpdateBookingBilling,
   usePatchInstitutionBooking, useCancelInstitutionBooking,
+  useRequestTimeline, useReleaseBookingForRedispatch,
+  useAssignExternalCarrier, useCompleteExternalMission,
   institutionQueryKeys,
 } from '../../../hooks/useInstitutionData';
 import { useQueryClient } from '@tanstack/react-query';
@@ -27,38 +29,31 @@ import {
   canEditBilling,
   canViewFinancialAmounts,
   canViewBillingSection,
+  canExportTransports,
 } from '../../../utils/institutionPermissions';
 import InstitutionOperationalEdit from './InstitutionOperationalEdit';
-import InstitutionBookingHistory from './InstitutionBookingHistory';
+import { formatLegTime, formatReturnTimeLabel, formatDepartureTime } from '../../../utils/formatLegTime';
 import InstitutionRequestEdit from './InstitutionRequestEdit';
 import { getAuthEnv } from '../../../utils/webAuthSession';
 import { toast } from 'sonner';
 import { getInstitutionSocket } from '../../../services/institutionSocket';
-import { fetchBookingMessages, sendBookingMessage } from '../../../services/institutionService';
+import { fetchBookingMessages, sendBookingMessage, exportRequestMissionPdf } from '../../../services/institutionService';
+import { buildCarrierMailto } from '../../../utils/externalCarrierEmail';
 import BookingChat from '../../company/Reservations/components/BookingChat';
+import ExternalCarrierFields, {
+  EMPTY_EXTERNAL_CARRIER_FORM,
+  validateExternalCarrierForm,
+  buildExternalCarrierPayload,
+} from '../../../components/institution/ExternalCarrierFields';
+import {
+  isExternalRequest,
+  hasBooking,
+  canAssignExternalCarrier,
+  canCompleteExternalMission,
+  EXTERNAL_STATUSES,
+} from '../../../utils/requestStatus';
+import { BOOKING_STATUS_LABELS } from './statusColors';
 import s from './RequestDetailPanel.module.css';
-
-// ─── Status mapping ────────────────────────────────────────
-const BOOKING_STATUS_MAP = {
-  PENDING:          { label: 'En attente',           css: 'statusPending' },
-  ACCEPTED:         { label: 'Accepté',              css: 'statusAccepted' },
-  ASSIGNED:         { label: 'Chauffeur assigné',    css: 'statusAssigned' },
-  EN_ROUTE:         { label: 'En route',             css: 'statusEnRoute' },
-  IN_PROGRESS:      { label: 'En cours',             css: 'statusInProgress' },
-  OUTBOUND_COMPLETED: { label: 'Retour en cours',    css: 'statusInProgress' },
-  COMPLETED:        { label: 'Terminé',              css: 'statusCompleted' },
-  RETURN_COMPLETED: { label: 'Aller-retour terminé', css: 'statusReturnCompleted' },
-  CANCELED:         { label: 'Annulé',               css: 'statusCancelled' },
-};
-
-const REQUEST_STATUS_MAP = {
-  DRAFT:     { label: 'Brouillon', css: 'statusDraft' },
-  SENT:      { label: 'Envoyée',   css: 'statusSent' },
-  ACCEPTED:  { label: 'Acceptée',  css: 'statusAccepted' },
-  CONVERTED: { label: 'Confirmée', css: 'statusConverted' },
-  CANCELLED: { label: 'Annulée',   css: 'statusCancelled' },
-  EXPIRED:   { label: 'Expirée',   css: 'statusExpired' },
-};
 
 const MISSION_LABELS = {
   patient_transport: 'Transport patient',
@@ -83,6 +78,64 @@ const fmtShort = (dateStr) => {
     hour: '2-digit', minute: '2-digit',
     day: '2-digit', month: '2-digit',
   });
+};
+
+const getRoutePoints = (request) => {
+  const legs = Array.isArray(request?.legs)
+    ? [...request.legs].sort((a, b) => (a.sequence_index ?? 0) - (b.sequence_index ?? 0))
+    : [];
+  if (legs.length > 0) {
+    return [
+      { label: 'Départ', address: legs[0].pickup_location, kind: 'start' },
+      ...legs.map((leg, index) => {
+        const isReturn = Boolean(request?.return_to_institution) && index === legs.length - 1;
+        const timeLabel = index === 0
+          ? formatDepartureTime(request)
+          : formatLegTime(leg);
+        return {
+          label: isReturn ? 'Retour' : `Destination ${index + 1}`,
+          address: leg.dropoff_location,
+          kind: isReturn ? 'return' : 'destination',
+          timeLabel,
+          details: {
+            establishment: leg.dropoff_establishment,
+            service: leg.dropoff_service,
+            doctor: leg.dropoff_doctor,
+          },
+        };
+      }),
+    ];
+  }
+  return [
+    { label: 'Départ', address: request?.pickup_location, kind: 'start' },
+    { label: 'Destination 1', address: request?.dropoff_location, kind: 'destination' },
+  ];
+};
+
+const getTripBadge = (request, routePoints) => {
+  if (request?.return_to_institution) {
+    return {
+      className: 'roundTripBadge',
+      label: `A/R institution — ${Math.max(routePoints.length - 1, 1)} trajet(s)`,
+    };
+  }
+  if (request?.multi_stop || routePoints.length > 2) {
+    return {
+      className: 'multiStopBadge',
+      label: `${routePoints.length - 1} destination(s)`,
+    };
+  }
+  if (request?.is_round_trip || request?.round_trip) {
+    const returnHint = formatReturnTimeLabel(request);
+    return {
+      className: 'roundTripBadge',
+      label: `Aller-retour${returnHint ? ` — ${returnHint}` : ''}`,
+    };
+  }
+  return {
+    className: 'oneWayBadge',
+    label: 'Aller simple',
+  };
 };
 
 const resolveBookingStatusKey = (bookingSummary) => {
@@ -131,20 +184,107 @@ const resolveBookingStatusKey = (bookingSummary) => {
   return normalized;
 };
 
-// ─── Status badge ──────────────────────────────────────────
-const StatusBadge = ({ request }) => {
-  if (request.status === 'CONVERTED' && request.booking_summary?.status) {
-    const info = BOOKING_STATUS_MAP[resolveBookingStatusKey(request.booking_summary)];
-    if (info) return <span className={`${s.statusBadge} ${s[info.css]}`}>{info.label}</span>;
-  }
-  const info = REQUEST_STATUS_MAP[request.status] || { label: request.status, css: 'statusDraft' };
-  return <span className={`${s.statusBadge} ${s[info.css]}`}>{info.label}</span>;
+const ExternalCarrierSection = ({ request, onComposeEmail, composing = false }) => {
+  const ext = request?.external_carrier || {};
+  const phone = (ext.phone || '').trim();
+  const phoneHref = phone ? `tel:${phone.replace(/[^+0-9]/g, '')}` : '';
+  const email = (ext.email || '').trim();
+
+  return (
+    <div className={s.section}>
+      <div className={s.sectionHeader}>
+        <div className={`${s.sectionIcon} ${s.sectionIconBrand}`}><FaTruck /></div>
+        <h3 className={s.sectionTitle}>Transporteur externe</h3>
+      </div>
+      <div className={s.summaryGrid}>
+        <div className={s.summaryItem}>
+          <span className={s.summaryLabel}>Nom</span>
+          <span className={s.summaryValue}>{ext.name || '—'}</span>
+        </div>
+        {phone && (
+          <div className={s.summaryItem}>
+            <span className={s.summaryLabel}>Téléphone</span>
+            <span className={s.summaryValue}>
+              <a href={phoneHref} className={s.carrierContactItem}>{phone}</a>
+            </span>
+          </div>
+        )}
+        {ext.email && (
+          <div className={s.summaryItem}>
+            <span className={s.summaryLabel}>Email</span>
+            <span className={s.summaryValue}>
+              <a href={`mailto:${ext.email}`} className={s.carrierContactItem}>{ext.email}</a>
+            </span>
+          </div>
+        )}
+        {ext.reference && (
+          <div className={s.summaryItem}>
+            <span className={s.summaryLabel}>Référence</span>
+            <span className={s.summaryValue}>{ext.reference}</span>
+          </div>
+        )}
+        {ext.reason && (
+          <div className={s.summaryItem}>
+            <span className={s.summaryLabel}>Raison</span>
+            <span className={s.summaryValue}>{ext.reason}</span>
+          </div>
+        )}
+        {ext.assigned_at && (
+          <div className={s.summaryItem}>
+            <span className={s.summaryLabel}>Affecté le</span>
+            <span className={s.summaryValue}>{fmt(ext.assigned_at)}</span>
+          </div>
+        )}
+        {ext.externalized_by_name && (
+          <div className={s.summaryItem}>
+            <span className={s.summaryLabel}>Affecté par</span>
+            <span className={s.summaryValue}>{ext.externalized_by_name}</span>
+          </div>
+        )}
+        {ext.executed_at && (
+          <div className={s.summaryItem}>
+            <span className={s.summaryLabel}>Déclarée réalisée le</span>
+            <span className={s.summaryValue}>{fmt(ext.executed_at)}</span>
+          </div>
+        )}
+        {ext.executed_by_name && (
+          <div className={s.summaryItem}>
+            <span className={s.summaryLabel}>Déclarée par</span>
+            <span className={s.summaryValue}>{ext.executed_by_name}</span>
+          </div>
+        )}
+        {ext.execution_notes && (
+          <div className={s.summaryItem}>
+            <span className={s.summaryLabel}>Notes</span>
+            <span className={s.summaryValue}>{ext.execution_notes}</span>
+          </div>
+        )}
+      </div>
+      {email && onComposeEmail && (
+        <div className={s.carrierEmailActions}>
+          <button
+            type="button"
+            className={s.carrierEmailBtn}
+            onClick={onComposeEmail}
+            disabled={composing}
+            title="Télécharge le bon de transport et ouvre un e-mail pré-rempli pour le transporteur"
+          >
+            <FaEnvelope size={12} />
+            {composing ? 'Préparation…' : 'Ouvrir dans ma messagerie'}
+          </button>
+          <span className={s.carrierEmailHint}>
+            Le bon (PDF) est téléchargé : joignez-le à l&apos;e-mail avant l&apos;envoi.
+          </span>
+        </div>
+      )}
+    </div>
+  );
 };
 
 // ─── Billing Section ───────────────────────────────────────
 const BillingSection = ({ request, canBilling, billingMutation, bookingBillingMutation }) => {
-  const isConverted = request.status === 'CONVERTED' && request.booking_summary;
-  const bs = request.booking_summary;
+  const isConverted = hasBooking(request);
+  const bs = isConverted ? request.booking_summary : null;
   const isInvoiced = isConverted && bs?.is_invoiced;
 
   const isCancelled = isConverted
@@ -156,6 +296,9 @@ const BillingSection = ({ request, canBilling, billingMutation, bookingBillingMu
     : (request.billing_intent || 'patient');
 
   const [selectedIntent, setSelectedIntent] = useState(currentBilledTo);
+  useEffect(() => {
+    setSelectedIntent(currentBilledTo);
+  }, [currentBilledTo]);
   const hasChanged = selectedIntent !== currentBilledTo;
 
   const billingLabels = {
@@ -313,21 +456,136 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
   const { data: request, isLoading, error } = useInstitutionRequest(requestId);
   const sendMutation = useSendRequest();
   const cancelMutation = useCancelRequest();
+  const assignExternalMutation = useAssignExternalCarrier();
+  const completeExternalMutation = useCompleteExternalMission();
   const billingMutation = useUpdateRequestBilling();
   const bookingBillingMutation = useUpdateBookingBilling();
   const patchBookingMutation = usePatchInstitutionBooking();
   const cancelBookingMutation = useCancelInstitutionBooking();
+  const redispatchMutation = useReleaseBookingForRedispatch();
+  const { data: timelineData, isLoading: timelineLoading } = useRequestTimeline(
+    requestId,
+    Boolean(requestId)
+  );
+
+  const timeline = useMemo(() => {
+    const events = [];
+    const pushEvent = (item) => {
+      if (!item?.date) return;
+      const key = `${item.event || ''}|${item.date}`;
+      if (events.some((ev) => `${ev.event || ''}|${ev.date}` === key)) return;
+      events.push(item);
+    };
+
+    const bs = request?.booking_summary;
+
+    // Source canonique : la timeline API (libellés riches : « Offre acceptée »,
+    // « Course créée », etc.). On l'utilise telle quelle si elle existe.
+    const apiEvents = timelineData?.events || [];
+    const hasApiTimeline = apiEvents.length > 0;
+    // `request_converted` (« Réservation créée ») et `booking_created`
+    // (« Course créée ») sont enregistrés ensemble à la conversion et sont
+    // synonymes : on masque le second pour éviter la répétition.
+    const hasConvertedEvent = apiEvents.some(
+      (ev) => ev.event_type === 'request_converted'
+    );
+    apiEvents.forEach((ev) => {
+      if (ev.event_type === 'booking_created' && hasConvertedEvent) return;
+      pushEvent({
+        event: ev.label || ev.event_type,
+        date: ev.created_at,
+        type: ev.event_type === 'cancelled' ? 'cancel' : undefined,
+        eventId: ev.id,
+      });
+    });
+
+    // Événements de cycle (créée / envoyée / acceptée / convertie) : uniquement
+    // en l'absence de timeline API, pour éviter les doublons de libellés.
+    if (!hasApiTimeline) {
+      const creator = request?.created_by_name;
+      const company = request?.accepted_by_company?.name;
+      pushEvent({
+        event: `Demande créée${creator ? ` par ${creator}` : ''}`,
+        date: request?.created_at,
+      });
+      pushEvent({ event: 'Envoyée aux transporteurs', date: request?.sent_at });
+      pushEvent({
+        event: `Acceptée${company ? ` par ${company}` : ''}`,
+        date: request?.accepted_at,
+      });
+      pushEvent({ event: 'Convertie en booking', date: request?.converted_at });
+    }
+
+    // Événements opérationnels (prise en charge / dépose par trajet) : toujours
+    // ajoutés car absents de la timeline API.
+    const journey = Array.isArray(bs?.route_journey) ? bs.route_journey : null;
+    if (journey?.length) {
+      journey.forEach((ev) => {
+        pushEvent({
+          event: ev.event,
+          date: ev.date,
+          type: ev.type,
+          eventId: ev.id,
+        });
+      });
+    } else if (!hasApiTimeline) {
+      pushEvent({ event: 'Patient pris en charge', date: bs?.boarded_at });
+      pushEvent({ event: 'Transport terminé', date: bs?.completed_at });
+    }
+
+    const bsCancelled = !hasApiTimeline ? bs?.cancelled_at : null;
+    if (bsCancelled) {
+      const roleMap = { company: 'Entreprise', driver: 'Chauffeur', admin: 'Admin', system: 'Système' };
+      const byLabel = roleMap[bs.cancelled_by_role] || '';
+      const reasonLabel = bs.cancellation_display_label || '';
+      const billableFlag = bs.is_cancellation_billable;
+      let detail = 'Annulée';
+      if (byLabel) detail += ` par ${byLabel}`;
+      if (reasonLabel) detail += ` — ${reasonLabel}`;
+      if (billableFlag === true) detail += ' (facturée)';
+      else if (billableFlag === false) detail += ' (non facturée)';
+      pushEvent({ event: detail, date: bsCancelled, type: 'cancel' });
+    } else if (!hasApiTimeline && request?.cancelled_at) {
+      pushEvent({ event: 'Annulée', date: request.cancelled_at, type: 'cancel' });
+    }
+
+    if (!hasApiTimeline && isExternalRequest(request)) {
+      const ext = request.external_carrier || {};
+      if (ext.assigned_at) {
+        pushEvent({
+          event: `Transporteur externe affecté${ext.name ? ` — ${ext.name}` : ''}`,
+          date: ext.assigned_at,
+        });
+      }
+      if (ext.executed_at) {
+        pushEvent({
+          event: 'Déclarée réalisée par l\'institution',
+          date: ext.executed_at,
+        });
+      }
+    }
+
+    return events
+      .filter((it) => it.date)
+      .sort((a, b) => new Date(b.date) - new Date(a.date));
+  }, [timelineData, request]);
 
   const institutionRole = meData?.institution_role;
   const canManage = canManageRequests(institutionRole);
   const canBillingEdit = canEditBilling(institutionRole);
   const canViewAmounts = canViewFinancialAmounts(institutionRole);
   const showBillingSection = canViewBillingSection(institutionRole);
+  const canExport = canExportTransports(institutionRole);
+  const [exportingPdf, setExportingPdf] = useState(null);
   const [isEditingBooking, setIsEditingBooking] = useState(false);
   const [isEditingRequest, setIsEditingRequest] = useState(false);
   const institutionSocket = useMemo(() => getInstitutionSocket(), []);
 
   const [showSendModal, setShowSendModal] = useState(false);
+  const [showAssignExternalForm, setShowAssignExternalForm] = useState(false);
+  const [showCompleteExternalForm, setShowCompleteExternalForm] = useState(false);
+  const [externalCarrierForm, setExternalCarrierForm] = useState(EMPTY_EXTERNAL_CARRIER_FORM);
+  const [externalCompleteNotes, setExternalCompleteNotes] = useState('');
   const [demoChatMessages, setDemoChatMessages] = useState([]);
   const demoTimersRef = useRef([]);
   const isDemoInstitution = useMemo(() => {
@@ -603,57 +861,73 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
     }
   };
 
-  // Timeline
-  const getTimeline = () => {
-    if (!request) return [];
-    const events = [];
-    const creator = request.created_by_name;
-    const company = request.accepted_by_company?.name;
-    const bs = request.booking_summary;
-
-    const institutionName = request.institution_name || request.institution?.name;
-    if (request.created_at)
-      events.push({
-        event: `Demande créée${creator ? ` par ${creator}` : ''}${institutionName ? ` (${institutionName})` : ''}`,
-        date: request.created_at,
-      });
-    if (request.sent_at)
-      events.push({ event: 'Demande envoyée', date: request.sent_at });
-    if (request.accepted_at)
-      events.push({
-        event: `Demande acceptée${company ? ` par ${company}` : ''}`,
-        date: request.accepted_at,
-      });
-    if (request.converted_at)
-      events.push({ event: 'Réservation créée', date: request.converted_at });
-    if (bs?.assigned_at)
-      events.push({ event: 'Chauffeur assigné', date: bs.assigned_at });
-    if (bs?.en_route_at)
-      events.push({ event: 'En route', date: bs.en_route_at });
-    if (bs?.boarded_at)
-      events.push({ event: 'Patient pris en charge', date: bs.boarded_at });
-    if (bs?.completed_at)
-      events.push({ event: 'Transport terminé', date: bs.completed_at });
-    const bsCancelled = bs?.cancelled_at;
-    if (bsCancelled) {
-      const roleMap = { company: 'Entreprise', driver: 'Chauffeur', admin: 'Admin', system: 'Système' };
-      const byLabel = roleMap[bs.cancelled_by_role] || '';
-      const reasonLabel = bs.cancellation_display_label || '';
-      const billable = bs.is_cancellation_billable;
-
-      let detail = 'Annulée';
-      if (byLabel) detail += ` par ${byLabel}`;
-      if (reasonLabel) detail += ` — ${reasonLabel}`;
-      if (billable === true) detail += ' (facturée)';
-      else if (billable === false) detail += ' (non facturée)';
-
-      events.push({ event: detail, date: bsCancelled, type: 'cancel' });
-    } else if (request.cancelled_at) {
-      events.push({ event: 'Annulée', date: request.cancelled_at, type: 'cancel' });
+  const handleAssignExternalCarrier = async () => {
+    const validationError = validateExternalCarrierForm(externalCarrierForm);
+    if (validationError) {
+      toast.error(validationError);
+      return;
     }
-
-    return events.sort((a, b) => new Date(b.date) - new Date(a.date));
+    try {
+      await assignExternalMutation.mutateAsync({
+        requestId: request.id,
+        data: buildExternalCarrierPayload(externalCarrierForm),
+      });
+      setShowAssignExternalForm(false);
+      setExternalCarrierForm(EMPTY_EXTERNAL_CARRIER_FORM);
+      toast.success('Transporteur externe affecté');
+    } catch (err) {
+      toast.error(err?.response?.data?.error || 'Erreur lors de l\'affectation externe');
+    }
   };
+
+  const handleCompleteExternalMission = async () => {
+    try {
+      await completeExternalMutation.mutateAsync({
+        requestId: request.id,
+        data: {
+          executed_at: new Date().toISOString(),
+          notes: externalCompleteNotes.trim() || undefined,
+        },
+      });
+      setShowCompleteExternalForm(false);
+      setExternalCompleteNotes('');
+      toast.success('Mission déclarée réalisée par l\'institution');
+    } catch (err) {
+      toast.error(err?.response?.data?.error || 'Erreur lors de la déclaration');
+    }
+  };
+
+  const handleExportMissionPdf = useCallback(async (variant) => {
+    if (!request?.id) return;
+    setExportingPdf(variant);
+    try {
+      await exportRequestMissionPdf(request.id, { variant });
+      toast.success(variant === 'operational' ? 'Bon de transport généré' : 'Rapport de mission généré');
+    } catch (err) {
+      toast.error(err?.message || 'Erreur lors de l\'export PDF');
+    } finally {
+      setExportingPdf(null);
+    }
+  }, [request?.id]);
+
+  const handleComposeCarrierEmail = useCallback(async () => {
+    const email = request?.external_carrier?.email;
+    if (!email || !request?.id) return;
+    setExportingPdf('operational');
+    try {
+      await exportRequestMissionPdf(request.id, { variant: 'operational' });
+      toast.success('Bon téléchargé — joignez-le à l\'e-mail');
+    } catch (err) {
+      toast.error(err?.message || 'Erreur lors de l\'export du bon');
+    } finally {
+      setExportingPdf(null);
+    }
+    const institutionName = meData?.institution?.name || meData?.name || '';
+    window.location.href = buildCarrierMailto(email, request, {
+      institutionName,
+      institutionPhone: meData?.contact_phone,
+    });
+  }, [request, meData]);
 
   const demoFetchMessages = useCallback(async (bookingId, options = {}) => {
     let base = { messages: [], has_more: false };
@@ -705,20 +979,22 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
     </div>
   );
 
-  const bs = request.booking_summary;
-  const bookingIdForOperations = bs?.id || request.booking_id || null;
-  const isConverted = request.status === 'CONVERTED' && Boolean(bookingIdForOperations);
+  const isExternal = isExternalRequest(request);
+  const bs = hasBooking(request) ? request.booking_summary : null;
+  const bookingIdForOperations = bs?.id || null;
+  const isConverted = hasBooking(request);
   const chatBookingId =
     bookingIdForOperations || (isDemoInstitution && request.id ? Number(`${request.id}01`) : null);
   const canShowChat =
     Boolean(chatBookingId)
+    && !isExternal
     && (isConverted || (isDemoInstitution && ['ACCEPTED', 'CONVERTED'].includes(request.status)));
-  const timeline = getTimeline();
   const bookingStatusKey = bs ? resolveBookingStatusKey(bs) : '';
   const isBoarded = Boolean(bs?.boarded_at);
   const canEditBookingOperational = Boolean(
     canManage
     && isConverted
+    && !isExternal
     && !isBoarded
     && !['COMPLETED', 'RETURN_COMPLETED', 'CANCELED'].includes(bookingStatusKey)
   );
@@ -726,11 +1002,18 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
   const canEditRequestNow = Boolean(
     canManage
     && !isConverted
-    && ['DRAFT', 'SENT', 'ACCEPTED'].includes(request.status)
+    && (
+      ['DRAFT', 'SENT', 'ACCEPTED'].includes(request.status)
+      || request.status === EXTERNAL_STATUSES.ASSIGNED
+    )
   );
+  const showAssignExternalAction = canManage && canAssignExternalCarrier(request);
+  const showCompleteExternalAction = canManage && canCompleteExternalMission(request);
   const patientName = request.patient
     ? `${request.patient.first_name} ${request.patient.last_name}`
     : bs?.customer_name || '—';
+  const routePoints = getRoutePoints(request);
+  const tripBadge = getTripBadge(request, routePoints);
 
   return (
     <div className={s.panel} data-tour-id="institution-request-detail-panel">
@@ -738,13 +1021,60 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
       <div className={s.panelHeader}>
         <div className={s.panelTitleRow}>
           <span className={s.panelTitle}>Demande #{request.id}</span>
-          <StatusBadge request={request} />
         </div>
+        {canExport && (
+          <div className={s.pdfExportGroup}>
+            <button
+              type="button"
+              className={s.pdfExportBtn}
+              disabled={Boolean(exportingPdf)}
+              onClick={() => handleExportMissionPdf('operational')}
+              title="Bon de transport (1 page)"
+            >
+              <FaFilePdf size={11} />
+              {exportingPdf === 'operational' ? '…' : 'Bon'}
+            </button>
+            <button
+              type="button"
+              className={s.pdfExportBtn}
+              disabled={Boolean(exportingPdf)}
+              onClick={() => handleExportMissionPdf('audit')}
+              title="Rapport de mission (audit)"
+            >
+              <FaFilePdf size={11} />
+              {exportingPdf === 'audit' ? '…' : 'Rapport'}
+            </button>
+          </div>
+        )}
         <button className={s.closeBtn} onClick={onClose} aria-label="Fermer"><HiOutlineX /></button>
       </div>
 
       {/* ── Scrollable content ── */}
       <div className={s.panelBody}>
+
+        {bs?.pending_change_request?.status === 'escalation_required' && canManage && bookingIdForOperations && (
+          <div className={s.actions} style={{ marginBottom: 12 }}>
+            <p style={{ margin: 0, fontSize: 13, color: '#b45309' }}>
+              Escalade requise — la validation transporteur a expiré. Remettez la course en diffusion.
+            </p>
+            <button
+              type="button"
+              className={`${s.actionBtn} ${s.btnSecondary}`}
+              disabled={redispatchMutation.isPending}
+              onClick={async () => {
+                try {
+                  await redispatchMutation.mutateAsync({ bookingId: bookingIdForOperations });
+                  toast.success('Course remise en diffusion');
+                  queryClient.invalidateQueries({ queryKey: institutionQueryKeys.requestDetail(requestId) });
+                } catch (err) {
+                  toast.error(err?.response?.data?.error || 'Échec de la rediffusion');
+                }
+              }}
+            >
+              Remettre en diffusion
+            </button>
+          </div>
+        )}
 
         {/* Actions */}
         {canEditBookingOperational && !isEditingBooking && (
@@ -752,15 +1082,17 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
             <button
               className={`${s.actionBtn} ${s.btnSecondary}`}
               onClick={() => setIsEditingBooking(true)}
+              title="Modifier le transport"
             >
-              <FaEdit size={11} /> Modifier le transport
+              <FaEdit size={11} /> Modifier
             </button>
             <button
               className={`${s.actionBtn} ${s.btnDanger}`}
               onClick={handleCancel}
               disabled={cancelBookingMutation.isPending}
+              title="Annuler le transport"
             >
-              <FaTimes size={11} /> Annuler le transport
+              <FaTimes size={11} /> Annuler
             </button>
           </div>
         )}
@@ -782,13 +1114,16 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
 
         {canEditRequestNow && !isEditingRequest && (
           <div className={s.actions}>
-            <button
-              className={`${s.actionBtn} ${s.btnSecondary}`}
-              onClick={() => setIsEditingRequest(true)}
-            >
-              <FaEdit size={11} /> Modifier la demande
-            </button>
-            {request.status === 'DRAFT' && (
+            {!isExternal && (
+              <button
+                className={`${s.actionBtn} ${s.btnSecondary}`}
+                onClick={() => setIsEditingRequest(true)}
+                title="Modifier la demande"
+              >
+                <FaEdit size={11} /> Modifier
+              </button>
+            )}
+            {request.status === 'DRAFT' && !isExternal && (
               <button
                 className={`${s.actionBtn} ${s.btnPrimary}`}
                 onClick={() => setShowSendModal(true)}
@@ -796,6 +1131,27 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
                 data-tour-id="institution-request-send-btn"
               >
                 <FaPaperPlane size={11} /> Envoyer
+              </button>
+            )}
+            {showAssignExternalAction && !showAssignExternalForm && (
+              <button
+                type="button"
+                className={`${s.actionBtn} ${s.btnSecondary}`}
+                onClick={() => setShowAssignExternalForm(true)}
+                disabled={assignExternalMutation.isPending}
+                title="Affecter un transporteur externe"
+              >
+                <FaTruck size={11} /> Externe
+              </button>
+            )}
+            {showCompleteExternalAction && !showCompleteExternalForm && (
+              <button
+                type="button"
+                className={`${s.actionBtn} ${s.btnPrimary}`}
+                onClick={() => setShowCompleteExternalForm(true)}
+                disabled={completeExternalMutation.isPending}
+              >
+                <FaTruck size={11} /> Déclarer réalisée
               </button>
             )}
             <button
@@ -808,19 +1164,92 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
           </div>
         )}
 
-        {canEditRequestNow && isEditingRequest && (
+        {showAssignExternalAction && showAssignExternalForm && (
+          <div className={s.section}>
+            <ExternalCarrierFields
+              value={externalCarrierForm}
+              onChange={setExternalCarrierForm}
+              idPrefix={`assign-external-${request.id}`}
+            />
+            <div className={s.actions}>
+              <button
+                type="button"
+                className={`${s.actionBtn} ${s.btnSecondary}`}
+                onClick={() => {
+                  setShowAssignExternalForm(false);
+                  setExternalCarrierForm(EMPTY_EXTERNAL_CARRIER_FORM);
+                }}
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                className={`${s.actionBtn} ${s.btnPrimary}`}
+                onClick={handleAssignExternalCarrier}
+                disabled={assignExternalMutation.isPending}
+              >
+                {assignExternalMutation.isPending ? '…' : 'Confirmer l\'affectation'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {showCompleteExternalAction && showCompleteExternalForm && (
+          <div className={s.section}>
+            <p className={s.billingMuted}>
+              Déclaration manuelle : la mission sera marquée comme réalisée par l&apos;institution.
+            </p>
+            <label htmlFor={`complete-external-notes-${request.id}`} className={s.billingMuted}>
+              Notes (optionnel)
+            </label>
+            <textarea
+              id={`complete-external-notes-${request.id}`}
+              className={s.editInput}
+              rows={3}
+              value={externalCompleteNotes}
+              onChange={(e) => setExternalCompleteNotes(e.target.value)}
+              placeholder="Commentaire interne"
+            />
+            <div className={s.actions}>
+              <button
+                type="button"
+                className={`${s.actionBtn} ${s.btnSecondary}`}
+                onClick={() => {
+                  setShowCompleteExternalForm(false);
+                  setExternalCompleteNotes('');
+                }}
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                className={`${s.actionBtn} ${s.btnPrimary}`}
+                onClick={handleCompleteExternalMission}
+                disabled={completeExternalMutation.isPending}
+              >
+                {completeExternalMutation.isPending ? '…' : 'Confirmer la déclaration'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {canEditRequestNow && isEditingRequest && !isExternal && (
           <InstitutionRequestEdit
             request={request}
             onCancel={() => setIsEditingRequest(false)}
-            onSaved={() => {
+            onSaved={({ carrierNotified } = {}) => {
               setIsEditingRequest(false);
-              toast.success('Demande mise à jour');
+              toast.success(
+                carrierNotified
+                  ? 'Modification enregistrée — les transporteurs en attente sont informés.'
+                  : 'Demande mise à jour',
+              );
             }}
           />
         )}
 
-        {/* Transport summary (if booking) */}
-        {isConverted && bs && (() => {
+        {/* Transport LIRIE (booking) */}
+        {isConverted && !isExternal && bs && (() => {
           const carrier = request.accepted_by_company || {};
           const carrierName = carrier.name || 'Transport';
           const carrierPhone = (carrier.contact_phone || '').toString().trim();
@@ -872,7 +1301,7 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
                 <div className={s.summaryItem}>
                   <span className={s.summaryLabel}>Statut</span>
                   <span className={s.summaryValue}>
-                    {BOOKING_STATUS_MAP[resolveBookingStatusKey(bs)]?.label || 'En cours'}
+                    {BOOKING_STATUS_LABELS[resolveBookingStatusKey(bs)] || 'En cours'}
                   </span>
                 </div>
                 {canViewAmounts && bs.amount != null && (
@@ -886,38 +1315,58 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
           );
         })()}
 
-        {/* Route */}
+        {/* Transporteur externe */}
+        {isExternal && (
+          <ExternalCarrierSection
+            request={request}
+            onComposeEmail={handleComposeCarrierEmail}
+            composing={exportingPdf === 'operational'}
+          />
+        )}
+
+        {/* Route (masquée pendant l'édition : l'éditeur de parcours la remplace) */}
+        {!isEditingRequest && (
         <div className={s.section}>
           <div className={s.sectionHeader}>
             <div className={`${s.sectionIcon} ${s.sectionIconBrand}`}><FaRoute /></div>
             <h3 className={s.sectionTitle}>Trajet</h3>
           </div>
           <div className={s.route}>
-            <div className={s.routeTrack}>
-              <div className={`${s.routeDot} ${s.routeDotStart}`} />
-              <div className={s.routeLine} />
-              <div className={`${s.routeDot} ${s.routeDotEnd}`} />
-            </div>
-            <div className={s.routeStops}>
-              <div className={s.routeStop}>
-                <div className={s.routeStopLabel}>Départ</div>
-                <div className={s.routeStopAddress}>{request.pickup_location || '—'}</div>
-              </div>
-              <div className={s.routeStop}>
-                <div className={s.routeStopLabel}>Arrivée</div>
-                <div className={s.routeStopAddress}>{request.dropoff_location || '—'}</div>
-              </div>
-            </div>
+            {routePoints.map((point, index) => {
+              const isFirst = index === 0;
+              const isLast = index === routePoints.length - 1;
+              const dotClass = isFirst ? s.routeDotStart : isLast ? s.routeDotEnd : s.routeDotMid;
+              const hasDetails = point.details
+                && (point.details.establishment || point.details.service || point.details.doctor);
+              return (
+                <div className={s.routeStop} key={`stop-${point.kind}-${index}-${point.address || ''}`}>
+                  <div className={s.routeMarker}>
+                    <span className={`${s.routeDot} ${dotClass}`} />
+                    {!isLast && <span className={s.routeConnector} />}
+                  </div>
+                  <div className={s.routeStopBody}>
+                    <div className={s.routeStopLabel}>
+                      {point.label}
+                      {point.timeLabel ? (
+                        <span className={s.routeStopTime}> · {point.timeLabel}</span>
+                      ) : null}
+                    </div>
+                    <div className={s.routeStopAddress}>{point.address || '—'}</div>
+                    {hasDetails && (
+                      <div className={s.routeStopDetails}>
+                        {[point.details.establishment, point.details.service, point.details.doctor]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
-          {(request.is_round_trip || request.round_trip) ? (
-            <div className={s.roundTripBadge}>
-              Aller-retour
-              {request.return_time ? ` — retour ${fmt(request.return_time)}` : ''}
-            </div>
-          ) : (
-            <div className={s.oneWayBadge}>Aller simple</div>
-          )}
+          <div className={s[tripBadge.className]}>{tripBadge.label}</div>
         </div>
+        )}
 
         {/* Détails */}
         <div className={s.section}>
@@ -935,12 +1384,16 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
           </div>
           <div className={s.infoRow}>
             <span className={s.infoLabel}>Type de trajet</span>
-            <span className={s.infoValue}>
-              {(request.is_round_trip || request.round_trip)
-                ? `Aller-retour${request.return_time ? ` (retour ${fmt(request.return_time)})` : ''}`
-                : 'Aller simple'}
-            </span>
+            <span className={s.infoValue}>{tripBadge.label}</span>
           </div>
+          {(request?.is_round_trip || request?.round_trip) && (
+            <div className={s.infoRow}>
+              <span className={s.infoLabel}>Retour</span>
+              <span className={s.infoValue}>
+                {formatReturnTimeLabel(request) || '—'}
+              </span>
+            </div>
+          )}
           {request.external_reference && (
             <div className={s.infoRow}>
               <span className={s.infoLabel}>Réf. externe</span>
@@ -950,15 +1403,30 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
         </div>
 
         {/* Besoins spécifiques */}
-        {(request.requires_wheelchair || request.requires_stretcher || request.requires_oxygen || request.notes) && (
+        {(() => {
+          const mob = request.mobility || {};
+          const hasWheelchair = request.requires_wheelchair || mob.wheelchair;
+          const hasVehicleWheelchair = mob.vehicle_wheelchair;
+          const hasAssistance = request.requires_assistance || mob.needs_assistance;
+          const assistanceType = (mob.assistance_type || '').trim();
+          const hasAny = hasWheelchair || hasVehicleWheelchair || hasAssistance
+            || request.requires_stretcher || request.requires_oxygen || request.notes;
+          if (!hasAny) return null;
+          return (
           <div className={s.section}>
             <div className={s.sectionHeader}>
               <div className={`${s.sectionIcon} ${s.sectionIconMuted}`}><FaNotesMedical /></div>
               <h3 className={s.sectionTitle}>Besoins</h3>
             </div>
             <div className={s.needsRow}>
-              {request.requires_wheelchair && (
+              {hasWheelchair && (
                 <span className={`${s.needsChip} ${s.needsChipActive}`}><FaWheelchair size={10} /> Fauteuil</span>
+              )}
+              {hasVehicleWheelchair && (
+                <span className={`${s.needsChip} ${s.needsChipActive}`}>Prendre chaise</span>
+              )}
+              {hasAssistance && (
+                <span className={`${s.needsChip} ${s.needsChipActive}`}>Assistance</span>
               )}
               {request.requires_stretcher && (
                 <span className={`${s.needsChip} ${s.needsChipActive}`}>Brancard</span>
@@ -967,15 +1435,22 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
                 <span className={`${s.needsChip} ${s.needsChipDanger}`}>O₂</span>
               )}
             </div>
+            {hasAssistance && assistanceType && (
+              <div className={s.routeStopDetails} style={{ marginTop: 6 }}>
+                Type d'assistance : {assistanceType}
+              </div>
+            )}
             {request.notes && (
               <div className={s.notesBlock}>{request.notes}</div>
             )}
           </div>
-        )}
+          );
+        })()}
 
         {/* Facturation */}
         {showBillingSection && (canBillingEdit || request.billing_intent) && (
           <BillingSection
+            key={request.id}
             request={request}
             canBilling={canBillingEdit}
             billingMutation={billingMutation}
@@ -995,27 +1470,26 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
         )}
 
         {/* Historique */}
-        {(timeline.length > 0 || isConverted) && (
+        {(timeline.length > 0 || isConverted || isExternal || timelineLoading) && (
           <div className={s.section}>
             <div className={s.sectionHeader}>
               <div className={`${s.sectionIcon} ${s.sectionIconMuted}`}><FaHistory /></div>
               <h3 className={s.sectionTitle}>Historique</h3>
             </div>
-            {isConverted && bookingIdForOperations ? (
-              <InstitutionBookingHistory
-                bookingId={bookingIdForOperations}
-                lifecycleTimeline={timeline}
-              />
-            ) : (
-              <div className={s.timeline}>
-                {timeline.map((item, i) => (
-                  <div key={i} className={`${s.timelineItem} ${item.type === 'cancel' ? s.timelineItemCancel : ''}`}>
-                    <div className={s.timelineEvent}>{item.event}</div>
-                    <div className={s.timelineDate}>{fmtShort(item.date)}</div>
-                  </div>
-                ))}
-              </div>
-            )}
+            <div className={s.timeline}>
+              {timelineLoading && (
+                <p className={s.billingMuted}>Chargement historique…</p>
+              )}
+              {timeline.map((item) => (
+                <div
+                  key={item.eventId || `${item.date}-${item.event}`}
+                  className={`${s.timelineItem} ${item.type === 'cancel' ? s.timelineItemCancel : ''}`}
+                >
+                  <div className={s.timelineEvent}>{item.event}</div>
+                  <div className={s.timelineDate}>{fmtShort(item.date)}</div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>

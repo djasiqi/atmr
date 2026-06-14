@@ -1106,7 +1106,7 @@ class TestInstitutionUserJobTitle:
     def test_patch_does_not_change_role(
         self, client, db, institution, admin_user, admin_headers
     ):
-        """job_title est indépendant du rôle : le rôle n'est jamais modifié."""
+        """institution_role est rejeté : le rôle n'est jamais modifiable via PATCH profil."""
         target = self._make_target(
             db, institution, role=InstitutionRole.REQUESTER.value, job_title="ASSC"
         )
@@ -1118,10 +1118,9 @@ class TestInstitutionUserJobTitle:
             headers=admin_headers,
         )
 
-        assert response.status_code == 200
+        assert response.status_code == 400
         db.session.refresh(target)
-        assert target.job_title == "Infirmier diplômé(e)"
-        # Le rôle reste inchangé (le schéma ignore institution_role)
+        assert target.job_title == "ASSC"
         assert target.institution_role == InstitutionRole.REQUESTER.value
 
     def test_patch_unknown_user_returns_404(
@@ -1134,3 +1133,440 @@ class TestInstitutionUserJobTitle:
             headers=admin_headers,
         )
         assert response.status_code == 404
+
+
+class TestInstitutionUserProfile:
+    """Tests profil utilisateur institution (identité + email de contact Mode B)."""
+
+    @pytest.fixture
+    def institution(self, db):
+        inst = Institution()
+        inst.name = "Clinique Profil Test"
+        inst.institution_type = "clinic"
+        inst.address = "Rue du Profil 1"
+        inst.public_id = str(uuid.uuid4())
+        db.session.add(inst)
+        db.session.flush()
+        db.session.refresh(inst)
+        return inst
+
+    @pytest.fixture
+    def admin_user(self, db, institution):
+        uid = str(uuid.uuid4())[:8]
+        user = User()
+        user.username = f"prof_admin_{uid}"
+        user.email = f"prof-admin-{uid}@test.ch"
+        user.role = UserRole.INSTITUTION
+        user.public_id = str(uuid.uuid4())
+        user.institution_id = institution.id
+        user.institution_role = InstitutionRole.ADMIN.value
+        user.account_status = "active"
+        user.set_password("password123", force_change=False)
+        db.session.add(user)
+        db.session.flush()
+        db.session.refresh(user)
+        return user
+
+    @pytest.fixture
+    def admin_headers(self, client, admin_user, institution):
+        claims = {
+            "role": admin_user.role.value,
+            "institution_id": institution.id,
+            "institution_role": admin_user.institution_role,
+            "aud": "atmr-api",
+        }
+        with client.application.app_context():
+            token = create_access_token(
+                identity=str(admin_user.public_id),
+                additional_claims=claims,
+            )
+        return {"Authorization": f"Bearer {token}"}
+
+    def _count_profile_audits(self, target_user_id):
+        from models.institution_user_audit_event import InstitutionUserAuditEvent
+
+        return InstitutionUserAuditEvent.query.filter_by(
+            target_user_id=target_user_id,
+            event_type="profile_updated",
+        ).count()
+
+    def _count_job_title_audits(self, target_user_id):
+        from models.institution_user_audit_event import InstitutionUserAuditEvent
+
+        return InstitutionUserAuditEvent.query.filter_by(
+            target_user_id=target_user_id,
+            event_type="job_title_updated",
+        ).count()
+
+    def test_create_username_mode_with_contact_email(
+        self, client, db, institution, admin_user, admin_headers
+    ):
+        uid = str(uuid.uuid4())[:8]
+        local_username = f"a.amraoui.{uid}"
+        contact = f"contact.{uid}@lha.ch"
+
+        response = client.post(
+            "/api/v1/institutions/users",
+            json={
+                "creation_mode": "username",
+                "username": local_username,
+                "institution_role": "institution_requester",
+                "first_name": "Abdelaziz",
+                "last_name": "AMRAOUI",
+                "email": contact,
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 201
+        data = response.get_json()
+        assert data["user"]["email"] == contact
+        assert data["user"]["authentication_method"] == "username"
+
+        created = User.query.filter_by(id=data["user"]["id"]).first()
+        assert created.email == contact
+        assert created.username == local_username
+
+    def test_create_username_mode_without_contact_email(
+        self, client, db, institution, admin_user, admin_headers
+    ):
+        uid = str(uuid.uuid4())[:8]
+        response = client.post(
+            "/api/v1/institutions/users",
+            json={
+                "creation_mode": "username",
+                "username": f"no.email.{uid}",
+                "institution_role": "institution_requester",
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 201
+        assert response.get_json()["user"]["email"] is None
+
+    def test_create_username_mode_contact_email_conflict(
+        self, client, db, institution, admin_user, admin_headers
+    ):
+        uid = str(uuid.uuid4())[:8]
+        taken = f"taken.{uid}@test.ch"
+        existing = User()
+        existing.username = f"existing_{uid}"
+        existing.email = taken
+        existing.role = UserRole.CLIENT
+        existing.public_id = str(uuid.uuid4())
+        existing.set_password("password123", force_change=False)
+        db.session.add(existing)
+        db.session.commit()
+
+        response = client.post(
+            "/api/v1/institutions/users",
+            json={
+                "creation_mode": "username",
+                "username": f"new.user.{uid}",
+                "institution_role": "institution_requester",
+                "email": taken,
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 409
+
+    def test_create_username_mode_contact_email_conflict_normalized(
+        self, client, db, institution, admin_user, admin_headers
+    ):
+        uid = str(uuid.uuid4())[:8]
+        existing = User()
+        existing.username = f"existing_norm_{uid}"
+        existing.email = f"user.{uid}@test.ch"
+        existing.role = UserRole.CLIENT
+        existing.public_id = str(uuid.uuid4())
+        existing.set_password("password123", force_change=False)
+        db.session.add(existing)
+        db.session.commit()
+
+        response = client.post(
+            "/api/v1/institutions/users",
+            json={
+                "creation_mode": "username",
+                "username": f"new.norm.{uid}",
+                "institution_role": "institution_requester",
+                "email": f"USER.{uid}@TEST.CH",
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 409
+
+    def test_create_username_mode_contact_email_conflict_archived(
+        self, client, db, institution, admin_user, admin_headers
+    ):
+        uid = str(uuid.uuid4())[:8]
+        archived_email = f"archived.{uid}@test.ch"
+        archived = User()
+        archived.username = f"archived_{uid}"
+        archived.email = archived_email
+        archived.role = UserRole.INSTITUTION
+        archived.public_id = str(uuid.uuid4())
+        archived.institution_id = institution.id
+        archived.institution_role = InstitutionRole.READER.value
+        archived.account_status = "disabled"
+        archived.archived_at = datetime.now(UTC)
+        archived.set_password("password123", force_change=False)
+        db.session.add(archived)
+        db.session.commit()
+
+        response = client.post(
+            "/api/v1/institutions/users",
+            json={
+                "creation_mode": "username",
+                "username": f"new.arch.{uid}",
+                "institution_role": "institution_requester",
+                "email": archived_email,
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 409
+
+    def test_patch_updates_first_name_last_name_email(
+        self, client, db, institution, admin_user, admin_headers
+    ):
+        uid = str(uuid.uuid4())[:8]
+        target = User()
+        target.username = f"patch.target.{uid}"
+        target.email = None
+        target.first_name = "Amraoui"
+        target.last_name = "ABDELAZIZ"
+        target.role = UserRole.INSTITUTION
+        target.public_id = str(uuid.uuid4())
+        target.institution_id = institution.id
+        target.institution_role = InstitutionRole.READER.value
+        target.account_status = "active"
+        target.authentication_method = "username"
+        target.set_password("password123", force_change=False)
+        db.session.add(target)
+        db.session.commit()
+
+        new_email = f"patch.{uid}@lha.ch"
+        response = client.patch(
+            f"/api/v1/institutions/users/{target.id}",
+            json={
+                "first_name": "Abdelaziz",
+                "last_name": "AMRAOUI",
+                "email": new_email,
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        assert response.get_json()["message"] == "Profil mis à jour"
+        db.session.refresh(target)
+        assert target.first_name == "Abdelaziz"
+        assert target.last_name == "AMRAOUI"
+        assert target.email == new_email
+        assert self._count_profile_audits(target.id) == 1
+
+    def test_patch_job_title_still_audits_job_title_updated(
+        self, client, db, institution, admin_user, admin_headers
+    ):
+        uid = str(uuid.uuid4())[:8]
+        target = User()
+        target.username = f"jt.only.{uid}"
+        target.email = f"jt.{uid}@test.ch"
+        target.role = UserRole.INSTITUTION
+        target.public_id = str(uuid.uuid4())
+        target.institution_id = institution.id
+        target.institution_role = InstitutionRole.READER.value
+        target.account_status = "active"
+        target.job_title = "ASSC"
+        target.set_password("password123", force_change=False)
+        db.session.add(target)
+        db.session.commit()
+
+        response = client.patch(
+            f"/api/v1/institutions/users/{target.id}",
+            json={"job_title": "Infirmier diplômé(e)"},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        assert response.get_json()["message"] == "Fonction mise à jour"
+        assert self._count_job_title_audits(target.id) == 1
+        assert self._count_profile_audits(target.id) == 0
+
+    def test_patch_email_conflict(
+        self, client, db, institution, admin_user, admin_headers
+    ):
+        uid = str(uuid.uuid4())[:8]
+        taken = f"taken.patch.{uid}@test.ch"
+        other = User()
+        other.username = f"other_{uid}"
+        other.email = taken
+        other.role = UserRole.CLIENT
+        other.public_id = str(uuid.uuid4())
+        other.set_password("password123", force_change=False)
+        db.session.add(other)
+
+        target = User()
+        target.username = f"target.patch.{uid}"
+        target.email = None
+        target.role = UserRole.INSTITUTION
+        target.public_id = str(uuid.uuid4())
+        target.institution_id = institution.id
+        target.institution_role = InstitutionRole.READER.value
+        target.account_status = "active"
+        target.authentication_method = "username"
+        target.set_password("password123", force_change=False)
+        db.session.add(target)
+        db.session.commit()
+
+        response = client.patch(
+            f"/api/v1/institutions/users/{target.id}",
+            json={"email": taken},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 409
+
+    def test_patch_clear_contact_email(
+        self, client, db, institution, admin_user, admin_headers
+    ):
+        uid = str(uuid.uuid4())[:8]
+        target = User()
+        target.username = f"clear.email.{uid}"
+        target.email = f"old.{uid}@test.ch"
+        target.role = UserRole.INSTITUTION
+        target.public_id = str(uuid.uuid4())
+        target.institution_id = institution.id
+        target.institution_role = InstitutionRole.READER.value
+        target.account_status = "active"
+        target.authentication_method = "username"
+        target.set_password("password123", force_change=False)
+        db.session.add(target)
+        db.session.commit()
+
+        response = client.patch(
+            f"/api/v1/institutions/users/{target.id}",
+            json={"email": ""},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        db.session.refresh(target)
+        assert target.email is None
+
+    def test_patch_profile_unchanged_no_audit(
+        self, client, db, institution, admin_user, admin_headers
+    ):
+        uid = str(uuid.uuid4())[:8]
+        target = User()
+        target.username = f"unchanged.{uid}"
+        target.email = f"same.{uid}@test.ch"
+        target.first_name = "Jean"
+        target.last_name = "Dupont"
+        target.role = UserRole.INSTITUTION
+        target.public_id = str(uuid.uuid4())
+        target.institution_id = institution.id
+        target.institution_role = InstitutionRole.READER.value
+        target.account_status = "active"
+        target.set_password("password123", force_change=False)
+        db.session.add(target)
+        db.session.commit()
+
+        response = client.patch(
+            f"/api/v1/institutions/users/{target.id}",
+            json={
+                "first_name": "Jean",
+                "last_name": "Dupont",
+                "email": f"same.{uid}@test.ch",
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        assert response.get_json()["message"] == "Profil inchangé"
+        assert self._count_profile_audits(target.id) == 0
+
+    def test_patch_profile_on_disabled_user(
+        self, client, db, institution, admin_user, admin_headers
+    ):
+        uid = str(uuid.uuid4())[:8]
+        target = User()
+        target.username = f"disabled.{uid}"
+        target.email = None
+        target.first_name = "Old"
+        target.role = UserRole.INSTITUTION
+        target.public_id = str(uuid.uuid4())
+        target.institution_id = institution.id
+        target.institution_role = InstitutionRole.READER.value
+        target.account_status = "disabled"
+        target.set_password("password123", force_change=False)
+        db.session.add(target)
+        db.session.commit()
+
+        response = client.patch(
+            f"/api/v1/institutions/users/{target.id}",
+            json={"first_name": "New"},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        db.session.refresh(target)
+        assert target.first_name == "New"
+
+    def test_patch_username_mode_email_does_not_change_login(
+        self, client, db, institution, admin_user, admin_headers
+    ):
+        uid = str(uuid.uuid4())[:8]
+        local_username = f"a.amraoui.{uid}"
+        target = User()
+        target.username = local_username
+        target.email = f"ancien.{uid}@email.ch"
+        target.role = UserRole.INSTITUTION
+        target.public_id = str(uuid.uuid4())
+        target.institution_id = institution.id
+        target.institution_role = InstitutionRole.READER.value
+        target.account_status = "active"
+        target.authentication_method = "username"
+        target.set_password("password123", force_change=False)
+        db.session.add(target)
+        db.session.commit()
+
+        response = client.patch(
+            f"/api/v1/institutions/users/{target.id}",
+            json={"email": f"nouveau.{uid}@email.ch"},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        db.session.refresh(target)
+        assert target.username == local_username
+        assert target.authentication_method == "username"
+        assert target.email == f"nouveau.{uid}@email.ch"
+
+    def test_patch_cannot_modify_username(
+        self, client, db, institution, admin_user, admin_headers
+    ):
+        uid = str(uuid.uuid4())[:8]
+        original_username = f"original.{uid}"
+        target = User()
+        target.username = original_username
+        target.email = f"user.{uid}@test.ch"
+        target.role = UserRole.INSTITUTION
+        target.public_id = str(uuid.uuid4())
+        target.institution_id = institution.id
+        target.institution_role = InstitutionRole.READER.value
+        target.account_status = "active"
+        target.set_password("password123", force_change=False)
+        db.session.add(target)
+        db.session.commit()
+
+        response = client.patch(
+            f"/api/v1/institutions/users/{target.id}",
+            json={"username": "new_login"},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 400
+        db.session.refresh(target)
+        assert target.username == original_username

@@ -42,8 +42,8 @@ const InstitutionRequestCreate = lazy(() => import('../Requests/InstitutionReque
 // ── Route → page meta mapping ──────────────────────────────
 const PAGE_META = {
   '': { title: 'Tableau de bord', breadcrumb: null },
-  requests: { title: 'Demandes de transport', breadcrumb: 'Demandes' },
-  'requests/new': { title: 'Nouvelle demande', breadcrumb: 'Nouvelle demande', parent: 'requests' },
+  requests: { title: 'Transports', breadcrumb: 'Transports' },
+  'requests/new': { title: 'Nouveau transport', breadcrumb: 'Nouveau transport', parent: 'requests' },
   patients: { title: 'Gestion des patients', breadcrumb: 'Patients' },
   settings: { title: 'Paramètres', breadcrumb: 'Paramètres' },
 };
@@ -58,7 +58,7 @@ function resolvePageMeta(pathname, publicId) {
   // Detail pages: requests/:id → treat as "requests" parent context
   if (/^requests\/[^/]+$/.test(relative) && relative !== 'requests/new') {
     return {
-      title: 'Détail de la demande',
+      title: 'Détail du transport',
       breadcrumb: 'Détail',
       parent: 'requests',
       isDetail: true,
@@ -212,7 +212,7 @@ const InstitutionLayout = () => {
     },
     {
       path: `${basePath}/requests`,
-      label: 'Demandes',
+      label: 'Transports',
       icon: <HiOutlineDocumentText />,
       badge: pendingCount > 0 ? pendingCount : null,
     },

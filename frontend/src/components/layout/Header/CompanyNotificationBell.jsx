@@ -15,7 +15,10 @@ import {
   FaBell,
   FaCommentDots,
   FaAmbulance,
+  FaEdit,
+  FaExclamationTriangle,
 } from 'react-icons/fa';
+import { resolveCompanyNotificationLink } from '../../../utils/companyNotificationNavigation';
 import {
   fetchCompanyNotifications,
   markCompanyNotificationRead,
@@ -200,14 +203,11 @@ const CompanyNotificationBell = () => {
         }
       }
 
-      const meta = notif.metadata || {};
-      const base = `${dashboardRoot}/company/${public_id}`;
-      let link = base;
-      if (notif.event_type === 'new_request') {
-        link = base;
-      } else if (meta.booking_id) {
-        link = `${base}/reservations?booking=${meta.booking_id}`;
-      }
+      const link = resolveCompanyNotificationLink({
+        notif,
+        dashboardRoot,
+        companyPublicId: public_id,
+      });
 
       setIsOpen(false);
       navigate(link);

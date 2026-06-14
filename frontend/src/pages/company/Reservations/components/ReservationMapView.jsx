@@ -11,6 +11,7 @@ import {
   ROUTE_OPTIONS,
   INFOWINDOW_FONT,
 } from '../../../../utils/mapUtils';
+import { buildIdentityFromApi } from '../../../../utils/bookingIdentity';
 import styles from './ReservationMapView.module.css';
 
 const CONTAINER_STYLE = { width: '100%', height: '100%' };
@@ -211,6 +212,7 @@ const ReservationMapView = ({ reservations }) => {
             const m = markerData.find((md) => md.id === activeInfoWindow);
             if (!m) return null;
             const r = m.reservation;
+            const identity = buildIdentityFromApi(r);
             return (
               <InfoWindow
                 position={m.position}
@@ -224,7 +226,7 @@ const ReservationMapView = ({ reservations }) => {
                     Prise en charge
                   </div>
                   <div style={{ fontSize: 12, color: MAP_COLORS.textSecondary, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    <span>Client : {r.client_name || r.client?.full_name || 'N/A'}</span>
+                    <span>Passager : {identity.passengerLabel}</span>
                     <span>Adresse : {r.pickup_location}</span>
                     <span>Heure : {new Date(r.scheduled_time).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
                     <span style={{ color: MAP_COLORS.brand, fontWeight: 500 }}>#{r.id}</span>

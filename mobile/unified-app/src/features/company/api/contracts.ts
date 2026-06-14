@@ -13,8 +13,41 @@ export type CompanyDispatchMission = {
   mission_id: number;
   status: CompanyDispatchMissionStatus;
   scheduled_at?: string | null;
-  /** Nom d’affichage passager (API `client.name` sur les résumés de course). */
+  /** Nom d’affichage passager (API `identity.passenger.name` ou repli `client.name`). */
   client_name?: string | null;
+  /** Blocs canoniques PR1 (optionnels — repli client côté UI). */
+  identity?: {
+    passenger?: { name?: string | null };
+    source?: {
+      type?: string | null;
+      id?: number | string | null;
+      code?: string | null;
+      name?: string | null;
+    } | null;
+    requester?: { id?: number | string | null; name?: string | null } | null;
+    ownership?: {
+      owner_company_id?: number | null;
+      owner_company_name?: string | null;
+    } | null;
+    execution?: {
+      executing_company_id?: number | null;
+      executing_company_name?: string | null;
+    } | null;
+    upstream?: {
+      type?: string | null;
+      id?: number | string | null;
+      code?: string | null;
+      name?: string | null;
+    } | null;
+    origin_channel?: string | null;
+  } | null;
+  trip_flags?: Record<string, boolean | number | null> | null;
+  scheduling?: {
+    scheduled_time?: string | null;
+    time_defined?: boolean;
+    display_time?: string | null;
+  } | null;
+  search_index?: string[] | null;
   pickup_label?: string | null;
   dropoff_label?: string | null;
   pickup_lat?: number | null;

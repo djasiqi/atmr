@@ -68,10 +68,11 @@ const InstitutionOperationalEdit = ({
   const [saveError, setSaveError] = useState(null);
 
   const isDateTimeInPast = useMemo(() => {
-    if (!form.scheduled_date || !form.scheduled_time || form.scheduled_time === '00:00') return false;
+    if (bs.time_confirmed === false) return false;
+    if (!form.scheduled_date || !form.scheduled_time) return false;
     const combined = new Date(`${form.scheduled_date}T${form.scheduled_time}:00`);
     return !Number.isNaN(combined.getTime()) && combined < new Date();
-  }, [form.scheduled_date, form.scheduled_time]);
+  }, [form.scheduled_date, form.scheduled_time, bs.time_confirmed]);
 
   const handleChange = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));

@@ -31,11 +31,10 @@ from models import (
     TransportRequest,
     User,
 )
-from models.enums import ClientType, ManagementMode, UserRole
+from models.enums import BookingCreatedVia, ClientType, ManagementMode, UserRole
 from security.audit_log import AuditLogger
 from shared.time_utils import (
     api_scheduled_iso_to_naive_geneva,
-    is_return_time_pending,
 )
 
 logger = logging.getLogger(__name__)
@@ -72,6 +71,28 @@ def _track_accept_conflict(
         )
     except Exception:
         pass
+
+
+def _build_conversion_institution_snapshot(
+    transport_request: TransportRequest,
+) -> dict[str, object]:
+    """Snapshot institution figé à la conversion (V2 — payload request_converted)."""
+    try:
+        from models import Institution
+        from services.institutions.mission_report_context import build_institution_snapshot
+
+        institution = getattr(transport_request, "institution", None)
+        if institution is None and transport_request.institution_id:
+            institution = Institution.query.get(transport_request.institution_id)
+        if institution is None:
+            return {}
+        return build_institution_snapshot(transport_request, institution)
+    except Exception as err:
+        logger.warning(
+            "[AcceptOffer] institution_snapshot capture failed: %s",
+            err,
+        )
+        return {}
 
 
 @dataclass(frozen=True, slots=True)
@@ -182,6 +203,26 @@ class AcceptOfferUseCase:
                     status_code=409,
                 )
 
+            from models.enums import CarrierSource
+
+            if transport_request.carrier_source == CarrierSource.EXTERNAL.value:
+                _track_accept_conflict(
+                    offer_id=input_data.offer_id,
+                    company_id=input_data.company_id,
+                    transport_request_id=transport_request.id,
+                    reason="carrier_source_external",
+                )
+                return AcceptOfferResult(
+                    success=False,
+                    offer_id=input_data.offer_id,
+                    transport_request_id=transport_request.id,
+                    error=(
+                        "Demande basculée vers un transporteur externe, "
+                        "acceptation impossible"
+                    ),
+                    status_code=409,
+                )
+
             # 4. Vérifier le statut de l'offre (doit être PENDING)
             # Recharger l'offre dans la même transaction
             offer = (
@@ -240,19 +281,38 @@ class AcceptOfferUseCase:
             transport_request.accepted_at = now
             transport_request.accepted_by_company_id = input_data.company_id
 
-            # 9. Créer le Booking (+ retour si A/R)
-            booking, return_booking = self._create_booking_from_request(
-                transport_request=transport_request,
-                company_id=input_data.company_id,
-                user_id=input_data.user_id,
-                proposed_pickup_time=input_data.proposed_pickup_time,
-            )
-            return_booking_id = return_booking.id if return_booking else None
+            # 9. Créer le(s) Booking(s)
+            if getattr(transport_request, "multi_stop", False):
+                booking, return_booking = self._create_bookings_from_legs(
+                    transport_request=transport_request,
+                    company_id=input_data.company_id,
+                    user_id=input_data.user_id,
+                    proposed_pickup_time=input_data.proposed_pickup_time,
+                )
+                return_booking_id = return_booking.id if return_booking else None
+            else:
+                booking, return_booking = self._create_booking_from_request(
+                    transport_request=transport_request,
+                    company_id=input_data.company_id,
+                    user_id=input_data.user_id,
+                    proposed_pickup_time=input_data.proposed_pickup_time,
+                )
+                return_booking_id = return_booking.id if return_booking else None
 
             # 10. Lier le booking à la request et marquer comme CONVERTED
             transport_request.booking_id = booking.id
             transport_request.status = RequestStatus.CONVERTED.value
             transport_request.converted_at = now
+
+            # Timeline transport: offer_accepted -> request_converted -> booking_created
+            self._record_accept_timeline(
+                transport_request=transport_request,
+                offer=offer,
+                booking=booking,
+                company=company,
+                user_id=input_data.user_id,
+                company_id=input_data.company_id,
+            )
 
             db.session.commit()
 
@@ -410,6 +470,81 @@ class AcceptOfferUseCase:
                 status_code=500,
             )
 
+    @staticmethod
+    def _record_accept_timeline(
+        *,
+        transport_request: TransportRequest,
+        offer: RequestOffer,
+        booking: Booking,
+        company: Company | None,
+        user_id: int,
+        company_id: int,
+    ) -> None:
+        """Historise l'acceptation, la conversion et la création du booking."""
+        try:
+            from services.institutions.transport_timeline_service import (
+                TimelineActor,
+                find_latest_event,
+                record_event,
+            )
+
+            company_name = company.name if company else None
+            actor = TimelineActor(
+                actor_type="company",
+                actor_user_id=user_id,
+                company_id=company_id,
+            )
+
+            # Chaîne offer_accepted -> offer_sent correspondant
+            offer_sent_event = find_latest_event(
+                transport_request_id=transport_request.id,
+                event_type="offer_sent",
+                company_id=company_id,
+            )
+            accepted_event = record_event(
+                "offer_accepted",
+                institution_id=transport_request.institution_id,
+                transport_request_id=transport_request.id,
+                actor=actor,
+                payload={
+                    "company_id": company_id,
+                    "company_name": company_name,
+                    "offer_id": offer.id,
+                },
+                correlation_id=f"offer_accepted:{offer.id}",
+                source_event_id=offer_sent_event.id if offer_sent_event else None,
+            )
+
+            converted_event = record_event(
+                "request_converted",
+                institution_id=transport_request.institution_id,
+                transport_request_id=transport_request.id,
+                booking_id=booking.id,
+                actor=actor,
+                payload={
+                    "booking_id": booking.id,
+                    "company_id": company_id,
+                    "institution_snapshot": _build_conversion_institution_snapshot(
+                        transport_request
+                    ),
+                },
+                correlation_id=f"request_converted:{transport_request.id}",
+                source_event_id=accepted_event.id if accepted_event else None,
+            )
+
+            record_event(
+                "booking_created",
+                institution_id=transport_request.institution_id,
+                transport_request_id=transport_request.id,
+                booking_id=booking.id,
+                actor=actor,
+                payload={"booking_id": booking.id, "company_id": company_id},
+                correlation_id=f"booking_created:{booking.id}",
+                source_event_id=converted_event.id if converted_event else None,
+            )
+        except Exception as timeline_err:
+            logger.warning("[AcceptOffer] Timeline recording failed: %s", timeline_err)
+
     def _create_booking_from_request(
         self,
         transport_request: TransportRequest,
@@ -515,6 +650,7 @@ class AcceptOfferUseCase:
             status=BookingStatus.ACCEPTED.value,
             # Montant: tarif préférentiel ou minimum par défaut
             amount=amount,
+            created_via=BookingCreatedVia.INSTITUTION_PORTAL,
         )
 
         # Assigner billed_to_company_id APRÈS la construction pour que
@@ -551,19 +687,33 @@ class AcceptOfferUseCase:
         )
 
         return_time_raw = getattr(transport_request, "return_time", None)
+        return_date_raw = getattr(transport_request, "return_date", None)
+        return_time_confirmed_flag = bool(
+            getattr(transport_request, "return_time_confirmed", False)
+        )
         return_time_naive = (
             api_scheduled_iso_to_naive_geneva(return_time_raw)
             if return_time_raw is not None
             else None
         )
-        return_time_pending = is_return_time_pending(return_time_naive)
 
-        if transport_request.is_round_trip and return_time_naive is None:
+        has_return_plan = transport_request.is_round_trip and (
+            return_time_naive is not None or return_date_raw is not None
+        )
+
+        if transport_request.is_round_trip and not has_return_plan:
             logger.warning(
-                "[AcceptOffer] A/R sans return_time, skip retour request_id=%s",
+                "[AcceptOffer] A/R sans return_date ni return_time, skip retour request_id=%s",
                 transport_request.id,
             )
-        elif transport_request.is_round_trip and return_time_naive is not None:
+        elif has_return_plan:
+            if return_time_naive is not None:
+                ret_scheduled = return_time_naive
+                ret_time_confirmed = return_time_confirmed_flag
+            else:
+                ret_scheduled = None
+                ret_time_confirmed = False
+
             return_booking = Booking(
                 company_id=company_id,
                 user_id=user_id,
@@ -571,8 +721,8 @@ class AcceptOfferUseCase:
                 customer_name=booking.customer_name,
                 mission_type=booking.mission_type,
                 delivery_description=booking.delivery_description,
-                scheduled_time=return_time_naive,
-                time_confirmed=not return_time_pending,
+                scheduled_time=ret_scheduled,
+                time_confirmed=ret_time_confirmed,
                 is_round_trip=False,
                 is_return=True,
                 parent_booking_id=booking.id,
@@ -596,6 +746,7 @@ class AcceptOfferUseCase:
                 billed_to_type=booking.billed_to_type,
                 status=BookingStatus.ACCEPTED.value,
                 amount=booking.amount,
+                created_via=BookingCreatedVia.INSTITUTION_PORTAL,
             )
             if booking.billed_to_company_id is not None:
                 return_booking.billed_to_company_id = booking.billed_to_company_id
@@ -609,11 +760,152 @@ class AcceptOfferUseCase:
                 "[AcceptOffer] Return booking %s created (parent=%s, time_confirmed=%s) for request %s",
                 return_booking.id,
                 booking.id,
-                not return_time_pending,
+                ret_time_confirmed,
                 transport_request.id,
             )
 
         return booking, return_booking
+
+    def _create_bookings_from_legs(
+        self,
+        transport_request: TransportRequest,
+        company_id: int,
+        user_id: int,
+        proposed_pickup_time: datetime | None = None,
+    ) -> tuple[Booking, Booking | None]:
+        """Conversion atomique multi-stop : 1 booking par leg."""
+        from models.transport_request_leg import TransportRequestLeg
+
+        legs = (
+            TransportRequestLeg.query.filter_by(
+                transport_request_id=transport_request.id
+            )
+            .order_by(TransportRequestLeg.sequence_index.asc())
+            .all()
+        )
+        if not legs:
+            raise ValueError(
+                f"Demande multi-stop {transport_request.id} sans legs configurés"
+            )
+
+        institution_client = self._get_or_create_institution_client(
+            transport_request, company_id
+        )
+        amount = 0.5
+        if institution_client and institution_client.preferential_rate:
+            amount = float(institution_client.preferential_rate)
+
+        billing_intent = (
+            getattr(transport_request, "billing_intent", None) or "patient"
+        ).lower()
+        billed_to_type = "patient"
+        billed_to_company_id = None
+        if billing_intent == "institution":
+            billed_to_type = "clinic"
+            billed_to_company_id = company_id
+
+        route_group_id = getattr(transport_request, "route_group_id", None)
+        entry_point = getattr(transport_request, "pickup_entry_point", None) or ""
+        customer_name = self._get_customer_name(transport_request)
+        primary: Booking | None = None
+
+        for leg in legs:
+            is_first_leg = leg.sequence_index == 0
+            leg_confirmed = bool(getattr(leg, "time_confirmed", False))
+            mission_depart_confirmed = bool(
+                getattr(transport_request, "pickup_time_confirmed", False)
+                and transport_request.scheduled_time
+            )
+            if is_first_leg:
+                raw_pickup = (
+                    proposed_pickup_time
+                    or (leg.scheduled_time if leg_confirmed else None)
+                    or (
+                        transport_request.scheduled_time
+                        if mission_depart_confirmed
+                        else None
+                    )
+                )
+                operational = (
+                    leg_confirmed
+                    or mission_depart_confirmed
+                    or proposed_pickup_time is not None
+                )
+            else:
+                raw_pickup = leg.scheduled_time if leg_confirmed else None
+                operational = leg_confirmed
+            effective_pickup_time = (
+                api_scheduled_iso_to_naive_geneva(raw_pickup) if raw_pickup else None
+            )
+
+            time_to_define = effective_pickup_time is None or not operational
+
+            booking = Booking(
+                company_id=company_id,
+                user_id=user_id,
+                client_id=institution_client.id if institution_client else None,
+                customer_name=customer_name,
+                mission_type=transport_request.mission_type,
+                delivery_description=transport_request.delivery_description,
+                is_return=False,
+                time_confirmed=not time_to_define,
+                scheduled_time=effective_pickup_time,
+                is_round_trip=False,
+                pickup_location=leg.pickup_location,
+                pickup_lat=float(leg.pickup_lat) if leg.pickup_lat else None,
+                pickup_lon=float(leg.pickup_lng) if leg.pickup_lng else None,
+                pickup_access_notes=self._format_pickup_notes(transport_request),
+                pickup_floor=transport_request.pickup_floor,
+                pickup_door_code=transport_request.pickup_door_code,
+                dropoff_location=leg.dropoff_location,
+                dropoff_lat=float(leg.dropoff_lat) if leg.dropoff_lat else None,
+                dropoff_lon=float(leg.dropoff_lng) if leg.dropoff_lng else None,
+                dropoff_access_notes=self._format_dropoff_notes(transport_request),
+                dropoff_floor=transport_request.dropoff_floor,
+                dropoff_door_code=transport_request.dropoff_door_code,
+                hospital_service=entry_point if entry_point else None,
+                wheelchair_client_has=self._get_mobility_flag(
+                    transport_request, "wheelchair"
+                ),
+                wheelchair_need=self._get_mobility_flag(
+                    transport_request, "stretcher"
+                ),
+                notes_medical=transport_request.notes,
+                billed_to_type=billed_to_type,
+                status=BookingStatus.ACCEPTED.value,
+                amount=amount,
+                route_group_id=route_group_id,
+                route_sequence_number=leg.route_sequence_number,
+                created_via=BookingCreatedVia.INSTITUTION_PORTAL,
+            )
+            if billed_to_company_id is not None:
+                booking.billed_to_company_id = billed_to_company_id
+
+            # NB : on NE rattache PAS les legs via parent_booking_id. La relation
+            # `return_trip` (remote_side=[id], fk=parent_booking_id) interprète
+            # parent_booking_id comme un lien aller/retour, ce qui ferait
+            # apparaître les legs comme "Aller-retour" et fausserait
+            # l'appariement de facturation A/R. Le regroupement du parcours est
+            # assuré par `route_group_id` (suffisant pour l'annulation en cascade).
+
+            db.session.add(booking)
+            db.session.flush()
+            leg.booking_id = booking.id
+            self._resolve_billing_party(booking, transport_request, company_id)
+
+            if primary is None:
+                primary = booking
+
+        if primary is None:
+            raise ValueError("Conversion multi-stop sans booking créé")
+
+        logger.info(
+            "[AcceptOffer] Multi-stop request %s -> %s bookings (route_group=%s)",
+            transport_request.id,
+            len(legs),
+            route_group_id,
+        )
+        return primary, None
 
     def _resolve_billing_party(
         self,

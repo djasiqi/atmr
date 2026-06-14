@@ -16,6 +16,9 @@ export const institutionQueryKeys = {
   requests: () => [...institutionQueryKeys.all, 'requests'],
   requestsList: (filters) => [...institutionQueryKeys.requests(), 'list', filters],
   requestDetail: (id) => [...institutionQueryKeys.requests(), 'detail', id],
+  requestTimeline: (id) => [...institutionQueryKeys.requests(), 'timeline', id],
+  bookingTimeline: (id) => [...institutionQueryKeys.requests(), 'booking-timeline', id],
+  patientTransportHistory: (id) => [...institutionQueryKeys.patients(), 'transport-history', id],
   patients: () => [...institutionQueryKeys.all, 'patients'],
   patientsList: (filters) => [...institutionQueryKeys.patients(), 'list', filters],
   patientDetail: (id) => [...institutionQueryKeys.patients(), 'detail', id],
@@ -124,6 +127,32 @@ export function useCancelRequest() {
     mutationFn: ({ requestId, reason }) => institutionService.cancelRequest(requestId, reason),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: institutionQueryKeys.requestDetail(variables.requestId) });
+      queryClient.invalidateQueries({ queryKey: institutionQueryKeys.requests() });
+    },
+  });
+}
+
+export function useAssignExternalCarrier() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ requestId, data }) => institutionService.assignExternalCarrier(requestId, data),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: institutionQueryKeys.requestDetail(variables.requestId) });
+      queryClient.invalidateQueries({ queryKey: institutionQueryKeys.requestTimeline(variables.requestId) });
+      queryClient.invalidateQueries({ queryKey: institutionQueryKeys.requests() });
+    },
+  });
+}
+
+export function useCompleteExternalMission() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ requestId, data }) => institutionService.completeExternalMission(requestId, data),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: institutionQueryKeys.requestDetail(variables.requestId) });
+      queryClient.invalidateQueries({ queryKey: institutionQueryKeys.requestTimeline(variables.requestId) });
       queryClient.invalidateQueries({ queryKey: institutionQueryKeys.requests() });
     },
   });
@@ -321,6 +350,44 @@ export function useBookingChangeEvents(bookingId, enabled = true) {
     queryFn: () => institutionService.fetchBookingChangeEvents(bookingId),
     enabled: Boolean(bookingId) && enabled,
     staleTime: 30 * 1000,
+  });
+}
+
+export function useRequestTimeline(requestId, enabled = true) {
+  return useQuery({
+    queryKey: institutionQueryKeys.requestTimeline(requestId),
+    queryFn: () => institutionService.getRequestTimeline(requestId),
+    enabled: Boolean(requestId) && enabled,
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useBookingTimeline(bookingId, enabled = true) {
+  return useQuery({
+    queryKey: institutionQueryKeys.bookingTimeline(bookingId),
+    queryFn: () => institutionService.getBookingTimeline(bookingId),
+    enabled: Boolean(bookingId) && enabled,
+    staleTime: 30 * 1000,
+  });
+}
+
+export function usePatientTransportHistory(patientId, enabled = true) {
+  return useQuery({
+    queryKey: institutionQueryKeys.patientTransportHistory(patientId),
+    queryFn: () => institutionService.getPatientTransportHistory(patientId),
+    enabled: Boolean(patientId) && enabled,
+    staleTime: 60 * 1000,
+  });
+}
+
+export function useReleaseBookingForRedispatch() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ bookingId, ...data }) =>
+      institutionService.releaseBookingForRedispatch(bookingId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: institutionQueryKeys.requests() });
+    },
   });
 }
 

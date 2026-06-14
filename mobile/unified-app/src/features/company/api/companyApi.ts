@@ -188,6 +188,14 @@ type RawRide = {
   duration_seconds?: number | string | null;
   time?: { pickup_at?: string | null };
   client?: { name?: string | null } | null;
+  client_name?: string | null;
+  identity?: CompanyDispatchMission["identity"];
+  trip_flags?: CompanyDispatchMission["trip_flags"];
+  scheduling?: CompanyDispatchMission["scheduling"];
+  time_confirmed?: boolean | null;
+  display_model?: string | null;
+  display_model_version?: number | null;
+  search_index?: unknown[] | null;
   route?: {
     pickup_address?: string | null;
     dropoff_address?: string | null;
@@ -334,9 +342,18 @@ function normalizeMission(raw: RawRide): CompanyDispatchMission | null {
   const driverId = toFiniteNumber(raw.driver?.id ?? null);
   const companyId = toFiniteNumber(raw.company_id ?? null);
   const clientName =
-    raw.client && typeof raw.client === "object" && typeof raw.client.name === "string" && raw.client.name.trim()
-      ? raw.client.name.trim()
-      : null;
+    (raw.identity &&
+      typeof raw.identity === "object" &&
+      raw.identity.passenger &&
+      typeof raw.identity.passenger === "object" &&
+      typeof raw.identity.passenger.name === "string" &&
+      raw.identity.passenger.name.trim())
+      ? raw.identity.passenger.name.trim()
+      : raw.client && typeof raw.client === "object" && typeof raw.client.name === "string" && raw.client.name.trim()
+        ? raw.client.name.trim()
+        : typeof raw.client_name === "string" && raw.client_name.trim()
+          ? raw.client_name.trim()
+          : null;
   const driverNameRaw = raw.driver && typeof raw.driver === "object" ? raw.driver : null;
   const driverNameFromApi =
     typeof driverNameRaw?.display_name === "string" && driverNameRaw.display_name.trim()
@@ -378,11 +395,25 @@ function normalizeMission(raw: RawRide): CompanyDispatchMission | null {
   const dropoffLat = toFiniteNumber(raw.route?.dropoff_lat ?? raw.dropoff_lat);
   const dropoffLon = toFiniteNumber(raw.route?.dropoff_lon ?? raw.dropoff_lon ?? raw.dropoff_lng);
   const scheduledAt = raw.time?.pickup_at ?? raw.pickup_at ?? raw.scheduled_at ?? null;
+  const identityRaw = raw.identity && typeof raw.identity === "object" ? raw.identity : null;
+  const tripFlagsRaw = raw.trip_flags && typeof raw.trip_flags === "object" ? raw.trip_flags : null;
+  const schedulingRaw = raw.scheduling && typeof raw.scheduling === "object" ? raw.scheduling : null;
+  const searchIndexRaw = Array.isArray(raw.search_index) ? raw.search_index.filter((t) => typeof t === "string") : null;
   return {
     mission_id: missionId,
     status: normalizedStatus,
     scheduled_at: scheduledAt,
     client_name: clientName,
+    identity: identityRaw,
+    trip_flags: tripFlagsRaw,
+    scheduling: schedulingRaw,
+    time_confirmed:
+      typeof raw.time_confirmed === "boolean"
+        ? raw.time_confirmed
+        : schedulingRaw && typeof schedulingRaw === "object" && "time_confirmed" in schedulingRaw
+          ? Boolean((schedulingRaw as { time_confirmed?: boolean }).time_confirmed)
+          : null,
+    search_index: searchIndexRaw,
     pickup_label: pickupLabel,
     dropoff_label: dropoffLabel,
     pickup_lat: pickupLat,
@@ -1141,9 +1172,8 @@ export async function createCompanyRide(options: CompanyRequestOptions & { paylo
     legacyPayload.return_date.trim().length > 0 &&
     (legacyPayload.return_time == null || String(legacyPayload.return_time).trim().length === 0)
   ) {
-    // Compat endpoint legacy: pour garantir la création du retour,
-    // envoyer un datetime ISO complet (heure non définie => 00:00:00).
-    legacyPayload.return_time = `${legacyPayload.return_date}T00:00:00`;
+    // Date seule : le backend crée le retour avec scheduled_time=null, time_confirmed=false.
+    delete legacyPayload.return_time;
   }
   const cleanedLegacyPayload = stripNullishFields(legacyPayload as Record<string, unknown>);
   const requests: Array<() => Promise<{ data: CompanyAnyPayload }>> = isRecurringRequest

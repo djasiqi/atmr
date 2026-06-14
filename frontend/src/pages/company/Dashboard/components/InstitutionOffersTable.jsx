@@ -2,6 +2,9 @@
 import React, { useState } from 'react';
 import { FiCheckCircle, FiXCircle, FiClock, FiInbox } from 'react-icons/fi';
 import styles from './ReservationTable.module.css';
+import BookingIdentityCell from '../../../../components/booking/BookingIdentityCell';
+import { buildOfferIdentity } from '../../../../utils/bookingIdentity';
+import { formatMissionScheduleDetail, formatLegTime, formatDepartureTime } from '../../../../utils/formatLegTime';
 
 /**
  * Formate une date ISO en "DD.MM.YYYY" et "HH:MM"
@@ -31,6 +34,44 @@ const canRespondToOffer = (offer) => {
     return new Date(offer.expires_at) > new Date();
   }
   return offer?.can_respond !== false;
+};
+
+// Nom court d'un point : établissement si dispo, sinon 1er segment de l'adresse.
+const shortName = (address, establishment) => {
+  if (establishment && establishment.trim()) return establishment.trim();
+  if (!address) return '—';
+  return address.split(',')[0].trim();
+};
+
+// Reconstruit le parcours complet d'une demande à partir des legs (multi-destinations + retour).
+const getRoutePoints = (req) => {
+  const legs = Array.isArray(req?.legs)
+    ? [...req.legs].sort((a, b) => (a.sequence_index ?? 0) - (b.sequence_index ?? 0))
+    : [];
+  if (legs.length > 0) {
+    return [
+      {
+        label: 'Départ',
+        address: legs[0].pickup_location,
+        short: shortName(legs[0].pickup_location),
+        kind: 'start',
+      },
+      ...legs.map((leg, index) => {
+        const isReturn = Boolean(req?.return_to_institution) && index === legs.length - 1;
+        return {
+          label: isReturn ? 'Retour' : `Destination ${index + 1}`,
+          address: leg.dropoff_location,
+          short: isReturn ? 'Retour institution' : shortName(leg.dropoff_location, leg.dropoff_establishment),
+          kind: isReturn ? 'return' : 'destination',
+          time: formatLegTime(leg),
+        };
+      }),
+    ];
+  }
+  return [
+    { label: 'Départ', address: req?.pickup_location, short: shortName(req?.pickup_location), kind: 'start', time: formatDepartureTime(req) },
+    { label: 'Arrivée', address: req?.dropoff_location, short: shortName(req?.dropoff_location, req?.dropoff_establishment), kind: 'destination', time: formatLegTime({ scheduled_time: req?.scheduled_time, time_confirmed: req?.scheduled_time_type === 'arrival' }) },
+  ];
 };
 
 const toDatetimeLocal = (isoString) => {
@@ -159,8 +200,23 @@ const ProposeTimeModal = ({ offer, onConfirm, onClose }) => {
  * Tableau des offres de transport institutionnelles.
  * Affiche les demandes reçues d'institutions avec possibilité d'accepter/proposer/refuser.
  */
+// Durée d'affichage d'une offre expirée avant masquage automatique (1h).
+const EXPIRED_OFFER_VISIBLE_MS = 60 * 60 * 1000;
+
 const InstitutionOffersTable = ({ offers = [], loading, onAccept, onReject }) => {
   const [proposeOffer, setProposeOffer] = useState(null);
+
+  // Masque les offres expirées depuis plus d'1h (on garde le statut "Expiré" le temps restant).
+  const visibleOffers = React.useMemo(() => {
+    const now = Date.now();
+    return (offers || []).filter((offer) => {
+      if (!offer?.expires_at) return true;
+      const expiresAt = new Date(offer.expires_at).getTime();
+      if (Number.isNaN(expiresAt)) return true;
+      if (expiresAt > now) return true; // pas encore expirée
+      return now - expiresAt <= EXPIRED_OFFER_VISIBLE_MS;
+    });
+  }, [offers]);
 
   if (loading) {
     return (
@@ -172,7 +228,7 @@ const InstitutionOffersTable = ({ offers = [], loading, onAccept, onReject }) =>
     );
   }
 
-  if (!offers.length) {
+  if (!visibleOffers.length) {
     return (
       <div className={styles.emptyState}>
         <FiInbox className={styles.emptyIcon} size={40} />
@@ -188,8 +244,8 @@ const InstitutionOffersTable = ({ offers = [], loading, onAccept, onReject }) =>
         <table className={styles.table}>
           <thead>
             <tr>
-              <th>Institution</th>
-              <th>Date / Heure</th>
+              <th className={styles.dateCell}>Date / Heure</th>
+              <th>Passager</th>
               <th>Trajet</th>
               <th>Type</th>
               <th>Statut</th>
@@ -197,12 +253,24 @@ const InstitutionOffersTable = ({ offers = [], loading, onAccept, onReject }) =>
             </tr>
           </thead>
           <tbody>
-            {offers.map((offer) => {
+            {visibleOffers.map((offer) => {
               const req = offer.transport_request || {};
+              const routePoints = getRoutePoints(req);
               const canRespond = canRespondToOffer(offer);
               const isExpired =
                 offer.expires_at && new Date(offer.expires_at) <= new Date();
-              const { date, time } = formatDateTime(req.scheduled_time);
+              const scheduleDetail = req.scheduling?.summary
+                ? { missionDate: req.scheduling.mission_date, summary: req.scheduling.summary }
+                : formatMissionScheduleDetail(req);
+              const departureTime = req.scheduling?.departure?.display_time;
+              const { date, time } = departureTime
+                ? { date: scheduleDetail.missionDate?.split('-').reverse().join('.') || formatDateTime(req.scheduled_time).date, time: departureTime }
+                : formatDateTime(req.next_confirmed_time || req.scheduled_time);
+              // Affichage compact : l'heure principale est déjà visible, on n'indique
+              // que sa nature (départ vs rendez-vous) plutôt que le résumé détaillé.
+              const scheduleKindLabel = (!departureTime && req.scheduled_time_type === 'arrival')
+                ? 'Rendez-vous'
+                : 'Départ';
               const mobility = req.mobility;
               const mobilityTags = [];
               if (mobility) {
@@ -214,41 +282,40 @@ const InstitutionOffersTable = ({ offers = [], loading, onAccept, onReject }) =>
 
               return (
                 <tr key={offer.id} className={styles.tableRow}>
+                  <td className={styles.dateCell}>
+                    <div>{date !== '—' ? date : (scheduleDetail.missionDate || '—')}</div>
+                    <div className={styles.cellPrimary}>{time || '—'}</div>
+                    {time && time !== '—' && (
+                      <div className={styles.cellMeta} title={scheduleDetail.summary || undefined}>
+                        {scheduleKindLabel}
+                      </div>
+                    )}
+                  </td>
                   <td className={styles.clientCell}>
-                    <strong>{req.institution_name || 'Institution'}</strong>
-                    {req.patient_name && (
-                      <div style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>
-                        {req.patient_name}
-                      </div>
-                    )}
+                    <BookingIdentityCell identity={buildOfferIdentity(offer)} />
                   </td>
-                  <td>
-                    <div>{date}</div>
-                    <div style={{ fontWeight: 600 }}>{time}</div>
-                    {req.scheduled_time_type && (
-                      <div style={{ fontSize: '10px', marginTop: 2, color: req.scheduled_time_type === 'arrival' ? 'var(--brand-primary)' : 'var(--text-tertiary)' }}>
-                        {req.scheduled_time_type === 'arrival' ? 'Heure RDV' : 'Heure départ'}
-                      </div>
-                    )}
-                  </td>
-                  <td className={styles.locationCell}>
-                    <div>
-                      <strong>De:</strong> {req.pickup_location || '—'}
-                    </div>
-                    <div>
-                      <strong>À:</strong> {req.dropoff_location || '—'}
-                    </div>
-                    {req.is_round_trip && (
-                      <div
-                        style={{
-                          fontSize: '11px',
-                          color: 'var(--brand-primary)',
-                          marginTop: 2,
-                        }}
-                      >
-                        ↩ Aller-retour
-                      </div>
-                    )}
+                  <td
+                    className={styles.locationCell}
+                    title={routePoints
+                      .map((point) => `${point.label} : ${point.address || '—'}`)
+                      .join('\n')}
+                  >
+                    {(() => {
+                      const tripCount = Math.max(routePoints.length - 1, 1);
+                      const isMulti = req.multi_stop || req.return_to_institution || tripCount > 1;
+                      return (
+                        <>
+                          <div className={styles.offerRouteSummaryLine}>
+                            {routePoints.map((point) => `${point.short}${point.time ? ` (${point.time})` : ''}`).join(' → ')}
+                          </div>
+                          {isMulti && (
+                            <div className={styles.offerRouteSummaryHeader}>
+                              Multi-destination · {tripCount} trajet{tripCount > 1 ? 's' : ''}
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
                   </td>
                   <td>
                     <div style={{ fontSize: '13px' }}>
@@ -287,13 +354,7 @@ const InstitutionOffersTable = ({ offers = [], loading, onAccept, onReject }) =>
                       {canRespond ? 'En attente' : isExpired ? 'Expiré' : 'Indisponible'}
                     </span>
                     {offer.expires_at && (
-                      <div
-                        style={{
-                          fontSize: '10px',
-                          color: 'var(--text-tertiary)',
-                          marginTop: 2,
-                        }}
-                      >
+                      <div className={styles.cellMeta}>
                         Exp: {formatDateTime(offer.expires_at).date}{' '}
                         {formatDateTime(offer.expires_at).time}
                       </div>
@@ -301,7 +362,7 @@ const InstitutionOffersTable = ({ offers = [], loading, onAccept, onReject }) =>
                   </td>
                   <td className={styles.actionsCell}>
                     {canRespond ? (
-                      <div style={{ display: 'flex', gap: '2px', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', gap: '2px', alignItems: 'center', justifyContent: 'flex-end' }}>
                         {/* Accepter (avec l'horaire demandé) */}
                         <button
                           onClick={(e) => {

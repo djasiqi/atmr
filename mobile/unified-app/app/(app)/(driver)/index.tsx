@@ -125,6 +125,7 @@ export default function DriverHomeScreen() {
     trackingOnboarded,
     showPedagogicalPanel,
     onReadinessGateReady,
+    dismissPedagogicalPanel,
   } = useTrackingAttentionState();
   const liveTrackingGuard = useMissionLiveTrackingGuard();
 
@@ -237,6 +238,7 @@ export default function DriverHomeScreen() {
               <DriverTrackingReadinessGate
                 mode={trackingOnboarded ? "needs_attention" : "onboarding"}
                 onReadyChange={onReadinessGateReady}
+                onDismiss={dismissPedagogicalPanel}
               />
             ) : null}
 

@@ -607,6 +607,21 @@ def _build_ride_summary(
         # Minutes (assignment.delay_seconds / 60), seuil ≥ 1 min — complète les endpoints ETA delays sur mobile.
         "assignment_pickup_delay_minutes": assignment_pickup_delay_minutes,
     }
+
+    from services.companies.booking_display import build_booking_display_blocks
+
+    display_blocks = build_booking_display_blocks(
+        booking, viewer_company_id=current_company_id
+    )
+    summary.update(display_blocks)
+    summary["time_confirmed"] = bool(getattr(booking, "time_confirmed", False))
+    passenger_name = (
+        display_blocks.get("identity", {}).get("passenger", {}).get("name")
+    )
+    if passenger_name:
+        summary["client_name"] = passenger_name
+        client_info["name"] = passenger_name
+
     return summary
 
 

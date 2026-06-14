@@ -165,6 +165,14 @@ class RejectOfferUseCase:
                             transport_request.id,
                         )
 
+            # Timeline transport: offer_rejected
+            self._record_reject_timeline(
+                transport_request=transport_request,
+                offer=offer,
+                user_id=input_data.user_id,
+                company_id=input_data.company_id,
+            )
+
             db.session.commit()
 
             # 7. Audit log
@@ -232,3 +240,45 @@ class RejectOfferUseCase:
                 error=f"Erreur inattendue: {e!s}",
                 status_code=500,
             )
+
+    @staticmethod
+    def _record_reject_timeline(
+        *,
+        transport_request: TransportRequest,
+        offer: RequestOffer,
+        user_id: int,
+        company_id: int,
+    ) -> None:
+        """Historise le refus d'offre (offer_rejected) avec chaîne vers offer_sent."""
+        try:
+            from services.institutions.transport_timeline_service import (
+                TimelineActor,
+                find_latest_event,
+                record_event,
+            )
+
+            company = offer.company
+            offer_sent_event = find_latest_event(
+                transport_request_id=transport_request.id,
+                event_type="offer_sent",
+                company_id=company_id,
+            )
+            record_event(
+                "offer_rejected",
+                institution_id=transport_request.institution_id,
+                transport_request_id=transport_request.id,
+                actor=TimelineActor(
+                    actor_type="company",
+                    actor_user_id=user_id,
+                    company_id=company_id,
+                ),
+                payload={
+                    "company_id": company_id,
+                    "company_name": company.name if company else None,
+                    "offer_id": offer.id,
+                },
+                correlation_id=f"offer_rejected:{offer.id}",
+                source_event_id=offer_sent_event.id if offer_sent_event else None,
+            )
+        except Exception as timeline_err:
+            logger.warning("[RejectOffer] Timeline recording failed: %s", timeline_err)

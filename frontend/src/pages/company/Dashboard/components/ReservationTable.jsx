@@ -2,24 +2,13 @@
 import React, { useState } from 'react';
 import { FiCheckCircle, FiXCircle, FiInbox, FiChevronDown } from 'react-icons/fi';
 import styles from './ReservationTable.module.css';
-import { renderBookingDateTime } from '../../../../utils/formatDate';
 import { formatDelay } from '../../../../utils/formatDelay';
 import { pickupArrivalHint } from '../../../../utils/formatPickupEta';
+import BookingScheduleCell from '../../../../components/booking/BookingScheduleCell';
 import ReservationActions from '../../../../components/reservations/ReservationActions';
-
-const STATUS_LABELS = {
-  pending: 'En attente',
-  accepted: 'Acceptée',
-  assigned: 'Assignée',
-  en_route: 'En route',
-  in_progress: 'En cours',
-  completed: 'Terminée',
-  return_completed: 'Retour terminé',
-  canceled: 'Annulée',
-  cancelled: 'Annulée',
-  rejected: 'Refusée',
-  no_show: 'Non présenté',
-};
+import BookingIdentityCell from '../../../../components/booking/BookingIdentityCell';
+import BookingTripBadges from '../../../../components/booking/BookingTripBadges';
+import BookingStatusBadge from '../../../../components/booking/BookingStatusBadge';
 
 const DISPLAY_INCREMENT = 50;
 
@@ -102,6 +91,40 @@ const getDelayRowClass = (delayMinutes) => {
   return 'rowReasonableDelay';
 };
 
+/**
+ * Regroupe les legs d'un même parcours multi-destinations (route_group_id) de
+ * façon contiguë et ordonnée par route_sequence_number, tout en conservant la
+ * position globale des autres lignes (insertion à la 1re occurrence du groupe).
+ */
+function clusterRouteGroups(list) {
+  if (!Array.isArray(list) || list.length === 0) return list;
+  const byGroup = new Map();
+  list.forEach((r) => {
+    const g = r?.route_group_id;
+    if (!g) return;
+    if (!byGroup.has(g)) byGroup.set(g, []);
+    byGroup.get(g).push(r);
+  });
+  if (byGroup.size === 0) return list;
+
+  const seen = new Set();
+  const result = [];
+  list.forEach((r) => {
+    const g = r?.route_group_id;
+    if (!g) {
+      result.push(r);
+      return;
+    }
+    if (seen.has(g)) return;
+    seen.add(g);
+    const members = [...byGroup.get(g)].sort(
+      (a, b) => (Number(a.route_sequence_number) || 0) - (Number(b.route_sequence_number) || 0)
+    );
+    result.push(...members);
+  });
+  return result;
+}
+
 const ReservationTable = ({
   reservations,
   loading,
@@ -138,9 +161,18 @@ const ReservationTable = ({
     );
   }
 
-  const displayedReservations = reservations.slice(0, displayLimit);
-  const hasMore = reservations.length > displayLimit;
-  const remainingCount = reservations.length - displayLimit;
+  const orderedReservations = clusterRouteGroups(reservations);
+  const displayedReservations = orderedReservations.slice(0, displayLimit);
+  const hasMore = orderedReservations.length > displayLimit;
+  const remainingCount = orderedReservations.length - displayLimit;
+
+  // Nombre de legs par parcours multi-destinations (pour le badge "Trajet N/M").
+  const routeGroupSizes = {};
+  (reservations || []).forEach((r) => {
+    if (r?.route_group_id) {
+      routeGroupSizes[r.route_group_id] = (routeGroupSizes[r.route_group_id] || 0) + 1;
+    }
+  });
 
   const renderRow = (r) => {
     const status = r.status?.toLowerCase() || 'unknown';
@@ -184,7 +216,7 @@ const ReservationTable = ({
         <table className={styles.table}>
           <thead>
             <tr>
-              <th>Client</th>
+              <th>Passager</th>
               <th>Date / Heure</th>
               <th>Trajet</th>
               <th>Montant</th>
@@ -211,30 +243,8 @@ const ReservationTable = ({
                   className={`${styles.tableRow} ${delayRowClass ? styles[delayRowClass] : ''}`}
                 >
                   <td className={styles.clientCell}>
-                    <span className={styles.clientName}>
-                      {r.client?.full_name || r.client_name}
-                    </span>
-                    {r.client?.institution_name && (
-                      <span className={styles.clientInstitution}>
-                        {r.client.institution_name}
-                      </span>
-                    )}
-                    {reservationIsRoundTripOutbound(r) ? (
-                      <span
-                        className={styles.roundTripBadge}
-                        title="Demande aller-retour : cette ligne est l’aller ; une course retour est liée."
-                      >
-                        Aller-retour
-                      </span>
-                    ) : null}
-                    {r.is_return ? (
-                      <span
-                        className={styles.returnLegBadge}
-                        title="Course retour liée à l’aller (même dossier client)."
-                      >
-                        Retour
-                      </span>
-                    ) : null}
+                    <BookingIdentityCell booking={r} />
+                    <BookingTripBadges booking={r} routeGroupSizes={routeGroupSizes} />
                     {delayMinutes > 0 && formatDelay(delayMinutes) && (
                       <span className={`${styles.delayBadge} ${
                         delayMinutes >= 15 ? styles.delayBadgeCritical
@@ -247,7 +257,7 @@ const ReservationTable = ({
                   </td>
                   <td className={styles.dateCell}>
                     <div className={styles.timeCellStack}>
-                      <span>{renderBookingDateTime(r)}</span>
+                      <BookingScheduleCell booking={r} undefinedClassName={styles.pickupEtaHint} />
                       {pickupArrivalLabel && (
                         <span className={styles.pickupEtaHint} title={pickupArrivalLabel.title}>
                           {pickupArrivalLabel.text}
@@ -286,30 +296,34 @@ const ReservationTable = ({
                     })()}
                   </td>
                   <td>
-                    <span className={`${styles.statusBadge} ${styles[status] || ''}`}>
-                      {STATUS_LABELS[status] || (r.status || '').replace('_', ' ') || status}
-                    </span>
-                    {r.is_transferred && r.active_transfer && (() => {
-                      const isSender = currentCompanyId && r.active_transfer.owner_company_id === currentCompanyId;
-                      const isReceiver = currentCompanyId && r.active_transfer.executing_company_id === currentCompanyId;
-                      let direction = '';
-                      let partnerName = '';
-                      if (isSender) {
-                        direction = 'à';
-                        partnerName = r.active_transfer.executing_company_name || r.executing_company_name || 'partenaire';
-                      } else if (isReceiver) {
-                        direction = 'de';
-                        partnerName = r.active_transfer.owner_company_name || 'partenaire';
-                      } else {
-                        direction = 'vers';
-                        partnerName = r.executing_company_name || r.company_name || 'partenaire';
-                      }
-                      return (
-                        <span className={styles.transferBadge} title={`Transférée ${direction} ${partnerName}`}>
-                          Transférée
-                        </span>
-                      );
-                    })()}
+                    <BookingStatusBadge status={status} />
+                    {r.active_change_request?.status === 'pending' && (
+                      <span
+                        className={styles.transferBadge}
+                        title="Modification institution en attente de validation"
+                        style={{ background: '#fef3c7', color: '#92400e' }}
+                      >
+                        Modif. en attente
+                      </span>
+                    )}
+                    {r.active_change_request?.status === 'escalation_required' && (
+                      <span
+                        className={styles.transferBadge}
+                        title="Demande de modification expirée — action institution requise"
+                        style={{ background: '#ffedd5', color: '#c2410c' }}
+                      >
+                        Escalade
+                      </span>
+                    )}
+                    {r.active_change_request?.status === 'expired' && (
+                      <span
+                        className={styles.transferBadge}
+                        title="Demande de modification expirée"
+                        style={{ background: '#f1f5f9', color: '#475569' }}
+                      >
+                        Modif. expirée
+                      </span>
+                    )}
                   </td>
                   <td className={styles.actionsCell} onClick={(e) => e.stopPropagation()}>
                     {!hasActions ? (
@@ -372,33 +386,23 @@ const ReservationTable = ({
             >
               <div className={styles.mobileCardHeader}>
                 <div className={styles.mobileCardTitleGroup}>
-                  <span className={styles.mobileCardTitle}>
-                    {r.client?.full_name || r.client_name}
-                  </span>
-                  {r.client?.institution_name && (
-                    <span className={styles.mobileCardInstitution}>{r.client.institution_name}</span>
-                  )}
-                  {reservationIsRoundTripOutbound(r) ? (
-                    <span className={styles.roundTripBadge} title="Demande aller-retour (aller + retour liés).">
-                      Aller-retour
-                    </span>
-                  ) : null}
-                  {r.is_return ? (
-                    <span className={styles.returnLegBadge} title="Course retour liée à l’aller.">
-                      Retour
-                    </span>
-                  ) : null}
+                  <BookingIdentityCell booking={r} layout="compact" />
+                  <BookingTripBadges booking={r} routeGroupSizes={routeGroupSizes} />
                 </div>
-                <span className={`${styles.statusBadge} ${styles[status] || ''}`}>
-                  {STATUS_LABELS[status] || status}
-                </span>
+                <BookingStatusBadge status={status} />
+                {r.active_change_request?.status === 'pending' && (
+                  <span style={{ marginLeft: 6, fontSize: 10, color: '#92400e' }}>Modif. en attente</span>
+                )}
+                {r.active_change_request?.status === 'escalation_required' && (
+                  <span style={{ marginLeft: 6, fontSize: 10, color: '#c2410c' }}>Escalade</span>
+                )}
               </div>
               <div className={styles.mobileCardBody}>
                 <div className={styles.mobileCardRow}>
                   <span className={styles.mobileCardLabel}>Horaire</span>
                   <span className={styles.mobileCardValue}>
                     <div className={styles.timeCellStack}>
-                      <span>{renderBookingDateTime(r)}</span>
+                      <BookingScheduleCell booking={r} undefinedClassName={styles.pickupEtaHint} />
                       {pickupArrivalLabel && (
                         <span className={styles.pickupEtaHint} title={pickupArrivalLabel.title}>
                           {pickupArrivalLabel.text}

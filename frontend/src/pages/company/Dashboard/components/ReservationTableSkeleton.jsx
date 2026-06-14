@@ -3,7 +3,7 @@ import React from 'react';
 import tableStyles from './ReservationTable.module.css';
 import sk from './ReservationTableSkeleton.module.css';
 
-const COLS = ['Client', 'Date / Heure', 'Trajet', 'Montant', 'Statut', 'Actions'];
+const COLS = ['Passager', 'Date / Heure', 'Trajet', 'Montant', 'Statut', 'Actions'];
 
 const SkeletonBar = ({ className }) => (
   <div className={`${sk.skeletonBlock} ${className || ''}`} aria-hidden />

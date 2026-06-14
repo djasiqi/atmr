@@ -6,7 +6,9 @@
  */
 
 .container {
-  max-width: 900px;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
 }
 
 .container h2 {
@@ -27,65 +29,85 @@
 
 .tabs {
   display: flex;
-  gap: 8px;
-  margin-bottom: 24px;
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 16px;
   flex-wrap: wrap;
+  gap: 3px;
+  width: 100%;
+  padding: 3px;
+  margin-bottom: 24px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-pill, 999px);
+  background: var(--bg-muted);
+  box-sizing: border-box;
 }
 
 .tab {
-  display: flex;
+  flex: 1 1 120px;
+  min-width: 110px;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 20px;
+  justify-content: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px;
   background-color: transparent;
-  border: 2px solid var(--border);
-  border-radius: var(--radius-md);
-  font-size: 0.85rem;
-  cursor: pointer;
-  color: var(--text-secondary);
-  transition: all var(--transition);
+  border: none;
+  border-radius: var(--radius-pill, 999px);
+  font-size: 0.8rem;
   font-weight: 500;
+  cursor: pointer;
+  color: var(--text-muted);
+  white-space: nowrap;
+  user-select: none;
+  transition: all 0.15s ease;
+  box-sizing: border-box;
 }
 
 .tab:hover {
-  background-color: var(--bg-muted);
-  border-color: var(--border-hover);
   color: var(--text-primary);
 }
 
 .tab.active {
-  background: linear-gradient(135deg, var(--brand) 0%, var(--brand-hover) 100%);
-  color: white;
-  border-color: var(--brand);
+  background: var(--bg-surface);
+  color: var(--brand);
   font-weight: 600;
-  box-shadow: 0 4px 12px rgba(0, 121, 107, 0.25);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
 .section {
   background-color: var(--bg-surface);
-  padding: 24px;
-  border: 2px solid var(--border);
+  padding: 28px 32px;
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  box-shadow: none;
 }
 
 .sectionHeader {
-  margin-bottom: 20px;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
 }
 
 .sectionHeader h3 {
-  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.95rem;
   font-weight: 600;
   color: var(--text-primary);
-  margin: 0 0 8px 0;
+  margin: 0 0 6px 0;
+}
+
+.sectionHeader h3 svg {
+  color: var(--text-tertiary);
+  font-size: 0.9em;
 }
 
 .sectionHeader p {
-  font-size: 0.85rem;
-  color: var(--text-secondary);
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--text-tertiary);
   margin: 0;
+  max-width: 640px;
 }
 
 .allocationModeCard {
@@ -210,25 +232,33 @@
   cursor: not-allowed;
 }
 
+.saveBtnRow {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .saveBtn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
-  padding: 10px 20px;
-  background: linear-gradient(135deg, var(--brand) 0%, var(--brand-hover) 100%);
+  align-self: flex-end;
+  margin-top: 8px;
+  padding: 9px 20px;
+  background: var(--brand);
   color: white;
-  border: none;
+  border: 1px solid var(--brand);
   border-radius: var(--radius-md);
   font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all var(--transition);
-  box-shadow: 0 4px 12px rgba(0, 121, 107, 0.25);
+  transition: background-color var(--transition), border-color var(--transition);
+  box-shadow: none;
 }
 
 .saveBtn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(0, 121, 107, 0.35);
+  background: var(--brand-hover);
+  border-color: var(--brand-hover);
 }
 
 .saveBtn:disabled {
@@ -456,16 +486,16 @@
 
 .field label {
   display: block;
-  font-size: 0.85rem;
-  font-weight: 500;
+  font-size: 0.8rem;
+  font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .field input[type="text"] {
   width: 100%;
-  padding: 10px 12px;
-  border: 2px solid var(--border);
+  padding: 9px 12px;
+  border: 1px solid var(--border);
   border-radius: var(--radius-md);
   font-size: 0.85rem;
   color: var(--text-primary);
@@ -559,19 +589,23 @@
 .profileForm {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 18px;
+}
+
+.profileForm .field {
+  margin-bottom: 0;
 }
 
 .fieldRow {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  gap: 20px;
 }
 
 .field textarea {
   width: 100%;
-  padding: 10px 12px;
-  border: 2px solid var(--border);
+  padding: 9px 12px;
+  border: 1px solid var(--border);
   border-radius: var(--radius-md);
   font-size: 0.85rem;
   font-family: inherit;
@@ -736,17 +770,18 @@
 /* Field hint */
 .fieldHint {
   display: block;
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  margin-top: 4px;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: var(--text-tertiary);
+  margin-top: 5px;
 }
 
 /* Number/email inputs */
 .field input[type="number"],
 .field input[type="email"] {
   width: 100%;
-  padding: 10px 12px;
-  border: 2px solid var(--border);
+  padding: 9px 12px;
+  border: 1px solid var(--border);
   border-radius: var(--radius-md);
   font-size: 0.85rem;
   color: var(--text-primary);
@@ -770,8 +805,8 @@
 /* Tel input */
 .field input[type="tel"] {
   width: 100%;
-  padding: 10px 12px;
-  border: 2px solid var(--border);
+  padding: 9px 12px;
+  border: 1px solid var(--border);
   border-radius: var(--radius-md);
   font-size: 0.85rem;
   color: var(--text-primary);

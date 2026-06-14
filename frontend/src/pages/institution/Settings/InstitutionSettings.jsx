@@ -219,8 +219,6 @@ const InstitutionSettings = () => {
 
   return (
     <div className={styles.container}>
-      <h2>Paramètres</h2>
-      
       <div className={styles.tabs}>
         {/* Mon profil — visible par tous les rôles */}
         {isBillingRole && (
@@ -680,13 +678,15 @@ const InstitutionSettings = () => {
               </p>
 
               {canAdmin && (
-                <button 
-                  className={styles.saveBtn}
-                  onClick={savePreferences}
-                  disabled={updatePrefsMutation.isPending}
-                >
-                  <FaSave /> {updatePrefsMutation.isPending ? 'Enregistrement...' : 'Enregistrer l\'ordre'}
-                </button>
+                <div className={styles.saveBtnRow}>
+                  <button 
+                    className={styles.saveBtn}
+                    onClick={savePreferences}
+                    disabled={updatePrefsMutation.isPending}
+                  >
+                    <FaSave /> {updatePrefsMutation.isPending ? 'Enregistrement...' : 'Enregistrer l\'ordre'}
+                  </button>
+                </div>
               )}
             </>
           )}

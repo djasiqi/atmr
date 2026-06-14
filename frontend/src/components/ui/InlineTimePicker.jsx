@@ -1,4 +1,6 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, {
+  useState, useRef, useEffect, useCallback, forwardRef, useImperativeHandle,
+} from 'react';
 import { createPortal } from 'react-dom';
 import { FiClock } from 'react-icons/fi';
 import tp from './InlineTimePicker.module.css';
@@ -13,7 +15,9 @@ function parseTime(val) {
   return { h: h || '', m: m || '' };
 }
 
-export default function InlineTimePicker({ value, onChange, placeholder: _placeholder, className, inputId, onSelectNow }) {
+const InlineTimePicker = forwardRef(function InlineTimePicker({
+  value, onChange, placeholder: _placeholder, className, inputId, onSelectNow, title, ariaLabel,
+}, ref) {
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef(null);
   const popoverRef = useRef(null);
@@ -41,6 +45,31 @@ export default function InlineTimePicker({ value, onChange, placeholder: _placeh
   }, [value, showUndefinedLabel]);
 
   const close = useCallback(() => setOpen(false), []);
+
+  const resolvePendingTime = useCallback(() => {
+    if (showUndefinedLabel) return '';
+    const digits = masked.replace(/\D/g, '');
+    if (digits.length === 0) return '';
+    if (digits.length === 4) {
+      const hh = digits.slice(0, 2);
+      const mm = digits.slice(2, 4);
+      if (parseInt(hh, 10) <= 23 && parseInt(mm, 10) <= 59) {
+        return `${hh}:${mm}`;
+      }
+    }
+    return value || '';
+  }, [masked, showUndefinedLabel, value]);
+
+  useImperativeHandle(ref, () => ({
+    /** Commit synchrone de la saisie en cours (ex. avant submit sans blur). */
+    flushPending: () => {
+      const resolved = resolvePendingTime();
+      if (resolved !== (value || '')) {
+        onChange(resolved);
+      }
+      return resolved;
+    },
+  }), [resolvePendingTime, value, onChange]);
 
   const handleInputChange = (e) => {
     if (showUndefinedLabel) {
@@ -155,6 +184,8 @@ export default function InlineTimePicker({ value, onChange, placeholder: _placeh
           onKeyDown={handleInputKeyDown}
           placeholder="__:__"
           maxLength={5}
+          title={title}
+          aria-label={ariaLabel}
         />
         <button
           type="button"
@@ -209,4 +240,6 @@ export default function InlineTimePicker({ value, onChange, placeholder: _placeh
       )}
     </>
   );
-}
+});
+
+export default InlineTimePicker;

@@ -28,6 +28,7 @@ from models import (
     RequestOffer,
     RequestStatus,
     TransportRequest,
+    TransportRequestLeg,
     User,
     UserRole,
 )
@@ -52,7 +53,8 @@ class TestSendWithOffers:
         """Crée un utilisateur institution admin."""
         user = User()
         user.email = f"admin_{uuid.uuid4().hex[:8]}@test.com"
-        user.password_hash = "test"
+        user.username = user.email
+        user.password = "test"
         user.role = UserRole.INSTITUTION.value
         user.institution_id = sample_institution.id
         user.institution_role = "institution_admin"
@@ -64,9 +66,11 @@ class TestSendWithOffers:
     def auth_headers(self, sample_user, sample_institution):
         """Headers JWT pour l'utilisateur institution."""
         token = create_access_token(
-            identity=sample_user.id,
+            identity=str(sample_user.public_id),
             additional_claims={
                 "role": UserRole.INSTITUTION.value,
+                "aud": "atmr-api",
+                "user_id": sample_user.id,
                 "institution_id": sample_institution.id,
                 "institution_role": "institution_admin",
             },
@@ -78,7 +82,8 @@ class TestSendWithOffers:
         """Crée une entreprise de test éligible."""
         user = User()
         user.email = f"company_{uuid.uuid4().hex[:8]}@test.com"
-        user.password_hash = "test"
+        user.username = user.email
+        user.password = "test"
         user.role = UserRole.COMPANY.value
         db.session.add(user)
         db.session.flush()
@@ -97,7 +102,8 @@ class TestSendWithOffers:
         """Crée une deuxième entreprise de test."""
         user = User()
         user.email = f"company2_{uuid.uuid4().hex[:8]}@test.com"
-        user.password_hash = "test"
+        user.username = user.email
+        user.password = "test"
         user.role = UserRole.COMPANY.value
         db.session.add(user)
         db.session.flush()
@@ -144,7 +150,7 @@ class TestSendWithOffers:
             headers=auth_headers,
         )
 
-        assert response.status_code == 200
+        assert response.status_code == 200, response.get_json()
         data = response.get_json()
 
         # Vérifier les infos d'envoi
@@ -189,7 +195,7 @@ class TestSendWithOffers:
             headers=auth_headers,
         )
 
-        assert response.status_code == 200
+        assert response.status_code == 200, response.get_json()
         data = response.get_json()
 
         # Vérifier mode séquentiel
@@ -283,7 +289,8 @@ class TestAcceptOffer:
         """Crée une entreprise de test."""
         user = User()
         user.email = f"company_{uuid.uuid4().hex[:8]}@test.com"
-        user.password_hash = "test"
+        user.username = user.email
+        user.password = "test"
         user.role = UserRole.COMPANY.value
         db.session.add(user)
         db.session.flush()
@@ -302,7 +309,8 @@ class TestAcceptOffer:
         """Crée une deuxième entreprise de test."""
         user = User()
         user.email = f"company2_{uuid.uuid4().hex[:8]}@test.com"
-        user.password_hash = "test"
+        user.username = user.email
+        user.password = "test"
         user.role = UserRole.COMPANY.value
         db.session.add(user)
         db.session.flush()
@@ -321,9 +329,11 @@ class TestAcceptOffer:
         """Headers JWT pour l'entreprise."""
         company, user = sample_company
         token = create_access_token(
-            identity=user.id,
+            identity=str(user.public_id),
             additional_claims={
                 "role": UserRole.COMPANY.value,
+                "aud": "atmr-api",
+                "user_id": user.id,
                 "company_id": company.id,
             },
         )
@@ -334,9 +344,11 @@ class TestAcceptOffer:
         """Headers JWT pour la deuxième entreprise."""
         company, user = sample_company_2
         token = create_access_token(
-            identity=user.id,
+            identity=str(user.public_id),
             additional_claims={
                 "role": UserRole.COMPANY.value,
+                "aud": "atmr-api",
+                "user_id": user.id,
                 "company_id": company.id,
             },
         )
@@ -408,6 +420,75 @@ class TestAcceptOffer:
         assert booking is not None
         assert booking.company_id == company.id
         assert booking.pickup_location == request.pickup_location
+
+    def test_accept_multi_stop_offer_first_leg_timed_others_to_define(
+        self,
+        client,
+        db,
+        sample_request_with_offer,
+        company_auth_headers,
+    ):
+        """Multi-destinations : leg 0 (A-B) a une heure, les suivants restent à définir."""
+        request, offer = sample_request_with_offer
+        request.multi_stop = True
+        request.return_to_institution = True
+        request.route_group_id = str(uuid.uuid4())
+        request.dropoff_location = "Retour institution"
+
+        legs = [
+            TransportRequestLeg(
+                transport_request_id=request.id,
+                sequence_index=0,
+                route_sequence_number=1,
+                pickup_location="Clinique",
+                dropoff_location="HUG",
+                scheduled_time=None,
+            ),
+            TransportRequestLeg(
+                transport_request_id=request.id,
+                sequence_index=1,
+                route_sequence_number=2,
+                pickup_location="HUG",
+                dropoff_location="Urgences ophtalmologie HUG",
+                scheduled_time=None,
+            ),
+            TransportRequestLeg(
+                transport_request_id=request.id,
+                sequence_index=2,
+                route_sequence_number=3,
+                pickup_location="Urgences ophtalmologie HUG",
+                dropoff_location="Clinique",
+                scheduled_time=None,
+            ),
+        ]
+        db.session.add_all(legs)
+        db.session.commit()
+
+        response = client.post(
+            f"/api/v1/company/request-offers/{offer.id}/accept",
+            headers=company_auth_headers,
+        )
+
+        assert response.status_code == 200, response.get_json()
+        created_bookings = Booking.query.filter_by(
+            route_group_id=request.route_group_id
+        ).all()
+        assert len(created_bookings) == 3
+
+        by_seq = {b.route_sequence_number: b for b in created_bookings}
+        # Leg 0 (A-B) : heure obligatoire, confirmée, course "aller" classique.
+        first = by_seq[1]
+        assert first.scheduled_time is not None
+        assert first.time_confirmed is True
+        assert first.is_return is False
+        # Legs suivants (B-C, C-A) : heure à définir, scheduled_time=null.
+        for seq in (2, 3):
+            leg_booking = by_seq[seq]
+            assert leg_booking.scheduled_time is None
+            assert leg_booking.time_confirmed is False
+            assert leg_booking.is_return is False
+            assert leg_booking.parent_booking_id is None
+            assert leg_booking.route_group_id == request.route_group_id
 
     def test_accept_makes_other_offers_unavailable(
         self,
@@ -551,7 +632,8 @@ class TestRejectOffer:
         for i in range(3):
             user = User()
             user.email = f"company{i}_{uuid.uuid4().hex[:8]}@test.com"
-            user.password_hash = "test"
+            user.username = user.email
+            user.password = "test"
             user.role = UserRole.COMPANY.value
             db.session.add(user)
             db.session.flush()
@@ -573,9 +655,11 @@ class TestRejectOffer:
         """Headers JWT pour la première entreprise."""
         company, user = sample_companies[0]
         token = create_access_token(
-            identity=user.id,
+            identity=str(user.public_id),
             additional_claims={
                 "role": UserRole.COMPANY.value,
+                "aud": "atmr-api",
+                "user_id": user.id,
                 "company_id": company.id,
             },
         )
@@ -664,7 +748,8 @@ class TestTransportPreferences:
         """Crée un utilisateur institution admin."""
         user = User()
         user.email = f"admin_{uuid.uuid4().hex[:8]}@test.com"
-        user.password_hash = "test"
+        user.username = user.email
+        user.password = "test"
         user.role = UserRole.INSTITUTION.value
         user.institution_id = sample_institution.id
         user.institution_role = "institution_admin"
@@ -676,9 +761,11 @@ class TestTransportPreferences:
     def auth_headers(self, sample_user, sample_institution):
         """Headers JWT pour l'utilisateur institution."""
         token = create_access_token(
-            identity=sample_user.id,
+            identity=str(sample_user.public_id),
             additional_claims={
                 "role": UserRole.INSTITUTION.value,
+                "aud": "atmr-api",
+                "user_id": sample_user.id,
                 "institution_id": sample_institution.id,
                 "institution_role": "institution_admin",
             },
@@ -692,7 +779,8 @@ class TestTransportPreferences:
         for i in range(3):
             user = User()
             user.email = f"company{i}_{uuid.uuid4().hex[:8]}@test.com"
-            user.password_hash = "test"
+            user.username = user.email
+            user.password = "test"
             user.role = UserRole.COMPANY.value
             db.session.add(user)
             db.session.flush()

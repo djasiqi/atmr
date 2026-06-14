@@ -92,14 +92,26 @@ const ScheduleReturnTimeModal = ({ isOpen, onClose, reservation, onConfirm }) =>
     }
   }, [isOpen, reservation]);
 
+  const isReturn = !!(
+    reservation?.is_return ||
+    reservation?.booking_type === 'return' ||
+    reservation?.type === 'return'
+  );
+
   const handleConfirm = async () => {
     if (!selectedDate || !selectedTime) return;
 
     setLoading(true);
     try {
       if (typeof onConfirm === 'function') {
-        // Envoyer la date/heure locale telle quelle, sans conversion UTC via Date
-        await onConfirm({ return_time: `${selectedDate}T${selectedTime}` });
+        // Envoyer la date/heure locale telle quelle, sans conversion UTC via Date.
+        // Retour : payload dédié (déclenche la création/planification du retour).
+        // Aller (ex. leg multi-étapes sans heure) : string générique → simple set d'heure.
+        if (isReturn) {
+          await onConfirm({ return_time: `${selectedDate}T${selectedTime}` });
+        } else {
+          await onConfirm(`${selectedDate}T${selectedTime}`);
+        }
       }
       onClose();
     } catch (error) {
@@ -137,7 +149,7 @@ const ScheduleReturnTimeModal = ({ isOpen, onClose, reservation, onConfirm }) =>
         {/* Header */}
         <div className={styles.schedHeader}>
           <div className={styles.schedHeaderIcon}><FiClock size={14} /></div>
-          <h3 className={styles.schedTitle}>Planifier le retour</h3>
+          <h3 className={styles.schedTitle}>{isReturn ? 'Planifier le retour' : "Planifier l'heure"}</h3>
         </div>
 
         {/* Info card */}
@@ -149,7 +161,7 @@ const ScheduleReturnTimeModal = ({ isOpen, onClose, reservation, onConfirm }) =>
                 <span className={styles.schedInfoValue}>{clientName}</span>
               </div>
             )}
-            {allerTime && (
+            {isReturn && allerTime && (
               <div className={styles.schedInfoRow}>
                 <span className={styles.schedInfoLabel}>Aller</span>
                 <span className={styles.schedInfoValue}>{allerTime}</span>
@@ -187,9 +199,11 @@ const ScheduleReturnTimeModal = ({ isOpen, onClose, reservation, onConfirm }) =>
           <button type="button" className={styles.schedCancel} onClick={onClose} disabled={loading}>
             Annuler
           </button>
-          <button type="button" className={styles.schedUrgent} onClick={handleUrgent} disabled={loading}>
-            <FiZap size={12} /> Urgent
-          </button>
+          {isReturn && (
+            <button type="button" className={styles.schedUrgent} onClick={handleUrgent} disabled={loading}>
+              <FiZap size={12} /> Urgent
+            </button>
+          )}
           <button
             type="button"
             className={styles.schedConfirm}

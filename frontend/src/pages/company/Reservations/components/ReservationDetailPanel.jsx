@@ -5,6 +5,7 @@ import {
   FiAlertCircle, FiEdit2, FiPackage, FiHome, FiTrash2,
 } from 'react-icons/fi';
 import { renderBookingDateTime } from '../../../../utils/formatDate';
+import { formatLegTime } from '../../../../utils/formatLegTime';
 import { fetchTransportVouchers } from '../../../../services/transportVoucherService';
 import AddressAutocomplete from '../../../../components/common/AddressAutocomplete';
 import InlineDatePicker from '../../../../components/ui/InlineDatePicker';
@@ -12,11 +13,14 @@ import InlineTimePicker from '../../../../components/ui/InlineTimePicker';
 import useCompanySocket from '../../../../hooks/useCompanySocket';
 import { toast } from 'sonner';
 import BookingChat from './BookingChat';
+import { buildIdentityFromApi } from '../../../../utils/bookingIdentity';
+import { getBookingSourceMeta } from '../../../../constants/bookingSourceLabels';
 import {
   completeReservation,
   patchBillingAdjustment,
   fetchBookingChangeEvents,
   acknowledgeBookingChangeEvent,
+  respondToChangeRequest,
 } from '../../../../services/companyService';
 import { fetchClinicBillingMappings } from '../../../../services/settingsService';
 import s from './ReservationDetailPanel.module.css';
@@ -94,11 +98,21 @@ const buildTimeline = (r) => {
     events.push({ event: `Acceptée${driverName ? ` par ${driverName}` : ''}`, date: r.accepted_at });
   }
   if (r.assigned_at) events.push({ event: `Assignée${driverName ? ` à ${driverName}` : ''}`, date: r.assigned_at });
-  if (r.picked_up_at || r.boarded_at) {
-    events.push({ event: `Client pris en charge${driverName ? ` par ${driverName}` : ''}`, date: r.picked_up_at || r.boarded_at });
+
+  // Événements opérationnels : historique consolidé du parcours complet
+  // (tous les legs multi-étapes + retours) si disponible, sinon le leg courant.
+  const journey = Array.isArray(r.route_journey) ? r.route_journey : null;
+  if (journey && journey.length) {
+    journey.forEach((ev) => {
+      if (ev?.date) events.push({ event: ev.event, date: ev.date, type: ev.type });
+    });
+  } else {
+    if (r.picked_up_at || r.boarded_at) {
+      events.push({ event: `Client pris en charge${driverName ? ` par ${driverName}` : ''}`, date: r.picked_up_at || r.boarded_at });
+    }
+    if (r.completed_at) events.push({ event: 'Course terminée', date: r.completed_at });
   }
   if (r.started_at) events.push({ event: 'Course démarrée', date: r.started_at });
-  if (r.completed_at) events.push({ event: 'Course terminée', date: r.completed_at });
   if ((r.cancelled_at || r.canceled_at) && !it?.cancelled_at) {
     const roleMap = { company: 'Entreprise', driver: 'Chauffeur', admin: 'Admin', system: 'Système' };
     const byLabel = roleMap[r.cancelled_by_role] || '';
@@ -183,8 +197,9 @@ function allowBillingAdjustByCreatedVia(res) {
 const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onReservationUpdated }) => {
   const [vouchers, setVouchers] = useState([]);
   const [loadingVouchers, setLoadingVouchers] = useState(false);
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const lastVoucherErrorRef = useRef(null);
+  const changeRequestBannerRef = useRef(null);
   const companySocket = useCompanySocket();
 
   const [editing, setEditing] = useState(false);
@@ -273,6 +288,27 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onRese
     } catch { return null; }
   }, [searchParams]);
 
+  useEffect(() => {
+    if (searchParams.get('focus') !== 'change_request') return undefined;
+    if (reservation?.active_change_request?.status !== 'pending') return undefined;
+
+    const timer = window.setTimeout(() => {
+      changeRequestBannerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('focus');
+        return next;
+      }, { replace: true });
+    }, 350);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    reservation?.id,
+    reservation?.active_change_request?.status,
+    searchParams,
+    setSearchParams,
+  ]);
+
   const loadVouchers = useCallback(async () => {
     if (!reservation?.id) return;
     try {
@@ -294,6 +330,7 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onRese
   }, [reservation?.id, loadVouchers]);
 
   const [institutionChangeEvents, setInstitutionChangeEvents] = useState([]);
+  const [respondingChange, setRespondingChange] = useState(false);
 
   useEffect(() => {
     if (!reservation?.id) {
@@ -569,6 +606,9 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onRese
   const adjustedDelta = Number.isFinite(Number(originalAmount))
     ? Number(reservation?.amount ?? 0) - Number(originalAmount) : null;
 
+  const bookingIdentity = buildIdentityFromApi(reservation);
+  const sourceMeta = getBookingSourceMeta(bookingIdentity.source?.type);
+
   return (
     <div className={s.panel} data-tour-id="ReservationDetailPanel_panel">
       {/* Header */}
@@ -592,6 +632,105 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onRese
       {/* Scrollable body */}
       <div className={s.panelBody}>
 
+        {reservation.active_change_request?.status === 'pending' && isInstitutionBooking && (
+          <div
+            ref={changeRequestBannerRef}
+            id="company-change-request-validation"
+            style={{
+              marginBottom: 12,
+              padding: '10px 12px',
+              borderRadius: 8,
+              border: '1px solid #fcd34d',
+              background: '#fffbeb',
+            }}
+          >
+            <p style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 600, color: '#92400e' }}>
+              Modification institution — validation requise
+            </p>
+            <p style={{ margin: '0 0 10px', fontSize: 12, color: '#78350f' }}>
+              {reservation.active_change_request.reason || 'Champs modifiés en attente de votre accord.'}
+            </p>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                type="button"
+                disabled={respondingChange}
+                onClick={async () => {
+                  setRespondingChange(true);
+                  try {
+                    await respondToChangeRequest(
+                      reservation.id,
+                      reservation.active_change_request.id,
+                      'accept'
+                    );
+                    toast.success('Modification acceptée');
+                    onReservationUpdated?.();
+                  } catch (e) {
+                    toast.error(e?.response?.data?.error || 'Échec');
+                  } finally {
+                    setRespondingChange(false);
+                  }
+                }}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: 6,
+                  border: 'none',
+                  background: '#059669',
+                  color: '#fff',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: respondingChange ? 'default' : 'pointer',
+                }}
+              >
+                Accepter
+              </button>
+              <button
+                type="button"
+                disabled={respondingChange}
+                onClick={async () => {
+                  setRespondingChange(true);
+                  try {
+                    await respondToChangeRequest(
+                      reservation.id,
+                      reservation.active_change_request.id,
+                      'refuse'
+                    );
+                    toast.success('Modification refusée');
+                    onReservationUpdated?.();
+                  } catch (e) {
+                    toast.error(e?.response?.data?.error || 'Échec');
+                  } finally {
+                    setRespondingChange(false);
+                  }
+                }}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: 6,
+                  border: '1px solid #cbd5e1',
+                  background: '#fff',
+                  color: '#334155',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: respondingChange ? 'default' : 'pointer',
+                }}
+              >
+                Refuser
+              </button>
+            </div>
+          </div>
+        )}
+
+        {reservation.route_group_id && (
+          <p style={{ margin: '0 0 10px', fontSize: 12, color: '#475569' }}>
+            Parcours multi-étapes — acceptation globale
+            {reservation.route_sequence_number
+              ? ` · étape ${reservation.route_sequence_number}`
+              : ''}
+            {reservation.route_group_id
+              ? ` · #${String(reservation.route_group_id).slice(-6)}`
+              : ''}
+          </p>
+        )}
+
         {/* ── EDIT MODE ── */}
         {editing ? (
           <div className={s.editForm}>
@@ -599,7 +738,7 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onRese
             {/* Context badge — client + id */}
             <div className={s.editContext}>
               <span className={s.editContextLabel}>
-                {reservation.client?.full_name || reservation.client_name || 'Client'}
+                {bookingIdentity.passengerLabel}
               </span>
               <span className={s.editContextSep} />
               <span className={s.editContextMeta}>#{reservation.id}</span>
@@ -842,12 +981,52 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onRese
               </div>
               <div className={s.summaryGrid}>
                 <div className={s.summaryItem}>
-                  <span className={s.summaryLabel}>Client</span>
-                  <span className={s.summaryValue}>{reservation.client?.full_name || reservation.client_name || '-'}</span>
+                  <span className={s.summaryLabel}>Passager</span>
+                  <span className={s.summaryValue}>{bookingIdentity.passengerLabel}</span>
                 </div>
+                {bookingIdentity.source?.name && (
+                  <div className={s.summaryItem}>
+                    <span className={s.summaryLabel}>Origine</span>
+                    <span className={s.summaryValue}>
+                      {sourceMeta.label} · {bookingIdentity.source.name}
+                      {bookingIdentity.source.code ? ` (${bookingIdentity.source.code})` : ''}
+                    </span>
+                  </div>
+                )}
+                {bookingIdentity.requester?.name && (
+                  <div className={s.summaryItem}>
+                    <span className={s.summaryLabel}>Demandeur</span>
+                    <span className={s.summaryValue}>{bookingIdentity.requester.name}</span>
+                  </div>
+                )}
+                {bookingIdentity.ownership?.owner_company_name && (
+                  <div className={s.summaryItem}>
+                    <span className={s.summaryLabel}>Propriétaire</span>
+                    <span className={s.summaryValue}>{bookingIdentity.ownership.owner_company_name}</span>
+                  </div>
+                )}
+                {bookingIdentity.execution?.executing_company_name && (
+                  <div className={s.summaryItem}>
+                    <span className={s.summaryLabel}>Exécutant</span>
+                    <span className={s.summaryValue}>{bookingIdentity.execution.executing_company_name}</span>
+                  </div>
+                )}
+                {bookingIdentity.upstream?.name && (
+                  <div className={s.summaryItem}>
+                    <span className={s.summaryLabel}>Source amont</span>
+                    <span className={s.summaryValue}>
+                      {bookingIdentity.upstream.name}
+                      {bookingIdentity.upstream.code ? ` (${bookingIdentity.upstream.code})` : ''}
+                    </span>
+                  </div>
+                )}
                 <div className={s.summaryItem}>
                   <span className={s.summaryLabel}>Horaire</span>
-                  <span className={s.summaryValue}>{renderBookingDateTime(reservation)}</span>
+                  <span className={s.summaryValue}>
+                    {reservation.time_confirmed === false
+                      ? formatLegTime({ scheduled_time: reservation.scheduled_time, time_confirmed: false })
+                      : renderBookingDateTime(reservation)}
+                  </span>
                 </div>
                 <div className={s.summaryItem}>
                   <span className={s.summaryLabel}>Montant</span>
@@ -857,12 +1036,6 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onRese
                   <div className={s.summaryItem}>
                     <span className={s.summaryLabel}>Chauffeur</span>
                     <span className={s.summaryValue}>{reservation.driver_name}</span>
-                  </div>
-                )}
-                {reservation.client?.institution_name && (
-                  <div className={s.summaryItem}>
-                    <span className={s.summaryLabel}>Institution</span>
-                    <span className={s.summaryValue}>{reservation.client.institution_name}</span>
                   </div>
                 )}
                 {(reservation.client?.contact_phone || reservation.client?.phone) && (

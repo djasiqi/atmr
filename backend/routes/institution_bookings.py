@@ -318,3 +318,56 @@ class InstitutionBookingChangeEvents(Resource):
                 InstitutionRole.CURATOR.value,
             ),
         }, 200
+
+
+@institution_bookings_ns.route("/<int:booking_id>/release-for-redispatch")
+class InstitutionBookingReleaseForRedispatch(Resource):
+    @institution_bookings_ns.doc(
+        description="Remet une course en diffusion (escalade / refus transporteur)",
+        security="BearerAuth",
+    )
+    def post(self, booking_id: int):
+        try:
+            institution_id, user_id, role, _display = get_institution_booking_context()
+            role_err = assert_operational_role(role)
+            if role_err:
+                return {"error": role_err}, 403
+
+            ctx = resolve_institution_booking(booking_id, institution_id)
+            if not ctx:
+                return {"error": "Booking non trouvé"}, 404
+
+            from application.institutions.release_booking_for_redispatch import (
+                ReleaseBookingForRedispatchInput,
+                ReleaseBookingForRedispatchUseCase,
+            )
+
+            data = request.get_json(silent=True) or {}
+            result = ReleaseBookingForRedispatchUseCase().execute(
+                ReleaseBookingForRedispatchInput(
+                    booking_id=booking_id,
+                    institution_id=institution_id,
+                    reason=data.get("reason"),
+                    actor_user_id=user_id,
+                    trigger_redispatch=data.get("trigger_redispatch", True),
+                )
+            )
+            if not result.success:
+                return {"error": result.error}, result.status_code
+
+            db.session.commit()
+            return {
+                "success": True,
+                "booking_id": result.booking_id,
+                "redispatched": result.redispatched,
+                "offers_created": result.offers_created,
+            }, 200
+        except Exception as e:
+            db.session.rollback()
+            sentry_sdk.capture_exception(e)
+            logger.exception(
+                "[InstitutionBookings] POST release-for-redispatch %s: %s",
+                booking_id,
+                e,
+            )
+            return {"error": f"Erreur serveur: {e!s}"}, 500

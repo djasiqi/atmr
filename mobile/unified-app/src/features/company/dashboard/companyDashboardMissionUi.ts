@@ -1,5 +1,5 @@
 import type { CompanyDispatchMission, CompanyDispatchMissionStatus } from "../api/contracts";
-import { isPickupSentinel } from "../utils/pickupSentinel";
+import { isPickupSentinel, isTimeUndefined } from "../utils/pickupSentinel";
 
 const SWISS_TZ = "Europe/Zurich";
 
@@ -66,9 +66,12 @@ export function conciseRouteSegment(s: string | null | undefined, maxLen = 42): 
 }
 
 export function missionHasDefinedPickupTime(
-  scheduledAt: string | null | undefined
+  missionOrScheduledAt: CompanyDispatchMission | string | null | undefined
 ): boolean {
-  return !isPickupSentinel(scheduledAt);
+  if (missionOrScheduledAt && typeof missionOrScheduledAt === "object") {
+    return !isTimeUndefined(missionOrScheduledAt);
+  }
+  return !isPickupSentinel(missionOrScheduledAt);
 }
 
 export function resolveMissionUiStatus(
@@ -76,7 +79,7 @@ export function resolveMissionUiStatus(
   nowMs = Date.now()
 ): MissionUiStatus {
   const status = mission.status;
-  const scheduleDefined = missionHasDefinedPickupTime(mission.scheduled_at);
+  const scheduleDefined = missionHasDefinedPickupTime(mission);
   const scheduled = scheduleDefined ? toEpoch(mission.scheduled_at) : 0;
   const delayMin = Number(mission.assignment_pickup_delay_minutes);
   const isDelayedByAssignment =

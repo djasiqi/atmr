@@ -7,7 +7,7 @@
 
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { FaSearch, FaFilter, FaPhoneAlt } from 'react-icons/fa';
+import { FaSearch, FaFilter, FaPhoneAlt, FaFilePdf } from 'react-icons/fa';
 import { FiAlertTriangle } from 'react-icons/fi';
 import { toast } from 'sonner';
 import {
@@ -16,41 +16,54 @@ import {
   useUpdateRequestBilling,
   useUpdateBookingBilling,
 } from '../../../hooks/useInstitutionData';
-import { canEditBilling } from '../../../utils/institutionPermissions';
+import { canEditBilling, canExportTransports } from '../../../utils/institutionPermissions';
+import { exportDailyMissionReportsZip } from '../../../services/institutionService';
 import DemoInteractiveGuide from '../../../components/demo/DemoInteractiveGuide';
+import InlineDatePicker from '../../../components/ui/InlineDatePicker';
+import ChipSelect from '../../../components/ui/ChipSelect';
 import { getAuthEnv } from '../../../utils/webAuthSession';
 import RequestDetailPanel from './RequestDetailPanel';
+import { formatReturnTimeLabel, formatMissionScheduleListLabel, getNextConfirmedLegTime, formatLegScheduleSummary } from '../../../utils/formatLegTime';
+import { getCarrierDisplay } from '../../../utils/carrierDisplay';
+import {
+  isExternalRequest,
+  isConvertedLirie,
+  getCarrierSourceLabel,
+  EXTERNAL_STATUSES,
+} from '../../../utils/requestStatus';
+import {
+  resolveStatusDisplay,
+  buildCardMeta,
+  resolveBillingMetaLabel,
+} from './statusColors';
 import s from './InstitutionRequests.module.css';
 
-// ─── Status maps ───────────────────────────────────────────
-const BOOKING_STATUS = {
-  PENDING:          { label: 'En attente',       badge: 'badgePending',         indicator: 'indicatorPending' },
-  ACCEPTED:         { label: 'Accepté',          badge: 'badgeAccepted',        indicator: 'indicatorAccepted' },
-  ASSIGNED:         { label: 'Chauffeur assigné', badge: 'badgeAssigned',       indicator: 'indicatorAssigned' },
-  EN_ROUTE:         { label: 'En route',         badge: 'badgeEnRoute',         indicator: 'indicatorEnRoute' },
-  IN_PROGRESS:      { label: 'En cours',         badge: 'badgeInProgress',      indicator: 'indicatorInProgress' },
-  OUTBOUND_COMPLETED: { label: 'Retour en cours', badge: 'badgeInProgress',     indicator: 'indicatorInProgress' },
-  COMPLETED:        { label: 'Terminé',          badge: 'badgeCompleted',       indicator: 'indicatorCompleted' },
-  RETURN_COMPLETED: { label: 'Aller-retour OK',  badge: 'badgeReturnCompleted', indicator: 'indicatorReturnCompleted' },
-  CANCELED:         { label: 'Annulé',           badge: 'badgeCancelled',       indicator: 'indicatorCancelled' },
-};
-
-const REQUEST_STATUS = {
-  DRAFT:     { label: 'Brouillon', badge: 'badgeDraft',     indicator: 'indicatorDraft' },
-  SENT:      { label: 'Envoyée',   badge: 'badgeSent',      indicator: 'indicatorSent' },
-  ACCEPTED:  { label: 'Acceptée',  badge: 'badgeAccepted',  indicator: 'indicatorAccepted' },
-  CONVERTED: { label: 'Confirmée', badge: 'badgeConverted', indicator: 'indicatorConverted' },
-  CANCELLED: { label: 'Annulée',   badge: 'badgeCancelled', indicator: 'indicatorCancelled' },
-  EXPIRED:   { label: 'Expirée',   badge: 'badgeExpired',   indicator: 'indicatorExpired' },
-};
-
+// ─── Filtres statut ───────────────────────────────────────────
 const STATUS_FILTER_LABELS = {
   '': 'Toutes',
   DRAFT: 'Brouillon',
   SENT: 'Envoyée',
   CONVERTED: 'Confirmée',
+  [EXTERNAL_STATUSES.ASSIGNED]: 'Externe affecté',
+  [EXTERNAL_STATUSES.COMPLETED]: 'Externe réalisée',
   CANCELLED: 'Annulée',
 };
+
+const STATUS_FILTER_OPTIONS = Object.entries(STATUS_FILTER_LABELS).map(([value, label]) => ({
+  value,
+  label,
+}));
+
+const CARRIER_MODE_FILTER_LABELS = {
+  '': 'Tous',
+  lirie: 'LIRIE',
+  external: 'Externe',
+};
+
+const CARRIER_MODE_FILTER_OPTIONS = Object.entries(CARRIER_MODE_FILTER_LABELS).map(([value, label]) => ({
+  value,
+  label,
+}));
 
 const INSTITUTION_RESUME_STEP_KEY = 'demo_institution_resume_step';
 const DEMO_INSTITUTION_COMPLETED_KEY = 'demo_institution_journey_completed';
@@ -148,13 +161,7 @@ const getDateGroupLabel = (dateStr) => {
   return d.toLocaleDateString('fr-CH', { weekday: 'long', day: 'numeric', month: 'long' });
 };
 
-const resolveStatus = (req) => {
-  if (req.status === 'CONVERTED' && req.booking_summary?.status) {
-    const bookingStatusKey = resolveBookingStatusKey(req.booking_summary);
-    return BOOKING_STATUS[bookingStatusKey] || REQUEST_STATUS.CONVERTED;
-  }
-  return REQUEST_STATUS[req.status] || REQUEST_STATUS.DRAFT;
-};
+const resolveStatus = (req) => resolveStatusDisplay(req, resolveBookingStatusKey);
 
 // ─── Délais ─────────────────────────────────────────────
 const TERMINAL_BOOKING_STATUSES = new Set([
@@ -174,7 +181,8 @@ const PRE_START_BOOKING_STATUSES = new Set(['PENDING', 'ACCEPTED', 'ASSIGNED']);
 const PRE_START_REQUEST_STATUSES = new Set(['DRAFT', 'SENT', 'ACCEPTED']);
 
 const resolveDelayInfo = (req, nowMs) => {
-  if (!req || !req.scheduled_time) return null;
+  const effectiveTime = req.next_confirmed_time || getNextConfirmedLegTime(req) || req.scheduled_time;
+  if (!req || !effectiveTime) return null;
   const bs = req.booking_summary;
   const bookingStatus = String(bs?.status || '').toUpperCase();
   const requestStatus = String(req.status || '').toUpperCase();
@@ -194,7 +202,7 @@ const resolveDelayInfo = (req, nowMs) => {
     return null;
   }
 
-  const scheduled = new Date(req.scheduled_time).getTime();
+  const scheduled = new Date(effectiveTime).getTime();
   if (Number.isNaN(scheduled)) return null;
   const diffMin = Math.floor((nowMs - scheduled) / 60000);
   if (diffMin < LATE_THRESHOLD_MIN) return null;
@@ -205,7 +213,7 @@ const resolveDelayInfo = (req, nowMs) => {
     severity,
     notStarted: true,
     label: `Retard +${diffMin} min`,
-    title: `La course n'a pas démarré (prévue à ${new Date(req.scheduled_time).toLocaleTimeString('fr-CH', { hour: '2-digit', minute: '2-digit' })}). Contactez le transporteur.`,
+    title: `La course n'a pas démarré (prévue à ${new Date(effectiveTime).toLocaleTimeString('fr-CH', { hour: '2-digit', minute: '2-digit' })}). Contactez le transporteur.`,
   };
 };
 
@@ -220,38 +228,111 @@ const formatPhoneDisplay = (phone) => {
   return String(phone).trim();
 };
 
+const getRoutePoints = (req) => {
+  const legs = Array.isArray(req?.legs)
+    ? [...req.legs].sort((a, b) => (a.sequence_index ?? 0) - (b.sequence_index ?? 0))
+    : [];
+  if (legs.length > 0) {
+    return [
+      { label: 'Départ', address: legs[0].pickup_location, kind: 'start' },
+      ...legs.map((leg, index) => {
+        const isReturn = Boolean(req?.return_to_institution) && index === legs.length - 1;
+        return {
+          label: isReturn ? 'Retour' : `Destination ${index + 1}`,
+          address: leg.dropoff_location,
+          kind: isReturn ? 'return' : 'destination',
+        };
+      }),
+    ];
+  }
+  return [
+    { label: 'Départ', address: req?.pickup_location, kind: 'start' },
+    { label: 'Destination 1', address: req?.dropoff_location, kind: 'destination' },
+  ];
+};
+
 const isRoundTripRequest = (req) => Boolean(req?.is_round_trip ?? req?.round_trip);
 
 const resolveTripTypeMeta = (req) => {
-  if (isRoundTripRequest(req)) {
-    const returnHint = req.return_time
-      ? ` — retour prévu à ${fmtTime(req.return_time)}`
-      : '';
+  const routePoints = getRoutePoints(req);
+  if (req?.return_to_institution) {
     return {
       label: 'A/R',
-      title: `Aller-retour${returnHint}`,
-      badgeClass: 'tripTypeRoundTrip',
+      title: `Parcours aller-retour (${Math.max(routePoints.length - 1, 1)} trajet(s))`,
+    };
+  }
+  if (req?.multi_stop || routePoints.length > 2) {
+    const destCount = routePoints.length - 1;
+    return {
+      label: destCount > 2 ? `${destCount} étapes` : 'Multi-destination',
+      title: `${destCount} destination(s) planifiée(s)`,
+    };
+  }
+  if (isRoundTripRequest(req)) {
+    const returnHint = formatReturnTimeLabel(req);
+    return {
+      label: 'A/R',
+      title: `Aller-retour${returnHint ? ` — ${returnHint}` : ''}`,
     };
   }
   return {
     label: 'Aller simple',
     title: 'Trajet aller simple (pas de retour planifié)',
-    badgeClass: 'tripTypeOneWay',
   };
 };
 
 // ─── Component ─────────────────────────────────────────────
 const InstitutionRequests = () => {
   const location = useLocation();
-  const [filters, setFilters] = useState({
-    status: '', date_from: '', date_to: '', query: '', page: 1, per_page: 20,
-  });
-  const [showFilters, setShowFilters] = useState(false);
+  const initialFilters = useMemo(() => {
+    const base = {
+      status: '',
+      carrier_source: '',
+      date_from: '',
+      date_to: '',
+      query: '',
+      page: 1,
+      per_page: 20,
+    };
+    const params = new URLSearchParams(location.search);
+    if (params.get('day') === 'today') {
+      const now = new Date();
+      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      return { ...base, date_from: today, date_to: today };
+    }
+    return base;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const [filters, setFilters] = useState(initialFilters);
+  const [showFilters, setShowFilters] = useState(
+    () => initialFilters.date_from !== '' || initialFilters.date_to !== ''
+  );
   const [selectedId, setSelectedId] = useState(null);
 
   const { data: meData } = useInstitutionMe();
   const myRole = meData?.institution_role;
   const showBillingSwitch = canEditBilling(myRole);
+  const canExport = canExportTransports(myRole);
+
+  const [exportDate, setExportDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [exporting, setExporting] = useState(null); // 'pdf' | null
+
+  const handleDailyExport = useCallback(async () => {
+    setExporting('pdf');
+    try {
+      const { rowsCount } = await exportDailyMissionReportsZip(exportDate);
+      const count = Number(rowsCount) || 0;
+      toast.success(
+        count > 0
+          ? `${count} rapport${count > 1 ? 's' : ''} de mission téléchargé${count > 1 ? 's' : ''}`
+          : 'Archive des rapports de mission générée',
+      );
+    } catch (err) {
+      toast.error(err?.message || "Erreur lors de l'export");
+    } finally {
+      setExporting(null);
+    }
+  }, [exportDate]);
 
   const updateRequestBilling = useUpdateRequestBilling();
   const updateBookingBilling = useUpdateBookingBilling();
@@ -284,7 +365,7 @@ const InstitutionRequests = () => {
   const grouped = useMemo(() => {
     const groups = {};
     for (const req of requests) {
-      const label = getDateGroupLabel(req.scheduled_time);
+      const label = getDateGroupLabel(req.mission_date || req.scheduled_time);
       if (!groups[label]) groups[label] = [];
       groups[label].push(req);
     }
@@ -411,28 +492,92 @@ const InstitutionRequests = () => {
         {/* Filters panel */}
         {showFilters && (
           <div className={s.filtersPanel}>
-            <div className={s.filterGroup}>
-              <label>Statut</label>
-              <select value={filters.status} onChange={(e) => handleFilter('status', e.target.value)}>
-                <option value="">Tous</option>
-                {Object.entries(STATUS_FILTER_LABELS).filter(([k]) => k).map(([val, label]) => (
-                  <option key={val} value={val}>{label}</option>
-                ))}
-              </select>
+            <div className={`${s.filterGroup} ${s.filterGroupStatus}`}>
+              <label htmlFor="filter-status">Statut</label>
+              <ChipSelect
+                id="filter-status"
+                className={s.filterChipSelect}
+                options={STATUS_FILTER_OPTIONS}
+                value={filters.status}
+                onChange={(v) => handleFilter('status', v)}
+                placeholder="Tous"
+                menuMinWidth={180}
+              />
             </div>
-            <div className={s.filterGroup}>
-              <label>Du</label>
-              <input type="date" value={filters.date_from} onChange={(e) => handleFilter('date_from', e.target.value)} />
+            <div className={`${s.filterGroup} ${s.filterGroupMode}`}>
+              <label htmlFor="filter-carrier-mode">Mode</label>
+              <ChipSelect
+                id="filter-carrier-mode"
+                className={s.filterChipSelect}
+                options={CARRIER_MODE_FILTER_OPTIONS}
+                value={filters.carrier_source}
+                onChange={(v) => handleFilter('carrier_source', v)}
+                placeholder="Tous"
+                menuMinWidth={140}
+              />
             </div>
-            <div className={s.filterGroup}>
-              <label>Au</label>
-              <input type="date" value={filters.date_to} onChange={(e) => handleFilter('date_to', e.target.value)} />
+            <div className={s.filterDateRange}>
+              <div className={s.filterGroup}>
+                <label htmlFor="filter-date-from">Du</label>
+                <div className={s.filterDateField}>
+                  <InlineDatePicker
+                    inputId="filter-date-from"
+                    value={filters.date_from}
+                    onChange={(v) => handleFilter('date_from', v)}
+                    ariaLabel="Date de début"
+                  />
+                </div>
+              </div>
+              <span className={s.filterDateSep} aria-hidden="true">—</span>
+              <div className={s.filterGroup}>
+                <label htmlFor="filter-date-to">Au</label>
+                <div className={s.filterDateField}>
+                  <InlineDatePicker
+                    inputId="filter-date-to"
+                    value={filters.date_to}
+                    onChange={(v) => handleFilter('date_to', v)}
+                    ariaLabel="Date de fin"
+                  />
+                </div>
+              </div>
             </div>
             <button
+              type="button"
               className={s.clearBtn}
-              onClick={() => setFilters({ status: '', date_from: '', date_to: '', query: '', page: 1, per_page: 20 })}
+              onClick={() => setFilters({
+                status: '',
+                carrier_source: '',
+                date_from: '',
+                date_to: '',
+                query: '',
+                page: 1,
+                per_page: 20,
+              })}
             >
               Effacer
+            </button>
+          </div>
+        )}
+
+        {/* Barre d'export journalier (admin + facturation + réception) */}
+        {canExport && (
+          <div className={s.exportBar}>
+            <span className={s.exportBarLabel}>Export journalier</span>
+            <div className={s.exportDateField}>
+              <InlineDatePicker
+                value={exportDate}
+                onChange={setExportDate}
+                ariaLabel="Date d'export journalier"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={handleDailyExport}
+              disabled={exporting !== null}
+              className={s.exportBtnPdf}
+              title="Télécharger tous les rapports de mission de la date (1 PDF par transport, archive ZIP)"
+            >
+              <FaFilePdf size={11} /> {exporting === 'pdf' ? 'Export...' : 'Rapports'}
             </button>
           </div>
         )}
@@ -460,8 +605,8 @@ const InstitutionRequests = () => {
           <div className={s.error}>Erreur : {error.message}</div>
         ) : requests.length === 0 ? (
           <div className={s.empty}>
-            <p>Aucune demande trouvée</p>
-            <p className={s.emptyHint}>Modifiez vos filtres ou créez une nouvelle demande.</p>
+            <p>Aucun transport trouvé</p>
+            <p className={s.emptyHint}>Modifiez vos filtres ou créez un nouveau transport.</p>
           </div>
         ) : (
           <>
@@ -476,76 +621,98 @@ const InstitutionRequests = () => {
                     : req.external_reference || `#${req.id}`;
                   const isSelected = selectedId === req.id;
 
-                  const companyName = req.accepted_by_company?.name;
-                  const companyPhone = req.accepted_by_company?.contact_phone;
+                  const companyName = getCarrierDisplay(req).name;
+                  const isExternal = isExternalRequest(req);
+                  const carrierModeLabel = getCarrierSourceLabel(req);
+                  const companyPhone = getCarrierDisplay(req).phone;
                   const delay = resolveDelayInfo(req, nowMs);
                   const showCallAction = delay && companyPhone;
                   const tripType = resolveTripTypeMeta(req);
+                  const routePoints = getRoutePoints(req);
+                  const billingMetaLabel = showBillingSwitch ? resolveBillingMetaLabel(req) : null;
+                  const timeTypeLabel = req.scheduled_time_type === 'arrival' ? 'RDV' : null;
+                  const cardMeta = buildCardMeta({
+                    req,
+                    companyName,
+                    carrierModeLabel,
+                    isExternal,
+                    tripTypeLabel: tripType.label,
+                    billingLabel: billingMetaLabel,
+                    timeTypeLabel,
+                  });
 
                   return (
                     <div
                       key={req.id}
-                      className={`${s.requestCard} ${isSelected ? s.requestCardSelected : ''} ${delay ? (delay.severity === 'severe' ? s.requestCardLateSevere : s.requestCardLate) : ''}`}
+                      className={`${s.requestCard} ${isSelected ? s.requestCardSelected : ''}`}
                       data-tour-id={req.status === 'DRAFT' ? 'institution-request-draft-card' : undefined}
                       onClick={() => handleSelectRequest(req)}
                     >
-                      <div className={`${s.cardIndicator} ${s[st.indicator]}`} />
+                      <div className={`${s.cardIndicator} ${s[st.indicatorClass]}`} />
 
-                      {/* Col 1 : nom + statut (2 lignes) */}
+                      {/* Col 1 : nom + statut hiérarchisé */}
                       <div className={s.colLeft}>
                         <span className={s.patientName}>{patientName}</span>
-                        <div className={s.statusLine}>
-                          <span className={`${s.badge} ${s[st.badge]}`}>{st.label}</span>
-                          {companyName && <span className={s.companyTag}>{companyName}</span>}
-                          {!companyName && req.status === 'SENT' && <span className={s.waitingTag}>En attente</span>}
-                          {delay && (
+                        <div className={s.statusBlock}>
+                          <div className={s.badgeRow}>
                             <span
-                              className={`${s.lateBadge} ${delay.severity === 'severe' ? s.lateBadgeSevere : ''}`}
-                              title={delay.title}
+                              className={`${s.badge} ${s[st.badgeClass]}`}
+                              title={st.fullLabel || st.label}
                             >
-                              <FiAlertTriangle aria-hidden="true" />
-                              {delay.label}
+                              {st.label}
+                            </span>
+                            {delay && (
+                              <span
+                                className={`${s.lateBadge} ${delay.severity === 'severe' ? s.lateBadgeSevere : ''}`}
+                                title={delay.title}
+                              >
+                                <FiAlertTriangle aria-hidden="true" />
+                                {delay.label}
+                              </span>
+                            )}
+                          </div>
+                          {cardMeta.carrierLine && (
+                            <span className={s.metaCarrier} title={cardMeta.carrierLine}>
+                              {cardMeta.carrierLine}
                             </span>
                           )}
                         </div>
                       </div>
 
-                      {/* Col 2 : trajet — départ puis destination */}
+                      {/* Col 2 : trajet complet — départ, destinations, retour éventuel */}
                       <div className={s.colCenter}>
-                        <div className={s.routeRow}>
-                          <span className={`${s.routeDot} ${s.routeDotStart}`} />
-                          <span className={s.routeText}>{shortAddr(req.pickup_location)}</span>
-                        </div>
-                        <div className={s.routeRow}>
-                          <span className={`${s.routeDot} ${s.routeDotEnd}`} />
-                          <span className={s.routeText}>{shortAddr(req.dropoff_location)}</span>
-                        </div>
+                        {routePoints.map((point, index) => {
+                          const isFirst = index === 0;
+                          return (
+                            <div className={s.routeRow} key={`${point.kind}-${index}-${point.address || ''}`}>
+                              <span className={s.routeDot} />
+                              <span
+                                className={`${s.routeText} ${isFirst ? s.routeTextPrimary : ''}`}
+                                title={`${point.label}: ${point.address || '—'}`}
+                              >
+                                {shortAddr(point.address)}
+                              </span>
+                            </div>
+                          );
+                        })}
                       </div>
 
                       {/* Col 3 : date/heure + toggle facturation */}
                       <div className={s.colRight}>
-                        <span className={s.cardDateTime}>
-                          {fmtDateShort(req.scheduled_time)} · {fmtTime(req.scheduled_time)}
-                          {isRoundTripRequest(req) && req.return_time && (
+                        <span className={s.cardDateTime} title={formatLegScheduleSummary(req)}>
+                          {formatMissionScheduleListLabel(req)}
+                          {isRoundTripRequest(req) && formatReturnTimeLabel(req) && !req.multi_stop && (
                             <span className={s.returnTimeInline}>
                               {' '}
-                              · retour {fmtTime(req.return_time)}
+                              · {formatReturnTimeLabel(req)}
                             </span>
                           )}
                         </span>
-                        <div className={s.cardMetaBadges}>
-                          <span
-                            className={`${s.tripTypeBadge} ${s[tripType.badgeClass]}`}
-                            title={tripType.title}
-                          >
-                            {tripType.label}
+                        {cardMeta.detailsLine && (
+                          <span className={s.metaDetails} title={cardMeta.detailsLine}>
+                            {cardMeta.detailsLine}
                           </span>
-                          {req.scheduled_time_type === 'arrival' && (
-                            <span className={s.timeTypeBadge} title="Heure du rendez-vous (arrivée)">
-                              📍 RDV
-                            </span>
-                          )}
-                        </div>
+                        )}
                         {showCallAction && (
                           <a
                             href={formatPhoneHref(companyPhone)}
@@ -559,7 +726,7 @@ const InstitutionRequests = () => {
                           </a>
                         )}
                         {showBillingSwitch && (() => {
-                          const isConverted = req.status === 'CONVERTED' && req.booking_summary;
+                          const isConverted = isConvertedLirie(req) && req.booking_summary;
                           const isPatient = isConverted
                             ? req.booking_summary.billed_to_type !== 'clinic'
                             : (req.billing_intent || 'patient') === 'patient';

@@ -100,10 +100,12 @@ type Props = {
   /** Si true, le composant ne s'affiche jamais (utile une fois l'onboarding fait). */
   silent?: boolean;
   mode?: "onboarding" | "needs_attention";
+  /** Permet de masquer le panneau pour la session (bouton de fermeture). */
+  onDismiss?: () => void;
 };
 
 export function DriverTrackingReadinessGate(props: Props) {
-  const { onReadyChange, silent } = props;
+  const { onReadyChange, silent, onDismiss } = props;
   const [loading, setLoading] = useState(true);
   const [snapshot, setSnapshot] = useState<TrackingReadinessSnapshot | null>(null);
   const [bgDisclosureVisible, setBgDisclosureVisible] = useState(false);
@@ -159,10 +161,31 @@ export function DriverTrackingReadinessGate(props: Props) {
 
   const handleNotifDisclosureAccept = useCallback(async () => {
     setNotifDisclosurePending(true);
-    await markNotificationDisclosureAccepted();
-    setNotifDisclosurePending(false);
-    setNotifDisclosureVisible(false);
-    await refresh();
+    try {
+      await markNotificationDisclosureAccepted();
+      if (Platform.OS !== "web") {
+        try {
+          const Notifications = await import("expo-notifications");
+          const current = await Notifications.getPermissionsAsync().catch(() => null);
+          const alreadyGranted = Boolean(current?.granted || current?.status === "granted");
+          const blocked = current?.canAskAgain === false && !alreadyGranted;
+          if (blocked) {
+            // Déjà refusé au niveau OS : l'invite ne réapparaît plus → router vers les réglages.
+            await Linking.openSettings().catch(() => undefined);
+          } else if (!alreadyGranted) {
+            // Premier passage : déclenche l'invite système ET enregistre l'app auprès d'iOS,
+            // sinon l'app n'apparaît pas dans Réglages > Notifications.
+            await Notifications.requestPermissionsAsync().catch(() => undefined);
+          }
+        } catch {
+          /* expo-notifications indisponible : on ignore, le bridge push prendra le relais */
+        }
+      }
+    } finally {
+      setNotifDisclosurePending(false);
+      setNotifDisclosureVisible(false);
+      await refresh();
+    }
   }, [refresh]);
 
   const checklist = useMemo(() => {
@@ -207,7 +230,20 @@ export function DriverTrackingReadinessGate(props: Props) {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Préparation tracking obligatoire</Text>
+      <View style={styles.headerRow}>
+        <Text style={styles.title}>Préparation tracking obligatoire</Text>
+        {onDismiss ? (
+          <Pressable
+            onPress={onDismiss}
+            style={styles.closeButton}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel="Fermer le panneau de préparation"
+          >
+            <Text style={styles.closeButtonText}>✕</Text>
+          </Pressable>
+        ) : null}
+      </View>
       <Text style={styles.subtitle}>
         Avant votre première mission, vérifiez les réglages ci-dessous.
       </Text>
@@ -285,9 +321,30 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 10,
   },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
   title: {
+    flex: 1,
     fontSize: 18,
     fontWeight: "700",
+  },
+  closeButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(15, 23, 42, 0.06)",
+  },
+  closeButtonText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#475569",
+    lineHeight: 16,
   },
   subtitle: {
     fontSize: 14,
