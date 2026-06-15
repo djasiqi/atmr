@@ -348,6 +348,7 @@ def build_institution_snapshot(tr: TransportRequest, institution: Institution) -
         "service": contact.get("requester_service") or MISSING,
         "requester_name": requester or contact.get("requester_name") or MISSING,
         "requester_phone": contact.get("requester_phone") or contact.get("phone") or MISSING,
+        "logo_url": getattr(institution, "logo_url", None),
         "captured_at": datetime.now(UTC).isoformat(),
     }
 

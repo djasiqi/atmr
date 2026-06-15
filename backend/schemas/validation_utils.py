@@ -3,13 +3,54 @@
 Fournit des helpers pour valider les entrées et retourner des erreurs structurées.
 """
 
+import json
 from typing import Any, Dict, cast
 
+from flask import request
 from marshmallow import (
     Schema,
     ValidationError,
 )
 from marshmallow.validate import Length
+
+
+def parse_request_json() -> Dict[str, Any]:
+    """Parse le corps JSON de la requête sans lever BadRequest Werkzeug.
+
+    Flask-RESTX (validate=True) et ``request.get_json()`` sans ``silent=True``
+    renvoient 400 ``invalid_json`` si le corps est vide ou mal formé. Cette
+    fonction centralise un parsing tolérant pour les routes métier.
+    """
+    data = request.get_json(silent=True)
+    if isinstance(data, dict):
+        return cast(Dict[str, Any], data)
+    if isinstance(data, str):
+        try:
+            nested = json.loads(data)
+            if isinstance(nested, dict):
+                return cast(Dict[str, Any], nested)
+        except json.JSONDecodeError:
+            pass
+
+    raw = request.get_data(cache=True, as_text=True)
+    if not raw or not raw.strip():
+        return {}
+
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        return {}
+
+    if isinstance(parsed, dict):
+        return cast(Dict[str, Any], parsed)
+    if isinstance(parsed, str):
+        try:
+            nested = json.loads(parsed)
+            if isinstance(nested, dict):
+                return cast(Dict[str, Any], nested)
+        except json.JSONDecodeError:
+            pass
+    return {}
 
 
 def validate_request(

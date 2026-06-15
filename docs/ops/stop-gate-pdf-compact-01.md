@@ -55,13 +55,14 @@ Prérequis: simplification compacité + dédoublonnage implémentés
 - **Prise en charge** (libellé court, une seule ligne) ; **Rendez-vous** si `scheduled_time_type = arrival`
 - **Signatures symétriques** : Chauffeur = `Heure réelle` + Signature ; Patient = `Date` + Signature
 - Date mission visible dès l'ouverture : `TR-… · JJ.MM.AAAA` dans l'en-tête du bon
-- Ne contient **PAS** : empreinte/hash, référence d'archivage, QR, facturation, historique, traçabilité
+- Ne contient **PAS** : empreinte/hash, référence d'archivage, facturation, historique, traçabilité administrative lourde
+- Contient un **QR code LIRIE** compact en haut à droite (URL `verify_url` — homepage pour l'instant) et le **logo institution** (ou logo LIRIE par défaut) en haut à gauche, au-dessus du titre — même logique sur le **rapport de mission** (`_report_header_table`)
 - Remarque médicale bornée à **120 caractères** (`_MAX_VOUCHER_NOTES`), rendue en italique grisé
 - Nom patient borné à **40 caractères** (`_MAX_VOUCHER_PATIENT`) — une seule ligne
 - Destination bornée à **55 caractères** (`_MAX_VOUCHER_DESTINATION`) — lieu reconnaissable, une ligne
 - Si départ = domicile : l'adresse de départ visible directement dans TRANSPORT
 
-✅ **Implémenté** : `build_operational_voucher_pdf`, `_build_voucher_identity_table` (type transport remonté), `_build_voucher_transport` (libellé horaire sur une ligne via `_voucher_transport_table`, destination ≤ 55 car.), `_build_voucher_medical` (≤ 120 car., note italique), `_build_voucher_contact_line` (service · nom · téléphone), `_signature_cell` (heure réelle) dans [`mission_report_pdf.py`](../backend/services/institutions/mission_report_pdf.py) ; `scheduled_time_type` exposé dans [`mission_report_context.py`](../backend/services/institutions/mission_report_context.py) ; tests `test_voucher_*` dans [`test_mission_report_pdf.py`](../backend/tests/unit/test_mission_report_pdf.py).
+✅ **Implémenté** : `build_operational_voucher_pdf`, `_build_voucher_identity_table` (type transport remonté), `_build_voucher_transport` (libellé horaire sur une ligne via `_voucher_transport_table`, destination ≤ 55 car.), `_build_voucher_medical` (≤ 120 car., note italique), `_build_voucher_contact_line` (service · nom · téléphone), `_signature_cell` (heure réelle), `_voucher_header_table` (logo gauche + QR droite au-dessus du titre) dans [`mission_report_pdf.py`](../backend/services/institutions/mission_report_pdf.py) ; `scheduled_time_type` exposé dans [`mission_report_context.py`](../backend/services/institutions/mission_report_context.py) ; tests `test_voucher_*` dans [`test_mission_report_pdf.py`](../backend/tests/unit/test_mission_report_pdf.py).
 
 ## PDF-VOUCHER-04 (identification facturation patient)
 

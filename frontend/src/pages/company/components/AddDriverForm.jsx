@@ -189,12 +189,14 @@ const AddDriverForm = ({ onSubmit, onClose }) => {
           selectedVehicle.brand ||
             selectedVehicle.make ||
             selectedVehicle.manufacturer ||
-            vehicleModel ||
-            'Non renseignee'
+            ''
         ).trim()) ||
-      'Non renseignee';
+      '';
     const vehiclePlate =
       (selectedVehicle && String(selectedVehicle.license_plate || '').trim()) || '';
+    const vehicleAssigned = vehicleModel || vehicleBrand || vehiclePlate || 'Non renseignee';
+    const resolvedBrand = vehicleBrand || vehicleModel || 'Non renseignee';
+    const resolvedPlate = vehiclePlate || 'N/A';
 
     const payload = {
       username: formData.username.trim(),
@@ -208,9 +210,9 @@ const AddDriverForm = ({ onSubmit, onClose }) => {
       address: domicileAddress.trim() || null,
       password: formData.password,
       vehicle_id: formData.vehicleId ? Number(formData.vehicleId) : null,
-      vehicle_assigned: vehicleModel,
-      brand: vehicleBrand,
-      license_plate: vehiclePlate,
+      vehicle_assigned: vehicleAssigned,
+      brand: resolvedBrand,
+      license_plate: resolvedPlate,
       contract_type: formData.contractType || 'CDI',
       employment_start_date: formData.employmentStartDate || null,
       license_valid_until: formData.licenseValidUntil || null,

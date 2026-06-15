@@ -12,10 +12,11 @@ import logging
 import secrets
 import uuid
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any, Mapping, TypedDict
 
 import sentry_sdk
-from flask import g, request
+from flask import current_app, request
 from flask_jwt_extended import get_jwt, jwt_required
 from flask_restx import Namespace, Resource, fields
 
@@ -51,8 +52,12 @@ from security.api_key_auth import api_key_required
 from security.audit_log import AuditLogger
 from security.authorization import AuthorizationService
 from shared.error_handlers import APIErrorHandler
+from shared.upload_validation import ALLOWED_LOGO_EXT, validate_file_upload
 
 logger = logging.getLogger(__name__)
+
+MAX_LOGO_MB = 2
+MAX_LOGO_BYTES = MAX_LOGO_MB * 1024 * 1024
 
 # Namespace pour les institutions
 institutions_ns = Namespace(
@@ -77,6 +82,7 @@ institution_me_model = institutions_ns.model(
             description="Type (clinic, ems, imad, hospital)"
         ),
         "address": fields.String(description="Adresse"),
+        "logo_url": fields.String(description="URL du logo institution"),
         "institution_role": fields.String(
             description="Rôle de l'utilisateur dans l'institution"
         ),
@@ -111,6 +117,34 @@ def _resolve_me_identity_for_response(
     return institution_role, email
 
 
+def _build_institution_me_response(
+    institution: Any, user: User, jwt_claims: Mapping[str, Any]
+) -> dict[str, Any]:
+    """Payload standard GET/PUT /institutions/me."""
+    institution_role, display_email = _resolve_me_identity_for_response(user, jwt_claims)
+    return {
+        "id": institution.id,
+        "public_id": institution.public_id,
+        "name": institution.name,
+        "institution_type": institution.institution_type,
+        "address": institution.address,
+        "contact_email": institution.contact_email,
+        "contact_phone": institution.contact_phone,
+        "notes": institution.notes,
+        "logo_url": getattr(institution, "logo_url", None),
+        "institution_role": institution_role,
+        "user": {
+            "id": user.id,
+            "public_id": user.public_id,
+            "username": user.username,
+            "email": display_email,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "phone": user.phone,
+        },
+    }
+
+
 @institutions_ns.route("/me")
 class InstitutionMe(Resource):
     """Endpoint pour récupérer les informations de l'institution courante."""
@@ -137,9 +171,6 @@ class InstitutionMe(Resource):
 
             # Récupérer le rôle institution depuis le JWT
             jwt_claims = get_jwt()
-            institution_role, display_email = _resolve_me_identity_for_response(
-                user, jwt_claims
-            )
 
             # Audit log
             try:
@@ -149,7 +180,7 @@ class InstitutionMe(Resource):
                     user_id=user.id,
                     result_status="success",
                     action_details={
-                        "institution_role": institution_role,
+                        "institution_role": jwt_claims.get("institution_role"),
                     },
                     ip_address=request.remote_addr,
                     user_agent=request.headers.get("User-Agent"),
@@ -162,26 +193,9 @@ class InstitutionMe(Resource):
                 )
 
             # Construire la réponse
-            response_data = {
-                "id": institution.id,
-                "public_id": institution.public_id,
-                "name": institution.name,
-                "institution_type": institution.institution_type,
-                "address": institution.address,
-                "contact_email": institution.contact_email,
-                "contact_phone": institution.contact_phone,
-                "notes": institution.notes,
-                "institution_role": institution_role,
-                "user": {
-                    "id": user.id,
-                    "public_id": user.public_id,
-                    "username": user.username,
-                    "email": display_email,
-                    "first_name": user.first_name,
-                    "last_name": user.last_name,
-                    "phone": user.phone,
-                },
-            }
+            response_data = _build_institution_me_response(
+                institution, user, jwt_claims
+            )
 
             logger.info(
                 "[Institution] GET /me - institution_id=%s, user_id=%s",
@@ -260,31 +274,8 @@ class InstitutionMe(Resource):
                         setattr(institution, field, new_val)
 
             if not new_values:
-                # Aucun changement réel
                 jwt_claims = get_jwt()
-                institution_role, display_email = _resolve_me_identity_for_response(
-                    user, jwt_claims
-                )
-                return {
-                    "id": institution.id,
-                    "public_id": institution.public_id,
-                    "name": institution.name,
-                    "institution_type": institution.institution_type,
-                    "address": institution.address,
-                    "contact_email": institution.contact_email,
-                    "contact_phone": institution.contact_phone,
-                    "notes": institution.notes,
-                    "institution_role": institution_role,
-                    "user": {
-                        "id": user.id,
-                        "public_id": user.public_id,
-                        "username": user.username,
-                        "email": display_email,
-                        "first_name": user.first_name,
-                        "last_name": user.last_name,
-                        "phone": user.phone,
-                    },
-                }, 200
+                return _build_institution_me_response(institution, user, jwt_claims), 200
 
             db.session.commit()
 
@@ -336,30 +327,7 @@ class InstitutionMe(Resource):
             )
 
             jwt_claims = get_jwt()
-            institution_role, display_email = _resolve_me_identity_for_response(
-                user, jwt_claims
-            )
-
-            return {
-                "id": institution.id,
-                "public_id": institution.public_id,
-                "name": institution.name,
-                "institution_type": institution.institution_type,
-                "address": institution.address,
-                "contact_email": institution.contact_email,
-                "contact_phone": institution.contact_phone,
-                "notes": institution.notes,
-                "institution_role": institution_role,
-                "user": {
-                    "id": user.id,
-                    "public_id": user.public_id,
-                    "username": user.username,
-                    "email": display_email,
-                    "first_name": user.first_name,
-                    "last_name": user.last_name,
-                    "phone": user.phone,
-                },
-            }, 200
+            return _build_institution_me_response(institution, user, jwt_claims), 200
 
         except Exception as e:
             db.session.rollback()
@@ -369,6 +337,164 @@ class InstitutionMe(Resource):
                 type(e).__name__,
                 str(e),
             )
+            return APIErrorHandler.handle_exception(e, logger)
+
+
+@institutions_ns.route("/me/logo")
+class InstitutionLogo(Resource):
+    """Upload / suppression du logo institution (admin only)."""
+
+    @institutions_ns.doc(
+        description="Retourne l'URL du logo actuel (ou null).",
+        security="Bearer",
+    )
+    @jwt_required()
+    @role_required(UserRole.INSTITUTION)
+    def get(self):
+        try:
+            institution, _user = AuthorizationService.require_institution_role(
+                InstitutionRole.ADMIN.value
+            )
+            return {"logo_url": getattr(institution, "logo_url", None)}, 200
+        except Exception as e:
+            return APIErrorHandler.handle_exception(e, logger)
+
+    @institutions_ns.doc(
+        description="Upload d'un logo institution (PNG/JPG/JPEG/SVG, max 2 Mo).",
+        security="Bearer",
+    )
+    @jwt_required()
+    @role_required(UserRole.INSTITUTION)
+    def post(self):
+        try:
+            institution, user = AuthorizationService.require_institution_role(
+                InstitutionRole.ADMIN.value
+            )
+            institution_id = int(getattr(institution, "id", 0) or 0)
+            if institution_id <= 0:
+                return APIErrorHandler.handle_exception(
+                    Exception("Institution introuvable (ID invalide)."),
+                    logger,
+                )
+
+            file = request.files.get("file")
+            if not file or not file.filename:
+                return APIErrorHandler.handle_validation_error(
+                    "Fichier vide.",
+                    field="file",
+                    logger_instance=logger,
+                )
+
+            is_valid, error_msg = validate_file_upload(
+                file=file,
+                filename=file.filename,
+                allowed_extensions=ALLOWED_LOGO_EXT,
+                max_size_bytes=MAX_LOGO_BYTES,
+                validate_content=True,
+            )
+            if not is_valid:
+                return APIErrorHandler.handle_validation_error(
+                    error_msg or "Fichier invalide.",
+                    field="file",
+                    logger_instance=logger,
+                )
+
+            content = file.read()
+            ext = (file.filename or "").rsplit(".", 1)[1].lower()
+
+            upload_root = Path(
+                current_app.config.get(
+                    "UPLOADS_DIR", str(Path(current_app.root_path) / "uploads")
+                )
+            ).resolve()
+            public_base = current_app.config.get("UPLOADS_PUBLIC_BASE", "/uploads")
+
+            from application.institutions.logo.upload_institution_logo import (
+                UploadInstitutionLogoUseCase,
+            )
+            from infrastructure.files.institution_logo_storage import (
+                FileSystemInstitutionLogoStorage,
+            )
+
+            storage = FileSystemInstitutionLogoStorage(base_uploads_dir=upload_root)
+            uc = UploadInstitutionLogoUseCase(storage=storage, public_base=public_base)
+            result = uc.execute(
+                institution=institution,
+                institution_id=institution_id,
+                extension=ext,
+                content=content,
+            )
+            if not result.ok:
+                return result.error or {"error": "Bad request"}, result.status_code or 400
+
+            db.session.commit()
+
+            try:
+                AuditLogger.log_action(
+                    action_type="institution_logo_uploaded",
+                    action_category="institution",
+                    user_id=user.id,
+                    user_type="institution",
+                    institution_id=institution_id,
+                    result_status="success",
+                )
+            except Exception as audit_err:
+                logger.warning("Échec audit log institution_logo_uploaded: %s", audit_err)
+
+            return {
+                "logo_url": getattr(institution, "logo_url", None),
+                "size_bytes": result.size_bytes,
+            }, 200
+        except Exception as e:
+            db.session.rollback()
+            return APIErrorHandler.handle_exception(e, logger)
+
+    @institutions_ns.doc(
+        description="Supprime le logo institution (fichier + champ DB).",
+        security="Bearer",
+    )
+    @jwt_required()
+    @role_required(UserRole.INSTITUTION)
+    def delete(self):
+        try:
+            institution, user = AuthorizationService.require_institution_role(
+                InstitutionRole.ADMIN.value
+            )
+            institution_id = int(getattr(institution, "id", 0) or 0)
+
+            upload_root = Path(
+                current_app.config.get(
+                    "UPLOADS_DIR", str(Path(current_app.root_path) / "uploads")
+                )
+            ).resolve()
+
+            from application.institutions.logo.delete_institution_logo import (
+                DeleteInstitutionLogoUseCase,
+            )
+            from infrastructure.files.institution_logo_storage import (
+                FileSystemInstitutionLogoStorage,
+            )
+
+            storage = FileSystemInstitutionLogoStorage(base_uploads_dir=upload_root)
+            uc = DeleteInstitutionLogoUseCase(storage=storage)
+            _ = uc.execute(institution=institution, institution_id=institution_id)
+            db.session.commit()
+
+            try:
+                AuditLogger.log_action(
+                    action_type="institution_logo_deleted",
+                    action_category="institution",
+                    user_id=user.id,
+                    user_type="institution",
+                    institution_id=institution_id,
+                    result_status="success",
+                )
+            except Exception as audit_err:
+                logger.warning("Échec audit log institution_logo_deleted: %s", audit_err)
+
+            return {"message": "Logo supprimé."}, 200
+        except Exception as e:
+            db.session.rollback()
             return APIErrorHandler.handle_exception(e, logger)
 
 

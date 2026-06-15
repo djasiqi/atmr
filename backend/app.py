@@ -403,6 +403,10 @@ def create_app(config_name: str | None = None):
     validate_required_env_vars(config_name)
 
     app = Flask(__name__)
+    from middleware.silent_json_request import SilentJSONRequest, register_json_body_precache
+
+    app.request_class = SilentJSONRequest
+    register_json_body_precache(app)
 
     # Désactiver les slashes stricts pour éviter les redirections 308
     app.url_map.strict_slashes = False
@@ -2072,6 +2076,15 @@ def create_app(config_name: str | None = None):
                     error_code = "invalid_content_type"
                     error_message = f"Content-Type invalide: '{request.content_type}'. Utilisez 'application/json'."
                 else:
+                    from middleware.silent_json_request import redact_json_body_preview
+
+                    raw_body = request.get_data(cache=True, as_text=True)
+                    app.logger.warning(
+                        "[BadRequest] JSON non parseable path=%s body_len=%s preview=%s",
+                        getattr(request, "path", None),
+                        len(raw_body) if raw_body else 0,
+                        redact_json_body_preview(raw_body),
+                    )
                     error_code = "invalid_json"
                     error_message = "Corps de requête JSON manquant ou invalide. Vérifiez le format du body."
             else:

@@ -8,10 +8,13 @@
  */
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { FaSave, FaBuilding } from 'react-icons/fa';
-import { useInstitutionMe, useUpdateInstitution } from '../../../../hooks/useInstitutionData';
+import { FaSave, FaBuilding, FaUpload, FaTrash } from 'react-icons/fa';
+import { useInstitutionMe, useUpdateInstitution, institutionQueryKeys } from '../../../../hooks/useInstitutionData';
+import { useQueryClient } from '@tanstack/react-query';
+import { uploadInstitutionLogo, deleteInstitutionLogo } from '../../../../services/institutionService';
 import { isAdmin } from '../../../../utils/institutionPermissions';
 import AddressAutocomplete from '../../../../components/common/AddressAutocomplete';
+import resolveLogoUrl from '../../../../utils/resolveLogoUrl';
 import { toast } from 'sonner';
 import ChipSelect from './ChipSelect';
 import styles from '../InstitutionSettings.module.css';
@@ -30,9 +33,14 @@ const INSTITUTION_TYPES = [
 const InstitutionProfileTab = () => {
   const { data: meData, isLoading } = useInstitutionMe();
   const updateMutation = useUpdateInstitution();
+  const queryClient = useQueryClient();
 
   const institutionRole = meData?.institution_role;
   const canEdit = isAdmin(institutionRole);
+
+  const fileInputRef = useRef(null);
+  const [logoPreview, setLogoPreview] = useState(null);
+  const [logoBusy, setLogoBusy] = useState(false);
 
   const [form, setForm] = useState({
     name: '',
@@ -65,6 +73,12 @@ const InstitutionProfileTab = () => {
     });
     lastSyncedRef.current = serverFingerprint;
   }, [meData]);
+
+  useEffect(() => {
+    if (!meData) return;
+    const resolved = resolveLogoUrl(meData.logo_url);
+    setLogoPreview(resolved || null);
+  }, [meData?.logo_url]);
 
   // Dirty state : détecter si des champs ont changé
   const isDirty = useMemo(() => {
@@ -117,6 +131,66 @@ const InstitutionProfileTab = () => {
     }
   };
 
+  const onPickLogoFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const allowed = ['image/png', 'image/jpeg', 'image/jpg', 'image/svg+xml'];
+    if (!allowed.includes(file.type)) {
+      toast.error('Format non supporté (PNG, JPG ou SVG).');
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('Fichier trop volumineux (max 2 Mo).');
+      return;
+    }
+
+    const localUrl = URL.createObjectURL(file);
+    setLogoPreview(localUrl);
+    setLogoBusy(true);
+
+    try {
+      const result = await uploadInstitutionLogo(file);
+      if (result?.logo_url) {
+        setLogoPreview(resolveLogoUrl(result.logo_url) || null);
+      }
+      lastSyncedRef.current = null;
+      await queryClient.invalidateQueries({ queryKey: institutionQueryKeys.me() });
+      toast.success('Logo mis à jour.');
+    } catch (err) {
+      const msg =
+        err?.response?.data?.error ||
+        err?.message ||
+        "Échec de l'upload du logo.";
+      toast.error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+      setLogoPreview(resolveLogoUrl(meData?.logo_url) || null);
+    } finally {
+      setLogoBusy(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const onRemoveLogo = async () => {
+    if (!meData?.logo_url) return;
+    setLogoBusy(true);
+    try {
+      await deleteInstitutionLogo();
+      setLogoPreview(null);
+      lastSyncedRef.current = null;
+      await queryClient.invalidateQueries({ queryKey: institutionQueryKeys.me() });
+      toast.success('Logo supprimé.');
+    } catch (err) {
+      const msg =
+        err?.response?.data?.error ||
+        err?.message ||
+        'Impossible de supprimer le logo.';
+      toast.error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+      setLogoPreview(resolveLogoUrl(meData?.logo_url) || null);
+    } finally {
+      setLogoBusy(false);
+    }
+  };
+
   if (isLoading) {
     return <p>Chargement...</p>;
   }
@@ -136,53 +210,121 @@ const InstitutionProfileTab = () => {
       </div>
 
       <div className={styles.profileForm}>
-        {/* Nom */}
-        <div className={styles.field}>
-          <label>Nom de l'institution *</label>
-          <input
-            type="text"
-            value={form.name}
-            onChange={(e) => handleChange('name', e.target.value)}
-            disabled={!canEdit}
-            placeholder="Ex : Clinique les Hauts d'Anières"
-          />
-          <span className={styles.fieldHint}>
-            Nom officiel tel qu'il apparaît dans le portail et les
-            communications.
-          </span>
-        </div>
+        <div className={styles.profileIdentityRow}>
+          <div className={styles.profileIdentityFields}>
+            {/* Nom */}
+            <div className={styles.field}>
+              <label>Nom de l'institution *</label>
+              <input
+                type="text"
+                value={form.name}
+                onChange={(e) => handleChange('name', e.target.value)}
+                disabled={!canEdit}
+                placeholder="Ex : Clinique les Hauts d'Anières"
+              />
+              <span className={styles.fieldHint}>
+                Nom officiel tel qu'il apparaît dans le portail et les
+                communications.
+              </span>
+            </div>
 
-        {/* Type d'institution */}
-        <div className={styles.field}>
-          <label htmlFor="institution-type">Type d'institution</label>
-          {canEdit ? (
-            <ChipSelect
-              id="institution-type"
-              name="institution_type"
-              ariaLabel="Type d'institution"
-              block
-              placeholder="Sélectionner un type"
-              value={form.institution_type || ''}
-              options={INSTITUTION_TYPES}
-              onChange={(val) => handleChange('institution_type', val)}
-            />
-          ) : (
-            <input
-              type="text"
-              value={
-                INSTITUTION_TYPES.find(
-                  (t) => t.value === meData?.institution_type?.toLowerCase()
-                )?.label ||
-                meData?.institution_type ||
-                ''
-              }
-              disabled
-              className={styles.readonlyField}
-            />
-          )}
-          <span className={styles.fieldHint}>
-            Détermine le fonctionnement du portail (équipes, accès patients, facturation).
-          </span>
+            {/* Type d'institution */}
+            <div className={styles.field}>
+              <label htmlFor="institution-type">Type d'institution</label>
+              {canEdit ? (
+                <ChipSelect
+                  id="institution-type"
+                  name="institution_type"
+                  ariaLabel="Type d'institution"
+                  block
+                  placeholder="Sélectionner un type"
+                  value={form.institution_type || ''}
+                  options={INSTITUTION_TYPES}
+                  onChange={(val) => handleChange('institution_type', val)}
+                />
+              ) : (
+                <input
+                  type="text"
+                  value={
+                    INSTITUTION_TYPES.find(
+                      (t) => t.value === meData?.institution_type?.toLowerCase()
+                    )?.label ||
+                    meData?.institution_type ||
+                    ''
+                  }
+                  disabled
+                  className={styles.readonlyField}
+                />
+              )}
+              <span className={styles.fieldHint}>
+                Détermine le fonctionnement du portail (équipes, accès patients, facturation).
+              </span>
+            </div>
+          </div>
+
+          {/* Logo institution — colonne droite */}
+          <div className={`${styles.field} ${styles.profileIdentityLogo}`}>
+            <label>Logo de l'institution</label>
+            <div className={styles.logoColumn}>
+              <div className={styles.logoBox}>
+                {logoPreview ? (
+                  <img
+                    src={logoPreview}
+                    alt="Logo de l'institution"
+                    className={styles.logoPreview}
+                    loading="lazy"
+                  />
+                ) : (
+                  <div className={styles.logoPlaceholder}>
+                    <span>Aucun logo</span>
+                  </div>
+                )}
+              </div>
+              {canEdit ? (
+                <div className={styles.logoActions}>
+                  <span className={styles.fieldHint}>
+                    PNG, JPG ou SVG — 2 Mo max. Affiché sur les bons de transport.
+                  </span>
+                  <div className={styles.logoActionsRow}>
+                    <button
+                      type="button"
+                      className={styles.logoActionBtn}
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={logoBusy}
+                    >
+                      <FaUpload aria-hidden="true" />{' '}
+                      {logoBusy
+                        ? 'Téléversement...'
+                        : logoPreview
+                          ? 'Remplacer'
+                          : 'Ajouter'}
+                    </button>
+                    {meData?.logo_url && (
+                      <button
+                        type="button"
+                        className={`${styles.logoActionBtn} ${styles.logoActionDanger}`}
+                        onClick={onRemoveLogo}
+                        disabled={logoBusy}
+                      >
+                        <FaTrash aria-hidden="true" /> Supprimer
+                      </button>
+                    )}
+                  </div>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/jpg,image/svg+xml"
+                    className={styles.logoFileInput}
+                    onChange={onPickLogoFile}
+                  />
+                </div>
+              ) : (
+                <span className={styles.fieldHint}>
+                  Affiché sur les bons de transport.
+                </span>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Email + Téléphone */}

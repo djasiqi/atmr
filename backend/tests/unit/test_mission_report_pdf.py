@@ -85,6 +85,33 @@ def _flow_texts(flow):
     return out
 
 
+def _flow_has_image(flow) -> bool:
+    """True si le flow contient au moins une image (ex. QR code), tables imbriquées incluses."""
+    from reportlab.platypus import Image, Table
+
+    def _cell_has_image(cell) -> bool:
+        items = cell if isinstance(cell, list) else [cell]
+        for sub in items:
+            if isinstance(sub, Image):
+                return True
+            if isinstance(sub, Table):
+                for row in sub._cellvalues:
+                    for nested in row:
+                        if _cell_has_image(nested):
+                            return True
+        return False
+
+    for el in flow:
+        if isinstance(el, Image):
+            return True
+        if isinstance(el, Table):
+            for row in el._cellvalues:
+                for cell in row:
+                    if _cell_has_image(cell):
+                        return True
+    return False
+
+
 def _tr(**kwargs):
     defaults = {
         "id": 1820,
@@ -804,6 +831,44 @@ class TestMissionReportPdf:
         if audit_text and voucher_text:
             assert "Empreinte" in audit_text
             assert "Empreinte" not in voucher_text
+
+    def test_voucher_has_lirie_qr_in_header(self, mock_bmsg, mock_timeline):
+        from services.institutions.mission_report_pdf import (
+            VoucherLayoutOptions,
+            _build_voucher_presentation,
+            _layout_voucher_operational,
+            _voucher_header,
+            _voucher_operational_header,
+        )
+
+        _mock_timeline_and_messages(mock_timeline, mock_bmsg)
+        tr = _tr(booking=_booking())
+        ctx = collect_mission_report_context(tr, _institution(), variant="operational")
+        assert ctx.traceability.get("verify_url") == "https://www.lirie.ch"
+
+        pres = _build_voucher_presentation(ctx)
+        assert pres.verify_url == "https://www.lirie.ch"
+        assert _flow_has_image(_voucher_operational_header(pres))
+        assert _flow_has_image(_voucher_header(ctx))
+
+        op_flow = _layout_voucher_operational(pres, VoucherLayoutOptions())
+        assert _flow_has_image(op_flow)
+        voucher_text = _pdf_text(
+            build_operational_voucher_pdf(ctx, layout="operational")
+        )
+        if voucher_text:
+            assert "Empreinte" not in voucher_text
+            assert "Réf. archivage" not in voucher_text
+
+    def test_audit_report_has_logo_in_header(self, mock_bmsg, mock_timeline):
+        from services.institutions.mission_report_pdf import _document_header
+
+        _mock_timeline_and_messages(mock_timeline, mock_bmsg)
+        tr = _tr(booking=_booking())
+        ctx = collect_mission_report_context(tr, _institution(), variant="audit")
+        assert _flow_has_image(_document_header(ctx, "Rapport de mission"))
+        pdf = build_mission_audit_report_pdf(ctx)
+        assert pdf[:4] == b"%PDF"
 
     def test_voucher_external_carrier_label(self, mock_bmsg, mock_timeline):
         from services.institutions.mission_report_pdf import _build_voucher_identity_table

@@ -405,20 +405,12 @@ export const fetchCompanyDriversCanonical = async () => {
  */
 export const createDriver = async (driverData) => {
   try {
-    // Forcer un JSON strict pour éviter les erreurs backend "invalid_json"
-    // lorsque le body est interprété avec un content-type ambigu.
     const sanitizedPayload = Object.fromEntries(
       Object.entries(driverData || {}).filter(([, value]) => value !== undefined)
     );
     const { data } = await apiClient.post(
       '/companies/me/drivers/create',
-      JSON.stringify(sanitizedPayload),
-      {
-        headers: {
-          'Content-Type': 'application/json; charset=utf-8',
-          Accept: 'application/json; charset=utf-8',
-        },
-      }
+      sanitizedPayload
     );
     return data;
   } catch (error) {

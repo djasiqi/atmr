@@ -5,6 +5,16 @@ import { useCreatePatient, useUpdatePatient, useInstitutionMe } from '../../../h
 import { canViewAdminData, canEditAdminData, isCurator } from '../../../utils/institutionPermissions';
 import AddressAutocomplete from '../../../components/common/AddressAutocomplete';
 import InlineDatePicker from '../../../components/ui/InlineDatePicker';
+import { PHONE_VALIDATION_MESSAGE } from '../../../utils/phone';
+import {
+  buildInstitutionPatientPayload,
+  formatInstitutionPatientApiError,
+  normalizePatientFormState,
+  sanitizeAvsInput,
+  sanitizeEmailInput,
+  sanitizePhoneInput,
+  sanitizePostalCodeInput,
+} from '../../../utils/institutionPatientForm';
 import { toast } from 'sonner';
 import s from './InstitutionPatients.module.css';
 
@@ -131,33 +141,9 @@ export default function PatientFormModal({ onClose, onSaved, editingPatient = nu
 
   const buildInitialForm = useCallback(() => {
     if (editingPatient) {
-      return {
-        gender: editingPatient.gender || '',
-        first_name: editingPatient.first_name || '',
-        last_name: editingPatient.last_name || '',
-        dob: editingPatient.dob ? editingPatient.dob.split('T')[0] : '',
-        phone: editingPatient.phone || '',
-        address: editingPatient.address || '',
-        postal_code: editingPatient.postal_code || '',
-        city: editingPatient.city || '',
-        door_code: editingPatient.door_code || '',
-        floor: editingPatient.floor || '',
-        access_notes: editingPatient.access_notes || '',
-        residence_name: editingPatient.residence_name || '',
-        avs_number: editingPatient.avs_number || '',
-        insurance_name: editingPatient.insurance_name || '',
-        insurance_number: editingPatient.insurance_number || '',
-        has_guardianship: editingPatient.has_guardianship || false,
-        guardianship_type: editingPatient.guardianship_type || '',
-        guardian_name: editingPatient.guardian_name || '',
-        guardian_organization: editingPatient.guardian_organization || '',
-        guardian_phone: editingPatient.guardian_phone || '',
-        guardian_email: editingPatient.guardian_email || '',
-        guardian_address: editingPatient.guardian_address || '',
-        notes: editingPatient.notes || '',
-      };
+      return normalizePatientFormState(editingPatient);
     }
-    const base = { ...EMPTY_FORM, ...(initialFormOverrides || {}) };
+    const base = normalizePatientFormState({ ...EMPTY_FORM, ...(initialFormOverrides || {}) });
     if (isCuratelleInstitution || userIsCurator) {
       const user = meData?.user;
       const instName = meData?.name || '';
@@ -165,8 +151,8 @@ export default function PatientFormModal({ onClose, onSaved, editingPatient = nu
       base.guardianship_type = 'opad';
       base.guardian_name = user ? `${user.first_name || ''} ${user.last_name || ''}`.trim() : '';
       base.guardian_organization = instName;
-      base.guardian_phone = user?.phone || meData?.contact_phone || '';
-      base.guardian_email = user?.email || meData?.contact_email || '';
+      base.guardian_phone = sanitizePhoneInput(user?.phone || meData?.contact_phone || '');
+      base.guardian_email = sanitizeEmailInput(user?.email || meData?.contact_email || '');
       base.guardian_address = meData?.address || '';
     }
     return base;
@@ -178,6 +164,22 @@ export default function PatientFormModal({ onClose, onSaved, editingPatient = nu
 
   const handleChange = (field, value) => setFormData(prev => ({ ...prev, [field]: value }));
 
+  const handlePhoneChange = (field, raw) => {
+    handleChange(field, sanitizePhoneInput(raw));
+  };
+
+  const handlePostalCodeChange = (raw) => {
+    handleChange('postal_code', sanitizePostalCodeInput(raw));
+  };
+
+  const handleAvsChange = (raw) => {
+    handleChange('avs_number', sanitizeAvsInput(raw));
+  };
+
+  const handleEmailChange = (field, raw) => {
+    handleChange(field, sanitizeEmailInput(raw));
+  };
+
   const maskAvs = useCallback((avs) => {
     if (!avs) return '';
     if (avs.length <= 4) return avs;
@@ -186,15 +188,12 @@ export default function PatientFormModal({ onClose, onSaved, editingPatient = nu
 
   const handleSubmit = async (e, forceCreate = false) => {
     e?.preventDefault?.();
-    if (!formData.first_name || !formData.last_name) {
-      toast.error('Prénom et nom requis');
+
+    const { payload, errors } = buildInstitutionPatientPayload(formData, { forceCreate });
+    if (errors.length > 0) {
+      toast.error(errors[0]);
       return;
     }
-    const payload = { ...formData };
-    Object.keys(payload).forEach(key => { if (payload[key] === '') payload[key] = null; });
-    payload.first_name = formData.first_name;
-    payload.last_name = formData.last_name;
-    if (forceCreate) payload.force_create = true;
 
     try {
       if (editingPatient) {
@@ -221,7 +220,7 @@ export default function PatientFormModal({ onClose, onSaved, editingPatient = nu
       if (data?.code === 'DUPLICATE_PATIENT' && data?.duplicates) {
         setDuplicateWarning(data.duplicates);
       } else {
-        toast.error(data?.error || 'Erreur');
+        toast.error(formatInstitutionPatientApiError(data));
       }
     }
   };
@@ -292,7 +291,15 @@ export default function PatientFormModal({ onClose, onSaved, editingPatient = nu
                   </div>
                   <div className={s.field}>
                     <label>Téléphone</label>
-                    <input type="tel" value={formData.phone} onChange={(e) => handleChange('phone', e.target.value)} placeholder="+41 79 123 45 67" />
+                    <input
+                      type="tel"
+                      value={formData.phone}
+                      onChange={(e) => handlePhoneChange('phone', e.target.value)}
+                      placeholder="+41791234567"
+                      inputMode="tel"
+                      autoComplete="tel"
+                    />
+                    <span className={s.fieldHint}>{PHONE_VALIDATION_MESSAGE}</span>
                   </div>
                 </div>
               </div>
@@ -316,8 +323,8 @@ export default function PatientFormModal({ onClose, onSaved, editingPatient = nu
                       setFormData((prev) => ({
                         ...prev,
                         address: item.address || item.label || '',
-                        postal_code: item.postcode || '',
-                        city: item.city || '',
+                        postal_code: sanitizePostalCodeInput(item.postcode || ''),
+                        city: (item.city || '').trim(),
                       }));
                     }}
                     placeholder="Tapez pour rechercher une adresse..."
@@ -327,7 +334,14 @@ export default function PatientFormModal({ onClose, onSaved, editingPatient = nu
                 <div className={s.row}>
                   <div className={s.field}>
                     <label>NPA</label>
-                    <input type="text" value={formData.postal_code} onChange={(e) => handleChange('postal_code', e.target.value)} placeholder="1247" />
+                    <input
+                      type="text"
+                      value={formData.postal_code}
+                      onChange={(e) => handlePostalCodeChange(e.target.value)}
+                      placeholder="1247"
+                      inputMode="numeric"
+                      maxLength={20}
+                    />
                   </div>
                   <div className={s.field}>
                     <label>Ville</label>
@@ -382,7 +396,15 @@ export default function PatientFormModal({ onClose, onSaved, editingPatient = nu
                       <label>N° AVS</label>
                       {canEditAdmin ? (
                         <div className={s.avsField}>
-                          <input type={avsRevealed ? 'text' : 'password'} value={formData.avs_number} onChange={(e) => handleChange('avs_number', e.target.value)} placeholder="756.XXXX.XXXX.XX" autoComplete="off" />
+                          <input
+                            type={avsRevealed ? 'text' : 'password'}
+                            value={formData.avs_number}
+                            onChange={(e) => handleAvsChange(e.target.value)}
+                            placeholder="756.XXXX.XXXX.XX"
+                            autoComplete="off"
+                            inputMode="numeric"
+                            maxLength={16}
+                          />
                           <button type="button" className={s.avsToggle} onClick={() => setAvsRevealed(prev => !prev)} title={avsRevealed ? 'Masquer' : 'Afficher'}>
                             {avsRevealed ? <FaEyeSlash size={13} /> : <FaEye size={13} />}
                           </button>
@@ -471,11 +493,26 @@ export default function PatientFormModal({ onClose, onSaved, editingPatient = nu
                       <div className={s.row}>
                         <div className={s.field}>
                           <label><FaPhone size={9} style={{marginRight: 4, opacity: 0.5}} />Téléphone</label>
-                          <input type="tel" value={formData.guardian_phone} onChange={(e) => handleChange('guardian_phone', e.target.value)} placeholder="+41 22 000 00 00" disabled={!canEditAdmin} />
+                          <input
+                            type="tel"
+                            value={formData.guardian_phone}
+                            onChange={(e) => handlePhoneChange('guardian_phone', e.target.value)}
+                            placeholder="+41220000000"
+                            inputMode="tel"
+                            autoComplete="tel"
+                            disabled={!canEditAdmin}
+                          />
                         </div>
                         <div className={s.field}>
                           <label><FaEnvelope size={9} style={{marginRight: 4, opacity: 0.5}} />Email</label>
-                          <input type="email" value={formData.guardian_email} onChange={(e) => handleChange('guardian_email', e.target.value)} placeholder="curateur@example.ch" disabled={!canEditAdmin} />
+                          <input
+                            type="email"
+                            value={formData.guardian_email}
+                            onChange={(e) => handleEmailChange('guardian_email', e.target.value)}
+                            placeholder="curateur@example.ch"
+                            autoComplete="email"
+                            disabled={!canEditAdmin}
+                          />
                         </div>
                       </div>
 

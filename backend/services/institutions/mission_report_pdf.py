@@ -40,6 +40,8 @@ _LOGO_PATH = (
 )
 _LOGO_TARGET_WIDTH = 2.2 * cm
 _LOGO_MAX_HEIGHT = 1.4 * cm
+_VOUCHER_LOGO_TARGET_WIDTH = 3.4 * cm
+_VOUCHER_LOGO_MAX_HEIGHT = 2.0 * cm
 
 _FOOTER_TEXT = (
     "Document généré par LIRIE — plateforme de coordination des transports. "
@@ -115,6 +117,8 @@ class VoucherPresentation:
     billing_label: str | None = None
     time_context_label: str | None = None
     has_needs: bool = False
+    verify_url: str = "https://www.lirie.ch"
+    logo_url: str | None = None
 
 
 def _styles() -> dict[str, ParagraphStyle]:
@@ -298,21 +302,58 @@ def _resolve_logo() -> str | None:
     return None
 
 
-def _build_logo_image(logo_path: str) -> Image | None:
-    """Logo LIRIE avec ratio préservé (pas d'upscale au-delà de la largeur native)."""
+def _resolve_upload_logo_path(logo_url: str | None) -> str | None:
+    """Chemin local depuis logo_url (/uploads/...), None si absent ou externe."""
+    if not _has_value(logo_url):
+        return None
+    raw = str(logo_url).strip()
+    if raw.startswith(("http://", "https://")):
+        return None
+    clean = raw.lstrip("/")
+    if clean.startswith("uploads/"):
+        clean = clean[8:]
+    try:
+        from flask import current_app
+
+        uploads_root = Path(
+            current_app.config.get(
+                "UPLOADS_DIR",
+                str(Path(current_app.root_path) / "uploads"),
+            )
+        ).resolve()
+    except Exception:
+        uploads_root = Path(__file__).resolve().parent.parent.parent / "uploads"
+    try:
+        candidate = (uploads_root / clean).resolve()
+        candidate.relative_to(uploads_root.resolve())
+    except (ValueError, OSError):
+        return None
+    return str(candidate) if candidate.is_file() else None
+
+
+def _build_logo_image(
+    logo_path: str,
+    *,
+    h_align: str = "RIGHT",
+    target_width: float | None = None,
+    max_height: float | None = None,
+) -> Image | None:
+    """Logo avec ratio préservé (pas d'upscale au-delà de la largeur native)."""
     try:
         reader = ImageReader(logo_path)
         native_w, native_h = reader.getSize()
         if not native_w or not native_h:
             return None
         aspect = native_h / native_w
-        width = min(_LOGO_TARGET_WIDTH, native_w)
+        max_w = target_width if target_width is not None else _LOGO_TARGET_WIDTH
+        max_h = max_height if max_height is not None else _LOGO_MAX_HEIGHT
+        width = min(max_w, native_w)
         height = width * aspect
-        if height > _LOGO_MAX_HEIGHT:
-            height = _LOGO_MAX_HEIGHT
+        if height > max_h:
+            height = max_h
             width = height / aspect
         logo = Image(logo_path, width=width, height=height)
-        logo.hAlign = "RIGHT"
+        logo.hAlign = h_align
         return logo
     except Exception:
         return None
@@ -345,9 +386,9 @@ def _section_title(title: str, *, with_rule: bool = True) -> list[Any]:
     return flow
 
 
-def _publisher_block() -> Any:
-    """Logo discret uniquement (pas de texte LIRIE — le footer porte l'émetteur)."""
-    logo_path = _resolve_logo()
+def _publisher_block(logo_url: str | None = None) -> Any:
+    """Logo institution (prioritaire) ou LIRIE — colonne droite (legacy)."""
+    logo_path = _resolve_upload_logo_path(logo_url) or _resolve_logo()
     if logo_path:
         logo = _build_logo_image(logo_path)
         if logo is not None:
@@ -361,16 +402,64 @@ def _publisher_block() -> Any:
     return Spacer(1, 0.01 * cm)
 
 
-def _document_header(ctx: MissionReportContext, doc_title: str) -> list[Any]:
-    """En-tête institutionnel : titre, référence mission, statut/dates, logo seul."""
-    st = _styles()
-    left_lines: list[Any] = [
-        Paragraph(doc_title.upper(), st["docTitle"]),
-        Paragraph(f"Référence mission : {ctx.reference}", st["refLarge"]),
-    ]
+_VOUCHER_QR_SIZE = 1.2 * cm
 
+
+def _voucher_logo_block(logo_url: str | None = None) -> Any:
+    """Logo institution (prioritaire) ou LIRIE, aligné à gauche."""
+    logo_path = _resolve_upload_logo_path(logo_url) or _resolve_logo()
+    if logo_path:
+        logo = _build_logo_image(
+            logo_path,
+            h_align="LEFT",
+            target_width=_VOUCHER_LOGO_TARGET_WIDTH,
+            max_height=_VOUCHER_LOGO_MAX_HEIGHT,
+        )
+        if logo is not None:
+            table = Table([[logo]], colWidths=[11 * cm])
+            table.setStyle(
+                TableStyle(
+                    [
+                        ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                    ]
+                )
+            )
+            return table
+    return Spacer(1, 0.01 * cm)
+
+
+def _voucher_qr_block(verify_url: str) -> Any:
+    """QR LIRIE aligné à droite (même bandeau que le logo)."""
+    st = _styles()
+    qr = _build_qr_image(verify_url, size=_VOUCHER_QR_SIZE)
+    if qr is not None:
+        table = Table([[qr]], colWidths=[6 * cm])
+        table.setStyle(
+            TableStyle(
+                [
+                    ("ALIGN", (0, 0), (-1, -1), "RIGHT"),
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ]
+            )
+        )
+        return table
+    return Paragraph(verify_url, st["small"])
+
+
+def _voucher_header_table(
+    title_lines: list[Any], verify_url: str, logo_url: str | None = None
+) -> Table:
+    """Bandeau bon : logo institution (gauche) + QR (droite), puis titre/référence."""
     header_table = Table(
-        [[left_lines, _publisher_block()]],
+        [
+            [_voucher_logo_block(logo_url), _voucher_qr_block(verify_url)],
+            [title_lines, Spacer(1, 0.01 * cm)],
+        ],
         colWidths=[11 * cm, 6 * cm],
     )
     header_table.setStyle(
@@ -379,10 +468,52 @@ def _document_header(ctx: MissionReportContext, doc_title: str) -> list[Any]:
                 ("VALIGN", (0, 0), (-1, -1), "TOP"),
                 ("LEFTPADDING", (0, 0), (-1, -1), 0),
                 ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, 0), 4),
             ]
         )
     )
+    return header_table
 
+
+def _report_header_table(
+    title_lines: list[Any], logo_url: str | None = None
+) -> Table:
+    """Bandeau rapport : logo institution (gauche), puis titre/référence."""
+    header_table = Table(
+        [
+            [_voucher_logo_block(logo_url), Spacer(1, 0.01 * cm)],
+            [title_lines, Spacer(1, 0.01 * cm)],
+        ],
+        colWidths=[11 * cm, 6 * cm],
+    )
+    header_table.setStyle(
+        TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, 0), 4),
+            ]
+        )
+    )
+    return header_table
+
+
+def _document_header(ctx: MissionReportContext, doc_title: str) -> list[Any]:
+    """En-tête rapport : logo institution + titre, référence mission, statut/dates."""
+    st = _styles()
+    left_lines: list[Any] = [
+        Paragraph(doc_title.upper(), st["docTitle"]),
+        Paragraph(f"Référence mission : {ctx.reference}", st["refLarge"]),
+    ]
+    inst_logo = ctx.institution_snapshot.get("logo_url")
+
+    flow: list[Any] = [
+        _report_header_table(left_lines, logo_url=inst_logo),
+        Spacer(1, 0.12 * cm),
+        _rule(),
+        Spacer(1, 0.06 * cm),
+    ]
     mission = ctx.mission_info
     edition = ctx.traceability.get("edition_date") or ctx.traceability.get(
         "generated_at_label", MISSING
@@ -391,8 +522,6 @@ def _document_header(ctx: MissionReportContext, doc_title: str) -> list[Any]:
         f"Statut : {ctx.status_label} · Date mission : {mission.get('mission_date', MISSING)}",
         f"Date d'édition : {edition}",
     ]
-
-    flow: list[Any] = [header_table, Spacer(1, 0.12 * cm), _rule(), Spacer(1, 0.06 * cm)]
     for line in meta_lines:
         flow.append(Paragraph(line, st["body"]))
     flow.append(Spacer(1, 0.12 * cm))
@@ -410,20 +539,12 @@ def _voucher_header(ctx: MissionReportContext) -> list[Any]:
         Paragraph("BON DE TRANSPORT", st["docTitle"]),
         Paragraph(ref_line, st["refLarge"]),
     ]
-    header_table = Table(
-        [[left_lines, _publisher_block()]],
-        colWidths=[11 * cm, 6 * cm],
-    )
-    header_table.setStyle(
-        TableStyle(
-            [
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                ("LEFTPADDING", (0, 0), (-1, -1), 0),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-            ]
-        )
-    )
-    return [header_table, Spacer(1, 0.3 * cm)]
+    verify_url = ctx.traceability.get("verify_url") or "https://www.lirie.ch"
+    inst_logo = ctx.institution_snapshot.get("logo_url")
+    return [
+        _voucher_header_table(left_lines, verify_url, logo_url=inst_logo),
+        Spacer(1, 0.3 * cm),
+    ]
 
 
 def _compact_identity_table(rows: list[tuple[str, str | None]]) -> Table:
@@ -1285,6 +1406,8 @@ def _build_voucher_presentation(ctx: MissionReportContext) -> VoucherPresentatio
         billing_label=billing_label,
         time_context_label=time_context_label,
         has_needs=_has_medical_content(medical),
+        verify_url=str(ctx.traceability.get("verify_url") or "https://www.lirie.ch"),
+        logo_url=ctx.institution_snapshot.get("logo_url"),
     )
 
 
@@ -1298,20 +1421,10 @@ def _voucher_operational_header(pres: VoucherPresentation) -> list[Any]:
         Paragraph("BON DE TRANSPORT", st["docTitle"]),
         Paragraph(ref_line, st["metaMuted"]),
     ]
-    header_table = Table(
-        [[left_lines, _publisher_block()]],
-        colWidths=[11 * cm, 6 * cm],
-    )
-    header_table.setStyle(
-        TableStyle(
-            [
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                ("LEFTPADDING", (0, 0), (-1, -1), 0),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-            ]
-        )
-    )
-    return [header_table, Spacer(1, 0.25 * cm)]
+    return [
+        _voucher_header_table(left_lines, pres.verify_url, logo_url=pres.logo_url),
+        Spacer(1, 0.25 * cm),
+    ]
 
 
 def _voucher_hero_block(
@@ -1580,12 +1693,13 @@ def _layout_voucher_operational(
 def _layout_voucher_ultra_compact(pres: VoucherPresentation) -> list[Any]:
     """Variante A — densité maximale (REVIEW_ONLY)."""
     st = _styles()
-    story: list[Any] = [
+    ref_line = f"{pres.reference} · {pres.mission_date or MISSING}"
+    left_lines: list[Any] = [
         Paragraph("BON DE TRANSPORT", st["docTitle"]),
-        Paragraph(
-            f"{pres.reference} · {pres.mission_date or MISSING}",
-            st["metaMuted"],
-        ),
+        Paragraph(ref_line, st["metaMuted"]),
+    ]
+    story: list[Any] = [
+        _voucher_header_table(left_lines, pres.verify_url, logo_url=pres.logo_url),
         Spacer(1, 0.15 * cm),
         Paragraph("PATIENT", st["sectionLabel"]),
     ]

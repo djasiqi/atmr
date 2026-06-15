@@ -11,6 +11,32 @@ from typing import Any
 from flask import Response, make_response
 from flask_restx import Api
 
+
+def _patch_flask_restx_safe_json_parsing() -> None:
+    """Évite les 400 ``invalid_json`` quand RESTX valide un body vide / illisible."""
+    from flask import request
+    from flask_restx.resource import Resource
+
+    if getattr(Resource, "_atmr_safe_json_patched", False):
+        return
+
+    def _safe_validate_payload(self, expect, collection=False):  # noqa: ANN001
+        data = request.get_json(silent=True)
+        if data is None:
+            data = {}
+        if collection:
+            data = data if isinstance(data, list) else [data]
+            for obj in data:
+                expect.validate(obj, self.api.refresolver, self.api.format_checker)
+        else:
+            expect.validate(data, self.api.refresolver, self.api.format_checker)
+
+    Resource.__validate_payload = _safe_validate_payload  # type: ignore[method-assign]
+    Resource._atmr_safe_json_patched = True
+
+
+_patch_flask_restx_safe_json_parsing()
+
 # ✅ Imports tardifs des namespaces pour éviter les cycles d'imports
 # Les namespaces seront importés dans init_namespaces() au lieu d'ici
 

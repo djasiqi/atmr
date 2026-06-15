@@ -4808,7 +4808,22 @@ class CreateDriver(Resource):
         if cid is None:
             companies_ns.abort(500, "Entreprise introuvable (ID invalide).")
 
-        data = request.get_json(silent=True) or {}
+        from schemas.validation_utils import parse_request_json
+
+        data = parse_request_json()
+        if not data:
+            return {
+                "error": "validation_error",
+                "message": (
+                    "Corps de requête JSON manquant ou invalide. "
+                    "Vérifiez le format du body."
+                ),
+                "details": {
+                    "fields": {
+                        "body": ["Un objet JSON est requis pour créer un chauffeur."]
+                    }
+                },
+            }, 400
 
         # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
         from marshmallow import ValidationError

@@ -62,6 +62,7 @@ class Institution(db.Model):
 
     # Métadonnées additionnelles
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    logo_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     # Timestamps
     created_at = Column(
@@ -95,6 +96,8 @@ class Institution(db.Model):
             "billing_email": self.billing_email,
             "billing_address": self.billing_address,
             "vat_number": self.vat_number,
+            "notes": self.notes,
+            "logo_url": self.logo_url,
             "created_at": _iso(self.created_at),
             "updated_at": _iso(self.updated_at),
         }

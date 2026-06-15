@@ -31,6 +31,27 @@ export const updateInstitution = async (data) => {
 };
 
 /**
+ * Téléverse le logo de l'institution (admin only)
+ * @param {File} file
+ */
+export const uploadInstitutionLogo = async (file) => {
+  const form = new FormData();
+  form.append('file', file);
+  const response = await apiClient.post(`${BASE_PATH}/me/logo`, form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return response.data;
+};
+
+/**
+ * Supprime le logo de l'institution (admin only)
+ */
+export const deleteInstitutionLogo = async () => {
+  const response = await apiClient.delete(`${BASE_PATH}/me/logo`);
+  return response.data;
+};
+
+/**
  * Récupère les entreprises éligibles pour les préférences transport
  */
 export const getEligibleCompanies = async () => {
@@ -790,6 +811,8 @@ const institutionService = {
   // Institution
   getMe,
   updateInstitution,
+  uploadInstitutionLogo,
+  deleteInstitutionLogo,
   getEligibleCompanies,
   // Requests
   listRequests,
