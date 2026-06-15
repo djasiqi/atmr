@@ -21,7 +21,6 @@ Garantir que le portail institution affiche correctement les missions transporte
 - `[frontend/src/utils/carrierDisplay.js](frontend/src/utils/carrierDisplay.js)`
 - `[frontend/src/pages/institution/Requests/InstitutionRequests.jsx](frontend/src/pages/institution/Requests/InstitutionRequests.jsx)`
 - `[frontend/src/pages/institution/Requests/RequestDetailPanel.jsx](frontend/src/pages/institution/Requests/RequestDetailPanel.jsx)`
-- `[frontend/src/pages/institution/Requests/InstitutionRequestDetail.jsx](frontend/src/pages/institution/Requests/InstitutionRequestDetail.jsx)`
 
 ## STOP GATE INSTITUTION-EXTERNAL-02 — Création / mode d'exécution
 

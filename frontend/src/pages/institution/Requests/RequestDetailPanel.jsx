@@ -1,17 +1,17 @@
 // pages/institution/Requests/RequestDetailPanel.jsx
 /**
  * Panel latéral du détail d'une demande — intégré dans la page liste.
- * Réutilise la même logique que InstitutionRequestDetail mais dans un format panel.
  */
 
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import ConfirmSendModal from './ConfirmSendModal';
+import ConfirmCancelModal from './ConfirmCancelModal';
 import ChipSelect from '../../../components/ui/ChipSelect';
 import {
   FaTimes, FaEdit, FaPaperPlane,
   FaTruck, FaRoute, FaFileInvoiceDollar, FaFilePdf,
   FaHistory, FaWheelchair, FaInfoCircle, FaNotesMedical,
-  FaPhoneAlt, FaEnvelope,
+  FaPhoneAlt, FaEnvelope, FaRedo,
 } from 'react-icons/fa';
 import { HiOutlineX } from 'react-icons/hi';
 import {
@@ -32,7 +32,9 @@ import {
   canExportTransports,
 } from '../../../utils/institutionPermissions';
 import InstitutionOperationalEdit from './InstitutionOperationalEdit';
-import { formatLegTime, formatReturnTimeLabel, formatDepartureTime } from '../../../utils/formatLegTime';
+import { buildOperationalTimeline } from '../../../utils/institutionTimelineDisplay';
+import { canRelaunchInstitutionRequest } from '../../../utils/institutionRequestDispatch';
+import { formatReturnTimeLabel, formatRouteStopTime } from '../../../utils/formatLegTime';
 import InstitutionRequestEdit from './InstitutionRequestEdit';
 import { getAuthEnv } from '../../../utils/webAuthSession';
 import { toast } from 'sonner';
@@ -86,17 +88,23 @@ const getRoutePoints = (request) => {
     : [];
   if (legs.length > 0) {
     return [
-      { label: 'Départ', address: legs[0].pickup_location, kind: 'start' },
+      {
+        label: 'Départ',
+        address: legs[0].pickup_location,
+        kind: 'start',
+        timeLabel: formatRouteStopTime({ kind: 'start', request }),
+      },
       ...legs.map((leg, index) => {
         const isReturn = Boolean(request?.return_to_institution) && index === legs.length - 1;
-        const timeLabel = index === 0
-          ? formatDepartureTime(request)
-          : formatLegTime(leg);
         return {
           label: isReturn ? 'Retour' : `Destination ${index + 1}`,
           address: leg.dropoff_location,
           kind: isReturn ? 'return' : 'destination',
-          timeLabel,
+          timeLabel: formatRouteStopTime({
+            kind: isReturn ? 'return' : 'destination',
+            request,
+            leg,
+          }),
           details: {
             establishment: leg.dropoff_establishment,
             service: leg.dropoff_service,
@@ -106,9 +114,25 @@ const getRoutePoints = (request) => {
       }),
     ];
   }
+  const arrivalLeg = request?.scheduled_time_type === 'arrival' && request?.scheduled_time
+    ? {
+      scheduled_time: request.scheduled_time,
+      time_confirmed: request.appointment_time_confirmed ?? true,
+    }
+    : null;
   return [
-    { label: 'Départ', address: request?.pickup_location, kind: 'start' },
-    { label: 'Destination 1', address: request?.dropoff_location, kind: 'destination' },
+    {
+      label: 'Départ',
+      address: request?.pickup_location,
+      kind: 'start',
+      timeLabel: formatRouteStopTime({ kind: 'start', request }),
+    },
+    {
+      label: 'Destination 1',
+      address: request?.dropoff_location,
+      kind: 'destination',
+      timeLabel: formatRouteStopTime({ kind: 'destination', request, leg: arrivalLeg }),
+    },
   ];
 };
 
@@ -469,105 +493,12 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
   );
 
   const timeline = useMemo(() => {
-    const events = [];
-    const pushEvent = (item) => {
-      if (!item?.date) return;
-      const key = `${item.event || ''}|${item.date}`;
-      if (events.some((ev) => `${ev.event || ''}|${ev.date}` === key)) return;
-      events.push(item);
-    };
-
-    const bs = request?.booking_summary;
-
-    // Source canonique : la timeline API (libellés riches : « Offre acceptée »,
-    // « Course créée », etc.). On l'utilise telle quelle si elle existe.
     const apiEvents = timelineData?.events || [];
-    const hasApiTimeline = apiEvents.length > 0;
-    // `request_converted` (« Réservation créée ») et `booking_created`
-    // (« Course créée ») sont enregistrés ensemble à la conversion et sont
-    // synonymes : on masque le second pour éviter la répétition.
-    const hasConvertedEvent = apiEvents.some(
-      (ev) => ev.event_type === 'request_converted'
-    );
-    apiEvents.forEach((ev) => {
-      if (ev.event_type === 'booking_created' && hasConvertedEvent) return;
-      pushEvent({
-        event: ev.label || ev.event_type,
-        date: ev.created_at,
-        type: ev.event_type === 'cancelled' ? 'cancel' : undefined,
-        eventId: ev.id,
-      });
+    return buildOperationalTimeline({
+      apiEvents,
+      request,
+      bookingSummary: request?.booking_summary,
     });
-
-    // Événements de cycle (créée / envoyée / acceptée / convertie) : uniquement
-    // en l'absence de timeline API, pour éviter les doublons de libellés.
-    if (!hasApiTimeline) {
-      const creator = request?.created_by_name;
-      const company = request?.accepted_by_company?.name;
-      pushEvent({
-        event: `Demande créée${creator ? ` par ${creator}` : ''}`,
-        date: request?.created_at,
-      });
-      pushEvent({ event: 'Envoyée aux transporteurs', date: request?.sent_at });
-      pushEvent({
-        event: `Acceptée${company ? ` par ${company}` : ''}`,
-        date: request?.accepted_at,
-      });
-      pushEvent({ event: 'Convertie en booking', date: request?.converted_at });
-    }
-
-    // Événements opérationnels (prise en charge / dépose par trajet) : toujours
-    // ajoutés car absents de la timeline API.
-    const journey = Array.isArray(bs?.route_journey) ? bs.route_journey : null;
-    if (journey?.length) {
-      journey.forEach((ev) => {
-        pushEvent({
-          event: ev.event,
-          date: ev.date,
-          type: ev.type,
-          eventId: ev.id,
-        });
-      });
-    } else if (!hasApiTimeline) {
-      pushEvent({ event: 'Patient pris en charge', date: bs?.boarded_at });
-      pushEvent({ event: 'Transport terminé', date: bs?.completed_at });
-    }
-
-    const bsCancelled = !hasApiTimeline ? bs?.cancelled_at : null;
-    if (bsCancelled) {
-      const roleMap = { company: 'Entreprise', driver: 'Chauffeur', admin: 'Admin', system: 'Système' };
-      const byLabel = roleMap[bs.cancelled_by_role] || '';
-      const reasonLabel = bs.cancellation_display_label || '';
-      const billableFlag = bs.is_cancellation_billable;
-      let detail = 'Annulée';
-      if (byLabel) detail += ` par ${byLabel}`;
-      if (reasonLabel) detail += ` — ${reasonLabel}`;
-      if (billableFlag === true) detail += ' (facturée)';
-      else if (billableFlag === false) detail += ' (non facturée)';
-      pushEvent({ event: detail, date: bsCancelled, type: 'cancel' });
-    } else if (!hasApiTimeline && request?.cancelled_at) {
-      pushEvent({ event: 'Annulée', date: request.cancelled_at, type: 'cancel' });
-    }
-
-    if (!hasApiTimeline && isExternalRequest(request)) {
-      const ext = request.external_carrier || {};
-      if (ext.assigned_at) {
-        pushEvent({
-          event: `Transporteur externe affecté${ext.name ? ` — ${ext.name}` : ''}`,
-          date: ext.assigned_at,
-        });
-      }
-      if (ext.executed_at) {
-        pushEvent({
-          event: 'Déclarée réalisée par l\'institution',
-          date: ext.executed_at,
-        });
-      }
-    }
-
-    return events
-      .filter((it) => it.date)
-      .sort((a, b) => new Date(b.date) - new Date(a.date));
   }, [timelineData, request]);
 
   const institutionRole = meData?.institution_role;
@@ -582,6 +513,8 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
   const institutionSocket = useMemo(() => getInstitutionSocket(), []);
 
   const [showSendModal, setShowSendModal] = useState(false);
+  const [showRelaunchModal, setShowRelaunchModal] = useState(false);
+  const [cancelBookingModal, setCancelBookingModal] = useState({ open: false, bookingId: null });
   const [showAssignExternalForm, setShowAssignExternalForm] = useState(false);
   const [showCompleteExternalForm, setShowCompleteExternalForm] = useState(false);
   const [externalCarrierForm, setExternalCarrierForm] = useState(EMPTY_EXTERNAL_CARRIER_FORM);
@@ -799,6 +732,17 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
     }
   }, [sendMutation, request, isDemoInstitution, scheduleDemoLifecycle]);
 
+  const handleRelaunch = useCallback(async () => {
+    try {
+      await sendMutation.mutateAsync({ requestId: request.id, options: {} });
+      setShowRelaunchModal(false);
+      toast.success('Diffusion relancée auprès des transporteurs');
+      queryClient.invalidateQueries({ queryKey: institutionQueryKeys.requestDetail(requestId) });
+    } catch (err) {
+      toast.error(err?.response?.data?.error || 'Erreur lors de la relance');
+    }
+  }, [sendMutation, request?.id, requestId, queryClient]);
+
   useEffect(() => {
     if (!isDemoInstitution || !request?.id) return;
     const persisted = readDemoSessionState();
@@ -837,27 +781,27 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
     } catch (err) {
       const data = err?.response?.data;
       if (err?.response?.status === 409 && data?.resulting_booking_id) {
-        const reason = window.prompt(
-          'Motif d\'annulation (obligatoire, min. 10 caractères si en route) :',
-          ''
-        );
-        if (!reason) return;
-        try {
-          await cancelBookingMutation.mutateAsync({
-            bookingId: data.resulting_booking_id,
-            data: {
-              version: request.booking_summary?.edit_version || 1,
-              reason,
-              reason_code: 'CLIENT_REQUEST',
-            },
-          });
-          toast.success('Transport annulé');
-        } catch (e2) {
-          toast.error(e2?.response?.data?.error || 'Erreur annulation transport');
-        }
+        setCancelBookingModal({ open: true, bookingId: data.resulting_booking_id });
         return;
       }
       toast.error(data?.error || 'Erreur lors de l\'annulation');
+    }
+  };
+
+  const handleConfirmCancelBooking = async (reason) => {
+    try {
+      await cancelBookingMutation.mutateAsync({
+        bookingId: cancelBookingModal.bookingId,
+        data: {
+          version: request.booking_summary?.edit_version || 1,
+          reason,
+          reason_code: 'CLIENT_REQUEST',
+        },
+      });
+      toast.success('Transport annulé');
+      setCancelBookingModal({ open: false, bookingId: null });
+    } catch (e2) {
+      toast.error(e2?.response?.data?.error || 'Erreur annulation transport');
     }
   };
 
@@ -1009,6 +953,7 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
   );
   const showAssignExternalAction = canManage && canAssignExternalCarrier(request);
   const showCompleteExternalAction = canManage && canCompleteExternalMission(request);
+  const canRelaunch = canManage && canRelaunchInstitutionRequest(request) && !isExternal;
   const patientName = request.patient
     ? `${request.patient.first_name} ${request.patient.last_name}`
     : bs?.customer_name || '—';
@@ -1133,6 +1078,18 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
                 <FaPaperPlane size={11} /> Envoyer
               </button>
             )}
+            {canRelaunch && (
+              <button
+                type="button"
+                className={`${s.actionBtn} ${s.btnPrimary}`}
+                onClick={() => setShowRelaunchModal(true)}
+                disabled={sendMutation.isPending}
+                data-tour-id="institution-request-relaunch-btn"
+                title="Relancer la diffusion aux transporteurs"
+              >
+                <FaRedo size={11} /> Relancer
+              </button>
+            )}
             {showAssignExternalAction && !showAssignExternalForm && (
               <button
                 type="button"
@@ -1160,6 +1117,21 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
               disabled={cancelMutation.isPending}
             >
               <FaTimes size={11} /> Annuler
+            </button>
+          </div>
+        )}
+
+        {canRelaunch && !canEditRequestNow && !isEditingRequest && (
+          <div className={s.actions}>
+            <button
+              type="button"
+              className={`${s.actionBtn} ${s.btnPrimary}`}
+              onClick={() => setShowRelaunchModal(true)}
+              disabled={sendMutation.isPending}
+              data-tour-id="institution-request-relaunch-btn"
+              title="Relancer la diffusion aux transporteurs"
+            >
+              <FaRedo size={11} /> Relancer
             </button>
           </div>
         )}
@@ -1347,9 +1319,16 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
                   <div className={s.routeStopBody}>
                     <div className={s.routeStopLabel}>
                       {point.label}
-                      {point.timeLabel ? (
-                        <span className={s.routeStopTime}> · {point.timeLabel}</span>
-                      ) : null}
+                      {(() => {
+                        const raw = point.timeLabel;
+                        if (!raw) return null;
+                        const time = point.label && raw.startsWith(point.label)
+                          ? raw.slice(point.label.length).replace(/^[\s·]+/, '')
+                          : raw;
+                        return time ? (
+                          <span className={s.routeStopTime}> · {time}</span>
+                        ) : null;
+                      })()}
                     </div>
                     <div className={s.routeStopAddress}>{point.address || '—'}</div>
                     {hasDetails && (
@@ -1499,6 +1478,23 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
           onClose={() => setShowSendModal(false)}
           onConfirm={handleSend}
           loading={sendMutation.isPending}
+        />
+      )}
+
+      {showRelaunchModal && (
+        <ConfirmSendModal
+          mode="relaunch"
+          onClose={() => setShowRelaunchModal(false)}
+          onConfirm={handleRelaunch}
+          loading={sendMutation.isPending}
+        />
+      )}
+
+      {cancelBookingModal.open && (
+        <ConfirmCancelModal
+          onClose={() => setCancelBookingModal({ open: false, bookingId: null })}
+          onConfirm={handleConfirmCancelBooking}
+          loading={cancelBookingMutation.isPending}
         />
       )}
     </div>

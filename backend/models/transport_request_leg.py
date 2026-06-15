@@ -59,6 +59,15 @@ from ext import db
 from .base import _iso
 
 
+def _iso_scheduled(dt):
+    """ISO UTC pour horaires mission (naïf Genève en base → Z côté API)."""
+    if dt is None:
+        return None
+    from shared.time_utils import iso_utc_z, to_utc_from_db
+
+    return iso_utc_z(to_utc_from_db(dt))
+
+
 
 if TYPE_CHECKING:
 
@@ -228,7 +237,7 @@ class TransportRequestLeg(db.Model):
 
             "dropoff_doctor": self.dropoff_doctor,
 
-            "scheduled_time": _iso(self.scheduled_time),
+            "scheduled_time": _iso_scheduled(self.scheduled_time),
 
             "time_confirmed": bool(self.time_confirmed),
 

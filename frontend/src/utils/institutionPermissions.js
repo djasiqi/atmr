@@ -6,7 +6,7 @@
  * - institution_admin: Tous droits
  * - institution_requester: Créer/modifier/envoyer/annuler les demandes
  * - institution_reader: Lecture seule
- * - institution_billing: Modifier les infos de facturation
+ * - institution_billing: Mêmes droits que demandeur + facturation (destinataire, montants)
  * - institution_curator: Curateur (curatelle) — gère demandes + facturation pour ses protégés
  */
 
@@ -94,12 +94,18 @@ const ROLE_PERMISSIONS = {
   ],
   
   institution_billing: [
-    // Lecture + facturation complète + changer facturation sur demandes + données admin patient
+    // Demandeur + facturation (destinataire facture, montants, données admin patient)
+    INSTITUTION_ACTIONS.CREATE_REQUEST,
+    INSTITUTION_ACTIONS.EDIT_REQUEST,
+    INSTITUTION_ACTIONS.SEND_REQUEST,
+    INSTITUTION_ACTIONS.CANCEL_REQUEST,
     INSTITUTION_ACTIONS.VIEW_REQUEST,
+    INSTITUTION_ACTIONS.CREATE_PATIENT,
+    INSTITUTION_ACTIONS.EDIT_PATIENT,
     INSTITUTION_ACTIONS.VIEW_PATIENT,
+    INSTITUTION_ACTIONS.VIEW_SETTINGS,
     INSTITUTION_ACTIONS.EDIT_BILLING,
     INSTITUTION_ACTIONS.EDIT_REQUEST_BILLING,
-    INSTITUTION_ACTIONS.VIEW_SETTINGS,
     INSTITUTION_ACTIONS.VIEW_ADMIN_DATA,
     INSTITUTION_ACTIONS.EDIT_ADMIN_DATA,
     INSTITUTION_ACTIONS.EDIT_PATIENT_BILLING_DATA,

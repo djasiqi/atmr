@@ -1825,6 +1825,16 @@ class GeocodeAddress(Resource):
         country = request.args.get("country", "CH")
 
         try:
+            alias = match_alias(address)
+            if alias and alias.get("lat") is not None and alias.get("lon") is not None:
+                return {
+                    "source": "alias",
+                    "address": alias.get("address") or address,
+                    "lat": alias["lat"],
+                    "lon": alias["lon"],
+                    "category": alias.get("category"),
+                }, 200
+
             if USE_GOOGLE_PLACES:
                 result = geocode_address_google(address, country=country)
             else:

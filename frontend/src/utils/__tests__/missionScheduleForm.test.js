@@ -20,10 +20,9 @@ describe('missionScheduleForm', () => {
   });
 
   describe('combineMissionDateTime', () => {
-    it('combine date mission et heure HH:MM', () => {
+    it('combine date mission et heure HH:MM (ISO naïf Genève)', () => {
       const iso = combineMissionDateTime('2026-06-13', '09:00');
-      expect(iso).toBeTruthy();
-      expect(iso).toMatch(/^2026-06-13T/);
+      expect(iso).toBe('2026-06-13T09:00:00');
     });
 
     it('retourne null si date absente (scénario C — date non commitée)', () => {
@@ -55,7 +54,7 @@ describe('missionScheduleForm', () => {
       });
       expect(ok).toBe(true);
       expect(payload.pickup_time_confirmed).toBe(true);
-      expect(payload.scheduled_time).toMatch(/^2026-06-13T/);
+      expect(payload.scheduled_time).toBe('2026-06-13T09:00:00');
       expect(payload.scheduled_time_type).toBe('departure');
     });
 

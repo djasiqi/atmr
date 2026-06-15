@@ -56,7 +56,7 @@ _EVENT_LABELS: dict[str, str] = {
     "offer_rejected": "Offre refusée",
     "offer_expired": "Offre expirée",
     "offer_accepted": "Offre acceptée",
-    "request_converted": "Réservation créée",
+    "request_converted": "Réservation confirmée",
     "booking_created": "Course créée",
     "driver_assigned": "Chauffeur assigné",
     "driver_reassigned": "Chauffeur réassigné",
@@ -74,11 +74,96 @@ _EVENT_LABELS: dict[str, str] = {
     "change_expired": "Demande de modification expirée",
     "escalation_required": "Escalade requise — action institution",
     "redispatched": "Course remise en diffusion",
-    "route_legs_reorganized": "Parcours réorganisé",
+    "route_legs_reorganized": "Parcours modifié",
     "external_carrier_assigned": "Transporteur externe affecté",
     "external_carrier_switched": "Mission basculée vers transporteur externe",
     "external_mission_completed": "Déclarée réalisée par transporteur externe",
 }
+
+
+_FIELD_CHANGE_GROUPS: tuple[tuple[str, frozenset[str]], ...] = (
+    (
+        "itinéraire",
+        frozenset(
+            {
+                "pickup_location",
+                "dropoff_location",
+                "dropoff_establishment",
+                "dropoff_service",
+                "dropoff_doctor",
+                "intermediate_stops",
+                "multi_stop",
+                "return_to_institution",
+                "is_round_trip",
+                "pickup_lat",
+                "pickup_lng",
+                "dropoff_lat",
+                "dropoff_lng",
+            }
+        ),
+    ),
+    (
+        "horaires",
+        frozenset(
+            {
+                "mission_date",
+                "scheduled_time",
+                "scheduled_time_type",
+                "pickup_time_confirmed",
+                "appointment_time_confirmed",
+                "return_time",
+                "return_date",
+                "return_time_confirmed",
+                "return_scheduled_time",
+            }
+        ),
+    ),
+    (
+        "mobilité",
+        frozenset(
+            {
+                "mobility",
+                "requires_wheelchair",
+                "requires_assistance",
+                "wheelchair_need",
+                "wheelchair_client_has",
+            }
+        ),
+    ),
+    (
+        "notes",
+        frozenset({"notes", "notes_medical", "pickup_access_notes", "dropoff_access_notes"}),
+    ),
+    (
+        "patient",
+        frozenset({"patient_id", "customer_name", "external_reference"}),
+    ),
+    (
+        "facturation",
+        frozenset({"billing_intent", "billing_details"}),
+    ),
+)
+
+
+def _summarize_changed_fields(fields: list[str]) -> str:
+    """Regroupe les champs techniques en libellés métier lisibles."""
+    if not fields:
+        return "informations mises à jour"
+    field_set = {str(f) for f in fields}
+    groups: list[str] = []
+    matched: set[str] = set()
+    for label, keys in _FIELD_CHANGE_GROUPS:
+        if field_set & keys:
+            groups.append(label)
+            matched |= field_set & keys
+    remaining = field_set - matched
+    if remaining:
+        groups.append("autres détails")
+    if len(groups) == 1:
+        return groups[0]
+    if len(groups) == 2:
+        return f"{groups[0]} et {groups[1]}"
+    return ", ".join(groups[:-1]) + f" et {groups[-1]}"
 
 
 def is_timeline_enabled() -> bool:
@@ -113,6 +198,29 @@ class TimelineActor:
     actor_user_id: int | None = None
     company_id: int | None = None
     driver_id: int | None = None
+
+
+def resolve_actor_name(user_id: int | None) -> str | None:
+    """Résout le nom affichable (prénom nom) d'un utilisateur acteur.
+
+    Utilisé pour rendre l'historique traçable (« Parcours modifié — Drin Jasiqi »).
+    Retourne ``None`` si l'utilisateur est introuvable ou sans nom.
+    """
+    if not user_id:
+        return None
+    try:
+        from models.user import User
+
+        user = User.query.get(user_id)
+        if not user:
+            return None
+        name = getattr(user, "full_name", None)
+        if name:
+            name = name.strip()
+        return name or None
+    except Exception as resolve_err:  # pragma: no cover - défensif
+        logger.warning("[TransportTimeline] resolve_actor_name échec: %s", resolve_err)
+        return None
 
 
 def record_event(
@@ -175,6 +283,9 @@ def build_timeline_label(event: TransportTimelineEvent) -> str:
     if event.event_type in ("offer_accepted", "offer_rejected"):
         name = payload.get("company_name") or ""
         return f"{base} — {name}".strip() if name else base
+    if event.event_type == "request_converted":
+        name = payload.get("company_name") or ""
+        return f"{base} — {name}".strip() if name else base
     if event.event_type == "driver_assigned":
         name = payload.get("driver_name") or ""
         return f"{base} — {name}".strip() if name else base
@@ -183,7 +294,17 @@ def build_timeline_label(event: TransportTimelineEvent) -> str:
         if isinstance(fields, dict):
             fields = list(fields.keys())
         if fields:
-            return f"{base} — {', '.join(str(f) for f in fields)}"
+            summary = _summarize_changed_fields([str(f) for f in fields])
+            notified = payload.get("carrier_notified")
+            if notified:
+                return f"Demande modifiée ({summary}) — transporteur informé"
+            return f"Demande modifiée ({summary})"
+    if event.event_type == "route_legs_reorganized":
+        after = payload.get("after_legs")
+        if isinstance(after, list) and after:
+            n = len(after)
+            suffix = f" — {n} étape{'s' if n > 1 else ''}"
+            return f"{base}{suffix}"
     if event.event_type == "status_changed":
         old_s = payload.get("old_status")
         new_s = payload.get("new_status")

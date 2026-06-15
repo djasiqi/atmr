@@ -17,6 +17,7 @@ from services.institutions.booking_change_service import (
     check_version,
     assert_not_boarded,
     INSTITUTION_OPERATIONAL_FIELDS,
+    LEG_SCHEDULE_PATCH_FIELDS,
 )
 
 
@@ -82,3 +83,10 @@ class TestOperationalFieldsWhitelist:
     def test_whitelist_includes_locations(self):
         assert "pickup_location" in INSTITUTION_OPERATIONAL_FIELDS
         assert "amount" not in INSTITUTION_OPERATIONAL_FIELDS
+
+
+class TestLegSchedulePatchFields:
+    def test_leg_schedule_fields_allowed(self):
+        assert "appointment_time" in LEG_SCHEDULE_PATCH_FIELDS
+        assert "leg_appointments" in LEG_SCHEDULE_PATCH_FIELDS
+        assert "return_appointment_time" in LEG_SCHEDULE_PATCH_FIELDS

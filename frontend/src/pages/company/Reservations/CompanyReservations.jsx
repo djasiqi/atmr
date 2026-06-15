@@ -14,9 +14,17 @@ import {
   scheduleReservation,
   dispatchNowForReservation,
   updateReservation,
+  fetchRequestOffers,
+  acceptRequestOffer,
+  rejectRequestOffer,
 } from '../../../services/companyService';
+import { buildOfferIdentity } from '../../../utils/bookingIdentity';
+import { getConfirmedScheduleParts, formatSchedulePartLabel } from '../../../utils/formatLegTime';
+import { canRespondToInstitutionOffer, isInstitutionOfferExpired } from '../../../utils/institutionOfferResponse';
 import ReservationTable from '../Dashboard/components/ReservationTable';
 import ReservationTableSkeleton from '../Dashboard/components/ReservationTableSkeleton';
+import ProposeOfferTimeModal from '../Dashboard/components/ProposeOfferTimeModal';
+import InstitutionOfferDetailPanel from './components/InstitutionOfferDetailPanel';
 import ReservationDetailPanel from './components/ReservationDetailPanel';
 import CancellationModal from '../../../components/reservations/CancellationModal';
 import ReservationStats from './components/ReservationStats';
@@ -33,6 +41,67 @@ import { lirieKeys, lirieInvalidateCompanyReservationLists } from '../../../quer
 import styles from './CompanyReservations.module.css';
 
 const PER_PAGE_OPTIONS = [10, 25, 50, 100];
+
+const ISO_DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Jour ISO (YYYY-MM-DD) → libellé court JJ.MM. */
+const shortDateFromIso = (iso) => {
+  if (!ISO_DAY_RE.test(iso || '')) return '';
+  const [, m, d] = iso.split('-');
+  return `${d}.${m}`;
+};
+
+/**
+ * Horaire d'affichage d'une demande institution (départ/RDV/retour),
+ * dérivé des legs car `scheduled_time` peut être nul pour un RDV.
+ */
+const buildOfferScheduling = (req) => {
+  const parts = getConfirmedScheduleParts(req);
+  const timeLabel = parts.length ? parts.map(formatSchedulePartLabel).join(' · ') : '';
+  const dateShort = shortDateFromIso(req.mission_date || req.scheduling?.mission_date);
+  if (!timeLabel) {
+    return { display_time: 'À définir', display_datetime: dateShort || 'À définir', time_defined: false };
+  }
+  return {
+    display_time: timeLabel,
+    display_datetime: dateShort ? `${dateShort} · ${timeLabel}` : timeLabel,
+    time_defined: true,
+  };
+};
+
+/** Normalise une offre institution en attente en ligne « réservation ». */
+const buildInstitutionOfferRow = (offer) => {
+  const req = offer.transport_request || {};
+  const identity = buildOfferIdentity(offer);
+  const canRespond = canRespondToInstitutionOffer(offer);
+  const isExpired = isInstitutionOfferExpired(offer);
+
+  return {
+    id: `offer-${offer.id}`,
+    __institutionOffer: true,
+    __offerId: offer.id,
+    __offer: offer,
+    __offerCanRespond: canRespond,
+    __offerExpired: isExpired,
+    status: 'pending',
+    is_return: false,
+    is_round_trip: Boolean(req.is_round_trip),
+    multi_stop: Boolean(req.multi_stop),
+    route_group_id: null,
+    amount: null,
+    expires_at: offer.expires_at,
+    __priceEstimate: offer.price_estimate || null,
+    pickup_location: req.pickup_location,
+    dropoff_location: req.dropoff_location,
+    scheduling: req.scheduling || buildOfferScheduling(req),
+    scheduled_time: req.scheduled_time,
+    time_confirmed: req.pickup_time_confirmed,
+    identity: {
+      primary_label: identity.passengerLabel,
+      secondary_label: identity.source?.name,
+    },
+  };
+};
 
 const EMPTY_STATS = {
   total: 0,
@@ -119,7 +188,11 @@ const CompanyReservations = () => {
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Data / filtres (réservations via TanStack Query — cache, stale-while-revalidate, pas de reflash total)
-  const [selectedDay, setSelectedDay] = useState('all');
+  // ?date=YYYY-MM-DD (clic notification « Demande modifiée ») → préselectionne le jour.
+  const [selectedDay, setSelectedDay] = useState(() => {
+    const dateParam = searchParams.get('date');
+    return /^\d{4}-\d{2}-\d{2}$/.test(dateParam || '') ? dateParam : 'all';
+  });
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter] = useState('all');
   const [sortOrder, setSortOrder] = useState('desc');
@@ -137,6 +210,8 @@ const CompanyReservations = () => {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editModalReservation, setEditModalReservation] = useState(null);
   const [newBookingOpen, setNewBookingOpen] = useState(false);
+  const [proposeOffer, setProposeOffer] = useState(null);
+  const [selectedOffer, setSelectedOffer] = useState(null);
 
   // UI states (parent-owned)
   const [activeTab, setActiveTab] = useState('all');
@@ -149,6 +224,16 @@ const CompanyReservations = () => {
 
   const searchInputRef = useRef(null);
   const { initialSearch, shouldFocus, consumeFocus, initialized } = useUrlSearchSync();
+
+  const openReservationPanel = useCallback((reservation) => {
+    setSelectedOffer(null);
+    setSelectedReservation(reservation);
+  }, []);
+
+  const openOfferPanel = useCallback((offer) => {
+    setSelectedReservation(null);
+    setSelectedOffer(offer);
+  }, []);
 
   const listQueryFilterScope = useMemo(
     () => ({
@@ -202,6 +287,126 @@ const CompanyReservations = () => {
   );
   const totalReservations = listPayload?.total ?? 0;
   const totalPages = listPayload?.total_pages ?? 0;
+
+  // Demandes institution en attente, fusionnées dans le tableau pour le jour sélectionné.
+  const isSpecificDay = ISO_DAY_RE.test(selectedDay);
+  const targetOfferIdParam = searchParams.get('offer');
+  const targetRequestIdParam = searchParams.get('request');
+  const needsOfferDateResolution = Boolean(
+    !isSpecificDay && (targetOfferIdParam || targetRequestIdParam)
+  );
+  const { data: pendingOffersData } = useQuery({
+    queryKey: lirieKeys.institutionOffers(),
+    queryFn: () => fetchRequestOffers('PENDING'),
+    enabled: canLoadReservations && (isSpecificDay || needsOfferDateResolution),
+    staleTime: 15_000,
+  });
+
+  const institutionOfferRows = useMemo(() => {
+    if (!isSpecificDay) return [];
+    const offers = pendingOffersData?.offers || [];
+    return offers
+      .filter((o) => {
+        const req = o.transport_request || {};
+        const day = req.mission_date || req.scheduling?.mission_date;
+        return day === selectedDay;
+      })
+      .map(buildInstitutionOfferRow);
+  }, [pendingOffersData, selectedDay, isSpecificDay]);
+
+  // Notifications anciennes : pas de mission_date en métadonnées.
+  // On retrouve l'offre/la demande en attente puis on sélectionne son jour.
+  useEffect(() => {
+    if (!needsOfferDateResolution) return;
+    const offers = pendingOffersData?.offers || [];
+    if (!offers.length) return;
+
+    const targetOfferId = targetOfferIdParam ? Number(targetOfferIdParam) : null;
+    const targetRequestId = targetRequestIdParam ? Number(targetRequestIdParam) : null;
+    const match = offers.find((offer) => {
+      const req = offer.transport_request || {};
+      return (
+        (targetOfferId && Number(offer.id) === targetOfferId)
+        || (targetRequestId && Number(req.id) === targetRequestId)
+      );
+    });
+    const req = match?.transport_request || {};
+    const day = req.mission_date || req.scheduling?.mission_date;
+    if (!ISO_DAY_RE.test(day || '')) return;
+
+    setSelectedDay(day);
+    setCurrentPage(1);
+    setSearchParams((prev) => {
+      prev.delete('offer');
+      prev.delete('request');
+      return prev;
+    }, { replace: true });
+  }, [
+    needsOfferDateResolution,
+    pendingOffersData,
+    targetOfferIdParam,
+    targetRequestIdParam,
+    setSearchParams,
+  ]);
+
+  const acceptOfferById = useCallback(
+    async (offerId, proposedPickupTime, offerForGuard = null) => {
+      if (offerForGuard && !canRespondToInstitutionOffer(offerForGuard)) {
+        toast.error('Offre expirée, vous ne pouvez plus répondre.');
+        return;
+      }
+
+      try {
+        await acceptRequestOffer(offerId, proposedPickupTime);
+        toast.success(
+          proposedPickupTime
+            ? 'Offre acceptée avec horaire proposé — réservation créée'
+            : 'Offre acceptée — réservation créée'
+        );
+        queryClient.invalidateQueries({ queryKey: lirieKeys.institutionOffers() });
+        void lirieInvalidateCompanyReservationLists(queryClient);
+        refetchReservations();
+      } catch (err) {
+        toast.error(err?.response?.data?.error || "Erreur lors de l'acceptation");
+      }
+    },
+    [queryClient, refetchReservations]
+  );
+
+  const handleAcceptInstitutionOffer = useCallback(
+    (row) => acceptOfferById(row.__offerId, undefined, row.__offer),
+    [acceptOfferById]
+  );
+
+  const handleProposeInstitutionOffer = useCallback(
+    (row) => {
+      if (!canRespondToInstitutionOffer(row.__offer)) {
+        toast.error('Offre expirée, vous ne pouvez plus répondre.');
+        return;
+      }
+
+      setProposeOffer(row.__offer);
+    },
+    []
+  );
+
+  const handleRejectInstitutionOffer = useCallback(
+    async (offerId, offerForGuard = null) => {
+      if (offerForGuard && !canRespondToInstitutionOffer(offerForGuard)) {
+        toast.error('Offre expirée, vous ne pouvez plus répondre.');
+        return;
+      }
+
+      try {
+        await rejectRequestOffer(offerId);
+        toast.success('Offre refusée');
+        queryClient.invalidateQueries({ queryKey: lirieKeys.institutionOffers() });
+      } catch (err) {
+        toast.error(err?.response?.data?.error || 'Erreur lors du refus');
+      }
+    },
+    [queryClient]
+  );
 
   // KPI = agrégats API (même période / visibilité que le compteur total) — pas seulement la page courante
   const stats = useMemo(() => {
@@ -275,6 +480,15 @@ const CompanyReservations = () => {
 
   const showListSkeleton = !canLoadReservations || listInitialLoading;
 
+  // Nettoie ?date= de l'URL une fois le filtre appliqué (évite qu'il reste collé).
+  useEffect(() => {
+    if (!searchParams.get('date')) return;
+    setSearchParams((prev) => {
+      prev.delete('date');
+      return prev;
+    }, { replace: true });
+  }, [searchParams, setSearchParams]);
+
   // Auto-open reservation from ?booking= query param (e.g. from notification click)
   useEffect(() => {
     const bookingIdParam = searchParams.get('booking');
@@ -286,7 +500,7 @@ const CompanyReservations = () => {
     // Try to find in current page first
     const found = reservations.find((r) => r.id === bookingId);
     if (found) {
-      setSelectedReservation(found);
+      openReservationPanel(found);
       setSearchParams((prev) => {
         prev.delete('booking');
         return prev;
@@ -305,7 +519,7 @@ const CompanyReservations = () => {
         });
         const match = (data?.reservations || []).find((r) => r.id === bookingId);
         if (match) {
-          setSelectedReservation(match);
+          openReservationPanel(match);
         }
       } catch (err) {
         console.error('[CompanyReservations] Auto-open booking error:', err);
@@ -317,7 +531,7 @@ const CompanyReservations = () => {
       }
     };
     fetchAndOpen();
-  }, [searchParams, reservations, showListSkeleton, setSearchParams]);
+  }, [searchParams, reservations, showListSkeleton, setSearchParams, openReservationPanel]);
 
   useEffect(() => {
     if (!initialized) return;
@@ -379,6 +593,12 @@ const CompanyReservations = () => {
 
     return reservations;
   }, [reservations, alertFilter]);
+
+  // Lignes du tableau = demandes institution en attente (jour sélectionné) + réservations.
+  const tableReservations = useMemo(
+    () => [...institutionOfferRows, ...filteredReservations],
+    [institutionOfferRows, filteredReservations]
+  );
 
   // Map reservations (single day only)
   const mapReservations = useMemo(() => {
@@ -474,7 +694,7 @@ const CompanyReservations = () => {
         ? reservation
         : reservations.find((r) => r.id === reservation);
     if (!resObj) return;
-    setSelectedReservation(resObj);
+    openReservationPanel(resObj);
   };
 
   const handleConfirmEdit = async (updatedData) => {
@@ -674,7 +894,7 @@ const CompanyReservations = () => {
           {/* Main content : premier chargement = squelette tableau ; rechargements = contenu + barre d’activité */}
           {showListSkeleton ? (
             <ReservationTableSkeleton rowCount={Math.min(12, Math.max(6, reservationsPerPage))} />
-          ) : totalReservations === 0 && !alertFilter ? (
+          ) : totalReservations === 0 && institutionOfferRows.length === 0 && !alertFilter ? (
             <div className={styles.emptyState}>
               <FiInbox size={40} className={styles.emptyIcon} />
               <h3 className={styles.emptyTitle}>Aucune reservation trouvee</h3>
@@ -699,8 +919,14 @@ const CompanyReservations = () => {
               {viewMode === 'table' ? (
                 <>
                   <ReservationTable
-                    reservations={filteredReservations}
-                    onRowClick={(reservation) => setSelectedReservation(reservation)}
+                    reservations={tableReservations}
+                    onRowClick={(row) => {
+                      if (row.__institutionOffer) {
+                        openOfferPanel(row.__offer);
+                      } else {
+                        openReservationPanel(row);
+                      }
+                    }}
                     onDelete={handleDeleteRequest}
                     onAccept={handleAccept}
                     onReject={handleReject}
@@ -708,6 +934,9 @@ const CompanyReservations = () => {
                     onTransfer={handleOpenTransferModal}
                     onSchedule={handleSchedule}
                     onDispatchNow={handleDispatchNow}
+                    onAcceptInstitutionOffer={handleAcceptInstitutionOffer}
+                    onProposeInstitutionOffer={handleProposeInstitutionOffer}
+                    onRejectInstitutionOffer={handleRejectInstitutionOffer}
                     hideAssign={true}
                     hideUrgent={true}
                     currentCompanyId={company?.id}
@@ -828,6 +1057,17 @@ const CompanyReservations = () => {
               />
             </Modal>
           )}
+
+          {proposeOffer && (
+            <ProposeOfferTimeModal
+              offer={proposeOffer}
+              onConfirm={(offerId, isoTime) => {
+                acceptOfferById(offerId, isoTime, proposeOffer);
+                setProposeOffer(null);
+              }}
+              onClose={() => setProposeOffer(null)}
+            />
+          )}
         </main>
 
         {/* Side panel */}
@@ -844,6 +1084,33 @@ const CompanyReservations = () => {
               onReservationUpdated={(updated) => {
                 if (updated?.id) setSelectedReservation(updated);
                 afterListMutation();
+              }}
+            />
+          </aside>
+        )}
+
+        {/* Side panel — demande institution en attente (lecture seule + actions) */}
+        {selectedOffer && (
+          <aside className={styles.detailPanel}>
+            <InstitutionOfferDetailPanel
+              offer={selectedOffer}
+              onClose={() => setSelectedOffer(null)}
+              onAccept={(offer) => {
+                acceptOfferById(offer.id, undefined, offer);
+                setSelectedOffer(null);
+              }}
+              onPropose={(offer) => {
+                if (!canRespondToInstitutionOffer(offer)) {
+                  toast.error('Offre expirée, vous ne pouvez plus répondre.');
+                  return;
+                }
+
+                setProposeOffer(offer);
+                setSelectedOffer(null);
+              }}
+              onReject={(offerId) => {
+                handleRejectInstitutionOffer(offerId, selectedOffer);
+                setSelectedOffer(null);
               }}
             />
           </aside>

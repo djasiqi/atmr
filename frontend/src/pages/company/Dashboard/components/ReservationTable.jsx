@@ -1,6 +1,6 @@
 // src/pages/company/Dashboard/components/ReservationTable.jsx
 import React, { useState } from 'react';
-import { FiCheckCircle, FiXCircle, FiInbox, FiChevronDown } from 'react-icons/fi';
+import { FiCheckCircle, FiXCircle, FiInbox, FiChevronDown, FiClock } from 'react-icons/fi';
 import styles from './ReservationTable.module.css';
 import { formatDelay } from '../../../../utils/formatDelay';
 import { pickupArrivalHint } from '../../../../utils/formatPickupEta';
@@ -9,6 +9,7 @@ import ReservationActions from '../../../../components/reservations/ReservationA
 import BookingIdentityCell from '../../../../components/booking/BookingIdentityCell';
 import BookingTripBadges from '../../../../components/booking/BookingTripBadges';
 import BookingStatusBadge from '../../../../components/booking/BookingStatusBadge';
+import { canRespondToInstitutionOffer, isInstitutionOfferExpired } from '../../../../utils/institutionOfferResponse';
 
 const DISPLAY_INCREMENT = 50;
 
@@ -84,6 +85,42 @@ function renderAmountCell(r, allReservations) {
   );
 }
 
+/** Tarif d'une offre institution en attente : estimation (préférentiel/profil) ou "À définir". */
+function renderOfferAmount(r) {
+  const est = r.__priceEstimate;
+  const amount = est ? Number(est.amount) : NaN;
+  if (est && !Number.isNaN(amount) && amount > 0) {
+    const sourceLabel =
+      est.source === 'preferential'
+        ? 'Tarif préférentiel'
+        : est.source === 'profile'
+          ? 'Tarif estimé selon le profil tarifaire'
+          : 'Tarif estimé';
+    return (
+      <span className={styles.amountSub} title={sourceLabel}>
+        {amount.toFixed(2)} {est.currency || 'CHF'}
+      </span>
+    );
+  }
+  return (
+    <span className={styles.amountSub} title="Tarif défini à l'acceptation de la demande">
+      À définir
+    </span>
+  );
+}
+
+/** Formate un instant absolu (ex. expiration d'offre). */
+const formatInstantDateTime = (isoString) => {
+  if (!isoString) return { date: '—', time: '' };
+  const d = new Date(isoString);
+  if (Number.isNaN(d.getTime())) return { date: '—', time: '' };
+  const pad = (n) => String(n).padStart(2, '0');
+  return {
+    date: `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()}`,
+    time: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
+  };
+};
+
 const getDelayRowClass = (delayMinutes) => {
   if (!delayMinutes || delayMinutes <= 0) return '';
   if (delayMinutes >= 15) return 'rowDelayed';
@@ -138,6 +175,9 @@ const ReservationTable = ({
   onDelete,
   onSchedule,
   onDispatchNow,
+  onAcceptInstitutionOffer,
+  onProposeInstitutionOffer,
+  onRejectInstitutionOffer,
   hideAssign = false,
   hideSchedule = false,
   hideUrgent = false,
@@ -198,6 +238,15 @@ const ReservationTable = ({
       showPickupEtaStatuses.includes(status) && pickupEtaIso
         ? pickupArrivalHint(pickupEtaIso)
         : null;
+    const isInstitutionOffer = Boolean(r.__institutionOffer);
+    const offerCanRespond = isInstitutionOffer
+      ? (typeof r.__offerCanRespond === 'boolean'
+        ? r.__offerCanRespond
+        : canRespondToInstitutionOffer(r.__offer || r))
+      : true;
+    const offerExpired = isInstitutionOffer
+      ? Boolean(r.__offerExpired) || isInstitutionOfferExpired(r.__offer || r)
+      : false;
 
     return {
       status,
@@ -206,6 +255,8 @@ const ReservationTable = ({
       delayMinutes,
       delayRowClass,
       pickupArrivalLabel,
+      offerCanRespond,
+      offerExpired,
     };
   };
 
@@ -233,6 +284,8 @@ const ReservationTable = ({
                 delayMinutes,
                 delayRowClass,
                 pickupArrivalLabel,
+                offerCanRespond,
+                offerExpired,
               } = renderRow(r);
 
               return (
@@ -276,6 +329,10 @@ const ReservationTable = ({
                     </div>
                   </td>
                   <td>
+                    {r.__institutionOffer ? (
+                      renderOfferAmount(r)
+                    ) : (
+                    <>
                     {renderAmountCell(r, reservations)}
                     {(() => {
                       const meta = r.metadata_json || {};
@@ -294,39 +351,90 @@ const ReservationTable = ({
                         </span>
                       );
                     })()}
+                    </>
+                    )}
                   </td>
                   <td>
-                    <BookingStatusBadge status={status} />
-                    {r.active_change_request?.status === 'pending' && (
-                      <span
-                        className={styles.transferBadge}
-                        title="Modification institution en attente de validation"
-                        style={{ background: '#fef3c7', color: '#92400e' }}
-                      >
-                        Modif. en attente
-                      </span>
-                    )}
-                    {r.active_change_request?.status === 'escalation_required' && (
-                      <span
-                        className={styles.transferBadge}
-                        title="Demande de modification expirée — action institution requise"
-                        style={{ background: '#ffedd5', color: '#c2410c' }}
-                      >
-                        Escalade
-                      </span>
-                    )}
-                    {r.active_change_request?.status === 'expired' && (
-                      <span
-                        className={styles.transferBadge}
-                        title="Demande de modification expirée"
-                        style={{ background: '#f1f5f9', color: '#475569' }}
-                      >
-                        Modif. expirée
-                      </span>
+                    {r.__institutionOffer ? (
+                      <>
+                        <span className={`${styles.statusBadge} ${styles.pending}`}>
+                          {offerCanRespond ? 'En attente' : offerExpired ? 'Expiré' : 'Indisponible'}
+                        </span>
+                        {r.expires_at && (
+                          <div className={styles.cellMeta}>
+                            Exp: {formatInstantDateTime(r.expires_at).date}{' '}
+                            {formatInstantDateTime(r.expires_at).time}
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <BookingStatusBadge status={status} />
+                        {r.active_change_request?.status === 'pending' && (
+                          <span
+                            className={styles.transferBadge}
+                            title="Modification institution en attente de validation"
+                            style={{ background: '#fef3c7', color: '#92400e' }}
+                          >
+                            Modif. en attente
+                          </span>
+                        )}
+                        {r.active_change_request?.status === 'escalation_required' && (
+                          <span
+                            className={styles.transferBadge}
+                            title="Demande de modification expirée — action institution requise"
+                            style={{ background: '#ffedd5', color: '#c2410c' }}
+                          >
+                            Escalade
+                          </span>
+                        )}
+                        {r.active_change_request?.status === 'expired' && (
+                          <span
+                            className={styles.transferBadge}
+                            title="Demande de modification expirée"
+                            style={{ background: '#f1f5f9', color: '#475569' }}
+                          >
+                            Modif. expirée
+                          </span>
+                        )}
+                      </>
                     )}
                   </td>
                   <td className={styles.actionsCell} onClick={(e) => e.stopPropagation()}>
-                    {!hasActions ? (
+                    {r.__institutionOffer ? (
+                      offerCanRespond ? (
+                        <>
+                          <button
+                            onClick={() => onAcceptInstitutionOffer?.(r)}
+                            title="Accepter (horaire demandé)"
+                            className={`${styles.actionButton} ${styles.acceptButton}`}
+                          >
+                            <FiCheckCircle size={16} />
+                          </button>
+                          <button
+                            onClick={() => onProposeInstitutionOffer?.(r)}
+                            title="Accepter avec un horaire différent"
+                            className={styles.actionButton}
+                            style={{ color: 'var(--brand-primary)' }}
+                          >
+                            <FiClock size={16} />
+                          </button>
+                          <button
+                            onClick={() => onRejectInstitutionOffer?.(r.__offerId, r.__offer)}
+                            title="Refuser la demande"
+                            className={`${styles.actionButton} ${styles.rejectButton}`}
+                          >
+                            <FiXCircle size={16} />
+                          </button>
+                        </>
+                      ) : (
+                        <span className={styles.noActionLabel}>
+                          {offerExpired
+                            ? 'Offre expirée, vous ne pouvez plus répondre.'
+                            : 'Aucune action'}
+                        </span>
+                      )
+                    ) : !hasActions ? (
                       <span className={styles.noActionLabel}>Terminée</span>
                     ) : !canManageReservation ? (
                       <span className={styles.noActionLabel} title="Cette course est gérée par l'entreprise partenaire">Lecture seule</span>
@@ -375,8 +483,15 @@ const ReservationTable = ({
       {/* Mobile cards */}
       <div className={styles.mobileCards}>
         {displayedReservations.map((r) => {
-          const { status, hasActions, canManageReservation, delayMinutes, pickupArrivalLabel } =
-            renderRow(r);
+          const {
+            status,
+            hasActions,
+            canManageReservation,
+            delayMinutes,
+            pickupArrivalLabel,
+            offerCanRespond,
+            offerExpired,
+          } = renderRow(r);
 
           return (
             <div
@@ -389,7 +504,13 @@ const ReservationTable = ({
                   <BookingIdentityCell booking={r} layout="compact" />
                   <BookingTripBadges booking={r} routeGroupSizes={routeGroupSizes} />
                 </div>
-                <BookingStatusBadge status={status} />
+                {r.__institutionOffer ? (
+                  <span className={`${styles.statusBadge} ${styles.pending}`}>
+                    {offerCanRespond ? 'En attente' : offerExpired ? 'Expiré' : 'Indisponible'}
+                  </span>
+                ) : (
+                  <BookingStatusBadge status={status} />
+                )}
                 {r.active_change_request?.status === 'pending' && (
                   <span style={{ marginLeft: 6, fontSize: 10, color: '#92400e' }}>Modif. en attente</span>
                 )}
@@ -424,9 +545,20 @@ const ReservationTable = ({
                 <div className={styles.mobileCardRow}>
                   <span className={styles.mobileCardLabel}>Montant</span>
                   <span className={styles.mobileCardValue}>
-                    {renderAmountCell(r, reservations)}
+                    {r.__institutionOffer
+                      ? renderOfferAmount(r)
+                      : renderAmountCell(r, reservations)}
                   </span>
                 </div>
+                {r.__institutionOffer && r.expires_at && (
+                  <div className={styles.mobileCardRow}>
+                    <span className={styles.mobileCardLabel}>Expiration</span>
+                    <span className={styles.mobileCardValue}>
+                      Exp: {formatInstantDateTime(r.expires_at).date}{' '}
+                      {formatInstantDateTime(r.expires_at).time}
+                    </span>
+                  </div>
+                )}
                 {delayMinutes > 0 && formatDelay(delayMinutes) && (
                   <div className={styles.mobileCardRow}>
                     <span className={styles.mobileCardLabel}>Retard</span>
@@ -440,7 +572,42 @@ const ReservationTable = ({
                   </div>
                 )}
               </div>
-              {hasActions && canManageReservation && (
+              {r.__institutionOffer ? (
+                <div className={styles.mobileCardActions} onClick={(e) => e.stopPropagation()}>
+                  {offerCanRespond ? (
+                    <>
+                      <button
+                        onClick={() => onAcceptInstitutionOffer?.(r)}
+                        title="Accepter (horaire demandé)"
+                        className={`${styles.actionButton} ${styles.acceptButton}`}
+                      >
+                        <FiCheckCircle size={16} />
+                      </button>
+                      <button
+                        onClick={() => onProposeInstitutionOffer?.(r)}
+                        title="Accepter avec un horaire différent"
+                        className={styles.actionButton}
+                        style={{ color: 'var(--brand-primary)' }}
+                      >
+                        <FiClock size={16} />
+                      </button>
+                      <button
+                        onClick={() => onRejectInstitutionOffer?.(r.__offerId, r.__offer)}
+                        title="Refuser la demande"
+                        className={`${styles.actionButton} ${styles.rejectButton}`}
+                      >
+                        <FiXCircle size={16} />
+                      </button>
+                    </>
+                  ) : (
+                    <span className={styles.noActionLabel}>
+                      {offerExpired
+                        ? 'Offre expirée, vous ne pouvez plus répondre.'
+                        : 'Aucune action'}
+                    </span>
+                  )}
+                </div>
+              ) : hasActions && canManageReservation && (
                 <div className={styles.mobileCardActions} onClick={(e) => e.stopPropagation()}>
                   <ReservationActions
                     reservation={r}

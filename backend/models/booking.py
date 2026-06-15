@@ -989,8 +989,8 @@ class Booking(db.Model):
         retours), afin d'afficher un historique unique quel que soit le trajet
         consulté.
 
-        Retourne une liste d'événements ``{event, date, type}`` triée par date,
-        ou ``None`` si aucun événement opérationnel.
+        Retourne une liste d'événements ``{event, date, type, leg_index, is_return, is_final_leg, leg_count}``
+        triée par date, ou ``None`` si aucun événement opérationnel.
         """
         try:
             # Chemin rapide : course simple sans groupe ni retour → pas de requête.
@@ -1005,9 +1005,10 @@ class Booking(db.Model):
 
             non_return_legs = [b for b, is_ret in pairs if not is_ret]
             multi = len(non_return_legs) > 1
+            leg_count = len(non_return_legs)
             events: list[dict[str, Any]] = []
 
-            def _add_leg(leg, base_label, *, is_return):
+            def _add_leg(leg, base_label, *, is_return, leg_index, is_final_leg):
                 if base_label and is_return:
                     suffix = f" — {base_label} (retour)"
                 elif base_label:
@@ -1023,6 +1024,10 @@ class Booking(db.Model):
                             "event": f"Prise en charge{suffix}",
                             "date": iso_utc_z(to_utc_from_db(boarded)),
                             "type": "pickup",
+                            "leg_index": leg_index,
+                            "is_return": is_return,
+                            "is_final_leg": False,
+                            "leg_count": leg_count,
                         }
                     )
                 completed = _as_dt(getattr(leg, "completed_at", None))
@@ -1032,13 +1037,29 @@ class Booking(db.Model):
                             "event": f"Dépose / course terminée{suffix}",
                             "date": iso_utc_z(to_utc_from_db(completed)),
                             "type": "dropoff",
+                            "leg_index": leg_index,
+                            "is_return": is_return,
+                            "is_final_leg": is_final_leg and not is_return,
+                            "leg_count": leg_count,
                         }
                     )
 
             for leg, is_return in pairs:
                 seq = getattr(leg, "route_sequence_number", None)
                 base_label = f"Trajet {seq}" if (multi and seq) else None
-                _add_leg(leg, base_label, is_return=is_return)
+                leg_index = int(seq) if (multi and seq) else None
+                is_final = (
+                    not is_return
+                    and leg_index is not None
+                    and leg_index == leg_count
+                )
+                _add_leg(
+                    leg,
+                    base_label,
+                    is_return=is_return,
+                    leg_index=leg_index,
+                    is_final_leg=is_final,
+                )
 
             events.sort(key=lambda e: e.get("date") or "")
             return events or None

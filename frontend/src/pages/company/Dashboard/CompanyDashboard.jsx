@@ -82,6 +82,7 @@ import {
   buildConstrainedImminentToastMessage,
   CONSTRAINED_IMMINENT_TOAST_ID,
 } from '../../../utils/companyDriverConstrainedBanner';
+import { filterVisibleInstitutionOffers } from '../../../utils/institutionOfferResponse';
 
 const DriverLiveMap = lazy(() => import('./components/DriverLiveMap'));
 const ReservationChart = lazy(() => import('./components/ReservationChart'));
@@ -600,6 +601,11 @@ const CompanyDashboard = () => {
     enabled: !!company?.id,
   });
   const institutionOffers = institutionOffersData?.offers || [];
+  const visibleInstitutionOffers = useMemo(
+    () => filterVisibleInstitutionOffers(institutionOffers),
+    [institutionOffers],
+  );
+  const hiddenInstitutionOffersCount = institutionOffers.length - visibleInstitutionOffers.length;
 
   const handleNewReservation = useCallback(() => reloadReservations(), [reloadReservations]);
   useEffect(() => {
@@ -639,6 +645,37 @@ const CompanyDashboard = () => {
     socket.on('offer_unavailable', handleOfferUnavailable);
     return () => socket.off('offer_unavailable', handleOfferUnavailable);
   }, [socket, handleOfferUnavailable]);
+
+  const handleInstitutionOfferUpdated = useCallback(
+    (payload) => {
+      if (!payload?.offer_id && !payload?.transport_request_id) return;
+      refetchInstitutionOffers();
+      if (payload?.is_relaunch) {
+        toast.info('Demande institution relancée — nouvelle offre disponible');
+      }
+    },
+    [refetchInstitutionOffers]
+  );
+
+  useEffect(() => {
+    if (!socket) return;
+    socket.on('institution_offer_updated', handleInstitutionOfferUpdated);
+    return () => socket.off('institution_offer_updated', handleInstitutionOfferUpdated);
+  }, [socket, handleInstitutionOfferUpdated]);
+
+  const handleNewCompanyNotification = useCallback(
+    (payload) => {
+      if (payload?.event_type !== 'new_request') return;
+      refetchInstitutionOffers();
+    },
+    [refetchInstitutionOffers]
+  );
+
+  useEffect(() => {
+    if (!socket) return;
+    socket.on('new_company_notification', handleNewCompanyNotification);
+    return () => socket.off('new_company_notification', handleNewCompanyNotification);
+  }, [socket, handleNewCompanyNotification]);
 
   const dashboardMountAtRef = React.useRef(Date.now());
 
@@ -1458,7 +1495,7 @@ const CompanyDashboard = () => {
                   : reservationTab === 'pending'
                     ? displayPending.length
                     : reservationTab === 'institution'
-                      ? institutionOffers.length
+                      ? visibleInstitutionOffers.length
                       : displayAssigned.length
               }
               totalCount={
@@ -1467,7 +1504,7 @@ const CompanyDashboard = () => {
                   : reservationTab === 'pending'
                     ? pendingReservations.length
                     : reservationTab === 'institution'
-                      ? institutionOffers.length
+                      ? visibleInstitutionOffers.length
                       : assignedReservations.length
               }
               activeDelayCount={activeDelayCount}
@@ -1489,7 +1526,7 @@ const CompanyDashboard = () => {
                   onClick={() => setReservationTab('institution')}
                 >
                   Institutions
-                  <span className={styles.tabBadge}>{institutionOffers.length}</span>
+                  <span className={styles.tabBadge}>{visibleInstitutionOffers.length}</span>
                 </button>
                 <button
                   className={`${styles.tab} ${reservationTab === 'assigned' ? styles.tabActive : ''}`}
@@ -1508,6 +1545,17 @@ const CompanyDashboard = () => {
                 « En attente » avec le statut « pending ». Cet onglet regroupe les courses déjà
                 acceptées en attente d&apos;assignation chauffeur.
               </p>
+            ) : null}
+            {!urgenceMode && reservationTab === 'institution' && hiddenInstitutionOffersCount > 0 ? (
+              <div className={styles.pendingScopeBanner} role="status">
+                <p>
+                  {hiddenInstitutionOffersCount === 1 ? (
+                    <>Une demande institution <strong>expirée</strong> n&apos;est plus affichée ici. L&apos;institution peut la relancer pour vous la renvoyer.</>
+                  ) : (
+                    <>{hiddenInstitutionOffersCount} demandes institutions <strong>expirées</strong> ne sont plus affichées ici. L&apos;institution peut les relancer.</>
+                  )}
+                </p>
+              </div>
             ) : null}
 
             {urgenceMode ? (
@@ -1547,7 +1595,7 @@ const CompanyDashboard = () => {
 
                 {reservationTab === 'institution' && (
                   <InstitutionOffersTable
-                    offers={institutionOffers}
+                    offers={visibleInstitutionOffers}
                     loading={loadingInstitutionOffers}
                     onAccept={handleAcceptOffer}
                     onReject={handleRejectOffer}

@@ -75,7 +75,7 @@ describe('buildMultiStopPayloadStops', () => {
 
     expect(payloadStops[0].sequence).toBe(1);
     expect(payloadStops[0].dropoff_location).toBe('HUG');
-    expect(payloadStops[0].scheduled_time).toBe(new Date('2026-06-11T09:00').toISOString());
+    expect(payloadStops[0].scheduled_time).toBe('2026-06-11T09:00:00');
     expect(payloadStops[1].sequence).toBe(2);
     expect(payloadStops[1].scheduled_time).toBeUndefined();
   });

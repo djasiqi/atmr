@@ -35,6 +35,15 @@ if TYPE_CHECKING:
     from .transport_request import TransportRequest
 
 
+def _iso_scheduled(dt):
+    """ISO UTC pour horaires mission (naïf Genève en base → Z côté API)."""
+    if dt is None:
+        return None
+    from shared.time_utils import iso_utc_z, to_utc_from_db
+
+    return iso_utc_z(to_utc_from_db(dt))
+
+
 class RequestOffer(db.Model):
     """Offre de transport envoyée à une entreprise.
 
@@ -157,14 +166,12 @@ class RequestOffer(db.Model):
         """Retourne True si l'offre a expiré (temps dépassé mais status pas encore EXPIRED)."""
         if self.expires_at is None:
             return False
-        from datetime import UTC
+        from shared.time_utils import now_utc, to_utc_from_db
 
-        now = datetime.now(UTC)
-        exp = self.expires_at
-        # Gérer le cas où expires_at est naive (sans timezone)
-        if exp.tzinfo is None:
-            exp = exp.replace(tzinfo=UTC)
-        return now > exp
+        exp = to_utc_from_db(self.expires_at)
+        if exp is None:
+            return False
+        return now_utc() > exp
 
     @property
     def can_respond(self) -> bool:
@@ -211,21 +218,28 @@ class RequestOffer(db.Model):
             "order": self.order,
             "status": self.status,
             "sent_at": _iso(self.sent_at),
-            "expires_at": _iso(self.expires_at),
+            "expires_at": _iso_scheduled(self.expires_at),
             "responded_at": _iso(self.responded_at),
             "rejection_reason": self.rejection_reason,
         }
 
     def serialize_for_company(self) -> dict[str, Any]:
         """Sérialise l'offre avec les détails de la demande pour l'entreprise."""
+        from services.institutions.mission_schedule import get_effective_dispatch_time
+        from services.pricing.offer_price_estimator import estimate_offer_price
+
         request = self.transport_request
+        next_confirmed = get_effective_dispatch_time(request)
+        price_estimate = estimate_offer_price(self)
         return {
             "id": self.id,
             "status": self.status,
             "mode": self.mode,
             "sent_at": _iso(self.sent_at),
-            "expires_at": _iso(self.expires_at),
+            "expires_at": _iso_scheduled(self.expires_at),
             "can_respond": self.can_respond,
+            # Tarif estimé (préférentiel sinon profil tarifaire) — affichage entreprise
+            "price_estimate": price_estimate,
             # Informations de la demande nécessaires pour décision
             "transport_request": {
                 "id": request.id,
@@ -242,7 +256,14 @@ class RequestOffer(db.Model):
                 ),
                 "mission_type": request.mission_type,
                 "delivery_description": request.delivery_description,
-                "scheduled_time": _iso(request.scheduled_time),
+                "mission_date": (
+                    request.mission_date.isoformat()
+                    if request.mission_date is not None
+                    else None
+                ),
+                "scheduled_time": _iso_scheduled(request.scheduled_time),
+                "next_confirmed_time": _iso_scheduled(next_confirmed),
+                "pickup_time_confirmed": bool(request.pickup_time_confirmed),
                 "scheduled_time_type": getattr(request, "scheduled_time_type", None)
                 or "departure",
                 "pickup_location": request.pickup_location,
@@ -256,7 +277,7 @@ class RequestOffer(db.Model):
                 if request.dropoff_lng
                 else None,
                 "is_round_trip": request.is_round_trip,
-                "return_time": _iso(request.return_time),
+                "return_time": _iso_scheduled(request.return_time),
                 "multi_stop": getattr(request, "multi_stop", False),
                 "return_to_institution": getattr(
                     request, "return_to_institution", False

@@ -234,8 +234,8 @@
 .requestItem {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 12px 20px;
+  gap: 10px;
+  padding: 12px 16px;
   border: none;
   border-bottom: 1px solid var(--border);
   background: transparent;
@@ -256,21 +256,52 @@
 .reqTime {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  min-width: 72px;
+  align-items: flex-start;
+  justify-content: center;
   flex-shrink: 0;
+  gap: 2px;
+  width: calc(5ch + 6px + 4.5ch);
+  min-width: calc(5ch + 6px + 4.5ch);
+}
+
+.reqTimeWithDate {
+  width: 10ch;
+  min-width: 10ch;
 }
 
 .reqDate {
   font-size: 11px;
   color: var(--text-secondary);
   font-weight: 500;
+  line-height: 1.25;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.reqHourLine {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  line-height: 1.25;
+  white-space: nowrap;
 }
 
 .reqHour {
   font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+  text-align: left;
+}
+
+.reqHourKind {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  line-height: 1;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .reqInfo {
@@ -411,10 +442,6 @@
     gap: 12px;
     padding: 10px 16px;
   }
-
-  .reqTime {
-    min-width: 60px;
-  }
 }
 
 /* Tablette portrait / mobile sidebar collapsed */
@@ -494,10 +521,6 @@
     font-size: 12px;
   }
 
-  .reqTime {
-    min-width: 50px;
-  }
-
   .reqHour {
     font-size: 13px;
   }
@@ -542,9 +565,5 @@
   .requestItem {
     padding: 8px 12px;
     gap: 8px;
-  }
-
-  .reqTime {
-    min-width: 44px;
   }
 }

@@ -38,6 +38,15 @@ function legacySource(booking) {
       name: institutionName,
     };
   }
+  // Origine portail institution : ne jamais retomber sur « Portefeuille propre ».
+  if (booking?.created_via === 'institution_portal') {
+    return {
+      type: 'institution',
+      id: booking?.client?.linked_institution_id ?? null,
+      code: null,
+      name: booking?.medical_facility || 'Institution',
+    };
+  }
   if (booking?.created_via === 'public_guest') {
     return { type: 'lirie_guest', id: null, code: 'GUEST', name: 'Invité LIRIE' };
   }

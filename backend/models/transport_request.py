@@ -48,6 +48,15 @@ if TYPE_CHECKING:
     from .user import User
 
 
+def _iso_scheduled(dt):
+    """ISO UTC pour horaires mission (naïf Genève en base → Z côté API)."""
+    if dt is None:
+        return None
+    from shared.time_utils import iso_utc_z, to_utc_from_db
+
+    return iso_utc_z(to_utc_from_db(dt))
+
+
 def _status_value(raw: Any) -> str:
     """Extrait la valeur string d'un statut (enum ou str)."""
     return raw.value if hasattr(raw, "value") else str(raw)
@@ -497,9 +506,9 @@ class TransportRequest(db.Model):
             "mission_date": (
                 self.mission_date.isoformat() if self.mission_date is not None else None
             ),
-            "scheduled_time": _iso(self.scheduled_time),
+            "scheduled_time": _iso_scheduled(self.scheduled_time),
             "pickup_time_confirmed": bool(self.pickup_time_confirmed),
-            "next_confirmed_time": _iso(next_confirmed),
+            "next_confirmed_time": _iso_scheduled(next_confirmed),
             "scheduled_time_type": self.scheduled_time_type,
             "pickup_location": self.pickup_location,
             "pickup_lat": float(self.pickup_lat) if self.pickup_lat else None,
@@ -516,7 +525,7 @@ class TransportRequest(db.Model):
             "pickup_entry_point": self.pickup_entry_point,
             "dropoff_entry_point": self.dropoff_entry_point,
             "is_round_trip": self.is_round_trip,
-            "return_time": _iso(self.return_time),
+            "return_time": _iso_scheduled(self.return_time),
             "return_date": (
                 self.return_date.isoformat() if self.return_date is not None else None
             ),
@@ -548,6 +557,7 @@ class TransportRequest(db.Model):
             "booking_id": self.booking_id,
             "accepted_by_company": self._serialize_accepted_company(),
             "booking_summary": self._serialize_booking_summary(),
+            **self._serialize_dispatch_state(),
             **self._canonical_display_payload(),
         }
 
@@ -564,6 +574,42 @@ class TransportRequest(db.Model):
         last = getattr(creator, "last_name", "") or ""
         name = f"{first} {last}".strip()
         return name or getattr(creator, "username", None) or None
+
+    def _serialize_dispatch_state(self) -> dict[str, Any]:
+        """État diffusion LIRIE (offres en attente / relance possible)."""
+        from models.enums import CarrierSource, OfferStatus, RequestStatus
+        from models.request_offer import RequestOffer
+
+        if self.carrier_source == CarrierSource.EXTERNAL.value or self.booking_id:
+            return {
+                "dispatch": {
+                    "has_pending_offers": False,
+                    "can_relaunch": False,
+                },
+            }
+
+        pending_offers = RequestOffer.query.filter_by(
+            transport_request_id=self.id,
+            status=OfferStatus.PENDING.value,
+        ).all()
+        actionable_pending = [
+            offer for offer in pending_offers if not offer.is_expired
+        ]
+        pending_count = len(actionable_pending)
+        has_only_expired_pending = (
+            len(pending_offers) > 0 and pending_count == 0
+        )
+        can_relaunch = (
+            self.status in (RequestStatus.SENT.value, RequestStatus.EXPIRED.value)
+            and pending_count == 0
+        )
+        return {
+            "dispatch": {
+                "has_pending_offers": pending_count > 0,
+                "has_only_expired_pending": has_only_expired_pending,
+                "can_relaunch": can_relaunch,
+            },
+        }
 
     def _serialize_external_carrier(self) -> dict[str, Any] | None:
         """Sérialise le bloc transporteur externe (snapshot)."""

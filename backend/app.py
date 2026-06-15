@@ -2066,6 +2066,32 @@ def create_app(config_name: str | None = None):
                 original_message,
             )
 
+            # Flask-RESTX abort(400) : message dans e.data, description Werkzeug générique
+            payload_data = getattr(e, "data", None)
+            if isinstance(payload_data, dict):
+                restx_message = payload_data.get("message")
+                restx_errors = payload_data.get("errors")
+                if restx_message or restx_errors:
+                    first_field_error = None
+                    if isinstance(restx_errors, dict) and restx_errors:
+                        first_val = next(iter(restx_errors.values()))
+                        if isinstance(first_val, list) and first_val:
+                            first_field_error = str(first_val[0])
+                        elif first_val is not None:
+                            first_field_error = str(first_val)
+                    error_message = (
+                        first_field_error
+                        or restx_message
+                        or "Données invalides"
+                    )
+                    response_body: dict[str, object] = {
+                        "error": "validation_error",
+                        "message": error_message,
+                    }
+                    if restx_errors:
+                        response_body["details"] = {"errors": restx_errors}
+                    return jsonify(response_body), 400
+
             # Déterminer le code d'erreur et le message
             werkzeug_default = "The browser (or proxy) sent a request that this server could not understand."
 
@@ -2076,17 +2102,36 @@ def create_app(config_name: str | None = None):
                     error_code = "invalid_content_type"
                     error_message = f"Content-Type invalide: '{request.content_type}'. Utilisez 'application/json'."
                 else:
+                    import json as _json
+
                     from middleware.silent_json_request import redact_json_body_preview
 
                     raw_body = request.get_data(cache=True, as_text=True)
-                    app.logger.warning(
-                        "[BadRequest] JSON non parseable path=%s body_len=%s preview=%s",
-                        getattr(request, "path", None),
-                        len(raw_body) if raw_body else 0,
-                        redact_json_body_preview(raw_body),
-                    )
-                    error_code = "invalid_json"
-                    error_message = "Corps de requête JSON manquant ou invalide. Vérifiez le format du body."
+                    body_parses = False
+                    if raw_body and raw_body.strip():
+                        try:
+                            _json.loads(raw_body)
+                            body_parses = True
+                        except _json.JSONDecodeError:
+                            body_parses = False
+
+                    if body_parses:
+                        error_code = "bad_request"
+                        error_message = (
+                            "Requête invalide. Vérifiez le format et les types des champs."
+                        )
+                    else:
+                        app.logger.warning(
+                            "[BadRequest] JSON non parseable path=%s body_len=%s preview=%s",
+                            getattr(request, "path", None),
+                            len(raw_body) if raw_body else 0,
+                            redact_json_body_preview(raw_body),
+                        )
+                        error_code = "invalid_json"
+                        error_message = (
+                            "Corps de requête JSON manquant ou invalide. "
+                            "Vérifiez le format du body."
+                        )
             else:
                 # Message spécifique - déterminer le code approprié
                 msg_lower = original_message.lower()

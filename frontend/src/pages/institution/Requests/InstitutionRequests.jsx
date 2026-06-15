@@ -6,8 +6,8 @@
  */
 
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
-import { FaSearch, FaFilter, FaPhoneAlt, FaFilePdf } from 'react-icons/fa';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { FaSearch, FaFilter, FaFilePdf, FaRedo } from 'react-icons/fa';
 import { FiAlertTriangle } from 'react-icons/fi';
 import { toast } from 'sonner';
 import {
@@ -15,8 +15,9 @@ import {
   useInstitutionMe,
   useUpdateRequestBilling,
   useUpdateBookingBilling,
+  useSendRequest,
 } from '../../../hooks/useInstitutionData';
-import { canEditBilling, canExportTransports } from '../../../utils/institutionPermissions';
+import { canEditBilling, canExportTransports, canManageRequests } from '../../../utils/institutionPermissions';
 import { exportDailyMissionReportsZip } from '../../../services/institutionService';
 import DemoInteractiveGuide from '../../../components/demo/DemoInteractiveGuide';
 import InlineDatePicker from '../../../components/ui/InlineDatePicker';
@@ -24,7 +25,10 @@ import ChipSelect from '../../../components/ui/ChipSelect';
 import { getAuthEnv } from '../../../utils/webAuthSession';
 import { resolveBookingStatusKey } from '../../../utils/institutionBookingStatus';
 import RequestDetailPanel from './RequestDetailPanel';
-import { formatReturnTimeLabel, formatMissionScheduleListLabel, getNextConfirmedLegTime, formatLegScheduleSummary } from '../../../utils/formatLegTime';
+import ConfirmSendModal from './ConfirmSendModal';
+import MissionScheduleCardTime from '../../../components/institution/MissionScheduleCardTime';
+import { canRelaunchInstitutionRequest } from '../../../utils/institutionRequestDispatch';
+import { formatReturnTimeLabel, formatLegScheduleSummary, getNextConfirmedLegTime } from '../../../utils/formatLegTime';
 import { getCarrierDisplay } from '../../../utils/carrierDisplay';
 import {
   isExternalRequest,
@@ -146,17 +150,6 @@ const resolveDelayInfo = (req, nowMs) => {
   };
 };
 
-const formatPhoneHref = (phone) => {
-  if (!phone) return '';
-  const cleaned = String(phone).replace(/[^+0-9]/g, '');
-  return cleaned ? `tel:${cleaned}` : '';
-};
-
-const formatPhoneDisplay = (phone) => {
-  if (!phone) return '';
-  return String(phone).trim();
-};
-
 const getRoutePoints = (req) => {
   const legs = Array.isArray(req?.legs)
     ? [...req.legs].sort((a, b) => (a.sequence_index ?? 0) - (b.sequence_index ?? 0))
@@ -210,9 +203,22 @@ const resolveTripTypeMeta = (req) => {
   };
 };
 
+const parseRouteRequestId = (param) => {
+  if (!param) return null;
+  const num = Number(param);
+  return Number.isFinite(num) ? num : param;
+};
+
 // ─── Component ─────────────────────────────────────────────
 const InstitutionRequests = () => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { public_id: publicId, requestId: routeRequestId } = useParams();
+  const requestsBasePath = useMemo(() => {
+    const isDemoPath = String(location.pathname || '').startsWith('/demo/');
+    const dashboardRoot = isDemoPath ? '/demo/dashboard' : '/dashboard';
+    return `${dashboardRoot}/institution/${publicId}/requests`;
+  }, [location.pathname, publicId]);
   const initialFilters = useMemo(() => {
     const base = {
       status: '',
@@ -236,10 +242,16 @@ const InstitutionRequests = () => {
   const [showFilters, setShowFilters] = useState(
     () => initialFilters.date_from !== '' || initialFilters.date_to !== ''
   );
-  const [selectedId, setSelectedId] = useState(null);
+  const [selectedId, setSelectedId] = useState(() => parseRouteRequestId(routeRequestId));
+  const [relaunchTarget, setRelaunchTarget] = useState(null);
+
+  useEffect(() => {
+    setSelectedId(parseRouteRequestId(routeRequestId));
+  }, [routeRequestId]);
 
   const { data: meData } = useInstitutionMe();
   const myRole = meData?.institution_role;
+  const canManage = canManageRequests(myRole);
   const showBillingSwitch = canEditBilling(myRole);
   const canExport = canExportTransports(myRole);
 
@@ -265,6 +277,7 @@ const InstitutionRequests = () => {
 
   const updateRequestBilling = useUpdateRequestBilling();
   const updateBookingBilling = useUpdateBookingBilling();
+  const sendMutation = useSendRequest();
 
   const { data: requestsData, isLoading, error } = useInstitutionRequests(filters);
 
@@ -283,12 +296,28 @@ const InstitutionRequests = () => {
   const handleFilter = (key, value) => setFilters(prev => ({ ...prev, [key]: value, page: 1 }));
 
   const handleSelectRequest = useCallback((req) => {
-    setSelectedId((prev) => (prev === req.id ? null : req.id));
-  }, []);
+    setSelectedId((prev) => {
+      const nextId = prev === req.id ? null : req.id;
+      navigate(nextId ? `${requestsBasePath}/${nextId}` : requestsBasePath, { replace: true });
+      return nextId;
+    });
+  }, [navigate, requestsBasePath]);
 
   const handleClosePanel = useCallback(() => {
     setSelectedId(null);
-  }, []);
+    navigate(requestsBasePath, { replace: true });
+  }, [navigate, requestsBasePath]);
+
+  const handleConfirmRelaunch = useCallback(async () => {
+    if (!relaunchTarget?.id) return;
+    try {
+      await sendMutation.mutateAsync({ requestId: relaunchTarget.id, options: {} });
+      setRelaunchTarget(null);
+      toast.success('Diffusion relancée auprès des transporteurs');
+    } catch (err) {
+      toast.error(err?.response?.data?.error || 'Erreur lors de la relance');
+    }
+  }, [relaunchTarget, sendMutation]);
 
   // Group by date
   const grouped = useMemo(() => {
@@ -553,22 +582,21 @@ const InstitutionRequests = () => {
                   const companyName = getCarrierDisplay(req).name;
                   const isExternal = isExternalRequest(req);
                   const carrierModeLabel = getCarrierSourceLabel(req);
-                  const companyPhone = getCarrierDisplay(req).phone;
                   const delay = resolveDelayInfo(req, nowMs);
-                  const showCallAction = delay && companyPhone;
                   const tripType = resolveTripTypeMeta(req);
                   const routePoints = getRoutePoints(req);
-                  const billingMetaLabel = showBillingSwitch ? resolveBillingMetaLabel(req) : null;
+                  const billingMetaLabel = showBillingSwitch ? null : resolveBillingMetaLabel(req);
                   const timeTypeLabel = req.scheduled_time_type === 'arrival' ? 'RDV' : null;
                   const cardMeta = buildCardMeta({
                     req,
                     companyName,
                     carrierModeLabel,
                     isExternal,
-                    tripTypeLabel: tripType.label,
+                    tripTypeLabel: showBillingSwitch ? null : tripType.label,
                     billingLabel: billingMetaLabel,
-                    timeTypeLabel,
+                    timeTypeLabel: showBillingSwitch ? null : timeTypeLabel,
                   });
+                  const showRelaunch = canManage && canRelaunchInstitutionRequest(req);
 
                   return (
                     <div
@@ -626,53 +654,70 @@ const InstitutionRequests = () => {
                         })}
                       </div>
 
-                      {/* Col 3 : date/heure + toggle facturation */}
+                      {/* Col 3 : date/heure + actions compactes */}
                       <div className={s.colRight}>
-                        <span className={s.cardDateTime} title={formatLegScheduleSummary(req)}>
-                          {formatMissionScheduleListLabel(req)}
-                          {isRoundTripRequest(req) && formatReturnTimeLabel(req) && !req.multi_stop && (
-                            <span className={s.returnTimeInline}>
-                              {' '}
-                              · {formatReturnTimeLabel(req)}
-                            </span>
-                          )}
-                        </span>
+                        <MissionScheduleCardTime
+                          request={req}
+                          title={[tripType.title, formatLegScheduleSummary(req)].filter(Boolean).join(' — ')}
+                        />
                         {cardMeta.detailsLine && (
                           <span className={s.metaDetails} title={cardMeta.detailsLine}>
                             {cardMeta.detailsLine}
                           </span>
                         )}
-                        {showCallAction && (
-                          <a
-                            href={formatPhoneHref(companyPhone)}
-                            className={`${s.callBtn} ${delay.severity === 'severe' ? s.callBtnSevere : ''}`}
-                            onClick={(e) => e.stopPropagation()}
-                            title={`Appeler ${companyName || 'le transporteur'} — ${formatPhoneDisplay(companyPhone)}`}
-                            aria-label={`Appeler ${companyName || 'le transporteur'} au ${formatPhoneDisplay(companyPhone)}`}
-                          >
-                            <FaPhoneAlt aria-hidden="true" />
-                            <span className={s.callBtnLabel}>{formatPhoneDisplay(companyPhone)}</span>
-                          </a>
+                        {showBillingSwitch && (
+                          <div className={s.colRightActions}>
+                            {showRelaunch && (
+                              <button
+                                type="button"
+                                className={s.cardRelaunchBtn}
+                                title="Relancer la diffusion aux transporteurs"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setRelaunchTarget(req);
+                                }}
+                              >
+                                <FaRedo size={10} />
+                                Relancer
+                              </button>
+                            )}
+                            {(() => {
+                              const isConverted = isConvertedLirie(req) && req.booking_summary;
+                              const isPatient = isConverted
+                                ? req.booking_summary.billed_to_type !== 'clinic'
+                                : (req.billing_intent || 'patient') === 'patient';
+                              const isInvoiced = isConverted && req.booking_summary.is_invoiced;
+                              return (
+                                <div
+                                  className={`${s.billingSwitch} ${s.billingSwitchCompact} ${isPatient ? s.billPatient : s.billClinic} ${isInvoiced ? s.billLocked : ''}`}
+                                  onClick={isInvoiced ? undefined : (e) => handleToggleBilling(e, req)}
+                                  title={isInvoiced ? 'Déjà facturé — non modifiable' : 'Cliquez pour changer la facturation'}
+                                >
+                                  <span className={s.billLabel}>{isPatient ? 'Patient' : 'Clinique'}</span>
+                                  <span className={s.billToggle}>
+                                    <span className={s.billDot} />
+                                  </span>
+                                </div>
+                              );
+                            })()}
+                          </div>
                         )}
-                        {showBillingSwitch && (() => {
-                          const isConverted = isConvertedLirie(req) && req.booking_summary;
-                          const isPatient = isConverted
-                            ? req.booking_summary.billed_to_type !== 'clinic'
-                            : (req.billing_intent || 'patient') === 'patient';
-                          const isInvoiced = isConverted && req.booking_summary.is_invoiced;
-                          return (
-                            <div
-                              className={`${s.billingSwitch} ${isPatient ? s.billPatient : s.billClinic} ${isInvoiced ? s.billLocked : ''}`}
-                              onClick={isInvoiced ? undefined : (e) => handleToggleBilling(e, req)}
-                              title={isInvoiced ? 'Déjà facturé — non modifiable' : 'Cliquez pour changer la facturation'}
+                        {!showBillingSwitch && showRelaunch && (
+                          <div className={s.colRightActions}>
+                            <button
+                              type="button"
+                              className={s.cardRelaunchBtn}
+                              title="Relancer la diffusion aux transporteurs"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setRelaunchTarget(req);
+                              }}
                             >
-                              <span className={s.billLabel}>{isPatient ? 'Patient' : 'Clinique'}</span>
-                              <span className={s.billToggle}>
-                                <span className={s.billDot} />
-                              </span>
-                            </div>
-                          );
-                        })()}
+                              <FaRedo size={10} />
+                              Relancer
+                            </button>
+                          </div>
+                        )}
                       </div>
 
                     </div>
@@ -704,6 +749,15 @@ const InstitutionRequests = () => {
             onClose={handleClosePanel}
           />
         </div>
+      )}
+
+      {relaunchTarget && (
+        <ConfirmSendModal
+          mode="relaunch"
+          onClose={() => setRelaunchTarget(null)}
+          onConfirm={handleConfirmRelaunch}
+          loading={sendMutation.isPending}
+        />
       )}
     </div>
   );

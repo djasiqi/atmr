@@ -46,6 +46,38 @@
   flex: 1;
 }
 
+.panelTitleStack {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.panelMeta {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.offerExpiredNotice {
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  background: var(--bg-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.noActionLabel {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-style: italic;
+  line-height: 1.45;
+}
+
 .panelTitle {
   font-size: 15px;
   font-weight: 700;
@@ -140,10 +172,13 @@
   flex-shrink: 0;
 }
 
-.sectionIconBrand { background: var(--brand-light); color: var(--brand); }
-.sectionIconWarning { background: #FFFBEB; color: var(--warning); }
-.sectionIconBlue { background: #EFF6FF; color: #2563EB; }
-.sectionIconMuted { background: var(--bg-muted); color: var(--text-muted); }
+.sectionIconBrand,
+.sectionIconWarning,
+.sectionIconBlue,
+.sectionIconMuted {
+  background: var(--neutral-100, #f8fafc);
+  color: var(--neutral-500, #64748b);
+}
 
 .sectionTitle {
   font-size: 13px;
@@ -188,10 +223,136 @@
   color: var(--text-secondary);
 }
 
+/* Actions bar (offres institution, aligné RequestDetailPanel) */
+.actions {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 16px;
+  min-width: 0;
+  width: 100%;
+}
+
+.actionBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 5px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition);
+  white-space: nowrap;
+  flex: 1 1 0;
+  min-width: 0;
+  font-family: inherit;
+}
+
+.btnPrimary {
+  background: var(--brand);
+  color: #fff;
+  border: none;
+}
+
+.btnPrimary:hover { background: var(--brand-hover); }
+
+.btnSecondary {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+}
+
+.btnSecondary:hover { background: var(--bg-muted); }
+
+.btnDanger {
+  background: var(--bg-surface);
+  color: var(--danger);
+  border: 1px solid var(--danger);
+  flex: 0 0 auto;
+}
+
+.btnDanger:hover { background: #FEF2F2; }
+
+.actionBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+
 /* Route */
 .route {
   display: flex;
   gap: 12px;
+}
+
+/* Timeline multi-étapes (offres institution) */
+.routeTimeline {
+  display: flex;
+  flex-direction: column;
+}
+
+.routeTimelineStop {
+  display: flex;
+  gap: 12px;
+  align-items: stretch;
+}
+
+.routeTimelineStop:not(:last-child) .routeStopBody {
+  padding-bottom: 16px;
+}
+
+.routeMarker {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+  width: 12px;
+  padding-top: 3px;
+}
+
+.routeConnector {
+  width: 2px;
+  flex: 1;
+  min-height: 12px;
+  background: var(--border);
+  border-radius: 1px;
+  margin: 3px 0;
+}
+
+.routeStopBody {
+  flex: 1;
+  min-width: 0;
+}
+
+.routeDotMid {
+  background: var(--neutral-400, #94a3b8);
+  box-shadow: 0 0 0 2px var(--neutral-100, #f8fafc);
+}
+
+.routeStopTime {
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.routeStopDetails {
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.3;
+}
+
+.oneWayBadge,
+.multiStopBadge {
+  display: inline-flex;
+  margin-top: 8px;
+  padding: 3px 8px;
+  background: var(--neutral-100, #f8fafc);
+  color: var(--text-secondary);
+  border: 1px solid var(--neutral-200, #e2e8f0);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .routeTrack {
@@ -320,8 +481,9 @@
   display: inline-flex;
   margin-top: 8px;
   padding: 3px 8px;
-  background: var(--brand-light);
-  color: var(--brand);
+  background: var(--neutral-100, #f8fafc);
+  color: var(--text-secondary);
+  border: 1px solid var(--neutral-200, #e2e8f0);
   border-radius: 999px;
   font-size: 11px;
   font-weight: 600;
@@ -355,7 +517,7 @@
 }
 
 .notesBlock {
-  margin-top: 6px;
+  margin-top: 10px;
   padding: 10px 12px;
   background: #FFFBEB;
   border: 1px solid #FDE68A;
@@ -370,11 +532,16 @@
 .statusBadge {
   display: inline-flex;
   align-items: center;
-  padding: 3px 10px;
+  padding: 3px 8px;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   white-space: nowrap;
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border: 1px solid transparent;
 }
 
 .statusCompleted { background: #ECFDF5; color: var(--success); }
@@ -384,6 +551,42 @@
 .statusAccepted { background: var(--brand-light); color: var(--brand); }
 .statusPending { background: var(--bg-muted); color: var(--text-muted); }
 .statusCancelled { background: #FEF2F2; color: var(--danger); }
+
+.badgeStatusNeutral {
+  background: var(--status-neutral-bg, var(--bg-muted));
+  color: var(--status-neutral-text, var(--text-muted));
+  border-color: var(--status-neutral-border, var(--border));
+}
+
+.badgeStatusInfo {
+  background: var(--status-info-bg, #eff6ff);
+  color: var(--status-info-text, #2563eb);
+  border-color: var(--status-info-border, #93c5fd);
+}
+
+.badgeStatusSuccess {
+  background: var(--status-success-bg, #ecfdf5);
+  color: var(--status-success-text, #15803d);
+  border-color: var(--status-success-border, #86efac);
+}
+
+.badgeStatusWarning {
+  background: var(--status-warning-bg, #fef3c7);
+  color: var(--status-warning-text, #92400e);
+  border-color: var(--status-warning-border, #fcd34d);
+}
+
+.badgeStatusExpired {
+  background: var(--warning-bg, #fffbeb);
+  color: var(--warning-hover, #d97706);
+  border-color: var(--warning-border, #fde68a);
+}
+
+.badgeStatusError {
+  background: var(--status-error-bg, #fef2f2);
+  color: var(--status-error-text, var(--danger));
+  border-color: var(--status-error-border, #fca5a5);
+}
 
 /* Billing */
 .billingStatus {
@@ -1151,6 +1354,44 @@
   font-variant-numeric: tabular-nums;
   flex-shrink: 0;
   font-size: 11px;
+}
+
+/* ═══════════════════════════════════════════
+   Besoins — puces harmonisées (cf. RequestDetailPanel)
+   ═══════════════════════════════════════════ */
+.needsRow {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.needsChip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+}
+
+.needsChipActive {
+  border-color: var(--brand);
+  background: var(--brand-light);
+  color: var(--brand);
+  font-weight: 700;
+}
+
+.needsChipDanger {
+  border-color: #FECACA;
+  background: #FEF2F2;
+  color: var(--danger);
 }
 
 @media (max-width: 390px) {

@@ -36,6 +36,11 @@ import { getAuthEnv } from '../../../utils/webAuthSession';
 import { computeInstitutionRequestStats, resolveBookingStatusKey } from '../../../utils/institutionBookingStatus';
 import { isConvertedLirie } from '../../../utils/requestStatus';
 import { BOOKING_STATUS_LABELS } from '../Requests/statusColors';
+import {
+  getMissionScheduleCardDisplay,
+  getNextConfirmedLegTime,
+} from '../../../utils/formatLegTime';
+import { extractWallClockDate } from '../../../utils/missionTimeDisplay';
 import s from './InstitutionDashboard.module.css';
 
 // ─── Status config ──────────────────────────────────────────
@@ -68,19 +73,46 @@ const shortAddr = (addr, max = 30) => {
 
 const fmtDate = (d) => {
   if (!d) return '—';
-  return new Date(d).toLocaleDateString('fr-CH', {
+  const raw = String(d).trim();
+  const iso = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? `${raw}T12:00:00` : raw;
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) return '—';
+  return parsed.toLocaleDateString('fr-CH', {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
   });
 };
 
-const fmtTime = (d) => {
-  if (!d) return '';
-  return new Date(d).toLocaleTimeString('fr-CH', {
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+/** Date + heure mission (mission_date, legs RDV, départ confirmé). */
+const resolveDashboardSchedule = (req) => {
+  const { primary } = getMissionScheduleCardDisplay(req);
+  const dateSrc = req?.mission_date
+    || extractWallClockDate(req?.scheduled_time)
+    || extractWallClockDate(req?.next_confirmed_time)
+    || extractWallClockDate(getNextConfirmedLegTime(req)?.iso);
+  const date = dateSrc ? fmtDate(dateSrc) : '—';
+  const hour = primary?.time || '';
+  const hourKind = primary?.label || '';
+  return { date, hour, hourKind };
+};
+
+const getRequestMissionDate = (req) => (
+  req?.mission_date
+  || extractWallClockDate(req?.scheduled_time)
+  || extractWallClockDate(req?.next_confirmed_time)
+  || extractWallClockDate(getNextConfirmedLegTime(req)?.iso)
+  || null
+);
+
+const getRequestSortTime = (req) => {
+  const next = getNextConfirmedLegTime(req);
+  const src = next?.iso || req?.next_confirmed_time || req?.scheduled_time || req?.mission_date;
+  if (!src) return 0;
+  const raw = String(src).trim();
+  const iso = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? `${raw}T00:00:00` : raw;
+  const parsed = new Date(iso);
+  return Number.isNaN(parsed.getTime()) ? 0 : parsed.getTime();
 };
 
 const resolveDisplayStatus = (req) => {
@@ -96,12 +128,30 @@ const resolveDisplayStatus = (req) => {
 
 const isToday = (dateStr) => {
   if (!dateStr) return false;
-  const d = new Date(dateStr);
+  const raw = String(dateStr).trim();
+  const iso = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? `${raw}T12:00:00` : raw;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return false;
   const now = new Date();
   return (
     d.getDate() === now.getDate() &&
     d.getMonth() === now.getMonth() &&
     d.getFullYear() === now.getFullYear()
+  );
+};
+
+const isTodayRequest = (req) => isToday(getRequestMissionDate(req));
+
+const RequestItemTime = ({ schedule, showDate = false }) => {
+  const showKind = Boolean(schedule.hourKind);
+  return (
+    <div className={`${s.reqTime} ${showDate ? s.reqTimeWithDate : ''}`}>
+      {showDate ? <span className={s.reqDate}>{schedule.date}</span> : null}
+      <span className={s.reqHourLine}>
+        <span className={s.reqHour}>{schedule.hour || '—'}</span>
+        <span className={s.reqHourKind}>{showKind ? schedule.hourKind : '\u00a0'}</span>
+      </span>
+    </div>
   );
 };
 
@@ -111,6 +161,11 @@ const InstitutionDashboard = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const isDemoEnv = getAuthEnv() === 'demo';
+  const requestsBasePath = useMemo(() => {
+    const isDemoPath = String(location.pathname || '').startsWith('/demo/');
+    const dashboardRoot = isDemoPath ? '/demo/dashboard' : '/dashboard';
+    return `${dashboardRoot}/institution/${public_id}/requests`;
+  }, [location.pathname, public_id]);
   const fallbackDemoMission = isDemoEnv
     ? (
         localStorage.getItem('demo_recommended_journey') ||
@@ -161,8 +216,8 @@ const InstitutionDashboard = () => {
   const todayRequests = useMemo(
     () =>
       requestItems
-        .filter((r) => isToday(r.scheduled_time))
-        .sort((a, b) => new Date(a.scheduled_time) - new Date(b.scheduled_time)),
+        .filter((r) => isTodayRequest(r))
+        .sort((a, b) => getRequestSortTime(a) - getRequestSortTime(b)),
     [requestItems]
   );
 
@@ -222,7 +277,7 @@ const InstitutionDashboard = () => {
       {/* ── KPI Cards ─────────────────────────────────────── */}
       <div className={s.kpiGrid} data-tour-id="institution-kpi-grid">
         <Link
-          to={`/dashboard/institution/${public_id}/requests`}
+          to={requestsBasePath}
           className={`${s.kpiCard} ${s.kpiTotal}`}
         >
           <div className={s.kpiIconWrap}>
@@ -293,7 +348,7 @@ const InstitutionDashboard = () => {
               )}
             </div>
             <Link
-              to={`/dashboard/institution/${public_id}/requests?day=today`}
+              to={`${requestsBasePath}?day=today`}
               className={s.cardLink}
             >
               Tout voir <FaChevronRight />
@@ -307,19 +362,14 @@ const InstitutionDashboard = () => {
               <div className={s.requestList}>
                 {todayRequests.map((req) => {
                   const st = resolveDisplayStatus(req);
+                  const schedule = resolveDashboardSchedule(req);
                   return (
                     <button
                       key={req.id}
                       className={s.requestItem}
-                      onClick={() =>
-                        navigate(
-                          `/dashboard/institution/${public_id}/requests/${req.id}`
-                        )
-                      }
+                      onClick={() => navigate(`${requestsBasePath}/${req.id}`)}
                     >
-                      <div className={s.reqTime}>
-                        <span className={s.reqHour}>{fmtTime(req.scheduled_time)}</span>
-                      </div>
+                      <RequestItemTime schedule={schedule} />
                       <div className={s.reqInfo}>
                         <div className={s.reqPatient}>
                           {req.patient
@@ -355,7 +405,7 @@ const InstitutionDashboard = () => {
               <h3 className={s.cardTitle}>Demandes récentes</h3>
             </div>
             <Link
-              to={`/dashboard/institution/${public_id}/requests`}
+              to={requestsBasePath}
               className={s.cardLink}
             >
               Tout voir <FaChevronRight />
@@ -369,20 +419,14 @@ const InstitutionDashboard = () => {
               <div className={s.requestList}>
                 {recentRequests.map((req) => {
                   const st = resolveDisplayStatus(req);
+                  const schedule = resolveDashboardSchedule(req);
                   return (
                     <button
                       key={req.id}
                       className={s.requestItem}
-                      onClick={() =>
-                        navigate(
-                          `/dashboard/institution/${public_id}/requests/${req.id}`
-                        )
-                      }
+                      onClick={() => navigate(`${requestsBasePath}/${req.id}`)}
                     >
-                      <div className={s.reqTime}>
-                        <span className={s.reqDate}>{fmtDate(req.scheduled_time)}</span>
-                        <span className={s.reqHour}>{fmtTime(req.scheduled_time)}</span>
-                      </div>
+                      <RequestItemTime schedule={schedule} showDate />
                       <div className={s.reqInfo}>
                         <div className={s.reqPatient}>
                           {req.patient

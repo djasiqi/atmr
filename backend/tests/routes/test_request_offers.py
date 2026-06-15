@@ -120,12 +120,15 @@ class TestSendWithOffers:
     @pytest.fixture
     def sample_request(self, db, sample_institution):
         """Crée une demande de transport de test."""
+        scheduled = datetime.now(UTC) + timedelta(days=2)
         request = TransportRequest()
         request.institution_id = sample_institution.id
         request.external_reference = f"TEST-{uuid.uuid4().hex[:8]}"
         request.pickup_location = "123 Rue Test"
         request.dropoff_location = "456 Avenue Dest"
-        request.scheduled_time = datetime.now(UTC) + timedelta(days=2)
+        request.mission_date = scheduled.date()
+        request.scheduled_time = scheduled
+        request.pickup_time_confirmed = True
         request.status = RequestStatus.DRAFT.value
         db.session.add(request)
         db.session.flush()
@@ -244,6 +247,142 @@ class TestSendWithOffers:
         assert second_offers == first_offers, (
             "Idempotent send should return same offer count"
         )
+
+    def test_send_reactivates_time_expired_pending_offers(
+        self,
+        client,
+        db,
+        sample_institution,
+        auth_headers,
+        sample_request,
+        sample_company,
+    ):
+        """Relance : offres PENDING expirées dans le temps sont réactivées avec un nouveau délai."""
+        pref = InstitutionTransportPreference()
+        pref.institution_id = sample_institution.id
+        pref.company_id = sample_company.id
+        pref.order = 1
+        db.session.add(pref)
+        db.session.commit()
+
+        response = client.post(
+            f"/api/v1/institutions/requests/{sample_request.id}/send",
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+
+        offer = RequestOffer.query.filter_by(
+            transport_request_id=sample_request.id,
+            company_id=sample_company.id,
+        ).first()
+        assert offer is not None
+        old_expires_at = offer.expires_at
+
+        offer.expires_at = datetime.now(UTC) - timedelta(hours=2)
+        db.session.commit()
+
+        response = client.post(
+            f"/api/v1/institutions/requests/{sample_request.id}/send",
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+
+        db.session.refresh(offer)
+        assert offer.status == OfferStatus.PENDING.value
+        assert offer.expires_at is not None
+        refreshed_expires = offer.expires_at
+        if refreshed_expires.tzinfo is None:
+            refreshed_expires = refreshed_expires.replace(tzinfo=UTC)
+        assert refreshed_expires > datetime.now(UTC)
+        assert offer.expires_at != old_expires_at
+
+    def test_dispatch_can_relaunch_when_only_time_expired_pending(
+        self,
+        client,
+        db,
+        sample_institution,
+        auth_headers,
+        sample_request,
+        sample_company,
+    ):
+        """Liste institution : relance possible si seules des offres PENDING expirées existent."""
+        pref = InstitutionTransportPreference()
+        pref.institution_id = sample_institution.id
+        pref.company_id = sample_company.id
+        pref.order = 1
+        db.session.add(pref)
+        db.session.commit()
+
+        response = client.post(
+            f"/api/v1/institutions/requests/{sample_request.id}/send",
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+
+        offer = RequestOffer.query.filter_by(
+            transport_request_id=sample_request.id,
+            company_id=sample_company.id,
+        ).first()
+        offer.expires_at = datetime.now(UTC) - timedelta(minutes=30)
+        db.session.commit()
+
+        list_response = client.get(
+            "/api/v1/institutions/requests",
+            headers=auth_headers,
+        )
+        assert list_response.status_code == 200
+        requests = list_response.get_json().get("requests", [])
+        row = next((r for r in requests if r["id"] == sample_request.id), None)
+        assert row is not None
+        assert row["dispatch"]["has_pending_offers"] is False
+        assert row["dispatch"]["has_only_expired_pending"] is True
+        assert row["dispatch"]["can_relaunch"] is True
+
+    @patch("ext.socketio.emit")
+    @patch("services.events.institution_events.persist_company_notification")
+    def test_send_relaunch_notifies_company_with_relaunch_dedupe(
+        self,
+        mock_notify,
+        _mock_socket_emit,
+        client,
+        db,
+        sample_institution,
+        auth_headers,
+        sample_request,
+        sample_company,
+    ):
+        """Relance : notification entreprise avec clé de déduplication distincte."""
+        mock_notify.return_value = {"id": 1}
+        pref = InstitutionTransportPreference()
+        pref.institution_id = sample_institution.id
+        pref.company_id = sample_company.id
+        pref.order = 1
+        db.session.add(pref)
+        db.session.commit()
+
+        client.post(
+            f"/api/v1/institutions/requests/{sample_request.id}/send",
+            headers=auth_headers,
+        )
+
+        offer = RequestOffer.query.filter_by(
+            transport_request_id=sample_request.id,
+            company_id=sample_company.id,
+        ).first()
+        offer.status = OfferStatus.EXPIRED.value
+        db.session.commit()
+
+        mock_notify.reset_mock()
+        response = client.post(
+            f"/api/v1/institutions/requests/{sample_request.id}/send",
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+        assert mock_notify.called
+        kwargs = mock_notify.call_args.kwargs
+        assert kwargs["company_id"] == sample_company.id
+        assert kwargs["title"] == "Demande de transport relancée"
+        assert ":relaunch:" in kwargs["dedupe_key"]
 
     def test_send_converted_request_fails_409(
         self,

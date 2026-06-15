@@ -155,8 +155,12 @@ export function buildCardMeta({
 
   if (companyName) {
     carrierLine = isExternal ? `Transporteur : ${companyName}` : companyName;
-  } else if (req?.status === 'SENT' && !isExternal) {
-    carrierLine = 'En attente d\'offre';
+  } else if ((req?.status === 'SENT' || req?.status === 'EXPIRED') && !isExternal) {
+    carrierLine = (req?.dispatch?.can_relaunch
+      || req?.dispatch?.has_only_expired_pending
+      || req?.status === 'EXPIRED')
+      ? 'Diffusion expirée — relancer'
+      : 'En attente d\'offre';
   } else if (carrierModeLabel) {
     carrierLine = carrierModeLabel;
   }

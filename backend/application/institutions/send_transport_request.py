@@ -111,6 +111,7 @@ class SendTransportRequestUseCase:
             if transport_request.status not in [
                 RequestStatus.DRAFT.value,
                 RequestStatus.SENT.value,
+                RequestStatus.EXPIRED.value,
             ]:
                 return SendTransportRequestResult(
                     success=False,
@@ -156,46 +157,55 @@ class SendTransportRequestUseCase:
             ).first()
 
             if existing_pending:
-                # ÉTAPE GO-LIVE: Idempotent si déjà SENT avec offres PENDING
+                # ÉTAPE GO-LIVE: Idempotent si déjà SENT avec offres PENDING actives
                 # → Retourne 200 au lieu de 409 (évite les erreurs UI sur retry)
                 if transport_request.status == RequestStatus.SENT.value:
-                    # Compter les offres PENDING
-                    pending_count = RequestOffer.query.filter_by(
+                    pending_offers = RequestOffer.query.filter_by(
                         transport_request_id=transport_request.id,
                         status=OfferStatus.PENDING.value,
-                    ).count()
+                    ).all()
+                    actionable_pending = [
+                        o for o in pending_offers if not o.is_expired
+                    ]
+
+                    if actionable_pending:
+                        pending_count = len(actionable_pending)
+                        logger.info(
+                            "[SendTransportRequest] Idempotent: request %s already SENT with %d pending offers",
+                            transport_request.id,
+                            pending_count,
+                        )
+
+                        mode = existing_pending.mode or OfferMode.BROADCAST.value
+
+                        return SendTransportRequestResult(
+                            success=True,
+                            transport_request_id=transport_request.id,
+                            offers_created=pending_count,
+                            mode=mode,
+                        )
 
                     logger.info(
-                        "[SendTransportRequest] Idempotent: request %s already SENT with %d pending offers",
+                        "[SendTransportRequest] Relaunch: request %s has %d time-expired pending offers",
                         transport_request.id,
-                        pending_count,
+                        len(pending_offers),
+                    )
+                else:
+                    # DRAFT avec offres pending = état incohérent
+                    from services.metrics.institution_metrics import (
+                        track_transport_request_duplicate_blocked,
                     )
 
-                    # Déterminer le mode depuis les offres existantes
-                    mode = existing_pending.mode or OfferMode.BROADCAST.value
-
-                    return SendTransportRequestResult(
-                        success=True,
+                    track_transport_request_duplicate_blocked(
                         transport_request_id=transport_request.id,
-                        offers_created=pending_count,
-                        mode=mode,
+                        institution_id=input_data.institution_id,
                     )
-
-                # Sinon (DRAFT avec offres pending = état incohérent)
-                from services.metrics.institution_metrics import (
-                    track_transport_request_duplicate_blocked,
-                )
-
-                track_transport_request_duplicate_blocked(
-                    transport_request_id=transport_request.id,
-                    institution_id=input_data.institution_id,
-                )
-                return SendTransportRequestResult(
-                    success=False,
-                    transport_request_id=input_data.transport_request_id,
-                    error="Des offres sont déjà en attente pour cette demande",
-                    status_code=409,
-                )
+                    return SendTransportRequestResult(
+                        success=False,
+                        transport_request_id=input_data.transport_request_id,
+                        error="Des offres sont déjà en attente pour cette demande",
+                        status_code=409,
+                    )
 
             # 5. Charger les settings institution + calculer le timeout
             settings = get_or_create_settings(input_data.institution_id)
@@ -215,7 +225,43 @@ class SendTransportRequestUseCase:
                 or OfferMode.SEQUENTIAL.value
             ).lower()
 
-            if configured_mode == OfferMode.BROADCAST.value:
+            prior_offers_exist = (
+                RequestOffer.query.filter_by(
+                    transport_request_id=transport_request.id,
+                ).first()
+                is not None
+            )
+            is_relaunch = prior_offers_exist and transport_request.status in [
+                RequestStatus.SENT.value,
+                RequestStatus.EXPIRED.value,
+            ]
+
+            if is_relaunch:
+                if transport_request.status == RequestStatus.EXPIRED.value:
+                    transport_request.status = RequestStatus.SENT.value
+
+                relaunch_result = self._create_relaunch_offers(
+                    transport_request=transport_request,
+                    institution_id=input_data.institution_id,
+                    preferences=preferences,
+                    configured_mode=configured_mode,
+                    expires_at=expires_at,
+                )
+                offers_created = relaunch_result["offers_created"]
+                mode = relaunch_result["mode"]
+
+                if offers_created == 0:
+                    db.session.rollback()
+                    return SendTransportRequestResult(
+                        success=False,
+                        transport_request_id=transport_request.id,
+                        error=(
+                            "Aucun transporteur disponible pour relancer la diffusion. "
+                            "Vérifiez vos préférences ou contactez le support."
+                        ),
+                        status_code=422,
+                    )
+            elif configured_mode == OfferMode.BROADCAST.value:
                 mode = OfferMode.BROADCAST.value
                 offers_created = self._create_broadcast_offers(
                     transport_request=transport_request,
@@ -338,7 +384,7 @@ class SendTransportRequestUseCase:
                 )
 
             # ÉTAPE 6: Notifier les entreprises cibles (Socket + bell)
-            self._notify_target_companies(transport_request)
+            self._notify_target_companies(transport_request, is_relaunch=is_relaunch)
 
             return SendTransportRequestResult(
                 success=True,
@@ -371,6 +417,7 @@ class SendTransportRequestUseCase:
             from services.institutions.transport_timeline_service import (
                 TimelineActor,
                 record_event,
+                resolve_actor_name,
             )
 
             actor = TimelineActor(
@@ -382,6 +429,7 @@ class SendTransportRequestUseCase:
                 institution_id=transport_request.institution_id,
                 transport_request_id=transport_request.id,
                 actor=actor,
+                payload={"actor_name": resolve_actor_name(user_id)},
                 correlation_id=f"request_sent:{transport_request.id}",
             )
 
@@ -508,9 +556,161 @@ class SendTransportRequestUseCase:
         return companies
 
     @staticmethod
-    def _notify_target_companies(transport_request: TransportRequest) -> None:
+    def _reactivate_offer(
+        offer: RequestOffer,
+        expires_at: datetime | None,
+    ) -> None:
+        """Remet une offre expirée/indisponible en attente."""
+        offer.status = OfferStatus.PENDING.value
+        offer.expires_at = expires_at
+        offer.sent_at = datetime.now(UTC)
+        offer.responded_at = None
+        offer.rejection_reason = None
+
+    def _create_relaunch_offers(
+        self,
+        *,
+        transport_request: TransportRequest,
+        institution_id: int,
+        preferences: list[InstitutionTransportPreference],
+        configured_mode: str,
+        expires_at: datetime,
+    ) -> dict[str, int | str]:
+        """Relance la diffusion après expiration sans transporteur accepté."""
+        if configured_mode == OfferMode.BROADCAST.value:
+            offers_created = self._relaunch_broadcast_offers(
+                transport_request=transport_request,
+                expires_at=None,
+            )
+            return {
+                "offers_created": offers_created,
+                "mode": OfferMode.BROADCAST.value,
+            }
+
+        if preferences:
+            offers_created, mode = self._relaunch_sequential_offers(
+                transport_request=transport_request,
+                institution_id=institution_id,
+                preferences=preferences,
+                expires_at=expires_at,
+            )
+            return {"offers_created": offers_created, "mode": mode}
+
+        offers_created = self._relaunch_broadcast_offers(
+            transport_request=transport_request,
+            expires_at=None,
+        )
+        return {
+            "offers_created": offers_created,
+            "mode": OfferMode.BROADCAST.value,
+        }
+
+    def _relaunch_sequential_offers(
+        self,
+        *,
+        transport_request: TransportRequest,
+        institution_id: int,
+        preferences: list[InstitutionTransportPreference],
+        expires_at: datetime,
+    ) -> tuple[int, str]:
+        """Relance séquentielle : réactive la 1re préférence éligible ou élargit."""
+        from services.demo.soft_delete_guard import (
+            company_is_demo,
+            institution_is_demo,
+        )
+
+        ordered_prefs = list(preferences)
+        if institution_is_demo(transport_request.institution):
+            ordered_prefs = [
+                p
+                for p in preferences
+                if company_is_demo(Company.query.get(p.company_id))
+            ]
+
+        reactivatable = {
+            OfferStatus.EXPIRED.value,
+            OfferStatus.UNAVAILABLE.value,
+        }
+
+        for pref in ordered_prefs:
+            existing = RequestOffer.query.filter_by(
+                transport_request_id=transport_request.id,
+                company_id=pref.company_id,
+            ).first()
+            if existing:
+                if existing.status == OfferStatus.REJECTED.value:
+                    continue
+                if existing.status == OfferStatus.PENDING.value:
+                    if existing.is_expired:
+                        self._reactivate_offer(existing, expires_at)
+                    return 1, OfferMode.SEQUENTIAL.value
+                if existing.status in reactivatable:
+                    self._reactivate_offer(existing, expires_at)
+                    return 1, OfferMode.SEQUENTIAL.value
+                continue
+
+            created = self._create_sequential_offer(
+                transport_request=transport_request,
+                preference=pref,
+                expires_at=expires_at,
+            )
+            if created:
+                return created, OfferMode.SEQUENTIAL.value
+
+        contacted_ids = [
+            o.company_id
+            for o in RequestOffer.query.filter_by(
+                transport_request_id=transport_request.id,
+            ).all()
+        ]
+        broadcast_created = self._create_broadcast_offers(
+            transport_request=transport_request,
+            expires_at=None,
+            excluded_company_ids=contacted_ids,
+        )
+        return broadcast_created, OfferMode.BROADCAST.value
+
+    def _relaunch_broadcast_offers(
+        self,
+        *,
+        transport_request: TransportRequest,
+        expires_at: datetime | None,
+    ) -> int:
+        """Relance broadcast : réactive les offres expirées ou contacte de nouvelles entreprises."""
+        offers = RequestOffer.query.filter_by(
+            transport_request_id=transport_request.id,
+        ).all()
+        reactivated = 0
+        for offer in offers:
+            if offer.status == OfferStatus.EXPIRED.value:
+                self._reactivate_offer(offer, expires_at)
+                reactivated += 1
+            elif (
+                offer.status == OfferStatus.PENDING.value
+                and offer.is_expired
+            ):
+                self._reactivate_offer(offer, expires_at)
+                reactivated += 1
+
+        if reactivated:
+            return reactivated
+
+        contacted_ids = [o.company_id for o in offers]
+        return self._create_broadcast_offers(
+            transport_request=transport_request,
+            expires_at=expires_at,
+            excluded_company_ids=contacted_ids,
+        )
+
+    def _notify_target_companies(
+        self,
+        transport_request: TransportRequest,
+        *,
+        is_relaunch: bool = False,
+    ) -> None:
         """Notifie chaque entreprise ayant reçu une offre PENDING."""
         try:
+            from ext import socketio
             from services.demo.soft_delete_guard import (
                 company_is_demo,
                 institution_is_demo,
@@ -541,16 +741,27 @@ class SendTransportRequestUseCase:
             )
             round_trip = " (A/R)" if transport_request.is_round_trip else ""
 
-            title = "Nouvelle demande de transport"
+            title = (
+                "Demande de transport relancée"
+                if is_relaunch
+                else "Nouvelle demande de transport"
+            )
             message = f"{inst_name} — {patient_name}{round_trip} — {time_str}".strip(
                 " —"
             )
+            relaunch_ts = int(datetime.now(UTC).timestamp())
 
             for offer in pending_offers:
                 try:
                     company = Company.query.get(offer.company_id)
                     if inst_is_demo and not company_is_demo(company):
                         continue
+
+                    dedupe_key = (
+                        f"new_request:{transport_request.id}:{offer.company_id}:relaunch:{relaunch_ts}"
+                        if is_relaunch
+                        else f"new_request:{transport_request.id}:{offer.company_id}"
+                    )
                     persist_company_notification(
                         company_id=offer.company_id,
                         event_type="new_request",
@@ -561,8 +772,21 @@ class SendTransportRequestUseCase:
                             "public_id": str(transport_request.public_id),
                             "offer_id": offer.id,
                             "institution_name": inst_name,
+                            "is_relaunch": is_relaunch,
                         },
-                        dedupe_key=f"new_request:{transport_request.id}:{offer.company_id}",
+                        dedupe_key=dedupe_key,
+                    )
+
+                    socketio.emit(
+                        "institution_offer_updated",
+                        {
+                            "offer_id": offer.id,
+                            "transport_request_id": transport_request.id,
+                            "company_id": offer.company_id,
+                            "is_relaunch": is_relaunch,
+                        },
+                        to=f"company_{offer.company_id}",
+                        namespace="/",
                     )
                 except Exception as notif_err:
                     logger.warning(

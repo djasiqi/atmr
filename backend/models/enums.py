@@ -25,7 +25,7 @@ class InstitutionRole(str, PyEnum):
     - ADMIN: Gestion complète de l'institution
     - REQUESTER: Peut créer et suivre des demandes de transport
     - READER: Lecture seule (suivi des demandes)
-    - BILLING: Accès aux fonctions de facturation
+    - BILLING: Mêmes droits que demandeur + facturation (destinataire, montants)
     - CURATOR: Curateur (curatelle) — gère demandes + facturation pour ses protégés assignés
     - RECEPTION: Réception — lecture + export transports
     """

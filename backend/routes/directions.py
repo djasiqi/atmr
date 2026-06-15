@@ -81,6 +81,14 @@ class DirectionsProxy(Resource):
             else "driving"
         )
         region_raw = body.get("region")
+        departure_raw = body.get("departure_time")
+        departure_time: int | None = None
+        if departure_raw is not None:
+            try:
+                departure_time = int(departure_raw)
+            except (TypeError, ValueError):
+                departure_time = None
+
         directions_request = DirectionsRequest(
             origin=origin,
             destination=destination,
@@ -91,6 +99,7 @@ class DirectionsProxy(Resource):
                 if isinstance(region_raw, str) and region_raw.strip()
                 else "ch"
             ),
+            departure_time=departure_time,
         )
 
         with route_duration_span(
@@ -103,6 +112,9 @@ class DirectionsProxy(Resource):
         payload: dict[str, Any] = {
             "status": result.status,
             "overview_polyline": result.overview_polyline,
+            "duration_seconds": result.duration_seconds,
+            "distance_meters": result.distance_meters,
+            "duration_in_traffic_seconds": result.duration_in_traffic_seconds,
             "cached": result.cached,
             "source": "google_directions_v1",
         }

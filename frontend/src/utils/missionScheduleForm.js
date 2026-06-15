@@ -3,6 +3,11 @@
  * Règle : heure saisie ⇒ confirmée ; heure vide ⇒ non confirmée.
  */
 
+import {
+  combineMissionDateTimeNaive,
+  extractWallClockTime,
+} from './missionTimeDisplay';
+
 export const normalizeMissionDate = (value) => {
   if (!value) return '';
   const raw = String(value).trim();
@@ -17,9 +22,7 @@ export const normalizeMissionDate = (value) => {
 
 export const combineMissionDateTime = (missionDate, timeHHMM) => {
   const normalizedDate = normalizeMissionDate(missionDate);
-  if (!normalizedDate || !timeHHMM?.trim()) return null;
-  const d = new Date(`${normalizedDate}T${timeHHMM.trim()}:00`);
-  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+  return combineMissionDateTimeNaive(normalizedDate, timeHHMM?.trim());
 };
 
 /** Délai minimal (minutes) entre maintenant et un rendez-vous / arrivée. */
@@ -49,12 +52,7 @@ export const extractHHMM = (value) => {
   if (!value) return '';
   const raw = String(value).trim();
   if (/^\d{2}:\d{2}$/.test(raw)) return raw;
-  const d = new Date(raw);
-  if (!Number.isNaN(d.getTime())) {
-    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-  }
-  const part = raw.split('T')[1];
-  return part ? part.slice(0, 5) : '';
+  return extractWallClockTime(raw);
 };
 
 /** Dérive pickup_time_confirmed depuis la présence d'une heure de départ. */

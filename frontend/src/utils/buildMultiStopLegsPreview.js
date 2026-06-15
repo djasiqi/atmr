@@ -63,9 +63,11 @@ export function buildMultiStopPayloadStops(validStops) {
     };
     const raw = stop.scheduled_time?.trim();
     if (raw) {
-      const parsed = new Date(raw);
-      if (!Number.isNaN(parsed.getTime())) {
-        entry.scheduled_time = parsed.toISOString();
+      // Conserver l'heure murale Genève — pas de conversion via le fuseau navigateur.
+      if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(raw)) {
+        entry.scheduled_time = raw.length === 16 ? `${raw}:00` : raw;
+      } else if (/^\d{2}:\d{2}$/.test(raw)) {
+        entry.scheduled_time = raw;
       }
     }
     if (typeof stop.time_confirmed === 'boolean') {

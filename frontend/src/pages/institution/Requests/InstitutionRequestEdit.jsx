@@ -5,84 +5,22 @@ import { useUpdateRequest } from '../../../hooks/useInstitutionData';
 import InlineDatePicker from '../../../components/ui/InlineDatePicker';
 import RouteStepTimeField from '../../../components/institution/RouteStepTimeField';
 import ConfirmRequestEditModal from './ConfirmRequestEditModal';
+import { combineMissionDateTime, extractHHMM } from '../../../utils/missionScheduleForm';
+import { extractWallClockDate } from '../../../utils/missionTimeDisplay';
+import {
+  buildInitialDestinations,
+  extractAddressFromPlace,
+  extractPlaceDetails,
+} from '../../../utils/institutionRouteForm';
 import s from './RequestDetailPanel.module.css';
-
-const pad2 = (n) => String(n).padStart(2, '0');
 
 const parseDate = (iso) => {
   if (!iso) return '';
   if (/^\d{4}-\d{2}-\d{2}$/.test(String(iso))) return String(iso);
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return String(iso).slice(0, 10);
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  return extractWallClockDate(iso) || String(iso).slice(0, 10);
 };
 
-const parseTime = (iso) => {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
-};
-
-const combineMissionDateTime = (missionDate, timeHHMM) => {
-  if (!missionDate || !timeHHMM?.trim()) return null;
-  const d = new Date(`${missionDate}T${timeHHMM.trim()}:00`);
-  return Number.isNaN(d.getTime()) ? null : d.toISOString();
-};
-
-const DOCTOR_NAME_PATTERN = /^(dr\.?|prof\.?|méd\.?|med\.?|docteur|professeur)\s/i;
-
-const extractAddressFromPlace = (item) =>
-  item?.label || item?.address || item?.formatted_address || item?.description || '';
-
-const extractPlaceDetails = (item) => {
-  const placeName = item?.name || '';
-  const details = { establishment: '', doctor: '' };
-  if (placeName && placeName !== item?.address) {
-    if (DOCTOR_NAME_PATTERN.test(placeName)) {
-      details.doctor = placeName;
-    } else {
-      details.establishment = placeName;
-    }
-  }
-  return details;
-};
-
-const routingDropoffDetails = (request) => {
-  const routing = request?.billing_details?.routing || {};
-  return {
-    establishment: routing.dropoff_establishment || '',
-    service: routing.dropoff_service || '',
-    doctor: routing.dropoff_doctor || '',
-  };
-};
-
-const buildInitialDestinations = (request) => {
-  const legs = Array.isArray(request?.legs)
-    ? [...request.legs].sort((a, b) => (a.sequence_index ?? 0) - (b.sequence_index ?? 0))
-    : [];
-  const hasReturn = Boolean(request?.return_to_institution);
-  const routingDetails = routingDropoffDetails(request);
-  if (legs.length > 0) {
-    const destLegs = hasReturn ? legs.slice(0, -1) : legs;
-    return destLegs.map((leg) => ({
-      address: leg.dropoff_location || '',
-      establishment: leg.dropoff_establishment || '',
-      service: leg.dropoff_service || '',
-      doctor: leg.dropoff_doctor || '',
-      scheduled_time: leg.scheduled_time || '',
-      time_confirmed: Boolean(leg.time_confirmed),
-    }));
-  }
-  return [{
-    address: request?.dropoff_location || '',
-    establishment: routingDetails.establishment,
-    service: routingDetails.service,
-    doctor: routingDetails.doctor,
-    scheduled_time: request?.scheduled_time_type === 'arrival' ? (request?.scheduled_time || '') : '',
-    time_confirmed: request?.scheduled_time_type === 'arrival' && Boolean(request?.scheduled_time),
-  }];
-};
+const parseTime = (iso) => extractHHMM(iso);
 
 const InstitutionRequestEdit = ({ request, onCancel, onSaved }) => {
   const wasMultiStop = Boolean(request?.multi_stop);

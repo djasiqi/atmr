@@ -55,7 +55,7 @@ const BASE_ROLE_OPTIONS = [
   { value: 'institution_admin', label: 'Administrateur', labelCuratelle: 'Direction', desc: 'Accès complet : paramètres, utilisateurs, transporteurs, clés API', descCuratelle: 'Accès complet : gestion des équipes, curateurs, paramètres et supervision' },
   { value: 'institution_curator', label: 'Curateur', desc: 'Gère les demandes et la facturation pour ses protégés (scope équipe)', curatelle_only: true },
   { value: 'institution_requester', label: 'Demandeur', desc: 'Créer et envoyer des demandes de transport, gérer les patients' },
-  { value: 'institution_billing', label: 'Facturation', desc: 'Gérer la facturation et les paramètres de billing' },
+  { value: 'institution_billing', label: 'Facturation', desc: 'Mêmes droits que demandeur + gestion de la facturation (destinataire, montants)' },
   { value: 'institution_reception', label: 'Réception', desc: 'Consultation et export des transports (PDF/CSV), sans modification' },
   { value: 'institution_reader', label: 'Lecteur', desc: 'Consultation uniquement, aucune modification' },
 ];

@@ -11,6 +11,17 @@ export const resolveCompanyNotificationLink = ({
   const base = `${dashboardRoot}/company/${companyPublicId}`;
   const bookingId = meta.booking_id;
 
+  // Demande modifiée par l'institution → page Réservations, filtrée sur le jour de la demande.
+  if (notif.event_type === 'request_updated') {
+    const params = new URLSearchParams();
+    if (meta.mission_date) params.set('date', String(meta.mission_date));
+    if (meta.offer_id) params.set('offer', String(meta.offer_id));
+    if (meta.request_id) params.set('request', String(meta.request_id));
+    if (bookingId) params.set('booking', String(bookingId));
+    const query = params.toString();
+    return query ? `${base}/reservations?${query}` : `${base}/reservations`;
+  }
+
   if (bookingId) {
     const params = new URLSearchParams({ booking: String(bookingId) });
     if (
@@ -23,7 +34,7 @@ export const resolveCompanyNotificationLink = ({
     return `${base}/dispatch?${params.toString()}`;
   }
 
-  if (notif.event_type === 'new_request' || notif.event_type === 'request_updated') {
+  if (notif.event_type === 'new_request') {
     const params = new URLSearchParams({ tab: 'institution' });
     if (meta.request_id) params.set('request', String(meta.request_id));
     if (meta.offer_id) params.set('offer', String(meta.offer_id));

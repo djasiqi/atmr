@@ -37,10 +37,12 @@ describe('Institution Permissions', () => {
       expect(can('institution_reader', INSTITUTION_ACTIONS.EDIT_BILLING)).toBe(false);
     });
 
-    it('billing can view and edit billing only', () => {
+    it('billing has requester rights plus billing', () => {
       expect(can('institution_billing', INSTITUTION_ACTIONS.VIEW_REQUEST)).toBe(true);
       expect(can('institution_billing', INSTITUTION_ACTIONS.EDIT_BILLING)).toBe(true);
-      expect(can('institution_billing', INSTITUTION_ACTIONS.CREATE_REQUEST)).toBe(false);
+      expect(can('institution_billing', INSTITUTION_ACTIONS.CREATE_REQUEST)).toBe(true);
+      expect(can('institution_billing', INSTITUTION_ACTIONS.SEND_REQUEST)).toBe(true);
+      expect(can('institution_billing', INSTITUTION_ACTIONS.EDIT_REQUEST_BILLING)).toBe(true);
       expect(can('institution_billing', INSTITUTION_ACTIONS.MANAGE_API_KEYS)).toBe(false);
     });
 
@@ -72,14 +74,14 @@ describe('Institution Permissions', () => {
   });
 
   describe('canManageRequests()', () => {
-    it('admin and requester can manage requests', () => {
+    it('admin, requester and billing can manage requests', () => {
       expect(canManageRequests('institution_admin')).toBe(true);
       expect(canManageRequests('institution_requester')).toBe(true);
+      expect(canManageRequests('institution_billing')).toBe(true);
     });
 
-    it('reader and billing cannot manage requests', () => {
+    it('reader cannot manage requests', () => {
       expect(canManageRequests('institution_reader')).toBe(false);
-      expect(canManageRequests('institution_billing')).toBe(false);
     });
   });
 
@@ -96,11 +98,11 @@ describe('Institution Permissions', () => {
   });
 
   describe('canViewSettings()', () => {
-    it('only admin can view settings', () => {
+    it('institution roles with VIEW_SETTINGS can view settings', () => {
       expect(canViewSettings('institution_admin')).toBe(true);
-      expect(canViewSettings('institution_requester')).toBe(false);
-      expect(canViewSettings('institution_reader')).toBe(false);
-      expect(canViewSettings('institution_billing')).toBe(false);
+      expect(canViewSettings('institution_requester')).toBe(true);
+      expect(canViewSettings('institution_reader')).toBe(true);
+      expect(canViewSettings('institution_billing')).toBe(true);
     });
   });
 

@@ -14,6 +14,7 @@ from marshmallow import EXCLUDE, Schema, ValidationError, fields as ma_fields, v
 
 from ext import db
 from models.enums import InstitutionRole
+from schemas.validation_utils import parse_request_json
 from routes.api_error_models import (
     create_api_error_model,
     create_not_found_error_model,
@@ -47,13 +48,26 @@ booking_patch_model = institution_bookings_ns.model(
     {
         "version": fields.Integer(required=True, description="Version optimiste"),
         "reason": fields.String(description="Motif (obligatoire si EN_ROUTE critique)"),
+        "customer_name": fields.String(),
         "pickup_location": fields.String(),
         "dropoff_location": fields.String(),
         "scheduled_time": fields.String(),
-        "customer_name": fields.String(),
+        "appointment_time": fields.String(),
+        "return_appointment_time": fields.String(),
+        "medical_facility": fields.String(),
+        "hospital_service": fields.String(),
+        "doctor_name": fields.String(),
+        "pickup_floor": fields.String(),
+        "pickup_door_code": fields.String(),
+        "dropoff_floor": fields.String(),
+        "dropoff_door_code": fields.String(),
+        "pickup_access_notes": fields.String(),
+        "dropoff_access_notes": fields.String(),
+        "notes_medical": fields.String(),
         "wheelchair_need": fields.Boolean(),
         "wheelchair_client_has": fields.Boolean(),
-        "notes_medical": fields.String(),
+        "delivery_description": fields.String(),
+        "leg_appointments": fields.List(fields.Raw),
     },
 )
 
@@ -95,6 +109,13 @@ class InstitutionBookingPatchSchema(Schema):
     wheelchair_need = ma_fields.Boolean(required=False)
     mission_type = ma_fields.String(required=False)
     delivery_description = ma_fields.String(required=False, allow_none=True)
+    appointment_time = ma_fields.String(required=False, allow_none=True)
+    return_appointment_time = ma_fields.String(required=False, allow_none=True)
+    leg_appointments = ma_fields.List(
+        ma_fields.Dict(keys=ma_fields.Str(), values=ma_fields.Raw()),
+        required=False,
+        allow_none=True,
+    )
 
 
 class InstitutionBookingCancelSchema(Schema):
@@ -168,7 +189,7 @@ class InstitutionBookingUpdate(Resource):
         description="Modification opérationnelle booking (avant boarded_at)",
         security="BearerAuth",
     )
-    @institution_bookings_ns.expect(booking_patch_model)
+    @institution_bookings_ns.expect(booking_patch_model, validate=False)
     @institution_bookings_ns.response(401, "Non authentifié", permission_error_model)
     @institution_bookings_ns.response(403, "Accès refusé", permission_error_model)
     @institution_bookings_ns.response(404, "Non trouvé", not_found_error_model)
@@ -180,7 +201,15 @@ class InstitutionBookingUpdate(Resource):
             if role_err:
                 return {"error": role_err}, 403
 
-            data = request.get_json() or {}
+            data = parse_request_json()
+            if not data:
+                return {
+                    "error": "invalid_json",
+                    "message": (
+                        "Corps de requête JSON manquant ou invalide. "
+                        "Vérifiez le format du body."
+                    ),
+                }, 400
             extra = set(data.keys()) - set(booking_patch_schema.fields.keys())
             if extra:
                 return {
@@ -237,7 +266,7 @@ class InstitutionBookingCancel(Resource):
         description="Annulation booking institution (avant boarded_at)",
         security="BearerAuth",
     )
-    @institution_bookings_ns.expect(cancel_model)
+    @institution_bookings_ns.expect(cancel_model, validate=False)
     def post(self, booking_id: int):
         try:
             institution_id, user_id, role, display = get_institution_booking_context()
@@ -245,7 +274,15 @@ class InstitutionBookingCancel(Resource):
             if role_err:
                 return {"error": role_err}, 403
 
-            data = request.get_json() or {}
+            data = parse_request_json()
+            if not data:
+                return {
+                    "error": "invalid_json",
+                    "message": (
+                        "Corps de requête JSON manquant ou invalide. "
+                        "Vérifiez le format du body."
+                    ),
+                }, 400
             try:
                 validated = cast(dict[str, Any], booking_cancel_schema.load(data))
             except ValidationError as ve:

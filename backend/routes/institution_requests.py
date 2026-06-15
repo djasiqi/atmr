@@ -163,6 +163,13 @@ def _notify_companies_request_updated(
     if time_str:
         message = f"{message} — {time_str}"
 
+    # Jour de la demande (pour préselectionner le filtre date côté entreprise)
+    mission_date_iso = None
+    if transport_req.mission_date is not None:
+        mission_date_iso = transport_req.mission_date.isoformat()
+    elif sched is not None:
+        mission_date_iso = sched.date().isoformat()
+
     for offer in pending_offers:
         metadata = {
             "request_id": transport_req.id,
@@ -171,6 +178,8 @@ def _notify_companies_request_updated(
             "institution_name": inst_name,
             "updated_fields": updated_fields,
         }
+        if mission_date_iso:
+            metadata["mission_date"] = mission_date_iso
         if transport_req.booking_id:
             metadata["booking_id"] = transport_req.booking_id
 
@@ -205,6 +214,7 @@ def _record_request_updated_timeline(
     from services.institutions.transport_timeline_service import (
         TimelineActor,
         record_event,
+        resolve_actor_name,
     )
 
     record_event(
@@ -215,6 +225,7 @@ def _record_request_updated_timeline(
         payload={
             "changed_fields": updated_fields,
             "carrier_notified": carrier_notified,
+            "actor_name": resolve_actor_name(user_id),
             "after_send": transport_req.status
             in (RequestStatus.SENT.value, RequestStatus.ACCEPTED.value),
         },
@@ -372,7 +383,7 @@ request_list_model = institution_requests_ns.model(
 def get_institution_context():
     """Récupère le contexte institution pour actions d'écriture (JWT ou API Key).
 
-    Rôles autorisés: admin, requester, curator.
+    Rôles autorisés: admin, requester, billing, curator.
 
     Returns:
         Tuple (institution_id, user_id_or_none)
@@ -385,6 +396,7 @@ def get_institution_context():
     institution, user = AuthorizationService.require_institution_role(
         InstitutionRole.ADMIN.value,
         InstitutionRole.REQUESTER.value,
+        InstitutionRole.BILLING.value,
         InstitutionRole.CURATOR.value,
     )
     return institution.id, user.id
@@ -1384,6 +1396,36 @@ class TransportRequestCancel(Resource):
             # Annuler la demande
             transport_req.status = RequestStatus.CANCELLED.value
             transport_req.cancelled_at = datetime.now(UTC)
+
+            # Timeline : tracer l'annulation (auteur + motif) pour l'historique
+            try:
+                from services.institutions.transport_timeline_service import (
+                    TimelineActor,
+                    record_event,
+                    resolve_actor_name,
+                )
+
+                record_event(
+                    "cancelled",
+                    institution_id=institution_id,
+                    transport_request_id=transport_req.id,
+                    actor=TimelineActor(
+                        actor_type="institution_user" if user_id else "api_key",
+                        actor_user_id=user_id,
+                    ),
+                    payload={
+                        "actor_name": resolve_actor_name(user_id),
+                        "cancellation_display_label": cancel_reason or None,
+                        "reason": cancel_reason or None,
+                        "previous_status": previous_status,
+                    },
+                    correlation_id=f"request_cancelled:{transport_req.id}",
+                )
+            except Exception as timeline_err:
+                logger.warning(
+                    "[TransportRequests] Timeline cancelled recording failed: %s",
+                    timeline_err,
+                )
 
             db.session.commit()
 

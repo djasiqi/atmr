@@ -586,14 +586,66 @@
   box-shadow: 0 1px 2px rgba(0,0,0,0.15);
 }
 
-/* Col 3 — date/heure + billing switch (aligné à droite) */
+.billingSwitchCompact {
+  padding: 2px 6px;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.colRight .billingSwitchCompact {
+  align-self: flex-end;
+}
+
+.colRight .billingSwitchCompact .billLabel {
+  font-size: 0.62rem;
+}
+
+/* Col 3 — date/heure + actions (aligné à droite, compact) */
 .colRight {
-  flex-shrink: 0;
+  flex: 0 0 118px;
+  width: 118px;
+  min-width: 118px;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 6px;
+  gap: 4px;
   align-self: flex-start;
+  overflow: hidden;
+}
+
+.colRightActions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: flex-start;
+  gap: 3px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.cardRelaunchBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border: 1px solid var(--brand);
+  border-radius: 999px;
+  background: var(--brand-light);
+  color: var(--brand);
+  font-size: 10px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--transition);
+}
+
+.cardRelaunchBtn:hover {
+  background: var(--brand);
+  color: #fff;
 }
 
 .cardDateTime {
@@ -601,6 +653,141 @@
   font-weight: 500;
   color: var(--text-muted);
   white-space: nowrap;
+}
+
+/* Horaires carte — lignes empilées, contenu dans la colonne */
+.cardSchedule {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  width: 100%;
+  min-width: 0;
+  text-align: right;
+  line-height: 1.25;
+  overflow: hidden;
+}
+
+.cardScheduleRow {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: baseline;
+  gap: 4px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.cardScheduleLine {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: baseline;
+  gap: 4px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.cardScheduleDate {
+  font-size: 0.68rem;
+  font-weight: 500;
+  color: var(--text-muted, #94a3b8);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.cardScheduleDeparture {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.cardSchedulePrimary {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  margin-top: 1px;
+}
+
+.cardSchedulePrimaryAlt {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  margin-top: 1px;
+}
+
+.cardSchedulePrimaryTime {
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: var(--text-primary, #0f172a);
+  letter-spacing: -0.02em;
+}
+
+.cardSchedulePrimaryLabel {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--brand-primary, #2563eb);
+}
+
+.cardSchedulePrimaryAlt .cardSchedulePrimaryTime {
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.cardSchedulePrimaryAlt .cardSchedulePrimaryLabel {
+  color: var(--text-secondary, #64748b);
+  text-transform: none;
+  font-weight: 600;
+}
+
+.cardScheduleSecondaryRow {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 4px;
+  margin-top: 1px;
+}
+
+.cardScheduleSep {
+  font-size: 0.65rem;
+  color: var(--border, #cbd5e1);
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.cardScheduleSecondary {
+  font-size: 0.68rem;
+  font-weight: 500;
+  color: var(--text-muted, #94a3b8);
+  white-space: nowrap;
+}
+
+.cardScheduleSecondaryInline {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.cardScheduleSecondaryLabel {
+  font-size: 0.62rem;
+  font-weight: 600;
+  color: var(--text-muted, #94a3b8);
+}
+
+.cardScheduleSecondaryTime {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--text-secondary, #64748b);
 }
 
 .cardMetaBadges {
@@ -663,44 +850,6 @@
 @keyframes lateBlink {
   0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.0); }
   50%      { box-shadow: 0 0 0 4px rgba(239,68,68,0.18); }
-}
-
-.callBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: var(--bg-surface, #fff);
-  color: var(--meta-text, var(--text-secondary));
-  border: 1px solid var(--neutral-200, #e2e8f0);
-  font-size: 0.72rem;
-  font-weight: 700;
-  white-space: nowrap;
-  text-decoration: none;
-  transition: transform 0.12s ease, background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
-  cursor: pointer;
-}
-.callBtn:hover {
-  background: var(--neutral-100, #f8fafc);
-  border-color: var(--neutral-300, #cbd5e1);
-  transform: translateY(-1px);
-}
-.callBtn svg {
-  width: 11px;
-  height: 11px;
-}
-.callBtnSevere {
-  background: var(--alert-error-bg, #fee2e2);
-  color: var(--alert-error-text, #991b1b);
-  border-color: var(--alert-error-border, #fca5a5);
-}
-.callBtnSevere:hover {
-  background: #fecaca;
-  border-color: #f87171;
-}
-.callBtnLabel {
-  font-variant-numeric: tabular-nums;
 }
 
 /* Status badge — buckets unifiés */

@@ -72,6 +72,14 @@ def get_change_request_ttl_minutes() -> int:
 def _revalidation_trigger_fields() -> frozenset[str]:
     return MAJOR_FIELDS
 
+LEG_SCHEDULE_PATCH_FIELDS = frozenset(
+    {
+        "appointment_time",
+        "leg_appointments",
+        "return_appointment_time",
+    }
+)
+
 INSTITUTION_OPERATIONAL_FIELDS = frozenset(
     {
         "customer_name",
@@ -144,6 +152,7 @@ OPERATIONAL_ROLES = frozenset(
     {
         InstitutionRole.ADMIN.value,
         InstitutionRole.REQUESTER.value,
+        InstitutionRole.BILLING.value,
         InstitutionRole.CURATOR.value,
     }
 )
@@ -378,6 +387,7 @@ def record_change_event(
             institution_id=institution_id,
             actor_user_id=actor_user_id,
             actor_type=actor_type,
+            actor_display_name=actor_display_name,
             action_type=action_type,
             changed_fields=changed_fields,
             reason=reason,
@@ -394,6 +404,7 @@ def _record_change_timeline(
     institution_id: int | None,
     actor_user_id: int | None,
     actor_type: str,
+    actor_display_name: str | None,
     action_type: str,
     changed_fields: dict[str, bool] | None,
     reason: str | None,
@@ -404,7 +415,20 @@ def _record_change_timeline(
         from services.institutions.transport_timeline_service import (
             TimelineActor,
             record_event,
+            resolve_actor_name,
         )
+
+        actor_name = actor_display_name or resolve_actor_name(actor_user_id)
+        payload: dict[str, Any] = {
+            "changed_fields": changed_fields,
+            "reason": reason,
+            "actor_name": actor_name,
+        }
+        if action_type == "cancelled":
+            payload["cancellation_display_label"] = getattr(
+                booking, "cancellation_display_label", None
+            )
+            payload["cancelled_by_role"] = actor_type
 
         record_event(
             action_type,
@@ -414,7 +438,7 @@ def _record_change_timeline(
             actor=TimelineActor(
                 actor_type=actor_type, actor_user_id=actor_user_id
             ),
-            payload={"changed_fields": changed_fields, "reason": reason},
+            payload=payload,
             correlation_id=f"{action_type}:{correlation_id}",
         )
     except Exception as timeline_err:
@@ -453,6 +477,81 @@ def apply_operational_patch(booking: Booking, validated: dict[str, Any]) -> list
         else:
             setattr(booking, key, value)
         updated.append(key)
+    return updated
+
+
+def sync_transport_request_leg_schedule(
+    transport_request: TransportRequest | None,
+    booking: Booking,
+    *,
+    appointment_time: str | None = None,
+    leg_appointments: list[dict[str, Any]] | None = None,
+    return_appointment_time: str | None = None,
+) -> list[str]:
+    """Met à jour les heures RDV sur les legs liés à la demande convertie."""
+    if transport_request is None:
+        return []
+
+    from models.transport_request_leg import TransportRequestLeg
+
+    legs = (
+        TransportRequestLeg.query.filter_by(
+            transport_request_id=transport_request.id
+        )
+        .order_by(TransportRequestLeg.sequence_index.asc())
+        .all()
+    )
+    if not legs:
+        return []
+
+    updated: list[str] = []
+    has_return = bool(getattr(transport_request, "return_to_institution", False))
+    dest_legs = legs[:-1] if has_return and len(legs) > 1 else legs
+    return_leg = legs[-1] if has_return and len(legs) > 1 else None
+
+    def _apply_leg_time(leg: TransportRequestLeg, iso: str | None, label: str) -> None:
+        if iso:
+            parsed = parse_local_naive(iso)
+            if parsed is None:
+                raise ValueError("Heure de rendez-vous invalide.")
+            leg.scheduled_time = parsed
+            leg.time_confirmed = True
+        else:
+            leg.scheduled_time = None
+            leg.time_confirmed = False
+        updated.append(label)
+
+    if leg_appointments:
+        for item in leg_appointments:
+            if not isinstance(item, dict):
+                continue
+            idx = item.get("index")
+            iso = item.get("scheduled_time")
+            if idx is None or not isinstance(idx, int):
+                continue
+            if idx < 0 or idx >= len(dest_legs):
+                continue
+            _apply_leg_time(dest_legs[idx], iso, f"leg[{idx}].scheduled_time")
+    elif appointment_time is not None:
+        leg = next((l for l in dest_legs if l.booking_id == booking.id), None)
+        if leg is None and dest_legs:
+            leg = dest_legs[0]
+        if leg is not None:
+            _apply_leg_time(leg, appointment_time, "leg[0].scheduled_time")
+
+    if return_appointment_time is not None and return_leg is not None:
+        _apply_leg_time(return_leg, return_appointment_time, "leg.return.scheduled_time")
+        if return_appointment_time:
+            parsed_return = parse_local_naive(return_appointment_time)
+            if parsed_return is not None:
+                transport_request.return_time = parsed_return
+                transport_request.return_time_confirmed = True
+                updated.append("return_time")
+        else:
+            transport_request.return_time = None
+            transport_request.return_time_confirmed = False
+            updated.append("return_time")
+
     return updated
 
 
@@ -927,7 +1026,10 @@ def update_institution_booking(
 ) -> tuple[dict[str, Any], int]:
     booking = ctx.booking
     unknown = (
-        set(payload.keys()) - INSTITUTION_OPERATIONAL_FIELDS - {"version", "reason"}
+        set(payload.keys())
+        - INSTITUTION_OPERATIONAL_FIELDS
+        - {"version", "reason"}
+        - LEG_SCHEDULE_PATCH_FIELDS
     )
     if unknown:
         return {
@@ -936,7 +1038,10 @@ def update_institution_booking(
         }, 400
 
     patch = {k: v for k, v in payload.items() if k in INSTITUTION_OPERATIONAL_FIELDS}
-    if not patch:
+    leg_schedule_present = any(
+        payload.get(k) is not None for k in LEG_SCHEDULE_PATCH_FIELDS
+    )
+    if not patch and not leg_schedule_present:
         return {"error": "Aucun champ opérationnel à mettre à jour."}, 400
 
     err = assert_not_boarded(booking)
@@ -985,7 +1090,15 @@ def update_institution_booking(
 
     before = _booking_operational_snapshot(booking)
     try:
-        updated_fields = apply_operational_patch(booking, patch)
+        updated_fields = apply_operational_patch(booking, patch) if patch else []
+        leg_updated = sync_transport_request_leg_schedule(
+            ctx.transport_request,
+            booking,
+            appointment_time=payload.get("appointment_time"),
+            leg_appointments=payload.get("leg_appointments"),
+            return_appointment_time=payload.get("return_appointment_time"),
+        )
+        updated_fields.extend(leg_updated)
     except ValueError as e:
         return {"error": str(e)}, 400
 

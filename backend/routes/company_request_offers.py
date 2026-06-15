@@ -240,6 +240,44 @@ class RequestOfferDetail(Resource):
             return {"error": f"Erreur serveur: {e!s}"}, 500
 
 
+@company_offers_ns.route("/<int:offer_id>/travel-estimate")
+@company_offers_ns.param("offer_id", "ID de l'offre")
+class OfferTravelEstimate(Resource):
+    """Durée estimée du trajet aller (Google Directions côté serveur)."""
+
+    @company_offers_ns.doc(
+        description="Estime la durée du trajet aller pour une offre (Google Maps)",
+        security="BearerAuth",
+    )
+    @company_offers_ns.response(401, "Non authentifié", permission_error_model)
+    @company_offers_ns.response(403, "Accès refusé", permission_error_model)
+    @company_offers_ns.response(404, "Offre non trouvée", not_found_error_model)
+    @jwt_required()
+    def get(self, offer_id: int):
+        try:
+            from services.institutions.route_travel_estimate_service import (
+                estimate_outbound_travel_minutes,
+            )
+
+            company_id, _user_id = get_company_context()
+            offer = RequestOffer.query.get(offer_id)
+            if not offer:
+                return {"error": "Offre non trouvée"}, 404
+            if offer.company_id != company_id:
+                return {"error": "Accès non autorisé à cette offre"}, 403
+
+            payload = estimate_outbound_travel_minutes(offer.transport_request)
+            return payload, 200
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            logger.error(
+                "[CompanyOffers] Erreur GET travel-estimate offer %s: %s",
+                offer_id,
+                e,
+            )
+            return {"error": f"Erreur serveur: {e!s}"}, 500
+
+
 @company_offers_ns.route("/<int:offer_id>/accept")
 @company_offers_ns.param("offer_id", "ID de l'offre")
 class AcceptOffer(Resource):

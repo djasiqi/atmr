@@ -33,7 +33,7 @@
   --transition: 0.2s ease;
 }
 
-/* Legacy: .backBtn kept for InstitutionRequestDetail.jsx */
+/* Legacy: .backBtn */
 .backBtn {
   display: flex;
   align-items: center;

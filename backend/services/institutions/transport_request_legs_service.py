@@ -350,6 +350,7 @@ def _record_legs_reorganized_timeline(
         from services.institutions.transport_timeline_service import (
             TimelineActor,
             record_event,
+            resolve_actor_name,
         )
 
         record_event(
@@ -363,6 +364,7 @@ def _record_legs_reorganized_timeline(
             payload={
                 "before_legs": before,
                 "after_legs": after,
+                "actor_name": resolve_actor_name(actor_user_id),
                 "route_group_id": getattr(transport_request, "route_group_id", None),
             },
             correlation_id=(

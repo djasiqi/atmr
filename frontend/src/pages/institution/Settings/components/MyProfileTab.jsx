@@ -22,7 +22,7 @@ import styles from '../InstitutionSettings.module.css';
 const ROLE_OPTIONS = [
   { value: 'institution_admin', label: 'Administrateur', desc: 'Accès complet à tous les paramètres et fonctionnalités' },
   { value: 'institution_requester', label: 'Demandeur', desc: 'Créer et gérer des demandes de transport, gérer les patients' },
-  { value: 'institution_billing', label: 'Facturation', desc: 'Gérer les paramètres de facturation et les données administratives des patients' },
+  { value: 'institution_billing', label: 'Facturation', desc: 'Mêmes droits que demandeur + gestion de la facturation (destinataire, montants)' },
   { value: 'institution_reader', label: 'Lecteur', desc: 'Consultation uniquement (lecture seule)' },
 ];
 

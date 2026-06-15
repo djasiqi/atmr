@@ -33,6 +33,7 @@ from models import (
 )
 from models.enums import BookingCreatedVia, ClientType, ManagementMode, UserRole
 from security.audit_log import AuditLogger
+from services.pricing.offer_price_estimator import resolve_institution_price
 from shared.time_utils import (
     api_scheduled_iso_to_naive_geneva,
 )
@@ -79,7 +80,9 @@ def _build_conversion_institution_snapshot(
     """Snapshot institution figé à la conversion (V2 — payload request_converted)."""
     try:
         from models import Institution
-        from services.institutions.mission_report_context import build_institution_snapshot
+        from services.institutions.mission_report_context import (
+            build_institution_snapshot,
+        )
 
         institution = getattr(transport_request, "institution", None)
         if institution is None and transport_request.institution_id:
@@ -281,6 +284,15 @@ class AcceptOfferUseCase:
             transport_request.accepted_at = now
             transport_request.accepted_by_company_id = input_data.company_id
 
+            if input_data.proposed_pickup_time is not None:
+                from models.enums import ScheduledTimeType
+
+                transport_request.scheduled_time = input_data.proposed_pickup_time
+                transport_request.scheduled_time_type = (
+                    ScheduledTimeType.DEPARTURE.value
+                )
+                transport_request.pickup_time_confirmed = True
+
             # 9. Créer le(s) Booking(s)
             if getattr(transport_request, "multi_stop", False):
                 booking, return_booking = self._create_bookings_from_legs(
@@ -298,6 +310,16 @@ class AcceptOfferUseCase:
                     proposed_pickup_time=input_data.proposed_pickup_time,
                 )
                 return_booking_id = return_booking.id if return_booking else None
+
+            # Synchroniser le départ confirmé depuis le booking principal
+            if booking is not None and booking.scheduled_time is not None:
+                from models.enums import ScheduledTimeType
+
+                transport_request.scheduled_time = booking.scheduled_time
+                transport_request.scheduled_time_type = (
+                    ScheduledTimeType.DEPARTURE.value
+                )
+                transport_request.pickup_time_confirmed = True
 
             # 10. Lier le booking à la request et marquer comme CONVERTED
             transport_request.booking_id = booking.id
@@ -524,6 +546,7 @@ class AcceptOfferUseCase:
                 payload={
                     "booking_id": booking.id,
                     "company_id": company_id,
+                    "company_name": company_name,
                     "institution_snapshot": _build_conversion_institution_snapshot(
                         transport_request
                     ),
@@ -567,11 +590,32 @@ class AcceptOfferUseCase:
             transport_request, company_id
         )
 
-        # Tarif: utiliser le tarif préférentiel du client institution si défini
-        # Le montant minimum est 0.5 (AMOUNT_MINIMUM dans le modèle Booking)
-        amount = 0.5  # Montant par défaut minimum
-        if institution_client and institution_client.preferential_rate:
-            amount = float(institution_client.preferential_rate)
+        # Tarif: préférentiel (client institution) sinon repli sur le profil
+        # tarifaire actif de l'entreprise. Cohérent avec l'estimation affichée
+        # sur l'offre (resolve_institution_price), pour que montant = estimation.
+        price = resolve_institution_price(
+            company_id=company_id,
+            preferential_rate=getattr(
+                institution_client, "preferential_rate", None
+            ),
+            pickup_location=transport_request.pickup_location,
+            dropoff_location=transport_request.dropoff_location,
+            pickup_lat=float(transport_request.pickup_lat)
+            if transport_request.pickup_lat
+            else None,
+            pickup_lon=float(transport_request.pickup_lng)
+            if transport_request.pickup_lng
+            else None,
+            dropoff_lat=float(transport_request.dropoff_lat)
+            if transport_request.dropoff_lat
+            else None,
+            dropoff_lon=float(transport_request.dropoff_lng)
+            if transport_request.dropoff_lng
+            else None,
+            scheduled_time=transport_request.scheduled_time,
+            is_round_trip=transport_request.is_round_trip,
+        )
+        amount = price["amount"]
 
         # Facturation: la demande (billing_intent) est la source de vérité.
         billed_to_type = "patient"
@@ -658,6 +702,15 @@ class AcceptOfferUseCase:
         # le réinitialise à None car le type par défaut est "patient")
         if billed_to_company_id is not None:
             booking.billed_to_company_id = billed_to_company_id
+
+        # Gel tarifaire : conserver le profil/version/détail si calculé via profil
+        if price.get("pricing_profile_id"):
+            booking.pricing_profile_id = price["pricing_profile_id"]
+            booking.pricing_profile_version_id = price.get(
+                "pricing_profile_version_id"
+            )
+            booking.price_amount = amount
+            booking.price_breakdown_json = price.get("breakdown")
 
         db.session.add(booking)
         db.session.flush()  # Pour obtenir l'ID
@@ -751,6 +804,14 @@ class AcceptOfferUseCase:
             if booking.billed_to_company_id is not None:
                 return_booking.billed_to_company_id = booking.billed_to_company_id
 
+            # Le retour reprend le même gel tarifaire que l'aller
+            return_booking.pricing_profile_id = booking.pricing_profile_id
+            return_booking.pricing_profile_version_id = (
+                booking.pricing_profile_version_id
+            )
+            return_booking.price_amount = booking.price_amount
+            return_booking.price_breakdown_json = booking.price_breakdown_json
+
             db.session.add(return_booking)
             db.session.flush()
 
@@ -791,9 +852,9 @@ class AcceptOfferUseCase:
         institution_client = self._get_or_create_institution_client(
             transport_request, company_id
         )
-        amount = 0.5
-        if institution_client and institution_client.preferential_rate:
-            amount = float(institution_client.preferential_rate)
+        preferential_rate = getattr(
+            institution_client, "preferential_rate", None
+        )
 
         billing_intent = (
             getattr(transport_request, "billing_intent", None) or "patient"
@@ -840,6 +901,21 @@ class AcceptOfferUseCase:
 
             time_to_define = effective_pickup_time is None or not operational
 
+            # Tarif par leg : préférentiel sinon profil tarifaire actif
+            leg_price = resolve_institution_price(
+                company_id=company_id,
+                preferential_rate=preferential_rate,
+                pickup_location=leg.pickup_location,
+                dropoff_location=leg.dropoff_location,
+                pickup_lat=float(leg.pickup_lat) if leg.pickup_lat else None,
+                pickup_lon=float(leg.pickup_lng) if leg.pickup_lng else None,
+                dropoff_lat=float(leg.dropoff_lat) if leg.dropoff_lat else None,
+                dropoff_lon=float(leg.dropoff_lng) if leg.dropoff_lng else None,
+                scheduled_time=transport_request.scheduled_time,
+                is_round_trip=False,
+            )
+            amount = leg_price["amount"]
+
             booking = Booking(
                 company_id=company_id,
                 user_id=user_id,
@@ -880,6 +956,15 @@ class AcceptOfferUseCase:
             )
             if billed_to_company_id is not None:
                 booking.billed_to_company_id = billed_to_company_id
+
+            # Gel tarifaire par leg si calculé via profil
+            if leg_price.get("pricing_profile_id"):
+                booking.pricing_profile_id = leg_price["pricing_profile_id"]
+                booking.pricing_profile_version_id = leg_price.get(
+                    "pricing_profile_version_id"
+                )
+                booking.price_amount = amount
+                booking.price_breakdown_json = leg_price.get("breakdown")
 
             # NB : on NE rattache PAS les legs via parent_booking_id. La relation
             # `return_trip` (remote_side=[id], fk=parent_booking_id) interprète

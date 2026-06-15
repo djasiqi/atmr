@@ -58,6 +58,11 @@ import {
   extractHHMM,
   MIN_ARRIVAL_LEAD_MINUTES,
 } from '../../../utils/missionScheduleForm';
+import {
+  filterTripTypesForInstitution,
+  institutionSupportsDomicilePickupTrip,
+  TRIP_TYPE_DOM_TO_DEST,
+} from '../../../utils/institutionRouteForm';
 
 const pad2 = (n) => String(n).padStart(2, '0');
 
@@ -156,7 +161,7 @@ const EMPTY_FORM = {
   billing_intent: 'patient',
   is_urgent: false,
   multi_stop: false,
-  return_to_institution: false,
+  return_to_institution: true,
   intermediate_stops: [],
 };
 
@@ -173,9 +178,15 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
   const assignExternalMutation = useAssignExternalCarrier();
 
   const institutionRole = meData?.institution_role;
+  const institutionType = meData?.institution_type;
   const canBilling = canEditBilling(institutionRole);
   const patientsItems = patientsData?.patients || patientsData?.items;
   const patients = useMemo(() => patientsItems || [], [patientsItems]);
+
+  const availableTripTypes = useMemo(
+    () => filterTripTypesForInstitution(TRIP_TYPES, institutionType),
+    [institutionType],
+  );
 
   // Refs for focus management
   const destinationRef = useRef(null);
@@ -349,16 +360,20 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
         updates.billing_intent = defaultIntent;
       }
 
-      // Trip type from default_pickup_mode
+      // Trip type from default_pickup_mode (domicile uniquement pour IMAD / curatelle)
       const mode = settings.default_pickup_mode || 'institution';
-      if (prev.trip_type === 'inst_to_dest') {
+      const domicilePickupAllowed = institutionSupportsDomicilePickupTrip(meData?.institution_type);
+      if (prev.trip_type === 'inst_to_dest' || prev.trip_type === TRIP_TYPE_DOM_TO_DEST) {
         // Only override at init
-        const defaultTrip = mode === 'domicile' ? 'dom_to_dest' : 'inst_to_dest';
+        const defaultTrip = mode === 'domicile' && domicilePickupAllowed
+          ? TRIP_TYPE_DOM_TO_DEST
+          : 'inst_to_dest';
         const def = TRIP_TYPES.find(t => t.value === defaultTrip);
         if (def) {
           updates.trip_type = defaultTrip;
           updates.pickup_type = def.pickupType;
           updates.dropoff_type = def.dropoffType;
+          updates.return_to_institution = defaultTrip === 'inst_to_dest';
         }
       }
 
@@ -665,6 +680,11 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
       if (tripTypeValue === 'return_home') {
         updates.billing_intent = 'patient';
         updates.round_trip = false;
+        updates.return_to_institution = false;
+      } else if (tripTypeValue === 'inst_to_dest') {
+        updates.return_to_institution = true;
+      } else {
+        updates.return_to_institution = false;
       }
       // Auto-fill pickup for institution mode
       if (def.pickupType === 'institution' && institutionAddress) {
@@ -711,6 +731,13 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
       return { ...prev, ...updates };
     });
   }, [institutionAddress, getPatientAddress]);
+
+  // Clinique / hôpital / EMS : pas de segment « Domicile → Dest. »
+  useEffect(() => {
+    if (institutionSupportsDomicilePickupTrip(institutionType)) return;
+    if (formData.trip_type !== TRIP_TYPE_DOM_TO_DEST) return;
+    handleTripTypeChange('inst_to_dest');
+  }, [institutionType, formData.trip_type, handleTripTypeChange]);
 
   // ── Datetime shortcuts ──
   const setTimeShortcut = useCallback((minutesFromNow) => {
@@ -1279,7 +1306,7 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
           <div className={styles.formGroup}>
             <label className={styles.formLabel}>Type de trajet</label>
             <div className={styles.tripSegment}>
-              {TRIP_TYPES.map(tt => (
+              {availableTripTypes.map(tt => (
                 <button key={tt.value} type="button"
                   className={`${styles.tripSegmentBtn} ${formData.trip_type === tt.value ? styles.tripSegmentBtnActive : ''}`}
                   onClick={() => handleTripTypeChange(tt.value)}>

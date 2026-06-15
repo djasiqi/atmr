@@ -166,7 +166,6 @@ const InstitutionLayout = lazy(() => import('./pages/institution/Layout/Institut
 const InstitutionDashboard = lazy(() => import('./pages/institution/Dashboard/InstitutionDashboard'));
 const InstitutionRequests = lazy(() => import('./pages/institution/Requests/InstitutionRequests'));
 const InstitutionRequestCreate = lazy(() => import('./pages/institution/Requests/InstitutionRequestCreate'));
-const InstitutionRequestDetail = lazy(() => import('./pages/institution/Requests/InstitutionRequestDetail'));
 const InstitutionPatients = lazy(() => import('./pages/institution/Patients/InstitutionPatients'));
 const InstitutionSettings = lazy(() => import('./pages/institution/Settings/InstitutionSettings'));
 
@@ -806,7 +805,7 @@ const App = () => {
               <Route index element={<InstitutionDashboard />} />
               <Route path="requests" element={<InstitutionRequests />} />
               <Route path="requests/new" element={<InstitutionRequestCreate />} />
-              <Route path="requests/:requestId" element={<InstitutionRequestDetail />} />
+              <Route path="requests/:requestId" element={<InstitutionRequests />} />
               <Route path="patients" element={<InstitutionPatients />} />
               <Route path="settings" element={<InstitutionSettings />} />
             </Route>
@@ -821,7 +820,7 @@ const App = () => {
               <Route index element={<InstitutionDashboard />} />
               <Route path="requests" element={<InstitutionRequests />} />
               <Route path="requests/new" element={<InstitutionRequestCreate />} />
-              <Route path="requests/:requestId" element={<InstitutionRequestDetail />} />
+              <Route path="requests/:requestId" element={<InstitutionRequests />} />
               <Route path="patients" element={<InstitutionPatients />} />
               <Route path="settings" element={<InstitutionSettings />} />
             </Route>

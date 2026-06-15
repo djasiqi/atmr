@@ -121,7 +121,7 @@ patient_list_model = institution_patients_ns.model(
 def get_institution_context():
     """Récupère le contexte institution pour actions d'écriture (JWT ou API Key).
 
-    Rôles autorisés: admin, requester, curator.
+    Rôles autorisés: admin, requester, billing, curator.
 
     Returns:
         Tuple (institution_id, user_id_or_none)
@@ -134,6 +134,7 @@ def get_institution_context():
     institution, user = AuthorizationService.require_institution_role(
         InstitutionRole.ADMIN.value,
         InstitutionRole.REQUESTER.value,
+        InstitutionRole.BILLING.value,
         InstitutionRole.CURATOR.value,
     )
     return institution.id, user.id
@@ -166,7 +167,7 @@ def get_institution_write_context():
     """Récupère le contexte institution pour écriture patient (JWT ou API Key).
 
     Rôles autorisés: admin, requester, billing, curator.
-    Le billing et le curator ont un accès restreint (filtrage des champs dans le handler).
+    Le curator a un accès restreint (filtrage des champs dans le handler).
 
     Returns:
         Tuple (institution_id, user_id_or_none)
@@ -639,9 +640,6 @@ class InstitutionPatientDetail(Resource):
         """Modifie un patient.
 
         Auth: JWT (institution_admin/requester/billing) ou API Key (scope patients:write)
-
-        Le rôle billing ne peut modifier que les champs suivants :
-        adresse/coordonnées, assurance, curatelle.
         """
         try:
             institution_id, user_id = get_institution_write_context()
@@ -666,19 +664,6 @@ class InstitutionPatientDetail(Resource):
                 validated = cast(dict[str, Any], patient_update_schema.load(data))
             except ValidationError as err:
                 return {"error": "Données invalides", "details": err.messages}, 400
-
-            # Si rôle billing, restreindre aux champs autorisés
-            institution_role = AuthorizationService.get_institution_role_from_jwt()
-            if institution_role == InstitutionRole.BILLING.value:
-                validated = {
-                    k: v
-                    for k, v in validated.items()
-                    if k in BILLING_PATIENT_EDITABLE_FIELDS
-                }
-                if not validated:
-                    return {
-                        "error": "Aucun champ modifiable avec le rôle facturation"
-                    }, 403
 
             # Vérifier unicité external_reference si changé
             new_ext_ref = validated.get("external_reference")
