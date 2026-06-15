@@ -22,6 +22,7 @@ import DemoInteractiveGuide from '../../../components/demo/DemoInteractiveGuide'
 import InlineDatePicker from '../../../components/ui/InlineDatePicker';
 import ChipSelect from '../../../components/ui/ChipSelect';
 import { getAuthEnv } from '../../../utils/webAuthSession';
+import { resolveBookingStatusKey } from '../../../utils/institutionBookingStatus';
 import RequestDetailPanel from './RequestDetailPanel';
 import { formatReturnTimeLabel, formatMissionScheduleListLabel, getNextConfirmedLegTime, formatLegScheduleSummary } from '../../../utils/formatLegTime';
 import { getCarrierDisplay } from '../../../utils/carrierDisplay';
@@ -72,68 +73,6 @@ const DEMO_INSTITUTION_COMPLETED_KEY = 'demo_institution_journey_completed';
 const shortAddr = (addr) => {
   if (!addr) return '—';
   return addr;
-};
-
-const resolveBookingStatusKey = (bookingSummary) => {
-  if (!bookingSummary) return '';
-  const raw = String(bookingSummary.status || '').toUpperCase();
-  const normalized = raw === 'CANCELLED' ? 'CANCELED' : raw;
-  const returnRaw = String(bookingSummary.return_booking?.status || '').toUpperCase();
-  const returnStatus = returnRaw === 'CANCELLED' ? 'CANCELED' : returnRaw;
-  const overall = String(bookingSummary.overall_status || '').toLowerCase();
-
-  const hasReturn = Boolean(bookingSummary.return_booking);
-  const returnCompleted = ['COMPLETED', 'RETURN_COMPLETED'].includes(returnStatus);
-  const returnCancelled = returnStatus === 'CANCELED';
-  const outboundCompleted = ['COMPLETED', 'RETURN_COMPLETED'].includes(normalized);
-
-  // Source de vérité préférée pour A/R: statut agrégé backend.
-  if (hasReturn && overall) {
-    if (overall === 'completed') return 'RETURN_COMPLETED';
-    if (overall === 'cancelled') return 'CANCELED';
-    if (overall === 'outbound_completed') return 'OUTBOUND_COMPLETED';
-    if (overall === 'in_progress') return 'IN_PROGRESS';
-    if (overall === 'planned') return 'ACCEPTED';
-  }
-
-  if (hasReturn) {
-    if (returnCompleted) return 'RETURN_COMPLETED';
-    if (returnCancelled) return 'CANCELED';
-    if (outboundCompleted) return 'OUTBOUND_COMPLETED';
-  }
-
-  // Défensif: si completed_at existe, l'UI doit afficher "Terminé"
-  // même si un statut stale "IN_PROGRESS" arrive encore du backend/cache.
-  if (
-    bookingSummary.completed_at &&
-    !hasReturn &&
-    normalized !== 'RETURN_COMPLETED' &&
-    normalized !== 'CANCELED'
-  ) {
-    return 'COMPLETED';
-  }
-
-  // Défensif: si le patient est déjà pris en charge (boarded_at), l'UI doit
-  // afficher "En cours" même si le statut métier n'a pas encore basculé.
-  if (
-    bookingSummary.boarded_at &&
-    normalized !== 'COMPLETED' &&
-    normalized !== 'RETURN_COMPLETED' &&
-    normalized !== 'CANCELED'
-  ) {
-    return 'IN_PROGRESS';
-  }
-
-  // De même, si l'événement "en route" est connu mais le statut reste figé.
-  if (
-    bookingSummary.en_route_at &&
-    !bookingSummary.boarded_at &&
-    (normalized === 'ACCEPTED' || normalized === 'ASSIGNED' || normalized === '')
-  ) {
-    return 'EN_ROUTE';
-  }
-
-  return normalized;
 };
 
 const getDateGroupLabel = (dateStr) => {

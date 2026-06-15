@@ -25,6 +25,7 @@ import {
   FaHourglassHalf,
   FaFileAlt,
   FaChevronRight,
+  FaTimesCircle,
 } from 'react-icons/fa';
 import {
   useInstitutionMe,
@@ -32,19 +33,12 @@ import {
 } from '../../../hooks/useInstitutionData';
 import DemoInteractiveGuide from '../../../components/demo/DemoInteractiveGuide';
 import { getAuthEnv } from '../../../utils/webAuthSession';
+import { computeInstitutionRequestStats, resolveBookingStatusKey } from '../../../utils/institutionBookingStatus';
+import { isConvertedLirie } from '../../../utils/requestStatus';
+import { BOOKING_STATUS_LABELS } from '../Requests/statusColors';
 import s from './InstitutionDashboard.module.css';
 
 // ─── Status config ──────────────────────────────────────────
-const BOOKING_STATUS_MAP = {
-  pending: 'En attente',
-  confirmed: 'Confirmé',
-  assigned: 'Chauffeur assigné',
-  en_route: 'En route',
-  in_progress: 'En cours',
-  completed: 'Terminé',
-  cancelled: 'Annulé',
-};
-
 const REQUEST_STATUS_CONFIG = {
   DRAFT:     { label: 'Brouillon',  css: 'statusDraft' },
   SENT:      { label: 'Envoyée',    css: 'statusSent' },
@@ -55,13 +49,15 @@ const REQUEST_STATUS_CONFIG = {
 };
 
 const BOOKING_STATUS_CSS = {
-  pending: 'statusSent',
-  confirmed: 'statusConverted',
-  assigned: 'statusConverted',
-  en_route: 'statusInProgress',
-  in_progress: 'statusInProgress',
-  completed: 'statusCompleted',
-  cancelled: 'statusCancelled',
+  PENDING: 'statusSent',
+  ACCEPTED: 'statusConverted',
+  ASSIGNED: 'statusConverted',
+  EN_ROUTE: 'statusInProgress',
+  IN_PROGRESS: 'statusInProgress',
+  OUTBOUND_COMPLETED: 'statusInProgress',
+  COMPLETED: 'statusCompleted',
+  RETURN_COMPLETED: 'statusCompleted',
+  CANCELED: 'statusCancelled',
 };
 
 // ─── Helpers ────────────────────────────────────────────────
@@ -88,10 +84,10 @@ const fmtTime = (d) => {
 };
 
 const resolveDisplayStatus = (req) => {
-  if (req.status === 'CONVERTED' && req.booking_summary?.status) {
-    const bStatus = req.booking_summary.status.toLowerCase();
-    const label = BOOKING_STATUS_MAP[bStatus] || 'Confirmée';
-    const css = BOOKING_STATUS_CSS[bStatus] || 'statusConverted';
+  if (isConvertedLirie(req) && req.booking_summary?.status) {
+    const bookingKey = resolveBookingStatusKey(req.booking_summary);
+    const label = BOOKING_STATUS_LABELS[bookingKey] || 'Confirmée';
+    const css = BOOKING_STATUS_CSS[bookingKey] || 'statusConverted';
     return { label, css };
   }
   const cfg = REQUEST_STATUS_CONFIG[req.status] || REQUEST_STATUS_CONFIG.DRAFT;
@@ -153,38 +149,13 @@ const InstitutionDashboard = () => {
   );
 
   // ─── Stats ──────────────────────────────────────────────
-  const stats = useMemo(() => {
-    const items = requestItems;
-    const sent = items.filter((r) => r.status === 'SENT').length;
-
-    const activeBookings = items.filter(
-      (r) =>
-        r.status === 'CONVERTED' &&
-        r.booking_summary?.status &&
-        !['completed', 'cancelled'].includes(r.booking_summary.status.toLowerCase())
-    ).length;
-
-    const completedBookings = items.filter(
-      (r) =>
-        r.status === 'CONVERTED' &&
-        r.booking_summary?.status?.toLowerCase() === 'completed'
-    ).length;
-
-    const needsAttention = items.filter((r) => {
-      if (r.status !== 'SENT') return false;
-      const sentTime = new Date(r.updated_at || r.created_at);
-      const hoursAgo = (Date.now() - sentTime.getTime()) / 3600000;
-      return hoursAgo > 2;
-    }).length;
-
-    return {
-      total: requestsData?.total || items.length,
-      sent,
-      activeBookings,
-      completedBookings,
-      needsAttention,
-    };
-  }, [requestItems, requestsData]);
+  const stats = useMemo(
+    () => computeInstitutionRequestStats(
+      requestItems,
+      requestsData?.total || requestItems.length,
+    ),
+    [requestItems, requestsData],
+  );
 
   // ─── Today's requests ───────────────────────────────────
   const todayRequests = useMemo(
@@ -268,7 +239,7 @@ const InstitutionDashboard = () => {
             <FaTruck />
           </div>
           <div className={s.kpiBody}>
-            <div className={s.kpiValue}>{loadingRequests ? '—' : stats.activeBookings}</div>
+            <div className={s.kpiValue}>{loadingRequests ? '—' : stats.active}</div>
             <div className={s.kpiLabel}>Transports en cours</div>
           </div>
         </div>
@@ -278,7 +249,7 @@ const InstitutionDashboard = () => {
             <FaHourglassHalf />
           </div>
           <div className={s.kpiBody}>
-            <div className={s.kpiValue}>{loadingRequests ? '—' : stats.sent}</div>
+            <div className={s.kpiValue}>{loadingRequests ? '—' : stats.pending}</div>
             <div className={s.kpiLabel}>En attente</div>
           </div>
           {stats.needsAttention > 0 && (
@@ -293,8 +264,18 @@ const InstitutionDashboard = () => {
             <FaCheckCircle />
           </div>
           <div className={s.kpiBody}>
-            <div className={s.kpiValue}>{loadingRequests ? '—' : stats.completedBookings}</div>
+            <div className={s.kpiValue}>{loadingRequests ? '—' : stats.completed}</div>
             <div className={s.kpiLabel}>Terminés</div>
+          </div>
+        </div>
+
+        <div className={`${s.kpiCard} ${s.kpiCancelled}`}>
+          <div className={s.kpiIconWrap}>
+            <FaTimesCircle />
+          </div>
+          <div className={s.kpiBody}>
+            <div className={s.kpiValue}>{loadingRequests ? '—' : stats.cancelled}</div>
+            <div className={s.kpiLabel}>Annulés</div>
           </div>
         </div>
       </div>
