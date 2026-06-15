@@ -15,8 +15,6 @@ import {
   FaBell,
   FaCommentDots,
   FaAmbulance,
-  FaEdit,
-  FaExclamationTriangle,
 } from 'react-icons/fa';
 import { resolveCompanyNotificationLink } from '../../../utils/companyNotificationNavigation';
 import {

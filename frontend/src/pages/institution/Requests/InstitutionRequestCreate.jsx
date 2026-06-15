@@ -19,7 +19,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { FaArrowLeft, FaSave, FaPaperPlane, FaTimes, FaPlus, FaGripVertical, FaTruck } from 'react-icons/fa';
+import { FaArrowLeft, FaSave, FaPaperPlane, FaTimes, FaPlus, FaGripVertical } from 'react-icons/fa';
 import AsyncCreatableSelect from 'react-select/async-creatable';
 import {
   useCreateRequest,

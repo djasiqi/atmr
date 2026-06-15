@@ -74,16 +74,6 @@ const shortAddr = (addr) => {
   return addr;
 };
 
-const fmtTime = (d) => {
-  if (!d) return '';
-  return new Date(d).toLocaleTimeString('fr-CH', { hour: '2-digit', minute: '2-digit' });
-};
-
-const fmtDateShort = (d) => {
-  if (!d) return '';
-  return new Date(d).toLocaleDateString('fr-CH', { day: '2-digit', month: '2-digit', year: 'numeric' });
-};
-
 const resolveBookingStatusKey = (bookingSummary) => {
   if (!bookingSummary) return '';
   const raw = String(bookingSummary.status || '').toUpperCase();
