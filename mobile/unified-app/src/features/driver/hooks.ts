@@ -154,7 +154,11 @@ export function useDriverStatusTransition() {
         });
         throw new Error("Transition already in-flight for this mission");
       }
-      const queued = await driverOfflineQueue.enqueue(params.missionId, params.targetStatus);
+      const queued = await driverOfflineQueue.enqueue(
+        params.missionId,
+        params.targetStatus,
+        params.reason ?? null
+      );
       try {
         const res = await updateDriverMissionStatus({
           missionId: params.missionId,
@@ -184,13 +188,15 @@ export function useDriverStatusTransition() {
       if (!contextId) {
         return undefined;
       }
-      const { missionId, targetStatus } = params;
+      const { missionId, targetStatus, reason } = params;
       const detailKey = driverQueryKeys.missionDetail(contextId, missionId);
       const listKey = driverQueryKeys.missions(contextId);
       await queryClient.cancelQueries({ queryKey: detailKey });
       await queryClient.cancelQueries({ queryKey: listKey });
       const previousDetail = queryClient.getQueryData<DriverMission | undefined>(detailKey);
       const previousMissions = queryClient.getQueryData<DriverMission[] | undefined>(listKey);
+      const isRelease =
+        targetStatus === "CANCELLED" && String(reason ?? "").trim().toUpperCase() === "RELEASE";
       if (targetStatus === "ARRIVED") {
         markDriverArrivedAtPickupMilestone(missionId);
         clearPickupApproachForMission(missionId);
@@ -203,6 +209,17 @@ export function useDriverStatusTransition() {
       }
       if (targetStatus === "COMPLETED") {
         clearAllStepperApproachBaselines(missionId);
+      }
+      if (isRelease) {
+        queryClient.setQueryData<DriverMission | undefined>(detailKey, undefined);
+        queryClient.setQueryData<DriverMission[] | undefined>(listKey, (old) => {
+          if (!Array.isArray(old)) {
+            return old;
+          }
+          return old.filter((m) => m.id !== missionId);
+        });
+        stopDriverTracking();
+        return { contextId, previousDetail, previousMissions, missionId, targetStatus };
       }
       const nextStatus: DriverMissionStatus = targetStatus === "ARRIVED" ? "ARRIVED" : (targetStatus as DriverMissionStatus);
       queryClient.setQueryData<DriverMission | undefined>(detailKey, (old) => {

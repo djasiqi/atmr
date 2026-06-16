@@ -244,7 +244,7 @@ export function MissionCard({
   const canCancel = Boolean(showTransitionActions && statusUx.nextTransitions.includes("CANCELLED"));
   /**
    * « Libérer » : visible uniquement sur ASSIGNED ou EN_ROUTE — parité stricte
-   * `operations-app/MissionCard.tsx:1043`. Côté API : `CANCELLED` + `reason: "RELEASE"`,
+   * `operations-app/MissionCard.tsx:1043`. Côté API : `CANCELLED` + `cancel_reason: "RELEASE"`,
    * donc même permission `mission:update_status`.
    */
   const canRelease = Boolean(

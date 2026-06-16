@@ -13,6 +13,7 @@ import { driverTrackingQueue } from "./services/driverTrackingQueue";
 type QueuedDriverAction = OfflineMutationAction & {
   missionId: number;
   targetStatus: DriverTransitionStatus;
+  reason?: string | null;
   eventSequence?: number;
 };
 
@@ -53,6 +54,7 @@ class DriverOfflineQueue {
         missionId: action.missionId,
         targetStatus: action.targetStatus,
         idempotencyKey: action.id,
+        reason: action.reason ?? null,
       });
       applyArrivedMilestoneFromStatusResponse(action.missionId, res);
     },
@@ -94,11 +96,16 @@ class DriverOfflineQueue {
     },
   });
 
-  async enqueue(missionId: number, targetStatus: DriverTransitionStatus) {
+  async enqueue(
+    missionId: number,
+    targetStatus: DriverTransitionStatus,
+    reason?: string | null
+  ) {
     const action: QueuedDriverAction = {
       id: createActionId(),
       missionId,
       targetStatus,
+      reason: reason ?? null,
       queuedAt: Date.now(),
       retryCount: 0,
     };

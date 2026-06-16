@@ -207,6 +207,13 @@ class UpdateDriverBookingStatusUseCase:
                     and not data.get("reason_code")
                 ):
                     data = {**data, "cancel_reason": "FAILED"}
+            # Alias legacy mobile : `reason: "RELEASE"` → `cancel_reason`
+            if (
+                data is not None
+                and not data.get("cancel_reason")
+                and str(data.get("reason", "")).strip().upper() == "RELEASE"
+            ):
+                data = {**data, "cancel_reason": "RELEASE"}
             valid_statuses = {
                 "arrived",
                 "en_route",

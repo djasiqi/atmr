@@ -17,8 +17,8 @@ type ReleaseConfirmationModalProps = {
  * lignes 1070+). Sémantique distincte d'« Annuler » : le chauffeur rend la
  * mission au pool dispatch — réassignée à un autre chauffeur, sans facturation.
  *
- * Côté API : transition `CANCELLED` avec `reason: "RELEASE"`
- * (cf. `useDriverStatusTransition` → `api.ts:180`).
+ * Côté API : transition `CANCELLED` avec `cancel_reason: "RELEASE"`
+ * (cf. `useDriverStatusTransition` → `api.ts`).
  */
 export function ReleaseConfirmationModal(props: ReleaseConfirmationModalProps) {
   const missionLabel = `#${props.missionId ?? "n/a"}`;

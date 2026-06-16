@@ -161,6 +161,47 @@ def test_release_cancels_assignment_and_triggers_dispatch() -> None:
     assert booking.cancelled_by_role is None
 
 
+def test_release_accepts_legacy_reason_alias() -> None:
+    from contextlib import nullcontext
+    from unittest.mock import patch
+
+    booking = _Booking(id=1, company_id=7, driver_id=10, status=BookingStatus.ASSIGNED)
+    assignment = _Assignment(id=123)
+    db = _Db()
+
+    uc = UpdateDriverBookingStatusUseCase(
+        booking_repo=_BookingRepo(booking),
+        assignment_repo=_AssignmentRepo(assignment),
+        db_session=db,
+        notify_booking_update_fn=lambda _driver_id, _b: None,
+        resolve_delays_fn=lambda _bid, _dt: None,
+        emit_assignment_cancelled_fn=lambda _cid, _aid, _bid, _did: None,
+        maybe_trigger_dispatch_fn=None,
+        now_utc_fn=lambda: datetime(2025, 12, 12, 10, 0, 0, tzinfo=UTC),
+    )
+
+    with (
+        patch("application.events.event_bus.publish_event"),
+        patch("ext.db.session") as mock_session,
+    ):
+        mock_session.no_autoflush = nullcontext()
+        res = uc.execute(
+            UpdateDriverBookingStatusCommand(
+                booking_id=1,
+                driver_id=10,
+                payload={
+                    "status": "canceled",
+                    "reason": "RELEASE",
+                },
+            )
+        )
+
+    assert res.status_code == 200
+    assert booking.status == BookingStatus.ACCEPTED
+    assert booking.driver_id is None
+    assert booking.cancellation_reason_code is None
+
+
 def test_driver_cancel_no_show_billable_and_label() -> None:
     """Driver CANCEL + NO_SHOW ⇒ billable True + label 'Client ne s'est pas présenté'."""
     from unittest.mock import patch

@@ -179,13 +179,31 @@ export async function getDriverMissionDetail(missionId: number): Promise<DriverM
   });
 }
 
+/** Corps PUT /driver/me/bookings/:id/status (contrat Flask `cancel_reason`). */
+export function buildDriverStatusUpdateBody(payload: DriverStatusTransitionPayload) {
+  const { targetStatus, reason } = payload;
+  if (targetStatus === "CANCELLED" || targetStatus === "FAILED") {
+    const normalizedReason = String(reason ?? "").trim().toUpperCase();
+    if (normalizedReason === "RELEASE") {
+      return { status: targetStatus, cancel_reason: "RELEASE" };
+    }
+    const reasonText = String(reason ?? "").trim();
+    return {
+      status: targetStatus,
+      cancel_reason: normalizedReason === "FAILED" ? "FAILED" : "CANCEL",
+      ...(reasonText && normalizedReason !== "FAILED" ? { reason_text: reasonText } : {}),
+    };
+  }
+  return { status: targetStatus };
+}
+
 export async function updateDriverMissionStatus(
   payload: DriverStatusTransitionPayload
 ): Promise<DriverStatusUpdateResult> {
   return runWithCircuitBreaker("mission_transition", async () => {
     const { data } = await apiClient.put<DriverStatusUpdateResult>(
       `/driver/me/bookings/${payload.missionId}/status`,
-      { status: payload.targetStatus, reason: payload.reason ?? null },
+      buildDriverStatusUpdateBody(payload),
       {
         headers: {
           "X-Idempotency-Key": payload.idempotencyKey,

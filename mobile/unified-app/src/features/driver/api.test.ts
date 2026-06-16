@@ -1,11 +1,13 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import {
+  buildDriverStatusUpdateBody,
   getDriverBookingsAll,
   getDriverCompanyBookingsToday,
   getDriverCompletedTrips,
   getDriverProfile,
   getDriverRoute,
   triggerDriverTestPush,
+  updateDriverMissionStatus,
   updateDriverPhoto,
   updateDriverProfile,
 } from "./api";
@@ -85,6 +87,51 @@ describe("driver secondary api contracts", () => {
 
     expect(mockPost).toHaveBeenCalledTimes(1);
     expect(mockPost.mock.calls[0][0]).toEqual("/driver/me/test-push");
+  });
+
+  it("maps release transition to cancel_reason RELEASE", () => {
+    expect(
+      buildDriverStatusUpdateBody({
+        missionId: 35175,
+        targetStatus: "CANCELLED",
+        idempotencyKey: "k1",
+        reason: "RELEASE",
+      })
+    ).toEqual({ status: "CANCELLED", cancel_reason: "RELEASE" });
+  });
+
+  it("maps driver cancel to cancel_reason CANCEL with reason_text", () => {
+    expect(
+      buildDriverStatusUpdateBody({
+        missionId: 12,
+        targetStatus: "CANCELLED",
+        idempotencyKey: "k2",
+        reason: "Client absent",
+      })
+    ).toEqual({
+      status: "CANCELLED",
+      cancel_reason: "CANCEL",
+      reason_text: "Client absent",
+    });
+  });
+
+  it("sends release payload on mission status update", async () => {
+    mockPut.mockResolvedValueOnce({ data: { booking_id: 35175, status: "ACCEPTED" } });
+
+    await updateDriverMissionStatus({
+      missionId: 35175,
+      targetStatus: "CANCELLED",
+      idempotencyKey: "k3",
+      reason: "RELEASE",
+    });
+
+    expect(mockPut).toHaveBeenCalledWith(
+      "/driver/me/bookings/35175/status",
+      { status: "CANCELLED", cancel_reason: "RELEASE" },
+      expect.objectContaining({
+        headers: expect.objectContaining({ "X-Idempotency-Key": "k3" }),
+      })
+    );
   });
 });
 
