@@ -61,7 +61,6 @@ const computeDefaultProposedTime = (req, scheduleInfo, travelMinutes) => {
 const ProposeOfferTimeModal = ({ offer, onConfirm, onClose }) => {
   const req = offer?.transport_request || {};
   const scheduleDetail = formatMissionScheduleDetail(req);
-  const scheduleInfo = getNextConfirmedScheduleInfo(req);
 
   const [travelMinutes, setTravelMinutes] = useState(null);
   const [travelLoading, setTravelLoading] = useState(true);
@@ -95,7 +94,7 @@ const ProposeOfferTimeModal = ({ offer, onConfirm, onClose }) => {
     return () => {
       cancelled = true;
     };
-  }, [offer?.id]);
+  }, [offer?.id, offer?.transport_request]);
 
   const requestedParts = getConfirmedScheduleParts(req);
   const requestedRows = requestedParts.map(formatSchedulePartLabel).join(' · ');

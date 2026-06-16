@@ -1,5 +1,8 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import { startUserActivityTracking } from './utils/userActivityTracker';
+import { initDeferredSessionLogout } from './utils/deferredSessionLogout';
+import { startSessionKeepAlive } from './utils/sessionKeepAlive';
 import App from './App';
 import './styles/globals.css';
 import reportWebVitals from './reportWebVitals';
@@ -188,6 +191,11 @@ const SentryErrorBoundary = Sentry.ErrorBoundary;
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 const isDev = ENVIRONMENT === 'development';
+
+startUserActivityTracking();
+initDeferredSessionLogout();
+startSessionKeepAlive();
+
 root.render(
   <React.StrictMode>
     <SentryErrorBoundary

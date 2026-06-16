@@ -523,7 +523,10 @@ export const fetchCompanyInfo = async () => {
 };
 
 export const updateCompanyInfo = async (payload) => {
-  const { data } = await apiClient.put('/companies/me', payload);
+  const { data } = await apiClient.put('/companies/me', payload, {
+    // Permet à CompanySettings d'afficher la modale mot de passe (getFreshToken)
+    skipFreshTokenLogout: true,
+  });
   return data;
 };
 

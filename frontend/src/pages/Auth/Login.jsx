@@ -27,6 +27,39 @@ const CIVILITY_OPTIONS = [
   { value: 'Autre', label: 'Autre' },
 ];
 
+const rolePathSegment = (role) => {
+  const normalized = normalizeAuthRole(role);
+  if (normalized === 'admin') return 'admin';
+  if (normalized === 'company') return 'company';
+  if (normalized === 'institution') return 'institution';
+  if (normalized === 'driver') return 'driver';
+  if (normalized === 'client') return 'client';
+  return normalized;
+};
+
+const isReturnPathAllowedForRole = (path, role) => {
+  if (!path) return false;
+  const segment = rolePathSegment(role);
+  if (!segment) return false;
+
+  const normalizedPath = String(path);
+  const dashboardMatch = normalizedPath.match(
+    /^\/(?:app\/)?(?:demo\/)?dashboard\/([^/?#]+)(?:[/?#]|$)/
+  );
+  if (dashboardMatch) {
+    return normalizeAuthRole(dashboardMatch[1]) === segment;
+  }
+
+  if (segment === 'client' && normalizedPath.startsWith('/client/')) {
+    return true;
+  }
+
+  return !/^\/(?:app\/)?(?:demo\/)?dashboard(?:[/?#]|$)/.test(normalizedPath);
+};
+
+const firstAllowedReturnPath = (role, ...paths) =>
+  paths.find((path) => isReturnPathAllowedForRole(path, role)) || null;
+
 const EyeIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
@@ -153,7 +186,9 @@ const Login = () => {
 
   useEffect(() => {
     if (!authUser || !hasActiveSession()) return;
-    const destination = nextFromQuery || safeReturnFromState || '/dashboard';
+    const destination =
+      firstAllowedReturnPath(authUser.role, nextFromQuery, safeReturnFromState) ||
+      '/dashboard';
     navigate(destination, { replace: true });
   }, [authUser, navigate, nextFromQuery, safeReturnFromState]);
 
@@ -347,9 +382,13 @@ const Login = () => {
       if (user.force_password_change) {
         navigate(`/force-reset-password/${user.public_id}`, { replace: true });
       } else {
-        const preferredReturn = safeReturnFromState || nextFromQuery;
+        const preferredReturn = firstAllowedReturnPath(
+          roleSegment,
+          redirect_to,
+          safeReturnFromState,
+          nextFromQuery
+        );
         const destination =
-          redirect_to ||
           preferredReturn ||
           `/dashboard/${roleSegment}/${user.public_id}`;
         navigate(destination, { replace: true });

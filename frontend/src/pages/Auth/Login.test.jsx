@@ -160,6 +160,52 @@ describe('Login Page', () => {
     });
   });
 
+  it('ignore un next dashboard incompatible avec le rôle connecté', async () => {
+    const mockToken = 'fake-institution-jwt';
+    const mockUser = {
+      public_id: 'inst-1',
+      role: 'institution',
+      first_name: 'I',
+      last_name: 'User',
+    };
+
+    apiClient.post.mockResolvedValue({
+      data: {
+        token: mockToken,
+        user: mockUser,
+        target_env: 'app',
+      },
+    });
+
+    jwtDecode.mockReturnValue({
+      sub: 'inst-1',
+      role: 'institution',
+    });
+
+    const staleCompanyNext = '/dashboard/company/company-1/settings';
+    render(
+      <Provider store={store}>
+        <MemoryRouter initialEntries={[`/login?next=${encodeURIComponent(staleCompanyNext)}`]}>
+          <Login />
+        </MemoryRouter>
+      </Provider>
+    );
+
+    fireEvent.change(screen.getByLabelText(/email/i), {
+      target: { value: 'institution@example.com' },
+    });
+    fireEvent.change(screen.getByPlaceholderText(/entrez votre mot de passe/i), {
+      target: { value: 'password123' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /se connecter/i }));
+
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('/dashboard/institution/inst-1', {
+        replace: true,
+      });
+    });
+  });
+
   it('shows error message on invalid credentials', async () => {
     apiClient.post.mockRejectedValue({
       response: { data: { error: 'Invalid credentials' } },

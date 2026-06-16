@@ -172,9 +172,6 @@ export function getNextConfirmedScheduleInfo(request) {
   legs.forEach((leg, index) => {
     if (!isOperational(leg.scheduled_time, leg.time_confirmed)) return;
     const isReturn = isReturnLegIndex(request, legs, index);
-    const label = isReturn
-      ? 'Retour'
-      : (leg.dropoff_establishment || leg.dropoff_service || `RDV ${index + 1}`);
     addCandidate(
       leg.scheduled_time,
       isReturn ? 'return' : 'destination',

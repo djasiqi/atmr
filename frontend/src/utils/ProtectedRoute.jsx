@@ -1,47 +1,30 @@
 import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { jwtDecode } from 'jwt-decode';
-import { getAuthEnv, getEnvAccessToken, getEnvUser } from './webAuthSession';
+import { getAuthEnv, getEnvUser } from './webAuthSession';
+import { useSessionBootstrap } from '../contexts/SessionBootstrapContext';
 
 // Clés localStorage : snake_case (nouveau) + fallback camelCase pendant migration.
 const STORAGE_KEYS = {
   company: {
-    token: 'company_access_token',
-    refresh: 'company_refresh_token',
-    tokenLegacy: 'company_authToken',
-    refreshLegacy: 'company_refreshToken',
     user: 'company_user',
     publicId: 'company_public_id',
   },
   driver: {
-    token: 'driver_access_token',
-    refresh: 'driver_refresh_token',
-    tokenLegacy: 'driver_authToken',
-    refreshLegacy: 'driver_refreshToken',
     user: 'driver_user',
     publicId: 'driver_public_id',
   },
-  // ✅ ÉTAPE 6: Clés pour les utilisateurs institution
   institution: {
-    token: 'institution_access_token',
-    refresh: 'institution_refresh_token',
-    tokenLegacy: null,
-    refreshLegacy: null,
     user: 'institution_user',
     publicId: 'institution_public_id',
   },
-  legacy: { token: 'authToken', refresh: 'refreshToken', tokenLegacy: null, refreshLegacy: null, user: 'user', publicId: 'public_id' },
+  legacy: { user: 'user', publicId: 'public_id' },
 };
-
-const getToken = (keys) =>
-  localStorage.getItem(keys.token) || (keys.tokenLegacy ? localStorage.getItem(keys.tokenLegacy) : null);
 
 const getStorageKeys = (allowedRoles) => {
   if (!Array.isArray(allowedRoles) || allowedRoles.length === 0) return STORAGE_KEYS.legacy;
   const roles = allowedRoles.map((r) => String(r).toLowerCase());
   if (roles.includes('company') || roles.includes('admin')) return STORAGE_KEYS.company;
   if (roles.includes('driver')) return STORAGE_KEYS.driver;
-  // ✅ ÉTAPE 6: Support rôle institution
   if (roles.includes('institution')) return STORAGE_KEYS.institution;
   return STORAGE_KEYS.legacy;
 };
@@ -54,24 +37,12 @@ const normalizeRole = (rawRole) => {
   return role;
 };
 
-const clearSession = (keys) => {
-  try {
-    localStorage.removeItem(keys.token);
-    localStorage.removeItem(keys.refresh);
-    if (keys.tokenLegacy) localStorage.removeItem(keys.tokenLegacy);
-    if (keys.refreshLegacy) localStorage.removeItem(keys.refreshLegacy);
-    localStorage.removeItem(keys.user);
-    localStorage.removeItem(keys.publicId);
-  } catch (_) {}
-};
-
 // Resout la destination d'onboarding. Pour l'instant seul le changement
 // de mot de passe est cable. Etendre ici pour CGU / profil / MFA.
 export const resolveOnboardingRedirect = (u, pathname) => {
   if (u?.force_password_change && !pathname.startsWith('/force-reset-password')) {
     return `/force-reset-password/${u.public_id || u.sub}`;
   }
-  // futur : if (u?.must_accept_cgu) return `/onboarding/cgu`;
   return null;
 };
 
@@ -79,6 +50,8 @@ const ProtectedRoute = ({ allowedRoles, children }) => {
   const location = useLocation();
   const keys = getStorageKeys(allowedRoles);
   const env = getAuthEnv();
+  const { status, user: bootstrapUser } = useSessionBootstrap();
+
   const isDemoDashboardPath =
     location.pathname === '/dashboard' ||
     location.pathname.startsWith('/dashboard/company/') ||
@@ -91,18 +64,39 @@ const ProtectedRoute = ({ allowedRoles, children }) => {
       />
     );
   }
-  const envToken = getEnvAccessToken(env, { allowLegacy: true });
-  const token = getToken(keys) || envToken;
-  let scopedUser = null;
-  try {
-    const scopedRaw = localStorage.getItem(keys.user);
-    scopedUser = scopedRaw ? JSON.parse(scopedRaw) : null;
-  } catch (_) {
-    scopedUser = null;
+
+  if (status === 'loading' || status === 'idle') {
+    return (
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          minHeight: '40vh',
+        }}
+        aria-live="polite"
+      >
+        Vérification de la session…
+      </div>
+    );
+  }
+
+  let scopedUser = bootstrapUser;
+  if (!scopedUser) {
+    try {
+      const scopedRaw = localStorage.getItem(keys.user);
+      scopedUser = scopedRaw ? JSON.parse(scopedRaw) : null;
+    } catch (_) {
+      scopedUser = null;
+    }
   }
   const user = scopedUser || getEnvUser(env);
 
-  if (!token && !user) {
+  if (status === 'anonymous') {
+    return <Navigate to="/login" replace state={{ from: location }} />;
+  }
+
+  if (status === 'error' && !user) {
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
 
@@ -124,28 +118,7 @@ const ProtectedRoute = ({ allowedRoles, children }) => {
     );
   }
 
-  let role = null;
-  if (token) {
-    try {
-      const payload = jwtDecode(token);
-      const now = Math.floor(Date.now() / 1000);
-      if (typeof payload.exp === 'number' && payload.exp <= now) {
-        clearSession(keys);
-        return <Navigate to="/login" replace state={{ from: location }} />;
-      }
-      role = normalizeRole(payload?.role ?? user?.role ?? '');
-    } catch {
-      // Fallback robuste: si le token scoped est absent/invalide mais le user est présent,
-      // on continue avec le rôle stocké (utile pour certains flux démo).
-      role = normalizeRole(user?.role ?? '');
-      if (!role) {
-        clearSession(keys);
-        return <Navigate to="/login" replace state={{ from: location }} />;
-      }
-    }
-  } else {
-    role = normalizeRole(user?.role ?? '');
-  }
+  const role = normalizeRole(user?.role ?? '');
 
   if (Array.isArray(allowedRoles) && allowedRoles.length > 0) {
     const allowed = allowedRoles.map((r) => normalizeRole(r));

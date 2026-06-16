@@ -1,19 +1,20 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { jwtDecode } from 'jwt-decode';
 import ProtectedRoute, { resolveOnboardingRedirect } from '../ProtectedRoute';
 
-jest.mock('jwt-decode');
+jest.mock('../../contexts/SessionBootstrapContext', () => ({
+  useSessionBootstrap: () => ({
+    status: 'authenticated',
+    isAuthenticated: true,
+    user: null,
+  }),
+}));
 
 describe('ProtectedRoute onboarding', () => {
   beforeEach(() => {
     localStorage.clear();
     jest.spyOn(console, 'warn').mockImplementation(() => {});
-    jwtDecode.mockReturnValue({
-      role: 'company',
-      exp: Math.floor(Date.now() / 1000) + 3600,
-    });
   });
 
   afterEach(() => {
@@ -22,11 +23,7 @@ describe('ProtectedRoute onboarding', () => {
   });
 
   const renderProtected = (user, initialPath = '/dashboard') => {
-    localStorage.setItem('company_access_token', 'fake-token');
-    localStorage.setItem(
-      'company_user',
-      JSON.stringify({ ...user, role: user.role || 'company' })
-    );
+    localStorage.setItem('company_user', JSON.stringify({ ...user, role: user.role || 'company' }));
 
     return render(
       <MemoryRouter initialEntries={[initialPath]}>

@@ -600,7 +600,10 @@ const CompanyDashboard = () => {
     refetchInterval: socketConnected ? false : 30_000,
     enabled: !!company?.id,
   });
-  const institutionOffers = institutionOffersData?.offers || [];
+  const institutionOffers = useMemo(
+    () => institutionOffersData?.offers || [],
+    [institutionOffersData?.offers],
+  );
   const visibleInstitutionOffers = useMemo(
     () => filterVisibleInstitutionOffers(institutionOffers),
     [institutionOffers],

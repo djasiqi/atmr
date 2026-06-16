@@ -149,3 +149,128 @@ def test_login_response_still_returns_user_payload(
     assert response.status_code == 200
     data = response.get_json()
     assert data["user"]["email"] == sample_user.email
+
+
+def _post_refresh(client):
+    return client.post("/api/v1/auth/refresh-token", json={})
+
+
+def _decode_refresh_ttl(refresh_token: str) -> int:
+    from flask_jwt_extended import decode_token
+
+    with current_app.app_context():
+        decoded = decode_token(refresh_token)
+    return int(decoded["exp"]) - int(decoded["iat"])
+
+
+def _short_refresh_ttl_seconds() -> int:
+    import os
+
+    return int(os.getenv("JWT_REFRESH_TOKEN_SHORT_EXPIRES_SECONDS", str(60 * 60)))
+
+
+def _long_refresh_ttl_seconds() -> int:
+    import os
+
+    return int(os.getenv("JWT_REFRESH_TOKEN_LONG_EXPIRES_SECONDS", str(30 * 24 * 3600)))
+
+
+class TestRefreshRotationRememberMe:
+    def test_refresh_rotation_preserves_remember_me_false(self, client, sample_user):
+        login_response = _post_login(client, sample_user, remember_me=False)
+        assert login_response.status_code == 200
+
+        login_cookie = _refresh_cookie_header(login_response)
+        assert login_cookie is not None
+        assert _is_session_cookie(login_cookie)
+
+        refresh_response = _post_refresh(client)
+        assert refresh_response.status_code == 200, refresh_response.get_data(as_text=True)
+
+        rotated_cookie = _refresh_cookie_header(refresh_response)
+        assert rotated_cookie is not None
+        assert _is_session_cookie(rotated_cookie), (
+            "Après rotation remember_me=false, cookie session attendu"
+        )
+
+        set_cookie_headers = refresh_response.headers.getlist("Set-Cookie")
+        refresh_jwt = None
+        for header in set_cookie_headers:
+            if header.startswith("refresh_token="):
+                refresh_jwt = header.split("=", 1)[1].split(";", 1)[0]
+                break
+        assert refresh_jwt
+
+        ttl = _decode_refresh_ttl(refresh_jwt)
+        short_ttl = _short_refresh_ttl_seconds()
+        assert ttl <= short_ttl * 2, (
+            f"TTL refresh après rotation devrait rester court (~{short_ttl}s), reçu {ttl}s"
+        )
+
+    def test_refresh_rotation_preserves_remember_me_true(self, client, sample_user):
+        login_response = _post_login(client, sample_user, remember_me=True)
+        assert login_response.status_code == 200
+
+        login_cookie = _refresh_cookie_header(login_response)
+        assert login_cookie is not None
+        login_max_age = _refresh_max_age(login_cookie)
+        assert login_max_age is not None and login_max_age >= 7 * 24 * 3600
+
+        refresh_response = _post_refresh(client)
+        assert refresh_response.status_code == 200, refresh_response.get_data(as_text=True)
+
+        rotated_cookie = _refresh_cookie_header(refresh_response)
+        assert rotated_cookie is not None
+        rotated_max_age = _refresh_max_age(rotated_cookie)
+        assert rotated_max_age is not None and rotated_max_age >= 7 * 24 * 3600, (
+            "Après rotation remember_me=true, Max-Age long attendu"
+        )
+
+        set_cookie_headers = refresh_response.headers.getlist("Set-Cookie")
+        refresh_jwt = None
+        for header in set_cookie_headers:
+            if header.startswith("refresh_token="):
+                refresh_jwt = header.split("=", 1)[1].split(";", 1)[0]
+                break
+        assert refresh_jwt
+
+        ttl = _decode_refresh_ttl(refresh_jwt)
+        long_ttl = _long_refresh_ttl_seconds()
+        assert ttl >= long_ttl // 2, (
+            f"TTL refresh après rotation devrait rester long (~{long_ttl}s), reçu {ttl}s"
+        )
+
+    def test_no_involuntary_ttl_conversion(self, app, sample_user):
+        """false→false et true→true ; jamais de bascule involontaire."""
+        for remember_me in (False, True):
+            isolated = app.test_client()
+            login_response = _post_login(isolated, sample_user, remember_me=remember_me)
+            assert login_response.status_code == 200
+
+            if remember_me:
+                login_ttl = _long_refresh_ttl_seconds()
+                login_cookie = _refresh_cookie_header(login_response)
+                assert _refresh_max_age(login_cookie or "") is not None
+            else:
+                login_ttl = _short_refresh_ttl_seconds()
+                login_cookie = _refresh_cookie_header(login_response)
+                assert _is_session_cookie(login_cookie or "")
+
+            refresh_response = isolated.post("/api/v1/auth/refresh-token", json={})
+            assert refresh_response.status_code == 200
+
+            set_cookie_headers = refresh_response.headers.getlist("Set-Cookie")
+            refresh_jwt = None
+            for header in set_cookie_headers:
+                if header.startswith("refresh_token="):
+                    refresh_jwt = header.split("=", 1)[1].split(";", 1)[0]
+                    break
+            assert refresh_jwt
+            rotated_ttl = _decode_refresh_ttl(refresh_jwt)
+
+            if remember_me:
+                assert rotated_ttl >= login_ttl // 2
+                assert not _is_session_cookie(_refresh_cookie_header(refresh_response) or "")
+            else:
+                assert rotated_ttl <= login_ttl * 2
+                assert _is_session_cookie(_refresh_cookie_header(refresh_response) or "")

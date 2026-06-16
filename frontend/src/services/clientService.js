@@ -1,7 +1,6 @@
 // src/services/clientService.js
 
 import apiClient from '../utils/apiClient';
-import { getFreshToken } from './authService';
 import { getActivePublicId } from '../utils/webAuthSession';
 
 /**
@@ -24,14 +23,14 @@ export const fetchClient = async (publicIdOverride = null) => {
 
 /**
  * Change le mot de passe du compte client connecté.
- * Le backend exige un JWT « fresh » : obtention via le mot de passe actuel, puis POST reset-password.
+ * Le backend exige un JWT « fresh » : l’intercepteur global (FreshTokenReauthContext)
+ * gère le 401 fresh via modale puis retente la requête.
  */
 export const changeClientPassword = async (publicId, { oldPassword, newPassword, confirmPassword }) => {
   const pid = String(publicId || '').trim();
   if (!pid) {
     throw new Error("Identifiant client manquant.");
   }
-  await getFreshToken(oldPassword);
   const { data } = await apiClient.post(`/clients/${pid}/reset-password`, {
     old_password: oldPassword,
     new_password: newPassword,

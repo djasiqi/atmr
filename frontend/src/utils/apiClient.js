@@ -11,6 +11,11 @@ import {
   removeLegacyGlobalTokens,
   setAuthEnv as setSessionAuthEnv,
 } from './webAuthSession';
+import { notifySessionReauthRequired } from './deferredSessionLogout';
+import {
+  isUserRecentlyActive,
+  SESSION_WORKING_LOOKBACK_MS,
+} from './userActivityTracker';
 
 let baseApiRest = process.env.REACT_APP_API_BASE_URL || process.env.REACT_APP_API_URL || '/api/v1';
 
@@ -350,6 +355,153 @@ const processQueue = (error, token = null) => {
   failedQueue = [];
 };
 
+const FRESH_TOKEN_REQUIRED_MESSAGE =
+  'Cette action nécessite une reconnexion récente. Veuillez vous reconnecter pour continuer.';
+
+export const AUTH_TOKEN_NOT_FRESH = 'AUTH_TOKEN_NOT_FRESH';
+
+let freshTokenReauthHandler = null;
+
+export const registerFreshTokenReauthHandler = (handler) => {
+  freshTokenReauthHandler = typeof handler === 'function' ? handler : null;
+};
+
+export const requestFreshTokenReauth = (options) => {
+  if (!freshTokenReauthHandler) {
+    return Promise.reject(new Error('FreshTokenReauthProvider non monté'));
+  }
+  return freshTokenReauthHandler(options);
+};
+
+export const isAuthRefreshInProgress = () => isRefreshing;
+
+const isFreshTokenErrorPayload = (errorData = {}) => {
+  const errorMsg = (errorData.msg || errorData.error || errorData.message || '').toLowerCase();
+  return (
+    errorMsg.includes('fresh') ||
+    errorMsg.includes('frais') ||
+    errorMsg.includes('fresh token required') ||
+    errorMsg.includes('token must be fresh') ||
+    errorMsg.includes('only fresh tokens') ||
+    errorMsg.includes("n'est pas frais") ||
+    errorMsg.includes('token n\'est pas frais')
+  );
+};
+
+const requestDeferredSessionLogout = (cfg = {}) => {
+  if (cfg.skipFreshTokenLogout || cfg.skipAuthRedirect) {
+    return;
+  }
+
+  void (async () => {
+    try {
+      const { tryRefreshSessionIfNeeded } = await import('./sessionKeepAlive');
+      if (await tryRefreshSessionIfNeeded({ force: true })) {
+        return;
+      }
+    } catch (_) {
+      // ignore
+    }
+
+    notifySessionReauthRequired({
+      silentUntilIdle: isUserRecentlyActive(SESSION_WORKING_LOOKBACK_MS),
+    });
+  })();
+};
+
+/** Renouvelle access + refresh token (cookies httpOnly + miroir localStorage). */
+export async function refreshSessionTokens(targetEnv = getCurrentAuthEnv()) {
+  if (isRefreshing) {
+    return new Promise((resolve, reject) => {
+      failedQueue.push({
+        resolve: () => resolve(true),
+        reject,
+      });
+    });
+  }
+
+  isRefreshing = true;
+  try {
+    const refreshToken = getEnvRefreshToken(targetEnv, { allowLegacy: true });
+    const refreshBase = isUnifiedGatewayHost()
+      ? targetEnv === DEMO_ENV_KEY
+        ? API_BASES.demo
+        : API_BASES.app
+      : undefined;
+
+    const refreshResponse = await apiClient.post(
+      '/auth/refresh-token',
+      refreshToken ? { refresh_token: refreshToken } : {},
+      {
+        skipAuthRedirect: true,
+        _targetEnv: targetEnv,
+        ...(refreshBase ? { baseURL: refreshBase } : {}),
+      }
+    );
+
+    const refreshed = refreshResponse?.data || {};
+    const nextAccessToken = refreshed.access_token || refreshed.token;
+    const nextRefreshToken = refreshed.refresh_token;
+    if (nextAccessToken) {
+      if (targetEnv === DEMO_ENV_KEY) {
+        localStorage.setItem('demo_access_token', nextAccessToken);
+      } else {
+        localStorage.setItem('app_access_token', nextAccessToken);
+      }
+    }
+    if (nextRefreshToken) {
+      if (targetEnv === DEMO_ENV_KEY) {
+        localStorage.setItem('demo_refresh_token', nextRefreshToken);
+      } else {
+        localStorage.setItem('app_refresh_token', nextRefreshToken);
+      }
+    }
+    removeLegacyGlobalTokens();
+    processQueue(null, null);
+    return true;
+  } catch (error) {
+    processQueue(error, null);
+    throw error;
+  } finally {
+    isRefreshing = false;
+  }
+};
+
+const rejectFreshTokenRequired = async (error, cfg = {}) => {
+  const handler = freshTokenReauthHandler;
+  if (handler && !cfg._freshReauthAttempted && !cfg.skipFreshTokenReauth) {
+    try {
+      await handler({
+        title: 'Confirmation requise',
+        retryFn: () =>
+          apiClient({
+            ...cfg,
+            _freshReauthAttempted: true,
+          }),
+      });
+      return apiClient({
+        ...cfg,
+        _freshReauthAttempted: true,
+      });
+    } catch (reauthError) {
+      return Promise.reject({
+        ...error,
+        code: AUTH_TOKEN_NOT_FRESH,
+        isFreshTokenRequired: true,
+        message: FRESH_TOKEN_REQUIRED_MESSAGE,
+        cause: reauthError,
+      });
+    }
+  }
+
+  return Promise.reject({
+    ...error,
+    code: AUTH_TOKEN_NOT_FRESH,
+    isFreshTokenRequired: true,
+    message: FRESH_TOKEN_REQUIRED_MESSAGE,
+  });
+};
+
 export const cleanLocalSession = () => {
   localStorage.removeItem(AUTH_ENV_STORAGE_KEY);
   localStorage.removeItem('app_user');
@@ -390,7 +542,15 @@ export const cleanLocalSession = () => {
   }
 };
 
-export const logoutUser = async (options = { redirect: true }) => {
+export const logoutUser = async (options = {}) => {
+  const { redirect = true, preserveNext = false } = options;
+  try {
+    const { cancelDeferredLogout } = await import('./deferredSessionLogout');
+    cancelDeferredLogout();
+  } catch (_) {
+    // ignore
+  }
+
   try {
     const isUnified = isUnifiedGatewayHost();
     await apiClient.delete('/shadow-mode/session', {
@@ -416,11 +576,11 @@ export const logoutUser = async (options = { redirect: true }) => {
     // Notifier useAuthToken du changement dans le même onglet
     window.dispatchEvent(new Event('auth-changed'));
 
-    if (options?.redirect !== false) {
+    if (redirect !== false) {
       const path = `${window.location.pathname}${window.location.search || ''}`;
       const isAlreadyLogin = window.location.pathname === '/login';
       window.location.href =
-        !isAlreadyLogin && path && path !== '/'
+        preserveNext && !isAlreadyLogin && path && path !== '/'
           ? `/login?next=${encodeURIComponent(path)}`
           : '/login';
     }
@@ -448,30 +608,14 @@ apiClient.interceptors.response.use(
 
     // ✅ Gestion 401 avec refresh automatique
     if (status === 401 && !cfg.skipAuthRedirect && !isAuthEndpoint) {
-      // ✅ Détecter AVANT le refresh si c'est un problème de token fresh
-      const errorData = error?.response?.data || {};
-      const errorMsg = (errorData.msg || errorData.error || errorData.message || '').toLowerCase();
-      const isFreshTokenRequired = 
-        errorMsg.includes('fresh') || 
-        errorMsg.includes('frais') || // Français
-        errorMsg.includes('fresh token required') ||
-        errorMsg.includes('token must be fresh') ||
-        errorMsg.includes('only fresh tokens') ||
-        errorMsg.includes("n'est pas frais") || // Français: "n'est pas frais"
-        errorMsg.includes('token n\'est pas frais'); // Français: "token n'est pas frais"
-      
-      // Si c'est un problème de token fresh, ne pas tenter le refresh mais retourner l'erreur avec le flag
-      if (isFreshTokenRequired) {
-        return Promise.reject({
-          ...error,
-          isFreshTokenRequired: true,
-          message: 'Cette action nécessite une reconnexion récente. Veuillez vous reconnecter pour continuer.',
-        });
+      // Token non-fresh : déconnexion + redirection login (sauf opt-out explicite)
+      if (isFreshTokenErrorPayload(error?.response?.data)) {
+        return rejectFreshTokenRequired(error, cfg);
       }
       
       // Si déjà en train de refresh une requête /auth/refresh-token, éviter boucle
       if (requestUrl.includes('/auth/refresh-token')) {
-        logoutUser();
+        requestDeferredSessionLogout(cfg);
         return Promise.reject(error);
       }
 
@@ -495,59 +639,15 @@ apiClient.interceptors.response.use(
 
       try {
         const targetEnv = cfg._targetEnv || getCurrentAuthEnv();
-        const refreshToken = getEnvRefreshToken(targetEnv, { allowLegacy: true });
-        const refreshBase = isUnifiedGatewayHost()
-          ? targetEnv === DEMO_ENV_KEY
-            ? API_BASES.demo
-            : API_BASES.app
-          : undefined;
-
-        const refreshResponse = await apiClient.post(
-          '/auth/refresh-token',
-          refreshToken ? { refresh_token: refreshToken } : {},
-          {
-            skipAuthRedirect: true, // Éviter boucle
-            _targetEnv: targetEnv,
-            ...(refreshBase ? { baseURL: refreshBase } : {}),
-          }
-        );
-
-        const refreshed = refreshResponse?.data || {};
-        const nextAccessToken = refreshed.access_token || refreshed.token;
-        const nextRefreshToken = refreshed.refresh_token;
-        if (nextAccessToken) {
-          if (targetEnv === DEMO_ENV_KEY) {
-            localStorage.setItem('demo_access_token', nextAccessToken);
-          } else {
-            localStorage.setItem('app_access_token', nextAccessToken);
-          }
-        }
-        if (nextRefreshToken) {
-          if (targetEnv === DEMO_ENV_KEY) {
-            localStorage.setItem('demo_refresh_token', nextRefreshToken);
-          } else {
-            localStorage.setItem('app_refresh_token', nextRefreshToken);
-          }
-        }
-        // Nettoyage progressif des clés legacy globales après refresh réussi.
-        removeLegacyGlobalTokens();
-
-        // Process queued requests après rafraîchissement réussi
-        processQueue(null, null);
+        await refreshSessionTokens(targetEnv);
 
         // ✅ P1-1: Retry requête originale
-        // Les nouveaux cookies sont automatiquement envoyés avec withCredentials: true
-        // Pas besoin d'ajouter Authorization header
-        // ⚡ Marquer que c'est un retry après refresh réussi pour éviter logs d'erreur
         cfg._retryAfterRefresh = true;
-        // ⚡ Supprimer l'erreur de la config pour éviter les logs Axios
         delete cfg._isRetry;
         try {
           const retryResponse = await apiClient(cfg);
-          // ✅ Refresh réussi → retourner la réponse réussie (pas l'erreur 401 initiale)
           return retryResponse;
         } catch (retryError) {
-          // Si le retry échoue aussi, propager l'erreur
           throw retryError;
         }
       } catch (refreshError) {
@@ -567,32 +667,15 @@ apiClient.interceptors.response.use(
             .catch(() => {});
         }
 
-        // ✅ Détecter si l'erreur est due à un token non-fresh requis
-        const errorData = refreshError?.response?.data || {};
-        const errorMsg = (errorData.msg || errorData.error || errorData.message || '').toLowerCase();
-        const isFreshTokenRequired = 
-          errorMsg.includes('fresh') || 
-          errorMsg.includes('frais') || // Français
-          errorMsg.includes('fresh token required') ||
-          errorMsg.includes('token must be fresh') ||
-          errorMsg.includes('only fresh tokens') ||
-          errorMsg.includes("n'est pas frais") || // Français: "n'est pas frais"
-          errorMsg.includes('token n\'est pas frais'); // Français: "token n'est pas frais"
-        
-        // Si c'est un problème de token fresh, ne pas déconnecter mais laisser le composant gérer l'erreur
-        if (isFreshTokenRequired) {
-          return Promise.reject({
-            ...refreshError,
-            isFreshTokenRequired: true,
-            message: 'Cette action nécessite une reconnexion récente. Veuillez vous reconnecter pour continuer.',
-          });
+        if (isFreshTokenErrorPayload(refreshError?.response?.data)) {
+          return rejectFreshTokenRequired(refreshError, cfg);
         }
         // Ne pas faire de logout global si l'erreur est cross-env (requête demo avec session app ou inversement)
         const requestEnv = cfg.baseURL === API_BASES.demo ? DEMO_ENV_KEY : cfg.baseURL === API_BASES.app ? APP_ENV_KEY : null;
         const currentEnv = getCurrentAuthEnv();
         const isCrossEnvError = requestEnv && requestEnv !== currentEnv;
         if (!isCrossEnvError) {
-          logoutUser();
+          requestDeferredSessionLogout(cfg);
         }
         return Promise.reject(refreshError);
       } finally {
@@ -600,24 +683,8 @@ apiClient.interceptors.response.use(
       }
     }
 
-    // ✅ Détecter aussi dans l'erreur initiale si c'est un problème de token fresh
-    const errorData = error?.response?.data || {};
-    const errorMsg = (errorData.msg || errorData.error || errorData.message || '').toLowerCase();
-    const isFreshTokenRequired = 
-      errorMsg.includes('fresh') || 
-      errorMsg.includes('frais') || // Français
-      errorMsg.includes('fresh token required') ||
-      errorMsg.includes('token must be fresh') ||
-      errorMsg.includes('only fresh tokens') ||
-      errorMsg.includes("n'est pas frais") || // Français: "n'est pas frais"
-      errorMsg.includes('token n\'est pas frais'); // Français: "token n'est pas frais"
-    
-    if (isFreshTokenRequired && status === 401) {
-      return Promise.reject({
-        ...error,
-        isFreshTokenRequired: true,
-        message: 'Cette action nécessite une reconnexion récente. Veuillez vous reconnecter pour continuer.',
-      });
+    if (status === 401 && isFreshTokenErrorPayload(error?.response?.data)) {
+      return rejectFreshTokenRequired(error, cfg);
     }
     // Pas de fallback automatique vers /api/v1: on reste sur la vérité du backend
     return Promise.reject(error);

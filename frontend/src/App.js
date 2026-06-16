@@ -14,8 +14,11 @@ import GoogleMapsProvider from './components/common/GoogleMapsProvider';
 import PwaOfflineBanner from './components/common/PwaOfflineBanner';
 import { Toaster } from 'sonner';
 import Home from './pages/Home/Home';
-import { hasActiveSession } from './utils/webAuthSession';
 import BookNewRedirect from './pages/Auth/BookNewRedirect';
+import { recordUserActivity } from './utils/userActivityTracker';
+import { isRecoverableAuthError, isFreshTokenRequiredError } from './utils/queryAuthError';
+import { FreshTokenReauthProvider } from './contexts/FreshTokenReauthContext';
+import { SessionBootstrapProvider } from './contexts/SessionBootstrapContext';
 
 // ✅ PERF: Pages critiques (eager loading - chargées immédiatement)
 import Login from './pages/Auth/Login';
@@ -59,6 +62,10 @@ function ScrollToTopOnNavigation() {
 
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }, [location.pathname, location.search]);
+
+  useEffect(() => {
+    recordUserActivity();
   }, [location.pathname, location.search]);
 
   return null;
@@ -172,79 +179,38 @@ const InstitutionSettings = lazy(() => import('./pages/institution/Settings/Inst
 // ──────────────────────────────────────────────────────────
 // Query Client (déclaré hors composant pour éviter recréation)
 // Exporté pour permettre le nettoyage du cache au logout
-export const queryClient = new QueryClient();
+export const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry(failureCount, error) {
+        if (isRecoverableAuthError(error) || isFreshTokenRequiredError(error)) {
+          return false;
+        }
+        return failureCount < 2;
+      },
+      meta: {
+        suppressAuthError: false,
+      },
+    },
+    mutations: {
+      retry(failureCount, error) {
+        if (isRecoverableAuthError(error) || isFreshTokenRequiredError(error)) {
+          return false;
+        }
+        return failureCount < 1;
+      },
+    },
+  },
+});
 wrapInvalidateQueries(queryClient);
 if (typeof window !== 'undefined') {
   installCompanyDashboardApiTiming();
   startCompanyDashboardWebVitals();
 }
 
-// Keep-alive user activity
-let lastActivity = Date.now();
-let activityTimeout = null;
-
-// ✅ PERF: Throttle activity tracking pour réduire INP
-function resetActivityTimer() {
-  // Throttle à 1 seconde pour éviter trop d'appels
-  if (activityTimeout) {
-    return;
-  }
-  lastActivity = Date.now();
-  activityTimeout = setTimeout(() => {
-    activityTimeout = null;
-  }, 1000);
-}
-
-// Rafraîchissement automatique du token toutes les 50 min si actif
-function setupTokenAutoRefresh() {
-  // ✅ PERF: Écoute activité avec options passives pour meilleure performance
-  const options = { passive: true, capture: false };
-  window.addEventListener('mousemove', resetActivityTimer, options);
-  window.addEventListener('keydown', resetActivityTimer, options);
-  window.addEventListener('touchstart', resetActivityTimer, options);
-
-  const id = setInterval(
-    async () => {
-      const now = Date.now();
-      const hasSession = hasActiveSession();
-
-      // Vérifier si l'utilisateur est actif (moins de 55 min d'inactivité)
-      const isActive = now - lastActivity < 55 * 60 * 1000;
-
-      // ✅ P1-1: Standardisation sur cookies httpOnly uniquement
-      // Les tokens sont dans les cookies httpOnly, le backend gère le refresh automatiquement
-      // On ne fait pas de refresh automatique côté frontend car :
-      // 1. Les cookies sont envoyés automatiquement avec chaque requête
-      // 2. Le backend peut détecter l'expiration et renouveler automatiquement
-      // 3. L'interceptor 401 gère déjà le refresh en cas d'erreur
-      if (!hasSession || !isActive) {
-        return; // Pas d'utilisateur ou inactif, ne rien faire
-      }
-
-      // ✅ P1-1: Pas besoin de refresh automatique
-      // Le backend gère les cookies automatiquement
-      // L'interceptor 401 gère le refresh en cas d'erreur
-    },
-    50 * 60 * 1000
-  ); // Toutes les 50 minutes (le token expire après 1h)
-
-  // cleanup
-  return () => {
-    clearInterval(id);
-    window.removeEventListener('mousemove', resetActivityTimer);
-    window.removeEventListener('keydown', resetActivityTimer);
-    window.removeEventListener('touchstart', resetActivityTimer);
-  };
-}
 // ──────────────────────────────────────────────────────────
 
 const App = () => {
-  // Configuration du rafraîchissement automatique du token
-  useEffect(() => {
-    const cleanup = setupTokenAutoRefresh();
-    return cleanup;
-  }, []);
-
   useEffect(() => {
     let cancelled = false;
     let idleId = null;
@@ -275,6 +241,8 @@ const App = () => {
 
   return (
     <QueryClientProvider client={queryClient}>
+      <SessionBootstrapProvider>
+        <FreshTokenReauthProvider>
       <Router
         future={{
           v7_startTransition: true,
@@ -831,6 +799,8 @@ const App = () => {
           </Suspense>
         </GoogleMapsRouteScope>
       </Router>
+        </FreshTokenReauthProvider>
+      </SessionBootstrapProvider>
     </QueryClientProvider>
   );
 };

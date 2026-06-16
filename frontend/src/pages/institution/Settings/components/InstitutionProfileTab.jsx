@@ -78,7 +78,7 @@ const InstitutionProfileTab = () => {
     if (!meData) return;
     const resolved = resolveLogoUrl(meData.logo_url);
     setLogoPreview(resolved || null);
-  }, [meData?.logo_url]);
+  }, [meData]);
 
   // Dirty state : détecter si des champs ont changé
   const isDirty = useMemo(() => {

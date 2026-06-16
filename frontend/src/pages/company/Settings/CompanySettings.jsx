@@ -26,7 +26,7 @@ import VehiclesTab from './tabs/VehiclesTab';
 
 import { useLirieCompany } from '../../../hooks/useLirieCompany';
 import { updateCompanyInfo, uploadCompanyLogo } from '../../../services/companyService';
-import { getFreshToken } from '../../../services/authService';
+import { useFreshTokenReauth } from '../../../contexts/FreshTokenReauthContext';
 import resolveLogoUrl from '../../../utils/resolveLogoUrl';
 
 // Validations locales
@@ -36,6 +36,7 @@ const uidRx = /^(CHE[- ]?\d{3}\.\d{3}\.\d{3}(\s*TVA)?)$|^(CHE[- ]?\d{9}(\s*TVA)?
 
 export default function CompanySettings() {
   const { company, companyError: loadError, loadingCompany, reloadCompany } = useLirieCompany();
+  const { requestFreshTokenReauth } = useFreshTokenReauth();
   const location = useLocation();
 
   // Onglet actif (détecte le hash dans l'URL)
@@ -73,9 +74,6 @@ export default function CompanySettings() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [passwordInput, setPasswordInput] = useState('');
-  const [pendingPayload, setPendingPayload] = useState(null);
 
   // -------- Logo --------
   const [logoPreview, setLogoPreview] = useState(null);
@@ -342,58 +340,33 @@ export default function CompanySettings() {
           domicile_city: form.domicile_city || undefined,
           domicile_country: form.domicile_country || undefined,
         };
-        setPendingPayload(payload);
         pendingSaveBillingRef.current = true;
-        setShowPasswordModal(true);
         setError('');
+        try {
+          await requestFreshTokenReauth({
+            title: 'Vérification requise',
+            retryFn: async () => {
+              const updated = await updateCompanyInfo(payload);
+              await reloadCompany?.();
+              setForm((prev) => ({
+                ...prev,
+                uid_ide: updated?.uid_ide ?? prev.uid_ide,
+              }));
+              if (pendingSaveBillingRef.current && billingRef.current?.save) {
+                await billingRef.current.save();
+              }
+              pendingSaveBillingRef.current = false;
+              setMessage('Parametres enregistres avec succes.');
+              setIsEditing(false);
+            },
+          });
+        } catch {
+          pendingSaveBillingRef.current = false;
+        }
       } else {
         const errorMsg = err?.response?.data?.error || err?.message || 'Erreur lors de la sauvegarde.';
         setError(errorMsg);
       }
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  // Gérer la soumission du mot de passe pour obtenir un token fresh
-  const handlePasswordSubmit = async (e) => {
-    e.preventDefault();
-    if (!passwordInput.trim()) {
-      setError('Veuillez entrer votre mot de passe.');
-      return;
-    }
-
-    setSaving(true);
-    setError('');
-    try {
-      // Obtenir un token fresh
-      await getFreshToken(passwordInput);
-      setShowPasswordModal(false);
-      setPasswordInput('');
-      
-      // Réessayer la modification avec le nouveau token
-      if (pendingPayload) {
-        const updated = await updateCompanyInfo(pendingPayload);
-        await reloadCompany?.();
-        setForm((prev) => ({
-          ...prev,
-          uid_ide: updated?.uid_ide ?? prev.uid_ide,
-        }));
-        setPendingPayload(null);
-      }
-
-      if (pendingSaveBillingRef.current && billingRef.current?.save) {
-        try {
-          await billingRef.current.save();
-        } finally {
-          pendingSaveBillingRef.current = false;
-        }
-      }
-
-      setMessage('Parametres enregistres avec succes.');
-      setIsEditing(false);
-    } catch (err) {
-      setError(err?.response?.data?.error || err?.message || 'Mot de passe incorrect ou erreur lors de l\'obtention du token.');
     } finally {
       setSaving(false);
     }
@@ -579,7 +552,7 @@ export default function CompanySettings() {
           {loadingCompany && <p>Chargement...</p>}
           {loadError && <div className={styles.error}>{loadError}</div>}
           {message && <div className={styles.success}>{message}</div>}
-          {error && !showPasswordModal && <div className={styles.error}>{error}</div>}
+          {error && <div className={styles.error}>{error}</div>}
 
           {/* Zone B — Tabs segmentees (V4/V5) */}
           <div className={styles.tabsContainer} role="tablist">
@@ -636,63 +609,6 @@ export default function CompanySettings() {
           )}
         </main>
       </div>
-
-      {/* Modal mot de passe (V3) */}
-      {showPasswordModal && (
-        <div
-          className={styles.modalOverlay}
-          onClick={() => {
-            setShowPasswordModal(false);
-            setPasswordInput('');
-            setPendingPayload(null);
-            setError('');
-          }}
-        >
-          <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-            <h2 className={styles.modalTitle}>Verification requise</h2>
-            <p className={styles.modalText}>
-              Pour des raisons de securite, veuillez entrer votre mot de passe pour confirmer cette modification.
-            </p>
-            <form onSubmit={handlePasswordSubmit}>
-              <div className={styles.formGroup}>
-                <label htmlFor="password">Mot de passe</label>
-                <input
-                  id="password"
-                  type="password"
-                  value={passwordInput}
-                  onChange={(e) => setPasswordInput(e.target.value)}
-                  className={styles.input}
-                  autoFocus
-                  disabled={saving}
-                />
-              </div>
-              {error && <div className={styles.error}>{error}</div>}
-              <div className={styles.modalActions}>
-                <button
-                  type="button"
-                  className={`${styles.button} ${styles.secondary}`}
-                  onClick={() => {
-                    setShowPasswordModal(false);
-                    setPasswordInput('');
-                    setPendingPayload(null);
-                    setError('');
-                  }}
-                  disabled={saving}
-                >
-                  Annuler
-                </button>
-                <button
-                  type="submit"
-                  className={`${styles.button} ${styles.primary}`}
-                  disabled={saving || !passwordInput.trim()}
-                >
-                  {saving ? 'Verification...' : 'Confirmer'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

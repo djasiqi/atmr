@@ -209,6 +209,49 @@ def _resolve_refresh_token_expires(
     return timedelta(seconds=short_seconds)
 
 
+def _resolve_remember_me_from_refresh_token(
+    refresh_token: str,
+    *,
+    is_mobile_request: bool,
+) -> bool:
+    """Déduit remember_me du JWT refresh (claim explicite ou TTL hérité).
+
+    Pour les tokens émis avant l'introduction de la claim, on infère depuis le TTL.
+    """
+    if is_mobile_request:
+        return False
+
+    try:
+        decoded = decode_token(refresh_token, allow_expired=False)
+    except Exception:
+        return False
+
+    if "remember_me" in decoded:
+        return bool(decoded["remember_me"])
+
+    ttl = int(decoded.get("exp", 0)) - int(decoded.get("iat", 0))
+    short_seconds = int(
+        os.getenv("JWT_REFRESH_TOKEN_SHORT_EXPIRES_SECONDS", str(60 * 60))
+    )
+    long_seconds = int(
+        os.getenv("JWT_REFRESH_TOKEN_LONG_EXPIRES_SECONDS", str(30 * 24 * 3600))
+    )
+    if ttl <= short_seconds * 2:
+        return False
+    if ttl >= long_seconds // 2:
+        return True
+    return False
+
+
+def _refresh_cookie_max_age(
+    *, remember_me: bool, refresh_expires_delta: timedelta
+) -> int | None:
+    """Max-Age cookie refresh : persistant si remember_me, session sinon."""
+    if remember_me:
+        return int(refresh_expires_delta.total_seconds())
+    return None
+
+
 ACTIVATION_EMAIL_TTL_MINUTES = int(os.getenv("ACTIVATION_EMAIL_TTL_MINUTES", "30"))
 ACTIVATION_SMS_TTL_MINUTES = int(os.getenv("ACTIVATION_SMS_TTL_MINUTES", "5"))
 ACTIVATION_SMS_MAX_ATTEMPTS = int(os.getenv("ACTIVATION_SMS_MAX_ATTEMPTS", "5"))
@@ -994,12 +1037,15 @@ def _login_post_body():
         is_mobile_request=is_mobile_request,
         remember_me=remember_me,
     )
+    refresh_claims: dict[str, object] = {
+        "aud": "atmr-api",
+        "pwd_hash": pwd_hash_version,
+    }
+    if not is_mobile_request:
+        refresh_claims["remember_me"] = remember_me
     refresh_token = create_refresh_token(
         identity=str(user.public_id),
-        additional_claims={
-            "aud": "atmr-api",  # Audience claim pour sécurité
-            "pwd_hash": pwd_hash_version,  # Hash pour invalider après changement de mot de passe
-        },
+        additional_claims=refresh_claims,
         expires_delta=refresh_expires_delta,
     )
 
@@ -2104,15 +2150,25 @@ class RefreshToken(Resource):
             )
 
             # 7. ✅ ROTATION AUTOMATIQUE : Générer toujours un nouveau refresh_token
-            # Utiliser le modèle User déjà récupéré pour accéder aux méthodes de hash
+            # Conserver la politique remember_me d'origine (false→false, true→true).
             pwd_hash_version = _get_password_hash_version(user)
-            refresh_expires_delta = current_app.config["JWT_REFRESH_TOKEN_EXPIRES"]
+            remember_me = _resolve_remember_me_from_refresh_token(
+                refresh_token,
+                is_mobile_request=is_mobile_request,
+            )
+            refresh_expires_delta = _resolve_refresh_token_expires(
+                is_mobile_request=is_mobile_request,
+                remember_me=remember_me,
+            )
+            new_refresh_claims: dict[str, object] = {
+                "aud": "atmr-api",
+                "pwd_hash": pwd_hash_version,
+            }
+            if not is_mobile_request:
+                new_refresh_claims["remember_me"] = remember_me
             new_refresh_token = create_refresh_token(
                 identity=str(user.public_id),
-                additional_claims={
-                    "aud": "atmr-api",
-                    "pwd_hash": pwd_hash_version,
-                },
+                additional_claims=new_refresh_claims,
                 expires_delta=refresh_expires_delta,
             )
 
@@ -2144,7 +2200,11 @@ class RefreshToken(Resource):
             # ✅ SECURITY: Stocker le nouveau token dans Redis et DB
             try:
                 # Stocker dans Redis pour rotation et limitation
-                token_service.store_token(user.id, new_refresh_token)
+                token_service.store_token(
+                    user.id,
+                    new_refresh_token,
+                    ttl_seconds=int(refresh_expires_delta.total_seconds()),
+                )
 
                 # Stocker aussi dans la DB pour compatibilité et audit
                 refresh_expires_at = datetime.now(UTC) + refresh_expires_delta
@@ -2251,16 +2311,18 @@ class RefreshToken(Resource):
                     domain=current_app.config["COOKIE_DOMAIN"],
                 )
 
-                # Cookie refresh_token (rotation automatique)
+                # Cookie refresh_token (rotation automatique, politique remember_me conservée)
+                refresh_cookie_max_age = _refresh_cookie_max_age(
+                    remember_me=remember_me,
+                    refresh_expires_delta=refresh_expires_delta,
+                )
                 response.set_cookie(
                     current_app.config["COOKIE_REFRESH_TOKEN_NAME"],
                     new_refresh_token,
                     httponly=current_app.config["COOKIE_HTTP_ONLY"],
                     secure=current_app.config["COOKIE_SECURE"],
                     samesite=current_app.config["COOKIE_SAME_SITE"],
-                    max_age=int(
-                        current_app.config["JWT_REFRESH_TOKEN_EXPIRES"].total_seconds()
-                    ),
+                    max_age=refresh_cookie_max_age,
                     path=current_app.config["COOKIE_PATH"],
                     domain=current_app.config["COOKIE_DOMAIN"],
                 )
