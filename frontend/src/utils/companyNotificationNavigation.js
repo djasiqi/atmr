@@ -11,8 +11,8 @@ export const resolveCompanyNotificationLink = ({
   const base = `${dashboardRoot}/company/${companyPublicId}`;
   const bookingId = meta.booking_id;
 
-  // Demande modifiée par l'institution → page Réservations, filtrée sur le jour de la demande.
-  if (notif.event_type === 'request_updated') {
+  // Demande institution (nouvelle ou modifiée) → page Réservations, filtrée sur le jour.
+  if (notif.event_type === 'request_updated' || notif.event_type === 'new_request') {
     const params = new URLSearchParams();
     if (meta.mission_date) params.set('date', String(meta.mission_date));
     if (meta.offer_id) params.set('offer', String(meta.offer_id));
@@ -32,13 +32,6 @@ export const resolveCompanyNotificationLink = ({
       params.set('focus', 'change_request');
     }
     return `${base}/dispatch?${params.toString()}`;
-  }
-
-  if (notif.event_type === 'new_request') {
-    const params = new URLSearchParams({ tab: 'institution' });
-    if (meta.request_id) params.set('request', String(meta.request_id));
-    if (meta.offer_id) params.set('offer', String(meta.offer_id));
-    return `${base}?${params.toString()}`;
   }
 
   return base;

@@ -6,12 +6,13 @@ import logging
 import os
 import uuid
 from dataclasses import dataclass
+from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
 from ext import db
 from models.transport_request_leg import TransportRequestLeg
-from shared.time_utils import api_scheduled_iso_to_naive_geneva
+from shared.time_utils import normalize_mission_wall_clock
 
 logger = logging.getLogger(__name__)
 
@@ -109,14 +110,16 @@ def build_legs_chain(
 
 
 def parse_leg_scheduled_time(value: Any) -> Any:
-    """Convertit une ISO API en datetime naïf Genève pour la colonne DateTime."""
+    """Convertit une ISO API en datetime naïf Genève pour la colonne timestamptz."""
     if value is None:
         return None
     if isinstance(value, str):
         stripped = value.strip()
         if not stripped:
             return None
-        return api_scheduled_iso_to_naive_geneva(stripped)
+        return normalize_mission_wall_clock(stripped)
+    if isinstance(value, datetime):
+        return normalize_mission_wall_clock(value)
     return value
 
 

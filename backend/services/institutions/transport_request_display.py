@@ -203,9 +203,9 @@ def build_transport_request_display_blocks(
     next_confirmed = get_effective_dispatch_time(transport_request)
     next_iso = None
     if next_confirmed is not None:
-        from shared.time_utils import iso_utc_z, to_utc_from_db
+        from shared.time_utils import mission_scheduled_to_api_iso
 
-        next_iso = iso_utc_z(to_utc_from_db(next_confirmed))
+        next_iso = mission_scheduled_to_api_iso(next_confirmed)
 
     legs_out: list[dict[str, Any]] = []
     for leg in sorted(
@@ -215,9 +215,9 @@ def build_transport_request_display_blocks(
         st = getattr(leg, "scheduled_time", None)
         scheduled_iso = None
         if st is not None:
-            from shared.time_utils import iso_utc_z, to_utc_from_db
+            from shared.time_utils import mission_scheduled_to_api_iso
 
-            scheduled_iso = iso_utc_z(to_utc_from_db(st))
+            scheduled_iso = mission_scheduled_to_api_iso(st)
         legs_out.append(
             {
                 "sequence_index": getattr(leg, "sequence_index", 0),

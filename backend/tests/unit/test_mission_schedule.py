@@ -10,6 +10,7 @@ import pytest
 from models.transport_request import TransportRequest
 from models.transport_request_leg import TransportRequestLeg
 from services.institutions.mission_schedule import (
+    apply_departure_schedule,
     get_effective_dispatch_time,
     has_at_least_one_confirmed_time,
     is_operational_time,
@@ -97,3 +98,47 @@ class TestGetEffectiveDispatchTime:
         tr.legs[0].scheduled_time = datetime(2026, 6, 12, 15, 0)
         assert tr.scheduled_time == original_dep
         assert get_effective_dispatch_time(tr) == original_dep
+
+
+class TestApplyDepartureSchedule:
+    """Cas 4 STOP GATE P2 — flux payload -> apply_departure_schedule -> modèle."""
+
+    def test_departure_naive_wall_clock_on_model(self):
+        tr = TransportRequest()
+        validated = {
+            "mission_date": "2026-06-16",
+            "scheduled_time": "2026-06-16T12:30:00",
+            "scheduled_time_type": "departure",
+            "pickup_time_confirmed": True,
+        }
+        apply_departure_schedule(tr, validated)
+        assert tr.scheduled_time == datetime(2026, 6, 16, 12, 30)
+        assert tr.scheduled_time.tzinfo is None
+        assert tr.pickup_time_confirmed is True
+        assert tr.mission_date == date(2026, 6, 16)
+
+    def test_departure_from_datetime_object_without_str_coercion(self):
+        tr = TransportRequest()
+        validated = {
+            "mission_date": "2026-06-16",
+            "scheduled_time": datetime(2026, 6, 16, 12, 30),
+            "scheduled_time_type": "departure",
+            "pickup_time_confirmed": True,
+        }
+        apply_departure_schedule(tr, validated)
+        assert tr.scheduled_time == datetime(2026, 6, 16, 12, 30)
+
+    @pytest.mark.parametrize("tz_env", ["UTC", "Europe/Zurich"])
+    def test_departure_stable_before_persistence_across_tz(self, monkeypatch, tz_env):
+        """Cas 3 P2 — apply_departure_schedule indépendant de TZ process."""
+        monkeypatch.setenv("TZ", tz_env)
+        tr = TransportRequest()
+        validated = {
+            "mission_date": "2026-06-16",
+            "scheduled_time": "2026-06-16T12:30:00",
+            "scheduled_time_type": "departure",
+            "pickup_time_confirmed": True,
+        }
+        apply_departure_schedule(tr, validated)
+        assert tr.scheduled_time == datetime(2026, 6, 16, 12, 30)
+        assert tr.scheduled_time.tzinfo is None

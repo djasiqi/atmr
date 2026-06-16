@@ -40,7 +40,7 @@ import {
   getMissionScheduleCardDisplay,
   getNextConfirmedLegTime,
 } from '../../../utils/formatLegTime';
-import { extractWallClockDate } from '../../../utils/missionTimeDisplay';
+import { extractWallClockDate, extractWallClockTime, getGenevaTodayDateStr } from '../../../utils/missionTimeDisplay';
 import s from './InstitutionDashboard.module.css';
 
 // ─── Status config ──────────────────────────────────────────
@@ -90,7 +90,7 @@ const resolveDashboardSchedule = (req) => {
   const dateSrc = req?.mission_date
     || extractWallClockDate(req?.scheduled_time)
     || extractWallClockDate(req?.next_confirmed_time)
-    || extractWallClockDate(getNextConfirmedLegTime(req)?.iso);
+    || extractWallClockDate(getNextConfirmedLegTime(req));
   const date = dateSrc ? fmtDate(dateSrc) : '—';
   const hour = primary?.time || '';
   const hourKind = primary?.label || '';
@@ -101,18 +101,21 @@ const getRequestMissionDate = (req) => (
   req?.mission_date
   || extractWallClockDate(req?.scheduled_time)
   || extractWallClockDate(req?.next_confirmed_time)
-  || extractWallClockDate(getNextConfirmedLegTime(req)?.iso)
+  || extractWallClockDate(getNextConfirmedLegTime(req))
   || null
 );
 
-const getRequestSortTime = (req) => {
+/** Clé de tri lexicographique (heure murale Genève, ISO naïf normalisé). */
+const getRequestSortKey = (req) => {
   const next = getNextConfirmedLegTime(req);
-  const src = next?.iso || req?.next_confirmed_time || req?.scheduled_time || req?.mission_date;
-  if (!src) return 0;
+  const src = next || req?.next_confirmed_time || req?.scheduled_time || req?.mission_date;
+  if (!src) return '';
   const raw = String(src).trim();
-  const iso = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? `${raw}T00:00:00` : raw;
-  const parsed = new Date(iso);
-  return Number.isNaN(parsed.getTime()) ? 0 : parsed.getTime();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return `${raw}T00:00:00`;
+  const date = extractWallClockDate(raw);
+  const time = extractWallClockTime(raw);
+  if (date && time) return `${date}T${time}:00`;
+  return raw;
 };
 
 const resolveDisplayStatus = (req) => {
@@ -128,16 +131,9 @@ const resolveDisplayStatus = (req) => {
 
 const isToday = (dateStr) => {
   if (!dateStr) return false;
-  const raw = String(dateStr).trim();
-  const iso = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? `${raw}T12:00:00` : raw;
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return false;
-  const now = new Date();
-  return (
-    d.getDate() === now.getDate() &&
-    d.getMonth() === now.getMonth() &&
-    d.getFullYear() === now.getFullYear()
-  );
+  const target = extractWallClockDate(dateStr);
+  if (!target) return false;
+  return target === getGenevaTodayDateStr();
 };
 
 const isTodayRequest = (req) => isToday(getRequestMissionDate(req));
@@ -217,7 +213,7 @@ const InstitutionDashboard = () => {
     () =>
       requestItems
         .filter((r) => isTodayRequest(r))
-        .sort((a, b) => getRequestSortTime(a) - getRequestSortTime(b)),
+        .sort((a, b) => getRequestSortKey(a).localeCompare(getRequestSortKey(b))),
     [requestItems]
   );
 

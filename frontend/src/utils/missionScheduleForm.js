@@ -6,7 +6,17 @@
 import {
   combineMissionDateTimeNaive,
   extractWallClockTime,
+  minutesSinceMissionWallClock,
 } from './missionTimeDisplay';
+
+export const pad2 = (n) => String(n).padStart(2, '0');
+
+/** Date locale YYYY-MM-DD (raccourcis formulaire, fuseau navigateur). */
+export const formatLocalDateYMD = (date) =>
+  `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+
+/** Heure locale HH:MM (raccourcis formulaire). */
+export const formatLocalTimeHM = (date) => `${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
 
 export const normalizeMissionDate = (value) => {
   if (!value) return '';
@@ -34,17 +44,17 @@ const PICKUP_PAST_GRACE_MINUTES = 2;
 /** True si l'instant ISO est dans le passé (au-delà de la tolérance). */
 export const isInstantInPast = (iso, graceMinutes = PICKUP_PAST_GRACE_MINUTES) => {
   if (!iso) return false;
-  const t = new Date(iso).getTime();
-  if (Number.isNaN(t)) return false;
-  return t < Date.now() - graceMinutes * 60000;
+  const elapsed = minutesSinceMissionWallClock(iso);
+  if (!Number.isFinite(elapsed)) return false;
+  return elapsed > graceMinutes;
 };
 
 /** True si l'instant ISO est avant maintenant + leadMinutes (rendez-vous trop proche/passé). */
 export const isInstantBeforeLead = (iso, leadMinutes = MIN_ARRIVAL_LEAD_MINUTES) => {
   if (!iso) return false;
-  const t = new Date(iso).getTime();
-  if (Number.isNaN(t)) return false;
-  return t < Date.now() + leadMinutes * 60000;
+  const elapsed = minutesSinceMissionWallClock(iso);
+  if (!Number.isFinite(elapsed)) return false;
+  return elapsed > -leadMinutes;
 };
 
 /** Normalise une valeur d'heure (ISO, "YYYY-MM-DDTHH:MM" ou "HH:MM") en "HH:MM". */

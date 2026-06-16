@@ -23,6 +23,10 @@ import {
   respondToChangeRequest,
 } from '../../../../services/companyService';
 import { fetchClinicBillingMappings } from '../../../../services/settingsService';
+import {
+  formatChangeRequestExpiry,
+  summarizeBookingChangeRequest,
+} from '../../../../utils/bookingChangeRequestDisplay';
 import s from './ReservationDetailPanel.module.css';
 
 const STATUS_MAP = {
@@ -635,6 +639,8 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onRese
     const pad = (n) => String(n).padStart(2, '0');
     return `RDV ${pad(d.getHours())}:${pad(d.getMinutes())}`;
   })();
+  const changeRequestSummary = summarizeBookingChangeRequest(reservation.active_change_request);
+  const changeRequestExpiryLabel = formatChangeRequestExpiry(changeRequestSummary.expiresAt);
 
   return (
     <div className={s.panel} data-tour-id="ReservationDetailPanel_panel">
@@ -674,9 +680,24 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onRese
             <p style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 600, color: '#92400e' }}>
               Modification institution — validation requise
             </p>
-            <p style={{ margin: '0 0 10px', fontSize: 12, color: '#78350f' }}>
-              {reservation.active_change_request.reason || 'Champs modifiés en attente de votre accord.'}
+            <p style={{ margin: '0 0 6px', fontSize: 12, color: '#78350f' }}>
+              Champs modifiés en attente de votre accord.
             </p>
+            {changeRequestSummary.fieldLabels.length > 0 && (
+              <p style={{ margin: '0 0 8px', fontSize: 12, color: '#92400e', fontWeight: 500 }}>
+                {changeRequestSummary.fieldLabels.join(' · ')}
+              </p>
+            )}
+            {changeRequestSummary.reason && (
+              <p style={{ margin: '0 0 8px', fontSize: 12, color: '#78350f' }}>
+                Motif : {changeRequestSummary.reason}
+              </p>
+            )}
+            {changeRequestExpiryLabel && (
+              <p style={{ margin: '0 0 10px', fontSize: 11, color: '#a16207' }}>
+                Répondre avant le {changeRequestExpiryLabel}
+              </p>
+            )}
             <div style={{ display: 'flex', gap: 8 }}>
               <button
                 type="button"

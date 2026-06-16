@@ -323,6 +323,35 @@ def validate_proposed_pickup_time(
     return naive_geneva, None
 
 
+def naive_geneva_to_db_aware(value: Union[str, datetime, None]) -> datetime | None:
+    """Convertit une heure murale Genève en datetime aware pour colonnes timestamptz.
+
+    Les datetime naïfs écrits tels quels en timestamptz sont interprétés comme UTC
+    par PostgreSQL (session UTC), ce qui décale l'affichage de +1 à +2 h.
+    """
+    naive = api_scheduled_iso_to_naive_geneva(value)
+    if naive is None:
+        return None
+    return naive.replace(tzinfo=LOCAL_TZ)
+
+
+def mission_scheduled_to_api_iso(value: Union[str, datetime, None]) -> str | None:
+    """Sérialise un horaire mission DB/API en ISO naïf Genève (sans suffixe Z).
+
+    Aligné sur ``split_date_time_local`` côté entreprise : les colonnes timestamptz
+    conservent l'heure murale saisie ; on retire tzinfo sans conversion UTC.
+    """
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        naive = parse_local_naive(value)
+        return naive.strftime("%Y-%m-%dT%H:%M:%S") if naive else None
+    naive = api_scheduled_iso_to_naive_geneva(value)
+    if naive is None:
+        return None
+    return naive.strftime("%Y-%m-%dT%H:%M:%S")
+
+
 def api_scheduled_iso_to_naive_geneva(
     value: Union[str, datetime, None],
 ) -> datetime | None:
@@ -353,6 +382,26 @@ def api_scheduled_iso_to_naive_geneva(
     return parse_local_naive(s)
 
 
+def normalize_mission_wall_clock(
+    value: Union[str, datetime, None],
+) -> datetime | None:
+    """Point d'entrée UNIQUE pour toute écriture d'horaire mission.
+
+    Entrée : ISO ``YYYY-MM-DDTHH:MM:SS`` (avec ou sans tz) ou ``datetime``.
+    Sortie : ``datetime`` NAIF représentant l'heure murale Genève.
+
+    IMPORTANT : la sortie dépend de la VALEUR RÉELLE de l'entrée, pas du libellé.
+    - Entrée naïve 12:30  -> 12:30 (considérée déjà heure murale Genève)
+    - Entrée offset 12:30+02:00 -> 12:30 (déjà Genève été)
+    - Entrée 10:30Z (UTC) -> 12:30 Genève été (instant absolu converti en mural)
+
+    RÈGLE D'ARCHITECTURE : point d'entrée unique des ÉCRITURES mission.
+    ``parse_iso8601()`` (aware) est interdit pour les écritures mission.
+    Réservé à la validation/comparaison et aux flux non-mission.
+    """
+    return api_scheduled_iso_to_naive_geneva(value)
+
+
 def format_geneva(dt: Union[str, datetime, None]) -> Tuple[str | None, str | None]:
     """Retourne ('YYYY-MM-DD','HH:MM') en **LOCAL_TZ** (aware),
     pratique pour l'affichage."""
@@ -375,8 +424,11 @@ __all__ += [
     "format_geneva",
     "geneva_naive_midnight_from_date_ymd",
     "iso_utc_z",
+    "mission_scheduled_to_api_iso",
     "minutes_between",
     "minutes_from_now",
+    "naive_geneva_to_db_aware",
+    "normalize_mission_wall_clock",
     "now_utc",
     "sort_key_utc",
     "to_geneva_local",

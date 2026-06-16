@@ -24,3 +24,19 @@ def test_is_expired_false_when_expires_at_in_future_utc():
     offer.expires_at = datetime.now(UTC) + timedelta(hours=2)
 
     assert offer.is_expired is False
+
+
+def test_serialize_expires_at_as_utc_z_instant():
+    """expires_at est un instant absolu, pas une heure murale mission."""
+    offer = RequestOffer()
+    offer.id = 1
+    offer.transport_request_id = 10
+    offer.company_id = 5
+    offer.mode = "sequential"
+    offer.order = 1
+    offer.status = OfferStatus.PENDING.value
+    offer.expires_at = datetime(2026, 6, 16, 10, 30, 0, tzinfo=UTC)
+
+    data = offer.serialize
+    assert data["expires_at"] == "2026-06-16T10:30:00Z"
+    assert data["expires_at"].endswith("Z")

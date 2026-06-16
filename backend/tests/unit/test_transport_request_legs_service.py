@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 import pytest
 
 from services.institutions.transport_request_legs_service import (
@@ -91,9 +93,50 @@ def test_parse_leg_scheduled_time_iso_to_datetime():
     assert parsed.month == 6
     assert parsed.day == 11
     assert parsed.hour == 9
+    assert parsed.tzinfo is None
+
+
+def test_parse_leg_scheduled_time_naive_iso():
+    parsed = parse_leg_scheduled_time("2026-06-16T17:00:00")
+    assert parsed is not None
+    assert parsed.hour == 17
+    assert parsed.minute == 0
+    assert parsed.tzinfo is None
 
 
 def test_parse_leg_scheduled_time_empty_returns_none():
     assert parse_leg_scheduled_time(None) is None
     assert parse_leg_scheduled_time("") is None
     assert parse_leg_scheduled_time("   ") is None
+
+
+def test_multi_stop_wall_clock_times_preserved():
+    """Cas 2 STOP GATE P2 — heures murales identiques avant persistance."""
+    validated = {
+        "intermediate_stops": [
+            {
+                "sequence": 1,
+                "dropoff_location": "A",
+                "scheduled_time": "2026-06-16T12:30:00",
+                "time_confirmed": True,
+            },
+            {
+                "sequence": 2,
+                "dropoff_location": "B",
+                "scheduled_time": "2026-06-16T13:15:00",
+                "time_confirmed": True,
+            },
+            {
+                "sequence": 3,
+                "dropoff_location": "C",
+                "scheduled_time": "2026-06-16T14:00:00",
+                "time_confirmed": True,
+            },
+        ]
+    }
+    stops = stops_from_validated(validated)
+    times = [parse_leg_scheduled_time(s.scheduled_time) for s in stops]
+    assert times[0] == datetime(2026, 6, 16, 12, 30)
+    assert times[1] == datetime(2026, 6, 16, 13, 15)
+    assert times[2] == datetime(2026, 6, 16, 14, 0)
+    assert all(t.tzinfo is None for t in times)

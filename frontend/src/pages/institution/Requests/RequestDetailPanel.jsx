@@ -35,6 +35,7 @@ import InstitutionOperationalEdit from './InstitutionOperationalEdit';
 import { buildOperationalTimeline } from '../../../utils/institutionTimelineDisplay';
 import { canRelaunchInstitutionRequest } from '../../../utils/institutionRequestDispatch';
 import { formatReturnTimeLabel, formatRouteStopTime } from '../../../utils/formatLegTime';
+import { formatWallClockDateTime } from '../../../utils/missionTimeDisplay';
 import InstitutionRequestEdit from './InstitutionRequestEdit';
 import { getAuthEnv } from '../../../utils/webAuthSession';
 import { toast } from 'sonner';
@@ -80,6 +81,13 @@ const fmtShort = (dateStr) => {
     hour: '2-digit', minute: '2-digit',
     day: '2-digit', month: '2-digit',
   });
+};
+
+/** Horaire mission (heure murale Genève) — distinct des instants absolus (fmt). */
+const fmtMissionSchedule = (value) => {
+  const { date, time } = formatWallClockDateTime(value);
+  if (date === '—' && !time) return '—';
+  return time ? `${date} · ${time}` : date;
 };
 
 const getRoutePoints = (request) => {
@@ -1264,7 +1272,7 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
               <div className={s.summaryGrid}>
                 <div className={s.summaryItem}>
                   <span className={s.summaryLabel}>Horaire</span>
-                  <span className={s.summaryValue}>{fmt(bs.scheduled_time)}</span>
+                  <span className={s.summaryValue}>{fmtMissionSchedule(bs.scheduled_time)}</span>
                 </div>
                 <div className={s.summaryItem}>
                   <span className={s.summaryLabel}>Patient</span>
@@ -1359,7 +1367,7 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
           </div>
           <div className={s.infoRow}>
             <span className={s.infoLabel}>Date et heure</span>
-            <span className={s.infoValue}>{fmt(request.scheduled_time)}</span>
+            <span className={s.infoValue}>{fmtMissionSchedule(request.scheduled_time)}</span>
           </div>
           <div className={s.infoRow}>
             <span className={s.infoLabel}>Type de trajet</span>

@@ -4,6 +4,8 @@ import {
   combineMissionDateTimeNaive,
   formatWallClockDateTime,
   isNaiveMissionIso,
+  getGenevaTodayDateStr,
+  minutesSinceMissionWallClock,
 } from '../missionTimeDisplay';
 
 describe('missionTimeDisplay', () => {
@@ -26,5 +28,21 @@ describe('missionTimeDisplay', () => {
       date: '15.06.2026',
       time: '18:00',
     });
+  });
+
+  it('getGenevaTodayDateStr retourne YYYY-MM-DD', () => {
+    const today = getGenevaTodayDateStr();
+    expect(today).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it('minutesSinceMissionWallClock sur ISO naïf indépendant du fuseau navigateur', () => {
+    const nowMs = Date.UTC(2026, 5, 16, 10, 45, 0);
+    expect(minutesSinceMissionWallClock('2026-06-16T12:30:00', nowMs)).toBe(15);
+    expect(minutesSinceMissionWallClock('2026-06-16T10:30:00', nowMs)).toBe(135);
+  });
+
+  it('minutesSinceMissionWallClock sur UTC Z normalise en Genève', () => {
+    const nowMs = Date.UTC(2026, 5, 16, 10, 45, 0);
+    expect(minutesSinceMissionWallClock('2026-06-16T08:30:00Z', nowMs)).toBe(135);
   });
 });

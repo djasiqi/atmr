@@ -88,6 +88,54 @@ export const toDatetimeLocalGeneva = (value) => {
   return `${datePart}T${timePart}`;
 };
 
+/** Parties date/heure du moment `ms` en fuseau métier Genève. */
+const getGenevaPartsFromMs = (ms) => {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: BUSINESS_TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(new Date(ms));
+  const pick = (type) => parts.find((p) => p.type === type)?.value ?? '';
+  return {
+    year: Number(pick('year')),
+    month: Number(pick('month')),
+    day: Number(pick('day')),
+    hour: Number(pick('hour')),
+    minute: Number(pick('minute')),
+  };
+};
+
+const dayNumberUtc = (year, month, day) => Math.floor(Date.UTC(year, month - 1, day) / 86400000);
+
+/** YYYY-MM-DD du jour courant en Europe/Zurich. */
+export const getGenevaTodayDateStr = () => {
+  const { year, month, day } = getGenevaPartsFromMs(Date.now());
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${year}-${pad(month)}-${pad(day)}`;
+};
+
+/**
+ * Minutes écoulées depuis une heure murale mission (Genève) jusqu'à `nowMs`.
+ * Naïf : lit HH:MM littéral ; avec fuseau : normalise via extractWallClock*.
+ */
+export const minutesSinceMissionWallClock = (value, nowMs = Date.now()) => {
+  const datePart = extractWallClockDate(value);
+  const timePart = extractWallClockTime(value);
+  if (!datePart || !timePart) return NaN;
+  const [y, m, d] = datePart.split('-').map(Number);
+  const [hh, mm] = timePart.split(':').map(Number);
+  if ([y, m, d, hh, mm].some((n) => Number.isNaN(n))) return NaN;
+
+  const scheduledMinutes = dayNumberUtc(y, m, d) * 1440 + hh * 60 + mm;
+  const now = getGenevaPartsFromMs(nowMs);
+  const nowMinutes = dayNumberUtc(now.year, now.month, now.day) * 1440 + now.hour * 60 + now.minute;
+  return nowMinutes - scheduledMinutes;
+};
+
 /** Formate date + heure murales (ex. « 15.06.2026 · 18:00 »). */
 export const formatWallClockDateTime = (value) => {
   if (!value) return { date: '—', time: '' };

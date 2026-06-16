@@ -19,6 +19,7 @@ import { recordUserActivity } from './utils/userActivityTracker';
 import { isRecoverableAuthError, isFreshTokenRequiredError } from './utils/queryAuthError';
 import { FreshTokenReauthProvider } from './contexts/FreshTokenReauthContext';
 import { SessionBootstrapProvider } from './contexts/SessionBootstrapContext';
+import AuthNavigationBridge from './components/auth/AuthNavigationBridge';
 
 // ✅ PERF: Pages critiques (eager loading - chargées immédiatement)
 import Login from './pages/Auth/Login';
@@ -249,6 +250,7 @@ const App = () => {
           v7_relativeSplatPath: true,
         }}
       >
+        <AuthNavigationBridge />
         <ScrollToTopOnNavigation />
         <Toaster position="top-right" richColors closeButton />
         <PwaOfflineBanner />

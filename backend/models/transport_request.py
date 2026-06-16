@@ -49,12 +49,12 @@ if TYPE_CHECKING:
 
 
 def _iso_scheduled(dt):
-    """ISO UTC pour horaires mission (naïf Genève en base → Z côté API)."""
+    """ISO naïf Genève pour horaires mission (contrat API institution)."""
     if dt is None:
         return None
-    from shared.time_utils import iso_utc_z, to_utc_from_db
+    from shared.time_utils import mission_scheduled_to_api_iso
 
-    return iso_utc_z(to_utc_from_db(dt))
+    return mission_scheduled_to_api_iso(dt)
 
 
 def _status_value(raw: Any) -> str:
@@ -675,12 +675,14 @@ class TransportRequest(db.Model):
 
         # A/R : agréger le retour via la relationship return_trip
         if self.is_round_trip and getattr(booking, "return_trip", None):
+            from shared.time_utils import mission_scheduled_to_api_iso
+
             ret = booking.return_trip
             ret_status = _status_value(ret.status)
             summary["return_booking"] = {
                 "id": ret.id,
                 "status": ret_status,
-                "scheduled_time": _iso(ret.scheduled_time),
+                "scheduled_time": mission_scheduled_to_api_iso(ret.scheduled_time),
             }
             outbound_amount = float(booking.amount) if booking.amount else 0
             return_amount = float(ret.amount) if ret.amount else 0
@@ -693,6 +695,8 @@ class TransportRequest(db.Model):
 
     @staticmethod
     def _build_single_booking_summary(booking: Any) -> dict[str, Any]:
+        from shared.time_utils import mission_scheduled_to_api_iso
+
         raw_status = booking.status
         status_str = (
             raw_status.value if hasattr(raw_status, "value") else str(raw_status)
@@ -721,7 +725,7 @@ class TransportRequest(db.Model):
         return {
             "id": booking.id,
             "status": status_str,
-            "scheduled_time": _iso(booking.scheduled_time),
+            "scheduled_time": mission_scheduled_to_api_iso(booking.scheduled_time),
             "edit_version": int(getattr(booking, "edit_version", None) or 1),
             "amount": float(booking.amount) if booking.amount else None,
             "customer_name": booking.customer_name,

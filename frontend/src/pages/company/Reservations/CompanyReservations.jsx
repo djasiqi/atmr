@@ -480,9 +480,12 @@ const CompanyReservations = () => {
 
   const showListSkeleton = !canLoadReservations || listInitialLoading;
 
-  // Nettoie ?date= de l'URL une fois le filtre appliqué (évite qu'il reste collé).
+  // Applique ?date= puis nettoie l'URL (clic notification, y compris si la page est déjà montée).
   useEffect(() => {
-    if (!searchParams.get('date')) return;
+    const dateParam = searchParams.get('date');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateParam || '')) return;
+    setSelectedDay(dateParam);
+    setCurrentPage(1);
     setSearchParams((prev) => {
       prev.delete('date');
       return prev;

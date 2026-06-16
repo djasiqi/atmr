@@ -1,5 +1,5 @@
 // frontend/src/services/authService.js
-import apiClient, { logoutUser as coreLogoutUser, cleanLocalSession } from '../utils/apiClient';
+import apiClient, { logoutUser as coreLogoutUser } from '../utils/apiClient';
 import { getAuthEnv, setEnvPublicId, setEnvUser } from '../utils/webAuthSession';
 
 // ✅ Inscription d'un utilisateur
@@ -67,15 +67,7 @@ export const loginUser = async (credentials) => {
 
 // ✅ Déconnexion d'un utilisateur (proxy vers apiClient.logoutUser)
 export const logoutUser = async (options = { redirect: true }) => {
-  try {
-    await coreLogoutUser({ redirect: false });
-  } finally {
-    cleanLocalSession();
-
-    if (options?.redirect !== false) {
-      window.location.href = '/login';
-    }
-  }
+  await coreLogoutUser(options);
 };
 
 // ✅ Réinitialisation du mot de passe (page utilisateur)

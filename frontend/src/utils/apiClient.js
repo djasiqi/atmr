@@ -12,6 +12,13 @@ import {
   setAuthEnv as setSessionAuthEnv,
 } from './webAuthSession';
 import { notifySessionReauthRequired } from './deferredSessionLogout';
+import { requestAuthNavigate } from './authNavigation';
+import {
+  beginExplicitLogout,
+  endExplicitLogout,
+  isExplicitLogoutInProgress,
+  isLoginSessionInProgress,
+} from './sessionLogoutState';
 import {
   isUserRecentlyActive,
   SESSION_WORKING_LOOKBACK_MS,
@@ -375,6 +382,18 @@ export const requestFreshTokenReauth = (options) => {
 
 export const isAuthRefreshInProgress = () => isRefreshing;
 
+const waitForAuthRefreshIdle = async (timeoutMs = 5000) => {
+  const started = Date.now();
+  while (isAuthRefreshInProgress()) {
+    if (Date.now() - started > timeoutMs) {
+      break;
+    }
+    await new Promise((resolve) => {
+      setTimeout(resolve, 50);
+    });
+  }
+};
+
 const isFreshTokenErrorPayload = (errorData = {}) => {
   const errorMsg = (errorData.msg || errorData.error || errorData.message || '').toLowerCase();
   return (
@@ -389,7 +408,7 @@ const isFreshTokenErrorPayload = (errorData = {}) => {
 };
 
 const requestDeferredSessionLogout = (cfg = {}) => {
-  if (cfg.skipFreshTokenLogout || cfg.skipAuthRedirect) {
+  if (cfg.skipFreshTokenLogout || cfg.skipAuthRedirect || isLoginSessionInProgress()) {
     return;
   }
 
@@ -442,21 +461,23 @@ export async function refreshSessionTokens(targetEnv = getCurrentAuthEnv()) {
     const refreshed = refreshResponse?.data || {};
     const nextAccessToken = refreshed.access_token || refreshed.token;
     const nextRefreshToken = refreshed.refresh_token;
-    if (nextAccessToken) {
-      if (targetEnv === DEMO_ENV_KEY) {
-        localStorage.setItem('demo_access_token', nextAccessToken);
-      } else {
-        localStorage.setItem('app_access_token', nextAccessToken);
+    if (!isExplicitLogoutInProgress()) {
+      if (nextAccessToken) {
+        if (targetEnv === DEMO_ENV_KEY) {
+          localStorage.setItem('demo_access_token', nextAccessToken);
+        } else {
+          localStorage.setItem('app_access_token', nextAccessToken);
+        }
       }
-    }
-    if (nextRefreshToken) {
-      if (targetEnv === DEMO_ENV_KEY) {
-        localStorage.setItem('demo_refresh_token', nextRefreshToken);
-      } else {
-        localStorage.setItem('app_refresh_token', nextRefreshToken);
+      if (nextRefreshToken) {
+        if (targetEnv === DEMO_ENV_KEY) {
+          localStorage.setItem('demo_refresh_token', nextRefreshToken);
+        } else {
+          localStorage.setItem('app_refresh_token', nextRefreshToken);
+        }
       }
+      removeLegacyGlobalTokens();
     }
-    removeLegacyGlobalTokens();
     processQueue(null, null);
     return true;
   } catch (error) {
@@ -544,9 +565,20 @@ export const cleanLocalSession = () => {
 
 export const logoutUser = async (options = {}) => {
   const { redirect = true, preserveNext = false } = options;
+
+  await waitForAuthRefreshIdle();
+  beginExplicitLogout();
+
   try {
     const { cancelDeferredLogout } = await import('./deferredSessionLogout');
     cancelDeferredLogout();
+  } catch (_) {
+    // ignore
+  }
+
+  try {
+    const { suspendSessionKeepAlive } = await import('./sessionKeepAlive');
+    suspendSessionKeepAlive();
   } catch (_) {
     // ignore
   }
@@ -562,8 +594,45 @@ export const logoutUser = async (options = {}) => {
       '⚠️ Impossible de désactiver le Shadow Mode lors de la déconnexion:',
       error?.response?.data || error?.message || error
     );
+  }
+
+  const postLogout = () =>
+    apiClient.post('/auth/logout', {}, { skipAuthRedirect: true });
+
+  try {
+    // Révoque les tokens côté serveur et supprime les cookies httpOnly.
+    // Sans cet appel, auth-changed relance /auth/me avec les cookies encore valides
+    // et reconnecte l'utilisateur immédiatement après le nettoyage local.
+    await postLogout();
+  } catch (error) {
+    // Access token expiré : tenter un refresh puis une nouvelle déconnexion.
+    if (error?.response?.status === 401) {
+      try {
+        await refreshSessionTokens();
+        await postLogout();
+      } catch (retryError) {
+        console.warn(
+          '⚠️ Déconnexion serveur impossible après refresh (session locale nettoyée quand même):',
+          retryError?.response?.data || retryError?.message || retryError
+        );
+      }
+    } else {
+      console.warn(
+        '⚠️ Déconnexion serveur impossible (session locale nettoyée quand même):',
+        error?.response?.data || error?.message || error
+      );
+    }
   } finally {
+    csrfToken = null;
+    csrfTokenExpiry = null;
     cleanLocalSession();
+
+    try {
+      const { disconnectCompanySocket } = await import('../services/companySocket');
+      disconnectCompanySocket();
+    } catch (_) {
+      // ignore
+    }
 
     // Vider le cache React Query pour éviter les données stale entre comptes
     try {
@@ -573,16 +642,17 @@ export const logoutUser = async (options = {}) => {
       // Silencieux si App pas encore chargé
     }
 
-    // Notifier useAuthToken du changement dans le même onglet
+    endExplicitLogout();
     window.dispatchEvent(new Event('auth-changed'));
 
     if (redirect !== false) {
       const path = `${window.location.pathname}${window.location.search || ''}`;
       const isAlreadyLogin = window.location.pathname === '/login';
-      window.location.href =
+      const loginPath =
         preserveNext && !isAlreadyLogin && path && path !== '/'
           ? `/login?next=${encodeURIComponent(path)}`
           : '/login';
+      requestAuthNavigate(loginPath, { replace: true });
     }
   }
 };

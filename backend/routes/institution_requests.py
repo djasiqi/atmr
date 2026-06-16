@@ -43,15 +43,18 @@ from security.api_key_auth import api_key_or_jwt_required
 from security.audit_log import AuditLogger
 from security.authorization import AuthorizationService, get_user_team_ids
 from shared.error_handlers import APIErrorHandler
-from shared.time_utils import parse_iso8601
+from shared.time_utils import normalize_mission_wall_clock
 
 logger = logging.getLogger(__name__)
+
+# Règle d'architecture : écritures mission via normalize_mission_wall_clock() uniquement.
+# parse_iso8601() interdit pour les écritures (aware) — validation/comparaison seulement.
 
 
 def _apply_return_fields(transport_req: TransportRequest, validated: dict[str, Any]) -> None:
     """Persiste return_date, return_time et return_time_confirmed sur une demande."""
     if validated.get("return_time"):
-        transport_req.return_time = parse_iso8601(validated["return_time"])
+        transport_req.return_time = normalize_mission_wall_clock(validated["return_time"])
         explicit = validated.get("return_time_confirmed")
         transport_req.return_time_confirmed = (
             bool(explicit) if explicit is not None else True
@@ -299,9 +302,7 @@ def _persist_legs_from_validated(
         if dropoff:
             appt_time = arrival
             if appt_time is None and validated.get("scheduled_time"):
-                from shared.time_utils import parse_iso8601
-
-                appt_time = parse_iso8601(str(validated["scheduled_time"]))
+                appt_time = normalize_mission_wall_clock(validated["scheduled_time"])
             legs_data = build_simple_trip_leg(
                 pickup_location=validated["pickup_location"],
                 pickup_lat=validated.get("pickup_lat"),

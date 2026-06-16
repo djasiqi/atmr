@@ -6,7 +6,10 @@ import ReservationActions from '../../../../components/reservations/ReservationA
 import BookingIdentityCell from '../../../../components/booking/BookingIdentityCell';
 import BookingTripBadges from '../../../../components/booking/BookingTripBadges';
 import BookingStatusBadge from '../../../../components/booking/BookingStatusBadge';
-import { isAppointmentTimeDefined } from '../../../../utils/bookingScheduling';
+import {
+  isReturnLegNeedingTime,
+  needsTimeBeforeDriverAssign,
+} from '../../../../utils/bookingScheduling';
 import BookingScheduleCell from '../../../../components/booking/BookingScheduleCell';
 import DriverInlineSelect from '../../Dispatch/components/DriverInlineSelect';
 import { pickupArrivalHint } from '../../../../utils/formatPickupEta';
@@ -45,13 +48,6 @@ const getDelayLevel = (minutes) => {
   if (minutes <= 5) return 'light';
   if (minutes <= 15) return 'moderate';
   return 'critical';
-};
-
-// Retour nécessitant confirmation d'heure avant assignation (INV-2)
-const checkNeedsTimeConfirmation = (r) => {
-  const isReturn = !!(r.is_return || r.booking_type === 'return' || r.type === 'return');
-  if (!isReturn) return false;
-  return !isAppointmentTimeDefined(r);
 };
 
 // V17: Hierarchie visuelle stricte danger > warning
@@ -196,18 +192,19 @@ const DispatchTable = ({
             const pickupArrivalLabel =
               etaStatuses.includes(status) && etaIso ? pickupArrivalHint(etaIso) : null;
             const driverName = getDriverName(r);
-            const needsTimeConfirmation = checkNeedsTimeConfirmation(r);
+            const needsTimeBeforeAssign = needsTimeBeforeDriverAssign(r);
+            const isReturnUnscheduled = isReturnLegNeedingTime(r);
 
             const noActionStatuses = ['canceled', 'cancelled', 'completed', 'return_completed', 'rejected', 'no_show'];
             const hasActions = !noActionStatuses.includes(status);
 
-            // Parcours multi-étapes : un leg accepté/assigné sans heure définie doit
-            // pouvoir être planifié (action « Planifier l'heure »), comme un retour.
-            const isMultiStopUnscheduled =
-              !!r.route_group_id &&
-              !isAppointmentTimeDefined(r) &&
-              ['accepted', 'assigned'].includes(status);
-            const needsTimeScheduling = needsTimeConfirmation || isMultiStopUnscheduled;
+            const needsTimeScheduling = needsTimeBeforeAssign;
+            const timeRequiredHintTitle = isReturnUnscheduled
+              ? "Definir l'heure de retour avant d'assigner"
+              : "Definir l'heure du trajet avant d'assigner";
+            const timeToDefineTitle = isReturnUnscheduled
+              ? 'Heure de retour a definir'
+              : 'Heure du trajet a definir';
 
             const isTransferredSender = currentCompanyId && r.is_transferred && r.active_transfer && r.active_transfer.owner_company_id === currentCompanyId;
             const canManageReservation = !isTransferredSender || status === 'pending';
@@ -226,8 +223,8 @@ const DispatchTable = ({
 
                 {/* Colonne Heure + badge retard */}
                 <td className={styles.timeCell}>
-                  {!isAppointmentTimeDefined(r) && (r.is_return || checkNeedsTimeConfirmation(r)) ? (
-                    <span className={styles.timeToDefine} title="Heure de retour a definir">
+                  {needsTimeBeforeAssign ? (
+                    <span className={styles.timeToDefine} title={timeToDefineTitle}>
                       <FiClock size={12} /> A definir
                     </span>
                   ) : (
@@ -275,8 +272,8 @@ const DispatchTable = ({
                   onClick={(e) => e.stopPropagation()}
                   data-tour-id={index === fallbackDriverAnchorIndex ? 'dispatch-driver-anchor' : undefined}
                 >
-                  {needsTimeConfirmation ? (
-                    <span className={styles.timeRequiredHint} title="Definir l'heure de retour avant d'assigner">
+                  {needsTimeBeforeAssign ? (
+                    <span className={styles.timeRequiredHint} title={timeRequiredHintTitle}>
                       <FiClock size={11} /> Heure requise
                     </span>
                   ) : onAssignDirect ? (

@@ -5,6 +5,7 @@
 
 import { refreshSessionTokens } from './apiClient';
 import { cancelDeferredLogout } from './deferredSessionLogout';
+import { isExplicitLogoutInProgress, isLoginSessionInProgress } from './sessionLogoutState';
 import { hasActiveSession } from './webAuthSession';
 import {
   isUserRecentlyActive,
@@ -21,8 +22,20 @@ let lastRefreshAttemptAt = 0;
 let intervalId = null;
 let activityUnsub = null;
 let keepAliveStarted = false;
+let keepAliveSuspended = false;
+
+export function suspendSessionKeepAlive() {
+  keepAliveSuspended = true;
+}
+
+export function resumeSessionKeepAlive() {
+  keepAliveSuspended = false;
+}
 
 export async function tryRefreshSessionIfNeeded({ force = false } = {}) {
+  if (keepAliveSuspended || isExplicitLogoutInProgress()) {
+    return false;
+  }
   if (!hasActiveSession()) {
     return false;
   }
@@ -38,6 +51,9 @@ export async function tryRefreshSessionIfNeeded({ force = false } = {}) {
   lastRefreshAttemptAt = now;
   try {
     await refreshSessionTokens();
+    if (isExplicitLogoutInProgress()) {
+      return false;
+    }
     cancelDeferredLogout();
     return true;
   } catch {
@@ -82,5 +98,6 @@ export function resetSessionKeepAliveForTests() {
     activityUnsub = null;
   }
   keepAliveStarted = false;
+  keepAliveSuspended = false;
   lastRefreshAttemptAt = 0;
 }

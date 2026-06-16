@@ -36,12 +36,12 @@ if TYPE_CHECKING:
 
 
 def _iso_scheduled(dt):
-    """ISO UTC pour horaires mission (naïf Genève en base → Z côté API)."""
+    """ISO naïf Genève pour horaires mission (contrat API institution)."""
     if dt is None:
         return None
-    from shared.time_utils import iso_utc_z, to_utc_from_db
+    from shared.time_utils import mission_scheduled_to_api_iso
 
-    return iso_utc_z(to_utc_from_db(dt))
+    return mission_scheduled_to_api_iso(dt)
 
 
 class RequestOffer(db.Model):
@@ -210,6 +210,8 @@ class RequestOffer(db.Model):
     @property
     def serialize(self) -> dict[str, Any]:
         """Sérialise l'offre pour l'API."""
+        from shared.time_utils import iso_utc_z, to_utc_from_db
+
         return {
             "id": self.id,
             "transport_request_id": self.transport_request_id,
@@ -218,7 +220,7 @@ class RequestOffer(db.Model):
             "order": self.order,
             "status": self.status,
             "sent_at": _iso(self.sent_at),
-            "expires_at": _iso_scheduled(self.expires_at),
+            "expires_at": iso_utc_z(to_utc_from_db(self.expires_at)),
             "responded_at": _iso(self.responded_at),
             "rejection_reason": self.rejection_reason,
         }
@@ -227,6 +229,7 @@ class RequestOffer(db.Model):
         """Sérialise l'offre avec les détails de la demande pour l'entreprise."""
         from services.institutions.mission_schedule import get_effective_dispatch_time
         from services.pricing.offer_price_estimator import estimate_offer_price
+        from shared.time_utils import iso_utc_z, to_utc_from_db
 
         request = self.transport_request
         next_confirmed = get_effective_dispatch_time(request)
@@ -236,7 +239,7 @@ class RequestOffer(db.Model):
             "status": self.status,
             "mode": self.mode,
             "sent_at": _iso(self.sent_at),
-            "expires_at": _iso_scheduled(self.expires_at),
+            "expires_at": iso_utc_z(to_utc_from_db(self.expires_at)),
             "can_respond": self.can_respond,
             # Tarif estimé (préférentiel sinon profil tarifaire) — affichage entreprise
             "price_estimate": price_estimate,

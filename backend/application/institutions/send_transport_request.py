@@ -720,6 +720,7 @@ class SendTransportRequestUseCase:
             )
             from services.institutions.mission_schedule import (
                 get_effective_dispatch_time,
+                get_mission_date,
             )
 
             pending_offers = RequestOffer.query.filter_by(
@@ -750,6 +751,8 @@ class SendTransportRequestUseCase:
                 " —"
             )
             relaunch_ts = int(datetime.now(UTC).timestamp())
+            mission_day = get_mission_date(transport_request)
+            mission_date_iso = mission_day.isoformat() if mission_day else None
 
             for offer in pending_offers:
                 try:
@@ -773,6 +776,11 @@ class SendTransportRequestUseCase:
                             "offer_id": offer.id,
                             "institution_name": inst_name,
                             "is_relaunch": is_relaunch,
+                            **(
+                                {"mission_date": mission_date_iso}
+                                if mission_date_iso
+                                else {}
+                            ),
                         },
                         dedupe_key=dedupe_key,
                     )

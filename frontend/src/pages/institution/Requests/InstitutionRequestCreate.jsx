@@ -56,6 +56,8 @@ import {
   isInstantInPast,
   isInstantBeforeLead,
   extractHHMM,
+  formatLocalDateYMD,
+  formatLocalTimeHM,
   MIN_ARRIVAL_LEAD_MINUTES,
 } from '../../../utils/missionScheduleForm';
 import {
@@ -63,15 +65,7 @@ import {
   institutionSupportsDomicilePickupTrip,
   TRIP_TYPE_DOM_TO_DEST,
 } from '../../../utils/institutionRouteForm';
-
-const pad2 = (n) => String(n).padStart(2, '0');
-
-const parseTimeFromIso = (iso) => {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
-};
+import { formatWallClockDateShort, formatWallClockDateTime } from '../../../utils/missionTimeDisplay';
 
 const TRAVEL_MINUTES_BETWEEN_STOPS = 20;
 
@@ -743,8 +737,8 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
   const setTimeShortcut = useCallback((minutesFromNow) => {
     const d = new Date();
     d.setMinutes(d.getMinutes() + minutesFromNow);
-    const dateVal = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-    const timeVal = `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+    const dateVal = formatLocalDateYMD(d);
+    const timeVal = formatLocalTimeHM(d);
     setFormData(prev => ({
       ...prev,
       mission_date: dateVal,
@@ -760,7 +754,7 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
     const d = new Date();
     d.setDate(d.getDate() + 1);
     d.setHours(9, 0, 0, 0);
-    const dateVal = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+    const dateVal = formatLocalDateYMD(d);
     setFormData(prev => ({
       ...prev,
       mission_date: dateVal,
@@ -821,7 +815,7 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
       times.push({ label: isMulti ? 'Destination 1' : 'RDV', time: formData.dropoff_time.trim() });
     }
     extraValid.forEach((stop, idx) => {
-      const t = parseTimeFromIso(stop.scheduled_time) || stop.scheduled_time?.split('T')[1]?.slice(0, 5);
+      const t = extractHHMM(stop.scheduled_time) || stop.scheduled_time?.split('T')[1]?.slice(0, 5);
       if (t) times.push({ label: `Destination ${idx + 2}`, time: t });
     });
     if (returnEnabled && formData.return_time?.trim()) {
@@ -1444,7 +1438,7 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
                       <RouteStepTimeField
                         inputId={`intermediate_stop_time_${idx}`}
                         label={`Heure du rendez-vous ${destNumber}`}
-                        timeValue={parseTimeFromIso(stop.scheduled_time) || stop.scheduled_time?.split('T')[1]?.slice(0, 5) || ''}
+                        timeValue={extractHHMM(stop.scheduled_time) || stop.scheduled_time?.split('T')[1]?.slice(0, 5) || ''}
                         timeConfirmed={Boolean(stop.time_confirmed)}
                         onTimeChange={(v) => setStopTime(idx, v)}
                       />
@@ -1863,9 +1857,12 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
               <span className={styles.footerSummaryText}>
                 {selectedPatient ? `${selectedPatient.first_name} ${selectedPatient.last_name}` : 'Patient non sélectionné'}
                 {formData.mission_date
-                  ? ` · ${new Date(formData.mission_date).toLocaleDateString('fr-CH', { day: '2-digit', month: 'short' })}`
+                  ? ` · ${formatWallClockDateShort(formData.mission_date)}`
                   : (formData.scheduled_time
-                    ? ` · ${new Date(formData.scheduled_time).toLocaleString('fr-CH', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}`
+                    ? (() => {
+                        const { date, time } = formatWallClockDateTime(formData.scheduled_time);
+                        return ` · ${date}${time ? ` ${time}` : ''}`;
+                      })()
                     : '')}
               </span>
               <span className={styles.footerBadges}>

@@ -525,9 +525,15 @@ def _reset_user_password_with_policy(user: User, new_password: str):
         user.password_expires_at = None
     if hasattr(user, "temporary_password_created_at"):
         user.temporary_password_created_at = None
-    if was_forced and hasattr(user, "first_login_completed_at") and not user.first_login_completed_at:
+    should_mark_first_login = (
+        hasattr(user, "first_login_completed_at")
+        and not user.first_login_completed_at
+        and user.institution_id
+        and getattr(user, "authentication_method", "email") == "username"
+    )
+    if should_mark_first_login:
         user.first_login_completed_at = datetime.now(UTC)
-        if user.institution_id:
+        if was_forced:
             try:
                 from models.institution_user_audit_event import InstitutionUserAuditEvent
 
@@ -5485,6 +5491,13 @@ class ActivateAccount(Resource):
             )
             user.account_status = "active"
             user.force_password_change = False
+            if (
+                hasattr(user, "first_login_completed_at")
+                and not user.first_login_completed_at
+                and user.institution_id
+                and getattr(user, "authentication_method", "email") == "username"
+            ):
+                user.first_login_completed_at = datetime.now(UTC)
             # Invalider le token (one-time use)
             user.invite_token_hash = None
             user.invite_expires_at = None

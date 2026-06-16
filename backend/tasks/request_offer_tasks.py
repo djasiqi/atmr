@@ -43,6 +43,7 @@ def _notify_company_new_offer(
             institution_is_demo,
         )
         from services.events.institution_events import persist_company_notification
+        from services.institutions.mission_schedule import get_mission_date
 
         institution = transport_request.institution
         if institution_is_demo(institution):
@@ -59,6 +60,9 @@ def _notify_company_new_offer(
 
         message = f"{inst_name} — {patient_name}{round_trip} — {time_str}".strip(" —")
 
+        mission_day = get_mission_date(transport_request)
+        mission_date_iso = mission_day.isoformat() if mission_day else None
+
         persist_company_notification(
             company_id=company_id,
             event_type="new_request",
@@ -69,6 +73,11 @@ def _notify_company_new_offer(
                 "public_id": str(transport_request.public_id),
                 "offer_id": offer_id,
                 "institution_name": inst_name,
+                **(
+                    {"mission_date": mission_date_iso}
+                    if mission_date_iso
+                    else {}
+                ),
             },
             dedupe_key=f"new_request:{transport_request.id}:{company_id}",
         )

@@ -55,6 +55,17 @@ class APIErrorHandler:
 
         # HTTPException (from Flask abort()) — propager le bon status code
         if isinstance(exception, HTTPException):
+            custom_response = getattr(exception, "response", None)
+            if custom_response is not None:
+                payload = custom_response.get_json(silent=True)
+                if isinstance(payload, dict):
+                    status_code = custom_response.status_code or exception.code or 500
+                    log.warning(
+                        "HTTPException interceptée: %s %s",
+                        status_code,
+                        payload.get("error") or exception.description,
+                    )
+                    return payload, status_code
             log.warning(
                 "HTTPException interceptée: %s %s",
                 exception.code,

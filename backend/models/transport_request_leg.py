@@ -60,12 +60,12 @@ from .base import _iso
 
 
 def _iso_scheduled(dt):
-    """ISO UTC pour horaires mission (naïf Genève en base → Z côté API)."""
+    """ISO naïf Genève pour horaires mission (contrat API institution)."""
     if dt is None:
         return None
-    from shared.time_utils import iso_utc_z, to_utc_from_db
+    from shared.time_utils import mission_scheduled_to_api_iso
 
-    return iso_utc_z(to_utc_from_db(dt))
+    return mission_scheduled_to_api_iso(dt)
 
 
 

@@ -178,12 +178,7 @@ const InstitutionLayout = () => {
   }, [userMenuOpen]);
 
   const handleLogout = useCallback(async () => {
-    try {
-      await logoutUser({ redirect: true });
-    } catch {
-      // Forcer un rechargement complet pour purger tout état React en mémoire
-      window.location.href = '/login';
-    }
+    await logoutUser({ redirect: true });
   }, []);
 
   // User initials for avatar

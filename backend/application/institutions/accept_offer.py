@@ -35,7 +35,7 @@ from models.enums import BookingCreatedVia, ClientType, ManagementMode, UserRole
 from security.audit_log import AuditLogger
 from services.pricing.offer_price_estimator import resolve_institution_price
 from shared.time_utils import (
-    api_scheduled_iso_to_naive_geneva,
+    normalize_mission_wall_clock,
 )
 
 logger = logging.getLogger(__name__)
@@ -287,7 +287,11 @@ class AcceptOfferUseCase:
             if input_data.proposed_pickup_time is not None:
                 from models.enums import ScheduledTimeType
 
-                transport_request.scheduled_time = input_data.proposed_pickup_time
+                # Règle d'architecture : écriture mission institution → normalize_mission_wall_clock.
+                # Idempotent sur naïf Genève déjà validé par validate_proposed_pickup_time.
+                transport_request.scheduled_time = normalize_mission_wall_clock(
+                    input_data.proposed_pickup_time
+                )
                 transport_request.scheduled_time_type = (
                     ScheduledTimeType.DEPARTURE.value
                 )
@@ -640,7 +644,7 @@ class AcceptOfferUseCase:
 
         # Horaire: utiliser l'horaire proposé par l'entreprise si fourni (naïf Genève)
         raw_pickup = proposed_pickup_time or transport_request.scheduled_time
-        effective_pickup_time = api_scheduled_iso_to_naive_geneva(raw_pickup)
+        effective_pickup_time = normalize_mission_wall_clock(raw_pickup)
 
         booking = Booking(
             # Identité
@@ -742,7 +746,7 @@ class AcceptOfferUseCase:
             getattr(transport_request, "return_time_confirmed", False)
         )
         return_time_naive = (
-            api_scheduled_iso_to_naive_geneva(return_time_raw)
+            normalize_mission_wall_clock(return_time_raw)
             if return_time_raw is not None
             else None
         )
@@ -892,7 +896,7 @@ class AcceptOfferUseCase:
                 raw_pickup = leg.scheduled_time if leg_confirmed else None
                 operational = leg_confirmed
             effective_pickup_time = (
-                api_scheduled_iso_to_naive_geneva(raw_pickup) if raw_pickup else None
+                normalize_mission_wall_clock(raw_pickup) if raw_pickup else None
             )
 
             time_to_define = effective_pickup_time is None or not operational

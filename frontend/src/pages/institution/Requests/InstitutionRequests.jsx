@@ -41,6 +41,12 @@ import {
   buildCardMeta,
   resolveBillingMetaLabel,
 } from './statusColors';
+import {
+  extractWallClockDate,
+  extractWallClockTime,
+  getGenevaTodayDateStr,
+  minutesSinceMissionWallClock,
+} from '../../../utils/missionTimeDisplay';
 import s from './InstitutionRequests.module.css';
 
 // ─── Filtres statut ───────────────────────────────────────────
@@ -81,17 +87,29 @@ const shortAddr = (addr) => {
 
 const getDateGroupLabel = (dateStr) => {
   if (!dateStr) return 'Autre';
-  const d = new Date(dateStr);
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
-  const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
-  const target = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const targetIso = extractWallClockDate(dateStr);
+  if (!targetIso) return 'Autre';
 
-  if (target.getTime() === today.getTime()) return "Aujourd'hui";
-  if (target.getTime() === tomorrow.getTime()) return 'Demain';
-  if (target.getTime() === yesterday.getTime()) return 'Hier';
-  return d.toLocaleDateString('fr-CH', { weekday: 'long', day: 'numeric', month: 'long' });
+  const todayIso = getGenevaTodayDateStr();
+  const [ty, tm, td] = todayIso.split('-').map(Number);
+  const tomorrow = new Date(Date.UTC(ty, tm - 1, td + 1));
+  const yesterday = new Date(Date.UTC(ty, tm - 1, td - 1));
+  const pad = (n) => String(n).padStart(2, '0');
+  const tomorrowIso = `${tomorrow.getUTCFullYear()}-${pad(tomorrow.getUTCMonth() + 1)}-${pad(tomorrow.getUTCDate())}`;
+  const yesterdayIso = `${yesterday.getUTCFullYear()}-${pad(yesterday.getUTCMonth() + 1)}-${pad(yesterday.getUTCDate())}`;
+
+  if (targetIso === todayIso) return "Aujourd'hui";
+  if (targetIso === tomorrowIso) return 'Demain';
+  if (targetIso === yesterdayIso) return 'Hier';
+
+  const [y, m, d] = targetIso.split('-').map(Number);
+  const labelDate = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+  return labelDate.toLocaleDateString('fr-CH', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    timeZone: 'UTC',
+  });
 };
 
 const resolveStatus = (req) => resolveStatusDisplay(req, resolveBookingStatusKey);
@@ -135,18 +153,17 @@ const resolveDelayInfo = (req, nowMs) => {
     return null;
   }
 
-  const scheduled = new Date(effectiveTime).getTime();
-  if (Number.isNaN(scheduled)) return null;
-  const diffMin = Math.floor((nowMs - scheduled) / 60000);
-  if (diffMin < LATE_THRESHOLD_MIN) return null;
+  const diffMin = minutesSinceMissionWallClock(effectiveTime, nowMs);
+  if (!Number.isFinite(diffMin) || diffMin < LATE_THRESHOLD_MIN) return null;
 
   const severity = diffMin >= LATE_SEVERE_MIN ? 'severe' : 'warning';
+  const displayTime = extractWallClockTime(effectiveTime);
   return {
     minutesLate: diffMin,
     severity,
     notStarted: true,
     label: `Retard +${diffMin} min`,
-    title: `La course n'a pas démarré (prévue à ${new Date(effectiveTime).toLocaleTimeString('fr-CH', { hour: '2-digit', minute: '2-digit' })}). Contactez le transporteur.`,
+    title: `La course n'a pas démarré (prévue à ${displayTime || '—'}). Contactez le transporteur.`,
   };
 };
 

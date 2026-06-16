@@ -1186,6 +1186,10 @@ def _pending_activation_users(institution_id: int) -> list[User]:
                 db.and_(
                     User.authentication_method == "username",
                     User.first_login_completed_at.is_(None),
+                    # Compte réellement jamais activé (MDP temporaire non changé).
+                    # Un utilisateur avec force_password_change=False a déjà activé
+                    # son compte même si first_login_completed_at est absent (legacy).
+                    User.force_password_change.is_(True),
                 ),
                 db.and_(
                     User.force_password_change.is_(True),
@@ -1704,7 +1708,11 @@ class InstitutionUsersPendingActivation(Resource):
             items = []
             for u in users:
                 reason = "invited"
-                if getattr(u, "authentication_method", "email") == "username" and not u.first_login_completed_at:
+                if (
+                    getattr(u, "authentication_method", "email") == "username"
+                    and not u.first_login_completed_at
+                    and u.force_password_change
+                ):
                     reason = "never_connected"
                 elif u.force_password_change and u.password_expires_at and u.password_expires_at < now:
                     reason = "password_expired"

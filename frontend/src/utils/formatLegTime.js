@@ -5,12 +5,24 @@
 
 import {
   extractWallClockTime,
+  extractWallClockDate,
   formatWallClockDateShort,
 } from './missionTimeDisplay';
 
 const fmtTime = (value) => extractWallClockTime(value);
 
 const fmtDateShort = (value) => formatWallClockDateShort(value);
+
+/** Clé de tri lexicographique sur heure murale Genève (ISO naïf normalisé). */
+const normalizeWallClockSortKey = (iso) => {
+  if (!iso) return '';
+  const raw = String(iso).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return `${raw}T00:00:00`;
+  const date = extractWallClockDate(raw);
+  const time = extractWallClockTime(raw);
+  if (date && time) return `${date}T${time}:00`;
+  return raw;
+};
 
 /** Dernier leg = retour institution uniquement s'il y a plusieurs étapes. */
 export const isReturnLegIndex = (request, legs, index) =>
@@ -154,7 +166,7 @@ export function getNextConfirmedScheduleInfo(request) {
     if (!time) return;
     candidates.push({
       iso: String(iso),
-      ms: new Date(iso).getTime(),
+      sortKey: normalizeWallClockSortKey(iso),
       time,
       kind,
       label,
@@ -188,7 +200,7 @@ export function getNextConfirmedScheduleInfo(request) {
   }
 
   if (!candidates.length) return null;
-  const next = candidates.reduce((min, c) => (c.ms < min.ms ? c : min));
+  const next = candidates.reduce((min, c) => (c.sortKey < min.sortKey ? c : min));
   return {
     iso: next.iso,
     time: next.time,

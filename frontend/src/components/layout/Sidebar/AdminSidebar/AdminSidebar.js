@@ -69,12 +69,25 @@ const AdminSidebar = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [userMenuOpen]);
 
-  const userData = useMemo(() => {
+  const [userData, setUserData] = useState(() => {
     try {
       return getActiveUser();
     } catch {
       return null;
     }
+  });
+
+  useEffect(() => {
+    const syncUser = () => {
+      try {
+        setUserData(getActiveUser());
+      } catch {
+        setUserData(null);
+      }
+    };
+    syncUser();
+    window.addEventListener('auth-changed', syncUser);
+    return () => window.removeEventListener('auth-changed', syncUser);
   }, []);
 
   const publicId = userData?.public_id || null;
@@ -83,11 +96,7 @@ const AdminSidebar = () => {
   const initials = useMemo(() => getInitials(displayName), [displayName]);
 
   const handleLogout = useCallback(async () => {
-    try {
-      await logoutUser();
-    } catch {
-      window.location.href = '/login';
-    }
+    await logoutUser();
   }, []);
 
   const handleAccountClick = () => {

@@ -65,7 +65,20 @@ describe('resolveCompanyNotificationLink', () => {
     expect(link).toBe('/dashboard/company/emmenex-moi/reservations?offer=7&request=1');
   });
 
-  it('dirige vers le dashboard institution pour new_request sans booking', () => {
+  it('dirige vers les réservations (jour + offre) pour new_request', () => {
+    const link = resolveCompanyNotificationLink({
+      ...baseArgs,
+      notif: {
+        event_type: 'new_request',
+        metadata: { request_id: 12, offer_id: 7, mission_date: '2026-06-16' },
+      },
+    });
+    expect(link).toBe(
+      '/dashboard/company/emmenex-moi/reservations?date=2026-06-16&offer=7&request=12',
+    );
+  });
+
+  it('dirige vers les réservations avec offer/request si mission_date absente (new_request)', () => {
     const link = resolveCompanyNotificationLink({
       ...baseArgs,
       notif: {
@@ -74,7 +87,7 @@ describe('resolveCompanyNotificationLink', () => {
       },
     });
     expect(link).toBe(
-      '/dashboard/company/emmenex-moi?tab=institution&request=12&offer=7',
+      '/dashboard/company/emmenex-moi/reservations?offer=7&request=12',
     );
   });
 });

@@ -85,15 +85,17 @@ const CompanySidebar = () => {
   }, [userMenuOpen]);
 
   const handleLogout = useCallback(async () => {
-    try {
-      await logoutUser();
-    } catch {
-      window.location.href = '/login';
-    }
+    await logoutUser();
   }, []);
 
-  // User data from localStorage
-  const userData = useMemo(() => getActiveUser(), []);
+  const [userData, setUserData] = useState(() => getActiveUser());
+
+  useEffect(() => {
+    const syncUser = () => setUserData(getActiveUser());
+    syncUser();
+    window.addEventListener('auth-changed', syncUser);
+    return () => window.removeEventListener('auth-changed', syncUser);
+  }, []);
 
   const userEmail = userData?.email || '';
   const userRole = userData?.role || 'company';

@@ -23,6 +23,17 @@ from application.institutions.accept_offer import (
 from schemas.institution_schemas import TransportRequestCreateSchema
 
 
+def _future_mission_date_str(*, days_ahead: int = 10) -> str:
+    """Date mission future (évite validation « dans le passé »)."""
+    return (date.today() + timedelta(days=days_ahead)).isoformat()
+
+
+def _future_scheduled_iso(*, days_ahead: int = 10, hour: int = 10, minute: int = 0) -> str:
+    """ISO8601 futur avec offset +01:00 pour tests schema."""
+    mission = date.today() + timedelta(days=days_ahead)
+    return f"{mission.isoformat()}T{hour:02d}:{minute:02d}:00+01:00"
+
+
 # ── Lightweight stubs (pas de DB réelle) ──
 
 
@@ -157,9 +168,10 @@ class TestTransportRequestSchemaRoundTrip:
 
     def test_schema_rejects_round_trip_without_return_plan(self):
         schema = TransportRequestCreateSchema()
+        mission = _future_mission_date_str()
         data = {
             "external_reference": "REF-001",
-            "scheduled_time": "2026-03-01T10:00:00+01:00",
+            "scheduled_time": _future_scheduled_iso(),
             "pickup_location": "A",
             "dropoff_location": "B",
             "is_round_trip": True,
@@ -172,28 +184,30 @@ class TestTransportRequestSchemaRoundTrip:
 
     def test_schema_accepts_round_trip_with_return_date_only(self):
         schema = TransportRequestCreateSchema()
+        mission = _future_mission_date_str()
         data = {
             "external_reference": "REF-001B",
-            "scheduled_time": "2026-03-01T10:00:00+01:00",
+            "scheduled_time": _future_scheduled_iso(),
             "pickup_location": "A",
             "dropoff_location": "B",
             "is_round_trip": True,
-            "return_date": "2026-03-01",
+            "return_date": mission,
         }
         result = schema.load(data)
         assert result["is_round_trip"] is True
-        assert result["return_date"] == "2026-03-01"
+        assert result["return_date"] == mission
         assert result.get("return_time") is None
 
     def test_schema_accepts_round_trip_with_return_time(self):
         schema = TransportRequestCreateSchema()
+        mission = _future_mission_date_str()
         data = {
             "external_reference": "REF-002",
-            "scheduled_time": "2026-03-01T10:00:00+01:00",
+            "scheduled_time": _future_scheduled_iso(),
             "pickup_location": "A",
             "dropoff_location": "B",
             "is_round_trip": True,
-            "return_time": "2026-03-01T16:00:00+01:00",
+            "return_time": _future_scheduled_iso(hour=16, minute=0),
         }
         result = schema.load(data)
         assert result["is_round_trip"] is True
@@ -203,7 +217,7 @@ class TestTransportRequestSchemaRoundTrip:
         schema = TransportRequestCreateSchema()
         data = {
             "external_reference": "REF-003",
-            "scheduled_time": "2026-03-01T10:00:00+01:00",
+            "scheduled_time": _future_scheduled_iso(),
             "pickup_location": "A",
             "dropoff_location": "B",
             "is_round_trip": False,
@@ -214,7 +228,7 @@ class TestTransportRequestSchemaRoundTrip:
     def test_schema_accepts_simple_trip_without_external_reference(self):
         schema = TransportRequestCreateSchema()
         data = {
-            "scheduled_time": "2026-03-01T10:00:00+01:00",
+            "scheduled_time": _future_scheduled_iso(),
             "pickup_location": "A",
             "dropoff_location": "B",
             "is_round_trip": False,

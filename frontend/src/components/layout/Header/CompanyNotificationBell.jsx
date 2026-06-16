@@ -144,9 +144,20 @@ const CompanyNotificationBell = () => {
     }
   }, []);
 
-  // Initial load
+  // Chargement initial + resync après changement de compte (logout/login sans reload)
   useEffect(() => {
     loadNotifications();
+  }, [loadNotifications]);
+
+  useEffect(() => {
+    const onAuthChanged = () => {
+      setIsOpen(false);
+      seenNotificationIdsRef.current = new Set();
+      lastSeenNotificationTsRef.current = 0;
+      void loadNotifications();
+    };
+    window.addEventListener('auth-changed', onAuthChanged);
+    return () => window.removeEventListener('auth-changed', onAuthChanged);
   }, [loadNotifications]);
 
   // Resync long (pas de refetch à chaque event socket)

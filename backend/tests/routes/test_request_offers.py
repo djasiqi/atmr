@@ -503,7 +503,9 @@ class TestAcceptOffer:
         request.external_reference = f"TEST-{uuid.uuid4().hex[:8]}"
         request.pickup_location = "123 Rue Test"
         request.dropoff_location = "456 Avenue Dest"
-        request.scheduled_time = datetime.now(UTC) + timedelta(days=2)
+        scheduled = datetime.now(UTC) + timedelta(days=2)
+        request.mission_date = scheduled.date()
+        request.scheduled_time = scheduled
         request.status = RequestStatus.SENT.value
         request.sent_at = datetime.now(UTC)
         db.session.add(request)
@@ -648,7 +650,9 @@ class TestAcceptOffer:
         request.external_reference = f"TEST-{uuid.uuid4().hex[:8]}"
         request.pickup_location = "123 Rue Test"
         request.dropoff_location = "456 Avenue Dest"
-        request.scheduled_time = datetime.now(UTC) + timedelta(days=2)
+        scheduled = datetime.now(UTC) + timedelta(days=2)
+        request.mission_date = scheduled.date()
+        request.scheduled_time = scheduled
         request.status = RequestStatus.SENT.value
         request.sent_at = datetime.now(UTC)
         db.session.add(request)
@@ -701,7 +705,9 @@ class TestAcceptOffer:
         request.external_reference = f"TEST-{uuid.uuid4().hex[:8]}"
         request.pickup_location = "123 Rue Test"
         request.dropoff_location = "456 Avenue Dest"
-        request.scheduled_time = datetime.now(UTC) + timedelta(days=2)
+        scheduled = datetime.now(UTC) + timedelta(days=2)
+        request.mission_date = scheduled.date()
+        request.scheduled_time = scheduled
         request.status = RequestStatus.SENT.value
         request.sent_at = datetime.now(UTC)
         db.session.add(request)
@@ -825,7 +831,9 @@ class TestRejectOffer:
         request.external_reference = f"TEST-{uuid.uuid4().hex[:8]}"
         request.pickup_location = "123 Rue Test"
         request.dropoff_location = "456 Avenue Dest"
-        request.scheduled_time = datetime.now(UTC) + timedelta(days=2)
+        scheduled = datetime.now(UTC) + timedelta(days=2)
+        request.mission_date = scheduled.date()
+        request.scheduled_time = scheduled
         request.status = RequestStatus.SENT.value
         request.sent_at = datetime.now(UTC)
         db.session.add(request)

@@ -852,6 +852,114 @@ class TestInstitutionInvitation:
         assert response.get_json()["status"] == "not_implemented"
 
 
+class TestInstitutionUsersPendingActivation:
+    """Liste « En attente d'activation » — statut Jamais connecté."""
+
+    @pytest.fixture
+    def institution(self, db):
+        inst = Institution()
+        inst.name = "Clinique Pending Activation"
+        inst.institution_type = "clinic"
+        inst.address = "Rue du Test 1"
+        inst.public_id = str(uuid.uuid4())
+        db.session.add(inst)
+        db.session.flush()
+        db.session.refresh(inst)
+        return inst
+
+    @pytest.fixture
+    def admin_user(self, db, institution):
+        uid = str(uuid.uuid4())[:8]
+        user = User()
+        user.username = f"admin_pending_{uid}"
+        user.email = f"admin-pending-{uid}@test.ch"
+        user.role = UserRole.INSTITUTION
+        user.public_id = str(uuid.uuid4())
+        user.institution_id = institution.id
+        user.institution_role = InstitutionRole.ADMIN.value
+        user.account_status = "active"
+        user.set_password("password123", force_change=False)
+        db.session.add(user)
+        db.session.flush()
+        db.session.refresh(user)
+        return user
+
+    @pytest.fixture
+    def admin_headers(self, client, admin_user, institution):
+        claims = {
+            "role": admin_user.role.value,
+            "institution_id": institution.id,
+            "institution_role": admin_user.institution_role,
+            "aud": "atmr-api",
+        }
+        with client.application.app_context():
+            token = create_access_token(
+                identity=str(admin_user.public_id),
+                additional_claims=claims,
+            )
+        return {"Authorization": f"Bearer {token}"}
+
+    def test_activated_username_user_not_listed_as_never_connected(
+        self, client, db, institution, admin_headers
+    ):
+        """Compte username activé (MDP changé) ne doit plus apparaître en attente."""
+        uid = str(uuid.uuid4())[:8]
+        user = User()
+        user.username = f"j.andre.{uid}"
+        user.email = None
+        user.first_name = "Julien"
+        user.last_name = "ANDRÉ"
+        user.role = UserRole.INSTITUTION
+        user.public_id = str(uuid.uuid4())
+        user.institution_id = institution.id
+        user.institution_role = InstitutionRole.REQUESTER.value
+        user.account_status = "active"
+        user.authentication_method = "username"
+        user.force_password_change = False
+        user.first_login_completed_at = None
+        user.set_password("Activated!Pwd2026Xyz", force_change=False)
+        db.session.add(user)
+        db.session.commit()
+
+        response = client.get(
+            "/api/v1/institutions/users/pending-activation",
+            headers=admin_headers,
+        )
+        assert response.status_code == 200
+        usernames = [u.get("username") for u in response.get_json()["users"]]
+        assert user.username not in usernames
+
+    def test_never_connected_username_user_still_listed(
+        self, client, db, institution, admin_headers
+    ):
+        """Compte username avec MDP temporaire non changé reste en attente."""
+        uid = str(uuid.uuid4())[:8]
+        user = User()
+        user.username = f"pending.{uid}"
+        user.email = None
+        user.role = UserRole.INSTITUTION
+        user.public_id = str(uuid.uuid4())
+        user.institution_id = institution.id
+        user.institution_role = InstitutionRole.REQUESTER.value
+        user.account_status = "active"
+        user.authentication_method = "username"
+        user.force_password_change = True
+        user.password_expires_at = datetime.now(UTC) + timedelta(days=14)
+        user.set_password("TempPass123!Xy", force_change=True)
+        db.session.add(user)
+        db.session.commit()
+
+        response = client.get(
+            "/api/v1/institutions/users/pending-activation",
+            headers=admin_headers,
+        )
+        assert response.status_code == 200
+        pending = response.get_json()["users"]
+        match = next((u for u in pending if u["username"] == user.username), None)
+        assert match is not None
+        assert match["pending_reason"] == "never_connected"
+
+
 class TestInstitutionUserJobTitle:
     """Tests pour le champ descriptif job_title (fonction/métier).
 

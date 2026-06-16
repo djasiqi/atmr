@@ -1,11 +1,17 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useLocation, Link, useSearchParams } from 'react-router-dom';
 
-import apiClient, { cleanLocalSession, setCurrentAuthEnv } from '../../utils/apiClient';
+import apiClient, { cleanLocalSession } from '../../utils/apiClient';
 import { jwtDecode } from 'jwt-decode';
 import { queryClient } from '../../App';
 import { buildSafeAppPath, pathFromNextQueryParam } from '../../utils/safeReturnPath';
 import { hasActiveSession, normalizeAuthRole, writeAuthSession } from '../../utils/webAuthSession';
+import {
+  beginLoginSession,
+  clearExplicitLogoutMarker,
+  endLoginSession,
+  hasRecentExplicitLogout,
+} from '../../utils/sessionLogoutState';
 import { linkMobilityProfileToUser, saveMobilityProfileForEmail } from '../../utils/clientMobilityProfile';
 import {
   getPendingActivationByEmail,
@@ -185,6 +191,7 @@ const Login = () => {
   }, [justActivated, location.state]);
 
   useEffect(() => {
+    if (hasRecentExplicitLogout()) return;
     if (!authUser || !hasActiveSession()) return;
     const destination =
       firstAllowedReturnPath(authUser.role, nextFromQuery, safeReturnFromState) ||
@@ -321,6 +328,8 @@ const Login = () => {
     if (!validateLoginForm()) return;
 
     setIsLoading(true);
+    beginLoginSession();
+    let loginSucceeded = false;
     try {
       const response = await apiClient.post(
         '/auth/login',
@@ -336,8 +345,6 @@ const Login = () => {
       if (!user || !user.role || !user.public_id) {
         throw new Error('Aucune information utilisateur reçue.');
       }
-
-      const authEnv = setCurrentAuthEnv(target_env);
 
       // ⚠️ Sécurité: on ne stocke JAMAIS le mot de passe en clair.
       // REMEMBER_KEY ne contient que l'email (et un marqueur de version)
@@ -355,6 +362,7 @@ const Login = () => {
 
       cleanLocalSession();
       queryClient.clear();
+      clearExplicitLogoutMarker();
 
       let roleSegment;
       if (token && typeof token === 'string') {
@@ -365,12 +373,18 @@ const Login = () => {
       }
 
       writeAuthSession({
-        env: authEnv,
+        env: target_env,
         user,
         role: roleSegment,
         accessToken: token,
         refreshToken: refresh_token,
       });
+      try {
+        const { resumeSessionKeepAlive } = await import('../../utils/sessionKeepAlive');
+        resumeSessionKeepAlive();
+      } catch (_) {
+        // ignore
+      }
       removePendingActivationByEmail(loginFormData.email);
       linkMobilityProfileToUser({
         publicId: user.public_id,
@@ -378,6 +392,8 @@ const Login = () => {
       });
 
       window.dispatchEvent(new Event('auth-changed'));
+
+      loginSucceeded = true;
 
       if (user.force_password_change) {
         navigate(`/force-reset-password/${user.public_id}`, { replace: true });
@@ -449,6 +465,9 @@ const Login = () => {
       setErrorMessage(msg);
     } finally {
       setIsLoading(false);
+      if (!loginSucceeded) {
+        endLoginSession();
+      }
     }
   };
 

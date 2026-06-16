@@ -220,6 +220,7 @@ export const writeAuthSession = ({
   refreshToken = null,
 } = {}) => {
   const normalizedEnv = env === DEMO_ENV_KEY ? DEMO_ENV_KEY : APP_ENV_KEY;
+  setAuthEnv(normalizedEnv);
   const resolvedRole = resolveRoleScope(role ?? user?.role);
   const userPayload =
     user && resolvedRole ? { ...user, role: resolvedRole } : user ? { ...user } : null;

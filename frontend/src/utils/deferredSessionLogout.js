@@ -63,7 +63,9 @@ const executeLogout = () => {
   import('./apiClient')
     .then(({ logoutUser }) => logoutUser({ preserveNext: true }))
     .catch(() => {
-      window.location.href = '/login';
+      import('./authNavigation').then(({ requestAuthNavigate }) => {
+        requestAuthNavigate('/login', { replace: true });
+      });
     });
 };
 

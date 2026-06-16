@@ -23,7 +23,7 @@ from models import (
 )
 from models.booking_change_request import BookingChangeRequestStatus
 from models.enums import BookingStatus, InstitutionRole
-from shared.time_utils import parse_local_naive
+from shared.time_utils import normalize_mission_wall_clock
 
 logger = logging.getLogger(__name__)
 
@@ -459,7 +459,9 @@ def apply_operational_patch(booking: Booking, validated: dict[str, Any]) -> list
         if key not in INSTITUTION_OPERATIONAL_FIELDS:
             continue
         if key == "scheduled_time":
-            scheduled_local = parse_local_naive(value)
+            # Règle d'architecture : écriture mission institution → normalize_mission_wall_clock.
+            # parse_local_naive reste autorisé côté booking entreprise (ManualBookingForm).
+            scheduled_local = normalize_mission_wall_clock(value)
             if scheduled_local is None:
                 raise ValueError("Heure planifiée invalide.")
             booking.scheduled_time = scheduled_local
@@ -511,7 +513,8 @@ def sync_transport_request_leg_schedule(
 
     def _apply_leg_time(leg: TransportRequestLeg, iso: str | None, label: str) -> None:
         if iso:
-            parsed = parse_local_naive(iso)
+            # Règle d'architecture : écriture mission institution → normalize_mission_wall_clock.
+            parsed = normalize_mission_wall_clock(iso)
             if parsed is None:
                 raise ValueError("Heure de rendez-vous invalide.")
             leg.scheduled_time = parsed
@@ -542,7 +545,8 @@ def sync_transport_request_leg_schedule(
     if return_appointment_time is not None and return_leg is not None:
         _apply_leg_time(return_leg, return_appointment_time, "leg.return.scheduled_time")
         if return_appointment_time:
-            parsed_return = parse_local_naive(return_appointment_time)
+            # Règle d'architecture : écriture mission institution → normalize_mission_wall_clock.
+            parsed_return = normalize_mission_wall_clock(return_appointment_time)
             if parsed_return is not None:
                 transport_request.return_time = parsed_return
                 transport_request.return_time_confirmed = True
@@ -570,7 +574,7 @@ def _simulate_after_snapshot(
         if key not in INSTITUTION_OPERATIONAL_FIELDS:
             continue
         if key == "scheduled_time":
-            parsed = parse_local_naive(value)
+            parsed = normalize_mission_wall_clock(value)
             after["scheduled_time"] = parsed.isoformat() if parsed else value
         elif key in ("wheelchair_client_has", "wheelchair_need"):
             after[key] = bool(value)

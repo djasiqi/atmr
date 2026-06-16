@@ -179,35 +179,12 @@ describe('authService', () => {
   });
 
   describe('logoutUser', () => {
-    it('devrait nettoyer le localStorage', async () => {
-      // Préparer localStorage
-      localStorage.setItem('authToken', 'fake-token');
-      localStorage.setItem('user', JSON.stringify({ id: 1 }));
-      localStorage.setItem('public_id', 'user-123');
-
-      // Mock coreLogoutUser pour qu'il ne fasse pas d'appel réel
+    it('délègue la déconnexion à apiClient.logoutUser', async () => {
       apiClientModule.logoutUser.mockResolvedValue(undefined);
-      apiClientModule.cleanLocalSession.mockImplementation(() => {
-        localStorage.removeItem('authToken');
-        localStorage.removeItem('user');
-        localStorage.removeItem('public_id');
-      });
-
-      // Mock window.location pour éviter l'erreur de navigation
-      const originalLocation = window.location;
-      delete window.location;
-      window.location = { href: '' };
 
       await logoutUser({ redirect: false });
 
       expect(apiClientModule.logoutUser).toHaveBeenCalledWith({ redirect: false });
-      expect(apiClientModule.cleanLocalSession).toHaveBeenCalled();
-      expect(localStorage.getItem('authToken')).toBeNull();
-      expect(localStorage.getItem('user')).toBeNull();
-      expect(localStorage.getItem('public_id')).toBeNull();
-
-      // Restaurer window.location
-      window.location = originalLocation;
     });
   });
 

@@ -9,8 +9,9 @@ la maintenabilité et la cohérence du code.
 import logging
 from typing import Literal, Tuple
 
-from flask import abort
+from flask import abort, jsonify
 from flask_jwt_extended import get_jwt_identity
+from werkzeug.exceptions import Forbidden
 
 from ext import db
 from models import Booking, Client, Company, Driver, Institution, User, UserRole
@@ -274,6 +275,19 @@ class AuthorizationService:
                 user.username,
             )
             abort(404, description="Institution not found")
+
+        if getattr(user, "force_password_change", False):
+            forbidden = Forbidden()
+            response = jsonify(
+                {
+                    "error": "password_change_required",
+                    "message": "Vous devez modifier votre mot de passe avant de continuer.",
+                    "redirect_to": f"/force-reset-password/{user.public_id}",
+                }
+            )
+            response.status_code = 403
+            forbidden.response = response
+            raise forbidden
 
         return institution, user
 

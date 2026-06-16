@@ -4,6 +4,10 @@ Invariant :
 - ``TransportRequest.scheduled_time`` = heure de départ uniquement (nullable).
 - ``TransportRequestLeg.scheduled_time`` = RDV / retour par étape.
 - ``get_effective_dispatch_time()`` = calcul opérationnel (heures confirmées, même jour).
+
+Règle d'architecture (écritures mission) :
+- Toute écriture d'horaire mission DOIT passer par ``normalize_mission_wall_clock()``.
+- ``parse_iso8601()`` est interdit pour les écritures mission (retourne aware).
 """
 
 from __future__ import annotations
@@ -11,7 +15,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import TYPE_CHECKING, Any
 
-from shared.time_utils import parse_iso8601
+from shared.time_utils import normalize_mission_wall_clock, parse_iso8601
 
 if TYPE_CHECKING:
     from models.transport_request import TransportRequest
@@ -140,7 +144,7 @@ def apply_departure_schedule(
     departure_dt: datetime | None = None
     st_raw = validated.get("scheduled_time")
     if st_raw and scheduled_time_type == "departure":
-        departure_dt = parse_iso8601(str(st_raw))
+        departure_dt = normalize_mission_wall_clock(st_raw)
         if pickup_confirmed:
             validate_time_pair(scheduled_time=departure_dt, time_confirmed=True)
 
@@ -170,7 +174,7 @@ def legacy_arrival_schedule(
     raw = validated.get("scheduled_time")
     if not raw:
         return None, False
-    dt = parse_iso8601(str(raw))
+    dt = normalize_mission_wall_clock(raw)
     confirmed = validated.get("appointment_time_confirmed")
     if confirmed is None:
         confirmed = True

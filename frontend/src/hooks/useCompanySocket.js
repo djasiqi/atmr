@@ -1,6 +1,10 @@
 // frontend/src/hooks/useCompanySocket.js
 import { useEffect, useState } from 'react';
-import { COMPANY_SOCKET_STATE_EVENT, getCompanySocket } from '../services/companySocket';
+import {
+  COMPANY_SOCKET_STATE_EVENT,
+  disconnectCompanySocket,
+  getCompanySocket,
+} from '../services/companySocket';
 
 /**
  * Hook React qui utilise le service singleton companySocket.
@@ -10,16 +14,22 @@ export default function useCompanySocket() {
   const [socket, setSocket] = useState(null);
 
   useEffect(() => {
-    const socketInstance = getCompanySocket();
+    const attachSocket = () => {
+      const socketInstance = getCompanySocket();
+      setSocket(socketInstance || null);
+    };
 
-    if (!socketInstance) {
-      setSocket(null);
-      return undefined;
-    }
+    attachSocket();
 
-    setSocket(socketInstance);
+    const onAuthChanged = () => {
+      disconnectCompanySocket();
+      attachSocket();
+    };
 
-    return undefined;
+    window.addEventListener('auth-changed', onAuthChanged);
+    return () => {
+      window.removeEventListener('auth-changed', onAuthChanged);
+    };
   }, []);
 
   return socket;
