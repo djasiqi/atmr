@@ -239,6 +239,14 @@ const InstitutionOfferDetailPanel = ({ offer, onClose, onAccept, onPropose, onRe
               <span className={styles.summaryLabel}>Passager</span>
               <span className={styles.summaryValue}>{identity.passengerLabel || '—'}</span>
             </div>
+            {req.patient?.dob && (
+              <div className={styles.summaryItem}>
+                <span className={styles.summaryLabel}>Date de naissance</span>
+                <span className={styles.summaryValue}>
+                  {new Date(req.patient.dob).toLocaleDateString('fr-CH')}
+                </span>
+              </div>
+            )}
             <div className={styles.summaryItem}>
               <span className={styles.summaryLabel}>Origine</span>
               <span className={styles.summaryValue}>{identity.source?.name || 'Institution'}</span>

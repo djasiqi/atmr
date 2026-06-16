@@ -720,6 +720,8 @@ class Booking(db.Model):
             ),
             "route_group_id": getattr(self, "route_group_id", None),
             "route_sequence_number": getattr(self, "route_sequence_number", None),
+            "passenger": self._get_institution_passenger_brief(),
+            "institution_leg": self._get_institution_leg_clinical_brief(),
             **self._canonical_display_payload(),
         }
 
@@ -876,12 +878,8 @@ class Booking(db.Model):
         viewer_id = getattr(self, "_serialize_viewer_company_id", None)
         return build_booking_display_blocks(self, viewer_company_id=viewer_id)
 
-    def _get_institution_timeline(self):
-        """Retourne les dates cles de la demande institution source, si elle existe.
-
-        Pour un booking retour (is_return=True), remonte au parent pour
-        trouver la TransportRequest source.
-        """
+    def _resolve_source_transport_request(self):
+        """Demande institution source (directe, parent A/R ou route_group_id)."""
         try:
             reqs = getattr(self, "source_request", None)
             if (
@@ -892,19 +890,92 @@ class Booking(db.Model):
                 parent = getattr(self, "return_trip", None)
                 if parent:
                     reqs = getattr(parent, "source_request", None)
-            # Multi-étapes : seuls les legs primaires sont liés à la TransportRequest
-            # (lien via transport_request.booking_id). Les legs suivants partagent le
-            # même parcours via route_group_id → on résout la demande source par groupe
-            # pour exposer un historique unique commun à tout le parcours.
             if not reqs and getattr(self, "route_group_id", None):
                 from models.transport_request import TransportRequest
 
-                reqs = TransportRequest.query.filter_by(
+                return TransportRequest.query.filter_by(
                     route_group_id=self.route_group_id
                 ).first()
             if not reqs:
                 return None
-            req = reqs[0] if isinstance(reqs, list) else reqs
+            return reqs[0] if isinstance(reqs, list) else reqs
+        except Exception:
+            return None
+
+    def _get_institution_passenger_brief(self) -> dict[str, Any] | None:
+        """Snapshot patient institution (DOB, ref. externe) pour l'UI transporteur."""
+        try:
+            req = self._resolve_source_transport_request()
+            if req is None:
+                return None
+            patient = getattr(req, "patient", None)
+            if patient is None:
+                return None
+            dob = getattr(patient, "dob", None)
+            return {
+                "institution_patient_id": getattr(patient, "id", None),
+                "first_name": getattr(patient, "first_name", None),
+                "last_name": getattr(patient, "last_name", None),
+                "birth_date": dob.isoformat() if dob is not None else None,
+                "external_reference": getattr(patient, "external_reference", None),
+                "phone": getattr(patient, "phone", None),
+            }
+        except Exception:
+            return None
+
+    def _get_institution_leg_clinical_brief(self) -> dict[str, Any] | None:
+        """Détails clinique du leg source (établissement, RDV) pour l'UI transporteur."""
+        try:
+            req = self._resolve_source_transport_request()
+            if req is None:
+                return None
+            legs = sorted(
+                list(getattr(req, "legs", None) or []),
+                key=lambda item: getattr(item, "sequence_index", 0),
+            )
+            if not legs:
+                return None
+            seq = getattr(self, "route_sequence_number", None)
+            leg = None
+            if seq is not None:
+                leg = next(
+                    (
+                        item
+                        for item in legs
+                        if getattr(item, "route_sequence_number", None) == seq
+                    ),
+                    None,
+                )
+            if leg is None:
+                leg = legs[0]
+            from shared.time_utils import iso_utc_z, to_utc_from_db
+
+            appt_dt = getattr(leg, "scheduled_time", None)
+            appt_iso = (
+                iso_utc_z(to_utc_from_db(appt_dt))
+                if appt_dt is not None and getattr(leg, "time_confirmed", False)
+                else None
+            )
+            return {
+                "establishment": getattr(leg, "dropoff_establishment", None),
+                "service": getattr(leg, "dropoff_service", None),
+                "doctor": getattr(leg, "dropoff_doctor", None),
+                "appointment_time": appt_iso,
+                "time_confirmed": bool(getattr(leg, "time_confirmed", False)),
+            }
+        except Exception:
+            return None
+
+    def _get_institution_timeline(self):
+        """Retourne les dates cles de la demande institution source, si elle existe.
+
+        Pour un booking retour (is_return=True), remonte au parent pour
+        trouver la TransportRequest source.
+        """
+        try:
+            req = self._resolve_source_transport_request()
+            if req is None:
+                return None
             inst = getattr(req, "institution", None)
             inst_name = getattr(inst, "name", None) if inst else None
             company = getattr(req, "accepted_by_company", None)

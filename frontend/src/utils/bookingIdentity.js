@@ -90,6 +90,7 @@ export function buildIdentityFromApi(booking) {
     }
     return {
       passengerLabel: identity.primary_label || identity.passenger?.name || DEFAULT_PASSENGER,
+      passenger: identity.passenger || null,
       source: identity.source || legacySource(booking),
       requester: identity.requester || null,
       ownership: identity.ownership || null,
@@ -102,6 +103,7 @@ export function buildIdentityFromApi(booking) {
   warnMissingDisplayModel(booking);
   return {
     passengerLabel: legacyPassengerName(booking),
+    passenger: booking?.passenger || booking?.identity?.passenger || null,
     source: legacySource(booking),
     requester: booking?.institution_timeline?.created_by_name
       ? { id: null, name: booking.institution_timeline.created_by_name }

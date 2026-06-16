@@ -638,9 +638,6 @@ class AcceptOfferUseCase:
             billed_to_type = "patient"
             billed_to_company_id = None
 
-        # Réutiliser le champ hospital_service du Booking pour le point d'accueil
-        entry_point = getattr(transport_request, "pickup_entry_point", None) or ""
-
         # Horaire: utiliser l'horaire proposé par l'entreprise si fourni (naïf Genève)
         raw_pickup = proposed_pickup_time or transport_request.scheduled_time
         effective_pickup_time = api_scheduled_iso_to_naive_geneva(raw_pickup)
@@ -680,8 +677,6 @@ class AcceptOfferUseCase:
             dropoff_access_notes=self._format_dropoff_notes(transport_request),
             dropoff_floor=transport_request.dropoff_floor,
             dropoff_door_code=transport_request.dropoff_door_code,
-            # Point d'accueil → champ existant hospital_service du Booking
-            hospital_service=entry_point if entry_point else None,
             # Mobilité
             wheelchair_client_has=self._get_mobility_flag(
                 transport_request, "wheelchair"
@@ -702,6 +697,8 @@ class AcceptOfferUseCase:
         # le réinitialise à None car le type par défaut est "patient")
         if billed_to_company_id is not None:
             booking.billed_to_company_id = billed_to_company_id
+
+        self._apply_clinical_dropoff_from_request(booking, transport_request)
 
         # Gel tarifaire : conserver le profil/version/détail si calculé via profil
         if price.get("pricing_profile_id"):
@@ -866,7 +863,6 @@ class AcceptOfferUseCase:
             billed_to_company_id = company_id
 
         route_group_id = getattr(transport_request, "route_group_id", None)
-        entry_point = getattr(transport_request, "pickup_entry_point", None) or ""
         customer_name = self._get_customer_name(transport_request)
         primary: Booking | None = None
 
@@ -939,7 +935,6 @@ class AcceptOfferUseCase:
                 dropoff_access_notes=self._format_dropoff_notes(transport_request),
                 dropoff_floor=transport_request.dropoff_floor,
                 dropoff_door_code=transport_request.dropoff_door_code,
-                hospital_service=entry_point if entry_point else None,
                 wheelchair_client_has=self._get_mobility_flag(
                     transport_request, "wheelchair"
                 ),
@@ -956,6 +951,8 @@ class AcceptOfferUseCase:
             )
             if billed_to_company_id is not None:
                 booking.billed_to_company_id = billed_to_company_id
+
+            self._apply_clinical_dropoff_from_leg(booking, leg)
 
             # Gel tarifaire par leg si calculé via profil
             if leg_price.get("pricing_profile_id"):
@@ -1239,8 +1236,8 @@ class AcceptOfferUseCase:
                 "last_name": patient.last_name,
                 "phone": getattr(patient, "phone", None),
                 "date_of_birth": (
-                    patient.date_of_birth.isoformat()
-                    if getattr(patient, "date_of_birth", None)
+                    patient.dob.isoformat()
+                    if getattr(patient, "dob", None)
                     else None
                 ),
             }
@@ -1286,6 +1283,57 @@ class AcceptOfferUseCase:
                 meta["routing"] = routing
 
         return meta
+
+    @staticmethod
+    def _apply_clinical_dropoff_fields(
+        booking: Booking,
+        *,
+        establishment: str | None,
+        service: str | None,
+        doctor: str | None,
+    ) -> None:
+        """Copie établissement / service / médecin de destination sur le booking."""
+        if establishment and str(establishment).strip():
+            booking.medical_facility = str(establishment).strip()
+        if service and str(service).strip():
+            booking.hospital_service = str(service).strip()
+        if doctor and str(doctor).strip():
+            booking.doctor_name = str(doctor).strip()
+
+    @staticmethod
+    def _clinical_dropoff_from_leg(
+        leg: object,
+    ) -> tuple[str | None, str | None, str | None]:
+        return (
+            getattr(leg, "dropoff_establishment", None),
+            getattr(leg, "dropoff_service", None),
+            getattr(leg, "dropoff_doctor", None),
+        )
+
+    def _clinical_dropoff_from_request(
+        self, transport_request: TransportRequest
+    ) -> tuple[str | None, str | None, str | None]:
+        legs = sorted(
+            list(getattr(transport_request, "legs", None) or []),
+            key=lambda item: getattr(item, "sequence_index", 0),
+        )
+        if not legs:
+            return None, None, None
+        return self._clinical_dropoff_from_leg(legs[0])
+
+    def _apply_clinical_dropoff_from_leg(self, booking: Booking, leg: object) -> None:
+        est, svc, doc = self._clinical_dropoff_from_leg(leg)
+        self._apply_clinical_dropoff_fields(
+            booking, establishment=est, service=svc, doctor=doc
+        )
+
+    def _apply_clinical_dropoff_from_request(
+        self, booking: Booking, transport_request: TransportRequest
+    ) -> None:
+        est, svc, doc = self._clinical_dropoff_from_request(transport_request)
+        self._apply_clinical_dropoff_fields(
+            booking, establishment=est, service=svc, doctor=doc
+        )
 
     def _format_pickup_notes(self, transport_request: TransportRequest) -> str | None:
         """Formate les notes d'accès pickup."""

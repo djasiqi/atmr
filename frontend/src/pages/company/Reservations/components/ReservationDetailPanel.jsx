@@ -608,6 +608,33 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onRese
 
   const bookingIdentity = buildIdentityFromApi(reservation);
   const sourceMeta = getBookingSourceMeta(bookingIdentity.source?.type);
+  const passengerBirthDate = isInstitutionBooking
+    ? (bookingIdentity.passenger?.birth_date
+      || reservation.passenger?.birth_date
+      || null)
+    : (reservation.client?.birth_date || bookingIdentity.passenger?.birth_date || null);
+
+  const resolveClinicalLabel = (value) => {
+    if (!value || value === 'Non spécifié') return null;
+    return value;
+  };
+  const legClinical = reservation.institution_leg || null;
+  const arrivalEstablishment = resolveClinicalLabel(reservation.medical_facility)
+    || resolveClinicalLabel(legClinical?.establishment);
+  const arrivalService = resolveClinicalLabel(reservation.hospital_service)
+    || resolveClinicalLabel(legClinical?.service);
+  const arrivalDoctor = resolveClinicalLabel(reservation.doctor_name)
+    || resolveClinicalLabel(legClinical?.doctor);
+  const arrivalClinicalLine = [arrivalEstablishment, arrivalService, arrivalDoctor]
+    .filter(Boolean)
+    .join(' · ');
+  const arrivalAppointmentLabel = (() => {
+    if (!legClinical?.appointment_time) return null;
+    const d = new Date(legClinical.appointment_time);
+    if (Number.isNaN(d.getTime())) return null;
+    const pad = (n) => String(n).padStart(2, '0');
+    return `RDV ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  })();
 
   return (
     <div className={s.panel} data-tour-id="ReservationDetailPanel_panel">
@@ -1038,17 +1065,25 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onRese
                     <span className={s.summaryValue}>{reservation.driver_name}</span>
                   </div>
                 )}
-                {(reservation.client?.contact_phone || reservation.client?.phone) && (
+                {(reservation.client?.contact_phone || reservation.client?.phone) && !isInstitutionBooking && (
                   <div className={s.summaryItem}>
                     <span className={s.summaryLabel}>Téléphone</span>
                     <span className={s.summaryValue}>{reservation.client.contact_phone || reservation.client.phone}</span>
                   </div>
                 )}
-                {reservation.client?.birth_date && (
+                {passengerBirthDate && (
                   <div className={s.summaryItem}>
                     <span className={s.summaryLabel}>Date de naissance</span>
                     <span className={s.summaryValue}>
-                      {new Date(reservation.client.birth_date).toLocaleDateString('fr-CH')}
+                      {new Date(passengerBirthDate).toLocaleDateString('fr-CH')}
+                    </span>
+                  </div>
+                )}
+                {(reservation.passenger?.external_reference || meta.external_reference || reservation.external_reference) && isInstitutionBooking && (
+                  <div className={s.summaryItem}>
+                    <span className={s.summaryLabel}>Réf. patient</span>
+                    <span className={s.summaryValue}>
+                      {reservation.passenger?.external_reference || meta.external_reference || reservation.external_reference}
                     </span>
                   </div>
                 )}
@@ -1093,8 +1128,16 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onRese
                     )}
                   </div>
                   <div className={s.routeStop}>
-                    <div className={s.routeStopLabel}>Arrivée</div>
+                    <div className={s.routeStopLabel}>
+                      Arrivée
+                      {arrivalAppointmentLabel && (
+                        <span className={s.routeStopTime}> · {arrivalAppointmentLabel}</span>
+                      )}
+                    </div>
                     <div className={s.routeStopAddress}>{reservation.dropoff_location || '-'}</div>
+                    {arrivalClinicalLine && (
+                      <div className={s.routeStopDetails}>{arrivalClinicalLine}</div>
+                    )}
                     {reservation.dropoff_access_notes && (
                       <div className={s.routeStopMeta}>
                         <span>{reservation.dropoff_access_notes}</span>
@@ -1110,9 +1153,9 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onRese
 
             {/* Destination — établissement, service, médecin */}
             {(() => {
-              const facility = reservation.medical_facility && reservation.medical_facility !== 'Non spécifié' ? reservation.medical_facility : null;
-              const service = reservation.hospital_service && reservation.hospital_service !== 'Non spécifié' ? reservation.hospital_service : null;
-              const doctor = reservation.doctor_name && reservation.doctor_name !== 'Non spécifié' ? reservation.doctor_name : null;
+              const facility = arrivalEstablishment;
+              const service = arrivalService;
+              const doctor = arrivalDoctor;
               if (!facility && !service && !doctor) return null;
               return (
                 <div className={s.section}>

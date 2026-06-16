@@ -37,6 +37,24 @@ class _Patient:
     id: int = 1
     first_name: str = "Jean"
     last_name: str = "Dupont"
+    dob: date | None = date(1985, 3, 15)
+
+
+@dataclass
+class _Leg:
+    sequence_index: int = 0
+    route_sequence_number: int = 1
+    pickup_location: str = "Domicile"
+    dropoff_location: str = "HUG"
+    dropoff_establishment: str | None = "HUG"
+    dropoff_service: str | None = "Neurologie"
+    dropoff_doctor: str | None = "Dr Test"
+    scheduled_time: datetime | None = None
+    time_confirmed: bool = False
+    pickup_lat: float | None = None
+    pickup_lng: float | None = None
+    dropoff_lat: float | None = None
+    dropoff_lng: float | None = None
 
 
 @dataclass
@@ -73,7 +91,9 @@ class _Booking:
     dropoff_access_notes: str | None = None
     dropoff_floor: str | None = None
     dropoff_door_code: str | None = None
+    medical_facility: str | None = None
     hospital_service: str | None = None
+    doctor_name: str | None = None
     wheelchair_client_has: bool = False
     wheelchair_need: bool = False
     notes_medical: str | None = None
@@ -125,6 +145,7 @@ class _TransportRequest:
     external_reference: str = "EXT-001"
     pickup_type: str | None = None
     dropoff_type: str | None = None
+    legs: list | None = None
     status: str = "SENT"
 
 
@@ -646,3 +667,43 @@ class TestGetRequestInfoReturnBooking:
         assert result is not None
         assert result["request_id"] == 100
         assert result["institution_id"] == 1
+
+
+class TestAcceptOfferClinicalDropoff:
+    """Copie établissement / service / médecin depuis les legs institution."""
+
+    def test_apply_clinical_dropoff_fields(self):
+        booking = _Booking()
+        AcceptOfferUseCase._apply_clinical_dropoff_fields(
+            booking,
+            establishment="HUG",
+            service="Neurologie",
+            doctor="Dr MOLLIQAJ",
+        )
+        assert booking.medical_facility == "HUG"
+        assert booking.hospital_service == "Neurologie"
+        assert booking.doctor_name == "Dr MOLLIQAJ"
+
+    def test_clinical_dropoff_from_request_uses_first_leg(self):
+        uc = AcceptOfferUseCase()
+        tr = _TransportRequest(
+            legs=[
+                _Leg(
+                    sequence_index=0,
+                    dropoff_establishment="HUG",
+                    dropoff_service="Neurologie",
+                    dropoff_doctor="Dr MOLLIQAJ",
+                ),
+                _Leg(sequence_index=1, dropoff_establishment="Retour"),
+            ],
+        )
+        est, svc, doc = uc._clinical_dropoff_from_request(tr)
+        assert est == "HUG"
+        assert svc == "Neurologie"
+        assert doc == "Dr MOLLIQAJ"
+
+    def test_build_metadata_uses_patient_dob(self):
+        uc = AcceptOfferUseCase()
+        tr = _TransportRequest(patient=_Patient(dob=date(1990, 5, 12)))
+        meta = uc._build_metadata(tr)
+        assert meta["patient"]["date_of_birth"] == "1990-05-12"

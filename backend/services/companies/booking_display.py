@@ -286,6 +286,17 @@ def resolve_booking_source(
     }
 
 
+def _passenger_birth_date(booking: Any) -> str | None:
+    fn = getattr(booking, "_get_institution_passenger_brief", None)
+    if callable(fn):
+        brief = fn()
+        if isinstance(brief, dict):
+            raw = brief.get("birth_date")
+            if raw:
+                return str(raw)
+    return None
+
+
 def build_booking_identity(
     booking: Any,
     viewer_company_id: int | None = None,
@@ -341,7 +352,10 @@ def build_booking_identity(
     )
 
     return {
-        "passenger": {"name": passenger},
+        "passenger": {
+            "name": passenger,
+            "birth_date": _passenger_birth_date(booking),
+        },
         "display_category": display_category,
         "primary_label": primary_label,
         "secondary_label": secondary_label,
