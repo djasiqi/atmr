@@ -58,6 +58,14 @@ describe('formatDepartureTime', () => {
     })).toMatch(/19:00/);
   });
 
+  it('priorise booking_summary si request.scheduled_time diverge', () => {
+    expect(formatDepartureTime({
+      pickup_time_confirmed: true,
+      scheduled_time: '2026-06-17T12:00:00',
+      booking_summary: { scheduled_time: '2026-06-17T10:00:00' },
+    })).toMatch(/10:00/);
+  });
+
   it('départ indicatif', () => {
     const label = formatDepartureTime({
       scheduled_time: '2026-06-11T13:15:00',

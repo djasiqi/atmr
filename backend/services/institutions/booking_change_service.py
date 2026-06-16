@@ -479,6 +479,18 @@ def apply_operational_patch(booking: Booking, validated: dict[str, Any]) -> list
         else:
             setattr(booking, key, value)
         updated.append(key)
+
+    if "scheduled_time" in updated:
+        from services.institutions.mission_schedule import (
+            sync_transport_request_departure_from_booking,
+        )
+
+        transport_request = TransportRequest.query.filter_by(
+            booking_id=booking.id
+        ).first()
+        if sync_transport_request_departure_from_booking(transport_request, booking):
+            updated.append("transport_request.scheduled_time")
+
     return updated
 
 

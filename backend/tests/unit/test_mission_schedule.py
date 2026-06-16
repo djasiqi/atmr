@@ -14,6 +14,7 @@ from services.institutions.mission_schedule import (
     get_effective_dispatch_time,
     has_at_least_one_confirmed_time,
     is_operational_time,
+    sync_transport_request_departure_from_booking,
     validate_time_pair,
 )
 
@@ -142,3 +143,33 @@ class TestApplyDepartureSchedule:
         apply_departure_schedule(tr, validated)
         assert tr.scheduled_time == datetime(2026, 6, 16, 12, 30)
         assert tr.scheduled_time.tzinfo is None
+
+
+class TestSyncTransportRequestDepartureFromBooking:
+    def test_aligne_le_depart_sur_le_booking_principal(self):
+        tr = TransportRequest()
+        tr.id = 2314
+        tr.booking_id = 99
+        tr.scheduled_time = datetime(2026, 6, 17, 12, 0)
+        tr.pickup_time_confirmed = True
+
+        booking = type("Booking", (), {})()
+        booking.id = 99
+        booking.scheduled_time = datetime(2026, 6, 17, 10, 0)
+
+        assert sync_transport_request_departure_from_booking(tr, booking) is True
+        assert tr.scheduled_time == datetime(2026, 6, 17, 10, 0)
+        assert tr.pickup_time_confirmed is True
+        assert tr.scheduled_time_type == "departure"
+
+    def test_ignore_booking_non_principal(self):
+        tr = TransportRequest()
+        tr.booking_id = 99
+        tr.scheduled_time = datetime(2026, 6, 17, 12, 0)
+
+        booking = type("Booking", (), {})()
+        booking.id = 100
+        booking.scheduled_time = datetime(2026, 6, 17, 10, 0)
+
+        assert sync_transport_request_departure_from_booking(tr, booking) is False
+        assert tr.scheduled_time == datetime(2026, 6, 17, 12, 0)

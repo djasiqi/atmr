@@ -181,3 +181,24 @@ def legacy_arrival_schedule(
     if confirmed and dt is None:
         raise ValueError("appointment_time_confirmed=true requiert scheduled_time.")
     return dt, bool(confirmed)
+
+
+def sync_transport_request_departure_from_booking(
+    transport_request: TransportRequest | None,
+    booking: Any,
+) -> bool:
+    """Aligne le départ request sur le booking principal (source opérationnelle)."""
+    if transport_request is None or booking is None:
+        return False
+    if getattr(transport_request, "booking_id", None) != getattr(booking, "id", None):
+        return False
+    scheduled = getattr(booking, "scheduled_time", None)
+    if scheduled is None:
+        return False
+
+    from models.enums import ScheduledTimeType
+
+    transport_request.scheduled_time = scheduled
+    transport_request.scheduled_time_type = ScheduledTimeType.DEPARTURE.value
+    transport_request.pickup_time_confirmed = True
+    return True

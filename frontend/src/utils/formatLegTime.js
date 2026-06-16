@@ -79,9 +79,33 @@ export function getBookingDepartureTime(request) {
   return time || null;
 }
 
+/**
+ * ISO de départ opérationnel : booking converti prioritaire sur request.scheduled_time.
+ * Évite les écarts après acceptation ou modification transporteur.
+ */
+export function getEffectiveDepartureScheduleIso(request) {
+  if (!request) return null;
+  const bookingIso = request?.booking_summary?.scheduled_time;
+  if (bookingIso) return bookingIso;
+
+  if (request.pickup_time_confirmed === true && request.scheduled_time) {
+    return request.scheduled_time;
+  }
+  if (request.pickup_time_confirmed === false && request.scheduled_time) {
+    return request.scheduled_time;
+  }
+  if (request.scheduled_time_type === 'departure' && request.scheduled_time) {
+    return request.scheduled_time;
+  }
+  return null;
+}
+
 /** Départ mission (pickup_time_confirmed ou booking converti). */
 export function formatDepartureTime(request) {
   if (!request) return 'À définir';
+
+  const bookingDep = getBookingDepartureTime(request);
+  if (bookingDep) return bookingDep;
 
   if (request.pickup_time_confirmed === true && request.scheduled_time) {
     const timeStr = fmtTime(request.scheduled_time);
@@ -98,10 +122,6 @@ export function formatDepartureTime(request) {
     const timeStr = fmtTime(request.scheduled_time);
     if (timeStr) return timeStr;
   }
-
-  // Après acceptation : heure de prise en charge sur le booking
-  const bookingDep = getBookingDepartureTime(request);
-  if (bookingDep) return bookingDep;
 
   return 'À définir';
 }
@@ -173,8 +193,12 @@ export function getNextConfirmedScheduleInfo(request) {
     });
   };
 
-  if (isOperational(request.scheduled_time, request.pickup_time_confirmed)) {
-    addCandidate(request.scheduled_time, 'departure', 'Départ');
+  const departureIso = getEffectiveDepartureScheduleIso(request);
+  const departureConfirmed = request?.booking_summary?.scheduled_time
+    ? true
+    : request.pickup_time_confirmed === true;
+  if (isOperational(departureIso, departureConfirmed)) {
+    addCandidate(departureIso, 'departure', 'Départ');
   }
 
   const legs = Array.isArray(request.legs)
@@ -215,9 +239,9 @@ export function getConfirmedScheduleParts(request) {
   const parts = [];
 
   const dep = formatDepartureTime(request);
-  const hasRequestDeparture = request.pickup_time_confirmed === true && request.scheduled_time;
   const hasBookingDeparture = Boolean(getBookingDepartureTime(request));
-  if (dep !== 'À définir' && (hasRequestDeparture || hasBookingDeparture)) {
+  const hasRequestDeparture = request.pickup_time_confirmed === true && request.scheduled_time;
+  if (dep !== 'À définir' && (hasBookingDeparture || hasRequestDeparture)) {
     parts.push({ label: 'Départ', time: dep.replace(' (non confirmé)', '') });
   }
 

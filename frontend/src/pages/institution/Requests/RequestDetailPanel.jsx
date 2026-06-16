@@ -34,7 +34,11 @@ import {
 import InstitutionOperationalEdit from './InstitutionOperationalEdit';
 import { buildOperationalTimeline } from '../../../utils/institutionTimelineDisplay';
 import { canRelaunchInstitutionRequest } from '../../../utils/institutionRequestDispatch';
-import { formatReturnTimeLabel, formatRouteStopTime } from '../../../utils/formatLegTime';
+import {
+  formatReturnTimeLabel,
+  formatRouteStopTime,
+  getEffectiveDepartureScheduleIso,
+} from '../../../utils/formatLegTime';
 import { formatWallClockDateTime } from '../../../utils/missionTimeDisplay';
 import InstitutionRequestEdit from './InstitutionRequestEdit';
 import { getAuthEnv } from '../../../utils/webAuthSession';
@@ -1367,7 +1371,9 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
           </div>
           <div className={s.infoRow}>
             <span className={s.infoLabel}>Date et heure</span>
-            <span className={s.infoValue}>{fmtMissionSchedule(request.scheduled_time)}</span>
+            <span className={s.infoValue}>
+              {fmtMissionSchedule(getEffectiveDepartureScheduleIso(request))}
+            </span>
           </div>
           <div className={s.infoRow}>
             <span className={s.infoLabel}>Type de trajet</span>
