@@ -113,3 +113,50 @@ Le gate P2.5 cible uniquement : tests unitaires P2, `test_mission_wall_clock_rou
 | Chemins entreprise inchangés | Documenté |
 
 **Prochaine étape (P3)** : migration Alembic autogenerate `timezone=False` + backfill face horloge + STOP GATE TZ=UTC vs TZ=Europe/Zurich.
+
+---
+
+## Phase P3 — Stockage heure murale (réalisée)
+
+✅ **Implémenté** : migration `timestamptz` → `timestamp without time zone` sur les 3 colonnes mission institution, avec préservation de la face horloge via `AT TIME ZONE 'Europe/Zurich'`.
+
+| Élément | Détail |
+|---------|--------|
+| Merge Alembic | `ed0ca76e0f2f_merge_heads_avant_p3.py` (`0d50163cb66c` + `20260616_backfill_first_login`) |
+| Migration P3 | `eb21b7cf8467_p3_mission_timestamp_without_tz.py` |
+| Modèles | `transport_request.py` (`scheduled_time`, `return_time`), `transport_request_leg.py` (`scheduled_time`) → `DateTime(timezone=False)` |
+| Conversion UP | `USING scheduled_time AT TIME ZONE 'Europe/Zurich'` (idem `return_time`, legs) |
+| Conversion DOWN | inverse `timestamp` → `timestamptz` avec même `USING` |
+
+### Types alignés (post-migration)
+
+| Table | Colonne | Type PostgreSQL |
+|-------|---------|-----------------|
+| `transport_requests` | `scheduled_time` | `timestamp without time zone` |
+| `transport_requests` | `return_time` | `timestamp without time zone` |
+| `transport_request_legs` | `scheduled_time` | `timestamp without time zone` |
+| `booking` | `scheduled_time` | `timestamp without time zone` (inchangé) |
+
+### STOP GATE P3-A
+
+| Critère | Statut |
+|---------|--------|
+| `flask db upgrade` / `downgrade ed0ca76e0f2f` réversibles | ✅ |
+| Valeurs murales préservées (pas de décalage 10:30) | ✅ contrôle SQL post-migration |
+| Index `ix_transport_requests_mission_date` | ✅ présent |
+| `test_mission_wall_clock_roundtrip` (Cas 1-4) | ✅ 4 passed |
+| `test_institution_time_utils` (`mission_scheduled_to_api_iso`, `normalize_mission_wall_clock`) | ✅ 18 passed |
+
+### STOP GATE P3-B — TZ indépendance
+
+✅ **Implémenté** : `backend/tests/integration/test_mission_storage_tz_independence.py`
+
+Sous `TZ=UTC` et `TZ=Europe/Zurich` : payload `12:30` → DB `12:30`, API `12:30`, institution `12:30`, entreprise `12:30`.
+
+**Résultat Docker (2026-06-16)** : 26 passed (gate P3-A + P3-B ciblé).
+
+### Inchangé après P3
+
+- Helpers `normalize_mission_wall_clock`, `mission_scheduled_to_api_iso` conservés (idempotents).
+- Aucun changement UX visible (`12:30` reste `12:30`).
+- Chemins booking entreprise (`parse_local_naive`) inchangés.

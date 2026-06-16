@@ -20,43 +20,22 @@ Invariant horaire :
 
 from __future__ import annotations
 
-
-
 from decimal import Decimal
-
 from typing import TYPE_CHECKING, Any
 
-
-
 from sqlalchemy import (
-
     Boolean,
-
     DateTime,
-
     ForeignKey,
-
     Index,
-
     Integer,
-
     Numeric,
-
     String,
-
     func,
-
 )
-
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
-
-
 from ext import db
-
-
-
-from .base import _iso
 
 
 def _iso_scheduled(dt):
@@ -147,7 +126,7 @@ class TransportRequestLeg(db.Model):
 
 
 
-    scheduled_time = mapped_column(DateTime(timezone=True), nullable=True)
+    scheduled_time = mapped_column(DateTime(timezone=False), nullable=True)
 
     time_confirmed: Mapped[bool] = mapped_column(
 

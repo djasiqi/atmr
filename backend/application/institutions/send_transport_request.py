@@ -242,7 +242,6 @@ class SendTransportRequestUseCase:
 
                 relaunch_result = self._create_relaunch_offers(
                     transport_request=transport_request,
-                    institution_id=input_data.institution_id,
                     preferences=preferences,
                     configured_mode=configured_mode,
                     expires_at=expires_at,
@@ -571,7 +570,6 @@ class SendTransportRequestUseCase:
         self,
         *,
         transport_request: TransportRequest,
-        institution_id: int,
         preferences: list[InstitutionTransportPreference],
         configured_mode: str,
         expires_at: datetime,
@@ -590,7 +588,6 @@ class SendTransportRequestUseCase:
         if preferences:
             offers_created, mode = self._relaunch_sequential_offers(
                 transport_request=transport_request,
-                institution_id=institution_id,
                 preferences=preferences,
                 expires_at=expires_at,
             )
@@ -609,7 +606,6 @@ class SendTransportRequestUseCase:
         self,
         *,
         transport_request: TransportRequest,
-        institution_id: int,
         preferences: list[InstitutionTransportPreference],
         expires_at: datetime,
     ) -> tuple[int, str]:
@@ -682,12 +678,8 @@ class SendTransportRequestUseCase:
         ).all()
         reactivated = 0
         for offer in offers:
-            if offer.status == OfferStatus.EXPIRED.value:
-                self._reactivate_offer(offer, expires_at)
-                reactivated += 1
-            elif (
-                offer.status == OfferStatus.PENDING.value
-                and offer.is_expired
+            if offer.status == OfferStatus.EXPIRED.value or (
+                offer.status == OfferStatus.PENDING.value and offer.is_expired
             ):
                 self._reactivate_offer(offer, expires_at)
                 reactivated += 1
@@ -844,6 +836,8 @@ def create_next_sequential_offer(
         expires_at=expires_at,
     )
     db.session.add(offer)
+    # flush pour que offer.id soit disponible immédiatement (réponse API escalade)
+    db.session.flush()
 
     return offer
 

@@ -186,7 +186,7 @@ class TransportRequest(db.Model):
 
     # Horaire
     mission_date: Mapped[date] = mapped_column(Date, nullable=False)
-    scheduled_time = Column(DateTime(timezone=True), nullable=True)
+    scheduled_time = Column(DateTime(timezone=False), nullable=True)
     pickup_time_confirmed: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
@@ -234,7 +234,7 @@ class TransportRequest(db.Model):
     is_round_trip: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
     )
-    return_time = Column(DateTime(timezone=True), nullable=True)
+    return_time = Column(DateTime(timezone=False), nullable=True)
     return_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     return_time_confirmed: Mapped[bool] = mapped_column(
         Boolean,

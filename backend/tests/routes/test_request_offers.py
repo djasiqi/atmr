@@ -575,6 +575,8 @@ class TestAcceptOffer:
         request.return_to_institution = True
         request.route_group_id = str(uuid.uuid4())
         request.dropoff_location = "Retour institution"
+        # Départ confirmé : leg 0 (A-B) hérite de l'heure mission, legs suivants à définir.
+        request.pickup_time_confirmed = True
 
         legs = [
             TransportRequestLeg(

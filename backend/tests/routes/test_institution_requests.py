@@ -141,9 +141,6 @@ class TestTransportRequestsCRUD:
         assert data["patient_id"] == sample_patient.id
         assert data["is_editable"] is True
 
-    @pytest.mark.skip(
-        reason="Schéma institution_api_keys.scopes (text[]/varchar(8)[]) incompatible avec le modèle Text — hors P2.5 horaires"
-    )
     def test_create_request_api_key(
         self, client, db, sample_api_key, sample_institution
     ):
