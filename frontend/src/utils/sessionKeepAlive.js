@@ -33,7 +33,11 @@ export function resumeSessionKeepAlive() {
 }
 
 export async function tryRefreshSessionIfNeeded({ force = false } = {}) {
-  if (keepAliveSuspended || isExplicitLogoutInProgress()) {
+  if (
+    keepAliveSuspended ||
+    isExplicitLogoutInProgress() ||
+    isLoginSessionInProgress()
+  ) {
     return false;
   }
   if (!hasActiveSession()) {
