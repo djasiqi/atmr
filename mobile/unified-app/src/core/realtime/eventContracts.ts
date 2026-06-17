@@ -24,6 +24,7 @@ export type CanonicalCompanyEventType =
 const DRIVER_EVENT_ALIASES: Record<string, CanonicalDriverEventType> = {
   mission_assigned: "mission_assigned",
   new_booking: "mission_assigned",
+  booking: "mission_assigned",
   booking_assigned: "mission_assigned",
   mission_updated: "mission_updated",
   mission_status_changed: "mission_updated",

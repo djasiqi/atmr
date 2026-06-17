@@ -386,7 +386,7 @@ def send_push_message(
     # Si channelId dans data mais pas à la racine, l'OS Android peut ne pas afficher
     # quand l'app est killed (Expo docs: channelId = champ racine Android-only)
     data_dict = data or {}
-    channel_id = data_dict.get("channelId", "missions_v2")
+    channel_id = data_dict.get("channelId", "mission_updates")
     trace_id = data_dict.get("trace_id")
 
     message: Dict[str, Any] = {

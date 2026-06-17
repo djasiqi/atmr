@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "@jest/globals";
 import { clearActiveMissionScreen, setActiveMissionScreen } from "./activeScreenStore";
 import {
+  isCriticalNotificationType,
   resolveForegroundPresentation,
   shouldSuppressForActiveScreen,
 } from "./notificationPolicy";
@@ -26,5 +27,10 @@ describe("notificationPolicy", () => {
   it("plays sound for critical types", () => {
     const presentation = resolveForegroundPresentation({ rawType: "mission_cancelled" });
     expect(presentation.shouldPlaySound).toBe(true);
+  });
+
+  it("treats legacy booking alias as critical assignment", () => {
+    expect(isCriticalNotificationType("booking")).toBe(true);
+    expect(isCriticalNotificationType("booking_assigned")).toBe(true);
   });
 });

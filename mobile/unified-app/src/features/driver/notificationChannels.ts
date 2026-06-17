@@ -1,4 +1,5 @@
 import { getExpoNotificationsModule } from "../../core/notifications/expoNotificationsCompat";
+import { normalizeDriverEventType } from "../../core/realtime/eventContracts";
 
 /**
  * Channel generique, cree pour TOUS les contextes (driver/company/client) des le
@@ -89,7 +90,8 @@ const DRIVER_NOTIFICATION_CONTRACT: Record<DriverNotificationEventType, DriverNo
 export function resolveDriverNotificationContract(
   input: string | null | undefined
 ): DriverNotificationContract {
-  const key = (input ?? "").toLowerCase() as DriverNotificationEventType;
+  const normalized = normalizeDriverEventType(input ?? "");
+  const key = (normalized ?? input ?? "").toLowerCase() as DriverNotificationEventType;
   return DRIVER_NOTIFICATION_CONTRACT[key] ?? DRIVER_NOTIFICATION_CONTRACT.mission_updated;
 }
 

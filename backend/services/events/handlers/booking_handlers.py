@@ -279,31 +279,31 @@ def handle_booking_updated(event: dict[str, Any]) -> None:
                 targets.exclude_driver_id is None
                 or int(driver_id) != int(targets.exclude_driver_id)
             ):
-                # Politique produit: pour le chauffeur, seules les notifications
-                # de changements significatifs doivent être visuelles :
-                # horaire, adresses, informations médicales/accès, notes.
-                # Les autres updates passent uniquement en socket/realtime.
+                # Politique produit: push chauffeur sur changements significatifs
+                # (horaire, adresses, notes médicales) ou statuts ASSIGNED/CANCELED.
                 changes = event.get("changes") or {}
-                changes_keys = (
-                    set(changes.keys()) if isinstance(changes, dict) else set()
+                from services.events.handlers.booking_push_policy import (
+                    should_send_driver_push_on_booking_updated,
                 )
-                driver_push_fields = {
-                    "scheduled_time",
-                    "pickup_location",
-                    "dropoff_location",
-                    "notes",
-                    "notes_medical",
-                    "medical_facility",
-                    "hospital_service",
-                    "doctor_name",
-                    "pickup_access_notes",
-                    "dropoff_access_notes",
-                    "wheelchair_client_has",
-                    "wheelchair_need",
-                }
-                driver_push = targets.notify_driver_push and bool(
-                    changes_keys.intersection(driver_push_fields)
+                from services.monitoring.prometheus import inc_driver_push_skipped
+                from services.notifications.push_pipeline_log import log_driver_push_skipped
+
+                driver_push = should_send_driver_push_on_booking_updated(
+                    notify_driver_push=targets.notify_driver_push,
+                    changes=changes if isinstance(changes, dict) else {},
                 )
+                if targets.notify_driver_push and not driver_push:
+                    changes_keys = (
+                        sorted(changes.keys()) if isinstance(changes, dict) else []
+                    )
+                    log_driver_push_skipped(
+                        reason="non_significant_change",
+                        driver_id=int(driver_id),
+                        booking_id=int(booking_id),
+                        changes_keys=changes_keys,
+                        trace_id=booking_data.get("trace_id"),
+                    )
+                    inc_driver_push_skipped(reason="non_significant_change")
                 fanout_booking_updated(
                     driver_id=int(driver_id),
                     booking_id=int(booking_id),

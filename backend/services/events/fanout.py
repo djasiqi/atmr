@@ -57,46 +57,30 @@ except ImportError:
 def _get_notification_channel(notification_type: str) -> str:
     """Détermine le canal Android approprié selon le type.
 
-    Correspond aux canaux définis côté mobile:
-    - critical: Urgences, accidents
-    - missions: Missions, retards
-    - missions_v2: H2 — canal debug pour contourner channel legacy (PUSH_PROOF=1)
-    - messages: Chat, communications
-    - info: Stats, informations générales
+    Correspond aux canaux définis côté mobile (notificationChannels.ts):
+    - mission_updates: Missions, retards, assignations
+    - urgent: Urgences, accidents, annulations
+    - chat: Chat, communications
+    - default: Stats, informations générales
     """
     channel_mapping = {
-        "urgent_alert": "critical",
-        "accident": "critical",
-        "emergency": "critical",
-        "booking": "missions",
-        "booking_assigned": "missions",
-        "booking_updated": "missions",
-        "booking_cancelled": "missions",
-        "booking_reassigned": "missions",
-        "delay": "missions",
-        "message": "messages",
-        "team_chat_message": "messages",
-        "dispatch_completed": "info",
-        "stats": "info",
-        "info": "info",
+        "urgent_alert": "urgent",
+        "accident": "urgent",
+        "emergency": "urgent",
+        "booking": "mission_updates",
+        "booking_assigned": "mission_updates",
+        "booking_updated": "mission_updates",
+        "booking_cancelled": "urgent",
+        "booking_reassigned": "mission_updates",
+        "delay": "mission_updates",
+        "message": "chat",
+        "team_chat_message": "chat",
+        "dispatch_completed": "default",
+        "stats": "default",
+        "info": "default",
     }
 
-    base = channel_mapping.get(notification_type, "missions")
-
-    # H2: Channel version bump — missions_v2 pour contourner channel legacy
-    # (Android ne met pas à jour un channel déjà créé en DEFAULT/LOW)
-    # Fallback auto en dev/staging ; PUSH_PROOF=1 en prod (feature flag)
-    if base == "missions":
-        push_proof = os.environ.get("PUSH_PROOF", "").strip().lower() in (
-            "1",
-            "true",
-            "yes",
-        )
-        flask_env = os.environ.get("FLASK_ENV", "").strip().lower()
-        if push_proof or flask_env in ("development", "staging"):
-            return "missions_v2"
-
-    return base
+    return channel_mapping.get(notification_type, "mission_updates")
 
 
 def _get_notification_category(notification_type: str) -> str | None:
@@ -299,6 +283,10 @@ def _send_push_to_driver(
 
         # ✅ Phase 1 - Quick Wins: Ajouter le canal Android approprié
         data["channelId"] = _get_notification_channel(notification_type)
+
+        from services.monitoring.prometheus import inc_driver_push_channel
+
+        inc_driver_push_channel(channel=data.get("channelId", "unknown"))
 
         # ✅ Phase 2 - Enrichissement: Ajouter la catégorie pour actions directes
         category = _get_notification_category(notification_type)
@@ -888,12 +876,24 @@ def fanout_booking_updated(
             data=data,
         )
     else:
+        from services.monitoring.prometheus import inc_driver_push_skipped
+        from services.notifications.push_pipeline_log import log_driver_push_skipped
+
+        changes = (booking_data or {}).get("changes") or {}
+        changes_keys = sorted(changes.keys()) if isinstance(changes, dict) else []
+        log_driver_push_skipped(
+            reason="socket_only_policy",
+            driver_id=driver_id,
+            booking_id=booking_id,
+            changes_keys=changes_keys,
+        )
+        inc_driver_push_skipped(reason="socket_only_policy")
         app_logger.info(
             "[event_fanout] booking_updated push skipped (socket-only policy): "
-            "driver_id=%s booking_id=%s changes=%s",
+            "push_skipped_reason=socket_only_policy driver_id=%s booking_id=%s changes=%s",
             driver_id,
             booking_id,
-            (booking_data or {}).get("changes"),
+            changes,
         )
 
 

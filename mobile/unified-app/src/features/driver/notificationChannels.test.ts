@@ -20,4 +20,17 @@ describe("resolveDriverNotificationContract", () => {
     const resolved = resolveDriverNotificationContract("unknown_event");
     expect(resolved.channelId).toBe("mission_updates");
   });
+
+  it("maps legacy booking alias to mission assigned contract", () => {
+    const resolved = resolveDriverNotificationContract("booking");
+    expect(resolved.event).toBe("mission_assigned");
+    expect(resolved.channelId).toBe("mission_updates");
+    expect(resolved.action).toBe("open_mission");
+  });
+
+  it("maps booking_assigned alias to mission assigned contract", () => {
+    const resolved = resolveDriverNotificationContract("booking_assigned");
+    expect(resolved.event).toBe("mission_assigned");
+    expect(resolved.channelId).toBe("mission_updates");
+  });
 });

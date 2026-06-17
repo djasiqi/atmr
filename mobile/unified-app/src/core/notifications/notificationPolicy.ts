@@ -1,6 +1,7 @@
 import { getActiveScreenState } from "./activeScreenStore";
 import type { DriverPushPayload } from "../../features/driver/push";
 import { resolveDriverNotificationContract } from "../../features/driver/notificationChannels";
+import { normalizeDriverEventType } from "../realtime/eventContracts";
 
 export type ForegroundNotificationPresentation = {
   shouldShowBanner: boolean;
@@ -18,7 +19,8 @@ const HIDDEN_PRESENTATION: ForegroundNotificationPresentation = {
 };
 
 export function isCriticalNotificationType(type: string | null | undefined): boolean {
-  return type === "mission_cancelled" || type === "mission_assigned";
+  const normalized = normalizeDriverEventType(type ?? "");
+  return normalized === "mission_cancelled" || normalized === "mission_assigned";
 }
 
 export function shouldSuppressForActiveScreen(input: {

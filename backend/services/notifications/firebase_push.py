@@ -220,7 +220,7 @@ def send_fcm_android(
     title: str,
     body: str,
     data: dict[str, Any] | None = None,
-    channel_id: str = "missions_v2",
+    channel_id: str = "mission_updates",
 ) -> dict[str, Any]:
     """Send FCM message for Android.
 

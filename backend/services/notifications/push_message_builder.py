@@ -656,9 +656,7 @@ def build_push_message(
 
     # type legacy pour compat mobile (notification_type)
     type_map = {
-        EVENT_ASSIGNED: "booking_assigned"
-        if recipient_role == "company"
-        else "booking",
+        EVENT_ASSIGNED: "booking_assigned",
         EVENT_STATUS_UPDATED: "booking_updated",
         EVENT_COMPLETED: "booking_updated",
         EVENT_CANCELLED: "booking_cancelled",

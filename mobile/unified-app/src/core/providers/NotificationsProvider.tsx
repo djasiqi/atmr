@@ -219,7 +219,8 @@ export function NotificationsProvider({ children }: PropsWithChildren) {
   );
 
   const normalizePushType = useCallback((raw: string): DriverPushPayload["type"] | null => {
-    if (raw === "mission_assigned" || raw === "booking_assigned") return "mission_assigned";
+    if (raw === "mission_assigned" || raw === "booking_assigned" || raw === "booking")
+      return "mission_assigned";
     if (raw === "mission_updated" || raw === "booking_updated") return "mission_updated";
     if (raw === "mission_cancelled" || raw === "booking_cancelled") return "mission_cancelled";
     if (raw === "mission_reassigned" || raw === "booking_reassigned") return "mission_reassigned";

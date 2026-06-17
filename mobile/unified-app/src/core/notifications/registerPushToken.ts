@@ -1,4 +1,4 @@
-import { Platform } from "react-native";
+import { AppState, Platform } from "react-native";
 import type { EventSubscription } from "expo-modules-core";
 
 import {
@@ -211,4 +211,17 @@ export function useRegisterPushTokenEffect(options: RegisterPushTokenOptions): v
       unsubscribeDisclosure();
     };
   }, [callbacks, enabled, fcmEnabled, telemetrySource]);
+
+  useEffect(() => {
+    if (!enabled || Platform.OS === "web") return;
+
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState !== "active") return;
+      void flushPendingPushTokenRegistrations(callbacks);
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [callbacks, enabled]);
 }

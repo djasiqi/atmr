@@ -17,6 +17,7 @@ _DRIVER_PUSH_STAGES = frozenset(
         "driver_push.task_start",
         "driver_push.task_done",
         "driver_push.dedup_skipped",
+        "driver_push.skipped",
     }
 )
 
@@ -53,3 +54,27 @@ def log_driver_push_stage(
         payload.update(extra)
 
     logger.info("[driver_push_pipeline] %s", json.dumps(payload, default=str))
+
+
+def log_driver_push_skipped(
+    *,
+    reason: str,
+    driver_id: int | str | None = None,
+    booking_id: int | str | None = None,
+    changes_keys: list[str] | None = None,
+    trace_id: str | None = None,
+    **extra: Any,
+) -> None:
+    """Log structuré quand un push chauffeur est ignoré par la politique métier."""
+    payload_extra: dict[str, Any] = {"push_skipped_reason": reason}
+    if changes_keys is not None:
+        payload_extra["changes_keys"] = changes_keys
+    if extra:
+        payload_extra.update(extra)
+    log_driver_push_stage(
+        "driver_push.skipped",
+        driver_id=driver_id,
+        booking_id=booking_id,
+        trace_id=trace_id,
+        **payload_extra,
+    )

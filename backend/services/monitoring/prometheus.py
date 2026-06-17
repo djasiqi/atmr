@@ -282,6 +282,18 @@ if PROMETHEUS_AVAILABLE and Counter and Histogram and Gauge:
         "Propriétaires avec au moins un DeviceToken actif",
         ["owner_type"],
     )
+
+    DRIVER_PUSH_CHANNEL_TOTAL = Counter(
+        "driver_push_channel_total",
+        "Push chauffeur envoyés par canal Android",
+        ["channel"],
+    )
+
+    DRIVER_PUSH_SKIPPED_TOTAL = Counter(
+        "driver_push_skipped_total",
+        "Push chauffeur ignorés par raison métier",
+        ["reason"],
+    )
 else:
     PUSH_NOTIFICATIONS_TOTAL = None
     PUSH_NOTIFICATION_LATENCY_SECONDS = None
@@ -290,6 +302,8 @@ else:
     PUSH_TOKENS_INVALIDATED = None
     PUSH_RATE_LIMIT_HITS = None
     PUSH_ACTIVE_OWNERS = None
+    DRIVER_PUSH_CHANNEL_TOTAL = None
+    DRIVER_PUSH_SKIPPED_TOTAL = None
 
 # ==================== Resync Metrics ====================
 
@@ -888,6 +902,26 @@ def observe_notification_kafka_enqueue_latency(*, status: str, seconds: float) -
         )
     except Exception as e:
         logger.debug("[PrometheusMetrics] notification_kafka_enqueue_latency: %s", e)
+
+
+def inc_driver_push_channel(*, channel: str) -> None:
+    """Incrémente le compteur push chauffeur par canal Android."""
+    if not PROMETHEUS_AVAILABLE or not DRIVER_PUSH_CHANNEL_TOTAL:
+        return
+    try:
+        DRIVER_PUSH_CHANNEL_TOTAL.labels(channel=channel or "unknown").inc()
+    except Exception as e:
+        logger.debug("[PrometheusMetrics] driver_push_channel: %s", e)
+
+
+def inc_driver_push_skipped(*, reason: str) -> None:
+    """Incrémente le compteur push chauffeur ignorés par raison métier."""
+    if not PROMETHEUS_AVAILABLE or not DRIVER_PUSH_SKIPPED_TOTAL:
+        return
+    try:
+        DRIVER_PUSH_SKIPPED_TOTAL.labels(reason=reason or "unknown").inc()
+    except Exception as e:
+        logger.debug("[PrometheusMetrics] driver_push_skipped: %s", e)
 
 
 # ==================== Invoice PDF Helper Functions ====================

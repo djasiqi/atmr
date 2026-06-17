@@ -42,6 +42,7 @@ def test_build_push_message_assigned_driver():
     assert out["data"]["client_display_name"] == "Drin Jasiqi"
     assert out["data"]["deep_link"] == "lirie://booking/3253"
     assert out["data"]["deepLink"] == "lirie://booking/3253"
+    assert out["data"]["type"] == "booking_assigned"
 
 
 def test_build_push_message_assigned_company():
