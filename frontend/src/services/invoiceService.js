@@ -630,13 +630,37 @@ export const getNextReminderLevel = (invoice) => {
   return Math.min(invoice.reminder_level + 1, 3);
 };
 
+export const getEffectiveDueDate = (invoice) => {
+  if (invoice?.effective_due_date) {
+    return invoice.effective_due_date;
+  }
+  const openReminders = (invoice?.reminders || []).filter(
+    (r) => (r.status || 'OPEN') === 'OPEN'
+  );
+  if (openReminders.length > 0) {
+    const latest = [...openReminders].sort(
+      (a, b) =>
+        new Date(b.generated_at || 0) - new Date(a.generated_at || 0) ||
+        (b.level || 0) - (a.level || 0)
+    )[0];
+    if (latest?.due_date) {
+      return latest.due_date;
+    }
+  }
+  return invoice?.due_date;
+};
+
 export const isOverdue = (invoice) => {
-  return invoice.balance_due > 0 && new Date(invoice.due_date) < new Date();
+  const status = invoiceStatusLower(invoice);
+  if (status === 'paid' || status === 'cancelled' || status === 'draft') return false;
+  if ((invoice?.balance_due ?? 0) <= 0) return false;
+  const dueDate = getEffectiveDueDate(invoice);
+  return Boolean(dueDate && new Date(dueDate) < new Date());
 };
 
 export const getDaysOverdue = (invoice) => {
   if (!isOverdue(invoice)) return 0;
-  const dueDate = new Date(invoice.due_date);
+  const dueDate = new Date(getEffectiveDueDate(invoice));
   const now = new Date();
   return Math.floor((now - dueDate) / (1000 * 60 * 60 * 24));
 };

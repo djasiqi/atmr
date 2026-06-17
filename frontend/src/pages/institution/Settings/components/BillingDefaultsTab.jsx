@@ -19,6 +19,7 @@ import { useInstitutionSettings, useUpdateInstitutionSettings } from '../../../.
 import { useInstitutionMe } from '../../../../hooks/useInstitutionData';
 import { isAdmin, canEditBilling } from '../../../../utils/institutionPermissions';
 import ChipSelect from './ChipSelect';
+import DurationInput from './DurationInput';
 import styles from '../InstitutionSettings.module.css';
 
 const BILLING_INTENT_OPTIONS = [
@@ -394,36 +395,28 @@ const BillingDefaultsTab = () => {
 
       <div className={styles.profileForm}>
         <div className={styles.fieldRow}>
-          <div className={styles.field}>
-            <label>Demandes le jour même (minutes)</label>
-            <input
-              type="number"
-              min="1"
-              max="240"
-              value={form.timeout_same_day_minutes}
-              onChange={(e) => handleChange('timeout_same_day_minutes', e.target.value)}
-              disabled={!canEdit}
-            />
-            <span className={styles.fieldHint}>
-              Délai pour les transports urgents prévus le jour même (1 à 240 min).
-              Recommandé : 5 min.
-            </span>
-          </div>
-          <div className={styles.field}>
-            <label>Demandes planifiées (minutes)</label>
-            <input
-              type="number"
-              min="1"
-              max="10080"
-              value={form.timeout_default_minutes}
-              onChange={(e) => handleChange('timeout_default_minutes', e.target.value)}
-              disabled={!canEdit}
-            />
-            <span className={styles.fieldHint}>
-              Délai pour les transports planifiés à l'avance (1 à 10 080 min).
-              Recommandé : 60 min.
-            </span>
-          </div>
+          <DurationInput
+            id="timeout_same_day"
+            label="Demandes le jour même"
+            value={form.timeout_same_day_minutes}
+            onChange={(minutes) => handleChange('timeout_same_day_minutes', minutes)}
+            minMinutes={1}
+            maxMinutes={240}
+            recommendedMinutes={5}
+            disabled={!canEdit}
+            hint="Délai pour les transports urgents prévus le jour même"
+          />
+          <DurationInput
+            id="timeout_default"
+            label="Demandes planifiées"
+            value={form.timeout_default_minutes}
+            onChange={(minutes) => handleChange('timeout_default_minutes', minutes)}
+            minMinutes={1}
+            maxMinutes={10080}
+            recommendedMinutes={60}
+            disabled={!canEdit}
+            hint="Délai pour les transports planifiés à l'avance"
+          />
         </div>
       </div>
 

@@ -383,22 +383,34 @@ class Invoice(db.Model):
             "patient_display_name": patient_display_name,
         }
 
-    def to_dict(self, *, include_reminder_rows: bool = True, list_view: bool = False):
+    def to_dict(self, *, include_reminder_rows: bool = True, list_view: bool = False, company_id: int | None = None):
         """Sérialise la facture en dictionnaire.
 
         Args:
             include_reminder_rows: Si False, ne sérialise pas les lignes ``reminders``
                 (``reminder_level`` / ``last_reminder_at`` restent sur la facture).
             list_view: Réponse liste / tableau : pas de lignes, paiements, méta lourde,
-                ni ventilation TVA détaillée (charge réseau et CPU réduites).
+                ni ventilation TVA détaillée. Les rappels sont inclus en version allégée
+                (accès PDF depuis le registre des factures).
         """
-        if list_view:
-            include_reminder_rows = False
+        resolved_company_id = company_id or self.company_id
 
         reminder_payload: list[dict[str, Any]]
-        if include_reminder_rows:
+        if list_view:
             reminder_payload = (
-                [reminder.to_dict() for reminder in self.reminders]
+                [
+                    reminder.to_dict_list_view(company_id=resolved_company_id)
+                    for reminder in self.reminders
+                ]
+                if hasattr(self, "reminders") and self.reminders
+                else []
+            )
+        elif include_reminder_rows:
+            reminder_payload = (
+                [
+                    reminder.to_dict(company_id=resolved_company_id)
+                    for reminder in self.reminders
+                ]
                 if hasattr(self, "reminders")
                 else []
             )
@@ -433,6 +445,12 @@ class Invoice(db.Model):
             booking_ids_ordered[0] if booking_ids_ordered else None
         )
 
+        from shared.invoice_due_dates import resolve_effective_due_date
+
+        effective_due = resolve_effective_due_date(
+            self, company_id=resolved_company_id
+        )
+
         return {
             "id": self.id,
             "company_id": self.company_id,
@@ -461,6 +479,7 @@ class Invoice(db.Model):
             "balance_due": float(self.balance_due),
             "issued_at": _iso(self.issued_at),
             "due_date": _iso(self.due_date),
+            "effective_due_date": _iso(effective_due),
             "sent_at": _iso(self.sent_at),
             "paid_at": _iso(self.paid_at),
             "cancelled_at": _iso(self.cancelled_at),
@@ -806,6 +825,9 @@ class InvoiceReminder(db.Model):
     )  # OPEN, PAID
 
     generated_at = Column(DateTime(timezone=True), nullable=False, default=func.now())
+    due_date: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     sent_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
@@ -822,8 +844,28 @@ class InvoiceReminder(db.Model):
     def __repr__(self):
         return f"<InvoiceReminder Level {self.level} - {self.added_fee} CHF>"
 
-    def to_dict(self):
+    def to_dict_list_view(
+        self, *, company_id: int | None = None
+    ) -> dict[str, Any]:
+        """Sérialisation allégée pour la liste des factures (accès PDF rappel)."""
+        from shared.invoice_due_dates import resolve_reminder_due_date
+
+        due = resolve_reminder_due_date(self, company_id=company_id)
+        return {
+            "id": self.id,
+            "level": self.level,
+            "pdf_url": self.pdf_url,
+            "status": self.status,
+            "generated_at": _iso(self.generated_at),
+            "due_date": _iso(due),
+            "reminder_fee_amount": float(self.reminder_fee_amount),
+        }
+
+    def to_dict(self, *, company_id: int | None = None):
         """Sérialise le rappel en dictionnaire."""
+        from shared.invoice_due_dates import resolve_reminder_due_date
+
+        due = resolve_reminder_due_date(self, company_id=company_id)
         return {
             "id": self.id,
             "invoice_id": self.invoice_id,
@@ -835,6 +877,7 @@ class InvoiceReminder(db.Model):
             "qr_reference": self.qr_reference,
             "status": self.status,
             "generated_at": _iso(self.generated_at),
+            "due_date": _iso(due),
             "sent_at": _iso(self.sent_at),
             "paid_at": _iso(self.paid_at),
             "pdf_url": self.pdf_url,

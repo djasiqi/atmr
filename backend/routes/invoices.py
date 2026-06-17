@@ -791,6 +791,7 @@ class InvoicesList(Resource):
                     joinedload(Invoice.billed_to_company),
                     subqueryload(Invoice.lines),
                     subqueryload(Invoice.payments),
+                    subqueryload(Invoice.reminders),
                 )
                 .filter(Invoice.id.in_(reg_ids))
                 .all()

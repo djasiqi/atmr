@@ -28,6 +28,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from ext import db
+from shared.serialize_compat import as_serialize_result
 from shared.time_utils import (
     api_scheduled_iso_to_naive_geneva,
     iso_utc_z,
@@ -494,7 +495,7 @@ class Booking(db.Model):
         cli = self.client
         cli_user = getattr(cli, "user", None)
 
-        return {
+        return as_serialize_result({
             "id": self.id,
             # ✅ P1-4 Phase 1.1: Supprimer customer_name, garder uniquement client_name
             "client_name": self.customer_full_name,
@@ -723,7 +724,7 @@ class Booking(db.Model):
             "passenger": self._get_institution_passenger_brief(),
             "institution_leg": self._get_institution_leg_clinical_brief(),
             **self._canonical_display_payload(),
-        }
+        })
 
     @property
     def serialize_dashboard(self):
@@ -746,7 +747,7 @@ class Booking(db.Model):
             split_date_time_local(scheduled_dt) if scheduled_dt else (None, None)
         )
 
-        return {
+        return as_serialize_result({
             "id": self.id,
             "client_name": self.customer_full_name,
             "pickup_location": self.pickup_location,
@@ -830,7 +831,7 @@ class Booking(db.Model):
                 else None
             ),
             **self._canonical_display_payload(),
-        }
+        })
 
     def _online_client_payment_brief(self):
         """Résumé du dernier paiement en ligne (Saferpay ou ancien Worldline) pour le portail client."""

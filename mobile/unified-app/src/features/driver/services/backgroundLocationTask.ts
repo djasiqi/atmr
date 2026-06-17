@@ -216,6 +216,80 @@ function isTaskManagerTaskDefined(): boolean {
   return false;
 }
 
+type TaskManagerModule = {
+  isTaskDefined?: (taskName: string) => boolean;
+  isTaskRegisteredAsync?: (taskName: string) => Promise<boolean>;
+  unregisterTaskAsync?: (taskName: string) => Promise<void>;
+};
+
+function readTaskManagerModule(): TaskManagerModule | null {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require("expo-task-manager") as TaskManagerModule;
+  } catch {
+    return null;
+  }
+}
+
+function isBenignTaskLifecycleError(error: unknown): boolean {
+  const message = (error instanceof Error ? error.message : String(error)).toLowerCase();
+  return (
+    message.includes("tasknotfound") ||
+    message.includes("not found for app id") ||
+    message.includes("unregistertaskasync")
+  );
+}
+
+async function isBackgroundLocationTaskRegistered(): Promise<boolean> {
+  const TaskManager = readTaskManagerModule();
+  if (typeof TaskManager?.isTaskRegisteredAsync !== "function") {
+    return false;
+  }
+  return TaskManager.isTaskRegisteredAsync(BACKGROUND_LOCATION_TASK_NAME).catch(() => false);
+}
+
+async function stopNativeBackgroundLocationUpdatesSafely(): Promise<void> {
+  if (
+    typeof Location.hasStartedLocationUpdatesAsync !== "function" ||
+    typeof Location.stopLocationUpdatesAsync !== "function"
+  ) {
+    return;
+  }
+
+  defineTaskIfNeeded();
+
+  const [hasStarted, isRegistered] = await Promise.all([
+    readNativeLocationUpdatesStarted(),
+    isBackgroundLocationTaskRegistered(),
+  ]);
+
+  if (!isRegistered && !hasStarted) {
+    return;
+  }
+
+  if (!isRegistered) {
+    emitDriverTelemetry("tracking.background.task.stop_skipped", {
+      source: "driver.services.backgroundLocationTask",
+      task_name: BACKGROUND_LOCATION_TASK_NAME,
+      reason: "task_not_registered",
+      has_started_flag: hasStarted,
+    });
+    return;
+  }
+
+  try {
+    await Location.stopLocationUpdatesAsync(BACKGROUND_LOCATION_TASK_NAME);
+  } catch (error) {
+    if (!isBenignTaskLifecycleError(error)) {
+      emitDriverTelemetry("tracking.background.task.stop_failed", {
+        source: "driver.services.backgroundLocationTask",
+        task_name: BACKGROUND_LOCATION_TASK_NAME,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+}
+
 async function readNativeLocationUpdatesStarted(): Promise<boolean> {
   if (typeof Location.hasStartedLocationUpdatesAsync !== "function") return false;
   return Location.hasStartedLocationUpdatesAsync(BACKGROUND_LOCATION_TASK_NAME).catch(() => false);
@@ -870,17 +944,7 @@ export async function startBackgroundLocationTaskIfEligible(
 export async function stopBackgroundLocationTask(reason: string) {
   stopNativeTrackingWatchdog();
   await setBackgroundTrackingMissionContext(null, null);
-  if (
-    typeof Location.hasStartedLocationUpdatesAsync !== "function" ||
-    typeof Location.stopLocationUpdatesAsync !== "function"
-  ) {
-    return;
-  }
-  const hasStarted = await Location.hasStartedLocationUpdatesAsync(BACKGROUND_LOCATION_TASK_NAME).catch(
-    () => false
-  );
-  if (!hasStarted) return;
-  await Location.stopLocationUpdatesAsync(BACKGROUND_LOCATION_TASK_NAME).catch(() => undefined);
+  await stopNativeBackgroundLocationUpdatesSafely();
   emitDriverTelemetry("tracking.background.task.stopped", {
     source: "driver.services.backgroundLocationTask",
     task_name: BACKGROUND_LOCATION_TASK_NAME,

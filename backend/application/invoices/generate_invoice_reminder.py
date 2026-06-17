@@ -156,6 +156,17 @@ class GenerateInvoiceReminderUseCase:
             reminder.total_due = total_due
             reminder.status = "OPEN"
             reminder.generated_at = datetime.now(UTC)
+            from shared.invoice_due_dates import (
+                compute_reminder_due_date,
+                get_reminder_payment_days_for_level,
+            )
+
+            reminder_days = get_reminder_payment_days_for_level(
+                invoice.company_id, input_data.level
+            )
+            reminder.due_date = compute_reminder_due_date(
+                reminder.generated_at, reminder_days
+            )
 
             db.session.add(reminder)
             db.session.flush()  # Pour obtenir l'ID (nécessaire pour le filename unique)

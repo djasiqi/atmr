@@ -202,3 +202,15 @@ def sync_transport_request_departure_from_booking(
     transport_request.scheduled_time_type = ScheduledTimeType.DEPARTURE.value
     transport_request.pickup_time_confirmed = True
     return True
+
+
+def sync_request_departure_for_booking(booking: Any) -> bool:
+    """Aligne transport_request.scheduled_time depuis le booking principal lié."""
+    if booking is None or getattr(booking, "id", None) is None:
+        return False
+    from models.transport_request import TransportRequest
+
+    transport_request = TransportRequest.query.filter_by(
+        booking_id=booking.id
+    ).first()
+    return sync_transport_request_departure_from_booking(transport_request, booking)

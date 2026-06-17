@@ -106,6 +106,12 @@ class ScheduleCompanyReservationUseCase:
         if st == "pending":
             set_status(booking, "status", "ACCEPTED")
 
+        from services.institutions.mission_schedule import (
+            sync_request_departure_for_booking,
+        )
+
+        sync_request_departure_for_booking(booking)
+
         return ScheduleCompanyReservationResult(
             ok=True,
             should_trigger_dispatch=True,

@@ -23,6 +23,7 @@ import {
   canEditDraft,
   invoiceStatusLower,
   getNextReminderLevel,
+  getReminderLabel,
 } from '../../../../../services/invoiceService';
 
 const InvoiceRowActions = ({
@@ -88,7 +89,12 @@ const InvoiceRowActions = ({
     ? invoice.reminders
         .sort((a, b) => new Date(b.generated_at || 0) - new Date(a.generated_at || 0))[0]
     : null;
-  const hasReminder = latestReminder && latestReminder.pdf_url;
+  const hasReminder = Boolean(latestReminder?.pdf_url);
+  const reminderViewLabel = latestReminder?.level
+    ? `Voir ${getReminderLabel(latestReminder.level)} (PDF)`
+    : invoice.reminder_level > 0
+      ? `Voir ${getReminderLabel(invoice.reminder_level)} (PDF)`
+      : 'Voir rappel (PDF)';
 
   const actions = [
     {
@@ -112,7 +118,7 @@ const InvoiceRowActions = ({
     },
     {
       key: 'viewReminder',
-      label: 'Voir rappel (PDF)',
+      label: reminderViewLabel,
       icon: <FiBell size={14} />,
       onClick: () => {
         if (latestReminder?.pdf_url) {

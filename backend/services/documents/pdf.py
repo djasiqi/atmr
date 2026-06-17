@@ -1525,25 +1525,90 @@ def _build_default_legal_footer_html(
     return core
 
 
-def _get_reminder_footer_message(level: int) -> str:
+def _resolve_reminder_dates_for_pdf(
+    reminder_ctx: dict[str, Any],
+    invoice: Any,
+) -> tuple[datetime, datetime, int]:
+    """Date du rappel, date limite de paiement et délai (jours) pour le PDF."""
+    from shared.invoice_due_dates import (
+        compute_reminder_due_date,
+        get_reminder_payment_days_for_level,
+    )
+
+    level = int(reminder_ctx.get("reminder_level") or 1)
+    generated_at = reminder_ctx.get("reminder_generated_at") or datetime.now(UTC)
+    if generated_at.tzinfo is None:
+        generated_at = generated_at.replace(tzinfo=UTC)
+
+    payment_days = reminder_ctx.get("reminder_payment_days")
+    if payment_days is None:
+        payment_days = get_reminder_payment_days_for_level(
+            getattr(invoice, "company_id", None), level
+        )
+    payment_days = max(int(payment_days), 0)
+
+    due_date = reminder_ctx.get("reminder_due_date")
+    if due_date is None:
+        due_date = compute_reminder_due_date(generated_at, payment_days)
+    elif due_date.tzinfo is None:
+        due_date = due_date.replace(tzinfo=UTC)
+
+    return generated_at, due_date, payment_days
+
+
+def _reminder_deadline_suffix(due_date: datetime | None) -> str:
+    if not due_date:
+        return ""
+    return f", soit au plus tard le {due_date.strftime('%d.%m.%Y')}"
+
+
+def _get_reminder_footer_message(
+    level: int,
+    payment_days: int | None = None,
+    due_date: datetime | None = None,
+) -> str:
     """Retourne le texte de pied de page adapté au niveau de rappel."""
+    default_days = {1: 10, 2: 5, 3: 5}
+    days = payment_days if payment_days is not None else default_days.get(level, 10)
+    jours = "jours" if days > 1 else "jour"
+    deadline = _reminder_deadline_suffix(due_date)
     if level == 1:
         return (
             "Sauf erreur ou croisement de nos courriers, le règlement de cette facture "
             "ne nous est pas parvenu. Nous vous remercions de bien vouloir procéder à "
-            "son règlement sous 10 jours."
+            f"son règlement sous {days} {jours}{deadline}."
         )
     if level == LEVEL_THRESHOLD:
         return (
             "Malgré notre précédent rappel, le règlement de cette facture ne nous est "
             "pas parvenu. Nous vous prions de bien vouloir régulariser cette situation "
-            "dans les meilleurs délais."
+            f"sous {days} {jours}{deadline}."
         )
     return (
         "Malgré nos précédents rappels, cette facture reste impayée. À défaut de "
-        "règlement sous 5 jours, nous nous réservons le droit d'entreprendre des "
-        "démarches de recouvrement."
+        f"règlement sous {days} {jours}{deadline}, nous nous réservons le droit "
+        "d'entreprendre des démarches de recouvrement."
     )
+
+
+def _build_reminder_footer_message(
+    reminder_ctx: dict[str, Any],
+    invoice: Any,
+    iban_value: str | None = None,
+) -> str:
+    """Pied de page rappel : délai configuré + date limite explicite."""
+    reminder_level_val = int(reminder_ctx.get("reminder_level") or 1)
+    _, reminder_due, reminder_days = _resolve_reminder_dates_for_pdf(
+        reminder_ctx, invoice
+    )
+    footer_message = _get_reminder_footer_message(
+        reminder_level_val, reminder_days, reminder_due
+    )
+    if iban_value:
+        footer_message = (
+            f"{footer_message} Paiement par virement bancaire : IBAN : {iban_value}"
+        )
+    return footer_message
 
 
 def _load_logo_ratio_safe(
@@ -4568,12 +4633,27 @@ class PDFService:
                 )
 
             # ✅ Réutiliser le template facture avec paramètres reminder
+            if reminder and not reminder.due_date and reminder.generated_at:
+                from shared.invoice_due_dates import (
+                    compute_reminder_due_date,
+                    get_reminder_payment_days_for_level,
+                )
+
+                reminder_days = get_reminder_payment_days_for_level(
+                    invoice.company_id, level
+                )
+                reminder.due_date = compute_reminder_due_date(
+                    reminder.generated_at, reminder_days
+                )
+
             pdf_content, nb_rows = self._create_invoice_pdf_content(
                 invoice,
                 reminder_level=level,
                 reminder_fee=reminder_fee,
                 reminder_total_due=reminder_total_due,
                 reminder_principal=reminder_principal,
+                reminder_due_date=reminder.due_date if reminder else None,
+                reminder_generated_at=reminder.generated_at if reminder else None,
             )
             generation_ms = int((perf_counter() - start_time) * 1000)
 
@@ -4722,6 +4802,8 @@ class PDFService:
         reminder_fee: Decimal | None = None,
         reminder_total_due: Decimal | None = None,
         reminder_principal: Decimal | float | None = None,
+        reminder_due_date: datetime | None = None,
+        reminder_generated_at: datetime | None = None,
     ):
         """Crée le contenu PDF d'une facture selon la variante de template
         sélectionnée.
@@ -4750,11 +4832,20 @@ class PDFService:
             "reminder_fee": reminder_fee,
             "reminder_principal": reminder_principal,
             "reminder_total_due": reminder_total_due,
+            "reminder_due_date": reminder_due_date,
+            "reminder_generated_at": reminder_generated_at,
+            "reminder_payment_days": None,
         }
 
         billing_settings = CompanyBillingSettings.query.filter_by(
             company_id=invoice.company_id
         ).first()
+        if is_reminder and level:
+            from shared.invoice_due_dates import get_reminder_payment_days_for_level
+
+            reminder_ctx["reminder_payment_days"] = get_reminder_payment_days_for_level(
+                invoice.company_id, level
+            )
         template_variant = "standard"
         if billing_settings and billing_settings.pdf_template_variant:
             template_variant = billing_settings.pdf_template_variant.lower()
@@ -5104,11 +5195,7 @@ class PDFService:
         display_reminder_level = reminder_ctx.get("display_reminder_level")
 
         # === INFORMATIONS FACTURE (GAUCHE) ===
-        echeance_label = (
-            "Date d'échéance initiale :"
-            if reminder_ctx.get("is_reminder")
-            else "Date d'échéance :"
-        )
+        is_reminder_doc = reminder_ctx.get("is_reminder")
         _mois_fr = (
             "janvier",
             "février",
@@ -5130,22 +5217,42 @@ class PDFService:
         )
         _inv_n = _xml_escape_for_paragraph(str(invoice.invoice_number or ""))
         _per_lbl = _xml_escape_for_paragraph(period_label)
-        invoice_info_left = (
-            f'<font size="{FONT_META_NUMBER}"><b>Numéro de facture :</b></font> '
-            f'<font size="{FONT_META_NUMBER}">{_inv_n}</font><br/>'
-            f'<font size="{FONT_META_DATES}"><b>Date d\'émission :</b></font> '
-            f'<font size="{FONT_META_DATES}">{invoice.issued_at.strftime("%d.%m.%Y")}</font><br/>'
-            f'<font size="{FONT_META_DATES}"><b>'
-            f"{_xml_escape_for_paragraph(echeance_label)}</b></font> "
-            f'<font size="{FONT_META_DATES}">{invoice.due_date.strftime("%d.%m.%Y")}</font><br/>'
-            f'<font size="{FONT_META_DATES}"><b>Période de facturation :</b></font> '
-            f'<font size="{FONT_META_DATES}">{_per_lbl}</font>'
-        )
-        if reminder_ctx.get("is_reminder"):
-            invoice_info_left += (
-                f'<br/><font size="{FONT_META_DATES}"><b>Date du rappel :</b></font> '
+        if is_reminder_doc:
+            reminder_gen, reminder_due, reminder_days = _resolve_reminder_dates_for_pdf(
+                reminder_ctx, invoice
+            )
+            delay_hint = (
+                f" (délai : {reminder_days} jours)"
+                if reminder_days != 1
+                else " (délai : 1 jour)"
+            )
+            invoice_info_left = (
+                f'<font size="{FONT_META_NUMBER}"><b>Numéro de facture :</b></font> '
+                f'<font size="{FONT_META_NUMBER}">{_inv_n}</font><br/>'
+                f'<font size="{FONT_META_DATES}"><b>Période de facturation :</b></font> '
+                f'<font size="{FONT_META_DATES}">{_per_lbl}</font><br/>'
+                f'<font size="{FONT_META_DATES}"><b>Facture initiale :</b></font> '
+                f'<font size="{FONT_META_DATES}">émise le '
+                f'{invoice.issued_at.strftime("%d.%m.%Y")}, échéance le '
+                f'{invoice.due_date.strftime("%d.%m.%Y")}</font><br/>'
+                f'<font size="{FONT_META_DATES}"><b>Date du rappel :</b></font> '
                 f'<font size="{FONT_META_DATES}">'
-                f"{datetime.now(UTC).strftime('%d.%m.%Y')}</font>"
+                f"{reminder_gen.strftime('%d.%m.%Y')}</font><br/>"
+                f'<font size="{FONT_META_DATES}"><b>Date limite de paiement :</b></font> '
+                f'<font size="{FONT_META_DATES}"><b>'
+                f"{reminder_due.strftime('%d.%m.%Y')}</b></font>"
+                f'<font size="{FONT_META_DATES}">{delay_hint}</font>'
+            )
+        else:
+            invoice_info_left = (
+                f'<font size="{FONT_META_NUMBER}"><b>Numéro de facture :</b></font> '
+                f'<font size="{FONT_META_NUMBER}">{_inv_n}</font><br/>'
+                f'<font size="{FONT_META_DATES}"><b>Date d\'émission :</b></font> '
+                f'<font size="{FONT_META_DATES}">{invoice.issued_at.strftime("%d.%m.%Y")}</font><br/>'
+                f'<font size="{FONT_META_DATES}"><b>Date d\'échéance :</b></font> '
+                f'<font size="{FONT_META_DATES}">{invoice.due_date.strftime("%d.%m.%Y")}</font><br/>'
+                f'<font size="{FONT_META_DATES}"><b>Période de facturation :</b></font> '
+                f'<font size="{FONT_META_DATES}">{_per_lbl}</font>'
             )
 
         invoice_info_table = Table(
@@ -5382,10 +5489,9 @@ class PDFService:
 
         # Message du pied de page : en mode rappel, texte gradué selon le niveau.
         if display_reminder_level:
-            reminder_level_val = reminder_ctx.get("reminder_level") or 1
-            footer_message = _get_reminder_footer_message(reminder_level_val)
-            if iban_value:
-                footer_message = f"{footer_message} Paiement par virement bancaire : IBAN : {iban_value}"
+            footer_message = _build_reminder_footer_message(
+                reminder_ctx, invoice, iban_value
+            )
         elif billing_settings and billing_settings.legal_footer:
             raw_footer = _resolve_legal_footer_placeholders(
                 billing_settings.legal_footer,
@@ -5700,15 +5806,25 @@ class PDFService:
         is_reminder = reminder_ctx.get("is_reminder", False)
 
         # === INFORMATIONS FACTURE (SIMPLIFIÉES) ===
-        echeance_label = "Échéance initiale:" if is_reminder else "Échéance:"
         _inv_m = _xml_escape_for_paragraph(str(invoice.invoice_number or ""))
-        invoice_info = (
-            f"<b>Facture {_inv_m}</b> - "
-            f"{invoice.issued_at.strftime('%d.%m.%Y')} - "
-            f"{echeance_label} {invoice.due_date.strftime('%d.%m.%Y')}"
-        )
         if is_reminder:
-            invoice_info += f" - Rappel: {datetime.now(UTC).strftime('%d.%m.%Y')}"
+            reminder_gen, reminder_due, reminder_days = _resolve_reminder_dates_for_pdf(
+                reminder_ctx, invoice
+            )
+            invoice_info = (
+                f"<b>Facture {_inv_m}</b> — initiale : "
+                f"{invoice.issued_at.strftime('%d.%m.%Y')} / échéance "
+                f"{invoice.due_date.strftime('%d.%m.%Y')}<br/>"
+                f"<b>Rappel du {reminder_gen.strftime('%d.%m.%Y')}</b> — "
+                f"<b>à payer au plus tard le {reminder_due.strftime('%d.%m.%Y')}</b> "
+                f"({reminder_days} jours)"
+            )
+        else:
+            invoice_info = (
+                f"<b>Facture {_inv_m}</b> - "
+                f"{invoice.issued_at.strftime('%d.%m.%Y')} - "
+                f"Échéance: {invoice.due_date.strftime('%d.%m.%Y')}"
+            )
         invoice_info_table_m = Table(
             [[Paragraph(invoice_info, normal_style)]],
             colWidths=[usable_width_pt_min],
@@ -6185,17 +6301,13 @@ class PDFService:
         jours_text = "jours" if payment_terms_days > 1 else "jour"
 
         if is_reminder:
-            reminder_level_val = reminder_ctx.get("reminder_level") or 1
-            footer_message = _get_reminder_footer_message(reminder_level_val)
-            iban_value_min = (
+            footer_message = _build_reminder_footer_message(
+                reminder_ctx,
+                invoice,
                 billing_settings.iban
                 if billing_settings and billing_settings.iban
-                else None
+                else None,
             )
-            if iban_value_min:
-                footer_message += (
-                    f" Paiement par virement bancaire : IBAN : {iban_value_min}"
-                )
         elif billing_settings and billing_settings.legal_footer:
             raw_footer = _resolve_legal_footer_placeholders(
                 billing_settings.legal_footer,
@@ -6594,17 +6706,34 @@ class PDFService:
         _inv_d = _xml_escape_for_paragraph(str(invoice.invoice_number or ""))
         _per_d = _xml_escape_for_paragraph(period_label_d)
         _st_d = _xml_escape_for_paragraph(str(status_value))
-        _ech_d = _xml_escape_for_paragraph(echeance_label)
-        invoice_info_detailed = (
-            f"<b>Numéro de facture :</b> {_inv_d}<br/>"
-            f"<b>Date d'émission :</b> {invoice.issued_at.strftime('%d.%m.%Y')}<br/>"
-            f"<b>{_ech_d}</b> {invoice.due_date.strftime('%d.%m.%Y')}<br/>"
-            f"<b>Période de facturation :</b> {_per_d}<br/>"
-            f"<b>Statut :</b> {_st_d}"
-        )
         if reminder_ctx.get("is_reminder"):
-            invoice_info_detailed += (
-                f"<br/><b>Date du rappel :</b> {datetime.now(UTC).strftime('%d.%m.%Y')}"
+            reminder_gen, reminder_due, reminder_days = _resolve_reminder_dates_for_pdf(
+                reminder_ctx, invoice
+            )
+            delay_hint = (
+                f" (délai : {reminder_days} jours)"
+                if reminder_days != 1
+                else " (délai : 1 jour)"
+            )
+            invoice_info_detailed = (
+                f"<b>Numéro de facture :</b> {_inv_d}<br/>"
+                f"<b>Période de facturation :</b> {_per_d}<br/>"
+                f"<b>Statut :</b> {_st_d}<br/>"
+                f"<b>Facture initiale :</b> émise le "
+                f"{invoice.issued_at.strftime('%d.%m.%Y')}, échéance le "
+                f"{invoice.due_date.strftime('%d.%m.%Y')}<br/>"
+                f"<b>Date du rappel :</b> {reminder_gen.strftime('%d.%m.%Y')}<br/>"
+                f"<b>Date limite de paiement :</b> "
+                f"<b>{reminder_due.strftime('%d.%m.%Y')}</b>{delay_hint}"
+            )
+        else:
+            _ech_d = _xml_escape_for_paragraph(echeance_label)
+            invoice_info_detailed = (
+                f"<b>Numéro de facture :</b> {_inv_d}<br/>"
+                f"<b>Date d'émission :</b> {invoice.issued_at.strftime('%d.%m.%Y')}<br/>"
+                f"<b>{_ech_d}</b> {invoice.due_date.strftime('%d.%m.%Y')}<br/>"
+                f"<b>Période de facturation :</b> {_per_d}<br/>"
+                f"<b>Statut :</b> {_st_d}"
             )
         invoice_info_table_d = Table(
             [[Paragraph(invoice_info_detailed, normal_style)]],
@@ -6813,12 +6942,9 @@ class PDFService:
             iban_value = company.iban
 
         if display_reminder_level:
-            reminder_level_val = reminder_ctx.get("reminder_level") or 1
-            footer_message = _get_reminder_footer_message(reminder_level_val)
-            if iban_value:
-                footer_message += (
-                    f" Paiement par virement bancaire : IBAN : {iban_value}"
-                )
+            footer_message = _build_reminder_footer_message(
+                reminder_ctx, invoice, iban_value
+            )
         elif billing_settings and billing_settings.legal_footer:
             raw_footer = _resolve_legal_footer_placeholders(
                 billing_settings.legal_footer,
@@ -6973,10 +7099,30 @@ class PDFService:
         story.append(Spacer(1, 20))
 
         # ✅ Informations enrichies du rappel
+        from shared.invoice_due_dates import (
+            compute_reminder_due_date,
+            get_reminder_payment_days_for_level,
+        )
+
+        reminder_days = (
+            get_reminder_payment_days_for_level(invoice.company_id, reminder.level)
+            if reminder and reminder.level
+            else 10
+        )
+        reminder_due = (
+            reminder.due_date
+            if reminder and reminder.due_date
+            else (
+                compute_reminder_due_date(reminder.generated_at, reminder_days)
+                if reminder and reminder.generated_at
+                else invoice.due_date
+            )
+        )
         invoice_info = [
             ["Numéro de facture:", invoice.invoice_number],
             ["Date d'émission initiale:", invoice.issued_at.strftime("%d.%m.%Y")],
-            ["Nouvelle échéance:", invoice.due_date.strftime("%d.%m.%Y")],
+            ["Date du rappel:", (reminder.generated_at if reminder else datetime.now(UTC)).strftime("%d.%m.%Y")],
+            ["Nouvelle échéance:", reminder_due.strftime("%d.%m.%Y")],
         ]
 
         if reminder and reminder.total_due > 0:

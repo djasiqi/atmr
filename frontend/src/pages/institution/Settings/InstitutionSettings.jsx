@@ -14,6 +14,7 @@
 import React, { useState, useEffect } from 'react';
 import { FaKey, FaTruck, FaPlus, FaTimes, FaCopy, FaArrowUp, FaArrowDown, FaSave, FaBuilding, FaTrash, FaFileInvoiceDollar, FaBell, FaUsersCog, FaUserCircle, FaUsers } from 'react-icons/fa';
 import { useTransportPreferences, useUpdateTransportPreferences, useApiKeys, useCreateApiKey, useRevokeApiKey, useInstitutionMe, useInstitutionSettings, useUpdateInstitutionSettings } from '../../../hooks/useInstitutionData';
+import { formatDurationLabel } from '../../../utils/durationInput';
 import { isAdmin, canEditBilling } from '../../../utils/institutionPermissions';
 import { toast } from 'sonner';
 import InstitutionProfileTab from './components/InstitutionProfileTab';
@@ -356,10 +357,10 @@ const InstitutionSettings = () => {
               {isSequentialDispatch ? (
                 <>
                   <span className={styles.allocationBadge}>
-                    Délai jour même : {settingsData?.settings?.timeout_same_day_minutes ?? 5} min
+                    Délai jour même : {formatDurationLabel(settingsData?.settings?.timeout_same_day_minutes ?? 5)}
                   </span>
                   <span className={styles.allocationBadge}>
-                    Délai planifié : {settingsData?.settings?.timeout_default_minutes ?? 60} min
+                    Délai planifié : {formatDurationLabel(settingsData?.settings?.timeout_default_minutes ?? 60)}
                   </span>
                   <span className={styles.allocationBadge}>Escalade automatique activée</span>
                 </>

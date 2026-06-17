@@ -420,7 +420,10 @@ class InvoiceRepository:
         # Filtrage direct par Invoice.company_id pour éviter les jointures ambiguës
         # (SQLAlchemy ne peut pas inférer un chemin unique vers Booking ici).
         return (
-            Invoice.query.options(joinedload(Invoice.lines))
+            Invoice.query.options(
+                joinedload(Invoice.lines),
+                joinedload(Invoice.reminders),
+            )
             .filter(Invoice.company_id == company_id)
             .order_by(Invoice.issued_at.desc(), Invoice.id.desc())
             .all()

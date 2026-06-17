@@ -9,11 +9,15 @@ Endpoints:
 """
 
 import logging
+from datetime import UTC, datetime, timedelta
 
-import sentry_sdk
+from flask import abort
+from flask import request as flask_request
 from flask_jwt_extended import get_jwt, verify_jwt_in_request
+from flask_jwt_extended.exceptions import JWTExtendedException
 from flask_restx import Namespace, Resource, fields
-from werkzeug.exceptions import HTTPException
+from jwt.exceptions import PyJWTError
+from sqlalchemy import or_
 
 from ext import db
 from models.institution_notification import InstitutionNotification
@@ -28,15 +32,22 @@ institution_notifications_ns = Namespace(
 
 
 def _get_institution_id() -> int:
-    """Extrait l'institution_id du JWT. Abort 403 si absent."""
-    from flask import abort
+    """Extrait l'institution_id du JWT.
 
-    verify_jwt_in_request()
+    Un token absent/expiré/invalide doit renvoyer 401 (et non 500). On intercepte
+    explicitement les exceptions JWT car la collecte se fait dans un bloc try/except
+    générique des routes qui, sinon, les transforme en 500 « Erreur serveur ».
+    """
+    try:
+        verify_jwt_in_request()
+    except (JWTExtendedException, PyJWTError) as exc:
+        logger.info("[InstitutionNotifications] JWT invalide ou expiré: %s", exc)
+        abort(401, description="Token invalide ou expiré")
     claims = get_jwt()
     institution_id = claims.get("institution_id")
     if not institution_id:
         abort(403, description="Accès réservé aux utilisateurs institution")
-    return institution_id
+    return int(institution_id)
 
 
 # ── Swagger models ──────────────────────────────────────────────────────────
@@ -84,11 +95,6 @@ class NotificationList(Resource):
     def get(self):
         """Retourne les notifications: dernières 24h + non lues (même anciennes)."""
         try:
-            from datetime import UTC, datetime, timedelta
-
-            from flask import request as flask_request
-            from sqlalchemy import or_
-
             institution_id = _get_institution_id()
 
             limit = min(int(flask_request.args.get("limit", 30)), 100)
@@ -125,11 +131,10 @@ class NotificationList(Resource):
             }
 
         except Exception as e:
-            if isinstance(e, HTTPException):
+            if hasattr(e, "code"):
                 raise
-            sentry_sdk.capture_exception(e)
-            logger.error("[InstitutionNotifications] GET error: %s", e)
-            return {"error": f"Erreur serveur: {e!s}"}, 500
+            logger.exception("[InstitutionNotifications] GET error: %s", e)
+            return {"error": "Erreur serveur"}, 500
 
 
 @institution_notifications_ns.route("/<int:notification_id>/read")
@@ -160,11 +165,10 @@ class NotificationRead(Resource):
 
         except Exception as e:
             db.session.rollback()
-            if isinstance(e, HTTPException):
+            if hasattr(e, "code"):
                 raise
-            sentry_sdk.capture_exception(e)
-            logger.error("[InstitutionNotifications] PUT read error: %s", e)
-            return {"error": f"Erreur serveur: {e!s}"}, 500
+            logger.exception("[InstitutionNotifications] PUT read error: %s", e)
+            return {"error": "Erreur serveur"}, 500
 
 
 @institution_notifications_ns.route("/read-all")
@@ -195,8 +199,7 @@ class NotificationReadAll(Resource):
 
         except Exception as e:
             db.session.rollback()
-            if isinstance(e, HTTPException):
+            if hasattr(e, "code"):
                 raise
-            sentry_sdk.capture_exception(e)
-            logger.error("[InstitutionNotifications] PUT read-all error: %s", e)
-            return {"error": f"Erreur serveur: {e!s}"}, 500
+            logger.exception("[InstitutionNotifications] PUT read-all error: %s", e)
+            return {"error": "Erreur serveur"}, 500

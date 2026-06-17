@@ -138,3 +138,38 @@ class TestScheduleReservationExplicitTimeConfirmed:
         assert booking.scheduled_time is not None
         assert booking.scheduled_time.hour == 14
         assert booking.time_confirmed is True
+
+    def test_schedule_syncs_transport_request_departure(self, monkeypatch):
+        from application.companies.reservations.schedule_reservation import (
+            ScheduleCompanyReservationUseCase,
+        )
+
+        synced: list[int] = []
+
+        def _fake_sync(booking):
+            synced.append(getattr(booking, "id", 0))
+            return True
+
+        monkeypatch.setattr(
+            "services.institutions.mission_schedule.sync_request_departure_for_booking",
+            _fake_sync,
+        )
+
+        booking = Booking(
+            id=35204,
+            customer_name="Test",
+            pickup_location="A",
+            dropoff_location="B",
+            scheduled_time=None,
+            time_confirmed=False,
+            status=BookingStatus.ACCEPTED.value,
+            amount=50.0,
+        )
+        uc = ScheduleCompanyReservationUseCase()
+        result = uc.execute(
+            booking,
+            scheduled_time_iso="2026-06-17T10:00:00",
+            time_confirmed=True,
+        )
+        assert result.ok is True
+        assert synced == [35204]

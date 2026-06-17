@@ -30,6 +30,8 @@ import {
   cancelInvoice,
   duplicateInvoice,
   fetchBillingOpportunities,
+  getEffectiveDueDate,
+  getDaysOverdue,
 } from '../../../../services/invoiceService';
 import { useLirieCompany } from '../../../../hooks/useLirieCompany';
 import { lirieKeys, invoiceFiltersHash } from '../../../../queryKeys/lirie';
@@ -677,21 +679,12 @@ const InvoicesRegistry = () => {
     return `${day}.${month}.${year}`;
   };
 
-  const getDaysOverdue = (invoice) => {
-    if (invoice.status === 'paid' || invoice.status === 'cancelled' || invoice.status === 'draft') return 0;
-    if (invoice.balance_due <= 0) return 0;
-    const due = new Date(invoice.due_date);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    due.setHours(0, 0, 0, 0);
-    const diff = Math.floor((today - due) / (1000 * 60 * 60 * 24));
-    return diff > 0 ? diff : 0;
-  };
+  const getDaysOverdueLocal = (invoice) => getDaysOverdue(invoice);
 
   const getRowClassName = (invoice) => {
     if (invoice.status === 'cancelled') return styles.rowCancelled;
     if (invoice.status === 'draft') return styles.rowDraft;
-    if (getDaysOverdue(invoice) > 0) return styles.rowOverdue;
+    if (getDaysOverdueLocal(invoice) > 0) return styles.rowOverdue;
     return '';
   };
 
@@ -965,7 +958,8 @@ const InvoicesRegistry = () => {
               {displayedInvoices.map((invoice, index) => {
                 const clientName = getClientName(invoice);
                 const payerName = getPayerName(invoice);
-                const daysOverdue = getDaysOverdue(invoice);
+                const daysOverdue = getDaysOverdueLocal(invoice);
+                const displayDueDate = getEffectiveDueDate(invoice);
                 return (
                   <tr key={invoice.id} className={`${getRowClassName(invoice)} ${selectedIds.has(invoice.id) ? styles.rowSelected : ''}`}>
                     <td className={styles.tdCheckbox}>
@@ -1001,7 +995,7 @@ const InvoicesRegistry = () => {
                     </td>
                     <td>
                       <div className={styles.cellDueDate}>
-                        <span>{formatDateCH(invoice.due_date)}</span>
+                        <span>{formatDateCH(displayDueDate)}</span>
                         {daysOverdue > 0 && (
                           <span className={styles.badgeOverdueSmall}>J+{daysOverdue}</span>
                         )}

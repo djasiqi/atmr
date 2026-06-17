@@ -681,9 +681,25 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onRese
               Modification institution — validation requise
             </p>
             <p style={{ margin: '0 0 6px', fontSize: 12, color: '#78350f' }}>
-              Champs modifiés en attente de votre accord.
+              Modifications proposées par l&apos;institution :
             </p>
-            {changeRequestSummary.fieldLabels.length > 0 && (
+            {changeRequestSummary.changeLines.length > 0 ? (
+              <ul
+                style={{
+                  margin: '0 0 8px',
+                  paddingLeft: 18,
+                  fontSize: 12,
+                  color: '#92400e',
+                  lineHeight: 1.45,
+                }}
+              >
+                {changeRequestSummary.changeLines.map((line) => (
+                  <li key={line.key} style={{ marginBottom: 3 }}>
+                    {line.text}
+                  </li>
+                ))}
+              </ul>
+            ) : changeRequestSummary.fieldLabels.length > 0 && (
               <p style={{ margin: '0 0 8px', fontSize: 12, color: '#92400e', fontWeight: 500 }}>
                 {changeRequestSummary.fieldLabels.join(' · ')}
               </p>
@@ -708,7 +724,8 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onRese
                     await respondToChangeRequest(
                       reservation.id,
                       reservation.active_change_request.id,
-                      'accept'
+                      'accept',
+                      reservation.active_change_request.version
                     );
                     toast.success('Modification acceptée');
                     onReservationUpdated?.();
@@ -740,7 +757,8 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onRese
                     await respondToChangeRequest(
                       reservation.id,
                       reservation.active_change_request.id,
-                      'refuse'
+                      'refuse',
+                      reservation.active_change_request.version
                     );
                     toast.success('Modification refusée');
                     onReservationUpdated?.();

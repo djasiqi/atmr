@@ -213,12 +213,12 @@ export const acknowledgeBookingChangeEvent = async (bookingId, eventId) => {
 };
 
 /** Accepte ou refuse une demande de modification institution (révalidation PR2) */
-export const respondToChangeRequest = async (bookingId, changeId, action) => {
+export const respondToChangeRequest = async (bookingId, changeId, action, version) => {
   const path =
     action === 'accept'
       ? `/companies/me/reservations/${bookingId}/change-requests/${changeId}/accept`
       : `/companies/me/reservations/${bookingId}/change-requests/${changeId}/refuse`;
-  const { data } = await apiClient.post(path, {});
+  const { data } = await apiClient.post(path, { version });
   return data;
 };
 

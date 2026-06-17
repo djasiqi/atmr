@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals
 
 const mockHasStarted = jest.fn<() => Promise<boolean>>();
 const mockStart = jest.fn<() => Promise<void>>();
+const mockStop = jest.fn<() => Promise<void>>();
+const mockIsTaskRegistered = jest.fn<() => Promise<boolean>>();
 const mockGetFg = jest.fn<() => Promise<{ status: string; granted: boolean }>>();
 const mockGetBg = jest.fn<() => Promise<{ status: string; granted: boolean }>>();
 const mockRequestFg = jest.fn<() => Promise<{ granted: boolean }>>();
@@ -20,7 +22,7 @@ jest.mock("expo-battery", () => ({
 jest.mock("expo-location", () => ({
   hasStartedLocationUpdatesAsync: () => mockHasStarted(),
   startLocationUpdatesAsync: (...args: unknown[]) => mockStart(...args),
-  stopLocationUpdatesAsync: jest.fn().mockResolvedValue(undefined),
+  stopLocationUpdatesAsync: (...args: unknown[]) => mockStop(...args),
   getForegroundPermissionsAsync: () => mockGetFg(),
   getBackgroundPermissionsAsync: () => mockGetBg(),
   requestForegroundPermissionsAsync: () => mockRequestFg(),
@@ -64,6 +66,7 @@ jest.mock("./driverTrackingQueue", () => ({
 
 jest.mock("expo-task-manager", () => ({
   defineTask: jest.fn(),
+  isTaskRegisteredAsync: () => mockIsTaskRegistered(),
 }));
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -76,13 +79,17 @@ describe("backgroundLocationTask", () => {
     trackingRuntime.__resetTrackingRuntimeForTests();
     mockHasStarted.mockReset();
     mockStart.mockReset();
+    mockStop.mockReset();
+    mockIsTaskRegistered.mockReset();
     mockEmit.mockReset();
     mockGetFg.mockResolvedValue({ status: "granted", granted: true });
     mockGetBg.mockResolvedValue({ status: "granted", granted: true });
     mockRequestFg.mockResolvedValue({ granted: true });
     mockRequestBg.mockResolvedValue({ granted: true });
     mockHasStarted.mockResolvedValue(false);
+    mockIsTaskRegistered.mockResolvedValue(false);
     mockStart.mockResolvedValue(undefined);
+    mockStop.mockResolvedValue(undefined);
     bgTask.__resetBackgroundLocationTaskStateForTests();
   });
 
@@ -144,6 +151,26 @@ describe("backgroundLocationTask", () => {
     expect(mockEmit).toHaveBeenCalledWith(
       "tracking.background.wake_restart",
       expect.objectContaining({ reason: "silent_push_wake_test", mission_id: 55 })
+    );
+  });
+
+  it("stopBackgroundLocationTask skips native stop when task is not registered", async () => {
+    bgTask.initializeBackgroundLocationTask();
+    mockHasStarted.mockResolvedValue(true);
+    mockIsTaskRegistered.mockResolvedValue(false);
+
+    await bgTask.stopBackgroundLocationTask("test_stop_unregistered");
+
+    expect(mockStop).not.toHaveBeenCalled();
+    expect(mockEmit).toHaveBeenCalledWith(
+      "tracking.background.task.stop_skipped",
+      expect.objectContaining({
+        reason: "task_not_registered",
+      })
+    );
+    expect(mockEmit).toHaveBeenCalledWith(
+      "tracking.background.task.stopped",
+      expect.objectContaining({ reason: "test_stop_unregistered" })
     );
   });
 
