@@ -101,6 +101,15 @@ INVOICE_PAGE_TOP_MARGIN_CM = 2.0
 INVOICE_PAGE_BOTTOM_MARGIN_FIRST_CM = 2.5
 INVOICE_PAGE_BOTTOM_MARGIN_LATER_CM = 1.1
 
+# STOP GATE PDF-FOOTER : zone interdite au contenu (pt depuis le bas de page).
+PDF_FOOTER_GATE_MIN_PT = 100.0
+PDF_FOOTER_DRAW_BASE_CM = 1.2  # aligné sur _make_legal_footer_page_callback
+PDF_POST_TABLE_SAFETY_MARGIN_PT = 8.0
+PDF_AR_LEGEND_BLOCK_PT = 24.0  # Spacer(8) + légende (~10) + Spacer(6)
+# STOP GATE PDF-TOTAL-01 : au moins une prestation avec le bloc de synthèse.
+PDF_TOTAL_ORPHAN_MIN_ROWS = 1
+PDF_TOTAL_SAFETY_MARGIN_PT = 12.0
+
 # Pied de page : mention plateforme (sous le trait, au bas de la marge)
 FOOTER_PLATFORM_TAGLINE = (
     "Facturation et gestion des prestations via LIRIE — "
@@ -410,6 +419,349 @@ def _make_legal_footer_page_callback(
         canvas.restoreState()
 
     return _draw_footer
+
+
+def _muted_footer_paragraph_style(centered_style: Any) -> Any:
+    """Style 8 pt gris pour le bloc légal du pied de page (miroir callback)."""
+    from reportlab.lib import colors
+    from reportlab.lib.enums import TA_CENTER
+    from reportlab.lib.styles import ParagraphStyle
+
+    return ParagraphStyle(
+        "FooterTaglineMutedMeasure",
+        parent=centered_style,
+        fontSize=FONT_SECONDARY,
+        leading=int(round(FONT_SECONDARY * 1.28)),
+        textColor=colors.HexColor(COLOR_MUTED_PDF),
+        spaceBefore=0,
+        spaceAfter=0,
+        alignment=TA_CENTER,
+    )
+
+
+def _measure_legal_footer_height_pt(
+    footer_message: str,
+    contact_bar: str | None,
+    centered_style: Any,
+    avail_width_pt: float,
+    mention: str | None = None,
+    platform_tagline: str | None = None,
+) -> float:
+    """Hauteur totale dessinée par le callback pied de page (depuis le bas de page)."""
+    from reportlab.lib.units import cm, mm
+    from reportlab.platypus import Paragraph
+
+    y_pos = float(PDF_FOOTER_DRAW_BASE_CM * cm)
+    muted_style = _muted_footer_paragraph_style(centered_style)
+
+    tag_src = (
+        FOOTER_PLATFORM_TAGLINE if platform_tagline is None else platform_tagline
+    )
+    tag = (tag_src or "").strip()
+    fm = (footer_message or "").strip()
+    bar = (contact_bar or "").strip()
+    upper_after_tag = bool(bar or fm or (mention or "").strip())
+
+    if tag:
+        p_tag = Paragraph(_xml_escape_for_paragraph(tag), muted_style)
+        _, h_t = p_tag.wrap(avail_width_pt, 100)
+        y_pos += float(h_t) + float(1.5 * mm)
+
+    if tag and upper_after_tag:
+        y_pos += float(2 * mm)
+
+    combined_legal_identity = ""
+    if fm and bar:
+        combined_legal_identity = (
+            _reportlab_safe_footer_html(fm)
+            + "<br/>"
+            + _xml_escape_for_paragraph(bar)
+        )
+    elif fm:
+        combined_legal_identity = _reportlab_safe_footer_html(fm)
+    elif bar:
+        combined_legal_identity = _xml_escape_for_paragraph(bar)
+
+    if combined_legal_identity:
+        p_body = Paragraph(combined_legal_identity, muted_style)
+        _, h_b = p_body.wrap(avail_width_pt, 260)
+        y_pos += float(h_b) + 4.0
+
+    if mention:
+        p2 = Paragraph(
+            f'<font size="8" color="grey">'
+            f"{_xml_escape_for_paragraph(mention)}</font>",
+            centered_style,
+        )
+        _, h2 = p2.wrap(avail_width_pt, 50)
+        y_pos += float(h2)
+
+    return y_pos
+
+
+def _compute_invoice_first_page_bottom_margin_cm(
+    footer_message: str,
+    contact_bar: str | None,
+    centered_style: Any,
+    avail_width_pt: float,
+    mention: str | None = None,
+) -> float:
+    """Marge bas page 1 : au moins la hauteur du pied légal + STOP GATE PDF-FOOTER."""
+    from reportlab.lib.units import cm
+
+    measured_pt = _measure_legal_footer_height_pt(
+        footer_message,
+        contact_bar,
+        centered_style,
+        avail_width_pt,
+        mention,
+    )
+    reserved_pt = max(
+        PDF_FOOTER_GATE_MIN_PT,
+        measured_pt + PDF_POST_TABLE_SAFETY_MARGIN_PT,
+    )
+    return max(float(reserved_pt / cm), INVOICE_PAGE_BOTTOM_MARGIN_FIRST_CM)
+
+
+def _flowable_height_pt(flowable: Any, avail_width_pt: float) -> float:
+    """Hauteur rendue d'un flowable ReportLab."""
+    _, h = flowable.wrap(avail_width_pt, 1_000_000)
+    return float(h)
+
+
+def _sum_flowables_height_pt(flowables: list[Any], avail_width_pt: float) -> float:
+    return sum(_flowable_height_pt(f, avail_width_pt) for f in flowables)
+
+
+def _invoice_frame_height_pt(
+    *,
+    top_margin_cm: float,
+    bottom_margin_cm: float,
+) -> float:
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import cm
+
+    return float(A4[1] - top_margin_cm * cm - bottom_margin_cm * cm)
+
+
+def _clone_table_chunk(
+    source_table: Any,
+    body_rows: list[Any],
+) -> Any:
+    """Sous-tableau (en-tête + lignes corps) avec mêmes colonnes / style que la source."""
+    from reportlab.platypus import Table
+
+    header = source_table._cellvalues[0]
+    chunk_data = [header, *body_rows]
+    tbl = Table(chunk_data, colWidths=source_table._colWidths, repeatRows=1)
+    style = getattr(source_table, "_style", None)
+    if style:
+        tbl.setStyle(style)
+    return tbl
+
+
+def _measure_table_chunk_pt(
+    source_table: Any,
+    body_rows: list[Any],
+    avail_width_pt: float,
+) -> float:
+    if not body_rows:
+        return 0.0
+    return _flowable_height_pt(
+        _clone_table_chunk(source_table, body_rows), avail_width_pt
+    )
+
+
+def _paginate_table_body_prefix(
+    source_table: Any,
+    prefix_rows: list[Any],
+    *,
+    avail_width_pt: float,
+    first_page_avail_pt: float,
+    later_pages_avail_pt: float,
+) -> list[Any]:
+    """Découpe les lignes « préfixe » sur plusieurs pages (sans bloc synthèse)."""
+    if not prefix_rows:
+        return []
+    chunks: list[Any] = []
+    current: list[Any] = []
+    page_idx = 0
+    min_row_height_pt = 18.0
+
+    for row in prefix_rows:
+        avail = first_page_avail_pt if page_idx == 0 else later_pages_avail_pt
+        trial = current + [row]
+        trial_h = _measure_table_chunk_pt(source_table, trial, avail_width_pt)
+        if trial_h <= avail or not current:
+            current.append(row)
+            continue
+        chunks.append(_clone_table_chunk(source_table, current))
+        current = [row]
+        page_idx += 1
+        if _measure_table_chunk_pt(source_table, current, avail_width_pt) > avail:
+            chunks.append(_clone_table_chunk(source_table, current))
+            current = []
+            page_idx += 1
+
+    if current:
+        chunks.append(_clone_table_chunk(source_table, current))
+    return chunks
+
+
+def _paginate_table_no_orphan_totals(
+    source_table: Any,
+    *,
+    avail_width_pt: float,
+    first_page_avail_pt: float,
+    later_pages_avail_pt: float,
+    trailer_reserve_pt: float,
+    safety_margin_pt: float = PDF_TOTAL_SAFETY_MARGIN_PT,
+) -> tuple[list[Any], Any | None]:
+    """Découpe le tableau : pages préfixe + chunk terminal (≥1 prestation).
+
+    Le chunk terminal doit être placé via ``KeepTogether`` avec le bloc synthèse
+    (légende [A/R], totaux) pour respecter STOP GATE PDF-TOTAL-01.
+    """
+    body_rows = list(source_table._cellvalues[1:])
+    if not body_rows:
+        return [], None
+
+    required_tail_pt = trailer_reserve_pt + safety_margin_pt
+    min_tail = min(max(PDF_TOTAL_ORPHAN_MIN_ROWS, 1), len(body_rows))
+    prefix_rows = body_rows[:-min_tail]
+    tail_rows = body_rows[-min_tail:]
+
+    # Si 1 ligne + synthèse dépasse une page utile, tirer des lignes du préfixe.
+    while prefix_rows:
+        tail_h = _measure_table_chunk_pt(source_table, tail_rows, avail_width_pt)
+        if tail_h + required_tail_pt <= later_pages_avail_pt + 0.5:
+            break
+        tail_rows.insert(0, prefix_rows.pop())
+
+    prefix_chunks = _paginate_table_body_prefix(
+        source_table,
+        prefix_rows,
+        avail_width_pt=avail_width_pt,
+        first_page_avail_pt=first_page_avail_pt,
+        later_pages_avail_pt=later_pages_avail_pt,
+    )
+
+    # Avant d'ajouter une ligne au dernier chunk préfixe : vérifier que la synthèse
+    # pourrait tenir sur la même page ; sinon retirer la ligne vers le groupe terminal.
+    if prefix_chunks and tail_rows:
+        last_prefix_body = list(prefix_chunks[-1]._cellvalues[1:])
+        while len(last_prefix_body) > 1:
+            page_idx = len(prefix_chunks) - 1
+            avail = (
+                first_page_avail_pt if page_idx == 0 else later_pages_avail_pt
+            )
+            prefix_h = _flowable_height_pt(prefix_chunks[-1], avail_width_pt)
+            tail_h = _measure_table_chunk_pt(source_table, tail_rows, avail_width_pt)
+            if prefix_h + tail_h + required_tail_pt <= avail + 0.5:
+                break
+            moved = last_prefix_body.pop()
+            tail_rows.insert(0, moved)
+            if last_prefix_body:
+                prefix_chunks[-1] = _clone_table_chunk(
+                    source_table, last_prefix_body
+                )
+            else:
+                prefix_chunks.pop()
+            if not prefix_chunks:
+                break
+
+    tail_table = _clone_table_chunk(source_table, tail_rows)
+    return prefix_chunks, tail_table
+
+
+def _append_paginated_detail_table_with_tail(
+    story: list[Any],
+    *,
+    s2_table: Any,
+    post_table_flowables: list[Any],
+    usable_width_pt: float,
+    first_page_bottom_margin_cm: float,
+    top_margin_cm: float = INVOICE_PAGE_TOP_MARGIN_CM,
+    later_bottom_margin_cm: float | None = None,
+) -> None:
+    """Ajoute le tableau paginé puis le bloc légende/totaux (réservation espace pied)."""
+    from reportlab.platypus import KeepTogether
+
+    if later_bottom_margin_cm is None:
+        later_bottom_margin_cm = INVOICE_PAGE_BOTTOM_MARGIN_LATER_CM
+    pre_table_height_pt = _sum_flowables_height_pt(story, usable_width_pt)
+    frame_first = _invoice_frame_height_pt(
+        top_margin_cm=top_margin_cm,
+        bottom_margin_cm=first_page_bottom_margin_cm,
+    )
+    frame_later = _invoice_frame_height_pt(
+        top_margin_cm=top_margin_cm,
+        bottom_margin_cm=later_bottom_margin_cm,
+    )
+    first_table_avail = max(frame_first - pre_table_height_pt, 24.0)
+    trailer_reserve = _sum_flowables_height_pt(post_table_flowables, usable_width_pt)
+    prefix_chunks, tail_table = _paginate_table_no_orphan_totals(
+        s2_table,
+        avail_width_pt=usable_width_pt,
+        first_page_avail_pt=first_table_avail,
+        later_pages_avail_pt=frame_later,
+        trailer_reserve_pt=trailer_reserve,
+    )
+    for chunk in prefix_chunks:
+        story.append(chunk)
+    if tail_table is not None:
+        story.append(KeepTogether([tail_table, *post_table_flowables]))
+    else:
+        story.extend(post_table_flowables)
+
+
+def _resolve_invoice_pdf_footer_message(
+    invoice: Any,
+    billing_settings: Any,
+    reminder_ctx: dict[str, Any],
+    company: Any,
+    *,
+    display_reminder_level: str | None,
+    append_iban_if_missing: bool = False,
+) -> str:
+    """Message HTML du pied de page légal (facture ou rappel)."""
+    payment_terms_days = 10
+    if billing_settings and billing_settings.payment_terms_days:
+        payment_terms_days = int(billing_settings.payment_terms_days)
+    overdue_fee = Decimal("15.00")
+    if billing_settings and billing_settings.overdue_fee:
+        overdue_fee = billing_settings.overdue_fee
+    jours_text = "jours" if payment_terms_days > 1 else "jour"
+
+    iban_value = None
+    if billing_settings and billing_settings.iban:
+        iban_value = billing_settings.iban
+    elif hasattr(company, "iban") and company.iban:
+        iban_value = company.iban
+
+    if display_reminder_level:
+        return _build_reminder_footer_message(reminder_ctx, invoice, iban_value)
+    if billing_settings and billing_settings.legal_footer:
+        raw_footer = _resolve_legal_footer_placeholders(
+            billing_settings.legal_footer,
+            payment_terms_days,
+            overdue_fee,
+            jours_text,
+        )
+        footer_message = _sanitize_legal_footer_for_iban(raw_footer)
+        if append_iban_if_missing and iban_value and "IBAN" not in footer_message:
+            footer_message += (
+                f"<br/>Paiement par virement bancaire : IBAN : {iban_value}"
+            )
+        return footer_message
+    footer_message = _build_default_legal_footer_html(
+        payment_terms_days, overdue_fee, iban_value
+    )
+    if not iban_value:
+        app_logger.warning(
+            "PDF: IBAN non affiché (absent ou illisible, ex. erreur déchiffrement)."
+        )
+    return footer_message
 
 
 def _normalize_address_for_comparison(address: str) -> str:
@@ -5403,30 +5755,39 @@ class PDFService:
         )
         story.append(detail_title)
         story.append(Spacer(1, 6))
-        story.append(s2_table)
-        # Légende A/R : même ordre que l'aperçu HTML (sous le tableau, avant remise globale / totaux).
+
+        # Pied de page : message + marge dynamique (STOP GATE PDF-FOOTER) avant pagination tableau.
+        footer_message = _resolve_invoice_pdf_footer_message(
+            invoice,
+            billing_settings,
+            reminder_ctx,
+            company,
+            display_reminder_level=display_reminder_level,
+        )
+        first_page_bottom_margin_cm = _compute_invoice_first_page_bottom_margin_cm(
+            footer_message,
+            contact_bar,
+            centered_style,
+            usable_width_pt,
+        )
+
+        post_table_flowables: list[Any] = []
         if _pdf_show_ar_legend(invoice, consolidated_lines, bookings_by_id):
             note_para = Paragraph(
                 f'<font size="{FONT_SECONDARY}" color="{COLOR_MUTED_PDF}">'
                 f"[A/R] = transport aller-retour</font>",
                 normal_style,
             )
-            story.append(Spacer(1, 8))
-            story.append(note_para)
-            story.append(Spacer(1, 6))
+            post_table_flowables.extend([Spacer(1, 8), note_para, Spacer(1, 6)])
         _gd_hint_std = _global_discount_hint_flowable(
             invoice, styles, font_name, content_width_pt=usable_width_pt
         )
         if _gd_hint_std is not None:
-            story.append(Spacer(1, 10))
-            story.append(_gd_hint_std)
-            story.append(Spacer(1, 9))
+            post_table_flowables.extend([Spacer(1, 10), _gd_hint_std, Spacer(1, 9)])
         else:
-            story.append(Spacer(1, 2))
-
-        # === TOTAL ===
+            post_table_flowables.append(Spacer(1, 2))
         if reminder_ctx.get("is_reminder"):
-            story.append(Spacer(1, 16))  # Respiration avant totaux (rappel)
+            post_table_flowables.append(Spacer(1, 16))
         _preview_tot_w = (
             INVOICE_PREVIEW_TOTALS_LABEL_CM + INVOICE_PREVIEW_TOTALS_AMOUNT_CM
         ) * cm
@@ -5441,11 +5802,7 @@ class PDFService:
                 ]
             )
         )
-        story.append(total_separator)
-        story.append(Spacer(1, 12))
-
-        # ✅ Utiliser toujours le format unifié pour les totaux (même libellé "TOTAL À FACTURER")
-        # ✅ Si mode rappel, ajouter la ligne de frais de rappel
+        post_table_flowables.extend([total_separator, Spacer(1, 12)])
         total_table = _build_totals_table(
             invoice,
             is_s2,
@@ -5458,58 +5815,17 @@ class PDFService:
             reminder_total_due=reminder_ctx.get("reminder_total_due"),
             reminder_principal=reminder_ctx.get("reminder_principal"),
         )
-        story.append(total_table)
-        story.append(Spacer(1, 30))
+        post_table_flowables.extend([total_table, Spacer(1, 30)])
+
+        _append_paginated_detail_table_with_tail(
+            story,
+            s2_table=s2_table,
+            post_table_flowables=post_table_flowables,
+            usable_width_pt=usable_width_pt,
+            first_page_bottom_margin_cm=first_page_bottom_margin_cm,
+        )
 
         # === PIED DE PAGE - NOTES DE FACTURATION ===
-
-        # Utiliser billing_settings passé en paramètre
-        # (déjà récupéré dans _create_invoice_pdf_content)
-
-        # Délai de paiement (par défaut 10 jours)
-        payment_terms_days = 10
-        if billing_settings and billing_settings.payment_terms_days:
-            payment_terms_days = int(billing_settings.payment_terms_days)
-
-        # Frais de retard (par défaut 15 CHF)
-        overdue_fee = Decimal("15.00")
-        if billing_settings and billing_settings.overdue_fee:
-            overdue_fee = billing_settings.overdue_fee
-
-        # Message de facturation avec valeurs dynamiques
-        jours_text = "jours" if payment_terms_days > 1 else "jour"
-
-        # Informations bancaires (récupérer depuis billing_settings ou company)
-        # En prod, si IBAN non lisible (déchiffrement invalide) : masquer, ne pas afficher "[IBAN non configuré]"
-        iban_value = None
-        if billing_settings and billing_settings.iban:
-            iban_value = billing_settings.iban
-        elif hasattr(company, "iban") and company.iban:
-            iban_value = company.iban
-
-        # Message du pied de page : en mode rappel, texte gradué selon le niveau.
-        if display_reminder_level:
-            footer_message = _build_reminder_footer_message(
-                reminder_ctx, invoice, iban_value
-            )
-        elif billing_settings and billing_settings.legal_footer:
-            raw_footer = _resolve_legal_footer_placeholders(
-                billing_settings.legal_footer,
-                payment_terms_days,
-                overdue_fee,
-                jours_text,
-            )
-            footer_message = _sanitize_legal_footer_for_iban(raw_footer)
-        else:
-            footer_message = _build_default_legal_footer_html(
-                payment_terms_days, overdue_fee, iban_value
-            )
-            if not iban_value:
-                app_logger.warning(
-                    "PDF (standard): IBAN non affiché (absent ou illisible, ex. erreur déchiffrement)."
-                )
-
-        # Pied de page légal : dessiné en zone fixe (marge inférieure), pas dans le flux
         mention = None
         footer_cb = _make_legal_footer_page_callback(
             footer_message,
@@ -5522,11 +5838,11 @@ class PDFService:
             footer_cb(canvas, doc)
             _on_first_page_debug_envelope(canvas, doc)
 
-        # Doc avec page QR-Bill dédiée (marge bas 2 cm, pas de pied légal)
+        # Doc avec page QR-Bill dédiée ; marge bas page 1 = hauteur pied légal mesurée.
         doc = _make_invoice_doc_with_qrbill_page(
             buffer,
             top_margin_cm=INVOICE_PAGE_TOP_MARGIN_CM,
-            bottom_margin_cm=INVOICE_PAGE_BOTTOM_MARGIN_FIRST_CM,
+            bottom_margin_cm=first_page_bottom_margin_cm,
             left_margin_cm=INVOICE_PAGE_LEFT_MARGIN_CM,
             right_margin_cm=INVOICE_PAGE_RIGHT_MARGIN_CM,
             on_first_page=_on_first_page,
@@ -5630,14 +5946,6 @@ class PDFService:
         font_name, font_name_bold = _ensure_dejavu_pdf_fonts()
 
         buffer = BytesIO()
-        doc = SimpleDocTemplate(
-            buffer,
-            pagesize=A4,
-            topMargin=1.5 * cm,
-            bottomMargin=2.5 * cm,  # Réserve espace pour pied de page légal
-            leftMargin=INVOICE_PAGE_LEFT_MARGIN_CM * cm,
-            rightMargin=INVOICE_PAGE_RIGHT_MARGIN_CM * cm,
-        )
 
         styles = getSampleStyleSheet()
         _min_lead = int(round(FONT_BODY * 1.3))
@@ -6109,19 +6417,29 @@ class PDFService:
                     ("LINEBELOW", (0, _r_m), (-1, _r_m), 0.35, _row_sep_m)
                 )
         services_table.setStyle(TableStyle(style_min_tbl))
-        story.append(services_table)
-        story.append(Spacer(1, 10))
 
-        # Aligné InvoiceLivePreview + templates standard/détaillé : encadré explicatif remise globale.
+        footer_message = _resolve_invoice_pdf_footer_message(
+            invoice,
+            billing_settings,
+            reminder_ctx,
+            company,
+            display_reminder_level=display_reminder_level,
+        )
+        first_page_bottom_margin_cm = _compute_invoice_first_page_bottom_margin_cm(
+            footer_message,
+            contact_bar_min,
+            centered_style,
+            usable_width_pt_min,
+        )
+
+        post_table_flowables_min: list[Any] = [Spacer(1, 10)]
         _gd_hint_min = _global_discount_hint_flowable(
             invoice, styles, font_name, content_width_pt=usable_width_pt_min
         )
         if _gd_hint_min is not None:
-            story.append(Spacer(1, 10))
-            story.append(_gd_hint_min)
-            story.append(Spacer(1, 9))
+            post_table_flowables_min.extend([Spacer(1, 10), _gd_hint_min, Spacer(1, 9)])
         else:
-            story.append(Spacer(1, 2))
+            post_table_flowables_min.append(Spacer(1, 2))
 
         # === TOTAL SIMPLIFIÉ ===
         # ✅ Mode rappel : mini-table (Sous-total facture + Frais + TOTAL)
@@ -6288,49 +6606,19 @@ class PDFService:
         )
         style_rules.append(("TOPPADDING", (0, -1), (-1, -1), 8))
         total_table.setStyle(TableStyle(style_rules))
-        story.append(total_table)
-        story.append(Spacer(1, 20))
+        post_table_flowables_min.extend([total_table, Spacer(1, 20)])
+
+        _append_paginated_detail_table_with_tail(
+            story,
+            s2_table=services_table,
+            post_table_flowables=post_table_flowables_min,
+            usable_width_pt=usable_width_pt_min,
+            first_page_bottom_margin_cm=first_page_bottom_margin_cm,
+            top_margin_cm=1.5,
+            later_bottom_margin_cm=first_page_bottom_margin_cm,
+        )
 
         # === PIED DE PAGE SIMPLIFIÉ ===
-        payment_terms_days = 10
-        if billing_settings and billing_settings.payment_terms_days:
-            payment_terms_days = int(billing_settings.payment_terms_days)
-        overdue_fee = Decimal("15.00")
-        if billing_settings and billing_settings.overdue_fee:
-            overdue_fee = billing_settings.overdue_fee
-        jours_text = "jours" if payment_terms_days > 1 else "jour"
-
-        if is_reminder:
-            footer_message = _build_reminder_footer_message(
-                reminder_ctx,
-                invoice,
-                billing_settings.iban
-                if billing_settings and billing_settings.iban
-                else None,
-            )
-        elif billing_settings and billing_settings.legal_footer:
-            raw_footer = _resolve_legal_footer_placeholders(
-                billing_settings.legal_footer,
-                payment_terms_days,
-                overdue_fee,
-                jours_text,
-            )
-            footer_message = _sanitize_legal_footer_for_iban(raw_footer)
-        else:
-            iban_value_min = (
-                billing_settings.iban
-                if billing_settings and billing_settings.iban
-                else None
-            )
-            footer_message = _build_default_legal_footer_html(
-                payment_terms_days, overdue_fee, iban_value_min
-            )
-            if not iban_value_min:
-                app_logger.warning(
-                    "PDF (minimal): IBAN non affiché (absent ou illisible, ex. erreur déchiffrement)."
-                )
-
-        # Pied de page légal : dessiné en zone fixe (marge inférieure)
         mention = None
         footer_cb_min = _make_legal_footer_page_callback(
             footer_message,
@@ -6362,6 +6650,14 @@ class PDFService:
         except Exception as e:
             app_logger.warning("Impossible de générer le QR-Bill: %s", e)
 
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=A4,
+            topMargin=1.5 * cm,
+            bottomMargin=first_page_bottom_margin_cm * cm,
+            leftMargin=INVOICE_PAGE_LEFT_MARGIN_CM * cm,
+            rightMargin=INVOICE_PAGE_RIGHT_MARGIN_CM * cm,
+        )
         doc.build(story, onFirstPage=_on_first_page_min)
         buffer.seek(0)
         nb_rows_min = len(invoice.lines) if getattr(invoice, "lines", None) else 0
@@ -6857,28 +7153,37 @@ class PDFService:
         )
         story.append(detail_title_d)
         story.append(Spacer(1, 6))
-        story.append(s2_table)
-        # Légende A/R : même ordre que l'aperçu HTML (sous le tableau, avant remise globale / totaux).
+
+        footer_message = _resolve_invoice_pdf_footer_message(
+            invoice,
+            billing_settings,
+            reminder_ctx,
+            company,
+            display_reminder_level=display_reminder_level,
+            append_iban_if_missing=True,
+        )
+        first_page_bottom_margin_cm = _compute_invoice_first_page_bottom_margin_cm(
+            footer_message,
+            contact_bar_det,
+            centered_style,
+            usable_width_pt,
+        )
+
+        post_table_flowables_d: list[Any] = []
         if _pdf_show_ar_legend(invoice, consolidated_lines, bookings_by_id):
             note_para = Paragraph(
                 f'<font size="{FONT_SECONDARY}" color="{COLOR_MUTED_PDF}">'
                 f"[A/R] = transport aller-retour</font>",
                 normal_style,
             )
-            story.append(Spacer(1, 8))
-            story.append(note_para)
-            story.append(Spacer(1, 6))
+            post_table_flowables_d.extend([Spacer(1, 8), note_para, Spacer(1, 6)])
         _gd_hint_d = _global_discount_hint_flowable(
             invoice, styles, font_name, content_width_pt=usable_width_pt
         )
         if _gd_hint_d is not None:
-            story.append(Spacer(1, 10))
-            story.append(_gd_hint_d)
-            story.append(Spacer(1, 9))
+            post_table_flowables_d.extend([Spacer(1, 10), _gd_hint_d, Spacer(1, 9)])
         else:
-            story.append(Spacer(1, 2))
-
-        # === TOTAL DÉTAILLÉ ===
+            post_table_flowables_d.append(Spacer(1, 2))
         _preview_tot_w_d = (
             INVOICE_PREVIEW_TOTALS_LABEL_CM + INVOICE_PREVIEW_TOTALS_AMOUNT_CM
         ) * cm
@@ -6893,13 +7198,9 @@ class PDFService:
                 ]
             )
         )
-        story.append(total_separator)
-        story.append(Spacer(1, 12))
-
-        # ✅ Utiliser toujours le format unifié pour les totaux (même libellé "TOTAL À FACTURER")
-        # ✅ Si mode rappel, ajouter la ligne de frais de rappel
+        post_table_flowables_d.extend([total_separator, Spacer(1, 12)])
         if reminder_ctx.get("is_reminder"):
-            story.append(Spacer(1, 16))  # Respiration avant totaux (rappel)
+            post_table_flowables_d.append(Spacer(1, 16))
         total_table = _build_totals_table(
             invoice,
             is_s2,
@@ -6912,61 +7213,27 @@ class PDFService:
             reminder_total_due=reminder_ctx.get("reminder_total_due"),
             reminder_principal=reminder_ctx.get("reminder_principal"),
         )
-        story.append(total_table)
-        story.append(Spacer(1, 30))
-
-        # === NOTES ET INFORMATIONS SUPPLÉMENTAIRES ===
+        post_table_flowables_d.extend([total_table, Spacer(1, 30)])
         if invoice.notes:
-            story.append(Paragraph("<b>Notes :</b>", normal_style))
-            story.append(
-                Paragraph(
-                    _reportlab_multiline_plain_to_html(invoice.notes), detail_style
-                )
+            post_table_flowables_d.extend(
+                [
+                    Paragraph("<b>Notes :</b>", normal_style),
+                    Paragraph(
+                        _reportlab_multiline_plain_to_html(invoice.notes), detail_style
+                    ),
+                    Spacer(1, 15),
+                ]
             )
-            story.append(Spacer(1, 15))
+
+        _append_paginated_detail_table_with_tail(
+            story,
+            s2_table=s2_table,
+            post_table_flowables=post_table_flowables_d,
+            usable_width_pt=usable_width_pt,
+            first_page_bottom_margin_cm=first_page_bottom_margin_cm,
+        )
 
         # === PIED DE PAGE DÉTAILLÉ ===
-        payment_terms_days = 10
-        if billing_settings and billing_settings.payment_terms_days:
-            payment_terms_days = int(billing_settings.payment_terms_days)
-
-        overdue_fee = Decimal("15.00")
-        if billing_settings and billing_settings.overdue_fee:
-            overdue_fee = billing_settings.overdue_fee
-
-        jours_text = "jours" if payment_terms_days > 1 else "jour"
-        iban_value = None
-        if billing_settings and billing_settings.iban:
-            iban_value = billing_settings.iban
-        elif hasattr(company, "iban") and company.iban:
-            iban_value = company.iban
-
-        if display_reminder_level:
-            footer_message = _build_reminder_footer_message(
-                reminder_ctx, invoice, iban_value
-            )
-        elif billing_settings and billing_settings.legal_footer:
-            raw_footer = _resolve_legal_footer_placeholders(
-                billing_settings.legal_footer,
-                payment_terms_days,
-                overdue_fee,
-                jours_text,
-            )
-            footer_message = _sanitize_legal_footer_for_iban(raw_footer)
-            if iban_value and "IBAN" not in footer_message:
-                footer_message += (
-                    f"<br/>Paiement par virement bancaire : IBAN : {iban_value}"
-                )
-        else:
-            footer_message = _build_default_legal_footer_html(
-                payment_terms_days, overdue_fee, iban_value
-            )
-            if not iban_value:
-                app_logger.warning(
-                    "PDF (detailed): IBAN non affiché (absent ou illisible, ex. erreur déchiffrement)."
-                )
-
-        # Pied de page légal : dessiné en zone fixe (marge inférieure)
         mention = None
         footer_cb_det = _make_legal_footer_page_callback(
             footer_message,
@@ -7010,7 +7277,7 @@ class PDFService:
         doc = _make_invoice_doc_with_qrbill_page(
             buffer,
             top_margin_cm=INVOICE_PAGE_TOP_MARGIN_CM,
-            bottom_margin_cm=INVOICE_PAGE_BOTTOM_MARGIN_FIRST_CM,
+            bottom_margin_cm=first_page_bottom_margin_cm,
             left_margin_cm=INVOICE_PAGE_LEFT_MARGIN_CM,
             right_margin_cm=INVOICE_PAGE_RIGHT_MARGIN_CM,
             on_first_page=_on_first_page_det,

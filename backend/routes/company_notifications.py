@@ -13,7 +13,7 @@ from datetime import UTC, datetime, timedelta
 
 from flask import abort
 from flask import request as flask_request
-from flask_jwt_extended import get_jwt, verify_jwt_in_request
+from flask_jwt_extended import get_jwt, jwt_required
 from flask_jwt_extended.exceptions import JWTExtendedException
 from flask_restx import Namespace, Resource
 from jwt.exceptions import PyJWTError
@@ -31,17 +31,7 @@ company_notifications_ns = Namespace(
 
 
 def _get_company_id() -> int:
-    """Extrait le company_id du JWT.
-
-    Un token absent/expiré/invalide doit renvoyer 401 (et non 500). On intercepte
-    explicitement les exceptions JWT car la collecte se fait dans un bloc try/except
-    générique des routes qui, sinon, les transforme en 500 « Erreur serveur ».
-    """
-    try:
-        verify_jwt_in_request()
-    except (JWTExtendedException, PyJWTError) as exc:
-        logger.info("[CompanyNotifications] JWT invalide ou expiré: %s", exc)
-        abort(401, description="Token invalide ou expiré")
+    """Extrait le company_id du JWT (auth vérifiée par @jwt_required())."""
     claims = get_jwt()
     company_id = claims.get("company_id")
     if not company_id:
@@ -49,10 +39,19 @@ def _get_company_id() -> int:
     return int(company_id)
 
 
+def _reraise_auth_errors(exc: Exception) -> None:
+    """Ne pas transformer les erreurs JWT/auth en 500 ni les remonter à Sentry."""
+    if isinstance(exc, (JWTExtendedException, PyJWTError)):
+        raise exc
+    if hasattr(exc, "code"):
+        raise exc
+
+
 @company_notifications_ns.route("")
 class CompanyNotificationList(Resource):
     """Liste des notifications de l'entreprise."""
 
+    @jwt_required()
     def get(self):
         """Retourne les notifications: dernières 24h + non lues."""
         try:
@@ -90,8 +89,7 @@ class CompanyNotificationList(Resource):
             }
 
         except Exception as e:
-            if hasattr(e, "code"):
-                raise
+            _reraise_auth_errors(e)
             logger.exception("[CompanyNotifications] GET error: %s", e)
             return {"error": "Erreur serveur"}, 500
 
@@ -100,6 +98,7 @@ class CompanyNotificationList(Resource):
 class CompanyNotificationRead(Resource):
     """Marquer une notification comme lue."""
 
+    @jwt_required()
     def put(self, notification_id):
         """Marque la notification comme lue."""
         try:
@@ -120,8 +119,7 @@ class CompanyNotificationRead(Resource):
 
         except Exception as e:
             db.session.rollback()
-            if hasattr(e, "code"):
-                raise
+            _reraise_auth_errors(e)
             logger.exception("[CompanyNotifications] PUT read error: %s", e)
             return {"error": "Erreur serveur"}, 500
 
@@ -130,6 +128,7 @@ class CompanyNotificationRead(Resource):
 class CompanyNotificationReadAll(Resource):
     """Marquer toutes les notifications comme lues."""
 
+    @jwt_required()
     def put(self):
         """Marque toutes les notifications non-lues comme lues."""
         try:
@@ -144,7 +143,6 @@ class CompanyNotificationReadAll(Resource):
 
         except Exception as e:
             db.session.rollback()
-            if hasattr(e, "code"):
-                raise
+            _reraise_auth_errors(e)
             logger.exception("[CompanyNotifications] PUT read-all error: %s", e)
             return {"error": "Erreur serveur"}, 500

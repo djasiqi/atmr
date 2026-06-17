@@ -277,6 +277,11 @@ class MessageHubMarkRead(Resource):
                 if conv:
                     updated = ConversationService.mark_read(conv, user)
                     return {"thread_id": thread_id, "marked_read": updated}, 200
+        except PermissionError:
+            logger.info(
+                "mark_read refusé (permissions), fallback legacy thread_id=%s",
+                thread_id,
+            )
         except Exception:
             logger.exception("mark_read conversation fallback")
 

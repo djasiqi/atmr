@@ -13,28 +13,68 @@ _DROP_EXCEPTION_TYPES = frozenset(
     {"ExpiredSignatureError", "NoAuthorizationError", "InvalidHeaderError"}
 )
 
+# Déconnexion WebSocket gevent (normal) — ne pas alerter Sentry sur /socket.io/
+_SOCKET_IO_BENIGN_EXC = frozenset({"StopIteration", "GreenletExit"})
+
+# Concurrence gevent sur sockets partagés (client déconnecté, pas de requête HTTP lue)
+_GEVENT_INFRA_EXC = frozenset({"ConcurrentObjectUseError"})
+
 _KAFKA_ERROR_TYPES = frozenset(
     {"NoBrokersAvailable", "KafkaTimeoutError", "KafkaConnectionError"}
 )
 
 
+def _is_socket_io_benign_disconnect(
+    event: dict[str, Any], exc_type: type[BaseException] | None
+) -> bool:
+    if exc_type is None or exc_type.__name__ not in _SOCKET_IO_BENIGN_EXC:
+        return False
+    req_url = (event.get("request") or {}).get("url", "")
+    return "/socket.io/" in req_url
+
+
+def _is_gevent_infrastructure_noise(
+    event: dict[str, Any],
+    exc_type: type[BaseException] | None,
+    message: str,
+) -> bool:
+    if exc_type is not None:
+        if exc_type.__name__ in _GEVENT_INFRA_EXC:
+            return True
+        if _is_socket_io_benign_disconnect(event, exc_type):
+            return True
+    if "already used by another greenlet" in message:
+        return True
+    if "Error handling request (no URI read)" in message:
+        return True
+    return False
+
+
 def before_send(event: dict[str, Any], hint: dict[str, Any] | None) -> dict[str, Any] | None:
-    """Filtre le bruit Sentry (JWT expirés, StopIteration Socket.IO)."""
+    """Filtre le bruit Sentry (JWT expirés, déconnexions / concurrence gevent)."""
     exc_info = hint.get("exc_info") if hint else None
-    if not exc_info:
-        return event
+    logentry = event.get("logentry") or {}
+    message = str(logentry.get("message") or event.get("message") or "")
 
-    exc_type = exc_info[0]
-    if exc_type is None:
-        return event
+    if exc_info:
+        exc_type = exc_info[0]
+        if exc_type is not None and exc_type.__name__ in _DROP_EXCEPTION_TYPES:
+            return None
+        if _is_gevent_infrastructure_noise(event, exc_type, message):
+            return None
 
-    if exc_type.__name__ in _DROP_EXCEPTION_TYPES:
+    # logger.exception() sur routes notifications : JWT expiré remonté comme erreur 500
+    if "Signature has expired" in message and (
+        "InstitutionNotifications" in message or "CompanyNotifications" in message
+    ):
+        return None
+    if "Accès conversation refusé" in message and (
+        "mark_read" in message or "messages_hub" in message
+    ):
         return None
 
-    if exc_type is StopIteration:
-        req_url = (event.get("request") or {}).get("url", "")
-        if "/socket.io/" in req_url:
-            return None
+    if _is_gevent_infrastructure_noise(event, None, message):
+        return None
 
     return event
 

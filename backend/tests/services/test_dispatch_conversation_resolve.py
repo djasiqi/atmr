@@ -25,6 +25,20 @@ def test_resolve_by_legacy_thread_prefers_canonical_dispatch():
     ensure_mock.assert_called_once_with(1)
 
 
+def test_resolve_by_legacy_thread_team_uses_ensure():
+    canonical = MagicMock()
+    canonical.id = 4
+
+    with patch(
+        "services.messaging.conversation_service.ConversationService.ensure_company_group_conversation",
+        return_value=canonical,
+    ) as ensure_mock:
+        result = ConversationService.resolve_by_legacy_thread(1, "team", driver=None)
+
+    assert result is canonical
+    ensure_mock.assert_called_once_with(1)
+
+
 def test_dedupe_dispatch_rows_prefers_canonical_conversation_id():
     canonical = MagicMock()
     canonical.id = 18

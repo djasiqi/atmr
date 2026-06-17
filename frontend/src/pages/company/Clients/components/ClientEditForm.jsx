@@ -339,6 +339,9 @@ const ClientEditForm = ({
       ...prev,
       [name]: finalValue,
     }));
+    if (['domicile_address', 'domicile_zip', 'domicile_city'].includes(name)) {
+      setDomicileCoords({ lat: null, lon: null });
+    }
     if (['phone', 'contact_phone', 'gp_phone'].includes(name) && fieldErrors[name]) {
       setFieldErrors((prev) => ({ ...prev, [name]: null }));
     }
@@ -842,9 +845,11 @@ const ClientEditForm = ({
                   <input
                     type="text"
                     id="domicile_address_street"
+                    name="domicile_address"
                     value={formData.domicile_address}
+                    onChange={handleChange}
                     className={styles.input}
-                    readOnly
+                    placeholder="Ex: Route de Veigy 127"
                     disabled={loading}
                   />
                 </div>
@@ -853,9 +858,11 @@ const ClientEditForm = ({
                   <input
                     type="text"
                     id="domicile_zip"
+                    name="domicile_zip"
                     value={formData.domicile_zip}
+                    onChange={handleChange}
                     className={styles.input}
-                    readOnly
+                    placeholder="Ex: 74140"
                     disabled={loading}
                   />
                 </div>
@@ -864,9 +871,11 @@ const ClientEditForm = ({
                   <input
                     type="text"
                     id="domicile_city"
+                    name="domicile_city"
                     value={formData.domicile_city}
+                    onChange={handleChange}
                     className={styles.input}
-                    readOnly
+                    placeholder="Ex: Gy"
                     disabled={loading}
                   />
                 </div>

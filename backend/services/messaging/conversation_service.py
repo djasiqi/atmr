@@ -171,6 +171,7 @@ class ConversationService:
             legacy_thread_id=company_group_legacy_thread_id(),
         ).first()
         if existing:
+            ConversationService._sync_dispatch_driver_participants(existing, company_id)
             return existing
 
         conv = Conversation(
@@ -1216,6 +1217,9 @@ class ConversationService:
         if thread_id == company_dispatch_legacy_thread_id():
             return ConversationService.ensure_company_dispatch_conversation(company_id)
 
+        if thread_id == company_group_legacy_thread_id():
+            return ConversationService.ensure_company_group_conversation(company_id)
+
         conv = Conversation.query.filter_by(
             company_id=company_id, legacy_thread_id=thread_id
         ).first()
@@ -1235,8 +1239,6 @@ class ConversationService:
                 return ConversationService.ensure_company_driver_conversation(
                     company_id, driver
                 )
-        if thread_id == company_group_legacy_thread_id():
-            return ConversationService.ensure_company_group_conversation(company_id)
         if thread_id == THREAD_SUPPORT:
             return None
         return None

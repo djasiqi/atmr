@@ -13,7 +13,7 @@ from datetime import UTC, datetime, timedelta
 
 from flask import abort
 from flask import request as flask_request
-from flask_jwt_extended import get_jwt, verify_jwt_in_request
+from flask_jwt_extended import get_jwt, jwt_required
 from flask_jwt_extended.exceptions import JWTExtendedException
 from flask_restx import Namespace, Resource, fields
 from jwt.exceptions import PyJWTError
@@ -32,22 +32,20 @@ institution_notifications_ns = Namespace(
 
 
 def _get_institution_id() -> int:
-    """Extrait l'institution_id du JWT.
-
-    Un token absent/expiré/invalide doit renvoyer 401 (et non 500). On intercepte
-    explicitement les exceptions JWT car la collecte se fait dans un bloc try/except
-    générique des routes qui, sinon, les transforme en 500 « Erreur serveur ».
-    """
-    try:
-        verify_jwt_in_request()
-    except (JWTExtendedException, PyJWTError) as exc:
-        logger.info("[InstitutionNotifications] JWT invalide ou expiré: %s", exc)
-        abort(401, description="Token invalide ou expiré")
+    """Extrait l'institution_id du JWT (auth vérifiée par @jwt_required())."""
     claims = get_jwt()
     institution_id = claims.get("institution_id")
     if not institution_id:
         abort(403, description="Accès réservé aux utilisateurs institution")
     return int(institution_id)
+
+
+def _reraise_auth_errors(exc: Exception) -> None:
+    """Ne pas transformer les erreurs JWT/auth en 500 ni les remonter à Sentry."""
+    if isinstance(exc, (JWTExtendedException, PyJWTError)):
+        raise exc
+    if hasattr(exc, "code"):
+        raise exc
 
 
 # ── Swagger models ──────────────────────────────────────────────────────────
@@ -92,6 +90,7 @@ class NotificationList(Resource):
         },
     )
     @institution_notifications_ns.response(200, "Succès", notifications_list_model)
+    @jwt_required()
     def get(self):
         """Retourne les notifications: dernières 24h + non lues (même anciennes)."""
         try:
@@ -131,8 +130,7 @@ class NotificationList(Resource):
             }
 
         except Exception as e:
-            if hasattr(e, "code"):
-                raise
+            _reraise_auth_errors(e)
             logger.exception("[InstitutionNotifications] GET error: %s", e)
             return {"error": "Erreur serveur"}, 500
 
@@ -145,6 +143,7 @@ class NotificationRead(Resource):
         description="Marquer une notification comme lue",
         security="BearerAuth",
     )
+    @jwt_required()
     def put(self, notification_id):
         """Marque la notification comme lue."""
         try:
@@ -165,8 +164,7 @@ class NotificationRead(Resource):
 
         except Exception as e:
             db.session.rollback()
-            if hasattr(e, "code"):
-                raise
+            _reraise_auth_errors(e)
             logger.exception("[InstitutionNotifications] PUT read error: %s", e)
             return {"error": "Erreur serveur"}, 500
 
@@ -179,6 +177,7 @@ class NotificationReadAll(Resource):
         description="Marquer toutes les notifications comme lues",
         security="BearerAuth",
     )
+    @jwt_required()
     def put(self):
         """Marque toutes les notifications non-lues comme lues."""
         try:
@@ -199,7 +198,6 @@ class NotificationReadAll(Resource):
 
         except Exception as e:
             db.session.rollback()
-            if hasattr(e, "code"):
-                raise
+            _reraise_auth_errors(e)
             logger.exception("[InstitutionNotifications] PUT read-all error: %s", e)
             return {"error": "Erreur serveur"}, 500
