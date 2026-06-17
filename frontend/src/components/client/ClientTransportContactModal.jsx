@@ -3,16 +3,9 @@ import { createPortal } from 'react-dom';
 import BookingChat from '../../pages/company/Reservations/components/BookingChat';
 import { ensureClientPortalSocket } from '../../services/clientPortalSocket';
 import { fetchBookingMessagesForClient, sendBookingMessageAsClient } from '../../services/bookingService';
+import { isBookingChatClosed } from '../../utils/bookingChat';
+import { isBookingChatClosed } from '../../../utils/bookingChat';
 import styles from '../../pages/client/Reservations/Reservations.module.css';
-
-function normalizeStatus(s) {
-  return String(s || '').toLowerCase();
-}
-
-function isChatClosedForBooking(booking) {
-  const st = normalizeStatus(booking?.status);
-  return ['completed', 'return_completed', 'canceled', 'cancelled'].includes(st);
-}
 
 /**
  * Modal « Contacter le transporteur » : numéro affiché + mini-chat (si entreprise retenue).
@@ -44,7 +37,7 @@ export default function ClientTransportContactModal({ booking, open, onClose, on
   const rawPhone = String(booking.company_contact_phone || '').replace(/\s/g, '');
   const hasDialablePhone = rawPhone.length >= 8 && /^\+?\d/.test(rawPhone);
   const hasCompany = Boolean(booking.company_id);
-  const chatClosed = isChatClosedForBooking(booking);
+  const chatClosed = isBookingChatClosed(booking);
   const showChat = hasCompany && !chatClosed;
 
   return createPortal(

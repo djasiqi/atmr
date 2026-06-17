@@ -47,6 +47,7 @@ import { getInstitutionSocket } from '../../../services/institutionSocket';
 import { fetchBookingMessages, sendBookingMessage, exportRequestMissionPdf } from '../../../services/institutionService';
 import { buildCarrierMailto } from '../../../utils/externalCarrierEmail';
 import BookingChat from '../../company/Reservations/components/BookingChat';
+import { isBookingChatClosed } from '../../../utils/bookingChat';
 import ExternalCarrierFields, {
   EMPTY_EXTERNAL_CARRIER_FORM,
   validateExternalCarrierForm,
@@ -1458,7 +1459,7 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
             socket={institutionSocket}
             fetchMessages={shouldUseDemoChat ? demoFetchMessages : fetchBookingMessages}
             sendMessage={shouldUseDemoChat ? demoSendMessage : sendBookingMessage}
-            closed={['COMPLETED', 'RETURN_COMPLETED', 'CANCELED'].includes(resolveBookingStatusKey(bs))}
+            closed={isBookingChatClosed(bs)}
           />
         )}
 

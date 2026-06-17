@@ -673,11 +673,12 @@ class TransportRequest(db.Model):
         except Exception:
             summary["route_journey"] = None
 
-        # A/R : agréger le retour via la relationship return_trip
-        if self.is_round_trip and getattr(booking, "return_trip", None):
-            from shared.time_utils import mission_scheduled_to_api_iso
+        # A/R : agréger le retour (query explicite — return_trip pointe vers le parent)
+        from services.booking.return_booking_resolver import resolve_return_child_booking
 
-            ret = booking.return_trip
+        ret = resolve_return_child_booking(booking) if self.is_round_trip else None
+        if self.is_round_trip and ret is not None:
+            from shared.time_utils import mission_scheduled_to_api_iso
             ret_status = _status_value(ret.status)
             summary["return_booking"] = {
                 "id": ret.id,

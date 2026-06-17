@@ -13,6 +13,7 @@ import InlineTimePicker from '../../../../components/ui/InlineTimePicker';
 import useCompanySocket from '../../../../hooks/useCompanySocket';
 import { toast } from 'sonner';
 import BookingChat from './BookingChat';
+import { isBookingChatClosed } from '../../../../utils/bookingChat';
 import { buildIdentityFromApi } from '../../../../utils/bookingIdentity';
 import { getBookingSourceMeta } from '../../../../constants/bookingSourceLabels';
 import {
@@ -1580,7 +1581,7 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onRese
               <BookingChat
                 bookingId={chatBookingId}
                 socket={companySocket}
-                closed={['completed', 'return_completed', 'canceled', 'cancelled'].includes(status)}
+                closed={isBookingChatClosed(reservation)}
               />
             )}
 

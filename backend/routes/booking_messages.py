@@ -24,6 +24,7 @@ from models.client import Client
 from models.enums import TransferStatus, UserRole
 from models.transport_request import TransportRequest
 from models.user import User
+from services.booking.return_booking_resolver import resolve_return_child_booking
 
 MAX_MESSAGE_LENGTH = 500
 
@@ -52,10 +53,16 @@ def _is_conversation_closed(booking: Booking) -> bool:
     - thread unifié sur l'aller (booking parent)
     - tant que le retour existe ET n'est pas terminal, la conversation reste ouverte
     """
-    return_trip = getattr(booking, "return_trip", None)
-    if return_trip is not None:
-        return_status = _normalize_booking_status(getattr(return_trip, "status", None))
+    return_booking = resolve_return_child_booking(booking)
+    if return_booking is not None:
+        return_status = _normalize_booking_status(
+            getattr(return_booking, "status", None)
+        )
         return return_status in TERMINAL_BOOKING_STATUSES
+
+    # A/R prévu sans segment retour encore créé : fil encore ouvert.
+    if bool(getattr(booking, "is_round_trip", False)):
+        return False
 
     status = _normalize_booking_status(getattr(booking, "status", None))
     return status in TERMINAL_BOOKING_STATUSES
