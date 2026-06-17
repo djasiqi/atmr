@@ -28,6 +28,7 @@ export default function BookingChat({
   const [sending, setSending] = useState(false);
   const [text, setText] = useState('');
   const [unavailable, setUnavailable] = useState(false);
+  const [apiClosed, setApiClosed] = useState(null);
   // booking_id canonique du fil (A/R + multi-étapes unifiés côté backend).
   const [threadBookingId, setThreadBookingId] = useState(bookingId);
   const messagesEndRef = useRef(null);
@@ -54,12 +55,16 @@ export default function BookingChat({
 
     const load = async () => {
       setLoading(true);
+      setApiClosed(null);
       try {
         const data = await fetchMessagesApi(bookingId);
         if (!cancelled) {
           setMessages(data.messages || []);
           setHasMore(data.has_more || false);
           if (data.booking_id) setThreadBookingId(data.booking_id);
+          if (typeof data.conversation_closed === 'boolean') {
+            setApiClosed(data.conversation_closed);
+          }
           setTimeout(scrollToBottom, 50);
         }
       } catch (err) {
@@ -148,6 +153,8 @@ export default function BookingChat({
     }
   }, [messages, hasMore, bookingId, fetchMessagesApi]);
 
+  const isClosed = apiClosed !== null ? apiClosed : closed;
+
   // Format timestamp HH:mm
   const fmtTime = (iso) => {
     if (!iso) return '';
@@ -219,7 +226,7 @@ export default function BookingChat({
             <div ref={messagesEndRef} />
           </div>
 
-          {closed ? (
+          {isClosed ? (
             <div className={s.closedBar}>Transport terminé — conversation clôturée</div>
           ) : (
             <div className={s.inputBar}>
