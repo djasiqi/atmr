@@ -4,7 +4,6 @@ import BookingChat from '../../pages/company/Reservations/components/BookingChat
 import { ensureClientPortalSocket } from '../../services/clientPortalSocket';
 import { fetchBookingMessagesForClient, sendBookingMessageAsClient } from '../../services/bookingService';
 import { isBookingChatClosed } from '../../utils/bookingChat';
-import { isBookingChatClosed } from '../../../utils/bookingChat';
 import styles from '../../pages/client/Reservations/Reservations.module.css';
 
 /**
