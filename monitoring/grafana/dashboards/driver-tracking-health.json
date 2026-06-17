@@ -157,6 +157,34 @@
       ],
       "title": "Dual-write mismatches",
       "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 32 },
+      "id": 11,
+      "targets": [
+        {
+          "expr": "sum(rate(driver_location_processed_total{accept_reason=\"mission_live_missing_mission_id\"}[5m]))",
+          "legendFormat": "missing mission_id/s"
+        }
+      ],
+      "title": "mission_live sans mission_id (doit être 0 post-P0-C)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": { "defaults": { "unit": "percentunit" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 32 },
+      "id": 12,
+      "targets": [
+        {
+          "expr": "sum(rate(driver_location_processed_total{accept_status=\"accepted_observability_only\"}[5m])) / clamp_min(sum(rate(driver_location_processed_total[5m])), 0.001)",
+          "legendFormat": "observability only"
+        }
+      ],
+      "title": "Ratio positions observability_only",
+      "type": "stat"
     }
   ],
   "refresh": "30s",

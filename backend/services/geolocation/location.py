@@ -234,6 +234,8 @@ class LocationService:
         normalized_mode = (
             normalize_location_mode(location_mode) if v21_enabled else "mission_live"
         )
+        if normalized_mode == "mission_live" and mission_id is None:
+            normalized_mode = "availability_presence"
         degraded_context = normalized_mode == "mission_live" and mission_id is None
 
         # 1. Validation

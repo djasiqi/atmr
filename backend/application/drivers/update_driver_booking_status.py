@@ -301,6 +301,25 @@ class UpdateDriverBookingStatusUseCase:
                                 "system message arrived failed booking_id=%s",
                                 booking.id,
                             )
+                        try:
+                            from services.dispatch.assignment_status_sync import (
+                                sync_assignment_from_driver_transition,
+                            )
+
+                            if sync_assignment_from_driver_transition(
+                                booking_id=booking.id,
+                                driver_id=cmd.driver_id,
+                                transition="arrived",
+                                assignment_repo=self._assignment_repo,
+                                now_utc=self._now_utc(),
+                            ):
+                                self._db.commit()
+                        except Exception:
+                            logger.exception(
+                                "[UpdateDriverBookingStatus] assignment_status_sync "
+                                "arrived failed booking_id=%s",
+                                booking.id,
+                            )
                     else:
                         logger.info(
                             "invalid_transition arrived booking_id=%s current=%s",
@@ -765,6 +784,28 @@ class UpdateDriverBookingStatusUseCase:
                 status_after=status_val_after,
                 new_status_str=locals().get("new_status_str"),
             )
+
+            transition_for_sync = locals().get("new_status_str")
+            if transition_for_sync:
+                try:
+                    from services.dispatch.assignment_status_sync import (
+                        sync_assignment_from_driver_transition,
+                    )
+
+                    sync_assignment_from_driver_transition(
+                        booking_id=booking.id,
+                        driver_id=cmd.driver_id,
+                        transition=str(transition_for_sync),
+                        assignment_repo=self._assignment_repo,
+                        now_utc=now_ts,
+                    )
+                except Exception:
+                    logger.exception(
+                        "[UpdateDriverBookingStatus] assignment_status_sync failed "
+                        "booking_id=%s transition=%s",
+                        booking.id,
+                        transition_for_sync,
+                    )
 
             self._db.commit()
             try:

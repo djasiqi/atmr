@@ -5,7 +5,7 @@ export const STALE_SECONDS_THRESHOLD = 120;
 /** Diamètre pastille chauffeur carte flotte (identique natif et variante navigateur). */
 export const FLEET_DRIVER_MARKER_DISC_DP = 22;
 
-export type CompanyDriverMapCategory = "available" | "en_mission" | "offline";
+export type CompanyDriverMapCategory = "available" | "en_mission" | "last_known" | "offline";
 
 /** Pastilles carte flotte — alignées sur la charte Lirie (cf. portail CRA `STATUS_COLORS`). */
 export const DRIVER_FLEET_MARKER_PALETTE: Record<
@@ -14,6 +14,7 @@ export const DRIVER_FLEET_MARKER_PALETTE: Record<
 > = {
   available: { fill: "#00796B", pinScale: 1.05, label: "Disponible" },
   en_mission: { fill: "#3B82F6", pinScale: 1, label: "En mission" },
+  last_known: { fill: "#cbd5e1", pinScale: 0.95, label: "Dernière position connue" },
   offline: { fill: "#94a3b8", pinScale: 0.9, label: "Position périmée ou hors ligne" },
 };
 
@@ -21,6 +22,7 @@ export function resolveDriverStatus(
   driver: CompanyDriverLiveLocation,
   options?: { hasActiveMission?: boolean }
 ): CompanyDriverMapCategory {
+  if (driver.location_status === "last_known") return "last_known";
   if (isDriverPositionStale(driver)) return "offline";
   if (options?.hasActiveMission === false) return "available";
   if (driver.mission_id != null) return "en_mission";
@@ -87,6 +89,7 @@ export function driverFleetMarkerDescription(driver: CompanyDriverLiveLocation):
 }
 
 export function isDriverPositionStale(driver: CompanyDriverLiveLocation): boolean {
+  if (driver.location_status === "last_known") return false;
   const lastSeen = Number(driver.last_seen_seconds);
   const byAge = Number.isFinite(lastSeen) && lastSeen > STALE_SECONDS_THRESHOLD;
   const byStatus = driver.location_status === "stale" || driver.location_status === "offline";

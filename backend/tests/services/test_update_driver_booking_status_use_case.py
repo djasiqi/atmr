@@ -9,7 +9,7 @@ from application.drivers.update_driver_booking_status import (
     UpdateDriverBookingStatusUseCase,
 )
 from models import BookingStatus
-from models.enums import CancelReason
+from models.enums import AssignmentStatus, CancelReason
 
 
 @dataclass
@@ -58,6 +58,9 @@ class _BookingRepo:
 @dataclass
 class _Assignment:
     id: int
+    booking_id: int = 1
+    driver_id: int | None = 10
+    status: AssignmentStatus = AssignmentStatus.SCHEDULED
 
 
 class _AssignmentRepo:
@@ -110,7 +113,7 @@ def test_release_cancels_assignment_and_triggers_dispatch() -> None:
     from unittest.mock import patch
 
     booking = _Booking(id=1, company_id=7, driver_id=10, status=BookingStatus.ASSIGNED)
-    assignment = _Assignment(id=123)
+    assignment = _Assignment(id=123, booking_id=1, driver_id=10)
     db = _Db()
     events: dict[str, Any] = {"emit": 0, "trigger": 0}
 
@@ -166,7 +169,7 @@ def test_release_accepts_legacy_reason_alias() -> None:
     from unittest.mock import patch
 
     booking = _Booking(id=1, company_id=7, driver_id=10, status=BookingStatus.ASSIGNED)
-    assignment = _Assignment(id=123)
+    assignment = _Assignment(id=123, booking_id=1, driver_id=10)
     db = _Db()
 
     uc = UpdateDriverBookingStatusUseCase(
@@ -444,6 +447,66 @@ def test_scope_reservation_parent_completed_child_accepted_cancels_only_child() 
     assert 51 in res.response.get("skipped_booking_ids", [])
     assert child.status == BookingStatus.CANCELED
     assert parent.status == BookingStatus.COMPLETED
+
+
+def test_en_route_syncs_assignment_to_en_route_pickup() -> None:
+    booking = _Booking(
+        id=1, company_id=1, driver_id=10, status=BookingStatus.ASSIGNED
+    )
+    assignment = _Assignment(id=5, booking_id=1, driver_id=10)
+    db = _Db()
+    uc = UpdateDriverBookingStatusUseCase(
+        booking_repo=_BookingRepo(booking),
+        assignment_repo=_AssignmentRepo(assignment),
+        db_session=db,
+        notify_booking_update_fn=lambda _d, _b: None,
+        resolve_delays_fn=lambda _bid, _dt: None,
+        emit_assignment_cancelled_fn=lambda _c, _a, _b, _d: None,
+        maybe_trigger_dispatch_fn=None,
+        now_utc_fn=lambda: datetime(2025, 12, 12, 10, 0, 0, tzinfo=UTC),
+    )
+    res = uc.execute(
+        UpdateDriverBookingStatusCommand(
+            booking_id=1,
+            driver_id=10,
+            payload={"status": "en_route"},
+        )
+    )
+    assert res.status_code == 200
+    assert booking.status == BookingStatus.EN_ROUTE
+    assert assignment.status == AssignmentStatus.EN_ROUTE_PICKUP
+    assert db.commits == 1
+
+
+def test_arrived_syncs_assignment_when_present() -> None:
+    booking = _Booking(id=1, company_id=1, driver_id=10, status=BookingStatus.EN_ROUTE)
+    assignment = _Assignment(
+        id=5,
+        booking_id=1,
+        driver_id=10,
+        status=AssignmentStatus.EN_ROUTE_PICKUP,
+    )
+    db = _Db()
+    uc = UpdateDriverBookingStatusUseCase(
+        booking_repo=_BookingRepo(booking),
+        assignment_repo=_AssignmentRepo(assignment),
+        db_session=db,
+        notify_booking_update_fn=lambda _d, _b: None,
+        resolve_delays_fn=lambda _bid, _dt: None,
+        emit_assignment_cancelled_fn=lambda _c, _a, _b, _d: None,
+        maybe_trigger_dispatch_fn=None,
+        now_utc_fn=lambda: datetime(2025, 12, 12, 10, 0, 0, tzinfo=UTC),
+    )
+    res = uc.execute(
+        UpdateDriverBookingStatusCommand(
+            booking_id=1,
+            driver_id=10,
+            payload={"status": "ARRIVED"},
+        )
+    )
+    assert res.status_code == 200
+    assert assignment.status == AssignmentStatus.ARRIVED_PICKUP
+    assert db.commits == 1
 
 
 def test_arrived_idempotent_en_route() -> None:

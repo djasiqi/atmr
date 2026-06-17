@@ -30,6 +30,7 @@ from services.driver_device_health import (
 )
 from services.geolocation.presence import (
     apply_device_health_override,
+    compute_db_fallback_location_status,
     compute_location_status,
     presence_status_from_location_status,
 )
@@ -224,9 +225,15 @@ def build_company_driver_locations_items(
             else "availability_presence"
         )
         location_mode = location_mode_raw or expected_mode
-        location_status = compute_location_status(
-            mode=location_mode, last_seen_seconds=last_seen_seconds
-        )
+        if used_db_fallback:
+            location_status = compute_db_fallback_location_status(
+                mode=location_mode,
+                last_seen_seconds=last_seen_seconds,
+            )
+        else:
+            location_status = compute_location_status(
+                mode=location_mode, last_seen_seconds=last_seen_seconds
+            )
         if last_seen_seconds is not None and h and loc_data:
             with suppress(Exception):
                 from services.monitoring.driver_location_metrics import (
@@ -300,6 +307,8 @@ def build_company_driver_locations_items(
             "offline_reason": offline_reason,
             "tracking_display_status": tracking_display_status,
         }
+        if used_db_fallback:
+            loc_item["position_source"] = "db_fallback"
         if device_health is not None:
             loc_item["device_health"] = device_health
         if accuracy_m is not None:

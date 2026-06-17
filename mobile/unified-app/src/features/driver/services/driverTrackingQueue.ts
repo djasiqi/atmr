@@ -78,6 +78,16 @@ const TRACKING_SESSION_TTL_MS = Number(
 const SESSION_STORAGE_KEY = "driver_tracking_session_v1";
 const inMemoryStorage = new Map<string, string>();
 
+function normalizeTrackingEnqueueMode(
+  locationMode: DriverTrackingMode,
+  missionId: number | null
+): DriverTrackingMode {
+  if (locationMode === "mission_live" && missionId == null) {
+    return "availability_presence";
+  }
+  return locationMode;
+}
+
 function nowMs(): number {
   return Date.now();
 }
@@ -258,6 +268,10 @@ class DriverTrackingQueue {
   }): Promise<DriverTrackingQueueItem> {
     await this.ensureLoaded();
     this.ensureSessionFresh();
+    const locationMode = normalizeTrackingEnqueueMode(
+      entry.locationMode,
+      entry.missionId
+    );
     const sequenceId = this.sequenceCounter + 1;
     this.sequenceCounter = sequenceId;
     const positionId = `trk_pos_${sequenceId}_${Math.random().toString(36).slice(2, 8)}`;
@@ -270,10 +284,10 @@ class DriverTrackingQueue {
       positionId,
       missionId: entry.missionId,
       appState: entry.appState,
-      locationMode: entry.locationMode,
+      locationMode,
       payload: {
         ...entry.payload,
-        locationMode: entry.locationMode,
+        locationMode,
         trackingEventId: undefined,
       },
       queuedAt: nowMs(),
@@ -296,7 +310,7 @@ class DriverTrackingQueue {
       app_state: entry.appState,
       queue_depth: this.items.length,
       oldest_item_age_ms: oldestQueuedAt ? Math.max(0, nowMs() - oldestQueuedAt) : null,
-      location_mode: entry.locationMode,
+      location_mode: locationMode,
       sequence_id: sequenceId,
       tracking_session_id: this.trackingSessionId,
     });
@@ -573,6 +587,13 @@ class DriverTrackingQueue {
         tracking_queue_oldest_age_ms: oldestQueuedAt ? Math.max(0, nowMs() - oldestQueuedAt) : null,
         network_profile_active: networkProfile,
         flush_path: flushPathUsed,
+      });
+      emitDriverTelemetry("tracking.flush.transport", {
+        source: "driver.tracking.queue",
+        transport: flushPathUsed === "socket_batch" ? "socket" : "http",
+        sent,
+        socket_emitted: socketEmitted,
+        backend_acked: backendAcked,
       });
       return {
         sent,

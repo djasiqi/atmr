@@ -10,6 +10,13 @@ PresenceStatus = str
 MISSION_LIVE_THRESHOLDS = (20, 90, 300)  # live, recent, stale upper bounds
 AVAILABILITY_THRESHOLDS = (90, 300, 900)
 
+# Fenêtre « dernière position connue » (fallback DB sans clé Redis active)
+LAST_KNOWN_DB_MAX_SECONDS: dict[str, int] = {
+    "mission_live": 4 * 3600,
+    "availability_presence": 24 * 3600,
+    "passive_last_known": 24 * 3600,
+}
+
 DEVICE_HEALTH_FRESH_SEC = 120
 """Fenêtre de fraîcheur du heartbeat device-status pour qu'il puisse
 overrider la présence (>= 120 s : on retombe sur le calcul standard, comme
@@ -70,9 +77,28 @@ def compute_location_status(
     return "offline"
 
 
+def compute_db_fallback_location_status(
+    *,
+    mode: str | None,
+    last_seen_seconds: int | None,
+) -> LocationStatus:
+    """Statut carte quand seule la DB driver fournit les coordonnées (Redis expiré)."""
+    if last_seen_seconds is None:
+        return "offline"
+    normalized = normalize_location_mode(mode)
+    max_last_known = LAST_KNOWN_DB_MAX_SECONDS.get(
+        normalized, LAST_KNOWN_DB_MAX_SECONDS["availability_presence"]
+    )
+    if last_seen_seconds <= max_last_known:
+        return "last_known"
+    return "offline"
+
+
 def presence_status_from_location_status(location_status: str) -> PresenceStatus:
     if location_status in {"live", "recent"}:
         return "online"
+    if location_status == "last_known":
+        return "degraded"
     if location_status == "stale":
         return "degraded"
     return "offline"

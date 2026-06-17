@@ -42,7 +42,7 @@ type DriverRealtimePayload = Partial<CompanyDriverLiveLocation> & {
   lon?: number;
   lng?: number;
   last_seen_seconds?: number | null;
-  location_status?: "live" | "recent" | "stale" | "offline" | null;
+  location_status?: "live" | "recent" | "stale" | "offline" | "last_known" | null;
   mission_status?: string | null;
   status?: string | null;
   recorded_at?: string | null;

@@ -225,7 +225,7 @@ export async function sendDriverLocation(payload: DriverLocationPayload): Promis
       is_background: payload.isBackground ?? false,
       mission_id: payload.missionId ?? null,
       timestamp: payload.timestamp ?? new Date().toISOString(),
-      location_mode: payload.locationMode ?? "mission_live",
+      location_mode: payload.locationMode ?? "availability_presence",
       tracking_event_id: payload.trackingEventId ?? null,
     }, {
       headers: payload.trackingEventId

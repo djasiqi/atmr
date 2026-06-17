@@ -145,4 +145,14 @@ describe("driverTrackingQueue", () => {
     const snapshot = await driverTrackingQueue.getSnapshot();
     expect(snapshot.queueDepth).toBe(before.queueDepth - 1);
   });
+
+  it("downgrade mission_live sans missionId vers availability_presence", async () => {
+    const item = await driverTrackingQueue.enqueue({
+      missionId: null,
+      appState: "active",
+      locationMode: "mission_live",
+      payload: { latitude: 1, longitude: 1, locationMode: "mission_live" },
+    });
+    expect(item.locationMode).toBe("availability_presence");
+  });
 });
