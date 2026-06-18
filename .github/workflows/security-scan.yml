@@ -5,11 +5,13 @@ on:
     branches: [main, develop]
     paths:
       - "backend/requirements*.txt"
+      - "services/ws-service/requirements.txt"
       - ".github/workflows/security-scan.yml"
   pull_request:
     branches: [main, develop]
     paths:
       - "backend/requirements*.txt"
+      - "services/ws-service/requirements.txt"
       - ".github/workflows/security-scan.yml"
   schedule:
     # Exécution hebdomadaire le lundi à 3h du matin UTC
@@ -33,6 +35,7 @@ jobs:
         requirements-file:
           - "backend/requirements.prod.txt"
           - "backend/requirements-dev.txt"
+          - "services/ws-service/requirements.txt"
 
     steps:
       - name: Checkout code

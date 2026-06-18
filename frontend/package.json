@@ -172,6 +172,7 @@
     "axios-lodash-path-override": "axios 1.16+, lodash 4.18.1, follow-redirects 1.16+, path-to-regexp 0.1.13 (GHSA axios/SSRF, lodash template & omit, ReDoS express).",
     "socket-io-parser-override": "Force 4.2.6+ for GHSA-677m-j7p3-52f9 (CVE-2026-33151) via socket.io-client transitive dep.",
     "flatted-override": "Force >=3.4.2 for GHSA-rf6f-7fwh-wjgh (prototype pollution in parse).",
-    "tmp-override": "Force >=0.2.6 for GHSA-ph9p-34f9-6g65 (path traversal via unsanitized prefix/postfix). Transitive via source-map-explorer/external-editor."
+    "tmp-override": "Force >=0.2.6 for GHSA-ph9p-34f9-6g65 (path traversal via unsanitized prefix/postfix). Transitive via source-map-explorer/external-editor.",
+    "security-audit-2026-06": "form-data >=4.0.6, shell-quote >=1.8.4, @babel/core >=7.29.7, launch-editor >=2.14.1, http-proxy-middleware 3.0.7 (dev + override webpack-dev-server)."
   }
 }
