@@ -10,14 +10,7 @@ import {
 export function useMissionMapResolvedCoords(input: MissionMapCoordInput) {
   const staticCoords = useMemo(
     () => resolveStaticMissionMapCoords(input),
-    [
-      input.driverLat,
-      input.driverLng,
-      input.pickupLat,
-      input.pickupLng,
-      input.dropoffLat,
-      input.dropoffLng,
-    ]
+    [input]
   );
   const [geocodedPickup, setGeocodedPickup] = useState<MapLatLng | null>(null);
   const [geocodedDropoff, setGeocodedDropoff] = useState<MapLatLng | null>(null);

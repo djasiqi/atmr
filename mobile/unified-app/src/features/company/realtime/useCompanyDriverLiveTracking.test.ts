@@ -16,14 +16,9 @@ jest.mock("../../../core/realtime/contextRealtimeRouter", () => ({
   },
 }));
 
+ 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const {
-  normalizeRealtimeLocation,
-  shouldReplaceDriverLocation,
-  applyPendingDriverUpdates,
-  REALTIME_FLUSH_MS,
-  MAX_BATCH_AGE_MS,
-} = require("./useCompanyDriverLiveTracking");
+const { normalizeRealtimeLocation, shouldReplaceDriverLocation, applyPendingDriverUpdates, REALTIME_FLUSH_MS, MAX_BATCH_AGE_MS } = require("./useCompanyDriverLiveTracking");
 
 describe("company live drivers merge policy", () => {
   it("exposes bounded batch flush windows", () => {

@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 
+import {
+  __resetDriverFcmBackgroundHandlerForTests,
+  registerDriverFcmBackgroundHandler,
+  setDriverFcmBackgroundCallback,
+} from "./firebaseMessaging";
+
 const mockSetBackgroundHandler = jest.fn();
 const mockGetMessaging = jest.fn();
 const mockEmit = jest.fn();
@@ -37,12 +43,6 @@ jest.mock("./silentNotifications", () => ({
 jest.mock("../../core/api/client", () => ({
   apiClient: { post: jest.fn().mockResolvedValue(undefined) },
 }));
-
-import {
-  __resetDriverFcmBackgroundHandlerForTests,
-  registerDriverFcmBackgroundHandler,
-  setDriverFcmBackgroundCallback,
-} from "./firebaseMessaging";
 
 describe("firebaseMessaging background handler", () => {
   beforeEach(() => {

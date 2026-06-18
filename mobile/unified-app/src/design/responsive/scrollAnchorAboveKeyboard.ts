@@ -1,7 +1,7 @@
 import type { MutableRefObject, RefObject } from "react";
 import { Dimensions, Keyboard, Platform } from "react-native";
-import type { KeyboardEvent } from "react-native";
-import type { ScrollView, View } from "react-native";
+import type { KeyboardEvent , ScrollView, View } from "react-native";
+
 
 const MARGIN_ABOVE_KB = 16;
 

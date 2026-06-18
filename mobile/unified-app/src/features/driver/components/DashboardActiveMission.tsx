@@ -92,21 +92,6 @@ function transitionLabel(target: DriverTransitionStatus): string {
   }
 }
 
-function transitionIcon(target: DriverTransitionStatus): keyof typeof Ionicons.glyphMap {
-  switch (target) {
-    case "EN_ROUTE":
-      return "play";
-    case "ARRIVED":
-      return "flag-outline";
-    case "IN_PROGRESS":
-      return "person-outline";
-    case "COMPLETED":
-      return "checkmark-done-outline";
-    default:
-      return "arrow-forward";
-  }
-}
-
 type MetricTileProps = {
   label: string;
   value: string;

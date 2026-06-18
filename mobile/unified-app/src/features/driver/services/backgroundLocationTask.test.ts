@@ -132,6 +132,7 @@ describe("backgroundLocationTask", () => {
 
   it("restartNativeTrackingFromWake emits wake_restart telemetry for mission context", async () => {
     bgTask.initializeBackgroundLocationTask();
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const asyncStorage = require("@react-native-async-storage/async-storage") as {
       getItem: jest.Mock;
     };

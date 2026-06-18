@@ -41,7 +41,7 @@ import {
 import { capVisibleRouteCount } from "./semanticRouteSystem";
 import type { CockpitGovernanceInput } from "./cockpitGovernance";
 import { computeCockpitUiState } from "./cockpitGovernance";
-import type { CockpitUiMode, CockpitUiState } from "./cockpitTypes";
+import type { CockpitUiState } from "./cockpitTypes";
 import { recordCockpitMetric } from "./cockpitMetrics";
 import type { CompanyDispatchMission } from "../../api/contracts";
 

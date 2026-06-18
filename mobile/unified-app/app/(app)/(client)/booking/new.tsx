@@ -134,7 +134,7 @@ function __logSuggestionDebug(
   }
   const la = item.lat;
   const lo = effectiveSuggestionLon(item);
-  // eslint-disable-next-line no-console
+   
   console.log({
     field,
     label: item.label,
@@ -1156,7 +1156,7 @@ export default function ClientBookingCreateScreen(
           : undefined
       );
       if (typeof __DEV__ !== "undefined" && __DEV__) {
-        // eslint-disable-next-line no-console
+         
         console.log({
           tag: "autocompleteAddress",
           field,
@@ -1316,7 +1316,7 @@ export default function ClientBookingCreateScreen(
     const lo0 = effectiveSuggestionLon(item);
     __logSuggestionDebug(field, item, selection);
     if (typeof __DEV__ !== "undefined" && __DEV__) {
-      // eslint-disable-next-line no-console
+       
       console.log({
         tag: "onSuggestionSelected",
         phase: "before",
@@ -1349,7 +1349,7 @@ export default function ClientBookingCreateScreen(
       invalidatePreview();
       setErrorMessage(null);
       if (typeof __DEV__ !== "undefined" && __DEV__) {
-        // eslint-disable-next-line no-console
+         
         console.log({
           tag: "onSuggestionSelected",
           phase: "after",
@@ -1367,7 +1367,7 @@ export default function ClientBookingCreateScreen(
       }
       try {
         if (typeof __DEV__ !== "undefined" && __DEV__) {
-          // eslint-disable-next-line no-console
+           
           console.log({
             tag: "onSuggestionSelected",
             phase: "placeDetails_fetch",
@@ -1394,7 +1394,7 @@ export default function ClientBookingCreateScreen(
           invalidatePreview();
           setErrorMessage(null);
           if (typeof __DEV__ !== "undefined" && __DEV__) {
-            // eslint-disable-next-line no-console
+             
             console.log({
               tag: "onSuggestionSelected",
               phase: "after",
@@ -1425,7 +1425,7 @@ export default function ClientBookingCreateScreen(
         invalidatePreview();
         setErrorMessage(null);
         if (typeof __DEV__ !== "undefined" && __DEV__) {
-          // eslint-disable-next-line no-console
+           
           console.log({
             tag: "onSuggestionSelected",
             phase: "after",
@@ -1574,7 +1574,7 @@ export default function ClientBookingCreateScreen(
       if (typeof __DEV__ === "undefined" || !__DEV__) {
         return;
       }
-      // eslint-disable-next-line no-console
+       
       console.log({
         tag: "resolveFieldForSubmit",
         phase: "end",
@@ -1594,7 +1594,7 @@ export default function ClientBookingCreateScreen(
     };
 
     if (typeof __DEV__ !== "undefined" && __DEV__) {
-      // eslint-disable-next-line no-console
+       
       console.log({
         tag: "resolveFieldForSubmit",
         phase: "start",
@@ -1711,7 +1711,7 @@ export default function ClientBookingCreateScreen(
           (r) => Boolean(r.place_id) && !isGeocodedSuggestion(r)
         );
         if (typeof __DEV__ !== "undefined" && __DEV__) {
-          // eslint-disable-next-line no-console
+           
           console.log({
             tag: "resolveFieldForSubmit",
             afterAutocomplete: true,
@@ -1978,14 +1978,14 @@ export default function ClientBookingCreateScreen(
   async function handleGoToSummary(): Promise<void> {
     setErrorMessage(null);
     if (typeof __DEV__ !== "undefined" && __DEV__) {
-      // eslint-disable-next-line no-console
+       
       console.log({
         goToSummary: "pickup",
         label: pickupLocation,
         address: pickupLocation,
         selection: pickupSelection,
       });
-      // eslint-disable-next-line no-console
+       
       console.log({
         goToSummary: "dropoff",
         label: dropoffLocation,

@@ -7,7 +7,6 @@ import {
 import {
   buildPerfInstrumentationReport,
   getPerfInstrumentationBucketCountForTests,
-  resetPerfInstrumentationStoreForTests,
 } from "./perfInstrumentationStore";
 import {
   getPerfInstrumentationTier,

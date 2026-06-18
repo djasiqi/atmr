@@ -13,16 +13,16 @@ import {
 type GoogleLatLng = { lat: () => number; lng: () => number };
 
 type DirectionsRouteLeg = {
-  steps?: Array<{
+  steps?: {
     path?: GoogleLatLng[];
-  }>;
+  }[];
 };
 
 type DirectionsRouteResult = {
-  routes?: Array<{
+  routes?: {
     overview_path?: GoogleLatLng[];
     legs?: DirectionsRouteLeg[];
-  }>;
+  }[];
 };
 
 function mapGoogleLatLng(point: GoogleLatLng): FleetMapLatLng {

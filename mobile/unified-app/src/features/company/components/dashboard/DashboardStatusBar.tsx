@@ -1,6 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { AppText } from "../../../../design/ui/AppText";
 import type { DashboardCompactStat } from "../../dashboard/companyDashboardViewModel";
 import { D } from "../../theme/companyDashboardTokens";
 import { M } from "./dashboardMobileTokens";

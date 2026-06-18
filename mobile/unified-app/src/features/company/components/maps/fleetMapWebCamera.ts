@@ -267,7 +267,7 @@ export function applyFleetFitAllDrivers(
 
 
 
-  fitMapToPositions(map, LatLng, LatLngBounds, positions);
+  fitMapToPositions(map, LatLng, LatLngBounds, positions, padding);
 
 }
 

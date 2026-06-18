@@ -1,4 +1,10 @@
-import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
+import { beforeEach, describe, expect, it, jest } from "@jest/globals";
+
+import {
+  handleSilentPushPayload,
+  isSilentPayload,
+  shouldSuppressVisualPush,
+} from "./silentNotifications";
 
 const mockPost = jest.fn<() => Promise<void>>();
 const mockRestart = jest.fn<() => Promise<void>>();
@@ -15,12 +21,6 @@ jest.mock("../../core/api/client", () => ({
 jest.mock("./services/backgroundLocationTask", () => ({
   restartNativeTrackingFromWake: (...args: unknown[]) => mockRestart(...args),
 }));
-
-import {
-  handleSilentPushPayload,
-  isSilentPayload,
-  shouldSuppressVisualPush,
-} from "./silentNotifications";
 
 describe("shouldSuppressVisualPush", () => {
   it("suppresses data-only mission_updated payloads", () => {

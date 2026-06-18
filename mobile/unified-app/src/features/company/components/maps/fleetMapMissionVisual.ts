@@ -4,7 +4,6 @@ import {
   formatMissionTime,
   isMissionDelayed,
   missionHasDefinedPickupTime,
-  resolveMissionUiStatus,
 } from "../../dashboard/companyDashboardMissionUi";
 import type { FleetDriverMapItem } from "./fleetMapTypes";
 import {

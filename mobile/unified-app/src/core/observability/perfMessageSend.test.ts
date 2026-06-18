@@ -1,6 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { QueryClient } from "@tanstack/react-query";
 
+import { resetPerfInstrumentationForTests } from "./perfInstrumentation";
+import { setPerfKpiSink } from "./perfKpi";
+import {
+  endMessageSend,
+  recordChatCacheMismatch,
+  recordMessageSendRetry,
+  startMessageSend,
+} from "./perfMessageSend";
+import {
+  applyOptimisticSendMutate,
+  clearOptimisticSendTimer,
+  scheduleOptimisticSendTimeout,
+} from "../../features/messages/hubSendMutationHelpers";
+import { buildCompanyHubCacheKeys } from "../../features/messages/messageHubCachePatch";
+
 jest.mock("./perfInstrumentationTier", () => ({
   shouldRecordPerfMetric: () => true,
   shouldEmitPerfEventPerCall: () => false,
@@ -18,23 +33,8 @@ jest.mock("../../features/messages/chatLocalPatchFlag", () => ({
   isPerfChatLocalPatchEnabled: () => true,
 }));
 
-import { resetPerfInstrumentationForTests } from "./perfInstrumentation";
-import { emitPerfKpi, setPerfKpiSink } from "./perfKpi";
-import {
-  endMessageSend,
-  recordChatCacheMismatch,
-  recordMessageSendRetry,
-  startMessageSend,
-} from "./perfMessageSend";
-import {
-  applyOptimisticSendMutate,
-  clearOptimisticSendTimer,
-  scheduleOptimisticSendTimeout,
-} from "../../features/messages/hubSendMutationHelpers";
-import { buildCompanyHubCacheKeys } from "../../features/messages/messageHubCachePatch";
-
 describe("perf.message.send", () => {
-  const events: Array<{ event: string; payload: Record<string, unknown> }> = [];
+  const events: { event: string; payload: Record<string, unknown> }[] = [];
 
   beforeEach(() => {
     jest.useFakeTimers();
@@ -96,7 +96,7 @@ describe("perf.message.send", () => {
     });
     clearOptimisticSendTimer(ctx);
     jest.advanceTimersByTime(30_000);
-    const list = qc.getQueryData<Array<{ status?: string }>>(keys.messages("dispatch")) ?? [];
+    const list = qc.getQueryData<{ status?: string }[]>(keys.messages("dispatch")) ?? [];
     const row = list.find((m) => (m as { _localId?: string })._localId === "local-ok");
     expect(row?.status).not.toBe("failed");
   });

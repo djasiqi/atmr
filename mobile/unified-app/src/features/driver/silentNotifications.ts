@@ -78,6 +78,7 @@ export async function handleSilentPushPayload(
     if (typeof bgTask.restartNativeTrackingFromWake === "function") {
       await bgTask.restartNativeTrackingFromWake("silent_push_payload");
     }
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const client = require("../../core/api/client") as { apiClient?: { post?: Function } };
     await client.apiClient?.post?.("/driver/me/push-notifications/silent-ack", {
       sync_type: (payload as SilentPushPayload)?.type || "silent_update",

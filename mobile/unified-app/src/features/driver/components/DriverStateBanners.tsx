@@ -69,7 +69,7 @@ export function DriverStateBanners() {
   const [pushRegistrationState, setPushRegistrationState] =
     useState<PushRegistrationBannerState>("ok");
   const [batteryOptimizationActive, setBatteryOptimizationActive] = useState(false);
-  const [oemGuidance, setOemGuidance] = useState(() => getOemBatteryGuidance());
+  const [oemGuidance] = useState(() => getOemBatteryGuidance());
 
   useEffect(() => {
     return subscribePushPermissionDenied(() => {

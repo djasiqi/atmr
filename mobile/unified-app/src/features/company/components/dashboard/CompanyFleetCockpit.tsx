@@ -155,7 +155,7 @@ export function CompanyFleetCockpit({
     const raw = opsFeed.stats.find((s) => s.key === key)?.value ?? "0";
     const n = Number.parseInt(String(raw).replace(/\D/g, ""), 10);
     return Number.isFinite(n) ? n : 0;
-  }, [opsFeed.stats]);
+  }, [opsFeed]);
 
   const operationalCounts = useMemo(
     () =>

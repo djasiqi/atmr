@@ -45,7 +45,7 @@ export function applyFleetFitVerticalBias(
 }
 
 export function buildDriversBoundsSignature(
-  drivers: Array<{ driver_id: number; latitude: number; longitude: number }>
+  drivers: { driver_id: number; latitude: number; longitude: number }[]
 ): string {
   return drivers
     .map((d) => `${d.driver_id}:${d.latitude.toFixed(5)},${d.longitude.toFixed(5)}`)
@@ -55,7 +55,7 @@ export function buildDriversBoundsSignature(
 
 /** Signature structurelle (IDs only) — auto-fit sans jitter GPS. */
 export function buildDriversStructuralSignature(
-  drivers: Array<{ driver_id: number }>
+  drivers: { driver_id: number }[]
 ): string {
   return drivers
     .map((d) => String(d.driver_id))
@@ -65,7 +65,7 @@ export function buildDriversStructuralSignature(
 
 /** Limite le dézoom manuel au-delà du cadre flotte (évite de « descendre » dans le vide). */
 export function computeFleetMaxRegionDelta(
-  drivers: Array<{ latitude: number; longitude: number }>,
+  drivers: { latitude: number; longitude: number }[],
   paddingFactor = 2.1,
   slack = 1.3
 ): number | undefined {

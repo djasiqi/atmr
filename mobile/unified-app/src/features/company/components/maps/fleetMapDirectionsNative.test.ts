@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 
+import {
+  fetchFleetDirectionsPathNative,
+} from "./fleetMapDirectionsNative";
+import { resetFleetDirectionsCacheForTests } from "./fleetMapDirections";
+
 const mockPost = jest.fn<(...args: any[]) => any>();
 const mockEmitDriverTelemetry = jest.fn<(...args: any[]) => any>();
 
@@ -12,11 +17,6 @@ jest.mock("../../../../core/api/client", () => ({
 jest.mock("../../../../core/observability/driverTelemetry", () => ({
   emitDriverTelemetry: (...args: unknown[]) => mockEmitDriverTelemetry(...args),
 }));
-
-import {
-  fetchFleetDirectionsPathNative,
-} from "./fleetMapDirectionsNative";
-import { resetFleetDirectionsCacheForTests } from "./fleetMapDirections";
 
 const ORIGIN = { latitude: 46.205, longitude: 6.143 };
 const DESTINATION = { latitude: 46.250, longitude: 6.180 };

@@ -19,7 +19,9 @@ jest.mock("./services/missionSyncOrchestrator", () => ({
   scheduleDriverMissionSync: jest.fn(),
 }));
 
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const { applyDriverSocketEvent } = require("./realtime") as typeof import("./realtime");
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const { missionRuntimeManager } = require("./services/missionRuntimeManager") as typeof import("./services/missionRuntimeManager");
 
 function recentIso(offsetMs: number): string {

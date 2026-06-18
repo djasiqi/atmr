@@ -5,7 +5,6 @@ import {
   getDuplicateSocketEventCount,
   recordCompanySocketConnected,
   recordDriverSocketConnected,
-  recordDuplicateSocketEvent,
   resetPerfSocketSession,
   shouldAcceptSocketEvent,
 } from "./perfKpi";

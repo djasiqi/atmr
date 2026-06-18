@@ -19,7 +19,7 @@ function patchDispatchThreadTitle(
   conversationId: number,
   payload: ChannelManagePayload
 ) {
-  queryClient.setQueriesData<{ threads: Array<{ thread_id?: string; conversation_id?: number; title?: string; subtitle?: string }> }>(
+  queryClient.setQueriesData<{ threads: { thread_id?: string; conversation_id?: number; title?: string; subtitle?: string }[] }>(
     { queryKey: [...HUB_KEY, "threads", companyId] },
     (old) => {
       if (!old?.threads?.length) return old;

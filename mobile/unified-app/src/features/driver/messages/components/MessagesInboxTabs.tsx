@@ -22,7 +22,7 @@ type Props = {
 type TabRect = { x: number; width: number };
 
 export function MessagesInboxTabs({ active, onChange, unreadByTab }: Props) {
-  const [rects, setRects] = useState<Array<TabRect | null>>(() => TABS.map(() => null));
+  const [rects, setRects] = useState<(TabRect | null)[]>(() => TABS.map(() => null));
   const activeIndex = Math.max(0, TABS.findIndex((t) => t.id === active));
 
   const handleLayout = (idx: number) => (event: LayoutChangeEvent) => {

@@ -1,4 +1,4 @@
-import { StyleSheet, View } from "react-native";
+import { View } from "react-native";
 import type { DashboardCompactMissionRow, DashboardCompactStat, DashboardDelayedMissionCard, DashboardLiveActivityItem, DashboardQuickAction } from "../../dashboard/companyDashboardViewModel";
 import { DashboardLiveFeed } from "./DashboardLiveFeed";
 import { DashboardMissionsStack } from "./DashboardMissionsStack";

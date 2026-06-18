@@ -35,6 +35,8 @@ module.exports = defineConfig([
       "src/features/company/components/maps/resolveMetroAssetSource.ts",
       "src/features/company/components/maps/fleetLirieDriverMarkerAssets.ts",
       "src/features/company/components/maps/fleetNativeMarkerImage.ts",
+      "src/features/company/components/maps/**/*.test.ts",
+      "src/features/company/components/maps/**/*.test.tsx",
     ],
     rules: {
       "no-restricted-imports": [

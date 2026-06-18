@@ -139,7 +139,7 @@ async function requestWithFallback<T>(
  * POST /company_mobile/dispatch/v1/rides/:id/… — aligné sur Flask (`company_mobile_dispatch` ns).
  * Repli sur /dispatch/v1/… seulement si 404/405/501.
  */
-async function postCompanyDispatchRideAction(
+export async function postCompanyDispatchRideAction(
   options: CompanyRequestOptions & { missionId: number },
   subPath: "/assign" | "/reassign" | "/cancel" | "/schedule" | string,
   body: unknown,
@@ -1176,7 +1176,7 @@ export async function createCompanyRide(options: CompanyRequestOptions & { paylo
     delete legacyPayload.return_time;
   }
   const cleanedLegacyPayload = stripNullishFields(legacyPayload as Record<string, unknown>);
-  const requests: Array<() => Promise<{ data: CompanyAnyPayload }>> = isRecurringRequest
+  const requests: (() => Promise<{ data: CompanyAnyPayload }>)[] = isRecurringRequest
     ? [
         // Pour une série, prioriser le pipeline web qui gère la récurrence.
         () =>
@@ -1534,7 +1534,7 @@ export async function searchCompanyAddresses(options: CompanyRequestOptions & { 
   const statusFromError = (error: unknown): number | null =>
     typeof (error as AxiosError)?.response?.status === "number" ? ((error as AxiosError).response?.status as number) : null;
 
-  const requests: Array<() => Promise<{ data: CompanyAnyPayload }>> = [
+  const requests: (() => Promise<{ data: CompanyAnyPayload }>)[] = [
     () =>
       apiClient.get("/geocode/autocomplete", {
         ...withContextHeaders(options),

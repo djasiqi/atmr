@@ -427,7 +427,7 @@ class RealtimeManager {
     const generationBeforeAwait = this.socketGeneration;
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { refreshAuthTokenNow, getAuthAccessToken } = require("../api/client") as {
+      const { refreshAuthTokenNow } = require("../api/client") as {
         refreshAuthTokenNow: () => Promise<boolean>;
         getAuthAccessToken: () => string | null;
       };
@@ -553,7 +553,7 @@ class RealtimeManager {
     const handshakeAuth = { token: "" };
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { refreshAuthTokenNow, getAuthAccessToken } = require("../api/client") as {
+      const { getAuthAccessToken } = require("../api/client") as {
         refreshAuthTokenNow: () => Promise<boolean>;
         getAuthAccessToken: () => string | null;
       };
@@ -614,7 +614,7 @@ class RealtimeManager {
       void (async () => {
         try {
           // eslint-disable-next-line @typescript-eslint/no-require-imports
-          const { refreshAuthTokenNow, getAuthAccessToken } = require("../api/client") as {
+          const { refreshAuthTokenNow } = require("../api/client") as {
             refreshAuthTokenNow: () => Promise<boolean>;
             getAuthAccessToken: () => string | null;
           };

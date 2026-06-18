@@ -1,3 +1,5 @@
+import { DENSITY_DRIVER_THRESHOLDS } from "./cockpitThresholds";
+
 export type DensityLevel = "low" | "medium" | "high" | "extreme" | "aggregate";
 
 export type MapDensityInput = {
@@ -14,8 +16,6 @@ export type MapDensityPolicy = {
   disableNonCriticalAnimations: boolean;
   aggregateMode: boolean;
 };
-
-import { DENSITY_DRIVER_THRESHOLDS } from "./cockpitThresholds";
 
 const ZOOM_LOW_THRESHOLD = 0.35;
 

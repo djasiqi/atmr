@@ -1,3 +1,6 @@
+import type { CockpitUiMode } from "./cockpitTypes";
+import type { DensityLevel } from "./mapDensityGovernor";
+
 export type StabilityAction = "camera" | "overlay" | "mode" | "density";
 
 export const STABILITY_WINDOWS_MS: Record<StabilityAction, number> = {
@@ -6,9 +9,6 @@ export const STABILITY_WINDOWS_MS: Record<StabilityAction, number> = {
   mode: 2500,
   density: 3000,
 };
-
-import type { CockpitUiMode } from "./cockpitTypes";
-import type { DensityLevel } from "./mapDensityGovernor";
 
 export type StabilityBudgetState = {
   lastCameraSwitchMs: number;

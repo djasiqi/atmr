@@ -107,7 +107,7 @@ function pushHint(
 }
 
 function firstMeaningful(
-  ...values: Array<string | undefined | null>
+  ...values: (string | undefined | null)[]
 ): string | undefined | null {
   return values.find((value) => isMeaningful(value)) ?? null;
 }

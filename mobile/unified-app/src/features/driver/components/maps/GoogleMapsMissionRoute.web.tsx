@@ -31,20 +31,6 @@ import {
 const MAPS_ERROR_HELP_URL =
   "https://developers.google.com/maps/documentation/javascript/error-messages#api-target-blocked-map-error";
 
-function isPlausibleGoogleMapsBrowserKey(k: string): boolean {
-  const t = k.trim();
-  if (t.length < 20) return false;
-  const lower = t.toLowerCase();
-  if (lower.includes("ta_clef")) return false;
-  if (lower.includes("google_maps_js")) return false;
-  if (lower.includes("your_api")) return false;
-  if (lower.includes("replace_me")) return false;
-  if (lower.includes("changeme")) return false;
-  if (lower.includes("example_key")) return false;
-  if (lower.includes("placeholder")) return false;
-  return true;
-}
-
 function getGoogleMaps(): Record<string, unknown> | undefined {
   if (typeof window === "undefined") return undefined;
   const g = (window as unknown as { google?: { maps: Record<string, unknown> } }).google?.maps;
@@ -162,7 +148,7 @@ export function GoogleMapsMissionRoute(props: Props) {
 
   const mapRef = useRef<MapLike | null>(null);
   const directionsRendererRef = useRef<DirectionsRendererLike | null>(null);
-  const markerDisposersRef = useRef<Array<() => void>>([]);
+  const markerDisposersRef = useRef<(() => void)[]>([]);
   const [mapLoadError, setMapLoadError] = useState<string | null>(null);
 
   const libraryList = useMemo(
@@ -171,7 +157,7 @@ export function GoogleMapsMissionRoute(props: Props) {
   );
 
   const webKeyIssue = useMemo(() => diagnoseGoogleMapsWebKeyIssue(), []);
-  const apiKey = useMemo(() => resolveGoogleMapsWebApiKey() ?? "", [webKeyIssue]);
+  const apiKey = useMemo(() => resolveGoogleMapsWebApiKey() ?? "", []);
   const webKeyHelpMessage = useMemo(() => formatGoogleMapsWebKeyHelpMessage(webKeyIssue), [webKeyIssue]);
 
   useEffect(() => {
@@ -392,8 +378,8 @@ export function GoogleMapsMissionRoute(props: Props) {
     driverLat,
     driverLng,
     routePlan.mode,
-    routePlan.origin?.latitude,
-    routePlan.destination?.latitude,
+    routePlan.origin,
+    routePlan.destination,
   ]);
 
   if (firstLat == null || firstLng == null) {

@@ -120,7 +120,7 @@
     "@testing-library/user-event": "^14.6.1",
     "ajv": "^8.17.1",
     "baseline-browser-mapping": "^2.9.11",
-    "http-proxy-middleware": "^3.0.5",
+    "http-proxy-middleware": "3.0.7",
     "msw": "^2.11.5",
     "react-scripts": "^5.0.1",
     "redux-mock-store": "^1.5.5",
@@ -138,8 +138,12 @@
     "ws": "8.21.0",
     "nth-check": "^2.1.1",
     "postcss": "8.5.10",
-    "js-yaml": "^4.1.0",
-    "webpack-dev-server": "^5.2.4",
+    "js-yaml": "^4.2.0",
+    "webpack-dev-server": {
+      ".": "^5.2.4",
+      "http-proxy-middleware": "3.0.7"
+    },
+    "http-proxy-middleware": "3.0.7",
     "rollup": "^2.80.0",
     "@sentry/browser": "^8.47.0",
     "glob": "^11.1.0",
@@ -154,7 +158,11 @@
     "uuid": "14.0.0",
     "fast-uri": ">=3.1.2",
     "@babel/plugin-transform-modules-systemjs": ">=7.29.4",
-    "tmp": ">=0.2.6"
+    "tmp": ">=0.2.6",
+    "form-data": ">=4.0.6",
+    "shell-quote": ">=1.8.4",
+    "@babel/core": ">=7.29.7",
+    "launch-editor": ">=2.14.1"
   },
   "_comment": {
     "glob-override": "Override glob to ^11.1.0 to fix GHSA-ww39-953v-wcq6 (command injection in CLI -c/--cmd option). This forces all transitive dependencies (react-scripts, etc.) to use the patched version. See: https://github.com/isaacs/node-glob/security/advisories/GHSA-ww39-953v-wcq6",

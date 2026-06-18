@@ -1,3 +1,4 @@
+import { getInstallationIdAsync } from "expo-application";
 import * as SecureStore from "expo-secure-store";
 
 import { getStableDeviceId, resetStableDeviceIdCacheForTests } from "./getStableDeviceId";
@@ -25,8 +26,7 @@ describe("getStableDeviceId", () => {
   });
 
   it("falls back to SecureStore when installation id unavailable", async () => {
-    const Application = require("expo-application");
-    Application.getInstallationIdAsync.mockResolvedValueOnce(null);
+    jest.mocked(getInstallationIdAsync).mockResolvedValueOnce(null);
     (SecureStore.getItemAsync as jest.Mock).mockResolvedValueOnce("stored-device-id");
 
     resetStableDeviceIdCacheForTests();

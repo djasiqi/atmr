@@ -2,7 +2,7 @@ import { emitDriverTelemetry } from "../../core/observability/driverTelemetry";
 
 export async function authenticateDriverBiometric(): Promise<boolean> {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const localAuth = require("expo-local-authentication");
     const hasHardware = await localAuth.hasHardwareAsync();
     if (!hasHardware) return false;

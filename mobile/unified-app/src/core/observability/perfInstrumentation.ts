@@ -3,7 +3,6 @@ import {
   buildPerfInstrumentationReport,
   recordPerfBucket,
   resetPerfInstrumentationStoreForTests,
-  type PerfMetricCategory,
 } from "./perfInstrumentationStore";
 import {
   getPerfInstrumentationTier,

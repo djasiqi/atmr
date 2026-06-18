@@ -206,28 +206,7 @@ export function CompanyRidesMissionFlatList(props: CompanyRidesMissionFlatListPr
 
   const renderItem: ListRenderItem<CompanyDispatchMission> = useCallback(
     ({ item }) => <CompanyRidesMissionRow mission={item} {...props} />,
-    [
-      props.expandedMissionId,
-      props.missionActionPendingId,
-      props.contextId,
-      props.dispatchDelaysFetched,
-      props.delayPickupByBookingId,
-      props.pickupEtaByBookingId,
-      props.canAssignRide,
-      props.canEditRide,
-      props.canTransferRide,
-      props.canUrgentRide,
-      props.canCancelRide,
-      props.canScheduleRide,
-      props.onToggleExpand,
-      props.onOpenAssign,
-      props.onGoDetails,
-      props.onEdit,
-      props.onSchedule,
-      props.onTransfer,
-      props.onCancel,
-      props.onMarkUrgent,
-    ]
+    [props]
   );
 
   const listEmpty = isLoading ? (

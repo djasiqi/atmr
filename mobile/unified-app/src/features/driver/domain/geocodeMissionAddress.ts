@@ -59,7 +59,7 @@ async function geocodeMissionAddressViaGoogleClient(address: string): Promise<Mi
     );
     const data = (await response.json()) as {
       status?: string;
-      results?: Array<{ geometry?: { location?: { lat?: number; lng?: number } } }>;
+      results?: { geometry?: { location?: { lat?: number; lng?: number } } }[];
     };
     if (data.status !== "OK") return null;
     const loc = data.results?.[0]?.geometry?.location;

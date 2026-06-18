@@ -67,13 +67,13 @@ export async function fetchRouteMetrics(options: {
     );
     const data = (await response.json()) as {
       status?: string;
-      routes?: Array<{
-        legs?: Array<{
+      routes?: {
+        legs?: {
           distance?: { value?: number };
           duration?: { value?: number };
           duration_in_traffic?: { value?: number };
-        }>;
-      }>;
+        }[];
+      }[];
     };
     if (data.status !== "OK") return null;
 

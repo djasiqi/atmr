@@ -166,7 +166,7 @@ function DispatchDelayMarqueeBadge({
     return () => {
       cancelAnimation(translateX);
     };
-  }, [loopDistance]);
+  }, [loopDistance, translateX]);
 
   const rowAnimatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: translateX.value }],

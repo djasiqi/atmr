@@ -1,10 +1,7 @@
 import type { ReactNode } from "react";
 import { Platform, View } from "react-native";
-import { borderMuted, surfaceCard } from "../responsive/colors";
+import { borderMuted } from "../responsive/colors";
 import { useResponsiveTokens } from "../responsive/useResponsiveTokens";
-
-/** Contour pilule entreprise : teinte marque très légère. */
-const COMPANY_BAR_BORDER = "rgba(0, 121, 107, 0.08)";
 
 export type FloatingBarPreset = "client" | "company";
 

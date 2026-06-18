@@ -56,7 +56,7 @@ function resolveMissionIdFromEvent(payload: {
 }
 
 export function useCompanyDashboardScreenModel() {
-  const { activeContext, can, bootstrap } = useSession();
+  const { activeContext, can } = useSession();
   const activeContextId = activeContext?.context_id ?? null;
   const contextId = useActiveCompanyContextId();
   const roleGuardsEnabled = isFeatureEnabled("company_mobile_role_guards_enabled");
@@ -500,9 +500,7 @@ export function useCompanyDashboardScreenModel() {
         loading,
       }),
     [
-      activeContext?.organization_name,
       alertTexts,
-      bootstrap?.user,
       driversAvailableCount,
       inboxQuery.data?.notifications,
       liveDrivers.drivers,

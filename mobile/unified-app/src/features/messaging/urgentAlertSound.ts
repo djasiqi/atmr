@@ -27,7 +27,7 @@ function playWebUrgentBeep(): void {
   if (!Ctx) return;
   try {
     const ctx = new Ctx();
-    const tones: Array<{ freq: number; start: number; dur: number }> = [
+    const tones: { freq: number; start: number; dur: number }[] = [
       { freq: 880, start: 0, dur: 0.14 },
       { freq: 880, start: 0.18, dur: 0.14 },
       { freq: 1175, start: 0.36, dur: 0.22 },

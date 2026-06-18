@@ -82,7 +82,7 @@ function computeMissionRouteFocusRegion(
   const mission = driver.enrichment.linkedMission;
   if (!mission) return null;
 
-  const points: Array<{ latitude: number; longitude: number }> = [
+  const points: { latitude: number; longitude: number }[] = [
     { latitude: driver.latitude, longitude: driver.longitude },
   ];
 
@@ -271,7 +271,7 @@ export function useOperationalFleetMap({
         routeCap,
         decayUnfocusedAt: decayUnfocusedAtRef.current,
       }),
-    [driversById, layers.mission?.compactRoutes, missions, routeCap, selectedMissionId, visualDecayTick]
+    [driversById, layers.mission?.compactRoutes, missions, routeCap, selectedMissionId]
   );
 
   const imminentDepartures: ImminentDeparturesResult = useMemo(
@@ -522,7 +522,7 @@ export function useOperationalFleetMap({
     setRecenterMode("all");
     recenterTokenRef.current += 1;
     setRecenterToken(recenterTokenRef.current);
-  }, [onDriverMarkerPress]);
+  }, [onDriverMarkerPress, onSelectedDriverIdChange]);
 
   const selectDriverFromCluster = useCallback(
     (driver: FleetDriverMapItem, clusterDrivers: FleetDriverMapItem[]) => {

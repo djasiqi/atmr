@@ -147,11 +147,8 @@ describe("company realtime bridge", () => {
     mockGetResolvedApiBaseUrl.mockReturnValue("");
     process.env.EXPO_PUBLIC_DRIVER_SOCKET_URL = "wss://driver-only.example.test";
     mockIsFeatureEnabled.mockReturnValue(true);
-    const {
-      companyRealtimeBridge,
-      getResolvedCompanySocketEnvSource,
-      getResolvedCompanySocketUrl,
-    } = require("./companyRealtimeBridge");
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { companyRealtimeBridge, getResolvedCompanySocketEnvSource, getResolvedCompanySocketUrl } = require("./companyRealtimeBridge");
 
     expect(getResolvedCompanySocketUrl()).toBe("");
     expect(getResolvedCompanySocketEnvSource()).toBe("none");
@@ -259,6 +256,7 @@ describe("company realtime bridge", () => {
   it("falls back to polling-only after a handshake timeout", () => {
     mockIsFeatureEnabled.mockReturnValue(true);
     process.env.EXPO_PUBLIC_COMPANY_SOCKET_URL = "http://company.example.test/socket";
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { companyRealtimeBridge } = require("./companyRealtimeBridge");
 
     companyRealtimeBridge.connect("company:42");
@@ -281,6 +279,7 @@ describe("company realtime bridge", () => {
   it("falls back to polling-only after a websocket handshake error", () => {
     mockIsFeatureEnabled.mockReturnValue(true);
     process.env.EXPO_PUBLIC_COMPANY_SOCKET_URL = "http://company.example.test/socket";
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { companyRealtimeBridge } = require("./companyRealtimeBridge");
 
     companyRealtimeBridge.connect("company:42");

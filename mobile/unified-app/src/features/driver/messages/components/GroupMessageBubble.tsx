@@ -8,8 +8,6 @@ import { CHAT_BUBBLE_OWN } from "../../../chat/chatPalette";
 import { missionActiveCardShadow } from "../../theme/driverDashboardTheme";
 import { createShadow } from "../../../../styles/shadowStyles";
 import { FONT_SIZE } from "../../../../design/responsive/typographyTokens";
-
-const groupBubbleShadow = createShadow(missionActiveCardShadow);
 import type { SharedChatMessage } from "../../../chat/types";
 import { VoiceMessageBar } from "../../../chat/components/VoiceMessageBar";
 import {
@@ -18,6 +16,8 @@ import {
   senderColor,
   type GroupMessageMeta,
 } from "../groupMessageLayout";
+
+const groupBubbleShadow = createShadow(missionActiveCardShadow);
 
 const MAX_IMAGE_W = 240;
 const MAX_IMAGE_H = 160;

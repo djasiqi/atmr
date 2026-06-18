@@ -1,4 +1,4 @@
-﻿import type { CompanyDriverLiveLocation } from "../api/contracts";
+import type { CompanyDriverLiveLocation } from "../api/contracts";
 
 export const STALE_SECONDS_THRESHOLD = 120;
 

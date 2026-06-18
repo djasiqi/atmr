@@ -6,7 +6,7 @@ export type RideRoutePreviewProps = {
   pickupLng: number | null;
   dropoffLat: number | null;
   dropoffLng: number | null;
-  routePoints: ReadonlyArray<{ lat: number; lng: number }>;
+  routePoints: readonly { lat: number; lng: number }[];
   distanceMeters: number | null;
   durationSeconds: number | null;
   /** Libellé du type d'itinéraire (ex. "Le plus rapide"). */

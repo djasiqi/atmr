@@ -263,6 +263,7 @@ function ChatConversationShellInner({
 
     shellBottomGap,
 
+    publishChatKpis,
     footerHeight,
 
   ]);

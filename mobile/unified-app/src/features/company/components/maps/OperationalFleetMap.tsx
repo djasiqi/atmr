@@ -18,8 +18,6 @@ import {
 
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { isFeatureEnabled } from "../../../../core/featureFlags/registry";
-
 import { useAppViewport } from "../../../../design/responsive/useAppViewport";
 
 import type { CompanyDispatchMission, CompanyDriverLiveLocation } from "../../api/contracts";
@@ -298,6 +296,8 @@ function FleetMapSurface({
         containerStyle={s.mapCard}
 
         logoClipFill={isCockpit && cockpitImmersive}
+
+        fitEdgePadding={fitEdgePadding}
 
       />
 

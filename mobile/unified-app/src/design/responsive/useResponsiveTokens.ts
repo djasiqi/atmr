@@ -156,7 +156,7 @@ export function computePublicLanding(
   isVeryLargeText: boolean,
   effectiveFontScale: number
 ): PublicLandingTokens {
-  const { width, usableHeight, shortest, topInset, bottomInset, isTiny, isCompact, isTablet, contentWidth } =
+  const { width, usableHeight, topInset, bottomInset, isTiny, isCompact, isTablet, contentWidth } =
     viewport;
 
   const isWideWeb = Platform.OS === "web" && width >= 1100;

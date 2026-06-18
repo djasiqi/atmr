@@ -1,7 +1,6 @@
 import { useMemo } from "react";
 import type { CompanyDriverLiveLocation } from "../api/contracts";
 import {
-  driverFleetMarkerDescription,
   driverFleetMarkerTitle,
   resolveDriverStatus,
 } from "../utils/companyDriverMapStatus";

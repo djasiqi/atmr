@@ -1,4 +1,4 @@
-﻿import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { StyleSheet, type Region } from "react-native";
 import { AppText } from "../../../../design/ui/AppText";
 import type { CompanyDispatchMission, CompanyDriverLiveLocation } from "../../api/contracts";
@@ -20,7 +20,7 @@ import {
   resolveExpoLirieGoogleMapLayer,
   triggerGoogleMapResize,
 } from "../../../maps/expoLirieGoogleMapLayer";
-import { enrichFleetDriver, computeFleetRegion } from "./fleetMapLogic";
+import { enrichFleetDriver, computeFleetRegion , clusterSharesDriverIds } from "./fleetMapLogic";
 import {
   buildMissionDirectionsPlanSignature,
   fleetRoutePathKey,
@@ -36,11 +36,10 @@ import {
 } from "./fleetMapWebCamera";
 import { pickClusterRepresentativeStatus } from "./fleetLirieClusterMarker";
 import { shouldFleetMarkerLivePulse } from "./fleetMapLiveMarker";
-import { makeFleetVehicleMarkerDataUrl } from "./fleetMarkerIcons";
-import { createMissionDriverContextElement } from "./fleetMarkerIcons";
+import { makeFleetVehicleMarkerDataUrl , createMissionDriverContextElement } from "./fleetMarkerIcons";
+
 import { buildLirieDriverMarkerImageSource } from "./fleetLirieDriverMarkerAssets";
 import { buildFleetClusterCountBadgeImageSource } from "./fleetNativeMarkerImage";
-import { LIRIE_DRIVER_MARKER_DISPLAY_WIDTH_PX } from "./fleetLirieMarkerSizing";
 import type { FleetMissionOverlay } from "./fleetMapMissionVisual";
 import type { FleetHeatmapPoint } from "./fleetMapGeo";
 import type {
@@ -51,29 +50,15 @@ import type {
   FleetMapRecenterMode,
   FleetPinnedClusterFocus,
 } from "./fleetMapTypes";
-import { FLEET_MAP_MARKER_DIMMED_OPACITY } from "./fleetMapTypes";
-import { clusterSharesDriverIds } from "./fleetMapLogic";
-import { DEFAULT_FLEET_MAP_LAYERS } from "./fleetMapTypes";
+import { FLEET_MAP_MARKER_DIMMED_OPACITY , DEFAULT_FLEET_MAP_LAYERS } from "./fleetMapTypes";
+
+
 import { FLEET_STATUS_THEME, type FleetOperationalStatus } from "./mapStatusTheme";
 import { driverFleetMarkerTitle } from "../../utils/companyDriverMapStatus";
 import type { FleetMarkerIconOptions } from "./fleetMarkerIcons";
 
 const MAPS_ERROR_HELP_URL =
   "https://developers.google.com/maps/documentation/javascript/error-messages#api-target-blocked-map-error";
-
-function isPlausibleGoogleMapsBrowserKey(k: string): boolean {
-  const t = k.trim();
-  if (t.length < 20) return false;
-  const lower = t.toLowerCase();
-  if (lower.includes("ta_clef")) return false;
-  if (lower.includes("google_maps_js")) return false;
-  if (lower.includes("your_api")) return false;
-  if (lower.includes("replace_me")) return false;
-  if (lower.includes("changeme")) return false;
-  if (lower.includes("example_key")) return false;
-  if (lower.includes("placeholder")) return false;
-  return true;
-}
 
 function getGoogleMaps(): Record<string, unknown> | undefined {
   if (typeof window === "undefined") return undefined;
@@ -212,7 +197,7 @@ export function GoogleMapsFleetCanvas({
   const libraryList = useMemo(() => resolveFleetMapsLibraryList(), []);
 
   const webKeyIssue = useMemo(() => diagnoseGoogleMapsWebKeyIssue(), []);
-  const apiKey = useMemo(() => resolveGoogleMapsWebApiKey() ?? "", [webKeyIssue]);
+  const apiKey = useMemo(() => resolveGoogleMapsWebApiKey() ?? "", []);
   const webKeyHelpMessage = useMemo(() => formatGoogleMapsWebKeyHelpMessage(webKeyIssue), [webKeyIssue]);
 
   const fallbackMarkers = useMemo<FleetMapMarker[]>(
@@ -363,7 +348,7 @@ export function GoogleMapsFleetCanvas({
           },
           onClick?: () => void
         ): ClassicFleetMarker | null => {
-          const { iconUrl, title, size, zIndex, opacity = 1 } = payload;
+          const { iconUrl, title, size, zIndex } = payload;
           const height = payload.height ?? size;
           const anchor = payload.anchor ?? { x: 0.5, y: 0.5 };
           const MarkerCtor = gmaps.Marker as new (opts: Record<string, unknown>) => ClassicFleetMarker;
@@ -404,11 +389,11 @@ export function GoogleMapsFleetCanvas({
           div.style.position = "absolute";
           div.style.pointerEvents = "none";
           div.style.zIndex = String(zIndex);
-          overlay.onAdd = function onAdd(this: typeof overlay) {
-            this.getPanes()?.floatPane.appendChild(div);
+          overlay.onAdd = function onAdd() {
+            overlay.getPanes()?.floatPane.appendChild(div);
           };
-          overlay.draw = function draw(this: typeof overlay) {
-            const point = this.getProjection()?.fromLatLngToDivPixel(
+          overlay.draw = function draw() {
+            const point = overlay.getProjection()?.fromLatLngToDivPixel(
               new LatLngCtor(position.lat, position.lng)
             );
             if (!point) return;
@@ -874,6 +859,7 @@ export function GoogleMapsFleetCanvas({
     apiKey,
     defaultRegion.latitude,
     defaultRegion.longitude,
+    defaultRegion.latitudeDelta,
     drivers,
     heatmapPoints,
     layers,

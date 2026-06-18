@@ -28,12 +28,12 @@ export async function registerCompanyPushToken(
 
 export type CompanyTestPushResult = {
   ok: boolean;
-  results?: Array<{
+  results?: {
     token_preview?: string;
     platform?: string | null;
     ok?: boolean;
     error?: string;
-  }>;
+  }[];
   tokens_count?: number;
   error?: string;
 };

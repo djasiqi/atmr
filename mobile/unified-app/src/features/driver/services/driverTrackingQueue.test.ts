@@ -39,7 +39,7 @@ jest.mock("../../../core/featureFlags/registry", () => ({
   ),
 }));
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const { driverTrackingQueue } = require("./driverTrackingQueue") as typeof import("./driverTrackingQueue");
 
 describe("driverTrackingQueue", () => {
@@ -137,7 +137,7 @@ describe("driverTrackingQueue", () => {
       .reverse()
       .find((call) => String(call[0]).includes("driver_tracking_delivery_queue_v1"));
     const persistedRaw = (queueWrite?.[1] as string) ?? "[]";
-    const persisted = JSON.parse(persistedRaw) as Array<{ sequenceId: number }>;
+    const persisted = JSON.parse(persistedRaw) as { sequenceId: number }[];
     const ackWatermark = Math.min(...persisted.map((item) => item.sequenceId));
     const before = await driverTrackingQueue.getSnapshot();
     const acked = await driverTrackingQueue.markBackendAckedByWatermark(ackWatermark);

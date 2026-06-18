@@ -10,7 +10,6 @@ import {
   type MissionCoord,
 } from "./missionRouteMetrics";
 import {
-  clearAllStepperApproachBaselines,
   clearStepperApproachBaseline,
   resolveStepperApproachBaseline,
   resetStepperApproachBaseline,

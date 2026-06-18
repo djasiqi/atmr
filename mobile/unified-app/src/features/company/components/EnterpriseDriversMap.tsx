@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useRef, type ReactElement } from "react";
+import { useCallback, useEffect, useMemo, useRef, type ReactElement } from "react";
 import { Platform, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 import MapView, { Circle, Polyline, PROVIDER_GOOGLE, type Region } from "react-native-maps";
 import { LirieMapLogoClip } from "../../maps/LirieMapLogoClip";
@@ -8,7 +8,7 @@ import {
   resolveNativeGoogleLogoClipPx,
 } from "../../maps/lirieMapChrome";
 import { getNativeGoogleMapViewStyleProps } from "../../maps/nativeGoogleMapStyle";
-import type { CompanyDispatchMission, CompanyDriverLiveLocation } from "../api/contracts";
+import type { CompanyDriverLiveLocation } from "../api/contracts";
 import { DriverMarker } from "./maps/DriverMarker";
 import { ClusterMarker } from "./maps/ClusterMarker";
 import { clusterSharesDriverIds, computeFleetRegion } from "./maps/fleetMapLogic";
@@ -42,7 +42,6 @@ import type { ImminentDeparture } from "../dashboard/cockpit/imminentDepartures"
 import { ImminentDepartureMarkers } from "./maps/ImminentDepartureMarkers";
 import {
   applyFleetFitVerticalBias,
-  buildDriversBoundsSignature,
   computeFleetMapFitEdgePadding,
   computeFleetMaxRegionDelta,
   type MapEdgePadding,
@@ -97,6 +96,8 @@ const mapCardShadow = Platform.select({
   },
 });
 
+const DEFAULT_FLEET_MAP_EDGE_INSETS: MapEdgePadding = { top: 52, right: 52, bottom: 52, left: 52 };
+
 const styles = StyleSheet.create({
   root: {
     position: "relative",
@@ -143,7 +144,6 @@ export function EnterpriseDriversMap({
   cameraVerticalBias = 0,
   constrainFleetZoom = false,
 }: EnterpriseDriversMapProps) {
-  const defaultInsets: MapEdgePadding = { top: 52, right: 52, bottom: 52, left: 52 };
   const mapRef = useRef<MapView | null>(null);
   const mapReadyRef = useRef(false);
   const pendingFitRef = useRef(false);
@@ -152,7 +152,7 @@ export function EnterpriseDriversMap({
   const driversByIdRef = useRef<Map<number, FleetDriverMapItem>>(new Map());
 
   driversRef.current = drivers;
-  const markers = markersProp ?? [];
+  const markers = useMemo(() => markersProp ?? [], [markersProp]);
   markersRef.current = markers;
 
   useEffect(() => {
@@ -163,33 +163,21 @@ export function EnterpriseDriversMap({
     driversByIdRef.current = next;
   }, [markers]);
 
-  const driversBoundsSignature = useMemo(
-    () =>
-      buildDriversBoundsSignature(
-        drivers.map((d) => ({
-          driver_id: d.driver_id,
-          latitude: d.latitude,
-          longitude: d.longitude,
-        }))
-      ),
-    [drivers]
-  );
-
   const initialRegion = useMemo(
     () => computeFleetRegion(drivers),
-    [driversBoundsSignature]
+    [drivers]
   );
 
   const resolvedFitPadding = useMemo(() => {
     const base =
       fitEdgePadding ??
-      computeFleetMapFitEdgePadding(cameraInsets ?? defaultInsets, { immersive: logoClipFill });
+      computeFleetMapFitEdgePadding(cameraInsets ?? DEFAULT_FLEET_MAP_EDGE_INSETS, { immersive: logoClipFill });
     return applyFleetFitVerticalBias(base, cameraVerticalBias);
   }, [cameraInsets, cameraVerticalBias, fitEdgePadding, logoClipFill]);
 
   const fleetMaxDelta = useMemo(
     () => (constrainFleetZoom ? computeFleetMaxRegionDelta(drivers) : undefined),
-    [constrainFleetZoom, driversBoundsSignature, drivers]
+    [constrainFleetZoom, drivers]
   );
 
   const mapStyleProps = useMemo(() => getNativeGoogleMapViewStyleProps(), []);
@@ -289,11 +277,6 @@ export function EnterpriseDriversMap({
           longitude: (routeCoords[0].longitude + routeCoords[routeCoords.length - 1].longitude) / 2,
         }
       : null;
-
-  const selectedOverlay =
-    missionOverlays.find((o) => o.missionId === selectedMissionId) ??
-    missionOverlays.find((o) => o.isSelected) ??
-    null;
 
   const etaBadgeOverlay = useMemo(
     () => resolveFleetMissionEtaBadgeOverlay(missionOverlays, selectedMissionId),

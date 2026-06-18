@@ -682,7 +682,7 @@ export function useCompanyFallbackPolling(refetch: () => Promise<unknown>) {
       void refetch();
     }, intervalMs);
     return () => clearInterval(intervalId);
-  }, [realtime.status, refetch]);
+  }, [realtime.dataFreshness, realtime.status, realtime.transportStatus, refetch]);
 
   return realtime;
 }

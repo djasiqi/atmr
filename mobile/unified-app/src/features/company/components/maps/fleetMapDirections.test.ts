@@ -8,7 +8,6 @@ import {
   resolveFleetMissionLegPlans,
   resolveFleetMissionRouteFocusLeg,
   resolveFleetOverlayRouteDrawPoints,
-  type FleetDirectionsPlan,
   type FleetMapLatLng,
 } from "./fleetMapDirections";
 import { extractDetailedDirectionsPath } from "./fleetMapDirectionsWebApi";

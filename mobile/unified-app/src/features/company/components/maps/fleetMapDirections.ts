@@ -73,11 +73,11 @@ export function buildFleetDirectionsCacheKey(
 }
 
 export function buildMissionDirectionsPlanSignature(
-  overlays: Array<{
+  overlays: {
     missionId: number;
     directionsPlan: FleetDirectionsPlan | null;
     legDirectionsPlans?: Partial<Record<FleetRouteLegId, FleetDirectionsPlan>>;
-  }>
+  }[]
 ): string {
   return overlays
     .map((overlay) => {

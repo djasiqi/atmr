@@ -691,12 +691,12 @@ async function fetchPeekRouteEtaMinutes(options: {
     const response = await fetch(`https://maps.googleapis.com/maps/api/directions/json?${params.toString()}`);
     const data = (await response.json()) as {
       status?: string;
-      routes?: Array<{
-        legs?: Array<{
+      routes?: {
+        legs?: {
           duration?: { value?: number };
           duration_in_traffic?: { value?: number };
-        }>;
-      }>;
+        }[];
+      }[];
     };
     if (data.status !== "OK") return null;
     const legs = data.routes?.[0]?.legs ?? [];

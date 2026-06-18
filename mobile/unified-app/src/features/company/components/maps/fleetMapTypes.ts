@@ -1,6 +1,8 @@
 import type { CompanyDispatchMission, CompanyDriverLiveLocation } from "../../api/contracts";
 import type { FleetOperationalStatus } from "./mapStatusTheme";
 
+import type { CameraPolicy } from "../../dashboard/cockpit/cameraPolicyManager";
+
 export type FleetMapStatusFilter =
   | "all"
   | "available"
@@ -115,8 +117,6 @@ export type {
 } from "./fleetMapMissionVisual";
 
 export type FleetMapRecenterMode = "all" | "selected" | "mission" | "urgent" | "user";
-
-import type { CameraPolicy } from "../../dashboard/cockpit/cameraPolicyManager";
 
 /** Politique carte pilotée par CockpitOrchestrator. */
 export type CockpitMapPolicy = {

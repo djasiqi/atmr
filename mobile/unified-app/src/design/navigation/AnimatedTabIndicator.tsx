@@ -11,7 +11,7 @@ export type AnimatedTabIndicatorProps = {
   /** Index actif. */
   activeIndex: number;
   /** Mesures `onLayout` pour chaque onglet. */
-  rects: ReadonlyArray<TabRect | null>;
+  rects: readonly (TabRect | null)[];
   /** Hauteur du trait (par défaut 3). */
   height?: number;
   /** Couleur du trait (par défaut teal LIRIE). */

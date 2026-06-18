@@ -37,20 +37,13 @@ const React = require("react");
 const TestRenderer = require("react-test-renderer");
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { QueryClient, QueryClientProvider } = require("@tanstack/react-query");
+ 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const {
-  contextRealtimeRouter,
-} = require("../../../core/realtime/contextRealtimeRouter");
+const { contextRealtimeRouter } = require("../../../core/realtime/contextRealtimeRouter");
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const {
-  useCompanyRecoveryListener,
-  RECOVERY_THROTTLE_MS,
-} = require("./useCompanyRecoveryListener");
+const { useCompanyRecoveryListener, RECOVERY_THROTTLE_MS } = require("./useCompanyRecoveryListener");
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const {
-  getRealtimeMetricsSnapshot,
-  resetRealtimeMetricsForTests,
-} = require("../../../core/observability/realtimeMetrics");
+const { getRealtimeMetricsSnapshot, resetRealtimeMetricsForTests } = require("../../../core/observability/realtimeMetrics");
 
 function HookHarness({
   contextId,

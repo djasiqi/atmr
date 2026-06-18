@@ -40,9 +40,9 @@ export function buildPerfReportMarkdown(options: PerfReportMarkdownOptions = {})
 
 export function dumpPerfReportToConsole(): void {
   const json = buildPerfInstrumentationReport(10);
-  // eslint-disable-next-line no-console -- rapport Sprint 0C volontaire
+   
   console.info("[perf-report]", JSON.stringify(json, null, 2));
-  // eslint-disable-next-line no-console -- rapport Sprint 0C volontaire
+   
   console.info(buildPerfReportMarkdown());
 }
 
@@ -51,9 +51,9 @@ export function getPerfReportSnapshot(topN = 10): ReturnType<typeof buildPerfIns
 }
 
 declare global {
-  // eslint-disable-next-line no-var
+   
   var __dumpPerfReport__: (() => void) | undefined;
-  // eslint-disable-next-line no-var
+   
   var __getPerfReport__: ((topN?: number) => ReturnType<typeof buildPerfInstrumentationReport>) | undefined;
 }
 

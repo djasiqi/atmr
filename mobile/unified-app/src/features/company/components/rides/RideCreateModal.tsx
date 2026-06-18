@@ -57,9 +57,7 @@ const COMPACT_CHIP_HEIGHT = 32;
 const COMPACT_CHIP_SMALL_HEIGHT = 40;
 const COMPACT_ACTION_HEIGHT = 46;
 const COMPACT_MULTILINE_MEDIUM_HEIGHT = 72;
-const COMPACT_MULTILINE_LARGE_HEIGHT = 88;
 const COMPACT_MULTILINE_MEDIUM_INPUT_HEIGHT = 56;
-const COMPACT_MULTILINE_LARGE_INPUT_HEIGHT = 72;
 const FIELD_ICON_SIZE = 18;
 const BACK_BOX = {
   width: 32,
@@ -908,7 +906,7 @@ async function enrichAddressWithPlaceDetails(address: RideAddressOption): Promis
           label?: string;
           address?: string;
           name?: string;
-          address_components?: Array<{ long_name?: string; types?: string[] }>;
+          address_components?: { long_name?: string; types?: string[] }[];
         }
       | undefined;
     const latCandidate = Number(details?.lat);
@@ -1011,7 +1009,7 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
   const [extraInfoOpen, setExtraInfoOpen] = useState(false);
   const [priceOpen, setPriceOpen] = useState(false);
   const [manualPriceOpen, setManualPriceOpen] = useState(false);
-  const [routePointsForPricing, setRoutePointsForPricing] = useState<Array<{ lat: number; lng: number }>>([]);
+  const [routePointsForPricing, setRoutePointsForPricing] = useState<{ lat: number; lng: number }[]>([]);
   const [routeDistanceMeters, setRouteDistanceMeters] = useState<number | null>(null);
   const [routeDurationSeconds, setRouteDurationSeconds] = useState<number | null>(null);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
@@ -1087,7 +1085,6 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
     isMaterialDelivery,
     pickupAddress,
     dropoffAddress,
-    selectPickupAddress,
     setPickupAccessNotes,
     setDropoffAccessNotes,
     setNotesMedical,
@@ -1231,13 +1228,6 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
       d.toLocaleDateString("fr-CH", { day: "2-digit", month: "long", year: "numeric" });
     return `Du ${fmt(first)} au ${fmt(last)}`;
   }, [recurrencePreview.dates]);
-
-  const recurrenceWeeklyDayLabel = useMemo(() => {
-    if (!recurringOn || form.recurrence !== "weekly") return "";
-    if (recurrencePreview.dates.length === 0) return "";
-    const wd = recurrencePreview.dates[0].toLocaleDateString("fr-CH", { weekday: "long" });
-    return wd.charAt(0).toUpperCase() + wd.slice(1);
-  }, [recurringOn, form.recurrence, recurrencePreview.dates]);
 
   const recurrenceValid = useMemo(() => {
     if (!recurringOn) return true;
@@ -1429,6 +1419,7 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
     setWheelchairClient,
     setWheelchairProvide,
     billToPatient,
+    handlePickupAddressSelected,
   ]);
 
   useEffect(() => {

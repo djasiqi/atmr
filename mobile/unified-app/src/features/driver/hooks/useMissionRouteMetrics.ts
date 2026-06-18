@@ -212,8 +212,7 @@ export function useMissionRouteMetrics(
     staticMetrics.distanceKm,
     staticMetrics.durationMinutes,
     etaMinutes,
-    options?.etaSnapshot?.driver_lat,
-    options?.etaSnapshot?.driver_lon,
+    options?.etaSnapshot,
     isFocused,
   ]);
 
