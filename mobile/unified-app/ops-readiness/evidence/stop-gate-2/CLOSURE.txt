@@ -2,6 +2,8 @@
 
 VERDICT: PASS
 
+Note evidence logcat (2026-06-19): IPv4 publiques redigees en [REDACTED_IPV4] avant versionnement (scan check_no_production_leaks).
+
 CRITERE OFFICIEL (atteint):
   Acceptation disclosure -> FGS actif -> Notification persistante.
 

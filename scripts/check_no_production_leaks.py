@@ -126,6 +126,12 @@ def _scan_file(path: Path) -> list[str]:
     for i, line in enumerate(data.splitlines(), 1):
         for m in IPV4_RE.finditer(line):
             ip = m.group("ip")
+            end = m.end()
+            # Ignore faux positifs : IPv4 embarquée dans un token versionné (ex. 13.2.0.11.00.00.856.062).
+            if end < len(line) and line[end] == ".":
+                rest = line[end + 1 :]
+                if rest and rest[0].isdigit():
+                    continue
             if _is_public_ipv4(ip):
                 errors.append(f"{rel}:{i}  IPv4 publique : {ip}")
     return errors

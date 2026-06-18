@@ -6716,11 +6716,11 @@
 06-10 16:05:27.883 E/msys    ( 6476): E[C 1]_MCCLogErrorInternal(331)=>8/374/3970/65536
 06-10 16:05:27.883 E/msys    ( 6476): E[C 1]_MCCLogErrorInternal(331)=>8/374/3972/18
 06-10 16:05:27.884 E/msys    ( 6476): E[C mem.context]_LogConnectFailure(4788)=>Establishing connection failure reason and flags: disconnect/Doze/-1/reason/18/flags/65536/[-, -, -, -, -, -, -, -, -, peer_reset, -, -, -, -]
-06-10 16:05:27.884 E/msys    ( 6476): E[C mem.context]_LogConnectFailure(4820)=>[Happy Eyeball] Connect failed with source=1, winner stream ip=2a03:2880:f25b:e6:face:b00c:0:6e2e, port=80, dnsResolutionMethod=1, combined_ip_addresses=2a03:2880:f25b:e6:face:b00c:0:6e2e, 157.240.17.175
+06-10 16:05:27.884 E/msys    ( 6476): E[C mem.context]_LogConnectFailure(4820)=>[Happy Eyeball] Connect failed with source=1, winner stream ip=2a03:2880:f25b:e6:face:b00c:0:6e2e, port=80, dnsResolutionMethod=1, combined_ip_addresses=2a03:2880:f25b:e6:face:b00c:0:6e2e, [REDACTED_IPV4]
 06-10 16:05:27.887 E/msys    ( 6476): E[N WCCConnectionMEM]_WCCConnectionMEMEmitStateChange(3200)=>[INFO] connection/new_state/connecting [connection_id=639160683, wcc_source=1, wcc_reason=18]
 06-10 16:05:27.887 E/msys    ( 6476): E[C MEMConnectionManager]_MEMConnectionManagerStateChangeHandler(585)=>[Critical] MEMConnectionState updated to ID: 1 with connectionId: 639160683
 06-10 16:05:27.898 D/NetdEventListenerService( 2620): DNS Requested by 103, 10277(com.instagram.android), 4(FAIL), isBlocked=true, 0ms
-06-10 16:05:27.900 E/msys    ( 6476): E[N WCCConnectionMEM]_WCCConnectionMEMDoConnectWithAuthKeys(1546)=>[INFO] connection/connect/start/[host=z-p42-chat-e2ee-ig.facebook.com port=5222]/[157.240.17.175:5222]/socketAddressCount=2
+06-10 16:05:27.900 E/msys    ( 6476): E[N WCCConnectionMEM]_WCCConnectionMEMDoConnectWithAuthKeys(1546)=>[INFO] connection/connect/start/[host=z-p42-chat-e2ee-ig.facebook.com port=5222]/[[REDACTED_IPV4]:5222]/socketAddressCount=2
 06-10 16:05:27.900 E/msys    ( 6476): E[N WCCConnectionMEM]_WCCConnectionMEMLifecycleEventHandler(2176)=>[INFO] connection/xmpp/lifecycle_event/will-connect
 06-10 16:05:27.900 E/msys    ( 6476): E[A WA]WCCHandshakeCreate(191)=>handshake/create, pq mode:0
 06-10 16:05:27.909 W/secondary_dns( 6476): I/O Exception while trying to resolve z-p42-chat-e2ee-ig.facebook.com
@@ -34941,7 +34941,7 @@
 06-10 16:07:42.912 I/SSS@search user 0(15158): (PackageBroadcastReceiver) packageName: com.google.android.apps.walletnfcrel
 06-10 16:07:42.912 I/SSS@search user 0(15158): (PackageBroadcastReceiver) Packages changed: com.google.android.apps.walletnfcrel
 06-10 16:07:42.912 I/SSS@search user 0(15158): (AppsDataWorker) scheduling worker CMD_UPDATE_LIST
-06-10 16:07:42.912 I/SmpLog  ( 3949): [SMP] Test mode: false, v:3.3.10.0, com.samsung.euicc
+06-10 16:07:42.912 I/SmpLog  ( 3949): [SMP] Test mode: false, v:[REDACTED_IPV4], com.samsung.euicc
 06-10 16:07:42.912 I/SmpLog  ( 3949): [SMP] ptype:fcm, token:...FP555 (163), D:false, O:DEVICE_BASED, S:true, M:false, P:FCM_PRIMARY_MODE
 06-10 16:07:42.913 I/SSS@search user 0(15158): (PackageBroadcastReceiver) onReceive android.intent.action.PACKAGE_CHANGED
 06-10 16:07:42.913 I/SSS@search user 0(15158): (PackageBroadcastReceiver) packageName: com.google.earth
@@ -37382,7 +37382,7 @@
 06-10 16:07:46.508 E/msys    ( 6476): E[C 1]_MCCLogErrorInternal(331)=>8/374/3970/65536
 06-10 16:07:46.508 E/msys    ( 6476): E[C 1]_MCCLogErrorInternal(331)=>8/374/3972/18
 06-10 16:07:46.508 E/msys    ( 6476): E[C mem.context]_LogConnectFailure(4788)=>Establishing connection failure reason and flags: disconnect/Doze/-1/reason/18/flags/65536/[-, -, -, -, -, -, -, -, -, peer_reset, -, -, -, -]
-06-10 16:07:46.509 E/msys    ( 6476): E[C mem.context]_LogConnectFailure(4820)=>[Happy Eyeball] Connect failed with source=1, winner stream ip=2a03:2880:f25b:e6:face:b00c:0:6e2e, port=80, dnsResolutionMethod=1, combined_ip_addresses=2a03:2880:f25b:e6:face:b00c:0:6e2e, 157.240.17.175
+06-10 16:07:46.509 E/msys    ( 6476): E[C mem.context]_LogConnectFailure(4820)=>[Happy Eyeball] Connect failed with source=1, winner stream ip=2a03:2880:f25b:e6:face:b00c:0:6e2e, port=80, dnsResolutionMethod=1, combined_ip_addresses=2a03:2880:f25b:e6:face:b00c:0:6e2e, [REDACTED_IPV4]
 06-10 16:07:46.514 E/msys    ( 6476): E[N WCCConnectionMEM]_WCCConnectionMEMEmitStateChange(3200)=>[INFO] connection/new_state/connecting [connection_id=639160684, wcc_source=1, wcc_reason=18]
 06-10 16:07:46.514 E/msys    ( 6476): E[C MEMConnectionManager]_MEMConnectionManagerStateChangeHandler(585)=>[Critical] MEMConnectionState updated to ID: 1 with connectionId: 639160684
 06-10 16:07:46.519 D/ConnectivityService( 2620): Returning BLOCKED NetworkInfo to uid=10277
@@ -37390,7 +37390,7 @@
 06-10 16:07:46.529 I/elpq    ( 7884): (REDACTED) HDM. Ignoring irrelevant audio permission changes for package %s
 06-10 16:07:46.530 I/RequestManager_FLP( 5669): onOpChanged, op=0 / packageName=com.snapchat.android
 06-10 16:07:46.539 I/lmkd    ( 1059): 1(delay), 0(swap), 0(freelimit), 0(reentrymode) memory pressure events were skipped after a kill!
-06-10 16:07:46.560 E/msys    ( 6476): E[N WCCConnectionMEM]_WCCConnectionMEMDoConnectWithAuthKeys(1546)=>[INFO] connection/connect/start/[host=z-p42-chat-e2ee-ig.facebook.com port=5222]/[157.240.17.175:5222]/socketAddressCount=2
+06-10 16:07:46.560 E/msys    ( 6476): E[N WCCConnectionMEM]_WCCConnectionMEMDoConnectWithAuthKeys(1546)=>[INFO] connection/connect/start/[host=z-p42-chat-e2ee-ig.facebook.com port=5222]/[[REDACTED_IPV4]:5222]/socketAddressCount=2
 06-10 16:07:46.560 E/msys    ( 6476): E[N WCCConnectionMEM]_WCCConnectionMEMLifecycleEventHandler(2176)=>[INFO] connection/xmpp/lifecycle_event/will-connect
 06-10 16:07:46.560 E/msys    ( 6476): E[A WA]WCCHandshakeCreate(191)=>handshake/create, pq mode:0
 06-10 16:07:46.565 D/NetdEventListenerService( 2620): DNS Requested by 103, 10277(com.instagram.android), 4(FAIL), isBlocked=true, 0ms
@@ -38129,7 +38129,7 @@
 06-10 16:07:48.181 D/SemWifiSwitchForIndividualAppsService( 2620): isSkipNetworkCondition - result:5
 06-10 16:07:48.238 D/NetdEventListenerService( 2620): DNS Requested by 103, 10707(com.azure.authenticator), 4(FAIL), isBlocked=true, 0ms
 06-10 16:07:48.350 I/Valdi   ( 5034): [DynamicDelivery] Loading module content for: valdi_core.valdimodule
-06-10 16:07:48.350 I/Valdi   ( 5034): [DynamicDelivery] Loading modules archive -- app version: 14.10.0.44
+06-10 16:07:48.350 I/Valdi   ( 5034): [DynamicDelivery] Loading modules archive -- app version: [REDACTED_IPV4]
 06-10 16:07:48.350 I/Valdi   ( 5034): [DynamicDelivery] No DynamicDeliveryConfig in COF
 06-10 16:07:48.350 W/Valdi   ( 5034): [DynamicDelivery] No DynamicDelivery config found. Skipping modules archive fetch.
 06-10 16:07:48.351 I/Valdi   ( 5034): [DynamicDelivery] RETURNING: false
@@ -46680,10 +46680,10 @@
 06-10 16:08:09.448 I/wpa_supplicant( 4922): wlan0: nl80211: New scan results available
 06-10 16:08:09.449 I/wpa_supplicant( 4922): nl80211: Scan included frequencies: 2412
 06-10 16:08:09.450 D/WifiNl80211Manager( 2620): Scan result ready event
-06-10 16:08:09.451 I/LOWI-9.0.1.64( 2858): [LOWI-Scan] lowi_close_record:Scan done in 22437223ms, 3 APs in scan results
+06-10 16:08:09.451 I/LOWI-[REDACTED_IPV4]( 2858): [LOWI-Scan] lowi_close_record:Scan done in 22437223ms, 3 APs in scan results
 06-10 16:08:09.453 I/HYPER-HAL( 2122): [RequestManager.cpp]releaseLocked(): Released ID : 32260552
 06-10 16:08:09.454 D/WifiNative( 2620): Scan result ready event
-06-10 16:08:09.455 I/LOWI-9.0.1.64( 2858): [LOWIUtils] responseToOutPostcard - TO: FreeWifiScanObserver, FROM:   LOWI-SERVER, RESP:  LOWI_ASYNC_DISCOVERY_SCAN_RESULTS
+06-10 16:08:09.455 I/LOWI-[REDACTED_IPV4]( 2858): [LOWIUtils] responseToOutPostcard - TO: FreeWifiScanObserver, FROM:   LOWI-SERVER, RESP:  LOWI_ASYNC_DISCOVERY_SCAN_RESULTS
 06-10 16:08:09.457 E/AppIconSolution( 5787): Couldn't get theme package resources, package is null
 06-10 16:08:09.457 I/AppIconSolution( 5787): load= live icon for com.sec.android.app.clockpackage, from overlay = false
 06-10 16:08:09.457 I/LauncherActivityInfo( 5787): packageName: com.sec.android.app.clockpackage, useThemeIcon: false, height: 288, width: 288, density: 640
