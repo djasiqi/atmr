@@ -1727,7 +1727,6 @@ const DraftInvoiceEditorPanel = ({
                 const rowNeedsApply = descEditable || amountEditable || noteEditable;
                 const rowAmountNegative =
                   line.line_total != null && Number(line.line_total) < 0;
-                const isArLine = isAnyRoundTripLine(line);
                 const showArLegExclude = canShowRoundTripLegExcludeActions(line);
                 const rowClassNames = [
                   rowAmountNegative ? styles.rowAmountNegative : '',
