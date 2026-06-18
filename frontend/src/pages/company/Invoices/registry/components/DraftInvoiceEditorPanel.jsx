@@ -522,6 +522,17 @@ const DraftInvoiceEditorPanel = ({
     [invoiceStatusLowerResolved]
   );
 
+  /** Aperçu HTML aligné PDF (A/R, montants fusionnés) : émise éditable ou payée en lecture seule. */
+  const showHtmlInvoicePreview = useMemo(() => {
+    if (!inv) return false;
+    if (allowsLineEditing) return true;
+    return (
+      invoiceStatusLowerResolved === 'paid' &&
+      Array.isArray(inv.lines) &&
+      inv.lines.length > 0
+    );
+  }, [inv, allowsLineEditing, invoiceStatusLowerResolved]);
+
   const filteredLines = useMemo(
     () => filterInvoiceLines(lines, lineFilter),
     [lines, lineFilter]
@@ -641,8 +652,12 @@ const DraftInvoiceEditorPanel = ({
 
   /** Édition autorisée : aperçu HTML ; sinon iframe si `pdf_url` présent. */
   const showDocumentViewer = useMemo(
-    () => Boolean(inv && (allowsLineEditing || String(pdfEmbedSrc || '').trim())),
-    [inv, allowsLineEditing, pdfEmbedSrc]
+    () =>
+      Boolean(
+        inv &&
+          (showHtmlInvoicePreview || String(pdfEmbedSrc || '').trim())
+      ),
+    [inv, showHtmlInvoicePreview, pdfEmbedSrc]
   );
 
   /** URL « propre » pour nouvel onglet (sans cache-bust iframe). */
@@ -664,14 +679,14 @@ const DraftInvoiceEditorPanel = ({
   useEffect(() => {
     const active =
       open &&
-      (allowsLineEditing ? Boolean(inv) : Boolean(String(pdfEmbedSrc || '').trim()));
+      (showHtmlInvoicePreview ? Boolean(inv) : Boolean(String(pdfEmbedSrc || '').trim()));
     if (active) {
       document.body.classList.add(HIDE_ACROBAT_PDF_OVERLAY_BODY_CLASS);
     }
     return () => {
       document.body.classList.remove(HIDE_ACROBAT_PDF_OVERLAY_BODY_CLASS);
     };
-  }, [open, pdfEmbedSrc, allowsLineEditing, inv]);
+  }, [open, pdfEmbedSrc, showHtmlInvoicePreview, inv]);
 
   useEffect(() => {
     const syncFs = () => {
@@ -695,7 +710,7 @@ const DraftInvoiceEditorPanel = ({
   useEffect(() => {
     if (
       (!showAddLinePanel && !showRemisePanel && !showLinesSheet) ||
-      !(allowsLineEditing ? inv : pdfEmbedSrc)
+      !(showHtmlInvoicePreview ? inv : pdfEmbedSrc)
     ) {
       return undefined;
     }
@@ -709,7 +724,7 @@ const DraftInvoiceEditorPanel = ({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [showAddLinePanel, showRemisePanel, showLinesSheet, pdfEmbedSrc, allowsLineEditing, inv]);
+  }, [showAddLinePanel, showRemisePanel, showLinesSheet, pdfEmbedSrc, showHtmlInvoicePreview, inv]);
 
   useEffect(() => {
     setPdfZoneExpanded(false);
@@ -2135,7 +2150,7 @@ const DraftInvoiceEditorPanel = ({
                         : ''
                     }`}
                   >
-                    {allowsLineEditing ? (
+                    {showHtmlInvoicePreview ? (
                       <InvoiceLivePreview
                         invoice={inv}
                         companyVatApplicable={companyVatApplicable}

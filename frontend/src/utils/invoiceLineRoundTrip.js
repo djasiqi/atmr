@@ -174,9 +174,6 @@ export function lineEditorContextArTag(line) {
   if (isRoundTripPreviewHiddenLine(line)) return 'Retour';
   if (isRoundTripPreviewPrimaryLine(line)) return 'A/R';
   if (isSingleMergedRoundTripLine(line)) return 'A/R';
-  if (m?.is_round_trip_leg === true || m?.transport_type === 'A/R') {
-    return 'Aller';
-  }
   return null;
 }
 

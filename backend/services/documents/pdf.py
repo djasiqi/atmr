@@ -2819,6 +2819,8 @@ def _pdf_show_ar_legend(
             return True
         if lm.get("round_trip_secondary_reservation_id") is not None:
             return True
+        if lm.get("billing_unit") == "round_trip":
+            return True
         if lm.get("is_round_trip_leg") is True and (
             lm.get("merged_segment_count") or 0
         ) >= 2:
@@ -2854,6 +2856,8 @@ def _consolidated_item_shows_ar_tag_pdf(item: dict[str, Any]) -> bool:
         if lm.get("round_trip_merge_partner_reservation_id") is not None:
             return True
         if lm.get("round_trip_secondary_reservation_id") is not None:
+            return True
+        if lm.get("billing_unit") == "round_trip":
             return True
         if lm.get("is_round_trip_leg") is True and (
             lm.get("merged_segment_count") or 0
@@ -3122,6 +3126,185 @@ def _pdf_format_transport_detail_inner_wrapped(
     return "<br/>".join(_xml_escape_for_paragraph(x) for x in lines)
 
 
+def _resolve_invoice_line_meta(
+    line: Any, enriched_by_line_id: dict[int, dict[str, Any]]
+) -> dict[str, Any]:
+    """``line_meta`` enrichi (A/R) si disponible, sinon valeur ORM."""
+    lid = getattr(line, "id", None)
+    if lid is not None:
+        hit = enriched_by_line_id.get(int(lid))
+        if isinstance(hit, dict):
+            return dict(hit)
+    raw = getattr(line, "line_meta", None)
+    return dict(raw) if isinstance(raw, dict) else {}
+
+
+def _build_enriched_line_meta_by_line_id(
+    invoice: Any,
+    bookings_by_id: dict[int, Any] | None = None,
+) -> dict[int, dict[str, Any]]:
+    """Aligne PDF / aperçu HTML : paires A/R, jambe masquée, mono-ligne ``is_round_trip``."""
+    from models.invoice import enrich_invoice_line_payloads_for_api
+
+    lines = list(getattr(invoice, "lines", None) or [])
+    if not lines:
+        return {}
+    line_dicts = [ln.to_dict() for ln in lines]
+    enrich_invoice_line_payloads_for_api(
+        lines, line_dicts, bookings_by_id=bookings_by_id
+    )
+    out: dict[int, dict[str, Any]] = {}
+    for ln, d in zip(lines, line_dicts, strict=True):
+        meta = d.get("line_meta")
+        if isinstance(meta, dict):
+            out[int(ln.id)] = meta
+    return out
+
+
+def _invoice_line_by_reservation_id(invoice: Any, reservation_id: int) -> Any | None:
+    for ln in getattr(invoice, "lines", None) or []:
+        rid = getattr(ln, "reservation_id", None)
+        if rid is not None and int(rid) == int(reservation_id):
+            return ln
+    return None
+
+
+def _pdf_merged_ht_for_ar_primary(
+    invoice: Any,
+    primary_line: Any,
+    partner_reservation_id: int,
+) -> Decimal:
+    p_amt = Decimal(str(getattr(primary_line, "line_total", 0) or 0))
+    partner_line = _invoice_line_by_reservation_id(invoice, partner_reservation_id)
+    if partner_line is None:
+        return round_to_5_cents(p_amt)
+    s_amt = Decimal(str(getattr(partner_line, "line_total", 0) or 0))
+    return round_to_5_cents(p_amt + s_amt)
+
+
+def _pdf_build_preconsolidated_ar_items(
+    invoice: Any,
+    bookings_by_id: dict[int, Any],
+    enriched_by_line_id: dict[int, dict[str, Any]],
+) -> tuple[list[dict[str, Any]], set[int]]:
+    """Lignes A/R déjà fusionnées via enrichissement (partenaire masqué ou mono-ligne)."""
+    pre: list[dict[str, Any]] = []
+    used_reservation_ids: set[int] = set()
+
+    for line in getattr(invoice, "lines", None) or []:
+        if line.type not in (InvoiceLineType.RIDE, InvoiceLineType.MATERIAL_DELIVERY):
+            continue
+        rid = getattr(line, "reservation_id", None)
+        if rid is None:
+            continue
+        bid = int(rid)
+        if bid in used_reservation_ids:
+            continue
+
+        lm = _resolve_invoice_line_meta(line, enriched_by_line_id)
+        if lm.get("preview_hide_merged_round_trip") is True:
+            used_reservation_ids.add(bid)
+            continue
+
+        booking = bookings_by_id.get(bid)
+        if not booking:
+            continue
+
+        partner_rid = lm.get("round_trip_merge_partner_reservation_id")
+        is_single_rt = lm.get("billing_unit") == "round_trip"
+
+        if partner_rid is not None:
+            partner_rid_i = int(partner_rid)
+            partner_line = _invoice_line_by_reservation_id(invoice, partner_rid_i)
+            partner_booking = bookings_by_id.get(partner_rid_i)
+            used_reservation_ids.add(bid)
+            used_reservation_ids.add(partner_rid_i)
+
+            pickup_aller = getattr(booking, "pickup_location", "") or ""
+            dropoff_aller = getattr(booking, "dropoff_location", "") or ""
+            amount_rounded = _pdf_merged_ht_for_ar_primary(
+                invoice, line, partner_rid_i
+            )
+            short_a = _short_label_for_transport(pickup_aller)
+            short_b = _short_label_for_transport(dropoff_aller)
+            detail_a = _short_detail_label(pickup_aller)
+            detail_b = _short_detail_label(dropoff_aller)
+            date_aller = getattr(booking, "scheduled_time", None)
+            date_retour = (
+                getattr(partner_booking, "scheduled_time", None)
+                if partner_booking
+                else None
+            )
+            earliest = date_aller or date_retour
+            if (
+                date_aller
+                and date_retour
+                and hasattr(date_aller, "__le__")
+                and date_aller <= date_retour
+            ):
+                earliest = date_aller
+            elif date_retour:
+                earliest = date_retour
+
+            patient_id = lm.get("patient_id") or getattr(booking, "client_id", None)
+            patient_name = lm.get("patient_name") or "Patient"
+
+            pre.append(
+                {
+                    "is_round_trip": True,
+                    "transport_type": "A/R",
+                    "date": date_aller or date_retour,
+                    "earliest_scheduled": earliest,
+                    "patient_id": patient_id,
+                    "patient_name": patient_name,
+                    "pickup": pickup_aller,
+                    "dropoff": dropoff_aller,
+                    "transport_display": f"{short_a} ↔ {short_b}",
+                    "aller_detail": f"{short_a} → {short_b}",
+                    "retour_detail": f"{short_b} → {short_a}",
+                    "aller_detail_short": f"{detail_a} → {detail_b}",
+                    "retour_detail_short": f"{detail_b} → {detail_a}",
+                    "amount": amount_rounded,
+                    "line1": line,
+                    "line2": partner_line,
+                    "booking1": booking,
+                    "booking2": partner_booking,
+                }
+            )
+            continue
+
+        if is_single_rt:
+            used_reservation_ids.add(bid)
+            pickup = getattr(booking, "pickup_location", "") or ""
+            dropoff = getattr(booking, "dropoff_location", "") or ""
+            short_a = _short_label_for_transport(pickup)
+            short_b = _short_label_for_transport(dropoff)
+            amount_rounded = round_to_5_cents(
+                Decimal(str(getattr(line, "line_total", 0) or 0))
+            )
+            pre.append(
+                {
+                    "is_round_trip": True,
+                    "transport_type": "A/R",
+                    "date": getattr(booking, "scheduled_time", None),
+                    "earliest_scheduled": getattr(booking, "scheduled_time", None),
+                    "patient_id": lm.get("patient_id")
+                    or getattr(booking, "client_id", None),
+                    "patient_name": lm.get("patient_name") or "Patient",
+                    "pickup": pickup,
+                    "dropoff": dropoff,
+                    "transport_display": f"{short_a} ↔ {short_b}",
+                    "aller_detail": f"{short_a} → {short_b}",
+                    "retour_detail": f"{short_b} → {short_a}",
+                    "amount": amount_rounded,
+                    "line": line,
+                    "booking": booking,
+                }
+            )
+
+    return pre, used_reservation_ids
+
+
 def _build_s2_table(
     invoice: "Invoice",
     font_name: str,
@@ -3172,6 +3355,13 @@ def _build_s2_table(
     # (l'encadré et le bloc totaux restent la synthèse).
     suppress_line_discount_breakdown = False
 
+    enriched_by_line_id = _build_enriched_line_meta_by_line_id(
+        invoice, bookings_by_id
+    )
+    pre_consolidated, used_ar_reservation_ids = _pdf_build_preconsolidated_ar_items(
+        invoice, bookings_by_id, enriched_by_line_id
+    )
+
     lines_with_bookings: list[dict[str, Any]] = []
     for line in invoice.lines:
         if (
@@ -3183,6 +3373,11 @@ def _build_s2_table(
             or not line.reservation_id
         ):
             continue
+        lm = _resolve_invoice_line_meta(line, enriched_by_line_id)
+        if lm.get("preview_hide_merged_round_trip") is True:
+            continue
+        if int(line.reservation_id) in used_ar_reservation_ids:
+            continue
         booking = bookings_by_id.get(line.reservation_id)
         if not booking:
             continue
@@ -3193,10 +3388,10 @@ def _build_s2_table(
         patient_id = None
 
         if is_third_party_invoice or is_s2_invoice:
-            # Facture tierce partie ou S2 : utiliser le patient depuis meta ou booking
-            if hasattr(line, "meta") and isinstance(line.meta, dict):
+            # Facture tierce partie ou S2 : utiliser le patient depuis line_meta ou booking
+            if lm.get("patient_name"):
                 patient_name = (
-                    line.meta.get("patient_name")
+                    lm.get("patient_name")
                     or booking.customer_name
                     or (
                         f"{booking.client.user.first_name or ''} "
@@ -3204,7 +3399,7 @@ def _build_s2_table(
                     ).strip()
                     or "Patient"
                 )
-                patient_id = line.meta.get("patient_id") or booking.client_id
+                patient_id = lm.get("patient_id") or booking.client_id
             else:
                 patient_name = (
                     booking.customer_name
@@ -3259,6 +3454,8 @@ def _build_s2_table(
             }
         )
     consolidated = _detect_and_group_round_trips(lines_with_bookings)
+    if pre_consolidated:
+        consolidated = pre_consolidated + consolidated
     consolidated = _sort_consolidated_lines_for_s2(consolidated)
     show_date_column = _pdf_detail_table_show_date_column(invoice, consolidated)
 
@@ -3566,6 +3763,12 @@ def _build_s2_table(
             if amt == 0:
                 continue
             cat_or, net_or = _line_catalog_vs_net_ht(line)
+            partner_rid_or = lm_or.get("round_trip_merge_partner_reservation_id")
+            if partner_rid_or is not None and lm_or.get("preview_hide_merged_round_trip") is not True:
+                merged_ht = _pdf_merged_ht_for_ar_primary(
+                    invoice, line, int(partner_rid_or)
+                )
+                net_or = float(merged_ht)
             cat_show_o = cat_or if abs(cat_or - net_or) > _PDF_CATALOG_NET_EPS else None
             if suppress_line_discount_breakdown:
                 cat_show_o = None
@@ -3603,11 +3806,11 @@ def _build_s2_table(
                 esc_d = _pdf_escape_wrapped_plain(
                     raw_desc_orphan, font_name, desc_inner_pt
                 )
-            lm_or = line.line_meta if isinstance(line.line_meta, dict) else {}
+            lm_or = _resolve_invoice_line_meta(line, enriched_by_line_id)
             orphan_ar = (
                 lm_or.get("round_trip_merge_partner_reservation_id") is not None
                 and lm_or.get("preview_hide_merged_round_trip") is not True
-            )
+            ) or lm_or.get("billing_unit") == "round_trip"
             ar_suffix = ""
             if orphan_ar:
                 ar_suffix = f" {_pdf_s2_ar_tag_markup()}"

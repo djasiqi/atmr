@@ -267,7 +267,10 @@ function lineIsRoundTrip(line) {
   if (m.period_preview_single_leg) return false;
   if (m.round_trip_merge_partner_reservation_id != null) return true;
   if (m.preview_hide_merged_round_trip === true) return true;
-  return false;
+  if (m.billing_unit === 'round_trip') return true;
+  const sec = m.round_trip_secondary_reservation_ids;
+  if (Array.isArray(sec) && sec.length > 0) return true;
+  return m.round_trip_secondary_reservation_id != null;
 }
 
 /** Montants HT / TVA / TTC pour une ligne principale A/R (somme des deux segments facturés). */

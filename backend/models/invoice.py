@@ -422,8 +422,7 @@ class Invoice(db.Model):
             lines_out = []
         elif hasattr(self, "lines"):
             lines_out = [line.to_dict() for line in self.lines]
-            _enrich_invoice_line_payloads_booking_dates(list(self.lines), lines_out)
-            _enrich_invoice_line_payloads_round_trip_merge(list(self.lines), lines_out)
+            enrich_invoice_line_payloads_for_api(list(self.lines), lines_out)
         else:
             lines_out = []
 
@@ -738,6 +737,82 @@ def _enrich_invoice_line_payloads_round_trip_merge(
         meta_sec["round_trip_merge_primary_reservation_id"] = int(pri_id)
         d_pri["line_meta"] = meta_pri
         d_sec["line_meta"] = meta_sec
+
+
+def _enrich_invoice_line_payloads_single_round_trip(
+    invoice_lines: list[Any],
+    line_dicts: list[dict[str, Any]],
+    *,
+    bookings_by_id: dict[int, Any] | None = None,
+) -> None:
+    """Marque les lignes A/R facturées en une seule entrée (réservation ``is_round_trip``)."""
+    rids = [
+        int(ln.reservation_id)
+        for ln in invoice_lines
+        if ln.type == InvoiceLineType.RIDE and ln.reservation_id
+    ]
+    if not rids:
+        return
+
+    if bookings_by_id is None:
+        from models.booking import Booking
+
+        bookings = Booking.query.filter(Booking.id.in_(list(set(rids)))).all()
+        bookings_by_id = {int(b.id): b for b in bookings}
+
+    invoice_rid_set = set(rids)
+
+    for ln, d in zip(invoice_lines, line_dicts, strict=True):
+        if ln.type != InvoiceLineType.RIDE or not ln.reservation_id:
+            continue
+        meta = dict(d.get("line_meta") or {})
+        if meta.get("round_trip_merge_partner_reservation_id"):
+            continue
+        if meta.get("preview_hide_merged_round_trip"):
+            continue
+        if meta.get("billing_unit") == "round_trip":
+            if meta.get("transport_type") != "A/R":
+                meta["transport_type"] = "A/R"
+                d["line_meta"] = meta
+            continue
+
+        b = bookings_by_id.get(int(ln.reservation_id))
+        if not b:
+            continue
+        if getattr(b, "is_return", False):
+            continue
+
+        is_rt = bool(getattr(b, "is_round_trip", False))
+        if not is_rt:
+            bid = int(b.id)
+            for other in bookings_by_id.values():
+                opid = getattr(other, "parent_booking_id", None)
+                if opid is not None and int(opid) == bid and int(other.id) in invoice_rid_set:
+                    is_rt = True
+                    break
+
+        if not is_rt:
+            continue
+
+        meta["billing_unit"] = "round_trip"
+        meta["transport_type"] = "A/R"
+        d["line_meta"] = meta
+
+
+def enrich_invoice_line_payloads_for_api(
+    invoice_lines: list[Any],
+    line_dicts: list[dict[str, Any]],
+    *,
+    bookings_by_id: dict[int, Any] | None = None,
+) -> None:
+    """Enrichit les payloads lignes facture (dates, paires A/R, A/R mono-ligne) pour l'API."""
+    _enrich_invoice_line_payloads_booking_dates(invoice_lines, line_dicts)
+    _enrich_invoice_line_payloads_round_trip_merge(invoice_lines, line_dicts)
+    _enrich_invoice_line_payloads_single_round_trip(
+        invoice_lines,
+        line_dicts,
+        bookings_by_id=bookings_by_id,
+    )
 
 
 class InvoicePayment(db.Model):

@@ -240,7 +240,9 @@ class InvoiceRepository:
                     client_by_id = {c.id: c for c in clients_loaded}
 
             dto_lines: list[InvoiceLineDTO] = []
-            for line in invoice.lines:
+            lines_orm = list(invoice.lines)
+            line_dicts: list[dict[str, Any]] = []
+            for line in lines_orm:
                 lm_final = cast(dict[str, Any] | None, line.line_meta)
                 if bs_val == "s2_clinic_monthly" and line.reservation_id:
                     _bk = booking_by_id.get(line.reservation_id)
@@ -257,6 +259,24 @@ class InvoiceRepository:
                 ):
                     _bk = booking_by_id.get(line.reservation_id)
                     lm_final = _merge_ride_service_date_from_booking(line, _bk)
+                line_dict = line.to_dict()
+                if lm_final is not None:
+                    line_dict["line_meta"] = lm_final
+                line_dicts.append(line_dict)
+
+            from models.invoice import enrich_invoice_line_payloads_for_api
+
+            enrich_invoice_line_payloads_for_api(
+                lines_orm,
+                line_dicts,
+                bookings_by_id=booking_by_id,
+            )
+
+            for line, line_dict in zip(lines_orm, line_dicts, strict=True):
+                lm_out = cast(
+                    dict[str, Any] | None,
+                    line_dict.get("line_meta"),
+                )
                 dto_lines.append(
                     InvoiceLineDTO(
                         id=line.id,
@@ -273,7 +293,7 @@ class InvoiceRepository:
                         total_with_vat=line.total_with_vat,
                         adjustment_note=line.adjustment_note,
                         reservation_id=line.reservation_id,
-                        line_meta=lm_final,
+                        line_meta=lm_out,
                     )
                 )
             lines = dto_lines
