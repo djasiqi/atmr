@@ -63,6 +63,20 @@ def test_inc_batch_rate_limited() -> None:
     mock_counter.inc.assert_called_once()
 
 
+def test_inc_tracking_mission_live_missing_mission_id() -> None:
+    if m._TRACKING_MISSION_LIVE_MISSING_MISSION_ID is None:
+        pytest.skip("prometheus_client Counter unavailable")
+    inc = MagicMock()
+    with patch.object(m, "_TRACKING_MISSION_LIVE_MISSING_MISSION_ID") as mock_counter:
+        mock_counter.labels.return_value = MagicMock(inc=inc)
+        m.inc_tracking_mission_live_missing_mission_id(
+            transport="http",
+            action="downgraded",
+        )
+    mock_counter.labels.assert_called_once_with(transport="http", action="downgraded")
+    inc.assert_called_once()
+
+
 def test_observe_gps_quality_accuracy() -> None:
     if m._GPS_ACCURACY is None:
         pytest.skip("prometheus_client Histogram unavailable")

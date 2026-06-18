@@ -5,12 +5,14 @@ set -euo pipefail
 # Usage:
 #   BOOTSTRAP_SERVERS=kafka-broker-1:29092 ./scripts/kafka-init-topics.sh
 #
-# Réplication : par défaut 2 (valide avec 2 ou 3+ brokers). RF=3 échoue si seuls
-# 2 brokers répondent au cluster (InvalidReplicationFactorException).
-# Pour 3 brokers stables, définir KAFKA_TOPIC_REPLICATION_FACTOR=3.
+# Variables (voir env.kafka.production.example) :
+#   KAFKA_TOPIC_REPLICATION_FACTOR / REPLICATION_FACTOR — défaut 2
+#   KAFKA_DEFAULT_PARTITIONS — défaut 6
+#   KAFKA_DLQ_PARTITIONS — défaut 3
+#   KAFKA_CREATE_INACTIVE_TOPICS — défaut false (topics notifications/mission)
+#   KAFKA_TOPIC_DRIVER_LOCATION_* — noms de topics (suffixe .v2 en Phase 1 prod)
 
 BOOTSTRAP_SERVERS="${BOOTSTRAP_SERVERS:-kafka-broker-1:29092}"
-# Préférer KAFKA_TOPIC_REPLICATION_FACTOR (compose) ; REPLICATION_FACTOR reste un alias.
 REPLICATION_FACTOR="${KAFKA_TOPIC_REPLICATION_FACTOR:-${REPLICATION_FACTOR:-2}}"
 
 if [ -n "${KAFKA_MIN_INSYNC_REPLICAS:-}" ] || [ -n "${MIN_INSYNC_REPLICAS:-}" ]; then
@@ -23,6 +25,10 @@ else
   fi
 fi
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=lib/kafka_topics_init.sh
+source "${SCRIPT_DIR}/lib/kafka_topics_init.sh"
+
 export BOOTSTRAP_SERVERS
 
 for _ in $(seq 1 40); do
@@ -33,7 +39,7 @@ for _ in $(seq 1 40); do
   sleep 2
 done
 if ! kafka-broker-api-versions --bootstrap-server "${BOOTSTRAP_SERVERS}" >/dev/null 2>&1; then
-  echo "Échec : impossible de contacter ${BOOTSTRAP_SERVERS} après le délai d’attente." >&2
+  echo "Échec : impossible de contacter ${BOOTSTRAP_SERVERS} après le délai d'attente." >&2
   exit 1
 fi
 
@@ -57,20 +63,6 @@ create_topic() {
     --add-config "min.insync.replicas=${MIN_INSYNC_REPLICAS},retention.ms=${retention_ms},cleanup.policy=${cleanup_policy}"
 }
 
-# Tracking (2h sur raw, 72h sur processed/dlq)
-create_topic "driver.location.raw" "36" "7200000" "delete"
-create_topic "driver.location.processed" "36" "259200000" "delete"
-create_topic "driver.location.dlq" "36" "259200000" "delete"
-
-# Notifications (optionnelles si profile kafka-notifications activé)
-create_topic "notifications.push" "36" "259200000" "delete"
-create_topic "notifications.sms" "36" "259200000" "delete"
-create_topic "notifications.email" "36" "259200000" "delete"
-create_topic "notifications.dlq" "36" "259200000" "delete"
-
-# Topics events explicitement contrôlés
-create_topic "mission.events" "36" "259200000" "delete"
-create_topic "notification.events" "36" "259200000" "delete"
-create_topic "dispatch.events" "36" "259200000" "delete"
+kafka_topics_create_all
 
 echo "Kafka topics init done on ${BOOTSTRAP_SERVERS} (replication factor=${REPLICATION_FACTOR})"

@@ -88,6 +88,7 @@ _TRACKING_ID_MISSING = None
 _CANONICAL_REDIS_WRITE = None
 _CANONICAL_OVERWRITE = None
 _GPS_PROVIDER = None
+_TRACKING_MISSION_LIVE_MISSING_MISSION_ID = None
 
 if Counter is not None:
     _DEDUP_SKIPPED = Counter(
@@ -214,6 +215,14 @@ if Counter is not None:
         "driver_location_gps_provider_total",
         "Provider GPS déclaré dans le payload chauffeur",
         ["provider", "platform"],
+    )
+    _TRACKING_MISSION_LIVE_MISSING_MISSION_ID = Counter(
+        "tracking_mission_live_missing_mission_id_total",
+        (
+            "Payload mission_live reçu sans mission_id (P0-C gate — "
+            "compteur post-déploiement, non cumulatif Redis)"
+        ),
+        ["transport", "action"],
     )
 
 if Histogram is not None:
@@ -648,3 +657,16 @@ def inc_driver_device_health_received(*, constraint_reason: str | None) -> None:
     raw = (constraint_reason or "").strip()
     cr = raw if raw in _KNOWN_CONSTRAINT_REASONS else "_unknown"
     _DRIVER_DEVICE_HEALTH_RECEIVED.labels(constraint_reason=cr).inc()
+
+
+def inc_tracking_mission_live_missing_mission_id(
+    *,
+    transport: str,
+    action: str = "downgraded",
+) -> None:
+    """Incrémente le compteur P0-C quand le mobile envoie mission_live sans mission_id."""
+    if not _metrics_enabled() or _TRACKING_MISSION_LIVE_MISSING_MISSION_ID is None:
+        return
+    t = transport if transport in ("http", "socket", "socket_batch") else "http"
+    act = action if action in ("downgraded", "rejected") else "_unknown"
+    _TRACKING_MISSION_LIVE_MISSING_MISSION_ID.labels(transport=t, action=act).inc()

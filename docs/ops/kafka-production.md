@@ -9,6 +9,12 @@ Contrat déploiement :
 
 Référence variables : `env.kafka.production.example` à la racine du dépôt.
 
+**Optimisation RAM mono-serveur** : voir [kafka-optimization-lirie.md](kafka-optimization-lirie.md) (Phase 1 stabilisation, observation 14 j, Phase 2 mono-broker).
+
+## Capacité hôte — swap (P0)
+
+Avant migration topics, configurer 4 Go swap + `vm.swappiness=10` sur le serveur (procédure dans [kafka-optimization-lirie.md](kafka-optimization-lirie.md#p0--swap-hôte-immédiat-hors-dépôt)).
+
 ## Mode Kafka OFF (nominal)
 
 1. Dans `.env.production` :
@@ -117,6 +123,12 @@ Codes `deploy-kafka-production.sh` : `0` OK, `2` preflight refusé, `3` post-dep
 
 5. **Consumer en `Restarting`**  
    Vérifier image backend à jour (sortie propre si `KAFKA_ENABLED=false`). `docker compose ... ps` doit afficher `Up`, pas `Restarting`.
+
+6. **kafka-ui absent après deploy**  
+   UI désormais en profile `kafka-ui`. Relancer avec `KAFKA_UI_ENABLED=1 scripts/deploy-kafka-production.sh` ou `--profile kafka-ui`.
+
+7. **Phase 2 mono-broker**  
+   Utiliser `KAFKA_COMPOSE_FILE=docker-compose.kafka.single.yml` et `docker-compose.kafka.atmr-network.single.yml`. Voir [kafka-optimization-lirie.md](kafka-optimization-lirie.md).
 
 ## Consumer notifications (`kafka-notifications`)
 

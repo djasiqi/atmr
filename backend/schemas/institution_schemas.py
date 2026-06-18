@@ -7,6 +7,7 @@ Inclut les schemas pour:
 """
 
 from datetime import date, timedelta
+import re
 
 import pytz
 from marshmallow import (
@@ -44,6 +45,10 @@ PICKUP_PAST_GRACE = timedelta(minutes=2)
 VALID_GENDERS = [g.value for g in GenderEnum] + [g.name for g in GenderEnum]
 VALID_MISSION_TYPES = MissionType.choices()
 VALID_BILLING_INTENTS = BillingIntent.choices()
+# Overrides destination : inclut assurance (UI institution) en plus des intents demande.
+VALID_DESTINATION_BILLING_OVERRIDES = list(
+    dict.fromkeys([*VALID_BILLING_INTENTS, "insurance"])
+)
 VALID_REQUEST_STATUSES = RequestStatus.choices()
 VALID_CARRIER_SOURCES = CarrierSource.choices()
 VALID_INSTITUTION_ROLES = [r.value for r in InstitutionRole]
@@ -55,6 +60,62 @@ ISO8601_DATE_REGEX = r"^\d{4}-\d{2}-\d{2}$"
 ISO8601_DATETIME_REGEX = (
     r"^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2})?(\.\d+)?(Z|[+-]\d{2}:\d{2})?$"
 )
+
+_HHMM_ONLY_REGEX = re.compile(r"^\d{2}:\d{2}$")
+_NAIVE_ISO_NO_SECONDS_REGEX = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$")
+
+
+def _mission_day_str(mission_date: object | None) -> str | None:
+    if mission_date is None:
+        return None
+    if isinstance(mission_date, str):
+        stripped = mission_date.strip()
+        return stripped[:10] if stripped else None
+    if isinstance(mission_date, date):
+        return mission_date.isoformat()
+    return None
+
+
+def _normalize_iso_schedule_value(value: str, *, mission_day: str | None) -> str | None:
+    stripped = value.strip()
+    if not stripped:
+        return None
+    if _HHMM_ONLY_REGEX.match(stripped):
+        if not mission_day:
+            return stripped
+        return f"{mission_day}T{stripped}:00"
+    if _NAIVE_ISO_NO_SECONDS_REGEX.match(stripped):
+        return f"{stripped}:00"
+    return stripped
+
+
+def normalize_transport_request_schedule_payload(data: dict) -> dict:
+    """Chaînes vides → None ; HH:MM / ISO sans secondes → ISO naïf complet."""
+    raw = dict(data)
+    mission_day = _mission_day_str(raw.get("mission_date"))
+
+    for field in ("scheduled_time", "return_scheduled_time", "return_time"):
+        val = raw.get(field)
+        if isinstance(val, str):
+            raw[field] = _normalize_iso_schedule_value(val, mission_day=mission_day)
+
+    stops = raw.get("intermediate_stops")
+    if isinstance(stops, list):
+        normalized_stops = []
+        for stop in stops:
+            if not isinstance(stop, dict):
+                normalized_stops.append(stop)
+                continue
+            entry = dict(stop)
+            st = entry.get("scheduled_time")
+            if isinstance(st, str):
+                entry["scheduled_time"] = _normalize_iso_schedule_value(
+                    st, mission_day=mission_day
+                )
+            normalized_stops.append(entry)
+        raw["intermediate_stops"] = normalized_stops
+
+    return raw
 
 
 # ========== Institution Profile Schema ==========
@@ -802,11 +863,32 @@ class TransportRequestCreateSchema(Schema):
                     "dropoff_doctor": fields.Str(
                         allow_none=True, validate=validate.Length(max=255)
                     ),
+                    "use_custom_billing": fields.Bool(
+                        load_default=False, allow_none=True
+                    ),
+                    "destination_billing_override": fields.Str(
+                        allow_none=True,
+                        validate=validate.OneOf(VALID_DESTINATION_BILLING_OVERRIDES),
+                    ),
+                    "is_return_stop": fields.Bool(load_default=False, allow_none=True),
                 },
                 name="IntermediateStopInput",
             )
         ),
         load_default=list,
+    )
+    return_stop = fields.Nested(
+        Schema.from_dict(
+            {
+                "use_custom_billing": fields.Bool(load_default=False, allow_none=True),
+                "destination_billing_override": fields.Str(
+                    allow_none=True,
+                    validate=validate.OneOf(VALID_DESTINATION_BILLING_OVERRIDES),
+                ),
+            },
+            name="ReturnStopBillingInput",
+        ),
+        allow_none=True,
     )
 
     @validates_schema
@@ -920,6 +1002,12 @@ class TransportRequestCreateSchema(Schema):
                 "delivery_description est requis pour mission_type=material_delivery",
                 field_name="delivery_description",
             )
+
+    @pre_load
+    def _normalize_schedule_fields(self, data, **_kwargs):
+        if not isinstance(data, dict):
+            return data
+        return normalize_transport_request_schedule_payload(data)
 
     @pre_load
     def _normalize_return_date(self, data, **_kwargs):
@@ -1136,11 +1224,38 @@ class TransportRequestUpdateSchema(Schema):
                     "dropoff_doctor": fields.Str(
                         allow_none=True, validate=validate.Length(max=255)
                     ),
+                    "use_custom_billing": fields.Bool(
+                        load_default=False, allow_none=True
+                    ),
+                    "destination_billing_override": fields.Str(
+                        allow_none=True,
+                        validate=validate.OneOf(VALID_DESTINATION_BILLING_OVERRIDES),
+                    ),
+                    "is_return_stop": fields.Bool(load_default=False, allow_none=True),
                 },
                 name="IntermediateStopUpdateInput",
             )
         )
     )
+    return_stop = fields.Nested(
+        Schema.from_dict(
+            {
+                "use_custom_billing": fields.Bool(load_default=False, allow_none=True),
+                "destination_billing_override": fields.Str(
+                    allow_none=True,
+                    validate=validate.OneOf(VALID_DESTINATION_BILLING_OVERRIDES),
+                ),
+            },
+            name="ReturnStopBillingUpdateInput",
+        ),
+        allow_none=True,
+    )
+
+    @pre_load
+    def _normalize_schedule_fields_update(self, data, **_kwargs):
+        if not isinstance(data, dict):
+            return data
+        return normalize_transport_request_schedule_payload(data)
 
     @pre_load
     def _normalize_return_date_update(self, data, **_kwargs):

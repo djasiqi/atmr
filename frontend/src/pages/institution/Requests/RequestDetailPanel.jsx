@@ -318,6 +318,34 @@ const ExternalCarrierSection = ({ request, onComposeEmail, composing = false }) 
   );
 };
 
+const BillingSummaryDisplay = ({ summary }) => {
+  if (!summary) return null;
+  return (
+    <div className={s.billingSummaryBlock}>
+      <p className={s.billingMuted}>
+        Payeur principal : <strong>{summary.primary_label || summary.primary_intent}</strong>
+      </p>
+      {summary.has_exceptions && summary.exceptions?.length > 0 && (
+        <div className={s.billingExceptions}>
+          <p className={s.billingMuted}>Exceptions :</p>
+          <ul className={s.billingExceptionList}>
+            {summary.exceptions.map((ex) => (
+              <li key={`${ex.dropoff_location}-${ex.destination_billing_override}`}>
+                {ex.destination_label || ex.dropoff_location} → {ex.override_label || ex.effective_label}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {summary.multi_payer && (
+        <span className={s.billingBadgeMultiPayer}>
+          Multi-payeurs ({summary.payer_count})
+        </span>
+      )}
+    </div>
+  );
+};
+
 // ─── Billing Section ───────────────────────────────────────
 const BillingSection = ({ request, canBilling, billingMutation, bookingBillingMutation }) => {
   const isConverted = hasBooking(request);
@@ -444,6 +472,8 @@ const BillingSection = ({ request, canBilling, billingMutation, bookingBillingMu
         <div className={`${s.sectionIcon} ${s.sectionIconWarning}`}><FaFileInvoiceDollar /></div>
         <h3 className={s.sectionTitle}>Facturation</h3>
       </div>
+
+      <BillingSummaryDisplay summary={request.billing_summary} />
 
       <div className={`${s.billingStatus} ${billingCss[currentBilledTo] || s.billingStatusPatient}`}>
         {billingLabels[currentBilledTo] || currentBilledTo}

@@ -12,22 +12,65 @@ KAFKA_REQUIRED_FLAGS=(
 
 KAFKA_REQUIRED_COMPOSE_FILES=(
   docker-compose.production.yml
-  docker-compose.kafka.yml
-  docker-compose.kafka.atmr-network.yml
 )
 
-KAFKA_EXPECTED_TOPICS=(
-  driver.location.raw
-  driver.location.processed
-  driver.location.dlq
-  notifications.push
-  notifications.sms
-  notifications.email
-  notifications.dlq
-  mission.events
-  notification.events
-  dispatch.events
-)
+# Fichier compose Kafka (3 brokers par défaut ; docker-compose.kafka.single.yml en Phase 2)
+KAFKA_COMPOSE_FILE="${KAFKA_COMPOSE_FILE:-docker-compose.kafka.yml}"
+KAFKA_NETWORK_FILE="${KAFKA_NETWORK_FILE:-}"
+
+kafka_resolve_network_file() {
+  if [[ -n "${KAFKA_NETWORK_FILE}" ]]; then
+    printf '%s\n' "${KAFKA_NETWORK_FILE}"
+    return
+  fi
+  if [[ "${KAFKA_COMPOSE_FILE}" == *single* ]] || [[ "${KAFKA_COMPOSE_FILE}" == *kraft* ]]; then
+    printf '%s\n' "docker-compose.kafka.atmr-network.single.yml"
+  else
+    printf '%s\n' "docker-compose.kafka.atmr-network.yml"
+  fi
+}
+
+# Topics actifs — noms résolus depuis .env (suffixe .v2 en Phase 1 prod)
+KAFKA_EXPECTED_TOPICS=()
+
+kafka_read_env_value() {
+  local name="$1"
+  local default="${2:-}"
+  local v=""
+  local envf="${ATMR_ENV_FILE:-}"
+  if [[ -n "${envf}" ]] && [[ -f "${envf}" ]]; then
+    v="$(grep -E "^${name}=" "${envf}" 2>/dev/null | tail -n1 | cut -d'=' -f2-)"
+    v="${v//\'/}"
+    v="${v//\"/}"
+    if [[ -n "${v}" ]]; then
+      printf '%s\n' "${v}"
+      return
+    fi
+  fi
+  printf '%s\n' "${default}"
+}
+
+kafka_build_expected_topics() {
+  KAFKA_EXPECTED_TOPICS=(
+    "$(kafka_read_env_value KAFKA_TOPIC_DRIVER_LOCATION_RAW driver.location.raw)"
+    "$(kafka_read_env_value KAFKA_TOPIC_DRIVER_LOCATION_PROCESSED driver.location.processed)"
+    "$(kafka_read_env_value KAFKA_TOPIC_DRIVER_LOCATION_DLQ driver.location.dlq)"
+    "$(kafka_read_env_value KAFKA_TOPIC_NOTIFICATIONS_DLQ notifications.dlq)"
+    "$(kafka_read_env_value KAFKA_OPS_SMOKE_TOPIC atmr.ops.smoke)"
+  )
+  local create_inactive
+  create_inactive="$(kafka_read_env_value KAFKA_CREATE_INACTIVE_TOPICS false | tr '[:upper:]' '[:lower:]')"
+  if [[ "${create_inactive}" == "true" ]]; then
+    KAFKA_EXPECTED_TOPICS+=(
+      notifications.push
+      notifications.sms
+      notifications.email
+      mission.events
+      notification.events
+      dispatch.events
+    )
+  fi
+}
 
 # Consumers du profile `kafka` (docker-compose.production.yml)
 KAFKA_CONSUMER_SERVICES=(
@@ -36,18 +79,25 @@ KAFKA_CONSUMER_SERVICES=(
   kafka-dlq-consumer
 )
 
-KAFKA_BROKER_CONTAINERS=(
-  atmr-kafka-broker-1
-  atmr-kafka-broker-2
-  atmr-kafka-broker-3
-)
+KAFKA_BROKER_CONTAINERS=()
 
-# Commande docker compose « Kafka ON » (3 YAML + profile kafka)
+kafka_refresh_broker_containers() {
+  KAFKA_BROKER_CONTAINERS=()
+  local svc
+  while IFS= read -r svc; do
+    [[ -z "${svc}" ]] && continue
+    KAFKA_BROKER_CONTAINERS+=("atmr-${svc}")
+  done < <(kafka_docker_compose config --services 2>/dev/null | grep '^kafka-broker-' || true)
+}
+
+# Commande docker compose « Kafka ON » (production + kafka + réseau + profile kafka)
 kafka_docker_compose() {
+  local net
+  net="$(kafka_resolve_network_file)"
   docker compose \
     -f docker-compose.production.yml \
-    -f docker-compose.kafka.yml \
-    -f docker-compose.kafka.atmr-network.yml \
+    -f "${KAFKA_COMPOSE_FILE}" \
+    -f "${net}" \
     --profile kafka \
     "$@"
 }
@@ -143,14 +193,23 @@ kafka_check_flags_all_false() {
 }
 
 kafka_check_compose_files() {
-  local f
+  local f net
   for f in "${KAFKA_REQUIRED_COMPOSE_FILES[@]}"; do
     if [[ ! -f "${f}" ]]; then
       log_fail "fichier Compose manquant : ${f}"
       return 1
     fi
   done
-  log_info "fichiers Compose Kafka (3/3 présents)"
+  if [[ ! -f "${KAFKA_COMPOSE_FILE}" ]]; then
+    log_fail "fichier Compose Kafka manquant : ${KAFKA_COMPOSE_FILE}"
+    return 1
+  fi
+  net="$(kafka_resolve_network_file)"
+  if [[ ! -f "${net}" ]]; then
+    log_fail "fichier réseau Kafka manquant : ${net}"
+    return 1
+  fi
+  log_info "fichiers Compose Kafka présents (compose=${KAFKA_COMPOSE_FILE}, network=${net})"
   return 0
 }
 
@@ -216,7 +275,7 @@ kafka_check_functional_smoke() {
   local first rf topic
   first="$(kafka_bootstrap_first)"
   rf="$(kafka_read_replication_factor KAFKA_TOPIC_REPLICATION_FACTOR 2)"
-  topic="atmr.ops.smoke"
+  topic="$(kafka_read_env_value KAFKA_OPS_SMOKE_TOPIC atmr.ops.smoke)"
   if ! kafka_docker_compose exec -T kafka-broker-1 kafka-topics \
     --bootstrap-server "${first}" \
     --create --if-not-exists \
@@ -252,19 +311,40 @@ kafka_check_compose_resolution() {
   local services
   services="$(kafka_docker_compose config --services 2>/dev/null || true)"
   local svc
-  for svc in kafka-broker-1 kafka-broker-2 kafka-broker-3 "${KAFKA_CONSUMER_SERVICES[@]}"; do
+  local broker_count=0
+  while IFS= read -r svc; do
+    [[ -z "${svc}" ]] && continue
+    if [[ "${svc}" == kafka-broker-* ]]; then
+      if ! grep -qx "${svc}" <<<"${services}"; then
+        log_fail "service broker « ${svc} » absent du merge"
+        return 1
+      fi
+      broker_count=$((broker_count + 1))
+    fi
+  done < <(kafka_docker_compose config --services 2>/dev/null | grep '^kafka-broker-' || true)
+  if ((broker_count < 1)); then
+    log_fail "aucun kafka-broker-* dans le merge Compose"
+    return 1
+  fi
+  for svc in "${KAFKA_CONSUMER_SERVICES[@]}"; do
     if ! grep -qx "${svc}" <<<"${services}"; then
       log_fail "service Compose « ${svc} » absent du merge (oubli -f / profile ?)"
       return 1
     fi
   done
-  log_info "résolution Compose : brokers + consumers (profile kafka)"
+  log_info "résolution Compose : ${broker_count} broker(s) + consumers (profile kafka)"
   return 0
 }
 
 kafka_wait_brokers_healthy() {
   local timeout_s="${1:-180}"
   local deadline=$((SECONDS + timeout_s))
+  kafka_refresh_broker_containers
+  local expected="${#KAFKA_BROKER_CONTAINERS[@]}"
+  if ((expected < 1)); then
+    log_fail "aucun conteneur broker à surveiller"
+    return 1
+  fi
   local c status healthy
   while ((SECONDS < deadline)); do
     healthy=0
@@ -274,13 +354,13 @@ kafka_wait_brokers_healthy() {
         healthy=$((healthy + 1))
       fi
     done
-    if ((healthy == 3)); then
-      log_info "brokers Kafka healthy (3/3) via docker inspect"
+    if ((healthy == expected)); then
+      log_info "brokers Kafka healthy (${healthy}/${expected}) via docker inspect"
       return 0
     fi
     sleep 5
   done
-  log_fail "timeout brokers healthy (${timeout_s}s) — docker inspect ${KAFKA_BROKER_CONTAINERS[0]} …"
+  log_fail "timeout brokers healthy (${timeout_s}s) — attendu ${expected}, healthy partiel"
   return 1
 }
 
@@ -309,6 +389,7 @@ kafka_check_broker_api() {
 }
 
 kafka_check_topics_exist() {
+  kafka_build_expected_topics
   local first
   first="$(kafka_bootstrap_first)"
   local listed
@@ -389,5 +470,23 @@ kafka_summary() {
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   echo "Résumé checks Kafka — repérer [OK] / [FAIL] ci-dessus."
   echo "Env lu : ATMR_ENV_FILE=${ATMR_ENV_FILE:-<non défini>}"
+  echo "Compose : KAFKA_COMPOSE_FILE=${KAFKA_COMPOSE_FILE}"
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 }
+
+# Charge KAFKA_COMPOSE_FILE depuis ATMR_ENV_FILE si défini (avant deploy/check).
+kafka_load_compose_file_from_env() {
+  local envf="${ATMR_ENV_FILE:-}"
+  local v=""
+  if [[ -n "${envf}" ]] && [[ -f "${envf}" ]]; then
+    v="$(grep -E '^KAFKA_COMPOSE_FILE=' "${envf}" 2>/dev/null | tail -n1 | cut -d'=' -f2-)"
+    v="${v//\'/}"
+    v="${v//\"/}"
+    v="${v// /}"
+    if [[ -n "${v}" ]]; then
+      KAFKA_COMPOSE_FILE="${v}"
+    fi
+  fi
+}
+
+kafka_load_compose_file_from_env

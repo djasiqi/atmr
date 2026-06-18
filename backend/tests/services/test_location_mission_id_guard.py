@@ -22,12 +22,17 @@ def test_mission_live_without_mission_id_downgraded_to_availability(app) -> None
                     with patch(
                         "services.geolocation.location.publish_event"
                     ):
-                        svc.update_driver_location(
-                            driver_id=1,
-                            latitude=46.2,
-                            longitude=6.1,
-                            location_mode="mission_live",
-                            mission_id=None,
-                        )
+                        with patch(
+                            "services.monitoring.driver_location_metrics."
+                            "inc_tracking_mission_live_missing_mission_id"
+                        ) as mock_inc:
+                            svc.update_driver_location(
+                                driver_id=1,
+                                latitude=46.2,
+                                longitude=6.1,
+                                location_mode="mission_live",
+                                mission_id=None,
+                            )
+    mock_inc.assert_called_once_with(transport="http", action="downgraded")
     call_kwargs = mock_store.call_args.kwargs
     assert call_kwargs["location_mode"] == "availability_presence"

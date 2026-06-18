@@ -140,3 +140,39 @@ def test_multi_stop_wall_clock_times_preserved():
     assert times[1] == datetime(2026, 6, 16, 13, 15)
     assert times[2] == datetime(2026, 6, 16, 14, 0)
     assert all(t.tzinfo is None for t in times)
+
+
+def test_stops_from_validated_billing_override():
+    validated = {
+        "intermediate_stops": [
+            {
+                "sequence": 1,
+                "dropoff_location": "Cabinet privé",
+                "use_custom_billing": True,
+                "destination_billing_override": "patient",
+            },
+        ]
+    }
+    stops = stops_from_validated(validated)
+    assert len(stops) == 1
+    assert stops[0].destination_billing_override == "patient"
+
+
+def test_build_legs_chain_marks_return_stop():
+    legs = build_legs_chain(
+        origin_location="EMS",
+        origin_lat=None,
+        origin_lng=None,
+        stops=[
+            LegStop(dropoff_location="HUG"),
+            LegStop(
+                dropoff_location="Cabinet",
+                destination_billing_override="patient",
+            ),
+        ],
+        return_to_institution=True,
+        institution_return_location="EMS",
+    )
+    assert len(legs) == 3
+    assert legs[-1]["is_return_stop"] is True
+    assert legs[1]["destination_billing_override"] == "patient"

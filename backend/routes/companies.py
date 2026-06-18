@@ -171,9 +171,28 @@ class SaveCompanyPushToken(Resource):
             try:
                 from services.monitoring.prometheus import (
                     refresh_push_active_owners_gauges,
+                    track_push_token_registration_outcome,
                 )
 
+                track_push_token_registration_outcome(
+                    owner_type="company",
+                    status_code=result.status_code,
+                    payload=payload,
+                )
                 refresh_push_active_owners_gauges()
+            except ImportError:
+                pass
+        else:
+            try:
+                from services.monitoring.prometheus import (
+                    track_push_token_registration_outcome,
+                )
+
+                track_push_token_registration_outcome(
+                    owner_type="company",
+                    status_code=result.status_code,
+                    payload=payload,
+                )
             except ImportError:
                 pass
         return result.response, result.status_code

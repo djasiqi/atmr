@@ -58,8 +58,34 @@ _BILLING_INTENT_LABELS = {
     "institution": "Institution",
     "curator": "Curateur",
     "spc": "SPC",
+    "insurance": "Assurance",
     "other": "Autre",
 }
+
+
+def _billing_label_for_request(req: TransportRequest, booking: Any | None) -> str:
+    """Libellé facturation : résumé multi-payeurs ou intent principal."""
+    from services.billing.destination_billing_resolver import (
+        billing_intent_label,
+        build_billing_summary,
+        effective_billing_for_leg,
+    )
+
+    summary = build_billing_summary(req)
+    if summary.get("multi_payer"):
+        return f"Multi-payeurs ({summary.get('payer_count', 2)})"
+    if booking is not None and getattr(req, "multi_stop", False):
+        legs = sorted(
+            list(getattr(req, "legs", None) or []),
+            key=lambda leg: leg.sequence_index,
+        )
+        for leg in legs:
+            if getattr(leg, "booking_id", None) == getattr(booking, "id", None):
+                effective = effective_billing_for_leg(leg, req)
+                return billing_intent_label(effective)
+    return _BILLING_INTENT_LABELS.get(
+        req.billing_intent, req.billing_intent or "—"
+    )
 
 # Statuts considérés comme "transport effectué"
 _COMPLETED_BOOKING_STATUSES = frozenset({"COMPLETED", "RETURN_COMPLETED"})
@@ -215,7 +241,8 @@ def build_transport_row(req: TransportRequest) -> dict[str, Any]:
         "company_name": carrier_name,
         "external_carrier_reference": getattr(req, "external_carrier_reference", None) or "",
         "status_label": _status_label(req, booking),
-        "billing_label": _BILLING_INTENT_LABELS.get(
+        "billing_label": _billing_label_for_request(req, booking),
+        "billing_primary_label": _BILLING_INTENT_LABELS.get(
             req.billing_intent, req.billing_intent or "—"
         ),
         "external_reference": req.external_reference or "",

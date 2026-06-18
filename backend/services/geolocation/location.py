@@ -231,12 +231,24 @@ class LocationService:
         driver_dto = driver_repo.find_by_id(driver_id)
         company_id = driver_dto.company_id if driver_dto else None
         v21_enabled = self._is_v21_enabled_for_company(company_id)
-        normalized_mode = (
+        incoming_mode = (
             normalize_location_mode(location_mode) if v21_enabled else "mission_live"
         )
-        if normalized_mode == "mission_live" and mission_id is None:
+        normalized_mode = incoming_mode
+        if incoming_mode == "mission_live" and mission_id is None:
+            try:
+                from services.monitoring.driver_location_metrics import (
+                    inc_tracking_mission_live_missing_mission_id,
+                )
+
+                inc_tracking_mission_live_missing_mission_id(
+                    transport=transport,
+                    action="downgraded",
+                )
+            except Exception:
+                pass
             normalized_mode = "availability_presence"
-        degraded_context = normalized_mode == "mission_live" and mission_id is None
+        degraded_context = incoming_mode == "mission_live" and mission_id is None
 
         # 1. Validation
         if not (-LAT_THRESHOLD <= latitude <= LAT_THRESHOLD):
@@ -776,21 +788,12 @@ class LocationService:
                 logger.warning("[LocationService] Redis store failed")
                 accept_status = "accepted_observability_only"
                 accept_reason = "redis_unavailable_no_arbitration"
-        if degraded_context and location_mode == "mission_live" and mission_id is None:
+        if degraded_context:
             logger.warning(
                 "[LocationService] mission_live sans mission_id (driver=%s, company=%s)",
                 driver_id,
                 company_id,
             )
-            if self.redis_client:
-                with contextlib.suppress(Exception):
-                    self.redis_client.incr(
-                        "driver_location:mission_live_missing_mission_id:global"
-                    )
-                    if company_id:
-                        self.redis_client.incr(
-                            f"driver_location:mission_live_missing_mission_id:company:{company_id}"
-                        )
 
         # DB
         session = db_session or db.session

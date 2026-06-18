@@ -13,6 +13,91 @@
   },
   "panels": [
     {
+      "id": 90,
+      "title": "Couverture push — chauffeurs opérationnels avec token",
+      "type": "stat",
+      "gridPos": {"x": 0, "y": 0, "w": 6, "h": 4},
+      "targets": [
+        {
+          "expr": "push_operational_drivers_with_active_token_total",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "short"}}
+    },
+    {
+      "id": 91,
+      "title": "Chauffeurs opérationnels sans token",
+      "type": "stat",
+      "gridPos": {"x": 6, "y": 0, "w": 6, "h": 4},
+      "targets": [
+        {
+          "expr": "push_operational_drivers_without_active_token_total",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "short", "color": {"mode": "thresholds"}, "thresholds": {"steps": [{"color": "green", "value": null}, {"color": "red", "value": 1}]}}}
+    },
+    {
+      "id": 92,
+      "title": "Ratio couverture opérationnelle",
+      "type": "gauge",
+      "gridPos": {"x": 12, "y": 0, "w": 6, "h": 4},
+      "targets": [
+        {
+          "expr": "push_operational_drivers_with_active_token_total / clamp_min(push_operational_drivers_total, 1)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1}}
+    },
+    {
+      "id": 93,
+      "title": "Owners driver avec token actif",
+      "type": "stat",
+      "gridPos": {"x": 18, "y": 0, "w": 6, "h": 4},
+      "targets": [
+        {
+          "expr": "push_active_owners_total{owner_type=\"driver\"}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "short"}}
+    },
+    {
+      "id": 94,
+      "title": "Enregistrements push token — succès / échec",
+      "type": "timeseries",
+      "gridPos": {"x": 0, "y": 4, "w": 12, "h": 6},
+      "targets": [
+        {
+          "expr": "sum by (provider) (rate(push_token_registration_success_total[1h]))",
+          "legendFormat": "success {{provider}}",
+          "refId": "A"
+        },
+        {
+          "expr": "sum by (reason) (rate(push_token_registration_failure_total[1h]))",
+          "legendFormat": "failure {{reason}}",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "ops"}}
+    },
+    {
+      "id": 95,
+      "title": "Taux succès enregistrement push token",
+      "type": "timeseries",
+      "gridPos": {"x": 12, "y": 4, "w": 12, "h": 6},
+      "targets": [
+        {
+          "expr": "sum(rate(push_token_registration_success_total[15m])) / clamp_min(sum(rate(push_token_registration_success_total[15m])) + sum(rate(push_token_registration_failure_total[15m])), 0.001)",
+          "legendFormat": "success ratio",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1}}
+    },
+    {
       "id": 100,
       "title": "KPI métier — délivrabilité notifications",
       "type": "timeseries",

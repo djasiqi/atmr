@@ -2,20 +2,28 @@
 set -euo pipefail
 
 # Crée les topics Kafka depuis le conteneur kafka-broker-1 (binaires Confluent inclus).
-# Pas besoin d’installer kafka-topics sur l’hôte ; le broker doit être up sur le réseau Compose.
 #
-# Usage (répertoire = racine déploiement, avec les 3 YAML présents) :
+# Usage (répertoire = racine déploiement) :
 #   ./scripts/kafka-init-topics-compose.sh
 #
-# Variables optionnelles :
-#   ATMR_DEPLOY_ROOT   — défaut : parent de scripts/
-#   BOOTSTRAP_SERVERS  — défaut : kafka-broker-1:29092
-#   KAFKA_TOPIC_REPLICATION_FACTOR / REPLICATION_FACTOR — défaut : 2
+# Variables : ATMR_DEPLOY_ROOT, KAFKA_COMPOSE_FILE, BOOTSTRAP_SERVERS,
+#   KAFKA_TOPIC_REPLICATION_FACTOR, KAFKA_DEFAULT_PARTITIONS, KAFKA_CREATE_INACTIVE_TOPICS, etc.
 
 ROOT="${ATMR_DEPLOY_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 cd "${ROOT}"
 
-for f in docker-compose.production.yml docker-compose.kafka.yml docker-compose.kafka.atmr-network.yml; do
+KAFKA_COMPOSE_FILE="${KAFKA_COMPOSE_FILE:-docker-compose.kafka.yml}"
+KAFKA_NETWORK_FILE="${KAFKA_NETWORK_FILE:-}"
+
+if [[ -z "${KAFKA_NETWORK_FILE}" ]]; then
+  if [[ "${KAFKA_COMPOSE_FILE}" == *single* ]]; then
+    KAFKA_NETWORK_FILE="docker-compose.kafka.atmr-network.single.yml"
+  else
+    KAFKA_NETWORK_FILE="docker-compose.kafka.atmr-network.yml"
+  fi
+fi
+
+for f in docker-compose.production.yml "${KAFKA_COMPOSE_FILE}" "${KAFKA_NETWORK_FILE}"; do
   if [[ ! -f "${f}" ]]; then
     echo "Fichier manquant : ${ROOT}/${f}" >&2
     exit 1
@@ -35,11 +43,15 @@ else
   fi
 fi
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=lib/kafka_topics_init.sh
+source "${SCRIPT_DIR}/lib/kafka_topics_init.sh"
+
 compose_exec() {
   docker compose \
     -f docker-compose.production.yml \
-    -f docker-compose.kafka.yml \
-    -f docker-compose.kafka.atmr-network.yml \
+    -f "${KAFKA_COMPOSE_FILE}" \
+    -f "${KAFKA_NETWORK_FILE}" \
     exec -T kafka-broker-1 "$@"
 }
 
@@ -76,17 +88,6 @@ create_topic() {
     --add-config "min.insync.replicas=${MIN_INSYNC_REPLICAS},retention.ms=${retention_ms},cleanup.policy=${cleanup_policy}"
 }
 
-create_topic "driver.location.raw" "36" "7200000" "delete"
-create_topic "driver.location.processed" "36" "259200000" "delete"
-create_topic "driver.location.dlq" "36" "259200000" "delete"
-
-create_topic "notifications.push" "36" "259200000" "delete"
-create_topic "notifications.sms" "36" "259200000" "delete"
-create_topic "notifications.email" "36" "259200000" "delete"
-create_topic "notifications.dlq" "36" "259200000" "delete"
-
-create_topic "mission.events" "36" "259200000" "delete"
-create_topic "notification.events" "36" "259200000" "delete"
-create_topic "dispatch.events" "36" "259200000" "delete"
+kafka_topics_create_all
 
 echo "Kafka topics OK — bootstrap=${BOOTSTRAP_SERVERS} replication=${REPLICATION_FACTOR}"

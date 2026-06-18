@@ -306,6 +306,56 @@ groups:
           description: "{{ $value }} tokens invalidés/heure (seuil: 10/h)"
           action: "Vérifier les raisons d'invalidation (reason label) et la santé des devices mobiles"
 
+      - alert: PushDriverCoverageLowBootstrap
+        expr: |
+          push_operational_drivers_without_active_token_total
+          / clamp_min(push_operational_drivers_total, 1) > 0.25
+        for: 1h
+        labels:
+          severity: warning
+          component: push_notifications
+        annotations:
+          summary: "Plus de 25% des chauffeurs opérationnels sans token push actif (bootstrap)"
+          description: "{{ $value | humanizePercentage }} sans token actif"
+          action: "Vérifier GET /admin/push-coverage/drivers et demander réouverture app chauffeurs concernés"
+
+      - alert: PushTokenRegistrationFailureSpike
+        expr: |
+          (
+            sum(increase(push_token_registration_failure_total[30m])) > 10
+            or
+            sum(rate(push_token_registration_failure_total[15m])) > 0.05
+          )
+          and
+          sum(rate(push_token_registration_success_total[15m]))
+          / clamp_min(sum(rate(push_token_registration_failure_total[15m])), 0.001) < 2
+        for: 30m
+        labels:
+          severity: warning
+          component: push_notifications
+        annotations:
+          summary: "Pic d'échecs enregistrement push token (possible régression release mobile)"
+          action: "Vérifier logs [push-token], version app mobile, télémétrie push.token.register_failed"
+
+      # Désactivé jusqu'au nettoyage flotte post-disclosure mobile (activer après plusieurs semaines)
+      # - alert: PushDriverCoverageWarning
+      #   expr: |
+      #     push_operational_drivers_with_active_token_total
+      #     / clamp_min(push_operational_drivers_total, 1) < 0.95
+      #   for: 30m
+      #   labels:
+      #     severity: warning
+      #     component: push_notifications
+      #
+      # - alert: PushDriverCoverageCritical
+      #   expr: |
+      #     push_operational_drivers_with_active_token_total
+      #     / clamp_min(push_operational_drivers_total, 1) < 0.90
+      #   for: 15m
+      #   labels:
+      #     severity: critical
+      #     component: push_notifications
+
   # ==================== Invoice PDF Alerts ====================
   - name: invoice_pdf
     interval: 1m

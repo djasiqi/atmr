@@ -17,7 +17,6 @@ import Home from './pages/Home/Home';
 import BookNewRedirect from './pages/Auth/BookNewRedirect';
 import { recordUserActivity } from './utils/userActivityTracker';
 import { isRecoverableAuthError, isFreshTokenRequiredError } from './utils/queryAuthError';
-import { FreshTokenReauthProvider } from './contexts/FreshTokenReauthContext';
 import { SessionBootstrapProvider } from './contexts/SessionBootstrapContext';
 import AuthNavigationBridge from './components/auth/AuthNavigationBridge';
 
@@ -243,13 +242,12 @@ const App = () => {
   return (
     <QueryClientProvider client={queryClient}>
       <SessionBootstrapProvider>
-        <FreshTokenReauthProvider>
-      <Router
-        future={{
-          v7_startTransition: true,
-          v7_relativeSplatPath: true,
-        }}
-      >
+        <Router
+          future={{
+            v7_startTransition: true,
+            v7_relativeSplatPath: true,
+          }}
+        >
         <AuthNavigationBridge />
         <ScrollToTopOnNavigation />
         <Toaster position="top-right" richColors closeButton />
@@ -800,8 +798,7 @@ const App = () => {
             </Routes>
           </Suspense>
         </GoogleMapsRouteScope>
-      </Router>
-        </FreshTokenReauthProvider>
+        </Router>
       </SessionBootstrapProvider>
     </QueryClientProvider>
   );

@@ -24,7 +24,6 @@ from services.documents.qrbill import QRBillService
 
 LEVEL_ONE = 1
 LEVEL_THRESHOLD = 2
-MAX_PATIENT_NAME_LENGTH = 18
 MONTHS_PER_YEAR = 12
 
 app_logger = logging.getLogger("pdf_service")
@@ -533,6 +532,42 @@ def _sum_flowables_height_pt(flowables: list[Any], avail_width_pt: float) -> flo
     return sum(_flowable_height_pt(f, avail_width_pt) for f in flowables)
 
 
+def _measure_closing_block_pt(
+    source_table: Any,
+    tail_rows: list[Any],
+    post_table_flowables: list[Any],
+    avail_width_pt: float,
+) -> float:
+    """Hauteur du groupe insécable : transport(s) terminal(aux) + légende + totaux."""
+    total = 0.0
+    if tail_rows:
+        total += _measure_table_chunk_pt(source_table, tail_rows, avail_width_pt)
+    if post_table_flowables:
+        total += _sum_flowables_height_pt(post_table_flowables, avail_width_pt)
+    return total
+
+
+def _closing_block_required_pt(
+    source_table: Any,
+    tail_rows: list[Any],
+    *,
+    avail_width_pt: float,
+    post_table_flowables: list[Any] | None,
+    trailer_reserve_pt: float,
+    safety_margin_pt: float,
+) -> float:
+    """Espace vertical requis pour le groupe terminal (transport + synthèse)."""
+    if post_table_flowables is not None:
+        return (
+            _measure_closing_block_pt(
+                source_table, tail_rows, post_table_flowables, avail_width_pt
+            )
+            + safety_margin_pt
+        )
+    tail_h = _measure_table_chunk_pt(source_table, tail_rows, avail_width_pt)
+    return tail_h + trailer_reserve_pt + safety_margin_pt
+
+
 def _invoice_frame_height_pt(
     *,
     top_margin_cm: float,
@@ -615,28 +650,38 @@ def _paginate_table_no_orphan_totals(
     first_page_avail_pt: float,
     later_pages_avail_pt: float,
     trailer_reserve_pt: float,
+    post_table_flowables: list[Any] | None = None,
     safety_margin_pt: float = PDF_TOTAL_SAFETY_MARGIN_PT,
 ) -> tuple[list[Any], Any | None]:
-    """Découpe le tableau : pages préfixe + chunk terminal (≥1 prestation).
+    """Découpe le tableau : pages préfixe + chunk terminal (exactement 1 prestation).
 
-    Le chunk terminal doit être placé via ``KeepTogether`` avec le bloc synthèse
-    (légende [A/R], totaux) pour respecter STOP GATE PDF-TOTAL-01.
+    Le chunk terminal contient uniquement le **dernier** transport, placé via
+    ``KeepTogether`` avec le bloc synthèse (légende [A/R], totaux).
+    La hauteur requise inclut ce transport + synthèse — pas la synthèse seule
+    (STOP GATE PDF-TOTAL-01). Un ``PageBreak`` explicite sépare préfixe et clôture
+    lorsque les deux ne tiennent pas sur la même page.
     """
     body_rows = list(source_table._cellvalues[1:])
     if not body_rows:
         return [], None
 
-    required_tail_pt = trailer_reserve_pt + safety_margin_pt
     min_tail = min(max(PDF_TOTAL_ORPHAN_MIN_ROWS, 1), len(body_rows))
     prefix_rows = body_rows[:-min_tail]
     tail_rows = body_rows[-min_tail:]
 
-    # Si 1 ligne + synthèse dépasse une page utile, tirer des lignes du préfixe.
-    while prefix_rows:
-        tail_h = _measure_table_chunk_pt(source_table, tail_rows, avail_width_pt)
-        if tail_h + required_tail_pt <= later_pages_avail_pt + 0.5:
-            break
-        tail_rows.insert(0, prefix_rows.pop())
+    def required_closing_pt(rows: list[Any]) -> float:
+        return _closing_block_required_pt(
+            source_table,
+            rows,
+            avail_width_pt=avail_width_pt,
+            post_table_flowables=post_table_flowables,
+            trailer_reserve_pt=trailer_reserve_pt,
+            safety_margin_pt=safety_margin_pt,
+        )
+
+    # Le groupe terminal (≥1 transport + synthèse) doit tenir seul sur une page utile.
+    while len(tail_rows) > min_tail and required_closing_pt(tail_rows) > later_pages_avail_pt + 0.5:
+        prefix_rows.append(tail_rows.pop(0))
 
     prefix_chunks = _paginate_table_body_prefix(
         source_table,
@@ -646,31 +691,7 @@ def _paginate_table_no_orphan_totals(
         later_pages_avail_pt=later_pages_avail_pt,
     )
 
-    # Avant d'ajouter une ligne au dernier chunk préfixe : vérifier que la synthèse
-    # pourrait tenir sur la même page ; sinon retirer la ligne vers le groupe terminal.
-    if prefix_chunks and tail_rows:
-        last_prefix_body = list(prefix_chunks[-1]._cellvalues[1:])
-        while len(last_prefix_body) > 1:
-            page_idx = len(prefix_chunks) - 1
-            avail = (
-                first_page_avail_pt if page_idx == 0 else later_pages_avail_pt
-            )
-            prefix_h = _flowable_height_pt(prefix_chunks[-1], avail_width_pt)
-            tail_h = _measure_table_chunk_pt(source_table, tail_rows, avail_width_pt)
-            if prefix_h + tail_h + required_tail_pt <= avail + 0.5:
-                break
-            moved = last_prefix_body.pop()
-            tail_rows.insert(0, moved)
-            if last_prefix_body:
-                prefix_chunks[-1] = _clone_table_chunk(
-                    source_table, last_prefix_body
-                )
-            else:
-                prefix_chunks.pop()
-            if not prefix_chunks:
-                break
-
-    tail_table = _clone_table_chunk(source_table, tail_rows)
+    tail_table = _clone_table_chunk(source_table, tail_rows) if tail_rows else None
     return prefix_chunks, tail_table
 
 
@@ -685,8 +706,6 @@ def _append_paginated_detail_table_with_tail(
     later_bottom_margin_cm: float | None = None,
 ) -> None:
     """Ajoute le tableau paginé puis le bloc légende/totaux (réservation espace pied)."""
-    from reportlab.platypus import KeepTogether
-
     if later_bottom_margin_cm is None:
         later_bottom_margin_cm = INVOICE_PAGE_BOTTOM_MARGIN_LATER_CM
     pre_table_height_pt = _sum_flowables_height_pt(story, usable_width_pt)
@@ -706,11 +725,28 @@ def _append_paginated_detail_table_with_tail(
         first_page_avail_pt=first_table_avail,
         later_pages_avail_pt=frame_later,
         trailer_reserve_pt=trailer_reserve,
+        post_table_flowables=post_table_flowables,
     )
     for chunk in prefix_chunks:
         story.append(chunk)
     if tail_table is not None:
-        story.append(KeepTogether([tail_table, *post_table_flowables]))
+        from reportlab.platypus import KeepTogether, PageBreak
+
+        closing_group = KeepTogether([tail_table, *post_table_flowables])
+        tail_body = list(tail_table._cellvalues[1:])
+        closing_h = _measure_closing_block_pt(
+            s2_table, tail_body, post_table_flowables, usable_width_pt
+        )
+        if prefix_chunks:
+            page_idx = len(prefix_chunks) - 1
+            avail = first_table_avail if page_idx == 0 else frame_later
+            prefix_h = _flowable_height_pt(prefix_chunks[-1], usable_width_pt)
+            remaining = max(avail - prefix_h, 0.0)
+        else:
+            remaining = first_table_avail
+        if closing_h > remaining + PDF_TOTAL_SAFETY_MARGIN_PT:
+            story.append(PageBreak())
+        story.append(closing_group)
     else:
         story.extend(post_table_flowables)
 
@@ -3200,8 +3236,16 @@ def _build_s2_table(
             else:
                 patient_name = "Client"
             patient_id = invoice.client_id if invoice.client_id else None
-        if len(patient_name) > MAX_PATIENT_NAME_LENGTH:
-            patient_name = patient_name[: MAX_PATIENT_NAME_LENGTH - 1] + "."
+        if (is_third_party_invoice or is_s2_invoice) and patient_name:
+            from application.invoices.invoice_line_description import (
+                format_patient_display_name_nom_prenom,
+            )
+
+            _pn = str(patient_name).strip()
+            if _pn and _pn not in ("Patient", "Client") and not _pn.startswith(
+                "Client #"
+            ):
+                patient_name = format_patient_display_name_nom_prenom(_pn)
         lines_with_bookings.append(
             {
                 "line": line,
@@ -3290,8 +3334,14 @@ def _build_s2_table(
             if _ln_item is not None:
                 date_str = _pdf_line_detail_date_str(_ln_item, invoice)
         pn_raw = item.get("patient_name", "Patient")
-        if len(pn_raw) > MAX_PATIENT_NAME_LENGTH:
-            pn_raw = pn_raw[: MAX_PATIENT_NAME_LENGTH - 1] + "."
+        from application.invoices.invoice_line_description import (
+            format_patient_display_name_nom_prenom,
+        )
+
+        if pn_raw and str(pn_raw).strip() not in ("Patient", "Client") and not str(
+            pn_raw
+        ).strip().startswith("Client #"):
+            pn_raw = format_patient_display_name_nom_prenom(str(pn_raw))
         cat_disp, net_disp = _consolidated_row_catalog_net(item)
         if suppress_line_discount_breakdown:
             cat_disp = None
@@ -3565,9 +3615,11 @@ def _build_s2_table(
             if is_third_party_invoice or is_s2_invoice:
                 raw_pn = lm_or.get("patient_name")
                 if raw_pn and str(raw_pn).strip() and str(raw_pn).strip() != "—":
-                    pn_disp = str(raw_pn).strip()
-                    if len(pn_disp) > MAX_PATIENT_NAME_LENGTH:
-                        pn_disp = pn_disp[: MAX_PATIENT_NAME_LENGTH - 1] + "."
+                    from application.invoices.invoice_line_description import (
+                        format_patient_display_name_nom_prenom,
+                    )
+
+                    pn_disp = format_patient_display_name_nom_prenom(str(raw_pn).strip())
                     orphan_pn_prefix = (
                         f'<font size="{int(FONT_SECONDARY)}" color="#475569">Client : '
                         f"{_xml_escape_for_paragraph(pn_disp)}</font><br/>"
@@ -6306,10 +6358,6 @@ class PDFService:
                             ).strip()
                             or "Patient"
                         )
-                        if len(patient_name) > MAX_PATIENT_NAME_LENGTH:
-                            patient_name = (
-                                patient_name[: MAX_PATIENT_NAME_LENGTH - 1] + "."
-                            )
                         pn_esc = _xml_escape_for_paragraph(patient_name)
                         patient_cell_mb = Paragraph(pn_esc, normal_style)
                         date_mb = _minimal_date_cell_with_discount_suffix(

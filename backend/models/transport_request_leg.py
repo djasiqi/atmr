@@ -142,6 +142,30 @@ class TransportRequestLeg(db.Model):
 
 
 
+    destination_billing_override: Mapped[str | None] = mapped_column(
+
+        String(50),
+
+        nullable=True,
+
+    )
+
+
+
+    is_return_stop: Mapped[bool] = mapped_column(
+
+        Boolean,
+
+        nullable=False,
+
+        default=False,
+
+        server_default="false",
+
+    )
+
+
+
     booking_id: Mapped[int | None] = mapped_column(
 
         ForeignKey("booking.id", ondelete="SET NULL"),
@@ -187,41 +211,37 @@ class TransportRequestLeg(db.Model):
 
 
     def serialize(self) -> dict[str, Any]:
+        from services.billing.destination_billing_resolver import (
+            effective_billing_for_leg,
+        )
+
+        transport_request = getattr(self, "transport_request", None)
+        effective_billing_intent = None
+        if transport_request is not None:
+            effective_billing_intent = effective_billing_for_leg(
+                self, transport_request
+            )
 
         return {
-
             "id": self.id,
-
             "transport_request_id": self.transport_request_id,
-
             "sequence_index": self.sequence_index,
-
             "route_sequence_number": self.route_sequence_number,
-
             "pickup_location": self.pickup_location,
-
             "pickup_lat": float(self.pickup_lat) if self.pickup_lat else None,
-
             "pickup_lng": float(self.pickup_lng) if self.pickup_lng else None,
-
             "dropoff_location": self.dropoff_location,
-
             "dropoff_lat": float(self.dropoff_lat) if self.dropoff_lat else None,
-
             "dropoff_lng": float(self.dropoff_lng) if self.dropoff_lng else None,
-
             "dropoff_establishment": self.dropoff_establishment,
-
             "dropoff_service": self.dropoff_service,
-
             "dropoff_doctor": self.dropoff_doctor,
-
             "scheduled_time": _iso_scheduled(self.scheduled_time),
-
             "time_confirmed": bool(self.time_confirmed),
-
+            "destination_billing_override": self.destination_billing_override,
+            "is_return_stop": bool(self.is_return_stop),
+            "effective_billing_intent": effective_billing_intent,
             "booking_id": self.booking_id,
-
         }
 
 

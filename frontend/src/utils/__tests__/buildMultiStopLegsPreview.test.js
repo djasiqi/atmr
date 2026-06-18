@@ -80,6 +80,15 @@ describe('buildMultiStopPayloadStops', () => {
     expect(payloadStops[1].scheduled_time).toBeUndefined();
   });
 
+  it('convertit HH:MM en ISO naïf quand missionDate est fournie', () => {
+    const payloadStops = buildMultiStopPayloadStops(
+      [{ dropoff_location: 'HUG', scheduled_time: '09:30' }],
+      '2026-06-11',
+    );
+
+    expect(payloadStops[0].scheduled_time).toBe('2026-06-11T09:30:00');
+  });
+
   it('inclut les détails (établissement / service / médecin) si renseignés', () => {
     const payloadStops = buildMultiStopPayloadStops([
       {

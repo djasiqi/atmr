@@ -20,8 +20,10 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
+from sqlalchemy import func
+
 from ext import db
-from models import BillingParty, BillingPartyType, ClinicBillingPartyMapping
+from models import BillingParty, BillingPartyType, ClinicBillingPartyMapping, Client, Company
 
 if TYPE_CHECKING:
     from models import Booking, Institution, TransportRequest
@@ -74,6 +76,7 @@ def resolve_billing_party_for_institution_booking(
     booking: Booking,
     transport_request: TransportRequest,
     company_id: int,
+    billing_intent_override: str | None = None,
 ) -> dict[str, Any]:
     """Résout et attache le billing_party_id au booking selon billing_intent.
 
@@ -84,11 +87,17 @@ def resolve_billing_party_for_institution_booking(
         booking: Le booking fraîchement créé
         transport_request: La demande de transport source
         company_id: ID de l'entreprise de transport qui accepte
+        billing_intent_override: Intent effectif (ex. override destination par leg)
 
     Returns:
         Dict avec les champs mis à jour (pour audit/metrics)
     """
-    billing_intent = transport_request.billing_intent or "patient"
+    billing_intent = (
+        billing_intent_override
+        if billing_intent_override
+        else (transport_request.billing_intent or "patient")
+    )
+    billing_intent = str(billing_intent).lower()
     institution = transport_request.institution
     patient = transport_request.patient
 
@@ -109,6 +118,7 @@ def resolve_billing_party_for_institution_booking(
                 booking=booking,
                 company_id=company_id,
                 billing_party_id=bp.id,
+                institution=institution,
             )
             booking.billing_party_id = bp.id
             booking.billed_to_type = "clinic"
@@ -163,8 +173,8 @@ def resolve_billing_party_for_institution_booking(
                 booking.id,
             )
 
-    # ── Intent: Tiers (curator/spc/other) ────────────────────────────
-    elif billing_intent in ("curator", "spc", "other"):
+    # ── Intent: Tiers (curator/spc/insurance/other) ─────────────────
+    elif billing_intent in ("curator", "spc", "other", "insurance"):
         # Auto-enrichir billing_details depuis les infos curateur du patient
         _enrich_billing_details_from_patient_guardian(transport_request, patient)
 
@@ -392,22 +402,52 @@ def _resolve_clinic_company_id_for_institution(
     booking: Booking,
     company_id: int,
     billing_party_id: int,
+    institution: Institution | None = None,
 ) -> int | None:
     """Déduit la clinique payeuse pour un booking institution.
 
     Priorité:
-    1) Valeur déjà présente sur booking.billed_to_company_id
-    2) Client institution lié (default_billed_to_company_id)
-    3) Mapping explicite (company_id, billing_party_id) -> clinic_company_id
+    1) ``billed_to_company_id`` déjà défini (sauf erreur historique = ID transporteur)
+    2) Client institution lié (``default_billed_to_company_id``)
+    3) Entreprise clinique homonyme (``Company.name`` ≈ ``institution_name``)
+    4) Mapping explicite (company_id, billing_party_id) -> clinic_company_id
     """
     existing = getattr(booking, "billed_to_company_id", None)
-    if existing is not None:
+    if existing is not None and int(existing) != int(company_id):
         return int(existing)
 
     client = getattr(booking, "client", None)
-    client_default = getattr(client, "default_billed_to_company_id", None)
-    if client_default is not None:
-        return int(client_default)
+    if client is None and getattr(booking, "client_id", None):
+        client = Client.query.get(int(booking.client_id))
+
+    if client and getattr(client, "is_institution", False):
+        client_default = getattr(client, "default_billed_to_company_id", None)
+        if client_default is not None:
+            return int(client_default)
+        inst_name = (getattr(client, "institution_name", None) or "").strip()
+        if inst_name:
+            co = (
+                Company.query.filter(
+                    func.lower(Company.name) == func.lower(inst_name)
+                )
+                .order_by(Company.id.asc())
+                .first()
+            )
+            if co is not None:
+                return int(co.id)
+
+    if institution is not None:
+        inst_name = (getattr(institution, "name", None) or "").strip()
+        if inst_name:
+            co = (
+                Company.query.filter(
+                    func.lower(Company.name) == func.lower(inst_name)
+                )
+                .order_by(Company.id.asc())
+                .first()
+            )
+            if co is not None:
+                return int(co.id)
 
     mapping = (
         ClinicBillingPartyMapping.query.filter_by(

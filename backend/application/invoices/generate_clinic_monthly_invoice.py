@@ -42,6 +42,7 @@ from repositories.invoice_line_repository import InvoiceLineRepository
 from repositories.invoice_repository import InvoiceRepository
 from repositories.invoice_sequence_repository import InvoiceSequenceRepository
 from services.billing.billing_party_linker import resolve_billing_party_for_clinic
+from services.billing.clinic_s2_eligibility import clinic_s2_billed_to_company_predicate
 from services.documents.pdf import PDFService
 
 logger = logging.getLogger(__name__)
@@ -378,7 +379,9 @@ class GenerateClinicMonthlyInvoiceUseCase:
             )
             query = Booking.query.filter(
                 Booking.company_id == input_data.company_id,
-                Booking.billed_to_company_id == input_data.clinic_company_id,
+                clinic_s2_billed_to_company_predicate(
+                    input_data.clinic_company_id, input_data.company_id
+                ),
                 Booking.billed_to_type
                 == "clinic",  # ✅ Strict: uniquement facturation clinique (exclut automatiquement les overrides patient)
                 or_(
@@ -713,6 +716,11 @@ class GenerateClinicMonthlyInvoiceUseCase:
             ] = {}  # {client_id: {"name": str, "id": int}}
 
             for reservation in reservations:
+                if (
+                    reservation.billed_to_company_id != input_data.clinic_company_id
+                    and reservation.billed_to_type == "clinic"
+                ):
+                    reservation.billed_to_company_id = input_data.clinic_company_id
                 # ✅ Livraison matériel : utiliser prix fixe entreprise
                 mission_type = (
                     getattr(reservation, "mission_type", None) or "patient_transport"
@@ -761,43 +769,33 @@ class GenerateClinicMonthlyInvoiceUseCase:
                         )
 
                 # ✅ Récupérer le nom du patient (snapshot pour traçabilité juridique)
-                # Format standardisé: "NOM Prénom" pour cohérence PDF
-                if reservation.client_id not in client_cache:
-                    client = self.client_repo.find_model_by_id_with_user(
-                        reservation.client_id, input_data.company_id
-                    )
-                    patient_name = ""
-                    patient_id = reservation.client_id
-                    if client and client.user:
-                        # ✅ Format standardisé: "NOM Prénom" (majuscules pour nom, capitalisé pour prénom)
-                        first_name = (client.user.first_name or "").strip()
-                        last_name = (client.user.last_name or "").strip()
-                        if last_name and first_name:
-                            # Format: "NOM Prénom" (nom en majuscules, prénom capitalisé)
-                            patient_name = (
-                                f"{last_name.upper()} {first_name.capitalize()}".strip()
-                            )
-                        elif last_name:
-                            patient_name = last_name.upper()
-                        elif first_name:
-                            patient_name = first_name.capitalize()
-                        else:
-                            patient_name = (
-                                client.user.username
-                                or f"Client #{reservation.client_id}"
-                            )
-                        patient_id = client.id
-                    if not patient_name:
-                        patient_name = f"Client #{reservation.client_id}"
-                    # ✅ Snapshot: stocker patient_id + patient_name au moment de la génération
-                    client_cache[reservation.client_id] = {
-                        "name": patient_name,
-                        "id": patient_id,
-                    }
+                from application.invoices.invoice_line_description import (
+                    resolve_s2_clinic_line_patient_name,
+                )
 
-                patient_info = client_cache[reservation.client_id]
-                patient_name = patient_info["name"]
-                patient_id = patient_info["id"]
+                client = self.client_repo.find_model_by_id_with_user(
+                    reservation.client_id, input_data.company_id
+                )
+                if client and getattr(client, "is_institution", False):
+                    patient_name = resolve_s2_clinic_line_patient_name(
+                        client, reservation
+                    )
+                    patient_id = reservation.client_id
+                else:
+                    if reservation.client_id not in client_cache:
+                        patient_name = resolve_s2_clinic_line_patient_name(
+                            client, reservation
+                        )
+                        patient_id = (
+                            client.id if client is not None else reservation.client_id
+                        )
+                        client_cache[reservation.client_id] = {
+                            "name": patient_name,
+                            "id": patient_id,
+                        }
+                    patient_info = client_cache[reservation.client_id]
+                    patient_name = patient_info["name"]
+                    patient_id = patient_info["id"]
 
                 # Déterminer le taux de TVA pour cette ligne
                 line_vat_rate = Decimal("0")

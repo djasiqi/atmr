@@ -233,10 +233,52 @@
       "description": "DEPRECATED — chemin socket unitaire uniquement. Utiliser driver_location_batch_latency_seconds."
     },
     {
+      "id": 9,
+      "title": "Latence Kafka E2E raw→processed (p95) — KPI GPS",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 31, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(tracking_kafka_e2e_latency_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p95",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(tracking_kafka_e2e_latency_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p50",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "unit": "s",
+          "decimals": 3,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "green" },
+              { "value": 2, "color": "red" }
+            ]
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "fillOpacity": 10
+          }
+        }
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi" }
+      },
+      "description": "STOP GATE optimisation Kafka : P95 < 2 s (ingest_consumer). Voir docs/ops/kafka-optimization-lirie.md"
+    },
+    {
       "id": 8,
       "title": "Batch latency p50/p95 (driver_location_batch)",
       "type": "timeseries",
-      "gridPos": { "x": 0, "y": 31, "w": 12, "h": 8 },
+      "gridPos": { "x": 12, "y": 31, "w": 12, "h": 8 },
       "targets": [
         {
           "expr": "histogram_quantile(0.95, sum(rate(driver_location_batch_latency_seconds_bucket[5m])) by (le))",

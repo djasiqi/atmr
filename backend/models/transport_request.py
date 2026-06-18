@@ -540,6 +540,7 @@ class TransportRequest(db.Model):
             "notes": self.notes,
             "billing_intent": self.billing_intent,
             "billing_details": self.billing_details,
+            "billing_summary": self._serialize_billing_summary(),
             "status": self.status,
             "status_label": RequestStatus.display_label(self.status),
             "carrier_source": self.carrier_source,
@@ -771,6 +772,12 @@ class TransportRequest(db.Model):
             # ✅ PR2: demande de validation transporteur en attente (révalidation)
             "pending_change_request": _pending_change_request_view(booking),
         }
+
+    def _serialize_billing_summary(self) -> dict[str, Any]:
+        """Résumé facturation multi-destination (payeur principal + exceptions)."""
+        from services.billing.destination_billing_resolver import build_billing_summary
+
+        return build_billing_summary(self)
 
     @classmethod
     def find_by_external_reference(

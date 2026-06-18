@@ -247,6 +247,7 @@ def _persist_legs_from_validated(
         is_multi_stop_enabled,
         new_route_group_id,
         persist_legs,
+        return_stop_from_validated,
         stops_from_validated,
         sync_return_fields_from_legs,
     )
@@ -266,6 +267,16 @@ def _persist_legs_from_validated(
         transport_req.return_time = None
 
         stops = stops_from_validated(validated)
+        return_stop = None
+        if transport_req.return_to_institution:
+            return_stop = return_stop_from_validated(
+                validated,
+                return_location=validated["pickup_location"],
+                return_lat=validated.get("pickup_lat"),
+                return_lng=validated.get("pickup_lng"),
+                return_scheduled_time=return_raw,
+                return_time_confirmed=return_confirmed,
+            )
         legs_data = build_legs_chain(
             origin_location=validated["pickup_location"],
             origin_lat=validated.get("pickup_lat"),
@@ -277,6 +288,7 @@ def _persist_legs_from_validated(
             institution_return_lng=validated.get("pickup_lng"),
             return_scheduled_time=return_raw,
             return_time_confirmed=return_confirmed,
+            return_stop=return_stop,
         )
         persist_legs(transport_req.id, legs_data)
 

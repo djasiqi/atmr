@@ -284,7 +284,77 @@ describe("session provider gates", () => {
     expect(mockSwitchContext).toHaveBeenCalledWith("client:self");
     expect(mockApplyContextCachePolicyOnSwitch).toHaveBeenCalledWith(queryClient, "driver:42");
     expect(handle.current?.activeContext?.context_id).toBe("client:self");
-    expect(mockOnContextSwitch).toHaveBeenLastCalledWith("client:self");
+    expect(mockDisconnect).toHaveBeenCalled();
+    expect(mockOnContextSwitch).not.toHaveBeenCalledWith("client:self", expect.anything());
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+
+  it("does not connect driver realtime on company bootstrap", async () => {
+    mockFetchBootstrap.mockResolvedValue({
+      ...buildBootstrap(null),
+      available_contexts: [
+        {
+          context_id: "company:99",
+          context_type: "company" as const,
+          label: "Company",
+          organization_id: 99,
+          permissions: ["company:dashboard:read"],
+          is_default: true,
+        },
+      ],
+      active_context_id: "company:99",
+    });
+    const handle: { current: SessionHandle | null } = { current: null };
+    const { renderer } = await buildHarness(handle);
+
+    await act(async () => {
+      await handle.current?.bootstrapSession();
+    });
+
+    expect(handle.current?.status).toBe("ready");
+    expect(handle.current?.activeContext?.context_type).toBe("company");
+    expect(mockDisconnect).toHaveBeenCalled();
+    expect(mockOnContextSwitch).not.toHaveBeenCalled();
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+
+  it("ignores driver auth exhaustion when active context is company", async () => {
+    let authExhaustedCb: ((reason: "exhausted" | "terminal", code?: string) => void) | null = null;
+    mockOnAuthExhausted.mockImplementation((cb) => {
+      authExhaustedCb = cb;
+      return () => undefined;
+    });
+    mockFetchBootstrap.mockResolvedValue({
+      ...buildBootstrap(null),
+      available_contexts: [
+        {
+          context_id: "company:99",
+          context_type: "company" as const,
+          label: "Company",
+          organization_id: 99,
+          permissions: ["company:dashboard:read"],
+          is_default: true,
+        },
+      ],
+      active_context_id: "company:99",
+    });
+    const handle: { current: SessionHandle | null } = { current: null };
+    const { renderer } = await buildHarness(handle);
+
+    await act(async () => {
+      await handle.current?.bootstrapSession();
+    });
+
+    await act(async () => {
+      authExhaustedCb?.("exhausted", "session_revoked");
+    });
+
+    expect(mockLogoutSession).not.toHaveBeenCalled();
+    expect(handle.current?.status).toBe("ready");
     await act(async () => {
       renderer.unmount();
     });

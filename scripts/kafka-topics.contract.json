@@ -1,14 +1,22 @@
 {
-  "version": "2026-04-21",
-  "notes": "Contrat topics Kafka ATMR/LIRIE",
+  "version": "2026-06-18",
+  "notes": "Contrat topics Kafka ATMR/LIRIE — pipeline tracking GPS (Phase 1 optimisée)",
+  "defaults": {
+    "replication_factor": 2,
+    "min_insync_replicas": 1,
+    "inactive_topics_enabled": false
+  },
   "topics": [
     {
       "name": "driver.location.raw",
-      "partitions": 36,
-      "replication_factor": 3,
-      "min_insync_replicas": 2,
+      "env_override": "KAFKA_TOPIC_DRIVER_LOCATION_RAW",
+      "partitions": 6,
+      "partitions_env": "KAFKA_DEFAULT_PARTITIONS",
+      "replication_factor": 2,
+      "min_insync_replicas": 1,
       "retention_ms": 7200000,
       "cleanup_policy": "delete",
+      "active_prod": true,
       "acl_expected": [
         "tracking-ingest-producer:Write",
         "tracking-ingest-consumer:Read",
@@ -17,24 +25,31 @@
     },
     {
       "name": "driver.location.processed",
-      "partitions": 36,
-      "replication_factor": 3,
-      "min_insync_replicas": 2,
+      "env_override": "KAFKA_TOPIC_DRIVER_LOCATION_PROCESSED",
+      "partitions": 6,
+      "partitions_env": "KAFKA_DEFAULT_PARTITIONS",
+      "replication_factor": 2,
+      "min_insync_replicas": 1,
       "retention_ms": 259200000,
       "cleanup_policy": "delete",
+      "active_prod": true,
       "acl_expected": [
         "tracking-ingest-consumer:Write",
         "ws-service:Read",
-        "ws-service:Describe"
+        "ws-service:Describe",
+        "tracking-processed-fanout:Read"
       ]
     },
     {
       "name": "driver.location.dlq",
-      "partitions": 36,
-      "replication_factor": 3,
-      "min_insync_replicas": 2,
+      "env_override": "KAFKA_TOPIC_DRIVER_LOCATION_DLQ",
+      "partitions": 3,
+      "partitions_env": "KAFKA_DLQ_PARTITIONS",
+      "replication_factor": 2,
+      "min_insync_replicas": 1,
       "retention_ms": 259200000,
       "cleanup_policy": "delete",
+      "active_prod": true,
       "acl_expected": [
         "tracking-ingest-consumer:Write",
         "kafka-dlq-consumer:Read",
@@ -42,69 +57,39 @@
       ]
     },
     {
-      "name": "notifications.push",
-      "partitions": 36,
-      "replication_factor": 3,
-      "min_insync_replicas": 2,
-      "retention_ms": 259200000,
-      "cleanup_policy": "delete",
-      "acl_expected": [
-        "notifications-producer:Write",
-        "notifications-consumer:Read",
-        "notifications-consumer:Describe"
-      ]
-    },
-    {
-      "name": "notifications.sms",
-      "partitions": 36,
-      "replication_factor": 3,
-      "min_insync_replicas": 2,
-      "retention_ms": 259200000,
-      "cleanup_policy": "delete",
-      "acl_expected": [
-        "notifications-producer:Write",
-        "notifications-consumer:Read",
-        "notifications-consumer:Describe"
-      ]
-    },
-    {
-      "name": "notifications.email",
-      "partitions": 36,
-      "replication_factor": 3,
-      "min_insync_replicas": 2,
-      "retention_ms": 259200000,
-      "cleanup_policy": "delete",
-      "acl_expected": [
-        "notifications-producer:Write",
-        "notifications-consumer:Read",
-        "notifications-consumer:Describe"
-      ]
-    },
-    {
       "name": "notifications.dlq",
-      "partitions": 36,
-      "replication_factor": 3,
-      "min_insync_replicas": 2,
+      "env_override": "KAFKA_TOPIC_NOTIFICATIONS_DLQ",
+      "partitions": 3,
+      "partitions_env": "KAFKA_DLQ_PARTITIONS",
+      "replication_factor": 2,
+      "min_insync_replicas": 1,
       "retention_ms": 259200000,
       "cleanup_policy": "delete",
+      "active_prod": true,
       "acl_expected": [
-        "notifications-consumer:Write",
         "kafka-dlq-consumer:Read",
         "kafka-dlq-consumer:Describe"
       ]
     },
     {
-      "name": "mission.events",
-      "partitions": 36,
-      "replication_factor": 3,
-      "min_insync_replicas": 2,
+      "name": "atmr.ops.smoke",
+      "env_override": "KAFKA_OPS_SMOKE_TOPIC",
+      "partitions": 1,
+      "partitions_env": "KAFKA_SMOKE_PARTITIONS",
+      "replication_factor": 2,
+      "min_insync_replicas": 1,
       "retention_ms": 259200000,
       "cleanup_policy": "delete",
-      "acl_expected": [
-        "mission-events-producer:Write",
-        "ws-service:Read",
-        "ws-service:Describe"
-      ]
+      "active_prod": true,
+      "acl_expected": []
     }
+  ],
+  "inactive_topics_when_KAFKA_CREATE_INACTIVE_TOPICS_true": [
+    "notifications.push",
+    "notifications.sms",
+    "notifications.email",
+    "mission.events",
+    "notification.events",
+    "dispatch.events"
   ]
 }

@@ -37,6 +37,8 @@ class LegStop:
     dropoff_establishment: str | None = None
     dropoff_service: str | None = None
     dropoff_doctor: str | None = None
+    destination_billing_override: str | None = None
+    is_return_stop: bool = False
 
 
 def new_route_group_id() -> str:
@@ -55,6 +57,7 @@ def build_legs_chain(
     institution_return_lng: float | None = None,
     return_scheduled_time: Any = None,
     return_time_confirmed: bool = False,
+    return_stop: LegStop | None = None,
 ) -> list[dict[str, Any]]:
     """Construit une chaîne continue de legs (pickup[i+1] = dropoff[i])."""
     if not stops and not return_to_institution:
@@ -67,25 +70,30 @@ def build_legs_chain(
     waypoints = list(stops)
     if return_to_institution:
         ret_loc = institution_return_location or origin_location
-        waypoints.append(
-            LegStop(
-                dropoff_location=ret_loc,
-                dropoff_lat=(
-                    institution_return_lat
-                    if institution_return_lat is not None
-                    else origin_lat
-                ),
-                dropoff_lng=(
-                    institution_return_lng
-                    if institution_return_lng is not None
-                    else origin_lng
-                ),
-                scheduled_time=return_scheduled_time,
-                time_confirmed=return_time_confirmed,
+        if return_stop is not None:
+            waypoints.append(return_stop)
+        else:
+            waypoints.append(
+                LegStop(
+                    dropoff_location=ret_loc,
+                    dropoff_lat=(
+                        institution_return_lat
+                        if institution_return_lat is not None
+                        else origin_lat
+                    ),
+                    dropoff_lng=(
+                        institution_return_lng
+                        if institution_return_lng is not None
+                        else origin_lng
+                    ),
+                    scheduled_time=return_scheduled_time,
+                    time_confirmed=return_time_confirmed,
+                    is_return_stop=True,
+                )
             )
-        )
 
     for idx, stop in enumerate(waypoints):
+        is_return = bool(getattr(stop, "is_return_stop", False))
         legs.append(
             {
                 "sequence_index": idx,
@@ -101,6 +109,8 @@ def build_legs_chain(
                 "dropoff_doctor": stop.dropoff_doctor,
                 "scheduled_time": parse_leg_scheduled_time(stop.scheduled_time),
                 "time_confirmed": bool(stop.time_confirmed),
+                "destination_billing_override": stop.destination_billing_override,
+                "is_return_stop": is_return,
             }
         )
         cur_pick = stop.dropoff_location
@@ -166,10 +176,44 @@ def persist_legs(
         leg.dropoff_doctor = ld.get("dropoff_doctor") or None
         leg.scheduled_time = parse_leg_scheduled_time(ld.get("scheduled_time"))
         leg.time_confirmed = bool(ld.get("time_confirmed", False))
+        leg.destination_billing_override = ld.get("destination_billing_override") or None
+        leg.is_return_stop = bool(ld.get("is_return_stop", False))
         db.session.add(leg)
         result.append(leg)
     db.session.flush()
     return result
+
+
+def _parse_destination_billing_override(item: dict[str, Any]) -> str | None:
+    if not bool(item.get("use_custom_billing", False)):
+        return None
+    override = (item.get("destination_billing_override") or "").strip()
+    return override.lower() if override else None
+
+
+def return_stop_from_validated(
+    validated: dict[str, Any],
+    *,
+    return_location: str,
+    return_lat: float | None,
+    return_lng: float | None,
+    return_scheduled_time: Any = None,
+    return_time_confirmed: bool = False,
+) -> LegStop | None:
+    """Construit le stop système retour depuis return_stop ou défaut."""
+    raw = validated.get("return_stop")
+    override = None
+    if isinstance(raw, dict):
+        override = _parse_destination_billing_override(raw)
+    return LegStop(
+        dropoff_location=return_location,
+        dropoff_lat=return_lat,
+        dropoff_lng=return_lng,
+        scheduled_time=return_scheduled_time,
+        time_confirmed=return_time_confirmed,
+        destination_billing_override=override,
+        is_return_stop=True,
+    )
 
 
 def stops_from_validated(validated: dict[str, Any]) -> list[LegStop]:
@@ -204,6 +248,8 @@ def stops_from_validated(validated: dict[str, Any]) -> list[LegStop]:
                 dropoff_establishment=(item.get("dropoff_establishment") or None),
                 dropoff_service=(item.get("dropoff_service") or None),
                 dropoff_doctor=(item.get("dropoff_doctor") or None),
+                destination_billing_override=_parse_destination_billing_override(item),
+                is_return_stop=bool(item.get("is_return_stop", False)),
             )
         )
     return stops
@@ -292,6 +338,7 @@ def reorganize_multi_stop_legs(
     return_to_institution: bool,
     return_scheduled_time: Any = None,
     return_time_confirmed: bool = False,
+    return_stop: LegStop | None = None,
     actor_user_id: int | None = None,
 ) -> list[TransportRequestLeg]:
     """Recalcule la chaîne de legs et historise si changement."""
@@ -318,6 +365,7 @@ def reorganize_multi_stop_legs(
         else None,
         return_scheduled_time=return_scheduled_time,
         return_time_confirmed=return_time_confirmed,
+        return_stop=return_stop,
     )
     new_legs = persist_legs(int(transport_request.id), legs_data)
     after = legs_snapshot(new_legs)

@@ -466,7 +466,7 @@ class TestAcceptOfferRoundTrip:
         )
 
         assert outbound.billed_to_type == "clinic"
-        assert outbound.billed_to_company_id == 5
+        assert outbound.billed_to_company_id is None
 
     @patch("application.institutions.accept_offer.db")
     def test_billing_intent_patient_keeps_patient_billing(self, mock_db: MagicMock):

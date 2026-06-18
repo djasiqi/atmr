@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { formatCurrencyCHF } from '../../../../../services/invoiceService';
+import { formatPatientDisplayNameNomPrenom } from '../../../../../utils/patientDisplayName';
 import styles from './InvoiceLivePreview.module.css';
 
 const MONTHS_FR = [
@@ -183,7 +184,7 @@ function rideLinePatientSubline(line, invoice) {
   const meta = m && typeof m === 'object' ? m : null;
   const name =
     meta?.patient_name != null && String(meta.patient_name).trim() !== ''
-      ? String(meta.patient_name).trim()
+      ? formatPatientDisplayNameNomPrenom(String(meta.patient_name).trim())
       : null;
   return name ? `Client : ${name}` : null;
 }
@@ -263,6 +264,7 @@ function linePreviewHiddenMergedRoundTrip(line) {
 function lineIsRoundTrip(line) {
   const m = line?.line_meta;
   if (!m || typeof m !== 'object') return false;
+  if (m.period_preview_single_leg) return false;
   if (m.round_trip_merge_partner_reservation_id != null) return true;
   if (m.preview_hide_merged_round_trip === true) return true;
   return false;
@@ -335,6 +337,28 @@ function invoiceLinePreviewSortRank(line) {
   return 1;
 }
 
+/** Clé ISO `YYYY-MM-DD` pour tri chronologique — lignes sans date en fin de liste (parité PDF S2). */
+function lineServiceDateSortKey(line) {
+  const meta = parseMeta(line?.line_meta);
+  const raw = meta?.service_date ?? meta?.service_date_iso;
+  if (raw == null || String(raw).trim() === '') return '9999-12-31';
+  const s = String(raw).trim();
+  const dm = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  if (dm) return `${dm[1]}-${dm[2]}-${dm[3]}`;
+  const d = new Date(s);
+  if (!Number.isNaN(d.getTime())) {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+  return '9999-12-31';
+}
+
+function linePatientSortKey(line) {
+  const meta = parseMeta(line?.line_meta);
+  return String(meta?.patient_name ?? '')
+    .trim()
+    .toLowerCase();
+}
+
 /**
  * Aperçu facture HTML pour brouillon — données alignées sur `Invoice.to_dict()` / PDF (lignes, totaux, méta).
  */
@@ -382,6 +406,12 @@ export default function InvoiceLivePreview({
         const ra = invoiceLinePreviewSortRank(a.ln);
         const rb = invoiceLinePreviewSortRank(b.ln);
         if (ra !== rb) return ra - rb;
+        const da = lineServiceDateSortKey(a.ln);
+        const db = lineServiceDateSortKey(b.ln);
+        if (da !== db) return da.localeCompare(db);
+        const pa = linePatientSortKey(a.ln);
+        const pb = linePatientSortKey(b.ln);
+        if (pa !== pb) return pa.localeCompare(pb);
         return a.idx - b.idx;
       })
       .map(({ ln }) => ln)

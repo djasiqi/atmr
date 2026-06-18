@@ -367,19 +367,6 @@ const FRESH_TOKEN_REQUIRED_MESSAGE =
 
 export const AUTH_TOKEN_NOT_FRESH = 'AUTH_TOKEN_NOT_FRESH';
 
-let freshTokenReauthHandler = null;
-
-export const registerFreshTokenReauthHandler = (handler) => {
-  freshTokenReauthHandler = typeof handler === 'function' ? handler : null;
-};
-
-export const requestFreshTokenReauth = (options) => {
-  if (!freshTokenReauthHandler) {
-    return Promise.reject(new Error('FreshTokenReauthProvider non monté'));
-  }
-  return freshTokenReauthHandler(options);
-};
-
 export const isAuthRefreshInProgress = () => isRefreshing;
 
 const waitForAuthRefreshIdle = async (timeoutMs = 5000) => {
@@ -488,33 +475,8 @@ export async function refreshSessionTokens(targetEnv = getCurrentAuthEnv()) {
   }
 };
 
-const rejectFreshTokenRequired = async (error, cfg = {}) => {
-  const handler = freshTokenReauthHandler;
-  if (handler && !cfg._freshReauthAttempted && !cfg.skipFreshTokenReauth) {
-    try {
-      await handler({
-        title: 'Confirmation requise',
-        retryFn: () =>
-          apiClient({
-            ...cfg,
-            _freshReauthAttempted: true,
-          }),
-      });
-      return apiClient({
-        ...cfg,
-        _freshReauthAttempted: true,
-      });
-    } catch (reauthError) {
-      return Promise.reject({
-        ...error,
-        code: AUTH_TOKEN_NOT_FRESH,
-        isFreshTokenRequired: true,
-        message: FRESH_TOKEN_REQUIRED_MESSAGE,
-        cause: reauthError,
-      });
-    }
-  }
-
+const rejectFreshTokenRequired = (error, cfg = {}) => {
+  requestDeferredSessionLogout(cfg);
   return Promise.reject({
     ...error,
     code: AUTH_TOKEN_NOT_FRESH,

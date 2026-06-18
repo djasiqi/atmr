@@ -18,7 +18,6 @@ jest.mock('../userActivityTracker', () => ({
 const {
   default: apiClient,
   AUTH_TOKEN_NOT_FRESH,
-  registerFreshTokenReauthHandler,
 } = require('../apiClient');
 const { notifySessionReauthRequired } = require('../deferredSessionLogout');
 
@@ -36,7 +35,6 @@ const fresh401Adapter = (config) =>
 describe('apiClient — séparation Fresh vs Expired', () => {
   beforeEach(() => {
     notifySessionReauthRequired.mockClear();
-    registerFreshTokenReauthHandler(null);
     localStorage.setItem('lirie_auth_env', 'app');
     localStorage.setItem(
       'app_user',
@@ -45,14 +43,12 @@ describe('apiClient — séparation Fresh vs Expired', () => {
   });
 
   afterEach(() => {
-    registerFreshTokenReauthHandler(null);
     localStorage.clear();
   });
 
-  it('401 token non fresh → pas notifySessionReauthRequired', async () => {
+  it('401 token non fresh → déclenche une déconnexion différée', async () => {
     await expect(
       apiClient.get('/companies/me', {
-        skipAuthRedirect: true,
         adapter: fresh401Adapter,
       })
     ).rejects.toMatchObject({
@@ -60,37 +56,9 @@ describe('apiClient — séparation Fresh vs Expired', () => {
       isFreshTokenRequired: true,
     });
 
-    expect(notifySessionReauthRequired).not.toHaveBeenCalled();
-  });
+    await new Promise((resolve) => setTimeout(resolve, 50));
 
-  it('401 fresh avec handler → retente via retryFn sans deferred logout', async () => {
-    let attempts = 0;
-    const adapter = (config) => {
-      attempts += 1;
-      if (attempts === 1) {
-        return fresh401Adapter(config);
-      }
-      return Promise.resolve({
-        data: { ok: true },
-        status: 200,
-        statusText: 'OK',
-        headers: {},
-        config,
-      });
-    };
-
-    registerFreshTokenReauthHandler(async ({ retryFn }) => {
-      await retryFn();
-    });
-
-    const result = await apiClient.get('/companies/me', {
-      skipAuthRedirect: true,
-      adapter,
-    });
-
-    expect(result.data).toEqual({ ok: true });
-    expect(notifySessionReauthRequired).not.toHaveBeenCalled();
-    expect(attempts).toBeGreaterThanOrEqual(2);
+    expect(notifySessionReauthRequired).toHaveBeenCalled();
   });
 });
 

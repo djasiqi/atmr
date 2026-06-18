@@ -141,3 +141,70 @@ def test_arrived_milestone_syncs_arrived_pickup(db, sample_company) -> None:
     assert res.response.get("mission_milestone") == "ARRIVED"
     db.session.refresh(assignment)
     assert assignment.status == AssignmentStatus.ARRIVED_PICKUP
+
+
+@pytest.mark.integration
+def test_release_with_trip_tracking_deletes_assignment(db, sample_company) -> None:
+    """RELEASE chauffeur : assignment supprimé même si trip_tracking existe."""
+    from unittest.mock import patch
+
+    from models import Assignment
+    from models.enums import CancelReason
+
+    assignment = create_assignment_with_booking_driver(
+        company=sample_company,
+        status=AssignmentStatus.EN_ROUTE_PICKUP,
+    )
+    booking = assignment.booking
+    driver = assignment.driver
+    assert booking is not None and driver is not None
+
+    booking.status = BookingStatus.EN_ROUTE
+    booking.driver_id = driver.id
+    db.session.flush()
+
+    db.session.add(
+        TripTracking(
+            assignment_id=assignment.id,
+            booking_id=booking.id,
+            driver_id=driver.id,
+            latitude=46.2044,
+            longitude=6.1432,
+            timestamp=datetime(2026, 6, 17, 14, 5, 0, tzinfo=UTC),
+        )
+    )
+    db.session.flush()
+    assert TripTracking.query.filter_by(assignment_id=assignment.id).count() == 1
+
+    uc = UpdateDriverBookingStatusUseCase(
+        booking_repo=BookingRepository(),
+        assignment_repo=AssignmentRepository(),
+        db_session=db.session,
+        notify_booking_update_fn=lambda *_a, **_k: None,
+        resolve_delays_fn=lambda *_a, **_k: None,
+        emit_assignment_cancelled_fn=lambda *_a, **_k: None,
+        maybe_trigger_dispatch_fn=None,
+    )
+    with (
+        patch.object(UpdateDriverBookingStatusUseCase, "_record_timeline_events"),
+        patch("application.events.event_bus.publish_event"),
+        patch(
+            "services.messaging.system_message_emitter.SystemMessageEmitter.on_booking_status_change"
+        ),
+    ):
+        res = uc.execute(
+            UpdateDriverBookingStatusCommand(
+                booking_id=booking.id,
+                driver_id=driver.id,
+                payload={
+                    "status": "canceled",
+                    "cancel_reason": CancelReason.RELEASE.value,
+                },
+            )
+        )
+    assert res.status_code == 200, res.response
+    db.session.refresh(booking)
+    assert booking.status == BookingStatus.ACCEPTED
+    assert booking.driver_id is None
+    assert Assignment.query.get(assignment.id) is None
+    assert TripTracking.query.filter_by(assignment_id=assignment.id).count() == 0

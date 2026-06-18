@@ -28,31 +28,18 @@ def _merge_s2_clinic_line_meta_from_booking(
         return out
 
     _existing_pn = out.get("patient_name")
-    if _existing_pn is None or str(_existing_pn).strip() == "":
-        cn = getattr(booking, "customer_name", None)
-        if cn and str(cn).strip():
-            out["patient_name"] = str(cn).strip()
-        elif client is not None:
-            u = getattr(client, "user", None)
-            if u is not None:
-                fn = (getattr(u, "first_name", "") or "").strip()
-                ln = (getattr(u, "last_name", "") or "").strip()
-                if ln and fn:
-                    out["patient_name"] = f"{ln.upper()} {fn.capitalize()}".strip()
-                elif ln:
-                    out["patient_name"] = ln.upper()
-                elif fn:
-                    out["patient_name"] = fn.capitalize()
-                elif getattr(u, "username", None):
-                    out["patient_name"] = str(u.username)
-                else:
-                    cid = getattr(booking, "client_id", None)
-                    out["patient_name"] = (
-                        f"Client #{cid}" if cid is not None else "Client"
-                    )
-            else:
-                cid = getattr(booking, "client_id", None)
-                out["patient_name"] = f"Client #{cid}" if cid is not None else "Client"
+    from application.invoices.invoice_line_description import (
+        format_patient_display_name_nom_prenom,
+        resolve_s2_clinic_line_patient_name,
+    )
+
+    resolved_pn = resolve_s2_clinic_line_patient_name(client, booking)
+    if resolved_pn:
+        out["patient_name"] = resolved_pn
+    elif _existing_pn is not None and str(_existing_pn).strip():
+        out["patient_name"] = format_patient_display_name_nom_prenom(
+            str(_existing_pn).strip()
+        )
 
     _existing_sd = out.get("service_date")
     if _existing_sd is None or str(_existing_sd).strip() == "":

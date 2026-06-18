@@ -40,8 +40,10 @@ import ChipSelect from '../../../components/ui/ChipSelect';
 import styles from './InstitutionRequestForm.module.css';
 import {
   buildMultiStopPayloadStops,
+  buildReturnStopPayload,
   filterValidMultiStopDestinations,
 } from '../../../utils/buildMultiStopLegsPreview';
+import DestinationBillingOverride from '../../../components/institution/DestinationBillingOverride';
 import RouteStepTimeField from '../../../components/institution/RouteStepTimeField';
 import ExternalCarrierFields, {
   EMPTY_EXTERNAL_CARRIER_FORM,
@@ -59,6 +61,7 @@ import {
   formatLocalDateYMD,
   formatLocalTimeHM,
   MIN_ARRIVAL_LEAD_MINUTES,
+  sanitizeSchedulePayloadForApi,
 } from '../../../utils/missionScheduleForm';
 import {
   filterTripTypesForInstitution,
@@ -153,6 +156,9 @@ const EMPTY_FORM = {
   notes: '',
   delivery_description: '',
   billing_intent: 'patient',
+  dropoff_use_custom_billing: false,
+  dropoff_destination_billing_override: 'patient',
+  return_stop: { use_custom_billing: false, destination_billing_override: 'patient' },
   is_urgent: false,
   multi_stop: false,
   return_to_institution: true,
@@ -642,6 +648,8 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
           dropoff_establishment: '',
           dropoff_service: '',
           dropoff_doctor: '',
+          use_custom_billing: false,
+          destination_billing_override: 'patient',
         },
       ],
     }));
@@ -847,7 +855,6 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
       dropoff_location: formData.dropoff_location || (formData.dropoff_type === 'institution' ? institutionAddress : ''),
       is_round_trip: false,
       is_urgent: formData.is_urgent || false,
-      return_time: null,
       billing_intent: formData.billing_intent,
       notes: formData.notes || null,
     };
@@ -935,21 +942,22 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
       ).trim();
       const principalStop = {
         dropoff_location: principalDropoff,
-        scheduled_time: dropoffIso || '',
+        ...(dropoffIso ? { scheduled_time: dropoffIso } : {}),
         time_confirmed: Boolean(dropoffTime?.trim()),
         dropoff_establishment: formData.dropoff_establishment || '',
         dropoff_service: formData.dropoff_service || '',
         dropoff_doctor: formData.dropoff_doctor || '',
+        use_custom_billing: Boolean(formData.dropoff_use_custom_billing),
+        destination_billing_override: formData.dropoff_destination_billing_override || 'patient',
       };
       payload.multi_stop = true;
       payload.return_to_institution = returnEnabled;
       payload.is_round_trip = false;
-      payload.return_time = null;
       // Retour domicile : domicile = dernière étape, destinations insérées avant.
       const orderedStops = isReturnHome
         ? [...extraValidStops, principalStop]
         : [principalStop, ...extraValidStops];
-      payload.intermediate_stops = buildMultiStopPayloadStops(orderedStops);
+      payload.intermediate_stops = buildMultiStopPayloadStops(orderedStops, missionDate);
       payload.dropoff_location = isReturnHome
         ? (orderedStops[0]?.dropoff_location || principalDropoff)
         : principalDropoff;
@@ -960,6 +968,7 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
       if (returnEnabled) {
         if (returnIso) payload.return_scheduled_time = returnIso;
         payload.return_time_confirmed = Boolean(returnTime?.trim());
+        payload.return_stop = buildReturnStopPayload(formData.return_stop);
       }
     } else {
       const hasPickup = Boolean(pickupTime?.trim());
@@ -1071,7 +1080,7 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
     }
 
     try {
-      const payload = buildPayload();
+      const payload = sanitizeSchedulePayloadForApi(buildPayload(flushedSchedule));
       const result = await createMutation.mutateAsync(payload);
 
       if (isLirieSendMode) {
@@ -1124,7 +1133,17 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
         navigate(`/dashboard/institution/${public_id}/requests/${result.id}`);
       }
     } catch (err) {
-      toast.error(err?.response?.data?.error || 'Erreur lors de la création');
+      const data = err?.response?.data;
+      const fieldErrors = data?.details?.fields || data?.details?.errors || data?.details;
+      const firstFieldError = fieldErrors && typeof fieldErrors === 'object'
+        ? Object.values(fieldErrors).flat().find((msg) => typeof msg === 'string' && msg.trim())
+        : null;
+      toast.error(
+        data?.message
+          || firstFieldError
+          || data?.error
+          || 'Erreur lors de la création',
+      );
     }
   };
 
@@ -1756,6 +1775,17 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
               </>
             )}
 
+            {canBilling && (hasExtraStops || journeyReturnEnabled) && (
+              <DestinationBillingOverride
+                idPrefix="dropoff-billing"
+                useCustomBilling={formData.dropoff_use_custom_billing}
+                billingOverride={formData.dropoff_destination_billing_override}
+                onUseCustomBillingChange={(checked) => handleChange('dropoff_use_custom_billing', checked)}
+                onBillingOverrideChange={(val) => handleChange('dropoff_destination_billing_override', val)}
+                disabled={!canBilling}
+              />
+            )}
+
             {/* ═══ SECTION 2bis — Détails des destinations supplémentaires ═══ */}
             {extraStops.map((stop, idx) => (
               <React.Fragment key={`extra-details-${idx}`}>
@@ -1779,8 +1809,39 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
                     onChange={(e) => setStopField(idx, 'dropoff_doctor', e.target.value)}
                     placeholder="Ex: Dr. Martin, Prof. Dupont" className={styles.detailsInput} />
                 </div>
+                {canBilling && (
+                  <DestinationBillingOverride
+                    idPrefix={`stop-billing-${idx}`}
+                    useCustomBilling={stop.use_custom_billing}
+                    billingOverride={stop.destination_billing_override}
+                    onUseCustomBillingChange={(checked) => setStopField(idx, 'use_custom_billing', checked)}
+                    onBillingOverrideChange={(val) => setStopField(idx, 'destination_billing_override', val)}
+                    disabled={!canBilling}
+                  />
+                )}
               </React.Fragment>
             ))}
+
+            {canBilling && journeyReturnEnabled && (
+              <>
+                <hr className={styles.detailsDivider} />
+                <h2 className={styles.detailsPanelTitle}>⇄ Retour institution</h2>
+                <DestinationBillingOverride
+                  idPrefix="return-billing"
+                  useCustomBilling={formData.return_stop?.use_custom_billing}
+                  billingOverride={formData.return_stop?.destination_billing_override}
+                  onUseCustomBillingChange={(checked) => setFormData((prev) => ({
+                    ...prev,
+                    return_stop: { ...prev.return_stop, use_custom_billing: checked },
+                  }))}
+                  onBillingOverrideChange={(val) => setFormData((prev) => ({
+                    ...prev,
+                    return_stop: { ...prev.return_stop, destination_billing_override: val },
+                  }))}
+                  disabled={!canBilling}
+                />
+              </>
+            )}
 
 
             <hr className={styles.detailsDivider} />

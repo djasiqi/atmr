@@ -1,0 +1,102 @@
+# docker-compose.kafka.kraft.yml
+# PoC KRaft — 1 nœud combined broker+controller, sans Zookeeper (étude LIRIE).
+# Usage local uniquement ; non validé pour prod sans tests complets.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.kafka.kraft.yml up -d
+#
+# Voir docs/ops/kafka-optimization-lirie.md § Étude KRaft.
+
+services:
+  atmr_api:
+    environment:
+      - KAFKA_ENABLED=true
+      - TRACKING_INGEST_ASYNC_ENABLED=true
+      - KAFKA_BOOTSTRAP_SERVERS=kafka-broker-1:29092
+
+  kafka-broker-1:
+    image: confluentinc/cp-kafka:7.6.0
+    hostname: kafka-broker-1
+    container_name: atmr-kafka-broker-1
+    ports:
+      - "9092:9092"
+      - "9101:9101"
+    environment:
+      CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: "broker,controller"
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka-broker-1:29093"
+      KAFKA_LISTENERS: "PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:29093,PLAINTEXT_HOST://0.0.0.0:9092"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka-broker-1:29092,PLAINTEXT_HOST://localhost:9092"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT"
+      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
+      KAFKA_MIN_INSYNC_REPLICAS: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_CONFLUENT_METRICS_ENABLE: "false"
+      KAFKA_JMX_PORT: 9101
+      KAFKA_JMX_HOSTNAME: localhost
+      KAFKA_HEAP_OPTS: "-Xms1G -Xmx1G"
+      KAFKA_NUM_PARTITIONS: ${KAFKA_DEFAULT_PARTITIONS:-6}
+      KAFKA_LOG_RETENTION_HOURS: 72
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+    volumes:
+      - kafka-data-1-kraft:/var/lib/kafka/data
+    mem_limit: 2g
+    networks:
+      - default
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+    restart: unless-stopped
+
+  kafka-topics-init:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: atmr-kafka-topics-init
+    environment:
+      BOOTSTRAP_SERVERS: kafka-broker-1:29092
+      KAFKA_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_DEFAULT_PARTITIONS: ${KAFKA_DEFAULT_PARTITIONS:-6}
+      KAFKA_DLQ_PARTITIONS: ${KAFKA_DLQ_PARTITIONS:-3}
+      KAFKA_CREATE_INACTIVE_TOPICS: "false"
+    depends_on:
+      kafka-broker-1:
+        condition: service_healthy
+    networks:
+      - default
+    volumes:
+      - ./scripts:/kafka-scripts:ro
+    entrypoint: ["/bin/bash", "/kafka-scripts/kafka-init-topics.sh"]
+    restart: "no"
+
+  tracking-kafka-consumer:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    depends_on:
+      kafka-topics-init:
+        condition: service_completed_successfully
+    command: python -m services.tracking.ingest_consumer
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-atmr}:${POSTGRES_PASSWORD:-atmr}@pgbouncer:6432/${POSTGRES_DB:-atmr}
+      KAFKA_ENABLED: "true"
+      TRACKING_INGEST_ASYNC_ENABLED: "true"
+      KAFKA_BOOTSTRAP_SERVERS: kafka-broker-1:29092
+      KAFKA_TOPIC_DRIVER_LOCATION_RAW: driver.location.raw
+      KAFKA_TOPIC_DRIVER_LOCATION_PROCESSED: driver.location.processed
+      KAFKA_TOPIC_DRIVER_LOCATION_DLQ: driver.location.dlq
+    networks:
+      - default
+    restart: unless-stopped
+
+volumes:
+  kafka-data-1-kraft:
+
+networks:
+  default:
+    name: atmr-stack

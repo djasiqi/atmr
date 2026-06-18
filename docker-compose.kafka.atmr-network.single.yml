@@ -1,0 +1,28 @@
+# Rattache le broker Kafka mono-hôte au réseau externe atmr-network (Phase 2).
+# Merger avec docker-compose.kafka.single.yml (pas les brokers 2/3).
+
+networks:
+  atmr-network:
+    external: true
+    name: atmr-network
+
+services:
+  kafka-broker-1:
+    networks:
+      - default
+      - atmr-network
+
+  tracking-kafka-consumer:
+    depends_on:
+      kafka-broker-1:
+        condition: service_healthy
+
+  tracking-processed-fanout:
+    depends_on:
+      kafka-broker-1:
+        condition: service_healthy
+
+  kafka-dlq-consumer:
+    depends_on:
+      kafka-broker-1:
+        condition: service_healthy

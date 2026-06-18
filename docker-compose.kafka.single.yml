@@ -1,0 +1,269 @@
+# docker-compose.kafka.single.yml
+# Kafka mono-broker LIRIE (Phase 2) — 1 ZK + 1 broker, RF=1.
+# Ne pas merger avec docker-compose.kafka.yml (conflits de services).
+#
+#   docker compose -f docker-compose.production.yml \
+#     -f docker-compose.kafka.single.yml \
+#     -f docker-compose.kafka.atmr-network.single.yml \
+#     --profile kafka up -d
+#
+# Déploiement : KAFKA_COMPOSE_FILE=docker-compose.kafka.single.yml INIT_TOPICS=1 scripts/deploy-kafka-production.sh
+
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    hostname: zookeeper
+    container_name: atmr-zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_SERVER_ID: 1
+      JAVA_TOOL_OPTIONS: "-Xms256m -Xmx256m"
+    volumes:
+      - zookeeper-data-single:/var/lib/zookeeper/data
+      - zookeeper-logs-single:/var/lib/zookeeper/log
+    mem_limit: 512m
+    networks:
+      - default
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  kafka-broker-1:
+    image: confluentinc/cp-kafka:7.6.0
+    hostname: kafka-broker-1
+    container_name: atmr-kafka-broker-1
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    ports:
+      - "9092:9092"
+      - "9101:9101"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-broker-1:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_DEFAULT_REPLICATION_FACTOR: ${KAFKA_BROKER_REPLICATION_FACTOR:-1}
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: ${KAFKA_BROKER_REPLICATION_FACTOR:-1}
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: ${KAFKA_BROKER_REPLICATION_FACTOR:-1}
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: ${KAFKA_BROKER_TXN_MIN_ISR:-1}
+      KAFKA_MIN_INSYNC_REPLICAS: ${KAFKA_BROKER_MIN_INSYNC_REPLICAS:-1}
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_CONFLUENT_METRICS_ENABLE: "false"
+      KAFKA_JMX_PORT: 9101
+      KAFKA_JMX_HOSTNAME: localhost
+      KAFKA_HEAP_OPTS: "-Xms1G -Xmx1G"
+      KAFKA_NUM_NETWORK_THREADS: 3
+      KAFKA_NUM_IO_THREADS: 3
+      KAFKA_NUM_PARTITIONS: ${KAFKA_DEFAULT_PARTITIONS:-6}
+      KAFKA_LOG_RETENTION_HOURS: 72
+      KAFKA_LOG_RETENTION_BYTES: 10737418240
+      KAFKA_LOG_SEGMENT_BYTES: 1073741824
+      KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS: 300000
+      KAFKA_COMPRESSION_TYPE: snappy
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+    volumes:
+      - kafka-data-1-single:/var/lib/kafka/data
+    mem_limit: 2g
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+    networks:
+      - default
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+    restart: unless-stopped
+
+  kafka-topics-init:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: atmr-kafka-topics-init
+    environment:
+      BOOTSTRAP_SERVERS: kafka-broker-1:29092
+      KAFKA_TOPIC_REPLICATION_FACTOR: ${KAFKA_TOPIC_REPLICATION_FACTOR:-1}
+      KAFKA_DEFAULT_PARTITIONS: ${KAFKA_DEFAULT_PARTITIONS:-6}
+      KAFKA_DLQ_PARTITIONS: ${KAFKA_DLQ_PARTITIONS:-3}
+      KAFKA_CREATE_INACTIVE_TOPICS: ${KAFKA_CREATE_INACTIVE_TOPICS:-false}
+      KAFKA_TOPIC_DRIVER_LOCATION_RAW: ${KAFKA_TOPIC_DRIVER_LOCATION_RAW:-driver.location.raw}
+      KAFKA_TOPIC_DRIVER_LOCATION_PROCESSED: ${KAFKA_TOPIC_DRIVER_LOCATION_PROCESSED:-driver.location.processed}
+      KAFKA_TOPIC_DRIVER_LOCATION_DLQ: ${KAFKA_TOPIC_DRIVER_LOCATION_DLQ:-driver.location.dlq}
+      KAFKA_TOPIC_NOTIFICATIONS_DLQ: ${KAFKA_TOPIC_NOTIFICATIONS_DLQ:-notifications.dlq}
+    depends_on:
+      kafka-broker-1:
+        condition: service_healthy
+    networks:
+      - default
+    volumes:
+      - ./scripts:/kafka-scripts:ro
+    entrypoint: ["/bin/bash", "/kafka-scripts/kafka-init-topics.sh"]
+    restart: "no"
+
+  kafka-ui:
+    profiles: ["kafka-ui"]
+    image: provectuslabs/kafka-ui:latest
+    container_name: atmr-kafka-ui
+    depends_on:
+      - kafka-broker-1
+    ports:
+      - "8090:8080"
+    mem_limit: 256m
+    environment:
+      KAFKA_CLUSTERS_0_NAME: atmr-cluster-single
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka-broker-1:29092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+      KAFKA_CLUSTERS_0_METRICS_PORT: 9101
+    networks:
+      - default
+    restart: unless-stopped
+
+  redis-failover:
+    image: redis:7-alpine
+    container_name: atmr-redis-failover
+    ports:
+      - "6380:6379"
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 2gb
+      --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-failover-data-single:/data
+    networks:
+      - default
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  tracking-kafka-consumer:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    depends_on:
+      kafka-topics-init:
+        condition: service_completed_successfully
+    command: python -m services.tracking.ingest_consumer
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-atmr}:${POSTGRES_PASSWORD:-atmr}@pgbouncer:6432/${POSTGRES_DB:-atmr}
+      KAFKA_ENABLED: "true"
+      TRACKING_INGEST_ASYNC_ENABLED: "true"
+      KAFKA_BOOTSTRAP_SERVERS: kafka-broker-1:29092
+      KAFKA_MAX_BLOCK_MS: "20000"
+      KAFKA_PUBLISH_ACK_TIMEOUT_S: "10"
+      KAFKA_TRACKING_CONSUMER_GROUP: tracking-ingest-consumer-group
+      KAFKA_TOPIC_DRIVER_LOCATION_RAW: ${KAFKA_TOPIC_DRIVER_LOCATION_RAW:-driver.location.raw}
+      KAFKA_TOPIC_DRIVER_LOCATION_PROCESSED: ${KAFKA_TOPIC_DRIVER_LOCATION_PROCESSED:-driver.location.processed}
+      KAFKA_TOPIC_DRIVER_LOCATION_VALIDATED: ${KAFKA_TOPIC_DRIVER_LOCATION_PROCESSED:-driver.location.processed}
+      KAFKA_TOPIC_DRIVER_LOCATION_DLQ: ${KAFKA_TOPIC_DRIVER_LOCATION_DLQ:-driver.location.dlq}
+      KAFKA_SECURITY_PROTOCOL: ${KAFKA_SECURITY_PROTOCOL:-PLAINTEXT}
+    networks:
+      - default
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 1G
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import pathlib,sys; cmd=pathlib.Path('/proc/1/cmdline').read_text(); sys.exit(0 if 'ingest_consumer' in cmd else 1)\"",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  tracking-processed-fanout:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    depends_on:
+      kafka-topics-init:
+        condition: service_completed_successfully
+    command: python -m services.tracking.processed_fanout_consumer
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-atmr}:${POSTGRES_PASSWORD:-atmr}@pgbouncer:6432/${POSTGRES_DB:-atmr}
+      REDIS_URL: redis://redis:6379/0
+      KAFKA_ENABLED: "true"
+      TRACKING_INGEST_ASYNC_ENABLED: "true"
+      TRACKING_PROCESSED_FANOUT_ENABLED: "true"
+      KAFKA_BOOTSTRAP_SERVERS: kafka-broker-1:29092
+      KAFKA_PROCESSED_FANOUT_GROUP: tracking-processed-fanout-group
+      KAFKA_TOPIC_DRIVER_LOCATION_PROCESSED: ${KAFKA_TOPIC_DRIVER_LOCATION_PROCESSED:-driver.location.processed}
+      KAFKA_PROCESSED_FANOUT_OFFSET_RESET: latest
+      KAFKA_SECURITY_PROTOCOL: ${KAFKA_SECURITY_PROTOCOL:-PLAINTEXT}
+    networks:
+      - default
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import pathlib,sys; cmd=pathlib.Path('/proc/1/cmdline').read_text(); sys.exit(0 if 'processed_fanout_consumer' in cmd else 1)\"",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  kafka-dlq-consumer:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    depends_on:
+      kafka-topics-init:
+        condition: service_completed_successfully
+    command: python -m services.kafka.dlq_consumer
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-atmr}:${POSTGRES_PASSWORD:-atmr}@pgbouncer:6432/${POSTGRES_DB:-atmr}
+      KAFKA_ENABLED: "true"
+      KAFKA_BOOTSTRAP_SERVERS: kafka-broker-1:29092
+      KAFKA_DLQ_CONSUMER_GROUP: kafka-dlq-consumer-group
+      KAFKA_TOPIC_NOTIFICATIONS_DLQ: ${KAFKA_TOPIC_NOTIFICATIONS_DLQ:-notifications.dlq}
+      KAFKA_TOPIC_DRIVER_LOCATION_DLQ: ${KAFKA_TOPIC_DRIVER_LOCATION_DLQ:-driver.location.dlq}
+      KAFKA_DLQ_STORAGE_PATH: /app/data/kafka_dlq_events.jsonl
+      KAFKA_SECURITY_PROTOCOL: ${KAFKA_SECURITY_PROTOCOL:-PLAINTEXT}
+    volumes:
+      - ./data/kafka-dlq:/app/data
+    networks:
+      - default
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import pathlib,sys; cmd=pathlib.Path('/proc/1/cmdline').read_text(); sys.exit(0 if 'dlq_consumer' in cmd else 1)\"",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+volumes:
+  zookeeper-data-single:
+  zookeeper-logs-single:
+  kafka-data-1-single:
+  redis-failover-data-single:
+
+networks:
+  default:
+    name: atmr-stack

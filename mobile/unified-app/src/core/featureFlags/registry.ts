@@ -315,6 +315,16 @@ export const featureFlags = {
     description:
       "Kill-switch for the company socket bridge. EXPO_PUBLIC_ENABLE_COMPANY_REALTIME=1 + URL (EXPO_PUBLIC_COMPANY_SOCKET_URL ou origine EXPO_PUBLIC_API_BASE_URL ; pas de repli DRIVER). En __DEV__, activé automatiquement si le dispatch company est actif (env ou feature_flags session). Voir expo-company-env.template.",
   } satisfies FeatureFlagDefinition,
+  company_runtime_resume_enabled: {
+    key: "company_runtime_resume_enabled",
+    source: "env",
+    enabled:
+      process.env.EXPO_PUBLIC_ENABLE_COMPANY_RUNTIME_RESUME === undefined
+        ? typeof __DEV__ !== "undefined" && __DEV__
+        : envEnabled("EXPO_PUBLIC_ENABLE_COMPANY_RUNTIME_RESUME"),
+    description:
+      "Reprise session entreprise au retour foreground (bootstrap + refresh token + reconnect socket + resync données). Critique Samsung Android.",
+  } satisfies FeatureFlagDefinition,
   company_dispatch_screen_enabled: {
     key: "company_dispatch_screen_enabled",
     source: "env",

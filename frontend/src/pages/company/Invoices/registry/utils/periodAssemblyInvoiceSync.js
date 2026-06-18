@@ -93,6 +93,32 @@ function transportMetaPatchIfNeeded(mergedLineMeta, serverLine) {
   return Object.keys(patch).length ? patch : null;
 }
 
+/** Jambe A/R déjà exclue dans l’aperçu période : retirer les marqueurs fusion sur le brouillon. */
+function roundTripLegExcludedMetaPatch(previewMeta) {
+  const m = previewMeta && typeof previewMeta === 'object' ? previewMeta : {};
+  if (!m.period_preview_single_leg) return null;
+  return {
+    is_round_trip_leg: null,
+    transport_type: null,
+    preview_hide_merged_round_trip: null,
+    round_trip_merge_partner_reservation_id: null,
+  };
+}
+
+function transportMetaSyncPatch(mergedLineMeta, serverLine) {
+  const legPatch = roundTripLegExcludedMetaPatch(mergedLineMeta);
+  if (legPatch) return legPatch;
+  return transportMetaPatchIfNeeded(mergedLineMeta, serverLine);
+}
+
+function serviceDateIsoFromLineMeta(lineMeta) {
+  const m = lineMeta && typeof lineMeta === 'object' ? lineMeta : {};
+  const raw = [m.service_date_iso, m.service_date].find(
+    (x) => x != null && String(x).trim() !== ''
+  );
+  return raw != null ? String(raw).trim().slice(0, 10) : '';
+}
+
 /**
  * @param {number} companyId
  * @param {number} invoiceId
@@ -127,9 +153,13 @@ export async function syncDraftInvoiceWithMergedAssemblyPreview(companyId, invoi
       if (km.original_line_total != null && Number.isFinite(Number(km.original_line_total))) {
         mergeBody.original_line_total = Number(km.original_line_total);
       }
-      const tp = transportMetaPatchIfNeeded(km, keep);
+      const tp = transportMetaSyncPatch(km, keep);
       if (tp) {
         mergeBody.line_meta_merge = tp;
+      }
+      const wantSd = serviceDateIsoFromLineMeta(km);
+      if (wantSd) {
+        mergeBody.service_date_iso = wantSd;
       }
       await invoiceService.updateDraftInvoiceLine(companyId, invoiceId, keep.id, mergeBody);
       inv = await loadInvoice(companyId, invoiceId);
@@ -185,9 +215,15 @@ export async function syncDraftInvoiceWithMergedAssemblyPreview(companyId, invoi
       body.original_line_total = Number(mOlt);
       changed = true;
     }
-    const tPatch = transportMetaPatchIfNeeded(mlm, sl);
+    const tPatch = transportMetaSyncPatch(mlm, sl);
     if (tPatch) {
       body.line_meta_merge = tPatch;
+      changed = true;
+    }
+    const wantSd = serviceDateIsoFromLineMeta(mlm);
+    const haveSd = serviceDateIsoFromLineMeta(slm);
+    if (wantSd && wantSd !== haveSd) {
+      body.service_date_iso = wantSd;
       changed = true;
     }
     if (changed) {

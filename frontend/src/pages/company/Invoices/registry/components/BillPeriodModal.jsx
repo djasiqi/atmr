@@ -20,12 +20,16 @@ import {
   FiExternalLink,
   FiCheck,
   FiTrash2,
+  FiSearch,
+  FiChevronLeft,
+  FiChevronRight,
 } from 'react-icons/fi';
 import { toast } from 'sonner';
 import { invoiceService, formatCurrencyCHF, generateInvoice } from '../../../../../services/invoiceService';
 import { getApiErrorMessage } from '../../../../../utils/apiErrorMessage';
 import DraftInvoiceEditorPanel from './DraftInvoiceEditorPanel';
 import InvoiceLivePreview from './InvoiceLivePreview';
+import InvoiceLineEditorContext from './InvoiceLineEditorContext';
 import draftEditorStyles from './InvoiceDraftEditModal.module.css';
 import styles from './BillPeriodModal.module.css';
 import InlineMonthYearPicker from '../../../../../components/ui/InlineMonthYearPicker';
@@ -33,6 +37,17 @@ import InlineDatePicker from '../../../../../components/ui/InlineDatePicker';
 import ChipSelect from '../../../../../components/ui/ChipSelect';
 import { syncDraftInvoiceWithMergedAssemblyPreview } from '../utils/periodAssemblyInvoiceSync';
 import { normalizeServiceDateToIsoForApi } from '../../../../../utils/invoiceServiceDate';
+import { filterInvoiceLines } from '../../../../../utils/invoiceLineFilter';
+import {
+  getInvoiceLineMeta,
+  invertTrajetLineDescription,
+  isRoundTripPreviewHiddenLine,
+  canShowRoundTripLegExcludeActions,
+  sortInvoiceLinesForEditor,
+} from '../../../../../utils/invoiceLineRoundTrip';
+
+const LINE_PAGE_SIZE = 25;
+const HEAVY_LINES_THRESHOLD = 12;
 
 const unwrapApi = (res) => {
   if (res && typeof res === 'object' && res.data && typeof res.data === 'object' && 'transports_count' in res.data) {
@@ -121,6 +136,33 @@ function cloneInvoiceMeta(baseMeta) {
   return {};
 }
 
+function applyPeriodRoundTripLegMeta(prevLm, legKept) {
+  const nextLm = { ...prevLm };
+  delete nextLm.round_trip_merge_partner_reservation_id;
+  delete nextLm.is_round_trip_leg;
+  delete nextLm.transport_type;
+  delete nextLm.round_trip_primary_amount_ht;
+  delete nextLm.round_trip_partner_amount_ht;
+  delete nextLm.round_trip_partner_description;
+  delete nextLm.round_trip_primary_description;
+  delete nextLm.service_date_end;
+  delete nextLm.round_trip_partner_scheduled_at;
+  delete nextLm.round_trip_primary_scheduled_at;
+  nextLm.period_preview_single_leg = legKept;
+  if (legKept === 'return') {
+    const partnerDate = prevLm.round_trip_partner_scheduled_at ?? prevLm.service_date_end;
+    if (partnerDate != null && String(partnerDate).trim() !== '') {
+      nextLm.service_date = partnerDate;
+    }
+  } else if (legKept === 'outbound') {
+    const primaryDate = prevLm.round_trip_primary_scheduled_at ?? prevLm.service_date;
+    if (primaryDate != null && String(primaryDate).trim() !== '') {
+      nextLm.service_date = primaryDate;
+    }
+  }
+  return nextLm;
+}
+
 /**
  * Applique remises (globale / par ligne), surcharges de lignes, lignes custom et déductions HT à l’aperçu période.
  * Remise globale : `line_meta.original_line_total` + `meta.global_discount` pour le même rendu que le brouillon.
@@ -174,7 +216,10 @@ function mergePeriodPreviewInvoice(baseInvoice, linePatch, extraLinesRaw, remise
     vat = Math.round(vat * factor * 100) / 100;
     ttc = Math.round((ht + vat) * 100) / 100;
     const prevLm = ln.line_meta && typeof ln.line_meta === 'object' ? ln.line_meta : {};
-    const nextLm = { ...prevLm };
+    let nextLm =
+      p.round_trip_leg_kept === 'outbound' || p.round_trip_leg_kept === 'return'
+        ? applyPeriodRoundTripLegMeta(prevLm, p.round_trip_leg_kept)
+        : { ...prevLm };
     if (factor < 1 - 1e-9) {
       nextLm.original_line_total = htBeforeRemise;
     } else {
@@ -364,7 +409,46 @@ function buildSyntheticInvoiceForPeriodAssembly({
     const lineTtc = Math.round((lineHt + lineVat) * 100) / 100;
     const arMeta =
       row.is_round_trip_leg === true
-        ? { is_round_trip_leg: true, transport_type: 'A/R' }
+        ? {
+            is_round_trip_leg: true,
+            transport_type: 'A/R',
+            ...(row.round_trip_partner_booking_id != null
+              ? {
+                  round_trip_merge_partner_reservation_id: Number(row.round_trip_partner_booking_id),
+                }
+              : {}),
+            ...(row.round_trip_primary_amount_ht != null
+              ? { round_trip_primary_amount_ht: Number(row.round_trip_primary_amount_ht) }
+              : {}),
+            ...(row.round_trip_partner_amount_ht != null
+              ? { round_trip_partner_amount_ht: Number(row.round_trip_partner_amount_ht) }
+              : {}),
+            ...(row.round_trip_partner_description != null &&
+            String(row.round_trip_partner_description).trim() !== ''
+              ? {
+                  round_trip_partner_description: String(row.round_trip_partner_description).trim(),
+                }
+              : {}),
+            ...(row.round_trip_partner_scheduled_at != null &&
+            String(row.round_trip_partner_scheduled_at).trim() !== ''
+              ? {
+                  round_trip_partner_scheduled_at: row.round_trip_partner_scheduled_at,
+                }
+              : {}),
+            ...(row.round_trip_primary_scheduled_at != null &&
+            String(row.round_trip_primary_scheduled_at).trim() !== ''
+              ? {
+                  round_trip_primary_scheduled_at: row.round_trip_primary_scheduled_at,
+                }
+              : {}),
+            ...(row.description != null && String(row.description).trim() !== ''
+              ? { round_trip_primary_description: String(row.description).trim() }
+              : {}),
+          }
+        : {};
+    const patientMeta =
+      row.patient_name != null && String(row.patient_name).trim() !== ''
+        ? { patient_name: String(row.patient_name).trim() }
         : {};
     const endDateMeta =
       row.scheduled_at_end != null && String(row.scheduled_at_end).trim() !== ''
@@ -379,10 +463,12 @@ function buildSyntheticInvoiceForPeriodAssembly({
       line_total: lineHt,
       vat_amount: lineVat,
       total_with_vat: lineTtc,
+      reservation_id: row.booking_id,
       line_meta: {
         service_date: row.scheduled_at,
         ...endDateMeta,
         ...arMeta,
+        ...patientMeta,
       },
     });
   });
@@ -509,6 +595,8 @@ const BillPeriodModal = ({
   const addLineServiceDateRef = useRef('');
   /** IDs réservations cochées pour la génération (patient / clinique). */
   const [selectedBookingIds, setSelectedBookingIds] = useState(() => new Set());
+  const [periodLineFilter, setPeriodLineFilter] = useState('');
+  const [periodLinePage, setPeriodLinePage] = useState(1);
   const periodLinesHeadingId = useId();
   const periodRemiseHeadingId = useId();
   const periodAddLineHeadingId = useId();
@@ -652,6 +740,8 @@ const BillPeriodModal = ({
     setAddLineQty('1');
     addLineServiceDateRef.current = '';
     setAddLineServiceDate('');
+    setPeriodLineFilter('');
+    setPeriodLinePage(1);
   }, [preview]);
 
   useEffect(() => {
@@ -880,6 +970,41 @@ const BillPeriodModal = ({
     });
   }, []);
 
+  const periodEditorLines = useMemo(
+    () => sortInvoiceLinesForEditor(Array.isArray(mergedPeriodInvoice?.lines) ? mergedPeriodInvoice.lines : []),
+    [mergedPeriodInvoice?.lines]
+  );
+
+  const periodFilteredLines = useMemo(
+    () => filterInvoiceLines(periodEditorLines, periodLineFilter),
+    [periodEditorLines, periodLineFilter]
+  );
+
+  const periodTotalLinePages = Math.max(1, Math.ceil(periodFilteredLines.length / LINE_PAGE_SIZE));
+  const periodEffectiveLinePage = Math.min(Math.max(1, periodLinePage), periodTotalLinePages);
+
+  const periodPaginatedLines = useMemo(() => {
+    const start = (periodEffectiveLinePage - 1) * LINE_PAGE_SIZE;
+    return periodFilteredLines.slice(start, start + LINE_PAGE_SIZE);
+  }, [periodFilteredLines, periodEffectiveLinePage]);
+
+  useEffect(() => {
+    setPeriodLinePage((p) => Math.min(p, periodTotalLinePages));
+  }, [periodTotalLinePages]);
+
+  useEffect(() => {
+    setPeriodLinePage(1);
+  }, [periodLineFilter]);
+
+  const periodLineRangeStart =
+    periodFilteredLines.length === 0 ? 0 : (periodEffectiveLinePage - 1) * LINE_PAGE_SIZE + 1;
+  const periodLineRangeEnd =
+    periodFilteredLines.length === 0
+      ? 0
+      : Math.min(periodEffectiveLinePage * LINE_PAGE_SIZE, periodFilteredLines.length);
+
+  const showPeriodLinesToolbar = periodEditorLines.length >= HEAVY_LINES_THRESHOLD;
+
   /** Retire la réservation de la sélection : la ligne disparaît de l’aperçu et des totaux. */
   const excludePeriodLineFromPreview = useCallback((lineId) => {
     const rawBid = bookingIdFromPeriodLineId(lineId);
@@ -901,6 +1026,56 @@ const BillPeriodModal = ({
       return n;
     });
   }, []);
+
+  /** A/R fusionné en aperçu période : une seule jambe (description, date, HT, sans tag [A/R]). */
+  const excludePeriodRoundTripLeg = useCallback(
+    (lineId, leg) => {
+      const baseLn = syntheticPeriodInvoice?.lines?.find((l) => l.id === lineId);
+      if (!baseLn) return;
+      const meta = getInvoiceLineMeta(baseLn);
+      const primaryHt = meta?.round_trip_primary_amount_ht;
+      const partnerHt = meta?.round_trip_partner_amount_ht;
+      const primaryDesc =
+        meta?.round_trip_primary_description != null &&
+        String(meta.round_trip_primary_description).trim() !== ''
+          ? String(meta.round_trip_primary_description).trim()
+          : (baseLn.description ?? '');
+      const partnerDescRaw =
+        meta?.round_trip_partner_description != null &&
+        String(meta.round_trip_partner_description).trim() !== ''
+          ? String(meta.round_trip_partner_description).trim()
+          : null;
+
+      if (leg === 'return' && primaryHt != null && Number.isFinite(Number(primaryHt))) {
+        setPeriodLinePatch((prev) => ({
+          ...prev,
+          [lineId]: {
+            ...prev[lineId],
+            line_total: String(Number(primaryHt)),
+            description: primaryDesc,
+            round_trip_leg_kept: 'outbound',
+          },
+        }));
+        return;
+      }
+      if (leg === 'outbound' && partnerHt != null && Number.isFinite(Number(partnerHt))) {
+        const returnDesc =
+          partnerDescRaw && partnerDescRaw !== primaryDesc
+            ? partnerDescRaw
+            : invertTrajetLineDescription(primaryDesc);
+        setPeriodLinePatch((prev) => ({
+          ...prev,
+          [lineId]: {
+            ...prev[lineId],
+            line_total: String(Number(partnerHt)),
+            description: returnDesc,
+            round_trip_leg_kept: 'return',
+          },
+        }));
+      }
+    },
+    [syntheticPeriodInvoice]
+  );
 
   const handlePeriodRemoveRemise = useCallback(() => {
     setPeriodGlobalRemiseInput('');
@@ -1834,14 +2009,73 @@ const BillPeriodModal = ({
                               </h3>
                             </header>
                             <div className={draftEditorStyles.linesSheetEditor}>
+                              {showPeriodLinesToolbar ? (
+                                <div
+                                  className={`${draftEditorStyles.linesToolbar} ${draftEditorStyles.linesToolbarDense}`}
+                                >
+                                  <div className={draftEditorStyles.linesToolbarFilterWrap}>
+                                    <FiSearch
+                                      className={draftEditorStyles.linesToolbarFilterIcon}
+                                      size={16}
+                                      aria-hidden
+                                    />
+                                    <input
+                                      type="search"
+                                      className={draftEditorStyles.linesToolbarInput}
+                                      placeholder="Client, date (JJ.MM.AAAA), libellé, montant, n° ligne…"
+                                      title="Ex. : Bouchardy · Jean-michel Bouchardy · 02.05.2026 · 02.05 · mai · HUG · 80"
+                                      value={periodLineFilter}
+                                      onChange={(e) => setPeriodLineFilter(e.target.value)}
+                                      autoComplete="off"
+                                      aria-label="Filtrer les lignes de l’aperçu période"
+                                    />
+                                  </div>
+                                  <span className={draftEditorStyles.linesToolbarMeta}>
+                                    {periodFilteredLines.length === 0
+                                      ? 'Aucun résultat'
+                                      : `Lignes ${periodLineRangeStart}–${periodLineRangeEnd} sur ${periodFilteredLines.length}`}
+                                  </span>
+                                  {periodTotalLinePages > 1 ? (
+                                    <div className={draftEditorStyles.linesToolbarPager}>
+                                      <button
+                                        type="button"
+                                        className={draftEditorStyles.btnPager}
+                                        disabled={periodEffectiveLinePage <= 1}
+                                        title="Page précédente"
+                                        aria-label="Page précédente"
+                                        onClick={() => setPeriodLinePage((p) => Math.max(1, p - 1))}
+                                      >
+                                        <FiChevronLeft size={18} aria-hidden />
+                                      </button>
+                                      <span className={draftEditorStyles.linesToolbarMeta}>
+                                        {periodEffectiveLinePage} / {periodTotalLinePages}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        className={draftEditorStyles.btnPager}
+                                        disabled={periodEffectiveLinePage >= periodTotalLinePages}
+                                        title="Page suivante"
+                                        aria-label="Page suivante"
+                                        onClick={() =>
+                                          setPeriodLinePage((p) =>
+                                            Math.min(periodTotalLinePages, p + 1)
+                                          )
+                                        }
+                                      >
+                                        <FiChevronRight size={18} aria-hidden />
+                                      </button>
+                                    </div>
+                                  ) : null}
+                                </div>
+                              ) : null}
                               <div
                                 className={`${draftEditorStyles.tableScroll} ${draftEditorStyles.tableScrollDense}${
-                                  syntheticPeriodInvoice.lines.length >= 12
+                                  periodEditorLines.length >= HEAVY_LINES_THRESHOLD
                                     ? ` ${draftEditorStyles.tableScrollHeavy}`
                                     : ''
                                 }`}
                               >
-                                {syntheticPeriodInvoice.lines.length > 0 ? (
+                                {periodEditorLines.length > 0 && periodFilteredLines.length > 0 ? (
                                   <div
                                     className={draftEditorStyles.linesColumnLegend}
                                     aria-hidden="true"
@@ -1868,14 +2102,20 @@ const BillPeriodModal = ({
                                     <col className={draftEditorStyles.colActions} />
                                   </colgroup>
                                   <tbody>
-                                    {syntheticPeriodInvoice.lines.length === 0 ? (
+                                    {periodEditorLines.length === 0 ? (
                                       <tr>
                                         <td colSpan={4} className={draftEditorStyles.tableEmptyTight}>
                                           Aucune ligne.
                                         </td>
                                       </tr>
+                                    ) : periodFilteredLines.length === 0 ? (
+                                      <tr>
+                                        <td colSpan={4} className={draftEditorStyles.tableEmptyTight}>
+                                          Rien pour ce filtre.
+                                        </td>
+                                      </tr>
                                     ) : (
-                                      syntheticPeriodInvoice.lines.map((ln) => {
+                                      periodPaginatedLines.map((ln) => {
                                         const descVal =
                                           periodLinePatch[ln.id]?.description != null
                                             ? periodLinePatch[ln.id].description
@@ -1897,27 +2137,58 @@ const BillPeriodModal = ({
                                         const htId = `period-line-ht-${ln.id}`;
                                         const noteId = `period-line-note-${ln.id}`;
                                         const canExclude = rawBid != null;
+                                        const showArLegExclude = canShowRoundTripLegExcludeActions(ln);
+                                        const rowClassNames = [
+                                          isRoundTripPreviewHiddenLine(ln)
+                                            ? draftEditorStyles.rowRoundTripReturn
+                                            : '',
+                                        ]
+                                          .filter(Boolean)
+                                          .join(' ');
                                         return (
-                                          <tr key={ln.id} title={rowTitle}>
+                                          <tr
+                                            key={ln.id}
+                                            title={rowTitle}
+                                            className={rowClassNames || undefined}
+                                          >
                                             <td className={draftEditorStyles.colDescCell}>
-                                              <div className={draftEditorStyles.denseDesc}>
-                                                <textarea
-                                                  id={descId}
-                                                  className={draftEditorStyles.denseTextarea}
-                                                  rows={1}
-                                                  value={descVal}
-                                                  onChange={(e) =>
-                                                    setPeriodLinePatch((prev) => ({
-                                                      ...prev,
-                                                      [ln.id]: {
-                                                        ...prev[ln.id],
-                                                        description: e.target.value,
-                                                      },
-                                                    }))
+                                              <div className={draftEditorStyles.lineEditorDescStack}>
+                                                <InvoiceLineEditorContext
+                                                  line={ln}
+                                                  styles={draftEditorStyles}
+                                                  legActions={
+                                                    showArLegExclude
+                                                      ? {
+                                                          enabled: true,
+                                                          returnTitle:
+                                                            'Conserver l’aller, retirer le retour de la facture (aperçu)',
+                                                          outboundTitle:
+                                                            'Conserver le retour, retirer l’aller de la facture (aperçu)',
+                                                          onExcludeLeg: (leg) =>
+                                                            excludePeriodRoundTripLeg(ln.id, leg),
+                                                        }
+                                                      : undefined
                                                   }
-                                                  aria-label={`Libellé · ${rowTitle}`}
-                                                  title={rowTitle}
                                                 />
+                                                <div className={draftEditorStyles.denseDesc}>
+                                                  <textarea
+                                                    id={descId}
+                                                    className={draftEditorStyles.denseTextarea}
+                                                    rows={1}
+                                                    value={descVal}
+                                                    onChange={(e) =>
+                                                      setPeriodLinePatch((prev) => ({
+                                                        ...prev,
+                                                        [ln.id]: {
+                                                          ...prev[ln.id],
+                                                          description: e.target.value,
+                                                        },
+                                                      }))
+                                                    }
+                                                    aria-label={`Libellé · ${rowTitle}`}
+                                                    title={rowTitle}
+                                                  />
+                                                </div>
                                               </div>
                                             </td>
                                             <td className={draftEditorStyles.colHtCell}>
@@ -1969,16 +2240,21 @@ const BillPeriodModal = ({
                                                 >
                                                   <FiCheck size={14} aria-hidden />
                                                 </button>
-                                                <button
-                                                  type="button"
-                                                  className={`${draftEditorStyles.btnTrashXs} ${draftEditorStyles.danger}`}
-                                                  disabled={!canExclude}
-                                                  title="Retirer ce transport de la facture (aperçu)"
-                                                  aria-label={`Exclure la ligne ${ln.id}`}
-                                                  onClick={() => excludePeriodLineFromPreview(ln.id)}
-                                                >
-                                                  <FiTrash2 size={13} aria-hidden />
-                                                </button>
+                                                {canExclude ? (
+                                                  <button
+                                                    type="button"
+                                                    className={`${draftEditorStyles.btnTrashXs} ${draftEditorStyles.danger}`}
+                                                    title={
+                                                      showArLegExclude
+                                                        ? 'Retirer l’aller-retour complet de la facture (aperçu)'
+                                                        : 'Retirer ce transport de la facture (aperçu)'
+                                                    }
+                                                    aria-label={`Exclure la ligne ${ln.id}`}
+                                                    onClick={() => excludePeriodLineFromPreview(ln.id)}
+                                                  >
+                                                    <FiTrash2 size={13} aria-hidden />
+                                                  </button>
+                                                ) : null}
                                               </div>
                                             </td>
                                           </tr>

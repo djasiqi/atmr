@@ -283,6 +283,33 @@ if PROMETHEUS_AVAILABLE and Counter and Histogram and Gauge:
         ["owner_type"],
     )
 
+    PUSH_OPERATIONAL_DRIVERS_TOTAL = Gauge(
+        "push_operational_drivers_total",
+        "Chauffeurs opérationnels (is_active et is_available)",
+    )
+
+    PUSH_OPERATIONAL_DRIVERS_WITH_ACTIVE_TOKEN_TOTAL = Gauge(
+        "push_operational_drivers_with_active_token_total",
+        "Chauffeurs opérationnels avec au moins un token push actif",
+    )
+
+    PUSH_OPERATIONAL_DRIVERS_WITHOUT_ACTIVE_TOKEN_TOTAL = Gauge(
+        "push_operational_drivers_without_active_token_total",
+        "Chauffeurs opérationnels sans token push actif",
+    )
+
+    PUSH_TOKEN_REGISTRATION_SUCCESS_TOTAL = Counter(
+        "push_token_registration_success_total",
+        "Enregistrements push token réussis (save-push-token)",
+        ["owner_type", "provider", "platform"],
+    )
+
+    PUSH_TOKEN_REGISTRATION_FAILURE_TOTAL = Counter(
+        "push_token_registration_failure_total",
+        "Échecs enregistrement push token (save-push-token)",
+        ["owner_type", "provider", "platform", "reason"],
+    )
+
     DRIVER_PUSH_CHANNEL_TOTAL = Counter(
         "driver_push_channel_total",
         "Push chauffeur envoyés par canal Android",
@@ -302,6 +329,11 @@ else:
     PUSH_TOKENS_INVALIDATED = None
     PUSH_RATE_LIMIT_HITS = None
     PUSH_ACTIVE_OWNERS = None
+    PUSH_OPERATIONAL_DRIVERS_TOTAL = None
+    PUSH_OPERATIONAL_DRIVERS_WITH_ACTIVE_TOKEN_TOTAL = None
+    PUSH_OPERATIONAL_DRIVERS_WITHOUT_ACTIVE_TOKEN_TOTAL = None
+    PUSH_TOKEN_REGISTRATION_SUCCESS_TOTAL = None
+    PUSH_TOKEN_REGISTRATION_FAILURE_TOTAL = None
     DRIVER_PUSH_CHANNEL_TOTAL = None
     DRIVER_PUSH_SKIPPED_TOTAL = None
 
@@ -660,14 +692,14 @@ def track_push_token_invalidated(reason: str) -> None:
 
 
 def refresh_push_active_owners_gauges() -> None:
-    """Met à jour les gauges de couverture push (drivers / companies joignables)."""
+    """Met à jour les gauges de couverture push (drivers / companies / opérationnels)."""
     if not PROMETHEUS_AVAILABLE or not PUSH_ACTIVE_OWNERS:
         return
 
     try:
         from sqlalchemy import distinct, func
 
-        from models import DeviceToken
+        from models import DeviceToken, Driver
 
         driver_owners = (
             DeviceToken.query.with_entities(func.count(distinct(DeviceToken.driver_id)))
@@ -689,9 +721,91 @@ def refresh_push_active_owners_gauges() -> None:
         )
         PUSH_ACTIVE_OWNERS.labels(owner_type="driver").set(int(driver_owners or 0))
         PUSH_ACTIVE_OWNERS.labels(owner_type="company").set(int(company_owners or 0))
+
+        operational_filter = (
+            Driver.is_active.is_(True),
+            Driver.is_available.is_(True),
+        )
+        operational_total = (
+            Driver.query.with_entities(func.count(Driver.id))
+            .filter(*operational_filter)
+            .scalar()
+        )
+
+        operational_with_token = (
+            Driver.query.with_entities(func.count(func.distinct(Driver.id)))
+            .join(DeviceToken, DeviceToken.driver_id == Driver.id)
+            .filter(
+                *operational_filter,
+                DeviceToken.is_active.is_(True),
+            )
+            .scalar()
+        )
+
+        op_total = int(operational_total or 0)
+        op_with = int(operational_with_token or 0)
+        op_without = max(op_total - op_with, 0)
+
+        if PUSH_OPERATIONAL_DRIVERS_TOTAL:
+            PUSH_OPERATIONAL_DRIVERS_TOTAL.set(op_total)
+        if PUSH_OPERATIONAL_DRIVERS_WITH_ACTIVE_TOKEN_TOTAL:
+            PUSH_OPERATIONAL_DRIVERS_WITH_ACTIVE_TOKEN_TOTAL.set(op_with)
+        if PUSH_OPERATIONAL_DRIVERS_WITHOUT_ACTIVE_TOKEN_TOTAL:
+            PUSH_OPERATIONAL_DRIVERS_WITHOUT_ACTIVE_TOKEN_TOTAL.set(op_without)
     except Exception as e:
         logger.debug(
             "[PrometheusMetrics] Error refreshing push active owners: %s", e
+        )
+
+
+def _normalize_push_registration_labels(
+    payload: dict[str, object] | None,
+) -> tuple[str, str]:
+    raw = payload or {}
+    provider = str(raw.get("provider") or "expo").lower()
+    platform = str(raw.get("platform") or "unknown").lower()
+    if platform not in ("ios", "android"):
+        platform = "unknown"
+    if provider not in ("expo", "fcm"):
+        provider = "expo"
+    return provider, platform
+
+
+def _registration_failure_reason(status_code: int) -> str:
+    if status_code in (401, 403, 404):
+        return "auth"
+    if status_code >= 500:
+        return "server"
+    return "validation"
+
+
+def track_push_token_registration_outcome(
+    *,
+    owner_type: str,
+    status_code: int,
+    payload: dict[str, object] | None = None,
+) -> None:
+    """Compteurs success/failure pour save-push-token (régression release mobile)."""
+    if not PROMETHEUS_AVAILABLE:
+        return
+    provider, platform = _normalize_push_registration_labels(payload)
+    try:
+        if 200 <= status_code < 300 and PUSH_TOKEN_REGISTRATION_SUCCESS_TOTAL:
+            PUSH_TOKEN_REGISTRATION_SUCCESS_TOTAL.labels(
+                owner_type=owner_type,
+                provider=provider,
+                platform=platform,
+            ).inc()
+        elif PUSH_TOKEN_REGISTRATION_FAILURE_TOTAL:
+            PUSH_TOKEN_REGISTRATION_FAILURE_TOTAL.labels(
+                owner_type=owner_type,
+                provider=provider,
+                platform=platform,
+                reason=_registration_failure_reason(status_code),
+            ).inc()
+    except Exception as e:
+        logger.debug(
+            "[PrometheusMetrics] Error tracking push token registration: %s", e
         )
 
 

@@ -70,6 +70,15 @@ jest.mock("../observability/driverTelemetry", () => ({
 
 jest.mock("../observability/sessionJournal", () => ({
   buildSessionDiagHeader: () => "diag-test",
+  appendSessionJournalEvent: jest.fn(),
+}));
+
+jest.mock("../notifications/getStableDeviceId", () => ({
+  getStableDeviceId: jest.fn().mockResolvedValue("test-device-id"),
+}));
+
+jest.mock("expo-application", () => ({
+  applicationName: "Lirie Test",
 }));
 
 jest.mock("../featureFlags/registry", () => ({
@@ -123,6 +132,7 @@ describe("refreshAuthTokenNow", () => {
         refresh_token: "refresh-token-next",
       },
     });
+    mockGetItemAsync.mockImplementation(async () => "refresh-token-next");
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { hasAuthToken, refreshAuthTokenNow } = require("./client");
 

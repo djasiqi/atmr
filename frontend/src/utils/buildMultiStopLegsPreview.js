@@ -1,3 +1,5 @@
+import { combineMissionDateTimeNaive } from './missionTimeDisplay';
+
 /**
  * Filtre les étapes multi-stop avec une destination non vide.
  * @param {Array<{ dropoff_location?: string, scheduled_time?: string }>} intermediateStops
@@ -54,8 +56,10 @@ export function buildMultiStopLegsPreview({
 /**
  * Construit le payload intermediate_stops à partir des étapes valides.
  * @param {Array<{ dropoff_location: string, scheduled_time?: string }>} validStops
+ * @param {string} [missionDate] — requis pour convertir HH:MM en ISO naïf
  */
-export function buildMultiStopPayloadStops(validStops) {
+export function buildMultiStopPayloadStops(validStops, missionDate) {
+  const normalizedDate = String(missionDate || '').trim();
   return validStops.map((stop, index) => {
     const entry = {
       sequence: index + 1,
@@ -67,7 +71,8 @@ export function buildMultiStopPayloadStops(validStops) {
       if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(raw)) {
         entry.scheduled_time = raw.length === 16 ? `${raw}:00` : raw;
       } else if (/^\d{2}:\d{2}$/.test(raw)) {
-        entry.scheduled_time = raw;
+        const iso = combineMissionDateTimeNaive(normalizedDate, raw);
+        if (iso) entry.scheduled_time = iso;
       }
     }
     if (typeof stop.time_confirmed === 'boolean') {
@@ -79,6 +84,25 @@ export function buildMultiStopPayloadStops(validStops) {
     if (service) entry.dropoff_service = service;
     const doctor = stop.dropoff_doctor?.trim();
     if (doctor) entry.dropoff_doctor = doctor;
+    if (stop.use_custom_billing) {
+      entry.use_custom_billing = true;
+      if (stop.destination_billing_override) {
+        entry.destination_billing_override = stop.destination_billing_override;
+      }
+    }
     return entry;
   });
+}
+
+export function buildReturnStopPayload(returnStop) {
+  if (!returnStop?.use_custom_billing) {
+    return {
+      use_custom_billing: false,
+      destination_billing_override: null,
+    };
+  }
+  return {
+    use_custom_billing: true,
+    destination_billing_override: returnStop.destination_billing_override || 'patient',
+  };
 }

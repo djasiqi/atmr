@@ -1,5 +1,6 @@
 import { getItem, removeItem, setItem } from "../storage/typedStorage";
 import { STORAGE_KEYS } from "../storage/storageKeys";
+import { canRegisterPushTokenWithBackend } from "./pushRegistrationGuard";
 
 export type PushTokenProvider = "expo" | "fcm";
 
@@ -49,6 +50,11 @@ async function readStore(): Promise<PendingPushTokenStore> {
   return raw;
 }
 
+export async function hasPendingPushTokenRegistrations(): Promise<boolean> {
+  const store = await readStore();
+  return store.items.length > 0;
+}
+
 export async function persistPendingPushTokenRegistration(
   entry: Omit<PendingPushTokenRegistration, "savedAt">
 ): Promise<void> {
@@ -83,6 +89,10 @@ export async function flushPendingPushTokenRegistrations(handlers: {
     platform: "ios" | "android";
   }) => Promise<void>;
 }): Promise<void> {
+  if (!(await canRegisterPushTokenWithBackend())) {
+    return;
+  }
+
   const store = await readStore();
   if (store.items.length === 0) return;
 

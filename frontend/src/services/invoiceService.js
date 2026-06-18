@@ -429,10 +429,17 @@ export const invoiceService = {
 
   async removeDraftInvoiceLine(companyId, invoiceId, lineId, options = {}) {
     const url = `${API_BASE}/invoices/companies/${companyId}/invoices/${invoiceId}/lines/${lineId}`;
-    const cfg =
-      options.expected_updated_at != null && String(options.expected_updated_at).trim()
-        ? { data: { expected_updated_at: options.expected_updated_at } }
-        : {};
+    const data = {};
+    if (options.expected_updated_at != null && String(options.expected_updated_at).trim()) {
+      data.expected_updated_at = options.expected_updated_at;
+    }
+    if (
+      options.exclude_round_trip_leg != null &&
+      String(options.exclude_round_trip_leg).trim()
+    ) {
+      data.exclude_round_trip_leg = String(options.exclude_round_trip_leg).trim().toLowerCase();
+    }
+    const cfg = Object.keys(data).length ? { data } : {};
     const response = await apiClient.delete(url, cfg);
     return response.data;
   },

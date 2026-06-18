@@ -60,3 +60,7 @@
 # En build release / prod sans __DEV__, décommenter pour forcer l’affichage des listes :
 # EXPO_PUBLIC_ENABLE_COMPANY_MOBILE_CLIENTS_READONLY=1
 # EXPO_PUBLIC_ENABLE_COMPANY_MOBILE_INVOICES_READONLY=1
+
+# Reprise session entreprise au retour foreground (Samsung / kill process) — prod release :
+# EXPO_PUBLIC_ENABLE_COMPANY_RUNTIME_RESUME=1
+# (déjà activé dans eas.json profiles preview + production)

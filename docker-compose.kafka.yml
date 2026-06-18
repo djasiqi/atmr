@@ -23,6 +23,8 @@ services:
       ZOOKEEPER_SYNC_LIMIT: 2
       ZOOKEEPER_SERVER_ID: 1
       ZOOKEEPER_SERVERS: zookeeper:2888:3888;zookeeper-2:2888:3888;zookeeper-3:2888:3888
+      JAVA_TOOL_OPTIONS: "-Xms256m -Xmx256m"
+    mem_limit: 512m
     volumes:
       - zookeeper-data:/var/lib/zookeeper/data
       - zookeeper-logs:/var/lib/zookeeper/log
@@ -46,6 +48,8 @@ services:
       ZOOKEEPER_SYNC_LIMIT: 2
       ZOOKEEPER_SERVER_ID: 2
       ZOOKEEPER_SERVERS: zookeeper:2888:3888;zookeeper-2:2888:3888;zookeeper-3:2888:3888
+      JAVA_TOOL_OPTIONS: "-Xms256m -Xmx256m"
+    mem_limit: 512m
     volumes:
       - zookeeper2-data:/var/lib/zookeeper/data
       - zookeeper2-logs:/var/lib/zookeeper/log
@@ -69,6 +73,8 @@ services:
       ZOOKEEPER_SYNC_LIMIT: 2
       ZOOKEEPER_SERVER_ID: 3
       ZOOKEEPER_SERVERS: zookeeper:2888:3888;zookeeper-2:2888:3888;zookeeper-3:2888:3888
+      JAVA_TOOL_OPTIONS: "-Xms256m -Xmx256m"
+    mem_limit: 512m
     volumes:
       - zookeeper3-data:/var/lib/zookeeper/data
       - zookeeper3-logs:/var/lib/zookeeper/log
@@ -107,12 +113,13 @@ services:
       KAFKA_CONFLUENT_METRICS_ENABLE: "false"
       KAFKA_JMX_PORT: 9101
       KAFKA_JMX_HOSTNAME: localhost
-      KAFKA_NUM_NETWORK_THREADS: 8
-      KAFKA_NUM_IO_THREADS: 8
+      KAFKA_HEAP_OPTS: "-Xms1G -Xmx1G"
+      KAFKA_NUM_NETWORK_THREADS: 3
+      KAFKA_NUM_IO_THREADS: 3
       KAFKA_SOCKET_SEND_BUFFER_BYTES: 102400
       KAFKA_SOCKET_RECEIVE_BUFFER_BYTES: 102400
       KAFKA_SOCKET_REQUEST_MAX_BYTES: 104857600
-      KAFKA_NUM_PARTITIONS: 36
+      KAFKA_NUM_PARTITIONS: ${KAFKA_DEFAULT_PARTITIONS:-6}
       KAFKA_LOG_RETENTION_HOURS: 72
       KAFKA_LOG_RETENTION_BYTES: 10737418240
       KAFKA_LOG_SEGMENT_BYTES: 1073741824
@@ -121,6 +128,11 @@ services:
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
     volumes:
       - kafka-data-1:/var/lib/kafka/data
+    mem_limit: 2g
+    deploy:
+      resources:
+        limits:
+          memory: 2G
     networks:
       - default
     healthcheck:
@@ -156,7 +168,10 @@ services:
       KAFKA_CONFLUENT_METRICS_ENABLE: "false"
       KAFKA_JMX_PORT: 9102
       KAFKA_JMX_HOSTNAME: localhost
-      KAFKA_NUM_PARTITIONS: 36
+      KAFKA_HEAP_OPTS: "-Xms1G -Xmx1G"
+      KAFKA_NUM_NETWORK_THREADS: 3
+      KAFKA_NUM_IO_THREADS: 3
+      KAFKA_NUM_PARTITIONS: ${KAFKA_DEFAULT_PARTITIONS:-6}
       KAFKA_LOG_RETENTION_HOURS: 72
       KAFKA_LOG_RETENTION_BYTES: 10737418240
       KAFKA_LOG_SEGMENT_BYTES: 1073741824
@@ -165,6 +180,11 @@ services:
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
     volumes:
       - kafka-data-2:/var/lib/kafka/data
+    mem_limit: 2g
+    deploy:
+      resources:
+        limits:
+          memory: 2G
     networks:
       - default
     healthcheck:
@@ -191,16 +211,19 @@ services:
       KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:9094
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-broker-3:29092,PLAINTEXT_HOST://localhost:9094
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
-      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
-      KAFKA_MIN_INSYNC_REPLICAS: 2
+      KAFKA_DEFAULT_REPLICATION_FACTOR: ${KAFKA_BROKER_REPLICATION_FACTOR:-2}
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: ${KAFKA_BROKER_REPLICATION_FACTOR:-2}
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: ${KAFKA_BROKER_REPLICATION_FACTOR:-2}
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: ${KAFKA_BROKER_TXN_MIN_ISR:-1}
+      KAFKA_MIN_INSYNC_REPLICAS: ${KAFKA_BROKER_MIN_INSYNC_REPLICAS:-1}
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       KAFKA_CONFLUENT_METRICS_ENABLE: "false"
       KAFKA_JMX_PORT: 9103
       KAFKA_JMX_HOSTNAME: localhost
-      KAFKA_NUM_PARTITIONS: 36
+      KAFKA_HEAP_OPTS: "-Xms1G -Xmx1G"
+      KAFKA_NUM_NETWORK_THREADS: 3
+      KAFKA_NUM_IO_THREADS: 3
+      KAFKA_NUM_PARTITIONS: ${KAFKA_DEFAULT_PARTITIONS:-6}
       KAFKA_LOG_RETENTION_HOURS: 72
       KAFKA_LOG_RETENTION_BYTES: 10737418240
       KAFKA_LOG_SEGMENT_BYTES: 1073741824
@@ -209,6 +232,11 @@ services:
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
     volumes:
       - kafka-data-3:/var/lib/kafka/data
+    mem_limit: 2g
+    deploy:
+      resources:
+        limits:
+          memory: 2G
     networks:
       - default
     healthcheck:
@@ -225,6 +253,13 @@ services:
     environment:
       BOOTSTRAP_SERVERS: kafka-broker-1:29092
       KAFKA_TOPIC_REPLICATION_FACTOR: ${KAFKA_TOPIC_REPLICATION_FACTOR:-2}
+      KAFKA_DEFAULT_PARTITIONS: ${KAFKA_DEFAULT_PARTITIONS:-6}
+      KAFKA_DLQ_PARTITIONS: ${KAFKA_DLQ_PARTITIONS:-3}
+      KAFKA_CREATE_INACTIVE_TOPICS: ${KAFKA_CREATE_INACTIVE_TOPICS:-false}
+      KAFKA_TOPIC_DRIVER_LOCATION_RAW: ${KAFKA_TOPIC_DRIVER_LOCATION_RAW:-driver.location.raw}
+      KAFKA_TOPIC_DRIVER_LOCATION_PROCESSED: ${KAFKA_TOPIC_DRIVER_LOCATION_PROCESSED:-driver.location.processed}
+      KAFKA_TOPIC_DRIVER_LOCATION_DLQ: ${KAFKA_TOPIC_DRIVER_LOCATION_DLQ:-driver.location.dlq}
+      KAFKA_TOPIC_NOTIFICATIONS_DLQ: ${KAFKA_TOPIC_NOTIFICATIONS_DLQ:-notifications.dlq}
     depends_on:
       kafka-broker-1:
         condition: service_healthy
@@ -235,14 +270,13 @@ services:
     networks:
       - default
     volumes:
-      - ./scripts/kafka-init-topics.sh:/init-topics.sh:ro
-    # Normalise fin de ligne Windows (CRLF) avant exécution.
-    entrypoint: ["/bin/bash", "-c", "sed 's/\\r$//' /init-topics.sh | bash -s -"]
+      - ./scripts:/kafka-scripts:ro
+    entrypoint: ["/bin/bash", "/kafka-scripts/kafka-init-topics.sh"]
     restart: "no"
 
-  # Kafka UI (interface web pour monitoring)
-  # Port hôte 8090 (8080 déjà pris par Traefik dashboard).
+  # Kafka UI — profile kafka-ui (optionnel, libère ~200 Mo RAM si non démarré)
   kafka-ui:
+    profiles: ["kafka-ui"]
     image: provectuslabs/kafka-ui:latest
     container_name: atmr-kafka-ui
     depends_on:
@@ -251,6 +285,7 @@ services:
       - kafka-broker-3
     ports:
       - "8090:8080"
+    mem_limit: 256m
     environment:
       KAFKA_CLUSTERS_0_NAME: atmr-cluster
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka-broker-1:29092,kafka-broker-2:29092,kafka-broker-3:29092

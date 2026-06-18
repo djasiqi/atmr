@@ -28,6 +28,7 @@ from infrastructure.invoices.invoice_calculator import (
     round_to_5_cents,
 )
 from models import Booking, ClientStay, Company
+from services.billing.clinic_s2_eligibility import clinic_s2_billed_to_company_predicate
 from models.enums import BookingStatus
 from repositories.booking_repository import BookingRepository
 from repositories.client_repository import ClientRepository
@@ -176,6 +177,7 @@ def _consolidate_period_preview_round_trip_rows(
         sched_end = max(_sched_candidates) if _sched_candidates else None
         if sched is not None and sched_end is not None and sched == sched_end:
             sched_end = None
+        secondary_pl = next((p for p in pls if p.booking_id != pri), None)
         merged_rows[pri] = PeriodPreviewLine(
             booking_id=pri,
             scheduled_at=sched,
@@ -187,6 +189,21 @@ def _consolidate_period_preview_round_trip_rows(
             already_invoiced=any(p.already_invoiced for p in pls),
             is_round_trip_leg=True,
             scheduled_at_end=sched_end,
+            patient_name=primary_pl.patient_name,
+            round_trip_partner_booking_id=(
+                int(secondary_pl.booking_id) if secondary_pl is not None else None
+            ),
+            round_trip_primary_amount_ht=float(primary_pl.amount_ht),
+            round_trip_partner_amount_ht=(
+                float(secondary_pl.amount_ht) if secondary_pl is not None else None
+            ),
+            round_trip_partner_description=(
+                secondary_pl.description if secondary_pl is not None else None
+            ),
+            round_trip_partner_scheduled_at=(
+                secondary_pl.scheduled_at if secondary_pl is not None else None
+            ),
+            round_trip_primary_scheduled_at=primary_pl.scheduled_at,
         )
         for p in pls:
             if p.booking_id != pri:
@@ -217,6 +234,13 @@ class PeriodPreviewLine:
     already_invoiced: bool
     is_round_trip_leg: bool = False
     scheduled_at_end: str | None = None
+    patient_name: str | None = None
+    round_trip_partner_booking_id: int | None = None
+    round_trip_primary_amount_ht: float | None = None
+    round_trip_partner_amount_ht: float | None = None
+    round_trip_partner_description: str | None = None
+    round_trip_partner_scheduled_at: str | None = None
+    round_trip_primary_scheduled_at: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -316,6 +340,10 @@ def build_period_invoice_preview(
                 description_builder=None,
             )
             locked = bool(getattr(b, "invoice_line_id", None))
+            b_client = crepo.find_model_by_id_with_user(int(b.client_id), company_id) if b.client_id else None
+            row_patient = resolve_patient_name_for_invoice(b_client, [b])
+            if not row_patient:
+                row_patient = (getattr(b, "customer_name", None) or "").strip() or None
             preview_lines_out.append(
                 PeriodPreviewLine(
                     booking_id=int(b.id),
@@ -327,6 +355,7 @@ def build_period_invoice_preview(
                     is_locked=locked,
                     already_invoiced=bool(getattr(b, "invoice_line_id", None)),
                     is_round_trip_leg=bool(rt_map.get(int(b.id), False)),
+                    patient_name=row_patient,
                 )
             )
 
@@ -404,7 +433,7 @@ def build_period_invoice_preview(
     )
     eligible_query = Booking.query.filter(
         Booking.company_id == company_id,
-        Booking.billed_to_company_id == ccid,
+        clinic_s2_billed_to_company_predicate(ccid, company_id),
         Booking.billed_to_type == "clinic",
         or_(
             Booking.status.in_(target_statuses),
@@ -426,6 +455,7 @@ def build_period_invoice_preview(
     )
     eligible_bookings = eligible_query.order_by(Booking.scheduled_time.asc()).all()
     rt_map_s2 = _round_trip_leg_by_booking_id(eligible_bookings)
+    crepo = ClientRepository()
 
     gross_s2 = Decimal("0.00")
     vat_sum_s2 = Decimal("0.00")
@@ -450,6 +480,12 @@ def build_period_invoice_preview(
         )
 
         locked = bool(getattr(b, "invoice_line_id", None))
+        b_client = crepo.find_model_by_id_with_user(int(b.client_id), company_id) if b.client_id else None
+        from application.invoices.invoice_line_description import (
+            resolve_s2_clinic_line_patient_name,
+        )
+
+        row_patient = resolve_s2_clinic_line_patient_name(b_client, b)
         preview_lines_out.append(
             PeriodPreviewLine(
                 booking_id=int(b.id),
@@ -461,6 +497,7 @@ def build_period_invoice_preview(
                 is_locked=locked,
                 already_invoiced=bool(getattr(b, "invoice_line_id", None)),
                 is_round_trip_leg=bool(rt_map_s2.get(int(b.id), False)),
+                patient_name=row_patient,
             )
         )
 
@@ -506,6 +543,20 @@ def preview_line_to_dict(pl: PeriodPreviewLine) -> dict[str, Any]:
         "already_invoiced": pl.already_invoiced,
         "is_round_trip_leg": pl.is_round_trip_leg,
     }
+    if pl.patient_name:
+        d["patient_name"] = pl.patient_name
+    if pl.round_trip_partner_booking_id is not None:
+        d["round_trip_partner_booking_id"] = pl.round_trip_partner_booking_id
+    if pl.round_trip_primary_amount_ht is not None:
+        d["round_trip_primary_amount_ht"] = pl.round_trip_primary_amount_ht
+    if pl.round_trip_partner_amount_ht is not None:
+        d["round_trip_partner_amount_ht"] = pl.round_trip_partner_amount_ht
+    if pl.round_trip_partner_description:
+        d["round_trip_partner_description"] = pl.round_trip_partner_description
+    if pl.round_trip_partner_scheduled_at:
+        d["round_trip_partner_scheduled_at"] = pl.round_trip_partner_scheduled_at
+    if pl.round_trip_primary_scheduled_at:
+        d["round_trip_primary_scheduled_at"] = pl.round_trip_primary_scheduled_at
     if pl.scheduled_at_end:
         d["scheduled_at_end"] = pl.scheduled_at_end
     return d

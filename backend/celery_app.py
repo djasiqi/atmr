@@ -326,6 +326,24 @@ celery.conf.beat_schedule = {
             "jitter": 120,
         },
     },
+    # Push: nettoyage tokens zombies (quotidien ~04:30 UTC)
+    "deactivate-stale-push-tokens": {
+        "task": "notifications.deactivate_stale_device_tokens",
+        "schedule": 24 * 3600,
+        "options": {
+            "expires": 6 * 3600,
+            "jitter": 300,
+        },
+    },
+    # Push: refresh gauges couverture (horaire)
+    "refresh-push-coverage-gauges": {
+        "task": "notifications.refresh_push_coverage_gauges",
+        "schedule": 3600.0,
+        "options": {
+            "expires": 1800,
+            "jitter": 120,
+        },
+    },
     # Tracking BG: silent push wake pour drivers en mission avec fix stale
     "tracking-stale-wake": {
         "task": "tasks.tracking_health_tasks.stale_tracking_wake_tick",

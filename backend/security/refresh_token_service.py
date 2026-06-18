@@ -127,7 +127,12 @@ def _supersede_old_token(token_record: RefreshToken, *, commit: bool = True) -> 
     )
 
 
-def is_token_revoked(token: str, grace_window: bool = False) -> bool:
+def is_token_revoked(
+    token: str,
+    grace_window: bool = False,
+    *,
+    request_device_id: str | None = None,
+) -> bool:
     """Verifie si un refresh token est revoque, expire, ou victime de reuse.
 
     Rotation soft :
@@ -162,6 +167,10 @@ def is_token_revoked(token: str, grace_window: bool = False) -> bool:
 
     now = datetime.now(UTC)
 
+    effective_device_id = request_device_id
+    if not effective_device_id and request:
+        effective_device_id = request.headers.get("X-Device-ID")
+
     if token_record.is_revoked:
         if (
             grace_window
@@ -174,6 +183,21 @@ def is_token_revoked(token: str, grace_window: bool = False) -> bool:
                 "Token revoked by legacy rotation but in grace window (%ds) — accepted (user_id=%d)",
                 ROTATION_GRACE_WINDOW_SECONDS,
                 token_record.user_id,
+            )
+            return False
+
+        if (
+            token_record.revoked_reason == "Superseded (new token used)"
+            and effective_device_id
+            and token_record.device_id
+            and token_record.device_id == effective_device_id
+        ):
+            logger.warning(
+                "refresh_reuse_same_device: superseded token reused on same device "
+                "(user_id=%d, hash=%s, device_id=%s, action=accept)",
+                token_record.user_id,
+                token_hash[:8],
+                effective_device_id,
             )
             return False
 
@@ -212,6 +236,22 @@ def is_token_revoked(token: str, grace_window: bool = False) -> bool:
 
         if new_record.last_used_at is not None:
             # Le nouveau token a deja ete utilise → reuse detection
+            if (
+                effective_device_id
+                and token_record.device_id
+                and token_record.device_id == effective_device_id
+            ):
+                logger.warning(
+                    "refresh_reuse_same_device: old token reused after new was used "
+                    "(user_id=%d, old=%s, new=%s, device_id=%s, action=supersede_only)",
+                    token_record.user_id,
+                    token_hash[:8],
+                    token_record.rotated_to_hash[:8],
+                    effective_device_id,
+                )
+                _supersede_old_token(token_record)
+                return False
+
             logger.warning(
                 "refresh_reuse_detected: old token reused after new was used "
                 "(user_id=%d, old=%s, new=%s, action=revoke_all)",
@@ -303,6 +343,44 @@ def revoke_all_user_tokens(user_id: int, reason: str | None = None) -> int:
             count,
             user_id,
             revoked_reason,
+        )
+
+    return count
+
+
+def revoke_active_tokens_for_device(
+    user_id: int,
+    device_id: str,
+    reason: str | None = None,
+) -> int:
+    """Révoque les refresh tokens actifs d'un utilisateur pour un appareil donné."""
+    if not device_id or not str(device_id).strip():
+        return 0
+
+    now = datetime.now(UTC)
+    revoked_reason = reason or "Remplacé par nouvelle session (même appareil)"
+
+    active_tokens = RefreshToken.query.filter(
+        and_(
+            RefreshToken.user_id == user_id,
+            RefreshToken.device_id == device_id,
+            ~RefreshToken.is_revoked,
+            RefreshToken.expires_at > now,
+        )
+    ).all()
+
+    count = len(active_tokens)
+    if count > 0:
+        for token in active_tokens:
+            token.is_revoked = True
+            token.revoked_at = now
+            token.revoked_reason = revoked_reason
+        db.session.commit()
+        logger.info(
+            "%d refresh token(s) révoqué(s) pour user_id=%d device_id=%s",
+            count,
+            user_id,
+            device_id,
         )
 
     return count

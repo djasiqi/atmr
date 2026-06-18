@@ -1,6 +1,6 @@
 import { Redirect, Tabs } from "expo-router";
 import { useEffect, useMemo } from "react";
-import { AppState, View } from "react-native";
+import { View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import {
   isFeatureEnabled,
@@ -14,6 +14,7 @@ import { E } from "../../../src/features/company/theme/enterpriseOpsTheme";
 import { buildFloatingTabScreenOptions, FLOATING_TAB_IMPLEMENTATION } from "../../../src/navigation/floatingTabScreenOptions";
 import { useCompanyUrgentAlertSound } from "../../../src/features/messaging/useCompanyUrgentAlertSound";
 import { useCompanyRecoveryListener } from "../../../src/features/company/realtime/useCompanyRecoveryListener";
+import { useCompanyRuntimeResume } from "../../../src/features/company/runtimeResume";
 import { useAppViewport } from "../../../src/design/responsive";
 import { useReduceMotion } from "../../../src/design/navigation/useReduceMotion";
 import { usePerfRouteTracking } from "../../../src/core/observability/usePerfRouteTracking";
@@ -29,6 +30,7 @@ export default function CompanyLayout() {
   const { activeContext, status } = useSession();
   const dispatchEnabled = isFeatureEnabled("company_dispatch_enabled");
   const realtimeEnabled = isCompanyRealtimeSocketExpected();
+  const companyRuntimeResumeEnabled = isFeatureEnabled("company_runtime_resume_enabled");
   const companyContextId =
     activeContext && activeContext.context_type === "company"
       ? activeContext.context_id
@@ -38,6 +40,11 @@ export default function CompanyLayout() {
   // Phase 2 PR B/C — gate D3.2 : recovery cohérent dashboard/missions/inbox/chat
   // sur stale (5 min sans event) ou reconnect (background/foreground, transition réseau).
   useCompanyRecoveryListener(companyContextId);
+
+  useCompanyRuntimeResume({
+    contextId: companyContextId,
+    enabled: companyRuntimeResumeEnabled && dispatchEnabled && status === "ready",
+  });
 
   // Déconnexion à la sortie de la zone entreprise (évite socket orpheline).
   useEffect(() => {
@@ -57,25 +64,6 @@ export default function CompanyLayout() {
       return;
     }
     companyRealtimeBridge.connect(companyContextId);
-  }, [companyContextId, dispatchEnabled, realtimeEnabled, status]);
-
-  // Après mise en arrière-plan / reconnexion réseau, relancer le bridge si le flux était en échec ou jamais connecté.
-  useEffect(() => {
-    if (!dispatchEnabled || !companyContextId || status !== "ready") {
-      return;
-    }
-    const sub = AppState.addEventListener("change", (next) => {
-      if (next !== "active") return;
-      if (!isFeatureEnabled("company_realtime_enabled")) return;
-      const snap = companyRealtimeBridge.getSnapshot();
-      if (snap.status === "idle") {
-        // Bridge jamais connecté (ex : cold start revenu au foreground avant que l'effet principal ne tire).
-        companyRealtimeBridge.connect(companyContextId);
-      } else if (snap.status === "failed" || snap.status === "reconnecting") {
-        companyRealtimeBridge.reconnect();
-      }
-    });
-    return () => sub.remove();
   }, [companyContextId, dispatchEnabled, realtimeEnabled, status]);
 
   if (!activeContext) {

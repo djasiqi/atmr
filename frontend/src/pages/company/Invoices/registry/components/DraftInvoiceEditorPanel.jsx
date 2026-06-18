@@ -45,9 +45,17 @@ import {
 } from '../../../../../utils/pdfUrlFallback';
 import { getApiErrorMessage } from '../../../../../utils/apiErrorMessage';
 import { normalizeServiceDateToIsoForApi } from '../../../../../utils/invoiceServiceDate';
+import { filterInvoiceLines } from '../../../../../utils/invoiceLineFilter';
+import {
+  isAnyRoundTripLine,
+  isRoundTripPreviewHiddenLine,
+  canShowRoundTripLegExcludeActions,
+  sortInvoiceLinesForEditor,
+} from '../../../../../utils/invoiceLineRoundTrip';
 import '../../../../../styles/acrobatPdfEmbedHide.css';
 import styles from './InvoiceDraftEditModal.module.css';
 import InvoiceLivePreview from './InvoiceLivePreview';
+import InvoiceLineEditorContext from './InvoiceLineEditorContext';
 import InlineDatePicker from '../../../../../components/ui/InlineDatePicker';
 import InlineMonthYearPicker from '../../../../../components/ui/InlineMonthYearPicker';
 
@@ -496,7 +504,7 @@ const DraftInvoiceEditorPanel = ({
   }, [freeRemiseAmount, draftTotalTtc]);
 
   const lines = useMemo(
-    () => (Array.isArray(inv?.lines) ? inv.lines : []),
+    () => sortInvoiceLinesForEditor(Array.isArray(inv?.lines) ? inv.lines : []),
     [inv?.lines]
   );
 
@@ -514,18 +522,10 @@ const DraftInvoiceEditorPanel = ({
     [invoiceStatusLowerResolved]
   );
 
-  const filteredLines = useMemo(() => {
-    const q = lineFilter.trim().toLowerCase();
-    if (!q) return lines;
-    return lines.filter((l) => {
-      const desc = (l.description || '').toLowerCase();
-      return (
-        desc.includes(q) ||
-        String(l.id ?? '').includes(q) ||
-        (l.reservation_id != null && String(l.reservation_id).includes(q))
-      );
-    });
-  }, [lines, lineFilter]);
+  const filteredLines = useMemo(
+    () => filterInvoiceLines(lines, lineFilter),
+    [lines, lineFilter]
+  );
 
   const totalLinePages = Math.max(1, Math.ceil(filteredLines.length / LINE_PAGE_SIZE));
   const effectiveLinePage = Math.min(Math.max(1, linePage), totalLinePages);
@@ -955,9 +955,12 @@ const DraftInvoiceEditorPanel = ({
 
   const handleRemoveLine = async (line) => {
     if (!allowsLineEditing) return;
+    const ar = isAnyRoundTripLine(line);
     if (
       !window.confirm(
-        'Exclure ce transport de la facture ? Le montant sera retiré du brouillon et le transport redeviendra facturable.'
+        ar
+          ? 'Exclure ce transport de la facture ? L’autre jambe aller-retour restera facturée séparément si elle existe.'
+          : 'Exclure ce transport de la facture ? Le montant sera retiré du brouillon et le transport redeviendra facturable.'
       )
     ) {
       return;
@@ -974,6 +977,36 @@ const DraftInvoiceEditorPanel = ({
       await afterDraftMutation(res);
     } catch (e) {
       setError(getApiErrorMessage(e, 'Suppression impossible'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleRemoveRoundTripLeg = async (line, leg) => {
+    if (!allowsLineEditing) return;
+    const legLabel = leg === 'return' ? 'retour' : 'aller';
+    if (
+      !window.confirm(
+        `Exclure uniquement la jambe ${legLabel} de ce transport aller-retour ? L’autre jambe restera sur la facture.`
+      )
+    ) {
+      return;
+    }
+    setSaving(true);
+    setError('');
+    try {
+      const res = await invoiceService.removeDraftInvoiceLine(
+        companyId,
+        inv.id,
+        line.id,
+        {
+          ...draftConcurrencyPayload,
+          exclude_round_trip_leg: leg,
+        }
+      );
+      await afterDraftMutation(res);
+    } catch (e) {
+      setError(getApiErrorMessage(e, 'Exclusion de la jambe impossible'));
     } finally {
       setSaving(false);
     }
@@ -1596,7 +1629,8 @@ const DraftInvoiceEditorPanel = ({
             <input
               type="search"
               className={styles.linesToolbarInput}
-              placeholder="Filtrer par libellé, n° ou réservation…"
+              placeholder="Client, date (JJ.MM.AAAA), libellé, montant, n° ligne…"
+              title="Ex. : Bouchardy · Jean-michel Bouchardy · 02.05.2026 · 02.05 · mai · HUG · 80"
               value={lineFilter}
               onChange={(e) => setLineFilter(e.target.value)}
               autoComplete="off"
@@ -1693,16 +1727,41 @@ const DraftInvoiceEditorPanel = ({
                 const rowNeedsApply = descEditable || amountEditable || noteEditable;
                 const rowAmountNegative =
                   line.line_total != null && Number(line.line_total) < 0;
+                const isArLine = isAnyRoundTripLine(line);
+                const showArLegExclude = canShowRoundTripLegExcludeActions(line);
+                const rowClassNames = [
+                  rowAmountNegative ? styles.rowAmountNegative : '',
+                  isRoundTripPreviewHiddenLine(line) ? styles.rowRoundTripReturn : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ');
                 return (
                   <tr
                     key={lineKey(line)}
                     title={lineRowTitle(line)}
-                    className={rowAmountNegative ? styles.rowAmountNegative : undefined}
+                    className={rowClassNames || undefined}
                   >
                     <td className={styles.colDescCell}>
-                      <div className={styles.denseDesc}>
-                        {descEditable ? (
-                          <>
+                      <div className={styles.lineEditorDescStack}>
+                        <InvoiceLineEditorContext
+                          line={line}
+                          styles={styles}
+                          legActions={
+                            allowsLineEditing &&
+                            isRide(line.type) &&
+                            line.reservation_id &&
+                            showArLegExclude
+                              ? {
+                                  enabled: true,
+                                  disabled: saving,
+                                  onExcludeLeg: (leg) =>
+                                    void handleRemoveRoundTripLeg(line, leg),
+                                }
+                              : undefined
+                          }
+                        />
+                        <div className={styles.denseDesc}>
+                          {descEditable ? (
                             <textarea
                               id={descId}
                               className={styles.denseTextarea}
@@ -1723,9 +1782,7 @@ const DraftInvoiceEditorPanel = ({
                               aria-label={`Libellé · ${lineRowTitle(line)}`}
                               title={`Ctrl+Entrée · enregistrer la ligne · ${line.id}${remiseNeg ? ` · ${remiseHintTitle || 'Remise'}` : ''}${(line.line_meta?.description_overridden || line.line_meta?.amount_overridden) ? ' · modifié' : ''}`}
                             />
-                          </>
-                        ) : (
-                          <>
+                          ) : (
                             <div
                               className={styles.denseStatic}
                               title={[line.description || line.type, lineRowTitle(line), remiseHintTitle]
@@ -1734,8 +1791,8 @@ const DraftInvoiceEditorPanel = ({
                             >
                               {line.description || line.type}
                             </div>
-                          </>
-                        )}
+                          )}
+                        </div>
                       </div>
                     </td>
                     <td className={styles.colHtCell}>
@@ -1798,7 +1855,11 @@ const DraftInvoiceEditorPanel = ({
                             type="button"
                             className={`${styles.btnTrashXs} ${styles.danger}`}
                             disabled={saving}
-                            title="Exclure"
+                            title={
+                              showArLegExclude
+                                ? 'Retirer l’aller-retour complet de la facture'
+                                : 'Exclure ce transport de la facture'
+                            }
                             aria-label={`Exclure ligne ${line.id}`}
                             onClick={() => handleRemoveLine(line)}
                           >

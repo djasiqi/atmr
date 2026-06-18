@@ -31,7 +31,7 @@ export const shouldShowQueryError = (error) => {
 export const getQueryErrorMessage = (error) => {
   if (!shouldShowQueryError(error)) return '';
   if (isFreshTokenRequiredError(error)) {
-    return 'Cette action nécessite une confirmation de mot de passe.';
+    return 'Votre session nécessite une reconnexion.';
   }
   return (
     error?.response?.data?.error ||

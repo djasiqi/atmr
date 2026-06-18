@@ -148,6 +148,21 @@ class AssignmentRepository:
         """
         return Assignment.query.filter_by(booking_id=booking_id).first()
 
+    def delete_dependent_records_for_assignment_id(self, assignment_id: int) -> None:
+        """Supprime les enregistrements qui bloquent la suppression d'un assignment.
+
+        Certaines FK (trip_tracking, trip_tracking_archive, eta_accuracy_log)
+        n'ont pas ON DELETE CASCADE.
+        """
+        from models.eta_accuracy_log import EtaAccuracyLog
+        from models.trip_tracking import TripTracking
+        from models.trip_tracking_archive import TripTrackingArchive
+
+        for model in (TripTracking, TripTrackingArchive, EtaAccuracyLog):
+            model.query.filter_by(assignment_id=assignment_id).delete(
+                synchronize_session=False
+            )
+
     def delete_by_booking_id(self, booking_id: int) -> int:
         """Supprime tous les assignments associés à un booking (opération bulk).
 

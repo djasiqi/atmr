@@ -23,7 +23,6 @@ import {
 import * as Location from "expo-location";
 
 import { semanticDanger, semanticSuccess, semanticWarning } from "../../../design/responsive/colors";
-import { markNotificationDisclosureAccepted } from "../../../core/notifications/notificationDisclosurePersistence";
 import {
   checkBatteryOptimizationStatus,
   getOemBatteryGuidance,
@@ -36,7 +35,6 @@ import {
   setTrackingNeedsAttention,
 } from "../services/trackingReadinessPersistence";
 import { MissionLiveTrackingDisclosureModal } from "./MissionLiveTrackingDisclosureModal";
-import { NotificationPermissionDisclosure } from "./NotificationPermissionDisclosure";
 
 export type TrackingReadinessSnapshot = {
   ready: boolean;
@@ -110,8 +108,6 @@ export function DriverTrackingReadinessGate(props: Props) {
   const [snapshot, setSnapshot] = useState<TrackingReadinessSnapshot | null>(null);
   const [bgDisclosureVisible, setBgDisclosureVisible] = useState(false);
   const [bgDisclosurePending, setBgDisclosurePending] = useState(false);
-  const [notifDisclosureVisible, setNotifDisclosureVisible] = useState(false);
-  const [notifDisclosurePending, setNotifDisclosurePending] = useState(false);
   const onboardedRef = useRef(false);
 
   const refresh = useCallback(async () => {
@@ -157,35 +153,6 @@ export function DriverTrackingReadinessGate(props: Props) {
     setBgDisclosurePending(false);
     setBgDisclosureVisible(false);
     await refresh();
-  }, [refresh]);
-
-  const handleNotifDisclosureAccept = useCallback(async () => {
-    setNotifDisclosurePending(true);
-    try {
-      await markNotificationDisclosureAccepted();
-      if (Platform.OS !== "web") {
-        try {
-          const Notifications = await import("expo-notifications");
-          const current = await Notifications.getPermissionsAsync().catch(() => null);
-          const alreadyGranted = Boolean(current?.granted || current?.status === "granted");
-          const blocked = current?.canAskAgain === false && !alreadyGranted;
-          if (blocked) {
-            // Déjà refusé au niveau OS : l'invite ne réapparaît plus → router vers les réglages.
-            await Linking.openSettings().catch(() => undefined);
-          } else if (!alreadyGranted) {
-            // Premier passage : déclenche l'invite système ET enregistre l'app auprès d'iOS,
-            // sinon l'app n'apparaît pas dans Réglages > Notifications.
-            await Notifications.requestPermissionsAsync().catch(() => undefined);
-          }
-        } catch {
-          /* expo-notifications indisponible : on ignore, le bridge push prendra le relais */
-        }
-      }
-    } finally {
-      setNotifDisclosurePending(false);
-      setNotifDisclosureVisible(false);
-      await refresh();
-    }
   }, [refresh]);
 
   const checklist = useMemo(() => {
@@ -265,11 +232,6 @@ export function DriverTrackingReadinessGate(props: Props) {
         <Pressable style={styles.button} onPress={() => void requestBgWithDisclosure()}>
           <Text style={styles.buttonText}>Autoriser localisation</Text>
         </Pressable>
-        {!snapshot?.notificationsGranted ? (
-          <Pressable style={styles.button} onPress={() => setNotifDisclosureVisible(true)}>
-            <Text style={styles.buttonText}>Autoriser notifications</Text>
-          </Pressable>
-        ) : null}
         <Pressable style={styles.button} onPress={() => void requestIgnoreBatteryOptimizations()}>
           <Text style={styles.buttonText}>Exemption batterie</Text>
         </Pressable>
@@ -302,15 +264,6 @@ export function DriverTrackingReadinessGate(props: Props) {
         }}
         onContinue={() => void handleBgDisclosureContinue()}
         onOpenSettings={() => void Linking.openSettings()}
-      />
-      <NotificationPermissionDisclosure
-        visible={notifDisclosureVisible}
-        pending={notifDisclosurePending}
-        onCancel={() => {
-          setNotifDisclosureVisible(false);
-          setNotifDisclosurePending(false);
-        }}
-        onAccept={() => void handleNotifDisclosureAccept()}
       />
     </View>
   );

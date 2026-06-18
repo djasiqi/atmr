@@ -26,8 +26,11 @@ from services.documents.pdf import (
     PDFService,
     _clone_table_chunk,
     _compute_invoice_first_page_bottom_margin_cm,
+    _measure_closing_block_pt,
     _measure_legal_footer_height_pt,
+    _measure_table_chunk_pt,
     _paginate_table_no_orphan_totals,
+    _sum_flowables_height_pt,
 )
 
 
@@ -423,6 +426,137 @@ class TestInvoicePdfFooterHelpers:
             tail_body
         )
         assert total_body == 15
+
+    def test_measure_closing_block_includes_tail_and_trailer(self):
+        from reportlab.lib.styles import getSampleStyleSheet
+        from reportlab.platypus import Paragraph, Spacer, Table
+
+        rows = [["Date", "Montant"], ["18.06.2026", "80.00"]]
+        table = Table(rows, colWidths=[200, 80])
+        tail = table._cellvalues[1:]
+        styles = getSampleStyleSheet()
+        post = [
+            Spacer(1, 8),
+            Paragraph("[A/R] = transport aller-retour", styles["Normal"]),
+            Spacer(1, 6),
+            Paragraph("Sous-total HT 360.00 CHF", styles["Normal"]),
+        ]
+        tail_h = _measure_table_chunk_pt(table, tail, 280)
+        closing_h = _measure_closing_block_pt(table, tail, post, 280)
+        assert closing_h > tail_h + 20.0, (
+            "Le bloc de clôture doit inclure transport + légende + totaux"
+        )
+
+    def test_paginate_reserves_last_transport_with_closing_block(self):
+        from reportlab.lib.styles import getSampleStyleSheet
+        from reportlab.platypus import Paragraph, Spacer, Table
+
+        styles = getSampleStyleSheet()
+        rows = [["Date", "Desc", "Montant"]]
+        for i in range(1, 10):
+            rows.append(
+                [
+                    f"18.06.202{i % 10}",
+                    f"Client test {i} — Trajet long aller-retour vers destination {i}",
+                    f"{40 + i}.00",
+                ]
+            )
+        table = Table(rows, colWidths=[70, 260, 60])
+        post = [
+            Spacer(1, 8),
+            Paragraph("[A/R] = transport aller-retour", styles["Normal"]),
+            Spacer(1, 6),
+            Paragraph("Sous-total HT 360.00 CHF", styles["Normal"]),
+            Spacer(1, 12),
+            Paragraph("TOTAL À FACTURER : 360.00 CHF", styles["Normal"]),
+        ]
+        prefix_chunks, tail_table = _paginate_table_no_orphan_totals(
+            table,
+            avail_width_pt=390,
+            first_page_avail_pt=200,
+            later_pages_avail_pt=220,
+            trailer_reserve_pt=_sum_flowables_height_pt(post, 390),
+            post_table_flowables=post,
+        )
+        assert tail_table is not None
+        tail_body = tail_table._cellvalues[1:]
+        assert len(tail_body) == 1, (
+            "Le groupe terminal ne doit contenir que le dernier transport"
+        )
+        closing_h = _measure_closing_block_pt(table, tail_body, post, 390)
+        assert closing_h <= 220 + 12, (
+            "Le groupe terminal doit tenir sur une page utile (transport + synthèse)"
+        )
+        if prefix_chunks:
+            last_desc = str(prefix_chunks[-1]._cellvalues[-1][1])
+            last_tail_desc = str(tail_body[-1][1])
+            assert last_desc != last_tail_desc, (
+                "Seul le dernier transport accompagne la synthèse"
+            )
+
+    def test_paginate_case3_last_transport_moves_with_totals(self):
+        """Cas 3 : dernier transport + synthèse sur la page suivante."""
+        from reportlab.lib.styles import getSampleStyleSheet
+        from reportlab.platypus import Paragraph, Spacer, Table
+
+        styles = getSampleStyleSheet()
+        rows = [["Date", "Desc", "Montant"]]
+        for i in range(1, 8):
+            rows.append([f"18.06.202{i % 10}", f"Client {i}", f"{40 + i}.00"])
+        table = Table(rows, colWidths=[70, 260, 60])
+        post = [
+            Spacer(1, 8),
+            Paragraph("Sous-total HT 360.00 CHF", styles["Normal"]),
+            Spacer(1, 12),
+            Paragraph("TOTAL À FACTURER : 360.00 CHF", styles["Normal"]),
+        ]
+        prefix_chunks, tail_table = _paginate_table_no_orphan_totals(
+            table,
+            avail_width_pt=390,
+            first_page_avail_pt=200,
+            later_pages_avail_pt=220,
+            trailer_reserve_pt=_sum_flowables_height_pt(post, 390),
+            post_table_flowables=post,
+        )
+        assert tail_table is not None
+        tail_body = tail_table._cellvalues[1:]
+        assert len(tail_body) == 1
+        closing_h = _measure_closing_block_pt(table, tail_body, post, 390)
+        assert closing_h <= 220 + 12
+        if prefix_chunks:
+            assert str(prefix_chunks[-1]._cellvalues[-1][1]) != str(
+                tail_body[-1][1]
+            )
+
+    def test_paginate_case2_never_totals_without_transport(self):
+        """Cas 2 interdit : synthèse seule sur une page (vérification structurelle)."""
+        from reportlab.lib.styles import getSampleStyleSheet
+        from reportlab.platypus import Paragraph, Spacer, Table
+
+        styles = getSampleStyleSheet()
+        rows = [["Date", "Desc", "Montant"]]
+        for i in range(1, 12):
+            rows.append([f"18.06.202{i % 10}", f"Client {i}", f"{40 + i}.00"])
+        table = Table(rows, colWidths=[70, 260, 60])
+        post = [
+            Spacer(1, 8),
+            Paragraph("Sous-total HT 360.00 CHF", styles["Normal"]),
+            Spacer(1, 12),
+            Paragraph("TOTAL À FACTURER : 360.00 CHF", styles["Normal"]),
+        ]
+        prefix_chunks, tail_table = _paginate_table_no_orphan_totals(
+            table,
+            avail_width_pt=390,
+            first_page_avail_pt=120,
+            later_pages_avail_pt=160,
+            trailer_reserve_pt=_sum_flowables_height_pt(post, 390),
+            post_table_flowables=post,
+        )
+        assert tail_table is not None
+        tail_rows = len(tail_table._cellvalues) - 1
+        assert tail_rows == 1, "Un seul transport doit accompagner la synthèse"
+        tail_body = tail_table._cellvalues[1:]
+        assert _measure_closing_block_pt(table, tail_body, post, 390) <= 160 + 12
 
     def test_clone_table_chunk_preserves_header(self):
         from reportlab.platypus import Table

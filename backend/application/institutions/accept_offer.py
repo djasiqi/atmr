@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy import func
 
 from ext import db
 from models import (
@@ -629,7 +630,7 @@ class AcceptOfferUseCase:
         ).lower()
         if billing_intent == "institution":
             billed_to_type = "clinic"
-            billed_to_company_id = company_id
+            billed_to_company_id = None
         elif billing_intent == "patient":
             billed_to_type = "patient"
             billed_to_company_id = None
@@ -857,20 +858,20 @@ class AcceptOfferUseCase:
             institution_client, "preferential_rate", None
         )
 
-        billing_intent = (
-            getattr(transport_request, "billing_intent", None) or "patient"
-        ).lower()
-        billed_to_type = "patient"
-        billed_to_company_id = None
-        if billing_intent == "institution":
-            billed_to_type = "clinic"
-            billed_to_company_id = company_id
+        from services.billing.destination_billing_resolver import (
+            billed_to_type_from_intent,
+            effective_billing_for_leg,
+        )
 
         route_group_id = getattr(transport_request, "route_group_id", None)
         customer_name = self._get_customer_name(transport_request)
         primary: Booking | None = None
 
         for leg in legs:
+            effective_intent = effective_billing_for_leg(leg, transport_request)
+            billed_to_type = billed_to_type_from_intent(effective_intent)
+            billed_to_company_id = None
+
             is_first_leg = leg.sequence_index == 0
             leg_confirmed = bool(getattr(leg, "time_confirmed", False))
             mission_depart_confirmed = bool(
@@ -977,7 +978,12 @@ class AcceptOfferUseCase:
             db.session.add(booking)
             db.session.flush()
             leg.booking_id = booking.id
-            self._resolve_billing_party(booking, transport_request, company_id)
+            self._resolve_billing_party(
+                booking,
+                transport_request,
+                company_id,
+                billing_intent_override=effective_intent,
+            )
 
             if primary is None:
                 primary = booking
@@ -998,6 +1004,7 @@ class AcceptOfferUseCase:
         booking: Booking,
         transport_request: TransportRequest,
         company_id: int,
+        billing_intent_override: str | None = None,
     ) -> None:
         """Résout et attache le billing_party au booking."""
         try:
@@ -1009,6 +1016,7 @@ class AcceptOfferUseCase:
                 booking=booking,
                 transport_request=transport_request,
                 company_id=company_id,
+                billing_intent_override=billing_intent_override,
             )
 
             res_status = billing_result.get("billing_resolution_status", "unknown")
@@ -1145,9 +1153,23 @@ class AcceptOfferUseCase:
                     institution, "billing_email", None
                 ) or getattr(institution, "contact_email", None)
                 new_client.contact_phone = getattr(institution, "contact_phone", None)
-                # Par défaut, facturation au patient tant qu'aucun payeur tiers
-                # n'est explicitement configuré (évite invalidation booking).
-                new_client.default_billed_to_type = "patient"
+                inst_name_for_co = (inst_name or "").strip()
+                clinic_co = (
+                    Company.query.filter(
+                        func.lower(Company.name) == func.lower(inst_name_for_co)
+                    )
+                    .order_by(Company.id.asc())
+                    .first()
+                    if inst_name_for_co
+                    else None
+                )
+                if clinic_co is not None:
+                    new_client.default_billed_to_type = "clinic"
+                    new_client.default_billed_to_company_id = int(clinic_co.id)
+                else:
+                    # Par défaut, facturation au patient tant qu'aucun payeur tiers
+                    # n'est explicitement configuré (évite invalidation booking).
+                    new_client.default_billed_to_type = "patient"
                 db.session.add(new_client)
                 db.session.flush()
 

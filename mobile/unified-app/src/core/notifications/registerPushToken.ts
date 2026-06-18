@@ -19,6 +19,10 @@ import {
   persistPendingPushTokenRegistration,
   registerWithRetry,
 } from "./pendingPushTokenRegistration";
+import {
+  clearPushRegistrationFailed,
+  setPushRegistrationFailed,
+} from "./pushRegistrationState";
 
 export type PushRegisterCallbacks = {
   registerExpo: (input: {
@@ -50,6 +54,7 @@ async function registerPushTokenWithPersistence(
   try {
     await registerWithRetry(registerFn);
     await clearPendingPushTokenRegistration(provider);
+    clearPushRegistrationFailed();
     emitDriverTelemetry("push.token.registered", {
       source: telemetrySource,
       provider,
@@ -61,6 +66,7 @@ async function registerPushTokenWithPersistence(
       deviceId: input.deviceId,
       platform: input.platform,
     });
+    setPushRegistrationFailed(true);
     emitDriverTelemetry("push.token.register_failed", {
       source: telemetrySource,
       provider,
@@ -95,8 +101,6 @@ export function useRegisterPushTokenEffect(options: RegisterPushTokenOptions): v
 
     const registerExpo = async () => {
       try {
-        await flushPendingPushTokenRegistrations(callbacks);
-
         if (!(await hasAcceptedNotificationDisclosure(telemetrySource))) return;
 
         const perm = await Notifications.requestPermissionsAsync();
@@ -107,6 +111,9 @@ export function useRegisterPushTokenEffect(options: RegisterPushTokenOptions): v
           onPermissionDenied?.();
           return;
         }
+
+        await flushPendingPushTokenRegistrations(callbacks);
+
         const deviceId = await getStableDeviceId();
         const tokenResult = await Notifications.getExpoPushTokenAsync();
         if (!tokenResult?.data || cancelled) return;
@@ -190,6 +197,12 @@ export function useRegisterPushTokenEffect(options: RegisterPushTokenOptions): v
     };
 
     void (async () => {
+      if (!(await hasAcceptedNotificationDisclosure(telemetrySource))) return;
+      const Notifications = getExpoNotificationsModule();
+      if (Notifications) {
+        const perm = await Notifications.getPermissionsAsync();
+        if (!perm.granted && perm.status !== "granted") return;
+      }
       await flushPendingPushTokenRegistrations(callbacks);
       const token = await getDriverFcmToken();
       if (token) await registerFcm(token);

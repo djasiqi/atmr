@@ -88,6 +88,20 @@ function assertContextRuntimeInvariants(context: AuthContext | null) {
   }
 }
 
+/** Socket chauffeur : actif uniquement en contexte driver (évite logout fantôme company). */
+export function syncDriverRealtimeForContext(
+  context: AuthContext | null,
+  options?: { enableSocket?: boolean }
+) {
+  if (context?.context_type === "driver") {
+    realtimeManager.onContextSwitch(context.context_id, {
+      enableSocket: options?.enableSocket ?? isFeatureEnabled("realtime_socket_enabled"),
+    });
+    return;
+  }
+  realtimeManager.disconnect();
+}
+
 function toUiErrorMessage(error: unknown, fallback: string): string {
   const axiosLikeStatus =
     error && typeof error === "object"
@@ -136,6 +150,10 @@ export function SessionProvider({ children }: PropsWithChildren) {
   );
   const [error, setError] = ReactRuntime.useState(null as string | null);
   const bootstrapInFlightRef = ReactRuntime.useRef(null as Promise<void> | null);
+  const activeContextRef = ReactRuntime.useRef(activeContext);
+  ReactRuntime.useLayoutEffect(() => {
+    activeContextRef.current = activeContext;
+  }, [activeContext]);
 
   ReactRuntime.useEffect(() => {
     void hydrateSessionJournal();
@@ -147,16 +165,23 @@ export function SessionProvider({ children }: PropsWithChildren) {
       void appendSessionJournalEvent("session.resume.skipped_has_access_token");
       return;
     }
+    const resumeDelaysMs = [0, 500, 1500];
     try {
       const hasRefreshToken = await hasStoredRefreshToken();
       if (!hasRefreshToken) {
         void appendSessionJournalEvent("session.resume.no_refresh_token");
         return;
       }
-      const resumed = await refreshAuthTokenNow();
-      if (resumed) {
-        void appendSessionJournalEvent("session.resume.success");
-        return;
+      for (let attempt = 1; attempt <= resumeDelaysMs.length; attempt += 1) {
+        if (attempt > 1) {
+          await new Promise((resolve) => setTimeout(resolve, resumeDelaysMs[attempt - 1]));
+          void appendSessionJournalEvent("session.resume.retry", { attempt });
+        }
+        const resumed = await refreshAuthTokenNow();
+        if (resumed) {
+          void appendSessionJournalEvent("session.resume.success", { attempt });
+          return;
+        }
       }
       void appendSessionJournalEvent("session.resume.failed", {
         reason: "refresh_returned_false",
@@ -290,7 +315,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
         },
         resolved?.context_id ?? null
       );
-      realtimeManager.onContextSwitch(resolved?.context_id ?? null, {
+      syncDriverRealtimeForContext(resolved, {
         enableSocket: isFeatureEnabled("realtime_socket_enabled"),
       });
       } catch (e) {
@@ -415,7 +440,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
             ? restoreContextCache(queryClient, nextContext.context_id)
             : false;
         const socketPhaseStarted = Date.now();
-        realtimeManager.onContextSwitch(response.active_context_id, {
+        syncDriverRealtimeForContext(nextContext, {
           enableSocket: isFeatureEnabled("realtime_socket_enabled"),
         });
         const socketMs = Date.now() - socketPhaseStarted;
@@ -505,6 +530,9 @@ export function SessionProvider({ children }: PropsWithChildren) {
 
   ReactRuntime.useEffect(() => {
     return realtimeManager.onAuthExhausted((reason, code) => {
+      if (activeContextRef.current?.context_type !== "driver") {
+        return;
+      }
       emitDriverTelemetry("realtime.auth.exhausted", {
         source: "sessionProvider.onAuthExhausted",
         reason,

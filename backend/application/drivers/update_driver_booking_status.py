@@ -54,6 +54,8 @@ class _BookingRepo(Protocol):
 class _AssignmentRepo(Protocol):
     def find_model_by_booking_id(self, booking_id: int) -> Any | None: ...
 
+    def delete_dependent_records_for_assignment_id(self, assignment_id: int) -> None: ...
+
 
 class _DbSession(Protocol):
     def commit(self) -> None: ...
@@ -635,6 +637,9 @@ class UpdateDriverBookingStatusUseCase:
                                 assignment_id_str: str | None = None
                                 if assignment is not None:
                                     assignment_id_str = str(assignment.id)
+                                    self._assignment_repo.delete_dependent_records_for_assignment_id(
+                                        assignment.id
+                                    )
                                     self._db.delete(assignment)
 
                                 if assignment_id_str is not None:

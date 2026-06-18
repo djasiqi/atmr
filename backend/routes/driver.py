@@ -3192,12 +3192,13 @@ class SavePushToken(Resource):
         # Variables pour stocker le résultat
         result = None
         status_code = 200
+        payload_raw = request.get_json(force=True) or {}
+        payload: dict[str, Any] = tcast("dict[str, Any]", payload_raw)
+        should_refresh_gauges = False
 
         try:
             # Log & typage strict
-            payload_raw = request.get_json(force=True) or {}
             logger.info("[push-token] payload=%s", payload_raw)
-            payload: dict[str, Any] = tcast("dict[str, Any]", payload_raw)
 
             from http import HTTPStatus
 
@@ -3217,6 +3218,7 @@ class SavePushToken(Resource):
 
             if uc_res.should_commit and status_code == HTTPStatus.OK:
                 db.session.commit()
+                should_refresh_gauges = True
 
         except (ValueError, TypeError, AttributeError) as e:
             db.session.rollback()
@@ -3261,6 +3263,22 @@ class SavePushToken(Resource):
                 "message": f"Erreur serveur : {e!s}",
             }
             status_code = 500
+
+        try:
+            from services.monitoring.prometheus import (
+                refresh_push_active_owners_gauges,
+                track_push_token_registration_outcome,
+            )
+
+            track_push_token_registration_outcome(
+                owner_type="driver",
+                status_code=status_code,
+                payload=payload,
+            )
+            if should_refresh_gauges:
+                refresh_push_active_owners_gauges()
+        except ImportError:
+            pass
 
         return result, status_code
 

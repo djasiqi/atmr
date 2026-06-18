@@ -82,6 +82,7 @@ from security.refresh_token_service import (
     get_user_active_sessions,
     is_token_revoked,
     mark_token_rotated,
+    revoke_active_tokens_for_device,
     revoke_all_user_tokens,
     revoke_refresh_token,
     store_refresh_token,
@@ -1067,24 +1068,23 @@ def _login_post_body():
 
         # Stocker aussi dans la DB pour compatibilité et audit
         refresh_expires_at = datetime.now(UTC) + refresh_expires_delta
+        device_id = request.headers.get("X-Device-ID")
+        device_name = request.headers.get("X-Device-Name")
+        if device_id:
+            revoke_active_tokens_for_device(
+                user.id,
+                device_id,
+                reason="Remplacé par nouvelle session (même appareil)",
+            )
         store_refresh_token(
             token=refresh_token,
             user_id=user.id,
             expires_at=refresh_expires_at,
-            device_id=request.headers.get("X-Device-ID"),
-            device_name=request.headers.get("X-Device-Name"),
+            device_id=device_id,
+            device_name=device_name,
         )
 
-        # Limite de tokens actifs : plus haute pour les drivers (multi-device, reinstall)
-        is_driver = user.role == UserRole.driver
-        max_active_tokens = int(
-            os.getenv(
-                "MAX_ACTIVE_REFRESH_TOKENS_DRIVER"
-                if is_driver
-                else "MAX_ACTIVE_REFRESH_TOKENS",
-                "15" if is_driver else "5",
-            )
-        )
+        max_active_tokens = _resolve_max_active_refresh_tokens(user)
         token_service.limit_active_tokens(user.id, max_active_tokens)
     except Exception as store_error:
         logger.warning(
@@ -1738,6 +1738,16 @@ def _check_user_profile_active(user: User) -> tuple[bool, str | None]:
     return True, None
 
 
+def _resolve_max_active_refresh_tokens(user: User) -> int:
+    """Limite de sessions refresh actives selon le rôle utilisateur."""
+    role = user.role
+    if role == UserRole.driver:
+        return int(os.getenv("MAX_ACTIVE_REFRESH_TOKENS_DRIVER", "15"))
+    if role in (UserRole.company, UserRole.institution):
+        return int(os.getenv("MAX_ACTIVE_REFRESH_TOKENS_COMPANY", "15"))
+    return int(os.getenv("MAX_ACTIVE_REFRESH_TOKENS", "5"))
+
+
 def _validate_refresh_token(
     refresh_token: str,
 ) -> tuple[str | None, dict[str, str] | None]:
@@ -1799,11 +1809,15 @@ def _validate_refresh_token(
 
         # ✅ SECURITY: Vérifier si le token est révoqué dans la DB (Phase 2)
         # Cette vérification permet la déconnexion forcée par l'admin.
-        # grace_window=True : si le token a été révoqué par rotation automatique
-        # dans les 30 dernières secondes, on l'accepte quand même (anti race-condition
-        # mobile où un ancien refresh est réutilisé avant que le nouveau soit stocké).
+        # grace_window=True : rotation soft (5 min) + réutilisation legacy acceptée
+        # en cas de race mobile (ancien refresh réutilisé avant persistance SecureStore).
         try:
-            if is_token_revoked(refresh_token, grace_window=True):
+            request_device_id = request.headers.get("X-Device-ID") if request else None
+            if is_token_revoked(
+                refresh_token,
+                grace_window=True,
+                request_device_id=request_device_id,
+            ):
                 logger.warning(
                     "Refresh token rejeté : token révoqué pour user %s",
                     user_public_id,
@@ -2214,23 +2228,23 @@ class RefreshToken(Resource):
 
                 # Stocker aussi dans la DB pour compatibilité et audit
                 refresh_expires_at = datetime.now(UTC) + refresh_expires_delta
+                device_id = request.headers.get("X-Device-ID")
+                device_name = request.headers.get("X-Device-Name")
+                if device_id:
+                    revoke_active_tokens_for_device(
+                        user.id,
+                        device_id,
+                        reason="Remplacé par rotation refresh (même appareil)",
+                    )
                 store_refresh_token(
                     token=new_refresh_token,
                     user_id=user.id,
                     expires_at=refresh_expires_at,
-                    device_id=request.headers.get("X-Device-ID"),
-                    device_name=request.headers.get("X-Device-Name"),
+                    device_id=device_id,
+                    device_name=device_name,
                 )
 
-                is_driver = user.role == UserRole.driver
-                max_active_tokens = int(
-                    os.getenv(
-                        "MAX_ACTIVE_REFRESH_TOKENS_DRIVER"
-                        if is_driver
-                        else "MAX_ACTIVE_REFRESH_TOKENS",
-                        "15" if is_driver else "5",
-                    )
-                )
+                max_active_tokens = _resolve_max_active_refresh_tokens(user)
                 token_service.limit_active_tokens(user.id, max_active_tokens)
             except Exception as store_error:
                 logger.warning(

@@ -9,7 +9,7 @@ import { isFeatureEnabled } from "../../core/featureFlags/registry";
 import { reconcileDriverMissions } from "./sync";
 import { driverOfflineQueue } from "./offlineQueue";
 import { invalidateDriverMissionScope } from "./queryKeys";
-import { refreshDriverTokenSingleflight } from "../../core/auth/driverTokenOrchestrator";
+import { refreshAuthTokenSingleflight } from "../../core/auth/authTokenOrchestrator";
 
 type RuntimeResumeOptions = {
   contextId: string | null;
@@ -53,7 +53,7 @@ export function useDriverRuntimeResume(options: RuntimeResumeOptions) {
           }
           for (let attempt = 1; attempt <= RESUME_MAX_ATTEMPTS; attempt += 1) {
             try {
-              await refreshDriverTokenSingleflight("foreground_resume");
+              await refreshAuthTokenSingleflight("foreground_resume");
               if (isFeatureEnabled("realtime_auth_reconnect_enabled")) {
                 realtimeManager.connect(contextId, {
                   enableSocket: isFeatureEnabled("realtime_socket_enabled"),

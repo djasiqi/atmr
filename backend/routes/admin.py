@@ -219,6 +219,52 @@ class AdminStats(Resource):
             admin_ns.abort(500, "Une erreur interne est survenue.")
 
 
+@admin_ns.route("/push-coverage/drivers")
+class AdminPushCoverageDrivers(Resource):
+    """Couverture push chauffeur — visibilité ops (tokens actifs, statut, app_version)."""
+
+    @jwt_required()
+    @role_required(UserRole.admin)
+    @ip_whitelist_required()
+    @limiter.limit("120 per hour")
+    def get(self):
+        from services.notifications.push_coverage_service import (
+            list_driver_push_coverage,
+        )
+
+        company_id_raw = request.args.get("company_id")
+        driver_id_raw = request.args.get("driver_id")
+        without_token_only = (
+            str(request.args.get("without_token_only", "false")).lower() == "true"
+        )
+        operational_only = (
+            str(request.args.get("operational_only", "true")).lower() != "false"
+        )
+
+        company_id: int | None = None
+        driver_id: int | None = None
+        try:
+            if company_id_raw is not None and str(company_id_raw).strip():
+                company_id = int(company_id_raw)
+            if driver_id_raw is not None and str(driver_id_raw).strip():
+                driver_id = int(driver_id_raw)
+        except ValueError:
+            return {"error": "invalid_filter", "message": "company_id ou driver_id invalide"}, 400
+
+        rows = list_driver_push_coverage(
+            company_id=company_id,
+            driver_id=driver_id,
+            without_token_only=without_token_only,
+            operational_only=operational_only,
+        )
+        return {
+            "drivers": rows,
+            "count": len(rows),
+            "operational_only": operational_only,
+            "without_token_only": without_token_only,
+        }, 200
+
+
 @admin_ns.route("/support/saferpay-payment-lookup")
 class AdminSaferpayPaymentLookup(Resource):
     """Recherche support par référence Saferpay (transaction id partiel ou complet)."""

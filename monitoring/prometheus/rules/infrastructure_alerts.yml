@@ -6,6 +6,17 @@ groups:
   - name: infrastructure
     interval: 30s
     rules:
+      - alert: LowMemoryAvailable
+        expr: |
+          node_memory_MemAvailable_bytes < 1610612736
+        for: 5m
+        labels:
+          severity: critical
+          component: infrastructure
+        annotations:
+          summary: "Mémoire disponible hôte < 1,5 Go"
+          description: "MemAvailable={{ $value | humanize1024 }}B — risque OOM (voir swap + stack Kafka)."
+
       - alert: HighMemoryUsage
         expr: |
           (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) > 0.90
@@ -199,14 +210,25 @@ groups:
           description: "WS_KAFKA_CONSUMER_ENABLED=true mais ws_kafka_consumer_running=0 depuis 2 minutes."
 
       - alert: Phase4TrackingLagCritical
-        expr: kafka_consumergroup_lag{topic="driver.location.raw"} > 10000
+        expr: kafka_consumergroup_lag{topic=~"driver\\.location\\.raw.*"} > 10000
         for: 2m
         labels:
           severity: critical
           component: kafka
         annotations:
           summary: "Lag tracking critique"
-          description: "Le lag tracking dépasse 10k messages sur driver.location.raw."
+          description: "Le lag tracking dépasse 10k messages sur le topic raw (incl. suffixe .v2)."
+
+      - alert: Phase4TrackingKafkaE2eLatencyHigh
+        expr: |
+          histogram_quantile(0.95, sum(rate(tracking_kafka_e2e_latency_seconds_bucket[5m])) by (le)) > 2
+        for: 5m
+        labels:
+          severity: warning
+          component: kafka
+        annotations:
+          summary: "Latence GPS pipeline Kafka P95 > 2 s"
+          description: "raw→processed dépasse 2 s (contrat métier carte entreprise)."
 
       - alert: Phase4TrackingPublishErrorsHigh
         expr: increase(tracking_kafka_publish_errors_total[5m]) > 50

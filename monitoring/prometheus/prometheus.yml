@@ -87,6 +87,15 @@ scrape_configs:
     scrape_interval: 30s
     scrape_timeout: 10s
 
+  # ==================== Kafka JMX (heap / GC — ports exposés sur brokers) ====================
+  # Prérequis : jmx_exporter sidecar ou scrape via kafka-ui si KAFKA_UI_ENABLED=1.
+  # Ports hôte : broker-1=9101, broker-2=9102, broker-3=9103 (Phase 1).
+  # Mesure manuelle : docker exec atmr-kafka-broker-1 jcmd 1 GC.heap_info
+  #
+  # - job_name: "kafka-jmx"
+  #   static_configs:
+  #     - targets: ["kafka-broker-1:9101", "kafka-broker-2:9102", "kafka-broker-3:9103"]
+
   # ==================== Celery Workers ====================
   # ⚠️ DÉSACTIVÉ: Le worker Celery n'expose pas de serveur HTTP avec métriques
   # Les métriques Celery sont disponibles via Flower (port 5555) ou via le backend

@@ -2240,11 +2240,18 @@ class DraftInvoiceLineEdit(Resource):
         body = request.get_json(silent=True) or {}
         exp = body.get("expected_updated_at")
         exp_s = str(exp).strip() if exp is not None and str(exp).strip() else None
+        exclude_leg = body.get("exclude_round_trip_leg")
+        exclude_leg_s = (
+            str(exclude_leg).strip().lower()
+            if exclude_leg is not None and str(exclude_leg).strip()
+            else None
+        )
         r = remove_draft_invoice_line(
             company_id,
             invoice_id,
             line_id,
             expected_updated_at=exp_s,
+            exclude_round_trip_leg=exclude_leg_s,
         )
         if not r.success:
             return r.error, r.status_code or 400

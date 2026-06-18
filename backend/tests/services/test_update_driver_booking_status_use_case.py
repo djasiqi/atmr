@@ -66,10 +66,14 @@ class _Assignment:
 class _AssignmentRepo:
     def __init__(self, assignment: _Assignment | None):
         self._assignment = assignment
+        self.deleted_dependents_for: list[int] = []
 
     def find_model_by_booking_id(self, booking_id: int):  # type: ignore[no-untyped-def]
         _ = booking_id
         return self._assignment
+
+    def delete_dependent_records_for_assignment_id(self, assignment_id: int) -> None:
+        self.deleted_dependents_for.append(assignment_id)
 
 
 class _Db:
@@ -114,12 +118,13 @@ def test_release_cancels_assignment_and_triggers_dispatch() -> None:
 
     booking = _Booking(id=1, company_id=7, driver_id=10, status=BookingStatus.ASSIGNED)
     assignment = _Assignment(id=123, booking_id=1, driver_id=10)
+    assignment_repo = _AssignmentRepo(assignment)
     db = _Db()
     events: dict[str, Any] = {"emit": 0, "trigger": 0}
 
     uc = UpdateDriverBookingStatusUseCase(
         booking_repo=_BookingRepo(booking),
-        assignment_repo=_AssignmentRepo(assignment),
+        assignment_repo=assignment_repo,
         db_session=db,
         notify_booking_update_fn=lambda _driver_id, _b: None,
         resolve_delays_fn=lambda _bid, _dt: None,
@@ -157,6 +162,7 @@ def test_release_cancels_assignment_and_triggers_dispatch() -> None:
     assert booking.status == BookingStatus.ACCEPTED
     assert booking.driver_id is None
     assert db.deleted  # assignment deleted
+    assert assignment_repo.deleted_dependents_for == [123]
     assert events["emit"] == 1
     assert events["trigger"] == 1
     # RELEASE ne doit pas remplir les champs cancellation_*

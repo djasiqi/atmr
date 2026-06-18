@@ -65,8 +65,21 @@ export const extractHHMM = (value) => {
   return extractWallClockTime(raw);
 };
 
-/** Dérive pickup_time_confirmed depuis la présence d'une heure de départ. */
-export const derivePickupTimeConfirmed = (pickupTime) => Boolean(pickupTime?.trim());
+/** Heure saisie ⇒ confirmée ; heure vide ⇒ non confirmée. */
+export const derivePickupTimeConfirmed = (pickupTime) => Boolean(extractHHMM(pickupTime));
+
+/** Supprime les champs horaire vides et normalise les ISO avant envoi API. */
+export const sanitizeSchedulePayloadForApi = (payload) => {
+  if (!payload || typeof payload !== 'object') return payload;
+  const out = { ...payload };
+  for (const field of ['scheduled_time', 'return_scheduled_time', 'return_time']) {
+    const val = out[field];
+    if (val == null || (typeof val === 'string' && !val.trim())) {
+      delete out[field];
+    }
+  }
+  return out;
+};
 
 /**
  * Applique le départ au payload : pickup confirmé ⇔ heure présente + ISO valide.

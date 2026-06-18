@@ -8,6 +8,12 @@ import {
   getPushPermissionDenied,
   subscribePushPermissionDenied,
 } from "../../../core/notifications/pushPermissionState";
+import {
+  requestNotificationDisclosure,
+  resolvePushRegistrationBannerState,
+  subscribePushRegistrationRefresh,
+  type PushRegistrationBannerState,
+} from "../../../core/notifications/pushRegistrationState";
 import { getTrackingSnapshot } from "../tracking";
 import { useSocketStatus } from "../hooks";
 import { FONT_SIZE } from "../../../design/responsive/typographyTokens";
@@ -60,6 +66,8 @@ export function DriverStateBanners() {
   const [gpsEnabled, setGpsEnabled] = useState(true);
   const [trackingDepth, setTrackingDepth] = useState(0);
   const [pushPermissionDenied, setPushPermissionDeniedState] = useState(getPushPermissionDenied());
+  const [pushRegistrationState, setPushRegistrationState] =
+    useState<PushRegistrationBannerState>("ok");
   const [batteryOptimizationActive, setBatteryOptimizationActive] = useState(false);
   const [oemGuidance, setOemGuidance] = useState(() => getOemBatteryGuidance());
 
@@ -67,6 +75,21 @@ export function DriverStateBanners() {
     return subscribePushPermissionDenied(() => {
       setPushPermissionDeniedState(getPushPermissionDenied());
     });
+  }, []);
+
+  useEffect(() => {
+    const refreshPushState = () => {
+      void resolvePushRegistrationBannerState().then(setPushRegistrationState);
+    };
+    refreshPushState();
+    const unsub = subscribePushRegistrationRefresh(refreshPushState);
+    const appSub = AppState.addEventListener("change", (next) => {
+      if (next === "active") refreshPushState();
+    });
+    return () => {
+      unsub();
+      appSub.remove();
+    };
   }, []);
 
   useEffect(() => {
@@ -121,8 +144,14 @@ export function DriverStateBanners() {
 
   const showTrackingWarning = useMemo(() => trackingDepth > 0, [trackingDepth]);
 
+  const showPushRegistrationBanner =
+    pushRegistrationState === "disclosure_required" ||
+    pushRegistrationState === "registration_pending" ||
+    pushRegistrationState === "registration_failed";
+
   const hasBanner =
     pushPermissionDenied ||
+    showPushRegistrationBanner ||
     isOffline ||
     (socketStatus.degraded && socketStatus.connected) ||
     !gpsEnabled ||
@@ -134,7 +163,34 @@ export function DriverStateBanners() {
 
   return (
     <View style={styles.stack}>
-      {pushPermissionDenied ? (
+      {pushRegistrationState === "disclosure_required" ? (
+        <Banner
+          title="Notifications"
+          message="Activez les notifications pour recevoir vos missions."
+          tone="warn"
+          actionLabel="Configurer"
+          onAction={() => requestNotificationDisclosure()}
+        />
+      ) : null}
+      {pushRegistrationState === "registration_pending" ? (
+        <Banner
+          title="Enregistrement en attente"
+          message="La synchronisation des notifications reprendra automatiquement."
+          tone="warn"
+        />
+      ) : null}
+      {pushRegistrationState === "registration_failed" ? (
+        <Banner
+          title="Notifications indisponibles"
+          message="Impossible d'enregistrer les notifications. Reessayez apres connexion."
+          tone="error"
+          actionLabel="Ouvrir les reglages"
+          onAction={() => {
+            void Linking.openSettings();
+          }}
+        />
+      ) : null}
+      {pushPermissionDenied && pushRegistrationState !== "disclosure_required" ? (
         <Banner
           title="Notifications desactivees"
           message="Activez les notifications pour recevoir vos missions."

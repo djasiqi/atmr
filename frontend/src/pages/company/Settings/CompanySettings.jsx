@@ -26,7 +26,6 @@ import VehiclesTab from './tabs/VehiclesTab';
 
 import { useLirieCompany } from '../../../hooks/useLirieCompany';
 import { updateCompanyInfo, uploadCompanyLogo } from '../../../services/companyService';
-import { useFreshTokenReauth } from '../../../contexts/FreshTokenReauthContext';
 import resolveLogoUrl from '../../../utils/resolveLogoUrl';
 
 // Validations locales
@@ -36,7 +35,6 @@ const uidRx = /^(CHE[- ]?\d{3}\.\d{3}\.\d{3}(\s*TVA)?)$|^(CHE[- ]?\d{9}(\s*TVA)?
 
 export default function CompanySettings() {
   const { company, companyError: loadError, loadingCompany, reloadCompany } = useLirieCompany();
-  const { requestFreshTokenReauth } = useFreshTokenReauth();
   const location = useLocation();
 
   // Onglet actif (détecte le hash dans l'URL)
@@ -85,7 +83,6 @@ export default function CompanySettings() {
   const partnershipsRef = useRef(null);
   const vehiclesRef = useRef(null);
   const operationsRef = useRef(null);
-  const pendingSaveBillingRef = useRef(false);
 
   useEffect(() => {
     const resolved = resolveLogoUrl(company?.logo_url);
@@ -323,50 +320,8 @@ export default function CompanySettings() {
         setIsEditing(false);
       }
     } catch (err) {
-      if (err?.isFreshTokenRequired) {
-        const payload = {
-          name: form.name || undefined,
-          address: form.address || undefined,
-          latitude: form.latitude || undefined,
-          longitude: form.longitude || undefined,
-          contact_email: form.contact_email || undefined,
-          contact_phone: form.contact_phone || undefined,
-          billing_email: form.billing_email || undefined,
-          billing_notes: form.billing_notes || undefined,
-          uid_ide: form.uid_ide || undefined,
-          domicile_address_line1: form.domicile_address_line1 || undefined,
-          domicile_address_line2: form.domicile_address_line2 || undefined,
-          domicile_zip: form.domicile_zip || undefined,
-          domicile_city: form.domicile_city || undefined,
-          domicile_country: form.domicile_country || undefined,
-        };
-        pendingSaveBillingRef.current = true;
-        setError('');
-        try {
-          await requestFreshTokenReauth({
-            title: 'Vérification requise',
-            retryFn: async () => {
-              const updated = await updateCompanyInfo(payload);
-              await reloadCompany?.();
-              setForm((prev) => ({
-                ...prev,
-                uid_ide: updated?.uid_ide ?? prev.uid_ide,
-              }));
-              if (pendingSaveBillingRef.current && billingRef.current?.save) {
-                await billingRef.current.save();
-              }
-              pendingSaveBillingRef.current = false;
-              setMessage('Parametres enregistres avec succes.');
-              setIsEditing(false);
-            },
-          });
-        } catch {
-          pendingSaveBillingRef.current = false;
-        }
-      } else {
-        const errorMsg = err?.response?.data?.error || err?.message || 'Erreur lors de la sauvegarde.';
-        setError(errorMsg);
-      }
+      const errorMsg = err?.response?.data?.error || err?.message || 'Erreur lors de la sauvegarde.';
+      setError(errorMsg);
     } finally {
       setSaving(false);
     }

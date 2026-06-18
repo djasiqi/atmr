@@ -18,12 +18,19 @@ jest.mock("../storage/typedStorage", () => ({
   removeItem: (...args: unknown[]) => mockRemoveItem(...args),
 }));
 
+const mockCanRegister = jest.fn<() => Promise<boolean>>();
+
+jest.mock("./pushRegistrationGuard", () => ({
+  canRegisterPushTokenWithBackend: () => mockCanRegister(),
+}));
+
 describe("pendingPushTokenRegistration", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockGetItem.mockResolvedValue(null);
     mockSetItem.mockResolvedValue(undefined);
     mockRemoveItem.mockResolvedValue(undefined);
+    mockCanRegister.mockResolvedValue(true);
   });
 
   it("registerWithRetry succeeds on second attempt", async () => {
@@ -84,6 +91,29 @@ describe("pendingPushTokenRegistration", () => {
 
     expect(registerExpo).toHaveBeenCalledTimes(1);
     expect(mockRemoveItem).toHaveBeenCalledWith(STORAGE_KEYS.PENDING_PUSH_TOKEN_REGISTRATION);
+  });
+
+  it("flushPendingPushTokenRegistrations skips handlers when disclosure/permission guard fails", async () => {
+    mockCanRegister.mockResolvedValue(false);
+    mockGetItem.mockResolvedValue({
+      items: [
+        {
+          provider: "expo",
+          token: "expo-tok",
+          deviceId: "dev",
+          platform: "ios",
+          savedAt: Date.now(),
+        },
+      ],
+    });
+    const registerExpo = jest.fn<() => Promise<void>>().mockResolvedValue(undefined);
+    const registerFcm = jest.fn<() => Promise<void>>().mockResolvedValue(undefined);
+
+    await flushPendingPushTokenRegistrations({ registerExpo, registerFcm });
+
+    expect(registerExpo).not.toHaveBeenCalled();
+    expect(registerFcm).not.toHaveBeenCalled();
+    expect(mockRemoveItem).not.toHaveBeenCalled();
   });
 
   it("clearPendingPushTokenRegistration removes only matching provider", async () => {

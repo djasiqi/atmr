@@ -852,3 +852,37 @@ def send_bulk_notifications_task(notifications: list[Dict[str, Any]]) -> Dict[st
         "success": success_count,
         "failed": failed_count,
     }
+
+
+@celery.task(name="notifications.deactivate_stale_device_tokens")
+def deactivate_stale_device_tokens_task() -> dict[str, int]:
+    """Désactive les tokens push zombies (cron quotidien)."""
+    from celery_app import get_flask_app
+    from ext import db
+    from services.monitoring.prometheus import refresh_push_active_owners_gauges
+    from services.notifications.device_token_lifecycle import (
+        deactivate_stale_device_tokens,
+    )
+
+    app = get_flask_app()
+    with app.app_context():
+        deactivated = deactivate_stale_device_tokens()
+        db.session.commit()
+        refresh_push_active_owners_gauges()
+        logger.info(
+            "[notification_task] deactivate_stale_device_tokens deactivated=%s",
+            deactivated,
+        )
+        return {"deactivated": deactivated}
+
+
+@celery.task(name="notifications.refresh_push_coverage_gauges")
+def refresh_push_coverage_gauges_task() -> dict[str, str]:
+    """Rafraîchit les gauges couverture push (filet horaire)."""
+    from celery_app import get_flask_app
+    from services.monitoring.prometheus import refresh_push_active_owners_gauges
+
+    app = get_flask_app()
+    with app.app_context():
+        refresh_push_active_owners_gauges()
+        return {"status": "ok"}

@@ -32,6 +32,7 @@ import { useAppViewport } from "../../../src/design/responsive";
 import { useReduceMotion } from "../../../src/design/navigation/useReduceMotion";
 import { usePerfRouteTracking } from "../../../src/core/observability/usePerfRouteTracking";
 import { DriverPresenceDisclosureHost } from "../../../src/features/driver/components/DriverPresenceDisclosureHost";
+import { DriverNotificationDisclosureHost } from "../../../src/features/driver/components/DriverNotificationDisclosureHost";
 import { DriverTrackingBannerHost } from "../../../src/features/driver/components/DriverTrackingBannerHost";
 
 /**
@@ -129,6 +130,7 @@ export default function DriverLayout() {
         <DriverTrackingHost />
         <DriverRealtimeSyncHost />
         <DriverPresenceDisclosureHost />
+        <DriverNotificationDisclosureHost />
         <DriverTrackingBannerHost />
         <Tabs
           implementation={FLOATING_TAB_IMPLEMENTATION}

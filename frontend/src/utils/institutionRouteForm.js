@@ -49,6 +49,8 @@ export const buildInitialDestinations = (request, bookingSummary = null) => {
       time_confirmed: Boolean(leg.time_confirmed),
       booking_id: leg.booking_id || null,
       leg_index: leg.sequence_index ?? null,
+      use_custom_billing: Boolean(leg.destination_billing_override),
+      destination_billing_override: leg.destination_billing_override || 'patient',
     }));
   }
 

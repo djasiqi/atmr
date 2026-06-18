@@ -98,8 +98,8 @@ services:
     networks:
       - default
     volumes:
-      - ./scripts/kafka-init-topics.sh:/init-topics.sh:ro
-    entrypoint: ["/bin/bash", "-c", "sed 's/\\r$//' /init-topics.sh | bash -s -"]
+      - ./scripts:/kafka-scripts:ro
+    entrypoint: ["/bin/bash", "/kafka-scripts/kafka-init-topics.sh"]
     restart: "no"
 
   kafka-ui:

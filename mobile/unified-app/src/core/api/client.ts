@@ -11,7 +11,7 @@ import {
 } from "../contracts/auth";
 import { buildMockBootstrap, buildMockSwitchContext } from "./mockData";
 import { emitDriverTelemetry } from "../observability/driverTelemetry";
-import { buildSessionDiagHeader } from "../observability/sessionJournal";
+import { appendSessionJournalEvent, buildSessionDiagHeader } from "../observability/sessionJournal";
 import { getRuntimeFlagsVersion, isFeatureEnabled } from "../featureFlags/registry";
 import { getNetworkSnapshot } from "../network/networkState";
 import { evaluateConnectivityPolicy } from "../network/connectivityPolicy";
@@ -149,6 +149,8 @@ let resumeAttemptId: string | null = null;
 /** Toutes les requêtes (driver, company, …) reçoivent le contexte actif pour l’autorisation multi-rôles. */
 let activeContextIdForApi: string | null = null;
 const REFRESH_TOKEN_STORAGE_KEY = "auth_refresh_token";
+const REFRESH_TOKEN_WRITE_RETRIES = 3;
+const REFRESH_TOKEN_WRITE_BACKOFF_MS = [100, 300] as const;
 const REFRESH_FAILURE_TELEMETRY_COOLDOWN_MS = 10000;
 const POST_BOOTSTRAP_REFRESH_SKIP_MS = 5000;
 let lastBootstrapAuthSuccessAtMs = 0;
@@ -205,16 +207,82 @@ export async function hasStoredRefreshToken(): Promise<boolean> {
   return Boolean(token);
 }
 
-async function writeRefreshToken(value: string | null): Promise<void> {
-  try {
-    if (value && value.trim().length > 0) {
-      await SecureStore.setItemAsync(REFRESH_TOKEN_STORAGE_KEY, value);
-      return;
-    }
-    await SecureStore.deleteItemAsync(REFRESH_TOKEN_STORAGE_KEY);
-  } catch {
-    // Best effort storage: keep runtime flow resilient.
+export class RefreshTokenPersistError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "RefreshTokenPersistError";
   }
+}
+
+function sleepMs(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function buildAuthDeviceHeaders(): Promise<Record<string, string>> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { getStableDeviceId } = require("../notifications/getStableDeviceId") as {
+      getStableDeviceId: () => Promise<string>;
+    };
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const Application = require("expo-application") as {
+      applicationName?: string | null;
+    };
+    const deviceId = await getStableDeviceId();
+    const deviceName =
+      (typeof Application.applicationName === "string" && Application.applicationName.length > 0
+        ? Application.applicationName
+        : null) ?? Platform.OS;
+    return {
+      "X-Device-ID": deviceId,
+      "X-Device-Name": deviceName,
+    };
+  } catch {
+    return {};
+  }
+}
+
+async function writeRefreshToken(value: string | null): Promise<void> {
+  const isDelete = !value || value.trim().length === 0;
+  const attempts = isDelete ? 1 : REFRESH_TOKEN_WRITE_RETRIES;
+  let lastError: unknown = null;
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      if (isDelete) {
+        await SecureStore.deleteItemAsync(REFRESH_TOKEN_STORAGE_KEY);
+        const readBack = await readRefreshToken();
+        if (readBack !== null) {
+          throw new RefreshTokenPersistError("delete_read_back_failed");
+        }
+      } else {
+        await SecureStore.setItemAsync(REFRESH_TOKEN_STORAGE_KEY, value);
+        const readBack = await readRefreshToken();
+        if (readBack !== value) {
+          throw new RefreshTokenPersistError("read_back_mismatch");
+        }
+      }
+      void appendSessionJournalEvent("auth.refresh_token.persist_success", { attempt });
+      return;
+    } catch (error) {
+      lastError = error;
+      if (attempt < attempts) {
+        await sleepMs(REFRESH_TOKEN_WRITE_BACKOFF_MS[attempt - 1] ?? 300);
+      }
+    }
+  }
+
+  const reason =
+    lastError instanceof Error ? lastError.message : "persist_failed";
+  void appendSessionJournalEvent("auth.refresh_token.persist_failed", { reason, attempts });
+  emitDriverTelemetry("auth.refresh_token.persist_failed", {
+    source: "core.api.client",
+    reason,
+    attempts,
+  });
+  throw lastError instanceof RefreshTokenPersistError
+    ? lastError
+    : new RefreshTokenPersistError(reason);
 }
 
 function isMutatingMethod(method: string | undefined): boolean {
@@ -296,6 +364,7 @@ async function refreshAuthToken(): Promise<string | null> {
     return null;
   }
   const payload = { refresh_token: refreshToken };
+  const deviceHeaders = await buildAuthDeviceHeaders();
 
   let endpointUsed: "refresh-token" | "refresh" = "refresh-token";
   let data: { access_token?: string; token?: string; refresh_token?: string } | null = null;
@@ -304,7 +373,7 @@ async function refreshAuthToken(): Promise<string | null> {
       access_token?: string;
       token?: string;
       refresh_token?: string;
-    }>("/auth/refresh-token", payload);
+    }>("/auth/refresh-token", payload, { headers: deviceHeaders });
     data = response.data;
   } catch (error) {
     const err = error as AxiosError;
@@ -317,7 +386,7 @@ async function refreshAuthToken(): Promise<string | null> {
       access_token?: string;
       token?: string;
       refresh_token?: string;
-    }>("/auth/refresh", payload);
+    }>("/auth/refresh", payload, { headers: deviceHeaders });
     data = fallbackResponse.data;
   }
 
@@ -327,7 +396,9 @@ async function refreshAuthToken(): Promise<string | null> {
   });
   const token = extractToken(data);
   const nextRefreshToken = extractRefreshToken(data);
-  await writeRefreshToken(nextRefreshToken);
+  if (nextRefreshToken) {
+    await writeRefreshToken(nextRefreshToken);
+  }
   if (token) {
     setAuthToken(token);
   }
@@ -628,10 +699,15 @@ export async function fetchBootstrap(activeContextId?: string | null): Promise<B
 export async function login(email: string, password: string): Promise<void> {
   if (useMockBootstrap) return;
   try {
-    const { data } = await apiClient.post("/auth/login", {
-      email: email.trim(),
-      password,
-    });
+    const deviceHeaders = await buildAuthDeviceHeaders();
+    const { data } = await apiClient.post(
+      "/auth/login",
+      {
+        email: email.trim(),
+        password,
+      },
+      { headers: deviceHeaders }
+    );
     const token = extractToken(data);
     const refreshToken = extractRefreshToken(data);
     if (token) {
@@ -676,7 +752,8 @@ export async function switchContext(targetContextId: string): Promise<SwitchCont
 export async function logoutSession(): Promise<void> {
   if (useMockBootstrap) return;
   try {
-    await apiClient.post("/auth/logout");
+    const deviceHeaders = await buildAuthDeviceHeaders();
+    await apiClient.post("/auth/logout", undefined, { headers: deviceHeaders });
   } catch (error) {
     // Logout backend best-effort: on purge toujours localement côté session provider.
     throw toApiError(error);

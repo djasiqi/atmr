@@ -311,12 +311,232 @@ def _resolve_draft_invoice(
     return inv, None, None
 
 
+_ROUND_TRIP_PREVIEW_META_KEYS = frozenset(
+    {
+        "is_round_trip_leg",
+        "transport_type",
+        "preview_hide_merged_round_trip",
+        "round_trip_merge_partner_reservation_id",
+        "round_trip_merge_primary_reservation_id",
+    }
+)
+
+_ROUND_TRIP_SINGLE_MERGED_META_KEYS = frozenset(
+    {
+        "is_round_trip_leg",
+        "transport_type",
+        "billing_unit",
+        "booking_ids",
+        "round_trip_secondary_reservation_ids",
+        "round_trip_secondary_reservation_id",
+        "secondary_segment_descriptions",
+        "secondary_segment_description",
+        "merged_segment_count",
+        "service_date_end",
+        "service_date_iso_end",
+    }
+)
+
+
+def _line_meta_dict(line: InvoiceLine) -> dict[str, Any]:
+    meta = line.line_meta
+    return dict(meta) if isinstance(meta, dict) else {}
+
+
+def _clear_keys(meta: dict[str, Any], keys: frozenset[str]) -> None:
+    for k in keys:
+        meta.pop(k, None)
+
+
+def _find_ride_line_by_reservation_id(
+    inv: Invoice, reservation_id: int
+) -> InvoiceLine | None:
+    rid = int(reservation_id)
+    return next(
+        (
+            ln
+            for ln in inv.lines
+            if ln.type == InvoiceLineType.RIDE and ln.reservation_id == rid
+        ),
+        None,
+    )
+
+
+def _clear_round_trip_preview_meta_on_line(line: InvoiceLine) -> None:
+    meta = _line_meta_dict(line)
+    if not meta:
+        return
+    _clear_keys(meta, _ROUND_TRIP_PREVIEW_META_KEYS)
+    line.line_meta = meta or None
+
+
+def _unlink_round_trip_preview_partner(inv: Invoice, deleted_line: InvoiceLine) -> None:
+    """Retire les marqueurs A/R sur la ligne survivante (paire deux lignes)."""
+    meta = _line_meta_dict(deleted_line)
+    partner_rid = meta.get("round_trip_merge_partner_reservation_id")
+    primary_rid = meta.get("round_trip_merge_primary_reservation_id")
+    partner_line: InvoiceLine | None = None
+    if partner_rid is not None:
+        partner_line = _find_ride_line_by_reservation_id(inv, int(partner_rid))
+    elif primary_rid is not None:
+        partner_line = _find_ride_line_by_reservation_id(inv, int(primary_rid))
+    if partner_line is not None and partner_line.id != deleted_line.id:
+        _clear_round_trip_preview_meta_on_line(partner_line)
+
+
+def _resolve_round_trip_leg_line_to_delete(
+    inv: Invoice,
+    anchor_line: InvoiceLine,
+    *,
+    exclude_leg: str,
+) -> InvoiceLine | None:
+    """Paires A/R (deux lignes) : renvoie la ligne à supprimer pour conserver l'autre jambe."""
+    if exclude_leg not in ("outbound", "return"):
+        return None
+    meta = _line_meta_dict(anchor_line)
+    partner_rid = meta.get("round_trip_merge_partner_reservation_id")
+    primary_rid = meta.get("round_trip_merge_primary_reservation_id")
+    if partner_rid is not None:
+        partner_line = _find_ride_line_by_reservation_id(inv, int(partner_rid))
+        if partner_line is None:
+            return None
+        if exclude_leg == "return":
+            return partner_line
+        return anchor_line
+    if meta.get("preview_hide_merged_round_trip") and primary_rid is not None:
+        primary_line = _find_ride_line_by_reservation_id(inv, int(primary_rid))
+        if primary_line is None:
+            return None
+        if exclude_leg == "return":
+            return anchor_line
+        return primary_line
+    return None
+
+
+def _booking_segment_amount(b: Booking) -> Decimal:
+    for attr in ("amount", "estimated_amount", "cancellation_fee_amount"):
+        raw = getattr(b, attr, None)
+        if raw is None:
+            continue
+        try:
+            val = round_to_5_cents(Decimal(str(raw)))
+        except Exception:
+            continue
+        if val > Decimal("0"):
+            return val
+    return Decimal("0")
+
+
+def _split_single_merged_round_trip_line(
+    inv: Invoice,
+    line: InvoiceLine,
+    *,
+    keep_leg: str,
+    vat_applicable: bool,
+    vat_rate: Decimal,
+) -> bool:
+    """Ligne A/R fusionnée (une entrée) : ne facturer qu'une jambe, libérer l'autre réservation."""
+    if keep_leg not in ("outbound", "return"):
+        return False
+    meta = _line_meta_dict(line)
+    booking_ids_raw = meta.get("booking_ids")
+    if not isinstance(booking_ids_raw, list) or len(booking_ids_raw) < 2:
+        sec_ids: list[int] = []
+        sec_raw = meta.get("round_trip_secondary_reservation_ids")
+        if isinstance(sec_raw, list):
+            sec_ids = [int(x) for x in sec_raw if x is not None]
+        elif meta.get("round_trip_secondary_reservation_id") is not None:
+            sec_ids = [int(meta["round_trip_secondary_reservation_id"])]
+        elif meta.get("round_trip_merge_partner_reservation_id") is not None:
+            try:
+                sec_ids = [int(meta["round_trip_merge_partner_reservation_id"])]
+            except (TypeError, ValueError):
+                sec_ids = []
+        pri_rid = line.reservation_id
+        if pri_rid is None or not sec_ids:
+            return False
+        booking_ids = [int(pri_rid), *sec_ids]
+    else:
+        booking_ids = [int(x) for x in booking_ids_raw if x is not None]
+    if len(booking_ids) < 2:
+        return False
+
+    bookings = Booking.query.filter(Booking.id.in_(booking_ids)).all()
+    by_id = {int(b.id): b for b in bookings}
+    ordered = [by_id[i] for i in booking_ids if i in by_id]
+    if len(ordered) < 2:
+        return False
+    ordered.sort(
+        key=lambda b: (
+            getattr(b, "scheduled_time", None) or datetime.min.replace(tzinfo=UTC),
+            int(b.id),
+        )
+    )
+    outbound_b = ordered[0]
+    return_b = ordered[-1]
+    keep_booking = outbound_b if keep_leg == "outbound" else return_b
+    drop_bookings = [b for b in ordered if int(b.id) != int(keep_booking.id)]
+
+    keep_amount = _booking_segment_amount(keep_booking)
+    if keep_amount <= Decimal("0"):
+        combined = round_to_5_cents(Decimal(str(line.line_total or 0)))
+        keep_amount = round_to_5_cents(combined / Decimal(len(ordered)))
+
+    from application.invoices.invoice_line_description import (
+        build_invoice_line_description_clinic_monthly,
+    )
+    from infrastructure.invoices.invoice_description_builder import (
+        InvoiceDescriptionBuilder,
+    )
+
+    description_builder = InvoiceDescriptionBuilder()
+    new_desc = build_invoice_line_description_clinic_monthly(
+        keep_booking,
+        description_builder=description_builder,
+    )
+    st = getattr(keep_booking, "scheduled_time", None)
+    service_iso = st.date().isoformat() if st is not None and hasattr(st, "date") else None
+
+    calc = InvoiceCalculator()
+    line.description = (new_desc or line.description or "")[:500]
+    line.reservation_id = int(keep_booking.id)
+    line.qty = Decimal("1")
+    line.unit_price = keep_amount
+    line.line_total = keep_amount
+    if vat_applicable and vat_rate > Decimal("0"):
+        line.vat_rate = vat_rate
+        va, tw = calc.calculate_vat(keep_amount, vat_rate)
+        line.vat_amount = va
+        line.total_with_vat = tw
+    else:
+        line.vat_rate = None
+        line.vat_amount = Decimal("0.00")
+        line.total_with_vat = keep_amount
+
+    new_meta = _line_meta_dict(line)
+    _clear_keys(new_meta, _ROUND_TRIP_SINGLE_MERGED_META_KEYS)
+    _clear_keys(new_meta, _ROUND_TRIP_PREVIEW_META_KEYS)
+    if service_iso:
+        new_meta["service_date"] = service_iso
+        new_meta["service_date_iso"] = service_iso
+    line.line_meta = new_meta or None
+
+    keep_booking.invoice_line_id = line.id
+    keep_booking.updated_at = datetime.now(UTC)
+    for b in drop_bookings:
+        if getattr(b, "invoice_line_id", None) == line.id:
+            b.invoice_line_id = None
+            b.updated_at = datetime.now(UTC)
+    return True
+
+
 def remove_draft_invoice_line(
     company_id: int,
     invoice_id: int,
     line_id: int,
     *,
     expected_updated_at: str | None = None,
+    exclude_round_trip_leg: str | None = None,
 ) -> EditDraftResult:
     inv, err_code, err_msg = _resolve_draft_invoice(
         company_id, invoice_id, expected_updated_at=expected_updated_at
@@ -328,10 +548,11 @@ def remove_draft_invoice_line(
             status_code=err_code or 400,
         )
     logger.info(
-        "[draft_edit] remove_line invoice_id=%s line_id=%s company_id=%s",
+        "[draft_edit] remove_line invoice_id=%s line_id=%s company_id=%s exclude_leg=%s",
         invoice_id,
         line_id,
         company_id,
+        exclude_round_trip_leg,
     )
 
     line = next((ln for ln in inv.lines if ln.id == line_id), None)
@@ -339,6 +560,74 @@ def remove_draft_invoice_line(
         return EditDraftResult(
             False, error={"error": "Ligne introuvable"}, status_code=404
         )
+
+    leg = (
+        str(exclude_round_trip_leg).strip().lower()
+        if exclude_round_trip_leg is not None
+        else ""
+    )
+    if leg and leg not in ("outbound", "return"):
+        return EditDraftResult(
+            False,
+            error={"error": "exclude_round_trip_leg invalide (outbound ou return)."},
+            status_code=400,
+        )
+
+    if leg:
+        keep_leg = "return" if leg == "outbound" else "outbound"
+        target = _resolve_round_trip_leg_line_to_delete(
+            inv, line, exclude_leg=leg
+        )
+        if target is not None:
+            if target.id != line.id:
+                _clear_round_trip_preview_meta_on_line(line)
+            else:
+                meta_anchor = _line_meta_dict(line)
+                partner_rid = meta_anchor.get("round_trip_merge_partner_reservation_id")
+                primary_rid = meta_anchor.get("round_trip_merge_primary_reservation_id")
+                survivor_line: InvoiceLine | None = None
+                if partner_rid is not None:
+                    survivor_line = _find_ride_line_by_reservation_id(
+                        inv, int(partner_rid)
+                    )
+                elif primary_rid is not None:
+                    survivor_line = _find_ride_line_by_reservation_id(
+                        inv, int(primary_rid)
+                    )
+                if survivor_line is not None:
+                    _clear_round_trip_preview_meta_on_line(survivor_line)
+            line = target
+        else:
+            settings_repo = CompanyBillingSettingsRepository()
+            bset = settings_repo.find_or_create(company_id)
+            vat_rate = (
+                Decimal(str(bset.vat_rate))
+                if bset.vat_rate is not None
+                else Decimal("0.00")
+            )
+            vat_applicable = bool(bset.vat_applicable) and vat_rate > 0
+            if not _split_single_merged_round_trip_line(
+                inv,
+                line,
+                keep_leg=keep_leg,
+                vat_applicable=vat_applicable,
+                vat_rate=vat_rate,
+            ):
+                return EditDraftResult(
+                    False,
+                    error={
+                        "error": "Impossible d'exclure cette jambe du transport aller-retour.",
+                    },
+                    status_code=400,
+                )
+            db.session.flush()
+            db.session.expire(inv, ["lines"])
+            _recompute_totals_from_lines(inv)
+            _mark_pdf_stale(inv)
+            db.session.commit()
+            return EditDraftResult(True, invoice=inv)
+    else:
+        _unlink_round_trip_preview_partner(inv, line)
 
     if line.reservation_id:
         bk = Booking.query.get(line.reservation_id)

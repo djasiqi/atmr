@@ -172,22 +172,98 @@ def build_merged_round_trip_invoice_line_description_from_segments(
     return "Trajet aller-retour"
 
 
+def _capitalize_given_names(given: str) -> str:
+    given = given.strip()
+    if not given:
+        return given
+    out: list[str] = []
+    for part in given.split():
+        if "-" in part:
+            out.append("-".join(seg.capitalize() for seg in part.split("-")))
+        else:
+            out.append(part.capitalize())
+    return " ".join(out)
+
+
+def _format_family_name_token(token: str) -> str:
+    token = token.strip()
+    if not token:
+        return token
+    if "-" in token:
+        return "-".join(seg.upper() for seg in token.split("-"))
+    return token.upper()
+
+
+def _is_family_name_token(token: str) -> bool:
+    """Heuristique : token en majuscules (éventuellement hyphené) = nom de famille."""
+    t = (token or "").strip().rstrip(".")
+    if not t or len(t) < 2:
+        return False
+    if "-" in t:
+        return t.upper() == t
+    letters = [c for c in t if c.isalpha()]
+    return len(letters) >= 2 and t.upper() == t
+
+
+def format_patient_display_name_nom_prenom(raw: str | None) -> str:
+    """Format unifié facture clinique S2 : « NOM Prénom » (nom de famille en tête)."""
+    if raw is None:
+        return ""
+    s = " ".join(str(raw).split())
+    if not s:
+        return s
+    parts = s.split()
+    if len(parts) == 1:
+        return _format_family_name_token(parts[0])
+
+    if _is_family_name_token(parts[0]):
+        nom = _format_family_name_token(parts[0])
+        prenom = _capitalize_given_names(" ".join(parts[1:]))
+        return f"{nom} {prenom}".strip()
+
+    if _is_family_name_token(parts[-1]):
+        nom = _format_family_name_token(parts[-1])
+        prenom = _capitalize_given_names(" ".join(parts[:-1]))
+        return f"{nom} {prenom}".strip()
+
+    # Convention réservation : dernier token = nom de famille
+    nom = _format_family_name_token(parts[-1])
+    prenom = _capitalize_given_names(" ".join(parts[:-1]))
+    return f"{nom} {prenom}".strip()
+
+
+def resolve_s2_clinic_line_patient_name(
+    client: Any | None, reservation: Booking
+) -> str:
+    """Nom « Client : … » pour facture clinique S2 — format unifié « NOM Prénom »."""
+    if client and getattr(client, "is_institution", False):
+        cn = getattr(reservation, "customer_name", None)
+        if cn and str(cn).strip():
+            return format_patient_display_name_nom_prenom(str(cn).strip())
+    if client and getattr(client, "user", None):
+        first_name = (client.user.first_name or "").strip()
+        last_name = (client.user.last_name or "").strip()
+        if last_name and first_name:
+            return (
+                f"{_format_family_name_token(last_name)} "
+                f"{_capitalize_given_names(first_name)}"
+            ).strip()
+        if last_name:
+            return _format_family_name_token(last_name)
+        if first_name:
+            return _capitalize_given_names(first_name)
+        un = getattr(client.user, "username", None)
+        if un:
+            return str(un)
+    cn = getattr(reservation, "customer_name", None)
+    if cn and str(cn).strip():
+        return format_patient_display_name_nom_prenom(str(cn).strip())
+    cid = getattr(reservation, "client_id", None)
+    return f"Client #{cid}" if cid is not None else "Client"
+
+
 def patient_display_name_clinic_monthly(
     client: Any | None, reservation: Booking
 ) -> str:
     """Même logique que le cache patient dans GenerateClinicMonthlyInvoiceUseCase (aperçu / labels)."""
-    patient_name = ""
-    if client and client.user:
-        first_name = (client.user.first_name or "").strip()
-        last_name = (client.user.last_name or "").strip()
-        if last_name and first_name:
-            patient_name = f"{last_name.upper()} {first_name.capitalize()}".strip()
-        elif last_name:
-            patient_name = last_name.upper()
-        elif first_name:
-            patient_name = first_name.capitalize()
-        else:
-            patient_name = client.user.username or f"Client #{reservation.client_id}"
-    if not patient_name:
-        patient_name = f"Client #{reservation.client_id}"
-    return patient_name
+    return resolve_s2_clinic_line_patient_name(client, reservation)

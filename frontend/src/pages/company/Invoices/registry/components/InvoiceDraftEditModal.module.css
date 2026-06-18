@@ -307,6 +307,143 @@
   min-width: 0;
 }
 
+.lineEditorDescStack {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.lineEditorContext {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px 0;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--text-tertiary, #64748b);
+}
+
+.lineEditorContextPart {
+  white-space: nowrap;
+}
+
+.lineEditorContextSep {
+  flex: 0 0 auto;
+  padding: 0 0.55em;
+  color: #cbd5e1;
+  user-select: none;
+  line-height: 1;
+}
+
+.lineArTagInline {
+  font-weight: 650;
+  color: #1d4ed8;
+  white-space: nowrap;
+  padding-inline: 0.1em;
+}
+
+.lineArTagInlineReturn {
+  font-weight: 650;
+  color: #7c3aed;
+  white-space: nowrap;
+}
+
+.lineContextAction {
+  padding: 0 0.15em;
+  margin: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  color: var(--text-secondary, #475569);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  white-space: nowrap;
+}
+
+.lineContextAction:hover:not(:disabled) {
+  color: #b91c1c;
+}
+
+.lineContextAction:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.lineArBadge,
+.lineArBadgeReturn {
+  align-self: flex-start;
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.lineArBadge {
+  color: #1d4ed8;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+}
+
+.lineArBadgeReturn {
+  color: #7c3aed;
+  background: #f5f3ff;
+  border: 1px solid #ddd6fe;
+}
+
+.lineArPartnerHint {
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--text-tertiary, #64748b);
+  overflow-wrap: anywhere;
+}
+
+.rowRoundTripReturn {
+  background: rgba(124, 58, 237, 0.04);
+}
+
+.btnLegExclude {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+  padding: 0 6px;
+  border: 1px solid var(--border-primary, #e2e8f0);
+  border-radius: 6px;
+  background: var(--bg-primary, #fff);
+  color: var(--text-secondary, #475569);
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.btnLegExclude:hover:not(:disabled) {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #b91c1c;
+}
+
+.btnLegExclude:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.denseActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
 .denseDesc > .denseTextarea,
 .denseDesc > .denseStatic {
   flex: 1 1 auto;
@@ -406,13 +543,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 100%;
-}
-
-.denseActions {
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 4px;
 }
 
 .btnLineSave {
