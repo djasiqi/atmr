@@ -172,6 +172,8 @@ tmp-eas*.zip
 tmp-lirie*.apk
 tmp-preview.apk
 tmp-preview.zip
+# Dumps manifest bruts (contiennent souvent com.google.android.geo.API_KEY)
+mobile/unified-app/ops-readiness/evidence/**/manifest-dump.raw.txt
 backend/docs/openapi.baseline.json
 backend/docs/openapi.json
 api_logs_snapshot.txt

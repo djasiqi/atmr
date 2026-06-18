@@ -8,3 +8,5 @@ Outil: bundletool 1.17.2 (tools/bundletool.jar)
 [WARN] AudioControlsService / AudioRecordingService presents (expo.modules.audio) — hors scope App Links
 
 OK: audit manifest de base passe
+
+Note: manifest-dump.txt versionne une copie redigee (pas de cle API en clair). Ne jamais committer un dump brut aapt/bundletool.
