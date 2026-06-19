@@ -13,22 +13,25 @@ ROOT="${ATMR_DEPLOY_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 BASE="${ATMR_ENV_FILE:-${ROOT}/.env.production}"
 LOCAL="${ROOT}/.env.production.local"
 OUT="${ROOT}/.env.production.kafka-effective"
+TMP="${OUT}.$$"
 
 if [[ ! -f "${BASE}" ]]; then
   echo "Fichier manquant : ${BASE}" >&2
   exit 1
 fi
 
-cp "${BASE}" "${OUT}"
-chmod 600 "${OUT}"
+cp "${BASE}" "${TMP}"
+chmod 600 "${TMP}"
 
 if [[ -f "${LOCAL}" ]]; then
   {
     echo ""
     echo "# --- Surcharges Kafka depuis .env.production.local (kafka-env-effective.sh)"
     grep -E '^KAFKA_' "${LOCAL}" 2>/dev/null | grep -v '^[[:space:]]*#' || true
-  } >> "${OUT}"
+  } >> "${TMP}"
 fi
+
+mv -f "${TMP}" "${OUT}"
 
 if [[ "${1:-}" == "--path" ]]; then
   printf '%s\n' "${OUT}"

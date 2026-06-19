@@ -3,16 +3,38 @@
 # Logique partagée de création des topics Kafka (sourcée par kafka-init-topics*.sh).
 
 kafka_topics_read_env() {
-  KAFKA_DEFAULT_PARTITIONS="${KAFKA_DEFAULT_PARTITIONS:-6}"
-  KAFKA_DLQ_PARTITIONS="${KAFKA_DLQ_PARTITIONS:-3}"
-  KAFKA_SMOKE_PARTITIONS="${KAFKA_SMOKE_PARTITIONS:-1}"
-  KAFKA_CREATE_INACTIVE_TOPICS="${KAFKA_CREATE_INACTIVE_TOPICS:-false}"
+  _kt_env() {
+    local name="$1"
+    local default="$2"
+    # Variable déjà exportée dans le shell (prioritaire)
+    if [[ -n "${!name-}" ]]; then
+      printf '%s' "${!name}"
+      return
+    fi
+    local envf="${ATMR_ENV_FILE:-}"
+    if [[ -n "${envf}" ]] && [[ -f "${envf}" ]]; then
+      local v=""
+      v="$(grep -E "^${name}=" "${envf}" 2>/dev/null | tail -n1 | cut -d'=' -f2-)"
+      v="${v//\'/}"
+      v="${v//\"/}"
+      if [[ -n "${v}" ]]; then
+        printf '%s' "${v}"
+        return
+      fi
+    fi
+    printf '%s' "${default}"
+  }
 
-  KAFKA_TOPIC_DRIVER_LOCATION_RAW="${KAFKA_TOPIC_DRIVER_LOCATION_RAW:-driver.location.raw}"
-  KAFKA_TOPIC_DRIVER_LOCATION_PROCESSED="${KAFKA_TOPIC_DRIVER_LOCATION_PROCESSED:-driver.location.processed}"
-  KAFKA_TOPIC_DRIVER_LOCATION_DLQ="${KAFKA_TOPIC_DRIVER_LOCATION_DLQ:-driver.location.dlq}"
-  KAFKA_TOPIC_NOTIFICATIONS_DLQ="${KAFKA_TOPIC_NOTIFICATIONS_DLQ:-notifications.dlq}"
-  KAFKA_OPS_SMOKE_TOPIC="${KAFKA_OPS_SMOKE_TOPIC:-atmr.ops.smoke}"
+  KAFKA_DEFAULT_PARTITIONS="$(_kt_env KAFKA_DEFAULT_PARTITIONS 6)"
+  KAFKA_DLQ_PARTITIONS="$(_kt_env KAFKA_DLQ_PARTITIONS 3)"
+  KAFKA_SMOKE_PARTITIONS="$(_kt_env KAFKA_SMOKE_PARTITIONS 1)"
+  KAFKA_CREATE_INACTIVE_TOPICS="$(_kt_env KAFKA_CREATE_INACTIVE_TOPICS false)"
+
+  KAFKA_TOPIC_DRIVER_LOCATION_RAW="$(_kt_env KAFKA_TOPIC_DRIVER_LOCATION_RAW driver.location.raw)"
+  KAFKA_TOPIC_DRIVER_LOCATION_PROCESSED="$(_kt_env KAFKA_TOPIC_DRIVER_LOCATION_PROCESSED driver.location.processed)"
+  KAFKA_TOPIC_DRIVER_LOCATION_DLQ="$(_kt_env KAFKA_TOPIC_DRIVER_LOCATION_DLQ driver.location.dlq)"
+  KAFKA_TOPIC_NOTIFICATIONS_DLQ="$(_kt_env KAFKA_TOPIC_NOTIFICATIONS_DLQ notifications.dlq)"
+  KAFKA_OPS_SMOKE_TOPIC="$(_kt_env KAFKA_OPS_SMOKE_TOPIC atmr.ops.smoke)"
 }
 
 kafka_topics_create_all() {
