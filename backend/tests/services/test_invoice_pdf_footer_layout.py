@@ -30,6 +30,7 @@ from services.documents.pdf import (
     _measure_legal_footer_height_pt,
     _measure_table_chunk_pt,
     _paginate_table_no_orphan_totals,
+    _simulate_table_body_last_page_remaining_pt,
     _sum_flowables_height_pt,
 )
 
@@ -60,12 +61,19 @@ def _unique_pdf_users() -> tuple[User, User]:
 
 def _extract_text_from_pdf(pdf_content: bytes) -> str:
     try:
+        from pypdf import PdfReader
+
+        reader = PdfReader(BytesIO(pdf_content))
+        return "\n".join(p.extract_text() or "" for p in reader.pages)
+    except ImportError:
+        pass
+    try:
         from pdfminer.high_level import extract_text
         from pdfminer.layout import LAParams
 
         return extract_text(BytesIO(pdf_content), laparams=LAParams())
     except ImportError:
-        return pdf_content.decode("utf-8", errors="ignore")
+        return ""
 
 
 def _get_pdf_page_count(pdf_content: bytes) -> int:
@@ -97,8 +105,8 @@ def _page_has_orphan_totals(page_text: str) -> bool:
     )
     if not any(marker in page_text for marker in synthesis_markers):
         return False
-    # Une prestation affiche au moins une date de service (jj.mm.aaaa).
-    return not bool(re.search(r"\d{2}\.\d{2}\.\d{4}", page_text))
+    # Une prestation affiche au moins une date de service (jj.mm.aaaa, espaces tolérés).
+    return not bool(re.search(r"\d{2}\.\s*\d{2}\.\s*\d{4}", page_text))
 
 
 def _assert_no_orphan_totals_pages(pdf_bytes: bytes) -> None:
@@ -376,7 +384,7 @@ class TestInvoicePdfFooterLayout:
         ]
         assert synthesis_pages, "Bloc de synthèse introuvable"
         for idx in synthesis_pages:
-            assert re.search(r"\d{2}\.\d{2}\.\d{4}", pages[idx]), (
+            assert re.search(r"\d{2}\.\s*\d{2}\.\s*\d{4}", pages[idx]), (
                 f"Page {idx + 1} : synthèse sans date de prestation"
             )
 
@@ -411,20 +419,19 @@ class TestInvoicePdfFooterHelpers:
         rows = [["Date", "Montant"]]
         rows.extend([[f"2024-01-{i:02d}", f"{i * 10}.00"] for i in range(1, 16)])
         table = Table(rows, colWidths=[200, 80])
-        prefix_chunks, tail_table = _paginate_table_no_orphan_totals(
+        body_table, tail_table = _paginate_table_no_orphan_totals(
             table,
             avail_width_pt=280,
             first_page_avail_pt=120,
             later_pages_avail_pt=200,
             trailer_reserve_pt=60,
         )
-        assert prefix_chunks, "Des chunks préfixe sont attendus"
+        assert body_table is not None, "Un corps unique est attendu"
         assert tail_table is not None
-        tail_body = tail_table._cellvalues[1:]
+        tail_body = tail_table._cellvalues
         assert len(tail_body) >= 1, "STOP GATE PDF-TOTAL-01 : chunk terminal vide"
-        total_body = sum(len(c._cellvalues) - 1 for c in prefix_chunks) + len(
-            tail_body
-        )
+        prefix_body = body_table._cellvalues[1:]
+        total_body = len(prefix_body) + len(tail_body)
         assert total_body == 15
 
     def test_measure_closing_block_includes_tail_and_trailer(self):
@@ -470,7 +477,7 @@ class TestInvoicePdfFooterHelpers:
             Spacer(1, 12),
             Paragraph("TOTAL À FACTURER : 360.00 CHF", styles["Normal"]),
         ]
-        prefix_chunks, tail_table = _paginate_table_no_orphan_totals(
+        body_table, tail_table = _paginate_table_no_orphan_totals(
             table,
             avail_width_pt=390,
             first_page_avail_pt=200,
@@ -479,7 +486,7 @@ class TestInvoicePdfFooterHelpers:
             post_table_flowables=post,
         )
         assert tail_table is not None
-        tail_body = tail_table._cellvalues[1:]
+        tail_body = tail_table._cellvalues
         assert len(tail_body) == 1, (
             "Le groupe terminal ne doit contenir que le dernier transport"
         )
@@ -487,8 +494,9 @@ class TestInvoicePdfFooterHelpers:
         assert closing_h <= 220 + 12, (
             "Le groupe terminal doit tenir sur une page utile (transport + synthèse)"
         )
-        if prefix_chunks:
-            last_desc = str(prefix_chunks[-1]._cellvalues[-1][1])
+        if body_table is not None:
+            prefix_body = body_table._cellvalues[1:]
+            last_desc = str(prefix_body[-1][1])
             last_tail_desc = str(tail_body[-1][1])
             assert last_desc != last_tail_desc, (
                 "Seul le dernier transport accompagne la synthèse"
@@ -510,7 +518,7 @@ class TestInvoicePdfFooterHelpers:
             Spacer(1, 12),
             Paragraph("TOTAL À FACTURER : 360.00 CHF", styles["Normal"]),
         ]
-        prefix_chunks, tail_table = _paginate_table_no_orphan_totals(
+        body_table, tail_table = _paginate_table_no_orphan_totals(
             table,
             avail_width_pt=390,
             first_page_avail_pt=200,
@@ -519,14 +527,13 @@ class TestInvoicePdfFooterHelpers:
             post_table_flowables=post,
         )
         assert tail_table is not None
-        tail_body = tail_table._cellvalues[1:]
+        tail_body = tail_table._cellvalues
         assert len(tail_body) == 1
         closing_h = _measure_closing_block_pt(table, tail_body, post, 390)
         assert closing_h <= 220 + 12
-        if prefix_chunks:
-            assert str(prefix_chunks[-1]._cellvalues[-1][1]) != str(
-                tail_body[-1][1]
-            )
+        if body_table is not None:
+            prefix_body = body_table._cellvalues[1:]
+            assert str(prefix_body[-1][1]) != str(tail_body[-1][1])
 
     def test_paginate_case2_never_totals_without_transport(self):
         """Cas 2 interdit : synthèse seule sur une page (vérification structurelle)."""
@@ -544,7 +551,7 @@ class TestInvoicePdfFooterHelpers:
             Spacer(1, 12),
             Paragraph("TOTAL À FACTURER : 360.00 CHF", styles["Normal"]),
         ]
-        prefix_chunks, tail_table = _paginate_table_no_orphan_totals(
+        body_table, tail_table = _paginate_table_no_orphan_totals(
             table,
             avail_width_pt=390,
             first_page_avail_pt=120,
@@ -553,10 +560,26 @@ class TestInvoicePdfFooterHelpers:
             post_table_flowables=post,
         )
         assert tail_table is not None
-        tail_rows = len(tail_table._cellvalues) - 1
+        tail_rows = len(tail_table._cellvalues)
         assert tail_rows == 1, "Un seul transport doit accompagner la synthèse"
-        tail_body = tail_table._cellvalues[1:]
+        tail_body = tail_table._cellvalues
         assert _measure_closing_block_pt(table, tail_body, post, 390) <= 160 + 12
+
+    def test_simulate_last_page_remaining_pt(self):
+        from reportlab.platypus import Table
+
+        rows = [["Date", "Montant"]]
+        rows.extend([[f"2024-01-{i:02d}", f"{i * 10}.00"] for i in range(1, 6)])
+        table = Table(rows, colWidths=[200, 80])
+        body_rows = table._cellvalues[1:]
+        remaining = _simulate_table_body_last_page_remaining_pt(
+            table,
+            body_rows,
+            avail_width_pt=280,
+            first_page_avail_pt=120,
+            later_pages_avail_pt=200,
+        )
+        assert remaining >= 0.0
 
     def test_clone_table_chunk_preserves_header(self):
         from reportlab.platypus import Table

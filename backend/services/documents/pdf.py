@@ -582,13 +582,29 @@ def _invoice_frame_height_pt(
 def _clone_table_chunk(
     source_table: Any,
     body_rows: list[Any],
+    *,
+    include_header: bool = True,
 ) -> Any:
-    """Sous-tableau (en-tête + lignes corps) avec mêmes colonnes / style que la source."""
+    """Sous-tableau avec mêmes colonnes / style que la source.
+
+    ``include_header=False`` pour le groupe de clôture (évite doublon d'en-tête
+    lorsque le corps principal utilise déjà ``repeatRows=1``).
+    """
     from reportlab.platypus import Table
 
-    header = source_table._cellvalues[0]
-    chunk_data = [header, *body_rows]
-    tbl = Table(chunk_data, colWidths=source_table._colWidths, repeatRows=1)
+    if include_header:
+        header = source_table._cellvalues[0]
+        chunk_data = [header, *body_rows]
+        repeat_rows = 1
+    else:
+        chunk_data = list(body_rows)
+        repeat_rows = 0
+    tbl = Table(
+        chunk_data,
+        colWidths=source_table._colWidths,
+        repeatRows=repeat_rows,
+        splitInRow=0,
+    )
     style = getattr(source_table, "_style", None)
     if style:
         tbl.setStyle(style)
@@ -607,40 +623,38 @@ def _measure_table_chunk_pt(
     )
 
 
-def _paginate_table_body_prefix(
+def _closing_tail_body_rows(tail_table: Any) -> list[Any]:
+    """Lignes corps du tableau terminal (sans ligne d'en-tête dupliquée)."""
+    return list(tail_table._cellvalues)
+
+
+def _simulate_table_body_last_page_remaining_pt(
     source_table: Any,
-    prefix_rows: list[Any],
+    body_rows: list[Any],
     *,
     avail_width_pt: float,
     first_page_avail_pt: float,
     later_pages_avail_pt: float,
-) -> list[Any]:
-    """Découpe les lignes « préfixe » sur plusieurs pages (sans bloc synthèse)."""
-    if not prefix_rows:
-        return []
-    chunks: list[Any] = []
-    current: list[Any] = []
+) -> float:
+    """Simule la pagination row-by-row ; retourne l'espace restant sur la dernière page."""
+    if not body_rows:
+        return float(first_page_avail_pt)
     page_idx = 0
-    min_row_height_pt = 18.0
-
-    for row in prefix_rows:
+    current: list[Any] = []
+    for row in body_rows:
         avail = first_page_avail_pt if page_idx == 0 else later_pages_avail_pt
         trial = current + [row]
         trial_h = _measure_table_chunk_pt(source_table, trial, avail_width_pt)
         if trial_h <= avail or not current:
             current.append(row)
             continue
-        chunks.append(_clone_table_chunk(source_table, current))
-        current = [row]
         page_idx += 1
-        if _measure_table_chunk_pt(source_table, current, avail_width_pt) > avail:
-            chunks.append(_clone_table_chunk(source_table, current))
-            current = []
-            page_idx += 1
-
-    if current:
-        chunks.append(_clone_table_chunk(source_table, current))
-    return chunks
+        current = [row]
+    avail = first_page_avail_pt if page_idx == 0 else later_pages_avail_pt
+    if not current:
+        return float(avail)
+    used_h = _measure_table_chunk_pt(source_table, current, avail_width_pt)
+    return max(float(avail) - used_h, 0.0)
 
 
 def _paginate_table_no_orphan_totals(
@@ -652,22 +666,22 @@ def _paginate_table_no_orphan_totals(
     trailer_reserve_pt: float,
     post_table_flowables: list[Any] | None = None,
     safety_margin_pt: float = PDF_TOTAL_SAFETY_MARGIN_PT,
-) -> tuple[list[Any], Any | None]:
-    """Découpe le tableau : pages préfixe + chunk terminal (exactement 1 prestation).
+) -> tuple[Any | None, Any | None]:
+    """Découpe le tableau : corps unique (``repeatRows=1``) + chunk terminal clôture.
 
-    Le chunk terminal contient uniquement le **dernier** transport, placé via
-    ``KeepTogether`` avec le bloc synthèse (légende [A/R], totaux).
-    La hauteur requise inclut ce transport + synthèse — pas la synthèse seule
-    (STOP GATE PDF-TOTAL-01). Un ``PageBreak`` explicite sépare préfixe et clôture
-    lorsque les deux ne tiennent pas sur la même page.
+    Le corps est un **seul** ``Table`` ReportLab (plus de chunks mid-page).
+    Le chunk terminal contient le **dernier** transport (± lignes déplacées),
+    placé via ``KeepTogether`` avec le bloc synthèse (légende [A/R], totaux).
+    STOP GATE PDF-TOTAL-01 : la hauteur du ``closing_group`` est réservée avant
+    de laisser l'avant-dernier transport seul en bas de page.
     """
     body_rows = list(source_table._cellvalues[1:])
     if not body_rows:
-        return [], None
+        return None, None
 
     min_tail = min(max(PDF_TOTAL_ORPHAN_MIN_ROWS, 1), len(body_rows))
-    prefix_rows = body_rows[:-min_tail]
-    tail_rows = body_rows[-min_tail:]
+    prefix_rows = list(body_rows[:-min_tail])
+    tail_rows = list(body_rows[-min_tail:])
 
     def required_closing_pt(rows: list[Any]) -> float:
         return _closing_block_required_pt(
@@ -680,19 +694,21 @@ def _paginate_table_no_orphan_totals(
         )
 
     # Le groupe terminal (≥1 transport + synthèse) doit tenir seul sur une page utile.
-    while len(tail_rows) > min_tail and required_closing_pt(tail_rows) > later_pages_avail_pt + 0.5:
+    while (
+        len(tail_rows) > min_tail
+        and required_closing_pt(tail_rows) > later_pages_avail_pt + 0.5
+    ):
         prefix_rows.append(tail_rows.pop(0))
 
-    prefix_chunks = _paginate_table_body_prefix(
-        source_table,
-        prefix_rows,
-        avail_width_pt=avail_width_pt,
-        first_page_avail_pt=first_page_avail_pt,
-        later_pages_avail_pt=later_pages_avail_pt,
+    body_table = (
+        _clone_table_chunk(source_table, prefix_rows) if prefix_rows else None
     )
-
-    tail_table = _clone_table_chunk(source_table, tail_rows) if tail_rows else None
-    return prefix_chunks, tail_table
+    tail_table = (
+        _clone_table_chunk(source_table, tail_rows, include_header=False)
+        if tail_rows
+        else None
+    )
+    return body_table, tail_table
 
 
 def _append_paginated_detail_table_with_tail(
@@ -719,7 +735,7 @@ def _append_paginated_detail_table_with_tail(
     )
     first_table_avail = max(frame_first - pre_table_height_pt, 24.0)
     trailer_reserve = _sum_flowables_height_pt(post_table_flowables, usable_width_pt)
-    prefix_chunks, tail_table = _paginate_table_no_orphan_totals(
+    body_table, tail_table = _paginate_table_no_orphan_totals(
         s2_table,
         avail_width_pt=usable_width_pt,
         first_page_avail_pt=first_table_avail,
@@ -727,21 +743,25 @@ def _append_paginated_detail_table_with_tail(
         trailer_reserve_pt=trailer_reserve,
         post_table_flowables=post_table_flowables,
     )
-    for chunk in prefix_chunks:
-        story.append(chunk)
+    if body_table is not None:
+        story.append(body_table)
     if tail_table is not None:
         from reportlab.platypus import KeepTogether, PageBreak
 
         closing_group = KeepTogether([tail_table, *post_table_flowables])
-        tail_body = list(tail_table._cellvalues[1:])
+        tail_body = _closing_tail_body_rows(tail_table)
         closing_h = _measure_closing_block_pt(
             s2_table, tail_body, post_table_flowables, usable_width_pt
         )
-        if prefix_chunks:
-            page_idx = len(prefix_chunks) - 1
-            avail = first_table_avail if page_idx == 0 else frame_later
-            prefix_h = _flowable_height_pt(prefix_chunks[-1], usable_width_pt)
-            remaining = max(avail - prefix_h, 0.0)
+        if body_table is not None:
+            prefix_body_rows = list(body_table._cellvalues[1:])
+            remaining = _simulate_table_body_last_page_remaining_pt(
+                s2_table,
+                prefix_body_rows,
+                avail_width_pt=usable_width_pt,
+                first_page_avail_pt=first_table_avail,
+                later_pages_avail_pt=frame_later,
+            )
         else:
             remaining = first_table_avail
         if closing_h > remaining + PDF_TOTAL_SAFETY_MARGIN_PT:
@@ -2790,6 +2810,7 @@ def _pdf_show_ar_legend(
     invoice: Any,
     consolidated: list[dict[str, Any]],
     bookings_by_id: dict[int, Any] | None = None,
+    enriched_by_line_id: dict[int, dict[str, Any]] | None = None,
 ) -> bool:
     """Légende [A/R] : uniquement si une ligne du tableau affiche réellement ``[A/R]``.
 
@@ -2797,8 +2818,9 @@ def _pdf_show_ar_legend(
     (sans réservation résolue dans ``bookings_by_id``) avec ``round_trip_merge_partner_*``.
     Pas de légende sur aller simple sans ces indicateurs.
     """
+    enriched = enriched_by_line_id or {}
     for item in consolidated:
-        if _consolidated_item_shows_ar_tag_pdf(item):
+        if _consolidated_item_shows_ar_tag_pdf(item, enriched):
             return True
     bb = bookings_by_id or {}
     for ln in getattr(invoice, "lines", []) or []:
@@ -2810,7 +2832,7 @@ def _pdf_show_ar_legend(
         rid = getattr(ln, "reservation_id", None)
         if rid is not None and bb.get(int(rid)):
             continue
-        lm = getattr(ln, "line_meta", None)
+        lm = _resolve_invoice_line_meta(ln, enriched)
         if not isinstance(lm, dict):
             continue
         if lm.get("preview_hide_merged_round_trip") is True:
@@ -2837,20 +2859,22 @@ def _consolidated_item_indicates_round_trip_tag(item: dict[str, Any]) -> bool:
     )
 
 
-def _consolidated_item_shows_ar_tag_pdf(item: dict[str, Any]) -> bool:
-    """Une ligne PDF doit afficher [A/R] : consolidation réelle OU métier alignée HTML (merge partenaire).
+def _consolidated_item_shows_ar_tag_pdf(
+    item: dict[str, Any],
+    enriched_by_line_id: dict[int, dict[str, Any]] | None = None,
+) -> bool:
+    """Une ligne PDF doit afficher [A/R] : statut métier round_trip (indépendant du montant).
 
     Ignore les lignes ``preview_hide_merged_round_trip`` (non rendues comme les lignes masquées HTML).
     """
     if _consolidated_item_indicates_round_trip_tag(item):
         return True
+    enriched = enriched_by_line_id or {}
     for key in ("line1", "line2", "line"):
         ln = item.get(key)
         if ln is None:
             continue
-        lm = getattr(ln, "line_meta", None)
-        if not isinstance(lm, dict):
-            continue
+        lm = _resolve_invoice_line_meta(ln, enriched)
         if lm.get("preview_hide_merged_round_trip") is True:
             continue
         if lm.get("round_trip_merge_partner_reservation_id") is not None:
@@ -3124,6 +3148,80 @@ def _pdf_format_transport_detail_inner_wrapped(
             return "<br/>".join(_xml_escape_for_paragraph(x) for x in chunk)
     lines = _wrap_line_by_width(f"Trajet : {s}", font_name, fs, desc_inner_pt)
     return "<br/>".join(_xml_escape_for_paragraph(x) for x in lines)
+
+
+def _pdf_s2_full_address_transport_text(
+    item: dict[str, Any],
+    *,
+    font_name: str,
+    desc_inner_pt: float,
+    is_ar: bool,
+    is_ride_line: bool,
+    is_material_delivery: bool,
+) -> str:
+    """Rendu PDF S2 clinique : adresses complètes source, max 2 lignes visibles.
+
+    Les adresses pickup/dropoff restent intégrales en source ; le PDF peut tronquer
+    la destination si la limite de 2 lignes est atteinte. ``[A/R]`` toujours préservé.
+    """
+    pickup = str(item.get("pickup") or "").strip()
+    dropoff = str(item.get("dropoff") or "").strip()
+    if pickup and dropoff:
+        raw = f"{pickup} → {dropoff}"
+    else:
+        line_desc = _line_description_from_consolidated_item(item)
+        raw = line_desc or str(item.get("transport_display") or "").strip()
+    ar_suffix_html = _pdf_s2_ar_tag_markup() if is_ar else None
+    html = _pdf_format_transport_detail_inner_wrapped(
+        raw,
+        font_name=font_name,
+        desc_inner_pt=desc_inner_pt,
+        is_ride_line=is_ride_line,
+        is_material_delivery=is_material_delivery,
+        force_balanced_two_lines=True,
+        inline_suffix_text="[A/R]" if is_ar else None,
+        inline_suffix_html=ar_suffix_html if is_ar else None,
+    )
+    return _pdf_limit_html_br_lines(html, 2)
+
+
+def _pdf_s2_orphan_line_transport_text(
+    line: Any,
+    *,
+    font_name: str,
+    desc_inner_pt: float,
+    is_ar: bool,
+    is_ride_line: bool,
+    is_material_delivery: bool,
+    enriched_by_line_id: dict[int, dict[str, Any]],
+) -> str:
+    """Rendu PDF S2 pour ligne orpheline (sans booking résolu)."""
+    raw_desc = (getattr(line, "description", None) or "")[:500].strip()
+    if is_ride_line and raw_desc:
+        return _pdf_s2_full_address_transport_text(
+            {"pickup": "", "dropoff": "", "line": line, "transport_display": raw_desc},
+            font_name=font_name,
+            desc_inner_pt=desc_inner_pt,
+            is_ar=is_ar,
+            is_ride_line=True,
+            is_material_delivery=False,
+        )
+    if is_material_delivery and raw_desc:
+        html = _pdf_format_transport_detail_inner_wrapped(
+            raw_desc,
+            font_name=font_name,
+            desc_inner_pt=desc_inner_pt,
+            is_ride_line=False,
+            is_material_delivery=True,
+            force_balanced_two_lines=True,
+        )
+        if is_ar:
+            html = f"{html}&nbsp;{_pdf_s2_ar_tag_markup()}"
+        return _pdf_limit_html_br_lines(html, 2)
+    esc = _pdf_escape_wrapped_plain(raw_desc, font_name, desc_inner_pt)
+    if is_ar:
+        esc = f"{esc}&nbsp;{_pdf_s2_ar_tag_markup()}"
+    return _pdf_limit_html_br_lines(esc, 2)
 
 
 def _resolve_invoice_line_meta(
@@ -3513,6 +3611,7 @@ def _build_s2_table(
     else:
         _desc_w_for_wrap = float(12 * cm if show_date_column else 13 * cm)
     desc_inner_pt = max(_desc_w_for_wrap - _s2_desc_hpad_pt, 60.0)
+    _max_desc_lines = max_simple_description_lines if max_simple_description_lines else 2
 
     table_data = [_header_row]
     s2_patient_separator_after_rows: list[int] = []
@@ -3550,7 +3649,7 @@ def _build_s2_table(
                 f'<br/><font size="{int(FONT_SECONDARY)}" color="#6b7280">'
                 f"<i>{esc_n}</i></font>"
             )
-        is_ar = _consolidated_item_shows_ar_tag_pdf(item)
+        is_ar = _consolidated_item_shows_ar_tag_pdf(item, enriched_by_line_id)
         is_ride_td = _consolidated_item_is_ride_transport(item)
         is_material_td = _consolidated_item_is_material_delivery(item)
         disc_suffix = ""
@@ -3563,7 +3662,23 @@ def _build_s2_table(
                 cat_disp, net_disp, compact_private_sub=True
             )
         line_desc_opt = _line_description_from_consolidated_item(item)
-        if is_ar:
+        if is_s2_invoice and is_ride_td:
+            transport_html = _pdf_s2_full_address_transport_text(
+                item,
+                font_name=font_name,
+                desc_inner_pt=desc_inner_pt,
+                is_ar=is_ar,
+                is_ride_line=True,
+                is_material_delivery=False,
+            )
+            inner_html = f"{transport_html}{disc_suffix}{note_suffix}"
+            amount_cell = _pdf_s2_amount_only_paragraph(
+                net_disp,
+                s2_main_style,
+                is_round_trip=False,
+                ht_column_plain=True,
+            )
+        elif is_ar:
             ar_suffix_html = _pdf_s2_ar_tag_markup()
             if line_desc_opt:
                 if max_simple_description_lines == 2 and (
@@ -3580,7 +3695,7 @@ def _build_s2_table(
                         inline_suffix_html=ar_suffix_html,
                     )
                     esc_desc = _pdf_limit_html_br_lines(
-                        esc_desc, max_simple_description_lines
+                        esc_desc, _max_desc_lines
                     )
                     inner_html = f"{esc_desc}{disc_suffix}{note_suffix}"
                 else:
@@ -3588,7 +3703,7 @@ def _build_s2_table(
                         line_desc_opt, font_name, desc_inner_pt
                     )
                     esc_desc = _pdf_limit_html_br_lines(
-                        esc_desc, max_simple_description_lines
+                        esc_desc, _max_desc_lines
                     )
                     inner_html = (
                         f"{esc_desc}&nbsp;{ar_suffix_html}{disc_suffix}{note_suffix}"
@@ -3600,18 +3715,18 @@ def _build_s2_table(
                     desc_inner_pt=desc_inner_pt,
                     is_ride_line=is_ride_td,
                     is_material_delivery=is_material_td,
-                    force_balanced_two_lines=max_simple_description_lines == 2,
+                    force_balanced_two_lines=_max_desc_lines == 2,
                     inline_suffix_text="[A/R]"
-                    if max_simple_description_lines == 2
+                    if _max_desc_lines == 2
                     else None,
                     inline_suffix_html=ar_suffix_html
-                    if max_simple_description_lines == 2
+                    if _max_desc_lines == 2
                     else None,
                 )
                 body_tr = _pdf_limit_html_br_lines(
-                    body_tr, max_simple_description_lines
+                    body_tr, _max_desc_lines
                 )
-                if max_simple_description_lines == 2:
+                if _max_desc_lines == 2:
                     inner_html = f"{body_tr}{disc_suffix}{note_suffix}"
                 else:
                     inner_html = (
@@ -3763,6 +3878,7 @@ def _build_s2_table(
             if amt == 0:
                 continue
             cat_or, net_or = _line_catalog_vs_net_ht(line)
+            lm_or = _resolve_invoice_line_meta(line, enriched_by_line_id)
             partner_rid_or = lm_or.get("round_trip_merge_partner_reservation_id")
             if partner_rid_or is not None and lm_or.get("preview_hide_merged_round_trip") is not True:
                 merged_ht = _pdf_merged_ht_for_ar_primary(
@@ -3781,39 +3897,54 @@ def _build_s2_table(
                 disc_or = _pdf_s2_per_line_discount_suffix_html(
                     cat_or, net_or, compact_private_sub=True
                 )
-            raw_desc_orphan = (line.description or "")[:500]
-            if (
-                line.type == InvoiceLineType.MATERIAL_DELIVERY
-                and raw_desc_orphan.strip()
-            ):
-                esc_d = _pdf_format_transport_detail_inner_wrapped(
-                    raw_desc_orphan,
-                    font_name=font_name,
-                    desc_inner_pt=desc_inner_pt,
-                    is_ride_line=False,
-                    is_material_delivery=True,
-                )
-            elif line.type == InvoiceLineType.RIDE and raw_desc_orphan.strip():
-                esc_d = _pdf_format_transport_detail_inner_wrapped(
-                    raw_desc_orphan,
-                    font_name=font_name,
-                    desc_inner_pt=desc_inner_pt,
-                    is_ride_line=True,
-                    is_material_delivery=False,
-                    force_balanced_two_lines=max_simple_description_lines == 2,
-                )
-            else:
-                esc_d = _pdf_escape_wrapped_plain(
-                    raw_desc_orphan, font_name, desc_inner_pt
-                )
-            lm_or = _resolve_invoice_line_meta(line, enriched_by_line_id)
             orphan_ar = (
                 lm_or.get("round_trip_merge_partner_reservation_id") is not None
                 and lm_or.get("preview_hide_merged_round_trip") is not True
             ) or lm_or.get("billing_unit") == "round_trip"
-            ar_suffix = ""
-            if orphan_ar:
-                ar_suffix = f" {_pdf_s2_ar_tag_markup()}"
+            if is_s2_invoice and line.type == InvoiceLineType.RIDE:
+                esc_d = _pdf_s2_orphan_line_transport_text(
+                    line,
+                    font_name=font_name,
+                    desc_inner_pt=desc_inner_pt,
+                    is_ar=orphan_ar,
+                    is_ride_line=True,
+                    is_material_delivery=False,
+                    enriched_by_line_id=enriched_by_line_id,
+                )
+            elif (
+                line.type == InvoiceLineType.MATERIAL_DELIVERY
+                and (line.description or "").strip()
+            ):
+                esc_d = _pdf_format_transport_detail_inner_wrapped(
+                    (line.description or "")[:500],
+                    font_name=font_name,
+                    desc_inner_pt=desc_inner_pt,
+                    is_ride_line=False,
+                    is_material_delivery=True,
+                    force_balanced_two_lines=_max_desc_lines == 2,
+                )
+                if orphan_ar:
+                    esc_d = f"{esc_d}&nbsp;{_pdf_s2_ar_tag_markup()}"
+                esc_d = _pdf_limit_html_br_lines(esc_d, _max_desc_lines)
+            elif line.type == InvoiceLineType.RIDE and (line.description or "").strip():
+                esc_d = _pdf_format_transport_detail_inner_wrapped(
+                    (line.description or "")[:500],
+                    font_name=font_name,
+                    desc_inner_pt=desc_inner_pt,
+                    is_ride_line=True,
+                    is_material_delivery=False,
+                    force_balanced_two_lines=_max_desc_lines == 2,
+                )
+                if orphan_ar:
+                    esc_d = f"{esc_d}&nbsp;{_pdf_s2_ar_tag_markup()}"
+                esc_d = _pdf_limit_html_br_lines(esc_d, _max_desc_lines)
+            else:
+                esc_d = _pdf_escape_wrapped_plain(
+                    (line.description or "")[:500], font_name, desc_inner_pt
+                )
+                if orphan_ar:
+                    esc_d = f"{esc_d}&nbsp;{_pdf_s2_ar_tag_markup()}"
+                esc_d = _pdf_limit_html_br_lines(esc_d, _max_desc_lines)
             orphan_pn_prefix = ""
             if is_third_party_invoice or is_s2_invoice:
                 raw_pn = lm_or.get("patient_name")
@@ -3827,9 +3958,7 @@ def _build_s2_table(
                         f'<font size="{int(FONT_SECONDARY)}" color="#475569">Client : '
                         f"{_xml_escape_for_paragraph(pn_disp)}</font><br/>"
                     )
-            orphan_inner_html = _pdf_limit_html_br_lines(
-                f"{esc_d}{ar_suffix}{disc_or}", max_simple_description_lines
-            )
+            orphan_inner_html = f"{esc_d}{disc_or}"
             desc_cell = Paragraph(
                 f"{orphan_pn_prefix}{orphan_inner_html}", s2_main_style
             )
@@ -3864,7 +3993,7 @@ def _build_s2_table(
             desc_w = 13 * cm
             col_widths = [desc_w, amount_w]
 
-    tbl = Table(table_data, colWidths=col_widths, repeatRows=1)
+    tbl = Table(table_data, colWidths=col_widths, repeatRows=1, splitInRow=0)
     _hdr_bg = colors.HexColor("#f8fafc")
     _row_sep = colors.HexColor("#f1f5f9")
     # Aligné InvoiceLivePreview : th padding 8px 10px ; date / desc resserrés (.colDate + td).
@@ -5954,6 +6083,9 @@ class PDFService:
             available_width_pt=usable_width_pt,
             max_simple_description_lines=2,
         )
+        enriched_line_meta = _build_enriched_line_meta_by_line_id(
+            invoice, bookings_by_id
+        )
         app_logger.info(
             "[PDF_PERF] _build_s2_table_ms=%s invoice_id=%s",
             int((perf_counter() - _perf_s2_start) * 1000),
@@ -6027,7 +6159,9 @@ class PDFService:
         )
 
         post_table_flowables: list[Any] = []
-        if _pdf_show_ar_legend(invoice, consolidated_lines, bookings_by_id):
+        if _pdf_show_ar_legend(
+            invoice, consolidated_lines, bookings_by_id, enriched_line_meta
+        ):
             note_para = Paragraph(
                 f'<font size="{FONT_SECONDARY}" color="{COLOR_MUTED_PDF}">'
                 f"[A/R] = transport aller-retour</font>",
@@ -7346,7 +7480,10 @@ class PDFService:
             bookings_by_id,
             include_non_ride=True,
             available_width_pt=usable_width_pt,
-            max_simple_description_lines=None,
+            max_simple_description_lines=2,
+        )
+        enriched_line_meta_d = _build_enriched_line_meta_by_line_id(
+            invoice, bookings_by_id
         )
         app_logger.info(
             "[PDF_PERF] _build_s2_table_ms=%s invoice_id=%s",
@@ -7421,7 +7558,9 @@ class PDFService:
         )
 
         post_table_flowables_d: list[Any] = []
-        if _pdf_show_ar_legend(invoice, consolidated_lines, bookings_by_id):
+        if _pdf_show_ar_legend(
+            invoice, consolidated_lines, bookings_by_id, enriched_line_meta_d
+        ):
             note_para = Paragraph(
                 f'<font size="{FONT_SECONDARY}" color="{COLOR_MUTED_PDF}">'
                 f"[A/R] = transport aller-retour</font>",

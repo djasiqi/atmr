@@ -85,3 +85,17 @@ def test_pdf_preconsolidated_merges_partner_amounts(monkeypatch):
     assert pre[0]["is_round_trip"] is True
     assert float(pre[0]["amount"]) == 160.0
     assert used == {10, 11}
+
+
+def test_consolidated_ar_tag_independent_of_line_total():
+    """[A/R] ne dépend pas du montant affiché."""
+    from services.documents.pdf import _consolidated_item_shows_ar_tag_pdf
+
+    for amount in (80.0, 90.0, 120.0):
+        line = SimpleNamespace(
+            id=42,
+            line_meta={"billing_unit": "round_trip"},
+        )
+        enriched = {42: {"billing_unit": "round_trip"}}
+        item = {"line": line, "amount": amount}
+        assert _consolidated_item_shows_ar_tag_pdf(item, enriched) is True
