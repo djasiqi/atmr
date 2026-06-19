@@ -166,9 +166,9 @@ export function DriverStateBanners() {
       {pushRegistrationState === "disclosure_required" ? (
         <Banner
           title="Notifications"
-          message="Activez les notifications pour recevoir vos missions."
+          message="Confirmez l'utilisation des notifications pour recevoir vos missions."
           tone="warn"
-          actionLabel="Configurer"
+          actionLabel="Continuer"
           onAction={() => requestNotificationDisclosure()}
         />
       ) : null}

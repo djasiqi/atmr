@@ -10,6 +10,7 @@ import { useEffect } from "../reactCompat";
 import { getExpoNotificationsModule } from "./expoNotificationsCompat";
 import { getStableDeviceId } from "./getStableDeviceId";
 import {
+  ensureNotificationDisclosureSyncedWithOsPermission,
   readNotificationDisclosureAccepted,
   subscribeNotificationDisclosureAccepted,
 } from "./notificationDisclosurePersistence";
@@ -77,6 +78,7 @@ async function registerPushTokenWithPersistence(
 }
 
 async function hasAcceptedNotificationDisclosure(telemetrySource: string): Promise<boolean> {
+  await ensureNotificationDisclosureSyncedWithOsPermission();
   const disclosureAccepted = await readNotificationDisclosureAccepted();
   if (!disclosureAccepted) {
     emitDriverTelemetry("push.token.disclosure_required", {

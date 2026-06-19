@@ -100,6 +100,21 @@ describe("missionLiveTrackingEligibility", () => {
     expect(result.foregroundServiceRunning).toBe(false);
   });
 
+  it("evaluateMissionTrackingCapability — status granted sans boolean granted", async () => {
+    Platform.OS = "android";
+    Location.getForegroundPermissionsAsync.mockResolvedValue({ status: "granted" });
+    Location.getBackgroundPermissionsAsync.mockResolvedValue({ status: "granted" });
+    bgTask.getNativeTaskLifecycleStatus.mockResolvedValue({
+      taskDefined: true,
+      taskStarted: true,
+    });
+
+    const result = await evaluateMissionTrackingCapability({ forLiveTransition: false });
+    expect(result.fgGranted).toBe(true);
+    expect(result.bgGranted).toBe(true);
+    expect(result.capable).toBe(true);
+  });
+
   it("evaluateMissionTrackingCapability — en mission Android sans FGS → non capable", async () => {
     Platform.OS = "android";
     bgTask.getNativeTaskLifecycleStatus.mockResolvedValue({

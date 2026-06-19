@@ -1,4 +1,5 @@
 import {
+  ensureNotificationDisclosureSyncedWithOsPermission,
   readNotificationDisclosureAccepted,
   subscribeNotificationDisclosureAccepted,
 } from "./notificationDisclosurePersistence";
@@ -49,6 +50,7 @@ export function getDisclosureShowRequestCount(): number {
 }
 
 export async function resolvePushRegistrationBannerState(): Promise<PushRegistrationBannerState> {
+  await ensureNotificationDisclosureSyncedWithOsPermission();
   const disclosureAccepted = await readNotificationDisclosureAccepted();
   if (!disclosureAccepted) {
     return "disclosure_required";

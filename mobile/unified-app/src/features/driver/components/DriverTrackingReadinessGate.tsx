@@ -22,6 +22,7 @@ import {
 } from "react-native";
 import * as Location from "expo-location";
 
+import { isExpoLocationPermissionGranted } from "../../../core/location/locationPermissionState";
 import { semanticDanger, semanticSuccess, semanticWarning } from "../../../design/responsive/colors";
 import {
   checkBatteryOptimizationStatus,
@@ -68,8 +69,8 @@ export async function evaluateTrackingReadiness(): Promise<TrackingReadinessSnap
     Promise.resolve(getOemBatteryGuidance()),
   ]);
 
-  const fgPermissionGranted = Boolean(fg.granted);
-  const bgPermissionGranted = Boolean(bg.granted);
+  const fgPermissionGranted = isExpoLocationPermissionGranted(fg);
+  const bgPermissionGranted = isExpoLocationPermissionGranted(bg);
   const gpsEnabled = Boolean(servicesEnabled);
   const batteryExempt =
     Platform.OS !== "android" || !battery.checked || battery.isIgnoring !== false;

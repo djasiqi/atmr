@@ -20,7 +20,7 @@ def test_upsert_fcm_modern_android_token_corrects_ios_platform(mock_db, mock_dt)
     result = upsert_device_token(
         driver_id=4,
         device_id="dev-1",
-        token="ewCrKUSCKU5bvnMqoZemWw:APA91bENAkBia",
+        token="FakeFcmInstanceId:APA91bTestRegistrationToken",
         platform="ios",
         provider="fcm",
     )

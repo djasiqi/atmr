@@ -3,6 +3,7 @@ import { StyleSheet, View } from "react-native";
 
 import { isFeatureEnabled } from "../../../core/featureFlags/registry";
 import {
+  ensureNotificationDisclosureSyncedWithOsPermission,
   markNotificationDisclosureAccepted,
   readNotificationDisclosureAccepted,
   subscribeNotificationDisclosureAccepted,
@@ -29,6 +30,7 @@ export function DriverNotificationDisclosureHost() {
   const [disclosurePending, setDisclosurePending] = useState(false);
 
   const refreshDisclosureState = useCallback(async () => {
+    await ensureNotificationDisclosureSyncedWithOsPermission();
     const accepted = await readNotificationDisclosureAccepted();
     setDisclosureAccepted(accepted);
     if (!accepted && pushEnabled && isDriverContext) {

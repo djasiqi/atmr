@@ -34,6 +34,10 @@ import { usePerfRouteTracking } from "../../../src/core/observability/usePerfRou
 import { DriverPresenceDisclosureHost } from "../../../src/features/driver/components/DriverPresenceDisclosureHost";
 import { DriverNotificationDisclosureHost } from "../../../src/features/driver/components/DriverNotificationDisclosureHost";
 import { DriverTrackingBannerHost } from "../../../src/features/driver/components/DriverTrackingBannerHost";
+import {
+  hasActiveDriverMissionStatus,
+  setOtaAutoReloadMissionBlocking,
+} from "../../../src/core/version/otaAutoReloadMissionGuard";
 
 /**
  * Sélectionne la mission active sur laquelle le tracking GPS doit être
@@ -99,6 +103,15 @@ function DriverTrackingHost() {
     stopBackgroundTrackingHealthMonitor();
     return undefined;
   }, [trackingMission?.id]);
+
+  useEffect(() => {
+    const missions = missionsQuery.data as DriverMission[] | undefined;
+    const blocking =
+      Array.isArray(missions) &&
+      missions.some((mission) => hasActiveDriverMissionStatus(mission.status));
+    setOtaAutoReloadMissionBlocking(blocking);
+    return () => setOtaAutoReloadMissionBlocking(false);
+  }, [missionsQuery.data]);
 
   return null;
 }

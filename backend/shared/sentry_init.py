@@ -8,6 +8,7 @@ from typing import Any
 import sentry_sdk
 from sentry_sdk.integrations.celery import CeleryIntegration
 from sentry_sdk.integrations.flask import FlaskIntegration
+from sentry_sdk.integrations.logging import ignore_logger
 
 _DROP_EXCEPTION_TYPES = frozenset(
     {"ExpiredSignatureError", "NoAuthorizationError", "InvalidHeaderError"}
@@ -23,6 +24,26 @@ _KAFKA_ERROR_TYPES = frozenset(
     {"NoBrokersAvailable", "KafkaTimeoutError", "KafkaConnectionError"}
 )
 
+# kafka-python journalise chaque retry bootstrap en ERROR (NodeNotReady, DNS, etc.).
+_KAFKA_PYTHON_LOGGERS = (
+    "kafka.net.manager",
+    "kafka.net.inet",
+    "kafka.cluster",
+    "kafka.conn",
+    "kafka.client",
+    "kafka.consumer",
+    "kafka.producer",
+)
+
+_KAFKA_BOOTSTRAP_LOG_MARKERS = (
+    "bootstrap attempt to bootstrap-",
+    "nodenotreadyerror",
+    "dns resolution failure",
+    "dns lookup failed for kafka-broker",
+    "metadata refresh: failed",
+    "temporary failure in name resolution",
+)
+
 
 def _is_socket_io_benign_disconnect(
     event: dict[str, Any], exc_type: type[BaseException] | None
@@ -31,6 +52,13 @@ def _is_socket_io_benign_disconnect(
         return False
     req_url = (event.get("request") or {}).get("url", "")
     return "/socket.io/" in req_url
+
+
+def _is_kafka_bootstrap_log_noise(message: str, logger_name: str) -> bool:
+    if logger_name.startswith("kafka."):
+        return True
+    lowered = message.lower()
+    return any(marker in lowered for marker in _KAFKA_BOOTSTRAP_LOG_MARKERS)
 
 
 def _is_gevent_infrastructure_noise(
@@ -55,6 +83,10 @@ def before_send(event: dict[str, Any], hint: dict[str, Any] | None) -> dict[str,
     exc_info = hint.get("exc_info") if hint else None
     logentry = event.get("logentry") or {}
     message = str(logentry.get("message") or event.get("message") or "")
+    logger_name = str(event.get("logger") or "")
+
+    if _is_kafka_bootstrap_log_noise(message, logger_name):
+        return None
 
     if exc_info:
         exc_type = exc_info[0]
@@ -93,6 +125,9 @@ def init_sentry(
 
     if sentry_sdk.Hub.current.client is not None:
         return
+
+    for kafka_logger in _KAFKA_PYTHON_LOGGERS:
+        ignore_logger(kafka_logger)
 
     integrations: list[Any] = []
     if flask:

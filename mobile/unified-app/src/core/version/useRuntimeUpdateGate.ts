@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import * as Updates from "expo-updates";
 import Constants from "expo-constants";
+import {
+  fetchAndReloadOtaUpdate,
+  OTA_ASSET_LOAD_ERROR,
+  resolveOtaApplyErrorMessage,
+} from "./otaUpdateActions";
 
 type UpdateGateState = {
   checking: boolean;
@@ -14,9 +19,6 @@ type UpdateGateState = {
   killSwitch: boolean;
   error: string | null;
 };
-
-const OTA_ASSET_LOAD_ERROR =
-  "Impossible de télécharger la mise à jour. Vérifiez votre connexion (Wi‑Fi de préférence) et réessayez.";
 
 function parseVersion(value: string): number[] {
   return value
@@ -121,8 +123,8 @@ export function useRuntimeUpdateGate() {
     applyingRef.current = true;
     setState((prev) => ({ ...prev, applying: true, error: null }));
     try {
-      const fetchResult = await Updates.fetchUpdateAsync();
-      if (!fetchResult.isNew) {
+      const result = await fetchAndReloadOtaUpdate();
+      if (result === "not_new") {
         applyingRef.current = false;
         setState((prev) => ({
           ...prev,
@@ -131,15 +133,15 @@ export function useRuntimeUpdateGate() {
         }));
         return;
       }
-      await Updates.reloadAsync();
+      if (result === "failed") {
+        throw new Error("update_apply_failed");
+      }
     } catch (error) {
       applyingRef.current = false;
       const message =
         error instanceof Error && error.message.includes("Failed to load all assets")
           ? OTA_ASSET_LOAD_ERROR
-          : error instanceof Error
-            ? error.message
-            : "update_apply_failed";
+          : resolveOtaApplyErrorMessage(error);
       setState((prev) => ({ ...prev, applying: false, error: message }));
     }
   };

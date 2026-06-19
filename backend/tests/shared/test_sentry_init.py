@@ -81,3 +81,31 @@ def test_before_send_drops_gunicorn_no_uri_read_log():
         "logger": "gunicorn.error",
     }
     assert before_send(event, None) is None
+
+
+def test_before_send_drops_kafka_bootstrap_dns_noise():
+    event = {
+        "logentry": {
+            "message": "DNS lookup failed for kafka-broker-1:29092, gaierror(-3, 'Temporary failure in name resolution')",
+        },
+        "logger": "kafka.net.inet",
+    }
+    assert before_send(event, None) is None
+
+
+def test_before_send_drops_kafka_bootstrap_nodenotready_noise():
+    event = {
+        "logentry": {
+            "message": "Bootstrap attempt to bootstrap-2 failed: NodeNotReadyError: bootstrap-2",
+        },
+        "logger": "kafka.net.manager",
+    }
+    assert before_send(event, None) is None
+
+
+def test_before_send_keeps_non_kafka_runtime_error():
+    event = {
+        "logentry": {"message": "Unhandled exception in request handler"},
+        "logger": "app.errors",
+    }
+    assert before_send(event, None) == event

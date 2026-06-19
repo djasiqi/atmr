@@ -17,7 +17,7 @@ from services.notifications.push_token_platform import (
 
 
 def test_looks_like_fcm_token_modern_prefix_format() -> None:
-    token = "ewCrKUSCKU5bvnMqoZemWw:APA91bENAkBia_9I-ZK9iUTWXRY"
+    token = "FakeFcmInstanceId:APA91bTestRegistrationToken_9I-ZK9iUTWXRY"
     assert looks_like_fcm_token(token) is True
     assert is_android_fcm_registration_token(token) is True
 

@@ -5,6 +5,7 @@ import * as Location from "expo-location";
 import { useDriverBackgroundTrackingUi } from "../hooks/useDriverBackgroundTrackingUi";
 import { useTransientTrackingBanner } from "../hooks/useTransientTrackingBanner";
 import { markLiveTrackingDisclosureAccepted } from "../services/liveTrackingDisclosureSession";
+import { notifyMissionTrackingCapabilityRefresh } from "../services/missionLiveTrackingEligibility";
 import { DriverTrackingBanner } from "./DriverTrackingBanner";
 import { MissionLiveTrackingDisclosureModal } from "./MissionLiveTrackingDisclosureModal";
 
@@ -30,6 +31,7 @@ export function DriverTrackingBannerHost() {
     await Location.requestBackgroundPermissionsAsync().catch(() => undefined);
     setDisclosurePending(false);
     setDisclosureVisible(false);
+    notifyMissionTrackingCapabilityRefresh();
   }, []);
 
   if (!visible) return null;

@@ -41,7 +41,7 @@ def test_classify_mismatch_provider_fcm_as_expo() -> None:
 
 
 def test_modern_fcm_token_detected() -> None:
-    token = "ewCrKUSCKU5bvnMqoZemWw:APA91bENAkBia"
+    token = "FakeFcmInstanceId:APA91bTestRegistrationToken"
     assert looks_like_fcm_token(token) is True
 
 

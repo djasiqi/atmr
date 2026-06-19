@@ -8,6 +8,7 @@ import {
 } from "./pushRegistrationState";
 
 jest.mock("./notificationDisclosurePersistence", () => ({
+  ensureNotificationDisclosureSyncedWithOsPermission: jest.fn(async () => undefined),
   readNotificationDisclosureAccepted: jest.fn(),
   subscribeNotificationDisclosureAccepted: jest.fn(() => () => undefined),
 }));
@@ -20,6 +21,9 @@ jest.mock("./pushPermissionState", () => ({
   getPushPermissionDenied: jest.fn(),
 }));
 
+const ensureSync = jest.requireMock<{
+  ensureNotificationDisclosureSyncedWithOsPermission: jest.Mock;
+}>("./notificationDisclosurePersistence").ensureNotificationDisclosureSyncedWithOsPermission;
 const readDisclosure = jest.requireMock<{ readNotificationDisclosureAccepted: jest.Mock }>(
   "./notificationDisclosurePersistence"
 ).readNotificationDisclosureAccepted;
@@ -34,9 +38,15 @@ describe("pushRegistrationState", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     clearPushRegistrationFailed();
+    ensureSync.mockResolvedValue(undefined);
     readDisclosure.mockResolvedValue(true);
     hasPending.mockResolvedValue(false);
     getPermissionDenied.mockReturnValue(false);
+  });
+
+  it("resolvePushRegistrationBannerState sync la disclosure avant évaluation", async () => {
+    await resolvePushRegistrationBannerState();
+    expect(ensureSync).toHaveBeenCalledTimes(1);
   });
 
   it("resolvePushRegistrationBannerState returns disclosure_required when not accepted", async () => {

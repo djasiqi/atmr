@@ -31,6 +31,14 @@ disclosure acceptée → permission OS → flush pending → save-push-token
 docker compose exec api python scripts/audit_device_tokens.py --list-drivers-without-token
 docker compose exec api python scripts/audit_device_tokens.py --report
 
+# Vérification FCM natif Android (SHA-1 / expo_fallback)
+./scripts/verify-fcm-token-coverage.sh --driver-id 7514
+./scripts/verify-fcm-token-coverage.sh --android-expo-only
+docker exec atmr-backend-1 python scripts/verify_fcm_token_coverage.py --driver-id 7514 --expect-fcm
+```
+
+Procédure complète SHA-1 Firebase : [firebase-fcm-sha1-procedure.md](./firebase-fcm-sha1-procedure.md)
+
 # Couverture admin
 curl -H "Authorization: Bearer $ADMIN_JWT" \
   "https://<host>/api/v1/admin/push-coverage/drivers?operational_only=true&without_token_only=true"
@@ -54,6 +62,7 @@ Exemple actionnable : `token_invalid` + dernier succès il y a 42j + Android + v
 |--------|----------|--------|
 | 6858 | Token FCM invalidé (`token_unregistered`), jamais ré-enregistré | Ouvrir app, accepter notifications, test push |
 | 7755 | Aucun token jamais enregistré | Première session complète + disclosure + permission |
+| 7514 | Android Expo seul (`expo_fallback_unreliable`), pas de FCM natif | SHA-1 Play App Signing dans Firebase → voir [firebase-fcm-sha1-procedure.md](./firebase-fcm-sha1-procedure.md) |
 
 ## Lifecycle tokens
 
@@ -117,3 +126,27 @@ FROM device_tokens WHERE driver_id IN (6858, 7755) ORDER BY updated_at DESC;
 | 3 | Blocage disponibilité chauffeur | Validation métier requise |
 
 **Aucun** blocage automatique de `driver.is_available` dans ce lot.
+
+## OTA auto-reload (prod)
+
+⚠️ **Désactivé en prod** (`EXPO_PUBLIC_OTA_AUTO_RELOAD_ENABLED=0`) après incident juin 2026. Rollback OTA group `a9012280-…` ; rechargement manuel (double relance app) requis.
+
+Comportement actuel :
+
+1. `expo-updates` télécharge l’OTA au boot (`checkAutomatically: ON_LOAD`)
+2. L’utilisateur doit **fermer et rouvrir** l’app pour appliquer le bundle
+3. Reprise auto-reload : uniquement après stabilisation (`OtaAutoReloadProvider` non monté)
+
+Validation terrain (S23 / driver sans FCM) :
+
+```powershell
+adb logcat -v time | Select-String 'driver.push.fcm|dev.expo.updates'
+```
+
+Attendu après swipe-kill + relance ×2 :
+
+- `dev.expo.updates` télécharge l’OTA
+- puis `driver.push.fcm.get_token_start` (session chauffeur ouverte)
+- puis `driver.push.fcm.token` si SHA-1 Firebase OK
+
+Voir [firebase-fcm-sha1-procedure.md](./firebase-fcm-sha1-procedure.md) pour la checklist FCM complète.

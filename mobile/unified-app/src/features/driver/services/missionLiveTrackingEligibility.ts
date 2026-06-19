@@ -8,6 +8,7 @@
 import * as Location from "expo-location";
 import { Platform } from "react-native";
 
+import { isExpoLocationPermissionGranted } from "../../../core/location/locationPermissionState";
 import type { DriverTransitionStatus } from "../types";
 import { getNativeTaskLifecycleStatus } from "./backgroundLocationTask";
 
@@ -69,6 +70,19 @@ export type EvaluateMissionTrackingCapabilityOptions = {
   forLiveTransition?: boolean;
 };
 
+const capabilityRefreshListeners = new Set<() => void>();
+
+export function subscribeMissionTrackingCapabilityRefresh(listener: () => void): () => void {
+  capabilityRefreshListeners.add(listener);
+  return () => {
+    capabilityRefreshListeners.delete(listener);
+  };
+}
+
+export function notifyMissionTrackingCapabilityRefresh(): void {
+  capabilityRefreshListeners.forEach((listener) => listener());
+}
+
 export async function evaluateMissionTrackingCapability(
   options: EvaluateMissionTrackingCapabilityOptions = {}
 ): Promise<MissionTrackingCapabilityResult> {
@@ -98,8 +112,8 @@ export async function evaluateMissionTrackingCapability(
   ]);
 
   const snapshot: MissionTrackingCapabilitySnapshot = {
-    fgGranted: Boolean(fg.granted),
-    bgGranted: Boolean(bg.granted),
+    fgGranted: isExpoLocationPermissionGranted(fg),
+    bgGranted: isExpoLocationPermissionGranted(bg),
     gpsEnabled: Boolean(gpsEnabled),
     foregroundServiceRunning: Boolean(lifecycle.taskStarted),
     platform,

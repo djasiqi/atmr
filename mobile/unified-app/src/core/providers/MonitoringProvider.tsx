@@ -1,7 +1,6 @@
 import { useEffect } from "../reactCompat";
 import type { PropsWithChildren } from "../reactCompat";
-import { setDriverTelemetrySink } from "../observability/driverTelemetry";
-import { sendIngestEvent } from "../observability/ingestAdapter";
+import { emitDriverTelemetry, setDriverTelemetrySink } from "../observability/driverTelemetry";import { sendIngestEvent } from "../observability/ingestAdapter";
 import * as Sentry from "@sentry/react-native";
 import * as Updates from "expo-updates";
 import Constants from "expo-constants";
@@ -24,6 +23,13 @@ function applyFleetMapSentryContext(): void {
 
 export function MonitoringProvider({ children }: PropsWithChildren) {
   useEffect(() => {
+    setDriverTelemetrySink((event, payload) => {
+      sendIngestEvent(event, payload as Record<string, unknown>);
+      if (__DEV__) {
+        console.info(`[driver-telemetry] ${event}`, payload);
+      }
+    });
+
     const dsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
     if (typeof dsn === "string" && dsn.length > 0) {
       Sentry.init({
@@ -39,17 +45,18 @@ export function MonitoringProvider({ children }: PropsWithChildren) {
       applyFleetMapSentryContext();
     }
 
-    setDriverTelemetrySink((event, payload) => {
-      sendIngestEvent(event, payload as Record<string, unknown>);
-      if (__DEV__) {
-        console.info(`[driver-telemetry] ${event}`, payload);
-      }
-    });
+    if (!__DEV__ && Updates.isEnabled && Updates.isEmbeddedLaunch === false) {
+      emitDriverTelemetry("ota.auto_reload.applied", {
+        source: "MonitoringProvider",
+        update_id: Updates.updateId ?? "unknown",
+        runtime_version:
+          Updates.runtimeVersion ?? Constants.expoConfig?.runtimeVersion ?? "unknown",
+      });
+    }
 
     return () => {
       setDriverTelemetrySink(null);
     };
   }, []);
-
   return children;
 }

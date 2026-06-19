@@ -3,17 +3,23 @@ import { AppState } from "react-native";
 import { isFeatureEnabled } from "../../../core/featureFlags/registry";
 import { describeBackgroundRuntime } from "../services/backgroundRuntimeCompat";
 import { getNativeTaskLifecycleStatus } from "../services/backgroundLocationTask";
-import { evaluateMissionTrackingCapability } from "../services/missionLiveTrackingEligibility";
+import {
+  evaluateMissionTrackingCapability,
+  requiresLiveTrackingPermission,
+  subscribeMissionTrackingCapabilityRefresh,
+} from "../services/missionLiveTrackingEligibility";
 import {
   getTrackingRuntimeSnapshot,
   subscribeTrackingRuntime,
 } from "../services/trackingRuntime";
 import { getTrackingSnapshot, subscribeTrackingSnapshot } from "../tracking";
 import { isTrackingActiveStatus } from "../domain/status";
+import type { DriverTransitionStatus } from "../types";
 
 export type DriverBackgroundTrackingUiState = {
   showBanner: boolean;
   bannerKind: "permission_required" | "background_unavailable" | null;
+  constraintReason: string | null;
   taskDefined: boolean;
   taskStarted: boolean;
   bgFlagEnabled: boolean;
@@ -31,6 +37,7 @@ export type DriverBackgroundTrackingUiState = {
 const EMPTY: DriverBackgroundTrackingUiState = {
   showBanner: false,
   bannerKind: null,
+  constraintReason: null,
   taskDefined: false,
   taskStarted: false,
   bgFlagEnabled: false,
@@ -56,13 +63,20 @@ async function loadDiagnostics(): Promise<DriverBackgroundTrackingUiState> {
   const tracking = getTrackingSnapshot();
   const runtime = getTrackingRuntimeSnapshot();
   const lifecycle = await getNativeTaskLifecycleStatus();
+  const missionStatus = tracking.missionStatus;
   const missionActive =
     tracking.missionId != null &&
-    tracking.missionStatus != null &&
-    isTrackingActiveStatus(tracking.missionStatus);
+    missionStatus != null &&
+    isTrackingActiveStatus(missionStatus);
+
+  const requiresFullBackgroundTracking =
+    missionStatus != null &&
+    requiresLiveTrackingPermission(missionStatus as DriverTransitionStatus);
 
   const capability = missionActive
-    ? await evaluateMissionTrackingCapability({ forLiveTransition: false })
+    ? await evaluateMissionTrackingCapability({
+        forLiveTransition: !requiresFullBackgroundTracking,
+      })
     : null;
 
   let showBanner = false;
@@ -83,6 +97,7 @@ async function loadDiagnostics(): Promise<DriverBackgroundTrackingUiState> {
   return {
     showBanner,
     bannerKind,
+    constraintReason: capability?.constraintReason ?? null,
     taskDefined: lifecycle.taskDefined,
     taskStarted: lifecycle.taskStarted,
     bgFlagEnabled: isFeatureEnabled("tracking_background_enabled"),
@@ -117,6 +132,9 @@ export function useDriverBackgroundTrackingUi(): DriverBackgroundTrackingUiState
     const unsubRuntime = subscribeTrackingRuntime(() => {
       void refresh();
     });
+    const unsubCapability = subscribeMissionTrackingCapabilityRefresh(() => {
+      void refresh();
+    });
     const appSub = AppState.addEventListener("change", () => {
       void refresh();
     });
@@ -141,6 +159,7 @@ export function useDriverBackgroundTrackingUi(): DriverBackgroundTrackingUiState
     return () => {
       unsubTracking();
       unsubRuntime();
+      unsubCapability();
       appSub.remove();
       if (interval) clearInterval(interval);
     };

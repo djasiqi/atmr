@@ -405,6 +405,13 @@ export const featureFlags = {
     description:
       "Kill-switch backend : désarme ErrorRecovery.crash() au startup iOS. Lu via bootstrap/version-check après hotfix natif. IOS_STARTUP_FATAL_RECOVERY_DISABLED=true côté serveur.",
   } satisfies FeatureFlagDefinition,
+  ota_auto_reload_enabled: {
+    key: "ota_auto_reload_enabled",
+    source: "env",
+    enabled: envEnabled("EXPO_PUBLIC_OTA_AUTO_RELOAD_ENABLED"),
+    description:
+      "Reload automatique après téléchargement OTA (Updates.useUpdates + reloadAsync). Prod uniquement.",
+  } satisfies FeatureFlagDefinition,
 } as const;
 
 export type FeatureFlagKey = keyof typeof featureFlags;
