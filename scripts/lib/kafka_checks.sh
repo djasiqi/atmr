@@ -365,15 +365,22 @@ kafka_wait_brokers_healthy() {
 }
 
 kafka_check_dns_from_atmr_network() {
-  if docker compose -f docker-compose.production.yml exec -T backend getent hosts kafka-broker-1 >/dev/null 2>&1; then
-    log_info "DNS kafka-broker-1 depuis backend (atmr-network)"
+  local probe=""
+  for probe in backend atmr-backend-1 kafka-dlq-consumer atmr-kafka-dlq-consumer tracking-kafka-consumer atmr-tracking-kafka-consumer-1; do
+    if docker ps --format '{{.Names}}' | grep -qx "${probe}"; then
+      if docker exec "${probe}" getent hosts kafka-broker-1 >/dev/null 2>&1 \
+        && docker exec "${probe}" getent hosts kafka-broker-2 >/dev/null 2>&1; then
+        log_info "DNS kafka-broker-1/2 depuis ${probe} (atmr-network)"
+        return 0
+      fi
+    fi
+  done
+  if docker compose -f docker-compose.production.yml exec -T backend getent hosts kafka-broker-1 >/dev/null 2>&1 \
+    && docker compose -f docker-compose.production.yml exec -T backend getent hosts kafka-broker-2 >/dev/null 2>&1; then
+    log_info "DNS kafka-broker-1/2 depuis backend (atmr-network)"
     return 0
   fi
-  if docker exec atmr-kafka-broker-1 getent hosts kafka-broker-1 >/dev/null 2>&1; then
-    log_info "DNS kafka-broker-1 depuis atmr-kafka-broker-1"
-    return 0
-  fi
-  log_fail "DNS kafka-broker-1 introuvable sur atmr-network — vérifier docker-compose.kafka.atmr-network.yml"
+  log_fail "DNS kafka-broker-* introuvable depuis atmr-network — relancer avec docker-compose.kafka.atmr-network.yml"
   return 1
 }
 

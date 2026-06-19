@@ -123,6 +123,8 @@ restart_app_after_topics_v2 = true
 
 Le workflow utilise `scripts/kafka-env-effective.sh` pour lire les surcharges `KAFKA_*` depuis `.env.production.local` sans modifier `.env.production`.
 
+**Important réseau** : le deploy doit toujours merger `docker-compose.kafka.atmr-network.yml` (fait par `deploy-kafka-production.sh`). Sans ce fichier, les brokers restent sur `atmr-stack` uniquement → erreurs Sentry `DNS Resolution failure` depuis backend/consumers sur `atmr-network`.
+
 ✅ **Implémenté** : workflow corrigé — dépendances `kafka_topics_init.sh` + contract + helpers env v2 inclus.
 
 ### Rollback Phase 1
