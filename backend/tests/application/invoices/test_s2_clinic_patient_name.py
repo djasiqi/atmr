@@ -11,6 +11,7 @@ from application.invoices.invoice_line_description import (
     format_patient_display_name_nom_prenom,
     resolve_s2_clinic_line_patient_name,
 )
+from models.enums import InvoiceLineType
 from repositories.invoice_repository import _merge_s2_clinic_line_meta_from_booking
 
 
@@ -26,6 +27,79 @@ from repositories.invoice_repository import _merge_s2_clinic_line_meta_from_book
 )
 def test_format_patient_display_name_nom_prenom(raw: str, expected: str):
     assert format_patient_display_name_nom_prenom(raw) == expected
+
+
+def test_material_delivery_institution_without_patient_has_no_client_label():
+    """Livraison établissement : pas de « Client : » (contact ≠ bénéficiaire)."""
+    client = SimpleNamespace(
+        is_institution=True,
+        user=SimpleNamespace(first_name="Clinique", last_name="X"),
+    )
+    booking = SimpleNamespace(
+        customer_name="ALOISI Anne",
+        client_id=42,
+        mission_type="material_delivery",
+        _get_institution_passenger_brief=lambda: None,
+    )
+    assert resolve_s2_clinic_line_patient_name(client, booking) == ""  # type: ignore[arg-type]
+
+
+def test_material_delivery_for_institution_patient_shows_client():
+    """Livraison pour un patient institution : « Client : NOM Prénom »."""
+    client = SimpleNamespace(
+        is_institution=True,
+        user=SimpleNamespace(first_name="Clinique", last_name="X"),
+    )
+    booking = SimpleNamespace(
+        customer_name="Eliane Francine STOFER-THOMI",
+        client_id=42,
+        mission_type="material_delivery",
+        _get_institution_passenger_brief=lambda: {
+            "institution_patient_id": 7,
+            "first_name": "Eliane Francine",
+            "last_name": "STOFER-THOMI",
+        },
+    )
+    assert (
+        resolve_s2_clinic_line_patient_name(client, booking)  # type: ignore[arg-type]
+        == "STOFER-THOMI Eliane Francine"
+    )
+
+
+def test_merge_clears_patient_name_for_institution_delivery_without_patient():
+    line = MagicMock()
+    line.type = InvoiceLineType.MATERIAL_DELIVERY
+    line.line_meta = {"patient_name": "ALOISI Anne"}
+    booking = SimpleNamespace(
+        customer_name="ALOISI Anne",
+        client_id=99,
+        scheduled_time=None,
+        mission_type="material_delivery",
+        _get_institution_passenger_brief=lambda: None,
+    )
+    client = SimpleNamespace(is_institution=True, user=None)
+    merged = _merge_s2_clinic_line_meta_from_booking(line, booking, client)
+    assert "patient_name" not in merged
+
+
+def test_merge_keeps_patient_name_for_delivery_with_institution_patient():
+    line = MagicMock()
+    line.type = InvoiceLineType.MATERIAL_DELIVERY
+    line.line_meta = {"patient_name": "ALOISI Anne"}
+    booking = SimpleNamespace(
+        customer_name="Eliane Francine STOFER-THOMI",
+        client_id=99,
+        scheduled_time=None,
+        mission_type="material_delivery",
+        _get_institution_passenger_brief=lambda: {
+            "institution_patient_id": 7,
+            "first_name": "Eliane Francine",
+            "last_name": "STOFER-THOMI",
+        },
+    )
+    client = SimpleNamespace(is_institution=True, user=None)
+    merged = _merge_s2_clinic_line_meta_from_booking(line, booking, client)
+    assert merged["patient_name"] == "STOFER-THOMI Eliane Francine"
 
 
 def test_institution_client_uses_booking_customer_name_formatted():

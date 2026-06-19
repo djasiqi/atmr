@@ -28,6 +28,7 @@ def _merge_s2_clinic_line_meta_from_booking(
         return out
 
     _existing_pn = out.get("patient_name")
+
     from application.invoices.invoice_line_description import (
         format_patient_display_name_nom_prenom,
         resolve_s2_clinic_line_patient_name,
@@ -36,6 +37,8 @@ def _merge_s2_clinic_line_meta_from_booking(
     resolved_pn = resolve_s2_clinic_line_patient_name(client, booking)
     if resolved_pn:
         out["patient_name"] = resolved_pn
+    elif line.type == InvoiceLineType.MATERIAL_DELIVERY:
+        out.pop("patient_name", None)
     elif _existing_pn is not None and str(_existing_pn).strip():
         out["patient_name"] = format_patient_display_name_nom_prenom(
             str(_existing_pn).strip()

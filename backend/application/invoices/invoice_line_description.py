@@ -232,10 +232,38 @@ def format_patient_display_name_nom_prenom(raw: str | None) -> str:
     return f"{nom} {prenom}".strip()
 
 
+def _resolve_institution_patient_name_for_booking(reservation: Booking) -> str:
+    """Patient institution bénéficiaire (demande source), ou '' si livraison établissement."""
+    fn = getattr(reservation, "_get_institution_passenger_brief", None)
+    if callable(fn):
+        brief = fn()
+        if isinstance(brief, dict) and brief.get("institution_patient_id"):
+            first = (brief.get("first_name") or "").strip()
+            last = (brief.get("last_name") or "").strip()
+            if last or first:
+                raw = (
+                    f"{first} {last}".strip()
+                    if first and last
+                    else (last or first)
+                )
+                return format_patient_display_name_nom_prenom(raw)
+    return ""
+
+
 def resolve_s2_clinic_line_patient_name(
     client: Any | None, reservation: Booking
 ) -> str:
-    """Nom « Client : … » pour facture clinique S2 — format unifié « NOM Prénom »."""
+    """Nom « Client : … » pour facture clinique S2 — format unifié « NOM Prénom ».
+
+    Livraison matériel : afficher le client uniquement si un patient institution est
+    lié à la demande source ; sinon pas de ligne (livraison pour l'établissement —
+    le contact clinique ne doit pas apparaître).
+    """
+    mission_type = (
+        getattr(reservation, "mission_type", None) or "patient_transport"
+    )
+    if mission_type == "material_delivery":
+        return _resolve_institution_patient_name_for_booking(reservation)
     if client and getattr(client, "is_institution", False):
         cn = getattr(reservation, "customer_name", None)
         if cn and str(cn).strip():

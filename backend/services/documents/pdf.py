@@ -2926,7 +2926,7 @@ def _line_description_from_consolidated_item(item: dict[str, Any]) -> str | None
 def _consolidated_item_is_ride_transport(item: dict[str, Any]) -> bool:
     """« Trajet : » uniquement pour les lignes RIDE (pas livraison matériel, CUSTOM, frais)."""
     if item.get("is_round_trip"):
-        for key in ("line1", "line2"):
+        for key in ("line1", "line2", "line"):
             ln = item.get(key)
             if ln is not None and getattr(ln, "type", None) == InvoiceLineType.RIDE:
                 return True
@@ -2938,7 +2938,7 @@ def _consolidated_item_is_ride_transport(item: dict[str, Any]) -> bool:
 def _consolidated_item_is_material_delivery(item: dict[str, Any]) -> bool:
     """Livraison matériel : préfixe « Livraison : », pas « Trajet : »."""
     if item.get("is_round_trip"):
-        for key in ("line1", "line2"):
+        for key in ("line1", "line2", "line"):
             ln = item.get(key)
             if (
                 ln is not None
@@ -3680,6 +3680,10 @@ def _build_s2_table(
             )
         elif is_ar:
             ar_suffix_html = _pdf_s2_ar_tag_markup()
+            _ar_desc_is_ride = is_ride_td or bool(
+                line_desc_opt
+                and (" → " in line_desc_opt or " ↔ " in line_desc_opt)
+            )
             if line_desc_opt:
                 if max_simple_description_lines == 2 and (
                     " → " in line_desc_opt or " ↔ " in line_desc_opt
@@ -3688,7 +3692,7 @@ def _build_s2_table(
                         line_desc_opt,
                         font_name=font_name,
                         desc_inner_pt=desc_inner_pt,
-                        is_ride_line=is_ride_td,
+                        is_ride_line=_ar_desc_is_ride,
                         is_material_delivery=is_material_td,
                         force_balanced_two_lines=True,
                         inline_suffix_text="[A/R]",
@@ -3713,7 +3717,7 @@ def _build_s2_table(
                     item.get("transport_display", ""),
                     font_name=font_name,
                     desc_inner_pt=desc_inner_pt,
-                    is_ride_line=is_ride_td,
+                    is_ride_line=_ar_desc_is_ride,
                     is_material_delivery=is_material_td,
                     force_balanced_two_lines=_max_desc_lines == 2,
                     inline_suffix_text="[A/R]"
@@ -3946,7 +3950,7 @@ def _build_s2_table(
                     esc_d = f"{esc_d}&nbsp;{_pdf_s2_ar_tag_markup()}"
                 esc_d = _pdf_limit_html_br_lines(esc_d, _max_desc_lines)
             orphan_pn_prefix = ""
-            if is_third_party_invoice or is_s2_invoice:
+            if (is_third_party_invoice or is_s2_invoice) and line.type != InvoiceLineType.MATERIAL_DELIVERY:
                 raw_pn = lm_or.get("patient_name")
                 if raw_pn and str(raw_pn).strip() and str(raw_pn).strip() != "—":
                     from application.invoices.invoice_line_description import (
