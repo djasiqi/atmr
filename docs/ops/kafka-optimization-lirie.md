@@ -70,19 +70,60 @@ KAFKA_TOPIC_DRIVER_LOCATION_DLQ=driver.location.dlq.v2
 
 Référence complète : `env.kafka.production.example`.
 
-### Déploiement migration v2
+### Déploiement migration v2 (SSH manuel)
 
-Après mise à jour du fragment (CI / `deploy-production.sh`) **ou** copie du bloc dans `.env.production.local` :
+Après mise à jour du fragment (CI `deploy.yml`) **ou** copie du bloc dans `.env.production.local` :
 
 ```bash
 cd /srv/atmr
-INIT_TOPICS=1 scripts/deploy-kafka-production.sh
+# Option A : ajouter v2 dans .env.production.local (idempotent)
+./scripts/apply-kafka-topics-v2-local.sh
+# Env effectif = .env.production + surcharges KAFKA_* du .local
+eval "$(./scripts/kafka-env-effective.sh)"
+INIT_TOPICS=1 ./scripts/deploy-kafka-production.sh
 docker compose -f docker-compose.production.yml restart backend ws-service
-scripts/check-kafka-production.sh on
-scripts/check-kafka-tracking-pipeline.sh
+./scripts/check-kafka-production.sh on
+./scripts/check-kafka-tracking-pipeline.sh
 ```
 
-Ne pas éditer `.env.production` à la main sur le serveur — il est régénéré par `deploy-production.sh` (CI + fragment + `.env.production.local`).
+Ne pas éditer `.env.production` à la main — il est régénéré par `deploy-production.sh` (CI + fragment + `.env.production.local`).
+
+### Déploiement CI — workflow `deploy-kafka.yml`
+
+Workflow manuel GitHub Actions, **séparé** de Build & Deploy (`deploy.yml`).
+
+**Fichiers copiés sur le serveur** : compose Kafka, scripts deploy/check/init, `lib/kafka_checks.sh`, `lib/kafka_topics_init.sh`, `kafka-topics.contract.json`, `check-kafka-tracking-pipeline.sh`, helpers env v2.
+
+
+| Input                         | Défaut  | Description                                                           |
+| ----------------------------- | ------- | --------------------------------------------------------------------- |
+| `confirm`                     | —       | Doit être exactement `kafka-on-production`                            |
+| `dry_run`                     | `true`  | `true` = copie + preflight uniquement ; `false` = deploy réel         |
+| `apply_topics_v2_env`         | `false` | Ajoute le bloc v2 dans `/srv/atmr/.env.production.local` (idempotent) |
+| `init_topics`                 | `false` | `INIT_TOPICS=1` — crée les topics `.v2` (6 partitions)                |
+| `restart_app_after_topics_v2` | `true`  | Restart `backend` + `ws-service` après init topics                    |
+
+
+**Run typique — sync compose uniquement (sans toucher aux topics)** :
+
+```text
+confirm = kafka-on-production
+dry_run = true
+```
+
+**Run typique — migration topics v2 complète** :
+
+```text
+confirm = kafka-on-production
+dry_run = false
+apply_topics_v2_env = true
+init_topics = true
+restart_app_after_topics_v2 = true
+```
+
+Le workflow utilise `scripts/kafka-env-effective.sh` pour lire les surcharges `KAFKA_*` depuis `.env.production.local` sans modifier `.env.production`.
+
+✅ **Implémenté** : workflow corrigé — dépendances `kafka_topics_init.sh` + contract + helpers env v2 inclus.
 
 ### Rollback Phase 1
 
@@ -168,17 +209,17 @@ Baseline J0 : capturer `free -h`, `docker stats`, lag, P50/P95 latence **avant**
 ### Recommandations post-audit P0 (classées)
 
 
-| Priorité | Action                                                                                  | Statut J0                                                      |
-| -------- | --------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| P0       | Documenter marge RAM comme baseline J0                                                  | ✅ Ce document                                                  |
-| P0       | **Configurer swap 4 Go** (section [P0 — Swap hôte](#p0--swap-hôte-immédiat-hors-dépôt)) | ✅ **2026-06-19**                                               |
-| P0       | Surveiller OOM killer (lecture seule J0–J14)                                            | Voir commandes ci-dessous                                      |
-| P0       | Ne pas lancer Phase 2 mono-broker avant 14 jours                                        | STOP GATE actif                                                |
-| P1       | Corréler Inactive(anon) avec `docker stats` / heaps JVM (audit P3)                      | ✅ [Audit P1–P8](#audit-production--p1p8-2026-06-18-ssh-live)   |
-| P1       | Recréer conteneurs Kafka pour appliquer compose optimisé                                | ✅ **2026-06-19** — heap 1G, RF=2, limites 2G/512M              |
-| P1       | Arrêter kafka-ui (profile optionnel)                                                    | ✅ **2026-06-19** — ~486 Mi libérés                             |
-| P1       | Basculer topics v2                                                                      | 🔴 Activer via fragment ou `.env.production.local` puis deploy |
-| P2       | Alerting `MemAvailable` < 1 Gi, run queue `r` > 8                                       | `LowMemoryAvailable` en place                                  |
+| Priorité | Action                                                                                  | Statut J0                                                                       |
+| -------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| P0       | Documenter marge RAM comme baseline J0                                                  | ✅ Ce document                                                                   |
+| P0       | **Configurer swap 4 Go** (section [P0 — Swap hôte](#p0--swap-hôte-immédiat-hors-dépôt)) | ✅ **2026-06-19**                                                                |
+| P0       | Surveiller OOM killer (lecture seule J0–J14)                                            | Voir commandes ci-dessous                                                       |
+| P0       | Ne pas lancer Phase 2 mono-broker avant 14 jours                                        | STOP GATE actif                                                                 |
+| P1       | Corréler Inactive(anon) avec `docker stats` / heaps JVM (audit P3)                      | ✅ [Audit P1–P8](#audit-production--p1p8-2026-06-18-ssh-live)                    |
+| P1       | Recréer conteneurs Kafka pour appliquer compose optimisé                                | ✅ **2026-06-19** — heap 1G, RF=2, limites 2G/512M                               |
+| P1       | Arrêter kafka-ui (profile optionnel)                                                    | ✅ **2026-06-19** — ~486 Mi libérés                                              |
+| P1       | Basculer topics v2                                                                      | Workflow `deploy-kafka.yml` ou `apply-kafka-topics-v2-local.sh` + `init_topics` |
+| P2       | Alerting `MemAvailable` < 1 Gi, run queue `r` > 8                                       | `LowMemoryAvailable` en place                                                   |
 
 
 ### Surveillance OOM (lecture seule, quotidien J0–J14)
@@ -315,13 +356,13 @@ swapon --show
 ### Actions recommandées (ordre)
 
 
-| Priorité | Action                                            | Comment exécuter                                                                 |
-| -------- | ------------------------------------------------- | -------------------------------------------------------------------------------- |
-| **P0**   | Swap 4 Go                                         | ✅ **2026-06-19**                                                                 |
-| **P1**   | Recréer stack Kafka (heap, RF, limites, kafka-ui) | ✅ **2026-06-19**                                                                 |
-| **P1**   | Basculer topics v2                                | Fragment ou `.env.production.local` → `INIT_TOPICS=1 deploy-kafka-production.sh` |
-| **P1**   | Observation 14 jours + latence P95                | Journal + Grafana — fin **2026-07-02**                                           |
-| **—**    | Phase 2 mono-broker                               | ⏸️ **NO-GO** par défaut — Go seulement si MemAvailable moyen < 3 Go              |
+| Priorité | Action                                            | Comment exécuter                                                                                            |
+| -------- | ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| **P0**   | Swap 4 Go                                         | ✅ **2026-06-19**                                                                                            |
+| **P1**   | Recréer stack Kafka (heap, RF, limites, kafka-ui) | ✅ **2026-06-19**                                                                                            |
+| **P1**   | Basculer topics v2                                | Workflow `deploy-kafka.yml` (`dry_run=false`, `apply_topics_v2_env=true`, `init_topics=true`) ou SSH manuel |
+| **P1**   | Observation 14 jours + latence P95                | Journal + Grafana — fin **2026-07-02**                                                                      |
+| **—**    | Phase 2 mono-broker                               | ⏸️ **NO-GO** par défaut — Go seulement si MemAvailable moyen < 3 Go                                         |
 
 
 **J0 observation** : démarrée le **2026-06-18**. Fin prévue **2026-07-02**.
@@ -558,3 +599,5 @@ Exécuter via `scripts/check-kafka-tracking-pipeline.sh` (automatisé partiel) +
 ✅ **Audit P1–P8 live SSH** (2026-06-18) : Kafka ON validé, lag=0 — voir sections audit.
 
 ✅ **Verdict opérationnel** (2026-06-19) : plan mature, Phase 1 GO, Phase 2 NO-GO par défaut — observation 14 jours avant toute décision mono-broker.
+
+✅ **Workflow CI `deploy-kafka.yml`** : fichiers init topics + env v2 + `kafka-env-effective.sh` ; procédure documentée ci-dessus.

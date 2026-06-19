@@ -1,6 +1,7 @@
 # yaml-language-server: disable
 # Déploiement Kafka production — manuel uniquement, séparé de Build & Deploy.
 # Ne modifie pas .github/workflows/deploy.yml.
+# Runbook : docs/ops/kafka-optimization-lirie.md (section CI deploy-kafka)
 name: Deploy Kafka (production)
 
 on:
@@ -11,13 +12,23 @@ on:
         required: true
         type: string
         default: ""
-      init_topics:
-        description: "INIT_TOPICS=1 lors du deploy (création / alignement topics)"
+      dry_run:
+        description: "Si true : copie fichiers + preflight uniquement (pas de redeploy)"
+        type: boolean
+        required: false
+        default: true
+      apply_topics_v2_env:
+        description: "Ajouter le bloc topics v2 dans /srv/atmr/.env.production.local (idempotent)"
         type: boolean
         required: false
         default: false
-      dry_run:
-        description: "Si true : copie des fichiers + check-kafka-production.sh preflight-on uniquement"
+      init_topics:
+        description: "INIT_TOPICS=1 — créer topics (nécessite apply_topics_v2_env ou vars déjà dans .env.local)"
+        type: boolean
+        required: false
+        default: false
+      restart_app_after_topics_v2:
+        description: "Après init topics v2 : restart backend + ws-service"
         type: boolean
         required: false
         default: true
@@ -62,7 +73,7 @@ jobs:
           fi
           echo "Secrets SSH présents"
 
-      - name: Ensure scripts/lib on server
+      - name: Ensure scripts directories on server
         uses: appleboy/ssh-action@master
         with:
           host: ${{ env.SSH_HOST }}
@@ -89,17 +100,17 @@ jobs:
           username: ${{ env.SSH_USER }}
           key: ${{ env.SSH_KEY }}
           port: ${{ env.SSH_PORT }}
-          source: "scripts/deploy-kafka-production.sh,scripts/check-kafka-production.sh,scripts/kafka-init-topics-compose.sh"
+          source: "scripts/deploy-kafka-production.sh,scripts/check-kafka-production.sh,scripts/check-kafka-tracking-pipeline.sh,scripts/kafka-init-topics-compose.sh,scripts/kafka-env-effective.sh,scripts/apply-kafka-topics-v2-local.sh,scripts/kafka-topics.contract.json,scripts/env.production.local.kafka-v2.example"
           target: "/srv/atmr/"
 
-      - name: Copy Kafka checks library
+      - name: Copy Kafka lib scripts
         uses: appleboy/scp-action@master
         with:
           host: ${{ env.SSH_HOST }}
           username: ${{ env.SSH_USER }}
           key: ${{ env.SSH_KEY }}
           port: ${{ env.SSH_PORT }}
-          source: "scripts/lib/kafka_checks.sh"
+          source: "scripts/lib/kafka_checks.sh,scripts/lib/kafka_topics_init.sh"
           target: "/srv/atmr/"
 
       - name: Verify Kafka files on server
@@ -111,16 +122,18 @@ jobs:
           port: ${{ env.SSH_PORT }}
           script: |
             set -euo pipefail
-            ls -la /srv/atmr/scripts || true
-            ls -la /srv/atmr/scripts/lib || true
+            test -f /srv/atmr/docker-compose.kafka.yml
             test -f /srv/atmr/scripts/deploy-kafka-production.sh
             test -f /srv/atmr/scripts/check-kafka-production.sh
+            test -f /srv/atmr/scripts/check-kafka-tracking-pipeline.sh
+            test -f /srv/atmr/scripts/kafka-init-topics-compose.sh
+            test -f /srv/atmr/scripts/kafka-env-effective.sh
+            test -f /srv/atmr/scripts/apply-kafka-topics-v2-local.sh
+            test -f /srv/atmr/scripts/kafka-topics.contract.json
             test -f /srv/atmr/scripts/lib/kafka_checks.sh
-            if [ -f /srv/atmr/scripts/kafka-init-topics-compose.sh ]; then
-              echo "kafka-init-topics-compose.sh present"
-            else
-              echo "WARN: kafka-init-topics-compose.sh absent (required only when init_topics=true)"
-            fi
+            test -f /srv/atmr/scripts/lib/kafka_topics_init.sh
+            test -f /srv/atmr/scripts/env.production.local.kafka-v2.example
+            echo "Tous les fichiers Kafka requis sont présents"
 
       - name: chmod +x Kafka scripts
         uses: appleboy/ssh-action@master
@@ -131,11 +144,31 @@ jobs:
           port: ${{ env.SSH_PORT }}
           script: |
             set -euo pipefail
-            chmod +x /srv/atmr/scripts/deploy-kafka-production.sh
-            chmod +x /srv/atmr/scripts/check-kafka-production.sh
-            if [ -f /srv/atmr/scripts/kafka-init-topics-compose.sh ]; then
-              chmod +x /srv/atmr/scripts/kafka-init-topics-compose.sh
-            fi
+            cd /srv/atmr
+            for s in \
+              scripts/deploy-kafka-production.sh \
+              scripts/check-kafka-production.sh \
+              scripts/check-kafka-tracking-pipeline.sh \
+              scripts/kafka-init-topics-compose.sh \
+              scripts/kafka-env-effective.sh \
+              scripts/apply-kafka-topics-v2-local.sh; do
+              chmod +x "${s}"
+              sed -i 's/\r$//' "${s}" 2>/dev/null || true
+            done
+
+      - name: Apply topics v2 env (optional)
+        if: ${{ github.event.inputs.apply_topics_v2_env }}
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ env.SSH_HOST }}
+          username: ${{ env.SSH_USER }}
+          key: ${{ env.SSH_KEY }}
+          port: ${{ env.SSH_PORT }}
+          script: |
+            set -euo pipefail
+            cd /srv/atmr
+            export ATMR_DEPLOY_ROOT=/srv/atmr
+            ./scripts/apply-kafka-topics-v2-local.sh
 
       - name: Dry run (preflight-on only)
         if: ${{ github.event.inputs.dry_run }}
@@ -149,6 +182,7 @@ jobs:
             set -euo pipefail
             cd /srv/atmr
             export ATMR_DEPLOY_ROOT=/srv/atmr
+            eval "$(./scripts/kafka-env-effective.sh)"
             ./scripts/check-kafka-production.sh preflight-on
 
       - name: Deploy Kafka + validate (no FORCE)
@@ -163,9 +197,14 @@ jobs:
             set -euo pipefail
             cd /srv/atmr
             export ATMR_DEPLOY_ROOT=/srv/atmr
+            eval "$(./scripts/kafka-env-effective.sh)"
             if [ "${{ github.event.inputs.init_topics }}" = "true" ]; then
-              test -f /srv/atmr/scripts/kafka-init-topics-compose.sh
+              test -f /srv/atmr/scripts/lib/kafka_topics_init.sh
               export INIT_TOPICS=1
             fi
             ./scripts/deploy-kafka-production.sh
             ./scripts/check-kafka-production.sh on
+            if [ "${{ github.event.inputs.init_topics }}" = "true" ] && [ "${{ github.event.inputs.restart_app_after_topics_v2 }}" = "true" ]; then
+              docker compose -f docker-compose.production.yml restart backend ws-service
+            fi
+            ./scripts/check-kafka-tracking-pipeline.sh || true
