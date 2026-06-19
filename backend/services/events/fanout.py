@@ -426,20 +426,27 @@ def _send_push_to_driver(
                 driver_id,
             )
         else:
-            # Envoyer à tous les devices actifs
+            from services.notifications.push_device_selection import (
+                prepare_driver_push_targets,
+            )
+
+            push_targets = prepare_driver_push_targets(
+                device_tokens,
+                driver_id=driver_id,
+            )
             success_count = 0
-            for device_token in device_tokens:
+            for device_token in push_targets:
                 result = send_push_message(
-                    token=device_token.token,
+                    token=device_token["token"],
                     title=title,
                     body=body,
                     data=data,
                     timeout=timeout,
                     driver_id=driver_id,
                     bypass_rate_limit=bypass_rate_limit,
-                    provider=getattr(device_token, "provider", None),
-                    platform=getattr(device_token, "platform", None),
-                    device_token_id=device_token.id,
+                    provider=device_token.get("provider"),
+                    platform=device_token.get("platform"),
+                    device_token_id=device_token["id"],
                 )
 
                 if result.get("ok"):
@@ -447,14 +454,14 @@ def _send_push_to_driver(
                     app_logger.debug(
                         "[event_fanout] Push sent to driver %s (device %s)",
                         driver_id,
-                        device_token.id,
+                        device_token["id"],
                     )
                 else:
                     error_msg = result.get("error", "Unknown error")
                     app_logger.warning(
                         "[event_fanout] Push failed for driver %s (device %s): %s",
                         driver_id,
-                        device_token.id,
+                        device_token["id"],
                         error_msg,
                     )
 
@@ -462,7 +469,7 @@ def _send_push_to_driver(
                         app_logger.info(
                             "[event_fanout] Token invalidé (lifecycle) pour driver %s (device %s)",
                             driver_id,
-                            device_token.id,
+                            device_token["id"],
                         )
                         try:
                             from services.monitoring.prometheus import (
@@ -473,7 +480,9 @@ def _send_push_to_driver(
                         except ImportError:
                             pass  # Prometheus non disponible
                         if not is_push_device_token_lifecycle_enabled():
-                            device_token.is_active = False
+                            row = DeviceToken.query.get(device_token["id"])
+                            if row is not None:
+                                row.is_active = False
 
             try:
                 db.session.commit()
@@ -1828,6 +1837,12 @@ def send_critical_alert_ios(
             )
             return False
 
+        from services.notifications.push_device_selection import (
+            prepare_driver_push_targets,
+        )
+
+        push_targets = prepare_driver_push_targets(device_tokens, driver_id=driver_id)
+
         # Construire le payload
         push_data: Dict[str, Any] = {
             "type": "critical_alert",
@@ -1840,14 +1855,11 @@ def send_critical_alert_ios(
         if data:
             push_data.update(data)
 
-        # Envoyer à tous les devices actifs
+        # Envoyer aux devices priorisés (FCM Android d'abord)
         success_count = 0
-        for device_token in device_tokens:
-            # ✅ Configuration spécifique iOS Critical Alert
-            # Note: Pour vraies Critical Alerts (bypass DnD), nécessite entitlement
-            # Actuellement: utilise interruptionLevel "critical" (iOS 15+)
+        for device_token in push_targets:
             result = send_push_message(
-                token=device_token.token,
+                token=device_token["token"],
                 title=f"🚨 {title}",
                 body=message,
                 data={
@@ -1864,9 +1876,9 @@ def send_critical_alert_ios(
                 use_retry=True,
                 driver_id=driver_id,
                 bypass_rate_limit=True,
-                provider=getattr(device_token, "provider", None),
-                platform=getattr(device_token, "platform", None),
-                device_token_id=device_token.id,
+                provider=device_token.get("provider"),
+                platform=device_token.get("platform"),
+                device_token_id=device_token["id"],
             )
 
             if result.get("ok"):
@@ -1875,7 +1887,9 @@ def send_critical_alert_ios(
                 result.get("token_invalid")
                 and not is_push_device_token_lifecycle_enabled()
             ):
-                device_token.is_active = False
+                row = DeviceToken.query.get(device_token["id"])
+                if row is not None:
+                    row.is_active = False
 
         try:
             db.session.commit()

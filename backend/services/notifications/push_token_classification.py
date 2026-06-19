@@ -5,10 +5,12 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 from models import DeviceToken
+from services.notifications.push_token_platform import (
+    looks_like_expo_token,
+    looks_like_fcm_token,
+)
 
 HEALTHY_PUSH_MAX_AGE_DAYS = 7
-FCM_TOKEN_PREFIX = "APA91"
-EXPO_TOKEN_PREFIX = "ExponentPushToken["
 
 
 def _as_utc(value: datetime | None) -> datetime | None:
@@ -19,22 +21,12 @@ def _as_utc(value: datetime | None) -> datetime | None:
     return value.astimezone(UTC)
 
 
-def _looks_like_fcm_token(token: str) -> bool:
-    return token.startswith(FCM_TOKEN_PREFIX) or (
-        len(token) > 100 and not token.startswith(EXPO_TOKEN_PREFIX)
-    )
-
-
-def _looks_like_expo_token(token: str) -> bool:
-    return token.startswith(EXPO_TOKEN_PREFIX)
-
-
 def _provider_mismatch(token: DeviceToken) -> bool:
     provider = (token.provider or "expo").lower()
     value = token.token or ""
-    if provider == "expo" and _looks_like_fcm_token(value):
+    if provider == "expo" and looks_like_fcm_token(value):
         return True
-    return provider == "fcm" and _looks_like_expo_token(value)
+    return provider == "fcm" and looks_like_expo_token(value)
 
 
 def classify_token(token: DeviceToken, *, now: datetime | None = None) -> str:

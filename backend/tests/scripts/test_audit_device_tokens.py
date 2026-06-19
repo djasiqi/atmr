@@ -5,10 +5,10 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 from scripts.audit_device_tokens import (
-    _looks_like_fcm_token,
     _provider_mismatch,
     classify_token,
 )
+from services.notifications.push_token_platform import looks_like_fcm_token
 
 
 class _TokenStub:
@@ -35,9 +35,14 @@ def test_classify_mismatch_provider_fcm_as_expo() -> None:
         provider="expo",
         token="APA91bFakeFcmTokenValue",
     )
-    assert _looks_like_fcm_token(token.token) is True
+    assert looks_like_fcm_token(token.token) is True
     assert _provider_mismatch(token) is True
     assert classify_token(token) == "MISMATCH_PROVIDER"
+
+
+def test_modern_fcm_token_detected() -> None:
+    token = "ewCrKUSCKU5bvnMqoZemWw:APA91bENAkBia"
+    assert looks_like_fcm_token(token) is True
 
 
 def test_classify_healthy_recent_push() -> None:

@@ -92,9 +92,11 @@ async function hasAcceptedNotificationDisclosure(telemetrySource: string): Promi
 export function useRegisterPushTokenEffect(options: RegisterPushTokenOptions): void {
   const { enabled, fcmEnabled, callbacks, telemetrySource, onPermissionDenied } = options;
   const Notifications = getExpoNotificationsModule();
+  const androidNativeFcmMode = fcmEnabled && Platform.OS === "android";
 
   useEffect(() => {
     if (!enabled || !Notifications || Platform.OS === "web") return;
+    if (androidNativeFcmMode) return;
 
     let cancelled = false;
     let expoSubscription: EventSubscription | null = null;
@@ -169,13 +171,43 @@ export function useRegisterPushTokenEffect(options: RegisterPushTokenOptions): v
       unsubscribeDisclosure();
       expoSubscription?.remove();
     };
-  }, [Notifications, callbacks, enabled, onPermissionDenied, telemetrySource]);
+  }, [Notifications, androidNativeFcmMode, callbacks, enabled, onPermissionDenied, telemetrySource]);
 
   useEffect(() => {
     if (!enabled || !fcmEnabled || Platform.OS === "web") return;
 
     let cancelled = false;
     let fcmRegistrationInFlight = false;
+
+    const registerExpoFallback = async (): Promise<void> => {
+      if (!Notifications || cancelled) return;
+      if (!(await hasAcceptedNotificationDisclosure(telemetrySource))) return;
+      emitDriverTelemetry("push.token.expo_fallback_unreliable", {
+        source: telemetrySource,
+        platform: Platform.OS,
+      });
+      try {
+        const perm = await Notifications.getPermissionsAsync();
+        if (!perm.granted && perm.status !== "granted") return;
+        const tokenResult = await Notifications.getExpoPushTokenAsync();
+        if (!tokenResult?.data || cancelled) return;
+        const deviceId = await getStableDeviceId();
+        const platform = Platform.OS === "ios" ? "ios" : "android";
+        const payload = { token: tokenResult.data, deviceId, platform };
+        await registerPushTokenWithPersistence(
+          "expo",
+          payload,
+          () => callbacks.registerExpo(payload),
+          telemetrySource
+        );
+      } catch (error) {
+        emitDriverTelemetry("push.token.register_failed", {
+          source: telemetrySource,
+          provider: "expo",
+          reason: error instanceof Error ? error.message : "expo_fallback_failed",
+        });
+      }
+    };
 
     const registerFcm = async (token: string) => {
       if (!token || cancelled || fcmRegistrationInFlight) return;
@@ -196,37 +228,56 @@ export function useRegisterPushTokenEffect(options: RegisterPushTokenOptions): v
       }
     };
 
-    void (async () => {
-      if (!(await hasAcceptedNotificationDisclosure(telemetrySource))) return;
-      const Notifications = getExpoNotificationsModule();
-      if (Notifications) {
-        const perm = await Notifications.getPermissionsAsync();
-        if (!perm.granted && perm.status !== "granted") return;
+    const attemptFcmRegistration = async (stage: string): Promise<boolean> => {
+      if (cancelled) return false;
+      if (!(await hasAcceptedNotificationDisclosure(telemetrySource))) return false;
+      const NotificationsModule = getExpoNotificationsModule();
+      if (NotificationsModule) {
+        const perm = await NotificationsModule.getPermissionsAsync();
+        if (!perm.granted && perm.status !== "granted") return false;
       }
       await flushPendingPushTokenRegistrations(callbacks);
       const token = await getDriverFcmToken();
-      if (token) await registerFcm(token);
-    })();
+      if (token) {
+        await registerFcm(token);
+        return true;
+      }
+      if (androidNativeFcmMode) {
+        emitDriverTelemetry("driver.push.fcm.unavailable", {
+          source: telemetrySource,
+          reason: "fcm_token_missing_after_get",
+          stage,
+        });
+        await registerExpoFallback();
+      }
+      return false;
+    };
+
+    void attemptFcmRegistration("session_ready");
 
     const unsubscribeRefresh = subscribeDriverFcmTokenRefresh((token) => {
       void registerFcm(token);
     });
     const unsubscribeDisclosure = subscribeNotificationDisclosureAccepted(() => {
-      void (async () => {
-        const token = await getDriverFcmToken();
-        if (token) await registerFcm(token);
-      })();
+      void attemptFcmRegistration("disclosure_accepted");
+    });
+
+    const appStateSubscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState !== "active" || cancelled) return;
+      void attemptFcmRegistration("app_foreground");
     });
 
     return () => {
       cancelled = true;
       unsubscribeRefresh();
       unsubscribeDisclosure();
+      appStateSubscription.remove();
     };
-  }, [callbacks, enabled, fcmEnabled, telemetrySource]);
+  }, [androidNativeFcmMode, callbacks, enabled, fcmEnabled, telemetrySource]);
 
   useEffect(() => {
     if (!enabled || Platform.OS === "web") return;
+    if (androidNativeFcmMode) return;
 
     const subscription = AppState.addEventListener("change", (nextState) => {
       if (nextState !== "active") return;
@@ -236,5 +287,5 @@ export function useRegisterPushTokenEffect(options: RegisterPushTokenOptions): v
     return () => {
       subscription.remove();
     };
-  }, [callbacks, enabled]);
+  }, [androidNativeFcmMode, callbacks, enabled]);
 }

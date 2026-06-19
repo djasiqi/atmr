@@ -43,7 +43,7 @@ curl -H "Authorization: Bearer $ADMIN_JWT" \
 | `last_driver_activity_at` | Dernière activité device (pas un login strict) |
 | `token_created_at` | Création du token actif le plus récent |
 | `token_updated_at` | Dernière ré-enregistrement |
-| `push_status` | `operational`, `no_token`, `stale_token`, `token_invalid` |
+| `push_status` | `operational`, `no_token`, `stale_token`, `token_invalid`, `expo_fallback_unreliable` (Android sans token FCM natif) |
 | `app_version` | Version app depuis Redis `driver:{id}:device_health` |
 
 Exemple actionnable : `token_invalid` + dernier succès il y a 42j + Android + v1.0.3 → demander réouverture app / réinstallation.

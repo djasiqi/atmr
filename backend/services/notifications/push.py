@@ -286,6 +286,11 @@ def send_push_message(
     if provider is None:
         provider = "expo" if token.startswith("ExponentPushToken") else "fcm"
 
+    if provider == "fcm":
+        from services.notifications.push_token_platform import infer_fcm_platform
+
+        platform = infer_fcm_platform(token, platform)
+
     # FCM native path
     if provider == "fcm":
         from services.notifications.firebase_push import send_fcm_android, send_fcm_ios

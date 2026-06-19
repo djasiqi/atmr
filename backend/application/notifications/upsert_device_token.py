@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from ext import app_logger, db
 from models import DeviceToken
+from services.notifications.push_token_platform import infer_fcm_platform
 
 
 def _normalize_provider(token: str, provider: str | None) -> str:
@@ -79,10 +80,11 @@ def upsert_device_token(
     resolved_provider = _normalize_provider(token, provider)
     now = datetime.now(UTC)
 
+    inferred_platform = infer_fcm_platform(token, platform if isinstance(platform, str) else None)
     if (
         resolved_provider == "fcm"
         and platform == "ios"
-        and token.startswith(("APA91", "APA91b"))
+        and inferred_platform == "android"
     ):
         app_logger.warning(
             "[push-token] platform ios->android inferred for FCM Android token owner driver=%s company=%s",
@@ -90,6 +92,8 @@ def upsert_device_token(
             company_id,
         )
         platform = "android"
+    elif inferred_platform:
+        platform = inferred_platform
 
     row: DeviceToken | None = None
 
@@ -100,6 +104,7 @@ def upsert_device_token(
         row = DeviceToken.query.filter_by(
             company_id=company_id,
             device_id=str(device_id).strip(),
+            provider=resolved_provider,
         ).first()
     elif driver_id is not None:
         device_id_str = str(device_id).strip() if device_id else None
@@ -107,6 +112,7 @@ def upsert_device_token(
             row = DeviceToken.query.filter_by(
                 driver_id=driver_id,
                 device_id=device_id_str,
+                provider=resolved_provider,
             ).first()
         else:
             app_logger.warning(

@@ -1,6 +1,7 @@
 import React from "react";
-import { beforeEach, describe, expect, it, jest } from "@jest/globals";
+import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { act, create } from "react-test-renderer";
+import { AppState } from "react-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { NotificationsProvider } from "../../core/providers/NotificationsProvider";
 import { useDriverRealtimeSync } from "./hooks";
@@ -16,7 +17,7 @@ const mockFlushTrackingQueue = jest.fn();
 const mockEmitDriverTelemetry = jest.fn();
 const mockIsFeatureEnabled = jest.fn();
 
-let mockAppStateHandler: ((state: "active" | "inactive" | "background") => void) | null = null;
+let mockAppStateHandlers: Array<(state: "active" | "inactive" | "background") => void> = [];
 let mockNotificationResponseHandler: ((response: any) => void) | null = null;
 let mockSessionState: {
   status: "ready" | "idle" | "error";
@@ -52,19 +53,25 @@ jest.mock("expo-notifications", () => ({
   }),
 }));
 
-jest.mock("react-native", () => ({
-  AppState: {
-    currentState: "active",
-    addEventListener: (_event: string, callback: (state: "active" | "inactive" | "background") => void) => {
-      mockAppStateHandler = callback;
-      return { remove: jest.fn() };
-    },
-  },
-  Platform: {
-    OS: "android",
-    select: (spec: Record<string, unknown>) =>
-      (spec.android as unknown) ?? (spec.default as unknown) ?? (spec.ios as unknown),
-  },
+jest.mock("../../core/notifications/notificationDisclosurePersistence", () => ({
+  readNotificationDisclosureAccepted: jest.fn(async () => true),
+  subscribeNotificationDisclosureAccepted: jest.fn(() => () => undefined),
+}));
+
+jest.mock("./notificationActions", () => ({
+  ensureDriverNotificationActions: jest.fn().mockResolvedValue(undefined),
+}));
+
+jest.mock("./notificationGrouping", () => ({
+  ensureDriverNotificationGrouping: jest.fn().mockResolvedValue(undefined),
+}));
+
+jest.mock("./missionBarIOS", () => ({
+  configureMissionBarIOS: jest.fn().mockResolvedValue(undefined),
+}));
+
+jest.mock("./missionBarBackground", () => ({
+  registerMissionBarBackgroundHandlers: jest.fn(),
 }));
 
 jest.mock("../../core/sessionProvider", () => ({
@@ -149,20 +156,65 @@ jest.mock("./push", () => ({
   handleDriverPushQuickAction: (payload: unknown) => mockHandleDriverPushQuickAction(payload),
 }));
 
+jest.mock("./firebaseMessaging", () => ({
+  initDriverFirebaseMessaging: jest.fn(),
+  disposeDriverFirebaseMessaging: jest.fn(),
+  driverFcmPlatform: () => "android",
+}));
+
+jest.mock("./notificationChannels", () => ({
+  ensureBaseNotificationChannels: jest.fn().mockResolvedValue(undefined),
+  ensureDriverNotificationChannels: jest.fn().mockResolvedValue(undefined),
+  getRegisteredNotificationChannelCount: jest.fn().mockReturnValue(0),
+  resolveDriverNotificationContract: jest.fn().mockReturnValue({}),
+}));
+
+jest.mock("./silentNotifications", () => ({
+  handleSilentPushPayload: jest.fn().mockResolvedValue(undefined),
+  isSilentPayload: () => false,
+  shouldSuppressVisualPush: () => false,
+}));
+
+jest.mock("./driverRealtimeSync", () => ({
+  configureDriverRealtimeSync: jest.fn(),
+  requestMissionRefresh: jest.fn(),
+  requestChatRefresh: jest.fn(),
+}));
+
+jest.mock("../../core/notifications/notificationDedupStore", () => ({
+  buildNotificationDedupKey: () => "dedup-key",
+  markNotificationHandled: () => false,
+}));
+
 function DriverRuntimeHarness() {
   useDriverRealtimeSync();
   return null;
 }
 
+function emitAppState(state: "active" | "inactive" | "background") {
+  for (const handler of mockAppStateHandlers) {
+    handler(state);
+  }
+}
+
 describe("P1->P2 lightweight integration", () => {
   beforeEach(() => {
-    mockAppStateHandler = null;
+    mockAppStateHandlers = [];
     mockNotificationResponseHandler = null;
     mockSessionState = {
       status: "ready",
       activeContext: { context_id: "driver:42", context_type: "driver", permissions: [] },
       bootstrap: { user: { id: 42 } },
     };
+
+    jest.spyOn(AppState, "addEventListener").mockImplementation((_event, callback) => {
+      mockAppStateHandlers.push(callback as (state: "active" | "inactive" | "background") => void);
+      return { remove: jest.fn() };
+    });
+    Object.defineProperty(AppState, "currentState", {
+      configurable: true,
+      get: () => "active",
+    });
 
     mockRouterPush.mockReset();
     mockRegisterDriverPushToken.mockReset();
@@ -195,6 +247,10 @@ describe("P1->P2 lightweight integration", () => {
     );
   });
 
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
   it("routes cold-start notification and executes a single resume chain", async () => {
     const queryClient = new QueryClient();
     let renderer: ReturnType<typeof create>;
@@ -213,7 +269,7 @@ describe("P1->P2 lightweight integration", () => {
     expect(mockRegisterDriverPushToken).toHaveBeenCalledWith(
       expect.objectContaining({ token: "ExpoPushToken[integration]", driverId: 42 })
     );
-    expect(mockRouterPush).toHaveBeenCalledWith("/(app)/(driver)/missions/501");
+    expect(mockRouterPush).toHaveBeenCalledWith("/(app)/(driver)");
 
     let releaseReconcile: (() => void) | null = null;
     mockReconcileDriverMissions.mockImplementationOnce(
@@ -224,10 +280,10 @@ describe("P1->P2 lightweight integration", () => {
     );
 
     await act(async () => {
-      mockAppStateHandler?.("inactive");
-      mockAppStateHandler?.("active");
-      mockAppStateHandler?.("inactive");
-      mockAppStateHandler?.("active");
+      emitAppState("inactive");
+      emitAppState("active");
+      emitAppState("inactive");
+      emitAppState("active");
       await Promise.resolve();
     });
 

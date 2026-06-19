@@ -35,9 +35,39 @@ let backgroundDataMessageCallback: BackgroundDataMessageHandler | null = null;
 function getDriverMessagingInstance(): ReturnType<typeof getMessaging> | null {
   try {
     return getMessaging(getApp());
-  } catch {
+  } catch (error) {
+    emitDriverTelemetry("driver.push.fcm.unavailable", {
+      source: "driver.firebaseMessaging",
+      reason: error instanceof Error ? error.message : "messaging_instance_unavailable",
+      stage: "get_messaging_instance",
+    });
     return null;
   }
+}
+
+function extractFcmErrorDetails(error: unknown): { reason: string; errorCode: string | null } {
+  if (error instanceof Error) {
+    const code =
+      "code" in error && typeof (error as { code?: unknown }).code === "string"
+        ? (error as { code: string }).code
+        : null;
+    return { reason: error.message, errorCode: code };
+  }
+  return { reason: "fcm_token_unavailable", errorCode: null };
+}
+
+function emitFcmUnavailable(stage: string, error?: unknown): void {
+  const { reason, errorCode } =
+    error !== undefined ? extractFcmErrorDetails(error) : { reason: stage, errorCode: null };
+  if (__DEV__) {
+    console.warn("[FCM]", stage, reason, errorCode ?? "");
+  }
+  emitDriverTelemetry("driver.push.fcm.unavailable", {
+    source: "driver.firebaseMessaging",
+    reason,
+    error_code: errorCode,
+    stage,
+  });
 }
 
 async function reportBackgroundHandlerNoCallback(payload: NativeFcmPayload): Promise<void> {
@@ -67,18 +97,30 @@ export function setDriverFcmBackgroundCallback(
 }
 
 export async function getDriverFcmToken(): Promise<string | null> {
-  if (!isFeatureEnabled("driver_fcm_native_enabled")) return null;
+  if (!isFeatureEnabled("driver_fcm_native_enabled")) {
+    emitFcmUnavailable("feature_flag_disabled");
+    return null;
+  }
+  emitDriverTelemetry("driver.push.fcm.get_token_start", {
+    source: "driver.firebaseMessaging",
+    platform: Platform.OS,
+  });
   const messagingInstance = getDriverMessagingInstance();
   if (!messagingInstance) return null;
   try {
     await requestPermission(messagingInstance);
     const token = await getToken(messagingInstance);
-    return token || null;
-  } catch (error) {
-    emitDriverTelemetry("driver.push.fcm.unavailable", {
+    if (!token) {
+      emitFcmUnavailable("get_token_empty");
+      return null;
+    }
+    emitDriverTelemetry("driver.push.fcm.token", {
       source: "driver.firebaseMessaging",
-      reason: error instanceof Error ? error.message : "fcm_token_unavailable",
+      token_present: true,
     });
+    return token;
+  } catch (error) {
+    emitFcmUnavailable("get_token_failed", error);
     return null;
   }
 }
@@ -120,10 +162,7 @@ export async function initDriverFirebaseMessaging(
     });
     registerDriverFcmBackgroundHandler();
   } catch (error) {
-    emitDriverTelemetry("driver.push.fcm.unavailable", {
-      source: "driver.firebaseMessaging",
-      reason: error instanceof Error ? error.message : "fcm_unavailable",
-    });
+    emitFcmUnavailable("init_failed", error);
   }
 }
 
@@ -223,10 +262,7 @@ export function registerDriverFcmBackgroundHandler(
     try {
       await displayBackgroundNotification(payload);
     } catch (error) {
-      emitDriverTelemetry("driver.push.fcm.unavailable", {
-        source: "driver.firebaseMessaging.background",
-        reason: error instanceof Error ? error.message : "bg_display_failed",
-      });
+      emitFcmUnavailable("background_display_failed", error);
     }
   });
 }

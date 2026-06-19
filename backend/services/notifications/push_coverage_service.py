@@ -10,6 +10,9 @@ from sqlalchemy import func
 
 from ext import redis_client
 from models import DeviceToken, Driver
+from services.notifications.push_device_selection import (
+    android_has_expo_only,
+)
 from services.notifications.push_token_classification import classify_token
 
 INVALID_TOKEN_CODES = frozenset({"token_unregistered", "DeviceNotRegistered"})
@@ -79,6 +82,8 @@ def _resolve_push_status(
     for token in active_tokens:
         if (token.last_push_error_code or "") in INVALID_TOKEN_CODES:
             return "token_invalid"
+    if android_has_expo_only(active_tokens):
+        return "expo_fallback_unreliable"
     classifications = {classify_token(token) for token in active_tokens}
     if classifications & {"STALE", "MISMATCH_PROVIDER"}:
         return "stale_token"

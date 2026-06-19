@@ -42,6 +42,31 @@ def test_resolve_push_status_operational() -> None:
     assert _resolve_push_status(has_active_token=True, active_tokens=tokens) == "operational"
 
 
+def test_resolve_push_status_android_expo_only_unreliable() -> None:
+    tokens = [
+        _token(
+            provider="expo",
+            token="ExponentPushToken[abc]",
+            platform="android",
+        )
+    ]
+    assert (
+        _resolve_push_status(has_active_token=True, active_tokens=tokens)
+        == "expo_fallback_unreliable"
+    )
+
+
+def test_resolve_push_status_android_fcm_operational() -> None:
+    tokens = [
+        _token(
+            provider="fcm",
+            token="abc:APA91bNative",
+            platform="android",
+        )
+    ]
+    assert _resolve_push_status(has_active_token=True, active_tokens=tokens) == "operational"
+
+
 def test_refresh_push_active_owners_gauges_noop_when_prometheus_disabled() -> None:
     from services.monitoring.prometheus import refresh_push_active_owners_gauges
 
