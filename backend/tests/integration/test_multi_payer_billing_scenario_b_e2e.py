@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 import pytest
 
 from application.institutions.accept_offer import AcceptOfferUseCase
-from models import Booking, Institution, InstitutionPatient, TransportRequest, TransportRequestLeg
+from models import Booking, Company, Institution, InstitutionPatient, TransportRequest, TransportRequestLeg
 from models.enums import RequestStatus
 from services.billing.destination_billing_resolver import build_billing_summary
 from shared.time_utils import now_local
@@ -140,6 +140,14 @@ class TestMultiPayerBillingScenarioB:
     ):
         if not test_company:
             pytest.skip("test_company required")
+
+        clinic_co = Company(
+            name=ems_institution.name,
+            uid_ide="CHE-987.654.321",
+            user_id=test_company.user_id,
+        )
+        db.session.add(clinic_co)
+        db.session.flush()
 
         tr = _build_scenario_b_request(
             db,

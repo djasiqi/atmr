@@ -3252,10 +3252,25 @@ def _build_enriched_line_meta_by_line_id(
         lines, line_dicts, bookings_by_id=bookings_by_id
     )
     out: dict[int, dict[str, Any]] = {}
+    bs = getattr(invoice, "billing_strategy", None)
+    bs_val = bs.value if hasattr(bs, "value") else str(bs or "")
+    is_s2 = bs_val == "s2_clinic_monthly"
     for ln, d in zip(lines, line_dicts, strict=True):
         meta = d.get("line_meta")
         if isinstance(meta, dict):
-            out[int(ln.id)] = meta
+            merged_meta = dict(meta)
+        else:
+            merged_meta = {}
+        if is_s2 and ln.reservation_id and bookings_by_id:
+            from repositories.invoice_repository import (
+                _merge_s2_clinic_line_meta_from_booking,
+            )
+
+            _bk = bookings_by_id.get(ln.reservation_id)
+            _cl = getattr(_bk, "client", None) if _bk is not None else None
+            merged_meta = _merge_s2_clinic_line_meta_from_booking(ln, _bk, _cl)
+            d["line_meta"] = merged_meta
+        out[int(ln.id)] = merged_meta
     return out
 
 
@@ -3345,7 +3360,12 @@ def _pdf_build_preconsolidated_ar_items(
                 earliest = date_retour
 
             patient_id = lm.get("patient_id") or getattr(booking, "client_id", None)
-            patient_name = lm.get("patient_name") or "Patient"
+            _bk_client = getattr(booking, "client", None)
+            from application.invoices.invoice_line_description import (
+                resolve_s2_clinic_line_patient_name,
+            )
+
+            patient_name = resolve_s2_clinic_line_patient_name(_bk_client, booking)
 
             pre.append(
                 {
@@ -3380,6 +3400,12 @@ def _pdf_build_preconsolidated_ar_items(
             amount_rounded = round_to_5_cents(
                 Decimal(str(getattr(line, "line_total", 0) or 0))
             )
+            _bk_client_rt = getattr(booking, "client", None)
+            from application.invoices.invoice_line_description import (
+                resolve_s2_clinic_line_patient_name,
+            )
+
+            _pn_rt = resolve_s2_clinic_line_patient_name(_bk_client_rt, booking)
             pre.append(
                 {
                     "is_round_trip": True,
@@ -3388,7 +3414,7 @@ def _pdf_build_preconsolidated_ar_items(
                     "earliest_scheduled": getattr(booking, "scheduled_time", None),
                     "patient_id": lm.get("patient_id")
                     or getattr(booking, "client_id", None),
-                    "patient_name": lm.get("patient_name") or "Patient",
+                    "patient_name": _pn_rt,
                     "pickup": pickup,
                     "dropoff": dropoff,
                     "transport_display": f"{short_a} ↔ {short_b}",
@@ -3486,8 +3512,18 @@ def _build_s2_table(
         patient_id = None
 
         if is_third_party_invoice or is_s2_invoice:
-            # Facture tierce partie ou S2 : utiliser le patient depuis line_meta ou booking
-            if lm.get("patient_name"):
+            from application.invoices.invoice_line_description import (
+                format_patient_display_name_nom_prenom,
+                resolve_s2_clinic_line_patient_name,
+            )
+
+            if is_s2_invoice:
+                _line_client = getattr(booking, "client", None)
+                patient_name = resolve_s2_clinic_line_patient_name(
+                    _line_client, booking
+                )
+                patient_id = lm.get("patient_id") or booking.client_id
+            elif lm.get("patient_name"):
                 patient_name = (
                     lm.get("patient_name")
                     or booking.customer_name
@@ -3950,7 +3986,7 @@ def _build_s2_table(
                     esc_d = f"{esc_d}&nbsp;{_pdf_s2_ar_tag_markup()}"
                 esc_d = _pdf_limit_html_br_lines(esc_d, _max_desc_lines)
             orphan_pn_prefix = ""
-            if (is_third_party_invoice or is_s2_invoice) and line.type != InvoiceLineType.MATERIAL_DELIVERY:
+            if is_third_party_invoice or is_s2_invoice:
                 raw_pn = lm_or.get("patient_name")
                 if raw_pn and str(raw_pn).strip() and str(raw_pn).strip() != "—":
                     from application.invoices.invoice_line_description import (

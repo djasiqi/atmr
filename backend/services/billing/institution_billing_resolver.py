@@ -397,34 +397,21 @@ def _resolve_or_create_institution_bp(
     return bp, SOURCE_CREATED_INSTITUTION
 
 
-def _resolve_clinic_company_id_for_institution(
+def resolve_clinic_company_id_for_institution_accept(
     *,
-    booking: Booking,
-    company_id: int,
-    billing_party_id: int,
+    institution_client: Client | None = None,
     institution: Institution | None = None,
+    transport_company_id: int,
+    billing_party_id: int | None = None,
 ) -> int | None:
-    """Déduit la clinique payeuse pour un booking institution.
-
-    Priorité:
-    1) ``billed_to_company_id`` déjà défini (sauf erreur historique = ID transporteur)
-    2) Client institution lié (``default_billed_to_company_id``)
-    3) Entreprise clinique homonyme (``Company.name`` ≈ ``institution_name``)
-    4) Mapping explicite (company_id, billing_party_id) -> clinic_company_id
-    """
-    existing = getattr(booking, "billed_to_company_id", None)
-    if existing is not None and int(existing) != int(company_id):
-        return int(existing)
-
-    client = getattr(booking, "client", None)
-    if client is None and getattr(booking, "client_id", None):
-        client = Client.query.get(int(booking.client_id))
-
-    if client and getattr(client, "is_institution", False):
-        client_default = getattr(client, "default_billed_to_company_id", None)
+    """Résout la clinique payeuse avant persistance Booking (``billed_to_type=clinic``)."""
+    if institution_client and getattr(institution_client, "is_institution", False):
+        client_default = getattr(institution_client, "default_billed_to_company_id", None)
         if client_default is not None:
-            return int(client_default)
-        inst_name = (getattr(client, "institution_name", None) or "").strip()
+            cid = int(client_default)
+            if cid != int(transport_company_id):
+                return cid
+        inst_name = (getattr(institution_client, "institution_name", None) or "").strip()
         if inst_name:
             co = (
                 Company.query.filter(
@@ -449,19 +436,71 @@ def _resolve_clinic_company_id_for_institution(
             if co is not None:
                 return int(co.id)
 
-    mapping = (
-        ClinicBillingPartyMapping.query.filter_by(
-            company_id=company_id,
-            billing_party_id=billing_party_id,
-            is_active=True,
+    if billing_party_id is not None:
+        mapping = (
+            ClinicBillingPartyMapping.query.filter_by(
+                company_id=transport_company_id,
+                billing_party_id=billing_party_id,
+                is_active=True,
+            )
+            .order_by(ClinicBillingPartyMapping.id.desc())
+            .first()
         )
-        .order_by(ClinicBillingPartyMapping.id.desc())
-        .first()
-    )
-    if mapping and mapping.clinic_company_id is not None:
-        return int(mapping.clinic_company_id)
+        if mapping and mapping.clinic_company_id is not None:
+            return int(mapping.clinic_company_id)
 
     return None
+
+
+def resolve_billed_to_company_id_for_accept(
+    *,
+    billed_to_type: str,
+    institution_client: Client | None = None,
+    institution: Institution | None = None,
+    transport_company_id: int,
+) -> int | None:
+    """``billed_to_company_id`` requis avant flush si ``billed_to_type != patient``."""
+    btype = (billed_to_type or "patient").strip().lower()
+    if btype == "patient":
+        return None
+    if btype == "clinic":
+        return resolve_clinic_company_id_for_institution_accept(
+            institution_client=institution_client,
+            institution=institution,
+            transport_company_id=transport_company_id,
+        )
+    return int(transport_company_id)
+
+
+def _resolve_clinic_company_id_for_institution(
+    *,
+    booking: Booking,
+    company_id: int,
+    billing_party_id: int,
+    institution: Institution | None = None,
+) -> int | None:
+    """Déduit la clinique payeuse pour un booking institution.
+
+    Priorité:
+    1) ``billed_to_company_id`` déjà défini (sauf erreur historique = ID transporteur)
+    2) Client institution lié (``default_billed_to_company_id``)
+    3) Entreprise clinique homonyme (``Company.name`` ≈ ``institution_name``)
+    4) Mapping explicite (company_id, billing_party_id) -> clinic_company_id
+    """
+    existing = getattr(booking, "billed_to_company_id", None)
+    if existing is not None and int(existing) != int(company_id):
+        return int(existing)
+
+    client = getattr(booking, "client", None)
+    if client is None and getattr(booking, "client_id", None):
+        client = Client.query.get(int(booking.client_id))
+
+    return resolve_clinic_company_id_for_institution_accept(
+        institution_client=client,
+        institution=institution,
+        transport_company_id=company_id,
+        billing_party_id=billing_party_id,
+    )
 
 
 # ── Résolution Patient ───────────────────────────────────────────────────

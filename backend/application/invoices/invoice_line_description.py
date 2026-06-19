@@ -265,9 +265,13 @@ def resolve_s2_clinic_line_patient_name(
     if mission_type == "material_delivery":
         return _resolve_institution_patient_name_for_booking(reservation)
     if client and getattr(client, "is_institution", False):
-        cn = getattr(reservation, "customer_name", None)
-        if cn and str(cn).strip():
-            return format_patient_display_name_nom_prenom(str(cn).strip())
+        cn = (getattr(reservation, "customer_name", None) or "").strip()
+        inst = (getattr(client, "institution_name", None) or "").strip()
+        if not cn:
+            return ""
+        if inst and cn.lower() == inst.lower():
+            return ""
+        return format_patient_display_name_nom_prenom(cn)
     if client and getattr(client, "user", None):
         first_name = (client.user.first_name or "").strip()
         last_name = (client.user.last_name or "").strip()

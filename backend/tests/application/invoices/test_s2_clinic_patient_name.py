@@ -33,15 +33,68 @@ def test_material_delivery_institution_without_patient_has_no_client_label():
     """Livraison établissement : pas de « Client : » (contact ≠ bénéficiaire)."""
     client = SimpleNamespace(
         is_institution=True,
-        user=SimpleNamespace(first_name="Clinique", last_name="X"),
+        institution_name="Clinique les Hauts d'Anières",
+        user=SimpleNamespace(first_name="Anne", last_name="Aloisi"),
     )
     booking = SimpleNamespace(
-        customer_name="ALOISI Anne",
+        customer_name="Clinique les Hauts d'Anières",
         client_id=42,
         mission_type="material_delivery",
         _get_institution_passenger_brief=lambda: None,
     )
     assert resolve_s2_clinic_line_patient_name(client, booking) == ""  # type: ignore[arg-type]
+
+
+def test_institution_client_never_uses_user_contact_name():
+    """Contact institution (user) ignoré — seul customer_name patient compte."""
+    client = SimpleNamespace(
+        is_institution=True,
+        institution_name="Clinique les Hauts d'Anières",
+        user=SimpleNamespace(first_name="Anne", last_name="Aloisi"),
+    )
+    booking = SimpleNamespace(
+        customer_name="Jean-Michel BOUCHARDY",
+        client_id=42,
+        mission_type="patient_transport",
+    )
+    assert (
+        resolve_s2_clinic_line_patient_name(client, booking)  # type: ignore[arg-type]
+        == "BOUCHARDY Jean-Michel"
+    )
+
+
+def test_institution_ride_when_customer_name_is_institution_returns_empty():
+    client = SimpleNamespace(
+        is_institution=True,
+        institution_name="Clinique les Hauts d'Anières",
+        user=SimpleNamespace(first_name="Anne", last_name="Aloisi"),
+    )
+    booking = SimpleNamespace(
+        customer_name="Clinique les Hauts d'Anières",
+        client_id=42,
+        mission_type="patient_transport",
+    )
+    assert resolve_s2_clinic_line_patient_name(client, booking) == ""  # type: ignore[arg-type]
+
+
+def test_merge_clears_stale_institution_contact_on_delivery_line():
+    line = MagicMock()
+    line.type = InvoiceLineType.MATERIAL_DELIVERY
+    line.line_meta = {"patient_name": "ALOISI Anne"}
+    booking = SimpleNamespace(
+        customer_name="Clinique les Hauts d'Anières",
+        client_id=99,
+        scheduled_time=None,
+        mission_type="material_delivery",
+        _get_institution_passenger_brief=lambda: None,
+    )
+    client = SimpleNamespace(
+        is_institution=True,
+        institution_name="Clinique les Hauts d'Anières",
+        user=SimpleNamespace(first_name="Anne", last_name="Aloisi"),
+    )
+    merged = _merge_s2_clinic_line_meta_from_booking(line, booking, client)
+    assert "patient_name" not in merged
 
 
 def test_material_delivery_for_institution_patient_shows_client():
@@ -105,14 +158,16 @@ def test_merge_keeps_patient_name_for_delivery_with_institution_patient():
 def test_institution_client_uses_booking_customer_name_formatted():
     client = SimpleNamespace(
         is_institution=True,
+        institution_name="Clinique les hauts d'anières",
         user=SimpleNamespace(
-            first_name="Clinique les hauts d'anières",
-            last_name="INSTITUTION",
+            first_name="Anne",
+            last_name="Aloisi",
         ),
     )
     booking = SimpleNamespace(
         customer_name="Eliane Francine STOFER-THOMI",
         client_id=42,
+        mission_type="patient_transport",
     )
     assert (
         resolve_s2_clinic_line_patient_name(client, booking)  # type: ignore[arg-type]
@@ -143,6 +198,7 @@ def test_merge_normalizes_patient_name_snapshot():
         customer_name="Khalid ALAOUI",
         client_id=99,
         scheduled_time=None,
+        mission_type="patient_transport",
     )
     client = SimpleNamespace(is_institution=True, user=None)
     merged = _merge_s2_clinic_line_meta_from_booking(line, booking, client)
@@ -156,6 +212,7 @@ def test_merge_overwrites_wrong_institution_snapshot_in_line_meta():
         customer_name="Khalid ALAOUI",
         client_id=99,
         scheduled_time=None,
+        mission_type="patient_transport",
     )
     client = SimpleNamespace(is_institution=True, user=None)
     merged = _merge_s2_clinic_line_meta_from_booking(line, booking, client)

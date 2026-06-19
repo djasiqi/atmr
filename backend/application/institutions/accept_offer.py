@@ -643,6 +643,13 @@ class AcceptOfferUseCase:
             billed_to_type = "patient"
             billed_to_company_id = None
 
+        billed_to_company_id = self._resolve_billed_to_company_id_before_flush(
+            billed_to_type=billed_to_type,
+            institution_client=institution_client,
+            transport_request=transport_request,
+            company_id=company_id,
+        )
+
         # Horaire: utiliser l'horaire proposé par l'entreprise si fourni (naïf Genève)
         raw_pickup = proposed_pickup_time or transport_request.scheduled_time
         effective_pickup_time = normalize_mission_wall_clock(raw_pickup)
@@ -691,17 +698,12 @@ class AcceptOfferUseCase:
             notes_medical=transport_request.notes,
             # Facturation — billed_to_type d'abord, company_id ajouté après
             billed_to_type=billed_to_type,
+            billed_to_company_id=billed_to_company_id,
             status=BookingStatus.ACCEPTED.value,
             # Montant: tarif préférentiel ou minimum par défaut
             amount=amount,
             created_via=BookingCreatedVia.INSTITUTION_PORTAL,
         )
-
-        # Assigner billed_to_company_id APRÈS la construction pour que
-        # le @validates voit déjà le billed_to_type correct (sinon il
-        # le réinitialise à None car le type par défaut est "patient")
-        if billed_to_company_id is not None:
-            booking.billed_to_company_id = billed_to_company_id
 
         self._apply_clinical_dropoff_from_request(booking, transport_request)
 
@@ -870,7 +872,12 @@ class AcceptOfferUseCase:
         for leg in legs:
             effective_intent = effective_billing_for_leg(leg, transport_request)
             billed_to_type = billed_to_type_from_intent(effective_intent)
-            billed_to_company_id = None
+            billed_to_company_id = self._resolve_billed_to_company_id_before_flush(
+                billed_to_type=billed_to_type,
+                institution_client=institution_client,
+                transport_request=transport_request,
+                company_id=company_id,
+            )
 
             is_first_leg = leg.sequence_index == 0
             leg_confirmed = bool(getattr(leg, "time_confirmed", False))
@@ -948,14 +955,13 @@ class AcceptOfferUseCase:
                 ),
                 notes_medical=transport_request.notes,
                 billed_to_type=billed_to_type,
+                billed_to_company_id=billed_to_company_id,
                 status=BookingStatus.ACCEPTED.value,
                 amount=amount,
                 route_group_id=route_group_id,
                 route_sequence_number=leg.route_sequence_number,
                 created_via=BookingCreatedVia.INSTITUTION_PORTAL,
             )
-            if billed_to_company_id is not None:
-                booking.billed_to_company_id = billed_to_company_id
 
             self._apply_clinical_dropoff_from_leg(booking, leg)
 
@@ -998,6 +1004,35 @@ class AcceptOfferUseCase:
             route_group_id,
         )
         return primary, None
+
+    @staticmethod
+    def _resolve_billed_to_company_id_before_flush(
+        *,
+        billed_to_type: str,
+        institution_client: Client | None,
+        transport_request: TransportRequest,
+        company_id: int,
+    ) -> int | None:
+        """Obligatoire avant flush si ``billed_to_type != patient`` (hook ORM Booking)."""
+        from services.billing.institution_billing_resolver import (
+            resolve_billed_to_company_id_for_accept,
+        )
+
+        btype = (billed_to_type or "patient").strip().lower()
+        clinic_company_id = resolve_billed_to_company_id_for_accept(
+            billed_to_type=btype,
+            institution_client=institution_client,
+            institution=transport_request.institution,
+            transport_company_id=company_id,
+        )
+        if btype != "patient" and (clinic_company_id is None or int(clinic_company_id) <= 0):
+            inst_name = getattr(transport_request.institution, "name", None) or "?"
+            msg = (
+                f"Impossible de résoudre billed_to_company_id pour billed_to_type={btype} "
+                f"(institution {inst_name})"
+            )
+            raise ValueError(msg)
+        return clinic_company_id
 
     def _resolve_billing_party(
         self,
@@ -1058,6 +1093,7 @@ class AcceptOfferUseCase:
         ).first()
 
         if client:
+            self._ensure_institution_client_clinic_company_link(client, institution)
             logger.info(
                 "[AcceptOffer] Institution client found by FK link: %s (id=%s, rate=%s)",
                 institution.name,
@@ -1073,6 +1109,9 @@ class AcceptOfferUseCase:
         if fallback_by_name:
             if not getattr(fallback_by_name, "linked_institution_id", None):
                 fallback_by_name.linked_institution_id = institution.id
+            self._ensure_institution_client_clinic_company_link(
+                fallback_by_name, institution
+            )
             logger.info(
                 "[AcceptOffer] Institution client found by name fallback: %s (id=%s, rate=%s, linked=%s)",
                 institution.name,
@@ -1083,6 +1122,32 @@ class AcceptOfferUseCase:
             return fallback_by_name
 
         return self._create_institution_client(institution, company_id)
+
+    @staticmethod
+    def _ensure_institution_client_clinic_company_link(
+        client: Client,
+        institution: object,
+    ) -> None:
+        """Rattache default_billed_to_company_id si absent (clients institution historiques)."""
+        if not getattr(client, "is_institution", False):
+            return
+        if getattr(client, "default_billed_to_company_id", None):
+            return
+        from services.billing.institution_billing_resolver import (
+            resolve_clinic_company_id_for_institution_accept,
+        )
+
+        transport_company_id = int(getattr(client, "company_id", 0) or 0)
+        if transport_company_id <= 0:
+            return
+        clinic_id = resolve_clinic_company_id_for_institution_accept(
+            institution_client=client,
+            institution=institution,  # type: ignore[arg-type]
+            transport_company_id=transport_company_id,
+        )
+        if clinic_id is not None:
+            client.default_billed_to_type = "clinic"
+            client.default_billed_to_company_id = int(clinic_id)
 
     def _find_institution_client_by_name(
         self, institution_name: str | None, company_id: int

@@ -860,11 +860,14 @@ class GenerateClinicMonthlyInvoiceUseCase:
                     ),
                     "reservation_id": reservation.id,
                     "line_meta": {
-                        # ✅ Snapshot patient: stocker patient_id + patient_name au moment de la génération
                         "patient_id": patient_id,
-                        "patient_name": patient_name,
                         "patient_client_id": reservation.client_id,
                         "service_date": _booking_service_date_iso(reservation),
+                        **(
+                            {"patient_name": patient_name}
+                            if patient_name and str(patient_name).strip()
+                            else {}
+                        ),
                     },
                 }
                 line_dto = self.invoice_line_repo.create(line_data)

@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 
 from services.billing.institution_billing_resolver import (
     _resolve_clinic_company_id_for_institution,
+    resolve_billed_to_company_id_for_accept,
 )
 
 
@@ -58,3 +59,30 @@ def test_resolve_clinic_from_institution_name_when_no_default():
             billing_party_id=1,
         )
     assert cid == 42
+
+
+def test_resolve_billed_to_company_id_for_accept_clinic():
+    client = SimpleNamespace(
+        is_institution=True,
+        default_billed_to_company_id=77,
+        institution_name="Clinique les Hauts d'Anières",
+    )
+    cid = resolve_billed_to_company_id_for_accept(
+        billed_to_type="clinic",
+        institution_client=client,
+        institution=None,
+        transport_company_id=5,
+    )
+    assert cid == 77
+
+
+def test_resolve_billed_to_company_id_for_accept_patient_returns_none():
+    assert (
+        resolve_billed_to_company_id_for_accept(
+            billed_to_type="patient",
+            institution_client=None,
+            institution=None,
+            transport_company_id=5,
+        )
+        is None
+    )

@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 import pytest
 
 from application.institutions.accept_offer import AcceptOfferUseCase
-from models import Booking, Institution, InstitutionPatient, TransportRequest, TransportRequestLeg
+from models import Booking, Company, Institution, InstitutionPatient, TransportRequest, TransportRequestLeg
 from models.enums import RequestStatus
 from services.billing.destination_billing_resolver import build_billing_summary
 from shared.time_utils import now_local
@@ -126,6 +126,14 @@ class TestMultiPayerBillingScenarioA:
         if not test_company:
             pytest.skip("test_company required")
 
+        clinic_co = Company(
+            name=ems_institution.name,
+            uid_ide="CHE-123.456.789",
+            user_id=test_company.user_id,
+        )
+        db.session.add(clinic_co)
+        db.session.flush()
+
         tr = _build_scenario_a_request(
             db,
             institution=ems_institution,
@@ -161,6 +169,7 @@ class TestMultiPayerBillingScenarioA:
         assert hug_booking.billing_party_id == return_booking.billing_party_id
         assert cabinet_booking.billed_to_type == "patient"
         assert hug_booking.billed_to_type == "clinic"
+        assert hug_booking.billed_to_company_id == clinic_co.id
 
         summary = build_billing_summary(tr)
         assert summary["multi_payer"] is True
