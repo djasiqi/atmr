@@ -1377,19 +1377,7 @@ const UnifiedDispatchRefactored = () => {
               reservation={selectedDispatch}
               onClose={() => setSelectedDispatch(null)}
               onSave={async (id, data) => {
-                const payload = { ...data };
-                // Recombiner scheduled_date + scheduled_time en ISO 8601
-                if (payload.scheduled_date && payload.scheduled_time) {
-                  payload.scheduled_time = `${payload.scheduled_date}T${payload.scheduled_time}:00`;
-                  delete payload.scheduled_date;
-                } else if (payload.scheduled_date && !payload.scheduled_time) {
-                  payload.scheduled_time = null;
-                  payload.time_confirmed = false;
-                  delete payload.scheduled_date;
-                } else {
-                  delete payload.scheduled_date;
-                }
-                await updateReservation(id, payload);
+                await updateReservation(id, data);
                 loadDispatches();
               }}
               onDelete={onDeleteReservationClick}

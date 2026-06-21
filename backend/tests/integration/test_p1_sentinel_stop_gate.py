@@ -309,6 +309,72 @@ class TestCas4MultiStopNoInheritance:
             ) or leg_booking.scheduled_time is None
 
 
+class TestCas4bReturnLegPastTimeAccepted:
+    """Retour multi-étapes : heure passée sur le leg retour ne bloque pas l'acceptation."""
+
+    def test_return_leg_past_confirmed_time_becomes_to_define(
+        self, db, requires_postgresql, institution, test_company, test_client
+    ):
+        if not test_company or not test_client:
+            pytest.skip("test_company and test_client required")
+
+        route_group_id = str(uuid.uuid4())
+        depart_at = _future_depart(8, 0)
+        past_return = now_local().replace(second=0, microsecond=0) - timedelta(minutes=5)
+
+        tr = _base_transport_request(
+            db,
+            institution,
+            scheduled_time=depart_at,
+            multi_stop=True,
+            route_group_id=route_group_id,
+        )
+        tr.return_to_institution = True
+        tr.pickup_time_confirmed = True
+
+        legs = [
+            TransportRequestLeg(
+                transport_request_id=tr.id,
+                sequence_index=0,
+                route_sequence_number=1,
+                pickup_location="Clinique",
+                dropoff_location="HUG",
+                scheduled_time=None,
+                time_confirmed=False,
+            ),
+            TransportRequestLeg(
+                transport_request_id=tr.id,
+                sequence_index=1,
+                route_sequence_number=2,
+                pickup_location="HUG",
+                dropoff_location="Clinique",
+                scheduled_time=past_return,
+                time_confirmed=True,
+                is_return_stop=True,
+            ),
+        ]
+        db.session.add_all(legs)
+        db.session.flush()
+
+        uc = AcceptOfferUseCase()
+        uc._create_bookings_from_legs(
+            transport_request=tr,
+            company_id=test_company.id,
+            user_id=test_company.user_id,
+        )
+        db.session.flush()
+
+        created = (
+            Booking.query.filter_by(route_group_id=route_group_id)
+            .order_by(Booking.route_sequence_number.asc())
+            .all()
+        )
+        assert len(created) == 2
+        return_booking = created[1]
+        assert return_booking.scheduled_time is None
+        assert return_booking.time_confirmed is False
+
+
 # ---------------------------------------------------------------------------
 # Cas 5 — Audit invariant DB (filtrage strict par IDs créés)
 # ---------------------------------------------------------------------------

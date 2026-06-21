@@ -8,6 +8,7 @@ import { registerDriverPushToken } from "../../features/driver/api/driverHttp";
 import { driverFcmPlatform } from "../../features/driver/firebaseMessaging";
 import { setPushPermissionDenied } from "../notifications/pushPermissionState";
 import { startDeviceHealthHeartbeat } from "../../features/driver/services/deviceHealthHeartbeat";
+import { reportPushRegistrationTelemetry } from "../notifications/pushRegistrationTelemetry";
 
 /** Enregistrement push chauffeur (Expo + FCM) — monté uniquement en contexte driver. */
 export function DriverNotificationsBridge() {
@@ -77,6 +78,25 @@ export function DriverNotificationsBridge() {
     telemetrySource: "driver.notifications.bridge",
     onPermissionDenied: () => setPushPermissionDenied(true),
   });
+
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+    console.info("[FCM-GATE] DriverNotificationsBridge state", {
+      enabled,
+      driverId,
+      pushEnabled: isFeatureEnabled("driver_push_enabled"),
+      fcmEnabled: isFeatureEnabled("driver_fcm_native_enabled"),
+      status,
+      contextType: activeContext?.context_type ?? null,
+    });
+    reportPushRegistrationTelemetry("driver_push.bridge_mounted", {
+      source: "driver.notifications.bridge",
+      enabled,
+      fcm_enabled: isFeatureEnabled("driver_fcm_native_enabled"),
+      driver_id: driverId,
+      context_type: activeContext?.context_type ?? null,
+    });
+  }, [activeContext?.context_type, driverId, enabled, status]);
 
   /**
    * Heartbeat de santé tracking : signale toutes les 60 s au backend que l'app

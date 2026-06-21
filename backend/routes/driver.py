@@ -3195,10 +3195,19 @@ class SavePushToken(Resource):
         payload_raw = request.get_json(force=True) or {}
         payload: dict[str, Any] = tcast("dict[str, Any]", payload_raw)
         should_refresh_gauges = False
+        provider = payload.get("provider", "expo")
+        platform = payload.get("platform")
+        device_id = payload.get("device_id") or payload.get("deviceId")
+        driver_id_hint = payload.get("driverId") or payload.get("driver_id")
 
         try:
-            # Log & typage strict
-            logger.info("[push-token] payload=%s", payload_raw)
+            logger.info(
+                "save_push_token received provider=%s platform=%s driver_id=%s device_id=%s",
+                provider,
+                platform,
+                driver_id_hint,
+                device_id,
+            )
 
             from http import HTTPStatus
 
@@ -3279,6 +3288,18 @@ class SavePushToken(Resource):
                 refresh_push_active_owners_gauges()
         except ImportError:
             pass
+
+        outcome_driver_id = (
+            result.get("driver_id") if isinstance(result, dict) else None
+        ) or driver_id_hint
+        logger.info(
+            "save_push_token outcome status=%s provider=%s platform=%s driver_id=%s device_id=%s",
+            status_code,
+            provider,
+            platform,
+            outcome_driver_id,
+            device_id,
+        )
 
         return result, status_code
 
@@ -4010,6 +4031,35 @@ class DriverDeviceHealth(Resource):
             logger.exception("device-health ingest failed driver_id=%s", driver.id)
             db.session.rollback()
             return {"ok": False, "error": "ingest_failed"}, 500
+
+
+@driver_ns.route("/me/telemetry/push")
+class DriverPushTelemetry(Resource):
+    """Télémétrie mobile enregistrement push (gate FCM — observable en prod)."""
+
+    @jwt_required()
+    @role_required(UserRole.driver)
+    def post(self):
+        driver, error_response, status_code = get_driver_from_token()
+        if error_response:
+            return error_response, status_code
+
+        body = request.get_json(silent=True) or {}
+        try:
+            from services.monitoring.driver_push_telemetry import (
+                ingest_driver_push_telemetry,
+            )
+
+            result = ingest_driver_push_telemetry(driver_id=int(driver.id), body=body)
+        except Exception:
+            logger.exception(
+                "driver_push_telemetry ingest failed driver_id=%s", driver.id
+            )
+            return {"ok": False, "error": "ingest_failed"}, 500
+
+        if not result.get("ok"):
+            return result, 400
+        return result, 200
 
 
 @driver_ns.route("/me/telemetry/tracking")

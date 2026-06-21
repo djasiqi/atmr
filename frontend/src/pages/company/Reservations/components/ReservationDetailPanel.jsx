@@ -137,21 +137,35 @@ const buildTimeline = (r) => {
 };
 
 const parseDate = (r) => {
+  if (r?.time_confirmed === false && !r?.scheduled_time) return '';
   const raw = r?.scheduled_time || r?.scheduled_date || r?.date;
   if (!raw) return '';
   const dt = new Date(raw);
   if (isNaN(dt.getTime())) return raw.slice(0, 10);
+  if (r?.time_confirmed === false && dt.getHours() === 0 && dt.getMinutes() === 0) return '';
   const pad = (n) => String(n).padStart(2, '0');
   return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`;
 };
 
 const parseTime = (r) => {
+  if (r?.time_confirmed === false && !r?.scheduled_time) return '';
   const raw = r?.scheduled_time || r?.scheduled_date || r?.date;
   if (!raw) return '';
   const dt = new Date(raw);
   if (isNaN(dt.getTime())) return '';
+  if (r?.time_confirmed === false && dt.getHours() === 0 && dt.getMinutes() === 0) return '';
   const pad = (n) => String(n).padStart(2, '0');
   return `${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+};
+
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const ISO_TIME_RE = /^\d{2}:\d{2}$/;
+
+/** Course retour ou étape multi-parcours dont l'horaire n'est pas encore fixé. */
+const isSchedulePending = (reservation) => {
+  if (!reservation) return false;
+  if (reservation.time_confirmed === false) return true;
+  return !reservation.scheduled_time;
 };
 
 function isBillingLockedForAdjust(r) {
@@ -493,12 +507,23 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onRese
     try {
       setSaving(true);
       setSaveError(null);
-      // Combiner date + heure en ISO local pour le backend (pas de conversion UTC)
+      // Combiner date + heure en ISO local pour le backend (pas de conversion UTC).
+      // Retours « à définir » : ne pas envoyer scheduled_time vide ou partiel (erreur ISO 8601).
       const payload = { ...form };
-      if (payload.scheduled_date && payload.scheduled_time) {
-        payload.scheduled_time = `${payload.scheduled_date}T${payload.scheduled_time}:00`;
-      }
+      const scheduleDate = String(payload.scheduled_date || '').trim();
+      const scheduleTime = String(payload.scheduled_time || '').trim();
       delete payload.scheduled_date;
+      delete payload.scheduled_time;
+      const hasValidSchedule = ISO_DATE_RE.test(scheduleDate)
+        && ISO_TIME_RE.test(scheduleTime)
+        && scheduleTime !== '00:00';
+      if (hasValidSchedule) {
+        payload.scheduled_time = `${scheduleDate}T${scheduleTime}:00`;
+        payload.time_confirmed = true;
+      } else if (isSchedulePending(reservation) || reservation?.is_return) {
+        payload.scheduled_time = null;
+        payload.time_confirmed = false;
+      }
       await onSave(reservation.id, payload);
       setEditing(false);
     } catch (err) {

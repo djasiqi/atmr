@@ -164,6 +164,10 @@ const InstitutionOfferDetailPanel = ({ offer, onClose, onAccept, onPropose, onRe
       : 'Tarif estimé';
 
   const passengerTitle = identity.passengerLabel || 'Demande institution';
+  const passengerBirthDate = req.patient?.dob
+    || req.patient?.birth_date
+    || req.patient_date_of_birth
+    || null;
   const canRespond = canRespondToInstitutionOffer(offer);
   const isExpired = isInstitutionOfferExpired(offer);
   const statusLabel = canRespond ? 'En attente' : isExpired ? 'Expiré' : 'Indisponible';
@@ -239,11 +243,11 @@ const InstitutionOfferDetailPanel = ({ offer, onClose, onAccept, onPropose, onRe
               <span className={styles.summaryLabel}>Passager</span>
               <span className={styles.summaryValue}>{identity.passengerLabel || '—'}</span>
             </div>
-            {req.patient?.dob && (
+            {passengerBirthDate && (
               <div className={styles.summaryItem}>
                 <span className={styles.summaryLabel}>Date de naissance</span>
                 <span className={styles.summaryValue}>
-                  {new Date(req.patient.dob).toLocaleDateString('fr-CH')}
+                  {new Date(passengerBirthDate).toLocaleDateString('fr-CH')}
                 </span>
               </div>
             )}

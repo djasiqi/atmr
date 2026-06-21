@@ -9,6 +9,7 @@ import {
   setBackgroundMessageHandler,
 } from "@react-native-firebase/messaging";
 import { emitDriverTelemetry } from "../../core/observability/driverTelemetry";
+import { reportPushRegistrationTelemetry } from "../../core/notifications/pushRegistrationTelemetry";
 import { isFeatureEnabled } from "../../core/featureFlags/registry";
 import { loadNotifee } from "./notifeeCompat";
 import { resolveDriverNotificationContract } from "./notificationChannels";
@@ -68,6 +69,18 @@ function emitFcmUnavailable(stage: string, error?: unknown): void {
     error_code: errorCode,
     stage,
   });
+  if (
+    stage === "get_token_failed" ||
+    stage === "get_token_empty" ||
+    stage === "messaging_instance_unavailable"
+  ) {
+    reportPushRegistrationTelemetry("driver_push.get_token_failed", {
+      source: "driver.firebaseMessaging",
+      stage,
+      reason,
+      error_code: errorCode,
+    });
+  }
 }
 
 async function reportBackgroundHandlerNoCallback(payload: NativeFcmPayload): Promise<void> {
@@ -105,21 +118,34 @@ export async function getDriverFcmToken(): Promise<string | null> {
     source: "driver.firebaseMessaging",
     platform: Platform.OS,
   });
+  console.info("[FCM-GATE] getDriverFcmToken start", { platform: Platform.OS });
   const messagingInstance = getDriverMessagingInstance();
-  if (!messagingInstance) return null;
+  if (!messagingInstance) {
+    reportPushRegistrationTelemetry("driver_push.get_token_failed", {
+      source: "driver.firebaseMessaging",
+      stage: "get_messaging_instance",
+      reason: "messaging_instance_unavailable",
+    });
+    return null;
+  }
   try {
     await requestPermission(messagingInstance);
     const token = await getToken(messagingInstance);
     if (!token) {
+      console.info("[FCM-GATE] getToken returned empty");
       emitFcmUnavailable("get_token_empty");
       return null;
     }
+    console.info("[FCM-GATE] getToken success", { tokenLength: token.length });
     emitDriverTelemetry("driver.push.fcm.token", {
       source: "driver.firebaseMessaging",
       token_present: true,
     });
     return token;
   } catch (error) {
+    console.info("[FCM-GATE] getToken failed", {
+      reason: error instanceof Error ? error.message : "unknown",
+    });
     emitFcmUnavailable("get_token_failed", error);
     return null;
   }

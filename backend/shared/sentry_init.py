@@ -28,11 +28,14 @@ _KAFKA_ERROR_TYPES = frozenset(
 _KAFKA_PYTHON_LOGGERS = (
     "kafka.net.manager",
     "kafka.net.inet",
+    "kafka.net.selector",
     "kafka.cluster",
     "kafka.conn",
     "kafka.client",
     "kafka.consumer",
     "kafka.producer",
+    "kafka.coordinator",
+    "kafka.coordinator.heartbeat",
 )
 
 _KAFKA_BOOTSTRAP_LOG_MARKERS = (
@@ -42,6 +45,11 @@ _KAFKA_BOOTSTRAP_LOG_MARKERS = (
     "dns lookup failed for kafka-broker",
     "metadata refresh: failed",
     "temporary failure in name resolution",
+    "rebalanceinprogresserror",
+    "heartbeat failed for group",
+    "error sending heartbeatrequest",
+    "task is already done",
+    "invalid file descriptor",
 )
 
 
@@ -90,8 +98,15 @@ def before_send(event: dict[str, Any], hint: dict[str, Any] | None) -> dict[str,
 
     if exc_info:
         exc_type = exc_info[0]
-        if exc_type is not None and exc_type.__name__ in _DROP_EXCEPTION_TYPES:
-            return None
+        if exc_type is not None:
+            exc_name = exc_type.__name__
+            if exc_name in _DROP_EXCEPTION_TYPES:
+                return None
+            # Race kafka-python au shutdown / rebalance (non bloquant)
+            if exc_name == "ValueError" and "invalid file descriptor" in message.lower():
+                return None
+            if exc_name == "RuntimeError" and "task is already done" in message.lower():
+                return None
         if _is_gevent_infrastructure_noise(event, exc_type, message):
             return None
 

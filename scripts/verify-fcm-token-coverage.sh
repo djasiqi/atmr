@@ -5,6 +5,7 @@
 #   ./scripts/verify-fcm-token-coverage.sh --report
 #   ./scripts/verify-fcm-token-coverage.sh --driver-id 7514
 #   ./scripts/verify-fcm-token-coverage.sh --driver-id 7514 --expect-fcm
+#   ./scripts/verify-fcm-token-coverage.sh --driver-id 7514 --gate-json
 #   ./scripts/verify-fcm-token-coverage.sh --android-expo-only
 #
 # Prod (SSH) :

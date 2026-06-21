@@ -223,6 +223,23 @@ class BookingPreviewSchema(BookingCreateSchema):
 class BookingUpdateSchema(Schema):
     """Schema pour mise à jour de réservation (PUT /api/bookings/<id>)."""
 
+    @pre_load
+    def _strip_empty_datetime_fields(self, data, **kwargs):  # noqa: ARG002
+        """Chaînes vides → champ absent (évite erreur ISO sur retours à définir)."""
+        if not isinstance(data, dict):
+            return data
+        raw = dict(data)
+        for key in ("scheduled_time", "return_time"):
+            val = raw.get(key)
+            if isinstance(val, str):
+                stripped = val.strip()
+                if not stripped:
+                    raw.pop(key, None)
+                elif "T" not in stripped:
+                    # Ex. "13:47" ou horaire partiel depuis l'UI — ignorer, pas d'erreur ISO.
+                    raw.pop(key, None)
+        return raw
+
     pickup_location = fields.Str(validate=validate.Length(min=1, max=500))
     dropoff_location = fields.Str(validate=validate.Length(min=1, max=500))
     scheduled_time = fields.Str(

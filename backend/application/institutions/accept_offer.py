@@ -909,6 +909,28 @@ class AcceptOfferUseCase:
 
             time_to_define = effective_pickup_time is None or not operational
 
+            is_return_leg = bool(getattr(leg, "is_return_stop", False)) or (
+                bool(getattr(transport_request, "return_to_institution", False))
+                and len(legs) > 1
+                and leg.sequence_index == len(legs) - 1
+            )
+            # Retours / étapes suivantes : pas de blocage « heure passée » à l'acceptation.
+            if not is_first_leg or is_return_leg:
+                if not leg_confirmed:
+                    effective_pickup_time = None
+                    time_to_define = True
+                elif effective_pickup_time is not None:
+                    from shared.time_utils import now_local
+
+                    is_sentinel_midnight = (
+                        effective_pickup_time.hour == 0
+                        and effective_pickup_time.minute == 0
+                        and effective_pickup_time.second == 0
+                    )
+                    if is_sentinel_midnight or effective_pickup_time < now_local():
+                        effective_pickup_time = None
+                        time_to_define = True
+
             # Tarif par leg : préférentiel sinon profil tarifaire actif
             leg_price = resolve_institution_price(
                 company_id=company_id,

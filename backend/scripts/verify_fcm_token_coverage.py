@@ -54,6 +54,11 @@ def parse_args() -> argparse.Namespace:
         help="Code sortie 1 si aucun token FCM Android actif pour --driver-id",
     )
     parser.add_argument(
+        "--gate-json",
+        action="store_true",
+        help="Sortie gate compacte JSON (driver_id, fcm_present, active_provider, status)",
+    )
+    parser.add_argument(
         "--operational-only",
         action="store_true",
         default=False,
@@ -198,6 +203,24 @@ def list_android_expo_only(*, operational_only: bool) -> list[dict[str, Any]]:
     return rows
 
 
+def build_gate_result(row: dict[str, Any]) -> dict[str, Any]:
+    """Résumé compact gate ops (CI / scripts)."""
+    driver_id = int(row["driver_id"])
+    fcm_present = row["fcm_coverage"] == FCM_COVERAGE_FCM_NATIVE_OK
+    active_tokens = row.get("active_tokens") or []
+    active_provider = "none"
+    if active_tokens:
+        active_provider = str(active_tokens[0].get("provider") or "unknown")
+    return {
+        "driver_id": driver_id,
+        "fcm_present": fcm_present,
+        "active_provider": active_provider,
+        "status": "PASS" if fcm_present else "FAIL",
+        "fcm_coverage": row["fcm_coverage"],
+        "checked_at": row.get("checked_at"),
+    }
+
+
 def main() -> int:
     args = parse_args()
     if not (args.report or args.android_expo_only or args.driver_id is not None):
@@ -229,7 +252,11 @@ def main() -> int:
                 print(json.dumps({"error": "driver_not_found", "driver_id": args.driver_id}))
                 return 1
             row = build_driver_report(driver)
-            print(json.dumps(row, indent=2, ensure_ascii=False))
+            if args.gate_json:
+                gate = build_gate_result(row)
+                print(json.dumps(gate, indent=2, ensure_ascii=False))
+            else:
+                print(json.dumps(row, indent=2, ensure_ascii=False))
             if args.expect_fcm and row["fcm_coverage"] != FCM_COVERAGE_FCM_NATIVE_OK:
                 exit_code = 1
                 print(

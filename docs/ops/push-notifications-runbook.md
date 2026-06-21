@@ -16,6 +16,53 @@ Ordre sécurisé du flush pending :
 disclosure acceptée → permission OS → flush pending → save-push-token
 ```
 
+## ⚠️ RUNBOOK PUSH ANDROID — contexte chauffeur obligatoire
+
+**Les tests FCM chauffeur sont invalides** si le contexte actif est `company`, `institution` ou `client`.
+
+`DriverNotificationsBridge` (seul composant qui enregistre `provider=fcm` côté chauffeur) ne se monte **que** si :
+
+```text
+activeContext.context_type === "driver"
+status === "ready"
+driverId != null
+driver_push_enabled === true
+```
+
+En contexte **entreprise**, c’est `CompanyNotificationsBridge` qui peut enregistrer un token **Expo** — ce qui produit exactement le symptôme :
+
+```text
+device_tokens.provider = expo   (mis à jour)
+device_tokens.provider = fcm    (absent)
+```
+
+→ **Ce n’est pas une preuve que FCM Android est cassé** ; c’est souvent une preuve que le flux chauffeur n’a jamais tourné.
+
+### Avant tout test FCM / push chauffeur
+
+- [ ] Contexte actif = **chauffeur** (pas entreprise)
+- [ ] Écran chauffeur visible (Disponible, missions…) — pas dispatch company
+- [ ] `driverId` connu (ex. 7514)
+- [ ] Disclosure notifications acceptée (modale **Continuer** si bandeau)
+- [ ] Permission notifications Android accordée
+- [ ] Attendre **20–30 s** après connexion avant la requête SQL
+
+**Qualification incident recommandée** tant que le gate ci-dessous n’est pas PASS :
+
+> Couverture FCM chauffeur non démontrée — tests exécutés majoritairement hors contexte chauffeur.
+
+**Ne pas qualifier** en P1/P2 « FCM Android cassé » sans gate PASS/FAIL en contexte chauffeur avéré.
+
+Chaîne technique (rappel) :
+
+```text
+DriverNotificationsBridge monté
+  → useRegisterPushTokenEffect
+  → getDriverFcmToken()
+  → registerFcm()
+  → device_tokens.provider = fcm
+```
+
 ## Garde disclosure sur flush pending
 
 `flushPendingPushTokenRegistrations` ne doit **jamais** POSTer si la disclosure n'est pas acceptée ou si la permission OS est absente. Test unitaire : `pendingPushTokenRegistration.test.ts`.
@@ -39,6 +86,7 @@ docker exec atmr-backend-1 python scripts/verify_fcm_token_coverage.py --driver-
 
 Procédure complète SHA-1 Firebase : [firebase-fcm-sha1-procedure.md](./firebase-fcm-sha1-procedure.md)
 
+```bash
 # Couverture admin
 curl -H "Authorization: Bearer $ADMIN_JWT" \
   "https://<host>/api/v1/admin/push-coverage/drivers?operational_only=true&without_token_only=true"
@@ -62,7 +110,7 @@ Exemple actionnable : `token_invalid` + dernier succès il y a 42j + Android + v
 |--------|----------|--------|
 | 6858 | Token FCM invalidé (`token_unregistered`), jamais ré-enregistré | Ouvrir app, accepter notifications, test push |
 | 7755 | Aucun token jamais enregistré | Première session complète + disclosure + permission |
-| 7514 | Android Expo seul (`expo_fallback_unreliable`), pas de FCM natif | SHA-1 Play App Signing dans Firebase → voir [firebase-fcm-sha1-procedure.md](./firebase-fcm-sha1-procedure.md) |
+| 7514 | Couverture FCM non démontrée ; token Expo présent ; tests initiaux souvent en contexte `company:1` | Exécuter **STOP GATE FCM-7514-A** (contexte chauffeur avéré) — voir ci-dessous |
 
 ## Lifecycle tokens
 
@@ -102,6 +150,118 @@ POST /api/v1/driver/me/test-push
 
 Bouton profil app mobile : « Déclencher test push ».
 
+## STOP GATE FCM-7514-A (couverture FCM chauffeur — Android)
+
+Gate formel pour démontrer (ou infirmer) l’enregistrement FCM natif du driver **7514** sur un appareil (ex. S23).
+
+### Prérequis app (conditions cumulatives)
+
+| # | Condition |
+|---|-----------|
+| 1 | Contexte actif = **chauffeur** (`activeContext.context_type = driver`) |
+| 2 | `driverId = 7514` |
+| 3 | Disclosure notifications acceptée |
+| 4 | Permission notifications OS accordée |
+| 5 | Attente **20–30 s** après connexion chauffeur |
+
+### Exécution
+
+1. Déconnexion complète de l’app
+2. Connexion **chauffeur 7514** — vérifier visuellement l’UI chauffeur (pas entreprise)
+3. Noter l’**heure exacte** de connexion (`T0`)
+4. Attendre 20–30 s
+5. Requête SQL prod immédiate :
+
+```sql
+SELECT
+    provider,
+    platform,
+    is_active,
+    updated_at
+FROM device_tokens
+WHERE driver_id = 7514
+ORDER BY updated_at DESC;
+```
+
+Script ops :
+
+```bash
+docker exec atmr-backend-1 python scripts/verify_fcm_token_coverage.py --driver-id 7514 --expect-fcm
+docker exec atmr-backend-1 python scripts/verify_fcm_token_coverage.py --driver-id 7514 --gate-json
+```
+
+Sortie gate compacte (`--gate-json`) :
+
+```json
+{
+  "driver_id": 7514,
+  "fcm_present": false,
+  "active_provider": "expo",
+  "status": "FAIL"
+}
+```
+
+### Critères
+
+| Résultat | Verdict |
+|----------|---------|
+| `provider=fcm`, `platform=android`, `is_active=true`, `updated_at >= T0` | **PASS** — couverture FCM démontrée |
+| Token Expo inchangé, pas de FCM | **FAIL** — flux FCM non achevé ; cause racine **non identifiée** sans télémétrie |
+| Aucune ligne `updated_at >= T0` | **FAIL** — enregistrement push jamais atteint |
+
+**Qualification incident (juin 2026, driver 7514 / S23)** :
+
+```text
+P1 MOBILE PUSH — Android Driver FCM registration path not completing
+État : REPRODUCED
+Impact : token Expo uniquement, aucun FCM natif en base
+Cause racine : NON IDENTIFIÉE (gate FAIL confirmé)
+```
+
+### Observabilité prod (P0 — après déploiement backend + OTA mobile)
+
+**Logs backend** — corréler le point de rupture sans logcat JS :
+
+```bash
+# A) save-push-token jamais appelé vs rejeté
+docker logs atmr-backend-1 --since 30m 2>&1 | grep save_push_token
+
+# B) Télémétrie mobile structurée (5 événements)
+docker logs atmr-backend-1 --since 30m 2>&1 | grep driver_push_telemetry
+```
+
+| Événement `driver_push_telemetry` | Interprétation |
+|-----------------------------------|----------------|
+| `driver_push.bridge_mounted` + `enabled=false` | Cas **A** — bridge non actif (contexte, flags, driverId) |
+| `driver_push.disclosure_blocked` | Cas **B** — disclosure non acceptée |
+| `driver_push.permission_blocked` | Cas **C** — permission OS refusée |
+| `driver_push.get_token_failed` | Cas **D** — `messaging().getToken()` échoue |
+| `driver_push.token_acquired` sans `register_success` | `getToken()` OK, `registerFcm()` / POST en échec (zone grise D→E) |
+| `driver_push.register_success` sans `save_push_token received` | Cas **E** — échec réseau / API côté client |
+| `save_push_token received` + status≠200 | Cas **F** — rejet backend |
+
+Endpoint mobile : `POST /api/v1/driver/me/telemetry/push`  
+Endpoint token : `POST /api/v1/driver/save-push-token` (logs `save_push_token received/outcome`).
+
+> ⚠️ L’ingest local (`localhost:7242/ingest`) est **__DEV__ uniquement** — invisible en prod.  
+> La télémétrie push prod passe par `/driver/me/telemetry/push` + logs backend.
+
+### Vérifier l’OTA chargée (Sentry)
+
+Tags Sentry mobile (MonitoringProvider) :
+
+- `expo_update_id` — attendu `74c41b05-…` pour l’OTA diagnostic FCM-GATE
+- `runtime_version` — ex. `1.0.5`
+- `is_embedded_launch` — `false` si bundle OTA appliqué
+
+Sans OTA diagnostic appliquée, les logs `[FCM-GATE]` console.info restent invisibles en release.
+
+### Si FAIL — logcat natif (complément)
+
+```powershell
+adb logcat -v time | Select-String 'FirebaseMessaging|RNFirebase|FIS_AUTH|SERVICE_NOT_AVAILABLE'
+```
+
 ## STOP GATE OPS (clôture projet)
 
 Validation obligatoire sur chauffeurs **6858** et **7755** :
@@ -137,16 +297,18 @@ Comportement actuel :
 2. L’utilisateur doit **fermer et rouvrir** l’app pour appliquer le bundle
 3. Reprise auto-reload : uniquement après stabilisation (`OtaAutoReloadProvider` non monté)
 
-Validation terrain (S23 / driver sans FCM) :
+Validation terrain (S23 / driver sans FCM) — **uniquement en contexte chauffeur** :
 
 ```powershell
-adb logcat -v time | Select-String 'driver.push.fcm|dev.expo.updates'
+adb logcat -v time | Select-String 'FirebaseMessaging|RNFirebase|dev.expo.updates'
 ```
 
-Attendu après swipe-kill + relance ×2 :
+> En APK prod, utiliser **logs backend** (`save_push_token`, `driver_push_telemetry`) et SQL / `verify_fcm_token_coverage.py --gate-json`.  
+> Les `console.info` JS et l’ingest local `localhost:7242` sont **invisibles** en release.
 
-- `dev.expo.updates` télécharge l’OTA
-- puis `driver.push.fcm.get_token_start` (session chauffeur ouverte)
-- puis `driver.push.fcm.token` si SHA-1 Firebase OK
+Attendu après swipe-kill + relance ×2 **en session chauffeur** :
 
-Voir [firebase-fcm-sha1-procedure.md](./firebase-fcm-sha1-procedure.md) pour la checklist FCM complète.
+- `dev.expo.updates` télécharge l’OTA si applicable
+- SQL : ligne `provider=fcm` pour le driver testé (gate FCM-7514-A)
+
+Voir [firebase-fcm-sha1-procedure.md](./firebase-fcm-sha1-procedure.md) pour SHA-1 et checklist complète.

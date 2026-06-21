@@ -232,6 +232,7 @@ class RequestOffer(db.Model):
         from shared.time_utils import iso_utc_z, to_utc_from_db
 
         request = self.transport_request
+        patient = request.patient
         next_confirmed = get_effective_dispatch_time(request)
         price_estimate = estimate_offer_price(self)
         return {
@@ -253,8 +254,18 @@ class RequestOffer(db.Model):
                 if request.institution
                 else None,
                 "patient_name": (
-                    f"{request.patient.first_name} {request.patient.last_name}"
-                    if request.patient
+                    f"{patient.first_name} {patient.last_name}"
+                    if patient
+                    else None
+                ),
+                "patient": (
+                    {
+                        "first_name": patient.first_name,
+                        "last_name": patient.last_name,
+                        "dob": patient.dob.isoformat() if patient.dob else None,
+                        "external_reference": patient.external_reference,
+                    }
+                    if patient
                     else None
                 ),
                 "mission_type": request.mission_type,

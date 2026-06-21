@@ -24,6 +24,7 @@ import {
   clearPushRegistrationFailed,
   setPushRegistrationFailed,
 } from "./pushRegistrationState";
+import { reportPushRegistrationTelemetry } from "./pushRegistrationTelemetry";
 
 export type PushRegisterCallbacks = {
   registerExpo: (input: {
@@ -60,6 +61,12 @@ async function registerPushTokenWithPersistence(
       source: telemetrySource,
       provider,
     });
+    if (provider === "fcm") {
+      reportPushRegistrationTelemetry("driver_push.register_success", {
+        source: telemetrySource,
+        provider: "fcm",
+      });
+    }
   } catch (error) {
     await persistPendingPushTokenRegistration({
       provider,
@@ -81,6 +88,12 @@ async function hasAcceptedNotificationDisclosure(telemetrySource: string): Promi
   await ensureNotificationDisclosureSyncedWithOsPermission();
   const disclosureAccepted = await readNotificationDisclosureAccepted();
   if (!disclosureAccepted) {
+    console.info("[FCM-GATE] disclosure not accepted — push registration blocked", {
+      source: telemetrySource,
+    });
+    reportPushRegistrationTelemetry("driver_push.disclosure_blocked", {
+      source: telemetrySource,
+    });
     emitDriverTelemetry("push.token.disclosure_required", {
       source: telemetrySource,
     });
@@ -232,19 +245,54 @@ export function useRegisterPushTokenEffect(options: RegisterPushTokenOptions): v
 
     const attemptFcmRegistration = async (stage: string): Promise<boolean> => {
       if (cancelled) return false;
+      console.info("[FCM-GATE] register effect start", {
+        source: telemetrySource,
+        stage,
+        enabled,
+        fcmEnabled,
+      });
       if (!(await hasAcceptedNotificationDisclosure(telemetrySource))) return false;
       const NotificationsModule = getExpoNotificationsModule();
       if (NotificationsModule) {
         const perm = await NotificationsModule.getPermissionsAsync();
-        if (!perm.granted && perm.status !== "granted") return false;
+        if (!perm.granted && perm.status !== "granted") {
+          console.info("[FCM-GATE] OS notification permission missing", {
+            source: telemetrySource,
+            stage,
+            status: perm.status,
+          });
+          reportPushRegistrationTelemetry("driver_push.permission_blocked", {
+            source: telemetrySource,
+            stage,
+            permission_status: perm.status,
+          });
+          return false;
+        }
       }
       await flushPendingPushTokenRegistrations(callbacks);
+      console.info("[FCM-GATE] requesting token", { source: telemetrySource, stage });
       const token = await getDriverFcmToken();
       if (token) {
+        console.info("[FCM-GATE] token received", {
+          source: telemetrySource,
+          stage,
+          tokenLength: token.length,
+        });
+        reportPushRegistrationTelemetry("driver_push.token_acquired", {
+          source: telemetrySource,
+          stage,
+          provider: "fcm",
+          token_length: token.length,
+        });
+        console.info("[FCM-GATE] posting token", { source: telemetrySource, stage, provider: "fcm" });
         await registerFcm(token);
         return true;
       }
       if (androidNativeFcmMode) {
+        console.info("[FCM-GATE] getToken returned empty — expo fallback", {
+          source: telemetrySource,
+          stage,
+        });
         emitDriverTelemetry("driver.push.fcm.unavailable", {
           source: telemetrySource,
           reason: "fcm_token_missing_after_get",

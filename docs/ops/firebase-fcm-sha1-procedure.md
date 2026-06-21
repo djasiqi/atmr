@@ -15,6 +15,14 @@ Cause fréquente : **SHA-1 Play App Signing** absent ou incorrect dans Firebase 
 
 ---
 
+## Prérequis — contexte chauffeur (obligatoire)
+
+Avant toute vérification SHA-1 ou logcat FCM, exécuter le **STOP GATE FCM-7514-A** décrit dans [push-notifications-runbook.md](./push-notifications-runbook.md).
+
+Sans contexte `driver`, `DriverNotificationsBridge` n’est pas monté → aucun token `provider=fcm` possible, même si Firebase est parfaitement configuré.
+
+---
+
 ## Étape 1 — Récupérer le SHA-1 (Play Console)
 
 1. [Google Play Console](https://play.google.com/console) → application **Lirie Operations**
@@ -147,6 +155,7 @@ Attendu : au moins une ligne `provider=fcm`, `platform=android`, `is_active=true
 
 ## Checklist STOP GATE (chauffeur pilote)
 
+- [ ] **Contexte chauffeur actif** (gate FCM-7514-A — pas entreprise)
 - [ ] SHA-1 Play App Signing présent dans Firebase (`ch.liri.operations`)
 - [ ] Logcat : `driver.push.fcm.token` avec `token_present=true`
 - [ ] Base : `device_tokens.provider=fcm` actif pour Android

@@ -307,6 +307,23 @@ class TestBookingUpdateSchema:
         assert "dropoff_location" not in result
         assert "amount" not in result
 
+        # scheduled_time vide (retour à définir) : ignoré, pas d'erreur ISO
+        data = {
+            "pickup_location": "123 New Street",
+            "scheduled_time": "",
+        }
+        result = validate_request(BookingUpdateSchema(), data, strict=False)
+        assert result["pickup_location"] == "123 New Street"
+        assert "scheduled_time" not in result
+
+        # Horaire partiel (HH:MM sans date) : ignoré, pas d'erreur ISO
+        data = {
+            "pickup_location": "123 New Street",
+            "scheduled_time": "13:47",
+        }
+        result = validate_request(BookingUpdateSchema(), data, strict=False)
+        assert "scheduled_time" not in result
+
         # Test avec plusieurs champs (mais pas tous)
         data = {
             "pickup_location": "123 New Street",

@@ -617,6 +617,17 @@ services:
         reservations:
           memory: 512M
           cpus: "0.5"
+    # Consumer Kafka pur : remplace le HEALTHCHECK HTTP Flask de l'image (faux unhealthy → restart loop).
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import pathlib,sys; cmd=pathlib.Path('/proc/1/cmdline').read_text(); sys.exit(0 if 'ingest_consumer' in cmd else 1)\"",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   tracking-processed-fanout:
     profiles:
@@ -660,6 +671,16 @@ services:
         reservations:
           memory: 256M
           cpus: "0.25"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import pathlib,sys; cmd=pathlib.Path('/proc/1/cmdline').read_text(); sys.exit(0 if 'processed_fanout_consumer' in cmd else 1)\"",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   kafka-dlq-consumer:
     profiles:
