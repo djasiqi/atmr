@@ -8,13 +8,20 @@ import { getTrackingSnapshot, subscribeTrackingSnapshot } from "../tracking";
 const FIX_STALE_THRESHOLD_SECONDS = 300;
 const TELEMETRY_DEBOUNCE_MS = 5 * 60_000;
 
-function computeLastFixAgeSeconds(lastWatchAt: string | null): number | null {
-  if (!lastWatchAt) return null;
-  const ts = Date.parse(lastWatchAt);
-  if (!Number.isFinite(ts)) return null;
-  const ageMs = Date.now() - ts;
-  if (ageMs < 0) return 0;
-  return Math.round(ageMs / 1000);
+function computeLastFixAgeSeconds(
+  lastWatchAt: string | null,
+  lastSentAt: string | null
+): number | null {
+  const candidates: number[] = [];
+  for (const iso of [lastWatchAt, lastSentAt]) {
+    if (!iso) continue;
+    const ts = Date.parse(iso);
+    if (!Number.isFinite(ts)) continue;
+    const ageMs = Date.now() - ts;
+    candidates.push(Math.max(0, Math.round(ageMs / 1000)));
+  }
+  if (candidates.length === 0) return null;
+  return Math.min(...candidates);
 }
 
 export function useMissionLocationStale(missionId: number | null, missionStatus: string | null) {
@@ -34,7 +41,10 @@ export function useMissionLocationStale(missionId: number | null, missionStatus:
         return;
       }
 
-      const ageSeconds = computeLastFixAgeSeconds(snapshot.lastWatchAt ?? null);
+      const ageSeconds = computeLastFixAgeSeconds(
+        snapshot.lastWatchAt ?? null,
+        snapshot.lastSentAt ?? null
+      );
       const stale =
         ageSeconds !== null && ageSeconds > FIX_STALE_THRESHOLD_SECONDS;
       setIsStale(stale);

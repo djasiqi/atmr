@@ -33,6 +33,7 @@ import {
 } from "../../features/driver/firebaseMessaging";
 import { resolveDriverDeepLink } from "../navigation/deepLinkHandler";
 import { configureMissionBarIOS } from "../../features/driver/missionBarIOS";
+import { hideMissionBarAndroid } from "../../features/driver/missionBarAndroid";
 import { registerMissionBarBackgroundHandlers } from "../../features/driver/missionBarBackground";
 import { loadNotifee } from "../../features/driver/notifeeCompat";
 import { appendSessionJournalEvent } from "../observability/sessionJournal";
@@ -533,26 +534,10 @@ export function NotificationsProvider({ children }: PropsWithChildren) {
           ? payload.channelId
           : contract.channelId;
 
+      // Android arrière-plan : FCM affiche déjà le bloc notification système, ou
+      // firebaseMessaging.displayBackgroundNotification pour le data-only — évite le doublon identique.
       if (Platform.OS === "android" && AppState.currentState !== "active") {
-        const mod = await loadNotifee();
-        if (mod) {
-          const { default: notifee, AndroidImportance } = mod;
-          await notifee.createChannel({
-            id: channelId,
-            name: "Missions",
-            importance: AndroidImportance.HIGH,
-          });
-          await notifee.displayNotification({
-            title,
-            body,
-            data: payload as Record<string, string>,
-            android: {
-              channelId,
-              pressAction: { id: "default" },
-            },
-          });
-          return;
-        }
+        return;
       }
 
       if (!Notifications) return;
@@ -823,14 +808,18 @@ export function NotificationsProvider({ children }: PropsWithChildren) {
           error: err instanceof Error ? err.message : "unknown",
         });
       });
-      void configureMissionBarIOS().catch((err) => {
-        console.error("[iOS] Mission bar setup failed:", err);
-        emitDriverTelemetry("push.mission_bar.setup_failed", {
-          source: "core.notifications.provider",
-          error: err instanceof Error ? err.message : "unknown",
+      if (isFeatureEnabled("driver_mission_bar_enabled")) {
+        void configureMissionBarIOS().catch((err) => {
+          console.error("[iOS] Mission bar setup failed:", err);
+          emitDriverTelemetry("push.mission_bar.setup_failed", {
+            source: "core.notifications.provider",
+            error: err instanceof Error ? err.message : "unknown",
+          });
         });
-      });
-      registerMissionBarBackgroundHandlers();
+        registerMissionBarBackgroundHandlers();
+      } else if (Platform.OS === "android") {
+        void hideMissionBarAndroid();
+      }
     }
     const received = Notifications.addNotificationReceivedListener((notification) => {
       const data = notification.request.content.data;

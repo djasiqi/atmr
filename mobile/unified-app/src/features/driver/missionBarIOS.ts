@@ -1,4 +1,5 @@
 import { emitDriverTelemetry } from "../../core/observability/driverTelemetry";
+import { isFeatureEnabled } from "../../core/featureFlags/registry";
 import { NativeModules, Platform } from "react-native";
 import { canUseNotifee, loadNotifee } from "./notifeeCompat";
 
@@ -9,6 +10,7 @@ type LiveActivityPayload = {
 };
 
 export async function configureMissionBarIOS(): Promise<void> {
+  if (!isFeatureEnabled("driver_mission_bar_enabled")) return;
   if (!canUseNotifee()) {
     emitDriverTelemetry("driver.mission_bar.ios.unavailable", {
       source: "driver.mission_bar.ios",
@@ -58,6 +60,7 @@ function getLiveActivityModule():
 }
 
 export async function startMissionLiveActivity(payload: LiveActivityPayload): Promise<void> {
+  if (!isFeatureEnabled("driver_mission_bar_enabled")) return;
   const module = getLiveActivityModule();
   if (!module) {
     emitDriverTelemetry("driver.mission_bar.ios.live_activity_unavailable", {
@@ -70,12 +73,14 @@ export async function startMissionLiveActivity(payload: LiveActivityPayload): Pr
 }
 
 export async function updateMissionLiveActivity(payload: LiveActivityPayload): Promise<void> {
+  if (!isFeatureEnabled("driver_mission_bar_enabled")) return;
   const module = getLiveActivityModule();
   if (!module) return;
   await module.updateActivity(payload);
 }
 
 export async function stopMissionLiveActivity(missionId: number): Promise<void> {
+  if (!isFeatureEnabled("driver_mission_bar_enabled")) return;
   const module = getLiveActivityModule();
   if (!module) return;
   await module.endActivity(missionId);

@@ -66,17 +66,31 @@ else
   ko "T1 smoke Kafka KO"
 fi
 
-# T13 — latence Prometheus (si curl backend metrics accessible)
+# T13 — latence E2E (consumer ingest + Prometheus)
 metrics_url="${PROMETHEUS_METRICS_URL:-http://localhost:9090}"
+consumer_metrics_port="${TRACKING_CONSUMER_METRICS_PORT:-9115}"
+consumer_e2e_count="$(
+  docker exec atmr-backend-1 curl -sf --max-time 5 \
+    "http://tracking-kafka-consumer:${consumer_metrics_port}/metrics" 2>/dev/null \
+    | grep -E '^tracking_kafka_e2e_latency_seconds_count' \
+    | awk '{s+=$2} END {print s+0}' || true
+)"
+if [[ -n "${consumer_e2e_count}" && "${consumer_e2e_count}" != "0" ]]; then
+  ok "T13 consumer tracking_kafka_e2e count=${consumer_e2e_count}"
+else
+  warn "T13 consumer metrics absentes (deploy image + recreate tracking-kafka-consumer + scrape Prometheus)"
+fi
 e2e_p95="$(curl -sf "${metrics_url}/api/v1/query" \
   --data-urlencode 'query=histogram_quantile(0.95, sum(rate(tracking_kafka_e2e_latency_seconds_bucket[5m])) by (le))' 2>/dev/null \
   | grep -oE '"value":\[[^]]+\]' | tail -1 | grep -oE '[0-9.]+$' || true)"
-if [[ -n "${e2e_p95}" ]]; then
+if [[ -n "${e2e_p95}" && "${e2e_p95}" != "NaN" ]]; then
   if awk -v v="${e2e_p95}" 'BEGIN{exit (v+0 > 2)}'; then
     ok "T13 tracking_kafka_e2e P95=${e2e_p95}s (< 2s)"
   else
     ko "T13 tracking_kafka_e2e P95=${e2e_p95}s (> 2s)"
   fi
+elif [[ -n "${consumer_e2e_count}" && "${consumer_e2e_count}" != "0" ]]; then
+  warn "T13 P95 Prometheus indisponible (attendre 1–2 scrapes après activité GPS)"
 else
   warn "T13 latence Prometheus non mesurée (PROMETHEUS_METRICS_URL ou métriques absentes)"
 fi

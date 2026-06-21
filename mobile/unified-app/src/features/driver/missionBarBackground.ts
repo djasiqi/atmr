@@ -1,7 +1,9 @@
 import { emitDriverTelemetry } from "../../core/observability/driverTelemetry";
+import { isFeatureEnabled } from "../../core/featureFlags/registry";
 import { canUseNotifee, loadNotifee } from "./notifeeCompat";
 
 export function registerMissionBarBackgroundHandlers(): void {
+  if (!isFeatureEnabled("driver_mission_bar_enabled")) return;
   if (!canUseNotifee()) {
     emitDriverTelemetry("driver.mission_bar.background.unavailable", {
       source: "driver.mission_bar.background",

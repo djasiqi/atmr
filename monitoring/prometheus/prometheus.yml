@@ -70,9 +70,27 @@ scrape_configs:
         target_label: "metric_type"
         replacement: "location"
       - source_labels: [__name__]
+        regex: "tracking_kafka_.*"
+        target_label: "metric_type"
+        replacement: "location"
+      - source_labels: [__name__]
         regex: "http_.*"
         target_label: "metric_type"
         replacement: "http"
+
+  # ==================== tracking-kafka-consumer (latence E2E GPS) ====================
+  # tracking_kafka_e2e_latency_seconds est observé dans le consumer ingest (pas Flask backend).
+  - job_name: "atmr-tracking-kafka-consumer"
+    metrics_path: "/metrics"
+    static_configs:
+      - targets:
+          - "tracking-kafka-consumer:9115"
+        labels:
+          service: "tracking-kafka-consumer"
+          component: "kafka-ingest"
+          environment: "production"
+    scrape_interval: 15s
+    scrape_timeout: 10s
 
   # ==================== ws-service (Kafka consumer health) ====================
   - job_name: "atmr-ws-service"

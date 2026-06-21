@@ -367,6 +367,8 @@ async function flushPoint(appState: AppStateStatus) {
   if (!granted) return;
   const position = await resolvePositionFromWatchOrFallback(appState);
   if (!position) return;
+  state.lastWatchedPosition = position;
+  state.lastWatchAtMs = Date.now();
   const nowIso = new Date().toISOString();
   const mode = resolveTrackingMode(appState);
   const cadence = getCadenceForTick(appState, mode);
@@ -568,6 +570,8 @@ async function sendLegacyPoint(appState: AppStateStatus, nowIso: string) {
   if (!granted) return;
   const position = await getCurrentPositionWithTimeout(appState);
   if (!position) return;
+  state.lastWatchedPosition = position;
+  state.lastWatchAtMs = Date.now();
   if (state.missionId === null && !state.presenceWindowActive) return;
   await sendDriverLocation({
     latitude: position.coords.latitude,
@@ -725,8 +729,10 @@ export function startDriverTrackingBridge(missionId: number, status: DriverMissi
   state.lastStaleFallbackAttemptMs = null;
   state.lastHttpFallbackTrackingEventId = null;
   resetPermissionState();
-  void showMissionBarAndroid(missionId, status);
-  void startMissionLiveActivity({ missionId, status });
+  if (isFeatureEnabled("driver_mission_bar_enabled")) {
+    void showMissionBarAndroid(missionId, status);
+    void startMissionLiveActivity({ missionId, status });
+  }
   void setBackgroundTrackingMissionContext(missionId, status);
   ensureNativeTrackingAppStateListener();
   if (isFeatureEnabled("tracking_background_enabled")) {
@@ -738,7 +744,7 @@ export function startDriverTrackingBridge(missionId: number, status: DriverMissi
 
 export function updateDriverTrackingBridgeStatus(status: DriverMissionStatus) {
   state.missionStatus = status;
-  if (state.missionId != null) {
+  if (state.missionId != null && isFeatureEnabled("driver_mission_bar_enabled")) {
     void showMissionBarAndroid(state.missionId, status);
     void updateMissionLiveActivity({ missionId: state.missionId, status });
   }
@@ -751,9 +757,11 @@ export function updateDriverTrackingBridgeStatus(status: DriverMissionStatus) {
 }
 
 export function stopDriverTrackingBridge() {
-  void hideMissionBarAndroid();
-  if (state.missionId != null) {
-    void stopMissionLiveActivity(state.missionId);
+  if (isFeatureEnabled("driver_mission_bar_enabled")) {
+    void hideMissionBarAndroid();
+    if (state.missionId != null) {
+      void stopMissionLiveActivity(state.missionId);
+    }
   }
   state.missionId = null;
   state.missionStatus = null;

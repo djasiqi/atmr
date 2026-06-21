@@ -149,7 +149,8 @@ export const featureFlags = {
     key: "driver_mission_bar_enabled",
     source: "env",
     enabled: envFlag(process.env.EXPO_PUBLIC_ENABLE_DRIVER_MISSION_BAR),
-    description: "Enable driver mission bar runtime integration.",
+    description:
+      "Barre mission persistante (Notifee Android / Live Activity iOS). Désactivée en prod (EXPO_PUBLIC_ENABLE_DRIVER_MISSION_BAR=0).",
   } satisfies FeatureFlagDefinition,
   realtime_auth_reconnect_enabled: {
     key: "realtime_auth_reconnect_enabled",

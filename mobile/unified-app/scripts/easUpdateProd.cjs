@@ -117,6 +117,7 @@ process.env.APP_VARIANT = process.env.APP_VARIANT || "prod";
 process.env.EXPO_PUBLIC_ENABLE_DRIVER_PUSH = "1";
 process.env.EXPO_PUBLIC_ENABLE_DRIVER_FCM_NATIVE = "1";
 process.env.EXPO_PUBLIC_ENABLE_DRIVER_NOTIFICATION_ACTIONS = "1";
+process.env.EXPO_PUBLIC_ENABLE_DRIVER_MISSION_BAR = "0";
 
 console.log("[easUpdateProd] Garde-fou OK — lancement OTA prod avec :");
 console.log(`  EXPO_PUBLIC_API_BASE_URL      = ${process.env.EXPO_PUBLIC_API_BASE_URL}`);
@@ -125,6 +126,7 @@ console.log(`  EXPO_PUBLIC_APP_ENV           = ${process.env.EXPO_PUBLIC_APP_ENV
 console.log(`  APP_VARIANT                   = ${process.env.APP_VARIANT}`);
 console.log(`  EXPO_PUBLIC_ENABLE_DRIVER_PUSH = ${process.env.EXPO_PUBLIC_ENABLE_DRIVER_PUSH}`);
 console.log(`  EXPO_PUBLIC_ENABLE_DRIVER_FCM_NATIVE = ${process.env.EXPO_PUBLIC_ENABLE_DRIVER_FCM_NATIVE}`);
+console.log(`  EXPO_PUBLIC_ENABLE_DRIVER_MISSION_BAR = ${process.env.EXPO_PUBLIC_ENABLE_DRIVER_MISSION_BAR}`);
 console.log(`  Platform                      = ${platform}`);
 console.log("");
 

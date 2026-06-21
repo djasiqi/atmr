@@ -393,7 +393,9 @@ Actions exécutées sur serveur (sans sudo) :
 
 **Incident mineur** : brokers 2/3 `NodeExists` ZK au premier recreate (résolu par redémarrage groupé).
 
-**Encore à faire (Phase 1)** : mesures latence P95 Prometheus (histogramme `tracking_kafka_e2e` à scraper côté consumer), journal d'observation J0→J14.
+**Encore à faire (Phase 1)** : journal d'observation J0→J14.
+
+✅ **Implémenté** (2026-06-21) : exposition métriques E2E sur `tracking-kafka-consumer:9115/metrics` + job Prometheus `atmr-tracking-kafka-consumer` (`backend/services/monitoring/standalone_prometheus_server.py`, `monitoring/prometheus/prometheus.yml`). La métrique `tracking_kafka_e2e_latency_seconds` est observée dans le **consumer ingest**, pas le backend Flask — le scrape backend seul laissait `count=0`.
 
 ### Journal J+3 (2026-06-21)
 
@@ -416,13 +418,13 @@ Mesures SSH live (`free -h`, `docker stats`, lag, test T13) :
 | PUT HTTP | **10/10 → 202** (`queued: true`) après activation `TRACKING_INGEST_EAGER_INIT=true` |
 | Latence admission HTTP | avg **~0,15 s**, max **~0,20 s** (< 2 s ✅) |
 | Offsets v2 | Δ raw **+14**, Δ processed **+14** (incl. messages debug antérieurs) |
-| P95 Prometheus `tracking_kafka_e2e` | **n/a** — histogramme count=0 (métrique émise par consumer, scrape à vérifier) |
+| P95 Prometheus `tracking_kafka_e2e` | **n/a avant fix scrape** — histogramme count=0 côté backend (métrique émise par consumer) ; corrigé par scrape `:9115/metrics` |
 
-**Incident corrigé J+3** : le producer Kafka lazy (`ingest_producer.py`) ne s'initialisait pas au premier `enqueue()` → fallback synchrone HTTP 200 sans publication Kafka. Correctif code : appeler `_maybe_init_producer()` dans `enqueue()`. Hotfix prod immédiat : `TRACKING_INGEST_EAGER_INIT=true` dans `.env.production` + recreate backend.
+**Incident corrigé J+3** : le producer Kafka lazy (`ingest_producer.py`) ne s'initialisait pas au premier `enqueue()` → fallback synchrone HTTP 200 sans publication Kafka. Correctif code : appeler `_maybe_init_producer()` dans `enqueue()`. Hotfix prod retiré après deploy **v5** (`TRACKING_INGEST_EAGER_INIT` supprimé).
 
-**Sentry (optionnel)** : filtre bruit Kafka présent dans `backend/shared/sentry_init.py` (repo) — **pas encore dans l'image prod** ; deploy backend recommandé pour calmer `Task is already done` / rebalance sporadiques.
+**Sentry** : filtre bruit Kafka dans `backend/shared/sentry_init.py` (image **v5**) — `before_send` ignore `Task is already done`, rebalance, DNS kafka-python ; `ignore_logger` sur loggers `kafka.*`. Pas de variable env supplémentaire.
 
-**Prochaines actions J+4→J14** : journal 1×/jour, surveiller zookeeper-2, deploy image backend (fix lazy init + Sentry), confirmer scrape P95 E2E Grafana.
+**Prochaines actions J+4→J14** : journal 1×/jour, surveiller zookeeper-2, deploy image **v6+** (serveur métriques consumer) + `curl -X POST http://localhost:9090/-/reload` Prometheus, confirmer P95 E2E Grafana.
 
 ### État actuel post-intervention (2026-06-19)
 

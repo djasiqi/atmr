@@ -25,6 +25,8 @@ source "${ROOT}/scripts/lib/kafka_checks.sh"
 PUBLIC_BASE_URL="${PUBLIC_BASE_URL:-https://api.lirie.ch}"
 BACKEND_URL="${BACKEND_URL:-http://localhost:5000}"
 PROMETHEUS_URL="${PROMETHEUS_METRICS_URL:-http://localhost:9090}"
+TRACKING_CONSUMER_METRICS_HOST="${TRACKING_CONSUMER_METRICS_HOST:-tracking-kafka-consumer}"
+TRACKING_CONSUMER_METRICS_PORT="${TRACKING_CONSUMER_METRICS_PORT:-9115}"
 SEND_COUNT="${T13_SEND_COUNT:-10}"
 PROPAGATION_WAIT_S="${PROPAGATION_WAIT_S:-15}"
 KAFKA_BROKER_CONTAINER="${KAFKA_BROKER_CONTAINER:-atmr-kafka-broker-1}"
@@ -49,7 +51,21 @@ _prom_p95_e2e() {
     | grep -oE '"value":\[[^]]+\]' | tail -1 | grep -oE '[0-9.]+$' || true
 }
 
+_consumer_metrics_body() {
+  docker exec "${BACKEND_CONTAINER}" curl -sf --max-time 5 \
+    "http://${TRACKING_CONSUMER_METRICS_HOST}:${TRACKING_CONSUMER_METRICS_PORT}/metrics" 2>/dev/null || true
+}
+
 _metric_count_e2e() {
+  local body count
+  body="$(_consumer_metrics_body)"
+  if [[ -n "${body}" ]]; then
+    count="$(echo "${body}" | grep -E '^tracking_kafka_e2e_latency_seconds_count' | awk '{s+=$2} END {print s+0}')"
+    if [[ -n "${count}" && "${count}" != "0" ]]; then
+      echo "${count}"
+      return
+    fi
+  fi
   curl -sf "${BACKEND_URL}/api/v1/prometheus/metrics" 2>/dev/null \
     | grep -E '^tracking_kafka_e2e_latency_seconds_count' \
     | awk '{s+=$2} END {print s+0}'

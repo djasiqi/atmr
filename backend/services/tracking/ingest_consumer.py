@@ -460,9 +460,13 @@ class TrackingIngestConsumer:
 
 
 def run_tracking_ingest_consumer() -> None:
+    from services.monitoring.standalone_prometheus_server import (
+        start_standalone_prometheus_server,
+    )
     from shared.sentry_init import init_sentry
 
     init_sentry()
+    start_standalone_prometheus_server()
     if not KAFKA_ENABLED or not TRACKING_INGEST_ASYNC_ENABLED:
         logger.info(
             "[tracking_consumer] disabled (KAFKA_ENABLED or TRACKING_INGEST_ASYNC_ENABLED), exiting cleanly"

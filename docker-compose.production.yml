@@ -599,6 +599,8 @@ services:
       KAFKA_SSL_CAFILE: ${KAFKA_SSL_CAFILE:-}
       KAFKA_SSL_CERTFILE: ${KAFKA_SSL_CERTFILE:-}
       KAFKA_SSL_KEYFILE: ${KAFKA_SSL_KEYFILE:-}
+      STANDALONE_PROMETHEUS_PORT: ${TRACKING_CONSUMER_METRICS_PORT:-9115}
+      STANDALONE_PROMETHEUS_ENABLED: ${STANDALONE_PROMETHEUS_ENABLED:-true}
     depends_on:
       redis:
         condition: service_healthy
@@ -617,6 +619,8 @@ services:
         reservations:
           memory: 512M
           cpus: "0.5"
+    expose:
+      - "${TRACKING_CONSUMER_METRICS_PORT:-9115}"
     # Consumer Kafka pur : remplace le HEALTHCHECK HTTP Flask de l'image (faux unhealthy → restart loop).
     healthcheck:
       test:
