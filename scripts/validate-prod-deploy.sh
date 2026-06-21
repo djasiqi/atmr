@@ -159,9 +159,14 @@ cmd_propagation() {
   section "Phase 2.6 — propagation Kafka E2E (PUT /driver/me/location)"
   require_var DRIVER_TEST_JWT || return 2
 
+  local topic_raw topic_processed
+  topic_raw="$(kafka_read_env_value KAFKA_TOPIC_DRIVER_LOCATION_RAW driver.location.raw)"
+  topic_processed="$(kafka_read_env_value KAFKA_TOPIC_DRIVER_LOCATION_PROCESSED driver.location.processed)"
+
   local raw_before processed_before
-  raw_before="$(_kafka_offset driver.location.raw)"
-  processed_before="$(_kafka_offset driver.location.processed)"
+  raw_before="$(_kafka_offset "${topic_raw}")"
+  processed_before="$(_kafka_offset "${topic_processed}")"
+  printf "  Topics         : raw=%s processed=%s\n" "${topic_raw}" "${topic_processed}"
   printf "  Offsets AVANT  : raw=%s processed=%s\n" "${raw_before}" "${processed_before}"
 
   local rec_before ing_before proc_before fan_before
@@ -183,7 +188,7 @@ cmd_propagation() {
     --max-time 15 \
     -d "{\"latitude\":46.2044,\"longitude\":6.1432,\"accuracy\":10.0,\"speed\":0.0,\"heading\":0.0,\"timestamp\":\"${ts}\"}" \
     || echo "000")"
-  if [[ "${code}" != "200" && "${code}" != "201" && "${code}" != "204" ]]; then
+  if [[ "${code}" != "200" && "${code}" != "201" && "${code}" != "202" && "${code}" != "204" ]]; then
     log_fail "PUT location HTTP ${code} — corps :"
     sed 's/^/        /' /tmp/_put_loc_resp.json >&2 || true
     return 1
@@ -194,8 +199,8 @@ cmd_propagation() {
   sleep "${PROPAGATION_WAIT_S}"
 
   local raw_after processed_after rec_after ing_after proc_after fan_after
-  raw_after="$(_kafka_offset driver.location.raw)"
-  processed_after="$(_kafka_offset driver.location.processed)"
+  raw_after="$(_kafka_offset "${topic_raw}")"
+  processed_after="$(_kafka_offset "${topic_processed}")"
   rec_after="$(_metric_value 'driver_location_received_total')"
   ing_after="$(_metric_value 'driver_location_ingested_total')"
   proc_after="$(_metric_value 'driver_location_processed_total\\{accept_status="accepted"')"

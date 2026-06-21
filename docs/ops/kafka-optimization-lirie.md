@@ -165,7 +165,7 @@ Baseline J0 : capturer `free -h`, `docker stats`, lag, P50/P95 latence **avant**
 | ---------- | ------------ | ---------- | ------- | ----------- | ------------------------------------- |
 | 2026-06-18 | ~1,6 Gi      | 0          | 0       | —           | J0 — urgence mémoire                  |
 | 2026-06-19 | ~6,8 Gi      | 4 Go actif | 0       | —           | P0+P1 compose — gain principal obtenu |
-| …          |              |            |         |             |                                       |
+| 2026-06-21 | ~3,7 Gi      | ~533 Mo    | 0       | ~0,15 s     | J+3 — voir section ci-dessous         |
 
 
 ---
@@ -393,7 +393,36 @@ Actions exécutées sur serveur (sans sudo) :
 
 **Incident mineur** : brokers 2/3 `NodeExists` ZK au premier recreate (résolu par redémarrage groupé).
 
-**Encore à faire (Phase 1)** : appliquer fragment topics v2 sur serveur, mesures latence P95 Prometheus, journal d'observation J0→J14.
+**Encore à faire (Phase 1)** : mesures latence P95 Prometheus (histogramme `tracking_kafka_e2e` à scraper côté consumer), journal d'observation J0→J14.
+
+### Journal J+3 (2026-06-21)
+
+Mesures SSH live (`free -h`, `docker stats`, lag, test T13) :
+
+| Indicateur | Valeur | Commentaire |
+| ---------- | ------ | ----------- |
+| MemAvailable | **~3,7 Gi** | JVM brokers montée (~1,2–1,5 Gi/broker vs ~1,9 Gi stack J+1) |
+| Swap utilisé | **~533 Mo / 4 Go** | Stable, pas de si/so anormal |
+| Lag max | **0** | groupes v2 `tracking-ingest-consumer-group`, fanout, DLQ |
+| Topics v2 | actifs | `driver.location.raw.v2` / `.processed.v2` / `.dlq.v2` (RF=2, 6 partitions) |
+| Consumers | healthy | ~45 h uptime, 0 restart depuis fix healthcheck 19/06 |
+| zookeeper-2 | **415 Mi / 512 Mi (~81 %)** | ⚠️ à surveiller — recreate si tendance > 90 % |
+| Brokers | healthy | 2 jours, réseau `atmr-network` OK |
+
+**Test T13** (10 envois GPS via `scripts/run-t13-prod-gps-test.sh`) :
+
+| Critère | Résultat |
+| ------- | -------- |
+| PUT HTTP | **10/10 → 202** (`queued: true`) après activation `TRACKING_INGEST_EAGER_INIT=true` |
+| Latence admission HTTP | avg **~0,15 s**, max **~0,20 s** (< 2 s ✅) |
+| Offsets v2 | Δ raw **+14**, Δ processed **+14** (incl. messages debug antérieurs) |
+| P95 Prometheus `tracking_kafka_e2e` | **n/a** — histogramme count=0 (métrique émise par consumer, scrape à vérifier) |
+
+**Incident corrigé J+3** : le producer Kafka lazy (`ingest_producer.py`) ne s'initialisait pas au premier `enqueue()` → fallback synchrone HTTP 200 sans publication Kafka. Correctif code : appeler `_maybe_init_producer()` dans `enqueue()`. Hotfix prod immédiat : `TRACKING_INGEST_EAGER_INIT=true` dans `.env.production` + recreate backend.
+
+**Sentry (optionnel)** : filtre bruit Kafka présent dans `backend/shared/sentry_init.py` (repo) — **pas encore dans l'image prod** ; deploy backend recommandé pour calmer `Task is already done` / rebalance sporadiques.
+
+**Prochaines actions J+4→J14** : journal 1×/jour, surveiller zookeeper-2, deploy image backend (fix lazy init + Sentry), confirmer scrape P95 E2E Grafana.
 
 ### État actuel post-intervention (2026-06-19)
 

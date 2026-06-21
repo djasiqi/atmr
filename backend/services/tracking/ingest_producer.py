@@ -177,6 +177,8 @@ class TrackingIngestProducer:
             "payload": payload,
         }
 
+        self._maybe_init_producer()
+
         if not self._initialized or self._producer is None:
             return {"queued": False, "trace_id": trace_id, "reason": "kafka_disabled"}
 
