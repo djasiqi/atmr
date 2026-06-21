@@ -57,6 +57,31 @@ def _deactivate_other_rows_with_same_token(
     return count
 
 
+def _deactivate_android_expo_legacy_for_driver(
+    *,
+    driver_id: int,
+    keep_row_id: int | None,
+) -> int:
+    """Désactive les tokens Expo Android obsolètes quand un FCM Android est enregistré."""
+    q = DeviceToken.query.filter(
+        DeviceToken.driver_id == driver_id,
+        DeviceToken.provider == "expo",
+        DeviceToken.platform == "android",
+        DeviceToken.is_active.is_(True),
+    )
+    if keep_row_id is not None:
+        q = q.filter(DeviceToken.id != keep_row_id)
+    count = q.update({"is_active": False}, synchronize_session=False)
+    count = int(count or 0)
+    if count > 0:
+        app_logger.info(
+            "[push-token] Désactivation %s token(s) Expo Android legacy driver_id=%s (FCM actif)",
+            count,
+            driver_id,
+        )
+    return count
+
+
 def upsert_device_token(
     *,
     driver_id: int | None = None,
@@ -151,6 +176,15 @@ def upsert_device_token(
             row.device_id,
             resolved_provider,
         )
+        if (
+            driver_id is not None
+            and resolved_provider == "fcm"
+            and (platform or "").lower() == "android"
+        ):
+            _deactivate_android_expo_legacy_for_driver(
+                driver_id=driver_id,
+                keep_row_id=row.id,
+            )
         return row
 
     row = DeviceToken()
@@ -179,6 +213,15 @@ def upsert_device_token(
         row.device_id,
         resolved_provider,
     )
+    if (
+        driver_id is not None
+        and resolved_provider == "fcm"
+        and (platform or "").lower() == "android"
+    ):
+        _deactivate_android_expo_legacy_for_driver(
+            driver_id=driver_id,
+            keep_row_id=row.id,
+        )
     return row
 
 

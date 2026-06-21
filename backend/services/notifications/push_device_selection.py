@@ -77,7 +77,40 @@ def prioritize_android_fcm_devices(
         selected.extend(non_android)
 
     selected.extend(without_device)
-    return selected
+    return _drop_android_expo_when_driver_has_fcm(devices, selected)
+
+
+def _drop_android_expo_when_driver_has_fcm(
+    all_devices: list[PushDeviceDict],
+    selected: list[PushDeviceDict],
+) -> list[PushDeviceDict]:
+    """Si le chauffeur a un token FCM Android, ne pas aussi pousser via Expo Android.
+
+    Cas réel : migration Expo → FCM avec rotation de ``device_id`` (même téléphone,
+    deux lignes actives) → double notification identique dans le tiroir.
+    """
+    has_android_fcm = any(
+        (d.get("platform") or "").lower() == "android"
+        and (d.get("provider") or "expo") == "fcm"
+        for d in all_devices
+    )
+    if not has_android_fcm:
+        return selected
+    filtered = [
+        d
+        for d in selected
+        if not (
+            (d.get("platform") or "").lower() == "android"
+            and (d.get("provider") or "expo") == "expo"
+        )
+    ]
+    if len(filtered) < len(selected):
+        app_logger.info(
+            "[push] android_expo_skipped_driver_has_fcm before=%s after=%s",
+            len(selected),
+            len(filtered),
+        )
+    return filtered
 
 
 def device_token_row_to_push_dict(row: Any) -> PushDeviceDict:

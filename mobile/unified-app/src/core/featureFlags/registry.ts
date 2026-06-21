@@ -7,12 +7,13 @@ type FeatureFlagDefinition = {
   description: string;
 };
 
-function envEnabled(name: string): boolean {
-  return process.env[name] === "1";
+/** Accès statique EXPO_PUBLIC_* requis pour inlining Metro (OTA/APK prod). */
+function envFlag(value: string | undefined): boolean {
+  return value === "1";
 }
 
-function envExplicitlyDisabled(name: string): boolean {
-  return process.env[name] === "0";
+function envFlagDisabled(value: string | undefined): boolean {
+  return value === "0";
 }
 
 // Single source of truth for rollout-safe toggles.
@@ -27,16 +28,16 @@ export const featureFlags = {
   ws_service_canary: {
     key: "ws_service_canary",
     source: "env",
-    enabled: envEnabled("EXPO_PUBLIC_WS_CANARY_ENABLED"),
+    enabled: envFlag(process.env.EXPO_PUBLIC_WS_CANARY_ENABLED),
     description:
       "Route Socket.IO vers ws-service via header X-WS-Canary (rollout progressif PR C).",
   } satisfies FeatureFlagDefinition,
   realtime_socket_enabled: {
     key: "realtime_socket_enabled",
     source: "env",
-    enabled: envExplicitlyDisabled("EXPO_PUBLIC_ENABLE_DRIVER_SOCKET")
+    enabled: envFlagDisabled(process.env.EXPO_PUBLIC_ENABLE_DRIVER_SOCKET)
       ? false
-      : envEnabled("EXPO_PUBLIC_ENABLE_DRIVER_SOCKET") ||
+      : envFlag(process.env.EXPO_PUBLIC_ENABLE_DRIVER_SOCKET) ||
         (typeof __DEV__ !== "undefined" && __DEV__),
     description:
       "Socket chauffeur (messagerie, missions). Local : actif par défaut en __DEV__ ou EXPO_PUBLIC_ENABLE_DRIVER_SOCKET=1. Voir expo-driver-dev.env.template.",
@@ -44,7 +45,7 @@ export const featureFlags = {
   tracking_background_enabled: {
     key: "tracking_background_enabled",
     source: "env",
-    enabled: envEnabled("EXPO_PUBLIC_ENABLE_BG_LOCATION"),
+    enabled: envFlag(process.env.EXPO_PUBLIC_ENABLE_BG_LOCATION),
     description: "Allow background location capabilities/tracking flow.",
   } satisfies FeatureFlagDefinition,
   driver_mission_live_tracking_guard_enabled: {
@@ -53,20 +54,20 @@ export const featureFlags = {
     enabled:
       process.env.EXPO_PUBLIC_ENABLE_DRIVER_MISSION_LIVE_TRACKING_GUARD === undefined
         ? true
-        : envEnabled("EXPO_PUBLIC_ENABLE_DRIVER_MISSION_LIVE_TRACKING_GUARD"),
+        : envFlag(process.env.EXPO_PUBLIC_ENABLE_DRIVER_MISSION_LIVE_TRACKING_GUARD),
     description:
       "Gate store-safe EN_ROUTE/IN_PROGRESS sur capability tracking mission (disclosure + permissions).",
   } satisfies FeatureFlagDefinition,
   tracking_persistent_runtime_enabled: {
     key: "tracking_persistent_runtime_enabled",
     source: "env",
-    enabled: envEnabled("EXPO_PUBLIC_ENABLE_TRACKING_PERSISTENT_QUEUE"),
+    enabled: envFlag(process.env.EXPO_PUBLIC_ENABLE_TRACKING_PERSISTENT_QUEUE),
     description: "Enable durable tracking queue + replay/flush delivery pipeline.",
   } satisfies FeatureFlagDefinition,
   tracking_presence_mode_enabled: {
     key: "tracking_presence_mode_enabled",
     source: "env",
-    enabled: envEnabled("EXPO_PUBLIC_ENABLE_TRACKING_PRESENCE_MODE"),
+    enabled: envFlag(process.env.EXPO_PUBLIC_ENABLE_TRACKING_PRESENCE_MODE),
     description: "Enable availability_presence tracking mode outside strict mission_live cadence.",
   } satisfies FeatureFlagDefinition,
   driver_tracking_work_window_enabled: {
@@ -76,62 +77,62 @@ export const featureFlags = {
     enabled:
       process.env.EXPO_PUBLIC_ENABLE_DRIVER_TRACKING_WORK_WINDOW === undefined
         ? true
-        : envEnabled("EXPO_PUBLIC_ENABLE_DRIVER_TRACKING_WORK_WINDOW"),
+        : envFlag(process.env.EXPO_PUBLIC_ENABLE_DRIVER_TRACKING_WORK_WINDOW),
     description:
       "Force le tracking GPS chauffeur en mode présence pendant la fenêtre 07h–19h (heure locale) même sans mission active. Hors plage : tracking uniquement si une mission éligible est en cours.",
   } satisfies FeatureFlagDefinition,
   tracking_http_fallback_enabled: {
     key: "tracking_http_fallback_enabled",
     source: "env",
-    enabled: envEnabled("EXPO_PUBLIC_ENABLE_TRACKING_HTTP_FALLBACK"),
+    enabled: envFlag(process.env.EXPO_PUBLIC_ENABLE_TRACKING_HTTP_FALLBACK),
     description: "Allow HTTP fallback path when socket/ack transport is unavailable.",
   } satisfies FeatureFlagDefinition,
   tracking_resume_resync_enabled: {
     key: "tracking_resume_resync_enabled",
     source: "env",
-    enabled: envEnabled("EXPO_PUBLIC_ENABLE_TRACKING_RESUME_RESYNC"),
+    enabled: envFlag(process.env.EXPO_PUBLIC_ENABLE_TRACKING_RESUME_RESYNC),
     description: "Trigger queue flush + mission resync when app returns foreground.",
   } satisfies FeatureFlagDefinition,
   tracking_real_ack_semantics_enabled: {
     key: "tracking_real_ack_semantics_enabled",
     source: "env",
-    enabled: envEnabled("EXPO_PUBLIC_ENABLE_TRACKING_REAL_ACK_SEMANTICS"),
+    enabled: envFlag(process.env.EXPO_PUBLIC_ENABLE_TRACKING_REAL_ACK_SEMANTICS),
     description: "Track delivery success only after backend ACK and not socket emit acceptance.",
   } satisfies FeatureFlagDefinition,
   tracking_queue_compaction_enabled: {
     key: "tracking_queue_compaction_enabled",
     source: "env",
-    enabled: envEnabled("EXPO_PUBLIC_ENABLE_TRACKING_QUEUE_COMPACTION"),
+    enabled: envFlag(process.env.EXPO_PUBLIC_ENABLE_TRACKING_QUEUE_COMPACTION),
     description: "Enable queue compaction strategy for prolonged offline sessions.",
   } satisfies FeatureFlagDefinition,
   tracking_safe_stale_fallback_enabled: {
     key: "tracking_safe_stale_fallback_enabled",
     source: "env",
-    enabled: envEnabled("EXPO_PUBLIC_ENABLE_TRACKING_SAFE_STALE_FALLBACK"),
+    enabled: envFlag(process.env.EXPO_PUBLIC_ENABLE_TRACKING_SAFE_STALE_FALLBACK),
     description: "Enable timeout/circuit-breaker protections for stale location fallback.",
   } satisfies FeatureFlagDefinition,
   tracking_adaptive_cadence_enabled: {
     key: "tracking_adaptive_cadence_enabled",
     source: "env",
-    enabled: envEnabled("EXPO_PUBLIC_ENABLE_TRACKING_ADAPTIVE_CADENCE"),
+    enabled: envFlag(process.env.EXPO_PUBLIC_ENABLE_TRACKING_ADAPTIVE_CADENCE),
     description: "Enable network-aware cadence resolver for tracking loops and ACK stale policy.",
   } satisfies FeatureFlagDefinition,
   driver_runtime_decommission_enabled: {
     key: "driver_runtime_decommission_enabled",
     source: "env",
-    enabled: envEnabled("EXPO_PUBLIC_ENABLE_DRIVER_RUNTIME_DECOMMISSION"),
+    enabled: envFlag(process.env.EXPO_PUBLIC_ENABLE_DRIVER_RUNTIME_DECOMMISSION),
     description: "Master switch for driver runtime replacement stack.",
   } satisfies FeatureFlagDefinition,
   driver_fcm_native_enabled: {
     key: "driver_fcm_native_enabled",
     source: "env",
-    enabled: envEnabled("EXPO_PUBLIC_ENABLE_DRIVER_FCM_NATIVE"),
+    enabled: envFlag(process.env.EXPO_PUBLIC_ENABLE_DRIVER_FCM_NATIVE),
     description: "Enable native FCM driver integration path.",
   } satisfies FeatureFlagDefinition,
   driver_notification_actions_enabled: {
     key: "driver_notification_actions_enabled",
     source: "env",
-    enabled: envEnabled("EXPO_PUBLIC_ENABLE_DRIVER_NOTIFICATION_ACTIONS"),
+    enabled: envFlag(process.env.EXPO_PUBLIC_ENABLE_DRIVER_NOTIFICATION_ACTIONS),
     description: "Enable quick notification actions and channels bootstrap.",
   } satisfies FeatureFlagDefinition,
   driver_messages_hub_enabled: {
@@ -140,45 +141,45 @@ export const featureFlags = {
     enabled:
       process.env.EXPO_PUBLIC_ENABLE_DRIVER_MESSAGES_HUB === undefined
         ? true
-        : envEnabled("EXPO_PUBLIC_ENABLE_DRIVER_MESSAGES_HUB"),
+        : envFlag(process.env.EXPO_PUBLIC_ENABLE_DRIVER_MESSAGES_HUB),
     description:
       "Hub Messages chauffeur (inbox mission-first, conversation enrichie, urgence dispatch).",
   } satisfies FeatureFlagDefinition,
   driver_mission_bar_enabled: {
     key: "driver_mission_bar_enabled",
     source: "env",
-    enabled: envEnabled("EXPO_PUBLIC_ENABLE_DRIVER_MISSION_BAR"),
+    enabled: envFlag(process.env.EXPO_PUBLIC_ENABLE_DRIVER_MISSION_BAR),
     description: "Enable driver mission bar runtime integration.",
   } satisfies FeatureFlagDefinition,
   realtime_auth_reconnect_enabled: {
     key: "realtime_auth_reconnect_enabled",
     source: "env",
-    enabled: envEnabled("EXPO_PUBLIC_ENABLE_REALTIME_AUTH_RECONNECT"),
+    enabled: envFlag(process.env.EXPO_PUBLIC_ENABLE_REALTIME_AUTH_RECONNECT),
     description: "Enable auth-aware realtime reconnect policy with explicit resume orchestration.",
   } satisfies FeatureFlagDefinition,
   realtime_auth_exhaustion_guard_enabled: {
     key: "realtime_auth_exhaustion_guard_enabled",
     source: "env",
-    enabled: envEnabled("EXPO_PUBLIC_ENABLE_REALTIME_AUTH_EXHAUSTION_GUARD"),
+    enabled: envFlag(process.env.EXPO_PUBLIC_ENABLE_REALTIME_AUTH_EXHAUSTION_GUARD),
     description: "Expose explicit UI/session guardrails when realtime auth retries are exhausted.",
   } satisfies FeatureFlagDefinition,
   realtime_resync_transition_gate_enabled: {
     key: "realtime_resync_transition_gate_enabled",
     source: "env",
-    enabled: envEnabled("EXPO_PUBLIC_ENABLE_REALTIME_RESYNC_TRANSITION_GATE"),
+    enabled: envFlag(process.env.EXPO_PUBLIC_ENABLE_REALTIME_RESYNC_TRANSITION_GATE),
     description: "Trigger reconnect resync only on true connection transitions and gate bursty re-syncs.",
   } satisfies FeatureFlagDefinition,
   realtime_reconnect_circuit_breaker_enabled: {
     key: "realtime_reconnect_circuit_breaker_enabled",
     source: "env",
-    enabled: envEnabled("EXPO_PUBLIC_ENABLE_REALTIME_RECONNECT_CIRCUIT_BREAKER"),
+    enabled: envFlag(process.env.EXPO_PUBLIC_ENABLE_REALTIME_RECONNECT_CIRCUIT_BREAKER),
     description:
       "Active un cooldown reconnexion Socket.IO après rafales d'échecs (fenêtre glissante) pour limiter storms et consommation batterie.",
   } satisfies FeatureFlagDefinition,
   company_gps_flush_priority_lanes_enabled: {
     key: "company_gps_flush_priority_lanes_enabled",
     source: "env",
-    enabled: envEnabled("EXPO_PUBLIC_ENABLE_COMPANY_GPS_FLUSH_PRIORITY_LANES"),
+    enabled: envFlag(process.env.EXPO_PUBLIC_ENABLE_COMPANY_GPS_FLUSH_PRIORITY_LANES),
     description:
       "Active les lanes de flush GPS (critical/visible/background). Désactivé : pipeline P0 (critical immédiat, reste en batch 300ms).",
   } satisfies FeatureFlagDefinition,
@@ -192,7 +193,7 @@ export const featureFlags = {
   company_map_dynamic_filter_enabled: {
     key: "company_map_dynamic_filter_enabled",
     source: "external",
-    enabled: envEnabled("EXPO_PUBLIC_COMPANY_MAP_DYNAMIC_FILTER_ENABLED"),
+    enabled: envFlag(process.env.EXPO_PUBLIC_COMPANY_MAP_DYNAMIC_FILTER_ENABLED),
     description:
       "Filtre GPS dynamique max(1.5, accuracy*0.25). Désactivable via bootstrap ou EXPO_PUBLIC=0.",
   } satisfies FeatureFlagDefinition,
@@ -202,96 +203,96 @@ export const featureFlags = {
     enabled:
       process.env.EXPO_PUBLIC_COMPANY_MAP_AUTOFIT_STRUCTURAL_ONLY === undefined
         ? true
-        : envEnabled("EXPO_PUBLIC_COMPANY_MAP_AUTOFIT_STRUCTURAL_ONLY"),
+        : envFlag(process.env.EXPO_PUBLIC_COMPANY_MAP_AUTOFIT_STRUCTURAL_ONLY),
     description:
       "Auto-fit caméra sur join/leave chauffeur uniquement (pas sur chaque tick GPS).",
   } satisfies FeatureFlagDefinition,
   mobile_map_parity_mode: {
     key: "mobile_map_parity_mode",
     source: "external",
-    enabled: envEnabled("EXPO_PUBLIC_MOBILE_MAP_PARITY_MODE"),
+    enabled: envFlag(process.env.EXPO_PUBLIC_MOBILE_MAP_PARITY_MODE),
     description: "Mode parité perception mobile aligné Web (debug / QA).",
   } satisfies FeatureFlagDefinition,
   driver_capture_aggressive_enabled: {
     key: "driver_capture_aggressive_enabled",
     source: "external",
-    enabled: envEnabled("EXPO_PUBLIC_DRIVER_CAPTURE_AGGRESSIVE_ENABLED"),
+    enabled: envFlag(process.env.EXPO_PUBLIC_DRIVER_CAPTURE_AGGRESSIVE_ENABLED),
     description:
       "Profil capture GPS agressif (intervalle/distance réduits). Gate PR5 + bootstrap.",
   } satisfies FeatureFlagDefinition,
   realtime_adaptive_polling_enabled: {
     key: "realtime_adaptive_polling_enabled",
     source: "env",
-    enabled: envEnabled("EXPO_PUBLIC_ENABLE_REALTIME_ADAPTIVE_POLLING"),
+    enabled: envFlag(process.env.EXPO_PUBLIC_ENABLE_REALTIME_ADAPTIVE_POLLING),
     description: "Adapt full mission polling cadence based on realtime transport health.",
   } satisfies FeatureFlagDefinition,
   driver_network_idle_gating_enabled: {
     key: "driver_network_idle_gating_enabled",
     source: "env",
-    enabled: envEnabled("EXPO_PUBLIC_ENABLE_DRIVER_NETWORK_IDLE_GATING"),
+    enabled: envFlag(process.env.EXPO_PUBLIC_ENABLE_DRIVER_NETWORK_IDLE_GATING),
     description: "Reduce mission polling/sync cadence when no mission is relevant.",
   } satisfies FeatureFlagDefinition,
   driver_background_network_gating_enabled: {
     key: "driver_background_network_gating_enabled",
     source: "env",
-    enabled: envEnabled("EXPO_PUBLIC_ENABLE_DRIVER_BACKGROUND_NETWORK_GATING"),
+    enabled: envFlag(process.env.EXPO_PUBLIC_ENABLE_DRIVER_BACKGROUND_NETWORK_GATING),
     description: "Apply background/deep-idle network cadence with app-state hysteresis.",
   } satisfies FeatureFlagDefinition,
   driver_sync_poll_harmonization_enabled: {
     key: "driver_sync_poll_harmonization_enabled",
     source: "env",
-    enabled: envEnabled("EXPO_PUBLIC_ENABLE_DRIVER_SYNC_POLL_HARMONIZATION"),
+    enabled: envFlag(process.env.EXPO_PUBLIC_ENABLE_DRIVER_SYNC_POLL_HARMONIZATION),
     description: "Avoid redundant sync workload between realtime polling and sync engine.",
   } satisfies FeatureFlagDefinition,
   driver_network_2g_cadence_enabled: {
     key: "driver_network_2g_cadence_enabled",
     source: "env",
-    enabled: envEnabled("EXPO_PUBLIC_ENABLE_DRIVER_NETWORK_2G_CADENCE"),
+    enabled: envFlag(process.env.EXPO_PUBLIC_ENABLE_DRIVER_NETWORK_2G_CADENCE),
     description: "Apply explicit 2G/3G cadence profile for driver runtime loops.",
   } satisfies FeatureFlagDefinition,
   driver_http_adaptive_timeout_enabled: {
     key: "driver_http_adaptive_timeout_enabled",
     source: "env",
-    enabled: envEnabled("EXPO_PUBLIC_ENABLE_DRIVER_HTTP_ADAPTIVE_TIMEOUT"),
+    enabled: envFlag(process.env.EXPO_PUBLIC_ENABLE_DRIVER_HTTP_ADAPTIVE_TIMEOUT),
     description: "Adjust HTTP timeout based on active network profile for driver APIs.",
   } satisfies FeatureFlagDefinition,
   driver_http_circuit_breaker_enabled: {
     key: "driver_http_circuit_breaker_enabled",
     source: "env",
-    enabled: envEnabled("EXPO_PUBLIC_ENABLE_DRIVER_HTTP_CIRCUIT_BREAKER"),
+    enabled: envFlag(process.env.EXPO_PUBLIC_ENABLE_DRIVER_HTTP_CIRCUIT_BREAKER),
     description: "Enable scoped HTTP circuit breakers for driver transport families.",
   } satisfies FeatureFlagDefinition,
   driver_transition_window_tuning_enabled: {
     key: "driver_transition_window_tuning_enabled",
     source: "env",
-    enabled: envEnabled("EXPO_PUBLIC_ENABLE_DRIVER_TRANSITION_WINDOW_TUNING"),
+    enabled: envFlag(process.env.EXPO_PUBLIC_ENABLE_DRIVER_TRANSITION_WINDOW_TUNING),
     description: "Enable configurable replay window and replay attempt limits for mission transitions.",
   } satisfies FeatureFlagDefinition,
   driver_push_enabled: {
     key: "driver_push_enabled",
     source: "env",
-    enabled: envEnabled("EXPO_PUBLIC_ENABLE_DRIVER_PUSH"),
+    enabled: envFlag(process.env.EXPO_PUBLIC_ENABLE_DRIVER_PUSH),
     description: "Enable push registration and push listeners for drivers.",
   } satisfies FeatureFlagDefinition,
   company_push_enabled: {
     key: "company_push_enabled",
     source: "env",
-    enabled: envEnabled("EXPO_PUBLIC_ENABLE_COMPANY_PUSH"),
+    enabled: envFlag(process.env.EXPO_PUBLIC_ENABLE_COMPANY_PUSH),
     description: "Enable company push token registration and notification handlers.",
   } satisfies FeatureFlagDefinition,
   fleet_map_safe_markers: {
     key: "fleet_map_safe_markers",
     source: "env",
-    enabled: envEnabled("EXPO_PUBLIC_FLEET_MAP_SAFE_MARKERS"),
+    enabled: envFlag(process.env.EXPO_PUBLIC_FLEET_MAP_SAFE_MARKERS),
     description:
       "Carte flotte : force les marqueurs en data-URI (sans PNG Metro/OTA). Rollback d'urgence via bootstrap feature_flags ou EXPO_PUBLIC_FLEET_MAP_SAFE_MARKERS=1.",
   } satisfies FeatureFlagDefinition,
   company_dispatch_enabled: {
     key: "company_dispatch_enabled",
     source: "env",
-    enabled: envExplicitlyDisabled("EXPO_PUBLIC_ENABLE_COMPANY_DISPATCH")
+    enabled: envFlagDisabled(process.env.EXPO_PUBLIC_ENABLE_COMPANY_DISPATCH)
       ? false
-      : envEnabled("EXPO_PUBLIC_ENABLE_COMPANY_DISPATCH") ||
+      : envFlag(process.env.EXPO_PUBLIC_ENABLE_COMPANY_DISPATCH) ||
         (typeof __DEV__ !== "undefined" && __DEV__),
     description:
       "Déverrouille companyRealtimeBridge.connect dans (company)/_layout. Local dev: actif par défaut en __DEV__ (ou EXPO_PUBLIC_ENABLE_COMPANY_DISPATCH=1). Prod: désactivé sauf override session (feature_flags). Requiert aussi company_realtime + URL socket.",
@@ -302,16 +303,16 @@ export const featureFlags = {
     enabled:
       process.env.EXPO_PUBLIC_MOBILE_CONTEXT_CACHE_PARKING === undefined
         ? true
-        : envEnabled("EXPO_PUBLIC_MOBILE_CONTEXT_CACHE_PARKING"),
+        : envFlag(process.env.EXPO_PUBLIC_MOBILE_CONTEXT_CACHE_PARKING),
     description:
       "Conserve le cache React Query par contexte (LRU 2) au switch entreprise/chauffeur au lieu de purge systématique.",
   } satisfies FeatureFlagDefinition,
   company_realtime_enabled: {
     key: "company_realtime_enabled",
     source: "env",
-    enabled: envExplicitlyDisabled("EXPO_PUBLIC_ENABLE_COMPANY_REALTIME")
+    enabled: envFlagDisabled(process.env.EXPO_PUBLIC_ENABLE_COMPANY_REALTIME)
       ? false
-      : envEnabled("EXPO_PUBLIC_ENABLE_COMPANY_REALTIME"),
+      : envFlag(process.env.EXPO_PUBLIC_ENABLE_COMPANY_REALTIME),
     description:
       "Kill-switch for the company socket bridge. EXPO_PUBLIC_ENABLE_COMPANY_REALTIME=1 + URL (EXPO_PUBLIC_COMPANY_SOCKET_URL ou origine EXPO_PUBLIC_API_BASE_URL ; pas de repli DRIVER). En __DEV__, activé automatiquement si le dispatch company est actif (env ou feature_flags session). Voir expo-company-env.template.",
   } satisfies FeatureFlagDefinition,
@@ -321,46 +322,46 @@ export const featureFlags = {
     enabled:
       process.env.EXPO_PUBLIC_ENABLE_COMPANY_RUNTIME_RESUME === undefined
         ? typeof __DEV__ !== "undefined" && __DEV__
-        : envEnabled("EXPO_PUBLIC_ENABLE_COMPANY_RUNTIME_RESUME"),
+        : envFlag(process.env.EXPO_PUBLIC_ENABLE_COMPANY_RUNTIME_RESUME),
     description:
       "Reprise session entreprise au retour foreground (bootstrap + refresh token + reconnect socket + resync données). Critique Samsung Android.",
   } satisfies FeatureFlagDefinition,
   company_dispatch_screen_enabled: {
     key: "company_dispatch_screen_enabled",
     source: "env",
-    enabled: envEnabled("EXPO_PUBLIC_ENABLE_COMPANY_DISPATCH_SCREEN"),
+    enabled: envFlag(process.env.EXPO_PUBLIC_ENABLE_COMPANY_DISPATCH_SCREEN),
     description:
       "When true, dashboard CTA in semi-auto opens the propositions (dispatch) screen; otherwise repli vers courses.",
   } satisfies FeatureFlagDefinition,
   company_mobile_structured_ride_payload_enabled: {
     key: "company_mobile_structured_ride_payload_enabled",
     source: "env",
-    enabled: envEnabled("EXPO_PUBLIC_ENABLE_COMPANY_MOBILE_STRUCTURED_RIDE_PAYLOAD"),
+    enabled: envFlag(process.env.EXPO_PUBLIC_ENABLE_COMPANY_MOBILE_STRUCTURED_RIDE_PAYLOAD),
     description: "Enable structured mobile ride payload (label/place_id/lat/lon) for create and edit flows.",
   } satisfies FeatureFlagDefinition,
   company_mobile_chat_socket_enabled: {
     key: "company_mobile_chat_socket_enabled",
     source: "env",
-    enabled: envEnabled("EXPO_PUBLIC_ENABLE_COMPANY_MOBILE_CHAT_SOCKET"),
+    enabled: envFlag(process.env.EXPO_PUBLIC_ENABLE_COMPANY_MOBILE_CHAT_SOCKET),
     description: "Enable realtime socket consumption for company chat updates.",
   } satisfies FeatureFlagDefinition,
   company_mobile_map_clustering_enabled: {
     key: "company_mobile_map_clustering_enabled",
     source: "env",
-    enabled: envEnabled("EXPO_PUBLIC_ENABLE_COMPANY_MOBILE_MAP_CLUSTERING"),
+    enabled: envFlag(process.env.EXPO_PUBLIC_ENABLE_COMPANY_MOBILE_MAP_CLUSTERING),
     description: "Enable clustering mode on company live drivers map.",
   } satisfies FeatureFlagDefinition,
   company_mobile_assign_optimistic_enabled: {
     key: "company_mobile_assign_optimistic_enabled",
     source: "env",
-    enabled: envEnabled("EXPO_PUBLIC_ENABLE_COMPANY_MOBILE_ASSIGN_OPTIMISTIC"),
+    enabled: envFlag(process.env.EXPO_PUBLIC_ENABLE_COMPANY_MOBILE_ASSIGN_OPTIMISTIC),
     description: "Enable optimistic assign/reassign updates in company mission lists.",
   } satisfies FeatureFlagDefinition,
   company_mobile_clients_readonly_enabled: {
     key: "company_mobile_clients_readonly_enabled",
     source: "env",
     enabled:
-      envEnabled("EXPO_PUBLIC_ENABLE_COMPANY_MOBILE_CLIENTS_READONLY") ||
+      envFlag(process.env.EXPO_PUBLIC_ENABLE_COMPANY_MOBILE_CLIENTS_READONLY) ||
       (typeof __DEV__ !== "undefined" && __DEV__),
     description:
       "Lecture seule clients (company). Dev : actif par défaut (__DEV__). Prod : EXPO_PUBLIC_ENABLE_COMPANY_MOBILE_CLIENTS_READONLY=1 ou feature_flags session.",
@@ -369,7 +370,7 @@ export const featureFlags = {
     key: "company_mobile_invoices_readonly_enabled",
     source: "env",
     enabled:
-      envEnabled("EXPO_PUBLIC_ENABLE_COMPANY_MOBILE_INVOICES_READONLY") ||
+      envFlag(process.env.EXPO_PUBLIC_ENABLE_COMPANY_MOBILE_INVOICES_READONLY) ||
       (typeof __DEV__ !== "undefined" && __DEV__),
     description:
       "Lecture seule factures (company). Dev : actif par défaut (__DEV__). Prod : EXPO_PUBLIC_ENABLE_COMPANY_MOBILE_INVOICES_READONLY=1 ou feature_flags session.",
@@ -377,14 +378,14 @@ export const featureFlags = {
   company_mobile_role_guards_enabled: {
     key: "company_mobile_role_guards_enabled",
     source: "env",
-    enabled: envEnabled("EXPO_PUBLIC_ENABLE_COMPANY_MOBILE_ROLE_GUARDS"),
+    enabled: envFlag(process.env.EXPO_PUBLIC_ENABLE_COMPANY_MOBILE_ROLE_GUARDS),
     description: "Enable additional role-based guards on sensitive company actions.",
   } satisfies FeatureFlagDefinition,
   perf_instrumentation_enabled: {
     key: "perf_instrumentation_enabled",
     source: "env",
     enabled:
-      envEnabled("EXPO_PUBLIC_PERF_INSTRUMENTATION") ||
+      envFlag(process.env.EXPO_PUBLIC_PERF_INSTRUMENTATION) ||
       (typeof __DEV__ !== "undefined" && __DEV__),
     description:
       "Instrumentation perf Phase 0 (notify, invalidate, JS long tasks, heap). Actif en __DEV__ ou EXPO_PUBLIC_PERF_INSTRUMENTATION=1.",
@@ -393,7 +394,7 @@ export const featureFlags = {
     key: "perf_chat_local_patch_enabled",
     source: "env",
     enabled:
-      envEnabled("EXPO_PUBLIC_PERF_CHAT_LOCAL_PATCH") ||
+      envFlag(process.env.EXPO_PUBLIC_PERF_CHAT_LOCAL_PATCH) ||
       (typeof __DEV__ !== "undefined" && __DEV__),
     description:
       "Phase A chat : patch React Query local au lieu d'invalidate. __DEV__ on, prod off sauf EXPO_PUBLIC_PERF_CHAT_LOCAL_PATCH=1.",
@@ -408,7 +409,7 @@ export const featureFlags = {
   ota_auto_reload_enabled: {
     key: "ota_auto_reload_enabled",
     source: "env",
-    enabled: envEnabled("EXPO_PUBLIC_OTA_AUTO_RELOAD_ENABLED"),
+    enabled: envFlag(process.env.EXPO_PUBLIC_OTA_AUTO_RELOAD_ENABLED),
     description:
       "Reload automatique après téléchargement OTA (Updates.useUpdates + reloadAsync). Prod uniquement.",
   } satisfies FeatureFlagDefinition,
@@ -467,7 +468,7 @@ export function isFeatureEnabled(key: FeatureFlagKey): boolean {
   if (runtimeValue !== null) return runtimeValue;
   if (
     key === "company_realtime_enabled" &&
-    !envExplicitlyDisabled("EXPO_PUBLIC_ENABLE_COMPANY_REALTIME") &&
+    !envFlagDisabled(process.env.EXPO_PUBLIC_ENABLE_COMPANY_REALTIME) &&
     typeof __DEV__ !== "undefined" &&
     __DEV__ &&
     isCompanyDispatchEnabledResolved()

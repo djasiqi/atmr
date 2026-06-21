@@ -64,6 +64,27 @@ def test_deactivate_logout_by_device_id(mock_dt):
 
 
 @patch("application.notifications.upsert_device_token.DeviceToken")
+def test_deactivate_android_expo_legacy_for_driver(mock_dt):
+    from application.notifications.upsert_device_token import (
+        _deactivate_android_expo_legacy_for_driver,
+    )
+
+    q = MagicMock()
+    q.filter.return_value = q
+    q.update.return_value = 2
+    mock_dt.query.filter.return_value = q
+    mock_dt.provider = MagicMock()
+    mock_dt.platform = MagicMock()
+    mock_dt.is_active = MagicMock()
+    mock_dt.driver_id = MagicMock()
+    mock_dt.id = MagicMock()
+    mock_dt.is_active.is_.return_value = True
+
+    count = _deactivate_android_expo_legacy_for_driver(driver_id=7514, keep_row_id=56)
+    assert count == 2
+
+
+@patch("application.notifications.upsert_device_token.DeviceToken")
 def test_deactivate_other_rows_with_same_token_keeps_target(mock_dt):
     """Vérifie que la dédup désactive les doublons et conserve `keep_row_id`."""
     q = MagicMock()

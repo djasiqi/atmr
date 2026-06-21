@@ -88,6 +88,32 @@ def test_prepare_driver_push_targets_from_orm_rows() -> None:
     assert targets[0]["provider"] == "fcm"
 
 
+def test_prepare_driver_push_targets_skips_expo_when_fcm_on_other_device_id() -> None:
+    """Même téléphone, device_id roté : un seul push FCM (pas Expo + FCM)."""
+    rows = [
+        SimpleNamespace(
+            id=55,
+            token="ExponentPushToken[abc]",
+            device_id="dev-old",
+            platform="android",
+            provider="expo",
+            updated_at=None,
+        ),
+        SimpleNamespace(
+            id=56,
+            token="xyz:APA91bNative",
+            device_id="dev-new",
+            platform="android",
+            provider="fcm",
+            updated_at=None,
+        ),
+    ]
+    targets = prepare_driver_push_targets(rows, driver_id=7514)
+    assert len(targets) == 1
+    assert targets[0]["provider"] == "fcm"
+    assert targets[0]["device_id"] == "dev-new"
+
+
 def test_android_has_expo_only() -> None:
     tokens = [
         SimpleNamespace(platform="android", provider="expo"),

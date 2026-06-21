@@ -4,6 +4,7 @@ describe("feature flags registry", () => {
   const originalSocket = process.env.EXPO_PUBLIC_ENABLE_DRIVER_SOCKET;
   const originalBg = process.env.EXPO_PUBLIC_ENABLE_BG_LOCATION;
   const originalPush = process.env.EXPO_PUBLIC_ENABLE_DRIVER_PUSH;
+  const originalFcmNative = process.env.EXPO_PUBLIC_ENABLE_DRIVER_FCM_NATIVE;
   const originalCompanyRealtime = process.env.EXPO_PUBLIC_ENABLE_COMPANY_REALTIME;
   const originalCompanyDispatch = process.env.EXPO_PUBLIC_ENABLE_COMPANY_DISPATCH;
   const originalCompanyDispatchScreen = process.env.EXPO_PUBLIC_ENABLE_COMPANY_DISPATCH_SCREEN;
@@ -12,6 +13,7 @@ describe("feature flags registry", () => {
     process.env.EXPO_PUBLIC_ENABLE_DRIVER_SOCKET = originalSocket;
     process.env.EXPO_PUBLIC_ENABLE_BG_LOCATION = originalBg;
     process.env.EXPO_PUBLIC_ENABLE_DRIVER_PUSH = originalPush;
+    process.env.EXPO_PUBLIC_ENABLE_DRIVER_FCM_NATIVE = originalFcmNative;
     process.env.EXPO_PUBLIC_ENABLE_COMPANY_REALTIME = originalCompanyRealtime;
     process.env.EXPO_PUBLIC_ENABLE_COMPANY_DISPATCH = originalCompanyDispatch;
     process.env.EXPO_PUBLIC_ENABLE_COMPANY_DISPATCH_SCREEN = originalCompanyDispatchScreen;
@@ -22,6 +24,7 @@ describe("feature flags registry", () => {
     process.env.EXPO_PUBLIC_ENABLE_DRIVER_SOCKET = "1";
     process.env.EXPO_PUBLIC_ENABLE_BG_LOCATION = "0";
     process.env.EXPO_PUBLIC_ENABLE_DRIVER_PUSH = "1";
+    process.env.EXPO_PUBLIC_ENABLE_DRIVER_FCM_NATIVE = "1";
     process.env.EXPO_PUBLIC_ENABLE_COMPANY_REALTIME = "0";
     process.env.EXPO_PUBLIC_ENABLE_COMPANY_DISPATCH = "0";
     process.env.EXPO_PUBLIC_ENABLE_COMPANY_DISPATCH_SCREEN = "0";
@@ -34,6 +37,7 @@ describe("feature flags registry", () => {
     expect(registry!.isFeatureEnabled("realtime_socket_enabled")).toBe(true);
     expect(registry!.isFeatureEnabled("tracking_background_enabled")).toBe(false);
     expect(registry!.isFeatureEnabled("driver_push_enabled")).toBe(true);
+    expect(registry!.isFeatureEnabled("driver_fcm_native_enabled")).toBe(true);
     expect(registry!.isFeatureEnabled("company_dispatch_enabled")).toBe(false);
     expect(registry!.isFeatureEnabled("company_realtime_enabled")).toBe(false);
     expect(registry!.isFeatureEnabled("company_dispatch_screen_enabled")).toBe(false);

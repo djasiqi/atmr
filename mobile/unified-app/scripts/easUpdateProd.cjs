@@ -18,6 +18,9 @@
  *      dans `process.env`. `dotenv` respecte `override: false` → les valeurs
  *      du `.env` n'écraseront pas celles déjà présentes.
  *   3) `APP_VARIANT=prod` et `EXPO_PUBLIC_APP_ENV=production` sont aussi forcés.
+ *   4) Les flags push chauffeur (eas.json > production) sont forcés à `1` :
+ *      sans eux, un OTA peut désactiver FCM/push dans le bundle JS alors que
+ *      l'APK natif les aurait (régression observée gate FCM driver 7514).
  *
  * Usage : node ./scripts/easUpdateProd.cjs --platform <ios|android|all> [--message "..."]
  */
@@ -110,12 +113,18 @@ process.env.EXPO_PUBLIC_API_BASE_URL = PROD_API_BASE_URL;
 process.env.EXPO_PUBLIC_DRIVER_SOCKET_URL = PROD_DRIVER_SOCKET_URL;
 process.env.EXPO_PUBLIC_APP_ENV = process.env.EXPO_PUBLIC_APP_ENV || "production";
 process.env.APP_VARIANT = process.env.APP_VARIANT || "prod";
+/** Aligné sur eas.json > build.production.env (compile-time feature flags). */
+process.env.EXPO_PUBLIC_ENABLE_DRIVER_PUSH = "1";
+process.env.EXPO_PUBLIC_ENABLE_DRIVER_FCM_NATIVE = "1";
+process.env.EXPO_PUBLIC_ENABLE_DRIVER_NOTIFICATION_ACTIONS = "1";
 
 console.log("[easUpdateProd] Garde-fou OK — lancement OTA prod avec :");
 console.log(`  EXPO_PUBLIC_API_BASE_URL      = ${process.env.EXPO_PUBLIC_API_BASE_URL}`);
 console.log(`  EXPO_PUBLIC_DRIVER_SOCKET_URL = ${process.env.EXPO_PUBLIC_DRIVER_SOCKET_URL}`);
 console.log(`  EXPO_PUBLIC_APP_ENV           = ${process.env.EXPO_PUBLIC_APP_ENV}`);
 console.log(`  APP_VARIANT                   = ${process.env.APP_VARIANT}`);
+console.log(`  EXPO_PUBLIC_ENABLE_DRIVER_PUSH = ${process.env.EXPO_PUBLIC_ENABLE_DRIVER_PUSH}`);
+console.log(`  EXPO_PUBLIC_ENABLE_DRIVER_FCM_NATIVE = ${process.env.EXPO_PUBLIC_ENABLE_DRIVER_FCM_NATIVE}`);
 console.log(`  Platform                      = ${platform}`);
 console.log("");
 
