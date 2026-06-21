@@ -114,6 +114,32 @@ def test_prepare_driver_push_targets_skips_expo_when_fcm_on_other_device_id() ->
     assert targets[0]["device_id"] == "dev-new"
 
 
+def test_prepare_driver_push_targets_single_latest_android_fcm() -> None:
+    from datetime import UTC, datetime
+
+    rows = [
+        SimpleNamespace(
+            id=56,
+            token="fcm-old",
+            device_id="dev-old",
+            platform="android",
+            provider="fcm",
+            updated_at=datetime(2026, 6, 1, tzinfo=UTC),
+        ),
+        SimpleNamespace(
+            id=57,
+            token="fcm-new",
+            device_id="dev-new",
+            platform="android",
+            provider="fcm",
+            updated_at=datetime(2026, 6, 21, tzinfo=UTC),
+        ),
+    ]
+    targets = prepare_driver_push_targets(rows, driver_id=7514)
+    assert len(targets) == 1
+    assert targets[0]["id"] == 57
+
+
 def test_android_has_expo_only() -> None:
     tokens = [
         SimpleNamespace(platform="android", provider="expo"),

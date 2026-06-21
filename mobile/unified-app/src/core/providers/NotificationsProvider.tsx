@@ -534,10 +534,31 @@ export function NotificationsProvider({ children }: PropsWithChildren) {
           ? payload.channelId
           : contract.channelId;
 
-      // Android arrière-plan : FCM affiche déjà le bloc notification système, ou
-      // firebaseMessaging.displayBackgroundNotification pour le data-only — évite le doublon identique.
+      // Android arrière-plan : affichage via Notifee dans firebaseMessaging.displayBackgroundNotification.
       if (Platform.OS === "android" && AppState.currentState !== "active") {
         return;
+      }
+
+      if (Platform.OS === "android" && isFeatureEnabled("driver_fcm_native_enabled")) {
+        const mod = await loadNotifee();
+        if (mod) {
+          const { default: notifee, AndroidImportance } = mod;
+          await notifee.createChannel({
+            id: channelId,
+            name: "Missions",
+            importance: AndroidImportance.HIGH,
+          });
+          await notifee.displayNotification({
+            title,
+            body,
+            data: payload as Record<string, string>,
+            android: {
+              channelId,
+              pressAction: { id: "default" },
+            },
+          });
+          return;
+        }
       }
 
       if (!Notifications) return;
@@ -612,6 +633,27 @@ export function NotificationsProvider({ children }: PropsWithChildren) {
             notification_id: notificationId,
           });
           void processSilentPayload(data);
+          return {
+            shouldShowBanner: false,
+            shouldShowList: false,
+            shouldPlaySound: false,
+            shouldSetBadge: false,
+          };
+        }
+
+        // Android FCM natif : affichage via RN Firebase (onMessage / Notifee), pas expo remote.
+        if (Platform.OS === "android" && isFeatureEnabled("driver_fcm_native_enabled")) {
+          const parsed = parsePayload(data);
+          if (parsed) {
+            void triggerDriverResync("push_update", parsed.mission_id);
+            if (parsed.thread_id) {
+              requestChatRefresh(parsed.thread_id, "push_expo_suppressed");
+            }
+          }
+          emitNotificationSuppressed("fcm_native_remote", {
+            stage: "foreground_handler",
+            notification_id: notificationId,
+          });
           return {
             shouldShowBanner: false,
             shouldShowList: false,

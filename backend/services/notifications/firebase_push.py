@@ -222,11 +222,11 @@ def send_fcm_android(
     data: dict[str, Any] | None = None,
     channel_id: str = "mission_updates",
 ) -> dict[str, Any]:
-    """Send FCM message for Android.
+    """Send FCM message for Android (toujours data-only).
 
-    - title/body non vides : notification visible (Android Notification block + data).
-    - title/body vides : message data-only (silencieux). Évite tout fallback
-      générique type "Liri / Mise à jour mission" qui pollue le tiroir système.
+    L'affichage visible est délégué au handler JS (Notifee). Un bloc
+    ``notification`` FCM provoquait un doublon identique dans le tiroir
+    (tray système + canal Expo/React Native sur le même appareil).
     """
     if not _init_firebase():
         return {"ok": False, "error": "Firebase not initialized"}
@@ -240,27 +240,11 @@ def send_fcm_android(
     if body:
         str_data["body"] = body
 
-    has_display = bool(title) or bool(body)
-
-    if has_display:
-        msg = messaging.Message(
-            token=token,
-            notification=messaging.Notification(title=title, body=body),
-            data=str_data,
-            android=messaging.AndroidConfig(
-                priority="high",
-                notification=messaging.AndroidNotification(
-                    channel_id=channel_id,
-                    sound="default",
-                ),
-            ),
-        )
-    else:
-        msg = messaging.Message(
-            token=token,
-            data=str_data,
-            android=messaging.AndroidConfig(priority="high"),
-        )
+    msg = messaging.Message(
+        token=token,
+        data=str_data,
+        android=messaging.AndroidConfig(priority="high"),
+    )
 
     result = _send_with_retry(msg, platform="Android")
     if result.get("error") == "token_unregistered":

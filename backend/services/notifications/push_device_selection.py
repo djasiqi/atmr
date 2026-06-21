@@ -113,6 +113,34 @@ def _drop_android_expo_when_driver_has_fcm(
     return filtered
 
 
+def _keep_latest_android_fcm_only(devices: list[PushDeviceDict]) -> list[PushDeviceDict]:
+    """Un seul token FCM Android par chauffeur (device_id roté → plusieurs lignes actives)."""
+    android_fcm = [
+        d
+        for d in devices
+        if (d.get("platform") or "").lower() == "android"
+        and (d.get("provider") or "expo") == "fcm"
+    ]
+    if len(android_fcm) <= 1:
+        return devices
+
+    def sort_key(row: PushDeviceDict) -> tuple[int, int]:
+        updated = row.get("updated_at")
+        ts = updated.timestamp() if updated is not None and hasattr(updated, "timestamp") else 0
+        row_id = row.get("id")
+        return (ts, int(row_id) if isinstance(row_id, int) else 0)
+
+    keep = max(android_fcm, key=sort_key)
+    drop_ids = {d.get("id") for d in android_fcm if d is not keep}
+    filtered = [d for d in devices if d.get("id") not in drop_ids]
+    app_logger.info(
+        "[push] android_fcm_single_target kept_id=%s dropped=%s",
+        keep.get("id"),
+        len(drop_ids),
+    )
+    return filtered
+
+
 def device_token_row_to_push_dict(row: Any) -> PushDeviceDict:
     return {
         "id": row.id,
@@ -143,7 +171,8 @@ def prepare_driver_push_targets(
             len(extracted),
             len(deduped),
         )
-    return prioritize_android_fcm_devices(deduped, driver_id=driver_id)
+    prioritized = prioritize_android_fcm_devices(deduped, driver_id=driver_id)
+    return _keep_latest_android_fcm_only(prioritized)
 
 
 def android_has_fcm_token(active_tokens: list[Any]) -> bool:

@@ -275,7 +275,7 @@ def send_push_message(
     """Envoie une notification push (FCM natif ou Expo Push fallback).
 
     Routing:
-    - provider="fcm" + platform="android" → data-only via firebase-admin
+    - provider="fcm" + platform="android" → data-only via firebase-admin (affichage Notifee côté app)
     - provider="fcm" + platform="ios" → notification+data via firebase-admin
     - provider="expo" / ExponentPushToken → Expo Push API (legacy)
     """

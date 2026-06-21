@@ -282,9 +282,6 @@ export function registerDriverFcmBackgroundHandler(
     }
 
     await invokeBackgroundDataMessageCallback(payload);
-    if (message.notification?.title || message.notification?.body) {
-      return;
-    }
     try {
       await displayBackgroundNotification(payload);
     } catch (error) {

@@ -52,13 +52,14 @@ def test_send_fcm_android_data_only_when_title_and_body_empty(_init, send_mock):
 @patch("services.notifications.firebase_push._send_with_retry")
 @patch("services.notifications.firebase_push._init_firebase", return_value=True)
 def test_send_fcm_android_visible_when_title_present(_init, send_mock):
+    """Android visible : data-only (title/body dans data), pas de bloc notification FCM."""
     send_mock.return_value = {"ok": True}
     res = send_fcm_android(token="tok", title="Hello", body="World", data={})
     assert res["ok"] is True
     msg = send_mock.call_args.args[0]
-    assert msg.notification is not None
-    assert msg.notification.title == "Hello"
-    assert msg.notification.body == "World"
+    assert getattr(msg, "notification", None) is None
+    assert msg.data.get("title") == "Hello"
+    assert msg.data.get("body") == "World"
 
 
 @patch("services.notifications.firebase_push._send_with_retry")
