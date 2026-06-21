@@ -304,6 +304,15 @@ def send_push_message(
         if platform == "ios":
             result = send_fcm_ios(token, title, body, data)
         else:
+            payload_data = data or {}
+            app_logger.info(
+                "push_payload_built provider=fcm platform=android has_notification=false "
+                "dedupe_key=%s booking_id=%s driver_id=%s push_dispatch_id=%s",
+                payload_data.get("dedupe_key"),
+                payload_data.get("booking_id"),
+                driver_id,
+                payload_data.get("push_dispatch_id"),
+            )
             result = send_fcm_android(token, title, body, data)
         if device_token_id is not None:
             try:

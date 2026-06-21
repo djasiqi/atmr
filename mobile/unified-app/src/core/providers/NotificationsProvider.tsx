@@ -45,6 +45,10 @@ import {
   markNotificationHandled,
 } from "../notifications/notificationDedupStore";
 import {
+  displayLocalDriverPush,
+  type LocalPushSource,
+} from "../notifications/pushLocalDisplay";
+import {
   computeNotificationAgeMs,
   emitNotificationDedupHit,
   emitNotificationDuplicateDropped,
@@ -99,7 +103,12 @@ function shouldDedupSkip(data: unknown, notificationId?: string | null): boolean
   const record = data as Record<string, unknown>;
   const missionIdRaw = record.mission_id ?? record.missionId ?? record.booking_id;
   const missionId = Number(missionIdRaw);
+  const dedupeKeyRaw =
+    (typeof record.dedupe_key === "string" && record.dedupe_key) ||
+    (typeof record.dedupeKey === "string" && record.dedupeKey) ||
+    null;
   const key = buildNotificationDedupKey({
+    dedupeKey: dedupeKeyRaw,
     eventId: extractEventId(data),
     notificationId: notificationId ?? null,
     missionId: Number.isFinite(missionId) ? missionId : null,
@@ -511,12 +520,18 @@ export function NotificationsProvider({ children }: PropsWithChildren) {
   );
 
   const displayDriverPushNotification = useCallback(
-    async (payload: Record<string, unknown>) => {
+    async (payload: Record<string, unknown>, source: LocalPushSource = "foreground") => {
       if (isSilentPayload(payload)) return;
       if (shouldSuppressVisualPush(payload)) return;
 
-      const rawType = extractRawType(payload);
-      const contract = resolveDriverNotificationContract(rawType);
+      if (Platform.OS === "android" && isFeatureEnabled("driver_fcm_native_enabled")) {
+        if (AppState.currentState !== "active" && source === "foreground") {
+          return;
+        }
+        await displayLocalDriverPush(payload, source);
+        return;
+      }
+
       const title =
         typeof payload.title === "string"
           ? payload.title
@@ -529,37 +544,6 @@ export function NotificationsProvider({ children }: PropsWithChildren) {
           : typeof (payload as { notification?: { body?: string } }).notification?.body === "string"
             ? (payload as { notification?: { body?: string } }).notification?.body
             : "Mise à jour mission";
-      const channelId =
-        typeof payload.channelId === "string" && payload.channelId.length > 0
-          ? payload.channelId
-          : contract.channelId;
-
-      // Android arrière-plan : affichage via Notifee dans firebaseMessaging.displayBackgroundNotification.
-      if (Platform.OS === "android" && AppState.currentState !== "active") {
-        return;
-      }
-
-      if (Platform.OS === "android" && isFeatureEnabled("driver_fcm_native_enabled")) {
-        const mod = await loadNotifee();
-        if (mod) {
-          const { default: notifee, AndroidImportance } = mod;
-          await notifee.createChannel({
-            id: channelId,
-            name: "Missions",
-            importance: AndroidImportance.HIGH,
-          });
-          await notifee.displayNotification({
-            title,
-            body,
-            data: payload as Record<string, string>,
-            android: {
-              channelId,
-              pressAction: { id: "default" },
-            },
-          });
-          return;
-        }
-      }
 
       if (!Notifications) return;
       await Notifications.scheduleNotificationAsync({
@@ -987,7 +971,7 @@ export function NotificationsProvider({ children }: PropsWithChildren) {
           requestChatRefresh(parsed.thread_id, "push_fcm");
         }
       }
-      await displayDriverPushNotification(payload).catch((err) => {
+      await displayDriverPushNotification(payload, "foreground").catch((err) => {
         console.error("[FCM] display notification failed:", err);
         emitDriverTelemetry("push.display.schedule_failed", {
           source: "core.notifications.provider",

@@ -14,6 +14,7 @@ from __future__ import annotations
 import logging
 import os
 import time
+import uuid
 from contextlib import suppress
 from typing import Any, ClassVar, Dict
 
@@ -115,7 +116,10 @@ def send_push_notification_task(
         try:
             from services.notifications.push_pipeline_log import log_driver_push_stage
 
-            _booking_id = (data or {}).get("booking_id")
+            data = dict(data or {})
+            push_dispatch_id = str(data.get("push_dispatch_id") or uuid.uuid4())
+            data["push_dispatch_id"] = push_dispatch_id
+            _booking_id = data.get("booking_id")
             log_driver_push_stage(
                 "driver_push.task_start",
                 event_id=(data or {}).get("event_id"),
@@ -243,11 +247,14 @@ def send_push_notification_task(
                 )
             else:
                 logger.warning(
-                    "[notification_task] Attempt %d/%d: Sending push to driver %s (%d devices)",
-                    self.request.retries + 1,
-                    MAX_PUSH_RETRIES,
+                    "[notification_task] push_dispatch_id=%s booking_id=%s driver_id=%s "
+                    "selected_devices=%s attempt=%d/%d",
+                    push_dispatch_id,
+                    _booking_id,
                     driver_id,
                     len(device_tokens_data),
+                    self.request.retries + 1,
+                    MAX_PUSH_RETRIES,
                 )
 
                 # P0.4: Recipient proof logging (DEBUG_NOTIF_ROUTING)
@@ -307,10 +314,14 @@ def send_push_notification_task(
 
                     if result.get("ok"):
                         success_count += 1
-                        logger.debug(
-                            "[notification_task] Push sent to driver %s (device %s)",
-                            driver_id,
+                        logger.info(
+                            "push_sent provider=%s device_token_id=%s push_dispatch_id=%s "
+                            "booking_id=%s driver_id=%s",
+                            device_token.get("provider") or "unknown",
                             device_token["id"],
+                            push_dispatch_id,
+                            _booking_id,
+                            driver_id,
                         )
                     else:
                         error = result.get("error", "Unknown error")
@@ -344,6 +355,16 @@ def send_push_notification_task(
                         "[notification_task] commit after lifecycle: %s",
                         str(e)[:200],
                     )
+
+                logger.warning(
+                    "push_sent_summary push_dispatch_id=%s push_sent_count=%s "
+                    "devices_total=%s driver_id=%s booking_id=%s",
+                    push_dispatch_id,
+                    success_count,
+                    len(device_tokens_data),
+                    driver_id,
+                    _booking_id,
+                )
 
                 # Si au moins un envoi a réussi, considérer comme succès
                 if success_count > 0:

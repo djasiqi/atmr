@@ -760,4 +760,9 @@ def build_push_message(
             or "Ouvrez l'application pour les détails."
         )
 
+    if event == EVENT_ASSIGNED and bid:
+        assigned_dedupe_key = f"booking:{bid}:event:assigned"
+        data["mission_id"] = bid
+        data["dedupe_key"] = assigned_dedupe_key
+
     return {"title": title, "body": body, "data": data}

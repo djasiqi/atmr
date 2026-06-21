@@ -26,11 +26,13 @@ function evictOldest(count: number): void {
 }
 
 export function buildNotificationDedupKey(input: {
+  dedupeKey?: string | null;
   eventId?: string | null;
   notificationId?: string | null;
   missionId?: number | null;
   type?: string | null;
 }): string {
+  if (input.dedupeKey) return input.dedupeKey;
   if (input.eventId) return `event:${input.eventId}`;
   if (input.notificationId) return `notif:${input.notificationId}`;
   if (input.missionId != null && input.type) return `fallback:${input.type}:${input.missionId}`;

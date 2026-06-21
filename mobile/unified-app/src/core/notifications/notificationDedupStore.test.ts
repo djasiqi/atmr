@@ -15,4 +15,12 @@ describe("notificationDedupStore", () => {
     expect(markNotificationHandled(key)).toBe(false);
     expect(markNotificationHandled(key)).toBe(true);
   });
+
+  it("priorise dedupe_key explicite", () => {
+    const key = buildNotificationDedupKey({
+      dedupeKey: "event:evt-explicit",
+      eventId: "other",
+    });
+    expect(key).toBe("event:evt-explicit");
+  });
 });

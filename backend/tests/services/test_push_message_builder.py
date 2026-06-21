@@ -43,6 +43,15 @@ def test_build_push_message_assigned_driver():
     assert out["data"]["deep_link"] == "lirie://booking/3253"
     assert out["data"]["deepLink"] == "lirie://booking/3253"
     assert out["data"]["type"] == "booking_assigned"
+    assert out["data"]["dedupe_key"] == "booking:3253:event:assigned"
+    assert out["data"]["mission_id"] == 3253
+
+
+def test_build_push_message_assigned_with_event_id_dedupe_in_fanout_style():
+    """dedupe_key event:{id} prioritaire côté fanout ; fallback booking au build."""
+    ctx = {"id": 3253, "client_name": "Drin Jasiqi", "time_formatted": "13:00"}
+    out = build_push_message(EVENT_ASSIGNED, ctx, "driver", discrete_mode=False)
+    assert out["data"]["dedupe_key"] == "booking:3253:event:assigned"
 
 
 def test_build_push_message_assigned_company():

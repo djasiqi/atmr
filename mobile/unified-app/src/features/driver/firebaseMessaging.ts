@@ -8,12 +8,11 @@ import {
   requestPermission,
   setBackgroundMessageHandler,
 } from "@react-native-firebase/messaging";
+import { displayLocalDriverPush } from "../../core/notifications/pushLocalDisplay";
 import { emitDriverTelemetry } from "../../core/observability/driverTelemetry";
 import { reportPushRegistrationTelemetry } from "../../core/notifications/pushRegistrationTelemetry";
 import { isFeatureEnabled } from "../../core/featureFlags/registry";
-import { loadNotifee } from "./notifeeCompat";
-import { resolveDriverNotificationContract } from "./notificationChannels";
-import { isSilentPayload, shouldSuppressVisualPush } from "./silentNotifications";
+import { isSilentPayload } from "./silentNotifications";
 
 type NativeFcmPayload = Record<string, unknown>;
 type RemoteFcmMessage = {
@@ -192,61 +191,6 @@ export async function initDriverFirebaseMessaging(
   }
 }
 
-async function displayBackgroundNotification(payload: NativeFcmPayload): Promise<void> {
-  if (Platform.OS !== "android") return;
-  if (isSilentPayload(payload)) return;
-  if (shouldSuppressVisualPush(payload)) return;
-
-  const rawType = typeof payload.type === "string" ? payload.type : null;
-  const contract = resolveDriverNotificationContract(rawType);
-  const rawTitle =
-    typeof payload.title === "string"
-      ? payload.title
-      : typeof (payload as { notification?: { title?: string } }).notification?.title === "string"
-        ? (payload as { notification?: { title?: string } }).notification?.title
-        : "";
-  const rawBody =
-    typeof payload.body === "string"
-      ? payload.body
-      : typeof (payload as { notification?: { body?: string } }).notification?.body === "string"
-        ? (payload as { notification?: { body?: string } }).notification?.body
-        : "";
-  const title = rawTitle?.trim() ?? "";
-  const body = rawBody?.trim() ?? "";
-
-  if (!title && !body) {
-    emitDriverTelemetry("push.notification.suppressed", {
-      source: "driver.firebaseMessaging.background",
-      suppress_reason: "empty_title_body",
-      payload_type: rawType ?? null,
-    });
-    return;
-  }
-
-  const channelId =
-    typeof payload.channelId === "string" && payload.channelId.length > 0
-      ? payload.channelId
-      : contract.channelId;
-
-  const mod = await loadNotifee();
-  if (!mod) return;
-  const { default: notifee, AndroidImportance } = mod;
-  await notifee.createChannel({
-    id: channelId,
-    name: "Missions",
-    importance: AndroidImportance.HIGH,
-  });
-  await notifee.displayNotification({
-    title,
-    body,
-    data: payload as Record<string, string>,
-    android: {
-      channelId,
-      pressAction: { id: "default" },
-    },
-  });
-}
-
 async function invokeBackgroundDataMessageCallback(payload: NativeFcmPayload): Promise<void> {
   const callback = backgroundDataMessageCallback;
   if (callback) {
@@ -283,7 +227,9 @@ export function registerDriverFcmBackgroundHandler(
 
     await invokeBackgroundDataMessageCallback(payload);
     try {
-      await displayBackgroundNotification(payload);
+      await displayLocalDriverPush(payload, "background", {
+        remoteNotification: message.notification ?? null,
+      });
     } catch (error) {
       emitFcmUnavailable("background_display_failed", error);
     }

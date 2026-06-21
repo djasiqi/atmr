@@ -637,6 +637,11 @@ def fanout_booking_assigned_to_driver(
     if correlation_id:
         data["correlation_id"] = correlation_id
     data.setdefault("booking_id", booking_id)
+    data["mission_id"] = booking_id
+    if event_id:
+        data["dedupe_key"] = f"event:{event_id}"
+    else:
+        data.setdefault("dedupe_key", f"booking:{booking_id}:event:assigned")
 
     _log_push_fanout(
         event_type="booking_assigned",
