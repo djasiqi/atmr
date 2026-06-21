@@ -23,4 +23,13 @@ describe("notificationDedupStore", () => {
     });
     expect(key).toBe("event:evt-explicit");
   });
+
+  it("utilise une clé stable pour booking_assigned malgré event_id différent", () => {
+    const key = buildNotificationDedupKey({
+      eventId: "evt-a",
+      missionId: 730,
+      type: "booking_assigned",
+    });
+    expect(key).toBe("booking:730:event:assigned");
+  });
 });

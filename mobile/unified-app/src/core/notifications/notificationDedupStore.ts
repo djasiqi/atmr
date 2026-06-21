@@ -33,6 +33,12 @@ export function buildNotificationDedupKey(input: {
   type?: string | null;
 }): string {
   if (input.dedupeKey) return input.dedupeKey;
+  if (input.missionId != null && input.type === "booking_assigned") {
+    return `booking:${input.missionId}:event:assigned`;
+  }
+  if (input.missionId != null && input.type === "booking_reassigned") {
+    return `booking:${input.missionId}:event:reassigned`;
+  }
   if (input.eventId) return `event:${input.eventId}`;
   if (input.notificationId) return `notif:${input.notificationId}`;
   if (input.missionId != null && input.type) return `fallback:${input.type}:${input.missionId}`;

@@ -191,6 +191,8 @@ def test_build_push_message_reassigned():
     assert "Drin Jasiqi" in out["body"]
     assert out["data"]["deep_link"] == "lirie://bookings"
     assert out["data"]["deepLink"] == "lirie://bookings"
+    assert out["data"]["dedupe_key"] == "booking:3253:event:reassigned"
+    assert out["data"]["mission_id"] == 3253
 
 
 # ---------- 6) Booking model-like (dict avec client_name) ----------

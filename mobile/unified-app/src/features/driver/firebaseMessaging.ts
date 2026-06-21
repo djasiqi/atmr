@@ -23,8 +23,14 @@ type RemoteFcmMessage = {
   };
 };
 
+export type FcmMessageMeta = {
+  source: "foreground" | "background" | "headless" | "fcm_callback";
+  display: boolean;
+};
+
 type BackgroundDataMessageHandler = (
-  payload: NativeFcmPayload
+  payload: NativeFcmPayload,
+  meta?: FcmMessageMeta
 ) => Promise<void> | void;
 
 let disposeForegroundSubscription: (() => void) | null = null;
@@ -167,7 +173,7 @@ export function subscribeDriverFcmTokenRefresh(
 }
 
 export async function initDriverFirebaseMessaging(
-  onDataMessage: (payload: NativeFcmPayload) => Promise<void> | void
+  onDataMessage: (payload: NativeFcmPayload, meta?: FcmMessageMeta) => Promise<void> | void
 ): Promise<void> {
   if (!isFeatureEnabled("driver_fcm_native_enabled")) return;
   const messagingInstance = getDriverMessagingInstance();
@@ -180,10 +186,10 @@ export async function initDriverFirebaseMessaging(
       token_present: Boolean(token),
     });
     disposeForegroundSubscription = onMessage(messagingInstance, async (message: RemoteFcmMessage) => {
-      await onDataMessage(message.data ?? {});
+      await onDataMessage(message.data ?? {}, { source: "foreground", display: true });
     });
-    setDriverFcmBackgroundCallback(async (payload) => {
-      await onDataMessage(payload);
+    setDriverFcmBackgroundCallback(async (payload, meta) => {
+      await onDataMessage(payload, meta ?? { source: "background", display: false });
     });
     registerDriverFcmBackgroundHandler();
   } catch (error) {
@@ -191,10 +197,13 @@ export async function initDriverFirebaseMessaging(
   }
 }
 
-async function invokeBackgroundDataMessageCallback(payload: NativeFcmPayload): Promise<void> {
+async function invokeBackgroundDataMessageCallback(
+  payload: NativeFcmPayload,
+  meta: FcmMessageMeta
+): Promise<void> {
   const callback = backgroundDataMessageCallback;
   if (callback) {
-    await callback(payload);
+    await callback(payload, meta);
     return;
   }
   await reportBackgroundHandlerNoCallback(payload);
@@ -216,7 +225,10 @@ export function registerDriverFcmBackgroundHandler(
 
     const payloadType = typeof payload.type === "string" ? payload.type : null;
     if (payloadType === "silent_update" || isSilentPayload(payload)) {
-      await invokeBackgroundDataMessageCallback(payload);
+      await invokeBackgroundDataMessageCallback(payload, {
+        source: "background",
+        display: false,
+      });
       emitDriverTelemetry("push.notification.suppressed", {
         source: "driver.firebaseMessaging.background",
         suppress_reason: "silent_update",
@@ -225,7 +237,10 @@ export function registerDriverFcmBackgroundHandler(
       return;
     }
 
-    await invokeBackgroundDataMessageCallback(payload);
+    await invokeBackgroundDataMessageCallback(payload, {
+      source: "background",
+      display: false,
+    });
     try {
       await displayLocalDriverPush(payload, "background", {
         remoteNotification: message.notification ?? null,

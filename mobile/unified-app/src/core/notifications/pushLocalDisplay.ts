@@ -16,6 +16,22 @@ type RemoteNotificationBlock = {
 };
 
 const memoryEntries = new Map<string, number>();
+const inFlightDisplayKeys = new Set<string>();
+
+function stableMissionDisplayDedupeKey(
+  payload: Record<string, unknown>
+): string | null {
+  const missionId = parseMissionId(payload);
+  if (missionId == null) return null;
+  const type = typeof payload.type === "string" ? payload.type : null;
+  if (type === "booking_assigned") {
+    return `booking:${missionId}:event:assigned`;
+  }
+  if (type === "booking_reassigned") {
+    return `booking:${missionId}:event:reassigned`;
+  }
+  return null;
+}
 
 function logPushEvent(
   event: string,
@@ -46,6 +62,9 @@ export function buildStableDedupeKey(payload: Record<string, unknown>): string {
     null;
   if (explicit) return explicit;
 
+  const missionStableKey = stableMissionDisplayDedupeKey(payload);
+  if (missionStableKey) return missionStableKey;
+
   const eventId =
     (typeof payload.event_id === "string" && payload.event_id) ||
     (typeof payload.eventId === "string" && payload.eventId) ||
@@ -54,9 +73,6 @@ export function buildStableDedupeKey(payload: Record<string, unknown>): string {
 
   const missionId = parseMissionId(payload);
   const type = typeof payload.type === "string" ? payload.type : null;
-  if (type === "booking_assigned" && missionId != null) {
-    return `booking:${missionId}:event:assigned`;
-  }
   if (missionId != null && type) {
     return `fallback:${type}:${missionId}`;
   }
@@ -142,52 +158,63 @@ export async function displayLocalDriverPush(
     return false;
   }
 
-  if (await shouldSkipLocalPushDisplay(dedupeKey)) {
+  if (inFlightDisplayKeys.has(dedupeKey)) {
     logPushEvent("push_duplicate_skipped", { source, dedupe_key: dedupeKey });
     return false;
   }
+  inFlightDisplayKeys.add(dedupeKey);
 
-  const { title, body } = extractTitleBody(payload);
-  if (!title && !body) {
-    emitDriverTelemetry("push.notification.suppressed", {
-      source: "core.notifications.pushLocalDisplay",
-      suppress_reason: "empty_title_body",
-      dedupe_key: dedupeKey,
-      source_context: source,
+  try {
+    if (await shouldSkipLocalPushDisplay(dedupeKey)) {
+      logPushEvent("push_duplicate_skipped", { source, dedupe_key: dedupeKey });
+      return false;
+    }
+
+    const { title, body } = extractTitleBody(payload);
+    if (!title && !body) {
+      emitDriverTelemetry("push.notification.suppressed", {
+        source: "core.notifications.pushLocalDisplay",
+        suppress_reason: "empty_title_body",
+        dedupe_key: dedupeKey,
+        source_context: source,
+      });
+      return false;
+    }
+
+    const rawType = typeof payload.type === "string" ? payload.type : null;
+    const contract = resolveDriverNotificationContract(rawType);
+    const channelId =
+      typeof payload.channelId === "string" && payload.channelId.length > 0
+        ? payload.channelId
+        : contract.channelId;
+
+    const mod = await loadNotifee();
+    if (!mod) return false;
+    const { default: notifee, AndroidImportance } = mod;
+    await notifee.createChannel({
+      id: channelId,
+      name: "Missions",
+      importance: AndroidImportance.HIGH,
     });
-    return false;
+    await notifee.displayNotification({
+      title,
+      body,
+      data: payload as Record<string, string>,
+      android: {
+        channelId,
+        pressAction: { id: "default" },
+      },
+    });
+
+    await markLocalPushDisplayed(dedupeKey);
+    logPushEvent("push_display_local", { source, dedupe_key: dedupeKey });
+    return true;
+  } finally {
+    inFlightDisplayKeys.delete(dedupeKey);
   }
-
-  const rawType = typeof payload.type === "string" ? payload.type : null;
-  const contract = resolveDriverNotificationContract(rawType);
-  const channelId =
-    typeof payload.channelId === "string" && payload.channelId.length > 0
-      ? payload.channelId
-      : contract.channelId;
-
-  const mod = await loadNotifee();
-  if (!mod) return false;
-  const { default: notifee, AndroidImportance } = mod;
-  await notifee.createChannel({
-    id: channelId,
-    name: "Missions",
-    importance: AndroidImportance.HIGH,
-  });
-  await notifee.displayNotification({
-    title,
-    body,
-    data: payload as Record<string, string>,
-    android: {
-      channelId,
-      pressAction: { id: "default" },
-    },
-  });
-
-  await markLocalPushDisplayed(dedupeKey);
-  logPushEvent("push_display_local", { source, dedupe_key: dedupeKey });
-  return true;
 }
 
 export function resetPushLocalDisplayForTests(): void {
   memoryEntries.clear();
+  inFlightDisplayKeys.clear();
 }

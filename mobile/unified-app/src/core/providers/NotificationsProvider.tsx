@@ -944,7 +944,7 @@ export function NotificationsProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     if (!isFeatureEnabled("driver_fcm_native_enabled")) return;
     if (activeContext?.context_type !== "driver") return;
-    void initDriverFirebaseMessaging(async (payload) => {
+    void initDriverFirebaseMessaging(async (payload, meta) => {
       if (shouldDedupSkip(payload)) return;
 
       if (isSilentPayload(payload)) {
@@ -971,7 +971,8 @@ export function NotificationsProvider({ children }: PropsWithChildren) {
           requestChatRefresh(parsed.thread_id, "push_fcm");
         }
       }
-      await displayDriverPushNotification(payload, "foreground").catch((err) => {
+      if (meta?.display === false) return;
+      await displayDriverPushNotification(payload, meta?.source ?? "foreground").catch((err) => {
         console.error("[FCM] display notification failed:", err);
         emitDriverTelemetry("push.display.schedule_failed", {
           source: "core.notifications.provider",

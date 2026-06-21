@@ -765,4 +765,8 @@ def build_push_message(
         data["mission_id"] = bid
         data["dedupe_key"] = assigned_dedupe_key
 
+    if event == EVENT_REASSIGNED and bid:
+        data["mission_id"] = bid
+        data["dedupe_key"] = f"booking:{bid}:event:reassigned"
+
     return {"title": title, "body": body, "data": data}

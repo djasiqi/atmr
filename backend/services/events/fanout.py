@@ -27,6 +27,7 @@ from services.notifications.push_message_builder import (
     CHANGE_TYPE_TIME_CHANGE,
     CHAT_TYPE_DIRECT,
     EVENT_ASSIGNED,
+    EVENT_REASSIGNED,
     _extract_time_hhmm,
     build_chat_push,
     build_push_for_company_to_driver,
@@ -1138,6 +1139,9 @@ def fanout_driver_booking_reassigned(
     old_driver_id: int,
     booking_id: int,
     new_driver_id: int | None = None,
+    booking_data: Dict[str, Any] | None = None,
+    event_id: str | None = None,
+    correlation_id: str | None = None,
 ) -> None:
     """Fan-out hybride quand une mission est retirée à un chauffeur (réassignée).
 
@@ -1170,22 +1174,44 @@ def fanout_driver_booking_reassigned(
             old_driver_id,
         )
 
-    # 2) Push notification (background)
+    # 2) Push notification (background) — message métier + dedupe_key stable
+    push_ctx: Dict[str, Any] = dict(booking_data or {})
+    push_ctx.setdefault("id", booking_id)
+    discrete = _get_recipient_discreet_mode(driver_id=old_driver_id)
+    msg = build_push_message(
+        EVENT_REASSIGNED,
+        push_ctx,
+        "driver",
+        discrete_mode=discrete,
+    )
+    data = dict(msg["data"])
+    data["type"] = "booking_reassigned"
+    data["booking_id"] = booking_id
+    data["mission_id"] = booking_id
+    data["new_driver_id"] = new_driver_id
+    data["recipient_role"] = "driver"
+    data["actor_role"] = "company"
+    if event_id:
+        data["event_id"] = event_id
+    if correlation_id:
+        data["correlation_id"] = correlation_id
+    if event_id:
+        data["dedupe_key"] = f"event:{event_id}"
+    else:
+        data.setdefault("dedupe_key", f"booking:{booking_id}:event:reassigned")
+
+    _log_push_fanout(
+        event_type="booking_reassigned",
+        booking_id=booking_id,
+        actor_role="dispatcher",
+        driver_id_target=old_driver_id,
+        company_id_target=0,
+    )
     _send_push_to_driver(
         driver_id=old_driver_id,
-        title="Course réassignée",
-        body=(
-            f"La course #{booking_id} a été réassignée à un autre chauffeur. "
-            "Vos courses vont être mises à jour."
-        ),
-        data={
-            "type": "booking_reassigned",
-            "booking_id": booking_id,
-            "new_driver_id": new_driver_id,
-            "deepLink": "lirie://bookings",
-            "recipient_role": "driver",
-            "actor_role": "company",
-        },
+        title=msg["title"],
+        body=msg["body"],
+        data=data,
     )
 
 

@@ -48,12 +48,21 @@ describe("pushLocalDisplay", () => {
     });
   });
 
-  it("priorise dedupe_key explicite puis event_id puis booking assigned", () => {
+  it("priorise dedupe_key explicite puis clé mission stable puis event_id", () => {
     expect(buildStableDedupeKey({ dedupe_key: "custom:key" })).toBe("custom:key");
-    expect(buildStableDedupeKey({ event_id: "evt-99" })).toBe("event:evt-99");
     expect(
-      buildStableDedupeKey({ type: "booking_assigned", booking_id: 35438 })
+      buildStableDedupeKey({
+        type: "booking_assigned",
+        booking_id: 35438,
+        event_id: "evt-99",
+      })
     ).toBe("booking:35438:event:assigned");
+    expect(
+      buildStableDedupeKey({ type: "booking_reassigned", booking_id: 42 })
+    ).toBe("booking:42:event:reassigned");
+    expect(buildStableDedupeKey({ event_id: "evt-99", type: "chat_message" })).toBe(
+      "event:evt-99"
+    );
   });
 
   it("skip duplicate display within TTL", async () => {

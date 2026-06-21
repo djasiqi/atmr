@@ -97,6 +97,29 @@ Chauffeur avec S23 + S25 (2 tokens FCM actifs, `device_id` différents). Attendu
 
 S23 → reboot complet → connexion chauffeur → vérifier GO 2 → assigner mission. Attendu : `provider=fcm` actif, `push_sent_count=1`, 1 notification.
 
+## Gate #9 — Réassignation (ancien chauffeur)
+
+Réassigner une mission du chauffeur test vers un autre chauffeur. Attendu :
+
+- 1× `push_display_local` sur l'**ancien** chauffeur avec `type=booking_reassigned` et `dedupe_key=booking:{id}:event:reassigned`
+- Titre « Course réassignée » avec nom client (mode detailed)
+- 0 notification sur le nouveau chauffeur en doublon avec l'assignation
+
+| Résultat | Preuve | Exécuté le | Exécuté par |
+|----------|--------|------------|-------------|
+| PASS / FAIL | logs backend + capture tray ancien chauffeur | | |
+
+## Correctif suivi incident (post-OTA `019eeb26`)
+
+✅ **Implémenté** : correctif complémentaire doublon assignation + notification réassignation manquante.
+
+- **Mobile** : handler background FCM n'affiche plus via le callback provider (`display: false`) — un seul `displayLocalDriverPush` ; clé stable `booking:{id}:event:assigned` prioritaire sur `event_id` différent ; verrou `inFlightDisplayKeys` anti-race.
+  - Fichiers : `pushLocalDisplay.ts`, `notificationDedupStore.ts`, `firebaseMessaging.ts`, `NotificationsProvider.tsx`
+- **Backend** : `fanout_driver_booking_reassigned` utilise `build_push_message(EVENT_REASSIGNED)` avec `dedupe_key`, `mission_id`, `event_id` ; handler charge le booking pour le corps métier.
+  - Fichiers : `fanout.py`, `push_message_builder.py`, `driver_handlers.py`
+
+**Reste à faire (ops)** : déployer backend + publier OTA mobile, puis exécuter gates #1–#9 sur S23.
+
 ## Livrable archivé
 
 Runbook complété + extraits Celery/logcat + capture tray S23 sans doublon visible.

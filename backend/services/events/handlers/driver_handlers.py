@@ -157,6 +157,8 @@ def handle_driver_booking_reassigned(event: dict[str, Any]) -> None:
     booking_id = event.get("booking_id")
     old_driver_id = event.get("old_driver_id")
     new_driver_id = event.get("new_driver_id")
+    event_id = event.get("event_id")
+    correlation_id = event.get("correlation_id")
 
     if not booking_id or not old_driver_id:
         logger.warning(
@@ -166,12 +168,31 @@ def handle_driver_booking_reassigned(event: dict[str, Any]) -> None:
         return
 
     try:
+        from ext import db
+        from models import Booking
         from services.events.fanout import fanout_driver_booking_reassigned
+
+        booking_data: dict[str, Any] | None = None
+        with suppress(Exception):
+            db.session.rollback()
+        booking = db.session.get(Booking, int(booking_id))
+        if booking:
+            try:
+                booking_data = (
+                    booking.to_dict()
+                    if hasattr(booking, "to_dict")
+                    else {"id": booking_id}
+                )
+            except (ValueError, TypeError, AttributeError):
+                booking_data = {"id": booking_id}
 
         fanout_driver_booking_reassigned(
             old_driver_id=int(old_driver_id),
             booking_id=int(booking_id),
             new_driver_id=int(new_driver_id) if new_driver_id else None,
+            booking_data=booking_data,
+            event_id=event_id,
+            correlation_id=correlation_id,
         )
     except (ValueError, TypeError) as e:
         logger.warning(
