@@ -824,6 +824,12 @@ export function NotificationsProvider({ children }: PropsWithChildren) {
   }, []);
 
   useEffect(() => {
+    if (Platform.OS !== "android") return;
+    if (status !== "ready" || activeContext?.context_type !== "driver") return;
+    void hideMissionBarAndroid();
+  }, [activeContext?.context_type, status]);
+
+  useEffect(() => {
     if (!isFeatureEnabled("driver_push_enabled")) return;
     if (!Notifications) return;
     const isWeb = Platform.OS === "web";

@@ -12,12 +12,8 @@ import { realtimeManager } from "../../../core/realtime/realtimeManager";
 import { TrackingManager } from "../../../core/tracking/trackingManager";
 import { resolveTrackingCadence, TrackingNetworkProfile } from "../../../core/tracking/cadenceResolver";
 import { driverTrackingQueue, DriverTrackingMode } from "./driverTrackingQueue";
-import { hideMissionBarAndroid, showMissionBarAndroid } from "../missionBarAndroid";
-import {
-  startMissionLiveActivity,
-  stopMissionLiveActivity,
-  updateMissionLiveActivity,
-} from "../missionBarIOS";
+import { hideMissionBarAndroid } from "../missionBarAndroid";
+import { stopMissionLiveActivity } from "../missionBarIOS";
 import {
   ensureNativeTrackingWhileForeground,
   initializeBackgroundLocationTask,
@@ -729,10 +725,7 @@ export function startDriverTrackingBridge(missionId: number, status: DriverMissi
   state.lastStaleFallbackAttemptMs = null;
   state.lastHttpFallbackTrackingEventId = null;
   resetPermissionState();
-  if (isFeatureEnabled("driver_mission_bar_enabled")) {
-    void showMissionBarAndroid(missionId, status);
-    void startMissionLiveActivity({ missionId, status });
-  }
+  void hideMissionBarAndroid();
   void setBackgroundTrackingMissionContext(missionId, status);
   ensureNativeTrackingAppStateListener();
   if (isFeatureEnabled("tracking_background_enabled")) {
@@ -744,10 +737,7 @@ export function startDriverTrackingBridge(missionId: number, status: DriverMissi
 
 export function updateDriverTrackingBridgeStatus(status: DriverMissionStatus) {
   state.missionStatus = status;
-  if (state.missionId != null && isFeatureEnabled("driver_mission_bar_enabled")) {
-    void showMissionBarAndroid(state.missionId, status);
-    void updateMissionLiveActivity({ missionId: state.missionId, status });
-  }
+  void hideMissionBarAndroid();
   if (!isEligible()) {
     stopDriverTrackingBridge();
     return;
@@ -757,11 +747,9 @@ export function updateDriverTrackingBridgeStatus(status: DriverMissionStatus) {
 }
 
 export function stopDriverTrackingBridge() {
-  if (isFeatureEnabled("driver_mission_bar_enabled")) {
-    void hideMissionBarAndroid();
-    if (state.missionId != null) {
-      void stopMissionLiveActivity(state.missionId);
-    }
+  void hideMissionBarAndroid();
+  if (state.missionId != null && isFeatureEnabled("driver_mission_bar_enabled")) {
+    void stopMissionLiveActivity(state.missionId);
   }
   state.missionId = null;
   state.missionStatus = null;
