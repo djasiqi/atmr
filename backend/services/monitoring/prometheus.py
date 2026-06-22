@@ -321,6 +321,54 @@ if PROMETHEUS_AVAILABLE and Counter and Histogram and Gauge:
         "Push chauffeur ignorés par raison métier",
         ["reason"],
     )
+
+    COMPANY_PUSH_NEW_REQUEST_SENT_TOTAL = Counter(
+        "company_push_new_request_sent_total",
+        "Push new_request institution enqueue vers entreprise",
+        ["company_id"],
+    )
+
+    COMPANY_PUSH_NEW_REQUEST_DELIVERY_FAILED_TOTAL = Counter(
+        "company_push_new_request_delivery_failed_total",
+        "Échec livraison push new_request entreprise",
+        ["reason"],
+    )
+
+    COMPANY_PUSH_NEW_REQUEST_OPENED_TOTAL = Counter(
+        "company_push_new_request_opened_total",
+        "Ouverture notification new_request (telemetry mobile)",
+        [],
+    )
+
+    COMPANY_PUSH_NEW_REQUEST_ACCEPT_TOTAL = Counter(
+        "company_push_new_request_accept_total",
+        "Acceptation offre institution après push mobile",
+        [],
+    )
+
+    COMPANY_PUSH_NEW_REQUEST_REJECT_TOTAL = Counter(
+        "company_push_new_request_reject_total",
+        "Refus offre institution après notification",
+        [],
+    )
+
+    COMPANY_PUSH_NEW_REQUEST_EXPIRED_TOTAL = Counter(
+        "company_push_new_request_expired_total",
+        "Tentative accept sur offre expirée",
+        [],
+    )
+
+    COMPANY_PUSH_OPEN_TO_ACCEPT_SECONDS = Histogram(
+        "company_push_open_to_accept_seconds",
+        "Délai entre ouverture notif et acceptation offre",
+        buckets=[5, 15, 30, 60, 120, 300, 600, 1800, 3600],
+    )
+
+    COMPANY_PUSH_TAP_WITHOUT_NETWORK_TOTAL = Counter(
+        "company_push_new_request_tap_without_network_total",
+        "Tap notification/offre institution sans réseau",
+        [],
+    )
 else:
     PUSH_NOTIFICATIONS_TOTAL = None
     PUSH_NOTIFICATION_LATENCY_SECONDS = None
@@ -336,6 +384,13 @@ else:
     PUSH_TOKEN_REGISTRATION_FAILURE_TOTAL = None
     DRIVER_PUSH_CHANNEL_TOTAL = None
     DRIVER_PUSH_SKIPPED_TOTAL = None
+    COMPANY_PUSH_NEW_REQUEST_SENT_TOTAL = None
+    COMPANY_PUSH_NEW_REQUEST_DELIVERY_FAILED_TOTAL = None
+    COMPANY_PUSH_NEW_REQUEST_OPENED_TOTAL = None
+    COMPANY_PUSH_NEW_REQUEST_ACCEPT_TOTAL = None
+    COMPANY_PUSH_NEW_REQUEST_REJECT_TOTAL = None
+    COMPANY_PUSH_NEW_REQUEST_EXPIRED_TOTAL = None
+    COMPANY_PUSH_OPEN_TO_ACCEPT_SECONDS = None
 
 # ==================== Resync Metrics ====================
 
@@ -1098,3 +1153,75 @@ def observe_invoice_pdf_perf(
             ).inc()
     except Exception as e:
         logger.debug("[PrometheusMetrics] Error tracking invoice PDF perf: %s", e)
+
+
+def inc_company_push_new_request_sent(*, company_id: int) -> None:
+    if not PROMETHEUS_AVAILABLE or not COMPANY_PUSH_NEW_REQUEST_SENT_TOTAL:
+        return
+    try:
+        COMPANY_PUSH_NEW_REQUEST_SENT_TOTAL.labels(company_id=str(company_id)).inc()
+    except Exception as e:
+        logger.debug("[PrometheusMetrics] company_push_new_request_sent: %s", e)
+
+
+def inc_company_push_new_request_delivery_failed(*, reason: str) -> None:
+    if not PROMETHEUS_AVAILABLE or not COMPANY_PUSH_NEW_REQUEST_DELIVERY_FAILED_TOTAL:
+        return
+    try:
+        COMPANY_PUSH_NEW_REQUEST_DELIVERY_FAILED_TOTAL.labels(reason=reason).inc()
+    except Exception as e:
+        logger.debug("[PrometheusMetrics] company_push_delivery_failed: %s", e)
+
+
+def inc_company_push_new_request_opened() -> None:
+    if not PROMETHEUS_AVAILABLE or not COMPANY_PUSH_NEW_REQUEST_OPENED_TOTAL:
+        return
+    try:
+        COMPANY_PUSH_NEW_REQUEST_OPENED_TOTAL.inc()
+    except Exception as e:
+        logger.debug("[PrometheusMetrics] company_push_opened: %s", e)
+
+
+def inc_company_push_new_request_accept() -> None:
+    if not PROMETHEUS_AVAILABLE or not COMPANY_PUSH_NEW_REQUEST_ACCEPT_TOTAL:
+        return
+    try:
+        COMPANY_PUSH_NEW_REQUEST_ACCEPT_TOTAL.inc()
+    except Exception as e:
+        logger.debug("[PrometheusMetrics] company_push_accept: %s", e)
+
+
+def inc_company_push_new_request_reject() -> None:
+    if not PROMETHEUS_AVAILABLE or not COMPANY_PUSH_NEW_REQUEST_REJECT_TOTAL:
+        return
+    try:
+        COMPANY_PUSH_NEW_REQUEST_REJECT_TOTAL.inc()
+    except Exception as e:
+        logger.debug("[PrometheusMetrics] company_push_reject: %s", e)
+
+
+def inc_company_push_new_request_expired() -> None:
+    if not PROMETHEUS_AVAILABLE or not COMPANY_PUSH_NEW_REQUEST_EXPIRED_TOTAL:
+        return
+    try:
+        COMPANY_PUSH_NEW_REQUEST_EXPIRED_TOTAL.inc()
+    except Exception as e:
+        logger.debug("[PrometheusMetrics] company_push_expired: %s", e)
+
+
+def observe_company_push_open_to_accept_seconds(*, seconds: float) -> None:
+    if not PROMETHEUS_AVAILABLE or not COMPANY_PUSH_OPEN_TO_ACCEPT_SECONDS:
+        return
+    try:
+        COMPANY_PUSH_OPEN_TO_ACCEPT_SECONDS.observe(max(0.0, float(seconds)))
+    except Exception as e:
+        logger.debug("[PrometheusMetrics] company_push_open_to_accept: %s", e)
+
+
+def inc_company_push_tap_without_network() -> None:
+    if not PROMETHEUS_AVAILABLE or not COMPANY_PUSH_TAP_WITHOUT_NETWORK_TOTAL:
+        return
+    try:
+        COMPANY_PUSH_TAP_WITHOUT_NETWORK_TOTAL.inc()
+    except Exception as e:
+        logger.debug("[PrometheusMetrics] company_push_tap_without_network: %s", e)

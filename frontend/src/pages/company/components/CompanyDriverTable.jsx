@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { FiEdit, FiTrash2, FiMoreVertical, FiEye, FiPower, FiAlertTriangle, FiPhone } from 'react-icons/fi';
 import s from './CompanyDriverTable.module.css';
-import { formatLastSeen, getFreshnessStatus } from '../../../utils/mapUtils';
+import { getDriverFreshnessLabel, getFreshnessStatus } from '../../../utils/mapUtils';
 import {
   isDriverConstrained,
   getDriverConstraintReason,
@@ -42,13 +42,7 @@ const CompanyDriverTable = ({ drivers, onEdit, onToggleStatus, onDeleteRequest }
     return { label: 'Disponible', className: s.statusAvailable };
   };
 
-  const getFreshnessLabel = (driver) => {
-    const status = getFreshnessStatus(driver);
-    if (status === 'live') return `Live · ${formatLastSeen(driver.last_seen_seconds)}`;
-    if (status === 'recent') return `Recent · ${formatLastSeen(driver.last_seen_seconds)}`;
-    if (status === 'stale') return `Stale · ${formatLastSeen(driver.last_seen_seconds)}`;
-    return 'Offline';
-  };
+  const getFreshnessLabel = (driver) => getDriverFreshnessLabel(driver);
 
   return (
     <div className={s.tableContainer}>

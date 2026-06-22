@@ -342,10 +342,28 @@ class AcceptOffer(Resource):
             )
 
             if not result.success:
-                return {
+                body: dict[str, object] = {
                     "error": result.error,
                     "offer_id": result.offer_id,
-                }, result.status_code
+                }
+                if result.error_code:
+                    body["code"] = result.error_code
+                if result.transport_request_id is not None:
+                    body["transport_request_id"] = result.transport_request_id
+                if result.booking_id is not None:
+                    body["booking_id"] = result.booking_id
+                if result.error_code == "OFFER_EXPIRED":
+                    try:
+                        from services.metrics.institution_metrics import (
+                            track_company_push_new_request_expired,
+                        )
+
+                        track_company_push_new_request_expired(
+                            company_id=company_id,
+                        )
+                    except Exception:
+                        pass
+                return body, result.status_code
 
             resp = {
                 "success": True,
@@ -355,6 +373,14 @@ class AcceptOffer(Resource):
             }
             if result.return_booking_id is not None:
                 resp["return_booking_id"] = result.return_booking_id
+            try:
+                from services.metrics.institution_metrics import (
+                    track_company_push_new_request_accept,
+                )
+
+                track_company_push_new_request_accept(company_id=company_id)
+            except Exception:
+                pass
             return resp
 
         except Exception as e:
@@ -422,6 +448,15 @@ class RejectOffer(Resource):
                     "error": result.error,
                     "offer_id": result.offer_id,
                 }, result.status_code
+
+            try:
+                from services.metrics.institution_metrics import (
+                    track_company_push_new_request_reject,
+                )
+
+                track_company_push_new_request_reject(company_id=company_id)
+            except Exception:
+                pass
 
             return {
                 "success": True,

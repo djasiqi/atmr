@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import re
+from datetime import datetime
 
 import pytest
 
@@ -385,3 +386,47 @@ def test_build_chat_push_no_id_in_title():
         message_id=123,
     )
     assert "123" not in out["title"]
+
+
+def test_build_push_for_institution_new_request_payload():
+    from types import SimpleNamespace
+
+    from services.notifications.push_message_builder import (
+        build_institution_offer_deep_link,
+        build_push_for_institution_new_request,
+    )
+
+    transport_request = SimpleNamespace(
+        id=456,
+        is_round_trip=True,
+        legs=[],
+        scheduled_time_type="arrival",
+    )
+    sched = datetime(2026, 6, 23, 14, 45)
+
+    out = build_push_for_institution_new_request(
+        transport_request=transport_request,
+        offer_id=123,
+        company_id=1,
+        institution_name="Clinique Test",
+        patient_name="Elisabeth T.",
+        title="Nouvelle demande",
+        message="Clinique Test — Elisabeth T.",
+        dedupe_key="new_request:456:1",
+        mission_date_iso="2026-06-23",
+        expires_at_iso="2026-06-23T13:00:00Z",
+        sched=sched,
+    )
+
+    data = out["data"]
+    assert data["type"] == "new_request"
+    assert data["offer_id"] == 123
+    assert data["request_id"] == 456
+    assert data["company_id"] == 1
+    assert data["trip_type"] == "round_trip"
+    assert data["scheduled_time_label"] == "RDV 14:45"
+    assert data["dedupe_key"] == "new_request:456:1"
+    assert data["recipient_role"] == "company"
+    assert data["deep_link"] == build_institution_offer_deep_link(
+        offer_id=123, request_id=456
+    )

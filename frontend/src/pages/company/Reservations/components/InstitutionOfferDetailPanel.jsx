@@ -13,6 +13,7 @@ import {
   formatReturnTimeLabel,
 } from '../../../../utils/formatLegTime';
 import { formatWallClockDateShort } from '../../../../utils/missionTimeDisplay';
+import { institutionOfferEstimateLabel } from '../../../../utils/institutionOfferEstimateLabel';
 import { canRespondToInstitutionOffer, isInstitutionOfferExpired } from '../../../../utils/institutionOfferResponse';
 
 /** Formate un instant absolu (ex. expiration d'offre). */
@@ -157,11 +158,8 @@ const InstitutionOfferDetailPanel = ({ offer, onClose, onAccept, onPropose, onRe
   const est = offer?.price_estimate || null;
   const estAmount = est ? Number(est.amount) : NaN;
   const hasEstimate = est && !Number.isNaN(estAmount) && estAmount > 0;
-  const estLabel = est?.source === 'preferential'
-    ? 'Tarif préférentiel'
-    : est?.source === 'profile'
-      ? 'Tarif estimé (profil tarifaire)'
-      : 'Tarif estimé';
+  const billingIntent = req.billing_intent || 'patient';
+  const estLabel = institutionOfferEstimateLabel(est, billingIntent);
 
   const passengerTitle = identity.passengerLabel || 'Demande institution';
   const passengerBirthDate = req.patient?.dob

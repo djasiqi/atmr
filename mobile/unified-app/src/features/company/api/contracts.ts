@@ -45,6 +45,9 @@ export type CompanyDispatchMission = {
   scheduling?: {
     scheduled_time?: string | null;
     time_defined?: boolean;
+    /** INV-2b — existence d'une heure métier (priorité helpers client). */
+    time_scheduled?: boolean;
+    time_confirmed?: boolean;
     display_time?: string | null;
   } | null;
   search_index?: string[] | null;

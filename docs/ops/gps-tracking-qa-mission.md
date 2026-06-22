@@ -22,7 +22,8 @@ avec relevé systématique à chaque transition.
 
 | Étape | Action chauffeur | Relevé immédiat |
 |-------|------------------|-----------------|
-| T0 | Mission assignée, app ouverte | `booking.status=ASSIGNED`, `assignment.status=SCHEDULED` |
+| T0 | Mission **ASSIGNED**, RDV dans >30 min | `location_mode=availability_presence`, transport **HTTP** uniquement |
+| T0b | **T-25 min** avant RDV (segment opérationnel) | bascule auto `mission_live` avant EN_ROUTE |
 | T1 | **En route** | `assignment.status=EN_ROUTE_PICKUP`, `trip_tracking` ≥ 1 point phase `EN_ROUTE_PICKUP` |
 | T2 | **Arrivé** (pickup) | `assignment.status=ARRIVED_PICKUP` |
 | T3 | **En cours** (client à bord) | `assignment.status=ONBOARD`, geofencing actif si applicable |

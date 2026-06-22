@@ -1,5 +1,11 @@
 import type { CompanyDispatchMission, CompanyDispatchMissionStatus } from "../api/contracts";
-import { isPickupSentinel, isTimeUndefined } from "../utils/pickupSentinel";
+import type { MissionLike } from "../utils/pickupSentinel";
+import {
+  hasConfirmedPickupTime,
+  hasScheduledPickupTime,
+  resolveMissionScheduledAt,
+  resolveMissionTimeConfirmed,
+} from "../utils/pickupSentinel";
 
 const SWISS_TZ = "Europe/Zurich";
 
@@ -37,10 +43,13 @@ export function formatMissionTime(value: string | null | undefined): string {
   });
 }
 
-/** Heure planifiée ou « À définir » si sentinel T00:00:00 (transport sans horaire fixé). */
-export function formatMissionScheduleTimeLabel(value: string | null | undefined): string {
-  if (isPickupSentinel(value)) return "À définir";
-  return formatMissionTime(value);
+export function formatMissionScheduleTimeLabel(mission: MissionLike | null | undefined): string {
+  if (!hasScheduledPickupTime(mission)) return "À définir";
+  const iso = resolveMissionScheduledAt(mission) ?? mission?.scheduled_at ?? null;
+  const time = formatMissionTime(iso);
+  const confirmed = mission?.time_confirmed ?? resolveMissionTimeConfirmed(mission);
+  if (confirmed === false) return `${time} (non confirmé)`;
+  return time;
 }
 
 export function formatMissionDateTimeShort(value: string | null | undefined): string {
@@ -65,13 +74,21 @@ export function conciseRouteSegment(s: string | null | undefined, maxLen = 42): 
   return `${head.slice(0, Math.max(0, maxLen - 1))}…`;
 }
 
+/** Alias historique — heure confirmée workflow (retards, statuts « en retard »). */
+export function missionHasConfirmedPickupTime(
+  mission: CompanyDispatchMission | MissionLike | null | undefined
+): boolean {
+  return hasConfirmedPickupTime(mission);
+}
+
+/** @deprecated Utiliser missionHasConfirmedPickupTime */
 export function missionHasDefinedPickupTime(
-  missionOrScheduledAt: CompanyDispatchMission | string | null | undefined
+  missionOrScheduledAt: CompanyDispatchMission | MissionLike | string | null | undefined
 ): boolean {
   if (missionOrScheduledAt && typeof missionOrScheduledAt === "object") {
-    return !isTimeUndefined(missionOrScheduledAt);
+    return hasConfirmedPickupTime(missionOrScheduledAt);
   }
-  return !isPickupSentinel(missionOrScheduledAt);
+  return hasScheduledPickupTime({ scheduled_at: missionOrScheduledAt });
 }
 
 export function resolveMissionUiStatus(
@@ -79,13 +96,14 @@ export function resolveMissionUiStatus(
   nowMs = Date.now()
 ): MissionUiStatus {
   const status = mission.status;
-  const scheduleDefined = missionHasDefinedPickupTime(mission);
-  const scheduled = scheduleDefined ? toEpoch(mission.scheduled_at) : 0;
+  const hasScheduled = hasScheduledPickupTime(mission);
+  const scheduleConfirmed = hasConfirmedPickupTime(mission);
+  const scheduled = scheduleConfirmed ? toEpoch(mission.scheduled_at) : 0;
   const delayMin = Number(mission.assignment_pickup_delay_minutes);
   const isDelayedByAssignment =
-    scheduleDefined && Number.isFinite(delayMin) && delayMin > 0;
+    scheduleConfirmed && Number.isFinite(delayMin) && delayMin > 0;
   const isPastScheduled =
-    scheduleDefined &&
+    scheduleConfirmed &&
     scheduled > 0 &&
     scheduled < nowMs &&
     status !== "completed" &&
@@ -97,7 +115,7 @@ export function resolveMissionUiStatus(
   if (status === "cancelled") {
     return { label: "Annulée", tone: "cancelled", barColor: TONE_COLORS.cancelled };
   }
-  if (!scheduleDefined) {
+  if (!hasScheduled) {
     if (status === "en_route" || status === "in_progress") {
       return { label: "En cours", tone: "in_progress", barColor: TONE_COLORS.in_progress };
     }
@@ -125,7 +143,7 @@ export function resolveMissionUiStatus(
 }
 
 export function formatEtaLabel(mission: CompanyDispatchMission): string | null {
-  if (!missionHasDefinedPickupTime(mission.scheduled_at)) {
+  if (!hasConfirmedPickupTime(mission)) {
     return null;
   }
   const delay = Number(mission.assignment_pickup_delay_minutes);
@@ -136,7 +154,6 @@ export function formatEtaLabel(mission: CompanyDispatchMission): string | null {
     return "En route";
   }
 
-  // Fallback ETA from API hints (web-aligned payloads may expose pickup/current ETA).
   const etaCandidate = (
     mission as CompanyDispatchMission & {
       pickup_eta?: string | null;
@@ -158,7 +175,6 @@ export function formatEtaLabel(mission: CompanyDispatchMission): string | null {
     }
   }
 
-  // Last-resort fallback: use scheduled time when mission is upcoming/assigned.
   if (mission.status === "assigned" || mission.status === "accepted" || mission.status === "pending") {
     const scheduledTs = toEpoch(mission.scheduled_at);
     if (scheduledTs > 0) {

@@ -895,11 +895,18 @@ class Booking(db.Model):
             if patient is None:
                 return None
             dob = getattr(patient, "dob", None)
+            gender_raw = getattr(patient, "gender", None)
+            gender_val = (
+                gender_raw.value
+                if gender_raw is not None and hasattr(gender_raw, "value")
+                else (str(gender_raw).strip() if gender_raw else None)
+            )
             return {
                 "institution_patient_id": getattr(patient, "id", None),
                 "first_name": getattr(patient, "first_name", None),
                 "last_name": getattr(patient, "last_name", None),
                 "birth_date": dob.isoformat() if dob is not None else None,
+                "gender": gender_val,
                 "external_reference": getattr(patient, "external_reference", None),
                 "phone": getattr(patient, "phone", None),
             }

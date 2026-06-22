@@ -1,11 +1,12 @@
 import {
   isMissionDelayed,
+  missionHasConfirmedPickupTime,
   missionHasDefinedPickupTime,
   resolveMissionUiStatus,
 } from "./companyDashboardMissionUi";
 
 describe("companyDashboardMissionUi", () => {
-  it("detects pickup sentinel as undefined schedule", () => {
+  it("detects pickup sentinel as unconfirmed schedule", () => {
     expect(missionHasDefinedPickupTime("2026-05-18T00:00:00+02:00")).toBe(false);
     expect(missionHasDefinedPickupTime("2026-05-18T08:00:00+02:00")).toBe(true);
   });
@@ -34,17 +35,26 @@ describe("companyDashboardMissionUi", () => {
     )).toBe(false);
   });
 
-  it("still marks past scheduled missions as delayed", () => {
+  it("still marks past confirmed scheduled missions as delayed", () => {
     const nowMs = Date.parse("2026-05-18T15:00:00+02:00");
     const status = resolveMissionUiStatus(
       {
         mission_id: 2,
         status: "assigned",
         scheduled_at: "2026-05-18T08:00:00+02:00",
+        time_confirmed: true,
       },
       nowMs
     );
     expect(status.tone).toBe("delayed");
     expect(status.label).toBe("En retard");
+    expect(
+      missionHasConfirmedPickupTime({
+        mission_id: 2,
+        status: "assigned",
+        scheduled_at: "2026-05-18T08:00:00+02:00",
+        time_confirmed: true,
+      })
+    ).toBe(true);
   });
 });

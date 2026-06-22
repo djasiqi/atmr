@@ -2,8 +2,9 @@ import * as Sentry from "@sentry/react-native";
 import { AppState, AppStateStatus, Platform } from "react-native";
 import * as Location from "expo-location";
 import { sendDriverLocation } from "../api/driverHttp";
-import { DriverMissionStatus } from "../types";
+import { DriverMissionStatus, type DriverMission } from "../types";
 import { isTrackingActiveStatus } from "../domain/status";
+import { resolveMissionTrackingMode } from "../domain/resolveMissionTrackingMode";
 import { emitDriverTelemetry } from "../../../core/observability/driverTelemetry";
 import { isFeatureEnabled } from "../../../core/featureFlags/registry";
 import { evaluateConnectivityPolicy } from "../../../core/network/connectivityPolicy";
@@ -98,9 +99,12 @@ function ensureNativeTrackingAppStateListener(): void {
   });
 }
 
+type MissionSchedulingSnapshot = Pick<DriverMission, "scheduled_time" | "time_confirmed" | "scheduling">;
+
 type TrackingBridgeState = {
   missionId: number | null;
   missionStatus: DriverMissionStatus | null;
+  missionScheduling: MissionSchedulingSnapshot | null;
   /**
    * True quand on track « par fenêtre horaire » (07h–19h) sans mission active.
    * Permet d'émettre des points GPS de présence pour les opérations même quand
@@ -153,6 +157,7 @@ type DriverTrackingBridgeListener = (snapshot: DriverTrackingBridgeSnapshot) => 
 const state: TrackingBridgeState = {
   missionId: null,
   missionStatus: null,
+  missionScheduling: null,
   presenceWindowActive: false,
   lastSentAt: null,
   lastAckAt: null,
@@ -362,12 +367,8 @@ async function flushPoint(appState: AppStateStatus) {
   void emitBatteryBaselineIfTracing("driver.tracking.bridge");
   const granted = await ensurePermission(appState);
   if (!granted) return;
-  const position = await resolvePositionFromWatchOrFallback(appState);
-  if (!position) return;
-  state.lastWatchedPosition = position;
-  state.lastWatchAtMs = Date.now();
-  const nowIso = new Date().toISOString();
   const mode = resolveTrackingMode(appState);
+  const position = await resolvePositionFromWatchOrFallback(appState, mode);
   const cadence = getCadenceForTick(appState, mode);
   await driverTrackingQueue.enqueue({
     missionId: state.missionId,
@@ -457,13 +458,30 @@ async function flushPoint(appState: AppStateStatus) {
   notifyTrackingBridgeListeners();
 }
 
-async function resolvePositionFromWatchOrFallback(appState: AppStateStatus) {
-  const hasFreshWatch =
-    state.lastWatchedPosition !== null &&
-    state.lastWatchAtMs !== null &&
-    Date.now() - state.lastWatchAtMs < WATCH_STALE_MS;
-  if (hasFreshWatch) return state.lastWatchedPosition;
+async function resolvePositionFromWatchOrFallback(
+  appState: AppStateStatus,
+  mode: DriverTrackingMode
+) {
+  const hasWatch =
+    state.lastWatchedPosition !== null && state.lastWatchAtMs !== null;
+  if (hasWatch) {
+    const ageMs = Date.now() - (state.lastWatchAtMs as number);
+    if (ageMs < WATCH_STALE_MS || mode === "availability_presence") {
+      return state.lastWatchedPosition;
+    }
+  }
   return getCurrentPositionWithTimeout(appState);
+}
+
+function buildActiveMissionSnapshot(): DriverMission | null {
+  if (state.missionId == null || !state.missionStatus) return null;
+  return {
+    id: state.missionId,
+    status: state.missionStatus,
+    scheduled_time: state.missionScheduling?.scheduled_time ?? null,
+    time_confirmed: state.missionScheduling?.time_confirmed ?? null,
+    scheduling: state.missionScheduling?.scheduling ?? null,
+  };
 }
 
 function resolveTrackingMode(appState: AppStateStatus): DriverTrackingMode {
@@ -471,8 +489,10 @@ function resolveTrackingMode(appState: AppStateStatus): DriverTrackingMode {
   if (!hasActiveMission() && state.presenceWindowActive) {
     return "availability_presence";
   }
-  if (state.missionStatus === "ASSIGNED" && isFeatureEnabled("tracking_presence_mode_enabled")) {
-    return "availability_presence";
+  const mission = buildActiveMissionSnapshot();
+  if (mission) {
+    const missionMode = resolveMissionTrackingMode(mission);
+    if (missionMode) return missionMode;
   }
   if (appState !== "active" && isFeatureEnabled("tracking_background_enabled")) {
     return "availability_presence";
@@ -681,6 +701,7 @@ async function stopMissionTrackingBridge(): Promise<void> {
   await syncBridgeQueueDepthFromPersistence();
   state.missionId = null;
   state.missionStatus = null;
+  state.missionScheduling = null;
   state.lastSentAt = null;
   state.lastAckAt = null;
   notifyTrackingBridgeListeners();
@@ -710,13 +731,18 @@ function ensureManagerState() {
     return;
   }
   if (state.missionId != null) {
-    void setBackgroundTrackingMissionContext(state.missionId, state.missionStatus, "mission");
+    void setBackgroundTrackingMissionContext(
+      state.missionId,
+      state.missionStatus,
+      "mission",
+      state.missionScheduling
+    );
     ensureNativeTrackingAppStateListener();
     if (isFeatureEnabled("tracking_background_enabled")) {
       void ensureNativeTrackingWhileForeground(
         state.missionId,
         state.missionStatus,
-        {},
+        { scheduling: state.missionScheduling },
         "ensure_manager_state"
       );
     }
@@ -743,9 +769,14 @@ function ensureManagerState() {
   trackingManager.updateMode(mode);
 }
 
-export function startDriverTrackingBridge(missionId: number, status: DriverMissionStatus) {
+export function startDriverTrackingBridge(
+  missionId: number,
+  status: DriverMissionStatus,
+  scheduling?: MissionSchedulingSnapshot | null
+) {
   state.missionId = missionId;
   state.missionStatus = status;
+  state.missionScheduling = scheduling ?? null;
   state.networkProfile = "normal";
   state.profileSinceMs = Date.now();
   state.staleFallbackBlockedUntilMs = 0;
@@ -754,10 +785,15 @@ export function startDriverTrackingBridge(missionId: number, status: DriverMissi
   state.lastHttpFallbackTrackingEventId = null;
   resetPermissionState();
   void hideMissionBarAndroid();
-  void setBackgroundTrackingMissionContext(missionId, status);
+  void setBackgroundTrackingMissionContext(missionId, status, "mission", scheduling);
   ensureNativeTrackingAppStateListener();
   if (isFeatureEnabled("tracking_background_enabled")) {
-    void ensureNativeTrackingWhileForeground(missionId, status, {}, "mission_started");
+      void ensureNativeTrackingWhileForeground(
+        state.missionId,
+        state.missionStatus,
+        { scheduling: state.missionScheduling },
+        "mission_started"
+      );
   }
   ensureManagerState();
   notifyTrackingBridgeListeners();

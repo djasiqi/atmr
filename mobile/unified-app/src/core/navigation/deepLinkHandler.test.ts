@@ -52,4 +52,13 @@ describe("resolveCompanyDeepLink", () => {
       rideId: 45,
     });
   });
+
+  it("resolves enterprise offer deep link", () => {
+    expect(resolveCompanyDeepLink("lirie://enterprise/offers/123?request=456")).toEqual({
+      route: "/(app)/(company)/offers/123?request=456",
+      rideId: null,
+      offerId: 123,
+      requestId: 456,
+    });
+  });
 });

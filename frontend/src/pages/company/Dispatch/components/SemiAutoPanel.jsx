@@ -4,6 +4,7 @@ import EmptyState from '../../../../components/EmptyState';
 import ModeBanner from './ModeBanner';
 import { showSuccess, showError } from '../../../../utils/toast';
 import useRLSuggestions from '../../../../hooks/useRLSuggestions';
+import { hasScheduledPickupTime } from '../../../../utils/bookingScheduling';
 import RLSuggestionCard from '../../../../components/RL/RLSuggestionCard';
 
 /**
@@ -45,31 +46,16 @@ const SemiAutoPanel = ({
   // ✅ Trier les dispatches : d'abord par heure croissante, puis les heures à définir à la fin
   const sortedDispatches = useMemo(() => {
     return [...dispatches].sort((a, b) => {
+      const aIsUndefined = !hasScheduledPickupTime(a);
+      const bIsUndefined = !hasScheduledPickupTime(b);
       const aTime = a.scheduled_time ? new Date(a.scheduled_time).getTime() : null;
       const bTime = b.scheduled_time ? new Date(b.scheduled_time).getTime() : null;
 
-      // Vérifier si c'est une heure à définir (null, undefined, ou 00:00:00)
-      const aIsUndefined =
-        !aTime || (aTime && new Date(aTime).getHours() === 0 && new Date(aTime).getMinutes() === 0);
-      const bIsUndefined =
-        !bTime || (bTime && new Date(bTime).getHours() === 0 && new Date(bTime).getMinutes() === 0);
-
-      // Si les deux ont une heure définie, trier par ordre croissant
       if (!aIsUndefined && !bIsUndefined) {
         return aTime - bTime;
       }
-
-      // Si seulement a n'a pas d'heure, mettre a à la fin
-      if (aIsUndefined && !bIsUndefined) {
-        return 1;
-      }
-
-      // Si seulement b n'a pas d'heure, mettre b à la fin
-      if (!aIsUndefined && bIsUndefined) {
-        return -1;
-      }
-
-      // Si les deux n'ont pas d'heure, garder l'ordre original
+      if (aIsUndefined && !bIsUndefined) return 1;
+      if (!aIsUndefined && bIsUndefined) return -1;
       return 0;
     });
   }, [dispatches]);

@@ -2029,6 +2029,20 @@ class DriverLocation(Resource):
                 skipped=bool(result.get("skipped", False)),
             )
             result_payload["trace_id"] = get_trace_id()
+            from services.monitoring.driver_location_metrics import (
+                inc_tracking_delivery_result,
+            )
+
+            loc_mode = str(body.get("location_mode") or "mission_live")
+            ack_status_value = str(result_payload.get("ack_status") or "")
+            if ack_status_value in ("accepted", "duplicate"):
+                inc_tracking_delivery_result(
+                    mode=loc_mode, transport="http", result="success"
+                )
+            elif ack_status_value in ("rejected", "ignored", "stale"):
+                inc_tracking_delivery_result(
+                    mode=loc_mode, transport="http", result="failure"
+                )
 
         return result, status_code
 

@@ -583,6 +583,18 @@ def send_push_company_notification_task(
                 "[notification_task] send_push_company_notification_task failed: %s",
                 e,
             )
+            if (data or {}).get("type") == "new_request":
+                try:
+                    from services.metrics.institution_metrics import (
+                        track_company_push_new_request_delivery_failed,
+                    )
+
+                    track_company_push_new_request_delivery_failed(
+                        company_id=company_id,
+                        reason="task_error",
+                    )
+                except Exception:
+                    pass
             return {"ok": False, "error": str(e), "company_id": company_id}
 
 

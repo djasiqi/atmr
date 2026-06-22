@@ -317,6 +317,13 @@ class TransportRequest(db.Model):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    revision: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=1,
+        server_default="1",
+        comment="Version métier incrémentée à chaque modification institution",
+    )
     sent_at = Column(DateTime(timezone=True), nullable=True)
     cancelled_at = Column(DateTime(timezone=True), nullable=True)
     accepted_at = Column(DateTime(timezone=True), nullable=True)
@@ -551,6 +558,7 @@ class TransportRequest(db.Model):
             "created_at": _iso(self.created_at),
             "created_by_name": self._get_creator_name(),
             "updated_at": _iso(self.updated_at),
+            "revision": int(getattr(self, "revision", None) or 1),
             "sent_at": _iso(self.sent_at),
             "cancelled_at": _iso(self.cancelled_at),
             "accepted_at": _iso(self.accepted_at),

@@ -54,6 +54,23 @@ def test_inc_received_increments_received_and_ingested_same_labels() -> None:
     i_inc.assert_called_once()
 
 
+def test_inc_tracking_delivery_result_labels() -> None:
+    if m._TRACKING_DELIVERY_RESULT is None:
+        pytest.skip("prometheus_client Counter unavailable")
+    inc = MagicMock()
+    with patch.object(m, "_TRACKING_DELIVERY_RESULT") as mock_c:
+        mock_c.labels.return_value = MagicMock(inc=inc)
+        m.inc_tracking_delivery_result(
+            mode="availability_presence",
+            transport="http",
+            result="success",
+        )
+    mock_c.labels.assert_called_once_with(
+        mode="availability_presence", transport="http", result="success"
+    )
+    inc.assert_called_once()
+
+
 def test_inc_batch_rate_limited() -> None:
     if m._BATCH_RATE_LIMITED is None:
         pytest.skip("prometheus_client Counter unavailable")

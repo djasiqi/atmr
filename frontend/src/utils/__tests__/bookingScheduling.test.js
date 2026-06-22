@@ -1,6 +1,9 @@
 import {
   formatAppointmentTime,
+  hasConfirmedPickupTime,
+  hasScheduledPickupTime,
   isAppointmentTimeDefined,
+  isPickupSentinel,
   isReturnLegNeedingTime,
   needsTimeBeforeDriverAssign,
 } from '../bookingScheduling';
@@ -8,17 +11,46 @@ import {
 describe('bookingScheduling', () => {
   it('utilise scheduling.display_time', () => {
     const booking = {
-      scheduling: { time_defined: true, display_time: '14:30' },
+      scheduling: {
+        time_defined: true,
+        time_scheduled: true,
+        display_time: '14:30',
+      },
     };
     expect(formatAppointmentTime(booking)).toBe('14:30');
   });
 
-  it('retourne À définir si time_defined false', () => {
+  it('retourne À définir si time_scheduled false', () => {
     const booking = {
-      scheduling: { time_defined: false, display_time: 'À définir' },
+      scheduling: {
+        time_defined: false,
+        time_scheduled: false,
+        display_time: 'À définir',
+      },
     };
     expect(formatAppointmentTime(booking)).toBe('À définir');
     expect(isAppointmentTimeDefined(booking)).toBe(false);
+    expect(hasScheduledPickupTime(booking)).toBe(false);
+  });
+
+  it('13:30 non confirmé — heure présente mais pas confirmée', () => {
+    const booking = {
+      scheduled_time: '2026-06-12T13:30:00',
+      time_confirmed: false,
+    };
+    expect(hasScheduledPickupTime(booking)).toBe(true);
+    expect(hasConfirmedPickupTime(booking)).toBe(false);
+    expect(isAppointmentTimeDefined(booking)).toBe(false);
+  });
+
+  it('minuit réel confirmé BK-01c', () => {
+    const booking = {
+      scheduled_time: '2026-06-12T00:00:00',
+      time_confirmed: true,
+    };
+    expect(isPickupSentinel(booking.scheduled_time, true)).toBe(false);
+    expect(hasScheduledPickupTime(booking)).toBe(true);
+    expect(hasConfirmedPickupTime(booking)).toBe(true);
   });
 
   it('needsTimeBeforeDriverAssign — retour sans heure', () => {
@@ -38,7 +70,7 @@ describe('bookingScheduling', () => {
         route_sequence_number: 2,
         time_confirmed: false,
         status: 'accepted',
-        scheduling: { time_defined: false },
+        scheduling: { time_defined: false, time_scheduled: false },
       })
     ).toBe(true);
   });
@@ -49,7 +81,7 @@ describe('bookingScheduling', () => {
         route_group_id: 'grp-1',
         route_sequence_number: 1,
         status: 'accepted',
-        scheduling: { time_defined: true, display_time: '11:30' },
+        scheduling: { time_defined: true, time_scheduled: true, display_time: '11:30' },
         scheduled_time: '2026-06-23T11:30:00',
       })
     ).toBe(false);

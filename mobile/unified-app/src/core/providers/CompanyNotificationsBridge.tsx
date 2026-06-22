@@ -1,6 +1,7 @@
 import { AppState, Platform } from "react-native";
 import { useRouter } from "expo-router";
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useRef } from "react";
+import NetInfo from "@react-native-community/netinfo";
 
 import { isFeatureEnabled } from "../featureFlags/registry";
 import { useEffect } from "../reactCompat";
@@ -11,15 +12,20 @@ import {
   extractEventIdFromData,
   shouldSkipCrossChannelEvent,
 } from "../notifications/crossChannelDedup";
+import { shouldIgnoreNotification } from "../notifications/shouldIgnoreNotification";
 import { useRegisterPushTokenEffect } from "../notifications/registerPushToken";
 import {
   initDriverFirebaseMessaging,
   disposeDriverFirebaseMessaging,
 } from "../../features/driver/firebaseMessaging";
 import { registerCompanyPushToken } from "../../features/company/api/companyPushApi";
+import { reportCompanyPushTelemetry } from "../../features/company/api/companyPushTelemetryApi";
 import {
+  markOfferPushOpened,
   navigateFromCompanyPush,
   parseCompanyPushPayload,
+  resolveCompanyPushTitleBody,
+  type CompanyPushPayload,
 } from "../../features/company/push/companyPush";
 
 type Props = {
@@ -30,6 +36,7 @@ export function CompanyNotificationsBridge({ children }: Props) {
   const router = useRouter();
   const { status, activeContext } = useSession();
   const Notifications = getExpoNotificationsModule();
+  const initialResponseConsumedRef = useRef(false);
 
   const companyId = useMemo(() => {
     if (activeContext?.context_type !== "company") return null;
@@ -42,6 +49,15 @@ export function CompanyNotificationsBridge({ children }: Props) {
     status === "ready" &&
     activeContext?.context_type === "company" &&
     companyId != null;
+
+  const filterContext = useMemo(
+    () => ({
+      contextType: activeContext?.context_type,
+      userId: null,
+      companyId,
+    }),
+    [activeContext?.context_type, companyId]
+  );
 
   const registerCallbacks = useMemo(
     () => ({
@@ -77,10 +93,6 @@ export function CompanyNotificationsBridge({ children }: Props) {
     [companyId]
   );
 
-  // P0.2 — Instrumentation du gate d'enregistrement entreprise. Permet de prouver
-  // en prod POURQUOI le POST /companies/save-push-token n'est pas atteint
-  // (contexte non-company, companyId null, session pas ready, flag off...).
-  // Re-emis a chaque transition (status ready / changement de contexte).
   useEffect(() => {
     if (Platform.OS === "web") return;
     emitDriverTelemetry("push.company.register_gate", {
@@ -100,47 +112,110 @@ export function CompanyNotificationsBridge({ children }: Props) {
     telemetrySource: "company.notifications.bridge",
   });
 
-  const handlePushData = useCallback(
-    async (data: Record<string, unknown>) => {
+  const shouldProcessPayload = useCallback(
+    (data: Record<string, unknown>, notificationId?: string | null): boolean => {
+      const filter = shouldIgnoreNotification(data, filterContext);
+      if (filter.ignore) {
+        emitDriverTelemetry("push.notification.ignored", {
+          source: "company.notifications.bridge",
+          reason: filter.reason ?? "ignored",
+          notification_id: notificationId ?? null,
+        });
+        return false;
+      }
       if (
         shouldSkipCrossChannelEvent({
           eventId: extractEventIdFromData(data),
+          notificationId,
           bookingId: Number(data.booking_id ?? data.bookingId) || null,
           type: typeof data.type === "string" ? data.type : null,
         })
       ) {
-        return;
+        return false;
       }
+      return true;
+    },
+    [filterContext]
+  );
+
+  const recordOpenedTelemetry = useCallback(
+    async (payload: CompanyPushPayload) => {
+      if (payload.type !== "new_request") return;
+      if (payload.offer_id != null) {
+        markOfferPushOpened(payload.offer_id);
+      }
+      await reportCompanyPushTelemetry({
+        event: "company_push.new_request.opened",
+        offerId: payload.offer_id,
+        requestId: payload.request_id,
+      });
+    },
+    []
+  );
+
+  const navigateFromPush = useCallback(
+    async (data: Record<string, unknown>, options?: { fromUserTap?: boolean }) => {
+      if (!shouldProcessPayload(data)) return;
       const payload = parseCompanyPushPayload(data);
       if (!payload) return;
 
-      if (AppState.currentState === "active" && Notifications) {
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title: "Liri Entreprise",
-            body: "Nouvelle activité sur vos courses",
-            data,
-          },
-          trigger: null,
-        }).catch(() => undefined);
+      if (options?.fromUserTap) {
+        const net = await NetInfo.fetch().catch(() => null);
+        const online =
+          Boolean(net?.isConnected) && net?.isInternetReachable !== false;
+        if (!online) {
+          await reportCompanyPushTelemetry({
+            event: "company_push.new_request.tap_without_network",
+            offerId: payload.offer_id,
+            requestId: payload.request_id,
+          });
+        }
+        if (payload.type === "new_request") {
+          await recordOpenedTelemetry(payload);
+        }
       }
+
       navigateFromCompanyPush(router, payload);
     },
-    [Notifications, router]
+    [recordOpenedTelemetry, router, shouldProcessPayload]
+  );
+
+  const showForegroundNotification = useCallback(
+    async (data: Record<string, unknown>) => {
+      if (!Notifications || AppState.currentState !== "active") return;
+      if (!shouldProcessPayload(data)) return;
+      const { title, body } = resolveCompanyPushTitleBody(data);
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title,
+          body,
+          data,
+        },
+        trigger: null,
+      }).catch(() => undefined);
+    },
+    [Notifications, shouldProcessPayload]
   );
 
   useEffect(() => {
     if (!pushEnabled || Platform.OS === "web") return;
 
-    void initDriverFirebaseMessaging(async (payload) => {
+    void initDriverFirebaseMessaging(async (payload, meta) => {
       if (!payload || typeof payload !== "object") return;
-      await handlePushData(payload as Record<string, unknown>);
+      const data = payload as Record<string, unknown>;
+      if (meta?.source === "foreground") {
+        await showForegroundNotification(data);
+        return;
+      }
+      // Background / headless : pas de navigation automatique.
+      // La notif locale (displayLocalDriverPush) + tap utilisateur
+      // déclenchent navigateFromPush via les listeners Expo / cold start.
     });
 
     return () => {
       disposeDriverFirebaseMessaging();
     };
-  }, [handlePushData, pushEnabled]);
+  }, [navigateFromPush, pushEnabled, showForegroundNotification]);
 
   useEffect(() => {
     if (!pushEnabled || !Notifications) return;
@@ -148,20 +223,36 @@ export function CompanyNotificationsBridge({ children }: Props) {
     const received = Notifications.addNotificationReceivedListener((event) => {
       const data = event.request.content.data;
       if (!data || typeof data !== "object") return;
-      void handlePushData(data as Record<string, unknown>);
+      void showForegroundNotification(data as Record<string, unknown>);
     });
 
     const opened = Notifications.addNotificationResponseReceivedListener((response) => {
       const data = response.notification.request.content.data;
       if (!data || typeof data !== "object") return;
-      void handlePushData(data as Record<string, unknown>);
+      void navigateFromPush(data as Record<string, unknown>, { fromUserTap: true });
     });
 
     return () => {
       received.remove();
       opened.remove();
     };
-  }, [Notifications, handlePushData, pushEnabled]);
+  }, [Notifications, navigateFromPush, pushEnabled, showForegroundNotification]);
+
+  useEffect(() => {
+    if (!pushEnabled || !Notifications) return;
+    if (initialResponseConsumedRef.current) return;
+    initialResponseConsumedRef.current = true;
+
+    void (async () => {
+      const initialResponse = await Notifications.getLastNotificationResponseAsync().catch(
+        () => null
+      );
+      if (!initialResponse?.notification) return;
+      const data = initialResponse.notification.request.content.data;
+      if (!data || typeof data !== "object") return;
+      await navigateFromPush(data as Record<string, unknown>, { fromUserTap: true });
+    })();
+  }, [Notifications, navigateFromPush, pushEnabled]);
 
   return children ?? null;
 }

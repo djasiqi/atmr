@@ -45,6 +45,7 @@ from services.monitoring.driver_location_metrics import (
     inc_batch_points_skipped,
     inc_batch_rate_limited,
     inc_received,
+    inc_tracking_delivery_result,
     inc_tracking_id_propagated,
     observe_batch_latency_seconds,
     observe_driver_location_batch_ingest_size,
@@ -2169,6 +2170,11 @@ def init_chat_socket(socketio: SocketIO):
                 )
                 return
             if location_mode == "availability_presence":
+                inc_tracking_delivery_result(
+                    mode="availability_presence",
+                    transport="socket",
+                    result="forbidden",
+                )
                 emit(
                     "error",
                     {
@@ -2705,6 +2711,11 @@ def init_chat_socket(socketio: SocketIO):
                         )
                         continue
                     if location_mode == "availability_presence":
+                        inc_tracking_delivery_result(
+                            mode="availability_presence",
+                            transport="socket_batch",
+                            result="forbidden",
+                        )
                         rejected_positions.append(
                             {
                                 "index": idx,
@@ -2810,6 +2821,11 @@ def init_chat_socket(socketio: SocketIO):
                             accept_status=accept_status,
                             accept_reason=result.accept_reason,
                             location_event_id=str(leid_b) if leid_b else None,
+                        )
+                        inc_tracking_delivery_result(
+                            mode=norm_mode_batch,
+                            transport="socket_batch",
+                            result="success",
                         )
 
                         # Émettre events geofencing si détectés (seulement pour dernière position)

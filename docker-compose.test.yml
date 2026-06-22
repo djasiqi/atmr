@@ -20,7 +20,7 @@ services:
   redis_test:
     image: redis:7-alpine
     ports:
-      - "6380:6379" # Port différent pour éviter conflit avec redis de dev
+      - "6381:6379" # Port différent (6380 utilisé par validation-redis)
     volumes:
       - redis_test_data:/data
     healthcheck:

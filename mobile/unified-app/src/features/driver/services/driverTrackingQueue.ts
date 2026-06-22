@@ -17,6 +17,11 @@ export type TrackingDeliveryState =
 
 export type DriverTrackingMode = "mission_live" | "availability_presence" | "observability_only";
 
+/** availability_presence = HTTP only (socket interdit côté backend). */
+function isSocketEligibleLocationMode(mode: DriverTrackingMode): boolean {
+  return mode !== "availability_presence";
+}
+
 export type DriverTrackingQueueItem = {
   id: string;
   sequenceId: number;
@@ -385,7 +390,10 @@ class DriverTrackingQueue {
       // Envoi batch socket reel (N points par emission) pour reduire la pression reseau.
       if (!options?.forceHttpFallback && realtimeManager.isDriverSocketReady()) {
         const socketCandidates = this.items.filter(
-          (item) => !this.isExpired(item) && item.deliveryState !== "socket_emitted"
+          (item) =>
+            !this.isExpired(item) &&
+            item.deliveryState !== "socket_emitted" &&
+            isSocketEligibleLocationMode(item.locationMode)
         );
         let sentThisFlush = 0;
         for (let index = 0; index < socketCandidates.length; index += SOCKET_BATCH_MAX_POINTS) {
@@ -453,6 +461,7 @@ class DriverTrackingQueue {
         try {
           const canTrySocket =
             !options?.forceHttpFallback &&
+            isSocketEligibleLocationMode(item.locationMode) &&
             (item.deliveryState === "queued" || item.deliveryState === "retry_pending");
           if (canTrySocket) {
             const socketSent = realtimeManager.sendDriverLocationBatch([

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import DispatchTableSkeleton from '../../../../components/SkeletonLoaders/DispatchTableSkeleton';
 import EmptyState from '../../../../components/EmptyState';
 import ModeBanner from './ModeBanner';
+import { hasScheduledPickupTime } from '../../../../utils/bookingScheduling';
 import {
   startAgent,
   getAgentStatus,
@@ -48,27 +49,28 @@ const FullyAutoPanel = ({
     },
   ]);
 
-  const formatTime = (timeString) => {
-    if (!timeString) return '⏱️ À définir';
+  const formatClockTime = (timeString) => {
+    if (!timeString) return '—';
     const date = new Date(timeString);
-    if (isNaN(date.getTime())) return '⏱️ À définir';
-    // Vérifier si c'est une heure à définir (00:00:00)
-    const hours = date.getHours();
-    const minutes = date.getMinutes();
-    if (hours === 0 && minutes === 0) {
-      return '⏱️ À définir';
-    }
+    if (Number.isNaN(date.getTime())) return '—';
     return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
   };
 
-  // Vérifier si une course est un retour avec heure à définir
-  const isReturnToSchedule = (dispatch) => {
-    if (!dispatch.scheduled_time) return true;
+  const formatDispatchScheduleLabel = (dispatch) => {
+    const scheduling = dispatch?.scheduling;
+    if (scheduling?.display_time) {
+      return hasScheduledPickupTime(dispatch)
+        ? scheduling.display_time
+        : '⏱️ À définir';
+    }
+    if (!hasScheduledPickupTime(dispatch)) return '⏱️ À définir';
+    if (!dispatch?.scheduled_time) return '⏱️ À définir';
     const date = new Date(dispatch.scheduled_time);
-    if (isNaN(date.getTime())) return true;
-    // Heure à définir = 00:00:00
-    return date.getHours() === 0 && date.getMinutes() === 0;
+    if (Number.isNaN(date.getTime())) return '⏱️ À définir';
+    return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
   };
+
+  const isReturnToSchedule = (dispatch) => !hasScheduledPickupTime(dispatch);
 
   // Ajouter un événement au journal avec détails
   const addLogEntry = (icon, message, type = 'info', details = null) => {
@@ -468,7 +470,7 @@ const FullyAutoPanel = ({
             {agentStatus?.running && (
               <div className={styles.serviceStatusInfo}>
                 <small>
-                  Dernier tick: {agentStatus?.last_tick ? formatTime(agentStatus.last_tick) : '—'}
+                  Dernier tick: {agentStatus?.last_tick ? formatClockTime(agentStatus.last_tick) : '—'}
                 </small>
               </div>
             )}
@@ -503,7 +505,7 @@ const FullyAutoPanel = ({
               <div className={styles.serviceStatusInfo}>
                 <small>
                   Dernière vérif:{' '}
-                  {optimizerStatus?.last_check ? formatTime(optimizerStatus.last_check) : '—'}
+                  {optimizerStatus?.last_check ? formatClockTime(optimizerStatus.last_check) : '—'}
                 </small>
               </div>
             )}
@@ -530,7 +532,7 @@ const FullyAutoPanel = ({
                   {sortedDispatches.map((dispatch) => (
                     <tr key={dispatch.id} className={styles.tableRow}>
                       <td className={styles.timeCell}>
-                        {formatTime(dispatch.scheduled_time) || '⏱️ À définir'}
+                        {formatDispatchScheduleLabel(dispatch) || '⏱️ À définir'}
                       </td>
                       <td className={styles.clientCell}>
                         <strong>{dispatch.client_name || 'Passager inconnu'}</strong>
@@ -702,7 +704,7 @@ const FullyAutoPanel = ({
               {delays.map((delay, index) => (
                 <div key={index} className={styles.alertItem}>
                   <div className={styles.alertHeader}>
-                    <span className={styles.alertTime}>{formatTime(delay.scheduled_time)}</span>
+                    <span className={styles.alertTime}>{formatClockTime(delay.scheduled_time)}</span>
                     <span
                       className={`${styles.alertSeverity} ${
                         styles[`severity${delay.severity || 'low'}`]

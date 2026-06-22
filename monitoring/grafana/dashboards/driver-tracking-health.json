@@ -185,6 +185,34 @@
       ],
       "title": "Ratio positions observability_only",
       "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 40 },
+      "id": 13,
+      "targets": [
+        {
+          "expr": "sum(increase(tracking_delivery_result_total{mode=\"availability_presence\",transport=\"http\",result=\"success\"}[48h]))",
+          "legendFormat": "presence http success (gate #2)"
+        }
+      ],
+      "title": "STOP GATE — availability_presence HTTP success (48h)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 40 },
+      "id": 14,
+      "targets": [
+        {
+          "expr": "sum(increase(tracking_delivery_result_total{result=\"forbidden\"}[48h]))",
+          "legendFormat": "forbidden (gate #5 alerte)"
+        }
+      ],
+      "title": "STOP GATE — forbidden inattendu (48h, cible 0)",
+      "type": "stat"
     }
   ],
   "refresh": "30s",

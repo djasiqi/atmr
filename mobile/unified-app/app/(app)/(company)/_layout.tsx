@@ -153,6 +153,8 @@ export default function CompanyLayout() {
           }}
         />
         <Tabs.Screen name="ride-details" options={{ href: null }} />
+        <Tabs.Screen name="offers/index" options={{ href: null }} />
+        <Tabs.Screen name="offers/[offerId]" options={{ href: null }} />
         <Tabs.Screen name="fleet-map" options={{ href: null }} />
         <Tabs.Screen name="dispatch" options={{ href: null }} />
       </Tabs>

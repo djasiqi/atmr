@@ -50,7 +50,7 @@ import {
   getTodayIsoDateInZurich,
   missionBelongsToSelectedDay,
 } from "../../../src/features/company/utils/companyDateUtils";
-import { isTimeUndefined, missionHasRenderableSchedule } from "../../../src/features/company/utils/pickupSentinel";
+import { canMarkRideUrgent, hasConfirmedPickupTime, missionHasRenderableSchedule } from "../../../src/features/company/utils/pickupSentinel";
 import { TransferRideModal } from "../../../src/features/company/components/transfers/TransferRideModal";
 import {
   cancelCompanyRide,
@@ -665,8 +665,8 @@ export default function CompanyRidesScreen() {
       const now = Date.now();
       return missionsWithSchedule.filter((m) => {
         if (m.status === "completed" || m.status === "cancelled") return false;
-        // Exclure les courses « À définir » (sentinelle T00:00:00) du calcul des retards.
-        if (isTimeUndefined(m)) return false;
+        // Exclure les courses sans heure confirmée du calcul des retards.
+        if (!hasConfirmedPickupTime(m)) return false;
         const t = Date.parse(m.scheduled_at);
         if (!Number.isFinite(t)) return false;
         return t < now;

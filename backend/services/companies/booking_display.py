@@ -6,6 +6,7 @@ Contrat : docs/architecture/canonical-display-model.md (BookingDisplayModel v1).
 from __future__ import annotations
 
 import re
+from datetime import datetime
 from typing import Any
 
 from models.enums import BookingCreatedVia, ClientType
@@ -297,6 +298,25 @@ def _passenger_birth_date(booking: Any) -> str | None:
     return None
 
 
+def _passenger_gender(booking: Any) -> str | None:
+    fn = getattr(booking, "_get_institution_passenger_brief", None)
+    if callable(fn):
+        brief = fn()
+        if isinstance(brief, dict):
+            raw = brief.get("gender")
+            if raw:
+                return str(raw)
+    cli = getattr(booking, "client", None)
+    cli_user = getattr(cli, "user", None) if cli is not None else None
+    gender_raw = getattr(cli_user, "gender", None) if cli_user is not None else None
+    if gender_raw is None:
+        return None
+    if hasattr(gender_raw, "value"):
+        return str(gender_raw.value)
+    text = str(gender_raw).strip()
+    return text or None
+
+
 def build_booking_identity(
     booking: Any,
     viewer_company_id: int | None = None,
@@ -355,6 +375,7 @@ def build_booking_identity(
         "passenger": {
             "name": passenger,
             "birth_date": _passenger_birth_date(booking),
+            "gender": _passenger_gender(booking),
         },
         "display_category": display_category,
         "primary_label": primary_label,
@@ -404,19 +425,79 @@ def build_identity_labels(
     return primary, source_name or COMPANY_CLIENT_DISPLAY_NAME
 
 
+def is_legacy_midnight_pickup_sentinel(
+    scheduled_dt: datetime | None,
+    *,
+    time_confirmed: bool | None = None,
+) -> bool:
+    """Transition Phase 2→4 : T00:00:00 sans confirmation = pas d'heure métier (legacy).
+
+    Minuit réel confirmé (BK-01c) n'est pas une sentinelle.
+    """
+    if scheduled_dt is None:
+        return False
+    st = (
+        scheduled_dt.replace(tzinfo=None)
+        if getattr(scheduled_dt, "tzinfo", None)
+        else scheduled_dt
+    )
+    if not (st.hour == 0 and st.minute == 0 and st.second == 0):
+        return False
+    if time_confirmed is True:
+        return False
+    return True
+
+
+def booking_has_scheduled_pickup_time(booking: Any) -> bool:
+    """Existence d'une heure métier — indépendant de la confirmation workflow."""
+    scheduled_dt = getattr(booking, "scheduled_time", None)
+    if scheduled_dt is None:
+        return False
+    time_confirmed = getattr(booking, "time_confirmed", None)
+    if isinstance(time_confirmed, bool):
+        tc: bool | None = time_confirmed
+    else:
+        tc = None
+    return not is_legacy_midnight_pickup_sentinel(scheduled_dt, time_confirmed=tc)
+
+
+def booking_has_confirmed_pickup_time(booking: Any) -> bool:
+    """INV-2 : heure confirmée workflow (= time_defined côté API)."""
+    time_confirmed = getattr(booking, "time_confirmed", None)
+    if time_confirmed is False:
+        return False
+    if time_confirmed is True:
+        return booking_has_scheduled_pickup_time(booking)
+    return booking_has_scheduled_pickup_time(booking)
+
+
 def build_booking_scheduling(booking: Any) -> dict[str, Any]:
     scheduled_dt = getattr(booking, "scheduled_time", None)
-    time_confirmed = bool(getattr(booking, "time_confirmed", True))
-    # INV-2 : seule règle métier — pas d'heuristique 00:00
-    time_defined = time_confirmed and scheduled_dt is not None
+    raw_time_confirmed = getattr(booking, "time_confirmed", None)
+    time_confirmed = (
+        bool(raw_time_confirmed)
+        if isinstance(raw_time_confirmed, bool)
+        else True
+    )
+    time_scheduled = booking_has_scheduled_pickup_time(booking)
+    time_defined = booking_has_confirmed_pickup_time(booking)
 
     display_time = "À définir"
     display_datetime = "À définir"
-    if time_defined and scheduled_dt is not None:
+    if scheduled_dt is not None and time_scheduled:
         date_local, time_local = split_date_time_local(scheduled_dt)
-        display_time = time_local or "À définir"
-        if date_local and time_local:
-            display_datetime = f"{date_local} • {time_local}"
+        if time_defined and time_local:
+            display_time = time_local
+            if date_local:
+                display_datetime = f"{date_local} • {time_local}"
+            else:
+                display_datetime = time_local
+        elif time_local:
+            display_time = f"{time_local} (non confirmé)"
+            if date_local:
+                display_datetime = f"{date_local} • {display_time}"
+            else:
+                display_datetime = display_time
         elif date_local:
             display_datetime = date_local
 
@@ -429,6 +510,7 @@ def build_booking_scheduling(booking: Any) -> dict[str, Any]:
     return {
         "scheduled_time": scheduled_iso,
         "time_confirmed": time_confirmed,
+        "time_scheduled": time_scheduled,
         "time_defined": time_defined,
         "display_time": display_time,
         "display_datetime": display_datetime,

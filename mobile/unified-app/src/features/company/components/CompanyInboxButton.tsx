@@ -8,7 +8,7 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect, useRouter } from "expo-router";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import "dayjs/locale/fr";
@@ -18,6 +18,7 @@ import {
   useCompanyInboxReadMutation,
 } from "../hooks";
 import type { CompanyInboxNotification } from "../api/companyInboxApi";
+import { resolveCompanyInboxNavigation } from "../utils/companyNotificationNavigation";
 import { E } from "../theme/enterpriseOpsTheme";
 import { AppButton } from "../../../design/responsive";
 import { AppText } from "../../../design/ui/AppText";
@@ -36,6 +37,7 @@ function formatWhen(iso: string): string {
  * Le comptage non lues est indépendant de la pastille « courses affichées » de l’en-tête.
  */
 export function CompanyInboxButton() {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const { data, isLoading, isError, refetch } = useCompanyInboxQuery();
   const readOne = useCompanyInboxReadMutation();
@@ -54,6 +56,14 @@ export function CompanyInboxButton() {
     if (!n.is_read) {
       readOne.mutate(n.id, {
         onError: () => undefined,
+      });
+    }
+    const target = resolveCompanyInboxNavigation(n);
+    if (target) {
+      setOpen(false);
+      router.push({
+        pathname: target.pathname,
+        params: target.params,
       });
     }
   };

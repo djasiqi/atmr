@@ -211,7 +211,7 @@ export function getTodayIsoDateInZurich(): string {
 
 /**
  * Course visible pour le jour sélectionné.
- * Exclut les missions datées explicitement sur un autre jour (ex. sentinelle T00:00:00 d'un autre jour).
+ * Exclut les missions datées explicitement sur un autre jour (ex. heure non définie d'un autre jour).
  * Conserve les retours sans horaire renvoyés par l'API pour l'aller du jour.
  */
 export function missionBelongsToSelectedDay(

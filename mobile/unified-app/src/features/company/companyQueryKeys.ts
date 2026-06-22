@@ -44,6 +44,20 @@ export const companyQueryKeys = {
       companyContextScope(contextId),
       missionId,
     ] as const,
+  institutionOffers: (contextId: string, status?: string) =>
+    [
+      ...companyQueryKeys.root,
+      "institution-offers",
+      companyContextScope(contextId),
+      status ?? "all",
+    ] as const,
+  institutionOfferDetail: (contextId: string, offerId: number) =>
+    [
+      ...companyQueryKeys.root,
+      "institution-offer",
+      companyContextScope(contextId),
+      offerId,
+    ] as const,
   inbox: (contextId: string) =>
     [...companyQueryKeys.root, "inbox", companyContextScope(contextId)] as const,
 } as const;

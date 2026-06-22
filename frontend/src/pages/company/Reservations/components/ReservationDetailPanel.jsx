@@ -6,6 +6,9 @@ import {
 } from 'react-icons/fi';
 import { renderBookingDateTime } from '../../../../utils/formatDate';
 import { formatLegTime } from '../../../../utils/formatLegTime';
+import {
+  hasScheduledPickupTime,
+} from '../../../../utils/bookingScheduling';
 import { fetchTransportVouchers } from '../../../../services/transportVoucherService';
 import AddressAutocomplete from '../../../../components/common/AddressAutocomplete';
 import InlineDatePicker from '../../../../components/ui/InlineDatePicker';
@@ -29,6 +32,10 @@ import {
   formatChangeRequestExpiry,
   summarizeBookingChangeRequest,
 } from '../../../../utils/bookingChangeRequestDisplay';
+import {
+  formatNameWithCivility,
+  resolvePassengerGender,
+} from '../../../../utils/personCivility';
 import s from './ReservationDetailPanel.module.css';
 
 const STATUS_MAP = {
@@ -138,23 +145,20 @@ const buildTimeline = (r) => {
 };
 
 const parseDate = (r) => {
-  if (r?.time_confirmed === false && !r?.scheduled_time) return '';
   const raw = r?.scheduled_time || r?.scheduled_date || r?.date;
   if (!raw) return '';
   const dt = new Date(raw);
-  if (isNaN(dt.getTime())) return raw.slice(0, 10);
-  if (r?.time_confirmed === false && dt.getHours() === 0 && dt.getMinutes() === 0) return '';
+  if (isNaN(dt.getTime())) return String(raw).slice(0, 10);
   const pad = (n) => String(n).padStart(2, '0');
   return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`;
 };
 
 const parseTime = (r) => {
-  if (r?.time_confirmed === false && !r?.scheduled_time) return '';
+  if (!hasScheduledPickupTime(r)) return '';
   const raw = r?.scheduled_time || r?.scheduled_date || r?.date;
   if (!raw) return '';
   const dt = new Date(raw);
   if (isNaN(dt.getTime())) return '';
-  if (r?.time_confirmed === false && dt.getHours() === 0 && dt.getMinutes() === 0) return '';
   const pad = (n) => String(n).padStart(2, '0');
   return `${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
 };
@@ -162,12 +166,7 @@ const parseTime = (r) => {
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const ISO_TIME_RE = /^\d{2}:\d{2}$/;
 
-/** Course retour ou étape multi-parcours dont l'horaire n'est pas encore fixé. */
-const isSchedulePending = (reservation) => {
-  if (!reservation) return false;
-  if (reservation.time_confirmed === false) return true;
-  return !reservation.scheduled_time;
-};
+const isSchedulePending = (reservation) => !hasScheduledPickupTime(reservation);
 
 function isBillingLockedForAdjust(r) {
   if (!r) return true;
@@ -243,11 +242,10 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onRese
 
   const isDateTimeInPast = useMemo(() => {
     if (!form.scheduled_date || !form.scheduled_time) return false;
-    // 00:00 = sentinelle "heure à définir", ne pas considérer comme "dans le passé"
-    if (form.scheduled_time === "00:00") return false;
+    if (isSchedulePending(reservation)) return false;
     const combined = new Date(`${form.scheduled_date}T${form.scheduled_time}:00`);
     return !isNaN(combined.getTime()) && combined < new Date();
-  }, [form.scheduled_date, form.scheduled_time]);
+  }, [form.scheduled_date, form.scheduled_time, reservation]);
 
   const buildFormFromReservation = useCallback((r) => {
     if (!r) return {};
@@ -516,8 +514,7 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onRese
       delete payload.scheduled_date;
       delete payload.scheduled_time;
       const hasValidSchedule = ISO_DATE_RE.test(scheduleDate)
-        && ISO_TIME_RE.test(scheduleTime)
-        && scheduleTime !== '00:00';
+        && ISO_TIME_RE.test(scheduleTime);
       if (hasValidSchedule) {
         payload.scheduled_time = `${scheduleDate}T${scheduleTime}:00`;
         payload.time_confirmed = true;
@@ -638,6 +635,11 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onRese
     ? Number(reservation?.amount ?? 0) - Number(originalAmount) : null;
 
   const bookingIdentity = buildIdentityFromApi(reservation);
+  const passengerGender = resolvePassengerGender(reservation, bookingIdentity);
+  const passengerDisplayName = formatNameWithCivility(
+    bookingIdentity.passengerLabel,
+    passengerGender,
+  );
   const driverDisplayName = resolveBookingDriverName(reservation);
   const sourceMeta = getBookingSourceMeta(bookingIdentity.source?.type);
   const passengerBirthDate = isInstitutionBooking
@@ -832,7 +834,7 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onRese
             {/* Context badge — client + id */}
             <div className={s.editContext}>
               <span className={s.editContextLabel}>
-                {bookingIdentity.passengerLabel}
+                {passengerDisplayName}
               </span>
               <span className={s.editContextSep} />
               <span className={s.editContextMeta}>#{reservation.id}</span>
@@ -1076,7 +1078,7 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onRese
               <div className={s.summaryGrid}>
                 <div className={s.summaryItem}>
                   <span className={s.summaryLabel}>Passager</span>
-                  <span className={s.summaryValue}>{bookingIdentity.passengerLabel}</span>
+                  <span className={s.summaryValue}>{passengerDisplayName}</span>
                 </div>
                 {bookingIdentity.source?.name && (
                   <div className={s.summaryItem}>

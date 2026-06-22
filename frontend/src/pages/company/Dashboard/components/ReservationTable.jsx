@@ -10,6 +10,7 @@ import BookingIdentityCell from '../../../../components/booking/BookingIdentityC
 import BookingTripBadges from '../../../../components/booking/BookingTripBadges';
 import BookingStatusBadge from '../../../../components/booking/BookingStatusBadge';
 import { canRespondToInstitutionOffer, isInstitutionOfferExpired } from '../../../../utils/institutionOfferResponse';
+import { institutionOfferEstimateLabel } from '../../../../utils/institutionOfferEstimateLabel';
 
 const DISPLAY_INCREMENT = 50;
 
@@ -90,12 +91,8 @@ function renderOfferAmount(r) {
   const est = r.__priceEstimate;
   const amount = est ? Number(est.amount) : NaN;
   if (est && !Number.isNaN(amount) && amount > 0) {
-    const sourceLabel =
-      est.source === 'preferential'
-        ? 'Tarif préférentiel'
-        : est.source === 'profile'
-          ? 'Tarif estimé selon le profil tarifaire'
-          : 'Tarif estimé';
+    const billingIntent = r.__offer?.transport_request?.billing_intent;
+    const sourceLabel = institutionOfferEstimateLabel(est, billingIntent);
     return (
       <span className={styles.amountSub} title={sourceLabel}>
         {amount.toFixed(2)} {est.currency || 'CHF'}

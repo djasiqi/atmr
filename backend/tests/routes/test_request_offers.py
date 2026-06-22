@@ -744,6 +744,33 @@ class TestAcceptOffer:
             headers=company_2_auth_headers,
         )
         assert response2.status_code == 409
+        body2 = response2.get_json()
+        assert body2.get("code") in ("OFFER_UNAVAILABLE", "REQUEST_CONVERTED")
+
+    def test_accept_after_reject_returns_offer_rejected(
+        self,
+        client,
+        db,
+        sample_request_with_offer,
+        company_auth_headers,
+    ):
+        """Refus puis tentative d'acceptation → OFFER_REJECTED (409)."""
+        _request, offer = sample_request_with_offer
+
+        reject_response = client.post(
+            f"/api/v1/company/request-offers/{offer.id}/reject",
+            headers=company_auth_headers,
+            json={"reason": "Indisponible"},
+        )
+        assert reject_response.status_code == 200
+
+        accept_response = client.post(
+            f"/api/v1/company/request-offers/{offer.id}/accept",
+            headers=company_auth_headers,
+        )
+        assert accept_response.status_code == 409
+        body = accept_response.get_json()
+        assert body.get("code") == "OFFER_REJECTED"
 
     def test_cannot_accept_other_company_offer(
         self, client, db, sample_request_with_offer, company_2_auth_headers

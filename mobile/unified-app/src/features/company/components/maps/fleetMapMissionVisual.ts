@@ -3,7 +3,7 @@ import {
   formatEtaLabel,
   formatMissionTime,
   isMissionDelayed,
-  missionHasDefinedPickupTime,
+  missionHasConfirmedPickupTime,
 } from "../../dashboard/companyDashboardMissionUi";
 import type { FleetDriverMapItem } from "./fleetMapTypes";
 import {
@@ -297,7 +297,7 @@ export function formatMapMissionEtaBadge(
   mission: CompanyDispatchMission,
   nowMs = Date.now()
 ): string | null {
-  if (!missionHasDefinedPickupTime(mission.scheduled_at)) {
+  if (!missionHasConfirmedPickupTime(mission)) {
     return null;
   }
   const delay = Number(mission.assignment_pickup_delay_minutes);

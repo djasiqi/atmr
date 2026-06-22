@@ -1,13 +1,12 @@
 """Estimation tarifaire des offres de demande institution.
 
-Règle métier : si un tarif préférentiel (client institution) existe, il est
-appliqué ; sinon repli sur le profil tarifaire actif de l'entreprise via le
-moteur `compute_price`. Ce module est utilisé à la fois pour :
+Règle métier (payeur effectif) :
+- ``billing_intent`` effectif = ``institution`` :
+  tarif préférentiel du client institution si présent, sinon profil tarifaire actif.
+- ``billing_intent`` effectif ≠ ``institution`` (patient, curateur, assurance, etc.) :
+  jamais de tarif préférentiel institution — uniquement le profil tarifaire actif.
 
-- l'affichage du tarif estimé sur une offre (lecture seule) ;
-- l'acceptation d'une offre (gel tarifaire du booking),
-
-afin que le montant estimé corresponde au montant réellement facturé.
+Ce module alimente l'estimation affichée sur l'offre et le gel tarifaire à l'acceptation.
 """
 
 from __future__ import annotations
@@ -33,6 +32,26 @@ logger = logging.getLogger(__name__)
 WEEKEND_START_INDEX = 5
 DEFAULT_MIN_AMOUNT = 0.5
 DEFAULT_CURRENCY = "CHF"
+
+SOURCE_PREFERENTIAL = "preferential"
+SOURCE_COMPANY_PROFILE = "company_profile"
+SOURCE_DEFAULT = "default"
+SOURCE_MIXED = "mixed"
+
+
+def institution_preferential_applies(effective_billing_intent: str | None) -> bool:
+    """True si le payeur effectif autorise le tarif préférentiel institution."""
+    return (effective_billing_intent or "patient").lower() == "institution"
+
+
+def effective_preferential_rate(
+    preferential_rate: Any,
+    effective_billing_intent: str | None,
+) -> Any:
+    """Neutralise le tarif préférentiel institution si le payeur n'est pas institution."""
+    if not institution_preferential_applies(effective_billing_intent):
+        return None
+    return preferential_rate
 
 
 def _to_positive(value: Any) -> float | None:
@@ -138,9 +157,20 @@ def _build_pricing_context(
     }
 
 
+def _aggregate_price_sources(sources: set[str]) -> str:
+    if len(sources) > 1:
+        return SOURCE_MIXED
+    if SOURCE_COMPANY_PROFILE in sources:
+        return SOURCE_COMPANY_PROFILE
+    if SOURCE_PREFERENTIAL in sources:
+        return SOURCE_PREFERENTIAL
+    return SOURCE_DEFAULT
+
+
 def resolve_institution_price(
     *,
     company_id: int | None,
+    effective_billing_intent: str | None = "patient",
     preferential_rate: Any = None,
     pickup_location: str | None = None,
     dropoff_location: str | None = None,
@@ -151,19 +181,21 @@ def resolve_institution_price(
     scheduled_time: datetime | None = None,
     is_round_trip: bool = False,
 ) -> dict[str, Any]:
-    """Résout le tarif d'un trajet institution (préférentiel sinon profil).
+    """Résout le tarif d'un trajet institution selon le payeur effectif.
 
     Retourne un dict :
         {amount, currency, source, pricing_profile_id,
          pricing_profile_version_id, breakdown}
-    source ∈ {"preferential", "profile", "default"}.
+    source ∈ {preferential, company_profile, default, mixed}.
     """
-    preferential = _to_positive(preferential_rate)
+    preferential = _to_positive(
+        effective_preferential_rate(preferential_rate, effective_billing_intent)
+    )
     if preferential is not None:
         return {
             "amount": preferential,
             "currency": DEFAULT_CURRENCY,
-            "source": "preferential",
+            "source": SOURCE_PREFERENTIAL,
             "pricing_profile_id": None,
             "pricing_profile_version_id": None,
             "breakdown": None,
@@ -201,7 +233,7 @@ def resolve_institution_price(
                 return {
                     "amount": float(amount),
                     "currency": getattr(profile, "currency", None) or DEFAULT_CURRENCY,
-                    "source": "profile",
+                    "source": SOURCE_COMPANY_PROFILE,
                     "pricing_profile_id": profile.id,
                     "pricing_profile_version_id": version.id,
                     "breakdown": breakdown,
@@ -214,7 +246,7 @@ def resolve_institution_price(
     return {
         "amount": DEFAULT_MIN_AMOUNT,
         "currency": DEFAULT_CURRENCY,
-        "source": "default",
+        "source": SOURCE_DEFAULT,
         "pricing_profile_id": None,
         "pricing_profile_version_id": None,
         "breakdown": None,
@@ -228,7 +260,7 @@ def _normalize_institution_name(value: str | None) -> str:
     normalized = unicodedata.normalize("NFKD", str(value))
     normalized = "".join(ch for ch in normalized if not unicodedata.combining(ch))
     normalized = (
-        normalized.lower().replace("’", "'").replace("`", "'").replace("´", "'")
+        normalized.lower().replace("'", "'").replace("`", "'").replace("´", "'")
     )
     normalized = re.sub(r"[^a-z0-9]+", " ", normalized)
     return re.sub(r"\s+", " ", normalized).strip()
@@ -275,6 +307,10 @@ def estimate_offer_price(offer: Any) -> dict[str, Any] | None:
     Lecture seule — destiné à l'affichage. Retourne ``None`` en cas d'échec.
     """
     try:
+        from services.billing.destination_billing_resolver import (
+            effective_billing_for_leg,
+        )
+
         request = getattr(offer, "transport_request", None)
         if request is None:
             return None
@@ -289,6 +325,7 @@ def estimate_offer_price(offer: Any) -> dict[str, Any] | None:
 
         scheduled_time = getattr(request, "scheduled_time", None)
         is_round_trip = bool(getattr(request, "is_round_trip", False))
+        primary_intent = (getattr(request, "billing_intent", None) or "patient").lower()
 
         legs = sorted(
             getattr(request, "legs", None) or [],
@@ -299,42 +336,48 @@ def estimate_offer_price(offer: Any) -> dict[str, Any] | None:
         sources: set[str] = set()
         currency = DEFAULT_CURRENCY
 
-        targets = (
-            [
-                {
-                    "pickup_location": leg.pickup_location,
-                    "dropoff_location": leg.dropoff_location,
-                    "pickup_lat": float(leg.pickup_lat) if leg.pickup_lat else None,
-                    "pickup_lon": float(leg.pickup_lng) if leg.pickup_lng else None,
-                    "dropoff_lat": float(leg.dropoff_lat) if leg.dropoff_lat else None,
-                    "dropoff_lon": float(leg.dropoff_lng) if leg.dropoff_lng else None,
-                }
+        if legs:
+            leg_targets = [
+                (
+                    effective_billing_for_leg(leg, request),
+                    {
+                        "pickup_location": leg.pickup_location,
+                        "dropoff_location": leg.dropoff_location,
+                        "pickup_lat": float(leg.pickup_lat) if leg.pickup_lat else None,
+                        "pickup_lon": float(leg.pickup_lng) if leg.pickup_lng else None,
+                        "dropoff_lat": float(leg.dropoff_lat) if leg.dropoff_lat else None,
+                        "dropoff_lon": float(leg.dropoff_lng) if leg.dropoff_lng else None,
+                    },
+                )
                 for leg in legs
             ]
-            if legs
-            else [
-                {
-                    "pickup_location": request.pickup_location,
-                    "dropoff_location": request.dropoff_location,
-                    "pickup_lat": float(request.pickup_lat)
-                    if request.pickup_lat
-                    else None,
-                    "pickup_lon": float(request.pickup_lng)
-                    if request.pickup_lng
-                    else None,
-                    "dropoff_lat": float(request.dropoff_lat)
-                    if request.dropoff_lat
-                    else None,
-                    "dropoff_lon": float(request.dropoff_lng)
-                    if request.dropoff_lng
-                    else None,
-                }
+        else:
+            leg_targets = [
+                (
+                    primary_intent,
+                    {
+                        "pickup_location": request.pickup_location,
+                        "dropoff_location": request.dropoff_location,
+                        "pickup_lat": float(request.pickup_lat)
+                        if request.pickup_lat
+                        else None,
+                        "pickup_lon": float(request.pickup_lng)
+                        if request.pickup_lng
+                        else None,
+                        "dropoff_lat": float(request.dropoff_lat)
+                        if request.dropoff_lat
+                        else None,
+                        "dropoff_lon": float(request.dropoff_lng)
+                        if request.dropoff_lng
+                        else None,
+                    },
+                )
             ]
-        )
 
-        for target in targets:
+        for effective_intent, target in leg_targets:
             result = resolve_institution_price(
                 company_id=company_id,
+                effective_billing_intent=effective_intent,
                 preferential_rate=preferential_rate,
                 scheduled_time=scheduled_time,
                 is_round_trip=is_round_trip,
@@ -344,17 +387,10 @@ def estimate_offer_price(offer: Any) -> dict[str, Any] | None:
             sources.add(result["source"])
             currency = result["currency"]
 
-        if "profile" in sources:
-            source = "profile"
-        elif "preferential" in sources:
-            source = "preferential"
-        else:
-            source = "default"
-
         return {
             "amount": round(total, 2),
             "currency": currency,
-            "source": source,
+            "source": _aggregate_price_sources(sources),
         }
     except Exception:
         logger.warning(

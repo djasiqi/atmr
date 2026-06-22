@@ -337,9 +337,18 @@ export function useDriverRealtimeSync() {
   }, [contextId, status]);
 }
 
-export function useDriverTracking(missionId: number | null, missionStatus: string | null | undefined) {
+export function useDriverTracking(mission: DriverMission | null | undefined) {
   const contextId = useActiveDriverContextId();
-  const normalized = normalizeDriverMissionStatus(missionStatus);
+  const missionId = mission?.id ?? null;
+  const normalized = normalizeDriverMissionStatus(mission?.status);
+  const scheduling =
+    mission != null
+      ? {
+          scheduled_time: mission.scheduled_time,
+          time_confirmed: mission.time_confirmed,
+          scheduling: mission.scheduling,
+        }
+      : null;
   useEffect(() => {
     if (contextId) {
       void reconcileTrackingRuntime({
@@ -356,11 +365,11 @@ export function useDriverTracking(missionId: number | null, missionStatus: strin
       stopDriverTracking();
       return;
     }
-    startDriverTracking(missionId, normalized);
+    startDriverTracking(missionId, normalized, scheduling);
     return () => {
       stopDriverTracking();
     };
-  }, [contextId, missionId, normalized]);
+  }, [contextId, missionId, normalized, scheduling?.scheduled_time, scheduling?.time_confirmed]);
 }
 
 /**

@@ -7,6 +7,8 @@ export type CompanyDeepLinkResolution = {
   route: string;
   rideId: number | null;
   threadId?: string | null;
+  offerId?: number | null;
+  requestId?: number | null;
 };
 
 const QUICK_ACTIONS = ["accept", "reject", "start", "complete"] as const;
@@ -149,6 +151,30 @@ export function resolveCompanyDeepLink(input: string | null | undefined): Compan
       route: `/(app)/(company)/rides${filterQuery}`,
       rideId: null,
     };
+  }
+
+  const enterpriseOfferTail = removeAnySchemePrefix(
+    input,
+    SCHEMES.map((scheme) => `${scheme}enterprise/offers/`)
+  );
+  if (enterpriseOfferTail != null) {
+    const [idPart, queryPart = ""] = enterpriseOfferTail.split("?");
+    const offerId = Number(idPart);
+    if (Number.isFinite(offerId)) {
+      const map = parseQuery(queryPart);
+      const requestRaw = map.get("request");
+      const requestId = requestRaw ? Number(requestRaw) : null;
+      const requestQuery =
+        requestId != null && Number.isFinite(requestId)
+          ? `?request=${requestId}`
+          : "";
+      return {
+        route: `/(app)/(company)/offers/${offerId}${requestQuery}`,
+        rideId: null,
+        offerId,
+        requestId: requestId != null && Number.isFinite(requestId) ? requestId : null,
+      };
+    }
   }
 
   const missionTail = removeAnySchemePrefix(input, SCHEMES.map((scheme) => `${scheme}mission/`));

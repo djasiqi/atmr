@@ -11,10 +11,19 @@ import {
   stopDriverTrackingBridge,
   updateDriverTrackingBridgeStatus,
 } from "./services/driverTrackingBridge";
-import { DriverMissionStatus } from "./types";
+import { DriverMissionStatus, type DriverMission } from "./types";
 
-export function startDriverTracking(missionId: number, status: DriverMissionStatus) {
-  startDriverTrackingBridge(missionId, status);
+export type DriverMissionSchedulingContext = Pick<
+  DriverMission,
+  "scheduled_time" | "time_confirmed" | "scheduling"
+>;
+
+export function startDriverTracking(
+  missionId: number,
+  status: DriverMissionStatus,
+  scheduling?: DriverMissionSchedulingContext | null
+) {
+  startDriverTrackingBridge(missionId, status, scheduling);
 }
 
 export function updateDriverTrackingStatus(status: DriverMissionStatus) {

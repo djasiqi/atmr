@@ -21,7 +21,7 @@ import {
   formatMissionScheduleTimeLabel,
   resolveMissionUiStatus,
 } from "../../dashboard/companyDashboardMissionUi";
-import { isPickupSentinel, isTimeUndefined } from "../../utils/pickupSentinel";
+import { hasConfirmedPickupTime, hasScheduledPickupTime } from "../../utils/pickupSentinel";
 import { resolveGoogleMapsNativeApiKey } from "../../../../config/googleMapsKeys";
 
 import { fleetGlassPanel } from "./fleetMapUiTokens";
@@ -334,13 +334,13 @@ function cycleSnap(level: "collapsed" | "medium" | "expanded"): "collapsed" | "m
 
 /**
  * Horodatage de tri d'une course.
- * Les courses sans heure réelle (sentinelle « À définir » T00:00:00, valeur vide ou
+ * Les courses sans heure confirmée (legacy « À définir », valeur vide ou
  * invalide) sont renvoyées en fin de liste : on privilégie les courses réellement
  * planifiées — y compris celles déjà passées mais non effectuées / en cours —
  * et on n'affiche les « À définir » que pour compléter s'il reste de la place.
  */
 function missionScheduleSortTs(mission: CompanyDispatchMission): number {
-  if (isPickupSentinel(mission.scheduled_at)) return Number.MAX_SAFE_INTEGER;
+  if (!hasScheduledPickupTime(mission)) return Number.MAX_SAFE_INTEGER;
   const ts = Date.parse(mission.scheduled_at as string);
   return Number.isNaN(ts) ? Number.MAX_SAFE_INTEGER : ts;
 }
@@ -874,8 +874,8 @@ function CompactUpcomingMissionsPeek({
         const driverName = formatPeekTableDriverLabel(
           mission.driver_name?.trim() || mission.partner_company_name?.trim() || "Non assigné"
         );
-        const scheduleUndefined = isTimeUndefined(mission);
-        const plannedDeparture = formatMissionScheduleTimeLabel(mission.scheduled_at);
+        const scheduleUndefined = !hasScheduledPickupTime(mission);
+        const plannedDeparture = formatMissionScheduleTimeLabel(mission);
         return (
           <Pressable
             key={mission.mission_id}

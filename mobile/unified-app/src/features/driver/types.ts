@@ -7,6 +7,7 @@ export type DriverMissionStatus =
   | "CANCELLED"
   | "REASSIGNED"
   | "NO_SHOW"
+  | "EXPIRED"
   | "FAILED";
 
 export type DriverTransitionStatus =
@@ -33,6 +34,13 @@ export type DriverMission = {
   pickup_location?: string | null;
   dropoff_location?: string | null;
   scheduled_time?: string | null;
+  time_confirmed?: boolean | null;
+  scheduling?: {
+    time_defined?: boolean;
+    time_scheduled?: boolean;
+    display_time?: string;
+    display_datetime?: string;
+  } | null;
   updated_at?: string | null;
   client_name?: string | null;
   [key: string]: unknown;

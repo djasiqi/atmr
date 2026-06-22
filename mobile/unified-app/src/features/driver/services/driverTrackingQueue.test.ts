@@ -155,4 +155,39 @@ describe("driverTrackingQueue", () => {
     });
     expect(item.locationMode).toBe("availability_presence");
   });
+
+  it("availability_presence n'utilise jamais le socket", async () => {
+    mockSendDriverLocationBatch.mockReturnValue(true);
+    mockSendDriverLocation.mockResolvedValue({ ack_status: "accepted" });
+    while ((await driverTrackingQueue.getSnapshot()).queueDepth > 0) {
+      await driverTrackingQueue.flush({
+        ackStaleMs: 60_000,
+        networkProfile: "normal",
+        forceHttpFallback: true,
+      });
+    }
+    mockSendDriverLocationBatch.mockClear();
+    mockSendDriverLocation.mockClear();
+
+    await driverTrackingQueue.enqueue({
+      missionId: 99,
+      appState: "active",
+      locationMode: "availability_presence",
+      payload: {
+        latitude: 46.5,
+        longitude: 6.6,
+        missionId: 99,
+        locationMode: "availability_presence",
+      },
+    });
+
+    const flush = await driverTrackingQueue.flush({
+      ackStaleMs: 60_000,
+      networkProfile: "normal",
+    });
+
+    expect(mockSendDriverLocationBatch).not.toHaveBeenCalled();
+    expect(mockSendDriverLocation).toHaveBeenCalled();
+    expect(flush.backendAcked).toBeGreaterThanOrEqual(1);
+  });
 });

@@ -2,9 +2,10 @@ import dayjs from "dayjs";
 
 type SchedulingLike = {
   time_defined?: boolean;
+  time_scheduled?: boolean;
 } | null | undefined;
 
-type MissionLike = {
+export type MissionLike = {
   scheduling?: SchedulingLike;
   time_confirmed?: boolean | null;
   scheduled_at?: string | null;
@@ -56,46 +57,63 @@ function resolveMissionScheduling(mission: unknown): SchedulingLike {
   return scheduling && typeof scheduling === "object" ? (scheduling as SchedulingLike) : null;
 }
 
-function resolveMissionTimeConfirmed(mission: unknown): boolean | null | undefined {
+export function resolveMissionTimeConfirmed(mission: unknown): boolean | null | undefined {
   const root = readNestedRecord(mission);
   const summary = readNestedRecord(root?.summary);
   const value = root?.time_confirmed ?? summary?.time_confirmed;
   return typeof value === "boolean" ? value : undefined;
 }
 
-/** Heure non définie — préfère scheduling.time_defined / time_confirmed (INV-2). */
-export function isTimeUndefined(mission: MissionLike | null | undefined): boolean {
-  if (!mission) return true;
-  const scheduling = mission.scheduling ?? resolveMissionScheduling(mission);
-  if (scheduling && typeof scheduling.time_defined === "boolean") {
-    return !scheduling.time_defined;
-  }
-  const timeConfirmed = mission.time_confirmed ?? resolveMissionTimeConfirmed(mission);
-  if (timeConfirmed === false) return true;
-  return isPickupSentinel(resolveMissionScheduledAt(mission) ?? mission.scheduled_at);
-}
-
-/** Legacy : sentinelle T00:00:00 — conservé pour données sans time_confirmed. */
-export function isPickupSentinel(pickupAt: string | null | undefined): boolean {
+/** Legacy : sentinelle T00:00:00 — fallback client si `scheduling.time_scheduled` absent. */
+export function isPickupSentinel(
+  pickupAt: string | null | undefined,
+  timeConfirmed?: boolean | null
+): boolean {
   if (pickupAt == null || pickupAt === "") return true;
   const d = dayjs(pickupAt);
   if (!d.isValid()) return true;
   const m = pickupAt.match(/T(\d{2}):(\d{2}):(\d{2})/);
-  if (m && m[1] === "00" && m[2] === "00" && m[3] === "00") return true;
+  if (m && m[1] === "00" && m[2] === "00" && m[3] === "00") {
+    if (timeConfirmed === true) return false;
+    return true;
+  }
   return false;
 }
 
-/**
- * Urgent autorisé uniquement tant que l’horaire n’est pas planifié (aligné POST …/urgent backend).
- * Une heure explicite (ex. 09:30) exclut l’urgence, même si `time_confirmed` est false (retour).
- */
-export function canMarkRideUrgent(mission: MissionLike | null | undefined): boolean {
+/** Existence d'une heure métier (urgence, « À définir », tri sans heure). */
+export function hasScheduledPickupTime(mission: MissionLike | null | undefined): boolean {
   if (!mission) return false;
   const scheduling = mission.scheduling ?? resolveMissionScheduling(mission);
-  if (scheduling && scheduling.time_defined === true) return false;
+  if (scheduling && typeof scheduling.time_scheduled === "boolean") {
+    return scheduling.time_scheduled;
+  }
+  const at = resolveMissionScheduledAt(mission) ?? mission.scheduled_at;
+  if (at == null || at === "") return false;
   const timeConfirmed = mission.time_confirmed ?? resolveMissionTimeConfirmed(mission);
-  if (timeConfirmed === true) return false;
-  return isPickupSentinel(resolveMissionScheduledAt(mission));
+  return !isPickupSentinel(at, timeConfirmed);
+}
+
+/** Heure confirmée workflow INV-2 (retards, dispatch opérationnel). */
+export function hasConfirmedPickupTime(mission: MissionLike | null | undefined): boolean {
+  if (!mission) return false;
+  const scheduling = mission.scheduling ?? resolveMissionScheduling(mission);
+  if (scheduling && typeof scheduling.time_defined === "boolean") {
+    return scheduling.time_defined;
+  }
+  const timeConfirmed = mission.time_confirmed ?? resolveMissionTimeConfirmed(mission);
+  if (timeConfirmed === true) return hasScheduledPickupTime(mission);
+  if (timeConfirmed === false) return false;
+  return hasScheduledPickupTime(mission);
+}
+
+export function isTimeUndefined(mission: MissionLike | null | undefined): boolean {
+  return !hasScheduledPickupTime(mission);
+}
+
+/** Urgent autorisé uniquement sans heure métier (aligné POST …/urgent backend). */
+export function canMarkRideUrgent(mission: MissionLike | null | undefined): boolean {
+  if (!mission) return false;
+  return !hasScheduledPickupTime(mission);
 }
 
 /** Course affichable dans la liste dispatch (sans horaire, « à définir » ou date valide). */

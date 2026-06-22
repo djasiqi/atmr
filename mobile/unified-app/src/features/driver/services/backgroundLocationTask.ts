@@ -2,8 +2,9 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Location from "expo-location";
 import * as Battery from "expo-battery";
 import { AppState, AppStateStatus, Platform } from "react-native";
-import { DriverMissionStatus } from "../types";
+import { DriverMissionStatus, type DriverMission } from "../types";
 import { isTrackingActiveStatus } from "../domain/status";
+import { resolveMissionTrackingMode } from "../domain/resolveMissionTrackingMode";
 import { driverTrackingQueue } from "./driverTrackingQueue";
 import { emitDriverTelemetry } from "../../../core/observability/driverTelemetry";
 import { isFeatureEnabled } from "../../../core/featureFlags/registry";
@@ -42,9 +43,12 @@ function notifyDeviceHealthOnNativeStartFailure(reason: string): void {
 
 type BackgroundTrackingTaskMode = "mission" | "presence_window";
 
+type MissionSchedulingSnapshot = Pick<DriverMission, "scheduled_time" | "time_confirmed" | "scheduling">;
+
 type BackgroundTaskRuntimeContext = {
   missionId: number | null;
   missionStatus: DriverMissionStatus | null;
+  missionScheduling: MissionSchedulingSnapshot | null;
   taskMode: BackgroundTrackingTaskMode;
   updatedAt: string;
 };
@@ -166,6 +170,10 @@ async function readTaskContext(): Promise<BackgroundTaskRuntimeContext | null> {
         typeof parsed.missionStatus === "string"
           ? (parsed.missionStatus as DriverMissionStatus)
           : null,
+      missionScheduling:
+        parsed.missionScheduling && typeof parsed.missionScheduling === "object"
+          ? (parsed.missionScheduling as MissionSchedulingSnapshot)
+          : null,
       taskMode:
         parsed.taskMode === "presence_window" ? "presence_window" : "mission",
       updatedAt:
@@ -186,13 +194,22 @@ async function writeTaskContext(context: BackgroundTaskRuntimeContext | null): P
 
 function resolveBackgroundTrackingMode(
   missionStatus: DriverMissionStatus | null,
-  taskMode: BackgroundTrackingTaskMode = "mission"
+  taskMode: BackgroundTrackingTaskMode = "mission",
+  scheduling: MissionSchedulingSnapshot | null = null
 ): "mission_live" | "availability_presence" {
   if (taskMode === "presence_window") {
     return "availability_presence";
   }
-  if (missionStatus === "ASSIGNED" && isFeatureEnabled("tracking_presence_mode_enabled")) {
-    return "availability_presence";
+  if (missionStatus) {
+    const mission: DriverMission = {
+      id: 0,
+      status: missionStatus,
+      scheduled_time: scheduling?.scheduled_time ?? null,
+      time_confirmed: scheduling?.time_confirmed ?? null,
+      scheduling: scheduling?.scheduling ?? null,
+    };
+    const mode = resolveMissionTrackingMode(mission);
+    if (mode) return mode;
   }
   return "mission_live";
 }
@@ -418,7 +435,11 @@ function defineTaskIfNeeded() {
         task_mode: context.taskMode,
       });
 
-      const mode = resolveBackgroundTrackingMode(context.missionStatus, context.taskMode);
+      const mode = resolveBackgroundTrackingMode(
+        context.missionStatus,
+        context.taskMode,
+        context.missionScheduling
+      );
       for (const location of locations) {
         const timestamp = new Date(location.timestamp ?? Date.now()).toISOString();
         await driverTrackingQueue.enqueue({
@@ -503,7 +524,8 @@ async function ensurePermissions(): Promise<boolean> {
 export async function setBackgroundTrackingMissionContext(
   missionId: number | null,
   missionStatus: DriverMissionStatus | null,
-  taskMode: BackgroundTrackingTaskMode = "mission"
+  taskMode: BackgroundTrackingTaskMode = "mission",
+  scheduling?: MissionSchedulingSnapshot | null
 ) {
   if (missionId == null && taskMode !== "presence_window") {
     await writeTaskContext(null);
@@ -512,6 +534,7 @@ export async function setBackgroundTrackingMissionContext(
   await writeTaskContext({
     missionId,
     missionStatus,
+    missionScheduling: scheduling ?? null,
     taskMode,
     updatedAt: new Date().toISOString(),
   });
@@ -519,6 +542,7 @@ export async function setBackgroundTrackingMissionContext(
 
 type StartBackgroundOptions = {
   presenceWindow?: boolean;
+  scheduling?: MissionSchedulingSnapshot | null;
 };
 
 async function startBackgroundLocationTaskIfEligibleInternal(
@@ -599,7 +623,12 @@ async function startBackgroundLocationTaskIfEligibleInternal(
     return false;
   }
 
-  await setBackgroundTrackingMissionContext(missionId, missionStatus, taskMode);
+  await setBackgroundTrackingMissionContext(
+    missionId,
+    missionStatus,
+    taskMode,
+    options.scheduling ?? null
+  );
   const hasStarted = await Location.hasStartedLocationUpdatesAsync(BACKGROUND_LOCATION_TASK_NAME);
   if (hasStarted) {
     clearNativeStartFailure();
@@ -611,7 +640,8 @@ async function startBackgroundLocationTaskIfEligibleInternal(
   const batteryLevel = await Battery.getBatteryLevelAsync().catch(() => null);
   const isLowBattery = typeof batteryLevel === "number" && batteryLevel <= LOW_BATTERY_THRESHOLD;
   const intervalBase =
-    resolveBackgroundTrackingMode(missionStatus, taskMode) === "availability_presence"
+    resolveBackgroundTrackingMode(missionStatus, taskMode, options.scheduling ?? null) ===
+    "availability_presence"
       ? Math.max(BACKGROUND_INTERVAL_MS, 90_000)
       : BACKGROUND_INTERVAL_MS;
   const effectiveIntervalMs = isLowBattery

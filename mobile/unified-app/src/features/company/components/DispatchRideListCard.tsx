@@ -23,7 +23,7 @@ import {
   uiForDispatchDelayMinutes,
 } from "../utils/dispatchWebAlignment";
 import { isDispatchCompleted, isDispatchCancelled } from "../utils/companyDispatchStatus";
-import { isTimeUndefined } from "../utils/pickupSentinel";
+import { hasScheduledPickupTime } from "../utils/pickupSentinel";
 import { buildIdentityFromMission } from "../utils/bookingIdentity";
 import { createShadow } from "../../../styles/shadowStyles";
 
@@ -251,7 +251,7 @@ export function DispatchRideListCard({
   unassignedPressDisabled,
   footer,
 }: DispatchRideListCardProps) {
-  const hasSchedule = mission.scheduled_at && !isTimeUndefined(mission);
+  const hasSchedule = hasScheduledPickupTime(mission);
   const pickupTime = hasSchedule ? formatDispatchScheduledTime(mission.scheduled_at) : "";
   const showTimeUndefined = !hasSchedule;
   const missionIdentity = buildIdentityFromMission(mission);

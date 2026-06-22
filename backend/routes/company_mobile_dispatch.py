@@ -1821,28 +1821,12 @@ class MobileRideUrgent(Resource):
             company_mobile_dispatch_ns.abort(404, "Course introuvable")
             raise AssertionError("Booking not found") from None
 
-        # -----------------------------------------------------------------------
-        # RÈGLE MÉTIER SENTINELLE 00:00 (pickup_at / scheduled_time)
-        # - pickup_at = 00:00:00 est une VALEUR SENTINELLE = "heure non définie" (unset).
-        # - pickup_at != 00:00:00 = "course déjà planifiée".
-        # - Urgent autorisé UNIQUEMENT si sentinelle (éviter modification accidentelle).
-        # - Dans l'API ride, ce champ est exposé sous time.pickup_at.
-        # - Aucun parsing ne doit transformer 00:00 en null ; aucun affichage ne doit
-        #   montrer 00:00 comme une vraie heure utilisateur.
-        # -----------------------------------------------------------------------
-        st = booking.scheduled_time
-        st_naive = st.replace(tzinfo=None) if st and getattr(st, "tzinfo", None) else st
-        is_sentinel = (
-            st_naive is not None
-            and st_naive.hour == 0
-            and st_naive.minute == 0
-            and st_naive.second == 0
-        )
+        from services.companies.booking_display import booking_has_scheduled_pickup_time
 
-        if st is not None and not is_sentinel:
+        if booking_has_scheduled_pickup_time(booking):
             return {
-                "error": "Ride already scheduled; urgent allowed only when pickup time is unset (00:00)",
-                "message": "Ride already scheduled; urgent allowed only when pickup time is unset (00:00)",
+                "error": "Ride already scheduled; urgent allowed only when pickup time is unset",
+                "message": "Ride already scheduled; urgent allowed only when pickup time is unset",
             }, 409
 
         booking.is_urgent = True

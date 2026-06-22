@@ -4,6 +4,7 @@ import {
   FiX, FiMapPin, FiClock, FiFileText, FiUser, FiTruck, FiPackage,
 } from 'react-icons/fi';
 import AddressAutocomplete from '../common/AddressAutocomplete';
+import { hasScheduledPickupTime } from '../../utils/bookingScheduling';
 import styles from './EditReservationModal.module.css';
 
 const STATUS_LABELS = {
@@ -55,9 +56,13 @@ const EditReservationModal = ({ isOpen, onClose, reservation, onConfirm }) => {
         const month = String(dateObj.getMonth() + 1).padStart(2, '0');
         const day = String(dateObj.getDate()).padStart(2, '0');
         setScheduledDate(`${year}-${month}-${day}`);
-        const hours = String(dateObj.getHours()).padStart(2, '0');
-        const minutes = String(dateObj.getMinutes()).padStart(2, '0');
-        setScheduledTime(`${hours}:${minutes}`);
+        if (hasScheduledPickupTime(reservation)) {
+          const hours = String(dateObj.getHours()).padStart(2, '0');
+          const minutes = String(dateObj.getMinutes()).padStart(2, '0');
+          setScheduledTime(`${hours}:${minutes}`);
+        } else {
+          setScheduledTime('');
+        }
       }
     }
   }, [isOpen, reservation]);

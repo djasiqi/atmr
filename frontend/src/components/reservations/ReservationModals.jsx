@@ -7,6 +7,7 @@ import CancellationModal from './CancellationModal';
 import EditReservationModal from './EditReservationModal';
 import InlineDatePicker from '../ui/InlineDatePicker';
 import InlineTimePicker from '../ui/InlineTimePicker';
+import { hasScheduledPickupTime } from '../../utils/bookingScheduling';
 import styles from './ReservationModals.module.css';
 
 const DEMO_FIRST_NAMES = [
@@ -82,11 +83,11 @@ const ScheduleReturnTimeModal = ({ isOpen, onClose, reservation, onConfirm }) =>
       const day = String(dateObj.getDate()).padStart(2, '0');
       setSelectedDate(`${year}-${month}-${day}`);
 
-      const hours = dateObj.getHours();
-      const minutes = dateObj.getMinutes();
-      if (hours === 0 && minutes === 0) {
+      if (!hasScheduledPickupTime(reservation)) {
         setSelectedTime('');
       } else {
+        const hours = dateObj.getHours();
+        const minutes = dateObj.getMinutes();
         setSelectedTime(`${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`);
       }
     }
@@ -131,17 +132,18 @@ const ScheduleReturnTimeModal = ({ isOpen, onClose, reservation, onConfirm }) =>
   if (!isOpen) return null;
 
   const clientName = reservation?.client_name || reservation?.client?.full_name || '';
-  const formatAllerTime = (isoStr) => {
+  const formatAllerTime = (bookingLike) => {
+    if (!bookingLike || !hasScheduledPickupTime(bookingLike)) return null;
+    const isoStr = bookingLike.scheduled_time;
     if (!isoStr) return null;
     const d = parseValidDate(isoStr);
     if (!d) return null;
     const datePart = d.toLocaleDateString('fr-CH', { day: '2-digit', month: '2-digit', year: 'numeric' });
-    if (d.getHours() === 0 && d.getMinutes() === 0) return datePart;
     const timePart = d.toLocaleTimeString('fr-CH', { hour: '2-digit', minute: '2-digit' });
     return `${datePart} ${timePart}`;
   };
-  const allerTime = formatAllerTime(reservation?.original_booking?.scheduled_time)
-    || formatAllerTime(reservation?.scheduled_time);
+  const allerTime = formatAllerTime(reservation?.original_booking)
+    || formatAllerTime(reservation);
 
   return (
     <div className={styles.schedOverlay} onClick={onClose}>

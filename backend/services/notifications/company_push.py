@@ -10,6 +10,24 @@ from ext import app_logger, db
 from services.notifications.push import send_push_message
 
 
+def _track_new_request_delivery_failed(
+    company_id: int, reason: str, data: Dict[str, Any]
+) -> None:
+    if data.get("type") != "new_request":
+        return
+    try:
+        from services.metrics.institution_metrics import (
+            track_company_push_new_request_delivery_failed,
+        )
+
+        track_company_push_new_request_delivery_failed(
+            company_id=company_id,
+            reason=reason,
+        )
+    except Exception:
+        pass
+
+
 def _ensure_event_ids(data: Dict[str, Any]) -> Dict[str, Any]:
     out = dict(data)
     if not out.get("event_id"):
@@ -80,7 +98,12 @@ def send_push_to_company_sync(
                     data=data,
                     timeout=timeout,
                 )
+                if not result.get("ok"):
+                    _track_new_request_delivery_failed(
+                        company_id, "provider_rejected", data
+                    )
                 return bool(result.get("ok"))
+            _track_new_request_delivery_failed(company_id, "no_token", data)
             return False
 
         from services.notifications.token_audit import (
@@ -168,15 +191,22 @@ def send_push_to_company_sync(
                 success_count,
                 len(device_tokens),
             )
+        else:
+            _track_new_request_delivery_failed(
+                company_id, "provider_rejected", data
+            )
     except (ValueError, TypeError, AttributeError) as e:
         app_logger.error(
             "[company_push] Push failed (validation error: %s): %s",
             type(e).__name__,
             e,
         )
+        _track_new_request_delivery_failed(company_id, "provider_rejected", data)
     except (ConnectionError, OSError, TimeoutError):
+        _track_new_request_delivery_failed(company_id, "timeout", data)
         raise
     except Exception:
         app_logger.exception("[company_push] Push failed")
+        _track_new_request_delivery_failed(company_id, "task_error", data)
 
     return success

@@ -757,7 +757,7 @@ class SendTransportRequestUseCase:
                         if is_relaunch
                         else f"new_request:{transport_request.id}:{offer.company_id}"
                     )
-                    persist_company_notification(
+                    notif = persist_company_notification(
                         company_id=offer.company_id,
                         event_type="new_request",
                         title=title,
@@ -775,6 +775,39 @@ class SendTransportRequestUseCase:
                             ),
                         },
                         dedupe_key=dedupe_key,
+                    )
+                    if notif is None:
+                        logger.info(
+                            "[SendTransportRequest] Push skipped (inbox dedupe) "
+                            "company=%s request=%s dedupe_key=%s",
+                            offer.company_id,
+                            transport_request.id,
+                            dedupe_key,
+                        )
+                        continue
+
+                    expires_at_iso = (
+                        offer.expires_at.isoformat()
+                        if getattr(offer, "expires_at", None)
+                        else None
+                    )
+                    from services.notifications.institution_new_request_push import (
+                        enqueue_institution_new_request_company_push,
+                    )
+
+                    enqueue_institution_new_request_company_push(
+                        transport_request=transport_request,
+                        offer_id=offer.id,
+                        company_id=offer.company_id,
+                        institution_name=inst_name,
+                        patient_name=patient_name,
+                        title=title,
+                        message=message,
+                        dedupe_key=dedupe_key,
+                        mission_date_iso=mission_date_iso,
+                        expires_at_iso=expires_at_iso,
+                        is_relaunch=is_relaunch,
+                        sched=sched,
                     )
 
                     socketio.emit(

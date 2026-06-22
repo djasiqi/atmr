@@ -1,17 +1,39 @@
 # Backlog Phase 2 — Migration des lectures `00:00` → `time_confirmed`
 
 ```txt
-Status: IN PROGRESS — Canonical Display Model v1 déployé (BK-01 / TR-01 auto PASS)
-Date: 2026-06-12
+Status: COMPLETED (2026-06-22) — helpers hasScheduledPickupTime / hasConfirmedPickupTime + stop-gate CI
+Date: 2026-06-22
 Owner: équipe ATMR
 Contrat: docs/architecture/canonical-display-model.md
-Stop gates: docs/ops/stop-gate-bk01-booking-display.md, docs/ops/stop-gate-tr01-transport-request-display.md
-Phase 4 (migration SQL 00:00 → NULL): 🔒 BLOCKED tant que Phase 2 n'est pas stabilisée en staging
+Stop gates: scripts/check_no_sentinel_heuristics.py (repo-integrity CI) · E2E urgent 6/6 ✅
+Phase 4 (migration SQL 00:00 → NULL): 🔒 BLOCKED tant que validation staging manuelle
 ```
 
-> **Mise à jour 2026-06-12 :** implémentation Phase 2 Canonical Display Model — `BookingScheduleCell`,
-> `BookingIdentityCell` (labels canoniques), blocs API `display_model` v1, retrait heuristiques `00:00`
-> sur tableaux entreprise/admin, mobile `isTimeUndefined`. Voir `docs/ux/normalisation-courses-entreprise.md`.
+> ✅ **Implémenté (2026-06-22) :** module centralisé `backend/services/companies/booking_display.py`
+> (`is_legacy_midnight_pickup_sentinel`, `booking_has_scheduled_pickup_time`, `booking_has_confirmed_pickup_time`,
+> `scheduling.time_scheduled`), helpers mobile `pickupSentinel.ts` / chauffeur `pickupScheduling.ts`,
+> web `bookingScheduling.js`, migration transporteur (ReservationActions, FullyAutoPanel, SemiAutoPanel,
+> ReservationModals, EditReservationModal, ReservationDetailPanel), POST `/v1/rides/{id}/urgent` Modèle A.
+
+---
+
+## Règle métier validée — deux helpers
+
+| Helper | Question | Utilisé pour |
+|--------|----------|--------------|
+| `hasScheduledPickupTime` | Une heure métier est-elle renseignée ? | Urgent, « À définir », tri sans heure |
+| `hasConfirmedPickupTime` | Heure confirmée workflow (INV-2) ? | Retards, assignation, dispatch |
+
+**Urgent (Modèle A)** : autorisé uniquement si `!hasScheduledPickupTime` (null ou legacy 00:00).
+Une heure renseignée non confirmée (ex. retour 13:30) **bloque** l'urgence.
+
+---
+
+## Ancien statut (2026-06-12)
+
+```txt
+Status: IN PROGRESS — Canonical Display Model v1 déployé (BK-01 / TR-01 auto PASS)
+```
 
 ---
 

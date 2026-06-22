@@ -131,7 +131,7 @@ function mapUpcomingRows(missions: CompanyDispatchMission[]): DashboardCompactMi
     .slice(0, 6)
     .map((m) => ({
       missionId: m.mission_id,
-      timeLabel: formatMissionScheduleTimeLabel(m.scheduled_at),
+      timeLabel: formatMissionScheduleTimeLabel(m),
       clientName: m.client_name?.trim() || "Invité",
       routeLabel: `${conciseRouteSegment(m.pickup_label, 22)} → ${conciseRouteSegment(m.dropoff_label, 22)}`,
       etaLabel: formatEtaLabel(m),

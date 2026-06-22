@@ -89,6 +89,7 @@ _CANONICAL_REDIS_WRITE = None
 _CANONICAL_OVERWRITE = None
 _GPS_PROVIDER = None
 _TRACKING_MISSION_LIVE_MISSING_MISSION_ID = None
+_TRACKING_DELIVERY_RESULT = None
 
 if Counter is not None:
     _DEDUP_SKIPPED = Counter(
@@ -224,6 +225,11 @@ if Counter is not None:
         ),
         ["transport", "action"],
     )
+    _TRACKING_DELIVERY_RESULT = Counter(
+        "tracking_delivery_result_total",
+        "Résultat livraison position par mode, transport et issue",
+        ["mode", "transport", "result"],
+    )
 
 if Histogram is not None:
     _CLOCK_SKEW = Histogram(
@@ -287,6 +293,25 @@ else:
     _GPS_ACCURACY = None
     _GPS_SPEED = None
     _GPS_HEADING = None
+
+
+def inc_tracking_delivery_result(
+    *,
+    mode: str,
+    transport: str,
+    result: str,
+) -> None:
+    """Compteur STOP GATE PR1 — availability_presence/http/success, forbidden, etc."""
+    if not _metrics_enabled() or _TRACKING_DELIVERY_RESULT is None:
+        return
+    lm = _norm_mode(mode)
+    t = transport if transport in ("http", "socket", "socket_batch") else "http"
+    r = (
+        result
+        if result in ("success", "forbidden", "failure", "duplicate")
+        else "_unknown"
+    )
+    _TRACKING_DELIVERY_RESULT.labels(mode=lm, transport=t, result=r).inc()
 
 
 def inc_dedup_skipped(

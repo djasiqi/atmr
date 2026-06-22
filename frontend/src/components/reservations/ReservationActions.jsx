@@ -1,6 +1,7 @@
 // src/components/reservations/ReservationActions.jsx
 import React from 'react';
 import { FiClock, FiZap, FiUserPlus, FiShare2 } from 'react-icons/fi';
+import { hasConfirmedPickupTime, hasScheduledPickupTime } from '../../utils/bookingScheduling';
 import styles from './ReservationActions.module.css';
 
 /** Statuts où ce bloc n’affiche pas d’actions secondaires (normal en dispatch). */
@@ -50,40 +51,13 @@ const ReservationActions = ({
     reservation?.type === 'return'
   );
 
-  // Vérifier si l'heure doit être confirmée
-  // Cas 1: time_confirmed est explicitement false OU null/undefined
-  // Cas 2: scheduled_time est manquant/null
-  // Cas 3: L'heure est 00:00 (heure par défaut, souvent utilisée pour "à confirmer")
-  const hasScheduledTime = !!reservation?.scheduled_time;
-
-  // ⚡ Logique stricte : time_confirmed doit être explicitement true
-  // Si null, undefined, ou false, on considère qu'il faut confirmer
-  const timeConfirmed = reservation?.time_confirmed === true;
-
-  // Vérifier si l'heure est à 00:00 (indicateur d'heure à confirmer)
-  let isDefaultTime = false;
-  if (reservation?.scheduled_time) {
-    const timeStr = reservation.scheduled_time.toString();
-    // Format ISO: "2025-11-03T00:00:00" ou similaire
-    isDefaultTime =
-      /[T ]00:00(?::00)?(?:[.,]\d+)?(?:Z|[+-]\d{2}:?\d{2})?$/i.test(timeStr) ||
-      timeStr.includes('T00:00:00') ||
-      timeStr.includes(' 00:00:00') ||
-      timeStr.includes('T00:00') ||
-      timeStr.includes(' 00:00');
-    if (!isDefaultTime) {
-      const parsed = new Date(timeStr.replace(' ', 'T'));
-      if (!Number.isNaN(parsed.getTime())) {
-        isDefaultTime = parsed.getHours() === 0 && parsed.getMinutes() === 0;
-      }
-    }
-  }
-
-  const computedNeedsTimeConfirmation = isReturn && (!timeConfirmed || !hasScheduledTime || isDefaultTime);
+  const computedNeedsTimeConfirmation = isReturn && !hasConfirmedPickupTime(reservation);
   const needsTimeConfirmation =
     typeof needsTimeConfirmationOverride === 'boolean'
       ? needsTimeConfirmationOverride
       : computedNeedsTimeConfirmation;
+
+  const canMarkUrgent = !hasScheduledPickupTime(reservation);
 
   const status = reservation?.status?.toLowerCase() || 'unknown';
   const deletableStatuses = ['pending', 'accepted', 'assigned'];
@@ -95,7 +69,7 @@ const ReservationActions = ({
   // « Urgent (+15 min) » utilise onDispatchNow (endpoint /dispatch-now générique :
   // fixe scheduled_time = maintenant + offset). Valable aussi bien pour un retour
   // que pour un leg aller sans heure définie.
-  const showUrgent = !hideUrgent && needsTimeConfirmation && !!onDispatchNow;
+  const showUrgent = !hideUrgent && canMarkUrgent && needsTimeConfirmation && !!onDispatchNow;
   // Assigner : pour les retours à confirmer OU pour accepted/assigned normaux (peut être caché)
   const showAssign =
     !hideAssign &&

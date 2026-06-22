@@ -442,6 +442,7 @@ class TestAcceptOfferRoundTrip:
         )
         uc._get_or_create_institution_client = MagicMock(return_value=client)  # type: ignore[assignment]
         uc._resolve_billing_party = MagicMock()  # type: ignore[assignment]
+        uc._resolve_billed_to_company_id_before_flush = MagicMock(return_value=None)  # type: ignore[method-assign]
 
         tr = _TransportRequest(
             is_round_trip=False,

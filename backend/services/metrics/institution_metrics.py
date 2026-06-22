@@ -411,3 +411,125 @@ def track_proposed_pickup_time_validation_failed(
         offer_id,
         reason,
     )
+
+
+def track_company_push_new_request_sent(*, company_id: int) -> None:
+    """Push new_request institution enqueue vers entreprise."""
+    logger.info(
+        "company_push_new_request_sent company_id=%s",
+        company_id,
+    )
+    try:
+        from services.monitoring.prometheus import inc_company_push_new_request_sent
+
+        inc_company_push_new_request_sent(company_id=company_id)
+    except Exception:
+        logger.debug("company_push_new_request_sent prometheus failed", exc_info=True)
+
+
+def track_company_push_new_request_delivery_failed(
+    *,
+    company_id: int,
+    reason: str,
+) -> None:
+    """Échec livraison push new_request (FCM/token/timeout)."""
+    logger.info(
+        "company_push_new_request_delivery_failed company_id=%s reason=%s",
+        company_id,
+        reason,
+    )
+    try:
+        from services.monitoring.prometheus import (
+            inc_company_push_new_request_delivery_failed,
+        )
+
+        inc_company_push_new_request_delivery_failed(reason=reason)
+    except Exception:
+        logger.debug(
+            "company_push_new_request_delivery_failed prometheus failed",
+            exc_info=True,
+        )
+
+
+def track_company_push_new_request_opened(*, company_id: int | None = None) -> None:
+    """Ouverture notification new_request (télémétrie mobile)."""
+    logger.info(
+        "company_push_new_request_opened company_id=%s",
+        company_id,
+    )
+    try:
+        from services.monitoring.prometheus import inc_company_push_new_request_opened
+
+        inc_company_push_new_request_opened()
+    except Exception:
+        logger.debug("company_push_new_request_opened prometheus failed", exc_info=True)
+
+
+def track_company_push_new_request_accept(*, company_id: int) -> None:
+    """Acceptation offre institution après notification mobile."""
+    logger.info(
+        "company_push_new_request_accept company_id=%s",
+        company_id,
+    )
+    try:
+        from services.monitoring.prometheus import inc_company_push_new_request_accept
+
+        inc_company_push_new_request_accept()
+    except Exception:
+        logger.debug("company_push_new_request_accept prometheus failed", exc_info=True)
+
+
+def track_company_push_new_request_reject(*, company_id: int) -> None:
+    """Refus offre institution après notification."""
+    logger.info(
+        "company_push_new_request_reject company_id=%s",
+        company_id,
+    )
+    try:
+        from services.monitoring.prometheus import inc_company_push_new_request_reject
+
+        inc_company_push_new_request_reject()
+    except Exception:
+        logger.debug("company_push_new_request_reject prometheus failed", exc_info=True)
+
+
+def track_company_push_new_request_expired(*, company_id: int) -> None:
+    """Tentative accept sur offre expirée."""
+    logger.info(
+        "company_push_new_request_expired company_id=%s",
+        company_id,
+    )
+    try:
+        from services.monitoring.prometheus import inc_company_push_new_request_expired
+
+        inc_company_push_new_request_expired()
+    except Exception:
+        logger.debug("company_push_new_request_expired prometheus failed", exc_info=True)
+
+
+def track_company_push_open_to_accept_seconds(*, seconds: float) -> None:
+    """Délai entre ouverture notif et acceptation offre."""
+    logger.info(
+        "company_push_open_to_accept_seconds seconds=%s",
+        seconds,
+    )
+    try:
+        from services.monitoring.prometheus import observe_company_push_open_to_accept_seconds
+
+        observe_company_push_open_to_accept_seconds(seconds=seconds)
+    except Exception:
+        logger.debug("company_push_open_to_accept_seconds prometheus failed", exc_info=True)
+
+
+def track_company_push_tap_without_network(*, company_id: int | None = None) -> None:
+    """Tap notification/offre sans réseau (usage offline)."""
+    logger.info(
+        "company_push_tap_without_network company_id=%s",
+        company_id,
+    )
+    try:
+        from services.monitoring.prometheus import inc_company_push_tap_without_network
+
+        inc_company_push_tap_without_network()
+    except Exception:
+        logger.debug("company_push_tap_without_network prometheus failed", exc_info=True)

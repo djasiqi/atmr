@@ -16,8 +16,11 @@ from services.companies.booking_display import (
     SOURCE_TYPE_INSTITUTION,
     SOURCE_TYPE_LIRIE_GUEST,
     SOURCE_TYPE_PARTNER,
+    booking_has_confirmed_pickup_time,
+    booking_has_scheduled_pickup_time,
     build_booking_display_blocks,
     build_booking_scheduling,
+    is_legacy_midnight_pickup_sentinel,
     resolve_booking_source,
 )
 
@@ -150,8 +153,29 @@ def test_scheduling_time_undefined_when_not_confirmed():
         time_confirmed=False,
     )
     scheduling = build_booking_scheduling(b)
+    assert scheduling["time_scheduled"] is False
     assert scheduling["time_defined"] is False
     assert scheduling["display_time"] == "À définir"
+
+
+def test_scheduling_unconfirmed_1330_has_time_scheduled():
+    b = _booking(
+        scheduled_time=datetime(2026, 6, 12, 13, 30),
+        time_confirmed=False,
+    )
+    scheduling = build_booking_scheduling(b)
+    assert scheduling["time_scheduled"] is True
+    assert scheduling["time_defined"] is False
+    assert scheduling["display_time"] == "13:30 (non confirmé)"
+    assert booking_has_scheduled_pickup_time(b) is True
+    assert booking_has_confirmed_pickup_time(b) is False
+
+
+def test_legacy_midnight_sentinel_vs_real_midnight():
+    legacy = datetime(2026, 6, 12, 0, 0)
+    assert is_legacy_midnight_pickup_sentinel(legacy, time_confirmed=False) is True
+    assert is_legacy_midnight_pickup_sentinel(legacy, time_confirmed=True) is False
+    assert is_legacy_midnight_pickup_sentinel(datetime(2026, 6, 12, 13, 30)) is False
 
 
 def test_scheduling_midnight_real_confirmed_bk01c():
@@ -161,6 +185,7 @@ def test_scheduling_midnight_real_confirmed_bk01c():
         time_confirmed=True,
     )
     scheduling = build_booking_scheduling(b)
+    assert scheduling["time_scheduled"] is True
     assert scheduling["time_defined"] is True
     assert scheduling["display_time"] == "00:00"
     assert scheduling["display_time"] != "À définir"
@@ -172,6 +197,7 @@ def test_scheduling_confirmed_1430_bk01a():
         time_confirmed=True,
     )
     scheduling = build_booking_scheduling(b)
+    assert scheduling["time_scheduled"] is True
     assert scheduling["time_defined"] is True
     assert scheduling["display_time"] == "14:30"
 
@@ -179,6 +205,7 @@ def test_scheduling_confirmed_1430_bk01a():
 def test_scheduling_undefined_null_bk01b():
     b = _booking(scheduled_time=None, time_confirmed=False)
     scheduling = build_booking_scheduling(b)
+    assert scheduling["time_scheduled"] is False
     assert scheduling["time_defined"] is False
     assert scheduling["display_time"] == "À définir"
 
@@ -188,6 +215,32 @@ def test_display_model_envelope():
     blocks = build_booking_display_blocks(b, viewer_company_id=10)
     assert blocks["display_model"] == DISPLAY_MODEL_BOOKING
     assert blocks["display_model_version"] == 1
+
+
+def test_identity_passenger_gender_from_institution_brief():
+    b = _booking(
+        _get_institution_passenger_brief=lambda: {
+            "first_name": "Matsa",
+            "last_name": "CHERIF",
+            "gender": "FEMME",
+            "birth_date": "1973-05-03",
+        },
+    )
+    blocks = build_booking_display_blocks(b, viewer_company_id=10)
+    assert blocks["identity"]["passenger"]["gender"] == "FEMME"
+
+
+def test_identity_passenger_gender_from_client_user():
+    from models.enums import GenderEnum
+
+    client = SimpleNamespace(
+        id=5,
+        user=SimpleNamespace(gender=GenderEnum.HOMME),
+        client_type=ClientType.TRANSPORT,
+    )
+    b = _booking(client=client, _get_institution_passenger_brief=lambda: None)
+    blocks = build_booking_display_blocks(b, viewer_company_id=10)
+    assert blocks["identity"]["passenger"]["gender"] == "HOMME"
 
 
 def test_identity_labels_institution_bk01e():

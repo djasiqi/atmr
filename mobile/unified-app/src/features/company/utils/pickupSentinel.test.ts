@@ -1,4 +1,10 @@
-import { canMarkRideUrgent, isPickupSentinel, isTimeUndefined } from "./pickupSentinel";
+import {
+  canMarkRideUrgent,
+  hasConfirmedPickupTime,
+  hasScheduledPickupTime,
+  isPickupSentinel,
+  isTimeUndefined,
+} from "./pickupSentinel";
 
 describe("pickupSentinel", () => {
   it("canMarkRideUrgent autorise l’urgence seulement sans horaire planifié", () => {
@@ -9,20 +15,30 @@ describe("pickupSentinel", () => {
       canMarkRideUrgent({
         summary: {
           time: { pickup_at: "2026-06-22T07:30:00.000Z" },
-          scheduling: { time_defined: true },
+          scheduling: { time_defined: true, time_scheduled: true },
           time_confirmed: true,
         },
       })
     ).toBe(false);
   });
 
-  it("isTimeUndefined reste distinct pour retours à confirmer avec heure affichée", () => {
+  it("heure renseignée non confirmée existe mais n’est pas confirmée", () => {
     expect(
-      isTimeUndefined({
+      hasScheduledPickupTime({
         scheduled_at: "2026-06-22T09:30:00",
         time_confirmed: false,
       })
     ).toBe(true);
+    expect(
+      hasConfirmedPickupTime({
+        scheduled_at: "2026-06-22T09:30:00",
+        time_confirmed: false,
+      })
+    ).toBe(false);
+    expect(isTimeUndefined({
+      scheduled_at: "2026-06-22T09:30:00",
+      time_confirmed: false,
+    })).toBe(false);
     expect(
       canMarkRideUrgent({
         scheduled_at: "2026-06-22T09:30:00",
@@ -31,8 +47,9 @@ describe("pickupSentinel", () => {
     ).toBe(false);
   });
 
-  it("isPickupSentinel détecte minuit sentinelle", () => {
+  it("isPickupSentinel distingue minuit sentinelle et minuit réel", () => {
     expect(isPickupSentinel("2026-06-22T00:00:00")).toBe(true);
+    expect(isPickupSentinel("2026-06-22T00:00:00", true)).toBe(false);
     expect(isPickupSentinel("2026-06-22T09:45:00")).toBe(false);
   });
 });

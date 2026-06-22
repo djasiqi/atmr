@@ -43,7 +43,10 @@ def _notify_company_new_offer(
             institution_is_demo,
         )
         from services.events.institution_events import persist_company_notification
-        from services.institutions.mission_schedule import get_mission_date
+        from services.institutions.mission_schedule import (
+            get_effective_dispatch_time,
+            get_mission_date,
+        )
 
         institution = transport_request.institution
         if institution_is_demo(institution):
@@ -54,19 +57,21 @@ def _notify_company_new_offer(
         patient = transport_request.patient
         patient_name = f"{patient.first_name} {patient.last_name}" if patient else ""
 
-        sched = transport_request.scheduled_time
+        sched = get_effective_dispatch_time(transport_request)
         time_str = sched.strftime("%d.%m.%Y %H:%M") if sched else ""
         round_trip = " (A/R)" if transport_request.is_round_trip else ""
 
         message = f"{inst_name} — {patient_name}{round_trip} — {time_str}".strip(" —")
+        title = "Nouvelle demande de transport"
 
         mission_day = get_mission_date(transport_request)
         mission_date_iso = mission_day.isoformat() if mission_day else None
+        dedupe_key = f"new_request:{transport_request.id}:{company_id}"
 
-        persist_company_notification(
+        notif = persist_company_notification(
             company_id=company_id,
             event_type="new_request",
-            title="Nouvelle demande de transport",
+            title=title,
             message=message,
             metadata={
                 "request_id": transport_request.id,
@@ -79,7 +84,42 @@ def _notify_company_new_offer(
                     else {}
                 ),
             },
-            dedupe_key=f"new_request:{transport_request.id}:{company_id}",
+            dedupe_key=dedupe_key,
+        )
+        if notif is None:
+            logger.info(
+                "[RequestOfferTask] Push skipped (inbox dedupe) company=%s request=%s dedupe_key=%s",
+                company_id,
+                transport_request.id,
+                dedupe_key,
+            )
+            return
+
+        if offer_id is None:
+            return
+
+        offer = RequestOffer.query.get(offer_id)
+        expires_at_iso = (
+            offer.expires_at.isoformat()
+            if offer and getattr(offer, "expires_at", None)
+            else None
+        )
+        from services.notifications.institution_new_request_push import (
+            enqueue_institution_new_request_company_push,
+        )
+
+        enqueue_institution_new_request_company_push(
+            transport_request=transport_request,
+            offer_id=offer_id,
+            company_id=company_id,
+            institution_name=inst_name,
+            patient_name=patient_name,
+            title=title,
+            message=message,
+            dedupe_key=dedupe_key,
+            mission_date_iso=mission_date_iso,
+            expires_at_iso=expires_at_iso,
+            sched=sched,
         )
     except Exception as e:
         logger.warning(

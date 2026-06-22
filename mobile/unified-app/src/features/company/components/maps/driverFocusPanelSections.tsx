@@ -92,12 +92,12 @@ export function DriverFocusPanelSections({
         </AppText>
         {mission ? (
           <AppText variant="caption" style={s.muted}>
-            {formatMissionScheduleTimeLabel(mission.scheduled_at)} · course actuelle
+            {formatMissionScheduleTimeLabel(mission)} · course actuelle
           </AppText>
         ) : null}
         {nextMission ? (
           <AppText variant="caption" style={s.muted}>
-            {formatMissionScheduleTimeLabel(nextMission.scheduled_at)} · prochaine ·{" "}
+            {formatMissionScheduleTimeLabel(nextMission)} · prochaine ·{" "}
             {conciseRouteSegment(nextMission.pickup_label)}
           </AppText>
         ) : (

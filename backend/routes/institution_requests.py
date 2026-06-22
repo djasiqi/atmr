@@ -185,19 +185,55 @@ def _notify_companies_request_updated(
             metadata["mission_date"] = mission_date_iso
         if transport_req.booking_id:
             metadata["booking_id"] = transport_req.booking_id
+        revision = int(getattr(transport_req, "revision", None) or 1)
+        metadata["revision"] = revision
 
         try:
-            persist_company_notification(
+            notif = persist_company_notification(
                 company_id=offer.company_id,
                 event_type="request_updated",
                 title="Demande modifiée par l'institution",
                 message=message.strip(" —"),
                 metadata=metadata,
                 dedupe_key=(
-                    f"request_updated:{transport_req.id}:{offer.company_id}:"
-                    f"{int(datetime.now(UTC).timestamp())}"
+                    f"request_updated:{transport_req.id}:{offer.company_id}:{revision}"
                 ),
             )
+            if notif is None:
+                continue
+            try:
+                from services.notifications.institution_new_request_push import (
+                    enqueue_institution_company_push_message,
+                )
+                from services.notifications.push_message_builder import (
+                    build_push_for_institution_request_updated,
+                )
+
+                push_msg = build_push_for_institution_request_updated(
+                    transport_request=transport_req,
+                    offer_id=offer.id,
+                    company_id=offer.company_id,
+                    institution_name=inst_name,
+                    patient_name=patient_name,
+                    title="Demande modifiée par l'institution",
+                    message=message.strip(" —"),
+                    dedupe_key=(
+                        f"request_updated:{transport_req.id}:{offer.company_id}:{revision}"
+                    ),
+                    revision=revision,
+                    mission_date_iso=mission_date_iso,
+                )
+                enqueue_institution_company_push_message(
+                    company_id=offer.company_id,
+                    msg=push_msg,
+                )
+            except Exception as push_err:
+                logger.warning(
+                    "[TransportRequests] Push update company=%s request=%s: %s",
+                    offer.company_id,
+                    transport_req.id,
+                    push_err,
+                )
         except Exception as notify_err:
             logger.warning(
                 "[TransportRequests] Notification update company=%s request=%s: %s",
@@ -1098,6 +1134,9 @@ class TransportRequestDetail(Resource):
             db.session.commit()
 
             if carrier_ack_required:
+                current_revision = int(getattr(transport_req, "revision", None) or 1)
+                transport_req.revision = current_revision + 1
+                db.session.commit()
                 _notify_companies_request_updated(
                     transport_req,
                     updated_fields=operational_fields,

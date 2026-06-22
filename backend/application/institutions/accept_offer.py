@@ -119,7 +119,32 @@ class AcceptOfferResult:
     return_booking_id: int | None = None
     transport_request_id: int | None = None
     error: str | None = None
+    error_code: str | None = None
     status_code: int = 200
+
+
+def _map_request_status_conflict_code(status: str) -> str:
+    from models.enums import RequestStatus
+
+    if status == RequestStatus.CANCELLED.value:
+        return "REQUEST_CANCELLED"
+    if status == RequestStatus.CONVERTED.value:
+        return "REQUEST_CONVERTED"
+    return "REQUEST_NOT_SENT"
+
+
+def _map_offer_status_conflict_code(status: str) -> tuple[str, int]:
+    from models.enums import OfferStatus
+
+    if status == OfferStatus.ACCEPTED.value:
+        return "OFFER_ALREADY_ACCEPTED", 409
+    if status == OfferStatus.REJECTED.value:
+        return "OFFER_REJECTED", 409
+    if status == OfferStatus.UNAVAILABLE.value:
+        return "OFFER_UNAVAILABLE", 409
+    if status == OfferStatus.EXPIRED.value:
+        return "OFFER_EXPIRED", 410
+    return "REQUEST_NOT_SENT", 409
 
 
 class AcceptOfferUseCase:
@@ -204,6 +229,9 @@ class AcceptOfferUseCase:
                     offer_id=input_data.offer_id,
                     transport_request_id=transport_request.id,
                     error=f"Demande en statut {transport_request.status}, acceptation impossible",
+                    error_code=_map_request_status_conflict_code(
+                        transport_request.status
+                    ),
                     status_code=409,
                 )
 
@@ -224,6 +252,7 @@ class AcceptOfferUseCase:
                         "Demande basculée vers un transporteur externe, "
                         "acceptation impossible"
                     ),
+                    error_code="CARRIER_EXTERNAL",
                     status_code=409,
                 )
 
@@ -243,12 +272,23 @@ class AcceptOfferUseCase:
                     transport_request_id=transport_request.id,
                     reason=f"offer_status_{offer.status}",
                 )
+                conflict_code, conflict_status = _map_offer_status_conflict_code(
+                    offer.status
+                )
+                booking_id = (
+                    transport_request.booking_id
+                    if conflict_code == "OFFER_ALREADY_ACCEPTED"
+                    or conflict_code == "REQUEST_CONVERTED"
+                    else None
+                )
                 return AcceptOfferResult(
                     success=False,
                     offer_id=input_data.offer_id,
                     transport_request_id=transport_request.id,
+                    booking_id=booking_id,
                     error=f"Offre en statut {offer.status}, acceptation impossible",
-                    status_code=409,
+                    error_code=conflict_code,
+                    status_code=conflict_status,
                 )
 
             # 5. Vérifier si l'offre a expiré
@@ -260,6 +300,7 @@ class AcceptOfferUseCase:
                     offer_id=input_data.offer_id,
                     transport_request_id=transport_request.id,
                     error="Offre expirée",
+                    error_code="OFFER_EXPIRED",
                     status_code=410,
                 )
 
@@ -595,11 +636,14 @@ class AcceptOfferUseCase:
             transport_request, company_id
         )
 
-        # Tarif: préférentiel (client institution) sinon repli sur le profil
-        # tarifaire actif de l'entreprise. Cohérent avec l'estimation affichée
-        # sur l'offre (resolve_institution_price), pour que montant = estimation.
+        billing_intent = (
+            getattr(transport_request, "billing_intent", None) or "patient"
+        ).lower()
+
+        # Tarif selon payeur effectif — cohérent avec estimate_offer_price.
         price = resolve_institution_price(
             company_id=company_id,
+            effective_billing_intent=billing_intent,
             preferential_rate=getattr(
                 institution_client, "preferential_rate", None
             ),
@@ -625,9 +669,6 @@ class AcceptOfferUseCase:
         # Facturation: la demande (billing_intent) est la source de vérité.
         billed_to_type = "patient"
         billed_to_company_id = None
-        billing_intent = (
-            getattr(transport_request, "billing_intent", None) or "patient"
-        ).lower()
         if billing_intent == "institution":
             billed_to_type = "clinic"
             billed_to_company_id = None
@@ -931,9 +972,10 @@ class AcceptOfferUseCase:
                         effective_pickup_time = None
                         time_to_define = True
 
-            # Tarif par leg : préférentiel sinon profil tarifaire actif
+            # Tarif par leg selon payeur effectif (override destination inclus)
             leg_price = resolve_institution_price(
                 company_id=company_id,
+                effective_billing_intent=effective_intent,
                 preferential_rate=preferential_rate,
                 pickup_location=leg.pickup_location,
                 dropoff_location=leg.dropoff_location,

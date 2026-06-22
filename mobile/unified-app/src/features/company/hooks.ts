@@ -35,6 +35,15 @@ import {
   markAllCompanyNotificationsRead,
   markCompanyNotificationRead,
 } from "./api/companyInboxApi";
+import {
+  acceptInstitutionOffer,
+  fetchInstitutionOfferDetail,
+  fetchInstitutionOffers,
+  parseInstitutionOfferApiError,
+  rejectInstitutionOffer,
+} from "./api/institutionOffersApi";
+import { reportCompanyPushTelemetry } from "./api/companyPushTelemetryApi";
+import { consumeOfferOpenToAcceptSeconds } from "./push/companyPush";
 import { companyContextScope, companyQueryKeys } from "./companyQueryKeys";
 import { companyRealtimeBridge } from "./realtime/companyRealtimeBridge";
 import {
@@ -1150,4 +1159,80 @@ export function useCompanyChatUnread() {
     markAsRead,
     lastReadAt: lastReadQ.data ?? null,
   };
+}
+
+export function useInstitutionOffersQuery(status = "PENDING") {
+  const contextId = useActiveCompanyContextId();
+  return useQuery({
+    queryKey: contextId
+      ? companyQueryKeys.institutionOffers(contextId, status)
+      : ["company", "institution-offers", "disabled"],
+    queryFn: () => fetchInstitutionOffers(status),
+    enabled: Boolean(contextId),
+    staleTime: QUERY_STALE_TIME_MS.companyList,
+  });
+}
+
+export function useInstitutionOfferDetailQuery(offerId: number | null) {
+  const contextId = useActiveCompanyContextId();
+  return useQuery({
+    queryKey:
+      contextId && offerId != null
+        ? companyQueryKeys.institutionOfferDetail(contextId, offerId)
+        : ["company", "institution-offer", "disabled"],
+    queryFn: () => fetchInstitutionOfferDetail(offerId as number),
+    enabled: Boolean(contextId) && offerId != null && Number.isFinite(offerId),
+    staleTime: QUERY_STALE_TIME_MS.companyList,
+    retry: (count, error) => {
+      const parsed = parseInstitutionOfferApiError(error);
+      if (parsed.status === 404 || parsed.status === 403) return false;
+      return count < 2;
+    },
+  });
+}
+
+export function useAcceptInstitutionOfferMutation() {
+  const queryClient = useQueryClient();
+  const contextId = useActiveCompanyContextId();
+  return useMutation({
+    mutationFn: (input: { offerId: number; proposedPickupTime?: string }) =>
+      acceptInstitutionOffer(input.offerId, input.proposedPickupTime),
+    onSuccess: async (_data, variables) => {
+      const seconds = consumeOfferOpenToAcceptSeconds(variables.offerId);
+      if (seconds != null) {
+        await reportCompanyPushTelemetry({
+          event: "company_push.new_request.open_to_accept",
+          offerId: variables.offerId,
+          seconds,
+        });
+      }
+      if (contextId) {
+        await queryClient.invalidateQueries({
+          queryKey: companyQueryKeys.institutionOffers(contextId, "PENDING"),
+        });
+        await queryClient.invalidateQueries({
+          queryKey: companyQueryKeys.institutionOfferDetail(contextId, variables.offerId),
+        });
+      }
+    },
+  });
+}
+
+export function useRejectInstitutionOfferMutation() {
+  const queryClient = useQueryClient();
+  const contextId = useActiveCompanyContextId();
+  return useMutation({
+    mutationFn: (input: { offerId: number; reason?: string }) =>
+      rejectInstitutionOffer(input.offerId, input.reason),
+    onSuccess: async (_data, variables) => {
+      if (contextId) {
+        await queryClient.invalidateQueries({
+          queryKey: companyQueryKeys.institutionOffers(contextId, "PENDING"),
+        });
+        await queryClient.invalidateQueries({
+          queryKey: companyQueryKeys.institutionOfferDetail(contextId, variables.offerId),
+        });
+      }
+    },
+  });
 }

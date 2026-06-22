@@ -198,6 +198,33 @@ class SaveCompanyPushToken(Resource):
         return result.response, result.status_code
 
 
+@companies_ns.route("/me/telemetry/push")
+class CompanyPushTelemetry(Resource):
+    """Télémétrie mobile push entreprise (entonnoir offres institution)."""
+
+    @jwt_required()
+    @role_required(UserRole.company, UserRole.admin)
+    def post(self):
+        from flask_jwt_extended import get_jwt
+
+        from services.monitoring.company_push_telemetry import (
+            ingest_company_push_telemetry,
+        )
+
+        claims = get_jwt() or {}
+        company_id = claims.get("company_id")
+        if not company_id:
+            return {"ok": False, "error": "company_context_required"}, 403
+
+        body = request.get_json(silent=True) or {}
+        result = ingest_company_push_telemetry(
+            company_id=int(company_id),
+            body=body,
+        )
+        status = 200 if result.get("ok") else 400
+        return result, status
+
+
 @companies_ns.route("/me/test-push")
 class CompanyTestPushNotification(Resource):
     """Diagnostic : envoie une push de test à tous les appareils entreprise actifs."""

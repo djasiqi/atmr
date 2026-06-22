@@ -9,8 +9,7 @@ import {
   useDriverRealtimeSync,
   useDriverTracking,
 } from "../../../src/features/driver/hooks";
-import { filterNextMissionsOnly } from "../../../src/features/driver/domain/missionGrouping";
-import { getDriverStatusUx } from "../../../src/features/driver/statusDictionary";
+import { pickTrackingMission } from "../../../src/features/driver/domain/pickTrackingMission";
 import type { DriverMission } from "../../../src/features/driver/types";
 import { isFeatureEnabled } from "../../../src/core/featureFlags/registry";
 import { useTrackingWindowState } from "../../../src/features/driver/services/trackingWindow";
@@ -40,21 +39,10 @@ import {
 } from "../../../src/core/version/otaAutoReloadMissionGuard";
 
 /**
- * Sélectionne la mission active sur laquelle le tracking GPS doit être
- * démarré. Logique alignée sur `selectActiveMission` du dashboard, mais
- * sans dépendance écran-spécifique : on prend d'abord les missions
- * `EN_ROUTE`/`IN_PROGRESS`, sinon la première non terminale (ASSIGNED,
- * ARRIVED).
+ * Sélectionne la mission active pour le tracking GPS (priorité stricte PR2).
  */
-function pickTrackingMission(missions: DriverMission[] | undefined): DriverMission | null {
-  if (!Array.isArray(missions) || missions.length === 0) return null;
-  const live = filterNextMissionsOnly(missions);
-  if (live.length > 0) return live[0] ?? null;
-  const firstNonTerminal = missions.find((mission) => {
-    const ux = getDriverStatusUx(typeof mission.status === "string" ? mission.status : null);
-    return !ux.terminal;
-  });
-  return firstNonTerminal ?? null;
+function selectTrackingMission(missions: DriverMission[] | undefined): DriverMission | null {
+  return pickTrackingMission(missions);
 }
 
 /**
@@ -73,13 +61,10 @@ function pickTrackingMission(missions: DriverMission[] | undefined): DriverMissi
 function DriverTrackingHost() {
   const missionsQuery = useDriverMissionsQuery();
   const trackingMission = useMemo(
-    () => pickTrackingMission(missionsQuery.data as DriverMission[] | undefined),
+    () => selectTrackingMission(missionsQuery.data as DriverMission[] | undefined),
     [missionsQuery.data],
   );
-  useDriverTracking(
-    trackingMission?.id ?? null,
-    typeof trackingMission?.status === "string" ? trackingMission.status : null,
-  );
+  useDriverTracking(trackingMission);
 
   const window = useTrackingWindowState();
   const workWindowEnabled = isFeatureEnabled("driver_tracking_work_window_enabled");

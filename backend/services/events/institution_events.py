@@ -713,7 +713,7 @@ def emit_offer_unavailable(
     dedupe_key = f"offer_unavailable:{transport_request.id}:{company_id}:{reason}"
 
     try:
-        persist_company_notification(
+        notif = persist_company_notification(
             company_id=company_id,
             event_type="offer_unavailable",
             title=title,
@@ -721,6 +721,8 @@ def emit_offer_unavailable(
             metadata=metadata,
             dedupe_key=dedupe_key,
         )
+        if notif is None:
+            return True
 
         from services.realtime.socketio import emit_company_event
 
@@ -745,6 +747,35 @@ def emit_offer_unavailable(
             transport_request_id=transport_request.id,
             reason=reason,
         )
+
+        try:
+            from services.notifications.institution_new_request_push import (
+                enqueue_institution_company_push_message,
+            )
+            from services.notifications.push_message_builder import (
+                build_push_for_institution_offer_unavailable,
+            )
+
+            push_msg = build_push_for_institution_offer_unavailable(
+                transport_request=transport_request,
+                offer_id=offer_id,
+                company_id=company_id,
+                institution_name=institution_name,
+                title=title,
+                message=message,
+                dedupe_key=dedupe_key,
+                reason=reason,
+            )
+            enqueue_institution_company_push_message(
+                company_id=company_id,
+                msg=push_msg,
+            )
+        except Exception as push_err:
+            logger.warning(
+                "[InstitutionEvents] Push offer_unavailable company=%s: %s",
+                company_id,
+                push_err,
+            )
         return True
     except Exception as e:
         logger.error(

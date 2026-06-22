@@ -770,3 +770,173 @@ def build_push_message(
         data["dedupe_key"] = f"booking:{bid}:event:reassigned"
 
     return {"title": title, "body": body, "data": data}
+
+
+# ---------- Institution new_request (offre entreprise) ----------
+
+
+def resolve_institution_trip_type(transport_request: Any) -> str:
+    """Type de parcours pour push/inbox institution."""
+    legs = getattr(transport_request, "legs", None) or []
+    if len(legs) > 1:
+        return "multi_leg"
+    if getattr(transport_request, "is_round_trip", False):
+        return "round_trip"
+    return "one_way"
+
+
+def build_institution_scheduled_time_label(
+    transport_request: Any,
+    sched: Any | None,
+) -> str:
+    """Libellé court FR pour notification (départ ou RDV)."""
+    if sched is None:
+        return "Date à confirmer"
+    time_part = sched.strftime("%H:%M")
+    stype = str(getattr(transport_request, "scheduled_time_type", "") or "").lower()
+    if stype == "arrival":
+        return f"RDV {time_part}"
+    return f"Départ {time_part}"
+
+
+def build_institution_offer_deep_link(*, offer_id: int, request_id: int) -> str:
+    return f"lirie://enterprise/offers/{offer_id}?request={request_id}"
+
+
+def build_push_for_institution_new_request(
+    *,
+    transport_request: Any,
+    offer_id: int,
+    company_id: int,
+    institution_name: str,
+    patient_name: str,
+    title: str,
+    message: str,
+    dedupe_key: str,
+    mission_date_iso: str | None = None,
+    expires_at_iso: str | None = None,
+    is_relaunch: bool = False,
+    sched: Any | None = None,
+) -> dict[str, Any]:
+    """Push FCM entreprise — nouvelle offre institution (payload enrichi mobile)."""
+    if sched is None:
+        from services.institutions.mission_schedule import get_effective_dispatch_time
+
+        sched = get_effective_dispatch_time(transport_request)
+
+    request_id = int(transport_request.id)
+    trip_type = resolve_institution_trip_type(transport_request)
+    scheduled_time_label = build_institution_scheduled_time_label(
+        transport_request, sched
+    )
+    deep_link = build_institution_offer_deep_link(
+        offer_id=offer_id, request_id=request_id
+    )
+
+    data: dict[str, Any] = {
+        "type": "new_request",
+        "offer_id": offer_id,
+        "request_id": request_id,
+        "company_id": company_id,
+        "institution_name": institution_name,
+        "patient_name": patient_name,
+        "trip_type": trip_type,
+        "scheduled_time_label": scheduled_time_label,
+        "deep_link": deep_link,
+        "dedupe_key": dedupe_key,
+        "recipient_role": "company",
+        "is_relaunch": is_relaunch,
+    }
+    if mission_date_iso:
+        data["mission_date"] = mission_date_iso
+    if expires_at_iso:
+        data["expires_at"] = expires_at_iso
+
+    collapse_key = f"institution_offer:{request_id}:{company_id}"
+    return {
+        "title": title,
+        "body": message,
+        "data": data,
+        "collapse_key": collapse_key,
+        "dedupe_key": dedupe_key,
+    }
+
+
+def build_push_for_institution_request_updated(
+    *,
+    transport_request: Any,
+    offer_id: int,
+    company_id: int,
+    institution_name: str,
+    patient_name: str,
+    title: str,
+    message: str,
+    dedupe_key: str,
+    revision: int,
+    mission_date_iso: str | None = None,
+) -> dict[str, Any]:
+    """Push FCM entreprise — demande institution modifiée."""
+    request_id = int(transport_request.id)
+    deep_link = build_institution_offer_deep_link(
+        offer_id=offer_id, request_id=request_id
+    )
+    data: dict[str, Any] = {
+        "type": "request_updated",
+        "offer_id": offer_id,
+        "request_id": request_id,
+        "company_id": company_id,
+        "institution_name": institution_name,
+        "patient_name": patient_name,
+        "revision": revision,
+        "deep_link": deep_link,
+        "dedupe_key": dedupe_key,
+        "recipient_role": "company",
+    }
+    if mission_date_iso:
+        data["mission_date"] = mission_date_iso
+    collapse_key = f"institution_offer_update:{request_id}:{company_id}:{revision}"
+    return {
+        "title": title,
+        "body": message,
+        "data": data,
+        "collapse_key": collapse_key,
+        "dedupe_key": dedupe_key,
+    }
+
+
+def build_push_for_institution_offer_unavailable(
+    *,
+    transport_request: Any,
+    offer_id: int,
+    company_id: int,
+    institution_name: str | None,
+    title: str,
+    message: str,
+    dedupe_key: str,
+    reason: str = "accepted_by_peer",
+) -> dict[str, Any]:
+    """Push FCM entreprise — offre plus disponible."""
+    request_id = int(transport_request.id)
+    deep_link = build_institution_offer_deep_link(
+        offer_id=offer_id, request_id=request_id
+    )
+    data: dict[str, Any] = {
+        "type": "offer_unavailable",
+        "offer_id": offer_id,
+        "request_id": request_id,
+        "company_id": company_id,
+        "reason": reason,
+        "deep_link": deep_link,
+        "dedupe_key": dedupe_key,
+        "recipient_role": "company",
+    }
+    if institution_name:
+        data["institution_name"] = institution_name
+    collapse_key = f"institution_offer_unavailable:{request_id}:{company_id}"
+    return {
+        "title": title,
+        "body": message,
+        "data": data,
+        "collapse_key": collapse_key,
+        "dedupe_key": dedupe_key,
+    }

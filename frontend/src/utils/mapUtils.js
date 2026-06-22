@@ -187,9 +187,6 @@ export const getDriverStatus = (driver) => {
   return 'available';
 };
 
-/**
- * Formate "il y a X s/min" pour les tooltips.
- */
 export const formatLastSeen = (lastSeenSeconds) => {
   if (lastSeenSeconds == null || lastSeenSeconds < 0) return 'Dernier signal inconnu';
   if (lastSeenSeconds < 60) return `il y a ${lastSeenSeconds}s`;
@@ -221,6 +218,27 @@ export const getFreshnessStatus = (driver) => {
   if (v <= 90) return 'recent';
   if (v <= 300) return 'stale';
   return 'offline';
+};
+
+/** Signal device_health actif malgré position backend absente (PR2 dispatch). */
+export const isDeviceHealthSignalActive = (driver) => {
+  const dh = driver?.device_health;
+  if (!dh || typeof dh !== 'object') return false;
+  if (dh.tracking_active === true) return true;
+  const age = Number(dh.last_fix_age_seconds);
+  return Number.isFinite(age) && age >= 0 && age < 120;
+};
+
+export const getDriverFreshnessLabel = (driver) => {
+  const status = getFreshnessStatus(driver);
+  if (status === 'offline_unknown' && isDeviceHealthSignalActive(driver)) {
+    return 'Signal actif · position non synchronisée';
+  }
+  if (status === 'live') return `Live · ${formatLastSeen(driver.last_seen_seconds)}`;
+  if (status === 'recent') return `Recent · ${formatLastSeen(driver.last_seen_seconds)}`;
+  if (status === 'stale') return `Stale · ${formatLastSeen(driver.last_seen_seconds)}`;
+  if (status === 'offline_unknown') return 'Offline';
+  return 'Offline';
 };
 
 // ─── Marqueurs SVG professionnels Lirie ───
