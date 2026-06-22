@@ -41,6 +41,9 @@ export function getDispatchApiErrorMessage(error: unknown, fallback: string): st
   if (st === 403) {
     return "Accès refusé pour cette ressource ou cette action.";
   }
+  if (st === 404) {
+    return "Ressource introuvable sur le serveur. Actualisez la page ou contactez le support.";
+  }
   const d = ax.response?.data;
   if (d && typeof d === "object") {
     const msg = (d as Record<string, unknown>).message;
@@ -1175,62 +1178,50 @@ export async function createCompanyRide(options: CompanyRequestOptions & { paylo
     // Date seule : le backend crée le retour avec scheduled_time=null, time_confirmed=false.
     delete legacyPayload.return_time;
   }
+  const isRoundTripRequest =
+    canonicalPayload.is_return === true || canonicalPayload.is_round_trip === true;
   const cleanedLegacyPayload = stripNullishFields(legacyPayload as Record<string, unknown>);
+  const mobileCreateRequest = () =>
+    apiClient.post(
+      "/company_mobile/dispatch/v1/rides",
+      cleanedLegacyPayload,
+      withContextHeaders(options)
+    );
+  const legacyDispatchCreateRequest = () =>
+    apiClient.post("/dispatch/v1/rides", cleanedLegacyPayload, withContextHeaders(options));
+  const manualCreateRequest = () =>
+    apiClient.post(
+      "/companies/me/reservations/manual",
+      webManualPayload,
+      withContextHeaders(options)
+    );
+  const reservationsCreateRequest = () =>
+    apiClient.post(
+      "/companies/me/reservations",
+      webManualPayload,
+      withContextHeaders(options)
+    );
+
   const requests: (() => Promise<{ data: CompanyAnyPayload }>)[] = isRecurringRequest
     ? [
-        // Pour une série, prioriser le pipeline web qui gère la récurrence.
-        () =>
-          apiClient.post(
-            "/companies/me/reservations/manual",
-            webManualPayload,
-            withContextHeaders(options)
-          ),
-        () =>
-          apiClient.post(
-            "/companies/me/reservations",
-            webManualPayload,
-            withContextHeaders(options)
-          ),
-        // Fallback final: certains environnements exposent seulement le pipeline dispatch.
-        () =>
-          apiClient.post(
-            "/company_mobile/dispatch/v1/rides",
-            cleanedLegacyPayload,
-            withContextHeaders(options)
-          ),
-        () =>
-          apiClient.post(
-            "/dispatch/v1/rides",
-            cleanedLegacyPayload,
-            withContextHeaders(options)
-          ),
+        manualCreateRequest,
+        reservationsCreateRequest,
+        mobileCreateRequest,
+        legacyDispatchCreateRequest,
       ]
-    : [
-        () =>
-          apiClient.post(
-            "/company_mobile/dispatch/v1/rides",
-            cleanedLegacyPayload,
-            withContextHeaders(options)
-          ),
-        () =>
-          apiClient.post(
-            "/dispatch/v1/rides",
-            cleanedLegacyPayload,
-            withContextHeaders(options)
-          ),
-        () =>
-          apiClient.post(
-            "/companies/me/reservations/manual",
-            webManualPayload,
-            withContextHeaders(options)
-          ),
-        () =>
-          apiClient.post(
-            "/companies/me/reservations",
-            webManualPayload,
-            withContextHeaders(options)
-          ),
-      ];
+    : isRoundTripRequest
+      ? [
+          manualCreateRequest,
+          mobileCreateRequest,
+          legacyDispatchCreateRequest,
+          reservationsCreateRequest,
+        ]
+      : [
+          mobileCreateRequest,
+          legacyDispatchCreateRequest,
+          manualCreateRequest,
+          reservationsCreateRequest,
+        ];
   const requestNames = isRecurringRequest
     ? [
         "/companies/me/reservations/manual",
@@ -1238,12 +1229,19 @@ export async function createCompanyRide(options: CompanyRequestOptions & { paylo
         "/company_mobile/dispatch/v1/rides",
         "/dispatch/v1/rides",
       ]
-    : [
-        "/company_mobile/dispatch/v1/rides",
-        "/dispatch/v1/rides",
-        "/companies/me/reservations/manual",
-        "/companies/me/reservations",
-      ];
+    : isRoundTripRequest
+      ? [
+          "/companies/me/reservations/manual",
+          "/company_mobile/dispatch/v1/rides",
+          "/dispatch/v1/rides",
+          "/companies/me/reservations",
+        ]
+      : [
+          "/company_mobile/dispatch/v1/rides",
+          "/dispatch/v1/rides",
+          "/companies/me/reservations/manual",
+          "/companies/me/reservations",
+        ];
   const tracedRequests = requests.map((request, index) => {
     const endpoint = requestNames[index] ?? `attempt_${index + 1}`;
     return async () => {
@@ -1327,7 +1325,7 @@ export async function updateCompanyRide(
   options: CompanyRequestOptions & { missionId: number; payload: CompanyAnyPayload }
 ) {
   const response = await apiClient.put(
-    `/dispatch/v1/rides/${options.missionId}`,
+    `/company_mobile/dispatch/v1/rides/${options.missionId}`,
     options.payload,
     withContextHeaders(options)
   );
@@ -1687,21 +1685,73 @@ export async function getCompanyAvailableDrivers(options: CompanyRequestOptions)
 }
 
 export async function getCompanyPartnershipsForTransfer(options: CompanyRequestOptions) {
-  const response = await apiClient.get(
-    "/dispatch/v1/partnerships/for-transfer",
-    withContextHeaders(options)
+  const response = await requestWithFallback<CompanyAnyPayload>(
+    [
+      () =>
+        apiClient.get("/company_mobile/partnerships/for-transfer", withContextHeaders(options)),
+      () => apiClient.get("/partnerships/for-transfer", withContextHeaders(options)),
+    ],
+    { domain: "partnerships_for_transfer", contextId: options.contextId }
   );
-  return response.data as CompanyAnyPayload;
+  return { items: normalizePartnershipsForTransfer(response.data) };
+}
+
+export type CompanyTransferPartnershipOption = {
+  /** Identifiant du partenariat (requis pour POST …/partnerships/:id/transfers). */
+  id: number;
+  label: string;
+  partnerCompanyId: number;
+};
+
+export function normalizePartnershipsForTransfer(payload: unknown): CompanyTransferPartnershipOption[] {
+  if (!payload || typeof payload !== "object") return [];
+  const root = payload as Record<string, unknown>;
+  const rows = [root.data, root.items, root.partnerships, payload].find((value) => Array.isArray(value));
+  if (!Array.isArray(rows)) return [];
+
+  return rows
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") return null;
+      const raw = entry as Record<string, unknown>;
+      const partnershipId = toFiniteNumber(raw.id);
+      if (partnershipId == null) return null;
+      const partnerCompanyId =
+        toFiniteNumber(raw.partner_company_id ?? raw.company_id ?? raw.target_company_id) ??
+        partnershipId;
+      const labelRaw =
+        (typeof raw.partner_company_name === "string" && raw.partner_company_name.trim()) ||
+        (typeof raw.company_name === "string" && raw.company_name.trim()) ||
+        (typeof raw.name === "string" && raw.name.trim()) ||
+        `Entreprise #${partnerCompanyId}`;
+      return {
+        id: partnershipId,
+        label: labelRaw,
+        partnerCompanyId,
+      };
+    })
+    .filter((item): item is CompanyTransferPartnershipOption => item != null);
 }
 
 export async function transferCompanyRide(
-  options: CompanyRequestOptions & { missionId: number; targetCompanyId: number }
+  options: CompanyRequestOptions & { missionId: number; partnershipId: number }
 ) {
   try {
-    const response = await apiClient.post(
-      "/dispatch/v1/partnerships/transfers",
-      { mission_id: options.missionId, target_company_id: options.targetCompanyId },
-      withContextHeaders(options)
+    const response = await requestWithFallback<CompanyAnyPayload>(
+      [
+        () =>
+          apiClient.post(
+            `/company_mobile/partnerships/${options.partnershipId}/transfers`,
+            { booking_id: options.missionId },
+            withContextHeaders(options)
+          ),
+        () =>
+          apiClient.post(
+            `/partnerships/${options.partnershipId}/transfers`,
+            { booking_id: options.missionId },
+            withContextHeaders(options)
+          ),
+      ],
+      { domain: "partnership_transfer_post", contextId: options.contextId }
     );
     return response.data as CompanyAnyPayload;
   } catch (error) {
@@ -1713,7 +1763,7 @@ export async function transferCompanyRide(
           source: "companyApi.transferCompanyRide",
           context_id: options.contextId,
           mission_id: options.missionId,
-          target_company_id: options.targetCompanyId,
+          partnership_id: options.partnershipId,
         },
         { allowWhenDisabled: true }
       );
@@ -1721,7 +1771,7 @@ export async function transferCompanyRide(
         "Conflit de transfert detecte (409). Rafraichissez la mission puis recommencez."
       );
     }
-    throw error;
+    throw new Error(getDispatchApiErrorMessage(error, "Transfert impossible."));
   }
 }
 

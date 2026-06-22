@@ -246,6 +246,50 @@ class TestManualBookingWebMobileParity:
         mobile_data = r_mobile.get_json()
         assert mobile_data.get("return_summary") is not None
 
+    def test_case2b_round_trip_return_date_only_creates_return(
+        self, mock_route, mock_geocode, app, db, client
+    ):
+        """Cas 2b : A/R avec return_date seul (heure à définir) → retour créé côté mobile."""
+        _requires_postgres(db)
+        mock_route.return_value = {
+            "code": "Ok",
+            "routes": [{"duration": 600, "distance": 5000}],
+        }
+        mock_geocode.return_value = (46.5197, 6.6323)
+
+        company = create_test_company(db)
+        customer = create_test_client(db, company=company)
+        db.session.commit()
+        db.session.refresh(customer)
+
+        scheduled = (datetime.now(UTC) + timedelta(days=1)).strftime(
+            "%Y-%m-%dT11:00:00"
+        )
+        return_date = scheduled.split("T")[0]
+
+        mobile = _base_mobile_payload(customer.id, scheduled)
+        mobile["is_return"] = True
+        mobile["return_date"] = return_date
+
+        headers = _company_headers(app, company)
+        r_mobile = client.post(
+            "/api/v1/company_mobile/dispatch/v1/rides",
+            json=mobile,
+            headers=headers,
+        )
+        assert r_mobile.status_code == 201, (r_mobile.status_code, r_mobile.get_json())
+        mobile_data = r_mobile.get_json()
+        assert mobile_data.get("return_summary") is not None
+
+        from models.booking import Booking
+
+        return_id = mobile_data["return_summary"]["id"]
+        return_booking = db.session.get(Booking, int(return_id))
+        assert return_booking is not None
+        assert return_booking.is_return is True
+        assert return_booking.scheduled_time is None
+        assert return_booking.time_confirmed is False
+
     def test_case3_notes_medical_persisted(
         self, mock_route, mock_geocode, app, db, client
     ):

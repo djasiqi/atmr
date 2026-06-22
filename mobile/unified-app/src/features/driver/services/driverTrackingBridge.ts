@@ -52,6 +52,7 @@ const STALE_FALLBACK_BREAKER_MS = Number(
 );
 let permissionRequestInFlight: Promise<boolean> | null = null;
 let nativeTrackingAppStateSubscribed = false;
+let stopDriverTrackingInProgress: Promise<void> | null = null;
 
 function resolveForegroundIntervalMs(): number {
   if (isFeatureEnabled("driver_capture_aggressive_enabled")) {
@@ -440,7 +441,9 @@ async function flushPoint(appState: AppStateStatus) {
     state.lastHttpFallbackTrackingEventId = fallbackTrackingEventId;
     state.flushPathUsed = "http_fallback";
   }
-  state.lastSentAt = nowIso;
+  if (isEligible()) {
+    state.lastSentAt = nowIso;
+  }
   emitDriverTelemetry("tracking.bridge.health", {
     source: "driver.tracking.bridge",
     mission_id: state.missionId,
@@ -555,7 +558,7 @@ export async function getDriverTrackingQueueSnapshot() {
   return driverTrackingQueue.getSnapshot();
 }
 
-async function updateQueueDepth() {
+export async function syncBridgeQueueDepthFromPersistence() {
   const snapshot = await driverTrackingQueue.getSnapshot();
   state.queueDepth = snapshot.queueDepth;
   notifyTrackingBridgeListeners();
@@ -673,8 +676,33 @@ const trackingManager = new TrackingManager({
   },
 });
 
+async function stopMissionTrackingBridge(): Promise<void> {
+  await flushDriverTrackingQueueNow();
+  await syncBridgeQueueDepthFromPersistence();
+  state.missionId = null;
+  state.missionStatus = null;
+  state.lastSentAt = null;
+  state.lastAckAt = null;
+  notifyTrackingBridgeListeners();
+}
+
+async function ensurePresenceTrackingState(): Promise<void> {
+  await syncBridgeQueueDepthFromPersistence();
+  ensureManagerState();
+  notifyTrackingBridgeListeners();
+}
+
+async function stopTrackingRuntime(): Promise<void> {
+  void setBackgroundTrackingMissionContext(null, null);
+  await stopBackgroundLocationTask("tracking_bridge_stopped");
+  stopLocationWatch();
+  trackingManager.stop();
+  notifyTrackingBridgeListeners();
+}
+
 function ensureManagerState() {
   if (!isEligible()) {
+    void syncBridgeQueueDepthFromPersistence();
     void stopBackgroundLocationTask("ineligible_tracking_state");
     trackingManager.stop();
     stopLocationWatch();
@@ -705,7 +733,7 @@ function ensureManagerState() {
     }
   }
   void ensureLocationWatch();
-  void updateQueueDepth();
+  void syncBridgeQueueDepthFromPersistence();
   const mode = resolveTrackingMode(trackingManager.getSnapshot().appState);
   const snapshot = trackingManager.getSnapshot();
   if (!snapshot.isRunning) {
@@ -739,40 +767,47 @@ export function updateDriverTrackingBridgeStatus(status: DriverMissionStatus) {
   state.missionStatus = status;
   void hideMissionBarAndroid();
   if (!isEligible()) {
-    stopDriverTrackingBridge();
+    void stopDriverTrackingBridge();
     return;
   }
   ensureManagerState();
   notifyTrackingBridgeListeners();
 }
 
-export function stopDriverTrackingBridge() {
-  void hideMissionBarAndroid();
-  if (state.missionId != null && isFeatureEnabled("driver_mission_bar_enabled")) {
-    void stopMissionLiveActivity(state.missionId);
+export async function stopDriverTrackingBridge(): Promise<void> {
+  if (stopDriverTrackingInProgress) {
+    return stopDriverTrackingInProgress;
   }
-  state.missionId = null;
-  state.missionStatus = null;
-  state.lastBackendAckLatencyMs = null;
-  state.networkProfile = "normal";
-  state.profileSinceMs = Date.now();
-  state.staleFallbackBlockedUntilMs = 0;
-  state.staleFallbackTimeouts = 0;
-  state.lastStaleFallbackAttemptMs = null;
-  state.lastHttpFallbackTrackingEventId = null;
-  resetPermissionState();
-  if (state.presenceWindowActive) {
-    /* Si la window 07h–19h est ouverte on garde le tracking en mode présence
-     * même après la fin d'une mission. Sinon on coupe complètement. */
-    ensureManagerState();
-    notifyTrackingBridgeListeners();
-    return;
+
+  stopDriverTrackingInProgress = (async () => {
+    void hideMissionBarAndroid();
+    const missionIdForBar = state.missionId;
+    if (missionIdForBar != null && isFeatureEnabled("driver_mission_bar_enabled")) {
+      void stopMissionLiveActivity(missionIdForBar);
+    }
+    state.lastBackendAckLatencyMs = null;
+    state.networkProfile = "normal";
+    state.profileSinceMs = Date.now();
+    state.staleFallbackBlockedUntilMs = 0;
+    state.staleFallbackTimeouts = 0;
+    state.lastStaleFallbackAttemptMs = null;
+    state.lastHttpFallbackTrackingEventId = null;
+    resetPermissionState();
+
+    await stopMissionTrackingBridge();
+
+    if (state.presenceWindowActive) {
+      await ensurePresenceTrackingState();
+    } else {
+      await stopTrackingRuntime();
+    }
+  })();
+
+  try {
+    await stopDriverTrackingInProgress;
+  } finally {
+    stopDriverTrackingInProgress = null;
   }
-  void setBackgroundTrackingMissionContext(null, null);
-  void stopBackgroundLocationTask("tracking_bridge_stopped");
-  stopLocationWatch();
-  trackingManager.stop();
-  notifyTrackingBridgeListeners();
 }
 
 /**
@@ -831,6 +866,6 @@ export function subscribeDriverTrackingBridge(
 }
 
 export function disposeDriverTrackingBridge() {
-  stopDriverTrackingBridge();
+  void stopDriverTrackingBridge();
   trackingManager.dispose();
 }

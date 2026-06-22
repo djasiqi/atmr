@@ -68,6 +68,19 @@ def _cancel_at(booking, hours_before):
 class TestComputeCancellationFee:
     """Table-driven tests for the fee computation algorithm."""
 
+    def test_policy_none_legacy_client_request_not_billable(self):
+        """policy=None, CLIENT_REQUEST -> non facturable (annulation anticipée)."""
+        b = _booking(scheduled_hours_from_now=120)
+        r = compute_cancellation_fee(
+            b,
+            status_at_cancel="ACCEPTED",
+            cancelled_at=datetime.now(UTC),
+            reason_code="CLIENT_REQUEST",
+            policy=None,
+        )
+        assert r.is_billable is False
+        assert r.fee_amount == Decimal("0")
+
     def test_policy_none_legacy_billable(self):
         """policy=None -> legacy reason-based, fee=0."""
         b = _booking()

@@ -15,12 +15,14 @@ import {
 import { emitCompanyDispatchTelemetry } from "../../../src/features/company/telemetry/companyTelemetry";
 import { useSession } from "../../../src/core/sessionProvider";
 import { contextRealtimeRouter } from "../../../src/core/realtime/contextRealtimeRouter";
-import { AppButton, AppText, Modal, Screen } from "../../../src/design/responsive";
+import { AppText, Screen } from "../../../src/design/responsive";
 import {
-  scheduleCompanyRide,
   getCompanyAvailableDrivers,
   getCompanyPartnershipsForTransfer,
+  getDispatchApiErrorMessage,
 } from "../../../src/features/company/api/companyApi";
+import { RideScheduleModal } from "../../../src/features/company/components/rides/RideScheduleModal";
+import { AssignDriverModal } from "../../../src/features/company/components/rides/AssignDriverModal";
 import { normalizeCompanyEventType } from "../../../src/core/realtime/eventContracts";
 import { buildIdentityFromMission } from "../../../src/features/company/utils/bookingIdentity";
 import type { CompanyDispatchMission } from "../../../src/features/company/api/contracts";
@@ -30,6 +32,7 @@ import {
   EnterpriseFooterActionRow,
 } from "../../../src/features/company/components/EnterpriseActionChip";
 import { E } from "../../../src/features/company/theme/enterpriseOpsTheme";
+import { canMarkRideUrgent } from "../../../src/features/company/utils/pickupSentinel";
 import { getEnterpriseStatusColors } from "../../../src/features/company/theme/enterpriseStatusColors";
 import { createShadow } from "../../../src/styles/shadowStyles";
 import { FONT_SIZE } from "../../../src/design/responsive/typographyTokens";
@@ -260,6 +263,7 @@ export default function CompanyRideDetailsScreen() {
   const [selectedPartnerId, setSelectedPartnerId] = useState<number | null>(null);
   const [assignOpen, setAssignOpen] = useState(false);
   const [transferOpen, setTransferOpen] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [mutationError, setMutationError] = useState<string | null>(null);
   const linkedInvoice = useMemo(() => {
@@ -387,23 +391,12 @@ export default function CompanyRideDetailsScreen() {
     setSaving(true);
     setMutationError(null);
     try {
-      const payload = await getCompanyPartnershipsForTransfer({ contextId });
-      const rows = Array.isArray((payload as { items?: unknown[] })?.items)
-        ? ((payload as { items?: Record<string, unknown>[] }).items ?? [])
-        : [];
-      const options = rows
-        .map((row) => {
-          const id = Number(row.company_id ?? row.target_company_id ?? row.id);
-          if (!Number.isFinite(id)) return null;
-          const label = String(row.company_name ?? row.name ?? `Company #${id}`);
-          return { id, label };
-        })
-        .filter((item): item is { id: number; label: string } => item != null);
-      setPartners(options);
-      setSelectedPartnerId(options[0]?.id ?? null);
+      const { items } = await getCompanyPartnershipsForTransfer({ contextId });
+      setPartners(items);
+      setSelectedPartnerId(items[0]?.id ?? null);
       setTransferOpen(true);
     } catch (error) {
-      setMutationError(error instanceof Error ? error.message : "Liste partenaires indisponible.");
+      setMutationError(getDispatchApiErrorMessage(error, "Liste partenaires indisponible."));
     } finally {
       setSaving(false);
     }
@@ -439,6 +432,7 @@ export default function CompanyRideDetailsScreen() {
   const driverLabel = readDriverLabel(d);
   const hasAssignedDriver = driverId != null || Boolean(driverLabel);
   const driverDisplay = driverLabel ?? (driverId != null ? `#${driverId}` : "Non assigné");
+  const showUrgentAction = d ? canMarkRideUrgent(d as unknown as CompanyDispatchMission) : false;
 
   if (missionQuery.isLoading && !d) {
     return (
@@ -588,53 +582,30 @@ export default function CompanyRideDetailsScreen() {
                   />
                   <EnterpriseActionChip
                     icon="time-outline"
-                    label={saving ? "Planif…" : "Planifier +20 min"}
-                    onPress={() => {
-                      void (async () => {
-                        if (!contextId || !rideIdNumber) return;
-                        setSaving(true);
-                        setMutationError(null);
-                        try {
-                          await scheduleCompanyRide({
-                            contextId,
-                            missionId: rideIdNumber,
-                            payload: {
-                              pickup_at: new Date(Date.now() + 20 * 60 * 1000).toISOString(),
-                              timezone: "Europe/Zurich",
-                              note: "Reschedule from ride-details",
-                              force_recompute: true,
-                            },
-                          });
-                          await missionQuery.refetch();
-                        } catch (error) {
-                          setMutationError(
-                            error instanceof Error ? error.message : "Planification impossible."
-                          );
-                        } finally {
-                          setSaving(false);
-                        }
-                      })();
-                    }}
+                    label="Planifier"
+                    onPress={() => setScheduleOpen(true)}
                     disabled={!contextId || saving}
                     compact
                   />
-                  <EnterpriseActionChip
-                    icon="flash-outline"
-                    label={rideActions.urgent.isPending ? "Urgent…" : "Urgent"}
-                    tone="urgent"
-                    onPress={() =>
-                      rideActions.urgent.mutate({
-                        missionId: rideIdNumber as number,
-                        payload: {
-                          urgent: true,
-                          reason_code: "manual_company_priority",
-                          source: "ride_details",
-                        },
-                      })
-                    }
-                    disabled={!contextId || rideActions.urgent.isPending}
-                    compact
-                  />
+                  {showUrgentAction ? (
+                    <EnterpriseActionChip
+                      icon="flash-outline"
+                      label={rideActions.urgent.isPending ? "Urgent…" : "Urgent"}
+                      tone="urgent"
+                      onPress={() =>
+                        rideActions.urgent.mutate({
+                          missionId: rideIdNumber as number,
+                          payload: {
+                            urgent: true,
+                            reason_code: "manual_company_priority",
+                            source: "ride_details",
+                          },
+                        })
+                      }
+                      disabled={!contextId || rideActions.urgent.isPending}
+                      compact
+                    />
+                  ) : null}
                   <EnterpriseActionChip
                     icon="swap-horizontal-outline"
                     label="Transférer"
@@ -690,22 +661,20 @@ export default function CompanyRideDetailsScreen() {
           </View>
         )}
       </Screen>
-      <Modal visible={assignOpen} title="Selection chauffeur" onClose={() => !saving && setAssignOpen(false)}>
-        {drivers.map((driver) => (
-          <AppButton
-            key={driver.id}
-            title={`${selectedDriverId === driver.id ? "• " : ""}${driver.label}`}
-            variant="secondary"
-            onPress={() => setSelectedDriverId(driver.id)}
-          />
-        ))}
-        <AppButton
-          title={saving ? "Assignation..." : "Confirmer assignation"}
-          variant="primary"
-          onPress={() => void assignDriver()}
-          disabled={saving || selectedDriverId == null}
-        />
-      </Modal>
+      <AssignDriverModal
+        visible={assignOpen}
+        pending={saving}
+        drivers={drivers}
+        selectedDriverId={selectedDriverId}
+        error={mutationError}
+        onSelect={setSelectedDriverId}
+        onConfirm={() => void assignDriver()}
+        onClose={() => {
+          setAssignOpen(false);
+          setMutationError(null);
+        }}
+        mode={hasAssignedDriver ? "reassign" : "assign"}
+      />
       <TransferRideModal
         visible={transferOpen}
         pending={saving}
@@ -720,18 +689,25 @@ export default function CompanyRideDetailsScreen() {
             try {
               await rideActions.transfer.mutateAsync({
                 missionId: rideIdNumber,
-                targetCompanyId: selectedPartnerId,
+                partnershipId: selectedPartnerId,
               });
               setTransferOpen(false);
               await missionQuery.refetch();
             } catch (error) {
-              setMutationError(error instanceof Error ? error.message : "Transfert impossible.");
+              setMutationError(getDispatchApiErrorMessage(error, "Transfert impossible."));
             } finally {
               setSaving(false);
             }
           })();
         }}
         onClose={() => !saving && setTransferOpen(false)}
+      />
+      <RideScheduleModal
+        visible={scheduleOpen}
+        missionId={rideIdNumber}
+        initialScheduledAt={scheduledIso}
+        onClose={() => setScheduleOpen(false)}
+        onSaved={() => void missionQuery.refetch()}
       />
     </PermissionGuard>
   );

@@ -5,6 +5,7 @@ import {
   stopDriverTrackingBridge,
   updateDriverTrackingBridgeStatus,
 } from "./driverTrackingBridge";
+import { driverTrackingQueue } from "./driverTrackingQueue";
 import type { DriverLocationPayload } from "../types";
 import type { DriverTelemetryEventName } from "../../../core/observability/driverTelemetry";
 
@@ -100,7 +101,7 @@ jest.mock("./backgroundLocationTask", () => ({
 }));
 
 describe("driver tracking bridge", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     jest.useFakeTimers();
     mockWarn.mockClear();
     mockRequestForegroundPermissionsAsync.mockReset();
@@ -138,11 +139,11 @@ describe("driver tracking bridge", () => {
       timestamp: Date.now(),
     });
     mockSendDriverLocation.mockResolvedValue({ ack_status: "accepted" });
-    stopDriverTrackingBridge();
+    await stopDriverTrackingBridge();
   });
 
-  afterEach(() => {
-    stopDriverTrackingBridge();
+  afterEach(async () => {
+    await stopDriverTrackingBridge();
     jest.useRealTimers();
   });
 
@@ -182,20 +183,59 @@ describe("driver tracking bridge", () => {
     expect(mockSendDriverLocation.mock.calls.length).toBe(callsAfterFirstFailure);
   });
 
-  it("stops tracking when mission status becomes ineligible", () => {
+  it("stops tracking when mission status becomes ineligible via updateDriverTrackingBridgeStatus", async () => {
     startDriverTrackingBridge(9, "ASSIGNED");
     expect(getDriverTrackingBridgeSnapshot().isRunning).toBe(true);
     updateDriverTrackingBridgeStatus("COMPLETED");
+    await stopDriverTrackingBridge();
     expect(getDriverTrackingBridgeSnapshot().isRunning).toBe(false);
     expect(getDriverTrackingBridgeSnapshot().missionId).toBeNull();
   });
 
-  it("restarts loop correctly on stop/start resume cycle", () => {
+  it("restarts loop correctly on stop/start resume cycle", async () => {
     startDriverTrackingBridge(10, "EN_ROUTE");
     expect(getDriverTrackingBridgeSnapshot().isRunning).toBe(true);
-    stopDriverTrackingBridge();
+    await stopDriverTrackingBridge();
     expect(getDriverTrackingBridgeSnapshot().isRunning).toBe(false);
     startDriverTrackingBridge(10, "EN_ROUTE");
     expect(getDriverTrackingBridgeSnapshot().isRunning).toBe(true);
+  });
+
+  it("STOP-GATE TRACKING-01: resync queueDepth after mission completion", async () => {
+    const getSnapshotSpy = jest.spyOn(driverTrackingQueue, "getSnapshot").mockResolvedValue({
+      queueDepth: 0,
+      oldestQueuedAt: null,
+      newestQueuedAt: null,
+      oldestItemAgeMs: null,
+    });
+
+    startDriverTrackingBridge(11, "IN_PROGRESS");
+    await stopDriverTrackingBridge();
+
+    const after = getDriverTrackingBridgeSnapshot();
+    expect(after.isRunning).toBe(false);
+    expect(after.queueDepth).toBe(0);
+    expect(getSnapshotSpy).toHaveBeenCalled();
+    getSnapshotSpy.mockRestore();
+  });
+
+  it("deduplicates concurrent stopDriverTrackingBridge calls", async () => {
+    const flushSpy = jest.spyOn(driverTrackingQueue, "flush").mockResolvedValue({
+      sent: 0,
+      backendAcked: 0,
+      socketEmitted: 0,
+      dropped: 0,
+      retried: 0,
+      queueDepth: 0,
+      flushPathUsed: "http_fallback",
+      lastBackendAckAt: null,
+      oldestItemAgeMs: null,
+      networkProfile: "normal",
+    });
+
+    startDriverTrackingBridge(12, "EN_ROUTE");
+    await Promise.all([stopDriverTrackingBridge(), stopDriverTrackingBridge()]);
+    expect(flushSpy.mock.calls.length).toBe(1);
+    flushSpy.mockRestore();
   });
 });

@@ -12,6 +12,7 @@ import {
 } from '../../../../utils/bookingScheduling';
 import BookingScheduleCell from '../../../../components/booking/BookingScheduleCell';
 import DriverInlineSelect from '../../Dispatch/components/DriverInlineSelect';
+import { resolveBookingDriverName } from '../../../../utils/bookingDriver';
 import { pickupArrivalHint } from '../../../../utils/formatPickupEta';
 import {
   getDispatchRowDelayInfo,
@@ -141,15 +142,7 @@ const DispatchTable = ({
     onRowClick?.(r);
   }, [onRowClick]);
 
-  // Obtenir le nom du chauffeur
-  const getDriverName = (r) => {
-    return r.driver?.full_name ||
-      r.driver?.name ||
-      r.driver?.username ||
-      r.assignment?.driver?.full_name ||
-      r.assignment?.driver?.name ||
-      null;
-  };
+  const getDriverName = (r) => resolveBookingDriverName(r);
 
   const routeGroupSizes = React.useMemo(() => {
     const sizes = {};

@@ -14,7 +14,7 @@ import {
   subscribePushRegistrationRefresh,
   type PushRegistrationBannerState,
 } from "../../../core/notifications/pushRegistrationState";
-import { getTrackingSnapshot } from "../tracking";
+import { getTrackingSnapshot, subscribeTrackingSnapshot } from "../tracking";
 import { useSocketStatus } from "../hooks";
 import { FONT_SIZE } from "../../../design/responsive/typographyTokens";
 import {
@@ -123,6 +123,14 @@ export function DriverStateBanners() {
 
   useEffect(() => {
     let mounted = true;
+    const refreshTrackingDepth = () => {
+      if (!mounted) return;
+      const snapshot = getTrackingSnapshot();
+      const showWarning = snapshot.isRunning && (snapshot.queueDepth ?? 0) > 0;
+      setTrackingDepth(showWarning ? snapshot.queueDepth ?? 0 : 0);
+    };
+    refreshTrackingDepth();
+    const unsubscribe = subscribeTrackingSnapshot(refreshTrackingDepth);
     const tick = async () => {
       try {
         const enabled = await Location.hasServicesEnabledAsync();
@@ -130,14 +138,13 @@ export function DriverStateBanners() {
       } catch {
         if (mounted) setGpsEnabled(false);
       }
-      if (mounted) {
-        setTrackingDepth(getTrackingSnapshot().queueDepth ?? 0);
-      }
+      refreshTrackingDepth();
     };
     void tick();
     const interval = setInterval(() => void tick(), 10_000);
     return () => {
       mounted = false;
+      unsubscribe();
       clearInterval(interval);
     };
   }, []);

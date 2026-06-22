@@ -81,6 +81,8 @@ export type EnterpriseHeaderProps = {
   onOpenDatePicker?: () => void;
   /** Ouvre la feuille « Mode de dispatch » (chip mode). */
   onOpenModePicker?: () => void;
+  /** Affiche le chip mode de dispatch (désactivé sur certaines pages, ex. Courses). */
+  showModeChip?: boolean;
   /**
    * Injecté par `Screen` (sticky) : hauteur de la zone sous la barre de statut / encoche.
    * Le fond de la bande (`E.CARD`) remplit cette zone ; le contenu reste en dessous.
@@ -116,6 +118,7 @@ export function EnterpriseHeader({
   onShiftDay,
   onOpenDatePicker,
   onOpenModePicker,
+  showModeChip = true,
   topSafeAreaPx: topSafeAreaPxProp,
   variant = "sticky",
 }: EnterpriseHeaderProps) {
@@ -273,7 +276,7 @@ export function EnterpriseHeader({
             <View style={[s.rightCluster, s.rightClusterFloating, s.floatingUnifiedControls]}>
               <View style={s.floatingDateSlot}>{dateBlock}</View>
               {liveStatusPill ? <View style={s.floatingLiveSlot}>{liveStatusPill}</View> : null}
-              <View style={s.floatingModeSlot}>{modeBlock}</View>
+              {showModeChip ? <View style={s.floatingModeSlot}>{modeBlock}</View> : null}
               <View
                 style={[
                   s.inboxWell,
@@ -307,7 +310,9 @@ export function EnterpriseHeader({
             </View>
             <View style={s.rightCluster}>
               {liveStatusPill ? <View style={s.rightLeadGap}>{liveStatusPill}</View> : null}
-              <View style={[liveStatusPill ? s.rightItemGap : s.rightLeadGap]}>{modeBlock}</View>
+              {showModeChip ? (
+                <View style={[liveStatusPill ? s.rightItemGap : s.rightLeadGap]}>{modeBlock}</View>
+              ) : null}
               <View
                 style={[
                   s.inboxWell,

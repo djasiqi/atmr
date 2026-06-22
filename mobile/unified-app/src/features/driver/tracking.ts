@@ -5,6 +5,7 @@ import {
   getDriverTrackingPresenceWindowActive,
   getDriverTrackingQueueSnapshot,
   setDriverTrackingPresenceWindow,
+  syncBridgeQueueDepthFromPersistence,
   subscribeDriverTrackingBridge,
   startDriverTrackingBridge,
   stopDriverTrackingBridge,
@@ -21,8 +22,10 @@ export function updateDriverTrackingStatus(status: DriverMissionStatus) {
 }
 
 export function stopDriverTracking() {
-  stopDriverTrackingBridge();
+  void stopDriverTrackingBridge();
 }
+
+export { syncBridgeQueueDepthFromPersistence };
 
 export function getTrackingSnapshot() {
   return getDriverTrackingBridgeSnapshot();

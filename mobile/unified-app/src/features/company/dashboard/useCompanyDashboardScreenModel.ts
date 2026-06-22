@@ -18,7 +18,7 @@ import {
   useCompanyInboxQuery,
 } from "../hooks";
 import { useCompanyDriverLiveTracking } from "../realtime/useCompanyDriverLiveTracking";
-import { getDispatchApiErrorMessage, switchCompanyDispatchMode } from "../api/companyApi";
+import { getDispatchApiErrorMessage } from "../api/companyApi";
 import { resolveDriverStatus } from "../utils/companyDriverMapStatus";
 import { emitCompanyDispatchTelemetry } from "../telemetry/companyTelemetry";
 import { endPageLoad, startPageLoad } from "../../../core/observability/perfKpi";
@@ -31,7 +31,6 @@ import {
 } from "./dispatchDashboardPresentation";
 import { buildCompanyDashboardUiModel } from "./companyDashboardViewModel";
 import { IN_FLIGHT_MISSION_STATUSES, missionHasDefinedPickupTime, toEpoch } from "./companyDashboardMissionUi";
-import type { DispatchModeValue } from "../components/DispatchModeSheet";
 
 const HEALTHY_FRESHNESS_WINDOW_MS = 30_000;
 const FOCUS_REFRESH_THROTTLE_MS = 3_000;
@@ -56,21 +55,12 @@ function resolveMissionIdFromEvent(payload: {
 }
 
 export function useCompanyDashboardScreenModel() {
-  const { activeContext, can } = useSession();
+  const { activeContext } = useSession();
   const activeContextId = activeContext?.context_id ?? null;
   const contextId = useActiveCompanyContextId();
-  const roleGuardsEnabled = isFeatureEnabled("company_mobile_role_guards_enabled");
-  const contextPermissions = activeContext?.permissions ?? [];
-  const canRunSensitiveAction = (permission: string, fallbackPermission: string) => {
-    if (!roleGuardsEnabled) return true;
-    if (contextPermissions.includes(permission)) return can(permission);
-    return can(fallbackPermission);
-  };
-  const canDispatchManage = canRunSensitiveAction("company:dispatch:manage", "company:dashboard:read");
 
   const [selectedDate, setSelectedDate] = useState(() => getTodayIsoDate());
   const [dateSheetOpen, setDateSheetOpen] = useState(false);
-  const [modeSheetOpen, setModeSheetOpen] = useState(false);
 
   const missionsQuery = useCompanyDispatchMissionsQuery({ date: selectedDate });
   const dashboardQuery = useCompanyDashboardQuery(selectedDate);
@@ -89,20 +79,6 @@ export function useCompanyDashboardScreenModel() {
   const dispatchStatusRefetch = dispatchStatusQuery.refetch;
   const optimizerRefetch = optimizerQuery.refetch;
   const liveDriversRefetch = liveDrivers.refetch;
-
-  const applyDispatchModeFromSheet = useCallback(
-    async (mode: DispatchModeValue) => {
-      if (!contextId || !canDispatchManage) return;
-      try {
-        await switchCompanyDispatchMode({ contextId, mode });
-        setModeSheetOpen(false);
-        await Promise.all([dispatchStatusRefetch(), dashboardRefetch(), missionsRefetch()]);
-      } catch {
-        // Garder la feuille ouverte.
-      }
-    },
-    [canDispatchManage, contextId, dashboardRefetch, dispatchStatusRefetch, missionsRefetch]
-  );
 
   const refreshStaleOnly = useCallback(async () => {
     const now = Date.now();
@@ -535,11 +511,7 @@ export function useCompanyDashboardScreenModel() {
     setSelectedDate,
     dateSheetOpen,
     setDateSheetOpen,
-    modeSheetOpen,
-    setModeSheetOpen,
     headerMode,
-    canDispatchManage,
-    applyDispatchModeFromSheet,
     refreshAll,
     loading,
     error,

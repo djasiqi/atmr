@@ -14,7 +14,7 @@ export const CANCELLATION_REASONS = [
   {
     code: 'CLIENT_REQUEST',
     label: 'Client a demandé l\'annulation',
-    description: 'Le client a demandé d\'annuler la course',
+    description: 'Le client a demandé d\'annuler la course (facturable selon statut/paliers)',
     isClientFault: true,
   },
   {

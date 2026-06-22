@@ -201,7 +201,21 @@ class TestComputeCancellationFieldsIntegration:
         assert fields["cancellation_fee_percent"] is None
         assert fields["cancellation_fee_tier_id"] is None
 
-    def test_fields_major_delay_override(self):
+    def test_fields_client_request_no_policy_early_cancel(self):
+        """CLIENT_REQUEST sans politique, annulation anticipée -> non facturable."""
+        b = self._make_booking(hours_ahead=120)
+
+        fields = compute_cancellation_fields(
+            reason_code="CLIENT_REQUEST",
+            reason_text="Client a demandé l'annulation",
+            cancelled_by_role="institution",
+            booking=b,
+            policy=None,
+            status_at_cancel="ACCEPTED",
+        )
+
+        assert fields["is_cancellation_billable"] is False
+        assert fields["cancellation_fee_amount"] == Decimal("0")
         """MAJOR_DELAY with override billable=false -> non-billable."""
         policy = CancellationPolicySchema().load(VALID_POLICY_INPUT)
         b = self._make_booking()

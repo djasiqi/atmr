@@ -6,6 +6,11 @@ import { AppInput } from "../../../../design/ui/AppInput";
 import { AppText } from "../../../../design/ui/AppText";
 import { RideAddressOption, useCompanyAddressSearch } from "../../useRideForms";
 import { FONT_SIZE } from "../../../../design/responsive/typographyTokens";
+import {
+  suggestionDropdownAnchorStyle,
+  suggestionDropdownPanelStyle,
+  suggestionFieldOpenStyle,
+} from "./suggestionOverlayStyles";
 
 const UI_BORDER_SOFT = "rgba(0, 121, 107, 0.12)";
 const ROW_RADIUS = 12;
@@ -49,6 +54,8 @@ type AddressSelectorProps = {
   inputStyle?: TextStyle;
   /** Affiche un astérisque rouge tant que le champ est vide. */
   required?: boolean;
+  /** Notifie le parent lorsque la liste de suggestions s’ouvre ou se ferme (empilement z-index). */
+  onSuggestionsVisibilityChange?: (visible: boolean) => void;
 };
 
 export function AddressSelector({
@@ -62,6 +69,7 @@ export function AddressSelector({
   shellStyle,
   inputStyle,
   required = false,
+  onSuggestionsVisibilityChange,
 }: AddressSelectorProps) {
   const t = useResponsiveTokens();
   const [query, setQuery] = useState(value);
@@ -116,10 +124,21 @@ export function AddressSelector({
     return () => clearTimeout(timer);
   }, [justSelected]);
 
+  useEffect(() => {
+    onSuggestionsVisibilityChange?.(shouldShowDropdown);
+    return () => {
+      if (shouldShowDropdown) {
+        onSuggestionsVisibilityChange?.(false);
+      }
+    };
+  }, [onSuggestionsVisibilityChange, shouldShowDropdown]);
+
+  const openStackStyle = shouldShowDropdown ? suggestionFieldOpenStyle : null;
+
   return (
-    <View style={[{ gap: t.fieldGap }, containerStyle]}>
+    <View style={[{ gap: t.fieldGap }, openStackStyle, containerStyle]}>
       {label ? <AppText variant="label">{label}</AppText> : null}
-      <View style={{ position: "relative" }}>
+      <View style={[{ position: "relative" }, openStackStyle]}>
         <AppInput
           value={query}
           onChangeText={(next) => {
@@ -171,23 +190,13 @@ export function AddressSelector({
           style={inputStyle}
         />
         {shouldShowDropdown ? (
-          <View
-            style={{
-              position: "absolute",
-              left: 0,
-              right: 0,
-              top: "100%",
-              marginTop: 4,
-              zIndex: 20,
-            }}
-          >
+          <View style={suggestionDropdownAnchorStyle}>
           <View
             style={{
               borderWidth: 1,
               borderColor: UI_BORDER_SOFT,
               borderRadius: ROW_RADIUS,
-              backgroundColor: "#FFFFFF",
-              overflow: "hidden",
+              ...suggestionDropdownPanelStyle,
             }}
           >
             <ScrollView
@@ -243,6 +252,9 @@ export function AddressSelector({
                         key={`${section.title}-${address.id}-${index}`}
                         accessibilityRole="button"
                         accessibilityLabel={`Suggestion adresse ${address.label}`}
+                        onPressIn={(event) => {
+                          event.preventDefault?.();
+                        }}
                         onPress={() => {
                           setQuery(address.label);
                           onChange(address.label);

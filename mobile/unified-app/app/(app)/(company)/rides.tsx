@@ -16,9 +16,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { PermissionGuard } from "../../../src/core/guards";
 import {
   AppButton,
-  AppSpinner,
   AppText,
-  Modal,
   Screen,
 } from "../../../src/design/responsive";
 import { useSession } from "../../../src/core/sessionProvider";
@@ -36,12 +34,10 @@ import { normalizeCompanyEventType } from "../../../src/core/realtime/eventContr
 import { isFeatureEnabled } from "../../../src/core/featureFlags/registry";
 import { RideCreateModal } from "../../../src/features/company/components/rides/RideCreateModal";
 import { RideEditModal } from "../../../src/features/company/components/rides/RideEditModal";
+import { AssignDriverModal } from "../../../src/features/company/components/rides/AssignDriverModal";
+import { RideScheduleModal } from "../../../src/features/company/components/rides/RideScheduleModal";
 import { EnterpriseHeader } from "../../../src/features/company/components/EnterpriseHeader";
 import { DayPickerSheet } from "../../../src/features/company/components/DayPickerSheet";
-import {
-  DispatchModeSheet,
-  type DispatchModeValue,
-} from "../../../src/features/company/components/DispatchModeSheet";
 import { CompanyRidesMissionFlatList } from "../../../src/features/company/components/rides/CompanyRidesMissionFlatList";
 import { E } from "../../../src/features/company/theme/enterpriseOpsTheme";
 import { filterMissionsByDispatchListChip } from "../../../src/features/company/utils/rideListStatusFilter";
@@ -50,18 +46,21 @@ import {
   pickupDelaysByBookingLastWins,
   pickupEtaIsoByBookingId,
 } from "../../../src/features/company/utils/dispatchWebAlignment";
-import { isTimeUndefined } from "../../../src/features/company/utils/pickupSentinel";
+import {
+  getTodayIsoDateInZurich,
+  missionBelongsToSelectedDay,
+} from "../../../src/features/company/utils/companyDateUtils";
+import { isTimeUndefined, missionHasRenderableSchedule } from "../../../src/features/company/utils/pickupSentinel";
 import { TransferRideModal } from "../../../src/features/company/components/transfers/TransferRideModal";
 import {
   cancelCompanyRide,
   getCompanyAvailableDrivers,
   getCompanyDispatchModes,
   getCompanyPartnershipsForTransfer,
+  getDispatchApiErrorMessage,
   markCompanyRideUrgent,
   runCompanyDispatch,
   runCompanyOptimizer,
-  scheduleCompanyRide,
-  switchCompanyDispatchMode,
   transferCompanyRide,
 } from "../../../src/features/company/api/companyApi";
 import type { CompanyDispatchMission } from "../../../src/features/company/api/contracts";
@@ -223,6 +222,7 @@ const rideStyles = StyleSheet.create({
   /** Bandeau filtres — bordure slate légère comme la barre de recherche. */
   tabsPanel: {
     alignSelf: "stretch",
+    marginTop: 8,
     ...(Platform.OS === "web" ? ({ minWidth: 0 } as const) : {}),
     backgroundColor: E.CARD,
     borderRadius: 14,
@@ -394,11 +394,6 @@ const rideStyles = StyleSheet.create({
   },
   errorBlock: { color: E.DANGER, lineHeight: 19 },
   mutedText: { color: E.TEXT_SEC },
-  modalRow: { borderWidth: 1, borderRadius: 10, padding: 8, marginBottom: 5 },
-  modalRowSelected: { borderColor: E.BRAND, backgroundColor: "rgba(0,121,107,0.08)" },
-  modalRowNormal: { borderColor: E.BORDER, backgroundColor: E.CARD },
-  modalRowText: { color: E.TEXT, fontWeight: "600" },
-  modalRowTextSelected: { color: E.BRAND, fontWeight: "800" },
 });
 
 export default function CompanyRidesScreen() {
@@ -420,11 +415,11 @@ export default function CompanyRidesScreen() {
   const [selectedPartnerId, setSelectedPartnerId] = useState<number | null>(null);
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [editMissionId, setEditMissionId] = useState<number | null>(null);
+  const [scheduleMissionId, setScheduleMissionId] = useState<number | null>(null);
   const [missionActionPendingId, setMissionActionPendingId] = useState<number | null>(null);
   const [expandedMissionId, setExpandedMissionId] = useState<number | null>(null);
-  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [selectedDate, setSelectedDate] = useState(() => getTodayIsoDateInZurich());
   const [dateSheetOpen, setDateSheetOpen] = useState(false);
-  const [modeSheetOpen, setModeSheetOpen] = useState(false);
   const filterNorm = useMemo(() => firstSearchParam(params.filter)?.toLowerCase() ?? "", [params.filter]);
   const statusParam = firstSearchParam(params.status);
 
@@ -571,7 +566,10 @@ export default function CompanyRidesScreen() {
     }, [activeContext, invalidate, refresh])
   );
 
-  const missions = useMemo(() => missionsQuery.data?.missions ?? [], [missionsQuery.data?.missions]);
+  const missions = useMemo(() => {
+    const raw = missionsQuery.data?.missions ?? [];
+    return raw.filter((mission) => missionBelongsToSelectedDay(mission, selectedDate));
+  }, [missionsQuery.data?.missions, selectedDate]);
   const delayPickupByBookingId = useMemo(() => {
     const rows = flattenCompanyDispatchDelays(dispatchDelaysQuery.data ?? []);
     return pickupDelaysByBookingLastWins(rows);
@@ -584,17 +582,44 @@ export default function CompanyRidesScreen() {
     if (editMissionId == null) return null;
     return missions.find((item) => item.mission_id === editMissionId) ?? null;
   }, [editMissionId, missions]);
-  const allMissions = useMemo(
-    () => allMissionsForCountsQuery.data?.missions ?? [],
-    [allMissionsForCountsQuery.data?.missions]
+
+  const missionBeingScheduled = useMemo(() => {
+    if (scheduleMissionId == null) return null;
+    return missions.find((item) => item.mission_id === scheduleMissionId) ?? null;
+  }, [scheduleMissionId, missions]);
+
+  const rideEditInitial = useMemo(() => {
+    if (missionBeingEdited == null) return null;
+    return {
+      clientId: null,
+      clientLabel: missionBeingEdited.client_name ?? null,
+      pickup: missionBeingEdited.pickup_label ?? "",
+      dropoff: missionBeingEdited.dropoff_label ?? "",
+      scheduledAt: missionBeingEdited.scheduled_at ?? null,
+      notes: null,
+    };
+  }, [
+    missionBeingEdited?.client_name,
+    missionBeingEdited?.dropoff_label,
+    missionBeingEdited?.pickup_label,
+    missionBeingEdited?.scheduled_at,
+    missionBeingEdited,
+  ]);
+  const allMissions = useMemo(() => {
+    const raw = allMissionsForCountsQuery.data?.missions ?? [];
+    return raw.filter((mission) => missionBelongsToSelectedDay(mission, selectedDate));
+  }, [allMissionsForCountsQuery.data?.missions, selectedDate]);
+  const allMissionsWithSchedule = useMemo(
+    () => allMissions.filter(missionHasRenderableSchedule),
+    [allMissions]
   );
   const filterCountByKey = useMemo(() => {
     const o: Record<string, number> = {};
     for (const item of RIDE_STATUS_FILTERS) {
-      o[item.key] = filterMissionsByDispatchListChip(allMissions, item.key).length;
+      o[item.key] = filterMissionsByDispatchListChip(allMissionsWithSchedule, item.key).length;
     }
     return o;
-  }, [allMissions]);
+  }, [allMissionsWithSchedule]);
   const roleGuardsEnabled = isFeatureEnabled("company_mobile_role_guards_enabled");
   const contextPermissions = activeContext?.permissions ?? [];
   const canRunSensitiveAction = (permission: string, fallbackPermission: string) => {
@@ -610,13 +635,7 @@ export default function CompanyRidesScreen() {
   const canScheduleRide = canRunSensitiveAction("company:rides:schedule", "company:rides:read");
   const canDispatchManage = canRunSensitiveAction("company:dispatch:manage", "company:rides:read");
   const filteredMissions = useMemo(() => {
-    const hasRenderableSchedule = (mission: CompanyDispatchMission) => {
-      if (!mission.scheduled_at) return false;
-      if (isTimeUndefined(mission)) return true;
-      const parsed = Date.parse(mission.scheduled_at);
-      return Number.isFinite(parsed);
-    };
-    const missionsWithSchedule = missions.filter(hasRenderableSchedule);
+    const missionsWithSchedule = missions.filter(missionHasRenderableSchedule);
     const f = filterNorm;
     if (f === "urgent") {
       return [...missionsWithSchedule].sort((left, right) => {
@@ -703,16 +722,11 @@ export default function CompanyRidesScreen() {
       setModalError(null);
       setModalPending(true);
       try {
-        const payload = await getCompanyPartnershipsForTransfer({ contextId });
-        const options = extractLabeledRows(
-          payload,
-          ["company_id", "target_company_id", "id"],
-          ["company_name", "name", "label"]
-        );
-        setPartnerships(options);
-        setSelectedPartnerId(options[0]?.id ?? null);
+        const { items } = await getCompanyPartnershipsForTransfer({ contextId });
+        setPartnerships(items);
+        setSelectedPartnerId(items[0]?.id ?? null);
       } catch (error) {
-        setModalError(error instanceof Error ? error.message : "Chargement des partenaires impossible.");
+        setModalError(getDispatchApiErrorMessage(error, "Chargement des partenaires impossible."));
       } finally {
         setModalPending(false);
       }
@@ -758,7 +772,7 @@ export default function CompanyRidesScreen() {
       await transferCompanyRide({
         contextId,
         missionId: transferModalMissionId,
-        targetCompanyId: selectedPartnerId,
+        partnershipId: selectedPartnerId,
       });
       emitCompanyDispatchTelemetry(
         "company.dispatch.driver_selected",
@@ -774,7 +788,7 @@ export default function CompanyRidesScreen() {
       setTransferModalMissionId(null);
       await refresh();
     } catch (error) {
-      setModalError(error instanceof Error ? error.message : "Transfert impossible.");
+      setModalError(getDispatchApiErrorMessage(error, "Transfert impossible."));
     } finally {
       setModalPending(false);
     }
@@ -790,21 +804,6 @@ export default function CompanyRidesScreen() {
       setActionPending(null);
     }
   }, [contextId, refresh, selectedDate]);
-
-  const applyDispatchModeFromSheet = useCallback(
-    async (mode: DispatchModeValue) => {
-      if (!contextId || !canDispatchManage) return;
-      try {
-        await switchCompanyDispatchMode({ contextId, mode });
-        setActiveMode(mode);
-        setModeSheetOpen(false);
-        await refresh();
-      } catch {
-        // Erreur API : le modal reste ouvert pour réessayer ou fermer manuellement.
-      }
-    },
-    [canDispatchManage, contextId, refresh]
-  );
 
   const runOptimizerNow = useCallback(async () => {
     if (!contextId) return;
@@ -863,29 +862,9 @@ export default function CompanyRidesScreen() {
     [contextId, refresh]
   );
 
-  const scheduleRideNow = useCallback(
-    async (missionId: number) => {
-      if (!contextId) return;
-      setMissionActionPendingId(missionId);
-      try {
-        const pickupAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
-        await scheduleCompanyRide({
-          contextId,
-          missionId,
-          payload: {
-            pickup_at: pickupAt,
-            timezone: "Europe/Zurich",
-            note: "Reschedule from company rides list",
-            force_recompute: true,
-          },
-        });
-        await refresh();
-      } finally {
-        setMissionActionPendingId(null);
-      }
-    },
-    [contextId, refresh]
-  );
+  const openScheduleModal = useCallback((missionId: number) => {
+    setScheduleMissionId(missionId);
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -931,8 +910,8 @@ export default function CompanyRidesScreen() {
             date={selectedDate}
             mode={activeMode}
             realtimeStatus={realtimeStatus.status}
+            showModeChip={false}
             onOpenDatePicker={() => setDateSheetOpen(true)}
-            onOpenModePicker={canDispatchManage ? () => setModeSheetOpen(true) : undefined}
           />
         }
         extraScrollBottomPadding={100}
@@ -1107,7 +1086,7 @@ export default function CompanyRidesScreen() {
           onOpenAssign={openAssignModal}
           onGoDetails={goRideDetails}
           onEdit={setEditMissionId}
-          onSchedule={scheduleRideNow}
+          onSchedule={openScheduleModal}
           onTransfer={openTransferModal}
           onCancel={cancelRideNow}
           onMarkUrgent={markUrgentNow}
@@ -1131,50 +1110,22 @@ export default function CompanyRidesScreen() {
         />
 
       </Screen>
-      <Modal
+      <AssignDriverModal
         visible={assignModalMissionId != null}
-        title="Assigner un chauffeur"
-        onClose={() => {
-          if (!modalPending) setAssignModalMissionId(null);
-        }}
-      >
-        {modalPending ? <AppSpinner /> : null}
-        {drivers.length === 0 && !modalPending ? (
-          <AppText variant="bodyMuted" style={rideStyles.mutedText}>
-            Aucun chauffeur disponible.
-          </AppText>
-        ) : null}
-        {drivers.map((driver) => (
-          <Pressable
-            key={driver.id}
-            onPress={() => setSelectedDriverId(driver.id)}
-            style={[
-              rideStyles.modalRow,
-              selectedDriverId === driver.id ? rideStyles.modalRowSelected : rideStyles.modalRowNormal,
-            ]}
-          >
-            <AppText
-              variant="body"
-              style={
-                selectedDriverId === driver.id ? rideStyles.modalRowTextSelected : rideStyles.modalRowText
-              }
-            >
-              {driver.label}
-            </AppText>
-          </Pressable>
-        ))}
-        <AppButton
-          title={modalPending ? "Assignation…" : "Confirmer"}
-          variant="primary"
-          onPress={() => void applyAssign()}
-          disabled={modalPending || selectedDriverId == null}
-        />
-        {modalError ? (
-          <AppText variant="error" style={rideStyles.errorBlock}>
-            {modalError}
-          </AppText>
-        ) : null}
-      </Modal>
+        pending={modalPending}
+        drivers={drivers}
+        selectedDriverId={selectedDriverId}
+        error={modalError}
+        onSelect={setSelectedDriverId}
+        onConfirm={() => void applyAssign()}
+        onClose={() => setAssignModalMissionId(null)}
+        mode={
+          assignModalMissionId != null &&
+          missions.some((m) => m.mission_id === assignModalMissionId && m.driver_id != null)
+            ? "reassign"
+            : "assign"
+        }
+      />
       <TransferRideModal
         visible={transferModalMissionId != null}
         pending={modalPending}
@@ -1192,23 +1143,19 @@ export default function CompanyRidesScreen() {
         onClose={() => setCreateModalVisible(false)}
         onCreated={() => void refresh()}
       />
+      <RideScheduleModal
+        visible={scheduleMissionId != null}
+        missionId={scheduleMissionId}
+        initialScheduledAt={missionBeingScheduled?.scheduled_at ?? null}
+        onClose={() => setScheduleMissionId(null)}
+        onSaved={() => void refresh()}
+      />
       <RideEditModal
         visible={editMissionId != null}
         missionId={editMissionId}
         detailDate={selectedDate}
         isGuestMission
-        initial={
-          missionBeingEdited == null
-            ? null
-            : {
-                clientId: null,
-                clientLabel: missionBeingEdited.client_name ?? null,
-                pickup: missionBeingEdited.pickup_label ?? "",
-                dropoff: missionBeingEdited.dropoff_label ?? "",
-                scheduledAt: missionBeingEdited.scheduled_at ?? null,
-                notes: null,
-              }
-        }
+        initial={rideEditInitial}
         onClose={() => setEditMissionId(null)}
         onSaved={() => void refresh()}
       />
@@ -1220,13 +1167,6 @@ export default function CompanyRidesScreen() {
           setSelectedDate(iso);
           setDateSheetOpen(false);
         }}
-      />
-      <DispatchModeSheet
-        visible={modeSheetOpen}
-        mode={activeMode}
-        onClose={() => setModeSheetOpen(false)}
-        onSelectMode={(mode) => void applyDispatchModeFromSheet(mode)}
-        switchingEnabled={canDispatchManage}
       />
     </PermissionGuard>
   );

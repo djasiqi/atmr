@@ -16,6 +16,7 @@ import {
   scheduleDriverMissionSync,
 } from "./missionSyncOrchestrator";
 import { driverTrackingQueue } from "./driverTrackingQueue";
+import { syncBridgeQueueDepthFromPersistence } from "./driverTrackingBridge";
 
 type BridgeOptions = {
   enableSocket: boolean;
@@ -91,7 +92,9 @@ export function startDriverRealtimeBridge(
           ? [payload.tracking_event_id]
           : [];
       if (trackingEventIds.length > 0) {
-        void driverTrackingQueue.markBackendAckedByIds(trackingEventIds);
+        void driverTrackingQueue.markBackendAckedByIds(trackingEventIds).then(() =>
+          syncBridgeQueueDepthFromPersistence()
+        );
       }
       const ackLastSequenceId =
         typeof payload?.ack_last_sequence_id === "number"
@@ -100,7 +103,9 @@ export function startDriverRealtimeBridge(
             ? Number(payload.ack_last_sequence_id)
             : null;
       if (ackLastSequenceId && Number.isFinite(ackLastSequenceId)) {
-        void driverTrackingQueue.markBackendAckedByWatermark(ackLastSequenceId);
+        void driverTrackingQueue
+          .markBackendAckedByWatermark(ackLastSequenceId)
+          .then(() => syncBridgeQueueDepthFromPersistence());
       }
       emitDriverTelemetry("tracking.batch.ack", {
         source: "driver.realtime.bridge",

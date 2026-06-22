@@ -485,6 +485,8 @@ class TestCancelMultiStopCascade:
         for leg in (principal, leg2, leg3):
             db.session.refresh(leg)
             assert leg.status == BookingStatus.CANCELED
+        # Annulation anticipée (3h avant) : pas de facturation sur le principal
+        assert principal.is_cancellation_billable is False
         # Les legs liés ne sont pas refacturés (facturation portée par le principal)
         assert leg2.is_cancellation_billable is False
         assert leg3.is_cancellation_billable is False

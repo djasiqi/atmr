@@ -24,8 +24,9 @@ export type ScreenProps = {
   /** Si true, enveloppe le contenu dans un ScrollView (landing, formulaires longs). */
   scroll?: boolean;
   /**
-   * Bandeau fixe au-dessus du scroll (ex. en-tête entreprise).
-   * uniquement avec `scroll={true}` : reste visible pendant le défilement.
+   * Bandeau fixe au-dessus du contenu (ex. en-tête entreprise).
+   * Avec `scroll={true}` : reste visible pendant le défilement.
+   * Avec `scroll={false}` : en-tête fixe au-dessus du corps (ex. FlatList interne).
    */
   stickyHeader?: ReactNode;
   keyboardVerticalOffset?: number;
@@ -171,8 +172,7 @@ export function Screen({
     : undefined;
 
   /** Avec sticky header, la safe area haute est gérée dans le bandeau (fond pleine largeur sous la barre système). */
-  const shellPaddingTop =
-    stickyHeader != null && scroll && safeTop ? 0 : safeTop ? topInset : 0;
+  const shellPaddingTop = stickyHeader != null && safeTop ? 0 : safeTop ? topInset : 0;
   const paddingBottom = safeBottom ? bottomInset : 0;
   const paddingHorizontal = withHorizontalPadding ? horizontalPadding : 0;
 
@@ -213,6 +213,19 @@ export function Screen({
         })
       : stickyHeader;
 
+  const staticBody = (
+    <View
+      style={[
+        styles.flex,
+        {
+          paddingHorizontal,
+        },
+      ]}
+    >
+      {children}
+    </View>
+  );
+
   const inner = scroll ? (
     stickyHeader != null ? (
       <View style={styles.flex}>
@@ -226,17 +239,13 @@ export function Screen({
     ) : (
       scrollBody
     )
-  ) : (
-    <View
-      style={[
-        styles.flex,
-        {
-          paddingHorizontal,
-        },
-      ]}
-    >
-      {children}
+  ) : stickyHeader != null ? (
+    <View style={styles.flex}>
+      <View style={styles.stickyHeaderSlot}>{stickyRendered}</View>
+      {staticBody}
     </View>
+  ) : (
+    staticBody
   );
 
   const shell = (

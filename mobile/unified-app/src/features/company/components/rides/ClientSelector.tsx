@@ -5,10 +5,14 @@ import { brandPrimary, brandText, useResponsiveTokens } from "../../../../design
 import { AppInput } from "../../../../design/ui/AppInput";
 import { AppText } from "../../../../design/ui/AppText";
 import { type RideClientOption, useCompanyClientSearch } from "../../useRideForms";
+import {
+  suggestionDropdownAnchorStyle,
+  suggestionDropdownPanelStyle,
+  suggestionFieldOpenStyle,
+} from "./suggestionOverlayStyles";
 
 const UI_BORDER_SOFT = "rgba(15, 23, 42, 0.12)";
 const UI_SEPARATOR = "rgba(15, 23, 42, 0.08)";
-const UI_BG_LIST = "rgba(248, 250, 252, 0.95)";
 const UI_BG_HOVER = "rgba(15, 23, 42, 0.03)";
 const UI_BG_PRESSED = "rgba(15, 23, 42, 0.06)";
 const UI_BG_SELECTED = "rgba(0, 121, 107, 0.09)";
@@ -29,6 +33,8 @@ type ClientSelectorProps = {
   placeholder?: string;
   helperText?: string;
   leftSlot?: ReactNode;
+  /** Notifie le parent lorsque la liste de résultats s’ouvre ou se ferme (empilement z-index). */
+  onSuggestionsVisibilityChange?: (visible: boolean) => void;
 };
 
 export function ClientSelector({
@@ -41,6 +47,7 @@ export function ClientSelector({
   placeholder = "Rechercher un client…",
   helperText,
   leftSlot,
+  onSuggestionsVisibilityChange,
 }: ClientSelectorProps) {
   const t = useResponsiveTokens();
   const [query, setQuery] = useState("");
@@ -62,14 +69,37 @@ export function ClientSelector({
     !clientsQuery.isLoading &&
     !clientsQuery.isFetching &&
     resultsCount === 0;
+  const overlayOpen =
+    isListOpen &&
+    canSearchClients &&
+    (clientsQuery.isLoading ||
+      clientsQuery.isFetching ||
+      resultsCount > 0 ||
+      shouldShowCreateClient);
+
+  useEffect(() => {
+    onSuggestionsVisibilityChange?.(overlayOpen);
+    return () => {
+      if (overlayOpen) {
+        onSuggestionsVisibilityChange?.(false);
+      }
+    };
+  }, [onSuggestionsVisibilityChange, overlayOpen]);
+
+  const openStackStyle = overlayOpen ? suggestionFieldOpenStyle : null;
+
   return (
-    <View style={{ gap: t.fieldGap }}>
+    <View style={[{ gap: t.fieldGap }, openStackStyle]}>
       {showFieldLabel ? <AppText variant="label">{fieldLabel}</AppText> : null}
+      <View style={[{ position: "relative" }, openStackStyle]}>
       <AppInput
         value={query}
         onChangeText={(nextValue) => {
           setQuery(nextValue);
           setIsListOpen(true);
+        }}
+        onFocus={() => {
+          if (canSearchClients) setIsListOpen(true);
         }}
         placeholder={placeholder}
         leftSlot={leftSlot}
@@ -96,14 +126,19 @@ export function ClientSelector({
         }}
         helperText={helperText}
       />
+      {overlayOpen ? (
+        <View style={suggestionDropdownAnchorStyle}>
+          <View
+            style={{
+              borderWidth: 1,
+              borderColor: UI_BORDER_SOFT,
+              borderRadius: ROW_RADIUS,
+              ...suggestionDropdownPanelStyle,
+            }}
+          >
       {shouldShowResults ? (
         <ScrollView
           style={{
-            borderWidth: 1,
-            borderColor: UI_BORDER_SOFT,
-            borderRadius: ROW_RADIUS,
-            backgroundColor: UI_BG_LIST,
-            overflow: "hidden",
             maxHeight: RESULTS_MAX_HEIGHT,
           }}
           nestedScrollEnabled
@@ -123,6 +158,9 @@ export function ClientSelector({
               accessibilityRole="button"
               accessibilityLabel={`Sélectionner le client ${client.label}`}
               accessibilityState={{ selected: value === client.id }}
+              onPressIn={(event) => {
+                event.preventDefault?.();
+              }}
               style={({ hovered, pressed }) => {
                 const isSelected = value === client.id;
                 let backgroundColor = isSelected ? UI_BG_SELECTED : hovered ? UI_BG_HOVER : "transparent";
@@ -165,7 +203,11 @@ export function ClientSelector({
           ))}
         </ScrollView>
       ) : null}
-      {clientsQuery.isLoading ? <AppText variant="caption">Recherche…</AppText> : null}
+      {clientsQuery.isLoading || clientsQuery.isFetching ? (
+        <AppText variant="caption" style={{ paddingHorizontal: 14, paddingVertical: 10 }}>
+          Recherche…
+        </AppText>
+      ) : null}
       {shouldShowCreateClient ? (
         <Pressable
           onPress={() => {
@@ -174,12 +216,20 @@ export function ClientSelector({
           }}
           accessibilityRole="button"
           accessibilityLabel="Créer un nouveau client"
+          style={{ paddingHorizontal: 14, paddingVertical: 10 }}
+          onPressIn={(event) => {
+            event.preventDefault?.();
+          }}
         >
           <AppText variant="body" style={{ color: brandPrimary, fontWeight: "600" }}>
             + Nouveau client
           </AppText>
         </Pressable>
       ) : null}
+          </View>
+        </View>
+      ) : null}
+      </View>
     </View>
   );
 }

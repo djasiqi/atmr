@@ -5,7 +5,6 @@ import { PermissionGuard } from "../../../src/core/guards";
 import { useCompanyDashboardScreenModel } from "../../../src/features/company/dashboard/useCompanyDashboardScreenModel";
 import { CompanyFleetCockpit } from "../../../src/features/company/components/dashboard/CompanyFleetCockpit";
 import { DayPickerSheet } from "../../../src/features/company/components/DayPickerSheet";
-import { DispatchModeSheet } from "../../../src/features/company/components/DispatchModeSheet";
 import type {
   DashboardCompactStat,
   DashboardQuickAction,
@@ -77,11 +76,9 @@ export default function CompanyDashboardScreen() {
           realtimeStatus={model.realtime.transportStatus}
           realtimeDataFreshness={model.realtime.dataFreshness}
           realtimeLastEventAt={model.realtime.lastEventAt}
-          canDispatchManage={model.canDispatchManage}
           refreshing={model.loading}
           onRefresh={() => void model.refreshAll()}
           onOpenDatePicker={() => model.setDateSheetOpen(true)}
-          onOpenModePicker={model.canDispatchManage ? () => model.setModeSheetOpen(true) : undefined}
           onViewMission={openMission}
           onMessage={() =>
             router.push("/(app)/(company)/chat" as Parameters<typeof router.push>[0])
@@ -118,13 +115,6 @@ export default function CompanyDashboardScreen() {
           model.setSelectedDate(iso);
           model.setDateSheetOpen(false);
         }}
-      />
-      <DispatchModeSheet
-        visible={model.modeSheetOpen}
-        mode={model.headerMode}
-        onClose={() => model.setModeSheetOpen(false)}
-        onSelectMode={(mode) => void model.applyDispatchModeFromSheet(mode)}
-        switchingEnabled={model.canDispatchManage}
       />
     </PermissionGuard>
   );

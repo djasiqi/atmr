@@ -7,7 +7,6 @@ import { useSession } from "../../../core/sessionProvider";
 import { getDriverProfile } from "../api";
 import { readDriverProfileCache } from "../services/driverProfileCache";
 import { useNotifications, useTrackingState } from "../hooks";
-import { useSocketStatus } from "../hooks/useSocketStatus";
 import { D } from "../theme/driverDashboardTheme";
 import { FONT_SIZE } from "../../../design/responsive/typographyTokens";
 
@@ -54,7 +53,6 @@ export function DriverDashboardHeader({
 }: Props) {
   const { bootstrap } = useSession();
   const tracking = useTrackingState();
-  const socket = useSocketStatus();
   const { unreadCount } = useNotifications();
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [profileName, setProfileName] = useState<string | null>(null);
@@ -118,14 +116,24 @@ export function DriverDashboardHeader({
   }, [tracking.isTracking, tracking.lastUpdate]);
 
   const syncLabel = useMemo(() => {
-    const gpsOk = gpsEnabled && tracking.isTracking;
-    const syncTs = tracking.lastUpdate ?? socket.lastConnectedAt;
-    const syncTime = formatSyncTime(syncTs);
-    if (!gpsOk && !socket.connected) return "GPS indisponible • Hors ligne";
-    if (!gpsOk) return `GPS inactif • Sync ${syncTime}`;
-    if (!socket.connected) return `GPS connecté • Sync locale ${syncTime}`;
-    return `GPS connecté • Synchronisé ${syncTime}`;
-  }, [gpsEnabled, tracking.isTracking, tracking.lastUpdate, socket.connected, socket.lastConnectedAt]);
+    if (!gpsEnabled) return "GPS indisponible";
+    if (!tracking.isTracking) return "GPS prêt";
+    const lastSendTime = formatSyncTime(tracking.lastUpdate);
+    const lastAckTime = formatSyncTime(tracking.lastAckAt);
+    if (tracking.queueDepth > 0) {
+      return `GPS connecté • Dernier envoi ${lastSendTime}`;
+    }
+    if (tracking.lastAckAt != null && tracking.queueDepth === 0) {
+      return `GPS connecté • Confirmé backend ${lastAckTime}`;
+    }
+    return `GPS connecté • Dernier envoi ${lastSendTime}`;
+  }, [
+    gpsEnabled,
+    tracking.isTracking,
+    tracking.lastUpdate,
+    tracking.lastAckAt,
+    tracking.queueDepth,
+  ]);
 
   const initials = useMemo(() => {
     const parts = displayName.split(/\s+/).filter(Boolean);

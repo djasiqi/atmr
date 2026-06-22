@@ -5,33 +5,37 @@ import { AppText } from "../../../../design/ui/AppText";
 import { FONT_SIZE } from "../../../../design/responsive/typographyTokens";
 import { E } from "../../theme/enterpriseOpsTheme";
 
-export type TransferPartnershipOption = { id: number; label: string };
+export type AssignDriverOption = { id: number; label: string };
 
-type TransferRideModalProps = {
+type AssignDriverModalProps = {
   visible: boolean;
   pending?: boolean;
-  options: TransferPartnershipOption[];
-  selectedPartnerId: number | null;
+  drivers: AssignDriverOption[];
+  selectedDriverId: number | null;
   error?: string | null;
   onSelect: (id: number) => void;
   onConfirm: () => void;
   onClose: () => void;
+  mode?: "assign" | "reassign";
 };
 
-export function TransferRideModal({
+export function AssignDriverModal({
   visible,
   pending = false,
-  options,
-  selectedPartnerId,
+  drivers,
+  selectedDriverId,
   error,
   onSelect,
   onConfirm,
   onClose,
-}: TransferRideModalProps) {
+  mode = "assign",
+}: AssignDriverModalProps) {
+  const title = mode === "reassign" ? "Réassigner un chauffeur" : "Assigner un chauffeur";
+
   return (
     <Modal
       visible={visible}
-      title="Transférer la course"
+      title={title}
       onClose={() => {
         if (!pending) onClose();
       }}
@@ -51,32 +55,32 @@ export function TransferRideModal({
               style={styles.footerBtnSecondary}
             />
             <AppButton
-              title={pending ? "Transfert…" : "Confirmer le transfert"}
+              title={pending ? "Assignation…" : "Confirmer"}
               variant="primary"
               onPress={onConfirm}
-              disabled={pending || selectedPartnerId == null || options.length === 0}
+              disabled={pending || selectedDriverId == null || drivers.length === 0}
               style={styles.footerBtnPrimary}
             />
           </View>
         </View>
       }
     >
-      {pending && options.length === 0 ? (
+      {pending && drivers.length === 0 ? (
         <View style={styles.spinnerWrap}>
           <AppSpinner />
         </View>
       ) : null}
-      {!pending && options.length === 0 ? (
+      {!pending && drivers.length === 0 ? (
         <AppText variant="bodyMuted" style={styles.emptyText}>
-          Aucun partenaire disponible pour le transfert.
+          Aucun chauffeur disponible pour cette course.
         </AppText>
       ) : null}
-      {options.map((company) => {
-        const selected = selectedPartnerId === company.id;
+      {drivers.map((driver) => {
+        const selected = selectedDriverId === driver.id;
         return (
           <Pressable
-            key={company.id}
-            onPress={() => onSelect(company.id)}
+            key={driver.id}
+            onPress={() => onSelect(driver.id)}
             disabled={pending}
             style={({ pressed }) => [
               styles.row,
@@ -85,14 +89,14 @@ export function TransferRideModal({
             ]}
             accessibilityRole="button"
             accessibilityState={{ selected }}
-            accessibilityLabel={company.label}
+            accessibilityLabel={driver.label}
           >
             <AppText
               variant="body"
               style={[styles.rowLabel, selected ? styles.rowLabelSelected : null]}
               numberOfLines={2}
             >
-              {company.label}
+              {driver.label}
             </AppText>
             {selected ? (
               <Ionicons name="checkmark-circle" size={20} color={E.BRAND} accessibilityElementsHidden />

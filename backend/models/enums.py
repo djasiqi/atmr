@@ -393,7 +393,7 @@ class CancelReason(str, PyEnum):
     CANCEL = "CANCEL"  # Annulation réelle, facturée (par défaut)
     RELEASE = "RELEASE"  # Libération pour réassignation, non facturée
     # Nouvelles raisons avec justification
-    CLIENT_REQUEST = "CLIENT_REQUEST"  # Client a demandé l'annulation → facturée
+    CLIENT_REQUEST = "CLIENT_REQUEST"  # Client a demandé l'annulation → selon statut/paliers
     CLIENT_NO_SHOW = "CLIENT_NO_SHOW"  # Client ne s'est pas présenté → facturée
     COMPANY_ISSUE = "COMPANY_ISSUE"  # Problème entreprise → non facturée
     DELAY = "DELAY"  # Retard important → non facturée

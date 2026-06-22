@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { AppButton, Modal } from "../../../../design/responsive";
@@ -6,6 +6,7 @@ import { AppInput } from "../../../../design/ui/AppInput";
 import { AppText } from "../../../../design/ui/AppText";
 import { E } from "../../theme/enterpriseOpsTheme";
 import { isFeatureEnabled } from "../../../../core/featureFlags/registry";
+import { getDispatchApiErrorMessage } from "../../api/companyApi";
 import { useCompanyRideDetailsQuery } from "../../hooks";
 import {
   normalizeScheduledTimeIso,
@@ -13,7 +14,9 @@ import {
   useRideEdit,
   useRideFormState,
 } from "../../useRideForms";
+import { scheduledTimeToFormNaiveIso } from "../../utils/companyDateUtils";
 import { AddressSelector } from "./AddressSelector";
+import { suggestionOverlayFieldStyle } from "./suggestionOverlayStyles";
 import { ClientSelector } from "./ClientSelector";
 import { TimeDatePicker } from "./TimeDatePicker";
 import { FONT_SIZE } from "../../../../design/responsive/typographyTokens";
@@ -229,6 +232,8 @@ export function RideEditModal({
   const editRide = useRideEdit();
   const form = useRideFormState();
   const [error, setError] = useState<string | null>(null);
+  const addressSuggestionsOpenRef = useRef(new Set<string>());
+  const [addressSuggestionsOpen, setAddressSuggestionsOpen] = useState(false);
   const medicalHydratedMissionRef = useRef<number | null>(null);
   const structuredPayloadEnabled = isFeatureEnabled("company_mobile_structured_ride_payload_enabled");
   const rideDetailQuery = useCompanyRideDetailsQuery({
@@ -250,11 +255,25 @@ export function RideEditModal({
     setWheelchairClient,
     setWheelchairProvide,
     setRecurrence,
-    scheduledAt,
   } = form;
 
+  const handleAddressSuggestionsVisibility = useCallback((fieldKey: string, visible: boolean) => {
+    const openFields = addressSuggestionsOpenRef.current;
+    if (visible) openFields.add(fieldKey);
+    else openFields.delete(fieldKey);
+    setAddressSuggestionsOpen(openFields.size > 0);
+  }, []);
+
+  const formHydratedMissionRef = useRef<number | null>(null);
+
   useEffect(() => {
-    if (!visible || !initial) return;
+    if (!visible) {
+      formHydratedMissionRef.current = null;
+      return;
+    }
+    if (!initial || missionId == null) return;
+    if (formHydratedMissionRef.current === missionId) return;
+    formHydratedMissionRef.current = missionId;
     if (!isGuestMission) {
       setClientId(initial.clientId ?? null);
     } else {
@@ -262,13 +281,15 @@ export function RideEditModal({
     }
     setPickup(initial.pickup ?? "");
     setDropoff(initial.dropoff ?? "");
-    setScheduledAt(initial.scheduledAt ?? scheduledAt);
+    setScheduledAt(
+      initial.scheduledAt ? scheduledTimeToFormNaiveIso(initial.scheduledAt) : "",
+    );
     setInternalNotes(initial.notes ?? "");
     setRecurrence("none");
   }, [
     initial,
     isGuestMission,
-    scheduledAt,
+    missionId,
     setClientId,
     setDropoff,
     setInternalNotes,
@@ -371,31 +392,41 @@ export function RideEditModal({
               lon: form.dropoffAddress.longitude,
             }
           : form.dropoff.trim();
+      const payload: Record<string, unknown> = {
+        client_id: form.clientId,
+        pickup_address: pickupPayload,
+        dropoff_address: dropoffPayload,
+        scheduled_time: normalizeScheduledTimeIso(form.scheduledAt),
+        recurrence: form.recurrence === "none" ? null : form.recurrence,
+        wheelchair_client_has: Boolean(form.wheelchairClient),
+        wheelchair_need: Boolean(form.wheelchairProvide),
+      };
+      const pickupLat = form.pickupAddress?.latitude;
+      const pickupLon = form.pickupAddress?.longitude;
+      if (pickupLat != null && pickupLon != null) {
+        payload.pickup_lat = pickupLat;
+        payload.pickup_lon = pickupLon;
+      }
+      const dropoffLat = form.dropoffAddress?.latitude;
+      const dropoffLon = form.dropoffAddress?.longitude;
+      if (dropoffLat != null && dropoffLon != null) {
+        payload.dropoff_lat = dropoffLat;
+        payload.dropoff_lon = dropoffLon;
+      }
+      if (form.notesMedical.trim()) payload.notes_medical = form.notesMedical.trim();
+      if (form.pickupAccessNotes.trim()) payload.pickup_access_notes = form.pickupAccessNotes.trim();
+      if (form.dropoffAccessNotes.trim()) payload.dropoff_access_notes = form.dropoffAccessNotes.trim();
+      if (form.internalNotes.trim()) payload.notes = form.internalNotes.trim();
+
       await editRide.mutateAsync({
         missionId,
-        payload: {
-          client_id: form.clientId,
-          pickup_address: pickupPayload,
-          dropoff_address: dropoffPayload,
-          pickup_lat: form.pickupAddress?.latitude ?? null,
-          pickup_lon: form.pickupAddress?.longitude ?? null,
-          dropoff_lat: form.dropoffAddress?.latitude ?? null,
-          dropoff_lon: form.dropoffAddress?.longitude ?? null,
-          scheduled_time: normalizeScheduledTimeIso(form.scheduledAt),
-          recurrence: form.recurrence === "none" ? null : form.recurrence,
-          notes_medical: form.notesMedical.trim() || null,
-          pickup_access_notes: form.pickupAccessNotes.trim() || null,
-          dropoff_access_notes: form.dropoffAccessNotes.trim() || null,
-          wheelchair_client_has: Boolean(form.wheelchairClient),
-          wheelchair_need: Boolean(form.wheelchairProvide),
-          notes: form.internalNotes.trim() || null,
-        },
+        payload,
       });
       setError(null);
       onSaved?.();
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Edition ride impossible.");
+      setError(getDispatchApiErrorMessage(e, "Impossible d'enregistrer la mission."));
     }
   };
 
@@ -477,7 +508,12 @@ export function RideEditModal({
           </View>
         ) : null}
         <View style={s.card}>
-          <View style={s.pickupDropoffRow}>
+          <View
+            style={[
+              s.pickupDropoffRow,
+              addressSuggestionsOpen ? suggestionOverlayFieldStyle : null,
+            ]}
+          >
             <View style={s.addressFieldsColumn}>
               <View style={s.sectionBlock}>
                 <AppText style={s.sectionLabel}>Prise en charge</AppText>
@@ -486,6 +522,9 @@ export function RideEditModal({
                   value={form.pickup}
                   onChange={form.setPickup}
                   onSelectAddress={form.selectPickupAddress}
+                  onSuggestionsVisibilityChange={(visible) =>
+                    handleAddressSuggestionsVisibility("pickup", visible)
+                  }
                   placeholder="Adresse de prise en charge"
                   leftSlot={<Ionicons name="navigate-outline" size={16} color={E.TEXT_SEC} />}
                   containerStyle={s.compactAddressContainer}
@@ -500,6 +539,9 @@ export function RideEditModal({
                   value={form.dropoff}
                   onChange={form.setDropoff}
                   onSelectAddress={form.selectDropoffAddress}
+                  onSuggestionsVisibilityChange={(visible) =>
+                    handleAddressSuggestionsVisibility("dropoff", visible)
+                  }
                   placeholder="Adresse de destination"
                   leftSlot={<Ionicons name="location-outline" size={16} color={E.TEXT_SEC} />}
                   containerStyle={s.compactAddressContainer}

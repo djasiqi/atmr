@@ -15,6 +15,7 @@ import { toast } from 'sonner';
 import BookingChat from './BookingChat';
 import { isBookingChatClosed } from '../../../../utils/bookingChat';
 import { buildIdentityFromApi } from '../../../../utils/bookingIdentity';
+import { resolveBookingDriverName } from '../../../../utils/bookingDriver';
 import { getBookingSourceMeta } from '../../../../constants/bookingSourceLabels';
 import {
   completeReservation,
@@ -73,7 +74,7 @@ const fmtShort = (dateStr) => {
 const buildTimeline = (r) => {
   if (!r) return [];
   const events = [];
-  const driverName = r.driver_name || r.driver?.full_name;
+  const driverName = resolveBookingDriverName(r);
 
   // Institution request events (if booking came from an institution request)
   const it = r.institution_timeline;
@@ -637,6 +638,7 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onRese
     ? Number(reservation?.amount ?? 0) - Number(originalAmount) : null;
 
   const bookingIdentity = buildIdentityFromApi(reservation);
+  const driverDisplayName = resolveBookingDriverName(reservation);
   const sourceMeta = getBookingSourceMeta(bookingIdentity.source?.type);
   const passengerBirthDate = isInstitutionBooking
     ? (bookingIdentity.passenger?.birth_date
@@ -1124,10 +1126,10 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onRese
                   <span className={s.summaryLabel}>Montant</span>
                   <span className={s.summaryValue}>{formatCurrency(reservation.amount)}</span>
                 </div>
-                {reservation.driver_name && (
+                {driverDisplayName && (
                   <div className={s.summaryItem}>
                     <span className={s.summaryLabel}>Chauffeur</span>
-                    <span className={s.summaryValue}>{reservation.driver_name}</span>
+                    <span className={s.summaryValue}>{driverDisplayName}</span>
                   </div>
                 )}
                 {(reservation.client?.contact_phone || reservation.client?.phone) && !isInstitutionBooking && (

@@ -22,7 +22,7 @@ Reference - Choix proposes au chauffeur (mobile CancelJustificationModal) :
 ├──────────────────┼─────────────────────────────────────┼────────────┤
 │ LAST_MINUTE      │ Annulation dernière minute          │ Oui        │
 │ NO_SHOW          │ Client ne s'est pas présenté        │ Oui        │
-│ CLIENT_REQUEST   │ Client a demandé l'annulation       │ Oui        │
+│ CLIENT_REQUEST   │ Client a demandé l'annulation       │ Selon statut/paliers │
 ├──────────────────┼─────────────────────────────────────┼────────────┤
 │ COMPANY_ISSUE    │ Problème entreprise                 │ Non        │
 │ MAJOR_DELAY      │ Retard important (mobile: DELAY)    │ Non        │
@@ -54,10 +54,18 @@ CANCELLATION_REASON_LABELS: dict[str, str] = {
     "PAYMENT_TIMEOUT": "Paiement en ligne non finalisé dans le délai (15 min)",
 }
 
-# Motifs facturables (annulation facturée à la clinique/client)
-# = choix chauffeur où isClientFault / "Facturation prévue" dans l'app
-BILLABLE_REASONS: frozenset[str] = frozenset(
-    {"LAST_MINUTE", "NO_SHOW", "CLIENT_REQUEST"}
+# Motifs toujours facturables sans palier (faute client avérée)
+ALWAYS_BILLABLE_REASONS: frozenset[str] = frozenset({"NO_SHOW"})
+
+# Motifs facturables selon paliers temporels / statut (politique entreprise)
+TIER_EVALUATED_REASONS: frozenset[str] = frozenset({"LAST_MINUTE", "CLIENT_REQUEST"})
+
+# Union pour évaluation des paliers (politique activée)
+BILLABLE_REASONS: frozenset[str] = ALWAYS_BILLABLE_REASONS | TIER_EVALUATED_REASONS
+
+# Mode legacy (sans politique) : CLIENT_REQUEST seul ne suffit pas
+LEGACY_BILLABLE_REASONS: frozenset[str] = ALWAYS_BILLABLE_REASONS | frozenset(
+    {"LAST_MINUTE"}
 )
 
 # Mapping transition : anciens codes mobile / UI → codes facturation
@@ -78,9 +86,12 @@ def _normalize_reason_code(code: str | None) -> str:
 
 
 def is_cancellation_billable(reason_code: str | None) -> bool:
-    """Indique si l'annulation est facturable selon le motif."""
+    """Indique si l'annulation est facturable selon le motif (sans contexte booking).
+
+    CLIENT_REQUEST nécessite un contexte (statut EN_ROUTE/IN_PROGRESS ou paliers).
+    """
     code = _normalize_reason_code(reason_code)
-    return code in BILLABLE_REASONS
+    return code in LEGACY_BILLABLE_REASONS
 
 
 def get_cancellation_display_label(
@@ -148,7 +159,7 @@ def compute_cancellation_fee(
 
     if not policy or not policy.get("enabled"):
         return CancellationFeeResult(
-            is_billable=(code in BILLABLE_REASONS),
+            is_billable=(code in LEGACY_BILLABLE_REASONS),
             percent=None,
             tier_id=None,
             fee_amount=_ZERO,

@@ -36,11 +36,9 @@ export type CompanyFleetCockpitProps = {
   realtimeStatus: string;
   realtimeDataFreshness?: string;
   realtimeLastEventAt?: string | null;
-  canDispatchManage: boolean;
   refreshing?: boolean;
   onRefresh?: () => void;
   onOpenDatePicker: () => void;
-  onOpenModePicker?: () => void;
   onViewMission?: (missionId: number) => void;
   onMessage?: () => void;
   opsFeed: DashboardOpsFeedProps;
@@ -126,11 +124,9 @@ export function CompanyFleetCockpit({
   realtimeStatus,
   realtimeDataFreshness,
   realtimeLastEventAt,
-  canDispatchManage,
   refreshing = false,
   onRefresh,
   onOpenDatePicker,
-  onOpenModePicker,
   onViewMission,
   onMessage,
   opsFeed,
@@ -375,8 +371,8 @@ export function CompanyFleetCockpit({
                 ) : null
               }
               topSafeAreaPx={0}
+              showModeChip={false}
               onOpenDatePicker={onOpenDatePicker}
-              onOpenModePicker={canDispatchManage ? onOpenModePicker : undefined}
             />
           </View>
         </View>

@@ -19,6 +19,18 @@ jest.mock("./services/missionSyncOrchestrator", () => ({
   scheduleDriverMissionSync: jest.fn(),
 }));
 
+const mockUpdateDriverTrackingStatus = jest.fn();
+
+jest.mock("./tracking", () => ({
+  getTrackingSnapshot: jest.fn(() => ({
+    missionId: 1,
+    missionStatus: "IN_PROGRESS",
+    isRunning: true,
+    queueDepth: 0,
+  })),
+  updateDriverTrackingStatus: (...args: unknown[]) => mockUpdateDriverTrackingStatus(...args),
+}));
+
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { applyDriverSocketEvent } = require("./realtime") as typeof import("./realtime");
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -31,6 +43,7 @@ function recentIso(offsetMs: number): string {
 describe("driver realtime merge behavior", () => {
   beforeEach(() => {
     missionRuntimeManager.resetForTests();
+    mockUpdateDriverTrackingStatus.mockReset();
   });
 
   it("applies event only once when sequence is duplicated", () => {
@@ -91,6 +104,29 @@ describe("driver realtime merge behavior", () => {
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: driverQueryKeys.missionDetail(contextId, 7),
     });
+    queryClient.clear();
+  });
+
+  it("stops tracking immediately on terminal return_completed socket event", () => {
+    const queryClient = new QueryClient();
+    const contextId = "driver:42";
+    queryClient.setQueryData(driverQueryKeys.missions(contextId), [
+      {
+        id: 1,
+        status: "IN_PROGRESS",
+        updated_at: recentIso(-30_000),
+      },
+    ]);
+
+    applyDriverSocketEvent(queryClient, contextId, {
+      mission_id: 1,
+      event_type: "mission_status_changed",
+      event_sequence: 5,
+      updated_at: recentIso(0),
+      payload: { status: "return_completed" },
+    });
+
+    expect(mockUpdateDriverTrackingStatus).toHaveBeenCalledWith("COMPLETED");
     queryClient.clear();
   });
 });

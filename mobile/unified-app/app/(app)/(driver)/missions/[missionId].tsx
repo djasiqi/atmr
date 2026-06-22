@@ -41,12 +41,12 @@ export default function DriverMissionDetailScreen() {
   const missionQuery = useDriverMissionDetailQuery(
     Number.isFinite(missionIdNumber) ? missionIdNumber : null
   );
+  const mission = missionQuery.data;
   const etaQuery = useDynamicEtaQuery(Number.isFinite(missionIdNumber) ? missionIdNumber : null, {
     missionStatus: mission?.status ?? null,
   });
   const transition = useDriverStatusTransition();
   const liveTrackingGuard = useMissionLiveTrackingGuard();
-  const mission = missionQuery.data;
 
   const handleMissionTransition = (nextStatus: DriverTransitionStatus) => {
     if (!mission?.id) return;

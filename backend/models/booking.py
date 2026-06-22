@@ -28,6 +28,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from ext import db
+from shared.driver_display import format_driver_display_name
 from shared.serialize_compat import as_serialize_result
 from shared.time_utils import (
     api_scheduled_iso_to_naive_geneva,
@@ -432,6 +433,11 @@ class Booking(db.Model):
             return str(u.username)
         return "Non spécifié"
 
+    @property
+    def driver_display_name(self) -> str | None:
+        """Nom affichable du chauffeur assigné (sans « None None »)."""
+        return format_driver_display_name(getattr(self, "driver", None))
+
     def get_effective_payer(self) -> dict[str, Any]:
         btype = (_as_str(self.billed_to_type) or "patient").lower()
         if btype != "patient" and getattr(self, "billed_to_company", None):
@@ -600,24 +606,12 @@ class Booking(db.Model):
                 "username": self.driver.user.username if self.driver.user else None,
                 "first_name": self.driver.user.first_name if self.driver.user else None,
                 "last_name": self.driver.user.last_name if self.driver.user else None,
-                "full_name": (
-                    (
-                        f"{self.driver.user.first_name or ''} "
-                        + f"{self.driver.user.last_name or ''}"
-                    ).strip()
-                    or self.driver.user.username
-                    if self.driver.user
-                    else None
-                ),
+                "full_name": self.driver_display_name,
             }
             if self.driver
             else None,
             "driver_id": self.driver_id,
-            "driver_name": (
-                f"{self.driver.user.first_name} {self.driver.user.last_name}".strip()
-                if self.driver and self.driver.user
-                else None
-            ),
+            "driver_name": self.driver_display_name,
             "duration_seconds": self.duration_seconds,
             "distance_meters": self.distance_meters,
             "medical_facility": self.medical_facility or "Non spécifié",
@@ -771,22 +765,10 @@ class Booking(db.Model):
             "is_transferred": is_transferred,
             "active_transfer": active_transfer,
             "driver_id": self.driver_id,
-            "driver_name": (
-                f"{self.driver.user.first_name} {self.driver.user.last_name}".strip()
-                if self.driver and self.driver.user
-                else None
-            ),
+            "driver_name": self.driver_display_name,
             "driver": {
                 "id": self.driver.id,
-                "full_name": (
-                    (
-                        f"{self.driver.user.first_name or ''} "
-                        f"{self.driver.user.last_name or ''}"
-                    ).strip()
-                    or (self.driver.user.username if self.driver.user else None)
-                    if self.driver and self.driver.user
-                    else None
-                ),
+                "full_name": self.driver_display_name,
             }
             if self.driver
             else None,

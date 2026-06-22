@@ -14,6 +14,9 @@ import { isFeatureEnabled } from "../../core/featureFlags/registry";
 import { AppState } from "react-native";
 import { evaluateConnectivityPolicy } from "../../core/network/connectivityPolicy";
 import { getNetworkSnapshot } from "../../core/network/networkState";
+import { isTrackingActiveStatus } from "./domain/status";
+import { normalizeDriverMissionStatus } from "./statusDictionary";
+import { getTrackingSnapshot, updateDriverTrackingStatus } from "./tracking";
 
 type RuntimeState = {
   contextId: string | null;
@@ -127,6 +130,24 @@ function shouldApplyEvent(
   return true;
 }
 
+function maybeStopTrackingOnTerminalMissionStatus(
+  missionId: number,
+  payload: Record<string, unknown>,
+  localMission: DriverMission | undefined
+): void {
+  const rawStatus =
+    typeof payload.status === "string"
+      ? payload.status
+      : typeof localMission?.status === "string"
+        ? localMission.status
+        : null;
+  const normalized = normalizeDriverMissionStatus(rawStatus);
+  if (isTrackingActiveStatus(normalized)) return;
+  const tracking = getTrackingSnapshot();
+  if (tracking.missionId !== missionId) return;
+  updateDriverTrackingStatus(normalized);
+}
+
 export function applyDriverSocketEvent(
   queryClient: QueryClient,
   contextId: string,
@@ -210,6 +231,19 @@ export function applyDriverSocketEvent(
     }
     return missions;
   });
+
+  const payload = canonicalEvent.payload ?? {};
+  if (typeof payload.status === "string" || canonicalType === "mission_status_changed") {
+    const missions =
+      (queryClient.getQueryData(driverQueryKeys.missions(contextId)) as DriverMission[] | undefined) ??
+      [];
+    const localMission = missions.find((mission) => mission.id === canonicalEvent.mission_id);
+    maybeStopTrackingOnTerminalMissionStatus(
+      canonicalEvent.mission_id,
+      payload as Record<string, unknown>,
+      localMission
+    );
+  }
 }
 
 export function startDriverRealtimePolling(queryClient: QueryClient, contextId: string) {

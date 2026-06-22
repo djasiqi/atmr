@@ -43,6 +43,7 @@ import {
 } from "./tracking";
 import { DriverMission, DriverMissionStatus, DriverTransitionStatus } from "./types";
 import { normalizeDriverMissionStatus } from "./statusDictionary";
+import { isTrackingActiveStatus } from "./domain/status";
 import { useDriverRuntimeResume } from "./runtimeResume";
 
 export function useActiveDriverContextId(): string | null {
@@ -348,6 +349,10 @@ export function useDriverTracking(missionId: number | null, missionStatus: strin
       });
     }
     if (!missionId) {
+      stopDriverTracking();
+      return;
+    }
+    if (!isTrackingActiveStatus(normalized)) {
       stopDriverTracking();
       return;
     }

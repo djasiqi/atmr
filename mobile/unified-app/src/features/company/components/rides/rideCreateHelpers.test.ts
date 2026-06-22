@@ -4,9 +4,20 @@ import {
   computeRecurrencePreview,
   parseMedicalHintsFromAddress,
   parseSimulationAmount,
+  resolvePreferentialBookingAmount,
 } from "./rideCreateHelpers";
 
 describe("rideCreateHelpers", () => {
+  describe("resolvePreferentialBookingAmount", () => {
+    it("conserve le tarif par trajet en aller simple", () => {
+      expect(resolvePreferentialBookingAmount(35, false)).toBe(35);
+    });
+
+    it("double le tarif en aller-retour", () => {
+      expect(resolvePreferentialBookingAmount(35, true)).toBe(70);
+    });
+  });
+
   describe("parseSimulationAmount", () => {
     it("lit le montant racine", () => {
       expect(parseSimulationAmount({ amount: 45.5 })).toBe(45.5);

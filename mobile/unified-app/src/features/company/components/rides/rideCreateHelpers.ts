@@ -9,6 +9,16 @@ export function backendWeekdayFromScheduledIso(raw: string): number | null {
   return (d.getDay() + 6) % 7;
 }
 
+/** Tarif préférentiel client = CHF / trajet ; en A/R le formulaire porte le total. */
+export function resolvePreferentialBookingAmount(
+  perLegRate: number,
+  isRoundTrip: boolean,
+): number {
+  const rate = Number(perLegRate);
+  if (!Number.isFinite(rate) || rate <= 0) return rate;
+  return isRoundTrip ? Math.round(rate * 2 * 100) / 100 : rate;
+}
+
 export function parseSimulationAmount(payload: unknown): number | null {
   if (!payload || typeof payload !== "object") return null;
   const raw = payload as Record<string, unknown>;

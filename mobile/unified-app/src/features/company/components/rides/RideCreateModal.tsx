@@ -22,6 +22,12 @@ import { useActiveCompanyContextId } from "../../hooks";
 import { searchCompanyAddresses } from "../../api/companyApi";
 import { AddressSelector } from "./AddressSelector";
 import { ClientSelector } from "./ClientSelector";
+import {
+  sectionsHiddenDuringSuggestionStyle,
+  suggestionOverlayFieldStyle,
+  suggestionOverlayFieldWithBgStyle,
+  suggestionOverlaySectionStyle,
+} from "./suggestionOverlayStyles";
 import { RecurrenceSelector } from "./RecurrenceSelector";
 import { TimeDatePicker } from "./TimeDatePicker";
 import { ClientCreateModal } from "./ClientCreateModal";
@@ -34,6 +40,7 @@ import {
   computeRecurrencePreview,
   parseMedicalHintsFromAddress,
   parseSimulationAmount,
+  resolvePreferentialBookingAmount,
 } from "./rideCreateHelpers";
 import { FONT_SIZE } from "../../../../design/responsive/typographyTokens";
 import { createShadow } from "../../../../styles/shadowStyles";
@@ -1012,10 +1019,28 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
   const [routePointsForPricing, setRoutePointsForPricing] = useState<{ lat: number; lng: number }[]>([]);
   const [routeDistanceMeters, setRouteDistanceMeters] = useState<number | null>(null);
   const [routeDurationSeconds, setRouteDurationSeconds] = useState<number | null>(null);
+  const [routePricingReady, setRoutePricingReady] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [openSuggestionFields, setOpenSuggestionFields] = useState<readonly string[]>([]);
   const priceAutoOpenedRef = useRef(false);
   const swapRotation = useRef(new Animated.Value(0)).current;
   const swapRotationTargetRef = useRef(0);
+
+  const openSuggestionSet = useMemo(() => new Set(openSuggestionFields), [openSuggestionFields]);
+  const anySuggestionOverlayOpen = openSuggestionFields.length > 0;
+  const clientSuggestionOverlayOpen = openSuggestionSet.has("client");
+  const pickupSuggestionOverlayOpen = openSuggestionSet.has("pickup");
+  const dropoffSuggestionOverlayOpen = openSuggestionSet.has("dropoff");
+  const addressSuggestionOverlayOpen = pickupSuggestionOverlayOpen || dropoffSuggestionOverlayOpen;
+
+  const handleAddressSuggestionsVisibility = useCallback((fieldKey: string, visible: boolean) => {
+    setOpenSuggestionFields((prev) => {
+      const next = new Set(prev);
+      if (visible) next.add(fieldKey);
+      else next.delete(fieldKey);
+      return [...next];
+    });
+  }, []);
 
   const handleSwapAddresses = useCallback(() => {
     form.swapAddresses();
@@ -1054,7 +1079,7 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
     };
   }, []);
   const clientDetailHydrationKeyRef = useRef<string>("");
-  const lastSimulationKeyRef = useRef<string>("");
+  const completedSimulationKeyRef = useRef<string>("");
   const activeSimulationKeyRef = useRef<string>("");
   const simulationRequestSeqRef = useRef(0);
   const amountLockedRef = useRef(false);
@@ -1068,6 +1093,8 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
   const clientDetailQuery = useCompanyClientDetail(form.clientId);
   const pricingContextQuery = useCompanyBillingPricingContext();
   const pricingSimulation = useCompanyPricingSimulation();
+  const pricingSimulateMutateRef = useRef(pricingSimulation.mutate);
+  pricingSimulateMutateRef.current = pricingSimulation.mutate;
   const {
     pickup,
     clientId,
@@ -1283,7 +1310,7 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
     const enriched = await enrichAddressWithPlaceDetails(address);
     if (enriched !== address && hasValidCoords(enriched)) {
       form.selectPickupAddress(enriched);
-      lastSimulationKeyRef.current = "";
+      completedSimulationKeyRef.current = "";
     }
   }, [form]);
 
@@ -1292,7 +1319,7 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
     const enriched = await enrichAddressWithPlaceDetails(address);
     if (enriched !== address && hasValidCoords(enriched)) {
       form.selectDropoffAddress(enriched);
-      lastSimulationKeyRef.current = "";
+      completedSimulationKeyRef.current = "";
     }
   }, [form]);
 
@@ -1333,7 +1360,9 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
       form.setWheelchairClient(false);
     }
     if (parseOptionalAmount(form.amountInput) == null && client.preferentialRate && client.preferentialRate > 0) {
-      form.setAmountInput(client.preferentialRate.toFixed(2));
+      form.setAmountInput(
+        resolvePreferentialBookingAmount(client.preferentialRate, form.isRoundTrip).toFixed(2),
+      );
       setAmountSource("preferential");
       setAmountLocked(false);
     }
@@ -1392,7 +1421,9 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
       if (detail.wheelchairProvide) setWheelchairProvide(true);
     }
     if (parseOptionalAmount(amountInput) == null && detail.preferentialRate && detail.preferentialRate > 0) {
-      setAmountInput(detail.preferentialRate.toFixed(2));
+      setAmountInput(
+        resolvePreferentialBookingAmount(detail.preferentialRate, isRoundTrip).toFixed(2),
+      );
       setAmountSource("preferential");
       setAmountLocked(false);
     }
@@ -1404,6 +1435,7 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
     dropoffAccessNotes,
     establishment,
     hospitalService,
+    isRoundTrip,
     notesMedical,
     pickup,
     pickupAccessNotes,
@@ -1430,7 +1462,7 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
       setSelectedClientPreferentialRate(null);
       setBillToPatient(false);
       clientDetailHydrationKeyRef.current = "";
-      lastSimulationKeyRef.current = "";
+      completedSimulationKeyRef.current = "";
       activeSimulationKeyRef.current = "";
       simulationRequestSeqRef.current = 0;
       simulationCacheRef.current.clear();
@@ -1442,10 +1474,12 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
   useEffect(() => {
     let cancelled = false;
     const loadRouteData = async () => {
+      setRoutePricingReady(false);
       if (!hasValidCoords(pickupAddress) || !hasValidCoords(dropoffAddress)) {
         setRoutePointsForPricing([]);
         setRouteDistanceMeters(null);
         setRouteDurationSeconds(null);
+        if (!cancelled) setRoutePricingReady(true);
         return;
       }
       const pickupLat = Number(pickupAddress?.latitude);
@@ -1466,6 +1500,7 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
         setRoutePointsForPricing([]);
         setRouteDistanceMeters(null);
         setRouteDurationSeconds(null);
+        if (!cancelled) setRoutePricingReady(true);
         return;
       }
 
@@ -1500,6 +1535,8 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
         setRoutePointsForPricing([]);
         setRouteDistanceMeters(null);
         setRouteDurationSeconds(null);
+      } finally {
+        if (!cancelled) setRoutePricingReady(true);
       }
     };
     void loadRouteData();
@@ -1561,7 +1598,7 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
         const resolved = scored[0]?.row ?? null;
         if (!resolved || cancelled) return;
         setResolved(resolved);
-        lastSimulationKeyRef.current = "";
+        completedSimulationKeyRef.current = "";
       } catch {
         // Best effort: si l'auto-résolution échoue, l'utilisateur peut saisir manuellement.
       }
@@ -1626,7 +1663,9 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
     if (isMaterialDelivery) return;
     if (activePreferentialAmount != null) {
       if (!amountLocked) {
-        setAmountInput(activePreferentialAmount.toFixed(2));
+        setAmountInput(
+          resolvePreferentialBookingAmount(activePreferentialAmount, isRoundTrip).toFixed(2),
+        );
         setAmountSource("preferential");
         setPricingWarning("");
       }
@@ -1641,12 +1680,15 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
     amountLocked,
     amountSource,
     isMaterialDelivery,
+    isRoundTrip,
     setAmountInput,
   ]);
 
   useEffect(() => {
     if (isMaterialDelivery || amountLocked || amountSource === "preferential") return;
     if (!pickupAddress || !dropoffAddress || !scheduledOk) return;
+    if (!routePricingReady) return;
+    if (pricingContextQuery.isLoading) return;
     const pickupLat = Number(pickupAddress.latitude);
     const pickupLng = Number(pickupAddress.longitude);
     const dropoffLat = Number(dropoffAddress.latitude);
@@ -1674,8 +1716,9 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
       toRoundedCoord(dropoffLat).toFixed(COORD_PRECISION),
       toRoundedCoord(dropoffLng).toFixed(COORD_PRECISION),
       String(routePointsForPricing.length),
+      String(routeDistanceMeters ?? ""),
     ].join("|");
-    if (lastSimulationKeyRef.current === simulationKey) {
+    if (completedSimulationKeyRef.current === simulationKey) {
       return;
     }
     const cached = simulationCacheRef.current.get(simulationKey);
@@ -1683,15 +1726,15 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
       setAmountInput(cached.amount.toFixed(2));
       setAmountSource("simulated");
       setPricingWarning(cached.warningMessage || "");
-      lastSimulationKeyRef.current = simulationKey;
+      completedSimulationKeyRef.current = simulationKey;
       return;
     }
-    lastSimulationKeyRef.current = simulationKey;
     activeSimulationKeyRef.current = simulationKey;
     simulationRequestSeqRef.current += 1;
     const requestSeq = simulationRequestSeqRef.current;
     setPricingWarning("");
     const timer = setTimeout(() => {
+      if (completedSimulationKeyRef.current === simulationKey) return;
       const payload = {
         pricing_profile_version_id: pricingProfileVersionId,
         booking: {
@@ -1707,7 +1750,7 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
               : undefined,
         },
       };
-      pricingSimulation.mutate(payload, {
+      pricingSimulateMutateRef.current(payload, {
         onSuccess: (response) => {
           if (
             requestSeq !== simulationRequestSeqRef.current ||
@@ -1724,15 +1767,18 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
             setPricingWarning("");
           }
           if (analysis.blocked) {
+            completedSimulationKeyRef.current = "";
             return;
           }
           const amount = analysis.amount ?? parseSimulationAmount(response);
           if (amount == null) {
             setPricingWarning("Calcul auto indisponible: saisissez un montant.");
+            completedSimulationKeyRef.current = "";
             return;
           }
           setAmountInput(amount.toFixed(2));
           setAmountSource("simulated");
+          completedSimulationKeyRef.current = simulationKey;
           simulationCacheRef.current.set(simulationKey, {
             amount,
             warningMessage: analysis.warningMessage,
@@ -1749,6 +1795,7 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
           ) {
             return;
           }
+          completedSimulationKeyRef.current = "";
           setPricingWarning("Calcul auto indisponible: saisissez un montant.");
         },
       });
@@ -1763,11 +1810,12 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
     pickupAddress,
     scheduledAt,
     pricingContextQuery.data?.pricingProfileVersionId,
-    pricingSimulation,
+    pricingContextQuery.isLoading,
+    routeDistanceMeters,
     routePointsForPricing,
+    routePricingReady,
     scheduledOk,
     setAmountInput,
-    clientId,
   ]);
 
   const submit = async () => {
@@ -1985,7 +2033,7 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
     if (!amountSource) return null;
     if (amountSource === "preferential") {
       return {
-        label: "Tarif préférentiel",
+        label: isRoundTrip ? "Tarif préférentiel · total A/R" : "Tarif préférentiel",
         borderColor: "rgba(14, 116, 144, 0.34)",
         backgroundColor: "rgba(14, 116, 144, 0.10)",
         textColor: "#0E7490",
@@ -2005,7 +2053,36 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
       backgroundColor: "rgba(249, 115, 22, 0.10)",
       textColor: "#C2410C",
     };
-  }, [amountSource]);
+  }, [amountSource, isRoundTrip]);
+
+  const priceEstimateSubtext = useMemo(() => {
+    if (amountSource === "preferential") {
+      if (isRoundTrip && activePreferentialAmount != null) {
+        const perLeg = activePreferentialAmount.toFixed(2).replace(".", ",");
+        return `Tarif préférentiel · ${perLeg} CHF × 2 trajets`;
+      }
+      return "Tarif préférentiel · par trajet";
+    }
+    if (amountSource === "simulated") return "Tarif conseillé";
+    if (pricingSimulation.isPending && !amountLocked) return "Calcul en cours…";
+    if (pricingWarning.trim().length > 0) return pricingWarning;
+    if (section1Complete && !routePricingReady) return "Calcul de l'itinéraire…";
+    if (!scheduledOk) return "Renseignez la date et l'heure de départ";
+    if (!pickupAddress || !dropoffAddress) return "Renseignez les adresses";
+    return "En attente du calcul";
+  }, [
+    activePreferentialAmount,
+    amountLocked,
+    amountSource,
+    isRoundTrip,
+    pickupAddress,
+    dropoffAddress,
+    pricingSimulation.isPending,
+    pricingWarning,
+    routePricingReady,
+    scheduledOk,
+    section1Complete,
+  ]);
 
   const header = () => (
     <View style={s.headerRow}>
@@ -2137,6 +2214,7 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
           {/* ============================================== */}
           {/* Section 1 — Informations essentielles          */}
           {/* ============================================== */}
+          <View style={anySuggestionOverlayOpen ? suggestionOverlaySectionStyle : undefined}>
           <RideCreateSection
             number={1}
             title="Informations essentielles"
@@ -2144,7 +2222,12 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
             complete={section1Complete}
           >
             <View style={s.formGroup}>
-              <View style={s.inlineActionRow}>
+              <View
+                style={[
+                  s.inlineActionRow,
+                  clientSuggestionOverlayOpen ? suggestionOverlayFieldWithBgStyle : null,
+                ]}
+              >
                 <View style={s.inlineActionGrow}>
                   <ClientSelector
                     showFieldLabel={false}
@@ -2152,6 +2235,9 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
                     onChange={form.setClientId}
                     onSelectClient={handleClientSelected}
                     onCreateClient={() => setCreateClientVisible(true)}
+                    onSuggestionsVisibilityChange={(visible) =>
+                      handleAddressSuggestionsVisibility("client", visible)
+                    }
                     leftSlot={<Ionicons name="person-outline" size={FIELD_ICON_SIZE} color={E.TEXT_SEC} />}
                   />
                 </View>
@@ -2173,7 +2259,11 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
                   />
                 </Pressable>
               </View>
+            </View>
+
+            <View style={clientSuggestionOverlayOpen ? sectionsHiddenDuringSuggestionStyle : undefined}>
               {form.isMaterialDelivery ? (
+                <View style={s.formGroup}>
                 <View style={s.inlineActionRow}>
                   <View style={s.inlineActionGrow}>
                     <AppInput
@@ -2219,6 +2309,7 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
                     importantForAccessibility="no"
                   />
                 </View>
+                </View>
               ) : null}
               {clientDetailQuery.data?.hasActiveStay ? (
                 <View style={[s.subCard, s.subCardBordered]}>
@@ -2242,12 +2333,21 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
                   </Pressable>
                 </View>
               ) : null}
-            </View>
 
             <View style={s.formGroupDivider} />
 
-            <View style={s.pickupDropoffSplit}>
+            <View
+              style={[
+                s.pickupDropoffSplit,
+                addressSuggestionOverlayOpen ? suggestionOverlayFieldStyle : null,
+              ]}
+            >
               <View style={s.addressColumnLeft}>
+                <View
+                  style={
+                    pickupSuggestionOverlayOpen ? suggestionOverlayFieldWithBgStyle : undefined
+                  }
+                >
                 <AddressSelector
                   label=""
                   value={form.pickup}
@@ -2255,11 +2355,25 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
                   onSelectAddress={(address) => {
                     void handlePickupAddressSelected(address);
                   }}
+                  onSuggestionsVisibilityChange={(visible) =>
+                    handleAddressSuggestionsVisibility("pickup", visible)
+                  }
                   placeholder="Adresse de départ…"
                   leftSlot={<Ionicons name="navigate-outline" size={16} color={E.TEXT_SEC} />}
                   shellStyle={s.addressShell}
                   required
                 />
+                </View>
+                <View
+                  style={
+                    pickupSuggestionOverlayOpen ? sectionsHiddenDuringSuggestionStyle : undefined
+                  }
+                >
+                <View
+                  style={
+                    dropoffSuggestionOverlayOpen ? suggestionOverlayFieldWithBgStyle : undefined
+                  }
+                >
                 <AddressSelector
                   label=""
                   value={form.dropoff}
@@ -2283,12 +2397,24 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
                       form.setNotesMedical(hints.notesMedical);
                     }
                   }}
+                  onSuggestionsVisibilityChange={(visible) =>
+                    handleAddressSuggestionsVisibility("dropoff", visible)
+                  }
                   placeholder="Adresse de destination…"
                   leftSlot={<Ionicons name="location-outline" size={16} color={E.TEXT_SEC} />}
                   shellStyle={s.addressShell}
                   required
                 />
+                </View>
+                </View>
               </View>
+              <View
+                style={
+                  pickupSuggestionOverlayOpen || dropoffSuggestionOverlayOpen
+                    ? sectionsHiddenDuringSuggestionStyle
+                    : undefined
+                }
+              >
               <View style={s.addressActionsColumn}>
                 <Animated.View style={swapRotateStyle}>
                   <Pressable
@@ -2303,8 +2429,21 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
                 </Animated.View>
                 <Pressable
                   onPress={() => {
-                    form.setIsRoundTrip(!form.isRoundTrip);
-                    if (!form.isRoundTrip) setExtraInfoOpen(true);
+                    const nextRound = !form.isRoundTrip;
+                    form.setIsRoundTrip(nextRound);
+                    if (nextRound) setExtraInfoOpen(true);
+                    if (
+                      !amountLocked &&
+                      amountSource === "preferential" &&
+                      activePreferentialAmount != null
+                    ) {
+                      setAmountInput(
+                        resolvePreferentialBookingAmount(
+                          activePreferentialAmount,
+                          nextRound,
+                        ).toFixed(2),
+                      );
+                    }
                   }}
                   style={[
                     s.actionRoundBtn,
@@ -2322,8 +2461,14 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
                   />
                 </Pressable>
               </View>
+              </View>
             </View>
 
+            <View
+              style={
+                dropoffSuggestionOverlayOpen ? sectionsHiddenDuringSuggestionStyle : undefined
+              }
+            >
             <View style={{ marginTop: 10 }}>
               <RideRoutePreview
                 pickupLat={pickupAddress ? Number(pickupAddress.latitude) : null}
@@ -2386,8 +2531,9 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
                     display="split"
                     emptyLabel="À définir"
                     emptyPreviewReferenceIso={form.scheduledAt}
-                    modalTitle="Date retour"
+                    modalTitle="Heure de retour"
                     accessibilityLabel="Choisir la date et l’heure de retour"
+                    timeAccessibilityLabel="Choisir l’heure de retour"
                     tonal
                   />
                 </View>
@@ -2666,8 +2812,12 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
               </View>
             ) : null}
             </View>
+            </View>
+            </View>
           </RideCreateSection>
+          </View>
 
+          <View style={anySuggestionOverlayOpen ? sectionsHiddenDuringSuggestionStyle : undefined}>
           <View style={s.sectionDivider} />
 
           {/* ============================================== */}
@@ -2690,8 +2840,10 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
                     if (amountLocked) {
                       setAmountLocked(false);
                       setAmountSource(null);
-                      lastSimulationKeyRef.current = "";
                     }
+                    completedSimulationKeyRef.current = "";
+                    activeSimulationKeyRef.current = "";
+                    setPricingWarning("");
                   }}
                   style={s.priceCardEstimate}
                   accessibilityRole="button"
@@ -2714,12 +2866,8 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
                     </AppText>
                     <AppText variant="label" style={s.priceCardAmountUnit}>CHF</AppText>
                   </View>
-                  <AppText variant="caption" style={s.priceCardSubtext} numberOfLines={1}>
-                    {amountSource === "preferential"
-                      ? "Tarif préférentiel"
-                      : amountSource === "simulated"
-                        ? "Tarif conseillé"
-                        : "En attente du calcul"}
+                  <AppText variant="caption" style={s.priceCardSubtext} numberOfLines={2}>
+                    {priceEstimateSubtext}
                   </AppText>
                 </Pressable>
                 <Pressable
@@ -2768,7 +2916,7 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
                       onPress={() => {
                         setAmountLocked(false);
                         setAmountSource(null);
-                        lastSimulationKeyRef.current = "";
+                        completedSimulationKeyRef.current = "";
                       }}
                       style={s.linkNewClient}
                       accessibilityRole="button"
@@ -2805,7 +2953,9 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
                     : "Calcul du montant en cours…"}
                 </AppText>
               ) : null}
-              {pricingWarning ? <AppText style={s.sectionHelper}>{pricingWarning}</AppText> : null}
+              {pricingWarning && amountSource != null ? (
+                <AppText style={s.sectionHelper}>{pricingWarning}</AppText>
+              ) : null}
             </RideCreateSection>
           ) : null}
 
@@ -2930,6 +3080,7 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
             </View>
 
           </RideCreateSection>
+          </View>
 
           {error ? (
             <AppText variant="error" style={s.error}>

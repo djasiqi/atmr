@@ -17,14 +17,18 @@ from application.bookings.cancellation_rules import (
 class TestIsCancellationBillable:
     """Tests pour is_cancellation_billable()."""
 
-    @pytest.mark.parametrize("code", ["LAST_MINUTE", "NO_SHOW", "CLIENT_REQUEST"])
+    @pytest.mark.parametrize("code", ["LAST_MINUTE", "NO_SHOW"])
     def test_billable_reasons(self, code: str) -> None:
-        """Motifs facturables retournent True."""
+        """Motifs facturables (legacy) retournent True."""
         assert is_cancellation_billable(code) is True
         assert is_cancellation_billable(code.lower()) is True
 
+    def test_client_request_not_billable_without_context(self) -> None:
+        """CLIENT_REQUEST seul ne suffit pas (dépend statut/paliers)."""
+        assert is_cancellation_billable("CLIENT_REQUEST") is False
+
     @pytest.mark.parametrize(
-        "code", ["COMPANY_ISSUE", "MAJOR_DELAY", "VEHICLE_ISSUE", "OTHER"]
+        "code", ["COMPANY_ISSUE", "MAJOR_DELAY", "VEHICLE_ISSUE", "OTHER", "CLIENT_REQUEST"]
     )
     def test_non_billable_reasons(self, code: str) -> None:
         """Motifs non facturables retournent False."""

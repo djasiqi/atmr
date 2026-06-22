@@ -839,7 +839,7 @@ export function useCompanyRideActions() {
       onSuccess: (_, params) => invalidateScope(params.missionId),
     }),
     transfer: useMutation({
-      mutationFn: (params: { missionId: number; targetCompanyId: number }) =>
+      mutationFn: (params: { missionId: number; partnershipId: number }) =>
         transferCompanyRide({ contextId: contextId as string, ...params }),
       onSuccess: (_, params) => invalidateScope(params.missionId),
     }),

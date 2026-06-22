@@ -10,6 +10,8 @@ export type TrackingState = {
   isTracking: boolean;
   mode: TrackingRuntimeMode;
   lastUpdate?: number;
+  lastAckAt?: number;
+  queueDepth: number;
   accuracy?: number;
 };
 
@@ -29,6 +31,12 @@ function mapSnapshotToTrackingState(
         ? Date.parse(snapshot.lastSentAt)
         : undefined
       : undefined,
+    lastAckAt: snapshot.lastAckAt
+      ? Number.isFinite(Date.parse(snapshot.lastAckAt))
+        ? Date.parse(snapshot.lastAckAt)
+        : undefined
+      : undefined,
+    queueDepth: snapshot.queueDepth,
     accuracy: undefined,
   };
 }

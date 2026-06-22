@@ -15,7 +15,18 @@ import { useResponsiveTokens } from "../../../../design/responsive";
 import { Modal } from "../../../../design/ui/LegacyModal";
 import { AppText } from "../../../../design/ui/AppText";
 import { E } from "../../theme/enterpriseOpsTheme";
-import { normalizeScheduledTimeIso } from "../../useRideForms";
+import {
+  buildGenevaScheduleFromLocalCalendarDay,
+  clampZurichDayToToday,
+  dateFromZurichWallParts,
+  formatNaiveIsoInZurich,
+  getTodayStartInZurich,
+  isSameZurichDay,
+  mergeZurichDayAndTime,
+  parseScheduledTimeInstant,
+  startOfZurichDay,
+  zurichWallPartsFromDate,
+} from "../../utils/companyDateUtils";
 import { FONT_SIZE } from "../../../../design/responsive/typographyTokens";
 
 const SWISS_TZ = "Europe/Zurich";
@@ -631,15 +642,11 @@ const styles = StyleSheet.create({
 });
 
 function parseToDate(iso: string): Date | null {
-  const n = normalizeScheduledTimeIso(iso);
-  if (!n) return null;
-  const d = new Date(n.includes("T") ? n : `${n}T00:00:00`);
-  return Number.isNaN(d.getTime()) ? null : d;
+  return parseScheduledTimeInstant(iso);
 }
 
 function toLocalIsoMinute(d: Date): string {
-  const pad = (x: number) => String(x).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
+  return formatNaiveIsoInZurich(d);
 }
 
 function getMonthTitle(d: Date): string {
@@ -733,31 +740,38 @@ const SCHEDULE_MIN_LEAD_MS = 15 * 60 * 1000;
  * Si la date est dans le passé ou le même jour mais trop tôt : jour courant (aujourd’hui) et
  * au moins maintenant + 15 minutes, aligné sur les créneaux de 5 minutes du picker.
  */
-function enforceMinSchedule(candidate: Date, todayStart: Date): Date {
+function enforceMinSchedule(candidate: Date, todayStartZurich: Date): Date {
   const minInstant = Date.now() + SCHEDULE_MIN_LEAD_MS;
-  const candDay = startOfDay(candidate);
-  const todayDay = startOfDay(todayStart);
+  const candDay = startOfZurichDay(candidate);
+  const todayDay = startOfZurichDay(todayStartZurich);
+
+  // Jour futur à Genève : conserver la date/heure choisie (ne pas ramener à aujourd’hui).
+  if (candDay.getTime() > todayDay.getTime()) {
+    return candidate;
+  }
 
   let result = new Date(candidate);
   let adjusted = false;
 
-  if (candDay < todayDay) {
+  if (candDay.getTime() < todayDay.getTime()) {
     result = new Date(minInstant);
     adjusted = true;
-  } else if (isSameDay(candidate, todayStart) && result.getTime() < minInstant) {
+  } else if (isSameZurichDay(candidate, todayStartZurich) && result.getTime() < minInstant) {
     result = new Date(minInstant);
     adjusted = true;
   }
 
-  if (adjusted || (isSameDay(result, todayStart) && result.getTime() < minInstant)) {
-    let m = nearestFiveMinute(result.getMinutes());
-    result.setMinutes(m, 0, 0);
+  if (adjusted || (isSameZurichDay(result, todayStartZurich) && result.getTime() < minInstant)) {
+    let parts = zurichWallPartsFromDate(result);
+    let m = nearestFiveMinute(parts.minute);
+    result = dateFromZurichWallParts(parts.year, parts.month, parts.day, parts.hour, m, 0);
     while (result.getTime() < minInstant) {
-      const nm = result.getMinutes() + TIME_MINUTE_STEP;
+      parts = zurichWallPartsFromDate(result);
+      const nm = parts.minute + TIME_MINUTE_STEP;
       if (nm >= 60) {
-        result.setHours(result.getHours() + 1, nm - 60, 0, 0);
+        result = dateFromZurichWallParts(parts.year, parts.month, parts.day, parts.hour + 1, nm - 60, 0);
       } else {
-        result.setMinutes(nm, 0, 0);
+        result = dateFromZurichWallParts(parts.year, parts.month, parts.day, parts.hour, nm, 0);
       }
     }
   }
@@ -766,9 +780,8 @@ function enforceMinSchedule(candidate: Date, todayStart: Date): Date {
 }
 
 function formatSwissDisplay(iso: string): string {
-  const n = normalizeScheduledTimeIso(iso);
-  if (!n) return "";
-  const d = parseToDate(n);
+  if (!iso.trim()) return "";
+  const d = parseToDate(iso);
   if (!d) return "";
   return d.toLocaleString("fr-CH", {
     timeZone: SWISS_TZ,
@@ -781,9 +794,8 @@ function formatSwissDisplay(iso: string): string {
 }
 
 function formatSwissDateOnlyDisplay(iso: string): string {
-  const n = normalizeScheduledTimeIso(iso);
-  if (!n) return "";
-  const d = parseToDate(n);
+  if (!iso.trim()) return "";
+  const d = parseToDate(iso);
   if (!d) return "";
   return d.toLocaleDateString("fr-CH", {
     timeZone: SWISS_TZ,
@@ -794,9 +806,8 @@ function formatSwissDateOnlyDisplay(iso: string): string {
 }
 
 function formatSwissDateCompactDisplay(iso: string): string {
-  const n = normalizeScheduledTimeIso(iso);
-  if (!n) return "";
-  const d = parseToDate(n);
+  if (!iso.trim()) return "";
+  const d = parseToDate(iso);
   if (!d) return "";
   const weekday = capitalizeFirst(
     d.toLocaleDateString("fr-CH", {
@@ -822,9 +833,8 @@ function formatSwissDateCompactDisplay(iso: string): string {
 }
 
 function formatSwissTimeOnlyDisplay(iso: string): string {
-  const n = normalizeScheduledTimeIso(iso);
-  if (!n) return "";
-  const d = parseToDate(n);
+  if (!iso.trim()) return "";
+  const d = parseToDate(iso);
   if (!d) return "";
   return d.toLocaleTimeString("fr-CH", {
     timeZone: SWISS_TZ,
@@ -858,6 +868,16 @@ type TimeDatePickerProps = {
   tonal?: boolean;
   /** Affiche un astérisque rouge tant que la valeur est vide (champ obligatoire). */
   required?: boolean;
+  /** Libellé accessibilité du bouton heure (mode split). */
+  timeAccessibilityLabel?: string;
+  /** Masque le champ déclencheur ; ouvrir l’éditeur via `openEditorSignal`. */
+  standaloneEditor?: boolean;
+  /** Incrémenter pour ouvrir l’éditeur (mode standalone). */
+  openEditorSignal?: number;
+  /** Validation explicite (bouton Valider). */
+  onEditorConfirm?: (value: string) => void;
+  /** Fermeture sans validation (backdrop, swipe). */
+  onEditorDismiss?: () => void;
 };
 
 export function TimeDatePicker({
@@ -871,13 +891,21 @@ export function TimeDatePicker({
   emptyPreviewSuffix = " · heure à définir",
   modalTitle: modalTitleProp,
   accessibilityLabel = "Choisir la date et l’heure de départ",
+  timeAccessibilityLabel = "Choisir l’heure",
   tonal = false,
   required = false,
+  standaloneEditor = false,
+  openEditorSignal = 0,
+  onEditorConfirm,
+  onEditorDismiss,
 }: TimeDatePickerProps) {
   const modalTitleFallback = dateOnly ? "Date" : "Date & heure";
   const modalTitle =
     (modalTitleProp ?? label.replace(/\s*\*\s*$/, "").trim()) || modalTitleFallback;
   const t = useResponsiveTokens();
+  /** Retour aller-retour : date calendaire = référence (aller), seule l’heure peut être « à définir ». */
+  const splitInheritsReferenceDate =
+    display === "split" && !dateOnly && Boolean(emptyPreviewReferenceIso?.trim());
   const preview = useMemo(() => {
     const main = dateOnly ? formatSwissDateOnlyDisplay(value) : formatSwissDisplay(value);
     if (main) return main;
@@ -888,8 +916,16 @@ export function TimeDatePicker({
     }
     return "";
   }, [value, emptyPreviewReferenceIso, emptyPreviewSuffix, dateOnly]);
-  const splitDatePreview = useMemo(() => formatSwissDateCompactDisplay(value), [value]);
+  const splitDatePreview = useMemo(() => {
+    if (splitInheritsReferenceDate) {
+      const refDisplay = formatSwissDateCompactDisplay(emptyPreviewReferenceIso ?? "");
+      if (refDisplay) return refDisplay;
+    }
+    return formatSwissDateCompactDisplay(value);
+  }, [value, emptyPreviewReferenceIso, splitInheritsReferenceDate]);
   const splitTimePreview = useMemo(() => formatSwissTimeOnlyDisplay(value), [value]);
+  const splitDateDefined = splitDatePreview.length > 0;
+  const splitTimeDefined = splitTimePreview.length > 0;
   const [mobileEditorOpen, setMobileEditorOpen] = useState(false);
   const [mobileStep, setMobileStep] = useState<"date" | "time">("date");
   const baseDate = useMemo(() => {
@@ -897,8 +933,7 @@ export function TimeDatePicker({
     if (parsed) return parsed;
     const refRaw = emptyPreviewReferenceIso?.trim();
     if (refRaw) {
-      const n = normalizeScheduledTimeIso(refRaw) || refRaw;
-      const refD = parseToDate(n);
+      const refD = parseToDate(refRaw);
       if (refD) {
         return new Date(refD.getFullYear(), refD.getMonth(), refD.getDate(), 12, 0, 0, 0);
       }
@@ -924,12 +959,19 @@ export function TimeDatePicker({
   const [timeCarouselRailWidth, setTimeCarouselRailWidth] = useState(0);
   const stripViewportFocusRef = useRef(stripViewportFocus);
   stripViewportFocusRef.current = stripViewportFocus;
-  const today = startOfDay(new Date());
+  const today = getTodayStartInZurich();
   const commitSchedule = useCallback(
     (next: Date) => {
+      if (splitInheritsReferenceDate) {
+        const refParsed = parseToDate(emptyPreviewReferenceIso ?? "");
+        if (refParsed) {
+          onChange(toLocalIsoMinute(enforceMinSchedule(mergeZurichDayAndTime(refParsed, next), today)));
+          return;
+        }
+      }
       onChange(toLocalIsoMinute(enforceMinSchedule(next, today)));
     },
-    [onChange, today],
+    [onChange, today, splitInheritsReferenceDate, emptyPreviewReferenceIso],
   );
   const stripDays = useMemo(
     () =>
@@ -951,18 +993,18 @@ export function TimeDatePicker({
   }, [monthStripWindowStart, today]);
 
   const yearStripYears = useMemo(() => {
-    const y0 = today.getFullYear();
+    const y0 = zurichWallPartsFromDate(today).year;
     return Array.from({ length: YEAR_STRIP_SPAN }, (_, i) => y0 + i);
   }, [today]);
 
-  const openPicker = () => {
+  const openPicker = useCallback(() => {
     const parsed = parseToDate(value);
     const raw = parsed ?? baseDate;
     const fixed = enforceMinSchedule(raw, today);
     if (parsed && fixed.getTime() !== raw.getTime()) {
       onChange(toLocalIsoMinute(fixed));
     }
-    const selected = clampDayToToday(fixed, today);
+    const selected = clampZurichDayToToday(fixed, today);
     setMobileStep("date");
     setStripFirstDay(computeStripFirstDay(selected, today));
     setStripViewportFocus(startOfDay(fixed));
@@ -970,7 +1012,31 @@ export function TimeDatePicker({
     setDateCarousel("day");
     stripScrollDoneRef.current = false;
     setMobileEditorOpen(true);
-  };
+  }, [value, baseDate, today, onChange]);
+
+  const openPickerRef = useRef(openPicker);
+  openPickerRef.current = openPicker;
+
+  const valueRef = useRef(value);
+  valueRef.current = value;
+
+  const closeEditor = useCallback(
+    (reason: "confirm" | "dismiss") => {
+      setMobileEditorOpen(false);
+      if (reason === "confirm") {
+        onEditorConfirm?.(valueRef.current);
+      } else {
+        onEditorDismiss?.();
+      }
+    },
+    [onEditorConfirm, onEditorDismiss],
+  );
+
+  useEffect(() => {
+    if (!standaloneEditor || !openEditorSignal) return;
+    // Ne pas dépendre de openPicker/value : sinon chaque changement d’heure rouvre l’éditeur sur l’onglet Date.
+    openPickerRef.current();
+  }, [standaloneEditor, openEditorSignal]);
 
   useEffect(() => {
     if (!mobileEditorOpen) {
@@ -990,27 +1056,34 @@ export function TimeDatePicker({
   };
 
   const selectedWebDate = parseToDate(value) ?? baseDate;
+  const selectedWebTimeParts = useMemo(
+    () => zurichWallPartsFromDate(selectedWebDate),
+    [selectedWebDate],
+  );
   const setWebDateTime = (nextDate: Date) => {
     commitSchedule(nextDate);
   };
 
   const setWebDay = (pickedDay: Date) => {
     const current = parseToDate(value) ?? baseDate;
-    const dayClamped = clampDayToToday(pickedDay, today);
-    const merged = new Date(dayClamped);
-    merged.setHours(current.getHours(), current.getMinutes(), 0, 0);
+    const merged = buildGenevaScheduleFromLocalCalendarDay(pickedDay, current);
     setWebDateTime(merged);
     if (mobileEditorOpen) {
-      if (dateOnly) setMobileEditorOpen(false);
+      if (dateOnly) closeEditor("confirm");
       else goToTimeStep();
     }
   };
 
+  const setWebDayToday = () => {
+    const t = zurichWallPartsFromDate(today);
+    setWebDay(new Date(t.year, t.month - 1, t.day));
+  };
+
   useEffect(() => {
     if (!mobileEditorOpen || carouselRailWidth <= 0 || stripScrollDoneRef.current) return;
-    const selRaw = startOfDay(selectedWebDate);
-    const sel = selRaw < today ? today : selRaw;
-    const idx = stripDays.findIndex((d) => isSameDay(d, sel));
+    const selRaw = startOfZurichDay(selectedWebDate);
+    const sel = selRaw.getTime() < today.getTime() ? today : selRaw;
+    const idx = stripDays.findIndex((d) => isSameZurichDay(d, sel));
     if (idx < 0) return;
     const targetX = Math.max(
       idx * DAY_CELL_WIDTH + DAY_CELL_WIDTH / 2 - carouselRailWidth / 2,
@@ -1019,7 +1092,7 @@ export function TimeDatePicker({
       weekStripRef.current?.scrollTo({ x: Math.max(0, targetX), animated: false });
     });
     stripScrollDoneRef.current = true;
-    setStripViewportFocus(startOfDay(sel));
+    setStripViewportFocus(startOfZurichDay(sel));
   }, [
     mobileEditorOpen,
     carouselRailWidth,
@@ -1053,11 +1126,10 @@ export function TimeDatePicker({
   const jumpToMonthFirst = useCallback(
     (monthFirst: Date) => {
       if (!monthHasSelectableDay(monthFirst, today)) return;
-      let target = startOfDay(monthFirst);
-      if (target < today) target = new Date(today);
+      let target = startOfZurichDay(monthFirst);
+      if (target.getTime() < today.getTime()) target = new Date(today);
       const current = parseToDate(value) ?? baseDate;
-      const merged = new Date(target);
-      merged.setHours(current.getHours(), current.getMinutes(), 0, 0);
+      const merged = mergeZurichDayAndTime(target, current);
       commitSchedule(merged);
       setStripFirstDay(computeStripFirstDay(target, today));
       setStripViewportFocus(target);
@@ -1071,11 +1143,10 @@ export function TimeDatePicker({
   const jumpToYear = useCallback(
     (year: number) => {
       const yStart = new Date(year, 0, 1);
-      let target = startOfDay(yStart);
-      if (target < today) target = new Date(today);
+      let target = startOfZurichDay(yStart);
+      if (target.getTime() < today.getTime()) target = new Date(today);
       const current = parseToDate(value) ?? baseDate;
-      const merged = new Date(target);
-      merged.setHours(current.getHours(), current.getMinutes(), 0, 0);
+      const merged = mergeZurichDayAndTime(target, current);
       commitSchedule(merged);
       setStripFirstDay(computeStripFirstDay(target, today));
       setStripViewportFocus(target);
@@ -1114,8 +1185,9 @@ export function TimeDatePicker({
     if (mobileStep !== "time" || timeCarouselRailWidth <= 0) return;
     const sel = parseToDate(value);
     const d = sel ?? new Date(Date.now() + 30 * 60 * 1000);
-    const h = d.getHours();
-    const slotMin = nearestFiveMinute(d.getMinutes());
+    const parts = zurichWallPartsFromDate(d);
+    const h = parts.hour;
+    const slotMin = nearestFiveMinute(parts.minute);
     const minuteIdx = slotMin / TIME_MINUTE_STEP;
     const targetHX = h * TIME_HOUR_CELL_WIDTH + TIME_HOUR_CELL_WIDTH / 2 - timeCarouselRailWidth / 2;
     const targetMX =
@@ -1130,8 +1202,8 @@ export function TimeDatePicker({
 
   const setWebTime = (hour: number, minute: number) => {
     const current = parseToDate(value) ?? baseDate;
-    const merged = new Date(current);
-    merged.setHours(hour, minute, 0, 0);
+    const day = zurichWallPartsFromDate(current);
+    const merged = dateFromZurichWallParts(day.year, day.month, day.day, hour, minute, 0);
     setWebDateTime(merged);
   };
 
@@ -1142,35 +1214,65 @@ export function TimeDatePicker({
           {label}
         </AppText>
       ) : null}
-      {display === "split" && !dateOnly ? (
+      {!standaloneEditor && display === "split" && !dateOnly ? (
         <View style={[styles.splitRow, tonal && styles.splitRowTonal]}>
-          <Pressable
-            onPress={openPicker}
-            style={({ pressed }) => [
-              styles.splitCell,
-              styles.splitCellDate,
-              tonal && styles.splitCellTonal,
-              pressed && styles.splitCellPressed,
-            ]}
-            accessibilityRole="button"
-            accessibilityLabel={accessibilityLabel}
-          >
-            <View style={styles.leadingIconWrap}>
-              <Ionicons name="calendar-outline" size={19} color={ICON_COLOR} />
+          {splitInheritsReferenceDate ? (
+            <View
+              style={[
+                styles.splitCell,
+                styles.splitCellDate,
+                tonal && styles.splitCellTonal,
+              ]}
+              accessibilityElementsHidden={false}
+              importantForAccessibility="yes"
+              accessible
+              accessibilityLabel={`Date de retour : ${splitDatePreview || emptyLabel}`}
+            >
+              <View style={styles.leadingIconWrap}>
+                <Ionicons name="calendar-outline" size={19} color={ICON_COLOR} />
+              </View>
+              <View style={styles.splitValue}>
+                <AppText
+                  variant="label"
+                  style={[
+                    styles.rowValue,
+                    splitDateDefined ? styles.rowValueDefined : styles.rowValueUndefined,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {splitDatePreview || emptyLabel}
+                </AppText>
+              </View>
             </View>
-            <View style={styles.splitValue}>
-              <AppText
-                variant="label"
-                style={[
-                  styles.rowValue,
-                  splitDatePreview ? styles.rowValueDefined : styles.rowValueUndefined,
-                ]}
-                numberOfLines={1}
-              >
-                {splitDatePreview || emptyLabel}
-              </AppText>
-            </View>
-          </Pressable>
+          ) : (
+            <Pressable
+              onPress={openPicker}
+              style={({ pressed }) => [
+                styles.splitCell,
+                styles.splitCellDate,
+                tonal && styles.splitCellTonal,
+                pressed && styles.splitCellPressed,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel={accessibilityLabel}
+            >
+              <View style={styles.leadingIconWrap}>
+                <Ionicons name="calendar-outline" size={19} color={ICON_COLOR} />
+              </View>
+              <View style={styles.splitValue}>
+                <AppText
+                  variant="label"
+                  style={[
+                    styles.rowValue,
+                    splitDateDefined ? styles.rowValueDefined : styles.rowValueUndefined,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {splitDatePreview || emptyLabel}
+                </AppText>
+              </View>
+            </Pressable>
+          )}
           <View style={styles.splitDivider} />
           <Pressable
             onPress={() => {
@@ -1184,7 +1286,7 @@ export function TimeDatePicker({
               pressed && styles.splitCellPressed,
             ]}
             accessibilityRole="button"
-            accessibilityLabel="Choisir l’heure de départ"
+            accessibilityLabel={timeAccessibilityLabel}
           >
             <View style={styles.leadingIconWrap}>
               <Ionicons name="time-outline" size={19} color={ICON_COLOR} />
@@ -1194,11 +1296,15 @@ export function TimeDatePicker({
                 variant="label"
                 style={[
                   styles.rowValue,
-                  splitTimePreview ? styles.rowValueDefined : styles.rowValueUndefined,
+                  splitTimeDefined ? styles.rowValueDefined : styles.rowValueUndefined,
                 ]}
                 numberOfLines={1}
               >
-                {splitTimePreview || "--:--"}
+                {splitTimeDefined
+                  ? splitTimePreview
+                  : splitInheritsReferenceDate
+                    ? emptyLabel
+                    : "--:--"}
               </AppText>
             </View>
             <View style={styles.trailingIconWrap}>
@@ -1217,7 +1323,7 @@ export function TimeDatePicker({
             </View>
           </Pressable>
         </View>
-      ) : (
+      ) : !standaloneEditor ? (
         <Pressable
           onPress={openPicker}
           style={({ pressed, hovered, focused }) => [
@@ -1254,12 +1360,12 @@ export function TimeDatePicker({
             ) : null}
           </View>
         </Pressable>
-      )}
+      ) : null}
 
       <Modal
         visible={mobileEditorOpen}
         title=""
-        onClose={() => setMobileEditorOpen(false)}
+        onClose={() => closeEditor("dismiss")}
         presentation="bottomSheet"
         sheetBodyMaxHeightRatio={0.88}
         renderHeader={() => (
@@ -1276,7 +1382,7 @@ export function TimeDatePicker({
             </View>
             <Pressable
               style={styles.mobileModalClose}
-              onPress={() => setMobileEditorOpen(false)}
+              onPress={() => closeEditor("confirm")}
               accessibilityRole="button"
               accessibilityLabel="Valider et fermer le sélecteur"
             >
@@ -1509,12 +1615,12 @@ export function TimeDatePicker({
                                 <View style={styles.mobilePickerCarouselCard}>
                                   <View style={styles.mobileDayStripRow}>
                                     {stripDays.map((day) => {
-                                      const selected = isSameDay(day, selectedWebDate);
+                                      const selected = isSameZurichDay(day, selectedWebDate);
                                       const wd = WEEKDAY_LABELS[(day.getDay() + 6) % 7];
                                       const outsideFocus =
                                         day.getMonth() !== stripViewportFocus.getMonth() ||
                                         day.getFullYear() !== stripViewportFocus.getFullYear();
-                                      const isPastDay = startOfDay(day) < today;
+                                      const isPastDay = startOfZurichDay(day).getTime() < today.getTime();
                                       return (
                                         <Pressable
                                           key={`day-strip-${day.toISOString()}`}
@@ -1574,7 +1680,7 @@ export function TimeDatePicker({
                           </View>
                         <View style={styles.mobileActionsDock}>
                         <Pressable
-                          onPress={() => setWebDay(today)}
+                          onPress={setWebDayToday}
                           style={({ pressed }) => [
                             styles.mobileActionDockButton,
                             styles.mobileActionDockPrimary,
@@ -1588,7 +1694,7 @@ export function TimeDatePicker({
                           </AppText>
                         </Pressable>
                         <Pressable
-                          onPress={dateOnly ? () => setMobileEditorOpen(false) : goToTimeStep}
+                          onPress={dateOnly ? () => closeEditor("confirm") : goToTimeStep}
                           style={({ pressed }) => [
                             styles.mobileActionDockButton,
                             styles.mobileActionDockPrimary,
@@ -1622,7 +1728,7 @@ export function TimeDatePicker({
                           hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
                         >
                           <AppText style={styles.mobileDateSegText}>
-                            {String(selectedWebDate.getHours()).padStart(2, "0")}
+                            {String(selectedWebTimeParts.hour).padStart(2, "0")}
                           </AppText>
                         </Pressable>
                         <View style={styles.mobileTimeHeaderColonWrap}>
@@ -1641,7 +1747,7 @@ export function TimeDatePicker({
                           hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
                         >
                           <AppText style={styles.mobileDateSegText}>
-                            {String(selectedWebDate.getMinutes()).padStart(2, "0")}
+                            {String(selectedWebTimeParts.minute).padStart(2, "0")}
                           </AppText>
                         </Pressable>
                       </View>
@@ -1665,12 +1771,12 @@ export function TimeDatePicker({
                             <View style={styles.mobilePickerCarouselCard}>
                               <View style={styles.mobileTimeHourStripRow}>
                                 {Array.from({ length: 24 }, (_, hour) => {
-                                  const active = selectedWebDate.getHours() === hour;
+                                  const active = selectedWebTimeParts.hour === hour;
                                   return (
                                     <Pressable
                                       key={`hour-strip-${hour}`}
                                       onPress={() => {
-                                        setWebTime(hour, selectedWebDate.getMinutes());
+                                        setWebTime(hour, selectedWebTimeParts.minute);
                                         setTimeCarousel("minute");
                                       }}
                                       style={({ pressed }) => [
@@ -1714,11 +1820,11 @@ export function TimeDatePicker({
                               <View style={styles.mobileTimeMinuteStripRow}>
                                 {TIME_MINUTE_SLOTS.map((minute) => {
                                   const active =
-                                    nearestFiveMinute(selectedWebDate.getMinutes()) === minute;
+                                    nearestFiveMinute(selectedWebTimeParts.minute) === minute;
                                   return (
                                     <Pressable
                                       key={`minute-strip-${minute}`}
-                                      onPress={() => setWebTime(selectedWebDate.getHours(), minute)}
+                                      onPress={() => setWebTime(selectedWebTimeParts.hour, minute)}
                                       style={({ pressed }) => [
                                         styles.mobileTimeStripCell,
                                         styles.mobileTimeMinuteStripCell,

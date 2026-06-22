@@ -473,6 +473,15 @@ function defineTaskIfNeeded() {
         network_profile_active: cadence.networkProfile,
         dropped: flushResult.dropped,
       });
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const bridge = require("./driverTrackingBridge") as typeof import("./driverTrackingBridge");
+        if (typeof bridge.syncBridgeQueueDepthFromPersistence === "function") {
+          void bridge.syncBridgeQueueDepthFromPersistence();
+        }
+      } catch {
+        /* noop — resync best-effort */
+      }
     }
   );
   taskDefined = true;

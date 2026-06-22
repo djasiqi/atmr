@@ -16,6 +16,9 @@ from typing import Any
 import requests
 
 from ext import db
+from infrastructure.persistence.bookings.booking_writer import (
+    _split_round_trip_total_amount,
+)
 from models import Booking
 from models.enums import BillingSource, BookingCreatedVia, BookingStatus
 from shared.constants import ErrorCodes
@@ -30,6 +33,40 @@ PREFERENTIAL_RATE_ZERO = 0
 MORNING_RUSH_START = 7
 EVENING_RUSH_START = 17
 LUNCH_START = 12
+
+
+def _preferential_rate_to_booking_amount(rate: float, *, is_round_trip: bool) -> float:
+    """Tarif préférentiel enregistré par trajet ; total réservation si aller-retour."""
+    per_leg = round(float(rate), 2)
+    return round(per_leg * 2.0, 2) if is_round_trip else per_leg
+
+
+def _resolve_leg_amounts(
+    total: float,
+    *,
+    is_round_trip: bool,
+    price_total: float | None,
+    preferential_per_leg: float | None = None,
+) -> tuple[float, float, float, float | None]:
+    """Répartit le montant total sur l'aller et le retour.
+
+    Tarif préférentiel A/R : montant identique par trajet (ex. 35 + 35 CHF).
+    Sinon : répartition 50/50 du total saisi ou simulé.
+    """
+    if not is_round_trip:
+        outbound_price = float(price_total if price_total is not None else total)
+        return float(total), 0.0, outbound_price, None
+
+    if preferential_per_leg is not None and float(preferential_per_leg) > 0:
+        leg = round(float(preferential_per_leg), 2)
+        return leg, leg, leg, leg
+
+    outbound_amount, return_amount = _split_round_trip_total_amount(float(total))
+    if price_total is not None:
+        outbound_price, return_price = _split_round_trip_total_amount(float(price_total))
+    else:
+        outbound_price, return_price = outbound_amount, return_amount
+    return outbound_amount, return_amount, outbound_price, return_price
 
 
 class CreateManualBookingError(Exception):
@@ -48,6 +85,49 @@ class CreateManualBookingError(Exception):
         self.status_code = status_code
         self.error_code = error_code
         self.details = details or {}
+
+
+def _validate_round_trip_leg_amounts(
+    outbound_amount: float,
+    return_leg_amount: float,
+    total: float,
+) -> None:
+    """Bloque les répartitions incohérentes (70/0, 0/70, 70/70, somme ≠ total)."""
+    out_r = round(float(outbound_amount), 2)
+    ret_r = round(float(return_leg_amount), 2)
+    total_r = round(float(total), 2)
+    tol = 0.02
+
+    if abs(out_r + ret_r - total_r) > tol:
+        raise CreateManualBookingError(
+            "Répartition tarifaire A/R incohérente : la somme aller + retour "
+            f"({out_r + ret_r:.2f} CHF) diffère du total ({total_r:.2f} CHF).",
+            status_code=500,
+            error_code="round_trip_amount_split_invalid",
+        )
+
+    if total_r >= 1.0:
+        if ret_r <= 0 or out_r <= 0:
+            raise CreateManualBookingError(
+                "Répartition tarifaire A/R invalide : aller et retour doivent "
+                "chacun porter une part du tarif (ex. 35 CHF + 35 CHF).",
+                status_code=500,
+                error_code="round_trip_leg_zero",
+            )
+        if abs(out_r - total_r) <= tol or abs(ret_r - total_r) <= tol:
+            raise CreateManualBookingError(
+                "Répartition tarifaire A/R invalide : le montant total ne doit "
+                "pas être entièrement sur un seul trajet.",
+                status_code=500,
+                error_code="round_trip_single_leg_total",
+            )
+        if abs(out_r - total_r) <= tol and abs(ret_r - total_r) <= tol:
+            raise CreateManualBookingError(
+                "Répartition tarifaire A/R invalide : aller et retour ne peuvent "
+                "pas porter chacun le montant total.",
+                status_code=500,
+                error_code="round_trip_duplicate_total",
+            )
 
 
 @dataclass
@@ -407,6 +487,8 @@ class CreateManualBookingUseCase:
         raw_desc = (validated_data.get("delivery_description") or "").strip()
         delivery_description = " ".join(raw_desc.split()) if raw_desc else None
 
+        preferential_per_leg_rate: float | None = None
+
         if mission_type == "material_delivery":
             from models import CompanyBillingSettings
 
@@ -465,23 +547,37 @@ class CreateManualBookingUseCase:
                 clinic_preferential
                 and float(clinic_preferential) > PREFERENTIAL_RATE_ZERO
             ):
-                amount_to_use = float(clinic_preferential)
+                per_leg = float(clinic_preferential)
+                amount_to_use = _preferential_rate_to_booking_amount(
+                    per_leg, is_round_trip=is_rt
+                )
+                if is_rt:
+                    preferential_per_leg_rate = per_leg
                 amount_source_used = "preferential"
                 price_breakdown_json = {
                     "overridden_by_preferential": True,
                     "preferential_source": "clinic",
+                    "preferential_amount_per_leg": f"{per_leg:.2f}",
                     "preferential_amount": f"{amount_to_use:.2f}",
+                    "is_round_trip_total": bool(is_rt),
                 }
             elif (
                 client_preferential
                 and float(client_preferential) > PREFERENTIAL_RATE_ZERO
             ):
-                amount_to_use = float(client_preferential)
+                per_leg = float(client_preferential)
+                amount_to_use = _preferential_rate_to_booking_amount(
+                    per_leg, is_round_trip=is_rt
+                )
+                if is_rt:
+                    preferential_per_leg_rate = per_leg
                 amount_source_used = "preferential"
                 price_breakdown_json = {
                     "overridden_by_preferential": True,
                     "preferential_source": "client",
+                    "preferential_amount_per_leg": f"{per_leg:.2f}",
                     "preferential_amount": f"{amount_to_use:.2f}",
+                    "is_round_trip_total": bool(is_rt),
                 }
             elif amount_source_requested == "manual" and has_provided_amount:
                 amount_source_used = "manual"
@@ -586,6 +682,19 @@ class CreateManualBookingUseCase:
                         "manual" if has_provided_amount else "fallback_zero"
                     )
 
+        outbound_amount, return_leg_amount, outbound_price_amount, return_price_amount = (
+            _resolve_leg_amounts(
+                amount_to_use,
+                is_round_trip=is_rt,
+                price_total=price_amount,
+                preferential_per_leg=preferential_per_leg_rate,
+            )
+        )
+        if is_rt:
+            _validate_round_trip_leg_amounts(
+                outbound_amount, return_leg_amount, amount_to_use
+            )
+
         created_outbounds: list[Booking] = []
         created_returns: list[Booking] = []
 
@@ -612,7 +721,7 @@ class CreateManualBookingUseCase:
             outbound.is_round_trip = is_rt
             outbound.pickup_location = validated_data["pickup_location"]
             outbound.dropoff_location = validated_data["dropoff_location"]
-            outbound.amount = amount_to_use
+            outbound.amount = outbound_amount
             outbound.status = BookingStatus.ACCEPTED
             outbound.company_id = cid
             outbound.booking_type = "manual"
@@ -623,9 +732,7 @@ class CreateManualBookingUseCase:
             outbound.distance_meters = dist_m
             outbound.pricing_profile_id = pricing_profile_id
             outbound.pricing_profile_version_id = pricing_profile_version_id
-            outbound.price_amount = (
-                price_amount if price_amount is not None else amount_to_use
-            )
+            outbound.price_amount = outbound_price_amount
             outbound_breakdown = dict(price_breakdown_json or {})
             outbound_breakdown["amount_source"] = amount_source_used
             outbound.price_breakdown_json = outbound_breakdown
@@ -697,7 +804,7 @@ class CreateManualBookingUseCase:
                 return_booking.status = BookingStatus.ACCEPTED
                 return_booking.pickup_location = outbound.dropoff_location
                 return_booking.dropoff_location = outbound.pickup_location
-                return_booking.amount = amount_to_use
+                return_booking.amount = return_leg_amount
                 return_booking.company_id = cid
                 return_booking.booking_type = "manual"
                 return_booking.created_via = BookingCreatedVia.DISPATCHER
@@ -709,9 +816,7 @@ class CreateManualBookingUseCase:
                 return_booking.distance_meters = dist_m
                 return_booking.pricing_profile_id = pricing_profile_id
                 return_booking.pricing_profile_version_id = pricing_profile_version_id
-                return_booking.price_amount = (
-                    price_amount if price_amount is not None else amount_to_use
-                )
+                return_booking.price_amount = return_price_amount
                 return_breakdown = dict(price_breakdown_json or {})
                 return_breakdown["amount_source"] = amount_source_used
                 return_booking.price_breakdown_json = return_breakdown

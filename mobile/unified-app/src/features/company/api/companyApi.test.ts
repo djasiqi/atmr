@@ -6,6 +6,7 @@ import {
   getCompanyDispatchMessages,
   getCompanyDispatchModes,
   getCompanyDispatchDelays,
+  getCompanyPartnershipsForTransfer,
   getDispatchMissions,
   getDriversLocationsSnapshot,
   getOptimizerStatus,
@@ -15,6 +16,7 @@ import {
   scheduleCompanyRide,
   switchCompanyDispatchMode,
   transferCompanyRide,
+  updateCompanyRide,
 } from "./companyApi";
 
 const mockGet = jest.fn<(...args: any[]) => any>();
@@ -324,6 +326,32 @@ describe("company api normalization", () => {
     );
   });
 
+  it("met à jour une course via l’endpoint mobile dispatch", async () => {
+    mockPut.mockResolvedValueOnce({ data: { ok: true } });
+
+    await updateCompanyRide({
+      contextId: "company:42",
+      missionId: 456,
+      payload: {
+        pickup_address: "Rue A",
+        dropoff_address: "Rue B",
+        scheduled_time: "2026-06-22T09:45:00",
+      },
+    });
+
+    expect(mockPut).toHaveBeenCalledWith(
+      "/company_mobile/dispatch/v1/rides/456",
+      expect.objectContaining({
+        scheduled_time: "2026-06-22T09:45:00",
+      }),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          "X-Active-Context-Id": "company:42",
+        }),
+      })
+    );
+  });
+
   it("uses cancel parity payload with reason_code and note", async () => {
     mockDelete.mockRejectedValueOnce({ response: { status: 404 } });
     mockPost.mockResolvedValueOnce({ data: { ok: true } });
@@ -450,13 +478,13 @@ describe("company api normalization", () => {
   });
 
   it("surfaces transfer conflict 409 with explicit message", async () => {
-    mockPost.mockRejectedValueOnce({ response: { status: 409 } });
+    mockPost.mockRejectedValueOnce({ response: { status: 409 }, isAxiosError: true });
 
     await expect(
       transferCompanyRide({
         contextId: "company:42",
         missionId: 55,
-        targetCompanyId: 66,
+        partnershipId: 12,
       })
     ).rejects.toThrow(/Conflit de transfert detecte/);
 
@@ -464,10 +492,43 @@ describe("company api normalization", () => {
       "company.dispatch.transfer_conflict",
       expect.objectContaining({
         mission_id: 55,
-        target_company_id: 66,
+        partnership_id: 12,
       }),
       { allowWhenDisabled: true }
     );
+  });
+
+  it("loads partnerships for transfer from company_mobile endpoint", async () => {
+    mockGet.mockResolvedValueOnce({
+      data: {
+        data: [
+          {
+            id: 7,
+            partner_company_id: 99,
+            partner_company_name: "Partenaire Test",
+          },
+        ],
+      },
+    });
+
+    const result = await getCompanyPartnershipsForTransfer({ contextId: "company:42" });
+    expect(result.items).toEqual([
+      { id: 7, label: "Partenaire Test", partnerCompanyId: 99 },
+    ]);
+    expect(mockGet.mock.calls[0][0]).toBe("/company_mobile/partnerships/for-transfer");
+  });
+
+  it("posts transfer with partnership id and booking_id", async () => {
+    mockPost.mockResolvedValueOnce({ data: { data: { id: 1 } } });
+
+    await transferCompanyRide({
+      contextId: "company:42",
+      missionId: 55,
+      partnershipId: 12,
+    });
+
+    expect(mockPost.mock.calls[0][0]).toBe("/company_mobile/partnerships/12/transfers");
+    expect(mockPost.mock.calls[0][1]).toEqual({ booking_id: 55 });
   });
 
   it("fusionne les retards live et snapshot comme le tableau web", async () => {

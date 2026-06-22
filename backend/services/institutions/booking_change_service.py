@@ -914,13 +914,30 @@ def cancel_institution_booking(
 
     before = _booking_operational_snapshot(booking)
     cancelled_at = datetime.now(UTC)
+
+    from models.invoice import CompanyBillingSettings
+
+    billing = (
+        CompanyBillingSettings.query.filter_by(company_id=booking.company_id).first()
+        if getattr(booking, "company_id", None)
+        else None
+    )
+    cancellation_policy = (
+        getattr(billing, "cancellation_policy", None) if billing else None
+    )
+
     fee = compute_cancellation_fee(
         booking,
         status_at_cancel=status,
         cancelled_at=cancelled_at,
         reason_code=reason_code or "CLIENT_REQUEST",
+        policy=cancellation_policy,
     )
-    is_billable = True if is_en_route else fee.is_billable
+    is_status_forced_billable = status in (
+        BookingStatus.EN_ROUTE.value,
+        BookingStatus.IN_PROGRESS.value,
+    )
+    is_billable = True if is_status_forced_billable else fee.is_billable
 
     booking.status = BookingStatus.CANCELED
     booking.cancellation_reason_code = reason_code or "CLIENT_REQUEST"
