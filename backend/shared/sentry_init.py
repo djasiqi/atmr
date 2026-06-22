@@ -63,9 +63,11 @@ def _is_socket_io_benign_disconnect(
 
 
 def _is_kafka_bootstrap_log_noise(message: str, logger_name: str) -> bool:
+    lowered = message.lower()
+    if "task is already done" in lowered:
+        return True
     if logger_name.startswith("kafka."):
         return True
-    lowered = message.lower()
     return any(marker in lowered for marker in _KAFKA_BOOTSTRAP_LOG_MARKERS)
 
 
@@ -109,6 +111,8 @@ def before_send(event: dict[str, Any], hint: dict[str, Any] | None) -> dict[str,
                 return None
         if _is_gevent_infrastructure_noise(event, exc_type, message):
             return None
+    elif "task is already done" in message.lower() and logger_name.startswith("kafka."):
+        return None
 
     # logger.exception() sur routes notifications : JWT expiré remonté comme erreur 500
     if "Signature has expired" in message and (

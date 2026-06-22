@@ -113,6 +113,9 @@ export type OperationalFleetMapProps = {
   /** Synchronise la sélection chauffeur depuis le cockpit (désélection panneau ops). */
   syncSelectedDriverId?: number | null;
 
+  /** iOS : diffère markers/routes tant que socket instable (reconnexion cockpit). */
+  nativeOverlaysEnabled?: boolean;
+
 };
 
 
@@ -165,6 +168,8 @@ type FleetMapSurfaceProps = {
 
   onSelectedDriverIdChange?: (driverId: number | null) => void;
 
+  nativeOverlaysEnabled?: boolean;
+
 };
 
 
@@ -214,6 +219,8 @@ function FleetMapSurface({
   driverSheetSnap = "collapsed",
 
   onDriverSheetSnapChange,
+
+  nativeOverlaysEnabled = true,
 
 }: FleetMapSurfaceProps) {
 
@@ -298,6 +305,8 @@ function FleetMapSurface({
         logoClipFill={isCockpit && cockpitImmersive}
 
         fitEdgePadding={fitEdgePadding}
+
+        nativeOverlaysEnabled={nativeOverlaysEnabled}
 
       />
 
@@ -519,7 +528,7 @@ export function OperationalFleetMap({
   cockpitMapPolicy,
   onMapSignalsChange,
   syncSelectedDriverId,
-
+  nativeOverlaysEnabled = true,
 }: OperationalFleetMapProps) {
 
   const isCockpit = layout === "cockpit";
@@ -650,6 +659,7 @@ export function OperationalFleetMap({
 
     onDriverSheetSnapChange,
     onSelectedDriverIdChange,
+    nativeOverlaysEnabled,
 
   };
 

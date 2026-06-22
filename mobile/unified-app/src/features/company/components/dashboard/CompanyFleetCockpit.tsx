@@ -10,6 +10,7 @@ import {
 } from "../../dashboard/cockpit";
 import { areMapSignalsEqual, type MapSignalsSnapshot } from "../maps/fleetMapTypes";
 import { EnterpriseHeader } from "../EnterpriseHeader";
+import { useCompanyMapNativeOverlayGate } from "../maps/companyMapNativeOverlayGate";
 import { OperationalFleetMap } from "../maps/OperationalFleetMap";
 import { fleetGlassPanel } from "../maps/fleetMapUiTokens";
 import {
@@ -63,6 +64,7 @@ function CockpitMapBlock({
   cockpitMapPolicy,
   onMapSignalsChange,
   syncSelectedDriverId,
+  nativeOverlaysEnabled,
 }: {
   layout: ReturnType<typeof computeFleetCockpitLayout>;
   cameraInsets: { top: number; right: number; bottom: number; left: number };
@@ -81,6 +83,8 @@ function CockpitMapBlock({
   initialSelectedDriverId: number | null;
   cockpitMapPolicy: CockpitOrchestrationDecision;
   onMapSignalsChange: (signals: MapSignalsSnapshot) => void;
+  syncSelectedDriverId?: number | null;
+  nativeOverlaysEnabled: boolean;
 }) {
   const mapPolicy = orchestrationToMapPolicy(cockpitMapPolicy);
   return (
@@ -111,6 +115,7 @@ function CockpitMapBlock({
         cockpitMapPolicy={mapPolicy}
         onMapSignalsChange={onMapSignalsChange}
         syncSelectedDriverId={syncSelectedDriverId}
+        nativeOverlaysEnabled={nativeOverlaysEnabled}
       />
     </View>
   );
@@ -135,6 +140,7 @@ export function CompanyFleetCockpit({
   void onRefresh;
 
   const { topInset, bottomInset, usableHeight, safeLeft, safeRight } = useAppViewport();
+  const nativeOverlaysEnabled = useCompanyMapNativeOverlayGate(realtimeStatus);
   const [opsSheetOpen, setOpsSheetOpen] = useState(false);
   const [urgencySheetOpen, setUrgencySheetOpen] = useState(false);
   const [driverSheetOpen, setDriverSheetOpen] = useState(false);
@@ -336,6 +342,7 @@ export function CompanyFleetCockpit({
         cockpitMapPolicy={orchestration}
         onMapSignalsChange={onMapSignalsChange}
         syncSelectedDriverId={selectedDriverId}
+        nativeOverlaysEnabled={nativeOverlaysEnabled}
       />
 
       {uiState.overlays.topBar ? (

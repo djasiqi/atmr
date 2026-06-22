@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, type ReactElement } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { Platform, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 import MapView, { Circle, Polyline, PROVIDER_GOOGLE, type Region } from "react-native-maps";
 import { LirieMapLogoClip } from "../../maps/LirieMapLogoClip";
@@ -77,6 +77,11 @@ export type EnterpriseDriversMapProps = {
   cameraVerticalBias?: number;
   /** Limite le dézoom manuel au cadre des chauffeurs. */
   constrainFleetZoom?: boolean;
+  /**
+   * iOS : false tant que socket instable / carte non prête — évite montage markers+routes
+   * pendant reconnexion (crash natif New Arch).
+   */
+  nativeOverlaysEnabled?: boolean;
 };
 
 const BORDER = "rgba(145, 165, 157, 0.45)";
@@ -143,9 +148,11 @@ export function EnterpriseDriversMap({
   fitEdgePadding,
   cameraVerticalBias = 0,
   constrainFleetZoom = false,
+  nativeOverlaysEnabled = true,
 }: EnterpriseDriversMapProps) {
   const mapRef = useRef<MapView | null>(null);
   const mapReadyRef = useRef(false);
+  const [mapReady, setMapReady] = useState(false);
   const pendingFitRef = useRef(false);
   const driversRef = useRef(drivers);
   const markersRef = useRef<FleetMapMarker[]>(markersProp ?? []);
@@ -184,9 +191,11 @@ export function EnterpriseDriversMap({
   const mapDims = { height: mapHeight, width: "100%" as const };
   const mapType = resolveMapType(layers);
   const mapsApiKey = resolveGoogleMapsNativeApiKey();
+  const mountNativeOverlays = nativeOverlaysEnabled && mapReady;
   const { routedPathsByMissionId, routedStateByMissionId } = useFleetMissionRoutedPaths(
-    missionOverlays,
-    mapsApiKey
+    mountNativeOverlays ? missionOverlays : [],
+    mapsApiKey,
+    { enabled: mountNativeOverlays }
   );
 
   const fitAllDrivers = useCallback(() => {
@@ -228,6 +237,7 @@ export function EnterpriseDriversMap({
 
   const onMapReady = useCallback(() => {
     mapReadyRef.current = true;
+    setMapReady(true);
     if (pendingFitRef.current || recenterMode === "all") {
       fitAllDrivers();
     }
@@ -487,39 +497,43 @@ export function EnterpriseDriversMap({
 
   const mapNode = (
     <MapView {...mapProps}>
-      {heatmapNodes}
-      {imminentDepartures.length > 0 ? (
-        <ImminentDepartureMarkers departures={imminentDepartures} />
+      {mountNativeOverlays ? (
+        <>
+          {heatmapNodes}
+          {imminentDepartures.length > 0 ? (
+            <ImminentDepartureMarkers departures={imminentDepartures} />
+          ) : null}
+          {hasMissionRoutes ? (
+            <MissionRoutePolylines
+              overlays={missionOverlays}
+              routedPathsByMissionId={routedPathsByMissionId}
+              routedStateByMissionId={routedStateByMissionId}
+            />
+          ) : null}
+          {!hasMissionRoutes && routeCoords.length >= 2 ? (
+            <Polyline
+              coordinates={routeCoords}
+              strokeColor="rgba(239, 68, 68, 0.10)"
+              strokeWidth={STANDALONE_ROUTE_STROKES.glow}
+              lineCap="round"
+              lineJoin="round"
+            />
+          ) : null}
+          {!hasMissionRoutes && routeCoords.length >= 2 ? (
+            <Polyline
+              coordinates={routeCoords}
+              strokeColor={activeRoute?.color ?? "#EF4444"}
+              strokeWidth={STANDALONE_ROUTE_STROKES.main}
+              lineCap="round"
+              lineJoin="round"
+            />
+          ) : null}
+          {missionAnchorNodes}
+          {markerNodes}
+          {missionEtaBubble}
+          {etaBubble}
+        </>
       ) : null}
-      {hasMissionRoutes ? (
-        <MissionRoutePolylines
-          overlays={missionOverlays}
-          routedPathsByMissionId={routedPathsByMissionId}
-          routedStateByMissionId={routedStateByMissionId}
-        />
-      ) : null}
-      {!hasMissionRoutes && routeCoords.length >= 2 ? (
-        <Polyline
-          coordinates={routeCoords}
-          strokeColor="rgba(239, 68, 68, 0.10)"
-          strokeWidth={STANDALONE_ROUTE_STROKES.glow}
-          lineCap="round"
-          lineJoin="round"
-        />
-      ) : null}
-      {!hasMissionRoutes && routeCoords.length >= 2 ? (
-        <Polyline
-          coordinates={routeCoords}
-          strokeColor={activeRoute?.color ?? "#EF4444"}
-          strokeWidth={STANDALONE_ROUTE_STROKES.main}
-          lineCap="round"
-          lineJoin="round"
-        />
-      ) : null}
-      {missionAnchorNodes}
-      {markerNodes}
-      {missionEtaBubble}
-      {etaBubble}
     </MapView>
   );
 

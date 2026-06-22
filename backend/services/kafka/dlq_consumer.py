@@ -40,6 +40,21 @@ KAFKA_SSL_CERTFILE = os.getenv("KAFKA_SSL_CERTFILE", "")
 KAFKA_SSL_KEYFILE = os.getenv("KAFKA_SSL_KEYFILE", "")
 
 
+class _KafkaSelectorNoiseFilter(logging.Filter):
+    """Réduit le bruit kafka-python (selector race) avant remontée logs/Sentry."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.name.startswith("kafka.") and "task is already done" in record.getMessage().lower():
+            return False
+        return True
+
+
+def _install_kafka_log_noise_filter() -> None:
+    flt = _KafkaSelectorNoiseFilter()
+    for name in ("kafka", "kafka.net.selector", "kafka.client", "kafka.conn"):
+        logging.getLogger(name).addFilter(flt)
+
+
 def _kafka_security_config() -> dict[str, Any]:
     cfg: dict[str, Any] = {"security_protocol": KAFKA_SECURITY_PROTOCOL}
     if KAFKA_SASL_MECHANISM:
@@ -161,20 +176,39 @@ class KafkaDlqConsumer:
         logger.info("[kafka_dlq] start loop")
         try:
             while self._running:
-                polled = self._consumer.poll(timeout_ms=1000)
+                try:
+                    polled = self._consumer.poll(timeout_ms=1000)
+                except RuntimeError as exc:
+                    if "task is already done" in str(exc).lower():
+                        logger.debug("[kafka_dlq] selector race ignorée (poll): %s", exc)
+                        continue
+                    raise
+                if not polled:
+                    continue
+                batch_ok = True
                 for _tp, records in polled.items():
                     for record in records:
                         try:
                             self._persist_event(record)
-                            self._consumer.commit()
-                            self._update_dlq_metric(record.topic)
                         except Exception:
+                            batch_ok = False
                             logger.exception(
                                 "[kafka_dlq] persist failed topic=%s partition=%s offset=%s",
                                 record.topic,
                                 record.partition,
                                 record.offset,
                             )
+                if batch_ok and polled:
+                    try:
+                        self._consumer.commit()
+                    except RuntimeError as exc:
+                        if "task is already done" in str(exc).lower():
+                            logger.debug("[kafka_dlq] selector race ignorée (commit): %s", exc)
+                        else:
+                            raise
+                    for _tp, records in polled.items():
+                        for record in records:
+                            self._update_dlq_metric(record.topic)
         except Exception as exc:
             from shared.sentry_init import capture_kafka_error, is_kafka_connection_error
 
@@ -197,6 +231,10 @@ class KafkaDlqConsumer:
 def run_kafka_dlq_consumer() -> None:
     from shared.sentry_init import init_sentry
 
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+    )
+    _install_kafka_log_noise_filter()
     init_sentry()
     if not KAFKA_ENABLED:
         logger.info("[kafka_dlq] disabled (KAFKA_ENABLED=false), exiting cleanly")
@@ -209,7 +247,4 @@ def run_kafka_dlq_consumer() -> None:
 
 
 if __name__ == "__main__":
-    logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
-    )
     run_kafka_dlq_consumer()

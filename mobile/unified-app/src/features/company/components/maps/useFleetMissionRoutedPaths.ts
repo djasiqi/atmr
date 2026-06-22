@@ -22,7 +22,9 @@ export function useFleetMissionRoutedPaths(
 
   overlays: FleetMissionOverlay[],
 
-  apiKey?: string | undefined
+  apiKey?: string | undefined,
+
+  options?: { enabled?: boolean }
 
 ): {
 
@@ -58,7 +60,9 @@ export function useFleetMissionRoutedPaths(
 
   useEffect(() => {
 
-    if (overlays.length === 0) {
+    const enabled = options?.enabled !== false;
+
+    if (!enabled || overlays.length === 0) {
 
       setRoutedPathsByMissionId(new Map());
 
@@ -176,7 +180,7 @@ export function useFleetMissionRoutedPaths(
 
     };
 
-  }, [apiKey, overlays, planSignature]);
+  }, [apiKey, options?.enabled, overlays, planSignature]);
 
 
 

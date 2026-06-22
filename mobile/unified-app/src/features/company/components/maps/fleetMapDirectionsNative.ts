@@ -1,3 +1,4 @@
+import { Platform } from "react-native";
 import {
   buildStableDirectionsFetchPlan,
   decodeEncodedPolyline,
@@ -97,34 +98,44 @@ type OverlayDirectionsInput = {
   legDirectionsPlans?: Partial<Record<FleetRouteLegId, FleetDirectionsPlan>>;
 };
 
+async function fetchOverlayDirectionsIntoMap(
+  overlay: OverlayDirectionsInput,
+  apiKey: string | undefined,
+  routed: Map<string, FleetMapLatLng[]>
+): Promise<void> {
+  if (overlay.legDirectionsPlans) {
+    for (const leg of ["to_pickup", "to_dropoff"] as const) {
+      const plan = overlay.legDirectionsPlans[leg];
+      if (!plan) continue;
+      const path = await fetchFleetDirectionsPathNative(plan, apiKey);
+      if (path.length >= 2) {
+        routed.set(fleetRoutePathKey(overlay.missionId, leg), path);
+      }
+    }
+    return;
+  }
+  if (!overlay.directionsPlan) return;
+  const path = await fetchFleetDirectionsPathNative(overlay.directionsPlan, apiKey);
+  if (path.length >= 2) {
+    routed.set(fleetRoutePathKey(overlay.missionId), path);
+  }
+}
+
 export async function fetchFleetDirectionsPathsForOverlaysNative(
   overlays: OverlayDirectionsInput[],
   apiKey?: string
 ): Promise<Map<string, FleetMapLatLng[]>> {
   const routed = new Map<string, FleetMapLatLng[]>();
 
+  if (Platform.OS === "ios") {
+    for (const overlay of overlays) {
+      await fetchOverlayDirectionsIntoMap(overlay, apiKey, routed);
+    }
+    return routed;
+  }
+
   await Promise.all(
-    overlays.flatMap((overlay) => {
-      if (overlay.legDirectionsPlans) {
-        return (["to_pickup", "to_dropoff"] as const).map(async (leg) => {
-          const plan = overlay.legDirectionsPlans?.[leg];
-          if (!plan) return;
-          const path = await fetchFleetDirectionsPathNative(plan, apiKey);
-          if (path.length >= 2) {
-            routed.set(fleetRoutePathKey(overlay.missionId, leg), path);
-          }
-        });
-      }
-      if (!overlay.directionsPlan) return [];
-      return [
-        (async () => {
-          const path = await fetchFleetDirectionsPathNative(overlay.directionsPlan!, apiKey);
-          if (path.length >= 2) {
-            routed.set(fleetRoutePathKey(overlay.missionId), path);
-          }
-        })(),
-      ];
-    })
+    overlays.map((overlay) => fetchOverlayDirectionsIntoMap(overlay, apiKey, routed))
   );
 
   return routed;

@@ -103,6 +103,25 @@ def test_before_send_drops_kafka_bootstrap_nodenotready_noise():
     assert before_send(event, None) is None
 
 
+def test_before_send_drops_kafka_task_already_done_selector_noise():
+    event = {
+        "logentry": {"message": "Task is already done!"},
+        "logger": "kafka.net.selector",
+    }
+    assert before_send(event, None) is None
+
+
+def test_before_send_drops_kafka_task_already_done_runtime():
+    event = {
+        "logentry": {"message": "Task is already done!"},
+        "logger": "app.worker",
+    }
+    assert (
+        before_send(event, {"exc_info": (RuntimeError, RuntimeError("Task is already done!"), None)})
+        is None
+    )
+
+
 def test_before_send_keeps_non_kafka_runtime_error():
     event = {
         "logentry": {"message": "Unhandled exception in request handler"},
