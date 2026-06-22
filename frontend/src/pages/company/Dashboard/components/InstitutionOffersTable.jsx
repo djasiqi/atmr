@@ -1,7 +1,7 @@
 // src/pages/company/Dashboard/components/InstitutionOffersTable.jsx
 import React, { useState, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { FiCheckCircle, FiXCircle, FiClock, FiInbox } from 'react-icons/fi';
+import { FiCheckCircle, FiXCircle, FiClock, FiInbox, FiZap } from 'react-icons/fi';
 import styles from './ReservationTable.module.css';
 import BookingIdentityCell from '../../../../components/booking/BookingIdentityCell';
 import { buildOfferIdentity } from '../../../../utils/bookingIdentity';
@@ -9,7 +9,8 @@ import { getCurrentAuthEnv } from '../../../../utils/apiClient';
 import { formatMissionScheduleDetail, formatLegTime, formatDepartureTime, getConfirmedScheduleParts, formatSchedulePartLabel } from '../../../../utils/formatLegTime';
 import { formatWallClockDateTime } from '../../../../utils/missionTimeDisplay';
 import { canRespondToInstitutionOffer, isInstitutionOfferExpired, filterVisibleInstitutionOffers } from '../../../../utils/institutionOfferResponse';
-import ProposeOfferTimeModal from './ProposeOfferTimeModal';
+import { resolveInstitutionOfferActions, computeAcceptNowPickupIso } from '../../../../utils/institutionOfferActions';
+import PlanOfferTimeModal from './ProposeOfferTimeModal';
 
 /** Formate une date/heure mission (heure murale Genève). */
 const formatMissionDateTime = (isoString) => formatWallClockDateTime(isoString);
@@ -68,7 +69,7 @@ const getRoutePoints = (req) => {
  * Affiche les demandes reçues d'institutions avec possibilité d'accepter/proposer/refuser.
  */
 const InstitutionOffersTable = ({ offers = [], loading, onAccept, onReject }) => {
-  const [proposeOffer, setProposeOffer] = useState(null);
+  const [planOffer, setPlanOffer] = useState(null);
   const navigate = useNavigate();
   const { public_id: companyPublicId } = useParams();
 
@@ -131,6 +132,7 @@ const InstitutionOffersTable = ({ offers = [], loading, onAccept, onReject }) =>
               const routePoints = getRoutePoints(req);
               const canRespond = canRespondToInstitutionOffer(offer);
               const isExpired = isInstitutionOfferExpired(offer);
+              const offerActions = resolveInstitutionOfferActions(offer);
               const scheduleDetail = req.scheduling?.summary
                 ? { missionDate: req.scheduling.mission_date, summary: req.scheduling.summary }
                 : formatMissionScheduleDetail(req);
@@ -238,44 +240,61 @@ const InstitutionOffersTable = ({ offers = [], loading, onAccept, onReject }) =>
                     )}
                   </td>
                   <td className={styles.actionsCell}>
-                    {canRespond ? (
+                    {canRespond && offerActions.canRespond ? (
                       <div style={{ display: 'flex', gap: '2px', alignItems: 'center', justifyContent: 'flex-end' }}>
-                        {/* Accepter (avec l'horaire demandé) */}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onAccept?.(offer.id);
-                          }}
-                          title="Accepter (horaire demandé)"
-                          className={`${styles.actionButton} ${styles.acceptButton}`}
-                        >
-                          <FiCheckCircle size={18} />
-                        </button>
+                        {offerActions.canValidate ? (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onAccept?.(offer.id);
+                            }}
+                            title="Valider l'horaire de départ confirmé"
+                            className={`${styles.actionButton} ${styles.acceptButton}`}
+                          >
+                            <FiCheckCircle size={18} />
+                          </button>
+                        ) : null}
 
-                        {/* Proposer un horaire */}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setProposeOffer(offer);
-                          }}
-                          title="Accepter avec un horaire différent"
-                          className={styles.actionButton}
-                          style={{ color: 'var(--brand-primary)' }}
-                        >
-                          <FiClock size={18} />
-                        </button>
+                        {offerActions.canAcceptNow ? (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onAccept?.(offer.id, computeAcceptNowPickupIso());
+                            }}
+                            title={offerActions.acceptNowLabel}
+                            className={styles.actionButton}
+                            style={{ color: 'var(--warning-primary, #ea580c)' }}
+                          >
+                            <FiZap size={18} />
+                          </button>
+                        ) : null}
 
-                        {/* Refuser */}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onReject?.(offer.id);
-                          }}
-                          title="Refuser la demande"
-                          className={`${styles.actionButton} ${styles.rejectButton}`}
-                        >
-                          <FiXCircle size={18} />
-                        </button>
+                        {offerActions.canPlan ? (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPlanOffer(offer);
+                            }}
+                            title="Définir l'heure de prise en charge"
+                            className={styles.actionButton}
+                            style={{ color: 'var(--brand-primary)' }}
+                          >
+                            <FiClock size={18} />
+                          </button>
+                        ) : null}
+
+                        {offerActions.canReject ? (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onReject?.(offer.id);
+                            }}
+                            title="Refuser la demande"
+                            className={`${styles.actionButton} ${styles.rejectButton}`}
+                          >
+                            <FiXCircle size={18} />
+                          </button>
+                        ) : null}
                       </div>
                     ) : (
                       <span style={{ color: 'var(--text-tertiary)', fontSize: '12px' }}>
@@ -293,14 +312,14 @@ const InstitutionOffersTable = ({ offers = [], loading, onAccept, onReject }) =>
       </div>
 
       {/* Modale proposition d'horaire */}
-      {proposeOffer && (
-        <ProposeOfferTimeModal
-          offer={proposeOffer}
+      {planOffer && (
+        <PlanOfferTimeModal
+          offer={planOffer}
           onConfirm={(offerId, isoTime) => {
             onAccept?.(offerId, isoTime);
-            setProposeOffer(null);
+            setPlanOffer(null);
           }}
-          onClose={() => setProposeOffer(null)}
+          onClose={() => setPlanOffer(null)}
         />
       )}
     </>

@@ -4,6 +4,7 @@ import {
   resolveCompanyContextGuardRedirect,
   resolveContextGuardRedirect,
   resolveDriverUnifiedGate,
+  resolveInstitutionUnifiedGate,
   resolveOnboardingGuardRedirect,
   resolvePermissionGuardRedirect,
   resolveVersionGuardRedirect,
@@ -104,5 +105,15 @@ describe("guard decision helpers", () => {
   it("driver unified gate redirect includes reason param for UX disambiguation", () => {
     const { redirectTo } = resolveDriverUnifiedGate(false);
     expect(redirectTo).toContain("reason=driver_gate");
+  });
+
+  it("institution unified gate blocks until explicitly enabled", () => {
+    const blocked = resolveInstitutionUnifiedGate(false);
+    expect(blocked.allowed).toBe(false);
+    expect(blocked.redirectTo).toBe("/(app)/blocked?reason=institution_gate");
+
+    const allowed = resolveInstitutionUnifiedGate(true);
+    expect(allowed.allowed).toBe(true);
+    expect(allowed.redirectTo).toBeNull();
   });
 });

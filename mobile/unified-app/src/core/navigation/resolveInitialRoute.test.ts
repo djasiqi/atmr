@@ -122,4 +122,62 @@ describe("resolveInitialRoute", () => {
       "/(app)/(company)/ride-details?rideId=99"
     );
   });
+
+  it("routes to context selector when institution gate is off and another context exists", () => {
+    const bootstrap = makeBootstrap({
+      available_contexts: [
+        {
+          context_id: "institution:7",
+          context_type: "institution",
+          label: "Institution",
+          permissions: ["institution:dashboard:read"],
+          is_default: true,
+        },
+        {
+          context_id: "company:42",
+          context_type: "company",
+          label: "Entreprise",
+          permissions: ["company:rides:read"],
+          is_default: false,
+        },
+      ],
+      active_context_id: "institution:7",
+      feature_flags: {},
+    });
+    expect(resolveInitialRoute(bootstrap)).toBe("/(app)/context-selector");
+  });
+
+  it("routes to blocked screen when institution gate is off and no alternative context exists", () => {
+    const bootstrap = makeBootstrap({
+      available_contexts: [
+        {
+          context_id: "institution:7",
+          context_type: "institution",
+          label: "Institution",
+          permissions: ["institution:dashboard:read"],
+          is_default: true,
+        },
+      ],
+      active_context_id: "institution:7",
+      feature_flags: {},
+    });
+    expect(resolveInitialRoute(bootstrap)).toBe("/(app)/blocked?reason=institution_gate");
+  });
+
+  it("routes institution when gate is explicitly enabled", () => {
+    const bootstrap = makeBootstrap({
+      available_contexts: [
+        {
+          context_id: "institution:7",
+          context_type: "institution",
+          label: "Institution",
+          permissions: ["institution:dashboard:read"],
+          is_default: true,
+        },
+      ],
+      active_context_id: "institution:7",
+      feature_flags: { institution_unified_enabled: true },
+    });
+    expect(resolveInitialRoute(bootstrap)).toBe("/(app)/(institution)");
+  });
 });

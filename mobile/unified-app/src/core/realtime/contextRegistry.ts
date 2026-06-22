@@ -26,6 +26,8 @@ export const CONTEXT_REALTIME_CHANNELS: Record<RealtimeSurface, string[]> = {
     "dispatch_run_started",
     "dispatch_run_completed",
     "dispatch_run_failed",
+    "institution_offer_updated",
+    "new_company_notification",
   ],
   client: ["client_booking_update"],
   institution: ["institution_transport_update"],

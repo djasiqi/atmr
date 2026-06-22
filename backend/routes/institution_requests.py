@@ -719,6 +719,7 @@ class TransportRequestList(Resource):
 
             # Options
             transport_req.is_round_trip = validated.get("is_round_trip", False)
+            transport_req.is_urgent = bool(validated.get("is_urgent", False))
             if transport_req.is_round_trip:
                 _apply_return_fields(transport_req, validated)
             logger.info(
@@ -1012,6 +1013,8 @@ class TransportRequestDetail(Resource):
             # Options
             if "is_round_trip" in validated:
                 transport_req.is_round_trip = validated["is_round_trip"]
+            if "is_urgent" in validated:
+                transport_req.is_urgent = bool(validated["is_urgent"])
             if any(
                 k in validated
                 for k in ("return_time", "return_date", "return_time_confirmed")

@@ -384,6 +384,74 @@ class TestSendWithOffers:
         assert kwargs["title"] == "Demande de transport relancée"
         assert ":relaunch:" in kwargs["dedupe_key"]
 
+    @patch("ext.socketio.emit")
+    @patch("services.events.institution_events.persist_company_notification")
+    def test_send_relaunch_broadcasts_to_all_eligible_companies(
+        self,
+        mock_notify,
+        _mock_socket_emit,
+        client,
+        db,
+        sample_institution,
+        auth_headers,
+        sample_request,
+        sample_company,
+        sample_company_2,
+    ):
+        """Relance : réactive l'offre expirée et contacte toutes les entreprises éligibles."""
+        mock_notify.return_value = {"id": 1}
+        InstitutionTransportPreference.set_preferences(
+            institution_id=sample_institution.id,
+            company_ids=[sample_company.id, sample_company_2.id],
+        )
+        db.session.commit()
+
+        client.post(
+            f"/api/v1/institutions/requests/{sample_request.id}/send",
+            headers=auth_headers,
+        )
+
+        offer1 = RequestOffer.query.filter_by(
+            transport_request_id=sample_request.id,
+            company_id=sample_company.id,
+        ).first()
+        assert offer1 is not None
+        old_expires = datetime.now(UTC) - timedelta(minutes=30)
+        offer1.status = OfferStatus.EXPIRED.value
+        offer1.expires_at = old_expires
+        db.session.commit()
+
+        mock_notify.reset_mock()
+        before_relaunch = datetime.now(UTC)
+        response = client.post(
+            f"/api/v1/institutions/requests/{sample_request.id}/send",
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["send_info"]["mode"] == OfferMode.BROADCAST.value
+        assert data["send_info"]["offers_created"] >= 2
+
+        db.session.refresh(offer1)
+        assert offer1.status == OfferStatus.PENDING.value
+        assert offer1.expires_at is not None
+        assert offer1.expires_at > before_relaunch
+
+        offer2 = RequestOffer.query.filter_by(
+            transport_request_id=sample_request.id,
+            company_id=sample_company_2.id,
+        ).first()
+        assert offer2 is not None
+        assert offer2.status == OfferStatus.PENDING.value
+        assert offer2.expires_at is not None
+        assert offer2.expires_at > before_relaunch
+
+        notified_company_ids = {
+            call.kwargs["company_id"] for call in mock_notify.call_args_list
+        }
+        assert sample_company.id in notified_company_ids
+        assert sample_company_2.id in notified_company_ids
+
     def test_send_converted_request_fails_409(
         self,
         client,
@@ -419,6 +487,7 @@ class TestAcceptOffer:
         institution = Institution()
         institution.name = "Clinique Accept Test"
         institution.public_id = str(uuid.uuid4())
+        institution.billing_address = "123 Rue Test, 1200 Genève"
         db.session.add(institution)
         db.session.flush()
         return institution
@@ -506,6 +575,7 @@ class TestAcceptOffer:
         scheduled = datetime.now(UTC) + timedelta(days=2)
         request.mission_date = scheduled.date()
         request.scheduled_time = scheduled
+        request.pickup_time_confirmed = True
         request.status = RequestStatus.SENT.value
         request.sent_at = datetime.now(UTC)
         db.session.add(request)
@@ -516,6 +586,7 @@ class TestAcceptOffer:
             company_id=company.id,
             mode=OfferMode.BROADCAST.value,
             status=OfferStatus.PENDING.value,
+            expires_at=datetime.now(UTC) + timedelta(hours=2),
         )
         db.session.add(offer)
         db.session.flush()
@@ -655,6 +726,7 @@ class TestAcceptOffer:
         scheduled = datetime.now(UTC) + timedelta(days=2)
         request.mission_date = scheduled.date()
         request.scheduled_time = scheduled
+        request.pickup_time_confirmed = True
         request.status = RequestStatus.SENT.value
         request.sent_at = datetime.now(UTC)
         db.session.add(request)
@@ -665,12 +737,14 @@ class TestAcceptOffer:
             company_id=company1.id,
             mode=OfferMode.BROADCAST.value,
             status=OfferStatus.PENDING.value,
+            expires_at=datetime.now(UTC) + timedelta(hours=2),
         )
         offer2 = RequestOffer(
             transport_request_id=request.id,
             company_id=company2.id,
             mode=OfferMode.BROADCAST.value,
             status=OfferStatus.PENDING.value,
+            expires_at=datetime.now(UTC) + timedelta(hours=2),
         )
         db.session.add(offer1)
         db.session.add(offer2)
@@ -710,6 +784,7 @@ class TestAcceptOffer:
         scheduled = datetime.now(UTC) + timedelta(days=2)
         request.mission_date = scheduled.date()
         request.scheduled_time = scheduled
+        request.pickup_time_confirmed = True
         request.status = RequestStatus.SENT.value
         request.sent_at = datetime.now(UTC)
         db.session.add(request)
@@ -720,12 +795,14 @@ class TestAcceptOffer:
             company_id=company1.id,
             mode=OfferMode.BROADCAST.value,
             status=OfferStatus.PENDING.value,
+            expires_at=datetime.now(UTC) + timedelta(hours=2),
         )
         offer2 = RequestOffer(
             transport_request_id=request.id,
             company_id=company2.id,
             mode=OfferMode.BROADCAST.value,
             status=OfferStatus.PENDING.value,
+            expires_at=datetime.now(UTC) + timedelta(hours=2),
         )
         db.session.add(offer1)
         db.session.add(offer2)
@@ -771,6 +848,82 @@ class TestAcceptOffer:
         assert accept_response.status_code == 409
         body = accept_response.get_json()
         assert body.get("code") == "OFFER_REJECTED"
+
+    def test_accept_rdv_only_without_proposed_pickup_returns_422(
+        self,
+        client,
+        db,
+        sample_request_with_offer,
+        company_auth_headers,
+    ):
+        """Cas Khalid : RDV seul sans départ — Valider interdit (Planifier requis)."""
+        request, offer = sample_request_with_offer
+        past_rdv = datetime.now(UTC) - timedelta(hours=2)
+        request.pickup_time_confirmed = False
+        request.scheduled_time = past_rdv
+        request.scheduled_time_type = "arrival"
+        request.appointment_time_confirmed = True
+        request.is_urgent = False
+        db.session.commit()
+
+        response = client.post(
+            f"/api/v1/company/request-offers/{offer.id}/accept",
+            headers=company_auth_headers,
+        )
+
+        assert response.status_code == 422
+        body = response.get_json()
+        assert body.get("code") == "PROPOSED_PICKUP_REQUIRED"
+
+    def test_accept_rdv_only_with_proposed_pickup_creates_booking(
+        self,
+        client,
+        db,
+        sample_request_with_offer,
+        company_auth_headers,
+    ):
+        """Planifier : accept avec proposed_pickup_time sur RDV seul."""
+        request, offer = sample_request_with_offer
+        past_rdv = datetime.now(UTC) - timedelta(hours=2)
+        proposed = datetime.now(UTC) + timedelta(minutes=15)
+        request.pickup_time_confirmed = False
+        request.scheduled_time = past_rdv
+        request.scheduled_time_type = "arrival"
+        request.appointment_time_confirmed = True
+        db.session.commit()
+
+        response = client.post(
+            f"/api/v1/company/request-offers/{offer.id}/accept",
+            headers=company_auth_headers,
+            json={"proposed_pickup_time": proposed.isoformat()},
+        )
+
+        assert response.status_code == 200, response.get_json()
+        data = response.get_json()
+        assert data.get("booking_id") is not None
+
+    def test_accept_expired_offer_returns_410_even_with_proposed_pickup(
+        self,
+        client,
+        db,
+        sample_request_with_offer,
+        company_auth_headers,
+    ):
+        """Offre expirée (urgente ou non) — gate avant accept, même avec proposed_pickup_time."""
+        _request, offer = sample_request_with_offer
+        offer.expires_at = datetime.now(UTC) - timedelta(minutes=5)
+        db.session.commit()
+
+        proposed = (datetime.now(UTC) + timedelta(minutes=15)).isoformat()
+        response = client.post(
+            f"/api/v1/company/request-offers/{offer.id}/accept",
+            headers=company_auth_headers,
+            json={"proposed_pickup_time": proposed},
+        )
+
+        assert response.status_code == 410
+        body = response.get_json()
+        assert body.get("code") == "OFFER_EXPIRED"
 
     def test_cannot_accept_other_company_offer(
         self, client, db, sample_request_with_offer, company_2_auth_headers

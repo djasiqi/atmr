@@ -248,6 +248,13 @@ class TransportRequest(db.Model):
     return_to_institution: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
     )
+    is_urgent: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+        comment="Mission urgente (départ immédiat autorisé si pas de départ confirmé)",
+    )
     route_group_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
 
     # Mobilité (JSONB pour flexibilité)
@@ -539,6 +546,7 @@ class TransportRequest(db.Model):
             "return_time_confirmed": bool(self.return_time_confirmed),
             "multi_stop": self.multi_stop,
             "return_to_institution": self.return_to_institution,
+            "is_urgent": bool(getattr(self, "is_urgent", False)),
             "route_group_id": self.route_group_id,
             "legs": [leg.serialize() for leg in (self.legs or [])],
             "mobility": self.get_mobility(),

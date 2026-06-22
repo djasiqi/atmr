@@ -194,6 +194,83 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 18,
   },
+  timeOnlyDateHint: {
+    fontSize: FONT_SIZE.px12,
+    color: E.TEXT_SEC,
+    marginBottom: 6,
+    lineHeight: 16,
+  },
+  timeOnlyRow: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    minHeight: 64,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: ROW_RADIUS,
+    borderWidth: 1,
+    borderColor: "rgba(0, 121, 107, 0.22)",
+    backgroundColor: "rgba(0, 121, 107, 0.06)",
+    gap: 12,
+  },
+  timeOnlyRowEmpty: {
+    borderColor: "rgba(145, 165, 157, 0.3)",
+    backgroundColor: "#FCFDFC",
+  },
+  timeOnlyRowHovered: {
+    borderColor: "rgba(0, 121, 107, 0.34)",
+    backgroundColor: "rgba(0, 121, 107, 0.1)",
+  },
+  timeOnlyRowFocused: {
+    borderColor: E.BRAND,
+    shadowColor: E.BRAND,
+    shadowOpacity: 0.16,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
+  },
+  timeOnlyRowPressed: {
+    backgroundColor: "rgba(0, 121, 107, 0.14)",
+  },
+  timeOnlyIconBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 11,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    borderWidth: 1,
+    borderColor: "rgba(0, 121, 107, 0.15)",
+  },
+  timeOnlyBody: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  timeOnlyCaption: {
+    fontSize: FONT_SIZE.px11,
+    fontWeight: "600" as const,
+    color: E.TEXT_SEC,
+    textTransform: "uppercase" as const,
+    letterSpacing: 0.4,
+  },
+  timeOnlyValue: {
+    fontSize: 28,
+    fontWeight: "700" as const,
+    color: E.TEXT,
+    lineHeight: 32,
+    fontVariant: ["tabular-nums"] as const,
+  },
+  timeOnlyValueEmpty: {
+    fontSize: FONT_SIZE.px16,
+    fontWeight: "600" as const,
+    color: E.TEXT_MUTED,
+    lineHeight: 22,
+  },
+  timeOnlyAction: {
+    fontSize: FONT_SIZE.px13,
+    fontWeight: "600" as const,
+    color: E.BRAND_DARK,
+  },
   webActionsRow: {
     flexDirection: "row" as const,
     gap: 6,
@@ -848,6 +925,8 @@ type TimeDatePickerProps = {
   onChange: (value: string) => void;
   /** True: sélection date uniquement (pas d'étape heure). */
   dateOnly?: boolean;
+  /** True: sélection heure uniquement — date figée via `emptyPreviewReferenceIso`. */
+  timeOnly?: boolean;
   /** Rendu champ : une ligne combinée (défaut) ou deux cellules date/heure. */
   display?: "combined" | "split";
   /** Libellé au-dessus du champ. */
@@ -884,6 +963,7 @@ export function TimeDatePicker({
   value,
   onChange,
   dateOnly = false,
+  timeOnly = false,
   display = "combined",
   label = "Date & heure de départ *",
   emptyLabel = "Non défini",
@@ -899,14 +979,22 @@ export function TimeDatePicker({
   onEditorConfirm,
   onEditorDismiss,
 }: TimeDatePickerProps) {
-  const modalTitleFallback = dateOnly ? "Date" : "Date & heure";
+  const modalTitleFallback = dateOnly ? "Date" : timeOnly ? "Heure" : "Date & heure";
   const modalTitle =
     (modalTitleProp ?? label.replace(/\s*\*\s*$/, "").trim()) || modalTitleFallback;
   const t = useResponsiveTokens();
-  /** Retour aller-retour : date calendaire = référence (aller), seule l’heure peut être « à définir ». */
+  /** Retour A/R ou planification offre : date calendaire figée, seule l'heure est éditée. */
   const splitInheritsReferenceDate =
-    display === "split" && !dateOnly && Boolean(emptyPreviewReferenceIso?.trim());
+    display === "split" && !dateOnly && !timeOnly && Boolean(emptyPreviewReferenceIso?.trim());
+  const locksDateToReference =
+    splitInheritsReferenceDate
+    || (timeOnly && Boolean(emptyPreviewReferenceIso?.trim()));
   const preview = useMemo(() => {
+    if (timeOnly) {
+      const time = formatSwissTimeOnlyDisplay(value);
+      if (time) return time;
+      return "";
+    }
     const main = dateOnly ? formatSwissDateOnlyDisplay(value) : formatSwissDisplay(value);
     if (main) return main;
     const refIso = emptyPreviewReferenceIso?.trim();
@@ -915,7 +1003,7 @@ export function TimeDatePicker({
       if (dateOnly) return `${dateOnly}${emptyPreviewSuffix}`;
     }
     return "";
-  }, [value, emptyPreviewReferenceIso, emptyPreviewSuffix, dateOnly]);
+  }, [value, emptyPreviewReferenceIso, emptyPreviewSuffix, dateOnly, timeOnly]);
   const splitDatePreview = useMemo(() => {
     if (splitInheritsReferenceDate) {
       const refDisplay = formatSwissDateCompactDisplay(emptyPreviewReferenceIso ?? "");
@@ -924,6 +1012,14 @@ export function TimeDatePicker({
     return formatSwissDateCompactDisplay(value);
   }, [value, emptyPreviewReferenceIso, splitInheritsReferenceDate]);
   const splitTimePreview = useMemo(() => formatSwissTimeOnlyDisplay(value), [value]);
+  const timeOnlyDateHint = useMemo(() => {
+    if (!timeOnly) return "";
+    const refIso = emptyPreviewReferenceIso?.trim();
+    if (refIso) return formatSwissDateCompactDisplay(refIso);
+    if (value.trim()) return formatSwissDateCompactDisplay(value);
+    return "";
+  }, [timeOnly, emptyPreviewReferenceIso, value]);
+  const timeOnlyHasValue = preview.length > 0;
   const splitDateDefined = splitDatePreview.length > 0;
   const splitTimeDefined = splitTimePreview.length > 0;
   const [mobileEditorOpen, setMobileEditorOpen] = useState(false);
@@ -962,7 +1058,7 @@ export function TimeDatePicker({
   const today = getTodayStartInZurich();
   const commitSchedule = useCallback(
     (next: Date) => {
-      if (splitInheritsReferenceDate) {
+      if (locksDateToReference) {
         const refParsed = parseToDate(emptyPreviewReferenceIso ?? "");
         if (refParsed) {
           onChange(toLocalIsoMinute(enforceMinSchedule(mergeZurichDayAndTime(refParsed, next), today)));
@@ -971,7 +1067,7 @@ export function TimeDatePicker({
       }
       onChange(toLocalIsoMinute(enforceMinSchedule(next, today)));
     },
-    [onChange, today, splitInheritsReferenceDate, emptyPreviewReferenceIso],
+    [onChange, today, locksDateToReference, emptyPreviewReferenceIso],
   );
   const stripDays = useMemo(
     () =>
@@ -1005,14 +1101,19 @@ export function TimeDatePicker({
       onChange(toLocalIsoMinute(fixed));
     }
     const selected = clampZurichDayToToday(fixed, today);
-    setMobileStep("date");
-    setStripFirstDay(computeStripFirstDay(selected, today));
-    setStripViewportFocus(startOfDay(fixed));
-    setMonthStripWindowStart(monthStripWindowStartFor(fixed));
-    setDateCarousel("day");
+    if (timeOnly) {
+      setMobileStep("time");
+      setTimeCarousel("hour");
+    } else {
+      setMobileStep("date");
+      setStripFirstDay(computeStripFirstDay(selected, today));
+      setStripViewportFocus(startOfDay(fixed));
+      setMonthStripWindowStart(monthStripWindowStartFor(fixed));
+      setDateCarousel("day");
+    }
     stripScrollDoneRef.current = false;
     setMobileEditorOpen(true);
-  }, [value, baseDate, today, onChange]);
+  }, [value, baseDate, today, onChange, timeOnly]);
 
   const openPickerRef = useRef(openPicker);
   openPickerRef.current = openPicker;
@@ -1033,10 +1134,10 @@ export function TimeDatePicker({
   );
 
   useEffect(() => {
-    if (!standaloneEditor || !openEditorSignal) return;
+    if (!openEditorSignal) return;
     // Ne pas dépendre de openPicker/value : sinon chaque changement d’heure rouvre l’éditeur sur l’onglet Date.
     openPickerRef.current();
-  }, [standaloneEditor, openEditorSignal]);
+  }, [openEditorSignal]);
 
   useEffect(() => {
     if (!mobileEditorOpen) {
@@ -1214,6 +1315,9 @@ export function TimeDatePicker({
           {label}
         </AppText>
       ) : null}
+      {timeOnly && timeOnlyDateHint ? (
+        <AppText style={styles.timeOnlyDateHint}>{timeOnlyDateHint}</AppText>
+      ) : null}
       {!standaloneEditor && display === "split" && !dateOnly ? (
         <View style={[styles.splitRow, tonal && styles.splitRowTonal]}>
           {splitInheritsReferenceDate ? (
@@ -1323,6 +1427,46 @@ export function TimeDatePicker({
             </View>
           </Pressable>
         </View>
+      ) : !standaloneEditor && timeOnly ? (
+        <Pressable
+          onPress={openPicker}
+          style={({ pressed, hovered, focused }) => [
+            styles.timeOnlyRow,
+            timeOnlyHasValue ? null : styles.timeOnlyRowEmpty,
+            hovered && styles.timeOnlyRowHovered,
+            focused && styles.timeOnlyRowFocused,
+            pressed && styles.timeOnlyRowPressed,
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel={accessibilityLabel}
+        >
+          <View style={styles.timeOnlyIconBadge}>
+            <Ionicons name="time-outline" size={22} color={E.BRAND} />
+          </View>
+          <View style={styles.timeOnlyBody}>
+            <AppText style={styles.timeOnlyCaption}>Prise en charge</AppText>
+            <AppText
+              style={timeOnlyHasValue ? styles.timeOnlyValue : styles.timeOnlyValueEmpty}
+              numberOfLines={1}
+            >
+              {preview || emptyLabel}
+            </AppText>
+          </View>
+          <AppText style={styles.timeOnlyAction}>
+            {timeOnlyHasValue ? "Modifier" : "Choisir"}
+          </AppText>
+          <View style={styles.requiredSlot}>
+            {required && !timeOnlyHasValue ? (
+              <AppText
+                variant="label"
+                accessibilityLabel="Champ obligatoire"
+                style={styles.requiredMark}
+              >
+                *
+              </AppText>
+            ) : null}
+          </View>
+        </Pressable>
       ) : !standaloneEditor ? (
         <Pressable
           onPress={openPicker}
@@ -1393,7 +1537,7 @@ export function TimeDatePicker({
         footer={null}
       >
         <View style={styles.mobileModalCard}>
-              {!dateOnly ? (
+              {!dateOnly && !timeOnly ? (
               <View style={styles.mobileStepTabs}>
                 <Pressable
                   onPress={() => setMobileStep("date")}
@@ -1437,7 +1581,7 @@ export function TimeDatePicker({
               ) : null}
               <ScrollView showsVerticalScrollIndicator={false} nestedScrollEnabled>
                 <View>
-                  {mobileStep === "date" || dateOnly ? (
+                  {!timeOnly && (mobileStep === "date" || dateOnly) ? (
                     <>
                     <View style={styles.mobileDateStepColumn}>
                         <View style={styles.mobileDateShell}>
@@ -1869,6 +2013,7 @@ export function TimeDatePicker({
                         />
                       </View>
                       <View style={styles.mobileActionsDock}>
+                        {!timeOnly ? (
                         <Pressable
                           onPress={() => setMobileStep("date")}
                           style={({ pressed }) => [
@@ -1885,6 +2030,7 @@ export function TimeDatePicker({
                             Retour date
                           </AppText>
                         </Pressable>
+                        ) : null}
                         <Pressable
                           onPress={() => commitSchedule(new Date())}
                           style={({ pressed }) => [
@@ -1901,6 +2047,7 @@ export function TimeDatePicker({
                             Maintenant
                           </AppText>
                         </Pressable>
+                        {!timeOnly ? (
                         <Pressable
                           onPress={() => onChange("")}
                           style={({ pressed }) => [
@@ -1917,6 +2064,7 @@ export function TimeDatePicker({
                             À définir
                           </AppText>
                         </Pressable>
+                        ) : null}
                       </View>
                     </View>
                     </View>

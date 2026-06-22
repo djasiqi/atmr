@@ -293,6 +293,7 @@ class AcceptOffer(Resource):
     @company_offers_ns.response(404, "Offre non trouvée", not_found_error_model)
     @company_offers_ns.response(409, "Offre déjà traitée", api_error_model)
     @company_offers_ns.response(410, "Offre expirée", api_error_model)
+    @company_offers_ns.response(422, "Horaire de prise en charge requis", api_error_model)
     @jwt_required()
     def post(self, offer_id: int):
         """Accepte une offre et crée le booking correspondant.

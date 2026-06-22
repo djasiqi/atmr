@@ -21,6 +21,7 @@ import {
 import { buildOfferIdentity } from '../../../utils/bookingIdentity';
 import { getConfirmedScheduleParts, formatSchedulePartLabel } from '../../../utils/formatLegTime';
 import { canRespondToInstitutionOffer, isInstitutionOfferExpired } from '../../../utils/institutionOfferResponse';
+import { computeAcceptNowPickupIso } from '../../../utils/institutionOfferActions';
 import ReservationTable from '../Dashboard/components/ReservationTable';
 import ReservationTableSkeleton from '../Dashboard/components/ReservationTableSkeleton';
 import ProposeOfferTimeModal from '../Dashboard/components/ProposeOfferTimeModal';
@@ -360,8 +361,8 @@ const CompanyReservations = () => {
         await acceptRequestOffer(offerId, proposedPickupTime);
         toast.success(
           proposedPickupTime
-            ? 'Offre acceptée avec horaire proposé — réservation créée'
-            : 'Offre acceptée — réservation créée'
+            ? 'Offre planifiée — réservation créée'
+            : 'Offre validée — réservation créée'
         );
         queryClient.invalidateQueries({ queryKey: lirieKeys.institutionOffers() });
         void lirieInvalidateCompanyReservationLists(queryClient);
@@ -373,12 +374,12 @@ const CompanyReservations = () => {
     [queryClient, refetchReservations]
   );
 
-  const handleAcceptInstitutionOffer = useCallback(
+  const handleValidateInstitutionOffer = useCallback(
     (row) => acceptOfferById(row.__offerId, undefined, row.__offer),
     [acceptOfferById]
   );
 
-  const handleProposeInstitutionOffer = useCallback(
+  const handlePlanInstitutionOffer = useCallback(
     (row) => {
       if (!canRespondToInstitutionOffer(row.__offer)) {
         toast.error('Offre expirée, vous ne pouvez plus répondre.');
@@ -389,6 +390,17 @@ const CompanyReservations = () => {
     },
     []
   );
+
+  const handleAcceptNowInstitutionOffer = useCallback(
+    (row) => acceptOfferById(row.__offerId, computeAcceptNowPickupIso(), row.__offer),
+    [acceptOfferById]
+  );
+
+  /** @deprecated alias — Valider */
+  const handleAcceptInstitutionOffer = handleValidateInstitutionOffer;
+
+  /** @deprecated alias — Planifier */
+  const handleProposeInstitutionOffer = handlePlanInstitutionOffer;
 
   const handleRejectInstitutionOffer = useCallback(
     async (offerId, offerForGuard = null) => {
@@ -937,6 +949,9 @@ const CompanyReservations = () => {
                     onTransfer={handleOpenTransferModal}
                     onSchedule={handleSchedule}
                     onDispatchNow={handleDispatchNow}
+                    onValidateInstitutionOffer={handleValidateInstitutionOffer}
+                    onPlanInstitutionOffer={handlePlanInstitutionOffer}
+                    onAcceptNowInstitutionOffer={handleAcceptNowInstitutionOffer}
                     onAcceptInstitutionOffer={handleAcceptInstitutionOffer}
                     onProposeInstitutionOffer={handleProposeInstitutionOffer}
                     onRejectInstitutionOffer={handleRejectInstitutionOffer}
@@ -1098,17 +1113,21 @@ const CompanyReservations = () => {
             <InstitutionOfferDetailPanel
               offer={selectedOffer}
               onClose={() => setSelectedOffer(null)}
-              onAccept={(offer) => {
+              onValidate={(offer) => {
                 acceptOfferById(offer.id, undefined, offer);
                 setSelectedOffer(null);
               }}
-              onPropose={(offer) => {
+              onPlan={(offer) => {
                 if (!canRespondToInstitutionOffer(offer)) {
                   toast.error('Offre expirée, vous ne pouvez plus répondre.');
                   return;
                 }
 
                 setProposeOffer(offer);
+                setSelectedOffer(null);
+              }}
+              onAcceptNow={(offer) => {
+                acceptOfferById(offer.id, computeAcceptNowPickupIso(), offer);
                 setSelectedOffer(null);
               }}
               onReject={(offerId) => {

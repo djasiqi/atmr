@@ -25,6 +25,14 @@ export const featureFlags = {
     enabled: true,
     description: "Espace chauffeur dans l’app unifiée. Désactivable via feature_flags (bootstrap) pour cohorte legacy.",
   } satisfies FeatureFlagDefinition,
+  institution_unified_enabled: {
+    key: "institution_unified_enabled",
+    source: "external",
+    /** Opt-in: l’espace institution reste fermé tant que le bootstrap n’expose pas explicitement `true`. */
+    enabled: envFlag(process.env.EXPO_PUBLIC_ENABLE_INSTITUTION_UNIFIED),
+    description:
+      "Espace institution dans l’app unifiée. Activable via feature_flags (bootstrap) ou EXPO_PUBLIC_ENABLE_INSTITUTION_UNIFIED=1 en dev.",
+  } satisfies FeatureFlagDefinition,
   ws_service_canary: {
     key: "ws_service_canary",
     source: "env",
@@ -504,4 +512,17 @@ export function getRuntimeNumericFlag(key: FeatureFlagKey): number | null {
     if (Number.isFinite(parsed)) return parsed;
   }
   return null;
+}
+
+export function resolveInstitutionUnifiedEnabledFromBootstrap(
+  bootstrapFlags: Record<string, RuntimeFlagValue> | null | undefined
+): boolean {
+  if (
+    bootstrapFlags &&
+    Object.prototype.hasOwnProperty.call(bootstrapFlags, "institution_unified_enabled")
+  ) {
+    const parsed = toBoolean(bootstrapFlags.institution_unified_enabled);
+    if (parsed !== null) return parsed;
+  }
+  return featureFlags.institution_unified_enabled.enabled;
 }

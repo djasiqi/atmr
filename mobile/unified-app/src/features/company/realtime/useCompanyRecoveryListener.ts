@@ -88,6 +88,17 @@ export function performCompanyRecoveryResync(
   void traceInvalidateQueries(chatKey, `recovery_resync_${trigger}_chat`, async () => {
     await queryClient.invalidateQueries({ queryKey: chatKey, exact: false });
   });
+  const institutionOffersKey = contextScopedKey(
+    contextId,
+    [...companyQueryKeys.institutionOffers(contextId, "PENDING")] as unknown[]
+  );
+  void traceInvalidateQueries(
+    institutionOffersKey,
+    `recovery_resync_${trigger}_institution_offers`,
+    async () => {
+      await queryClient.invalidateQueries({ queryKey: institutionOffersKey, exact: false });
+    }
+  );
 }
 
 export function useCompanyRecoveryListener(contextId: string | null): void {

@@ -278,6 +278,9 @@ class RequestOffer(db.Model):
                 "scheduled_time": _iso_scheduled(request.scheduled_time),
                 "next_confirmed_time": _iso_scheduled(next_confirmed),
                 "pickup_time_confirmed": bool(request.pickup_time_confirmed),
+                "appointment_time_confirmed": bool(
+                    getattr(request, "appointment_time_confirmed", False)
+                ),
                 "scheduled_time_type": getattr(request, "scheduled_time_type", None)
                 or "departure",
                 "pickup_location": request.pickup_location,
@@ -296,6 +299,7 @@ class RequestOffer(db.Model):
                 "return_to_institution": getattr(
                     request, "return_to_institution", False
                 ),
+                "is_urgent": bool(getattr(request, "is_urgent", False)),
                 "legs": [leg.serialize() for leg in (request.legs or [])],
                 "mobility": request.get_mobility(),
                 "contact_on_site": request.contact_on_site,

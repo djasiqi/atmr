@@ -14,6 +14,7 @@ import { isFeatureEnabled } from "../../../core/featureFlags/registry";
 import { shouldShowCompanyDriverContextSwitch } from "../../../core/contextSwitchPolicy";
 import { useSession } from "../../../core/sessionProvider";
 import { useCompanyMessageHubUnreadBadge } from "../messages/hooks";
+import { useInstitutionOffersPendingBadge } from "../hooks";
 import { RadialActionMenu, type RadialAction } from "../../../components/RadialActionMenu";
 import { FONT_SIZE } from "../../../design/responsive/typographyTokens";
 
@@ -85,7 +86,7 @@ function useActiveRouteName(state: BottomTabBarProps["state"]): string {
 
 /**
  * Barre d’onglets flottante (pilule) avec CTA centrale « nouvelle course »
- * (patron 2 + bouton rond + 2). « Autres » ouvre Clients & facturation et Paramètres.
+ * (patron 2 + bouton rond + 2). « Autres » ouvre Demandes institution, Clients & facturation et Paramètres.
  *
  * Onglets : icônes + badge (chat) ; pas de libellé sous la barre — `label` sert à l’accessibilité.
  */
@@ -98,9 +99,12 @@ export function CompanyFloatingTabBar({ state, navigation }: BottomTabBarProps) 
   const [switchPending, setSwitchPending] = useState(false);
   const [switchMessage, setSwitchMessage] = useState<string | null>(null);
   const chatUnread = useCompanyMessageHubUnreadBadge();
+  const offersPending = useInstitutionOffersPendingBadge();
   const current = useActiveRouteName(state);
+  const onOffersRoute = current === "offers/index" || current.startsWith("offers/");
   const maxBarWidth = Math.min(480, usableWidth - 2 * horizontalPadding);
-  const focusedFromSheet = HIDDEN_SHEET_ROUTES.some((x) => x.name === current);
+  const focusedFromSheet =
+    HIDDEN_SHEET_ROUTES.some((x) => x.name === current) || onOffersRoute;
   const bottomPad = computeCompanyFloatingBottomPad(bottomInset);
   const totalBarAreaHeight = 64 + bottomInset;
   const primaryDriverContext = useMemo(() => {
@@ -126,6 +130,15 @@ export function CompanyFloatingTabBar({ state, navigation }: BottomTabBarProps) 
 
   const radialActions = useMemo<RadialAction[]>(() => {
     const items: RadialAction[] = [
+      {
+        key: "institution-offers",
+        label: "Demandes institution",
+        icon: <Ionicons name="business-outline" size={20} color="#FFFFFF" />,
+        color: "#0F766E",
+        onPress: () => {
+          void router.push("/(app)/(company)/offers" as Href);
+        },
+      },
       {
         key: "clients-facturation",
         label: "Clients & facturation",
@@ -245,22 +258,46 @@ export function CompanyFloatingTabBar({ state, navigation }: BottomTabBarProps) 
             }}
           />
           <View style={styles.barSlot}>
-            <RadialActionMenu
-              inline
-              actions={radialActions}
-              triggerVariant="tab"
-              actionsLayout="vertical"
-              mainIcon={<Ionicons name="grid-outline" size={22} color={focusedFromSheet ? C.brand : C.textMuted} />}
-              openIcon={<Ionicons name="close-outline" size={22} color={C.brand} />}
-              position="bottomRight"
-              radius={68}
-              verticalSpacing={40}
-              verticalExtraSpacing={14}
-              actionsOffsetX={0}
-              actionsOffsetY={-20}
-              showLabels={false}
-              accessibilityLabel="Autres écrans"
-            />
+            <View style={styles.iconBadgeWrap}>
+              <RadialActionMenu
+                inline
+                actions={radialActions}
+                triggerVariant="tab"
+                actionsLayout="vertical"
+                mainIcon={
+                  <Ionicons
+                    name="grid-outline"
+                    size={22}
+                    color={focusedFromSheet ? C.brand : C.textMuted}
+                  />
+                }
+                openIcon={<Ionicons name="close-outline" size={22} color={C.brand} />}
+                position="bottomRight"
+                radius={68}
+                verticalSpacing={40}
+                verticalExtraSpacing={14}
+                actionsOffsetX={0}
+                actionsOffsetY={-20}
+                showLabels={false}
+                accessibilityLabel={
+                  offersPending > 0
+                    ? `Autres écrans, ${offersPending} demande${offersPending > 1 ? "s" : ""} institution`
+                    : "Autres écrans"
+                }
+              />
+              {offersPending > 0 ? (
+                <View style={styles.badge} accessibilityLabel={`${offersPending}`} accessibilityRole="text" accessible>
+                  <AppText
+                    variant="caption"
+                    numberOfLines={1}
+                    maxFontSizeMultiplier={1.25}
+                    style={styles.badgeText}
+                  >
+                    {offersPending > 99 ? "99+" : String(offersPending)}
+                  </AppText>
+                </View>
+              ) : null}
+            </View>
           </View>
     </BaseFloatingBar>
       {switchMessage ? (

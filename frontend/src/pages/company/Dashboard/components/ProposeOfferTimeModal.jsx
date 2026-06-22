@@ -54,11 +54,10 @@ const computeDefaultProposedTime = (req, scheduleInfo, travelMinutes) => {
 };
 
 /**
- * Modale « Proposer un horaire » pour une offre institution.
- * Permet au transporteur de confirmer / proposer une heure de prise en charge
- * lorsque l'institution attend une confirmation d'horaire.
+ * Modale « Planifier la prise en charge » pour une offre institution.
+ * Planifier = accept(proposed_pickup_time) — booking direct, pas de validation institution.
  */
-const ProposeOfferTimeModal = ({ offer, onConfirm, onClose }) => {
+const PlanOfferTimeModal = ({ offer, onConfirm, onClose }) => {
   const req = offer?.transport_request || {};
   const scheduleDetail = formatMissionScheduleDetail(req);
 
@@ -124,7 +123,7 @@ const ProposeOfferTimeModal = ({ offer, onConfirm, onClose }) => {
     <div className={styles.proposeTimeOverlay} onClick={onClose}>
       <div className={styles.proposeTimeDialog} onClick={(e) => e.stopPropagation()}>
         <h3 style={{ margin: '0 0 16px', fontSize: '16px' }}>
-          Proposer un horaire de prise en charge
+          Planifier la prise en charge
         </h3>
 
         <div
@@ -217,7 +216,7 @@ const ProposeOfferTimeModal = ({ offer, onConfirm, onClose }) => {
                 fontSize: '13px',
               }}
             >
-              Accepter avec cet horaire
+              Confirmer l'horaire
             </button>
           </div>
         </form>
@@ -226,4 +225,6 @@ const ProposeOfferTimeModal = ({ offer, onConfirm, onClose }) => {
   );
 };
 
-export default ProposeOfferTimeModal;
+export default PlanOfferTimeModal;
+/** @deprecated Utiliser PlanOfferTimeModal */
+export { PlanOfferTimeModal as ProposeOfferTimeModal };

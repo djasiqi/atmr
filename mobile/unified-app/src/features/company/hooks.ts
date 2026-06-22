@@ -44,6 +44,7 @@ import {
 } from "./api/institutionOffersApi";
 import { reportCompanyPushTelemetry } from "./api/companyPushTelemetryApi";
 import { consumeOfferOpenToAcceptSeconds } from "./push/companyPush";
+import { filterVisibleInstitutionOffers } from "./utils/institutionOfferResponse";
 import { companyContextScope, companyQueryKeys } from "./companyQueryKeys";
 import { companyRealtimeBridge } from "./realtime/companyRealtimeBridge";
 import {
@@ -1171,6 +1172,15 @@ export function useInstitutionOffersQuery(status = "PENDING") {
     enabled: Boolean(contextId),
     staleTime: QUERY_STALE_TIME_MS.companyList,
   });
+}
+
+/** Nombre d'offres institution PENDING encore visibles (badge navigation). */
+export function useInstitutionOffersPendingBadge(): number {
+  const { data } = useInstitutionOffersQuery("PENDING");
+  return useMemo(
+    () => filterVisibleInstitutionOffers(data?.offers ?? []).length,
+    [data?.offers]
+  );
 }
 
 export function useInstitutionOfferDetailQuery(offerId: number | null) {

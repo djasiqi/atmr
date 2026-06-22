@@ -7,6 +7,10 @@ const MESSAGES: Record<string, { title: string; body: string }> = {
     title: "Déploiement en cours",
     body: "Cette version est en cours de déploiement progressif. Utilisez l'application Chauffeur habituelle en attendant votre activation.",
   },
+  institution_gate: {
+    title: "Espace institution bientôt disponible",
+    body: "Le tableau de bord institution n'est pas encore activé sur cette application. Utilisez le portail web ou contactez le support pour vos demandes prioritaires.",
+  },
 };
 
 const DEFAULT_MESSAGE = {

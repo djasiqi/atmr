@@ -13,6 +13,7 @@ import {
   Screen,
 } from "../../src/design/responsive";
 import { FONT_SIZE } from "../../src/design/responsive/typographyTokens";
+import { isFeatureEnabled } from "../../src/core/featureFlags/registry";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const ReactRuntime: any = require("react");
 
@@ -26,6 +27,8 @@ export default function ContextSelectorScreen() {
     () => (bootstrap?.available_contexts ?? []) as AuthContext[],
     [bootstrap]
   ) as AuthContext[];
+
+  const institutionUnifiedEnabled = isFeatureEnabled("institution_unified_enabled");
 
   ReactRuntime.useEffect(() => {
     if (!pendingContextId || !activeContext) return;
@@ -42,12 +45,16 @@ export default function ContextSelectorScreen() {
         router.replace("/(app)/(client)" as any);
         return;
       case "institution":
+        if (!institutionUnifiedEnabled) {
+          router.replace("/(app)/blocked?reason=institution_gate" as any);
+          return;
+        }
         router.replace("/(app)/(institution)" as any);
         return;
       default:
         router.replace("/(app)/context-selector" as any);
     }
-  }, [activeContext, pendingContextId, router]);
+  }, [activeContext, institutionUnifiedEnabled, pendingContextId, router]);
 
   const handleContextPress = ReactRuntime.useCallback(
     async (ctx: AuthContext) => {
@@ -75,12 +82,15 @@ export default function ContextSelectorScreen() {
             ctx,
             bootstrap?.user?.role
           );
+          const institutionBlocked =
+            ctx.context_type === "institution" && !institutionUnifiedEnabled;
           const blockReason = companyDriverSwitchBlockedReason(
             activeContext,
             ctx,
             bootstrap?.user?.role
           );
-          const rowDisabled = Boolean(pendingContextId) || companyDriverBlocked;
+          const rowDisabled =
+            Boolean(pendingContextId) || companyDriverBlocked || institutionBlocked;
           const selected = ctx.context_id === activeContext?.context_id;
           return (
             <TouchableOpacity
@@ -103,6 +113,11 @@ export default function ContextSelectorScreen() {
                   {blockReason === "not_company_account"
                     ? "Réservé au compte entreprise (un chauffeur seul n'accède pas à la gestion)."
                     : "Bascule entreprise / chauffeur : app mobile, compte entreprise, dispatch actif."}
+                </Text>
+              ) : null}
+              {institutionBlocked && ctx.context_id !== activeContext?.context_id ? (
+                <Text style={styles.rowHint}>
+                  Espace institution pas encore activé sur l&apos;application mobile.
                 </Text>
               ) : null}
             </TouchableOpacity>

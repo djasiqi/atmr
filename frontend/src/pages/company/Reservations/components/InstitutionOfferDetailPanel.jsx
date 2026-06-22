@@ -1,7 +1,7 @@
 // src/pages/company/Reservations/components/InstitutionOfferDetailPanel.jsx
 import React from 'react';
 import {
-  FiCheckCircle, FiXCircle, FiClock, FiX,
+  FiCheckCircle, FiXCircle, FiClock, FiX, FiZap,
 } from 'react-icons/fi';
 import { FaRoute, FaInfoCircle, FaNotesMedical, FaWheelchair } from 'react-icons/fa';
 import styles from './ReservationDetailPanel.module.css';
@@ -15,6 +15,7 @@ import {
 import { formatWallClockDateShort } from '../../../../utils/missionTimeDisplay';
 import { institutionOfferEstimateLabel } from '../../../../utils/institutionOfferEstimateLabel';
 import { canRespondToInstitutionOffer, isInstitutionOfferExpired } from '../../../../utils/institutionOfferResponse';
+import { resolveInstitutionOfferActions } from '../../../../utils/institutionOfferActions';
 
 /** Formate un instant absolu (ex. expiration d'offre). */
 const formatInstantDateTime = (isoString) => {
@@ -131,7 +132,9 @@ const renderRouteStopTime = (point) => {
   ) : null;
 };
 
-const InstitutionOfferDetailPanel = ({ offer, onClose, onAccept, onPropose, onReject }) => {
+const InstitutionOfferDetailPanel = ({
+  offer, onClose, onValidate, onPlan, onAcceptNow, onReject,
+}) => {
   const req = offer?.transport_request || {};
   const identity = buildOfferIdentity(offer);
   const routePoints = getRoutePoints(req);
@@ -167,6 +170,7 @@ const InstitutionOfferDetailPanel = ({ offer, onClose, onAccept, onPropose, onRe
     || req.patient_date_of_birth
     || null;
   const canRespond = canRespondToInstitutionOffer(offer);
+  const offerActions = resolveInstitutionOfferActions(offer);
   const isExpired = isInstitutionOfferExpired(offer);
   const statusLabel = canRespond ? 'En attente' : isExpired ? 'Expiré' : 'Indisponible';
   const statusClass = canRespond
@@ -175,6 +179,10 @@ const InstitutionOfferDetailPanel = ({ offer, onClose, onAccept, onPropose, onRe
       ? styles.badgeStatusExpired
       : styles.badgeStatusNeutral;
   const expiresMeta = offer?.expires_at ? formatInstantDateTime(offer.expires_at) : null;
+
+  const planIsPrimary = offerActions.canPlan
+    && !offerActions.canValidate
+    && !offerActions.canAcceptNow;
 
   return (
     <div className={styles.panel}>
@@ -196,30 +204,56 @@ const InstitutionOfferDetailPanel = ({ offer, onClose, onAccept, onPropose, onRe
       </div>
 
       <div className={styles.panelBody}>
-        {canRespond ? (
-          <div className={styles.actions}>
-            <button
-              type="button"
-              onClick={() => onAccept?.(offer)}
-              className={`${styles.actionBtn} ${styles.btnPrimary}`}
-            >
-              <FiCheckCircle size={12} /> Accepter
-            </button>
-            <button
-              type="button"
-              onClick={() => onPropose?.(offer)}
-              className={`${styles.actionBtn} ${styles.btnSecondary}`}
-            >
-              <FiClock size={12} /> Proposer
-            </button>
-            <button
-              type="button"
-              onClick={() => onReject?.(offer.id)}
-              className={`${styles.actionBtn} ${styles.btnDanger}`}
-              title="Refuser la demande"
-            >
-              <FiXCircle size={12} /> Refuser
-            </button>
+        {canRespond && offerActions.canRespond ? (
+          <div className={styles.offerActionsBlock}>
+            {offerActions.hint ? (
+              <p className={styles.offerActionHint}>{offerActions.hint}</p>
+            ) : null}
+            <div className={styles.offerActionsRow}>
+              {offerActions.canValidate ? (
+                <button
+                  type="button"
+                  onClick={() => onValidate?.(offer)}
+                  className={`${styles.actionBtn} ${styles.actionBtnOffer} ${styles.btnPrimary}`}
+                >
+                  <FiCheckCircle size={14} aria-hidden />
+                  {offerActions.validateLabel}
+                </button>
+              ) : null}
+              {offerActions.canAcceptNow ? (
+                <button
+                  type="button"
+                  onClick={() => onAcceptNow?.(offer)}
+                  className={`${styles.actionBtn} ${styles.actionBtnOffer} ${styles.btnAcceptNow}`}
+                >
+                  <FiZap size={14} aria-hidden />
+                  {offerActions.acceptNowLabel}
+                </button>
+              ) : null}
+              {offerActions.canPlan ? (
+                <button
+                  type="button"
+                  onClick={() => onPlan?.(offer)}
+                  className={`${styles.actionBtn} ${styles.actionBtnOffer} ${
+                    planIsPrimary ? styles.btnPrimary : styles.btnSecondary
+                  }`}
+                >
+                  <FiClock size={14} aria-hidden />
+                  {offerActions.planLabel}
+                </button>
+              ) : null}
+              {offerActions.canReject ? (
+                <button
+                  type="button"
+                  onClick={() => onReject?.(offer.id)}
+                  className={`${styles.actionBtn} ${styles.actionBtnOffer} ${styles.actionBtnReject}`}
+                  title="Refuser la demande"
+                >
+                  <FiXCircle size={14} aria-hidden />
+                  {offerActions.rejectLabel}
+                </button>
+              ) : null}
+            </div>
           </div>
         ) : (
           <div className={styles.offerExpiredNotice}>

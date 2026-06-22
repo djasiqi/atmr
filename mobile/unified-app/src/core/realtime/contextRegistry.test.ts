@@ -37,6 +37,8 @@ describe("context registry", () => {
       "dispatch_run_started",
       "dispatch_run_completed",
       "dispatch_run_failed",
+      "institution_offer_updated",
+      "new_company_notification",
     ]);
   });
 

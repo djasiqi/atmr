@@ -3,17 +3,58 @@ import { apiClient } from "../../../core/api/client";
 import type { InstitutionOfferErrorCode } from "../utils/institutionOfferResponse";
 import { isInstitutionOfferErrorCode } from "../utils/institutionOfferResponse";
 
+export type InstitutionTransportLeg = {
+  sequence_index?: number;
+  pickup_location?: string | null;
+  dropoff_location?: string | null;
+  dropoff_establishment?: string | null;
+  dropoff_service?: string | null;
+  dropoff_doctor?: string | null;
+  scheduled_time?: string | null;
+  time_confirmed?: boolean | null;
+};
+
 export type InstitutionTransportRequestSummary = {
   id?: number;
   public_id?: string;
   institution_name?: string;
+  institution_id?: number;
+  patient_name?: string | null;
+  patient?: {
+    first_name?: string | null;
+    last_name?: string | null;
+    dob?: string | null;
+    birth_date?: string | null;
+    external_reference?: string | null;
+  } | null;
   mission_type?: string;
+  mission_date?: string | null;
   scheduled_time?: string | null;
+  next_confirmed_time?: string | null;
+  scheduled_time_type?: string | null;
+  pickup_time_confirmed?: boolean;
+  appointment_time_confirmed?: boolean;
+  is_urgent?: boolean;
   pickup_location?: string | null;
   dropoff_location?: string | null;
   is_round_trip?: boolean;
+  return_to_institution?: boolean;
+  multi_stop?: boolean;
   return_time?: string | null;
+  legs?: InstitutionTransportLeg[];
+  mobility?: Record<string, unknown> | null;
+  requires_wheelchair?: boolean;
+  requires_assistance?: boolean;
+  requires_stretcher?: boolean;
+  requires_oxygen?: boolean;
   notes?: string | null;
+  billing_intent?: string | null;
+};
+
+export type InstitutionPriceEstimate = {
+  amount?: number | null;
+  currency?: string | null;
+  source?: string | null;
 };
 
 export type InstitutionRequestOffer = {
@@ -23,6 +64,7 @@ export type InstitutionRequestOffer = {
   sent_at?: string | null;
   expires_at?: string | null;
   can_respond?: boolean;
+  price_estimate?: InstitutionPriceEstimate | null;
   transport_request?: InstitutionTransportRequestSummary | null;
 };
 
@@ -112,6 +154,20 @@ export async function fetchInstitutionOfferDetail(
     `/company/request-offers/${offerId}`
   );
   return data;
+}
+
+export type InstitutionOfferTravelEstimate = {
+  travel_minutes?: number | null;
+  source?: string | null;
+};
+
+export async function fetchOfferTravelEstimate(
+  offerId: number
+): Promise<InstitutionOfferTravelEstimate> {
+  const { data } = await apiClient.get<InstitutionOfferTravelEstimate>(
+    `/company/request-offers/${offerId}/travel-estimate`
+  );
+  return data ?? {};
 }
 
 export async function acceptInstitutionOffer(

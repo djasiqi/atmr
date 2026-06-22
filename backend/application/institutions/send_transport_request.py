@@ -574,28 +574,11 @@ class SendTransportRequestUseCase:
         configured_mode: str,
         expires_at: datetime,
     ) -> dict[str, int | str]:
-        """Relance la diffusion après expiration sans transporteur accepté."""
-        if configured_mode == OfferMode.BROADCAST.value:
-            offers_created = self._relaunch_broadcast_offers(
-                transport_request=transport_request,
-                expires_at=None,
-            )
-            return {
-                "offers_created": offers_created,
-                "mode": OfferMode.BROADCAST.value,
-            }
-
-        if preferences:
-            offers_created, mode = self._relaunch_sequential_offers(
-                transport_request=transport_request,
-                preferences=preferences,
-                expires_at=expires_at,
-            )
-            return {"offers_created": offers_created, "mode": mode}
-
+        """Relance la diffusion : réactive les offres expirées et élargit à toutes les entreprises éligibles."""
+        del preferences, configured_mode  # Relance = broadcast élargi (nouveau délai pour tous)
         offers_created = self._relaunch_broadcast_offers(
             transport_request=transport_request,
-            expires_at=None,
+            expires_at=expires_at,
         )
         return {
             "offers_created": offers_created,
@@ -672,27 +655,32 @@ class SendTransportRequestUseCase:
         transport_request: TransportRequest,
         expires_at: datetime | None,
     ) -> int:
-        """Relance broadcast : réactive les offres expirées ou contacte de nouvelles entreprises."""
+        """Relance broadcast : réactive les offres expirées + contacte les entreprises éligibles restantes."""
         offers = RequestOffer.query.filter_by(
             transport_request_id=transport_request.id,
         ).all()
         reactivated = 0
         for offer in offers:
+            if offer.status == OfferStatus.REJECTED.value:
+                continue
             if offer.status == OfferStatus.EXPIRED.value or (
                 offer.status == OfferStatus.PENDING.value and offer.is_expired
             ):
                 self._reactivate_offer(offer, expires_at)
                 reactivated += 1
 
-        if reactivated:
-            return reactivated
-
-        contacted_ids = [o.company_id for o in offers]
-        return self._create_broadcast_offers(
+        contacted_ids = [
+            o.company_id
+            for o in RequestOffer.query.filter_by(
+                transport_request_id=transport_request.id,
+            ).all()
+        ]
+        new_created = self._create_broadcast_offers(
             transport_request=transport_request,
             expires_at=expires_at,
             excluded_company_ids=contacted_ids,
         )
+        return reactivated + new_created
 
     def _notify_target_companies(
         self,

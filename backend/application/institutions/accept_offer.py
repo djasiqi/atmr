@@ -304,6 +304,25 @@ class AcceptOfferUseCase:
                     status_code=410,
                 )
 
+            # 5b. Valider / Planifier — garde-fou horaire (avant point de non-retour)
+            from services.institutions.offer_accept_rules import (
+                validate_accept_pickup_rules,
+            )
+
+            pickup_rule_error = validate_accept_pickup_rules(
+                transport_request,
+                proposed_pickup_time=input_data.proposed_pickup_time,
+            )
+            if pickup_rule_error:
+                return AcceptOfferResult(
+                    success=False,
+                    offer_id=input_data.offer_id,
+                    transport_request_id=transport_request.id,
+                    error=pickup_rule_error,
+                    error_code="PROPOSED_PICKUP_REQUIRED",
+                    status_code=422,
+                )
+
             # === POINT DE NON-RETOUR: First Accept Wins ===
 
             now = datetime.now(UTC)
@@ -691,9 +710,15 @@ class AcceptOfferUseCase:
             company_id=company_id,
         )
 
-        # Horaire: utiliser l'horaire proposé par l'entreprise si fourni (naïf Genève)
-        raw_pickup = proposed_pickup_time or transport_request.scheduled_time
-        effective_pickup_time = normalize_mission_wall_clock(raw_pickup)
+        # Horaire: proposed_pickup_time ou départ institutionnel confirmé uniquement
+        from services.institutions.offer_accept_rules import has_confirmed_departure
+
+        raw_pickup = proposed_pickup_time
+        if raw_pickup is None and has_confirmed_departure(transport_request):
+            raw_pickup = transport_request.scheduled_time
+        effective_pickup_time = (
+            normalize_mission_wall_clock(raw_pickup) if raw_pickup else None
+        )
 
         booking = Booking(
             # Identité
@@ -881,6 +906,7 @@ class AcceptOfferUseCase:
     ) -> tuple[Booking, Booking | None]:
         """Conversion atomique multi-stop : 1 booking par leg."""
         from models.transport_request_leg import TransportRequestLeg
+        from services.institutions.offer_accept_rules import has_confirmed_departure
 
         legs = (
             TransportRequestLeg.query.filter_by(
@@ -922,25 +948,15 @@ class AcceptOfferUseCase:
 
             is_first_leg = leg.sequence_index == 0
             leg_confirmed = bool(getattr(leg, "time_confirmed", False))
-            mission_depart_confirmed = bool(
-                getattr(transport_request, "pickup_time_confirmed", False)
-                and transport_request.scheduled_time
-            )
+            mission_depart_confirmed = has_confirmed_departure(transport_request)
             if is_first_leg:
-                raw_pickup = (
-                    proposed_pickup_time
-                    or (leg.scheduled_time if leg_confirmed else None)
-                    or (
-                        transport_request.scheduled_time
-                        if mission_depart_confirmed
-                        else None
-                    )
+                # Ne jamais utiliser leg.scheduled_time (RDV) comme pickup sans départ confirmé.
+                raw_pickup = proposed_pickup_time or (
+                    transport_request.scheduled_time
+                    if mission_depart_confirmed
+                    else None
                 )
-                operational = (
-                    leg_confirmed
-                    or mission_depart_confirmed
-                    or proposed_pickup_time is not None
-                )
+                operational = mission_depart_confirmed or proposed_pickup_time is not None
             else:
                 raw_pickup = leg.scheduled_time if leg_confirmed else None
                 operational = leg_confirmed

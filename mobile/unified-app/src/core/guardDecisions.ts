@@ -52,3 +52,15 @@ export function resolveDriverUnifiedGate(enabled: boolean): DriverUnifiedGateRes
   }
   return { allowed: true, redirectTo: null, option: "C" };
 }
+
+export type InstitutionUnifiedGateResult = {
+  allowed: boolean;
+  redirectTo: string | null;
+};
+
+export function resolveInstitutionUnifiedGate(enabled: boolean): InstitutionUnifiedGateResult {
+  if (!enabled) {
+    return { allowed: false, redirectTo: "/(app)/blocked?reason=institution_gate" };
+  }
+  return { allowed: true, redirectTo: null };
+}

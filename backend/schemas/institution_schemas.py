@@ -783,6 +783,7 @@ class TransportRequestCreateSchema(Schema):
 
     # Options trajet
     is_round_trip = fields.Bool(load_default=False)
+    is_urgent = fields.Bool(load_default=False)
     return_time = fields.Str(
         validate=validate.Regexp(
             ISO8601_DATETIME_REGEX,
@@ -1162,6 +1163,7 @@ class TransportRequestUpdateSchema(Schema):
 
     # Options
     is_round_trip = fields.Bool()
+    is_urgent = fields.Bool()
     return_time = fields.Str(
         validate=validate.Regexp(ISO8601_DATETIME_REGEX),
         allow_none=True,

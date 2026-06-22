@@ -105,3 +105,28 @@ export function isInstitutionOfferErrorCode(value: unknown): value is Institutio
     (INSTITUTION_OFFER_ERROR_CODES as readonly string[]).includes(value)
   );
 }
+
+export type InstitutionOfferTerminalState =
+  | "active"
+  | "expired"
+  | "unavailable"
+  | "accepted"
+  | "rejected";
+
+/**
+ * État terminal d'une offre (aligné web InstitutionOfferDetailPanel).
+ * Distingue expiration (délai dépassé) vs indisponible (autre transporteur).
+ */
+export function resolveInstitutionOfferTerminalState(
+  offer: InstitutionOfferLike | null | undefined,
+  now: Date = new Date()
+): InstitutionOfferTerminalState {
+  if (!offer) return "unavailable";
+  const status = String(offer.status ?? "").toUpperCase();
+  if (status === "ACCEPTED") return "accepted";
+  if (status === "REJECTED") return "rejected";
+  if (canRespondToInstitutionOffer(offer, now)) return "active";
+  if (status === "UNAVAILABLE") return "unavailable";
+  if (status === "EXPIRED" || isInstitutionOfferExpired(offer, now)) return "expired";
+  return "unavailable";
+}

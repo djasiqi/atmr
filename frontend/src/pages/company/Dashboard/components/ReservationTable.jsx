@@ -1,6 +1,6 @@
 // src/pages/company/Dashboard/components/ReservationTable.jsx
 import React, { useState } from 'react';
-import { FiCheckCircle, FiXCircle, FiInbox, FiChevronDown, FiClock } from 'react-icons/fi';
+import { FiCheckCircle, FiXCircle, FiInbox, FiChevronDown, FiClock, FiZap } from 'react-icons/fi';
 import styles from './ReservationTable.module.css';
 import { formatDelay } from '../../../../utils/formatDelay';
 import { pickupArrivalHint } from '../../../../utils/formatPickupEta';
@@ -10,7 +10,55 @@ import BookingIdentityCell from '../../../../components/booking/BookingIdentityC
 import BookingTripBadges from '../../../../components/booking/BookingTripBadges';
 import BookingStatusBadge from '../../../../components/booking/BookingStatusBadge';
 import { canRespondToInstitutionOffer, isInstitutionOfferExpired } from '../../../../utils/institutionOfferResponse';
+import { resolveInstitutionOfferActions } from '../../../../utils/institutionOfferActions';
 import { institutionOfferEstimateLabel } from '../../../../utils/institutionOfferEstimateLabel';
+
+const renderInstitutionOfferActionButtons = (r, styles, handlers) => {
+  const actions = resolveInstitutionOfferActions(r.__offer || r);
+  if (!actions.canRespond) return null;
+  return (
+    <>
+      {actions.canValidate ? (
+        <button
+          onClick={() => handlers.onValidate?.(r)}
+          title="Valider l'horaire de départ confirmé"
+          className={`${styles.actionButton} ${styles.acceptButton}`}
+        >
+          <FiCheckCircle size={16} />
+        </button>
+      ) : null}
+      {actions.canAcceptNow ? (
+        <button
+          onClick={() => handlers.onAcceptNow?.(r)}
+          title={actions.acceptNowLabel}
+          className={styles.actionButton}
+          style={{ color: 'var(--warning-primary, #ea580c)' }}
+        >
+          <FiZap size={16} />
+        </button>
+      ) : null}
+      {actions.canPlan ? (
+        <button
+          onClick={() => handlers.onPlan?.(r)}
+          title="Définir l'heure de prise en charge"
+          className={styles.actionButton}
+          style={{ color: 'var(--brand-primary)' }}
+        >
+          <FiClock size={16} />
+        </button>
+      ) : null}
+      {actions.canReject ? (
+        <button
+          onClick={() => handlers.onReject?.(r.__offerId, r.__offer)}
+          title="Refuser la demande"
+          className={`${styles.actionButton} ${styles.rejectButton}`}
+        >
+          <FiXCircle size={16} />
+        </button>
+      ) : null}
+    </>
+  );
+};
 
 const DISPLAY_INCREMENT = 50;
 
@@ -175,6 +223,9 @@ const ReservationTable = ({
   onAcceptInstitutionOffer,
   onProposeInstitutionOffer,
   onRejectInstitutionOffer,
+  onValidateInstitutionOffer,
+  onPlanInstitutionOffer,
+  onAcceptNowInstitutionOffer,
   hideAssign = false,
   hideSchedule = false,
   hideUrgent = false,
@@ -400,30 +451,12 @@ const ReservationTable = ({
                   <td className={styles.actionsCell} onClick={(e) => e.stopPropagation()}>
                     {r.__institutionOffer ? (
                       offerCanRespond ? (
-                        <>
-                          <button
-                            onClick={() => onAcceptInstitutionOffer?.(r)}
-                            title="Accepter (horaire demandé)"
-                            className={`${styles.actionButton} ${styles.acceptButton}`}
-                          >
-                            <FiCheckCircle size={16} />
-                          </button>
-                          <button
-                            onClick={() => onProposeInstitutionOffer?.(r)}
-                            title="Accepter avec un horaire différent"
-                            className={styles.actionButton}
-                            style={{ color: 'var(--brand-primary)' }}
-                          >
-                            <FiClock size={16} />
-                          </button>
-                          <button
-                            onClick={() => onRejectInstitutionOffer?.(r.__offerId, r.__offer)}
-                            title="Refuser la demande"
-                            className={`${styles.actionButton} ${styles.rejectButton}`}
-                          >
-                            <FiXCircle size={16} />
-                          </button>
-                        </>
+                        renderInstitutionOfferActionButtons(r, styles, {
+                          onValidate: onValidateInstitutionOffer || onAcceptInstitutionOffer,
+                          onPlan: onPlanInstitutionOffer || onProposeInstitutionOffer,
+                          onAcceptNow: onAcceptNowInstitutionOffer,
+                          onReject: onRejectInstitutionOffer,
+                        })
                       ) : (
                         <span className={styles.noActionLabel}>
                           {offerExpired
@@ -572,30 +605,12 @@ const ReservationTable = ({
               {r.__institutionOffer ? (
                 <div className={styles.mobileCardActions} onClick={(e) => e.stopPropagation()}>
                   {offerCanRespond ? (
-                    <>
-                      <button
-                        onClick={() => onAcceptInstitutionOffer?.(r)}
-                        title="Accepter (horaire demandé)"
-                        className={`${styles.actionButton} ${styles.acceptButton}`}
-                      >
-                        <FiCheckCircle size={16} />
-                      </button>
-                      <button
-                        onClick={() => onProposeInstitutionOffer?.(r)}
-                        title="Accepter avec un horaire différent"
-                        className={styles.actionButton}
-                        style={{ color: 'var(--brand-primary)' }}
-                      >
-                        <FiClock size={16} />
-                      </button>
-                      <button
-                        onClick={() => onRejectInstitutionOffer?.(r.__offerId, r.__offer)}
-                        title="Refuser la demande"
-                        className={`${styles.actionButton} ${styles.rejectButton}`}
-                      >
-                        <FiXCircle size={16} />
-                      </button>
-                    </>
+                    renderInstitutionOfferActionButtons(r, styles, {
+                      onValidate: onValidateInstitutionOffer || onAcceptInstitutionOffer,
+                      onPlan: onPlanInstitutionOffer || onProposeInstitutionOffer,
+                      onAcceptNow: onAcceptNowInstitutionOffer,
+                      onReject: onRejectInstitutionOffer,
+                    })
                   ) : (
                     <span className={styles.noActionLabel}>
                       {offerExpired

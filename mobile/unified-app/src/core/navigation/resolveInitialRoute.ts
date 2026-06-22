@@ -1,4 +1,5 @@
 import { BootstrapResponse, resolveDefaultContext } from "../contracts/auth";
+import { resolveInstitutionUnifiedEnabledFromBootstrap } from "../featureFlags/registry";
 import { resolveCompanyDeepLink, resolveDriverDeepLink } from "./deepLinkHandler";
 
 export function resolveInitialRoute(bootstrap: BootstrapResponse, deepLink?: string | null): string {
@@ -40,8 +41,21 @@ export function resolveInitialRoute(bootstrap: BootstrapResponse, deepLink?: str
         }
       }
       return "/(app)/(company)";
-    case "institution":
+    case "institution": {
+      const institutionEnabled = resolveInstitutionUnifiedEnabledFromBootstrap(
+        bootstrap.feature_flags
+      );
+      if (!institutionEnabled) {
+        const hasAlternativeContext = bootstrap.available_contexts.some(
+          (candidate) => candidate.context_type !== "institution"
+        );
+        if (hasAlternativeContext) {
+          return "/(app)/context-selector";
+        }
+        return "/(app)/blocked?reason=institution_gate";
+      }
       return "/(app)/(institution)";
+    }
     default:
       return "/(app)/context-selector";
   }

@@ -30,19 +30,20 @@ describe("performCompanyRecoveryResync (gate D3.2)", () => {
     resetRealtimeMetricsForTests();
   });
 
-  it("invalidates dashboard + missions + inbox + delays + chat for stale trigger", () => {
+  it("invalidates dashboard + missions + inbox + delays + chat + institution offers for stale trigger", () => {
     const queryClient = new QueryClient();
     const spy = jest.spyOn(queryClient, "invalidateQueries");
 
     performCompanyRecoveryResync(queryClient, "company:42", "stale");
 
-    expect(spy).toHaveBeenCalledTimes(5);
+    expect(spy).toHaveBeenCalledTimes(6);
     const keys = spy.mock.calls.map((call) => (call[0] as { queryKey: unknown[] }).queryKey);
     expect(keys.some((k) => (k as unknown[]).includes("dashboard"))).toBe(true);
     expect(keys.some((k) => (k as unknown[]).includes("missions"))).toBe(true);
     expect(keys.some((k) => (k as unknown[]).includes("inbox"))).toBe(true);
     expect(keys.some((k) => (k as unknown[]).includes("dispatch-delays"))).toBe(true);
     expect(keys.some((k) => (k as unknown[]).includes("chat"))).toBe(true);
+    expect(keys.some((k) => (k as unknown[]).includes("institution-offers"))).toBe(true);
   });
 
   it("increments recovery_resync metric by trigger", () => {

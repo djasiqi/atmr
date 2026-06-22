@@ -14,6 +14,7 @@ import { E } from "../../../src/features/company/theme/enterpriseOpsTheme";
 import { buildFloatingTabScreenOptions, FLOATING_TAB_IMPLEMENTATION } from "../../../src/navigation/floatingTabScreenOptions";
 import { useCompanyUrgentAlertSound } from "../../../src/features/messaging/useCompanyUrgentAlertSound";
 import { useCompanyRecoveryListener } from "../../../src/features/company/realtime/useCompanyRecoveryListener";
+import { useInstitutionOffersRealtimeListener } from "../../../src/features/company/realtime/useInstitutionOffersRealtimeListener";
 import { useCompanyRuntimeResume } from "../../../src/features/company/runtimeResume";
 import { useAppViewport } from "../../../src/design/responsive";
 import { useReduceMotion } from "../../../src/design/navigation/useReduceMotion";
@@ -40,6 +41,7 @@ export default function CompanyLayout() {
   // Phase 2 PR B/C — gate D3.2 : recovery cohérent dashboard/missions/inbox/chat
   // sur stale (5 min sans event) ou reconnect (background/foreground, transition réseau).
   useCompanyRecoveryListener(companyContextId);
+  useInstitutionOffersRealtimeListener(companyContextId);
 
   useCompanyRuntimeResume({
     contextId: companyContextId,

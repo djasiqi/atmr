@@ -2,6 +2,7 @@ import { AppState, Platform } from "react-native";
 import { useRouter } from "expo-router";
 import { useCallback, useMemo, useRef } from "react";
 import NetInfo from "@react-native-community/netinfo";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { isFeatureEnabled } from "../featureFlags/registry";
 import { useEffect } from "../reactCompat";
@@ -27,6 +28,7 @@ import {
   resolveCompanyPushTitleBody,
   type CompanyPushPayload,
 } from "../../features/company/push/companyPush";
+import { invalidateInstitutionOfferQueries } from "../../features/company/realtime/useInstitutionOffersRealtimeListener";
 
 type Props = {
   children?: React.ReactNode;
@@ -34,15 +36,29 @@ type Props = {
 
 export function CompanyNotificationsBridge({ children }: Props) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { status, activeContext } = useSession();
   const Notifications = getExpoNotificationsModule();
   const initialResponseConsumedRef = useRef(false);
+
+  const companyContextId = useMemo(() => {
+    if (activeContext?.context_type !== "company") return null;
+    return activeContext.context_id ?? null;
+  }, [activeContext?.context_id, activeContext?.context_type]);
 
   const companyId = useMemo(() => {
     if (activeContext?.context_type !== "company") return null;
     const id = Number(activeContext.organization_id);
     return Number.isFinite(id) ? id : null;
   }, [activeContext?.context_type, activeContext?.organization_id]);
+
+  const refreshInstitutionOffers = useCallback(
+    (offerId?: number) => {
+      if (!companyContextId) return;
+      void invalidateInstitutionOfferQueries(queryClient, companyContextId, offerId);
+    },
+    [companyContextId, queryClient]
+  );
 
   const pushEnabled =
     isFeatureEnabled("company_push_enabled") &&
@@ -175,15 +191,26 @@ export function CompanyNotificationsBridge({ children }: Props) {
         }
       }
 
+      if (payload.type === "new_request" || payload.type === "request_updated") {
+        refreshInstitutionOffers(payload.offer_id);
+      }
+
       navigateFromCompanyPush(router, payload);
     },
-    [recordOpenedTelemetry, router, shouldProcessPayload]
+    [recordOpenedTelemetry, refreshInstitutionOffers, router, shouldProcessPayload]
   );
 
   const showForegroundNotification = useCallback(
     async (data: Record<string, unknown>) => {
       if (!Notifications || AppState.currentState !== "active") return;
       if (!shouldProcessPayload(data)) return;
+      const payload = parseCompanyPushPayload(data);
+      if (
+        payload?.type === "new_request" ||
+        payload?.type === "request_updated"
+      ) {
+        refreshInstitutionOffers(payload.offer_id);
+      }
       const { title, body } = resolveCompanyPushTitleBody(data);
       await Notifications.scheduleNotificationAsync({
         content: {
@@ -194,7 +221,7 @@ export function CompanyNotificationsBridge({ children }: Props) {
         trigger: null,
       }).catch(() => undefined);
     },
-    [Notifications, shouldProcessPayload]
+    [Notifications, refreshInstitutionOffers, shouldProcessPayload]
   );
 
   useEffect(() => {
