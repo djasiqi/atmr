@@ -4,6 +4,7 @@ export const STORAGE_KEYS = {
   SESSION_RUNTIME: "session.runtime",
   STORAGE_MIGRATION_VERSION: "storage.migration.version",
   PENDING_PUSH_TOKEN_REGISTRATION: "notifications.pending_push_token_registration",
+  PENDING_COMPANY_PUSH_PRESS: "notifications.pending_company_push_press",
   DRIVER_TRACKING_ONBOARDED: "driver.tracking_onboarded",
   DRIVER_TRACKING_NEEDS_ATTENTION: "driver.tracking_needs_attention",
   DRIVER_NOTIFICATION_DISCLOSURE_ACCEPTED: "driver.notification_disclosure_accepted",

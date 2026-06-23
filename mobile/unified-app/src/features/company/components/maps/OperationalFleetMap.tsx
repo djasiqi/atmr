@@ -21,7 +21,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useAppViewport } from "../../../../design/responsive/useAppViewport";
 
 import type { CompanyDispatchMission, CompanyDriverLiveLocation } from "../../api/contracts";
-
+import { useCompanyRealtimeStatus } from "../../hooks";
 import { EnterpriseDriversMap } from "../EnterpriseDriversMap";
 
 import { MapFloatingControls } from "./MapFloatingControls";
@@ -40,6 +40,7 @@ import { MapLayersSheet } from "./MapLayersSheet";
 import { ClusterDriversSheet } from "./ClusterDriversSheet";
 
 import { useOperationalFleetMap } from "./useOperationalFleetMap";
+import { useCompanyMapNativeOverlayGate } from "./companyMapNativeOverlayGate";
 
 import { FleetMapErrorBoundary } from "./FleetMapErrorBoundary";
 import { ALL_LIRIE_DRIVER_MARKER_MODULES } from "./fleetLirieDriverMarkerModules";
@@ -116,6 +117,11 @@ export type OperationalFleetMapProps = {
   /** iOS : diffère markers/routes tant que socket instable (reconnexion cockpit). */
   nativeOverlaysEnabled?: boolean;
 
+  /** Cockpit : tableau « Prochaines courses » développé ou réduit. */
+  upcomingTableExpanded?: boolean;
+
+  onUpcomingTableExpandedChange?: (expanded: boolean) => void;
+
 };
 
 
@@ -170,6 +176,10 @@ type FleetMapSurfaceProps = {
 
   nativeOverlaysEnabled?: boolean;
 
+  upcomingTableExpanded?: boolean;
+
+  onUpcomingTableExpandedChange?: (expanded: boolean) => void;
+
 };
 
 
@@ -221,6 +231,10 @@ function FleetMapSurface({
   onDriverSheetSnapChange,
 
   nativeOverlaysEnabled = true,
+
+  upcomingTableExpanded = true,
+
+  onUpcomingTableExpandedChange,
 
 }: FleetMapSurfaceProps) {
 
@@ -402,6 +416,10 @@ function FleetMapSurface({
 
         onRecenter={() => fleet.recenter("selected")}
 
+        upcomingTableExpanded={upcomingTableExpanded}
+
+        onUpcomingTableExpandedChange={onUpcomingTableExpandedChange}
+
       />
 
 
@@ -528,8 +546,13 @@ export function OperationalFleetMap({
   cockpitMapPolicy,
   onMapSignalsChange,
   syncSelectedDriverId,
-  nativeOverlaysEnabled = true,
+  nativeOverlaysEnabled: nativeOverlaysEnabledProp,
+  upcomingTableExpanded = true,
+  onUpcomingTableExpandedChange,
 }: OperationalFleetMapProps) {
+  const realtime = useCompanyRealtimeStatus();
+  const gatedNativeOverlays = useCompanyMapNativeOverlayGate(realtime.transportStatus);
+  const nativeOverlaysEnabled = nativeOverlaysEnabledProp ?? gatedNativeOverlays;
 
   const isCockpit = layout === "cockpit";
 
@@ -660,6 +683,10 @@ export function OperationalFleetMap({
     onDriverSheetSnapChange,
     onSelectedDriverIdChange,
     nativeOverlaysEnabled,
+
+    upcomingTableExpanded,
+
+    onUpcomingTableExpandedChange,
 
   };
 

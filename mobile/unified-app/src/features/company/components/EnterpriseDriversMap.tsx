@@ -366,6 +366,7 @@ export function EnterpriseDriversMap({
           return (
             <ClusterMarker
               key={`cluster-${m.clusterKey}-${m.count}`}
+              markerKey={m.clusterKey}
               latitude={m.latitude}
               longitude={m.longitude}
               count={m.count}
@@ -408,6 +409,10 @@ export function EnterpriseDriversMap({
       nodes.push(
         <ClusterMarker
           key={`pinned-cluster-${pinnedClusterFocus.count}`}
+          markerKey={`pinned-${pinnedClusterFocus.drivers
+            .map((driver) => driver.driver_id)
+            .sort((a, b) => a - b)
+            .join(",")}`}
           latitude={pinnedClusterFocus.latitude}
           longitude={pinnedClusterFocus.longitude}
           count={pinnedClusterFocus.count}

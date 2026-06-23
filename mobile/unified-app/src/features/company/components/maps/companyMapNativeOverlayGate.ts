@@ -1,19 +1,43 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Platform } from "react-native";
 
 /**
  * iOS New Architecture + react-native-maps : montage markers/polylines pendant
- * `connecting`/`reconnecting` + rafale Directions provoque NSInvalidArgumentException
- * (Sentry LIRIE-MOBILE, finalizeUpdates / AIRGoogleMap).
+ * `connecting` ou démontage/remontage sur `reconnecting` provoque
+ * NSInvalidArgumentException (Sentry finalizeUpdates / AIRGoogleMap).
  */
-const IOS_OVERLAY_GATE = Platform.OS === "ios";
+const isIosOverlayGate = (): boolean => Platform.OS === "ios";
 
-/** Délai après socket `healthy` avant overlays natifs (évite la course reconnect). */
-export const IOS_MAP_OVERLAY_STABILIZE_MS = 450;
+/** Délai après socket `healthy` avant le premier montage des overlays natifs. */
+export const IOS_MAP_OVERLAY_STABILIZE_MS = 900;
+
+export function normalizeCompanyTransportStatus(transportStatus: string): string {
+  return transportStatus.toLowerCase().trim();
+}
 
 export function isCompanyTransportStableForMapOverlays(transportStatus: string): boolean {
-  const normalized = transportStatus.toLowerCase().trim();
-  return normalized === "healthy";
+  return normalizeCompanyTransportStatus(transportStatus) === "healthy";
+}
+
+/**
+ * iOS : une fois les overlays affichés, on les conserve pendant `reconnecting`
+ * pour éviter un cycle mount/unmount qui fait crasher l'interop legacy.
+ */
+export function shouldHoldMapOverlaysDuringReconnect(
+  transportStatus: string,
+  overlaysWereEnabled: boolean
+): boolean {
+  if (!isIosOverlayGate() || !overlaysWereEnabled) return false;
+  return normalizeCompanyTransportStatus(transportStatus) === "reconnecting";
+}
+
+export function shouldDisableMapOverlays(
+  transportStatus: string,
+  overlaysWereEnabled: boolean
+): boolean {
+  if (isCompanyTransportStableForMapOverlays(transportStatus)) return false;
+  if (shouldHoldMapOverlaysDuringReconnect(transportStatus, overlaysWereEnabled)) return false;
+  return true;
 }
 
 /**
@@ -21,19 +45,26 @@ export function isCompanyTransportStableForMapOverlays(transportStatus: string):
  * Android / web : toujours true.
  */
 export function useCompanyMapNativeOverlayGate(transportStatus: string): boolean {
-  const [enabled, setEnabled] = useState(() => !IOS_OVERLAY_GATE);
+  const [enabled, setEnabled] = useState(() => !isIosOverlayGate());
+  const enabledRef = useRef(enabled);
+  enabledRef.current = enabled;
 
   useEffect(() => {
-    if (!IOS_OVERLAY_GATE) {
+    if (!isIosOverlayGate()) {
       setEnabled(true);
       return;
     }
-    if (!isCompanyTransportStableForMapOverlays(transportStatus)) {
-      setEnabled(false);
+
+    if (isCompanyTransportStableForMapOverlays(transportStatus)) {
+      const timer = setTimeout(() => setEnabled(true), IOS_MAP_OVERLAY_STABILIZE_MS);
+      return () => clearTimeout(timer);
+    }
+
+    if (shouldHoldMapOverlaysDuringReconnect(transportStatus, enabledRef.current)) {
       return;
     }
-    const timer = setTimeout(() => setEnabled(true), IOS_MAP_OVERLAY_STABILIZE_MS);
-    return () => clearTimeout(timer);
+
+    setEnabled(false);
   }, [transportStatus]);
 
   return enabled;

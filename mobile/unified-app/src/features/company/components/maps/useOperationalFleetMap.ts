@@ -38,8 +38,10 @@ import {
   type MapSignalsSnapshot,
 } from "./fleetMapTypes";
 import type { CameraPolicy } from "../../dashboard/cockpit/cameraPolicyManager";
-import { buildDriversBoundsSignature, buildDriversStructuralSignature } from "./fleetMapFitPadding";
-import { isCompanyMapAutofitStructuralOnly } from "../../realtime/companyMapRuntimeConfig";
+import {
+  buildDriversStructuralSignature,
+  shouldTriggerFleetStructuralAutoFit,
+} from "./fleetMapFitPadding";
 import type { ImminentDeparturesResult } from "../../dashboard/cockpit/imminentDepartures";
 import { buildImminentDepartures } from "../../dashboard/cockpit/imminentDepartures";
 
@@ -587,27 +589,34 @@ export function useOperationalFleetMap({
     setRecenterToken(recenterTokenRef.current);
   }, [enriched.length]);
 
-  const driversBoundsSignature = useMemo(() => {
-    if (isCompanyMapAutofitStructuralOnly()) {
-      return buildDriversStructuralSignature(filtered.map((d) => ({ driver_id: d.driver_id })));
-    }
-    return buildDriversBoundsSignature(
-      filtered.map((d) => ({
-        driver_id: d.driver_id,
-        latitude: d.latitude,
-        longitude: d.longitude,
-      }))
-    );
-  }, [filtered]);
+  // Auto-fit structurel uniquement (join/leave chauffeur) — jamais sur tick GPS.
+  const driversBoundsSignature = useMemo(
+    () => buildDriversStructuralSignature(filtered.map((d) => ({ driver_id: d.driver_id }))),
+    [filtered]
+  );
   const lastAutoFitBoundsRef = useRef("");
   useEffect(() => {
     if (filtered.length === 0) return;
     if (selectedDriverId != null) return;
     if (cockpitMapPolicy.cameraPolicy === "user_gesture_preserve") return;
-    if (driversBoundsSignature === lastAutoFitBoundsRef.current) return;
-    const isFirstFit = lastAutoFitBoundsRef.current === "";
+
+    const previousSignature = lastAutoFitBoundsRef.current;
+    const isFirstFit = previousSignature === "";
+
+    if (
+      !shouldTriggerFleetStructuralAutoFit({
+        previousSignature,
+        nextSignature: driversBoundsSignature,
+        isFirstFit,
+      })
+    ) {
+      if (isFirstFit || previousSignature !== driversBoundsSignature) {
+        lastAutoFitBoundsRef.current = driversBoundsSignature;
+      }
+      return;
+    }
+
     lastAutoFitBoundsRef.current = driversBoundsSignature;
-    if (isFirstFit) return;
     setRecenterMode("all");
     recenterTokenRef.current += 1;
     setRecenterToken(recenterTokenRef.current);

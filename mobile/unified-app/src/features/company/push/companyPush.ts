@@ -140,26 +140,27 @@ const INSTITUTION_OFFER_TYPES = new Set([
 ]);
 
 export function navigateFromCompanyPush(router: Router, payload: CompanyPushPayload): void {
-  if (payload.deep_link) {
-    const resolved = resolveCompanyDeepLink(payload.deep_link);
-    if (resolved?.route) {
-      router.push(resolved.route as never);
-      return;
-    }
-  }
-
   if (
     payload.offer_id != null &&
     (INSTITUTION_OFFER_TYPES.has(payload.type) || payload.request_id != null)
   ) {
-    router.push({
-      pathname: "/(app)/(company)/offers/[offerId]",
-      params: {
-        offerId: String(payload.offer_id),
-        ...(payload.request_id != null ? { request: String(payload.request_id) } : {}),
-      },
-    });
+    router.push("/(app)/(company)/offers" as never);
     return;
+  }
+
+  if (payload.deep_link) {
+    const resolved = resolveCompanyDeepLink(payload.deep_link);
+    if (resolved?.route) {
+      const isInstitutionOfferDetail =
+        resolved.offerId != null &&
+        resolved.route.includes("/(app)/(company)/offers/");
+      if (isInstitutionOfferDetail) {
+        router.push("/(app)/(company)/offers" as never);
+        return;
+      }
+      router.push(resolved.route as never);
+      return;
+    }
   }
 
   if (payload.booking_id != null) {

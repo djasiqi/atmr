@@ -65,6 +65,8 @@ function CockpitMapBlock({
   onMapSignalsChange,
   syncSelectedDriverId,
   nativeOverlaysEnabled,
+  upcomingTableExpanded,
+  onUpcomingTableExpandedChange,
 }: {
   layout: ReturnType<typeof computeFleetCockpitLayout>;
   cameraInsets: { top: number; right: number; bottom: number; left: number };
@@ -85,6 +87,8 @@ function CockpitMapBlock({
   onMapSignalsChange: (signals: MapSignalsSnapshot) => void;
   syncSelectedDriverId?: number | null;
   nativeOverlaysEnabled: boolean;
+  upcomingTableExpanded: boolean;
+  onUpcomingTableExpandedChange: (expanded: boolean) => void;
 }) {
   const mapPolicy = orchestrationToMapPolicy(cockpitMapPolicy);
   return (
@@ -116,6 +120,8 @@ function CockpitMapBlock({
         onMapSignalsChange={onMapSignalsChange}
         syncSelectedDriverId={syncSelectedDriverId}
         nativeOverlaysEnabled={nativeOverlaysEnabled}
+        upcomingTableExpanded={upcomingTableExpanded}
+        onUpcomingTableExpandedChange={onUpcomingTableExpandedChange}
       />
     </View>
   );
@@ -144,6 +150,7 @@ export function CompanyFleetCockpit({
   const [opsSheetOpen, setOpsSheetOpen] = useState(false);
   const [urgencySheetOpen, setUrgencySheetOpen] = useState(false);
   const [driverSheetOpen, setDriverSheetOpen] = useState(false);
+  const [upcomingTableExpanded, setUpcomingTableExpanded] = useState(true);
   const [selectedDriverId, setSelectedDriverId] = useState<number | null>(null);
   const [mapSignals, setMapSignals] = useState<MapSignalsSnapshot>({
     filtersOpen: false,
@@ -260,11 +267,11 @@ export function CompanyFleetCockpit({
     () =>
       computeDynamicCameraInsets(layout, {
         driverSheetOpen: false,
-        cockpitOpsPanel: true,
+        cockpitOpsPanel: upcomingTableExpanded,
         safeRight,
         safeLeft,
       }),
-    [layout, safeRight, safeLeft]
+    [layout, upcomingTableExpanded, safeRight, safeLeft]
   );
 
   const onDriverSheetChange = useCallback(
@@ -343,6 +350,8 @@ export function CompanyFleetCockpit({
         onMapSignalsChange={onMapSignalsChange}
         syncSelectedDriverId={selectedDriverId}
         nativeOverlaysEnabled={nativeOverlaysEnabled}
+        upcomingTableExpanded={upcomingTableExpanded}
+        onUpcomingTableExpandedChange={setUpcomingTableExpanded}
       />
 
       {uiState.overlays.topBar ? (

@@ -205,6 +205,10 @@ export function GoogleMapsFleetCanvas({
     [drivers]
   );
   const markers = markersProp ?? fallbackMarkers;
+  const driversRef = useRef(drivers);
+  const markersRef = useRef(markers);
+  driversRef.current = drivers;
+  markersRef.current = markers;
   const adaptiveMarkerSize = useMemo(
     () => resolveAdaptiveMarkerSize(viewportWidth),
     [viewportWidth]
@@ -908,15 +912,15 @@ export function GoogleMapsFleetCanvas({
           map,
           LatLng,
           LatLngBounds,
-          drivers,
-          markers,
+          driversRef.current,
+          markersRef.current,
           defaultCenter,
           cameraInsets
         );
       } else {
         applyFleetWebCamera(map, LatLng, LatLngBounds, {
           recenterRegion,
-          markers,
+          markers: markersRef.current,
           defaultCenter,
           fitPadding: cameraInsets,
         });
@@ -936,9 +940,7 @@ export function GoogleMapsFleetCanvas({
     apiKey,
     defaultRegion.latitude,
     defaultRegion.longitude,
-    drivers,
     mapReady,
-    markers,
     recenterMode,
     recenterRegion,
     recenterToken,

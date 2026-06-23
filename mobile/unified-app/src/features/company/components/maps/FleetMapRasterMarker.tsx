@@ -1,9 +1,9 @@
-import { memo, useMemo } from "react";
-import { Platform } from "react-native";
+import { forwardRef, memo, useMemo } from "react";
 import { Marker } from "react-native-maps";
 
 import type { FleetNativeMarkerImageSource } from "./fleetNativeMarkerImage";
 import { isValidMapCoord } from "./mapsIosNewArchSafeMode";
+import { resolveFleetRasterMarkerNativeProps } from "./resolveFleetRasterMarkerNativeProps";
 
 type Props = {
   coordinate: { latitude: number; longitude: number };
@@ -21,29 +21,22 @@ const DEFAULT_ANCHOR = { x: 0.5, y: 0.5 } as const;
  * Marqueur raster — consommateur pur : utilise uniquement uri/width/height déjà résolus.
  * Ne refait pas de résolution Metro au render (uri déjà fournie par les builders).
  */
-function FleetMapRasterMarkerComponent({
-  coordinate,
-  imageSource,
-  anchor = DEFAULT_ANCHOR,
-  zIndex,
-  opacity = 1,
-  title,
-  onPress,
-}: Props) {
-  const markerProps = useMemo(() => {
-    const uri = imageSource.uri?.trim() ?? "";
-    if (!uri) return null;
-
-    const { width, height, assetModule } = imageSource;
-    const raster = { uri, width, height };
-    const isDataUri = uri.startsWith("data:");
-
-    if (Platform.OS === "android" && assetModule != null && !isDataUri) {
-      return { icon: assetModule };
-    }
-
-    return Platform.OS === "android" ? { icon: raster } : { image: raster };
-  }, [imageSource]);
+const FleetMapRasterMarkerComponent = forwardRef<Marker, Props>(function FleetMapRasterMarkerComponent(
+  {
+    coordinate,
+    imageSource,
+    anchor = DEFAULT_ANCHOR,
+    zIndex,
+    opacity = 1,
+    title,
+    onPress,
+  },
+  ref
+) {
+  const markerProps = useMemo(
+    () => resolveFleetRasterMarkerNativeProps(imageSource),
+    [imageSource]
+  );
 
   if (!markerProps) {
     return null;
@@ -55,6 +48,7 @@ function FleetMapRasterMarkerComponent({
 
   return (
     <Marker
+      ref={ref}
       coordinate={coordinate}
       anchor={anchor}
       tracksViewChanges={false}
@@ -65,6 +59,6 @@ function FleetMapRasterMarkerComponent({
       {...markerProps}
     />
   );
-}
+});
 
 export const FleetMapRasterMarker = memo(FleetMapRasterMarkerComponent);

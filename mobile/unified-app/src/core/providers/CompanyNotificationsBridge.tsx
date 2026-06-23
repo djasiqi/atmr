@@ -28,6 +28,10 @@ import {
   resolveCompanyPushTitleBody,
   type CompanyPushPayload,
 } from "../../features/company/push/companyPush";
+import {
+  consumePendingCompanyPushPress,
+  registerCompanyNotifeeForegroundPressHandler,
+} from "../../features/company/push/companyNotifeePress";
 import { invalidateInstitutionOfferQueries } from "../../features/company/realtime/useInstitutionOffersRealtimeListener";
 
 type Props = {
@@ -236,13 +240,29 @@ export function CompanyNotificationsBridge({ children }: Props) {
       }
       // Background / headless : pas de navigation automatique.
       // La notif locale (displayLocalDriverPush) + tap utilisateur
-      // déclenchent navigateFromPush via les listeners Expo / cold start.
+      // déclenchent navigateFromPush via Notifee / Expo / cold start.
     });
 
     return () => {
       disposeDriverFirebaseMessaging();
     };
   }, [navigateFromPush, pushEnabled, showForegroundNotification]);
+
+  useEffect(() => {
+    if (!pushEnabled || Platform.OS === "web") return;
+
+    let disposeNotifeePress: (() => void) | null = null;
+    void (async () => {
+      disposeNotifeePress = await registerCompanyNotifeeForegroundPressHandler((data) => {
+        void navigateFromPush(data, { fromUserTap: true });
+      });
+    })();
+
+    return () => {
+      disposeNotifeePress?.();
+      disposeNotifeePress = null;
+    };
+  }, [navigateFromPush, pushEnabled]);
 
   useEffect(() => {
     if (!pushEnabled || !Notifications) return;
@@ -266,11 +286,18 @@ export function CompanyNotificationsBridge({ children }: Props) {
   }, [Notifications, navigateFromPush, pushEnabled, showForegroundNotification]);
 
   useEffect(() => {
-    if (!pushEnabled || !Notifications) return;
+    if (!pushEnabled) return;
     if (initialResponseConsumedRef.current) return;
     initialResponseConsumedRef.current = true;
 
     void (async () => {
+      const pending = await consumePendingCompanyPushPress();
+      if (pending) {
+        await navigateFromPush(pending, { fromUserTap: true });
+        return;
+      }
+
+      if (!Notifications) return;
       const initialResponse = await Notifications.getLastNotificationResponseAsync().catch(
         () => null
       );

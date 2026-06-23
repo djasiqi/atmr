@@ -1,4 +1,5 @@
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
+import { Marker } from "react-native-maps";
 
 import type { FleetDriverMapItem } from "./fleetMapTypes";
 import { ClusterCountBadgeMarker } from "./ClusterCountBadgeMarker";
@@ -8,8 +9,10 @@ import { resolveFleetMarkerAnchor } from "./resolveFleetMarkerAnchor";
 import { pickClusterRepresentativeStatus } from "./fleetLirieClusterMarker";
 import { FLEET_MAP_MARKER_DIMMED_OPACITY } from "./fleetMapTypes";
 import { isValidMapCoord } from "./mapsIosNewArchSafeMode";
+import { useFleetMarkerMotion } from "./useFleetMarkerMotion";
 
 type Props = {
+  markerKey: string;
   latitude: number;
   longitude: number;
   count: number;
@@ -20,13 +23,28 @@ type Props = {
 };
 
 /** Icône PNG (`require`) + chiffre en Text natif (lisible sur Android). */
-export function ClusterMarker({ latitude, longitude, count, drivers, onPress, dimmed = false }: Props) {
+export function ClusterMarker({
+  markerKey,
+  latitude,
+  longitude,
+  count,
+  drivers,
+  onPress,
+  dimmed = false,
+}: Props) {
   const opacity = dimmed ? FLEET_MAP_MARKER_DIMMED_OPACITY : 1;
   const status = useMemo(() => pickClusterRepresentativeStatus(drivers), [drivers]);
-  const coordinate = useMemo(
+  const targetCoordinate = useMemo(
     () => ({ latitude, longitude }),
     [latitude, longitude]
   );
+
+  const badgeMarkerRef = useRef<Marker | null>(null);
+  const { displayCoordinate, primaryMarkerRef } = useFleetMarkerMotion({
+    target: targetCoordinate,
+    markerKey,
+    secondaryMarkerRef: badgeMarkerRef,
+  });
 
   const iconSource = useMemo(
     () => buildFleetDriverMarkerImageSource(status, false),
@@ -41,21 +59,28 @@ export function ClusterMarker({ latitude, longitude, count, drivers, onPress, di
     return null;
   }
 
-  if (!isValidMapCoord(latitude, longitude)) {
+  if (!isValidMapCoord(displayCoordinate.latitude, displayCoordinate.longitude)) {
     return null;
   }
 
   return (
     <>
       <FleetMapRasterMarker
-        coordinate={coordinate}
+        ref={primaryMarkerRef}
+        coordinate={displayCoordinate}
         imageSource={iconSource}
         anchor={markerAnchor}
         onPress={onPress}
         zIndex={500}
         opacity={opacity}
       />
-      <ClusterCountBadgeMarker coordinate={coordinate} count={count} onPress={onPress} opacity={opacity} />
+      <ClusterCountBadgeMarker
+        ref={badgeMarkerRef}
+        coordinate={displayCoordinate}
+        count={count}
+        onPress={onPress}
+        opacity={opacity}
+      />
     </>
   );
 }

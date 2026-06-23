@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { FiAlertTriangle, FiX, FiInfo, FiAlertCircle, FiCreditCard, FiLoader } from 'react-icons/fi';
 import Modal from '../common/Modal';
 import { CANCELLATION_REASONS } from '../../constants/cancellationReasons';
@@ -9,6 +9,13 @@ const CancellationModal = ({ isOpen, reservation, onConfirm, onClose }) => {
   const [reasonText, setReasonText] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const reasonTextRef = useRef(null);
+
+  useEffect(() => {
+    if (selectedCode === 'OTHER' && reasonTextRef.current) {
+      reasonTextRef.current.focus();
+    }
+  }, [selectedCode]);
 
   const status = useMemo(() => {
     const raw = reservation?.status;
@@ -156,7 +163,7 @@ const CancellationModal = ({ isOpen, reservation, onConfirm, onClose }) => {
                 onClick={() => { if (!loading) setSelectedCode(reason.code); }}
                 role="radio"
                 aria-checked={isSelected}
-                tabIndex={0}
+                tabIndex={isSelected ? 0 : -1}
                 onKeyDown={(e) => { if (!loading && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); setSelectedCode(reason.code); } }}
               >
                 <div className={`${s.reasonRadio} ${isSelected ? s.reasonRadioSelected : ''}`}>
@@ -182,6 +189,7 @@ const CancellationModal = ({ isOpen, reservation, onConfirm, onClose }) => {
           <div className={s.reasonTextGroup}>
             <label className={s.reasonTextLabel} htmlFor="cancel-reason-text">Justification</label>
             <textarea
+              ref={reasonTextRef}
               id="cancel-reason-text"
               className={s.reasonTextArea}
               placeholder="Décrivez la raison de l'annulation..."

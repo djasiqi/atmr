@@ -101,11 +101,14 @@ function checkEasProduction() {
     errors.push("❌ EXPO_PUBLIC_API_BASE_URL HTTPS manquant dans eas.json (production.env)");
   }
   const androidMapsKey = prodEnv.EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_API_KEY?.trim();
+  const mapsFromShell = process.env.EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_API_KEY?.trim();
   if (androidMapsKey && androidMapsKey.startsWith("AIza") && androidMapsKey !== "test-android-key") {
     checks.push("✅ EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_API_KEY prod dans eas.json");
+  } else if (mapsFromShell && mapsFromShell.startsWith("AIza")) {
+    checks.push("✅ EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_API_KEY présente dans l'environnement shell");
   } else {
-    errors.push(
-      "❌ EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_API_KEY manquante ou placeholder dans eas.json (production.env)"
+    warnings.push(
+      "⚠️ EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_API_KEY absente de eas.json — OK si définie dans EAS Environment (production) sur expo.dev"
     );
   }
   const prodPrebuild = eas.build.production.prebuildCommand ?? "";
@@ -115,6 +118,27 @@ function checkEasProduction() {
     errors.push(
       "❌ prebuildCommand avec --clean manquant dans eas.json (production) — EAS peut ignorer le prebuild si android/ existe"
     );
+  }
+  const otaAutoReload = prodEnv.EXPO_PUBLIC_OTA_AUTO_RELOAD_ENABLED;
+  if (otaAutoReload === "1" || otaAutoReload === "true") {
+    checks.push("✅ EXPO_PUBLIC_OTA_AUTO_RELOAD_ENABLED actif (production)");
+  } else {
+    errors.push(
+      "❌ EXPO_PUBLIC_OTA_AUTO_RELOAD_ENABLED doit être \"1\" dans eas.json (production) pour les builds store"
+    );
+  }
+  const appJsonPath = path.join(ROOT, "app.json");
+  if (fs.existsSync(appJsonPath)) {
+    const app = JSON.parse(fs.readFileSync(appJsonPath, "utf8"));
+    const version = app.expo?.version;
+    const runtimeVersion = app.expo?.runtimeVersion;
+    if (version && runtimeVersion && version === runtimeVersion) {
+      checks.push(`✅ version / runtimeVersion alignés (${version})`);
+    } else {
+      errors.push(
+        `❌ version (${version ?? "?"}) et runtimeVersion (${runtimeVersion ?? "?"}) doivent être identiques pour ce release store`
+      );
+    }
   }
 }
 

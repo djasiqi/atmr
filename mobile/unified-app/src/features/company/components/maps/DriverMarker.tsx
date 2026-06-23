@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Marker } from "react-native-maps";
 import { Platform } from "react-native";
 
@@ -13,6 +13,7 @@ import { resolveFleetMarkerAnchor } from "./resolveFleetMarkerAnchor";
 import { countDriverMarkerRender } from "./fleetMapDevInstrumentation";
 import { recordDriverMarkerRender } from "../../../../core/observability/perfInstrumentation";
 import { IOS_MAP_NO_CUSTOM_MARKER_CHILDREN, isValidMapCoord } from "./mapsIosNewArchSafeMode";
+import { useFleetMarkerMotion } from "./useFleetMarkerMotion";
 
 type Props = {
   item: FleetDriverMapItem;
@@ -46,10 +47,19 @@ function DriverMarkerComponent({
     [imageSource]
   );
 
-  const coordinate = useMemo(
+  const targetCoordinate = useMemo(
     () => ({ latitude: item.latitude, longitude: item.longitude }),
     [item.latitude, item.longitude]
   );
+
+  const pulseMarkerRef = useRef<Marker | null>(null);
+  const { displayCoordinate, primaryMarkerRef } = useFleetMarkerMotion({
+    target: targetCoordinate,
+    markerKey: String(item.driver_id),
+    recordedAt: item.recorded_at ?? item.timestamp,
+    locationStatus: item.location_status,
+    secondaryMarkerRef: pulseMarkerRef,
+  });
 
   const [pulseTracksViewChanges, setPulseTracksViewChanges] = useState(Platform.OS === "android");
 
@@ -63,7 +73,7 @@ function DriverMarkerComponent({
     setPulseTracksViewChanges(Platform.OS === "android");
     const id = setTimeout(() => setPulseTracksViewChanges(false), 400);
     return () => clearTimeout(id);
-  }, [showLivePulse, coordinate.latitude, coordinate.longitude]);
+  }, [showLivePulse, displayCoordinate.latitude, displayCoordinate.longitude]);
 
   const handlePress = useCallback(
     (e: { stopPropagation?: () => void }) => {
@@ -79,7 +89,7 @@ function DriverMarkerComponent({
     return null;
   }
 
-  if (!isValidMapCoord(coordinate.latitude, coordinate.longitude)) {
+  if (!isValidMapCoord(displayCoordinate.latitude, displayCoordinate.longitude)) {
     return null;
   }
 
@@ -87,7 +97,8 @@ function DriverMarkerComponent({
     <>
       {showLivePulse && !IOS_MAP_NO_CUSTOM_MARKER_CHILDREN ? (
         <Marker
-          coordinate={coordinate}
+          ref={pulseMarkerRef}
+          coordinate={displayCoordinate}
           anchor={{ x: 0.5, y: 0.58 }}
           tracksViewChanges={pulseTracksViewChanges}
           zIndex={(selected ? 999 : theme.priority) - 1}
@@ -98,7 +109,8 @@ function DriverMarkerComponent({
         </Marker>
       ) : null}
       <FleetMapRasterMarker
-        coordinate={coordinate}
+        ref={primaryMarkerRef}
+        coordinate={displayCoordinate}
         imageSource={imageSource}
         anchor={markerAnchor}
         title={driverFleetMarkerTitle(item)}
@@ -116,6 +128,8 @@ function areDriverMarkerPropsEqual(prev: Props, next: Props): boolean {
     prev.item.latitude === next.item.latitude &&
     prev.item.longitude === next.item.longitude &&
     prev.item.location_status === next.item.location_status &&
+    prev.item.recorded_at === next.item.recorded_at &&
+    prev.item.timestamp === next.item.timestamp &&
     prev.selected === next.selected &&
     prev.dimmed === next.dimmed &&
     prev.vectorMode === next.vectorMode &&

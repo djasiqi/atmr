@@ -8,7 +8,7 @@ import { Platform } from "react-native";
  * (`RCTLegacyViewManagerInteropComponentView.finalizeUpdates`) peut tenter
  * d'insérer une sous-vue `nil` dans `__NSArrayM insertObject:atIndex:`,
  * ce qui lève une NSInvalidArgumentException fatale (Sentry
- * 32b6e2e9e86243d6a1d80d8905165368, build 1.0.5+58, iPhone 12, iOS 26.3.1).
+ * 32b6e2e9e86243d6a1d80d8905165368, 55e711c3… build 1.0.5+61, iPhone 16 Pro Max, iOS 26.5).
  *
  * Le crash arrive pendant un re-render de marker custom (pulse, badge) sous
  * activité chauffeur (switch context, mises à jour GPS/statut rapprochées).

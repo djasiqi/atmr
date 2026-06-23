@@ -24,7 +24,7 @@ import {
 import { hasConfirmedPickupTime, hasScheduledPickupTime } from "../../utils/pickupSentinel";
 import { resolveGoogleMapsNativeApiKey } from "../../../../config/googleMapsKeys";
 
-import { fleetGlassPanel } from "./fleetMapUiTokens";
+import { FLEET_UI, fleetGlassPanel } from "./fleetMapUiTokens";
 import { DriverFocusPanelSections } from "./driverFocusPanelSections";
 
 
@@ -67,6 +67,11 @@ type Props = {
 
   /** Cockpit : toujours le tableau « Prochaines courses », jamais la fiche modale. */
   inlineTableOnly?: boolean;
+
+  /** Cockpit : tableau « Prochaines courses » développé (défaut) ou réduit. */
+  upcomingTableExpanded?: boolean;
+
+  onUpcomingTableExpandedChange?: (expanded: boolean) => void;
 
   /** Regroupement carte : liste inline (même design que le tableau courses). */
   clusterDrivers?: FleetDriverMapItem[] | null;
@@ -114,6 +119,10 @@ export function DriverBottomSheet({
 
   inlineTableOnly = false,
 
+  upcomingTableExpanded = true,
+
+  onUpcomingTableExpandedChange,
+
   clusterDrivers = null,
 
   onCloseCluster,
@@ -138,6 +147,21 @@ export function DriverBottomSheet({
   if (compact && inlineTableOnly && hasUpcomingSource) {
     const selected = driver ?? null;
     const clusterActive = clusterDrivers != null && clusterDrivers.length > 1;
+    const showUpcomingDefault = !clusterActive && !selected;
+    const upcoming = selectUpcomingMissions(upcomingMissions ?? [], 3);
+
+    if (showUpcomingDefault && !upcomingTableExpanded) {
+      return (
+        <View style={s.peekRoot} pointerEvents="box-none">
+          <UpcomingMissionsExpandFab
+            bottomOffset={peekBottomOffset}
+            missionCount={upcoming.length}
+            onPress={() => onUpcomingTableExpandedChange?.(true)}
+          />
+        </View>
+      );
+    }
+
     return (
       <View style={s.peekRoot} pointerEvents="box-none">
         <View
@@ -159,9 +183,10 @@ export function DriverBottomSheet({
             />
           ) : (
             <CompactUpcomingMissionsPeek
-              missions={selectUpcomingMissions(upcomingMissions ?? [], 3)}
+              missions={upcoming}
               drivers={availableDrivers}
               onMissionPress={onMissionFocus}
+              onMinimize={() => onUpcomingTableExpandedChange?.(false)}
             />
           )}
         </View>
@@ -764,16 +789,55 @@ function formatPeekTableTravelMetrics(
   return { durationLabel, distanceLabel };
 }
 
+function UpcomingMissionsExpandFab({
+  bottomOffset,
+  missionCount,
+  onPress,
+}: {
+  bottomOffset: number;
+  missionCount: number;
+  onPress: () => void;
+}) {
+  return (
+    <View
+      style={[s.upcomingFabAnchor, bottomOffset > 0 ? { paddingBottom: bottomOffset } : null]}
+      pointerEvents="box-none"
+    >
+      <Pressable
+        onPress={onPress}
+        style={({ pressed }) => [fleetGlassPanel(s.upcomingFab), pressed ? s.peekCardPressed : null]}
+        accessibilityRole="button"
+        accessibilityLabel={
+          missionCount > 0
+            ? `Afficher les prochaines courses, ${missionCount} course${missionCount > 1 ? "s" : ""}`
+            : "Afficher les prochaines courses"
+        }
+      >
+        <Ionicons name="list-outline" size={18} color={FLEET_MAP_COLORS.text} />
+        {missionCount > 0 ? (
+          <View style={s.upcomingFabBadge}>
+            <AppText variant="caption" style={s.upcomingFabBadgeText}>
+              {missionCount > 9 ? "9+" : missionCount}
+            </AppText>
+          </View>
+        ) : null}
+      </Pressable>
+    </View>
+  );
+}
+
 function CompactUpcomingMissionsPeek({
   missions,
   drivers,
   onPress,
   onMissionPress,
+  onMinimize,
 }: {
   missions: CompanyDispatchMission[];
   drivers: FleetDriverMapItem[];
   onPress?: () => void;
   onMissionPress?: (missionId: number) => void;
+  onMinimize?: () => void;
 }) {
   const [liveEtaByMissionId, setLiveEtaByMissionId] = useState<Record<number, number>>({});
   const [liveDistanceByMissionId, setLiveDistanceByMissionId] = useState<Record<number, number>>({});
@@ -836,10 +900,21 @@ function CompactUpcomingMissionsPeek({
       accessibilityRole={onPress ? "button" : "text"}
       accessibilityLabel="Voir les prochaines courses"
     >
-      <View style={s.peekMissionsHeader}>
+      <View style={onMinimize ? s.peekMissionsHeaderRow : s.peekMissionsHeader}>
         <AppText variant="caption" style={s.peekMissionsTitle}>
           Prochaines courses
         </AppText>
+        {onMinimize ? (
+          <Pressable
+            onPress={onMinimize}
+            hitSlop={10}
+            style={s.peekHeaderClose}
+            accessibilityRole="button"
+            accessibilityLabel="Réduire le tableau des prochaines courses"
+          >
+            <Ionicons name="chevron-down" size={16} color={FLEET_MAP_COLORS.textMuted} />
+          </Pressable>
+        ) : null}
       </View>
       {hasMissions ? (
         <View style={s.peekMissionsTableHeader} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
@@ -1520,6 +1595,39 @@ const s = StyleSheet.create({
   peekHeaderClose: {
     padding: 2,
     flexShrink: 0,
+  },
+  upcomingFabAnchor: {
+    position: "absolute",
+    right: FLEET_UI.fabRight,
+    bottom: FLEET_UI.overlayBottom,
+    zIndex: 1,
+  },
+  upcomingFab: {
+    width: FLEET_UI.fabSize,
+    height: FLEET_UI.fabSize,
+    borderRadius: FLEET_UI.fabSize / 2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  upcomingFabBadge: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    minWidth: 15,
+    height: 15,
+    borderRadius: 8,
+    paddingHorizontal: 3,
+    backgroundColor: FLEET_MAP_COLORS.brand,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1.5,
+    borderColor: "#fff",
+  },
+  upcomingFabBadgeText: {
+    color: "#fff",
+    fontSize: FONT_SIZE.px9,
+    fontWeight: "800",
+    lineHeight: 11,
   },
   peekMissionsTitle: {
     color: FLEET_MAP_COLORS.textMuted,

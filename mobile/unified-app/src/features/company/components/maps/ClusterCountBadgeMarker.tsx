@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { forwardRef, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Platform, StyleSheet, Text, View } from "react-native";
 import { Marker } from "react-native-maps";
 
@@ -17,59 +17,64 @@ type Props = {
 };
 
 /** Pastille compteur en Text natif (lisible) — l’icône PNG est un marqueur séparé. */
-export function ClusterCountBadgeMarker({ coordinate, count, onPress, opacity = 1 }: Props) {
-  const layout = useMemo(() => resolveFleetClusterCountBadgeLayout(count), [count]);
-  const fontSize = useMemo(() => resolveFleetClusterBadgeFontSize(layout.label), [layout.label]);
-  const [tracksViewChanges, setTracksViewChanges] = useState(Platform.OS === "android");
+const ClusterCountBadgeMarkerComponent = forwardRef<Marker, Props>(
+  function ClusterCountBadgeMarkerComponent({ coordinate, count, onPress, opacity = 1 }, ref) {
+    const layout = useMemo(() => resolveFleetClusterCountBadgeLayout(count), [count]);
+    const fontSize = useMemo(() => resolveFleetClusterBadgeFontSize(layout.label), [layout.label]);
+    const [tracksViewChanges, setTracksViewChanges] = useState(Platform.OS === "android");
 
-  useEffect(() => {
-    setTracksViewChanges(true);
-    const timer = setTimeout(() => setTracksViewChanges(false), 700);
-    return () => clearTimeout(timer);
-  }, [count, layout.width, layout.height]);
+    useEffect(() => {
+      setTracksViewChanges(true);
+      const timer = setTimeout(() => setTracksViewChanges(false), 700);
+      return () => clearTimeout(timer);
+    }, [count, layout.width, layout.height]);
 
-  const stopTracking = useCallback(() => {
-    setTracksViewChanges(false);
-  }, []);
+    const stopTracking = useCallback(() => {
+      setTracksViewChanges(false);
+    }, []);
 
-  if (IOS_MAP_NO_CUSTOM_MARKER_CHILDREN) {
-    return null;
-  }
+    if (IOS_MAP_NO_CUSTOM_MARKER_CHILDREN) {
+      return null;
+    }
 
-  if (!isValidMapCoord(coordinate.latitude, coordinate.longitude)) {
-    return null;
-  }
+    if (!isValidMapCoord(coordinate.latitude, coordinate.longitude)) {
+      return null;
+    }
 
-  return (
-    <Marker
-      coordinate={coordinate}
-      anchor={FLEET_CLUSTER_COUNT_BADGE_ANCHOR}
-      tracksViewChanges={tracksViewChanges}
-      zIndex={501}
-      opacity={opacity}
-      onPress={onPress}
-    >
-      <View
-        style={[
-          styles.badge,
-          {
-            minWidth: layout.width,
-            height: layout.height,
-            borderRadius: layout.height / 2,
-            paddingHorizontal: layout.label.length > 1 ? 4 : 0,
-          },
-        ]}
-        onLayout={stopTracking}
-        collapsable={false}
-        renderToHardwareTextureAndroid
+    return (
+      <Marker
+        ref={ref}
+        coordinate={coordinate}
+        anchor={FLEET_CLUSTER_COUNT_BADGE_ANCHOR}
+        tracksViewChanges={tracksViewChanges}
+        zIndex={501}
+        opacity={opacity}
+        onPress={onPress}
       >
-        <Text style={[styles.text, { fontSize, lineHeight: fontSize + 4 }]} allowFontScaling={false}>
-          {layout.label}
-        </Text>
-      </View>
-    </Marker>
-  );
-}
+        <View
+          style={[
+            styles.badge,
+            {
+              minWidth: layout.width,
+              height: layout.height,
+              borderRadius: layout.height / 2,
+              paddingHorizontal: layout.label.length > 1 ? 4 : 0,
+            },
+          ]}
+          onLayout={stopTracking}
+          collapsable={false}
+          renderToHardwareTextureAndroid
+        >
+          <Text style={[styles.text, { fontSize, lineHeight: fontSize + 4 }]} allowFontScaling={false}>
+            {layout.label}
+          </Text>
+        </View>
+      </Marker>
+    );
+  }
+);
+
+export const ClusterCountBadgeMarker = memo(ClusterCountBadgeMarkerComponent);
 
 const styles = StyleSheet.create({
   badge: {

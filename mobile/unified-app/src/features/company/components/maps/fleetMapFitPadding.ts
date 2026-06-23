@@ -63,6 +63,16 @@ export function buildDriversStructuralSignature(
     .join("|");
 }
 
+export function shouldTriggerFleetStructuralAutoFit(params: {
+  previousSignature: string;
+  nextSignature: string;
+  isFirstFit: boolean;
+}): boolean {
+  if (params.isFirstFit) return false;
+  if (params.previousSignature === params.nextSignature) return false;
+  return true;
+}
+
 /** Limite le dézoom manuel au-delà du cadre flotte (évite de « descendre » dans le vide). */
 export function computeFleetMaxRegionDelta(
   drivers: { latitude: number; longitude: number }[],

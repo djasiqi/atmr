@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { Animated } from "react-native";
+import { Animated, Platform } from "react-native";
 
 import { Polyline } from "react-native-maps";
 
@@ -107,6 +107,10 @@ function MissionRouteStrokePolylines({
 
 
   useEffect(() => {
+    if (Platform.OS === "ios") {
+      setOpacity(target);
+      return;
+    }
 
     const duration = overlay.isSelected
 

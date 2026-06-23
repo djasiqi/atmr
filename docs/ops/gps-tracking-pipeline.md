@@ -1,5 +1,20 @@
 # Pipeline GPS / tracking métier — référence ops
 
+## Déploiement mobile (correctif tracking)
+
+Le correctif PR1/PR2 est **JS** mais requiert un **build store** pour :
+- embarquer le bundle tracking dès le premier lancement ;
+- activer `EXPO_PUBLIC_OTA_AUTO_RELOAD_ENABLED=1` (flag compile-time, non activable par OTA seul).
+
+| Étape | Commande (depuis `mobile/unified-app`) |
+|-------|----------------------------------------|
+| Préflight | `npm run build:prod:preflight` |
+| Build store | `npm run build:prod:all` (ou `-p android` / `-p ios`) |
+| Submit | `npm run submit:prod:android` puis `npm run submit:prod:ios` |
+| OTA post-store | `npm run update:prod:all` (runtime `1.0.6` requis sur le device) |
+
+**Version cible** : `1.0.6` (`runtimeVersion` = `1.0.6`). Les devices restés en `1.0.5` ne reçoivent pas les OTA de cette lignée.
+
 ## Cause racine incident ASSIGNED (juin 2026)
 
 En production, les chauffeurs **ASSIGNED** envoyaient `availability_presence` via **socket** ; le backend rejette ce mode sur socket (`availability_presence_socket_forbidden`). Le mobile traitait l'`emit` comme un succès → file d'attente bloquée → positions figées en DB alors que le heartbeat `device_health` restait actif.

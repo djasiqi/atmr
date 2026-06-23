@@ -7,7 +7,10 @@ const FOCUSABLE_SELECTORS =
 const Modal = ({ children, onClose, size = 'lg', className = '', ariaLabel = 'Fenêtre modale' }) => {
   const contentRef = useRef(null);
   const previousActiveRef = useRef(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
+  // Focus initial uniquement au montage — ne pas voler le focus lors des re-renders parents.
   useEffect(() => {
     previousActiveRef.current = document.activeElement;
     const content = contentRef.current;
@@ -20,10 +23,22 @@ const Modal = ({ children, onClose, size = 'lg', className = '', ariaLabel = 'Fe
       content.focus();
     }
 
+    return () => {
+      const prev = previousActiveRef.current;
+      if (prev && typeof prev.focus === 'function') {
+        prev.focus();
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const content = contentRef.current;
+    if (!content) return undefined;
+
     const onKeyDown = (e) => {
       if (e.key === 'Escape') {
         e.preventDefault();
-        onClose?.();
+        onCloseRef.current?.();
         return;
       }
       if (e.key !== 'Tab') return;
@@ -48,12 +63,8 @@ const Modal = ({ children, onClose, size = 'lg', className = '', ariaLabel = 'Fe
     document.addEventListener('keydown', onKeyDown);
     return () => {
       document.removeEventListener('keydown', onKeyDown);
-      const prev = previousActiveRef.current;
-      if (prev && typeof prev.focus === 'function') {
-        prev.focus();
-      }
     };
-  }, [onClose]);
+  }, []);
 
   const handleClickOutside = (e) => {
     // Ferme le modal si on clique sur l'overlay (pas sur le contenu)
