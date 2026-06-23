@@ -8,6 +8,7 @@ import {
   formatMissionScheduleTimeLabel,
 } from "../../dashboard/companyDashboardMissionUi";
 import type { FleetDriverMapItem } from "./fleetMapTypes";
+import { formatFleetConstraintReason } from "./fleetMapLogic";
 import { FLEET_MAP_COLORS } from "./mapStatusTheme";
 import { resolveDriverDisplayName } from "../../utils/companyDriverMapStatus";
 
@@ -51,7 +52,11 @@ export function DriverFocusPanelSections({
           État live
         </AppText>
         <AppText variant="body" style={s.value}>
-          {enrichment.operationalStatus === "on_mission" ? "En route" : enrichment.operationalStatus}
+          {enrichment.operationalStatus === "on_mission"
+            ? "En route"
+            : enrichment.operationalStatus === "constrained"
+              ? formatFleetConstraintReason(driver)
+              : enrichment.operationalStatus}
         </AppText>
         {delayMin > 0 ? (
           <AppText variant="caption" style={s.warning}>

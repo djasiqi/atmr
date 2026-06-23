@@ -128,6 +128,13 @@ def _fanout_processed_message(envelope: dict[str, Any]) -> None:
         try:
             lat_val = p.get("latitude", p.get("lat"))
             lon_val = p.get("longitude", p.get("lon"))
+            persist_result = envelope.get("persist_result")
+            if isinstance(persist_result, dict):
+                snapped_lat = persist_result.get("snapped_lat")
+                snapped_lon = persist_result.get("snapped_lon")
+                if snapped_lat is not None and snapped_lon is not None:
+                    lat_val = snapped_lat
+                    lon_val = snapped_lon
             if lat_val is None or lon_val is None:
                 return
             lat = float(lat_val)
@@ -249,11 +256,18 @@ def _fanout_processed_message(envelope: dict[str, Any]) -> None:
         if event_id:
             canonical_payload["event_id"] = event_id
 
+        persist_result = envelope.get("persist_result")
+        accept_status = "accepted_observability_only"
+        if isinstance(persist_result, dict):
+            pr_status = persist_result.get("accept_status")
+            if isinstance(pr_status, str) and pr_status.strip():
+                accept_status = pr_status.strip()
+
         fanout_driver_location_update(
             company_id,
             canonical_payload,
             canonical_payload,
-            accept_status="accepted_observability_only",
+            accept_status=accept_status,
         )
 
 

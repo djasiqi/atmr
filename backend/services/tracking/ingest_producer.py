@@ -169,13 +169,20 @@ class TrackingIngestProducer:
         """
         trace_id = str(uuid.uuid4())
         now_ms = int(time.time() * 1000)
-        message = {
+        payload_event_id = payload.get("location_event_id") or payload.get(
+            "tracking_event_id"
+        )
+        message: dict[str, Any] = {
             "trace_id": trace_id,
             "driver_id": driver_id,
             "source": source,
             "received_at_ms": now_ms,
             "payload": payload,
         }
+        if company_id is not None:
+            message["company_id"] = int(company_id)
+        if payload_event_id is not None and str(payload_event_id).strip():
+            message["location_event_id"] = str(payload_event_id).strip()
 
         self._maybe_init_producer()
 

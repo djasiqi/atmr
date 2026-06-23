@@ -2,6 +2,13 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { AppStateStatus, Platform } from "react-native";
 import { DriverLocationPayload } from "../types";
 import { sendDriverLocation } from "../api/driverHttp";
+import { formatTrackingSendError } from "./driverTrackingSendErrorFormat";
+import {
+  QueueSuspendReason,
+  QueueSuspendState,
+  resolveQueueSuspendMs,
+} from "./driverTrackingQueueBackoff";
+import { onAuthRefreshSuccess } from "../../../core/auth/authRefreshListeners";
 import { emitDriverTelemetry } from "../../../core/observability/driverTelemetry";
 import { realtimeManager } from "../../../core/realtime/realtimeManager";
 import { isFeatureEnabled } from "../../../core/featureFlags/registry";
@@ -49,6 +56,7 @@ export type DriverTrackingFlushResult = {
   queueDepth: number;
   flushPathUsed: "http_fallback" | "socket_batch";
   lastBackendAckAt: number | null;
+  lastBackendAckStatus: "accepted" | "queued" | "duplicate" | null;
   oldestItemAgeMs: number | null;
   networkProfile: "offline" | "poor" | "normal";
 };
@@ -81,6 +89,7 @@ const TRACKING_SESSION_TTL_MS = Number(
   process.env.EXPO_PUBLIC_DRIVER_TRACKING_SESSION_TTL_SEC ?? "1800"
 ) * 1000;
 const SESSION_STORAGE_KEY = "driver_tracking_session_v1";
+const QUEUE_SUSPEND_STORAGE_KEY = "driver_tracking_queue_suspend_v1";
 const inMemoryStorage = new Map<string, string>();
 
 function normalizeTrackingEnqueueMode(
@@ -113,6 +122,8 @@ function buildQueueId(): string {
 class DriverTrackingQueue {
   private loaded = false;
   private isFlushing = false;
+  private authListenerRegistered = false;
+  private queueSuspend: QueueSuspendState | null = null;
   private items: DriverTrackingQueueItem[] = [];
   private sequenceCounter = 0;
   private trackingSessionId = "";
@@ -160,6 +171,8 @@ class DriverTrackingQueue {
     } else {
       this.rotateTrackingSession();
     }
+    await this.loadSuspendState();
+    this.registerAuthRefreshListener();
     this.loaded = true;
   }
 
@@ -175,6 +188,67 @@ class DriverTrackingQueue {
         createdAt: this.sessionCreatedAt,
       })
     );
+  }
+
+  private registerAuthRefreshListener() {
+    if (this.authListenerRegistered) return;
+    this.authListenerRegistered = true;
+    onAuthRefreshSuccess(() => {
+      void this.clearSuspension("auth_refresh_success");
+    });
+  }
+
+  private async loadSuspendState() {
+    const parsed = safeJsonParse<QueueSuspendState>(
+      await this.readStorage(QUEUE_SUSPEND_STORAGE_KEY)
+    );
+    if (
+      parsed &&
+      typeof parsed.untilMs === "number" &&
+      typeof parsed.reason === "string" &&
+      parsed.untilMs > nowMs()
+    ) {
+      this.queueSuspend = parsed;
+    } else {
+      this.queueSuspend = null;
+    }
+  }
+
+  private async persistSuspendState() {
+    if (!this.queueSuspend) {
+      await this.writeStorage(QUEUE_SUSPEND_STORAGE_KEY, "");
+      return;
+    }
+    await this.writeStorage(QUEUE_SUSPEND_STORAGE_KEY, JSON.stringify(this.queueSuspend));
+  }
+
+  private suspendActive(): boolean {
+    return this.queueSuspend !== null && nowMs() < this.queueSuspend.untilMs;
+  }
+
+  async clearSuspension(source = "manual"): Promise<void> {
+    if (!this.queueSuspend) return;
+    this.queueSuspend = null;
+    await this.persistSuspendState();
+    emitDriverTelemetry("tracking.queue.suspension_cleared", {
+      source: "driver.tracking.queue",
+      reason: source,
+    });
+  }
+
+  private async activateSuspension(
+    suspendMs: number,
+    reason: QueueSuspendReason
+  ): Promise<void> {
+    const untilMs = nowMs() + Math.max(1_000, suspendMs);
+    this.queueSuspend = { untilMs, reason };
+    await this.persistSuspendState();
+    emitDriverTelemetry("tracking.queue.suspended", {
+      source: "driver.tracking.queue",
+      reason,
+      suspend_ms: suspendMs,
+      until_ms: untilMs,
+    });
   }
 
   private rotateTrackingSession() {
@@ -341,6 +415,7 @@ class DriverTrackingQueue {
         queueDepth: this.items.length,
         flushPathUsed: "http_fallback",
         lastBackendAckAt: null,
+        lastBackendAckStatus: null,
         oldestItemAgeMs: this.items[0] ? Math.max(0, nowMs() - this.items[0].queuedAt) : null,
         networkProfile,
       };
@@ -352,8 +427,40 @@ class DriverTrackingQueue {
     let dropped = 0;
     let retried = 0;
     let lastBackendAckAt: number | null = null;
+    let lastBackendAckStatus: DriverTrackingFlushResult["lastBackendAckStatus"] = null;
     let flushPathUsed: DriverTrackingFlushResult["flushPathUsed"] = "http_fallback";
     try {
+      await this.loadSuspendState();
+      if (this.suspendActive() && this.queueSuspend) {
+        const waitMs = Math.max(0, this.queueSuspend.untilMs - nowMs());
+        emitDriverTelemetry("tracking.queue.suspend_wait", {
+          source: "driver.tracking.queue",
+          reason: this.queueSuspend.reason,
+          wait_ms: waitMs,
+          queue_depth: this.items.length,
+        });
+        if (this.items.length > 0 && waitMs > 0) {
+          setTimeout(() => {
+            void this.flush(options);
+          }, waitMs);
+        }
+        return {
+          sent: 0,
+          backendAcked: 0,
+          socketEmitted: 0,
+          dropped: 0,
+          retried: 0,
+          queueDepth: this.items.length,
+          flushPathUsed,
+          lastBackendAckAt: null,
+          lastBackendAckStatus: null,
+          oldestItemAgeMs: this.items[0]
+            ? Math.max(0, nowMs() - this.items[0].queuedAt)
+            : null,
+          networkProfile,
+        };
+      }
+
       const enableRealAck = isFeatureEnabled("tracking_real_ack_semantics_enabled");
       const remaining: DriverTrackingQueueItem[] = [];
       this.items.sort((a, b) => (a.sequenceId ?? 0) - (b.sequenceId ?? 0));
@@ -382,12 +489,13 @@ class DriverTrackingQueue {
           queueDepth: this.items.length,
           flushPathUsed,
           lastBackendAckAt,
+          lastBackendAckStatus,
           oldestItemAgeMs: oldestQueuedAt ? Math.max(0, nowMs() - oldestQueuedAt) : null,
           networkProfile,
         };
       }
 
-      // Envoi batch socket reel (N points par emission) pour reduire la pression reseau.
+      // Envoi batch socket reel
       if (!options?.forceHttpFallback && realtimeManager.isDriverSocketReady()) {
         const socketCandidates = this.items.filter(
           (item) =>
@@ -531,12 +639,18 @@ class DriverTrackingQueue {
             trackingEventId: item.id,
           });
           sent += 1;
-          if (ack.ack_status === "accepted" || ack.ack_status === "duplicate") {
+          if (
+            ack.ack_status === "accepted" ||
+            ack.ack_status === "duplicate" ||
+            ack.ack_status === "queued"
+          ) {
             item.deliveryState = "backend_acked";
             item.ackedAt = nowMs();
             item.lastError = null;
             backendAcked += 1;
             lastBackendAckAt = item.ackedAt;
+            lastBackendAckStatus =
+              ack.ack_status === "queued" ? "queued" : ack.ack_status;
             emitDriverTelemetry("tracking.ingest.ack", {
               source: "driver.tracking.queue",
               mission_id: item.missionId,
@@ -559,6 +673,15 @@ class DriverTrackingQueue {
             trace_id: ack.trace_id ?? null,
           });
         } catch (error) {
+          const meta = formatTrackingSendError(error);
+          const suspendPlan = resolveQueueSuspendMs(meta, meta.retry_after_seconds);
+          if (suspendPlan) {
+            await this.activateSuspension(suspendPlan.suspendMs, suspendPlan.reason);
+            item.deliveryState = "retry_pending";
+            item.lastError = suspendPlan.reason;
+            remaining.push(item);
+            continue;
+          }
           item.deliveryState = "retry_pending";
           item.lastError = error instanceof Error ? error.message : "send_failed";
           item.retryCount += 1;
@@ -580,9 +703,12 @@ class DriverTrackingQueue {
       this.items = remaining;
       await this.persist();
       if (this.items.length > 0 && DRAIN_INTERVAL_MS > 0) {
+        const delayMs = this.suspendActive() && this.queueSuspend
+          ? Math.max(DRAIN_INTERVAL_MS, this.queueSuspend.untilMs - nowMs())
+          : DRAIN_INTERVAL_MS;
         setTimeout(() => {
           void this.flush(options);
-        }, DRAIN_INTERVAL_MS);
+        }, delayMs);
       }
       emitDriverTelemetry("tracking.queue.flush", {
         source: "driver.tracking.queue",
@@ -613,6 +739,7 @@ class DriverTrackingQueue {
         queueDepth: this.items.length,
         flushPathUsed,
         lastBackendAckAt,
+        lastBackendAckStatus,
         oldestItemAgeMs: oldestQueuedAt ? Math.max(0, nowMs() - oldestQueuedAt) : null,
         networkProfile,
       };
@@ -681,3 +808,7 @@ class DriverTrackingQueue {
 }
 
 export const driverTrackingQueue = new DriverTrackingQueue();
+
+export function clearDriverTrackingQueueSuspension(): Promise<void> {
+  return driverTrackingQueue.clearSuspension("auth_refresh_success");
+}

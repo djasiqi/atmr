@@ -11,6 +11,7 @@ export type TrackingState = {
   mode: TrackingRuntimeMode;
   lastUpdate?: number;
   lastAckAt?: number;
+  lastAckIsQueued?: boolean;
   queueDepth: number;
   accuracy?: number;
 };
@@ -36,6 +37,7 @@ function mapSnapshotToTrackingState(
         ? Date.parse(snapshot.lastAckAt)
         : undefined
       : undefined,
+    lastAckIsQueued: snapshot.lastAckIsQueued === true,
     queueDepth: snapshot.queueDepth,
     accuracy: undefined,
   };
@@ -50,6 +52,7 @@ function trackingSnapshotsEqual(
     a.missionStatus === b.missionStatus &&
     a.lastSentAt === b.lastSentAt &&
     a.lastAckAt === b.lastAckAt &&
+    a.lastAckIsQueued === b.lastAckIsQueued &&
     a.queueDepth === b.queueDepth &&
     a.missionId === b.missionId
   );

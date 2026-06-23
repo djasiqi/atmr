@@ -45,6 +45,9 @@ type DriverRealtimePayload = Partial<CompanyDriverLiveLocation> & {
   location_status?: "live" | "recent" | "stale" | "offline" | "last_known" | null;
   mission_status?: string | null;
   status?: string | null;
+  presence_status?: string | null;
+  tracking_display_status?: string | null;
+  device_health?: CompanyDriverLiveLocation["device_health"];
   recorded_at?: string | null;
   received_at?: string | null;
 };
@@ -126,6 +129,24 @@ export function normalizeRealtimeLocation(payload: DriverRealtimePayload): Compa
     received_at: payload.received_at ?? new Date().toISOString(),
     last_seen_seconds: lastSeenSeconds,
     location_status: normalizeLocationStatus(payload.location_status ?? null, lastSeenSeconds),
+    status: driverStatus || undefined,
+    presence_status:
+      typeof payload.presence_status === "string" ? payload.presence_status.trim().toLowerCase() : undefined,
+    tracking_display_status:
+      typeof payload.tracking_display_status === "string"
+        ? payload.tracking_display_status.trim().toLowerCase()
+        : undefined,
+    device_health:
+      payload.device_health && typeof payload.device_health === "object"
+        ? {
+            constraint_reason:
+              typeof payload.device_health.constraint_reason === "string"
+                ? payload.device_health.constraint_reason
+                : payload.device_health.constraint_reason ?? null,
+            battery_optimized: payload.device_health.battery_optimized ?? null,
+            tracking_active: payload.device_health.tracking_active ?? null,
+          }
+        : undefined,
   };
 }
 
@@ -166,6 +187,11 @@ function mergeRealtimeDriver(
     full_name: normalized.full_name ?? existing?.full_name ?? null,
     first_name: normalized.first_name ?? existing?.first_name ?? null,
     last_name: normalized.last_name ?? existing?.last_name ?? null,
+    status: normalized.status ?? existing?.status ?? undefined,
+    presence_status: normalized.presence_status ?? existing?.presence_status ?? undefined,
+    tracking_display_status:
+      normalized.tracking_display_status ?? existing?.tracking_display_status ?? undefined,
+    device_health: normalized.device_health ?? existing?.device_health ?? undefined,
   };
   if (!shouldReplaceDriverLocation(existing, normalized)) return null;
   return mergeDriverLocationPreserveReference(existing, merged);

@@ -26,6 +26,7 @@ from .kafka_topics import (
 
 try:
     from services.monitoring.driver_location_metrics import (
+        inc_tracking_kafka_dlq_force_commit,
         inc_tracking_kafka_dlq_messages,
         inc_tracking_kafka_messages_produced,
         inc_tracking_kafka_publish_errors,
@@ -43,6 +44,10 @@ except Exception:  # pragma: no cover
         pass
 
     def inc_tracking_kafka_dlq_messages(*, reason: str) -> None:
+        _ = reason
+        pass
+
+    def inc_tracking_kafka_dlq_force_commit(*, reason: str) -> None:
         _ = reason
         pass
 
@@ -73,7 +78,13 @@ KAFKA_ACKS = os.getenv("KAFKA_ACKS", "all")
 KAFKA_AUTO_OFFSET_RESET = os.getenv("KAFKA_AUTO_OFFSET_RESET", "earliest")
 KAFKA_MAX_RETRIES = int(os.getenv("KAFKA_MAX_RETRIES", "3"))
 KAFKA_RETRY_BACKOFF_MS = int(os.getenv("KAFKA_RETRY_BACKOFF_MS", "300"))
-KAFKA_PUBLISH_ACK_TIMEOUT_S = float(os.getenv("KAFKA_PUBLISH_ACK_TIMEOUT_S", "0.5"))
+KAFKA_PUBLISH_ACK_TIMEOUT_S = float(os.getenv("KAFKA_PUBLISH_ACK_TIMEOUT_S", "2.0"))
+TRACKING_INGEST_PERSIST_ENABLED = (
+    os.getenv("TRACKING_INGEST_PERSIST_ENABLED", "false").lower() == "true"
+)
+TRACKING_INGEST_SEEK_TO_END_ON_START = (
+    os.getenv("TRACKING_INGEST_SEEK_TO_END_ON_START", "false").lower() == "true"
+)
 KAFKA_MAX_BLOCK_MS = int(os.getenv("KAFKA_MAX_BLOCK_MS", "500"))
 TRACKING_DLQ_RETRY_BACKOFF_S = float(os.getenv("TRACKING_DLQ_RETRY_BACKOFF_S", "1.0"))
 TRACKING_DLQ_PUBLISH_MAX_ATTEMPTS = int(
@@ -325,6 +336,13 @@ class TrackingIngestConsumer:
                         record.partition,
                         record.offset,
                     )
+                    try:
+                        inc_tracking_kafka_dlq_force_commit(reason=error_type)
+                    except Exception:
+                        logger.debug(
+                            "[tracking_consumer] dlq force_commit metric unavailable",
+                            exc_info=True,
+                        )
                     self._commit_current()
                     return True
                 logger.critical(
@@ -376,6 +394,41 @@ class TrackingIngestConsumer:
         for attempt in range(1, KAFKA_MAX_RETRIES + 1):
             try:
                 validated = {**message_obj, "validated_at_ms": record.timestamp}
+                if TRACKING_INGEST_PERSIST_ENABLED:
+                    from services.tracking.ingest_persist import (
+                        persist_driver_location_from_kafka,
+                    )
+
+                    validated, uc_result = persist_driver_location_from_kafka(
+                        message_obj,
+                        driver_id=driver_id,
+                    )
+                    validated["validated_at_ms"] = record.timestamp
+                    try:
+                        from services.monitoring.driver_location_metrics import (
+                            inc_received,
+                            inc_tracking_kafka_persist,
+                        )
+
+                        payload_for_mode = validated.get("payload")
+                        location_mode = (
+                            str(payload_for_mode.get("location_mode"))
+                            if isinstance(payload_for_mode, dict)
+                            and payload_for_mode.get("location_mode")
+                            else "mission_live"
+                        )
+                        if not uc_result.dedup_skipped:
+                            inc_received(
+                                transport="kafka", location_mode=location_mode
+                            )
+                        inc_tracking_kafka_persist(
+                            accept_status=uc_result.accept_status,
+                        )
+                    except Exception:
+                        logger.debug(
+                            "[tracking_consumer] persist metrics unavailable",
+                            exc_info=True,
+                        )
                 self._publish_with_ack(
                     topic=TOPIC_DRIVER_LOCATION_PROCESSED,
                     key=key,
@@ -421,12 +474,34 @@ class TrackingIngestConsumer:
                 )
         return False
 
+    def _seek_to_end_on_start(self) -> None:
+        """Option R7 : ignorer le backlog raw au premier démarrage avec persist."""
+        assert self._consumer is not None
+        logger.warning(
+            "[tracking_consumer] TRACKING_INGEST_SEEK_TO_END_ON_START=true — skip backlog raw"
+        )
+        deadline = time.monotonic() + 30.0
+        while self._running and time.monotonic() < deadline:
+            self._consumer.poll(timeout_ms=500)
+            assignment = self._consumer.assignment()
+            if assignment:
+                self._consumer.seek_to_end(*assignment)
+                logger.info(
+                    "[tracking_consumer] seek_to_end partitions=%s", len(assignment)
+                )
+                return
+        logger.error(
+            "[tracking_consumer] seek_to_end timeout — no partition assignment"
+        )
+
     def start(self) -> None:
         if not self._initialized:
             logger.error("[tracking_consumer] cannot start, not initialized")
             return
         assert self._consumer is not None
         self._running = True
+        if TRACKING_INGEST_SEEK_TO_END_ON_START:
+            self._seek_to_end_on_start()
         logger.info("[tracking_consumer] start loop")
         try:
             while self._running:

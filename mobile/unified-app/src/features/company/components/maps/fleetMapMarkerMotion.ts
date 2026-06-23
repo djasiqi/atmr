@@ -1,7 +1,18 @@
 import type { CompanyDriverLiveLocation } from "../../api/contracts";
+import {
+  reportFleetMarkerAnimationSkipped,
+  type FleetMarkerAnimationSkipReason,
+} from "../../../../core/observability/fleetMapDiagnostics";
 import { haversineMeters } from "../../realtime/driverLiveLocationMerge";
+import { isValidMapCoord } from "./mapsIosNewArchSafeMode";
 
 export type FleetMapLatLng = { latitude: number; longitude: number };
+
+export function isValidFleetMapCoordinate(
+  coord: FleetMapLatLng | null | undefined
+): coord is FleetMapLatLng {
+  return isValidMapCoord(coord?.latitude, coord?.longitude);
+}
 
 export type FleetMarkerMotionPlan =
   | { mode: "snap" }
@@ -50,7 +61,15 @@ export function resolveFleetMarkerMotionPlan(
   const noopDistanceM = input.noopDistanceM ?? NOOP_DISTANCE_M;
   const from = input.from;
 
+  if (!isValidFleetMapCoordinate(input.to)) {
+    return { mode: "snap" };
+  }
+
   if (!from) {
+    return { mode: "snap" };
+  }
+
+  if (!isValidFleetMapCoordinate(from)) {
     return { mode: "snap" };
   }
 
@@ -97,17 +116,53 @@ export function canAnimateFleetMarker(marker: AnimatableFleetMarkerRef): boolean
   return typeof marker?.animateMarkerToCoordinate === "function";
 }
 
-export function animateFleetMarkerToCoordinate(
-  marker: AnimatableFleetMarkerRef,
-  coordinate: FleetMapLatLng,
-  durationMs: number
-): boolean {
-  if (!canAnimateFleetMarker(marker)) return false;
+export type AnimateFleetMarkerInput = {
+  marker: AnimatableFleetMarkerRef;
+  from: FleetMapLatLng | null | undefined;
+  to: FleetMapLatLng;
+  durationMs: number;
+  reportSkip?: boolean;
+};
+
+function reportAnimationSkip(
+  reason: FleetMarkerAnimationSkipReason,
+  extra?: Record<string, unknown>
+): void {
+  reportFleetMarkerAnimationSkipped(reason, extra);
+}
+
+export function animateFleetMarkerToCoordinate({
+  marker,
+  from,
+  to,
+  durationMs,
+  reportSkip = true,
+}: AnimateFleetMarkerInput): boolean {
+  const skip = (reason: FleetMarkerAnimationSkipReason, extra?: Record<string, unknown>) => {
+    if (reportSkip) {
+      reportAnimationSkip(reason, extra);
+    }
+    return false;
+  };
+
+  if (!canAnimateFleetMarker(marker)) {
+    return skip("marker_unavailable");
+  }
+  if (!from) {
+    return skip("missing_previous");
+  }
+  if (!isValidFleetMapCoordinate(from)) {
+    return skip("invalid_previous", { from });
+  }
+  if (!isValidFleetMapCoordinate(to)) {
+    return skip("invalid_next", { to });
+  }
+
   try {
-    marker?.animateMarkerToCoordinate?.(coordinate, durationMs);
+    marker?.animateMarkerToCoordinate?.(to, durationMs);
     return true;
   } catch {
-    return false;
+    return skip("marker_unavailable");
   }
 }
 

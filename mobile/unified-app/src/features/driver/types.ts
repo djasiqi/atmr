@@ -70,6 +70,7 @@ export type DriverLocationPayload = {
 
 export type DriverLocationAckStatus =
   | "accepted"
+  | "queued"
   | "duplicate"
   | "stale"
   | "ignored"

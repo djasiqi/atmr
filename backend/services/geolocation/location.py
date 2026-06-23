@@ -35,7 +35,7 @@ from repositories.assignment_repository import AssignmentRepository
 from repositories.driver_repository import DriverRepository
 from services.geolocation.geofencing import get_geofencing_service
 from services.geolocation.presence import normalize_location_mode
-from services.monitoring.driver_location_metrics import inc_processed
+from services.monitoring.driver_location_metrics import inc_processed, observe_osrm_request
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +49,11 @@ DEFAULT_MATCH_WINDOW = int(os.getenv("DRIVER_LOC_MATCH_WINDOW", "5"))  # 5 point
 OSRM_CIRCUIT_BREAKER_THRESHOLD = int(os.getenv("OSRM_CIRCUIT_BREAKER_THRESHOLD", "5"))
 OSRM_CIRCUIT_BREAKER_COOLDOWN_SEC = int(
     os.getenv("OSRM_CIRCUIT_BREAKER_COOLDOWN_SEC", "60")
+)
+# Timeout snap OSRM : doit rester < KAFKA_PUBLISH_ACK_TIMEOUT_S (2.0) côté ingest_consumer.
+OSRM_SNAP_TIMEOUT_S = float(os.getenv("OSRM_SNAP_TIMEOUT_S", "1.5"))
+OSRM_SNAP_TIMEOUT_ENABLED = (
+    os.getenv("OSRM_SNAP_TIMEOUT_ENABLED", "true").lower() != "false"
 )
 
 # Missions « en cours » : historique trajet pour tout le cycle actif, pas seulement ONBOARD
@@ -171,6 +176,39 @@ class LocationService:
                 OSRM_CIRCUIT_BREAKER_COOLDOWN_SEC,
                 self._osrm_failures,
             )
+
+    def _osrm_request_timeout_sec(self, operation: str) -> float:
+        """Timeout HTTP OSRM ; désactivable via OSRM_SNAP_TIMEOUT_ENABLED (rollback prod)."""
+        if OSRM_SNAP_TIMEOUT_ENABLED:
+            return OSRM_SNAP_TIMEOUT_S
+        return 3.0 if operation == "match" else 2.0
+
+    def _osrm_http_get(
+        self, operation: str, url: str, *, params: dict[str, Any] | None = None
+    ) -> requests.Response | None:
+        """GET OSRM avec timeout, métriques et circuit breaker."""
+        if self._is_osrm_circuit_open():
+            observe_osrm_request(operation=operation, result="circuit_open", duration_sec=0.0)
+            return None
+        timeout_sec = self._osrm_request_timeout_sec(operation)
+        started = datetime.now(UTC)
+        try:
+            r = requests.get(url, params=params or {}, timeout=timeout_sec)
+            duration = (datetime.now(UTC) - started).total_seconds()
+            if r.ok:
+                observe_osrm_request(operation=operation, result="success", duration_sec=duration)
+                return r
+            observe_osrm_request(operation=operation, result="error", duration_sec=duration)
+            self._register_osrm_failure(operation, RequestException(f"HTTP {r.status_code}"))
+        except Timeout as e:
+            duration = (datetime.now(UTC) - started).total_seconds()
+            observe_osrm_request(operation=operation, result="timeout", duration_sec=duration)
+            self._register_osrm_failure(operation, e)
+        except (RequestException, ConnectionError, OSError) as e:
+            duration = (datetime.now(UTC) - started).total_seconds()
+            observe_osrm_request(operation=operation, result="error", duration_sec=duration)
+            self._register_osrm_failure(operation, e)
+        return None
 
     def resolve_normalized_location_mode(
         self, company_id: int | None, location_mode: str
@@ -422,16 +460,14 @@ class LocationService:
             if self._is_osrm_circuit_open():
                 return None
             url = f"{self.osrm_base_url}/nearest/v1/driving/{longitude},{latitude}"
-            r = requests.get(url, params={"number": 1}, timeout=2)
-            if r.ok:
+            r = self._osrm_http_get("nearest", url, params={"number": 1})
+            if r is not None and r.ok:
                 data = r.json()
                 waypoints = data.get("waypoints", [])
                 if waypoints and waypoints[0].get("location"):
                     loc = waypoints[0]["location"]
                     self._register_osrm_success()
                     return (float(loc[0]), float(loc[1]))  # (lon, lat)
-        except (RequestException, Timeout, ConnectionError, OSError) as e:
-            self._register_osrm_failure("nearest", e)
         except (ValueError, TypeError, KeyError) as e:
             self._register_osrm_failure("nearest", e)
         except Exception:
@@ -499,11 +535,9 @@ class LocationService:
 
             # Appel OSRM match
             url = f"{self.osrm_base_url}/match/v1/driving/{coords}"
-            r = requests.get(
-                url, params={"tidy": "true", "overview": "false"}, timeout=3
-            )
+            r = self._osrm_http_get("match", url, params={"tidy": "true", "overview": "false"})
 
-            if r.ok:
+            if r is not None and r.ok:
                 data = r.json()
                 matchings = data.get("matchings", [])
                 tracepoints = data.get("tracepoints", [])
@@ -515,8 +549,6 @@ class LocationService:
                         loc = tp["location"]
                         self._register_osrm_success()
                         return (float(loc[0]), float(loc[1]))  # (lon, lat)
-        except (RequestException, Timeout, ConnectionError, OSError) as e:
-            self._register_osrm_failure("match", e)
         except (ValueError, TypeError, KeyError) as e:
             self._register_osrm_failure("match", e)
         except Exception:

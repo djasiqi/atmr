@@ -124,6 +124,9 @@ export function DriverDashboardHeader({
       return `GPS connecté • Dernier envoi ${lastSendTime}`;
     }
     if (tracking.lastAckAt != null && tracking.queueDepth === 0) {
+      if (tracking.lastAckIsQueued) {
+        return `GPS connecté • En file (${lastAckTime})`;
+      }
       return `GPS connecté • Confirmé backend ${lastAckTime}`;
     }
     return `GPS connecté • Dernier envoi ${lastSendTime}`;
@@ -132,6 +135,7 @@ export function DriverDashboardHeader({
     tracking.isTracking,
     tracking.lastUpdate,
     tracking.lastAckAt,
+    tracking.lastAckIsQueued,
     tracking.queueDepth,
   ]);
 

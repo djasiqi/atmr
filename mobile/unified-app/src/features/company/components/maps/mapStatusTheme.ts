@@ -1,21 +1,20 @@
 import type { Ionicons } from "@expo/vector-icons";
 
-
+import {
+  FLEET_BREAK_FILL,
+  FLEET_CONSTRAINED_FILL,
+  FLEET_LAST_KNOWN_FILL,
+} from "./fleetTrackingStatusPalette";
 
 /** Statut opérationnel affiché sur la carte flotte (dispatch). */
-
 export type FleetOperationalStatus =
-
   | "on_mission"
-
   | "available"
-
   | "break"
-
+  | "constrained"
+  | "last_known"
   | "delayed"
-
   | "incident"
-
   | "offline";
 
 
@@ -36,7 +35,7 @@ export const FLEET_MAP_COLORS = {
 
   available: "#00796B",
 
-  break: "#F59E0B",
+  break: FLEET_BREAK_FILL,
 
   delayed: "#EF4444",
 
@@ -149,6 +148,34 @@ export const FLEET_STATUS_THEME: Record<
     markerVariant: "vehicle",
 
     priority: 40,
+
+  },
+
+  constrained: {
+
+    fill: FLEET_CONSTRAINED_FILL,
+
+    label: "Batterie restreinte",
+
+    icon: "battery-half",
+
+    markerVariant: "vehicle",
+
+    priority: 48,
+
+  },
+
+  last_known: {
+
+    fill: FLEET_LAST_KNOWN_FILL,
+
+    label: "Dernière position",
+
+    icon: "location",
+
+    markerVariant: "vehicle",
+
+    priority: 12,
 
   },
 

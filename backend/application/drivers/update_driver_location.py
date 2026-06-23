@@ -27,6 +27,8 @@ class UpdateDriverLocationCommand:
     mission_id: int | None = None
     metrics_transport: str = "http"
     location_event_id: str | None = None
+    emit_geofence: bool = True
+    company_id: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -124,6 +126,15 @@ class UpdateDriverLocationUseCase:
         accept_reason = str(getattr(res, "accept_reason", ""))
         received_at = getattr(res, "received_at", None)
         received_at_str = str(received_at) if received_at is not None else None
+
+        if cmd.emit_geofence and geofence_events:
+            from services.tracking.geofence_emit import emit_driver_geofence_events
+
+            emit_driver_geofence_events(
+                driver_id=cmd.driver_id,
+                company_id=cmd.company_id,
+                geofence_events=geofence_events,
+            )
 
         return UpdateDriverLocationResult(
             snapped_lat=float(snapped_lat),

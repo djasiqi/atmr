@@ -88,9 +88,11 @@ def test_batch_duplicate_position_id_absorbed_and_ordered_by_sequence(
     monkeypatch.setattr("routes.driver.TRACKING_INGEST_ASYNC_ENABLED", True)
     monkeypatch.setattr("routes.driver.redis_client", fake_redis)
     calls: list[dict] = []
+    enqueue_meta: list[dict] = []
 
     def _enqueue_tracking_event(**kwargs):
         calls.append(kwargs["payload"])
+        enqueue_meta.append(kwargs)
         return {"queued": True, "trace_id": "t-1"}
 
     monkeypatch.setattr("routes.driver.enqueue_tracking_event", _enqueue_tracking_event)
@@ -132,3 +134,5 @@ def test_batch_duplicate_position_id_absorbed_and_ordered_by_sequence(
     assert len(calls) == 2
     assert calls[0]["sequence_id"] == 1
     assert calls[1]["sequence_id"] == 2
+    assert all("location_event_id" in call for call in calls)
+    assert enqueue_meta[0]["company_id"] == driver.company_id

@@ -116,4 +116,12 @@ describe('degraded_constrained / batterie restreinte', () => {
     expect(resolveDriverMapMarkerColor('assigned', colors)).toBe(STATUS_COLORS.assigned);
     expect(resolveDriverMapMarkerColor('offline', colors)).toBe(STATUS_COLORS.offline);
   });
+
+  it('resolveDriverMapVisualStatus renvoie constrained pour last_known + constrained', () => {
+    const driver = {
+      location_status: 'last_known',
+      presence_status: 'degraded_constrained',
+    };
+    expect(resolveDriverMapVisualStatus(driver)).toBe('constrained');
+  });
 });

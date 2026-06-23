@@ -5,9 +5,9 @@ Contrat déploiement :
 - **`scripts/deploy-production.sh`** : stack applicative **uniquement** — ne doit **jamais** activer `--profile kafka` ni fusionner `docker-compose.kafka*.yml`.
 - **`INIT_TOPICS=1 scripts/deploy-kafka-production.sh`** : **seul chemin officiel** pour déployer brokers + raccord `atmr-network` + consumers profile `kafka`, avec preflight et validations post-deploy.
 - **Kafka OFF** : les 4 flags à `false` (ou absents) dans `.env.production`, **aucun** consumer Kafka actif.
-- **Kafka ON** : brokers healthy, DNS `kafka-broker-*` depuis `atmr-network`, topics créés, consumers du profile `kafka` en `running`.
+- **Kafka ON** : brokers healthy, DNS `kafka-broker-*` depuis `atmr-network`, topics créés, consumers du profile `kafka` en `running`, **`TRACKING_INGEST_PERSIST_ENABLED=true`** si l'ingest async doit écrire en DB.
 
-Référence variables : `env.kafka.production.example` à la racine du dépôt.
+Référence variables : `env.kafka.production.example` à la racine du dépôt (5 flags dont `TRACKING_INGEST_PERSIST_ENABLED`).
 
 **Optimisation RAM mono-serveur** : voir [kafka-optimization-lirie.md](kafka-optimization-lirie.md) (Phase 1 stabilisation, observation 14 j, Phase 2 mono-broker).
 
@@ -22,6 +22,7 @@ Avant migration topics, configurer 4 Go swap + `vm.swappiness=10` sur le serveur
    - `KAFKA_ENABLED=false`
    - `TRACKING_INGEST_ASYNC_ENABLED=false`
    - `TRACKING_PROCESSED_FANOUT_ENABLED=false`
+   - `TRACKING_INGEST_PERSIST_ENABLED=false`
    - `WS_KAFKA_CONSUMER_ENABLED=false`
 
 2. Déploiement applicatif : CI/CD habituel ou `scripts/deploy-production.sh` (sans Kafka).
@@ -43,7 +44,8 @@ Avant migration topics, configurer 4 Go swap + `vm.swappiness=10` sur le serveur
 
 - Fichiers présents sous `/srv/atmr` :  
   `docker-compose.production.yml`, `docker-compose.kafka.yml`, `docker-compose.kafka.atmr-network.yml`
-- `.env.production` : les **4** flags Kafka à `true` (cohérence stricte).
+- `.env.production` : les **4** flags Kafka à `true` (cohérence stricte) **+** `TRACKING_INGEST_PERSIST_ENABLED=true` pour la persistance GPS.
+- Premier deploy persist sur prod avec backlog raw : envisager `TRACKING_INGEST_SEEK_TO_END_ON_START=true` (voir [gps-tracking-pipeline.md](gps-tracking-pipeline.md)).
 - Réseau Docker `atmr-network` (créé automatiquement au deploy Kafka si `ATMR_AUTO_CREATE_NETWORK=1`, défaut dans `deploy-kafka-production.sh`).
 
 ### Première montée (topics à créer)

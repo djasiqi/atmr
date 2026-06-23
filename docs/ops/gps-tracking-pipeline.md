@@ -121,7 +121,34 @@ Statuts terminaux (`COMPLETED`, `CANCELLED`, `NO_SHOW`, `EXPIRED`) : `resolveMis
 |---|---|
 | HTTP `PUT /driver/me/location` | **availability_presence** (obligatoire) + fallback **mission_live** |
 | Socket `driver_location_batch` | **mission_live** uniquement (ACK batch) |
-| Kafka async | **Hors périmètre PR1** — `TRACKING_INGEST_ASYNC_ENABLED` (PR3 conditionnelle) |
+| Kafka async | `TRACKING_INGEST_ASYNC_ENABLED` + `TRACKING_INGEST_PERSIST_ENABLED` — persist dans [`ingest_consumer.py`](../../backend/services/tracking/ingest_consumer.py) via `UpdateDriverLocationUseCase` ; fanout Socket.IO via [`processed_fanout_consumer.py`](../../backend/services/tracking/processed_fanout_consumer.py) |
+
+### Mitigation incident GPS (Phase 0 ops)
+
+Si les positions ne persistent pas malgré des HTTP 202 :
+
+1. `TRACKING_INGEST_ASYNC_ENABLED=false` dans `.env.production` (path sync immédiat).
+2. Noter l'état des **4 flags** Kafka (`KAFKA_ENABLED`, `ASYNC`, `PROCESSED_FANOUT`, `WS_KAFKA_CONSUMER`) — `PERSIST=true` sans `ASYNC=true` est un **no-op** (consumer exit).
+3. Valider : PUT location → **200** (pas 202), `trip_tracking` alimenté.
+4. Gap historique : les positions perdues avant mitigation ne sont pas récupérables automatiquement.
+
+### Activation Kafka avec persistance (post-patch)
+
+Activer **simultanément** : `KAFKA_ENABLED=true`, `TRACKING_INGEST_ASYNC_ENABLED=true`, `TRACKING_PROCESSED_FANOUT_ENABLED=true`, `TRACKING_INGEST_PERSIST_ENABLED=true`.
+
+**Replay au démarrage (R7)** : `TRACKING_INGEST_SEEK_TO_END_ON_START=true` au premier deploy prod pour ignorer le backlog `driver.location.raw` (rétention ~2 h). Staging : garder `earliest` pour rattrapage.
+
+**Dégradation acceptée (R3)** : persist OK mais fanout KO (double échec DLQ) → carte gelée jusqu'au watchdog frontend (~60 s).
+
+### Métriques Kafka persist
+
+```promql
+# Alerte écart 202 vs persist (tous statuts terminaux)
+sum(rate(tracking_http_accepted_async_total[5m]))
+  - sum(rate(tracking_kafka_persist_total[5m])) > 0.1
+```
+
+Labels `tracking_kafka_persist_total` : `accepted_canonical`, `accepted_observability_only`, `skipped`, `failed` uniquement.
 
 ## Redis
 
@@ -164,3 +191,122 @@ Dashboard [`driver-tracking-health.json`](../../monitoring/grafana/dashboards/dr
 - `trip_tracking` = 0 pendant `IN_PROGRESS` > 15 min
 - `tracking_mission_live_missing_mission_id_total` rate > 0 post-P0-C
 - Ratio `accepted_observability_only`
+
+## Sprint 1 — Pipeline OSRM + DLQ (S1.4)
+
+✅ **Implémenté** : timeout OSRM 1,5 s, circuit breaker coexistence, métriques et alerte DLQ force commit.
+
+| Paramètre | Défaut | Rôle |
+|---|---|---|
+| `OSRM_SNAP_TIMEOUT_S` | `1.5` | Timeout snap/map (< `KAFKA_PUBLISH_ACK_TIMEOUT_S=2.0`) |
+| `OSRM_SNAP_TIMEOUT_ENABLED` | `true` | `false` = rollback comportement legacy (2 s / 3 s) sans redeploy |
+| `OSRM_CIRCUIT_BREAKER_THRESHOLD` | `5` | Échecs consécutifs avant skip OSRM |
+| `OSRM_CIRCUIT_BREAKER_COOLDOWN_SEC` | `60` | Durée circuit ouvert → coords raw |
+
+Fichiers : [`location.py`](../../backend/services/geolocation/location.py), [`driver_location_metrics.py`](../../backend/services/monitoring/driver_location_metrics.py), [`ingest_consumer.py`](../../backend/services/tracking/ingest_consumer.py).
+
+### Alertes PromQL (S1.4)
+
+```promql
+# OSRM dégradé
+increase(tracking_osrm_request_total{result="timeout"}[5m]) > 10
+
+# Perte silencieuse GPS — page oncall immédiat (L1)
+increase(tracking_kafka_dlq_force_commit_total[1h]) > 0
+```
+
+### Runbook post-alerte L1 (N8)
+
+La position est **déjà perdue** au moment de l'alerte :
+
+1. Compter : `increase(tracking_kafka_dlq_force_commit_total[1h])` + corréler `driver_id` dans logs CRITICAL ingest_consumer
+2. Vérifier que la **prochaine position** mobile comble le trou (pas de récupération rétroactive)
+3. Si trou > 5 min : informer exploitants (lacune tracé)
+4. Pas de re-push mobile automatique (hors scope S1)
+
+Validation alerte (N6 chaos pré-prod) : OSRM down + Kafka KO simulé → métrique s'incrémente + alerte Grafana se déclenche.
+
+---
+
+## STOP GATE P2 — Protocole post-déploiement Sprint 1
+
+**Exécuter après déploiement S1** — bloquant avant implémentation Sprint 2.
+
+### Scénarios
+
+| Scénario | Drivers | Intervalle | Durée | Objectif |
+|---|---|---|---|---|
+| A | 50 | 3 s | 5 min | Perf baseline, reconnect |
+| B | 100 | 3 s | 5 min | Perf charge, ev/s |
+| C | 50 | 3 s | **30 min** | Fuites mémoire (heap) |
+| D | 100 | 3 s | **30 min** | Idem (~60k events) |
+
+Ne **pas raccourcir** C/D (30 min intégraux).
+
+### Reconnect (G2 / N7)
+
+```bash
+docker compose kill -s SIGTERM realtime
+sleep 5
+docker compose start realtime
+```
+
+Répéter **10× sur A + 10× sur B**, **≥ 25 s entre chaque**. Critère : **99 %** reconnects → event GPS utile **< 10 s**.
+
+### Heap snapshots (N5)
+
+| Plateforme | Outil | Action |
+|---|---|---|
+| Web | Chrome DevTools → Memory | Snapshot début/fin C/D |
+| Android | Android Studio Profiler | idem |
+| iOS | Xcode Instruments → Allocations | idem + logs `[FleetMarkerAnimationSkipped]` |
+
+### Critères GO/NO-GO impl S2
+
+| Critère | Seuil |
+|---|---|
+| Web 100 drivers p95 tick | < 100 ms |
+| Reconnect success (event < 10 s) | > 99 % |
+| No-data-loss post-reconnect | Δ position vs Redis < 5 s |
+| Mobile disconnect 5 min (L3) | Carte rafraîchie au resync |
+| Heap delta 30 min | < 10 % |
+| DLQ force commit (nominal) | = 0 |
+| S1.1 faux stale | 0 |
+
+### RACI sign-off (O2)
+
+| Rôle | Responsabilité |
+|---|---|
+| Tech lead backend | Pipeline S1.4, critères DLQ |
+| Tech lead mobile | STOP GATE mobile, GO S2.3 |
+| Ops / SRE | Métriques, alertes, chaos DLQ |
+| **GO S2 impl** | **Consensus des 3** |
+
+Décision GO/NO-GO dans **5 jours ouvrés** après fin STOP GATE D. Résultats : tableau ci-dessous.
+
+| Item | Résultat | Date | Signataire |
+|---|---|---|---|
+| Scénario A | | | |
+| Scénario B | | | |
+| Scénario C | | | |
+| Scénario D | | | |
+| DLQ chaos (N6) | | | |
+| GO S2 impl | GO / NO-GO | | |
+
+---
+
+## Sprint 1 UX carte — référence
+
+✅ **Implémenté** :
+
+| Item | Fichiers |
+|---|---|
+| S1.1 stale backend-only web | `DriverLiveMap.jsx`, `mapUtils.js` |
+| S1.2 `last_known` mobile | `mapStatusTheme.ts`, `fleetMapLogic.ts` |
+| S1.3 bannière no-GPS mobile | `OperationalFleetMap.tsx`, `useOperationalFleetMap.ts` |
+| S1.5 clustering tri-state web | `driverMapClustering.js`, `DriverLiveMap.jsx` |
+| S1.6 constrained `#f97316` mobile | `fleetTrackingStatusPalette.ts`, `DriverBottomSheet.tsx` |
+
+Env clustering web : `REACT_APP_ENABLE_DRIVER_CLUSTERING` = `true` | `false` | absent (auto > `REACT_APP_DRIVER_CLUSTERING_THRESHOLD`, défaut 50).
+
+⛔ **Sprint 2 impl** : bloqué jusqu'à STOP GATE + revue [`sprint2-fleet-tracking-design.md`](./sprint2-fleet-tracking-design.md) S2.1.

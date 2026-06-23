@@ -401,6 +401,14 @@ async function refreshAuthToken(): Promise<string | null> {
   }
   if (token) {
     setAuthToken(token);
+    try {
+      const { notifyAuthRefreshSuccess } = require("../auth/authRefreshListeners") as {
+        notifyAuthRefreshSuccess: () => void;
+      };
+      notifyAuthRefreshSuccess();
+    } catch {
+      /* optional */
+    }
   }
   return token;
 }

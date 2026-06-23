@@ -15,6 +15,7 @@ export type TrackingSendErrorMeta = {
   http_status: number | null;
   api_error_code: string | null;
   transport_code: string | null;
+  retry_after_seconds: number | null;
 };
 
 const MAX_MESSAGE_LEN = 240;
@@ -42,6 +43,7 @@ export function formatTrackingSendError(error: unknown): TrackingSendErrorMeta {
     http_status: null,
     api_error_code: null,
     transport_code: null,
+    retry_after_seconds: null,
   });
 
   if (error == null) {
@@ -52,6 +54,11 @@ export function formatTrackingSendError(error: unknown): TrackingSendErrorMeta {
     const transportCode = typeof error.code === "string" ? error.code : null;
     const status = error.response?.status ?? null;
     const data = error.response?.data as Record<string, unknown> | undefined;
+    const retryAfterRaw = data?.retry_after_seconds;
+    const retryAfterSeconds =
+      typeof retryAfterRaw === "number" && Number.isFinite(retryAfterRaw)
+        ? retryAfterRaw
+        : null;
     const apiCode =
       typeof data?.error_code === "string"
         ? data.error_code
@@ -72,6 +79,7 @@ export function formatTrackingSendError(error: unknown): TrackingSendErrorMeta {
         http_status: status,
         api_error_code: apiCode,
         transport_code: transportCode,
+        retry_after_seconds: retryAfterSeconds,
       };
     }
 
@@ -83,6 +91,7 @@ export function formatTrackingSendError(error: unknown): TrackingSendErrorMeta {
         http_status: status,
         api_error_code: apiCode,
         transport_code: transportCode,
+        retry_after_seconds: retryAfterSeconds,
       };
     }
 
@@ -93,6 +102,7 @@ export function formatTrackingSendError(error: unknown): TrackingSendErrorMeta {
         http_status: null,
         api_error_code: apiCode,
         transport_code: transportCode,
+        retry_after_seconds: retryAfterSeconds,
       };
     }
 
@@ -102,6 +112,7 @@ export function formatTrackingSendError(error: unknown): TrackingSendErrorMeta {
       http_status: status,
       api_error_code: apiCode,
       transport_code: transportCode,
+      retry_after_seconds: retryAfterSeconds,
     };
   }
 
@@ -110,6 +121,11 @@ export function formatTrackingSendError(error: unknown): TrackingSendErrorMeta {
     const code = typeof error.code === "string" ? error.code : null;
     const status = typeof error.status === "number" ? error.status : null;
     const msg = error.message;
+    const retryAfterRaw = error.retry_after_seconds;
+    const retryAfterSeconds =
+      typeof retryAfterRaw === "number" && Number.isFinite(retryAfterRaw)
+        ? retryAfterRaw
+        : null;
 
     if (code === "HTTP_CIRCUIT_BREAKER_OPEN") {
       return {
@@ -118,6 +134,7 @@ export function formatTrackingSendError(error: unknown): TrackingSendErrorMeta {
         http_status: null,
         api_error_code: code,
         transport_code: null,
+        retry_after_seconds: null,
       };
     }
 
@@ -128,6 +145,7 @@ export function formatTrackingSendError(error: unknown): TrackingSendErrorMeta {
         http_status: status,
         api_error_code: code,
         transport_code: null,
+        retry_after_seconds: retryAfterSeconds,
       };
     }
 
@@ -138,6 +156,7 @@ export function formatTrackingSendError(error: unknown): TrackingSendErrorMeta {
         http_status: null,
         api_error_code: code,
         transport_code: null,
+        retry_after_seconds: retryAfterSeconds,
       };
     }
 

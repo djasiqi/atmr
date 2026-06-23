@@ -6,6 +6,11 @@ describe('getFreshnessStatus', () => {
     expect(getFreshnessStatus({ location_status: 'recent' })).toBe('recent');
     expect(getFreshnessStatus({ location_status: 'stale' })).toBe('stale');
     expect(getFreshnessStatus({ location_status: 'offline' })).toBe('offline');
+    expect(getFreshnessStatus({ location_status: 'last_known' })).toBe('last_known');
+  });
+
+  it('backend live ignore last_seen_seconds élevé (stale autoritatif backend)', () => {
+    expect(getFreshnessStatus({ location_status: 'live', last_seen_seconds: 150 })).toBe('live');
   });
 
   it('falls back to last_seen_seconds thresholds', () => {

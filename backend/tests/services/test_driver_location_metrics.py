@@ -117,3 +117,49 @@ def test_inc_tracking_id_propagated() -> None:
         mock_counter.labels.return_value = MagicMock(inc=inc)
         m.inc_tracking_id_propagated(transport="socket_batch", propagated=True)
     inc.assert_called_once()
+
+
+def test_inc_received_accepts_kafka_transport() -> None:
+    if m._RECEIVED is None:
+        pytest.skip("prometheus_client Counter unavailable")
+    inc = MagicMock()
+    with patch.object(m, "_RECEIVED") as mock_r, patch.object(m, "_INGESTED") as mock_i:
+        mock_r.labels.return_value = MagicMock(inc=inc)
+        mock_i.labels.return_value = MagicMock(inc=MagicMock())
+        m.inc_received(transport="kafka", location_mode="mission_live")
+    mock_r.labels.assert_called_once_with(transport="kafka", location_mode="mission_live")
+
+
+def test_inc_tracking_kafka_dlq_force_commit() -> None:
+    if m._TRACKING_KAFKA_DLQ_FORCE_COMMIT is None:
+        pytest.skip("prometheus_client Counter unavailable")
+    inc = MagicMock()
+    with patch.object(m, "_TRACKING_KAFKA_DLQ_FORCE_COMMIT") as mock_c:
+        mock_c.labels.return_value = MagicMock(inc=inc)
+        m.inc_tracking_kafka_dlq_force_commit(reason="persist_failed")
+    mock_c.labels.assert_called_once_with(reason="persist_failed")
+    inc.assert_called_once()
+
+
+def test_observe_osrm_request_success() -> None:
+    if m._TRACKING_OSRM_REQUEST is None or m._TRACKING_OSRM_LATENCY is None:
+        pytest.skip("prometheus_client metrics unavailable")
+    inc = MagicMock()
+    observe = MagicMock()
+    with patch.object(m, "_TRACKING_OSRM_REQUEST") as mock_c, patch.object(m, "_TRACKING_OSRM_LATENCY") as mock_h:
+        mock_c.labels.return_value = MagicMock(inc=inc)
+        mock_h.labels.return_value = MagicMock(observe=observe)
+        m.observe_osrm_request(operation="nearest", result="success", duration_sec=0.42)
+    inc.assert_called_once()
+    observe.assert_called_once_with(0.42)
+
+
+def test_inc_tracking_kafka_persist_maps_unknown_status_to_failed() -> None:
+    if m._TRACKING_KAFKA_PERSIST is None:
+        pytest.skip("prometheus_client Counter unavailable")
+    inc = MagicMock()
+    with patch.object(m, "_TRACKING_KAFKA_PERSIST") as mock_counter:
+        mock_counter.labels.return_value = MagicMock(inc=inc)
+        m.inc_tracking_kafka_persist(accept_status="weird_status")
+    mock_counter.labels.assert_called_once_with(accept_status="failed")
+    inc.assert_called_once()

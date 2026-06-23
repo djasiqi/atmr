@@ -209,7 +209,13 @@ export const getFreshnessStatus = (driver) => {
     return trackingDisplay;
   }
   const backendStatus = String(driver?.location_status || '').toLowerCase();
-  if (backendStatus === 'live' || backendStatus === 'recent' || backendStatus === 'stale' || backendStatus === 'offline') {
+  if (
+    backendStatus === 'live'
+    || backendStatus === 'recent'
+    || backendStatus === 'stale'
+    || backendStatus === 'offline'
+    || backendStatus === 'last_known'
+  ) {
     return backendStatus;
   }
   const v = Number(driver?.last_seen_seconds);

@@ -15,6 +15,7 @@ import type { FleetDriverMapItem } from "./fleetMapTypes";
 import { FLEET_STATUS_THEME, FLEET_MAP_COLORS } from "./mapStatusTheme";
 
 import { driverFleetMarkerInitials, resolveDriverDisplayName } from "../../utils/companyDriverMapStatus";
+import { formatFleetConstraintReason } from "./fleetMapLogic";
 
 import {
   conciseRouteSegment,
@@ -1126,11 +1127,15 @@ function CompactDriverSheet({
       ]
         .filter(Boolean)
         .join(" · ")
-    : enrichment.operationalStatus === "available"
-      ? "Prêt pour une nouvelle course"
-      : enrichment.operationalStatus === "break"
-        ? "Pause en cours"
-        : null;
+    : enrichment.operationalStatus === "constrained"
+      ? formatFleetConstraintReason(driver)
+      : enrichment.operationalStatus === "available"
+        ? "Prêt pour une nouvelle course"
+        : enrichment.operationalStatus === "break"
+          ? "Pause en cours"
+          : enrichment.operationalStatus === "last_known"
+            ? "Dernière position connue (non active)"
+            : null;
 
   const handleCall = () => {
     const phone = enrichment.phone?.trim();

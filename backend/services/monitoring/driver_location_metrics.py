@@ -90,6 +90,15 @@ _CANONICAL_OVERWRITE = None
 _GPS_PROVIDER = None
 _TRACKING_MISSION_LIVE_MISSING_MISSION_ID = None
 _TRACKING_DELIVERY_RESULT = None
+_TRACKING_HTTP_ACCEPTED_ASYNC = None
+_TRACKING_KAFKA_PERSIST = None
+
+_VALID_TRANSPORTS = frozenset({"http", "socket", "socket_batch", "kafka"})
+
+
+def _norm_transport(transport: str) -> str:
+    t = (transport or "http").strip()
+    return t if t in _VALID_TRANSPORTS else "http"
 
 if Counter is not None:
     _DEDUP_SKIPPED = Counter(
@@ -148,6 +157,11 @@ if Counter is not None:
     _TRACKING_KAFKA_DLQ = Counter(
         "tracking_kafka_dlq_messages_total",
         "Messages redirigés vers la DLQ tracking",
+        ["reason"],
+    )
+    _TRACKING_KAFKA_DLQ_FORCE_COMMIT = Counter(
+        "tracking_kafka_dlq_force_commit_total",
+        "Offsets Kafka commités après échec DLQ (position GPS perdue)",
         ["reason"],
     )
     _TRACKING_KAFKA_REBALANCE = Counter(
@@ -230,6 +244,16 @@ if Counter is not None:
         "Résultat livraison position par mode, transport et issue",
         ["mode", "transport", "result"],
     )
+    _TRACKING_HTTP_ACCEPTED_ASYNC = Counter(
+        "tracking_http_accepted_async_total",
+        "Réponses HTTP 202 (position mise en file Kafka, avant persist consumer)",
+        ["location_mode"],
+    )
+    _TRACKING_KAFKA_PERSIST = Counter(
+        "tracking_kafka_persist_total",
+        "Traitements persist terminés dans ingest_consumer (labels finis)",
+        ["accept_status"],
+    )
 
 if Histogram is not None:
     _CLOCK_SKEW = Histogram(
@@ -283,6 +307,17 @@ if Histogram is not None:
         ["platform", "location_mode", "transport"],
         buckets=(0, 45, 90, 135, 180, 225, 270, 315, 360),
     )
+    _TRACKING_OSRM_REQUEST = Counter(
+        "tracking_osrm_request_total",
+        "Requêtes OSRM snap/map (LocationService)",
+        ["operation", "result"],
+    )
+    _TRACKING_OSRM_LATENCY = Histogram(
+        "tracking_osrm_latency_seconds",
+        "Latence requêtes OSRM snap/map",
+        ["operation"],
+        buckets=(0.05, 0.1, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 5.0),
+    )
 else:
     _CLOCK_SKEW = None
     _BATCH_INGEST_SIZE = None
@@ -293,6 +328,8 @@ else:
     _GPS_ACCURACY = None
     _GPS_SPEED = None
     _GPS_HEADING = None
+    _TRACKING_OSRM_REQUEST = None
+    _TRACKING_OSRM_LATENCY = None
 
 
 def inc_tracking_delivery_result(
@@ -305,7 +342,7 @@ def inc_tracking_delivery_result(
     if not _metrics_enabled() or _TRACKING_DELIVERY_RESULT is None:
         return
     lm = _norm_mode(mode)
-    t = transport if transport in ("http", "socket", "socket_batch") else "http"
+    t = _norm_transport(transport)
     r = (
         result
         if result in ("success", "forbidden", "failure", "duplicate")
@@ -323,7 +360,7 @@ def inc_dedup_skipped(
     if not _metrics_enabled() or _DEDUP_SKIPPED is None:
         return
     lm = _norm_mode(location_mode)
-    t = transport if transport in ("http", "socket", "socket_batch") else "http"
+    t = _norm_transport(transport)
     r = (
         reason
         if reason in ("duplicate_event_id", "duplicate_proximity")
@@ -337,7 +374,7 @@ def inc_received(*, transport: str, location_mode: str) -> None:
     if not _metrics_enabled() or _RECEIVED is None:
         return
     lm = _norm_mode(location_mode)
-    t = transport if transport in ("http", "socket", "socket_batch") else "http"
+    t = _norm_transport(transport)
     _RECEIVED.labels(transport=t, location_mode=lm).inc()
     if _INGESTED is not None:
         _INGESTED.labels(transport=t, location_mode=lm).inc()
@@ -371,7 +408,7 @@ def inc_processed(
         return
     lm = _norm_mode(location_mode)
     ar = _norm_reason(accept_reason)
-    t = transport if transport in ("http", "socket", "socket_batch") else "http"
+    t = _norm_transport(transport)
     st = (
         accept_status
         if accept_status
@@ -418,7 +455,7 @@ def observe_canonical_update_latency_seconds(
     if not _metrics_enabled() or _CANONICAL_UPDATE_LATENCY is None:
         return
     lm = _norm_mode(location_mode)
-    t = transport if transport in ("http", "socket", "socket_batch") else "http"
+    t = _norm_transport(transport)
     try:
         s = float(seconds)
     except (TypeError, ValueError):
@@ -504,6 +541,26 @@ def inc_tracking_kafka_dlq_messages(*, reason: str) -> None:
     if not _metrics_enabled() or _TRACKING_KAFKA_DLQ is None:
         return
     _TRACKING_KAFKA_DLQ.labels(reason=reason or "_unknown").inc()
+
+
+def inc_tracking_kafka_dlq_force_commit(*, reason: str) -> None:
+    if not _metrics_enabled() or _TRACKING_KAFKA_DLQ_FORCE_COMMIT is None:
+        return
+    r = (reason or "_unknown").strip() or "_unknown"
+    if len(r) > 120:
+        r = r[:120]
+    _TRACKING_KAFKA_DLQ_FORCE_COMMIT.labels(reason=r).inc()
+
+
+def observe_osrm_request(*, operation: str, result: str, duration_sec: float) -> None:
+    if not _metrics_enabled():
+        return
+    op = operation if operation in ("nearest", "match") else "_unknown"
+    res = result if result in ("success", "timeout", "error", "circuit_open") else "_unknown"
+    if _TRACKING_OSRM_REQUEST is not None:
+        _TRACKING_OSRM_REQUEST.labels(operation=op, result=res).inc()
+    if _TRACKING_OSRM_LATENCY is not None and duration_sec >= 0 and res == "success":
+        _TRACKING_OSRM_LATENCY.labels(operation=op).observe(float(duration_sec))
 
 
 def inc_tracking_kafka_rebalance(*, event: str) -> None:
@@ -597,7 +654,7 @@ def inc_batch_points_skipped(*, reason: str, location_mode: str) -> None:
 def inc_tracking_id_propagated(*, transport: str, propagated: bool) -> None:
     if not _metrics_enabled():
         return
-    t = transport if transport in ("http", "socket", "socket_batch") else "http"
+    t = _norm_transport(transport)
     if propagated and _TRACKING_ID_PROPAGATED is not None:
         _TRACKING_ID_PROPAGATED.labels(transport=t).inc()
     elif not propagated and _TRACKING_ID_MISSING is not None:
@@ -607,7 +664,7 @@ def inc_tracking_id_propagated(*, transport: str, propagated: bool) -> None:
 def inc_canonical_redis_write(*, location_mode: str, transport: str) -> None:
     if not _metrics_enabled() or _CANONICAL_REDIS_WRITE is None:
         return
-    t = transport if transport in ("http", "socket", "socket_batch") else "http"
+    t = _norm_transport(transport)
     _CANONICAL_REDIS_WRITE.labels(location_mode=_norm_mode(location_mode), transport=t).inc()
 
 
@@ -644,7 +701,7 @@ def observe_gps_quality(
         return
     plat = _norm_platform(platform)
     lm = _norm_mode(location_mode)
-    t = transport if transport in ("http", "socket", "socket_batch") else "http"
+    t = _norm_transport(transport)
     if accuracy is not None and _GPS_ACCURACY is not None:
         try:
             acc = float(accuracy)
@@ -692,6 +749,31 @@ def inc_tracking_mission_live_missing_mission_id(
     """Incrémente le compteur P0-C quand le mobile envoie mission_live sans mission_id."""
     if not _metrics_enabled() or _TRACKING_MISSION_LIVE_MISSING_MISSION_ID is None:
         return
-    t = transport if transport in ("http", "socket", "socket_batch") else "http"
+    t = _norm_transport(transport)
     act = action if action in ("downgraded", "rejected") else "_unknown"
     _TRACKING_MISSION_LIVE_MISSING_MISSION_ID.labels(transport=t, action=act).inc()
+
+
+_KAFKA_PERSIST_STATUSES = frozenset(
+    {
+        "accepted_canonical",
+        "accepted_observability_only",
+        "skipped",
+        "failed",
+    }
+)
+
+
+def inc_tracking_http_accepted_async(*, location_mode: str) -> None:
+    """Compteur HTTP 202 — position acceptée pour enqueue Kafka."""
+    if not _metrics_enabled() or _TRACKING_HTTP_ACCEPTED_ASYNC is None:
+        return
+    _TRACKING_HTTP_ACCEPTED_ASYNC.labels(location_mode=_norm_mode(location_mode)).inc()
+
+
+def inc_tracking_kafka_persist(*, accept_status: str) -> None:
+    """Compteur persist consumer — labels finis uniquement (pas driver_id/company_id)."""
+    if not _metrics_enabled() or _TRACKING_KAFKA_PERSIST is None:
+        return
+    st = accept_status if accept_status in _KAFKA_PERSIST_STATUSES else "failed"
+    _TRACKING_KAFKA_PERSIST.labels(accept_status=st).inc()

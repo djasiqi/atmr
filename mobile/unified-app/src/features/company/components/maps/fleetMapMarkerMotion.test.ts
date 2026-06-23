@@ -1,6 +1,7 @@
 import {
   DEFAULT_SNAP_DISTANCE_M,
   NOOP_DISTANCE_M,
+  isValidFleetMapCoordinate,
   resolveFleetMarkerMotionPlan,
   shouldApplyFleetMarkerCommit,
 } from "./fleetMapMarkerMotion";
@@ -120,5 +121,30 @@ describe("fleetMapMarkerMotion", () => {
     expect(shouldApplyFleetMarkerCommit(2, 2)).toBe(true);
     expect(shouldApplyFleetMarkerCommit(1, 2)).toBe(false);
     expect(shouldApplyFleetMarkerCommit(2, 3)).toBe(false);
+  });
+
+  it("snap si coordonnée cible invalide", () => {
+    expect(
+      resolveFleetMarkerMotionPlan({
+        from: genevaA,
+        to: { latitude: Number.NaN, longitude: 6.1432 },
+      })
+    ).toEqual({ mode: "snap" });
+  });
+
+  it("snap si coordonnée précédente invalide", () => {
+    expect(
+      resolveFleetMarkerMotionPlan({
+        from: { latitude: Number.NaN, longitude: 6.1432 },
+        to: genevaB,
+      })
+    ).toEqual({ mode: "snap" });
+  });
+
+  it("isValidFleetMapCoordinate rejette NaN et hors bornes", () => {
+    expect(isValidFleetMapCoordinate(genevaA)).toBe(true);
+    expect(isValidFleetMapCoordinate({ latitude: Number.NaN, longitude: 0 })).toBe(false);
+    expect(isValidFleetMapCoordinate({ latitude: 91, longitude: 0 })).toBe(false);
+    expect(isValidFleetMapCoordinate(null)).toBe(false);
   });
 });

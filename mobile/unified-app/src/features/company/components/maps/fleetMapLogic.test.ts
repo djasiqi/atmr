@@ -10,6 +10,7 @@ import {
   filterFleetDrivers,
   pickPrimaryFleetDriver,
   resolveFleetOperationalStatus,
+  formatFleetConstraintReason,
 } from "./fleetMapLogic";
 import { DEFAULT_FLEET_MAP_FILTERS } from "./fleetMapTypes";
 
@@ -76,6 +77,29 @@ describe("fleetMapLogic", () => {
       location_status: "stale",
     };
     expect(resolveFleetOperationalStatus(driver, null)).toBe("offline");
+  });
+
+  it("last_known distinct de offline", () => {
+    const driver: CompanyDriverLiveLocation = {
+      ...baseDriver(1, 46.2, 6.14),
+      location_status: "last_known",
+      last_seen_seconds: 900,
+    };
+    expect(resolveFleetOperationalStatus(driver, null)).toBe("last_known");
+  });
+
+  it("constrained avant mission active", () => {
+    const driver: CompanyDriverLiveLocation = {
+      ...baseDriver(1, 46.2, 6.14),
+      presence_status: "degraded_constrained",
+      location_status: "live",
+    };
+    expect(resolveFleetOperationalStatus(driver, null)).toBe("constrained");
+  });
+
+  it("formatFleetConstraintReason fallback Raison inconnue", () => {
+    const driver = baseDriver(1, 46.2, 6.14);
+    expect(formatFleetConstraintReason(driver)).toBe("Raison inconnue");
   });
 
   it("buildFleetActiveRoute uses mission coordinates", () => {

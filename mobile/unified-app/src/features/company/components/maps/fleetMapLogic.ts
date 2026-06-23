@@ -197,6 +197,7 @@ function missionPriorityStatusScore(mission: CompanyDispatchMission | null): num
 function operationalStatusScore(driver: FleetDriverMapItem): number {
   const st = driver.enrichment.operationalStatus;
   if (st === "incident") return 320;
+  if (st === "constrained") return 280;
   if (st === "delayed") return 300;
   if (st === "on_mission") return 260;
   if (st === "available") return 200;
@@ -219,6 +220,44 @@ export function pickPrimaryFleetDriver(drivers: FleetDriverMapItem[]): FleetDriv
   return ranked[0] ?? null;
 }
 
+const CONSTRAINED_DRIVER_STATUSES = new Set(["assigned_constrained", "available_constrained"]);
+
+export function isFleetDriverConstrained(driver: CompanyDriverLiveLocation): boolean {
+  const presence = String(driver.presence_status ?? "").toLowerCase();
+  if (presence === "degraded_constrained") return true;
+  const status = String(driver.status ?? "").toLowerCase();
+  return CONSTRAINED_DRIVER_STATUSES.has(status);
+}
+
+/** Compteur « localisés » carte — parité web (hors offline / offline_unknown). */
+export function isFleetDriverLocated(driver: CompanyDriverLiveLocation): boolean {
+  const lat = Number(driver.latitude);
+  const lon = Number(driver.longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false;
+  const tracking = String(driver.tracking_display_status ?? "").toLowerCase();
+  if (tracking === "offline_unknown") return false;
+  const status = String(driver.location_status ?? "").toLowerCase();
+  if (status === "offline") return false;
+  return true;
+}
+
+const CONSTRAINT_REASON_LABELS: Record<string, string> = {
+  battery_optimized: "Optimisation batterie active",
+  permission_fg_denied: "Permission localisation refusée",
+  permission_bg_denied: "Localisation arrière-plan refusée",
+  gps_provider_disabled: "GPS désactivé sur l'appareil",
+  fgs_not_running: "Service avant-plan inactif",
+  fix_stale: "Dernière position trop ancienne",
+};
+
+/** Libellé exploitant pour device_health.constraint_reason (O5). */
+export function formatFleetConstraintReason(driver: CompanyDriverLiveLocation): string {
+  const raw = driver.device_health?.constraint_reason;
+  if (raw == null || String(raw).trim() === "") return "Raison inconnue";
+  const key = String(raw).trim().toLowerCase();
+  return CONSTRAINT_REASON_LABELS[key] ?? key.replace(/_/g, " ");
+}
+
 export function resolveFleetOperationalStatus(
 
   driver: CompanyDriverLiveLocation,
@@ -227,10 +266,14 @@ export function resolveFleetOperationalStatus(
 
 ): FleetOperationalStatus {
 
-  if (isDriverPositionStale(driver)) return "offline";
+  if (driver.location_status === "last_known") return "last_known";
 
   const activeMission =
     linkedMission && isMissionInFlight(linkedMission.status) ? linkedMission : null;
+
+  if (!activeMission && isFleetDriverConstrained(driver)) return "constrained";
+
+  if (isDriverPositionStale(driver)) return "offline";
 
   const delayMin = Number(activeMission?.assignment_pickup_delay_minutes);
 

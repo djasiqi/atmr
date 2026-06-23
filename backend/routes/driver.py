@@ -1704,6 +1704,26 @@ class DriverLocation(Resource):
                             is_background = bool(p.get("is_background", False))
                             mission_id = p.get("mission_id")
 
+                            from services.tracking.location_event_id import (
+                                extract_raw_location_event_id,
+                                resolve_location_event_id,
+                            )
+
+                            loc_event_id_raw = extract_raw_location_event_id(
+                                header_value=(
+                                    request.headers.get("X-Location-Event-Id")
+                                    or request.headers.get("x-location-event-id")
+                                ),
+                                payload=p if isinstance(p, dict) else None,
+                            )
+                            location_event_id = resolve_location_event_id(
+                                driver_id=driver.id,
+                                latitude=lat,
+                                longitude=lon,
+                                recorded_at=str(recorded_at),
+                                raw_id=loc_event_id_raw,
+                            )
+
                             if TRACKING_INGEST_ASYNC_ENABLED:
                                 ingest_payload = {
                                     "latitude": lat,
@@ -1716,6 +1736,7 @@ class DriverLocation(Resource):
                                     "location_mode": location_mode,
                                     "is_background": is_background,
                                     "mission_id": mission_id,
+                                    "location_event_id": location_event_id,
                                 }
                                 company_id_raw = getattr(driver, "company_id", None)
                                 company_id_value = (
@@ -1730,21 +1751,27 @@ class DriverLocation(Resource):
                                     company_id=company_id_value,
                                 )
                                 if ingest_result.get("queued"):
+                                    try:
+                                        from services.monitoring.driver_location_metrics import (
+                                            inc_tracking_http_accepted_async,
+                                        )
+
+                                        inc_tracking_http_accepted_async(
+                                            location_mode=str(location_mode)
+                                        )
+                                    except Exception:
+                                        logger.debug(
+                                            "[DriverLocation] async accepted metric unavailable",
+                                            exc_info=True,
+                                        )
                                     return {
                                         "ok": True,
                                         "queued": True,
                                         "trace_id": ingest_result.get("trace_id"),
                                         "accept_status": "accepted_async",
                                         "accept_reason": "queued_kafka",
+                                        "location_event_id": location_event_id,
                                     }, 202
-
-                            loc_event_id_raw = request.headers.get(
-                                "X-Location-Event-Id"
-                            ) or request.headers.get("x-location-event-id")
-                            if isinstance(p, dict):
-                                loc_event_id_raw = loc_event_id_raw or p.get(
-                                    "location_event_id"
-                                )
 
                             from application.drivers.update_driver_location import (
                                 UpdateDriverLocationCommand,
@@ -1780,11 +1807,7 @@ class DriverLocation(Resource):
                                 uc = UpdateDriverLocationUseCase(
                                     update_location_fn=create_location_update_fn()
                                 )
-                                loc_ev_str = (
-                                    str(loc_event_id_raw).strip()
-                                    if loc_event_id_raw
-                                    else None
-                                )
+                                loc_ev_str = location_event_id
                                 uc_result = uc.execute(
                                     UpdateDriverLocationCommand(
                                         driver_id=driver.id,
@@ -1801,6 +1824,7 @@ class DriverLocation(Resource):
                                         mission_id=mission_id,
                                         metrics_transport="http",
                                         location_event_id=loc_ev_str,
+                                        company_id=driver_company_id,
                                     )
                                 )
 
@@ -1834,26 +1858,9 @@ class DriverLocation(Resource):
                                         accept_status=accept_status,
                                         accept_reason=accept_reason,
                                         location_event_id=(
-                                            str(loc_event_id_raw)
-                                            if loc_event_id_raw
-                                            else None
+                                            location_event_id
                                         ),
                                     )
-
-                                    # Émettre events geofencing si détectés
-                                    for event in uc_result.geofence_events:
-                                        if event == "arrived_at_pickup":
-                                            socketio.emit(
-                                                "driver:arrived_at_pickup",
-                                                {"driver_id": driver.id},
-                                                to=f"company_{driver.company_id}",
-                                            )
-                                        elif event == "arrived_at_dropoff":
-                                            socketio.emit(
-                                                "driver:arrived_at_dropoff",
-                                                {"driver_id": driver.id},
-                                                to=f"company_{driver.company_id}",
-                                            )
 
                             except Exception as e_loc:
                                 logger.exception(
@@ -2273,6 +2280,25 @@ class DriverLocationBatch(Resource):
                 "position_id": point.get("position_id"),
                 "batch_id": body.get("batch_id") if isinstance(body, dict) else None,
             }
+            from services.tracking.location_event_id import resolve_location_event_id
+
+            try:
+                batch_lat = float(payload["latitude"])
+                batch_lon = float(payload["longitude"])
+            except (TypeError, ValueError):
+                rejected += 1
+                continue
+            batch_recorded_at = str(payload.get("recorded_at") or "")
+            raw_batch_event = point.get("tracking_event_id") or point.get(
+                "location_event_id"
+            )
+            payload["location_event_id"] = resolve_location_event_id(
+                driver_id=driver.id,
+                latitude=batch_lat,
+                longitude=batch_lon,
+                recorded_at=batch_recorded_at or datetime.now(UTC).isoformat(),
+                raw_id=str(raw_batch_event).strip() if raw_batch_event else None,
+            )
             company_id_raw = getattr(driver, "company_id", None)
             company_id_value = (
                 int(company_id_raw) if isinstance(company_id_raw, (int, str)) else None

@@ -100,6 +100,14 @@ export type CompanyDriverLiveLocation = {
   received_at?: string | null;
   last_seen_seconds?: number | null;
   location_status?: "live" | "recent" | "stale" | "offline" | "last_known" | null;
+  tracking_display_status?: string | null;
+  presence_status?: string | null;
+  status?: string | null;
+  device_health?: {
+    constraint_reason?: string | null;
+    battery_optimized?: boolean | null;
+    tracking_active?: boolean | null;
+  } | null;
   // Marqueur serveur : position acceptée en mode observabilité uniquement (moins prioritaire qu'une
   // position live). Ne doit jamais écraser une position live plus récente sur la carte entreprise.
   accepted_observability_only?: boolean;

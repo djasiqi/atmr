@@ -37,6 +37,7 @@ export type DriverApiError = {
   code: string;
   message: string;
   retryable?: boolean;
+  retry_after_seconds?: number;
 };
 
 export type DriverChatMessage = {
@@ -109,6 +110,10 @@ function normalizeError(error: unknown): DriverApiError {
     retryable:
       typeof e.response?.data?.retryable === "boolean"
         ? e.response?.data?.retryable
+        : undefined,
+    retry_after_seconds:
+      typeof e.response?.data?.retry_after_seconds === "number"
+        ? e.response.data.retry_after_seconds
         : undefined,
   };
 }
@@ -234,9 +239,32 @@ export async function sendDriverLocation(payload: DriverLocationPayload): Promis
           }
         : undefined,
     });
-    const status = String((data as { ack_status?: unknown })?.ack_status ?? "accepted");
+    const payload = data as {
+      ack_status?: unknown;
+      accept_status?: unknown;
+      accept_reason?: unknown;
+      queued?: unknown;
+      tracking_event_id?: unknown;
+      trace_id?: unknown;
+    };
+    const acceptStatus =
+      typeof payload.accept_status === "string" ? payload.accept_status : null;
+    if (acceptStatus === "accepted_async" || payload.queued === true) {
+      return {
+        ack_status: "queued",
+        accept_reason:
+          typeof payload.accept_reason === "string" ? payload.accept_reason : "queued_kafka",
+        tracking_event_id:
+          typeof payload.tracking_event_id === "string"
+            ? String(payload.tracking_event_id)
+            : null,
+        trace_id: typeof payload.trace_id === "string" ? String(payload.trace_id) : null,
+      };
+    }
+    const status = String(payload.ack_status ?? "accepted");
     const ackStatus: DriverLocationAck["ack_status"] =
       status === "accepted" ||
+      status === "queued" ||
       status === "duplicate" ||
       status === "stale" ||
       status === "ignored" ||
@@ -245,16 +273,14 @@ export async function sendDriverLocation(payload: DriverLocationPayload): Promis
         : "accepted";
     return {
       ack_status: ackStatus,
-      accept_reason: typeof (data as { accept_reason?: unknown })?.accept_reason === "string"
-        ? String((data as { accept_reason?: unknown }).accept_reason)
+      accept_reason: typeof payload.accept_reason === "string"
+        ? String(payload.accept_reason)
         : null,
       tracking_event_id:
-        typeof (data as { tracking_event_id?: unknown })?.tracking_event_id === "string"
-          ? String((data as { tracking_event_id?: unknown }).tracking_event_id)
+        typeof payload.tracking_event_id === "string"
+          ? String(payload.tracking_event_id)
           : null,
-      trace_id: typeof (data as { trace_id?: unknown })?.trace_id === "string"
-        ? String((data as { trace_id?: unknown }).trace_id)
-        : null,
+      trace_id: typeof payload.trace_id === "string" ? String(payload.trace_id) : null,
     };
   });
 }

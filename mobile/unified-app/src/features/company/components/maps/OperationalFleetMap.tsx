@@ -18,6 +18,7 @@ import {
 
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { AppText } from "../../../../design/ui/AppText";
 import { useAppViewport } from "../../../../design/responsive/useAppViewport";
 
 import type { CompanyDispatchMission, CompanyDriverLiveLocation } from "../../api/contracts";
@@ -180,6 +181,8 @@ type FleetMapSurfaceProps = {
 
   onUpcomingTableExpandedChange?: (expanded: boolean) => void;
 
+  socketConnected?: boolean;
+
 };
 
 
@@ -235,6 +238,8 @@ function FleetMapSurface({
   upcomingTableExpanded = true,
 
   onUpcomingTableExpandedChange,
+
+  socketConnected = true,
 
 }: FleetMapSurfaceProps) {
 
@@ -325,6 +330,19 @@ function FleetMapSurface({
       />
 
       </FleetMapErrorBoundary>
+
+      {fleet.showNoGpsBanner ? (
+        <View style={s.noGpsBanner} pointerEvents="none">
+          <AppText variant="label" style={s.noGpsTitle}>
+            {socketConnected ? "Aucun GPS récent" : "Temps réel indisponible"}
+          </AppText>
+          <AppText variant="caption" style={s.noGpsDetail}>
+            {socketConnected
+              ? "Aucune position fraîche. Vérifiez l'app chauffeur et le GPS."
+              : "Données issues du dernier chargement. Vérifiez la connexion réseau."}
+          </AppText>
+        </View>
+      ) : null}
 
       {showLegend ? <MapLegend /> : null}
 
@@ -688,6 +706,8 @@ export function OperationalFleetMap({
 
     onUpcomingTableExpandedChange,
 
+    socketConnected: realtime.transportStatus === "healthy",
+
   };
 
 
@@ -866,6 +886,62 @@ const s = StyleSheet.create({
     borderWidth: 1,
 
     borderColor: "rgba(145, 165, 157, 0.35)",
+
+  },
+
+  noGpsBanner: {
+
+    position: "absolute",
+
+    top: 10,
+
+    alignSelf: "center",
+
+    maxWidth: "92%",
+
+    paddingHorizontal: 16,
+
+    paddingVertical: 8,
+
+    backgroundColor: "#FFFFFF",
+
+    borderWidth: 2,
+
+    borderColor: "#E2E8F0",
+
+    borderRadius: 10,
+
+    zIndex: 100,
+
+    ...Platform.select({
+
+      ios: { shadowColor: "#000", shadowOpacity: 0.08, shadowRadius: 3, shadowOffset: { width: 0, height: 1 } },
+
+      android: { elevation: 2 },
+
+      default: {},
+
+    }),
+
+  },
+
+  noGpsTitle: {
+
+    color: "#334155",
+
+    textAlign: "center",
+
+  },
+
+  noGpsDetail: {
+
+    color: "#64748B",
+
+    textAlign: "center",
+
+    marginTop: 4,
+
+    lineHeight: 16,
 
   },
 

@@ -113,6 +113,7 @@ type TrackingBridgeState = {
   presenceWindowActive: boolean;
   lastSentAt: string | null;
   lastAckAt: string | null;
+  lastAckIsQueued: boolean;
   lastBackendAckLatencyMs: number | null;
   queueDepth: number;
   flushPathUsed: "http_fallback" | "socket_batch" | null;
@@ -142,6 +143,7 @@ export type DriverTrackingBridgeSnapshot = {
   permission: "unknown" | "granted" | "denied";
   lastSentAt: string | null;
   lastAckAt: string | null;
+  lastAckIsQueued: boolean;
   queueDepth: number;
   flushPathUsed: "http_fallback" | "socket_batch" | null;
   networkProfile: TrackingNetworkProfile;
@@ -161,6 +163,7 @@ const state: TrackingBridgeState = {
   presenceWindowActive: false,
   lastSentAt: null,
   lastAckAt: null,
+  lastAckIsQueued: false,
   lastBackendAckLatencyMs: null,
   queueDepth: 0,
   flushPathUsed: null,
@@ -197,6 +200,7 @@ function buildTrackingBridgeSnapshot(): DriverTrackingBridgeSnapshot {
     permission: state.permission,
     lastSentAt: state.lastSentAt,
     lastAckAt: state.lastAckAt,
+    lastAckIsQueued: state.lastAckIsQueued,
     queueDepth: state.queueDepth,
     flushPathUsed: state.flushPathUsed,
     networkProfile: state.networkProfile,
@@ -395,6 +399,7 @@ async function flushPoint(appState: AppStateStatus) {
   state.flushPathUsed = flushResult.flushPathUsed;
   if (flushResult.backendAcked > 0 && flushResult.lastBackendAckAt) {
     state.lastAckAt = new Date(flushResult.lastBackendAckAt).toISOString();
+    state.lastAckIsQueued = flushResult.lastBackendAckStatus === "queued";
     state.lastBackendAckLatencyMs =
       flushResult.lastBackendAckAt - Date.parse(nowIso);
   }
@@ -704,6 +709,7 @@ async function stopMissionTrackingBridge(): Promise<void> {
   state.missionScheduling = null;
   state.lastSentAt = null;
   state.lastAckAt = null;
+  state.lastAckIsQueued = false;
   notifyTrackingBridgeListeners();
 }
 

@@ -8,6 +8,7 @@ import {
   resolveDriverMapVisualStatus,
   CONSTRAINED_MARKER_COLOR,
 } from '../../../../utils/companyDriverProjections';
+import { resolveDriverClusteringEnabled } from '../../../../utils/driverMapClustering';
 import {
   recordDriverLiveMapRender,
   recordFitBoundsCall,
@@ -41,7 +42,6 @@ import {
 /** Cercle chauffeur 24×24, ancrage au centre du disque (12, 12). */
 const DRIVER_MARKER_ANCHOR = iconAnchorToAdvancedMarkerCss(12, 12, 24, 24);
 
-const ENABLE_CLUSTERING = process.env.REACT_APP_ENABLE_DRIVER_CLUSTERING === 'true';
 const MAP_DEBUG =
   typeof window !== 'undefined' &&
   (window.__MAP_DEBUG === true || sessionStorage.getItem('MAP_DEBUG') === '1');
@@ -57,6 +57,55 @@ const STATUS_TITLE_LABELS = {
 };
 
 const CONTAINER_STYLE = { width: '100%', height: '100%', minHeight: '280px' };
+
+function createDriverMarkerClusterer(map) {
+  if (GOOGLE_MAPS_USE_JS_STYLES) {
+    return new MarkerClusterer({
+      map,
+      markers: [],
+      renderer: {
+        render: ({ count, position }) => {
+          const size = count < 10 ? 40 : count < 50 ? 46 : 52;
+          return new window.google.maps.Marker({
+            position,
+            icon: {
+              url: makeClusterIcon(count),
+              scaledSize: new window.google.maps.Size(size, size),
+              anchor: new window.google.maps.Point(size / 2, size / 2),
+            },
+            zIndex: Number(window.google.maps.Marker.MAX_ZINDEX) + count,
+          });
+        },
+      },
+    });
+  }
+  if (window.google?.maps?.marker?.AdvancedMarkerElement) {
+    const AdvancedMarkerElement = window.google.maps.marker.AdvancedMarkerElement;
+    return new MarkerClusterer({
+      map,
+      markers: [],
+      renderer: {
+        render: ({ count, position }) => {
+          const size = count < 10 ? 40 : count < 50 ? 46 : 52;
+          const img = document.createElement('img');
+          img.src = makeClusterIcon(count);
+          img.width = size;
+          img.height = size;
+          img.style.display = 'block';
+          const clusterAnchor = iconAnchorToAdvancedMarkerCss(size / 2, size / 2, size, size);
+          return new AdvancedMarkerElement({
+            position,
+            content: img,
+            anchorLeft: clusterAnchor.anchorLeft,
+            anchorTop: clusterAnchor.anchorTop,
+            zIndex: 1000000 + count,
+          });
+        },
+      },
+    });
+  }
+  return null;
+}
 
 function getDriverDisplayName(driver) {
   return driver.full_name ||
@@ -273,7 +322,7 @@ function DriverLiveMap({ drivers: propDrivers }) {
     let clusterCount = null;
     if (clustererRef.current && Array.isArray(clustererRef.current.markers)) {
       clusterCount = clustererRef.current.markers.length;
-    } else if (clustererRef.current && ENABLE_CLUSTERING) {
+    } else if (clustererRef.current && clusteringEnabledRef.current) {
       clusterCount = markerEntries.length;
     }
     recordMapsOverlayStats({
@@ -293,6 +342,13 @@ function DriverLiveMap({ drivers: propDrivers }) {
   const socketConnected = useCompanySocketConnected();
 
   const allDrivers = Array.isArray(propDrivers) ? propDrivers : [];
+  const clusteringEnabled = useMemo(
+    () => resolveDriverClusteringEnabled(allDrivers.length),
+    [allDrivers.length],
+  );
+  const clusteringEnabledRef = useRef(clusteringEnabled);
+  clusteringEnabledRef.current = clusteringEnabled;
+
   const drivers = searchQuery
     ? allDrivers.filter((d) => {
         const q = searchQuery.toLowerCase();
@@ -377,7 +433,7 @@ function DriverLiveMap({ drivers: propDrivers }) {
       }
 
       recordMarkerCreate();
-      const clustered = ENABLE_CLUSTERING && clustererRef.current;
+      const clustered = clusteringEnabledRef.current && clustererRef.current;
       const marker = new window.google.maps.Marker({
         position,
         map: clustered ? null : map,
@@ -467,7 +523,7 @@ function DriverLiveMap({ drivers: propDrivers }) {
     img.title = markerTitle;
     img.draggable = false;
 
-    const clustered = ENABLE_CLUSTERING && clustererRef.current;
+    const clustered = clusteringEnabledRef.current && clustererRef.current;
     const marker = new AdvancedMarkerElement({
       position,
       map: clustered ? null : map,
@@ -520,7 +576,7 @@ function DriverLiveMap({ drivers: propDrivers }) {
   const removeMarker = useCallback((id) => {
     const marker = markersRef.current[id];
     if (!marker) return;
-    if (ENABLE_CLUSTERING && clustererRef.current) {
+    if (clusteringEnabledRef.current && clustererRef.current) {
       clustererRef.current.removeMarker(marker);
     }
     if (typeof marker._hoverCleanup === 'function') marker._hoverCleanup();
@@ -556,61 +612,46 @@ function DriverLiveMap({ drivers: propDrivers }) {
     return () => window.google.maps.event.removeListener(listener);
   }, []);
 
-  // Callback quand Google Map est chargée
   const onMapLoad = useCallback((map) => {
     mapRef.current = map;
-
-    if (ENABLE_CLUSTERING) {
-      if (GOOGLE_MAPS_USE_JS_STYLES) {
-        clustererRef.current = new MarkerClusterer({
-          map,
-          markers: [],
-          renderer: {
-            render: ({ count, position }) => {
-              const size = count < 10 ? 40 : count < 50 ? 46 : 52;
-              return new window.google.maps.Marker({
-                position,
-                icon: {
-                  url: makeClusterIcon(count),
-                  scaledSize: new window.google.maps.Size(size, size),
-                  anchor: new window.google.maps.Point(size / 2, size / 2),
-                },
-                zIndex: Number(window.google.maps.Marker.MAX_ZINDEX) + count,
-              });
-            },
-          },
-        });
-      } else if (window.google?.maps?.marker?.AdvancedMarkerElement) {
-        const AdvancedMarkerElement = window.google.maps.marker.AdvancedMarkerElement;
-        clustererRef.current = new MarkerClusterer({
-          map,
-          markers: [],
-          renderer: {
-            render: ({ count, position }) => {
-              const size = count < 10 ? 40 : count < 50 ? 46 : 52;
-              const img = document.createElement('img');
-              img.src = makeClusterIcon(count);
-              img.width = size;
-              img.height = size;
-              img.style.display = 'block';
-              const clusterAnchor = iconAnchorToAdvancedMarkerCss(size / 2, size / 2, size, size);
-              return new AdvancedMarkerElement({
-                position,
-                content: img,
-                anchorLeft: clusterAnchor.anchorLeft,
-                anchorTop: clusterAnchor.anchorTop,
-                zIndex: 1000000 + count,
-              });
-            },
-          },
-        });
-      }
-    }
-
     setMapReady(true);
     perfMark('gmaps_map_loaded');
     if (MAP_DEBUG) console.log('[DriverLiveMap] Google Map chargée');
   }, []);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!mapReady || !map || !window.google) return undefined;
+
+    if (clusteringEnabled && !clustererRef.current) {
+      const clusterer = createDriverMarkerClusterer(map);
+      if (clusterer) {
+        clustererRef.current = clusterer;
+        Object.values(markersRef.current).forEach((marker) => {
+          if (GOOGLE_MAPS_USE_JS_STYLES) {
+            marker.setMap(null);
+          } else {
+            marker.map = null;
+          }
+          clusterer.addMarker(marker);
+        });
+      }
+    } else if (!clusteringEnabled && clustererRef.current) {
+      const clusterer = clustererRef.current;
+      Object.values(markersRef.current).forEach((marker) => {
+        clusterer.removeMarker(marker);
+        if (GOOGLE_MAPS_USE_JS_STYLES) {
+          marker.setMap(map);
+        } else {
+          marker.map = map;
+        }
+      });
+      clusterer.setMap(null);
+      clustererRef.current = null;
+    }
+
+    return undefined;
+  }, [mapReady, clusteringEnabled]);
 
   const structuralSetKey = useMemo(
     () => buildDriverStructuralSetKey(drivers, searchQuery),
@@ -641,6 +682,7 @@ function DriverLiveMap({ drivers: propDrivers }) {
       const locStat = String(d.tracking_display_status || d.location_status || '').toLowerCase();
       const hasBackendStatus = locStat === 'stale' || locStat === 'offline'
         || locStat === 'live' || locStat === 'recent'
+        || locStat === 'last_known'
         || locStat === 'degraded_constrained' || locStat === 'offline_unknown';
       const staleByAge = !d.location_status && !d.tracking_display_status
         && Number.isFinite(lastSeenSecondsNumber)

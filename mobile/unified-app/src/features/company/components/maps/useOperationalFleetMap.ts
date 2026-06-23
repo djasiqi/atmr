@@ -16,6 +16,7 @@ import {
   findUrgentFleetDriver,
   pickPrimaryFleetDriver,
   resolveClusterCellDeg,
+  isFleetDriverLocated,
 } from "./fleetMapLogic";
 import { FLEET_MISSION_MAP_POLICY } from "./fleetMapMissionPolicies";
 import {
@@ -218,6 +219,12 @@ export function useOperationalFleetMap({
     return next;
   }, [drivers, missions, organizationName, missionIndex]);
   const filtered = useMemo(() => filterFleetDrivers(enriched, filters), [enriched, filters]);
+
+  const locatedCount = useMemo(
+    () => filtered.filter((driver) => isFleetDriverLocated(driver)).length,
+    [filtered],
+  );
+  const showNoGpsBanner = drivers.length > 0 && locatedCount === 0;
   const activeFilterCount = useMemo(() => countActiveFleetFilters(filters), [filters]);
 
   const selectedDriver = useMemo(() => {
@@ -554,6 +561,19 @@ export function useOperationalFleetMap({
     [onSelectedDriverIdChange]
   );
 
+  // Purge auto du focus cluster épinglé si chauffeurs absents ou sélection levée.
+  useEffect(() => {
+    if (!pinnedClusterFocus) return;
+    const activeIds = new Set(filtered.map((d) => d.driver_id));
+    const driversStillPresent = pinnedClusterFocus.drivers.every((d) => activeIds.has(d.driver_id));
+    const selectionStillInCluster =
+      selectedDriverId == null
+      || pinnedClusterFocus.drivers.some((d) => d.driver_id === selectedDriverId);
+    if (!driversStillPresent || !selectionStillInCluster) {
+      setPinnedClusterFocus(null);
+    }
+  }, [filtered, pinnedClusterFocus, selectedDriverId]);
+
   const recenter = useCallback((mode: FleetMapRecenterMode = "all") => {
     setRecenterMode(mode);
     recenterTokenRef.current += 1;
@@ -801,6 +821,8 @@ export function useOperationalFleetMap({
     cockpitMapPolicy,
     imminentDepartures,
     applySearchContext,
+    locatedCount,
+    showNoGpsBanner,
     mapSignals: {
       filtersOpen,
       layersOpen,
