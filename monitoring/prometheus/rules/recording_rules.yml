@@ -188,7 +188,7 @@ groups:
           /
           clamp_min(sum(rate(driver_device_health_reports_total[5m])), 0.001)
 
-  - name: location_recording
+  - name: location_batch_recording
     interval: 1m
     rules:
       - record: location:batch_latency_p95_5m
