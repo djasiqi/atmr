@@ -1,0 +1,56 @@
+http:
+  middlewares:
+    cors-www-lirie:
+      headers:
+        accessControlAllowOriginList:
+          - "https://www.lirie.ch"
+          - "https://lirie.ch"
+        accessControlAllowMethods:
+          - "GET"
+          - "POST"
+          - "PUT"
+          - "PATCH"
+          - "DELETE"
+          - "OPTIONS"
+        accessControlAllowHeaders:
+          - "Authorization"
+          - "Content-Type"
+          - "X-Company-ID"
+          - "X-Session-ID"
+          - "Cache-Control"
+          - "Pragma"
+        accessControlAllowCredentials: true
+        addVaryHeader: true
+    # IP allowlist monitoring (Prometheus / Alertmanager)
+    monitoring-ipallow:
+      ipAllowList:
+        sourceRange:
+          - "176.65.139.231/32"
+          - "176.65.139.233/32"
+          - "176.65.139.236/32"
+          - "176.65.139.237/32"
+
+  routers:
+    atmr_api:
+      rule: Host(`api.lirie.ch`)
+      entryPoints: [ websecure ]
+      tls:
+        certResolver: letsencrypt
+      service: atmr_api
+      middlewares:
+        - cors-www-lirie
+
+    atmr_api_ws:
+      rule: Host(`api.lirie.ch`) && PathPrefix(`/socket.io`)
+      entryPoints: [ websecure ]
+      tls:
+        certResolver: letsencrypt
+      service: atmr_api
+      middlewares:
+        - cors-www-lirie
+
+  services:
+    atmr_api:
+      loadBalancer:
+        servers:
+          - url: "http://backend:5000"

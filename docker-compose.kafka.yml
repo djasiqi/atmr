@@ -351,8 +351,9 @@ services:
   redis-failover:
     image: redis:7-alpine
     container_name: atmr-redis-failover
-    ports:
-      - "6380:6379"
+    # Port non publie sur l'hote (acces interne Docker uniquement via redis-failover:6379)
+    expose:
+      - "6379"
     command: >
       redis-server 
       --appendonly yes

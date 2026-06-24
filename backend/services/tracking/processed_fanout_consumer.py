@@ -381,7 +381,7 @@ class ProcessedLocationFanoutConsumer:
                                     record.partition,
                                     record.offset,
                                 )
-                            last_ok = OffsetAndMetadata(record.offset + 1, "")
+                            last_ok = OffsetAndMetadata(record.offset + 1, "", -1)
                         except Exception as exc:
                             drv = (
                                 record.value.get("driver_id")
