@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { FiEdit, FiTrash2, FiMoreVertical, FiEye, FiPower, FiAlertTriangle, FiPhone } from 'react-icons/fi';
 import s from './CompanyDriverTable.module.css';
-import { getDriverFreshnessLabel, getFreshnessStatus } from '../../../utils/mapUtils';
+import { getDriverFreshnessLabel } from '../../../utils/mapUtils';
 import {
   isDriverConstrained,
   getDriverConstraintReason,
