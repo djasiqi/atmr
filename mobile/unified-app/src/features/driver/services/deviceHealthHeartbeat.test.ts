@@ -27,6 +27,32 @@ const mockCheckBatteryOptimizationStatus = jest.fn() as jest.MockedFunction<
 const mockGetDriverTrackingBridgeSnapshot = jest.fn();
 const mockGetDriverTrackingPresenceWindowActive = jest.fn(() => false);
 
+// --- Diagnostic Lot 1 mocks ---
+const mockIsLowPowerModeEnabledAsync = jest.fn() as jest.MockedFunction<
+  () => Promise<boolean>
+>;
+const mockGetLastKnownPositionAsync = jest.fn() as jest.MockedFunction<
+  () => Promise<{ coords: { accuracy: number | null } } | null>
+>;
+const mockBackgroundFetchGetStatusAsync = jest.fn() as jest.MockedFunction<
+  () => Promise<number | null>
+>;
+const mockGetTrackingRuntimeSnapshot = jest.fn(() => ({
+  lastTaskInvokedAt: null as number | null,
+  lastNativeStartError: null,
+  lastNativeStartErrorAt: null,
+  pendingFgsStart: { active: false },
+  missionId: null,
+  mode: "off",
+  nativeStartDiagnostics: {
+    native_start_phase: null,
+    native_start_error: null,
+    native_task_defined: null,
+    native_started_before: null,
+    native_started_after: null,
+  },
+}));
+
 let mockPlatformOS: "android" | "ios" | "web" = "android";
 let appStateChangeHandler: ((next: string) => void) | null = null;
 const mockAppStateRemove = jest.fn();
@@ -54,11 +80,32 @@ jest.mock("expo-location", () => ({
   getForegroundPermissionsAsync: () => mockGetForegroundPermissionsAsync(),
   getBackgroundPermissionsAsync: () => mockGetBackgroundPermissionsAsync(),
   hasServicesEnabledAsync: () => mockHasServicesEnabledAsync(),
+  getLastKnownPositionAsync: () => mockGetLastKnownPositionAsync(),
 }));
 
 jest.mock("expo-battery", () => ({
   getBatteryLevelAsync: () => mockGetBatteryLevelAsync(),
   getBatteryStateAsync: () => mockGetBatteryStateAsync(),
+  isLowPowerModeEnabledAsync: () => mockIsLowPowerModeEnabledAsync(),
+}));
+
+jest.mock("expo-application", () => ({
+  nativeApplicationVersion: "1.42.3",
+}));
+
+jest.mock("expo-device", () => ({
+  manufacturer: "Apple",
+  modelName: "iPhone 12",
+  osVersion: "17.4",
+}));
+
+jest.mock("expo-background-fetch", () => ({
+  getStatusAsync: () => mockBackgroundFetchGetStatusAsync(),
+  BackgroundFetchStatus: { Restricted: 1, Denied: 2, Available: 3 },
+}));
+
+jest.mock("./trackingRuntime", () => ({
+  getTrackingRuntimeSnapshot: () => mockGetTrackingRuntimeSnapshot(),
 }));
 
 jest.mock("../../../core/api/client", () => ({
@@ -103,6 +150,24 @@ function setHappyPathDefaults() {
     lastWatchAt: new Date(Date.now() - 5_000).toISOString(),
   });
   mockApiPost.mockResolvedValue({ data: { ok: true } });
+  mockIsLowPowerModeEnabledAsync.mockResolvedValue(false);
+  mockGetLastKnownPositionAsync.mockResolvedValue({ coords: { accuracy: 12 } });
+  mockBackgroundFetchGetStatusAsync.mockResolvedValue(3 /* Available */);
+  mockGetTrackingRuntimeSnapshot.mockReturnValue({
+    lastTaskInvokedAt: Date.now() - 8_000,
+    lastNativeStartError: null,
+    lastNativeStartErrorAt: null,
+    pendingFgsStart: { active: false },
+    missionId: null,
+    mode: "off",
+    nativeStartDiagnostics: {
+      native_start_phase: null,
+      native_start_error: null,
+      native_task_defined: null,
+      native_started_before: null,
+      native_started_after: null,
+    },
+  });
 }
 
 describe("deviceHealthHeartbeat", () => {
@@ -121,6 +186,10 @@ describe("deviceHealthHeartbeat", () => {
     mockGetDriverTrackingBridgeSnapshot.mockReset();
     mockGetDriverTrackingPresenceWindowActive.mockReset();
     mockGetDriverTrackingPresenceWindowActive.mockReturnValue(false);
+    mockIsLowPowerModeEnabledAsync.mockReset();
+    mockGetLastKnownPositionAsync.mockReset();
+    mockBackgroundFetchGetStatusAsync.mockReset();
+    mockGetTrackingRuntimeSnapshot.mockReset();
     mockAppStateAddEventListener.mockClear();
     mockAppStateRemove.mockClear();
     setHappyPathDefaults();
@@ -228,6 +297,42 @@ describe("deviceHealthHeartbeat", () => {
       mockGetBatteryStateAsync.mockResolvedValue(0 /* UNKNOWN */);
       const payload = await heartbeat.collectDeviceHealth();
       expect(payload.is_charging).toBeNull();
+    });
+
+    it("[Lot 1] includes app/os version, native fix age, and null iOS signals on Android", async () => {
+      const payload = await heartbeat.collectDeviceHealth();
+      expect(payload.app_version).toBe("1.42.3");
+      expect(payload.os_version).toBe("17.4");
+      expect(payload.native_task_running).toBe(true);
+      // lastTaskInvokedAt = now - 8s -> ~8s
+      expect(payload.native_last_fix_age_seconds).toBeGreaterThanOrEqual(7);
+      expect(payload.native_last_fix_age_seconds).toBeLessThan(60);
+      // iOS-only signals are null on Android
+      expect(payload.ios_low_power_mode).toBeNull();
+      expect(payload.ios_background_refresh_status).toBeNull();
+      expect(payload.ios_accuracy_authorization).toBeNull();
+    });
+
+    it("[Lot 1] populates iOS background signals on iOS", async () => {
+      mockPlatformOS = "ios";
+      mockIsLowPowerModeEnabledAsync.mockResolvedValue(true);
+      mockBackgroundFetchGetStatusAsync.mockResolvedValue(2 /* Denied */);
+      mockGetLastKnownPositionAsync.mockResolvedValue({
+        coords: { accuracy: 3000 },
+      });
+      const payload = await heartbeat.collectDeviceHealth();
+      expect(payload.ios_low_power_mode).toBe(true);
+      expect(payload.ios_background_refresh_status).toBe("denied");
+      expect(payload.ios_accuracy_authorization).toBe("reduced");
+    });
+
+    it("[Lot 1] infers full accuracy when last fix is precise on iOS", async () => {
+      mockPlatformOS = "ios";
+      mockGetLastKnownPositionAsync.mockResolvedValue({
+        coords: { accuracy: 15 },
+      });
+      const payload = await heartbeat.collectDeviceHealth();
+      expect(payload.ios_accuracy_authorization).toBe("full");
     });
   });
 

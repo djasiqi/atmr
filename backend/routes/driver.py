@@ -4042,6 +4042,13 @@ device_health_model = driver_ns.model(
         "fg_permission": fields.String,
         "bg_permission": fields.String,
         "kind": fields.String,
+        "app_version": fields.String,
+        "os_version": fields.String,
+        "native_last_fix_age_seconds": fields.Integer,
+        "native_task_running": fields.Boolean,
+        "ios_accuracy_authorization": fields.String,
+        "ios_low_power_mode": fields.Boolean,
+        "ios_background_refresh_status": fields.String,
     },
 )
 

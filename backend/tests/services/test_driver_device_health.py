@@ -84,6 +84,43 @@ def test_ingest_driver_device_health_persists_and_writes_redis(db, sample_driver
     assert mock_redis.hset.called
 
 
+def test_ingest_driver_device_health_parses_diagnostic_lot1_fields(db, sample_driver):
+    """Lot 1 : versions + signaux iOS background remontés dans le snapshot."""
+    mock_redis = MagicMock()
+    mock_event = MagicMock()
+    with patch("services.driver_device_health.redis_client", mock_redis), patch(
+        "services.geolocation.device_health.write_device_health", return_value=True
+    ), patch(
+        "services.monitoring.driver_device_health_metrics.record_device_health_report"
+    ), patch("services.driver_device_health.DriverDeviceHealthEvent", return_value=mock_event), patch(
+        "services.driver_device_health.db.session"
+    ):
+        snapshot = ingest_driver_device_health(
+            sample_driver.id,
+            {
+                "manufacturer": "Apple",
+                "platform": "ios",
+                "tracking_active": True,
+                "last_fix_age_seconds": 6000,
+                "app_version": "1.42.3",
+                "os_version": "17.4",
+                "native_last_fix_age_seconds": 12,
+                "native_task_running": True,
+                "ios_accuracy_authorization": "reduced",
+                "ios_low_power_mode": True,
+                "ios_background_refresh_status": "denied",
+            },
+        )
+
+    assert snapshot["app_version"] == "1.42.3"
+    assert snapshot["os_version"] == "17.4"
+    assert snapshot["native_last_fix_age_seconds"] == "12"
+    assert snapshot["native_task_running"] == "1"
+    assert snapshot["ios_accuracy_authorization"] == "reduced"
+    assert snapshot["ios_low_power_mode"] == "1"
+    assert snapshot["ios_background_refresh_status"] == "denied"
+
+
 def test_read_driver_device_health_snapshot_empty():
     mock_redis = MagicMock()
     mock_redis.hgetall.return_value = {}

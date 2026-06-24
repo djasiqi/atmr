@@ -22,6 +22,16 @@ import { getTrackingRuntimeSnapshot } from "./trackingRuntime";
 
 export type DevicePermissionStatus = "granted" | "denied" | "undetermined";
 
+/** Diagnostic Lot 1 — autorisation de précision iOS (inférée, lecture seule). */
+export type IosAccuracyAuthorization = "full" | "reduced" | "unknown";
+
+/** Diagnostic Lot 1 — statut Background App Refresh iOS. */
+export type IosBackgroundRefreshStatus =
+  | "available"
+  | "denied"
+  | "restricted"
+  | "unknown";
+
 export type DeviceHealthPayload = {
   kind: "tracking_health";
   manufacturer?: string | null;
@@ -46,6 +56,21 @@ export type DeviceHealthPayload = {
   native_task_defined?: boolean | null;
   native_started_before?: boolean | null;
   native_started_after?: boolean | null;
+  // --- Diagnostic Lot 1 (observabilité uniquement, aucun changement de comportement) ---
+  /** Version applicative (native) — ex. "1.42.0". */
+  app_version?: string | null;
+  /** Version OS — ex. "17.4" (iOS) / "14" (Android). */
+  os_version?: string | null;
+  /** Âge (s) du dernier callback du task natif background-location — distinct du watch JS. */
+  native_last_fix_age_seconds?: number | null;
+  /** Le task natif de localisation tourne réellement (hasStartedLocationUpdatesAsync). */
+  native_task_running?: boolean | null;
+  /** iOS : autorisation de précision inférée (full/reduced) — null hors iOS. */
+  ios_accuracy_authorization?: IosAccuracyAuthorization | null;
+  /** iOS : mode économie d'énergie actif — null hors iOS. */
+  ios_low_power_mode?: boolean | null;
+  /** iOS : statut Background App Refresh — null hors iOS. */
+  ios_background_refresh_status?: IosBackgroundRefreshStatus | null;
 };
 
 export type DeviceHealthRequestPayload = DeviceHealthPayload & {
@@ -102,6 +127,99 @@ function readDeviceIdentity(): { manufacturer: string | null; model: string | nu
   } catch {
     return { manufacturer: null, model: null };
   }
+}
+
+function readAppOsVersion(): { appVersion: string | null; osVersion: string | null } {
+  let appVersion: string | null = null;
+  let osVersion: string | null = null;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const Application = require("expo-application") as {
+      nativeApplicationVersion?: string | null;
+    };
+    appVersion = Application?.nativeApplicationVersion
+      ? String(Application.nativeApplicationVersion)
+      : null;
+  } catch {
+    appVersion = null;
+  }
+  if (!appVersion) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const Constants = require("expo-constants").default as {
+        expoConfig?: { version?: string | null } | null;
+      };
+      appVersion = Constants?.expoConfig?.version
+        ? String(Constants.expoConfig.version)
+        : null;
+    } catch {
+      /* noop */
+    }
+  }
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const Device = require("expo-device") as { osVersion?: string | null };
+    osVersion = Device?.osVersion ? String(Device.osVersion) : null;
+  } catch {
+    osVersion = null;
+  }
+  return { appVersion, osVersion };
+}
+
+async function readIosLowPowerMode(): Promise<boolean | null> {
+  if (Platform.OS !== "ios") return null;
+  try {
+    if (typeof Battery.isLowPowerModeEnabledAsync !== "function") return null;
+    return await Battery.isLowPowerModeEnabledAsync();
+  } catch {
+    return null;
+  }
+}
+
+async function readIosBackgroundRefreshStatus(): Promise<IosBackgroundRefreshStatus | null> {
+  if (Platform.OS !== "ios") return null;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const BackgroundFetch = require("expo-background-fetch") as {
+      getStatusAsync?: () => Promise<number | null>;
+      BackgroundFetchStatus?: { Restricted?: number; Denied?: number; Available?: number };
+    };
+    if (typeof BackgroundFetch.getStatusAsync !== "function") return "unknown";
+    const status = await BackgroundFetch.getStatusAsync();
+    const enums = BackgroundFetch.BackgroundFetchStatus ?? {};
+    if (status === enums.Available) return "available";
+    if (status === enums.Denied) return "denied";
+    if (status === enums.Restricted) return "restricted";
+    return "unknown";
+  } catch {
+    return "unknown";
+  }
+}
+
+/** Inférence lecture seule de la précision iOS via la dernière position connue.
+ *  Reduced accuracy iOS => accuracy horizontale très large (≈ km). Pas de getter
+ *  natif exposé par expo-location ; heuristique conservatrice à seuils. */
+async function readIosAccuracyAuthorization(): Promise<IosAccuracyAuthorization | null> {
+  if (Platform.OS !== "ios") return null;
+  try {
+    if (typeof Location.getLastKnownPositionAsync !== "function") return "unknown";
+    const pos = await Location.getLastKnownPositionAsync();
+    const acc = pos?.coords?.accuracy;
+    if (typeof acc !== "number" || !Number.isFinite(acc)) return "unknown";
+    if (acc <= 200) return "full";
+    if (acc >= 1000) return "reduced";
+    return "unknown";
+  } catch {
+    return "unknown";
+  }
+}
+
+function computeNativeLastFixAgeSeconds(): number | null {
+  const ts = getTrackingRuntimeSnapshot().lastTaskInvokedAt;
+  if (typeof ts !== "number" || !Number.isFinite(ts)) return null;
+  const ageMs = Date.now() - ts;
+  if (ageMs < 0) return 0;
+  return Math.round(ageMs / 1000);
 }
 
 async function readForegroundPermission(): Promise<DevicePermissionStatus> {
@@ -259,22 +377,38 @@ function resolveConstraintReason(input: {
 }
 
 export async function collectDeviceHealth(): Promise<DeviceHealthPayload> {
-  const [fgPermission, bgPermission, gpsProviderEnabled, fgsRunning, batteryOptimized, batteryLevel, isCharging, notificationsEnabled] =
-    await Promise.all([
-      readForegroundPermission(),
-      readBackgroundPermission(),
-      readGpsProviderEnabled(),
-      readFgsRunning(),
-      readBatteryOptimized(),
-      readBatteryLevel(),
-      readBatteryCharging(),
-      readNotificationsEnabled(),
-    ]);
+  const [
+    fgPermission,
+    bgPermission,
+    gpsProviderEnabled,
+    fgsRunning,
+    batteryOptimized,
+    batteryLevel,
+    isCharging,
+    notificationsEnabled,
+    iosLowPowerMode,
+    iosBackgroundRefreshStatus,
+    iosAccuracyAuthorization,
+  ] = await Promise.all([
+    readForegroundPermission(),
+    readBackgroundPermission(),
+    readGpsProviderEnabled(),
+    readFgsRunning(),
+    readBatteryOptimized(),
+    readBatteryLevel(),
+    readBatteryCharging(),
+    readNotificationsEnabled(),
+    readIosLowPowerMode(),
+    readIosBackgroundRefreshStatus(),
+    readIosAccuracyAuthorization(),
+  ]);
 
   const snapshot = readBridgeSnapshot();
   const lastFixAgeSeconds = computeLastFixAgeSeconds(snapshot);
+  const nativeLastFixAgeSeconds = computeNativeLastFixAgeSeconds();
   const fgsExpected = expectFgsRunning(snapshot);
   const identity = readDeviceIdentity();
+  const { appVersion, osVersion } = readAppOsVersion();
   const trackingActive = fgsRunning;
 
   const constraintReason = resolveConstraintReason({
@@ -323,6 +457,13 @@ export async function collectDeviceHealth(): Promise<DeviceHealthPayload> {
     native_task_defined: nativeDiag.native_task_defined,
     native_started_before: nativeDiag.native_started_before,
     native_started_after: nativeDiag.native_started_after,
+    app_version: appVersion,
+    os_version: osVersion,
+    native_last_fix_age_seconds: nativeLastFixAgeSeconds,
+    native_task_running: fgsRunning,
+    ios_accuracy_authorization: iosAccuracyAuthorization,
+    ios_low_power_mode: iosLowPowerMode,
+    ios_background_refresh_status: iosBackgroundRefreshStatus,
   };
 }
 

@@ -42,6 +42,14 @@ class DriverDeviceHealthEvent(db.Model):
     native_task_defined = db.Column(db.Boolean, nullable=True)
     native_started_before = db.Column(db.Boolean, nullable=True)
     native_started_after = db.Column(db.Boolean, nullable=True)
+    # Diagnostic Lot 1 (versions + signaux background iOS)
+    app_version = db.Column(db.String(32), nullable=True)
+    os_version = db.Column(db.String(32), nullable=True)
+    native_last_fix_age_seconds = db.Column(db.Integer, nullable=True)
+    native_task_running = db.Column(db.Boolean, nullable=True)
+    ios_accuracy_authorization = db.Column(db.String(16), nullable=True)
+    ios_low_power_mode = db.Column(db.Boolean, nullable=True)
+    ios_background_refresh_status = db.Column(db.String(16), nullable=True)
 
     driver = db.relationship("Driver", backref=db.backref("device_health_events", lazy="dynamic"))
 
@@ -67,4 +75,11 @@ class DriverDeviceHealthEvent(db.Model):
             "native_task_defined": self.native_task_defined,
             "native_started_before": self.native_started_before,
             "native_started_after": self.native_started_after,
+            "app_version": self.app_version,
+            "os_version": self.os_version,
+            "native_last_fix_age_seconds": self.native_last_fix_age_seconds,
+            "native_task_running": self.native_task_running,
+            "ios_accuracy_authorization": self.ios_accuracy_authorization,
+            "ios_low_power_mode": self.ios_low_power_mode,
+            "ios_background_refresh_status": self.ios_background_refresh_status,
         }

@@ -441,6 +441,38 @@ def ingest_driver_device_health(
     native_started_before = _optional_bool("native_started_before")
     native_started_after = _optional_bool("native_started_after")
 
+    # --- Diagnostic Lot 1 (observabilité device-health enrichie) ---
+    app_version = (str(payload.get("app_version") or "").strip() or None)
+    if app_version:
+        app_version = app_version[:32]
+    os_version = (str(payload.get("os_version") or "").strip() or None)
+    if os_version:
+        os_version = os_version[:32]
+
+    native_last_fix_age = payload.get("native_last_fix_age_seconds")
+    try:
+        native_last_fix_age_seconds = (
+            int(native_last_fix_age) if native_last_fix_age is not None else None
+        )
+    except (TypeError, ValueError):
+        native_last_fix_age_seconds = None
+
+    native_task_running = _optional_bool("native_task_running")
+
+    ios_accuracy_authorization = (
+        str(payload.get("ios_accuracy_authorization") or "").strip() or None
+    )
+    if ios_accuracy_authorization:
+        ios_accuracy_authorization = ios_accuracy_authorization[:16]
+
+    ios_low_power_mode = _optional_bool("ios_low_power_mode")
+
+    ios_background_refresh_status = (
+        str(payload.get("ios_background_refresh_status") or "").strip() or None
+    )
+    if ios_background_refresh_status:
+        ios_background_refresh_status = ios_background_refresh_status[:16]
+
     event = DriverDeviceHealthEvent(
 
         driver_id=driver_id,
@@ -480,6 +512,20 @@ def ingest_driver_device_health(
         native_started_before=native_started_before,
 
         native_started_after=native_started_after,
+
+        app_version=app_version,
+
+        os_version=os_version,
+
+        native_last_fix_age_seconds=native_last_fix_age_seconds,
+
+        native_task_running=native_task_running,
+
+        ios_accuracy_authorization=ios_accuracy_authorization,
+
+        ios_low_power_mode=ios_low_power_mode,
+
+        ios_background_refresh_status=ios_background_refresh_status,
 
     )
 
@@ -527,6 +573,22 @@ def ingest_driver_device_health(
 
         "native_started_after": _bool_to_redis(native_started_after),
 
+        "app_version": app_version or "",
+
+        "os_version": os_version or "",
+
+        "native_last_fix_age_seconds": str(
+            native_last_fix_age_seconds if native_last_fix_age_seconds is not None else ""
+        ),
+
+        "native_task_running": _bool_to_redis(native_task_running),
+
+        "ios_accuracy_authorization": ios_accuracy_authorization or "",
+
+        "ios_low_power_mode": _bool_to_redis(ios_low_power_mode),
+
+        "ios_background_refresh_status": ios_background_refresh_status or "",
+
         "last_heartbeat_at": str(int(now.timestamp() * 1000)),
 
     }
@@ -572,6 +634,18 @@ def ingest_driver_device_health(
             last_fix_age_seconds=last_fix_age_seconds,
 
             tracking_active=tracking_active,
+
+            app_version=app_version,
+
+            os_version=os_version,
+
+            native_task_running=native_task_running,
+
+            ios_accuracy_authorization=ios_accuracy_authorization,
+
+            ios_low_power_mode=ios_low_power_mode,
+
+            ios_background_refresh_status=ios_background_refresh_status,
 
         )
 
