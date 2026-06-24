@@ -56,9 +56,10 @@ def _norm_mode(mode: str | None) -> str:
 
 
 try:
-    from prometheus_client import Counter, Histogram
+    from prometheus_client import Counter, Gauge, Histogram
 except ImportError:
     Counter = None
+    Gauge = None
     Histogram = None
 
 _RECEIVED = None
@@ -75,6 +76,7 @@ _TRACKING_KAFKA_PRODUCED = None
 _TRACKING_KAFKA_PUBLISH_ERRORS = None
 _TRACKING_KAFKA_DLQ = None
 _TRACKING_KAFKA_REBALANCE = None
+_TRACKING_KAFKA_CONSUMER_LAG = None
 _TRACKING_PROCESSED_FANOUT_FAILURES = None
 _TRACKING_KAFKA_E2E_LATENCY = None
 _DRIVER_DEVICE_HEALTH_RECEIVED = None
@@ -168,6 +170,11 @@ if Counter is not None:
         "tracking_kafka_rebalance_total",
         "Nombre de rebalances détectés sur le consumer tracking",
         ["event"],
+    )
+    _TRACKING_KAFKA_CONSUMER_LAG = Gauge(
+        "tracking_kafka_consumer_lag",
+        "Lag du consumer tracking (end_offset - position), agrégé par partition",
+        ["group", "topic", "partition"],
     )
     _TRACKING_PROCESSED_FANOUT_FAILURES = Counter(
         "tracking_processed_fanout_failures_total",
@@ -567,6 +574,23 @@ def inc_tracking_kafka_rebalance(*, event: str) -> None:
     if not _metrics_enabled() or _TRACKING_KAFKA_REBALANCE is None:
         return
     _TRACKING_KAFKA_REBALANCE.labels(event=event or "_unknown").inc()
+
+
+def set_tracking_kafka_consumer_lag(
+    *, group: str, topic: str, partition: int | str, lag: float
+) -> None:
+    """Positionne le lag consumer tracking pour une partition (P1-1a).
+
+    ``lag = end_offset - position`` (lag « prêt à traiter », sans RPC ``committed()``).
+    Sans effet si métriques désactivées ou prometheus_client absent.
+    """
+    if not _metrics_enabled() or _TRACKING_KAFKA_CONSUMER_LAG is None:
+        return
+    g = (group or "_unknown").strip() or "_unknown"
+    t = (topic or "_unknown").strip() or "_unknown"
+    _TRACKING_KAFKA_CONSUMER_LAG.labels(
+        group=g[:120], topic=t[:120], partition=str(partition)
+    ).set(max(0.0, float(lag)))
 
 
 def inc_tracking_processed_fanout_failure(*, error_type: str) -> None:

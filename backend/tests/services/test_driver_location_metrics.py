@@ -163,3 +163,44 @@ def test_inc_tracking_kafka_persist_maps_unknown_status_to_failed() -> None:
         m.inc_tracking_kafka_persist(accept_status="weird_status")
     mock_counter.labels.assert_called_once_with(accept_status="failed")
     inc.assert_called_once()
+
+
+def test_set_tracking_kafka_consumer_lag_sets_gauge() -> None:
+    if m._TRACKING_KAFKA_CONSUMER_LAG is None:
+        pytest.skip("prometheus_client Gauge unavailable")
+    setter = MagicMock()
+    with patch.object(m, "_TRACKING_KAFKA_CONSUMER_LAG") as mock_g:
+        mock_g.labels.return_value = MagicMock(set=setter)
+        m.set_tracking_kafka_consumer_lag(
+            group="tracking-ingest-consumer-group",
+            topic="driver.location.raw.v2",
+            partition=3,
+            lag=42,
+        )
+    mock_g.labels.assert_called_once_with(
+        group="tracking-ingest-consumer-group",
+        topic="driver.location.raw.v2",
+        partition="3",
+    )
+    setter.assert_called_once_with(42.0)
+
+
+def test_set_tracking_kafka_consumer_lag_clamps_negative() -> None:
+    if m._TRACKING_KAFKA_CONSUMER_LAG is None:
+        pytest.skip("prometheus_client Gauge unavailable")
+    setter = MagicMock()
+    with patch.object(m, "_TRACKING_KAFKA_CONSUMER_LAG") as mock_g:
+        mock_g.labels.return_value = MagicMock(set=setter)
+        m.set_tracking_kafka_consumer_lag(
+            group="g", topic="t", partition=0, lag=-5
+        )
+    setter.assert_called_once_with(0.0)
+
+
+def test_set_tracking_kafka_consumer_lag_noop_when_disabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DRIVER_LOCATION_METRICS_ENABLED", "false")
+    with patch.object(m, "_TRACKING_KAFKA_CONSUMER_LAG") as mock_g:
+        m.set_tracking_kafka_consumer_lag(group="g", topic="t", partition=1, lag=10)
+    mock_g.labels.assert_not_called()

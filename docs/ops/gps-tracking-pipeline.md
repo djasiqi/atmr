@@ -228,6 +228,60 @@ Validation alerte (N6 chaos pré-prod) : OSRM down + Kafka KO simulé → métri
 
 ---
 
+## STOP GATE — Activation de la persistance GPS (`TRACKING_INGEST_PERSIST_ENABLED`)
+
+> ⚠️ Action la plus risquée de la roadmap Kafka (charge DB/OSRM). À n'activer **qu'après** : P0-1 (filtrage bruit kafka-python), P0-3 (OSRM timeout verrouillé) et **P1-1a** (métrique + alerte de lag ingest en place). Ne jamais activer sans observabilité préalable.
+
+### Pré-requis avant bascule
+
+- `configure_kafka_log_noise()` actif (P0-1) — bruit `Task is already done!` filtré.
+- `OSRM_SNAP_TIMEOUT_S=1.5` / `OSRM_SNAP_TIMEOUT_ENABLED=true` (P0-3).
+- Métrique `tracking_kafka_consumer_lag{group="tracking-ingest-consumer-group"}` visible + alerte `TrackingKafkaConsumerLagHigh` (`> 50 for 2m`) déployée (P1-1a).
+
+### Bascule
+
+```bash
+# Dans .env.production : TRACKING_INGEST_PERSIST_ENABLED=true
+docker compose -f docker-compose.production.yml up -d --no-deps tracking-kafka-consumer
+```
+
+### Seuils ROLLBACK numériques (R2) — rollback si l'UN d'eux est franchi
+
+| Indicateur | Seuil ROLLBACK |
+|---|---|
+| `tracking_kafka_consumer_lag{group="tracking-ingest-consumer-group"}` | > 200 soutenu 5 min |
+| `rate(tracking_osrm_request_total{result="timeout"}[5m])` | > 0.5 /s |
+| `rate(tracking_kafka_dlq_messages_total[5m])` | > 0.05 /s (~3/min) |
+| CPU container `tracking-kafka-consumer` | > 80 % soutenu 5 min |
+
+### Surveillance 30–60 min — preuve que la persistance FONCTIONNE (R3)
+
+```promql
+# Doit devenir non nul après activation
+rate(tracking_kafka_persist_total{accept_status="accepted_canonical"}[5m]) > 0
+
+# Corrélation ~1:1 attendue avec le débit raw
+rate(tracking_kafka_persist_total[5m])
+  / rate(tracking_kafka_messages_produced_total{topic="driver.location.raw.v2"}[5m])
+```
+
+### Rollback
+
+```bash
+# Rollback principal : repasser le flag à false puis recréer le service
+#   .env.production : TRACKING_INGEST_PERSIST_ENABLED=false
+docker compose -f docker-compose.production.yml up -d --no-deps tracking-kafka-consumer
+
+# Rollback granulaire (garder la persistance, neutraliser seulement OSRM) :
+#   .env.production : OSRM_SNAP_TIMEOUT_ENABLED=false
+docker compose -f docker-compose.production.yml up -d --no-deps tracking-kafka-consumer
+
+# Rollback de la métrique de lag si surcharge broker (P1-1a) :
+#   .env.production : TRACKING_KAFKA_LAG_METRIC_ENABLED=false
+```
+
+---
+
 ## STOP GATE P2 — Protocole post-déploiement Sprint 1
 
 **Exécuter après déploiement S1** — bloquant avant implémentation Sprint 2.

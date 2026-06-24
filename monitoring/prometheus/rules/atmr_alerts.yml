@@ -461,6 +461,22 @@ groups:
   - name: tracking_health
     interval: 30s
     rules:
+      # P1-1a — garde-fou de lag AVANT activation persistance GPS (STOP GATE P0-2).
+      # Seuil conservateur pour la fenêtre STOP GATE ; à durcir vers >100 for 5m (P2-1) après stabilisation.
+      - alert: TrackingKafkaConsumerLagHigh
+        expr: |
+          max(tracking_kafka_consumer_lag{group="tracking-ingest-consumer-group"}) > 50
+        for: 2m
+        labels:
+          severity: warning
+          component: tracking
+          team: backend-platform
+          service: tracking
+        annotations:
+          summary: "Lag consumer tracking ingest > 50"
+          description: "Lag Kafka ingest élevé ({{ $value }}) — surveiller avant/pendant l'activation de la persistance GPS."
+          runbook_url: "https://grafana/d/driver-tracking-health"
+
       - alert: TrackingStaleHigh
         expr: |
           (

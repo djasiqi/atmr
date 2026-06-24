@@ -32,6 +32,7 @@ try:
         inc_tracking_kafka_publish_errors,
         inc_tracking_kafka_rebalance,
         observe_tracking_kafka_e2e_latency,
+        set_tracking_kafka_consumer_lag,
     )
 except Exception:  # pragma: no cover
 
@@ -59,6 +60,12 @@ except Exception:  # pragma: no cover
         _ = event
         pass
 
+    def set_tracking_kafka_consumer_lag(
+        *, group: str, topic: str, partition: int | str, lag: float
+    ) -> None:
+        _ = (group, topic, partition, lag)
+        pass
+
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +91,14 @@ TRACKING_INGEST_PERSIST_ENABLED = (
 )
 TRACKING_INGEST_SEEK_TO_END_ON_START = (
     os.getenv("TRACKING_INGEST_SEEK_TO_END_ON_START", "false").lower() == "true"
+)
+# P1-1a : métrique de lag consumer (garde-fou avant activation persistance).
+# Désactivable à chaud (rollback < 1 min) si end_offsets() surcharge le broker.
+TRACKING_KAFKA_LAG_METRIC_ENABLED = (
+    os.getenv("TRACKING_KAFKA_LAG_METRIC_ENABLED", "true").lower() == "true"
+)
+TRACKING_KAFKA_LAG_METRIC_INTERVAL_S = float(
+    os.getenv("TRACKING_KAFKA_LAG_METRIC_INTERVAL_S", "15")
 )
 KAFKA_MAX_BLOCK_MS = int(os.getenv("KAFKA_MAX_BLOCK_MS", "500"))
 TRACKING_DLQ_RETRY_BACKOFF_S = float(os.getenv("TRACKING_DLQ_RETRY_BACKOFF_S", "1.0"))
@@ -146,6 +161,7 @@ class TrackingIngestConsumer:
         self._producer = None
         self._running = False
         self._initialized = False
+        self._last_lag_publish_ts = 0.0
         signal.signal(signal.SIGTERM, self._shutdown_signal)
         signal.signal(signal.SIGINT, self._shutdown_signal)
         if KAFKA_ENABLED and TRACKING_INGEST_ASYNC_ENABLED:
@@ -512,6 +528,7 @@ class TrackingIngestConsumer:
                             self._process_record(record)
                         except Exception:
                             logger.exception("[tracking_consumer] processing error")
+                self._maybe_publish_lag()
         except Exception as exc:
             from shared.sentry_init import capture_kafka_error, is_kafka_connection_error
 
@@ -521,6 +538,38 @@ class TrackingIngestConsumer:
             raise
         finally:
             self.close()
+
+    def _maybe_publish_lag(self) -> None:
+        """Publie le lag consumer par partition (P1-1a), throttlé ~15 s.
+
+        ``lag = end_offset - position`` (lag « prêt à traiter », évite le RPC
+        ``committed()``). Garde-fou de saturation avant activation persistance.
+        Best-effort : toute erreur est avalée pour ne jamais casser la boucle poll.
+        """
+        if not TRACKING_KAFKA_LAG_METRIC_ENABLED or self._consumer is None:
+            return
+        now = time.time()
+        if now - self._last_lag_publish_ts < TRACKING_KAFKA_LAG_METRIC_INTERVAL_S:
+            return
+        self._last_lag_publish_ts = now
+        try:
+            assignment = self._consumer.assignment()
+            if not assignment:
+                return
+            end_offsets = self._consumer.end_offsets(list(assignment))
+            for tp in assignment:
+                position = self._consumer.position(tp)
+                end_offset = end_offsets.get(tp)
+                if position is None or end_offset is None:
+                    continue
+                set_tracking_kafka_consumer_lag(
+                    group=KAFKA_CONSUMER_GROUP,
+                    topic=tp.topic,
+                    partition=tp.partition,
+                    lag=end_offset - position,
+                )
+        except Exception:
+            logger.debug("[tracking_consumer] lag metric unavailable", exc_info=True)
 
     def _shutdown_signal(self, signum, _frame) -> None:
         logger.info("[tracking_consumer] shutdown signal=%s", signum)
@@ -538,8 +587,10 @@ def run_tracking_ingest_consumer() -> None:
     from services.monitoring.standalone_prometheus_server import (
         start_standalone_prometheus_server,
     )
+    from shared.logging_utils import configure_kafka_log_noise
     from shared.sentry_init import init_sentry
 
+    configure_kafka_log_noise()
     init_sentry()
     start_standalone_prometheus_server()
     if not KAFKA_ENABLED or not TRACKING_INGEST_ASYNC_ENABLED:

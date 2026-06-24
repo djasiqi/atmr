@@ -1727,6 +1727,12 @@ def create_app(config_name: str | None = None):
         logging.getLogger("werkzeug").addFilter(pii_filter)
         logging.getLogger().addFilter(pii_filter)
 
+    # ✅ P0-1 : filtrer le bruit bénin kafka-python (« Task is already done! »).
+    # Le process Flask/Gunicorn est aussi producteur Kafka (path async tracking).
+    from shared.logging_utils import configure_kafka_log_noise
+
+    configure_kafka_log_noise()
+
     # 8) Unified dispatch queue
     from services.unified_dispatch import queue as ud_queue
 

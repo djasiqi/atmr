@@ -411,8 +411,10 @@ class ProcessedLocationFanoutConsumer:
 
 
 def run_processed_location_fanout_consumer() -> None:
+    from shared.logging_utils import configure_kafka_log_noise
     from shared.sentry_init import init_sentry
 
+    configure_kafka_log_noise()
     init_sentry()
     if not (
         KAFKA_ENABLED

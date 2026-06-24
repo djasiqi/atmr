@@ -6,10 +6,56 @@ Ce module maintient la compatibilité rétroactive en exposant les fonctions
 existantes qui utilisent maintenant le service centralisé PIIMaskingService.
 """
 
+import logging
+import os
 from typing import Any
 
 from services.security.pii import PIIFilter as _PIIFilter
 from services.security.pii import PIIMaskingService
+
+# Loggers kafka-python concernés par le bruit bénin "Task is already done!"
+# (race interne du scheduler kafka.net.selector en série 3.x — voir docs/ops).
+_KAFKA_NOISE_LOGGERS = ("kafka", "kafka.net.selector", "kafka.client", "kafka.conn")
+_KAFKA_NOISE_FILTER_FLAG = "_kafka_noise_filter_installed"
+
+
+class KafkaSelectorNoiseFilter(logging.Filter):
+    """Supprime le bruit bénin kafka-python (race « Task is already done! »).
+
+    Le RuntimeError est déjà catché par kafka-python lui-même ; ces lignes ne
+    portent aucune information exploitable et polluent les logs/Sentry.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        is_benign_noise = record.name.startswith("kafka.") and (
+            "task is already done" in record.getMessage().lower()
+        )
+        return not is_benign_noise
+
+
+def configure_kafka_log_noise(level: str | None = None) -> None:
+    """Réduit le bruit kafka-python côté logging stdout (P0-1 roadmap tracking).
+
+    Deux effets complémentaires :
+    - abaisse le niveau du logger ``kafka.net.selector`` à
+      ``KAFKA_SELECTOR_LOG_LEVEL`` (défaut ``CRITICAL``) ;
+    - installe un filtre supprimant les messages « Task is already done! »
+      sur les loggers ``kafka.*``.
+
+    Pilotable par la variable d'env ``KAFKA_SELECTOR_LOG_LEVEL`` (rollback :
+    repasser à ``ERROR``/``WARNING`` pour réafficher le bruit). Idempotent :
+    le filtre n'est pas ajouté en double.
+    """
+    raw_level = level or os.getenv("KAFKA_SELECTOR_LOG_LEVEL") or "CRITICAL"
+    resolved = raw_level.upper()
+    selector_level = getattr(logging, resolved, logging.CRITICAL)
+    logging.getLogger("kafka.net.selector").setLevel(selector_level)
+
+    for name in _KAFKA_NOISE_LOGGERS:
+        log = logging.getLogger(name)
+        if not getattr(log, _KAFKA_NOISE_FILTER_FLAG, False):
+            log.addFilter(KafkaSelectorNoiseFilter())
+            setattr(log, _KAFKA_NOISE_FILTER_FLAG, True)
 
 
 # ✅ Compatibilité rétroactive : Exposer les fonctions via le service

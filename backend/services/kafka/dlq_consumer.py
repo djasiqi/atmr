@@ -40,19 +40,11 @@ KAFKA_SSL_CERTFILE = os.getenv("KAFKA_SSL_CERTFILE", "")
 KAFKA_SSL_KEYFILE = os.getenv("KAFKA_SSL_KEYFILE", "")
 
 
-class _KafkaSelectorNoiseFilter(logging.Filter):
-    """Réduit le bruit kafka-python (selector race) avant remontée logs/Sentry."""
-
-    def filter(self, record: logging.LogRecord) -> bool:
-        if record.name.startswith("kafka.") and "task is already done" in record.getMessage().lower():
-            return False
-        return True
-
-
 def _install_kafka_log_noise_filter() -> None:
-    flt = _KafkaSelectorNoiseFilter()
-    for name in ("kafka", "kafka.net.selector", "kafka.client", "kafka.conn"):
-        logging.getLogger(name).addFilter(flt)
+    """Délègue au helper centralisé (P0-1) : niveau + filtre kafka.net.selector."""
+    from shared.logging_utils import configure_kafka_log_noise
+
+    configure_kafka_log_noise()
 
 
 def _kafka_security_config() -> dict[str, Any]:
