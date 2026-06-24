@@ -50,10 +50,11 @@ def test_start_standalone_prometheus_server_registers_process_collector(
 ) -> None:
     mod._started = False
     mod._process_collector_registered = False
-    registered: list[str] = []
+    collector_calls: list[str] = []
 
-    def _fake_register(collector) -> None:
-        registered.append(type(collector).__name__)
+    class _FakeProcessCollector:
+        def __init__(self) -> None:
+            collector_calls.append("init")
 
     def _fake_start(port: int, addr: str = "") -> None:
         return None
@@ -65,12 +66,6 @@ def test_start_standalone_prometheus_server_registers_process_collector(
         prometheus_client, "start_http_server", _fake_start, raising=True
     )
     monkeypatch.setattr(
-        prometheus_client.REGISTRY, "register", _fake_register, raising=True
-    )
-    class _FakeProcessCollector:
-        pass
-
-    monkeypatch.setattr(
         prometheus_client,
         "ProcessCollector",
         _FakeProcessCollector,
@@ -80,4 +75,4 @@ def test_start_standalone_prometheus_server_registers_process_collector(
     mod.start_standalone_prometheus_server()
     assert mod._started is True
     assert mod._process_collector_registered is True
-    assert len(registered) == 1
+    assert collector_calls == ["init"]

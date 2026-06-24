@@ -214,7 +214,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
 
 # Warmup ML + validations ; migrations prod via DATABASE_URL_DIRECT (deploy), pas via PgBouncer.
 COPY --chown=appuser:appgroup docker-entrypoint.sh /app/
-RUN chmod +x /app/docker-entrypoint.sh
+RUN sed -i 's/\r$//' /app/docker-entrypoint.sh && chmod +x /app/docker-entrypoint.sh
 
 # Utilisation de dumb-init pour une gestion propre des signaux
 ENTRYPOINT ["dumb-init", "--"]

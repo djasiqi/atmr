@@ -32,12 +32,16 @@ def start_standalone_prometheus_server() -> None:
             return
         port = int(os.getenv("STANDALONE_PROMETHEUS_PORT", "9115"))
         try:
-            from prometheus_client import REGISTRY, ProcessCollector, start_http_server
+            from prometheus_client import ProcessCollector, start_http_server
 
-            # P2-3 : exposer process_resident_memory_bytes sur les consumers standalone.
+            # P2-3 : process_resident_memory_bytes (ProcessCollector s'auto-enregistre ;
+            # ignorer si déjà présent dans le registry par défaut).
             if not _process_collector_registered:
-                REGISTRY.register(ProcessCollector())
-                _process_collector_registered = True
+                try:
+                    ProcessCollector()
+                    _process_collector_registered = True
+                except ValueError:
+                    _process_collector_registered = True
 
             start_http_server(port, addr="0.0.0.0")
             _started = True
