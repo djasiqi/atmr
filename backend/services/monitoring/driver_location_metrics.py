@@ -94,6 +94,7 @@ _TRACKING_MISSION_LIVE_MISSING_MISSION_ID = None
 _TRACKING_DELIVERY_RESULT = None
 _TRACKING_HTTP_ACCEPTED_ASYNC = None
 _TRACKING_KAFKA_PERSIST = None
+_TRACKING_INVALID_CONFIG = None
 
 _VALID_TRANSPORTS = frozenset({"http", "socket", "socket_batch", "kafka"})
 
@@ -181,6 +182,11 @@ if Counter is not None:
         "Échecs traitement message dans le consumer driver.location.processed → fanout",
         ["error_type"],
     )
+    _TRACKING_FANOUT_EMIT = Counter(
+        "tracking_fanout_emit_total",
+        "Émissions Socket.IO driver_location depuis un consumer Kafka processed",
+        ["emitter"],
+    )
     _DRIVER_DEVICE_HEALTH_RECEIVED = Counter(
         "driver_device_health_received_total",
         (
@@ -260,6 +266,11 @@ if Counter is not None:
         "tracking_kafka_persist_total",
         "Traitements persist terminés dans ingest_consumer (labels finis)",
         ["accept_status"],
+    )
+    _TRACKING_INVALID_CONFIG = Counter(
+        "tracking_invalid_config_total",
+        "Démarrages refusés du consumer ingest (configuration incohérente)",
+        ["reason"],
     )
 
 if Histogram is not None:
@@ -602,6 +613,16 @@ def inc_tracking_processed_fanout_failure(*, error_type: str) -> None:
     _TRACKING_PROCESSED_FANOUT_FAILURES.labels(error_type=et).inc()
 
 
+def inc_tracking_fanout_emit(*, emitter: str) -> None:
+    """Compteur d'émission fanout par émetteur (P1-2 : backend_fanout | ws_service)."""
+    if not _metrics_enabled() or _TRACKING_FANOUT_EMIT is None:
+        return
+    em = (emitter or "_unknown").strip() or "_unknown"
+    if em not in ("backend_fanout", "ws_service"):
+        em = "_unknown"
+    _TRACKING_FANOUT_EMIT.labels(emitter=em).inc()
+
+
 def observe_tracking_kafka_e2e_latency(*, latency_ms: float) -> None:
     if not _metrics_enabled() or _TRACKING_KAFKA_E2E_LATENCY is None:
         return
@@ -801,3 +822,14 @@ def inc_tracking_kafka_persist(*, accept_status: str) -> None:
         return
     st = accept_status if accept_status in _KAFKA_PERSIST_STATUSES else "failed"
     _TRACKING_KAFKA_PERSIST.labels(accept_status=st).inc()
+
+
+_TRACKING_INVALID_CONFIG_REASONS = frozenset({"async_without_persist"})
+
+
+def inc_tracking_invalid_config(*, reason: str) -> None:
+    """Compteur config invalide au démarrage ingest_consumer (labels finis)."""
+    if not _metrics_enabled() or _TRACKING_INVALID_CONFIG is None:
+        return
+    r = reason if reason in _TRACKING_INVALID_CONFIG_REASONS else "async_without_persist"
+    _TRACKING_INVALID_CONFIG.labels(reason=r).inc()

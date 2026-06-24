@@ -128,7 +128,7 @@ Statuts terminaux (`COMPLETED`, `CANCELLED`, `NO_SHOW`, `EXPIRED`) : `resolveMis
 Si les positions ne persistent pas malgré des HTTP 202 :
 
 1. `TRACKING_INGEST_ASYNC_ENABLED=false` dans `.env.production` (path sync immédiat).
-2. Noter l'état des **4 flags** Kafka (`KAFKA_ENABLED`, `ASYNC`, `PROCESSED_FANOUT`, `WS_KAFKA_CONSUMER`) — `PERSIST=true` sans `ASYNC=true` est un **no-op** (consumer exit).
+2. Noter l'état des **5 flags** Kafka (`KAFKA_ENABLED`, `ASYNC`, `PROCESSED_FANOUT`, `WS_KAFKA`, `PERSIST`) — `PERSIST=true` sans `ASYNC=true` est un **no-op** (consumer exit).
 3. Valider : PUT location → **200** (pas 202), `trip_tracking` alimenté.
 4. Gap historique : les positions perdues avant mitigation ne sont pas récupérables automatiquement.
 
@@ -149,6 +149,12 @@ sum(rate(tracking_http_accepted_async_total[5m]))
 ```
 
 Labels `tracking_kafka_persist_total` : `accepted_canonical`, `accepted_observability_only`, `skipped`, `failed` uniquement.
+
+Alertes associées (cf. `monitoring/prometheus/rules/atmr_alerts.yml`, groupe `tracking_health`) :
+
+- `TrackingInvalidConfig` : `sum(increase(tracking_invalid_config_total[15m])) > 0` — consumer refusé au boot (config ASYNC sans PERSIST).
+- `TrackingPersistStalledWhileIngesting` : `sum(rate(tracking_kafka_persist_total[10m])) == 0` et HTTP 202 actif — signature perte silencieuse GPS.
+- `TrackingKafkaConsumerRestartLoop` : redémarrages fréquents du conteneur ingest (défense en profondeur).
 
 ## Redis
 
@@ -268,17 +274,66 @@ rate(tracking_kafka_persist_total[5m])
 ### Rollback
 
 ```bash
-# Rollback principal : repasser le flag à false puis recréer le service
-#   .env.production : TRACKING_INGEST_PERSIST_ENABLED=false
-docker compose -f docker-compose.production.yml up -d --no-deps tracking-kafka-consumer
+# Rollback principal (republish-only) : exiger ALLOW_REPUBLISH_ONLY pour éviter crash garde-fou
+#   .env.production + .env :
+#     TRACKING_INGEST_PERSIST_ENABLED=false
+#     TRACKING_INGEST_ALLOW_REPUBLISH_ONLY=true
+docker compose -f docker-compose.production.yml --profile kafka up -d --no-deps --force-recreate tracking-kafka-consumer
+
+# Ou script ops :
+#   bash scripts/hotfix-tracking-persist-production.sh --rollback
 
 # Rollback granulaire (garder la persistance, neutraliser seulement OSRM) :
 #   .env.production : OSRM_SNAP_TIMEOUT_ENABLED=false
-docker compose -f docker-compose.production.yml up -d --no-deps tracking-kafka-consumer
+docker compose -f docker-compose.production.yml --profile kafka up -d --no-deps --force-recreate tracking-kafka-consumer
 
 # Rollback de la métrique de lag si surcharge broker (P1-1a) :
 #   .env.production : TRACKING_KAFKA_LAG_METRIC_ENABLED=false
 ```
+
+---
+
+## Métrique E2E latency (P1-5)
+
+✅ **Vérifié** : l'histogramme s'appelle `tracking_kafka_e2e_latency_seconds` (pas `_ms`).
+
+| Élément | Valeur |
+|---------|--------|
+| Métrique | `tracking_kafka_e2e_latency_seconds` |
+| Observée dans | `ingest_consumer.py` (`_observe_e2e_latency`) |
+| Scrape | job `atmr-tracking-kafka-consumer` → port **9115** |
+| Dashboard Grafana | `monitoring/grafana/dashboards/driver-location-pipeline.json` (requêtes `_seconds_bucket`) |
+
+Requête P95 :
+
+```promql
+histogram_quantile(0.95, sum(rate(tracking_kafka_e2e_latency_seconds_bucket[5m])) by (le))
+```
+
+Le producteur mobile doit continuer à envoyer `received_at_ms` (champ requis pour le calcul E2E).
+
+---
+
+## Investigation partitions CURRENT-OFFSET=- (P2-2)
+
+Runbook lecture seule si `kafka-consumer-groups --describe` affiche `CURRENT-OFFSET=-` sur certaines partitions :
+
+```bash
+# 1. Lister l'état des groupes tracking
+kafka-consumer-groups --bootstrap-server kafka-broker-1:29092 \
+  --describe --group tracking-ingest-consumer-group
+
+# 2. Vérifier si la partition n'a jamais reçu de message (offset log end = 0)
+kafka-run-class kafka.tools.GetOffsetShell \
+  --broker-list kafka-broker-1:29092 \
+  --topic driver.location.raw.v2 --time -1
+
+# 3. Si partition vide et jamais assignée : CURRENT-OFFSET=- est normal (pas de commit)
+# 4. Si partition a des messages mais offset=- : consumer n'a pas encore poll/commit
+#    → vérifier logs consumer, rebalance en cours, ou consumer arrêté
+```
+
+Partitions typiquement concernées en prod : **1 et 5** (assignation inégale avec peu de drivers). **Pas d'action corrective** tant que le lag global reste bas.
 
 ---
 

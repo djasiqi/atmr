@@ -31,6 +31,7 @@ def test_start_standalone_prometheus_server_idempotent(monkeypatch) -> None:
 
 def test_start_standalone_prometheus_server_disabled(monkeypatch) -> None:
     mod._started = False
+    mod._process_collector_registered = False
     monkeypatch.setenv("STANDALONE_PROMETHEUS_ENABLED", "false")
 
     import prometheus_client
@@ -42,3 +43,41 @@ def test_start_standalone_prometheus_server_disabled(monkeypatch) -> None:
 
     mod.start_standalone_prometheus_server()
     assert mod._started is False
+
+
+def test_start_standalone_prometheus_server_registers_process_collector(
+    monkeypatch,
+) -> None:
+    mod._started = False
+    mod._process_collector_registered = False
+    registered: list[str] = []
+
+    def _fake_register(collector) -> None:
+        registered.append(type(collector).__name__)
+
+    def _fake_start(port: int, addr: str = "") -> None:
+        return None
+
+    monkeypatch.setenv("STANDALONE_PROMETHEUS_ENABLED", "true")
+    import prometheus_client
+
+    monkeypatch.setattr(
+        prometheus_client, "start_http_server", _fake_start, raising=True
+    )
+    monkeypatch.setattr(
+        prometheus_client.REGISTRY, "register", _fake_register, raising=True
+    )
+    class _FakeProcessCollector:
+        pass
+
+    monkeypatch.setattr(
+        prometheus_client,
+        "ProcessCollector",
+        _FakeProcessCollector,
+        raising=True,
+    )
+
+    mod.start_standalone_prometheus_server()
+    assert mod._started is True
+    assert mod._process_collector_registered is True
+    assert len(registered) == 1

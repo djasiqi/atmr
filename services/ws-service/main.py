@@ -136,6 +136,8 @@ redis_client: redis.Redis | None = None
 redis_manager: socketio.AsyncRedisManager | None = None
 kafka_consumer_task: asyncio.Task[Any] | None = None
 relay_listener_task: asyncio.Task[Any] | None = None
+kafka_lag_loop_task: asyncio.Task[Any] | None = None
+kafka_lag_stop_event: asyncio.Event | None = None
 
 
 def _build_redis_connection_url() -> str:
@@ -441,6 +443,14 @@ async def _consume_kafka_events() -> None:
     if consumer is None:
         return
 
+    from kafka_lag_metrics import configure_kafka_lag, register_consumer
+
+    configure_kafka_lag(
+        group_id=WS_KAFKA_GROUP_ID,
+        topic=KAFKA_TOPIC_DRIVER_LOCATION_PROCESSED,
+    )
+    register_consumer(consumer)
+
     try:
         logger.info("kafka consumer started topics=%s group_id=%s pod=%s", topics, WS_KAFKA_GROUP_ID, POD_ID)
         if WS_KAFKA_SEEK_TO_END_ON_START:
@@ -508,6 +518,10 @@ async def _consume_kafka_events() -> None:
                 room,
                 user_id=str(driver_id_obj),
             )
+            if event_type_obj == "driver_location_update":
+                from kafka_lag_metrics import record_fanout_emit
+
+                record_fanout_emit()
             logger.info(
                 "kafka event processed topic=%s partition=%s offset=%s driver_id=%s event_type=%s event_id=%s relay_mode=%s room=%s",
                 msg.topic,
@@ -525,6 +539,9 @@ async def _consume_kafka_events() -> None:
         capture_kafka_error(exc)
         logger.exception("kafka consumer loop failed")
     finally:
+        from kafka_lag_metrics import register_consumer
+
+        register_consumer(None)
         await _aiokafka_safe_stop(consumer)
 
 
@@ -916,6 +933,8 @@ async def metrics() -> JSONResponse:
     kafka_consumer_running = (
         kafka_consumer_task is not None and not kafka_consumer_task.done()
     )
+    from kafka_lag_metrics import render_prometheus_lines
+
     lines = [
         "# HELP ws_kafka_consumer_enabled Kafka consumer activé par configuration",
         "# TYPE ws_kafka_consumer_enabled gauge",
@@ -923,6 +942,7 @@ async def metrics() -> JSONResponse:
         "# HELP ws_kafka_consumer_running Consumer Kafka actif (task vivante)",
         "# TYPE ws_kafka_consumer_running gauge",
         f"ws_kafka_consumer_running {1 if kafka_consumer_running else 0}",
+        *render_prometheus_lines(),
     ]
     from fastapi.responses import PlainTextResponse
 
@@ -973,6 +993,7 @@ async def health() -> JSONResponse:
 @fastapi_app.on_event("startup")
 async def startup() -> None:
     global redis_client, redis_manager, kafka_consumer_task, relay_listener_task
+    global kafka_lag_loop_task, kafka_lag_stop_event
 
     redis_client = await _create_redis_client()
     try:
@@ -1009,7 +1030,10 @@ async def startup() -> None:
     relay_listener_task = asyncio.create_task(_listen_relay_events())
     kafka_consumer_task = asyncio.create_task(_consume_kafka_events())
     from gps_ingest import flush_loop
+    from kafka_lag_metrics import lag_publish_loop
 
+    kafka_lag_stop_event = asyncio.Event()
+    kafka_lag_loop_task = asyncio.create_task(lag_publish_loop(kafka_lag_stop_event))
     asyncio.create_task(flush_loop())
 
 
@@ -1046,14 +1070,18 @@ async def driver_location_batch(sid: str, data: dict[str, Any] | None = None) ->
 
 @fastapi_app.on_event("shutdown")
 async def shutdown() -> None:
-    global kafka_consumer_task, relay_listener_task
-    for task in (kafka_consumer_task, relay_listener_task):
+    global kafka_consumer_task, relay_listener_task, kafka_lag_loop_task, kafka_lag_stop_event
+    if kafka_lag_stop_event is not None:
+        kafka_lag_stop_event.set()
+    for task in (kafka_lag_loop_task, kafka_consumer_task, relay_listener_task):
         if task is not None:
             task.cancel()
             with suppress(asyncio.CancelledError):
                 await task
     kafka_consumer_task = None
     relay_listener_task = None
+    kafka_lag_loop_task = None
+    kafka_lag_stop_event = None
     if redis_client is not None:
         await redis_client.aclose()
     if redis_manager is not None:

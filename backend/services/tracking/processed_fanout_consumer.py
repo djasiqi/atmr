@@ -49,6 +49,12 @@ KAFKA_SASL_PASSWORD = os.getenv("KAFKA_SASL_PASSWORD", "")
 KAFKA_SSL_CAFILE = os.getenv("KAFKA_SSL_CAFILE", "")
 KAFKA_SSL_CERTFILE = os.getenv("KAFKA_SSL_CERTFILE", "")
 KAFKA_SSL_KEYFILE = os.getenv("KAFKA_SSL_KEYFILE", "")
+TRACKING_KAFKA_LAG_METRIC_ENABLED = (
+    os.getenv("TRACKING_KAFKA_LAG_METRIC_ENABLED", "true").lower() == "true"
+)
+TRACKING_KAFKA_LAG_METRIC_INTERVAL_S = float(
+    os.getenv("TRACKING_KAFKA_LAG_METRIC_INTERVAL_S", "15")
+)
 
 
 def _kafka_security_config() -> dict[str, Any]:
@@ -269,6 +275,16 @@ def _fanout_processed_message(envelope: dict[str, Any]) -> None:
             canonical_payload,
             accept_status=accept_status,
         )
+        try:
+            from services.monitoring.driver_location_metrics import (
+                inc_tracking_fanout_emit,
+            )
+
+            inc_tracking_fanout_emit(emitter="backend_fanout")
+        except Exception:
+            logger.debug(
+                "[processed_fanout] fanout emit metric unavailable", exc_info=True
+            )
 
 
 class ProcessedLocationFanoutConsumer:
@@ -277,6 +293,7 @@ class ProcessedLocationFanoutConsumer:
         self._consumer = None
         self._running = False
         self._initialized = False
+        self._last_lag_publish_ts = 0.0
         signal.signal(signal.SIGTERM, self._shutdown_signal)
         signal.signal(signal.SIGINT, self._shutdown_signal)
         if (
@@ -396,8 +413,12 @@ class ProcessedLocationFanoutConsumer:
                                 "[processed_fanout] commit failed after batch partition=%s",
                                 getattr(tp, "partition", "?"),
                             )
+                self._maybe_publish_lag()
             except Exception as exc:
-                from shared.sentry_init import capture_kafka_error, is_kafka_connection_error
+                from shared.sentry_init import (
+                    capture_kafka_error,
+                    is_kafka_connection_error,
+                )
 
                 if is_kafka_connection_error(exc):
                     capture_kafka_error(exc)
@@ -405,17 +426,56 @@ class ProcessedLocationFanoutConsumer:
                 time.sleep(1.0)
         self.close()
 
+    def _maybe_publish_lag(self) -> None:
+        """Publie le lag consumer par partition (P1-1b), throttlé ~15 s.
+
+        ``lag = end_offset - position`` (lag « prêt à traiter », évite le RPC
+        ``committed()``). Best-effort : toute erreur est avalée.
+        """
+        if not TRACKING_KAFKA_LAG_METRIC_ENABLED or self._consumer is None:
+            return
+        now = time.time()
+        if now - self._last_lag_publish_ts < TRACKING_KAFKA_LAG_METRIC_INTERVAL_S:
+            return
+        self._last_lag_publish_ts = now
+        try:
+            from services.monitoring.driver_location_metrics import (
+                set_tracking_kafka_consumer_lag,
+            )
+
+            assignment = self._consumer.assignment()
+            if not assignment:
+                return
+            end_offsets = self._consumer.end_offsets(list(assignment))
+            for tp in assignment:
+                position = self._consumer.position(tp)
+                end_offset = end_offsets.get(tp)
+                if position is None or end_offset is None:
+                    continue
+                set_tracking_kafka_consumer_lag(
+                    group=KAFKA_PROCESSED_FANOUT_GROUP,
+                    topic=tp.topic,
+                    partition=tp.partition,
+                    lag=end_offset - position,
+                )
+        except Exception:
+            logger.debug("[processed_fanout] lag metric publish failed", exc_info=True)
+
     def close(self) -> None:
         if self._consumer is not None:
             self._consumer.close()
 
 
 def run_processed_location_fanout_consumer() -> None:
+    from services.monitoring.standalone_prometheus_server import (
+        start_standalone_prometheus_server,
+    )
     from shared.logging_utils import configure_kafka_log_noise
     from shared.sentry_init import init_sentry
 
     configure_kafka_log_noise()
     init_sentry()
+    start_standalone_prometheus_server()
     if not (
         KAFKA_ENABLED
         and TRACKING_INGEST_ASYNC_ENABLED

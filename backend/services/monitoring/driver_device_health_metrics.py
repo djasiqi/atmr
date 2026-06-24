@@ -121,7 +121,7 @@ if Histogram is not None and _METRICS_ENABLED:
     _FIX_AGE = Histogram(
         "driver_device_last_fix_age_seconds",
         "Âge du dernier fix GPS rapporté par le mobile",
-        ["manufacturer"],
+        ["manufacturer", "platform", "app_version", "os_version"],
         buckets=(30, 60, 90, 120, 300, 600, 1800, 3600),
     )
 
@@ -156,7 +156,12 @@ def record_device_health_report(
             os_version=osv,
         ).inc()
     if _FIX_AGE is not None and last_fix_age_seconds is not None:
-        _FIX_AGE.labels(manufacturer=manuf).observe(float(last_fix_age_seconds))
+        _FIX_AGE.labels(
+            manufacturer=manuf,
+            platform=plat,
+            app_version=appv,
+            os_version=osv,
+        ).observe(float(last_fix_age_seconds))
     if (
         _STALE is not None
         and last_fix_age_seconds is not None

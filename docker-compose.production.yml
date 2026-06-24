@@ -433,6 +433,8 @@ services:
       WS_KAFKA_SSL_KEYFILE: ${WS_KAFKA_SSL_KEYFILE:-}
       KAFKA_TOPIC_DRIVER_LOCATION_PROCESSED: ${KAFKA_TOPIC_DRIVER_LOCATION_PROCESSED:-driver.location.processed}
       KAFKA_TOPIC_MISSION_EVENTS: ${KAFKA_TOPIC_MISSION_EVENTS:-mission.events}
+      # P1-1c : métrique lag consumer ws-service-shared (exposée sur /metrics:8001)
+      TRACKING_KAFKA_LAG_METRIC_ENABLED: ${TRACKING_KAFKA_LAG_METRIC_ENABLED:-true}
       WS_SERVICE_ACCEPT_CONNECTIONS: ${WS_SERVICE_ACCEPT_CONNECTIONS:-true}
       WS_KILL_SWITCH_DRAIN_SEC: ${WS_KILL_SWITCH_DRAIN_SEC:-30}
       BACKEND_INTERNAL_TRACKING_INGEST_URL: ${BACKEND_INTERNAL_TRACKING_INGEST_URL:-http://backend:5000/api/internal/tracking/ingest}
@@ -667,6 +669,10 @@ services:
       KAFKA_SSL_CAFILE: ${KAFKA_SSL_CAFILE:-}
       KAFKA_SSL_CERTFILE: ${KAFKA_SSL_CERTFILE:-}
       KAFKA_SSL_KEYFILE: ${KAFKA_SSL_KEYFILE:-}
+      # P1-1b : métrique de lag fanout + serveur Prometheus standalone (port distinct de l'ingest)
+      TRACKING_KAFKA_LAG_METRIC_ENABLED: ${TRACKING_KAFKA_LAG_METRIC_ENABLED:-true}
+      STANDALONE_PROMETHEUS_PORT: ${TRACKING_FANOUT_METRICS_PORT:-9116}
+      STANDALONE_PROMETHEUS_ENABLED: ${STANDALONE_PROMETHEUS_ENABLED:-true}
     depends_on:
       redis:
         condition: service_healthy

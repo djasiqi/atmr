@@ -204,3 +204,23 @@ def test_set_tracking_kafka_consumer_lag_noop_when_disabled(
     with patch.object(m, "_TRACKING_KAFKA_CONSUMER_LAG") as mock_g:
         m.set_tracking_kafka_consumer_lag(group="g", topic="t", partition=1, lag=10)
     mock_g.labels.assert_not_called()
+
+
+def test_inc_tracking_fanout_emit_known_emitters() -> None:
+    if m._TRACKING_FANOUT_EMIT is None:
+        pytest.skip("prometheus_client Counter unavailable")
+    inc = MagicMock()
+    with patch.object(m, "_TRACKING_FANOUT_EMIT") as mock_c:
+        mock_c.labels.return_value = MagicMock(inc=inc)
+        m.inc_tracking_fanout_emit(emitter="backend_fanout")
+        m.inc_tracking_fanout_emit(emitter="ws_service")
+    assert mock_c.labels.call_count == 2
+
+
+def test_inc_tracking_fanout_emit_unknown_maps_to_unknown() -> None:
+    if m._TRACKING_FANOUT_EMIT is None:
+        pytest.skip("prometheus_client Counter unavailable")
+    with patch.object(m, "_TRACKING_FANOUT_EMIT") as mock_c:
+        mock_c.labels.return_value = MagicMock(inc=MagicMock())
+        m.inc_tracking_fanout_emit(emitter="other")
+    mock_c.labels.assert_called_once_with(emitter="_unknown")

@@ -461,20 +461,121 @@ groups:
   - name: tracking_health
     interval: 30s
     rules:
-      # P1-1a — garde-fou de lag AVANT activation persistance GPS (STOP GATE P0-2).
-      # Seuil conservateur pour la fenêtre STOP GATE ; à durcir vers >100 for 5m (P2-1) après stabilisation.
+      # P1-1a / P2-1 — lag consumer ingest (seuil conservateur STOP GATE → durci en régime nominal).
       - alert: TrackingKafkaConsumerLagHigh
         expr: |
-          max(tracking_kafka_consumer_lag{group="tracking-ingest-consumer-group"}) > 50
-        for: 2m
+          max(tracking_kafka_consumer_lag{group="tracking-ingest-consumer-group"}) > 100
+        for: 5m
         labels:
           severity: warning
           component: tracking
           team: backend-platform
           service: tracking
         annotations:
-          summary: "Lag consumer tracking ingest > 50"
-          description: "Lag Kafka ingest élevé ({{ $value }}) — surveiller avant/pendant l'activation de la persistance GPS."
+          summary: "Lag consumer tracking ingest > 100"
+          description: "Lag Kafka ingest élevé ({{ $value }}) — risque de saturation du pipeline GPS."
+          runbook_url: "https://grafana/d/driver-tracking-health"
+
+      - alert: TrackingKafkaFanoutLagHigh
+        expr: |
+          max(tracking_kafka_consumer_lag{group="tracking-processed-fanout-group"}) > 100
+        for: 5m
+        labels:
+          severity: warning
+          component: tracking
+          team: backend-platform
+          service: tracking
+        annotations:
+          summary: "Lag consumer tracking fanout > 100"
+          description: "Lag Kafka fanout élevé ({{ $value }}) — risque de retard Socket.IO entreprise."
+          runbook_url: "https://grafana/d/driver-tracking-health"
+
+      - alert: TrackingKafkaWsServiceLagHigh
+        expr: |
+          max(tracking_kafka_consumer_lag{group="ws-service-shared"}) > 100
+        for: 5m
+        labels:
+          severity: warning
+          component: tracking
+          team: backend-platform
+          service: tracking
+        annotations:
+          summary: "Lag consumer ws-service-shared > 100"
+          description: "Lag Kafka ws-service élevé ({{ $value }}) — risque de retard Socket.IO mobile."
+          runbook_url: "https://grafana/d/driver-tracking-health"
+
+      - alert: TrackingKafkaDlqForceCommit
+        expr: |
+          increase(tracking_kafka_dlq_force_commit_total[10m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+          component: tracking
+          team: backend-platform
+          service: tracking
+        annotations:
+          summary: "Force commit DLQ tracking (position GPS perdue)"
+          description: "Au moins un offset commité après échec DLQ — aucune récupération possible. Voir runbook R7."
+          runbook_url: "https://grafana/d/driver-tracking-health"
+
+      - alert: TrackingKafkaPublishErrors
+        expr: |
+          rate(tracking_kafka_publish_errors_total[5m]) > 0.016667
+        for: 5m
+        labels:
+          severity: warning
+          component: tracking
+          team: backend-platform
+          service: tracking
+        annotations:
+          summary: "Erreurs publication Kafka tracking (> 1/min)"
+          description: "Taux d'erreurs publish Kafka tracking élevé ({{ $value | humanize }}/s)."
+          runbook_url: "https://grafana/d/driver-tracking-health"
+
+      - alert: TrackingInvalidConfig
+        expr: |
+          sum(increase(tracking_invalid_config_total[15m])) > 0
+        for: 2m
+        labels:
+          severity: critical
+          component: tracking
+          team: backend-platform
+          service: tracking
+        annotations:
+          summary: "Consumer tracking ingest — configuration invalide (ASYNC sans PERSIST)"
+          description: "Un démarrage ingest_consumer a été refusé (config ASYNC=true, PERSIST=false). Vérifier TRACKING_INGEST_PERSIST_ENABLED ou ALLOW_REPUBLISH_ONLY."
+          runbook_url: "https://grafana/d/driver-tracking-health"
+
+      - alert: TrackingPersistStalledWhileIngesting
+        expr: |
+          (sum(rate(tracking_kafka_persist_total[10m])) == 0)
+            and (sum(rate(tracking_http_accepted_async_total[10m])) > 0)
+        for: 10m
+        labels:
+          severity: critical
+          component: tracking
+          team: backend-platform
+          service: tracking
+        annotations:
+          summary: "Positions HTTP acceptées (202) mais aucune persistance Kafka"
+          description: "Signature incident persistance GPS désactivée — HTTP async actif sans tracking_kafka_persist_total."
+          runbook_url: "https://grafana/d/driver-tracking-health"
+
+      - alert: TrackingKafkaConsumerRestartLoop
+        expr: |
+          rate(container_start_time_seconds{
+            id =~ "/docker/.*",
+            name =~ ".*tracking-kafka-consumer.*"
+          }[15m]) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          component: tracking
+          team: backend-platform
+          service: tracking
+        annotations:
+          summary: "tracking-kafka-consumer redémarre fréquemment"
+          description: "Crash-loop possible au boot du consumer ingest (config, Kafka, ou dépendances)."
           runbook_url: "https://grafana/d/driver-tracking-health"
 
       - alert: TrackingStaleHigh
@@ -511,6 +612,28 @@ groups:
         annotations:
           summary: "Stale rate OEM > 40%"
           description: "Constructeur {{ $labels.manufacturer }} au-dessus du seuil ({{ $value | humanizePercentage }})."
+          runbook_url: "https://grafana/d/driver-tracking-health"
+
+      # A2 — alerte Apple ciblée ventilée par version iOS/app (faible cardinalité).
+      - alert: TrackingAppleStaleHigh
+        expr: |
+          (
+            sum by (platform, app_version, os_version) (rate(driver_device_stale_fix_total[1h]))
+            /
+            clamp_min(
+              sum by (platform, app_version, os_version) (rate(driver_device_health_reports_total[1h])),
+              0.001
+            )
+          ) > 0.60
+        for: 30m
+        labels:
+          severity: critical
+          component: tracking
+          team: mobile-platform
+          service: tracking
+        annotations:
+          summary: "Stale rate Apple > 60% (par version)"
+          description: "Plateforme {{ $labels.platform }} app={{ $labels.app_version }} iOS={{ $labels.os_version }} — {{ $value | humanizePercentage }} stale."
           runbook_url: "https://grafana/d/driver-tracking-health"
 
       - alert: TrackingSilentWakeLow

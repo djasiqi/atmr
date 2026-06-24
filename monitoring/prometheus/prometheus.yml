@@ -92,6 +92,20 @@ scrape_configs:
     scrape_interval: 15s
     scrape_timeout: 10s
 
+  # ==================== tracking-processed-fanout (lag consumer fanout) ====================
+  # P1-1b : tracking_kafka_consumer_lag{group="tracking-processed-fanout-group"} sur port 9116.
+  - job_name: "atmr-tracking-processed-fanout"
+    metrics_path: "/metrics"
+    static_configs:
+      - targets:
+          - "tracking-processed-fanout:9116"
+        labels:
+          service: "tracking-processed-fanout"
+          component: "kafka-fanout"
+          environment: "production"
+    scrape_interval: 15s
+    scrape_timeout: 10s
+
   # ==================== ws-service (Kafka consumer health) ====================
   - job_name: "atmr-ws-service"
     metrics_path: "/metrics"

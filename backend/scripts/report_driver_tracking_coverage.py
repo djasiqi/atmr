@@ -22,6 +22,7 @@ if __name__ == "__main__" and __package__ is None:  # pragma: no cover
 
 from app import create_app
 from models import DeviceToken, Driver
+from models.driver_device_health_event import DriverDeviceHealthEvent
 
 ROOT_CAUSE_VALUES = (
     "fgs_not_running",
@@ -52,6 +53,26 @@ CSV_FIELDS = [
     "root_cause",
     "action_plan",
 ]
+
+STALE_AUDIT_FIELDS = [
+    "driver_id",
+    "manufacturer",
+    "model",
+    "platform",
+    "app_version",
+    "os_version",
+    "heartbeats",
+    "stale_count",
+    "stale_rate_pct",
+    "last_recorded_at",
+    "last_gps_timestamp",
+    "last_heartbeat_timestamp",
+    "last_received_timestamp",
+    "last_fix_age_seconds",
+    "native_last_fix_age_seconds",
+]
+
+_STALE_THRESHOLD_SECONDS = 300
 
 
 def _read_device_health(driver_id: int) -> dict[str, Any]:
@@ -88,7 +109,6 @@ def _count_stream_positions(driver_id: int, *, since: datetime) -> int:
         entries = redis_client.xrevrange(
             "driver_location_stream", count=5000, max="+", min="-"
         )
-        since_ms = int(since.timestamp() * 1000)
         for _entry_id, fields in entries:
             if not isinstance(fields, dict):
                 continue
@@ -260,11 +280,97 @@ def build_coverage_rows(*, days: int) -> list[dict[str, Any]]:
     return rows
 
 
+def build_stale_audit_rows(*, hours: int) -> list[dict[str, Any]]:
+    """Audit A0 : taux stale par chauffeur depuis driver_device_health_events."""
+    now = datetime.now(UTC)
+    since = now - timedelta(hours=hours)
+    rows: list[dict[str, Any]] = []
+
+    flask_app = create_app()
+    with flask_app.app_context():
+        events = (
+            DriverDeviceHealthEvent.query.filter(
+                DriverDeviceHealthEvent.recorded_at >= since
+            )
+            .order_by(
+                DriverDeviceHealthEvent.driver_id.asc(),
+                DriverDeviceHealthEvent.recorded_at.desc(),
+            )
+            .all()
+        )
+        by_driver: dict[int, list[DriverDeviceHealthEvent]] = {}
+        for ev in events:
+            by_driver.setdefault(int(ev.driver_id), []).append(ev)
+
+        for driver_id, evs in sorted(by_driver.items()):
+            stale_count = sum(
+                1
+                for ev in evs
+                if ev.last_fix_age_seconds is not None
+                and ev.last_fix_age_seconds > _STALE_THRESHOLD_SECONDS
+            )
+            heartbeats = len(evs)
+            latest = evs[0]
+            recorded_at = latest.recorded_at
+            if recorded_at is not None and recorded_at.tzinfo is None:
+                recorded_at = recorded_at.replace(tzinfo=UTC)
+            fix_age = latest.last_fix_age_seconds or 0
+            gps_ts = (
+                recorded_at - timedelta(seconds=fix_age)
+                if recorded_at is not None
+                else None
+            )
+            rows.append(
+                {
+                    "driver_id": driver_id,
+                    "manufacturer": latest.manufacturer or "",
+                    "model": latest.model or "",
+                    "platform": latest.platform or "",
+                    "app_version": latest.app_version or "",
+                    "os_version": latest.os_version or "",
+                    "heartbeats": heartbeats,
+                    "stale_count": stale_count,
+                    "stale_rate_pct": round(
+                        100.0 * stale_count / heartbeats if heartbeats else 0.0, 1
+                    ),
+                    "last_recorded_at": (
+                        recorded_at.isoformat() if recorded_at else ""
+                    ),
+                    "last_gps_timestamp": (
+                        gps_ts.isoformat() if gps_ts else ""
+                    ),
+                    "last_heartbeat_timestamp": (
+                        recorded_at.isoformat() if recorded_at else ""
+                    ),
+                    "last_received_timestamp": (
+                        recorded_at.isoformat() if recorded_at else ""
+                    ),
+                    "last_fix_age_seconds": latest.last_fix_age_seconds or "",
+                    "native_last_fix_age_seconds": (
+                        latest.native_last_fix_age_seconds or ""
+                    ),
+                }
+            )
+
+    return rows
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Rapport couverture tracking chauffeurs"
     )
     parser.add_argument("--days", type=int, default=7)
+    parser.add_argument(
+        "--stale-audit",
+        action="store_true",
+        help="Audit A0 : taux stale par chauffeur (driver_device_health_events)",
+    )
+    parser.add_argument(
+        "--stale-hours",
+        type=int,
+        default=24,
+        help="Fenêtre en heures pour --stale-audit (défaut 24)",
+    )
     parser.add_argument(
         "--output",
         type=str,
@@ -273,16 +379,32 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    rows = build_coverage_rows(days=args.days)
-    out = open(args.output, "w", newline="", encoding="utf-8") if args.output else sys.stdout
-    try:
-        writer = csv.DictWriter(out, fieldnames=CSV_FIELDS)
+    if args.stale_audit:
+        rows = build_stale_audit_rows(hours=args.stale_hours)
+        fields = STALE_AUDIT_FIELDS
+    else:
+        rows = build_coverage_rows(days=args.days)
+        fields = CSV_FIELDS
+
+    if args.output:
+        with Path(args.output).open("w", newline="", encoding="utf-8") as out:
+            writer = csv.DictWriter(out, fieldnames=fields)
+            writer.writeheader()
+            for row in rows:
+                writer.writerow(row)
+    else:
+        writer = csv.DictWriter(sys.stdout, fieldnames=fields)
         writer.writeheader()
         for row in rows:
             writer.writerow(row)
-    finally:
-        if args.output:
-            out.close()
+
+    if args.stale_audit:
+        high_stale = [r for r in rows if float(r["stale_rate_pct"]) >= 50.0]
+        print(
+            f"# stale-audit drivers={len(rows)} high_stale_50pct={len(high_stale)} window_h={args.stale_hours}",
+            file=sys.stderr,
+        )
+        return 0
 
     absent = [r for r in rows if r["in_tracking_pipeline"] == "non"]
     unknown = [
