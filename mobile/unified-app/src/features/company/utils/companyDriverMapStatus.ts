@@ -7,15 +7,17 @@ export const FLEET_DRIVER_MARKER_DISC_DP = 22;
 
 export type CompanyDriverMapCategory = "available" | "en_mission" | "last_known" | "offline";
 
-/** Pastilles carte flotte — alignées sur la charte Lirie (cf. portail CRA `STATUS_COLORS`). */
+import { FLEET_WEB_STATUS_COLORS } from "../components/maps/fleetMapStatusContract";
+
+/** Pastilles carte flotte — alignées sur la charte Lirie web. */
 export const DRIVER_FLEET_MARKER_PALETTE: Record<
   CompanyDriverMapCategory,
   { fill: string; pinScale: number; label: string }
 > = {
-  available: { fill: "#00796B", pinScale: 1.05, label: "Disponible" },
-  en_mission: { fill: "#3B82F6", pinScale: 1, label: "En mission" },
-  last_known: { fill: "#cbd5e1", pinScale: 0.95, label: "Dernière position connue" },
-  offline: { fill: "#94a3b8", pinScale: 0.9, label: "Position périmée ou hors ligne" },
+  available: { fill: FLEET_WEB_STATUS_COLORS.available, pinScale: 1.05, label: "Disponible" },
+  en_mission: { fill: FLEET_WEB_STATUS_COLORS.busy, pinScale: 1, label: "En mission" },
+  last_known: { fill: FLEET_WEB_STATUS_COLORS.offline, pinScale: 0.95, label: "Dernière position connue" },
+  offline: { fill: FLEET_WEB_STATUS_COLORS.offline, pinScale: 0.9, label: "Position périmée ou hors ligne" },
 };
 
 export function resolveDriverStatus(

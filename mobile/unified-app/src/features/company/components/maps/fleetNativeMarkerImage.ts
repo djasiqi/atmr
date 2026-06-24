@@ -3,30 +3,31 @@ import * as Sentry from "@sentry/react-native";
 
 import { isFeatureEnabled } from "../../../../core/featureFlags/registry";
 import {
-  makeFleetClusterCountBadgeDataUrl,
+  makeFleetClusterMarkerDataUrl,
+  makeFleetCircleMarkerDataUrl,
   makeFleetEtaBadgeMarkerDataUrl,
   makeMissionAnchorMarkerDataUrl,
+  resolveDriverMarkerInitials,
 } from "./fleetMarkerIcons";
-import { buildDriverMarkerPngUri } from "./fleetMarkerPngEncode";
+import { buildDriverMarkerPngUri, buildClusterMarkerPngUri } from "./fleetMarkerPngEncode";
 
 import type { FleetMissionAnchorStyle } from "./fleetMapMissionVisual";
 
-import { buildLirieDriverMarkerImageSource } from "./fleetLirieDriverMarkerAssets";
 import {
   pickClusterRepresentativeStatus,
-  resolveFleetClusterCountBadgeLayout,
+  resolveClusterMarkerSizePx,
 } from "./fleetLirieClusterMarker";
 import type { FleetDriverMapItem } from "./fleetMapTypes";
 import {
   FLEET_NATIVE_DRIVER_MARKER_SIZE_PX as FLEET_DRIVER_MARKER_SIZE_PX,
-  LIRIE_CLUSTER_MARKER_DISPLAY_WIDTH_PX,
 } from "./fleetLirieMarkerSizing";
 import type { FleetOperationalStatus } from "./mapStatusTheme";
-import { FLEET_STATUS_THEME } from "./mapStatusTheme";
+import { resolveMarkerVisual } from "./fleetMapStatusContract";
+import { isFleetDriverMarkerStale } from "./fleetMapStale";
+import { driverFleetMarkerInitials } from "../../utils/companyDriverMapStatus";
 
 import {
   usesAndroidFleetMarkerPng,
-  withAndroidClusterCountBadgePng,
   withAndroidEtaBadgePng,
   withAndroidMissionAnchorPng,
 } from "./resolveFleetNativeMarkerUri";
@@ -34,89 +35,31 @@ import {
 /** Largeur d’affichage des pins chauffeur Lirie sur la carte native. */
 export const FLEET_NATIVE_DRIVER_MARKER_SIZE_PX = FLEET_DRIVER_MARKER_SIZE_PX;
 
-export const FLEET_NATIVE_CLUSTER_MARKER_SIZE_PX = LIRIE_CLUSTER_MARKER_DISPLAY_WIDTH_PX;
-
 export type FleetNativeMarkerImageSource = {
   uri: string;
   width: number;
   height: number;
-  /** Module Metro — uniquement si PNG Lirie résolu (pas en safe / data-URI). */
   assetModule?: number;
 };
 
-function isUsableNativeMarkerUri(uri: string): boolean {
-  if (uri.startsWith("data:image/svg")) return false;
-  if (uri.startsWith("data:image/png") || uri.startsWith("data:image/jpeg")) return true;
-  if (uri.startsWith("http://") || uri.startsWith("https://")) return true;
-  return false;
-}
-
-function resolveCustomDriverMarkerIconUri(): string | null {
-  const raw = process.env.EXPO_PUBLIC_DRIVER_MARKER_ICON_URI?.trim();
-  if (!raw) return null;
-
-  if (Platform.OS === "android" || Platform.OS === "ios") {
-    return isUsableNativeMarkerUri(raw) ? raw : null;
-  }
-
-  if (raw.includes("://") || raw.startsWith("data:image/")) {
-    return raw;
-  }
-
-  if (/^[A-Za-z]:[\\/]/.test(raw)) {
-    const normalized = raw.replaceAll("\\", "/");
-    return `file:///${normalized}`;
-  }
-
-  if (raw.startsWith("/")) {
-    return `file://${raw}`;
-  }
-
-  return raw;
-}
-
-function resolveCustomDriverMarkerIconUriByStatus(
-  status: FleetOperationalStatus
-): string | null {
-  const statusEnvNameByKey: Record<FleetOperationalStatus, string> = {
-    on_mission: "EXPO_PUBLIC_DRIVER_MARKER_ICON_ON_MISSION_URI",
-    available: "EXPO_PUBLIC_DRIVER_MARKER_ICON_AVAILABLE_URI",
-    break: "EXPO_PUBLIC_DRIVER_MARKER_ICON_BREAK_URI",
-    delayed: "EXPO_PUBLIC_DRIVER_MARKER_ICON_DELAYED_URI",
-    incident: "EXPO_PUBLIC_DRIVER_MARKER_ICON_INCIDENT_URI",
-    offline: "EXPO_PUBLIC_DRIVER_MARKER_ICON_OFFLINE_URI",
-  };
-  const raw = process.env[statusEnvNameByKey[status]]?.trim();
-  if (!raw) return null;
-
-  if (Platform.OS === "android" || Platform.OS === "ios") {
-    return isUsableNativeMarkerUri(raw) ? raw : null;
-  }
-
-  if (raw.includes("://") || raw.startsWith("data:image/")) {
-    return raw;
-  }
-  if (/^[A-Za-z]:[\\/]/.test(raw)) {
-    const normalized = raw.replaceAll("\\", "/");
-    return `file:///${normalized}`;
-  }
-  if (raw.startsWith("/")) {
-    return `file://${raw}`;
-  }
-  return raw;
-}
+export type BuildFleetDriverMarkerOptions = {
+  isStale?: boolean;
+};
 
 function emergencyGeneratedDriverMarker(
   status: FleetOperationalStatus,
-  sizePx: number,
-  selected: boolean
+  driver: FleetDriverMapItem,
+  options?: BuildFleetDriverMarkerOptions
 ): FleetNativeMarkerImageSource {
-  const theme = FLEET_STATUS_THEME[status];
+  const isStale = options?.isStale ?? isFleetDriverMarkerStale(driver);
+  const visual = resolveMarkerVisual(status, isStale);
+  const initials = driverFleetMarkerInitials(driver);
+  const sizePx = FLEET_NATIVE_DRIVER_MARKER_SIZE_PX;
   return {
     uri: buildDriverMarkerPngUri({
-      fill: theme.fill,
-      selected,
-      pulse: theme.pulse === true,
+      fill: visual.fill,
+      opacity: visual.opacity,
+      label: initials,
       sizePx,
     }),
     width: sizePx,
@@ -126,9 +69,13 @@ function emergencyGeneratedDriverMarker(
 
 export function buildFleetDriverMarkerImageSource(
   status: FleetOperationalStatus,
-  selected = false
+  driver: FleetDriverMapItem,
+  options?: BuildFleetDriverMarkerOptions
 ): FleetNativeMarkerImageSource {
-  const sizePx = Math.round(FLEET_NATIVE_DRIVER_MARKER_SIZE_PX * (selected ? 1.08 : 1));
+  const sizePx = FLEET_NATIVE_DRIVER_MARKER_SIZE_PX;
+  const isStale = options?.isStale ?? isFleetDriverMarkerStale(driver);
+  const visual = resolveMarkerVisual(status, isStale);
+  const initials = driverFleetMarkerInitials(driver);
 
   if (isFeatureEnabled("fleet_map_safe_markers")) {
     Sentry.addBreadcrumb({
@@ -139,18 +86,17 @@ export function buildFleetDriverMarkerImageSource(
   }
 
   try {
-    const customUri = resolveCustomDriverMarkerIconUri();
-    const customStatusUri = resolveCustomDriverMarkerIconUriByStatus(status);
-    const resolvedCustomUri = customStatusUri ?? customUri;
-    if (resolvedCustomUri) {
-      return {
-        uri: resolvedCustomUri,
-        width: sizePx,
-        height: sizePx,
-      };
+    if (usesAndroidFleetMarkerPng()) {
+      return emergencyGeneratedDriverMarker(status, driver, { isStale });
     }
 
-    return buildLirieDriverMarkerImageSource(status, sizePx, selected);
+    return {
+      uri: makeFleetCircleMarkerDataUrl(visual.fill, sizePx, visual.opacity, {
+        label: initials,
+      }),
+      width: sizePx,
+      height: sizePx,
+    };
   } catch (error) {
     const reason = error instanceof Error ? error.message : "build_marker_failed";
     Sentry.addBreadcrumb({
@@ -159,36 +105,39 @@ export function buildFleetDriverMarkerImageSource(
       level: "warning",
       data: { status, reason },
     });
-    return emergencyGeneratedDriverMarker(status, sizePx, selected);
+    return emergencyGeneratedDriverMarker(status, driver, { isStale });
   }
 }
 
-/** Pastille « 2 », « 3 »… (Android : PNG). */
-export function buildFleetClusterCountBadgeImageSource(
-  count: number
-): FleetNativeMarkerImageSource {
-  const layout = resolveFleetClusterCountBadgeLayout(count);
-  const source: FleetNativeMarkerImageSource = {
-    uri: makeFleetClusterCountBadgeDataUrl(layout.label, layout.width, layout.height),
-    width: layout.width,
-    height: layout.height,
-  };
-  if (!usesAndroidFleetMarkerPng()) return source;
-  return withAndroidClusterCountBadgePng(
-    source,
-    layout.label,
-    layout.width,
-    layout.height
-  );
-}
-
-/** @deprecated Utiliser buildFleetDriverMarkerImageSource + buildFleetClusterCountBadgeImageSource */
+/** Cluster web : disque coloré selon statut dominant + compteur centré. */
 export function buildFleetClusterMarkerImageSource(
   count: number,
   drivers: FleetDriverMapItem[] = []
 ): FleetNativeMarkerImageSource {
   const status = pickClusterRepresentativeStatus(drivers);
-  return buildFleetDriverMarkerImageSource(status, false);
+  const visual = resolveMarkerVisual(status, false);
+  const sizePx = resolveClusterMarkerSizePx(count);
+
+  if (usesAndroidFleetMarkerPng()) {
+    return {
+      uri: buildClusterMarkerPngUri(count, sizePx, visual.fill),
+      width: sizePx,
+      height: sizePx,
+    };
+  }
+
+  return {
+    uri: makeFleetClusterMarkerDataUrl(count, visual.fill, sizePx),
+    width: sizePx,
+    height: sizePx,
+  };
+}
+
+/** @deprecated Utiliser buildFleetClusterMarkerImageSource */
+export function buildFleetClusterCountBadgeImageSource(
+  count: number
+): FleetNativeMarkerImageSource {
+  return buildFleetClusterMarkerImageSource(count, []);
 }
 
 export function buildFleetEtaBadgeImageSource(label: string): FleetNativeMarkerImageSource {
@@ -232,3 +181,5 @@ export function buildMissionAnchorImageSource(
     halo: anchor.role === "urgent" || anchor.role === "active",
   });
 }
+
+export { resolveDriverMarkerInitials };

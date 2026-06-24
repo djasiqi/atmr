@@ -34,12 +34,12 @@ import {
   regionToZoom,
   type FleetWebMapCamera,
 } from "./fleetMapWebCamera";
-import { pickClusterRepresentativeStatus } from "./fleetLirieClusterMarker";
-import { shouldFleetMarkerLivePulse } from "./fleetMapLiveMarker";
-import { makeFleetVehicleMarkerDataUrl , createMissionDriverContextElement } from "./fleetMarkerIcons";
+import { createMissionDriverContextElement } from "./fleetMarkerIcons";
 
-import { buildLirieDriverMarkerImageSource } from "./fleetLirieDriverMarkerAssets";
-import { buildFleetClusterCountBadgeImageSource } from "./fleetNativeMarkerImage";
+import {
+  buildFleetClusterMarkerImageSource,
+  buildFleetDriverMarkerImageSource,
+} from "./fleetNativeMarkerImage";
 import type { FleetMissionOverlay } from "./fleetMapMissionVisual";
 import type { FleetHeatmapPoint } from "./fleetMapGeo";
 import type {
@@ -55,7 +55,7 @@ import { FLEET_MAP_MARKER_DIMMED_OPACITY , DEFAULT_FLEET_MAP_LAYERS } from "./fl
 
 import { FLEET_STATUS_THEME, type FleetOperationalStatus } from "./mapStatusTheme";
 import { driverFleetMarkerTitle } from "../../utils/companyDriverMapStatus";
-import type { FleetMarkerIconOptions } from "./fleetMarkerIcons";
+import { isFleetDriverMarkerStale } from "./fleetMapStale";
 
 const MAPS_ERROR_HELP_URL =
   "https://developers.google.com/maps/documentation/javascript/error-messages#api-target-blocked-map-error";
@@ -92,36 +92,22 @@ type DriverMarkerSelectionHandle = {
 };
 
 function buildDriverMarkerVisual(
-  driver: FleetDriverMapItem,
-  markerSize: number,
-  selected: boolean
+  driver: FleetDriverMapItem
 ): {
-  fill: string;
-  markerOpts: FleetMarkerIconOptions;
   markerTitle: string;
   iconUrl: string;
+  size: number;
   zIndex: number;
 } {
   const status: FleetOperationalStatus = driver.enrichment.operationalStatus;
   const theme = FLEET_STATUS_THEME[status];
-  const livePulse = shouldFleetMarkerLivePulse(status, driver);
-  const markerOpts: FleetMarkerIconOptions = {
-    sizePx: markerSize,
-    selected,
-    variant: theme.markerVariant,
-    pulse: livePulse && Boolean(theme.pulse),
-  };
-  const markerTitle = driverFleetMarkerTitle(driver);
-  const iconUrl =
-    livePulse && markerOpts.pulse
-      ? makeFleetVehicleMarkerDataUrl(theme.fill, markerOpts)
-      : buildLirieDriverMarkerImageSource(status, markerSize).uri;
+  const isStale = isFleetDriverMarkerStale(driver);
+  const source = buildFleetDriverMarkerImageSource(status, driver, { isStale });
   return {
-    fill: theme.fill,
-    markerOpts,
-    markerTitle,
-    iconUrl,
-    zIndex: selected ? 12 : 4,
+    markerTitle: driverFleetMarkerTitle(driver),
+    iconUrl: source.uri,
+    size: source.width,
+    zIndex: theme.priority,
   };
 }
 
@@ -455,33 +441,18 @@ export function GoogleMapsFleetCanvas({
             if (pinnedDriverIds && clusterSharesDriverIds(m.drivers, pinnedDriverIds)) {
               continue;
             }
-            const size = Math.min(48, adaptiveMarkerSize + 8);
             const clusterTitle = `${m.count} chauffeurs`;
-            const clusterStatus = pickClusterRepresentativeStatus(m.drivers);
-            const icon = buildLirieDriverMarkerImageSource(clusterStatus, size);
-            const badge = buildFleetClusterCountBadgeImageSource(m.count);
+            const clusterIcon = buildFleetClusterMarkerImageSource(m.count, m.drivers);
             const onClusterTap = () => onClusterPressRef.current?.(m.drivers);
             placeMarker(
               { lat: m.latitude, lng: m.longitude },
               {
-                iconUrl: icon.uri,
+                iconUrl: clusterIcon.uri,
                 title: clusterTitle,
-                size: icon.width,
-                height: icon.height,
-                anchor: { x: 0.5, y: 1 },
-                zIndex: 3,
-              },
-              onClusterTap
-            );
-            placeMarker(
-              { lat: m.latitude, lng: m.longitude },
-              {
-                iconUrl: badge.uri,
-                title: clusterTitle,
-                size: badge.width,
-                height: badge.height,
-                anchor: FLEET_CLUSTER_COUNT_BADGE_ANCHOR,
-                zIndex: 4,
+                size: clusterIcon.width,
+                height: clusterIcon.height,
+                anchor: { x: 0.5, y: 0.5 },
+                zIndex: 500,
               },
               onClusterTap
             );
@@ -501,7 +472,7 @@ export function GoogleMapsFleetCanvas({
             selectedMissionIdRef.current != null &&
             linkedMissionId === selectedMissionIdRef.current;
           const selected = d.driver_id === selectedDriverIdRef.current || missionSelected;
-          const visual = buildDriverMarkerVisual(d, adaptiveMarkerSize, selected);
+          const visual = buildDriverMarkerVisual(d);
           const dimmed =
             (selectedDriverIdRef.current != null && !selected) ||
             (selectedMissionIdRef.current != null &&
@@ -512,7 +483,7 @@ export function GoogleMapsFleetCanvas({
             {
               iconUrl: visual.iconUrl,
               title: visual.markerTitle,
-              size: adaptiveMarkerSize,
+              size: visual.size,
               zIndex: visual.zIndex,
             },
             () => onDriverPressRef.current?.(d)
@@ -526,21 +497,21 @@ export function GoogleMapsFleetCanvas({
             }
             driverMarkerHandlesRef.current.push({
               driverId,
-              setSelected: (nextSelected) => {
-                const next = buildDriverMarkerVisual(d, adaptiveMarkerSize, nextSelected);
+              setSelected: () => {
+                const next = buildDriverMarkerVisual(d);
                 if (markerInstance.setIcon) {
                   const SizeCtor = gmaps.Size as new (w: number, h: number) => unknown;
                   const PointCtor = gmaps.Point as new (x: number, y: number) => unknown;
-                  const r = adaptiveMarkerSize / 2;
+                  const r = next.size / 2;
                   markerInstance.setIcon({
                     url: next.iconUrl,
-                    scaledSize: new SizeCtor(adaptiveMarkerSize, adaptiveMarkerSize),
+                    scaledSize: new SizeCtor(next.size, next.size),
                     anchor: new PointCtor(r, r),
                   });
                 }
                 markerInstance.setZIndex?.(next.zIndex);
                 (markerInstance as ClassicFleetMarker & { setOpacity?: (o: number) => void }).setOpacity?.(
-                  nextSelected ? 1 : dimmed ? dimmedOpacity : 1
+                  dimmed ? dimmedOpacity : 1
                 );
               },
             });
@@ -552,11 +523,11 @@ export function GoogleMapsFleetCanvas({
             (marker) =>
               marker.kind === "driver" && marker.driver.driver_id === selectedDriverIdRef.current
           );
-          const size = Math.min(48, adaptiveMarkerSize + 8);
           const clusterTitle = `${pinnedClusterFocus.count} chauffeurs`;
-          const clusterStatus = pickClusterRepresentativeStatus(pinnedClusterFocus.drivers);
-          const icon = buildLirieDriverMarkerImageSource(clusterStatus, size);
-          const badge = buildFleetClusterCountBadgeImageSource(pinnedClusterFocus.count);
+          const clusterIcon = buildFleetClusterMarkerImageSource(
+            pinnedClusterFocus.count,
+            pinnedClusterFocus.drivers
+          );
           const onPinnedClusterTap = () => onClusterPressRef.current?.(pinnedClusterFocus.drivers);
           const position = {
             lat: pinnedClusterFocus.latitude,
@@ -565,25 +536,12 @@ export function GoogleMapsFleetCanvas({
           placeMarker(
             position,
             {
-              iconUrl: icon.uri,
+              iconUrl: clusterIcon.uri,
               title: clusterTitle,
-              size: icon.width,
-              height: icon.height,
-              anchor: { x: 0.5, y: 1 },
-              zIndex: 3,
-              opacity: dimmedOpacity,
-            },
-            onPinnedClusterTap
-          );
-          placeMarker(
-            position,
-            {
-              iconUrl: badge.uri,
-              title: clusterTitle,
-              size: badge.width,
-              height: badge.height,
-              anchor: FLEET_CLUSTER_COUNT_BADGE_ANCHOR,
-              zIndex: 4,
+              size: clusterIcon.width,
+              height: clusterIcon.height,
+              anchor: { x: 0.5, y: 0.5 },
+              zIndex: 500,
               opacity: dimmedOpacity,
             },
             onPinnedClusterTap
@@ -594,7 +552,7 @@ export function GoogleMapsFleetCanvas({
               (driver) => driver.driver_id === selectedDriverIdRef.current
             );
             if (focusedDriver) {
-              const visual = buildDriverMarkerVisual(focusedDriver, adaptiveMarkerSize, true);
+              const visual = buildDriverMarkerVisual(focusedDriver);
               placeMarker(
                 { lat: focusedDriver.latitude, lng: focusedDriver.longitude },
                 {

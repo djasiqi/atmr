@@ -1,12 +1,8 @@
-import { useMemo, useRef } from "react";
-import { Marker } from "react-native-maps";
+import { useMemo } from "react";
 
 import type { FleetDriverMapItem } from "./fleetMapTypes";
-import { ClusterCountBadgeMarker } from "./ClusterCountBadgeMarker";
 import { FleetMapRasterMarker } from "./FleetMapRasterMarker";
-import { buildFleetDriverMarkerImageSource } from "./fleetNativeMarkerImage";
-import { resolveFleetMarkerAnchor } from "./resolveFleetMarkerAnchor";
-import { pickClusterRepresentativeStatus } from "./fleetLirieClusterMarker";
+import { buildFleetClusterMarkerImageSource } from "./fleetNativeMarkerImage";
 import { FLEET_MAP_MARKER_DIMMED_OPACITY } from "./fleetMapTypes";
 import { isValidMapCoord } from "./mapsIosNewArchSafeMode";
 import { useFleetMarkerMotion } from "./useFleetMarkerMotion";
@@ -18,11 +14,10 @@ type Props = {
   count: number;
   drivers: FleetDriverMapItem[];
   onPress?: () => void;
-  /** Même transparence que les chauffeurs non sélectionnés. */
   dimmed?: boolean;
 };
 
-/** Icône PNG (`require`) + chiffre en Text natif (lisible sur Android). */
+/** Disque cluster web coloré selon statut dominant. */
 export function ClusterMarker({
   markerKey,
   latitude,
@@ -33,26 +28,19 @@ export function ClusterMarker({
   dimmed = false,
 }: Props) {
   const opacity = dimmed ? FLEET_MAP_MARKER_DIMMED_OPACITY : 1;
-  const status = useMemo(() => pickClusterRepresentativeStatus(drivers), [drivers]);
   const targetCoordinate = useMemo(
     () => ({ latitude, longitude }),
     [latitude, longitude]
   );
 
-  const badgeMarkerRef = useRef<Marker | null>(null);
   const { displayCoordinate, primaryMarkerRef } = useFleetMarkerMotion({
     target: targetCoordinate,
     markerKey,
-    secondaryMarkerRef: badgeMarkerRef,
   });
 
   const iconSource = useMemo(
-    () => buildFleetDriverMarkerImageSource(status, false),
-    [status]
-  );
-  const markerAnchor = useMemo(
-    () => resolveFleetMarkerAnchor(iconSource),
-    [iconSource]
+    () => buildFleetClusterMarkerImageSource(count, drivers),
+    [count, drivers]
   );
 
   if (!iconSource.uri?.trim()) {
@@ -64,23 +52,14 @@ export function ClusterMarker({
   }
 
   return (
-    <>
-      <FleetMapRasterMarker
-        ref={primaryMarkerRef}
-        coordinate={displayCoordinate}
-        imageSource={iconSource}
-        anchor={markerAnchor}
-        onPress={onPress}
-        zIndex={500}
-        opacity={opacity}
-      />
-      <ClusterCountBadgeMarker
-        ref={badgeMarkerRef}
-        coordinate={displayCoordinate}
-        count={count}
-        onPress={onPress}
-        opacity={opacity}
-      />
-    </>
+    <FleetMapRasterMarker
+      ref={primaryMarkerRef}
+      coordinate={displayCoordinate}
+      imageSource={iconSource}
+      anchor={{ x: 0.5, y: 0.5 }}
+      onPress={onPress}
+      zIndex={500}
+      opacity={opacity}
+    />
   );
 }

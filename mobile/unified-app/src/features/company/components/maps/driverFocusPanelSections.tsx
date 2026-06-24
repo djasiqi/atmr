@@ -52,7 +52,7 @@ export function DriverFocusPanelSections({
           État live
         </AppText>
         <AppText variant="body" style={s.value}>
-          {enrichment.operationalStatus === "on_mission"
+          {enrichment.operationalStatus === "busy"
             ? "En route"
             : enrichment.operationalStatus === "constrained"
               ? formatFleetConstraintReason(driver)

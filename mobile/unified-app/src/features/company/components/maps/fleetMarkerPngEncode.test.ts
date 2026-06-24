@@ -12,10 +12,10 @@ describe("fleetMarkerPngEncode", () => {
   it("produit des PNG base64 (pas SVG) pour Android", () => {
     clearFleetMarkerPngCache();
     const uri = buildDriverMarkerPngUri({
-      fill: "#00796B",
-      selected: false,
-      pulse: false,
-      sizePx: 56,
+      fill: "#4ade80",
+      opacity: 1,
+      label: "JD",
+      sizePx: 42,
     });
     expect(uri.startsWith("data:image/png;base64,")).toBe(true);
     expect(uri.length).toBeGreaterThan(120);
@@ -42,7 +42,7 @@ describe("fleetMarkerPngEncode", () => {
 
   it("encode cluster et ETA", () => {
     clearFleetMarkerPngCache();
-    const cluster = buildClusterMarkerPngUri(12, 56);
+    const cluster = buildClusterMarkerPngUri(12, 46, "#ef4444");
     expect(cluster.startsWith("data:image/png;base64,")).toBe(true);
     const eta = buildEtaBadgePngUri("+8 min");
     expect(eta.uri.startsWith("data:image/png;base64,")).toBe(true);

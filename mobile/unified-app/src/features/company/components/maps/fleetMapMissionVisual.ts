@@ -434,7 +434,7 @@ function missionDisplayScore(
     const st = driver.enrichment.operationalStatus;
     if (st === "incident") score += 5000;
     if (st === "delayed") score += 4500;
-    if (st === "on_mission") score += 2000;
+    if (st === "busy") score += 2000;
   }
   if (isMissionDelayed(mission)) score += 4200;
   if (mission.status === "in_progress") score += 3800;

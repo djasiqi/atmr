@@ -24,12 +24,13 @@ type Props = {
   onClose: () => void;
 };
 
-type SearchStatusFilter = "all" | "available" | "on_mission" | "break" | "delayed" | "offline";
+type SearchStatusFilter = "all" | "available" | "busy" | "assigned" | "break" | "delayed" | "offline";
 
 const STATUS_CHIPS: SearchStatusFilter[] = [
   "all",
   "available",
-  "on_mission",
+  "busy",
+  "assigned",
   "break",
   "delayed",
   "offline",
@@ -45,9 +46,13 @@ function resolveSearchFilterLabel(filter: SearchStatusFilter): string {
 }
 
 function normalizeOperationalStatus(status: FleetOperationalStatus): SearchStatusFilter {
-  if (status === "incident") return "delayed";
+  if (status === "incident" || status === "emergency") return "delayed";
   if (status === "delayed") return "delayed";
-  return status;
+  if (status === "constrained" || status === "last_known") return "offline";
+  if (status === "busy" || status === "assigned" || status === "available" || status === "break" || status === "offline") {
+    return status;
+  }
+  return "available";
 }
 
 function isDriverInStatusFilter(driver: FleetDriverMapItem, filter: SearchStatusFilter): boolean {
@@ -237,7 +242,8 @@ export function MapDriverSearchSheet({
     const counts: Record<SearchStatusFilter, number> = {
       all: drivers.length,
       available: 0,
-      on_mission: 0,
+      busy: 0,
+      assigned: 0,
       break: 0,
       delayed: 0,
       offline: 0,
@@ -439,7 +445,9 @@ export function MapDriverSearchSheet({
               style={({ pressed }) => [
                 s.card,
                 pressed && s.rowPressed,
-                item.enrichment.operationalStatus === "on_mission" && s.cardMission,
+                (item.enrichment.operationalStatus === "busy" ||
+                  item.enrichment.operationalStatus === "assigned") &&
+                  s.cardMission,
               ]}
               accessibilityRole="button"
               accessibilityLabel={`Afficher ${resolveDriverDisplayName(item)}`}

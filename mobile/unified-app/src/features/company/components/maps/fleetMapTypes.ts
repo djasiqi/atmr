@@ -6,7 +6,8 @@ import type { CameraPolicy } from "../../dashboard/cockpit/cameraPolicyManager";
 export type FleetMapStatusFilter =
   | "all"
   | "available"
-  | "on_mission"
+  | "busy"
+  | "assigned"
   | "break"
   | "delayed"
   | "urgent";

@@ -334,38 +334,61 @@ export function encodeFleetMarkerPngDataUri(
 
 export function buildDriverMarkerPngUri(options: {
   fill: string;
-  selected: boolean;
-  pulse: boolean;
+  opacity: number;
+  label: string;
   sizePx: number;
 }): string {
-  const { fill, selected, pulse, sizePx } = options;
-  const key = `driver:${fill}:${selected}:${pulse}:${sizePx}`;
+  const { fill, opacity, label, sizePx } = options;
+  const key = `driver:${fill}:${opacity}:${label}:${sizePx}`;
   return encodeFleetMarkerPngDataUri(key, sizePx, sizePx, (data, w, h) => {
     const cx = w / 2;
     const cy = h / 2;
-    const coreR = (selected ? 17 : 15) * (sizePx / 56);
-    if (pulse) {
-      fillCircle(data, w, h, cx, cy, coreR + 4, parseHexColor(fill, 45));
+    const scale = sizePx / 24;
+    const coreR = 8.2 * scale;
+    const strokeW = 2.5;
+    const fillColor = parseHexColor(fill, Math.round(opacity * 255));
+    strokeCircle(data, w, h, cx, cy, coreR, strokeW, parseHexColor("#ffffff", 245));
+    fillCircle(data, w, h, cx, cy, coreR - strokeW * 0.4, fillColor);
+    const trimmed = label.trim().slice(0, 2).toUpperCase();
+    if (trimmed.length > 0) {
+      const textScale = Math.max(2, Math.round(2.2 * scale));
+      const textW = trimmed.length * 6 * textScale;
+      drawText(
+        data,
+        w,
+        h,
+        trimmed,
+        Math.round(cx - textW / 2),
+        Math.round(cy - 5 * textScale),
+        parseHexColor("#ffffff", 255),
+        textScale
+      );
     }
-    fillCircle(data, w, h, cx, cy, coreR + 2, parseHexColor(fill, 46));
-    strokeCircle(data, w, h, cx, cy, coreR, 2.5, parseHexColor("#ffffff", 245));
-    fillCircle(data, w, h, cx, cy, coreR - 1, parseHexColor(fill, 255));
-    fillCircle(data, w, h, cx, cy, 3.5, parseHexColor("#ffffff", 230));
   });
 }
 
-export function buildClusterMarkerPngUri(count: number, sizePx: number): string {
-  const key = `cluster:${count}:${sizePx}`;
+export function buildClusterMarkerPngUri(count: number, sizePx: number, fillColor: string): string {
+  const key = `cluster:${count}:${sizePx}:${fillColor}`;
   return encodeFleetMarkerPngDataUri(key, sizePx, sizePx, (data, w, h) => {
     const cx = w / 2;
     const cy = h / 2;
-    const r = 15 * (sizePx / 56);
-    fillCircle(data, w, h, cx, cy, r + 2, parseHexColor("#3498DB", 50));
-    fillCircle(data, w, h, cx, cy, r, parseHexColor("#3498DB", 255));
-    strokeCircle(data, w, h, cx, cy, r, 2, parseHexColor("#ffffff", 255));
+    const r = w / 2 - 2;
+    const fill = parseHexColor(fillColor, 255);
+    fillCircle(data, w, h, cx, cy, r, fill);
+    strokeCircle(data, w, h, cx, cy, r, 2.5, parseHexColor("#ffffff", 255));
     const label = count > 99 ? "99" : String(count);
-    const textW = label.length * 6 * 2;
-    drawText(data, w, h, label, Math.round(cx - textW / 2), Math.round(cy - 5), parseHexColor("#ffffff", 255), 2);
+    const textScale = 2;
+    const textW = label.length * 6 * textScale;
+    drawText(
+      data,
+      w,
+      h,
+      label,
+      Math.round(cx - textW / 2),
+      Math.round(cy - 5 * textScale),
+      parseHexColor("#ffffff", 255),
+      textScale
+    );
   });
 }
 

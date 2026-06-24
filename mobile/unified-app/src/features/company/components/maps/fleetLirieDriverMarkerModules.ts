@@ -14,10 +14,14 @@ export type LirieDriverMarkerAssetKey =
 export const LIRIE_STATUS_TO_MARKER_ASSET: Record<FleetOperationalStatus, LirieDriverMarkerAssetKey> =
   {
     available: "available",
-    on_mission: "assigned",
+    assigned: "assigned",
+    busy: "assigned",
     break: "warning",
+    constrained: "warning",
     delayed: "critical",
     incident: "critical",
+    emergency: "critical",
+    last_known: "offline",
     offline: "offline",
   };
 

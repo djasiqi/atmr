@@ -2,7 +2,8 @@ import type { CompanyDispatchMission, CompanyDriverLiveLocation } from "../../ap
 
 import type { DashboardLiveOverlay } from "../../dashboard/companyDashboardViewModel";
 
-import { isDriverPositionStale, resolveDriverDisplayName } from "../../utils/companyDriverMapStatus";
+import { resolveDriverDisplayName } from "../../utils/companyDriverMapStatus";
+import { isFleetDriverConstrained } from "./fleetMapStatusContract";
 
 import {
 
@@ -199,7 +200,9 @@ function operationalStatusScore(driver: FleetDriverMapItem): number {
   if (st === "incident") return 320;
   if (st === "constrained") return 280;
   if (st === "delayed") return 300;
-  if (st === "on_mission") return 260;
+  if (st === "busy") return 260;
+  if (st === "assigned") return 240;
+  if (st === "emergency") return 310;
   if (st === "available") return 200;
   if (st === "break") return 150;
   return 100;
@@ -220,14 +223,7 @@ export function pickPrimaryFleetDriver(drivers: FleetDriverMapItem[]): FleetDriv
   return ranked[0] ?? null;
 }
 
-const CONSTRAINED_DRIVER_STATUSES = new Set(["assigned_constrained", "available_constrained"]);
-
-export function isFleetDriverConstrained(driver: CompanyDriverLiveLocation): boolean {
-  const presence = String(driver.presence_status ?? "").toLowerCase();
-  if (presence === "degraded_constrained") return true;
-  const status = String(driver.status ?? "").toLowerCase();
-  return CONSTRAINED_DRIVER_STATUSES.has(status);
-}
+export { isFleetDriverConstrained } from "./fleetMapStatusContract";
 
 /** Compteur « localisés » carte — parité web (hors offline / offline_unknown). */
 export function isFleetDriverLocated(driver: CompanyDriverLiveLocation): boolean {
@@ -258,14 +254,17 @@ export function formatFleetConstraintReason(driver: CompanyDriverLiveLocation): 
   return CONSTRAINT_REASON_LABELS[key] ?? key.replace(/_/g, " ");
 }
 
+function isDriverEmergency(driver: CompanyDriverLiveLocation): boolean {
+  const status = String(driver.status ?? "").toLowerCase();
+  if (status === "emergency") return true;
+  const emergencyMode = (driver as { emergency_mode?: boolean }).emergency_mode;
+  return emergencyMode === true;
+}
+
 export function resolveFleetOperationalStatus(
-
   driver: CompanyDriverLiveLocation,
-
   linkedMission: CompanyDispatchMission | null
-
 ): FleetOperationalStatus {
-
   if (driver.location_status === "last_known") return "last_known";
 
   const activeMission =
@@ -273,38 +272,36 @@ export function resolveFleetOperationalStatus(
 
   if (!activeMission && isFleetDriverConstrained(driver)) return "constrained";
 
-  if (isDriverPositionStale(driver)) return "offline";
+  if (isDriverEmergency(driver)) return "emergency";
 
   const delayMin = Number(activeMission?.assignment_pickup_delay_minutes);
-
   if (activeMission && Number.isFinite(delayMin) && delayMin >= 20) return "incident";
-
   if (activeMission && isMissionDelayed(activeMission)) return "delayed";
 
-  if (activeMission) return "on_mission";
-
-  const speed = Number(driver.speed);
-
-  if (
-
-    driver.location_status === "live" &&
-
-    Number.isFinite(speed) &&
-
-    speed < 0.4 &&
-
-    driver.mission_id == null &&
-
-    !activeMission
-
-  ) {
-
-    return "break";
-
+  if (activeMission) {
+    const backendStatus = String(driver.status ?? "").toLowerCase();
+    if (backendStatus === "assigned" || activeMission.status === "assigned") return "assigned";
+    return "busy";
   }
 
-  return "available";
+  const backendStatus = String(driver.status ?? "").toLowerCase();
+  if (backendStatus === "offline") return "offline";
+  if (backendStatus === "assigned") return "assigned";
+  if (backendStatus === "busy") return "busy";
 
+  const speed = Number(driver.speed);
+  if (
+    driver.location_status === "live" &&
+    Number.isFinite(speed) &&
+    speed < 0.4 &&
+    driver.mission_id == null &&
+    !activeMission
+  ) {
+    return "break";
+  }
+
+  if (backendStatus === "available") return "available";
+  return "available";
 }
 
 
@@ -519,9 +516,13 @@ export function filterFleetDrivers(
 
         return operationalStatus === "available";
 
-      case "on_mission":
+      case "busy":
 
-        return operationalStatus === "on_mission";
+        return operationalStatus === "busy";
+
+      case "assigned":
+
+        return operationalStatus === "assigned";
 
       case "break":
 

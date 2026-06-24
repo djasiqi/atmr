@@ -1,19 +1,16 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Marker } from "react-native-maps";
-import { Platform } from "react-native";
+import { memo, useCallback, useEffect, useMemo } from "react";
 
 import type { FleetDriverMapItem } from "./fleetMapTypes";
 import { FleetMapRasterMarker } from "./FleetMapRasterMarker";
-import { FleetDriverLivePulse } from "./FleetDriverLivePulse";
-import { shouldFleetMarkerLivePulse } from "./fleetMapLiveMarker";
 import { FLEET_STATUS_THEME } from "./mapStatusTheme";
 import { driverFleetMarkerTitle } from "../../utils/companyDriverMapStatus";
 import { buildFleetDriverMarkerImageSource } from "./fleetNativeMarkerImage";
 import { resolveFleetMarkerAnchor } from "./resolveFleetMarkerAnchor";
 import { countDriverMarkerRender } from "./fleetMapDevInstrumentation";
 import { recordDriverMarkerRender } from "../../../../core/observability/perfInstrumentation";
-import { IOS_MAP_NO_CUSTOM_MARKER_CHILDREN, isValidMapCoord } from "./mapsIosNewArchSafeMode";
+import { isValidMapCoord } from "./mapsIosNewArchSafeMode";
 import { useFleetMarkerMotion } from "./useFleetMarkerMotion";
+import { isFleetDriverMarkerStale } from "./fleetMapStale";
 
 type Props = {
   item: FleetDriverMapItem;
@@ -32,15 +29,11 @@ function DriverMarkerComponent({
 }: Props) {
   const status = item.enrichment.operationalStatus;
   const theme = FLEET_STATUS_THEME[status];
-  const showLivePulse = useMemo(
-    () => shouldFleetMarkerLivePulse(status, item),
-    [item, status]
-  );
-  const pulseVariant = status === "on_mission" ? "mission" : "available";
+  const isStale = useMemo(() => isFleetDriverMarkerStale(item), [item]);
 
   const imageSource = useMemo(
-    () => buildFleetDriverMarkerImageSource(status, selected),
-    [selected, status]
+    () => buildFleetDriverMarkerImageSource(status, item, { isStale }),
+    [isStale, item, status]
   );
   const markerAnchor = useMemo(
     () => resolveFleetMarkerAnchor(imageSource),
@@ -52,28 +45,17 @@ function DriverMarkerComponent({
     [item.latitude, item.longitude]
   );
 
-  const pulseMarkerRef = useRef<Marker | null>(null);
   const { displayCoordinate, primaryMarkerRef } = useFleetMarkerMotion({
     target: targetCoordinate,
     markerKey: String(item.driver_id),
     recordedAt: item.recorded_at ?? item.timestamp,
     locationStatus: item.location_status,
-    secondaryMarkerRef: pulseMarkerRef,
   });
-
-  const [pulseTracksViewChanges, setPulseTracksViewChanges] = useState(Platform.OS === "android");
 
   useEffect(() => {
     countDriverMarkerRender(item.driver_id);
     recordDriverMarkerRender();
   });
-
-  useEffect(() => {
-    if (!showLivePulse) return;
-    setPulseTracksViewChanges(Platform.OS === "android");
-    const id = setTimeout(() => setPulseTracksViewChanges(false), 400);
-    return () => clearTimeout(id);
-  }, [showLivePulse, displayCoordinate.latitude, displayCoordinate.longitude]);
 
   const handlePress = useCallback(
     (e: { stopPropagation?: () => void }) => {
@@ -84,6 +66,7 @@ function DriverMarkerComponent({
   );
 
   void vectorMode;
+  void selected;
 
   if (!imageSource.uri?.trim()) {
     return null;
@@ -94,31 +77,16 @@ function DriverMarkerComponent({
   }
 
   return (
-    <>
-      {showLivePulse && !IOS_MAP_NO_CUSTOM_MARKER_CHILDREN ? (
-        <Marker
-          ref={pulseMarkerRef}
-          coordinate={displayCoordinate}
-          anchor={{ x: 0.5, y: 0.58 }}
-          tracksViewChanges={pulseTracksViewChanges}
-          zIndex={(selected ? 999 : theme.priority) - 1}
-          opacity={dimmed ? 0.45 : 1}
-          pointerEvents="none"
-        >
-          <FleetDriverLivePulse color={theme.fill} variant={pulseVariant} />
-        </Marker>
-      ) : null}
-      <FleetMapRasterMarker
-        ref={primaryMarkerRef}
-        coordinate={displayCoordinate}
-        imageSource={imageSource}
-        anchor={markerAnchor}
-        title={driverFleetMarkerTitle(item)}
-        onPress={handlePress}
-        zIndex={selected ? 999 : theme.priority}
-        opacity={dimmed ? 0.45 : 1}
-      />
-    </>
+    <FleetMapRasterMarker
+      ref={primaryMarkerRef}
+      coordinate={displayCoordinate}
+      imageSource={imageSource}
+      anchor={markerAnchor}
+      title={driverFleetMarkerTitle(item)}
+      onPress={handlePress}
+      zIndex={theme.priority}
+      opacity={dimmed ? 0.45 : 1}
+    />
   );
 }
 
@@ -128,6 +96,8 @@ function areDriverMarkerPropsEqual(prev: Props, next: Props): boolean {
     prev.item.latitude === next.item.latitude &&
     prev.item.longitude === next.item.longitude &&
     prev.item.location_status === next.item.location_status &&
+    prev.item.last_seen_seconds === next.item.last_seen_seconds &&
+    prev.item.tracking_display_status === next.item.tracking_display_status &&
     prev.item.recorded_at === next.item.recorded_at &&
     prev.item.timestamp === next.item.timestamp &&
     prev.selected === next.selected &&

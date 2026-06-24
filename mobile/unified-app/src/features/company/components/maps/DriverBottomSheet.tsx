@@ -2135,7 +2135,7 @@ const s = StyleSheet.create({
 
   missionBlock: { gap: 4 },
 
-  clientLine: { color: FLEET_MAP_COLORS.onMission, fontWeight: "700", fontSize: FONT_SIZE.px12 },
+  clientLine: { color: FLEET_MAP_COLORS.busy, fontWeight: "700", fontSize: FONT_SIZE.px12 },
 
   routeLine: { color: FLEET_MAP_COLORS.text, fontWeight: "600", lineHeight: 18, fontSize: FONT_SIZE.px13 },
 

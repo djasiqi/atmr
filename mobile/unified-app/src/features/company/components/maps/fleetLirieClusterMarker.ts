@@ -1,18 +1,19 @@
-import { LIRIE_DRIVER_PIN_ASPECT } from "./fleetLirieDriverMarkerAssets";
+import { LIRIE_DRIVER_MARKER_DISPLAY_WIDTH_PX } from "./fleetLirieMarkerSizing";
 import type { FleetDriverMapItem } from "./fleetMapTypes";
 import type { FleetOperationalStatus } from "./mapStatusTheme";
-import {
-  LIRIE_CLUSTER_COUNT_BADGE_HEIGHT_PX,
-  LIRIE_DRIVER_MARKER_DISPLAY_WIDTH_PX,
-} from "./fleetLirieMarkerSizing";
+import { resolveClusterMarkerSizePx } from "./fleetLirieMarkerSizing";
 
-/** Statut le plus urgent parmi les chauffeurs du cluster (icône représentative). */
+/** Statut le plus urgent parmi les chauffeurs du cluster (couleur du disque). */
 const CLUSTER_STATUS_PRIORITY: FleetOperationalStatus[] = [
+  "emergency",
   "incident",
   "delayed",
-  "on_mission",
+  "constrained",
+  "busy",
+  "assigned",
   "break",
   "available",
+  "last_known",
   "offline",
 ];
 
@@ -27,16 +28,18 @@ export function pickClusterRepresentativeStatus(
   return "available";
 }
 
+export { resolveClusterMarkerSizePx };
+
 export type FleetClusterCountBadgeLayout = {
   label: string;
   width: number;
   height: number;
 };
 
-/** Libellé + dimensions (cercle 1 chiffre, pilule 2+). */
+/** @deprecated Clusters utilisent un seul disque web — conservé pour compat tests legacy. */
 export function resolveFleetClusterCountBadgeLayout(count: number): FleetClusterCountBadgeLayout {
   const label = count > 99 ? "99+" : String(count);
-  const height = LIRIE_CLUSTER_COUNT_BADGE_HEIGHT_PX;
+  const height = 24;
   if (label.length <= 1) {
     return { label, width: height, height };
   }
@@ -46,9 +49,10 @@ export function resolveFleetClusterCountBadgeLayout(count: number): FleetCluster
   return { label, width: 32, height };
 }
 
-/** Ancrage : y bas = pastille plus basse sur la carte (proche du corps de l’icône). */
+/** @deprecated */
 export const FLEET_CLUSTER_COUNT_BADGE_ANCHOR = { x: -0.08, y: 0.68 } as const;
 
+/** @deprecated */
 export function resolveFleetClusterBadgeFontSize(label: string): number {
   if (label.length >= 3) return 9;
   return 11;
@@ -62,11 +66,11 @@ export type FleetClusterMarkerHostLayout = FleetClusterCountBadgeLayout & {
   fontSize: number;
 };
 
-/** Dimensions du conteneur Marker (icône PNG + pastille à droite). */
+/** @deprecated */
 export function resolveFleetClusterMarkerHostLayout(count: number): FleetClusterMarkerHostLayout {
   const badge = resolveFleetClusterCountBadgeLayout(count);
   const iconW = LIRIE_DRIVER_MARKER_DISPLAY_WIDTH_PX;
-  const iconH = Math.round(iconW * LIRIE_DRIVER_PIN_ASPECT);
+  const iconH = iconW;
   const hostW = iconW + Math.round(badge.width * 0.72);
   const hostH = iconH;
   return {

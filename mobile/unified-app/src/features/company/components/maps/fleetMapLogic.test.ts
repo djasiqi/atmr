@@ -12,6 +12,7 @@ import {
   resolveFleetOperationalStatus,
   formatFleetConstraintReason,
 } from "./fleetMapLogic";
+import { isFleetDriverMarkerStale } from "./fleetMapStale";
 import { DEFAULT_FLEET_MAP_FILTERS } from "./fleetMapTypes";
 
 const baseDriver = (id: number, lat: number, lng: number, missionId?: number): CompanyDriverLiveLocation => ({
@@ -58,7 +59,7 @@ describe("fleetMapLogic", () => {
     expect(filtered.map((d) => d.driver_id).sort()).toEqual([1, 2]);
   });
 
-  it("does not mark on_mission when mission is completed", () => {
+  it("does not mark busy when mission is completed", () => {
     const driver = baseDriver(2, 46.3, 6.15, 5);
     const completed: CompanyDispatchMission = {
       mission_id: 5,
@@ -70,13 +71,35 @@ describe("fleetMapLogic", () => {
     expect(enriched.enrichment.operationalStatus).toBe("available");
   });
 
-  it("offline when stale", () => {
+  it("stale ne force plus le statut offline", () => {
     const driver: CompanyDriverLiveLocation = {
-      ...baseDriver(1, 46.2, 6.14),
+      ...baseDriver(1, 46.2, 6.14, 10),
       last_seen_seconds: 500,
       location_status: "stale",
+      status: "busy",
     };
-    expect(resolveFleetOperationalStatus(driver, null)).toBe("offline");
+    const mission: CompanyDispatchMission = {
+      mission_id: 10,
+      status: "en_route",
+      driver_id: 1,
+    };
+    expect(resolveFleetOperationalStatus(driver, mission)).toBe("busy");
+    expect(isFleetDriverMarkerStale(driver)).toBe(true);
+  });
+
+  it("assigned when mission status is assigned", () => {
+    const driver = { ...baseDriver(1, 46.2, 6.14, 10), status: "assigned" };
+    const mission: CompanyDispatchMission = {
+      mission_id: 10,
+      status: "assigned",
+      driver_id: 1,
+    };
+    expect(resolveFleetOperationalStatus(driver, mission)).toBe("assigned");
+  });
+
+  it("emergency from backend status", () => {
+    const driver = { ...baseDriver(1, 46.2, 6.14), status: "emergency" };
+    expect(resolveFleetOperationalStatus(driver, null)).toBe("emergency");
   });
 
   it("last_known distinct de offline", () => {

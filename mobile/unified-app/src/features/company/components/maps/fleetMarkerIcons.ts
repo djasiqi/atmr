@@ -1,4 +1,5 @@
 import type { FleetMarkerVariant } from "./mapStatusTheme";
+import { FLEET_DRIVER_MARKER_WEB_BASE_PX } from "./fleetLirieMarkerSizing";
 
 /** Canvas SVG avec marge transparente (évite le rognage react-native-maps). */
 const VIEWBOX = 56;
@@ -22,6 +23,83 @@ function escapeSvgText(input: string): string {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
+}
+
+/** Initiales marqueur (2 lettres max) — parité web makeCircleMarkerIcon. */
+export function resolveDriverMarkerInitials(driverName: string): string {
+  const labelRaw = driverName.trim().toUpperCase();
+  return labelRaw.slice(0, 2);
+}
+
+type FleetCircleMarkerOptions = {
+  label?: string;
+  textColor?: string;
+  ringColor?: string;
+};
+
+/**
+ * Marqueur cercle chauffeur — parité web makeCircleMarkerIcon, mis à l'échelle mobile.
+ */
+export function buildFleetCircleMarkerSvgMarkup(
+  color: string,
+  sizePx: number,
+  opacity = 1,
+  options: FleetCircleMarkerOptions = {}
+): string {
+  const scale = sizePx / FLEET_DRIVER_MARKER_WEB_BASE_PX;
+  const cx = sizePx / 2;
+  const cy = sizePx / 2;
+  const r = 8.2 * scale;
+  const strokeW = 2.1 * scale;
+  const fontSize = 7.4 * scale;
+  const labelRaw = typeof options.label === "string" ? options.label.trim().toUpperCase() : "";
+  const label = escapeSvgText(labelRaw.slice(0, 2));
+  const textColor = options.textColor ?? "#ffffff";
+  const ringColor = options.ringColor ?? "#ffffff";
+  const textNode = label
+    ? `<text x="${cx}" y="${cy + 0.4 * scale}" text-anchor="middle" dominant-baseline="central" fill="${textColor}" font-size="${fontSize}" font-weight="700" letter-spacing="0.2" font-family="-apple-system,Segoe UI,Roboto,sans-serif">${label}</text>`
+    : "";
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${sizePx}" height="${sizePx}" viewBox="0 0 ${sizePx} ${sizePx}" aria-hidden="true">
+    <defs>
+      <filter id="ds" x="-20%" y="-20%" width="140%" height="140%">
+        <feDropShadow dx="0" dy="${1 * scale}" stdDeviation="${1.5 * scale}" flood-color="#000" flood-opacity="0.2"/>
+      </filter>
+    </defs>
+    <circle cx="${cx}" cy="${cy}" r="${r}" fill="${color}" fill-opacity="${opacity}" stroke="${ringColor}" stroke-width="${strokeW}" filter="url(#ds)"/>
+    ${textNode}
+  </svg>`;
+}
+
+export function makeFleetCircleMarkerDataUrl(
+  color: string,
+  sizePx: number,
+  opacity = 1,
+  options: FleetCircleMarkerOptions = {}
+): string {
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(
+    buildFleetCircleMarkerSvgMarkup(color, sizePx, opacity, options)
+  )}`;
+}
+
+export function createFleetCircleMarkerElement(
+  color: string,
+  sizePx: number,
+  opacity = 1,
+  options: FleetCircleMarkerOptions & { title?: string } = {}
+): HTMLElement | null {
+  if (typeof document === "undefined") return null;
+  const root = document.createElement("div");
+  applyMarkerHostStyles(
+    root,
+    sizePx,
+    "filter:drop-shadow(0 1px 3px rgba(15,23,42,0.2))",
+    options.title
+  );
+  return mountSvgMarkup(
+    root,
+    buildFleetCircleMarkerSvgMarkup(color, sizePx, opacity, options),
+    sizePx
+  );
 }
 
 function incidentTrianglePath(cx: number, cy: number, r: number): string {
@@ -221,44 +299,56 @@ export function makeFleetClusterCountBadgeDataUrl(
   )}`;
 }
 
-export function buildFleetClusterMarkerSvgMarkup(count: number, sizePx = VIEWBOX): string {
+export function buildFleetClusterMarkerSvgMarkup(
+  count: number,
+  fillColor: string,
+  sizePx?: number
+): string {
+  const size = sizePx ?? (count < 10 ? 40 : count < 50 ? 46 : 52);
   const label = escapeSvgText(String(Math.min(99, count)));
-  const cx = sizePx / 2;
-  const cy = sizePx / 2;
-  const innerR = Math.max(12, Math.round(sizePx * 0.36));
+  const cx = size / 2;
+  const cy = size / 2;
+  const innerR = size / 2 - 2;
   const fontSize = label.length >= 2 ? 11 : 13;
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${sizePx}" height="${sizePx}" viewBox="0 0 ${sizePx} ${sizePx}" aria-hidden="true">
-    ${MARKER_SHADOW_FILTER}
-    <circle cx="${cx}" cy="${cy}" r="${innerR + 3}" fill="#00796B" fill-opacity="0.18"/>
-    <g filter="url(#fleetPinShadow)">
-      <circle cx="${cx}" cy="${cy}" r="${innerR}" fill="#00796B"/>
-      <text x="${cx}" y="${cy + 0.5}" text-anchor="middle" dominant-baseline="central" fill="#ffffff"
-        font-size="${fontSize}" font-weight="600"
-        font-family="system-ui,-apple-system,Segoe UI,Roboto,sans-serif">${label}</text>
-    </g>
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" aria-hidden="true">
+    <defs>
+      <filter id="cs" x="-15%" y="-15%" width="130%" height="130%">
+        <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#000" flood-opacity="0.2"/>
+      </filter>
+    </defs>
+    <circle cx="${cx}" cy="${cy}" r="${innerR}" fill="${fillColor}" stroke="#fff" stroke-width="2.5" filter="url(#cs)"/>
+    <text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="central" fill="#fff"
+      font-size="${fontSize}" font-weight="600"
+      font-family="-apple-system,system-ui,sans-serif">${label}</text>
   </svg>`;
 }
 
-export function makeFleetClusterMarkerDataUrl(count: number, sizePx = VIEWBOX): string {
+export function makeFleetClusterMarkerDataUrl(
+  count: number,
+  fillColor: string,
+  sizePx?: number
+): string {
   return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(
-    buildFleetClusterMarkerSvgMarkup(count, sizePx)
+    buildFleetClusterMarkerSvgMarkup(count, fillColor, sizePx)
   )}`;
 }
 
 export function createFleetClusterMarkerElement(
   count: number,
-  sizePx = VIEWBOX,
+  fillColor: string,
+  sizePx?: number,
   title?: string
 ): HTMLElement | null {
   if (typeof document === "undefined") return null;
+  const size = sizePx ?? (count < 10 ? 40 : count < 50 ? 46 : 52);
   const root = document.createElement("div");
   applyMarkerHostStyles(
     root,
-    sizePx,
+    size,
     "filter:drop-shadow(0 6px 12px rgba(30,58,138,0.2))",
     title
   );
-  return mountSvgMarkup(root, buildFleetClusterMarkerSvgMarkup(count, sizePx), sizePx);
+  return mountSvgMarkup(root, buildFleetClusterMarkerSvgMarkup(count, fillColor, size), size);
 }
 
 /** Pastille mission (P/D) — data URL pour react-native-maps (`image`), sans pin Google natif. */

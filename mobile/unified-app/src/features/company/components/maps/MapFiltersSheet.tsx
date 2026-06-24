@@ -29,7 +29,9 @@ const STATUS_OPTIONS: { key: FleetMapStatusFilter; label: string }[] = [
 
   { key: "available", label: "Disponible" },
 
-  { key: "on_mission", label: "En mission" },
+  { key: "busy", label: "En mission" },
+
+  { key: "assigned", label: "Assigné" },
 
   { key: "break", label: "En pause" },
 

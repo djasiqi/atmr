@@ -1,8 +1,9 @@
 import {
   pickClusterRepresentativeStatus,
-  resolveFleetClusterMarkerHostLayout,
+  resolveClusterMarkerSizePx,
 } from "./fleetLirieClusterMarker";
-import { buildFleetClusterCountBadgeImageSource } from "./fleetNativeMarkerImage";
+import { buildFleetClusterMarkerImageSource } from "./fleetNativeMarkerImage";
+import { FLEET_WEB_STATUS_COLORS } from "./fleetMapStatusContract";
 import type { FleetDriverMapItem } from "./fleetMapTypes";
 
 function driverWithStatus(status: FleetDriverMapItem["enrichment"]["operationalStatus"]): FleetDriverMapItem {
@@ -10,8 +11,18 @@ function driverWithStatus(status: FleetDriverMapItem["enrichment"]["operationalS
     driver_id: 1,
     latitude: 46.2,
     longitude: 6.1,
+    timestamp: new Date().toISOString(),
     enrichment: {
       operationalStatus: status,
+      linkedMission: null,
+      delayMinutes: null,
+      vehicleType: null,
+      licensePlate: null,
+      currentAddress: null,
+      destinationAddress: null,
+      etaLabel: null,
+      distanceLabel: null,
+      phone: null,
     },
   } as FleetDriverMapItem;
 }
@@ -24,23 +35,24 @@ describe("fleetLirieClusterMarker", () => {
         driverWithStatus("delayed"),
       ])
     ).toBe("delayed");
+    expect(
+      pickClusterRepresentativeStatus([
+        driverWithStatus("busy"),
+        driverWithStatus("emergency"),
+      ])
+    ).toBe("emergency");
   });
 
-  it("dimensionne le conteneur cluster avec pastille à droite", () => {
-    const host = resolveFleetClusterMarkerHostLayout(2);
-    expect(host.hostW).toBeGreaterThan(host.iconW);
-    expect(host.fontSize).toBe(11);
-    expect(host.width).toBe(24);
+  it("tailles cluster alignées web", () => {
+    expect(resolveClusterMarkerSizePx(3)).toBe(40);
+    expect(resolveClusterMarkerSizePx(12)).toBe(46);
+    expect(resolveClusterMarkerSizePx(60)).toBe(52);
   });
 
-  it("produit une pastille compteur raster agrandie", () => {
-    const single = buildFleetClusterCountBadgeImageSource(2);
-    expect(single.width).toBe(24);
-    expect(single.height).toBe(24);
-
-    const duo = buildFleetClusterCountBadgeImageSource(12);
-    expect(duo.width).toBe(28);
-    expect(duo.height).toBe(24);
-    expect(duo.uri.length).toBeGreaterThan(0);
+  it("produit un cluster raster avec couleur dominante", () => {
+    const src = buildFleetClusterMarkerImageSource(3, [driverWithStatus("incident")]);
+    expect(src.width).toBe(40);
+    expect(src.uri.length).toBeGreaterThan(0);
+    expect(decodeURIComponent(src.uri)).toContain(FLEET_WEB_STATUS_COLORS.emergency);
   });
 });
