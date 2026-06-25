@@ -41,27 +41,60 @@ def _preferential_rate_to_booking_amount(rate: float, *, is_round_trip: bool) ->
     return round(per_leg * 2.0, 2) if is_round_trip else per_leg
 
 
+def _amount_encodes_round_trip_total(breakdown: dict[str, Any] | None) -> bool:
+    """Vrai si le tarif renvoyé encode déjà l'aller-retour (montant = total).
+
+    Seul le modèle de tarification ``zone`` applique une clé tarifaire
+    ``round_trip`` distincte : dans ce cas le montant calculé représente le
+    TOTAL des deux trajets et doit être réparti 50/50.
+
+    Tous les autres modèles (flat, distance, zone_count, hybrid_stack,
+    zone_matrix) ignorent l'aller-retour et renvoient un prix PAR trajet : le
+    montant doit alors être porté en entier sur chaque trajet (total = 2×).
+
+    La détection se base sur la règle tarifaire effectivement appliquée
+    (``base.rule``), ce qui reste correct même quand ``zone_matrix`` retombe
+    sur ``zone`` (auquel cas le tarif A/R a réellement été appliqué).
+    """
+    if not isinstance(breakdown, dict):
+        return False
+    base = breakdown.get("base")
+    rule = base.get("rule") if isinstance(base, dict) else None
+    return isinstance(rule, str) and "round_trip" in rule
+
+
 def _resolve_leg_amounts(
-    total: float,
+    amount: float,
     *,
     is_round_trip: bool,
     price_total: float | None,
     preferential_per_leg: float | None = None,
+    split_total: bool = False,
 ) -> tuple[float, float, float, float | None]:
-    """Répartit le montant total sur l'aller et le retour.
+    """Répartit le montant sur l'aller et le retour.
 
-    Tarif préférentiel A/R : montant identique par trajet (ex. 35 + 35 CHF).
-    Sinon : répartition 50/50 du total saisi ou simulé.
+    - Tarif préférentiel A/R : montant identique par trajet (ex. 35 + 35 CHF).
+    - ``split_total=True`` (modèle ``zone`` avec tarif A/R configuré) : le
+      montant est un TOTAL réparti 50/50.
+    - ``split_total=False`` (cas par défaut : prix simulé par trajet ou saisi
+      manuellement) : le montant est un prix PAR trajet, porté en entier sur
+      l'aller ET le retour (total facturé = 2×). Cohérent avec le tarif
+      préférentiel.
     """
     if not is_round_trip:
-        outbound_price = float(price_total if price_total is not None else total)
-        return float(total), 0.0, outbound_price, None
+        outbound_price = float(price_total if price_total is not None else amount)
+        return float(amount), 0.0, outbound_price, None
 
     if preferential_per_leg is not None and float(preferential_per_leg) > 0:
         leg = round(float(preferential_per_leg), 2)
         return leg, leg, leg, leg
 
-    outbound_amount, return_amount = _split_round_trip_total_amount(float(total))
+    if not split_total:
+        leg = round(float(amount), 2)
+        leg_price = round(float(price_total), 2) if price_total is not None else leg
+        return leg, leg, leg_price, leg_price
+
+    outbound_amount, return_amount = _split_round_trip_total_amount(float(amount))
     if price_total is not None:
         outbound_price, return_price = _split_round_trip_total_amount(float(price_total))
     else:
@@ -488,6 +521,9 @@ class CreateManualBookingUseCase:
         delivery_description = " ".join(raw_desc.split()) if raw_desc else None
 
         preferential_per_leg_rate: float | None = None
+        # Vrai uniquement quand le tarif calculé encode déjà l'A/R (modèle zone).
+        # Sinon le montant est un prix par trajet (porté en entier sur chaque sens).
+        amount_is_round_trip_total = False
 
         if mission_type == "material_delivery":
             from models import CompanyBillingSettings
@@ -670,6 +706,9 @@ class CreateManualBookingUseCase:
                         price_amount = amount_to_use
                         price_breakdown_json = dict(computed_breakdown or {})
                         amount_source_used = "simulated"
+                        amount_is_round_trip_total = (
+                            _amount_encodes_round_trip_total(price_breakdown_json)
+                        )
                     except Exception:
                         logger.exception(
                             "Pricing compute failed during manual booking create"
@@ -688,11 +727,15 @@ class CreateManualBookingUseCase:
                 is_round_trip=is_rt,
                 price_total=price_amount,
                 preferential_per_leg=preferential_per_leg_rate,
+                split_total=amount_is_round_trip_total,
             )
         )
         if is_rt:
+            # Le total facturé est toujours la somme des deux trajets (50/50 du
+            # total pour le modèle zone, ou prix par trajet × 2 sinon).
+            booking_total = round(outbound_amount + return_leg_amount, 2)
             _validate_round_trip_leg_amounts(
-                outbound_amount, return_leg_amount, amount_to_use
+                outbound_amount, return_leg_amount, booking_total
             )
 
         created_outbounds: list[Booking] = []
