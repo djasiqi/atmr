@@ -19,8 +19,7 @@ import { driverTrackingQueue } from "./driverTrackingQueue";
 import {
   syncBridgeQueueDepthFromPersistence,
   forceRestartTrackingWatchFromBridge,
-  getDriverTrackingBridgeSnapshot,
-  startDriverTrackingBridge,
+  hardRestartDriverTrackingBridge,
 } from "./driverTrackingBridge";
 import { pickTrackingMission } from "../domain/pickTrackingMission";
 import { isTrackingActiveStatus } from "../domain/status";
@@ -43,13 +42,15 @@ const REMOTE_KICK_COOLDOWN_MS = Number(
 let lastRemoteKickAtMs = 0;
 
 /**
- * Kick backend `force_tracking_restart`. Deux cas :
- *  - Le runtime tourne déjà (zombie/FGS stale) → redémarrage watch/FGS ciblé.
- *  - Le runtime est arrêté à froid (manager `isRunning=false`) alors qu'une
- *    mission active existe (après login/logout, FGS tué par l'OS) →
- *    `forceRestartTrackingWatchFromBridge` ne relance PAS le manager. On relance
- *    donc le runtime complet via `startDriverTrackingBridge` à partir de la
- *    mission connue du cache React Query.
+ * Kick backend `force_tracking_restart`. Le serveur n'émet ce kick que lorsqu'il
+ * détecte un vrai problème (watchdog : pas de position fraîche). On fait donc
+ * confiance au signal et on applique la **récupération forte** :
+ *  - Si une mission live est résolvable (état du bridge OU cache React Query) →
+ *    `hardRestartDriverTrackingBridge` : teardown complet du FGS natif + watch +
+ *    engine, puis reconstruction. Couvre à la fois le cas « arrêté à froid »
+ *    (après login/logout) et le FGS zombie (service vivant mais souscription
+ *    GPS morte) — qu'un simple redémarrage de watch ne ressusciterait pas.
+ *  - Sinon (aucune mission active, ex. présence) → redémarrage watch/FGS léger.
  */
 function handleForceTrackingRestart(
   queryClient: QueryClient,
@@ -66,36 +67,45 @@ function handleForceTrackingRestart(
     return;
   }
   lastRemoteKickAtMs = nowMs;
+
+  // Mission de repli (utile uniquement si le bridge est à froid : missionId null).
+  let fallback: Parameters<typeof hardRestartDriverTrackingBridge>[0] = null;
   try {
-    const snapshot = getDriverTrackingBridgeSnapshot();
-    if (!snapshot.isRunning) {
-      const missions = queryClient.getQueryData(
-        driverQueryKeys.missions(contextId)
-      ) as DriverMission[] | undefined;
-      const active = pickTrackingMission(missions);
-      if (active?.id != null && isTrackingActiveStatus(normalizeDriverMissionStatus(active.status))) {
-        startDriverTrackingBridge(
-          active.id,
-          normalizeDriverMissionStatus(active.status),
-          {
+    const missions = queryClient.getQueryData(
+      driverQueryKeys.missions(contextId)
+    ) as DriverMission[] | undefined;
+    const active = pickTrackingMission(missions);
+    if (active?.id != null) {
+      const normalized = normalizeDriverMissionStatus(active.status);
+      if (isTrackingActiveStatus(normalized)) {
+        fallback = {
+          missionId: active.id,
+          status: normalized,
+          scheduling: {
             scheduled_time: active.scheduled_time ?? null,
             time_confirmed: active.time_confirmed ?? null,
             scheduling: active.scheduling ?? null,
-          }
-        );
-        emitDriverTelemetry("tracking.remote_kick.cold_start", {
-          source: "driver.realtime.bridge",
-          context_id: contextId,
-          mission_id: active.id,
-          mission_status: normalizeDriverMissionStatus(active.status),
-        });
-        return;
+          },
+        };
       }
     }
   } catch {
-    /* defensive : on retombe sur le redémarrage watch/FGS ci-dessous. */
+    fallback = null;
   }
-  void forceRestartTrackingWatchFromBridge("backend_remote_kick");
+
+  void hardRestartDriverTrackingBridge(fallback, "backend_remote_kick").then(
+    (restarted) => {
+    if (restarted) {
+      emitDriverTelemetry("tracking.remote_kick.hard_restart", {
+        source: "driver.realtime.bridge",
+        context_id: contextId,
+        mission_id: fallback?.missionId ?? null,
+      });
+      return;
+    }
+    // Aucune mission live → repli léger (présence/legacy).
+    void forceRestartTrackingWatchFromBridge("backend_remote_kick");
+  });
 }
 
 const DEFAULT_OPTIONS: BridgeOptions = {

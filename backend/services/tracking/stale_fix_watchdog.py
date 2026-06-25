@@ -1,12 +1,18 @@
 """Watchdog serveur — kick Socket.IO drivers en mission au tracking gelé.
 
-Deux pathologies couvertes :
+Trois pathologies couvertes :
   - ``fix_stale`` : le device track mais le dernier fix est trop ancien.
   - ``mobile_tracking_down`` : le device en mission **live** (EN_ROUTE /
     IN_PROGRESS) rapporte ``tracking_active=0`` / ``fgs_running=0`` (ou
     ``constraint_reason=fgs_not_running``). Cas observé après login/logout ou
-    FGS tué par l'OS : l'app sait que son tracking est éteint mais ne le
-    redémarre pas. Le kick force_tracking_restart réveille le runtime mobile.
+    FGS tué par l'OS : l'app sait que son tracking est éteint.
+  - ``no_fresh_position`` (correctif structurant) : pour un driver dont une
+    mission **exige** le tracking (EN_ROUTE/IN_PROGRESS, ou ASSIGNED confirmé
+    dans la fenêtre T‑30), **aucune position fraîche réelle** n'atteint le
+    pipeline (clé canonical Redis ``driver:{id}:loc:canonical`` absente ou
+    périmée) — **indépendamment** de ce que le device rapporte. C'est le seul
+    signal non‑falsifiable côté serveur : un FGS zombie peut rapporter
+    ``tracking_active=1`` / un fix natif « frais » tout en n'envoyant rien.
 """
 
 from __future__ import annotations
@@ -39,6 +45,24 @@ EMIT_FORCE_RESTART = os.getenv("EMIT_FORCE_TRACKING_RESTART", "true").lower() no
 KICK_ON_TRACKING_DOWN = os.getenv(
     "STALE_FIX_WATCHDOG_KICK_ON_TRACKING_DOWN", "true"
 ).lower() not in ("0", "false", "no", "off")
+
+# --- Correctif A : détection par fraîcheur réelle (non-falsifiable) ----------
+# Flag dédié pour rollout sûr en prod (peut être coupé sans toucher au reste).
+FRESHNESS_ENABLED = os.getenv(
+    "STALE_FIX_WATCHDOG_FRESHNESS_ENABLED", "true"
+).lower() not in ("0", "false", "no", "off")
+# Au-delà de ce délai sans position canonical acceptée alors qu'une mission
+# exige le tracking, on kicke (le mobile envoie ~toutes les 8 s : 180 s laisse
+# une marge confortable pour le démarrage et les aléas réseau).
+FRESHNESS_MAX_SEC = int(os.getenv("STALE_FIX_WATCHDOG_FRESHNESS_MAX_SEC", "180"))
+# Fenêtre ASSIGNED : on attend du tracking dès T‑30 avant l'heure prévue et
+# jusqu'à T+60 après (course confirmée non encore démarrée mais imminente/à quai).
+ASSIGNED_LEAD_BEFORE_SEC = int(
+    os.getenv("STALE_FIX_WATCHDOG_ASSIGNED_LEAD_SEC", "1800")
+)
+ASSIGNED_GRACE_AFTER_SEC = int(
+    os.getenv("STALE_FIX_WATCHDOG_ASSIGNED_GRACE_SEC", "3600")
+)
 
 
 def _kick_throttle_key(driver_id: int) -> str:
@@ -76,10 +100,40 @@ def _coerce_int(value) -> int | None:
         return None
 
 
+def _parse_dt(value) -> datetime | None:
+    """Parse un datetime (objet ou ISO string) en tz-aware UTC. None si invalide."""
+    if value is None or value == "":
+        return None
+    if isinstance(value, datetime):
+        dt = value
+    else:
+        try:
+            dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        except (ValueError, TypeError):
+            return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
+    return dt
+
+
+def _assigned_in_tracking_window(
+    scheduled_at, time_confirmed, now: datetime
+) -> bool:
+    """ASSIGNED confirmé dont l'heure prévue est dans la fenêtre [T‑30, T+60]."""
+    if not time_confirmed:
+        return False
+    dt = _parse_dt(scheduled_at)
+    if dt is None:
+        return False
+    return (dt.timestamp() - ASSIGNED_LEAD_BEFORE_SEC) <= now.timestamp() <= (
+        dt.timestamp() + ASSIGNED_GRACE_AFTER_SEC
+    )
+
+
 def _resolve_kick_reason(
     health: dict, *, live_mission: bool, now: datetime
 ) -> str | None:
-    """Retourne la raison du kick (ou None si le driver n'est pas candidat)."""
+    """Raison du kick selon le self-report device (ou None)."""
     constraint = str(health.get("constraint_reason") or "").lower()
 
     # Pathologie historique : fix_stale prolongé.
@@ -115,6 +169,51 @@ def _resolve_kick_reason(
     return "mobile_tracking_down"
 
 
+def _canonical_freshness_sec(redis_client, driver_id: int, now: datetime) -> float | None:
+    """Âge (s) de la dernière position **canonical acceptée**, ou None si absente.
+
+    Lit ``driver:{id}:loc:canonical`` (rempli uniquement sur ``accepted_canonical``).
+    Priorité ``received_at`` (horodatage backend, immune au skew device) puis
+    ``recorded_at`` / ``ts``.
+    """
+    try:
+        raw = redis_client.hgetall(f"driver:{driver_id}:loc:canonical")
+    except Exception:
+        return None
+    if not raw:
+        return None
+    data: dict[str, str] = {}
+    try:
+        for k, v in raw.items():
+            kk = k.decode() if isinstance(k, bytes) else str(k)
+            vv = v.decode() if isinstance(v, bytes) else str(v)
+            data[kk] = vv
+    except Exception:
+        return None
+    for field in ("received_at", "recorded_at", "ts"):
+        dt = _parse_dt(data.get(field))
+        if dt is not None:
+            return max(0.0, (now - dt).total_seconds())
+    return None
+
+
+def _resolve_freshness_kick(
+    redis_client, health: dict, driver_id: int, now: datetime
+) -> str | None:
+    """Kick si aucune position canonical fraîche n'atteint le pipeline.
+
+    Indépendant du self-report device : c'est le seul signal serveur que le
+    FGS zombie ne peut pas falsifier. On exige un heartbeat récent (device
+    joignable) pour que le kick soit délivrable.
+    """
+    if not _heartbeat_is_recent(health, now):
+        return None
+    age = _canonical_freshness_sec(redis_client, driver_id, now)
+    if age is not None and age < FRESHNESS_MAX_SEC:
+        return None
+    return "no_fresh_position"
+
+
 def run_stale_fix_watchdog_tick() -> dict:
     """Émet force_tracking_restart aux drivers en mission au tracking gelé."""
     if not ENABLED:
@@ -139,13 +238,22 @@ def run_stale_fix_watchdog_tick() -> dict:
         BookingStatus.EN_ROUTE.value,
         BookingStatus.IN_PROGRESS.value,
     )
+    assigned_status = BookingStatus.ASSIGNED.value
     rows = (
         Booking.query.filter(Booking.status.in_(active_statuses))
-        .with_entities(Booking.driver_id, Booking.id, Booking.status)
+        .with_entities(
+            Booking.driver_id,
+            Booking.id,
+            Booking.status,
+            Booking.scheduled_time,
+            Booking.time_confirmed,
+        )
         .all()
     )
     driver_ids: set[int] = set()
     live_driver_ids: set[int] = set()
+    # Drivers dont une mission EXIGE une position fraîche (live, ou ASSIGNED T‑30).
+    freshness_required: set[int] = set()
     for row in rows:
         did = getattr(row, "driver_id", None)
         if not did:
@@ -159,6 +267,13 @@ def run_stale_fix_watchdog_tick() -> dict:
         status_value = getattr(status, "value", status)
         if status_value in live_statuses:
             live_driver_ids.add(did)
+            freshness_required.add(did)
+        elif status_value == assigned_status and _assigned_in_tracking_window(
+            getattr(row, "scheduled_time", None),
+            getattr(row, "time_confirmed", None),
+            now,
+        ):
+            freshness_required.add(did)
 
     sent = 0
     skipped = 0
@@ -182,6 +297,15 @@ def run_stale_fix_watchdog_tick() -> dict:
             live_mission=driver_id in live_driver_ids,
             now=now,
         )
+        # Correctif A : si le self-report ne déclenche rien mais qu'une mission
+        # exige le tracking, on vérifie la fraîcheur RÉELLE du pipeline.
+        if (
+            reason is None
+            and FRESHNESS_ENABLED
+            and driver_id in freshness_required
+        ):
+            reason = _resolve_freshness_kick(redis_client, health, driver_id, now)
+
         if reason is None:
             skipped += 1
             continue
@@ -203,12 +327,14 @@ def run_stale_fix_watchdog_tick() -> dict:
             sent += 1
 
     logger.info(
-        "[stale_fix_watchdog] sent=%s skipped=%s throttled=%s candidates=%s live=%s",
+        "[stale_fix_watchdog] sent=%s skipped=%s throttled=%s candidates=%s "
+        "live=%s freshness_required=%s",
         sent,
         skipped,
         throttled,
         len(driver_ids),
         len(live_driver_ids),
+        len(freshness_required),
     )
     return {
         "ok": True,
@@ -217,4 +343,5 @@ def run_stale_fix_watchdog_tick() -> dict:
         "throttled": throttled,
         "candidates": len(driver_ids),
         "live_candidates": len(live_driver_ids),
+        "freshness_required": len(freshness_required),
     }

@@ -30,6 +30,14 @@ groups:
         annotations:
           summary: "Watchdog kicke en continu des chauffeurs en mission live au tracking éteint (FGS down)"
           description: "Le self-heal mobile cold-start ne réveille pas le runtime malgré le kick serveur ; vérifier le bridge mobile (tracking_self_heal_cold_start_enabled, force_tracking_restart)."
+      - alert: TrackingActiveMissionNoCanonical
+        expr: increase(tracking_stale_fix_watchdog_kick_total{reason="no_fresh_position"}[15m]) > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Mission active sans position canonical fraîche — watchdog kicke en continu (FGS zombie probable)"
+          description: "Des chauffeurs en mission (live ou ASSIGNED T-30) n'ont aucune position canonical fraîche (>3 min) alors que le device se déclare sain. Signal non-falsifiable : le terminal n'envoie rien malgré tracking_active=1. Si l'alerte persiste, le self-heal mobile (hard restart sur force_tracking_restart) ne rétablit pas l'envoi — investiguer device/réseau."
       - alert: TrackingStaleRateHigh
         expr: |
           sum(rate(driver_device_health_received_total{constraint_reason="fix_stale"}[5m]))

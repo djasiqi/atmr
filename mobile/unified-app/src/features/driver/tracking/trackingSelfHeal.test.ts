@@ -175,4 +175,28 @@ describe("shouldTriggerAntiZombie — aucun fix jamais produit", () => {
       })
     ).toBe(false);
   });
+
+  it("déclenche si le dernier ENVOI est périmé même avec un fix local frais (zombie)", () => {
+    expect(
+      shouldTriggerAntiZombie({
+        isTrackingRunning: true,
+        lastFixProducedAtMs: NOW, // fix natif/local « frais »
+        lastSentAt: new Date(NOW - (ANTI_ZOMBIE_FIX_AGE_SEC + 30) * 1000).toISOString(),
+        trackingStartedAtMs: NOW - 10 * 60 * 1000,
+        nowMs: NOW,
+      })
+    ).toBe(true);
+  });
+
+  it("ne déclenche pas si le dernier envoi est récent", () => {
+    expect(
+      shouldTriggerAntiZombie({
+        isTrackingRunning: true,
+        lastFixProducedAtMs: NOW - 10 * 60 * 1000, // fix ancien
+        lastSentAt: new Date(NOW - 10 * 1000).toISOString(), // envoi récent
+        trackingStartedAtMs: NOW - 10 * 60 * 1000,
+        nowMs: NOW,
+      })
+    ).toBe(false);
+  });
 });

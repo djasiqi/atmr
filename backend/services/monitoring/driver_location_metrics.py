@@ -903,7 +903,7 @@ def inc_tracking_invalid_config(*, reason: str) -> None:
 
 
 _STALE_FIX_WATCHDOG_KICK_REASONS = frozenset(
-    {"fix_stale", "mobile_tracking_down"}
+    {"fix_stale", "mobile_tracking_down", "no_fresh_position"}
 )
 
 

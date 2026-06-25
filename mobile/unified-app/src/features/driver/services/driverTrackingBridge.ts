@@ -297,6 +297,45 @@ export async function forceRestartTrackingWatchFromBridge(
   return forceRestartTrackingWatch(reason, getSelfHealSlice(), getSelfHealActions(), appState);
 }
 
+/**
+ * Redémarrage DUR du runtime tracking : teardown complet (FGS natif + watch +
+ * engine) puis reconstruction via `startDriverTrackingBridge`. Nécessaire pour
+ * un FGS zombie Samsung dont le service est vivant mais la souscription GPS
+ * native est morte : relancer seulement le watch JS (`forceRestartTrackingWatch`)
+ * ne recrée pas le task natif. La mission courante est capturée depuis l'état
+ * du bridge ; à froid (état vide après login/logout), on retombe sur `fallback`
+ * (résolu depuis le cache des missions par l'appelant).
+ */
+export async function hardRestartDriverTrackingBridge(
+  fallback: {
+    missionId: number;
+    status: DriverMissionStatus;
+    scheduling?: MissionSchedulingSnapshot | null;
+  } | null,
+  reason: string
+): Promise<boolean> {
+  let missionId = state.missionId;
+  let status = state.missionStatus;
+  let scheduling = state.missionScheduling;
+  if (missionId == null && fallback) {
+    missionId = fallback.missionId;
+    status = fallback.status;
+    scheduling = fallback.scheduling ?? null;
+  }
+  await stopDriverTrackingBridge();
+  if (missionId != null && status != null && isTrackingActiveStatus(status)) {
+    startDriverTrackingBridge(missionId, status, scheduling);
+    emitDriverTelemetry("tracking.hard_restart", {
+      source: "driver.tracking.bridge",
+      mission_id: missionId,
+      mission_status: status,
+      reason,
+    });
+    return true;
+  }
+  return false;
+}
+
 async function handleAntiZombieIfNeeded(appState: AppStateStatus): Promise<void> {
   const managerSnapshot = trackingManager.getSnapshot();
   if (

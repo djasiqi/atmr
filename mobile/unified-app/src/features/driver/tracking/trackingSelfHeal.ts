@@ -138,26 +138,33 @@ export function shouldTriggerAntiZombie(input: {
   if (nowMs - lastAntiZombieTriggeredAtMs < ANTI_ZOMBIE_COOLDOWN_MS) {
     return false;
   }
+  /**
+   * Le signal de santé prioritaire est l'ENVOI réel (`lastSentAt`) : un fix
+   * natif/local « frais » (`lastFixProducedAtMs`, `native_last_fix_age`) ne
+   * suffit pas si plus rien n'est envoyé au backend — c'est précisément le FGS
+   * zombie observé (service vivant, souscription morte, 0 envoi). Ordre de
+   * priorité : dernier envoi > dernier fix produit > ancienneté de démarrage
+   * (cas « démarré mais jamais rien produit »).
+   */
+  const sentAgeSec = input.lastSentAt
+    ? (nowMs - Date.parse(input.lastSentAt)) / 1000
+    : null;
   const fixAge = getFixAgeSeconds(input.lastFixProducedAtMs, nowMs);
-  let stale: boolean;
+  const startedAgeSec =
+    input.trackingStartedAtMs != null
+      ? (nowMs - input.trackingStartedAtMs) / 1000
+      : null;
+
+  if (sentAgeSec !== null) {
+    return sentAgeSec > ANTI_ZOMBIE_FIX_AGE_SEC;
+  }
   if (fixAge !== null) {
-    stale = fixAge > ANTI_ZOMBIE_FIX_AGE_SEC;
-  } else if (input.trackingStartedAtMs != null) {
-    // Aucun fix jamais produit : zombie si le runtime tourne depuis > seuil.
-    stale = (nowMs - input.trackingStartedAtMs) / 1000 > ANTI_ZOMBIE_FIX_AGE_SEC;
-  } else {
-    stale = false;
+    return fixAge > ANTI_ZOMBIE_FIX_AGE_SEC;
   }
-  if (!stale) {
-    return false;
+  if (startedAgeSec !== null) {
+    return startedAgeSec > ANTI_ZOMBIE_FIX_AGE_SEC;
   }
-  if (input.lastSentAt) {
-    const sentAgeSec = (nowMs - Date.parse(input.lastSentAt)) / 1000;
-    if (sentAgeSec <= ANTI_ZOMBIE_FIX_AGE_SEC) {
-      return false;
-    }
-  }
-  return true;
+  return false;
 }
 
 export function markAntiZombieTriggered(nowMs: number = Date.now()): void {
