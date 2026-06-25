@@ -150,6 +150,7 @@ type TrackingBridgeState = {
   watchRestartTimestampsMs: number[];
   fsmState: TrackingFsmState;
   lastFixProducedAtMs: number | null;
+  trackingStartedAtMs: number | null;
 };
 
 export type DriverTrackingPosition = {
@@ -204,6 +205,7 @@ const state: TrackingBridgeState = {
   watchRestartTimestampsMs: [],
   fsmState: "IDLE",
   lastFixProducedAtMs: null,
+  trackingStartedAtMs: null,
 };
 
 const trackingBridgeListeners = new Set<DriverTrackingBridgeListener>();
@@ -302,6 +304,7 @@ async function handleAntiZombieIfNeeded(appState: AppStateStatus): Promise<void>
       isTrackingRunning: managerSnapshot.isRunning,
       lastFixProducedAtMs: state.lastFixProducedAtMs,
       lastSentAt: state.lastSentAt,
+      trackingStartedAtMs: state.trackingStartedAtMs,
     })
   ) {
     return;
@@ -902,6 +905,7 @@ async function stopTrackingRuntime(): Promise<void> {
   await stopBackgroundLocationTask("tracking_bridge_stopped");
   stopLocationWatch();
   trackingManager.stop();
+  state.trackingStartedAtMs = null;
   notifyTrackingBridgeListeners();
 }
 
@@ -910,6 +914,7 @@ function ensureManagerState() {
     void syncBridgeQueueDepthFromPersistence();
     void stopBackgroundLocationTask("ineligible_tracking_state");
     trackingManager.stop();
+    state.trackingStartedAtMs = null;
     stopLocationWatch();
     void setBackgroundTrackingMissionContext(null, null);
     return;
@@ -947,6 +952,7 @@ function ensureManagerState() {
   const mode = resolveTrackingMode(trackingManager.getSnapshot().appState);
   const snapshot = trackingManager.getSnapshot();
   if (!snapshot.isRunning) {
+    state.trackingStartedAtMs = Date.now();
     trackingManager.start(mode);
     return;
   }
@@ -1050,6 +1056,7 @@ export function setDriverTrackingPresenceWindow(active: boolean) {
     void stopBackgroundLocationTask("presence_window_closed");
     stopLocationWatch();
     trackingManager.stop();
+    state.trackingStartedAtMs = null;
     notifyTrackingBridgeListeners();
     return;
   }

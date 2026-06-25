@@ -7,7 +7,7 @@ import {
   startDriverRealtimePollingWithOptions,
   stopDriverRealtimePolling,
 } from "../realtime";
-import { DriverSocketEvent } from "../types";
+import { DriverMission, DriverSocketEvent } from "../types";
 import { isFeatureEnabled } from "../../../core/featureFlags/registry";
 import { flushTrackingQueue } from "../tracking";
 import { emitDriverTelemetry } from "../../../core/observability/driverTelemetry";
@@ -16,12 +16,87 @@ import {
   scheduleDriverMissionSync,
 } from "./missionSyncOrchestrator";
 import { driverTrackingQueue } from "./driverTrackingQueue";
-import { syncBridgeQueueDepthFromPersistence, forceRestartTrackingWatchFromBridge } from "./driverTrackingBridge";
+import {
+  syncBridgeQueueDepthFromPersistence,
+  forceRestartTrackingWatchFromBridge,
+  getDriverTrackingBridgeSnapshot,
+  startDriverTrackingBridge,
+} from "./driverTrackingBridge";
+import { pickTrackingMission } from "../domain/pickTrackingMission";
+import { isTrackingActiveStatus } from "../domain/status";
+import { normalizeDriverMissionStatus } from "../statusDictionary";
 
 type BridgeOptions = {
   enableSocket: boolean;
   getMissionPresence?: () => { hasRelevantMission: boolean; missionCount: number };
 };
+
+/**
+ * Cooldown local des remote kicks. Le backend throttle déjà à 10 min/driver,
+ * mais ce garde-fou évite le churn (stop/restart watch+FGS) en cas de rafale
+ * d'events `force_tracking_restart` (replay socket à la reconnexion, plusieurs
+ * workers backend avant la pose du throttle Redis).
+ */
+const REMOTE_KICK_COOLDOWN_MS = Number(
+  process.env.EXPO_PUBLIC_REMOTE_KICK_COOLDOWN_MS ?? "60000"
+);
+let lastRemoteKickAtMs = 0;
+
+/**
+ * Kick backend `force_tracking_restart`. Deux cas :
+ *  - Le runtime tourne déjà (zombie/FGS stale) → redémarrage watch/FGS ciblé.
+ *  - Le runtime est arrêté à froid (manager `isRunning=false`) alors qu'une
+ *    mission active existe (après login/logout, FGS tué par l'OS) →
+ *    `forceRestartTrackingWatchFromBridge` ne relance PAS le manager. On relance
+ *    donc le runtime complet via `startDriverTrackingBridge` à partir de la
+ *    mission connue du cache React Query.
+ */
+function handleForceTrackingRestart(
+  queryClient: QueryClient,
+  contextId: string
+): void {
+  const nowMs = Date.now();
+  if (nowMs - lastRemoteKickAtMs < REMOTE_KICK_COOLDOWN_MS) {
+    emitDriverTelemetry("tracking.remote_kick.throttled", {
+      source: "driver.realtime.bridge",
+      context_id: contextId,
+      since_last_ms: nowMs - lastRemoteKickAtMs,
+      cooldown_ms: REMOTE_KICK_COOLDOWN_MS,
+    });
+    return;
+  }
+  lastRemoteKickAtMs = nowMs;
+  try {
+    const snapshot = getDriverTrackingBridgeSnapshot();
+    if (!snapshot.isRunning) {
+      const missions = queryClient.getQueryData(
+        driverQueryKeys.missions(contextId)
+      ) as DriverMission[] | undefined;
+      const active = pickTrackingMission(missions);
+      if (active?.id != null && isTrackingActiveStatus(normalizeDriverMissionStatus(active.status))) {
+        startDriverTrackingBridge(
+          active.id,
+          normalizeDriverMissionStatus(active.status),
+          {
+            scheduled_time: active.scheduled_time ?? null,
+            time_confirmed: active.time_confirmed ?? null,
+            scheduling: active.scheduling ?? null,
+          }
+        );
+        emitDriverTelemetry("tracking.remote_kick.cold_start", {
+          source: "driver.realtime.bridge",
+          context_id: contextId,
+          mission_id: active.id,
+          mission_status: normalizeDriverMissionStatus(active.status),
+        });
+        return;
+      }
+    }
+  } catch {
+    /* defensive : on retombe sur le redémarrage watch/FGS ci-dessous. */
+  }
+  void forceRestartTrackingWatchFromBridge("backend_remote_kick");
+}
 
 const DEFAULT_OPTIONS: BridgeOptions = {
   enableSocket: isFeatureEnabled("realtime_socket_enabled"),
@@ -135,7 +210,7 @@ export function startDriverRealtimeBridge(
       return;
     }
     if (event.event_type === "force_tracking_restart") {
-      void forceRestartTrackingWatchFromBridge("backend_remote_kick");
+      handleForceTrackingRestart(queryClient, contextId);
       emitDriverTelemetry("tracking.remote_kick.received", {
         source: "driver.realtime.bridge",
         context_id: contextId,

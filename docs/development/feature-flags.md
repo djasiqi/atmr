@@ -7,7 +7,8 @@ Registre mobile (`registry.ts`) et variables backend.
 | Flag | Défaut | Description | Rollback |
 |------|--------|-------------|----------|
 | `tracking_persistent_runtime_enabled` | env | Queue persistent + flushPoint | `EXPO_PUBLIC_ENABLE_TRACKING_PERSISTENT_QUEUE=0` |
-| `tracking_self_heal_watch_restart_enabled` | false | Restart watch/FGS sur stale | off |
+| `tracking_self_heal_watch_restart_enabled` | true (ON) | Restart watch/FGS sur stale (zombie FGS) | `EXPO_PUBLIC_ENABLE_TRACKING_SELF_HEAL_WATCH=0` |
+| `tracking_self_heal_cold_start_enabled` | true (ON) | Re-arme le runtime à froid quand mission active mais `tracking_active=0` (manager arrêté). Complète l'anti-zombie qui exige `isTrackingRunning=true`. | `EXPO_PUBLIC_ENABLE_TRACKING_SELF_HEAL_COLD_START=0` |
 | `tracking_state_machine_enabled` | false | FSM shadow | off |
 | `tracking_recovery_cascade_enabled` | false | Cascade GPS→FGS→Socket→Engine | off |
 | `tracking_background_enabled` | — | FGS mission_live | off |

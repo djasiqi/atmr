@@ -97,6 +97,7 @@ _TRACKING_DELIVERY_RESULT = None
 _TRACKING_HTTP_ACCEPTED_ASYNC = None
 _TRACKING_KAFKA_PERSIST = None
 _TRACKING_INVALID_CONFIG = None
+_STALE_FIX_WATCHDOG_KICK = None
 
 _VALID_TRANSPORTS = frozenset({"http", "socket", "socket_batch", "kafka"})
 
@@ -283,6 +284,14 @@ if Counter is not None:
     _TRACKING_INVALID_CONFIG = Counter(
         "tracking_invalid_config_total",
         "Démarrages refusés du consumer ingest (configuration incohérente)",
+        ["reason"],
+    )
+    _STALE_FIX_WATCHDOG_KICK = Counter(
+        "tracking_stale_fix_watchdog_kick_total",
+        (
+            "Kicks force_tracking_restart émis par le watchdog serveur, par "
+            "raison (fix_stale | mobile_tracking_down)"
+        ),
         ["reason"],
     )
 
@@ -650,13 +659,21 @@ def observe_tracking_kafka_e2e_latency(*, latency_ms: float) -> None:
 _KNOWN_CONSTRAINT_REASONS: frozenset[str] = frozenset(
     {
         "",
-        "samsung_battery_optimized",
+        # Valeurs réellement émises par le mobile (resolveConstraintReason) —
+        # indispensables pour les dashboards/alertes (ex. TrackingStaleRateHigh
+        # interroge constraint_reason="fix_stale").
+        "fix_stale",
+        "fgs_not_running",
+        "permission_fg_denied",
+        "permission_bg_denied",
+        "gps_provider_disabled",
         "battery_optimized",
+        # Valeurs legacy conservées pour compat données historiques.
+        "samsung_battery_optimized",
         "doze",
         "permission_revoked",
         "fg_permission_denied",
         "bg_permission_denied",
-        "gps_provider_disabled",
         "fgs_killed",
         "low_fix_success_rate",
     }
@@ -883,3 +900,16 @@ def inc_tracking_invalid_config(*, reason: str) -> None:
         return
     r = reason if reason in _TRACKING_INVALID_CONFIG_REASONS else "async_without_persist"
     _TRACKING_INVALID_CONFIG.labels(reason=r).inc()
+
+
+_STALE_FIX_WATCHDOG_KICK_REASONS = frozenset(
+    {"fix_stale", "mobile_tracking_down"}
+)
+
+
+def inc_stale_fix_watchdog_kick(*, reason: str) -> None:
+    """Compteur kicks watchdog serveur (labels bornés)."""
+    if not _metrics_enabled() or _STALE_FIX_WATCHDOG_KICK is None:
+        return
+    r = reason if reason in _STALE_FIX_WATCHDOG_KICK_REASONS else "_unknown"
+    _STALE_FIX_WATCHDOG_KICK.labels(reason=r).inc()

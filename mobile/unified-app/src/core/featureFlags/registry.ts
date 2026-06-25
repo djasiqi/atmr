@@ -128,6 +128,16 @@ export const featureFlags = {
         : envFlag(process.env.EXPO_PUBLIC_ENABLE_TRACKING_SELF_HEAL_WATCH),
     description: "Restart watch/FGS on stale_fallback breaker (Samsung zombie FGS).",
   } satisfies FeatureFlagDefinition,
+  tracking_self_heal_cold_start_enabled: {
+    key: "tracking_self_heal_cold_start_enabled",
+    source: "env",
+    enabled:
+      process.env.EXPO_PUBLIC_ENABLE_TRACKING_SELF_HEAL_COLD_START === undefined
+        ? true
+        : envFlag(process.env.EXPO_PUBLIC_ENABLE_TRACKING_SELF_HEAL_COLD_START),
+    description:
+      "Re-arme le runtime tracking à froid quand une mission est active mais le manager ne tourne pas (tracking_active=0 / fgs_running=0). Symétrique de l'anti-zombie qui exige isTrackingRunning=true.",
+  } satisfies FeatureFlagDefinition,
   tracking_state_machine_enabled: {
     key: "tracking_state_machine_enabled",
     source: "env",

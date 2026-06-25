@@ -53,7 +53,7 @@ const STATUS_TITLE_LABELS = {
   busy: 'En course',
   offline: 'Hors-ligne',
   emergency: 'Urgence',
-  constrained: 'Batterie restreinte',
+  constrained: 'Position figée',
 };
 
 const CONTAINER_STYLE = { width: '100%', height: '100%', minHeight: '280px' };
@@ -213,6 +213,35 @@ const CONSTRAINT_REASON_LABELS = {
   fix_stale: 'Dernier fix GPS trop ancien',
 };
 
+/** Libellé court (badge/marqueur) par contrainte — évite de tout étiqueter « batterie ». */
+const CONSTRAINT_REASON_BADGE = {
+  battery_optimized: 'Batterie restreinte',
+  permission_bg_denied: 'Permission arrière-plan',
+  permission_fg_denied: 'Permission GPS',
+  fgs_not_running: 'Tracking arrêté',
+  gps_provider_disabled: 'GPS désactivé',
+  fix_stale: 'Fix GPS ancien',
+};
+
+/** Badge court reflétant la vraie contrainte (fallback générique « Position figée »). */
+function resolveConstraintBadgeLabel(constraintReason) {
+  const key = constraintReason ? String(constraintReason).trim() : '';
+  return CONSTRAINT_REASON_BADGE[key] || 'Position figée';
+}
+
+/** Phrase meta du tooltip, pilotée par la contrainte réelle (pas « batterie » par défaut). */
+function buildConstraintMetaLine(constraintReason, lastSeenSeconds) {
+  const key = constraintReason ? String(constraintReason).trim() : '';
+  const reasonLabel = key ? (CONSTRAINT_REASON_LABELS[key] || constraintReason) : 'inconnue';
+  const seenLabel = Number.isFinite(Number(lastSeenSeconds))
+    ? `Dernier signal il y a ${Number(lastSeenSeconds)}s.`
+    : 'Dernier signal inconnu.';
+  const cause = key === 'battery_optimized'
+    ? "l'app du chauffeur signale une optimisation batterie de l'OS"
+    : `l'app du chauffeur signale&nbsp;: ${escapeHtml(reasonLabel)}`;
+  return `Position figée — ${cause}. ${seenLabel}`;
+}
+
 const createStyledTooltip = (driver, opts = {}) => {
   const {
     lastSeenSeconds,
@@ -242,13 +271,10 @@ const createStyledTooltip = (driver, opts = {}) => {
   // Ligne meta
   let metaLine = '';
   if (status === 'constrained' || isConstrained) {
-    const reasonLabel = constraintReason && String(constraintReason).trim()
-      ? (CONSTRAINT_REASON_LABELS[String(constraintReason).trim()] || constraintReason)
-      : 'inconnue';
-    const seenLabel = Number.isFinite(Number(lastSeenSeconds))
-      ? `Dernier signal il y a ${Number(lastSeenSeconds)}s.`
-      : 'Dernier signal inconnu.';
-    metaLine = `Position figée — l'app du chauffeur signale un problème d'optimisation batterie (raison&nbsp;: ${escapeHtml(reasonLabel)}). ${seenLabel}`;
+    // Badge piloté par la contrainte réelle (Tracking arrêté, GPS désactivé…),
+    // plus « Batterie restreinte » par défaut.
+    if (!noGps) conf.label = resolveConstraintBadgeLabel(constraintReason);
+    metaLine = buildConstraintMetaLine(constraintReason, lastSeenSeconds);
   } else if (status === 'offline' && (lastSeenSeconds != null || isStale)) {
     metaLine = formatLastSeen(lastSeenSeconds);
   } else if (status === 'busy' || status === 'assigned') {
@@ -399,7 +425,9 @@ function DriverLiveMap({ drivers: propDrivers }) {
       : baseColor;
     const opacity = isStale && !isConstrainedMarker ? 0.88 : 1;
     const markerLabel = getDriverMarkerLabel(driver);
-    const titleStatus = STATUS_TITLE_LABELS[status] || status || 'Inconnu';
+    const titleStatus = status === 'constrained'
+      ? resolveConstraintBadgeLabel(getDriverConstraintReason(driver))
+      : (STATUS_TITLE_LABELS[status] || status || 'Inconnu');
     const markerTitle = `${getDriverDisplayName(driver)} · ${titleStatus}${isStale ? ' · signal ancien' : ''}`;
     const iconUrl = makeCircleMarkerIcon(color, opacity, {
       label: markerLabel,
@@ -984,10 +1012,10 @@ function DriverLiveMap({ drivers: propDrivers }) {
               </div>
               <div
                 style={{ display: 'flex', alignItems: 'center', gap: 4 }}
-                title="Batterie restreinte — l'app du chauffeur signale un problème d'optimisation batterie. La position est figée."
+                title="Position figée — l'app du chauffeur ne rafraîchit plus sa position (tracking arrêté, optimisation batterie, permissions ou GPS désactivé). Voir le détail au survol du chauffeur."
               >
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: CONSTRAINED_MARKER_COLOR, flexShrink: 0 }} />
-                <span>Batterie</span>
+                <span>Figé</span>
               </div>
             </div>
           </div>

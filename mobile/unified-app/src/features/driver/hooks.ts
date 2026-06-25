@@ -35,6 +35,10 @@ import {
 import { scheduleDriverMissionSync } from "./services/missionSyncOrchestrator";
 import { reconcileTrackingRuntime } from "./services/trackingReconcile";
 import {
+  markColdStartTriggered,
+  shouldTriggerColdStart,
+} from "./tracking/trackingSelfHeal";
+import {
   flushTrackingQueue,
   getTrackingSnapshot,
   startDriverTracking,
@@ -337,6 +341,9 @@ export function useDriverRealtimeSync() {
   }, [contextId, status]);
 }
 
+/** Cadence du tick de re-arm cold-start (self-heal). */
+const COLD_START_REARM_INTERVAL_MS = 60_000;
+
 export function useDriverTracking(mission: DriverMission | null | undefined) {
   const contextId = useActiveDriverContextId();
   const missionId = mission?.id ?? null;
@@ -370,6 +377,42 @@ export function useDriverTracking(mission: DriverMission | null | undefined) {
       stopDriverTracking();
     };
   }, [contextId, missionId, normalized, scheduling?.scheduled_time, scheduling?.time_confirmed]);
+
+  /**
+   * Self-heal cold-start : tick léger qui re-arme le runtime tracking quand
+   * une mission est active mais le manager ne tourne pas (`isRunning=false`)
+   * ou n'a rien envoyé depuis longtemps. Comble le Catch-22 de l'anti-zombie
+   * (qui exige `isTrackingRunning=true`) après login/logout, kill FGS OS, ou
+   * suspension des timers JS. Le hook est ancré au layout chauffeur, donc ce
+   * tick tourne même quand le tracking est arrêté.
+   */
+  useEffect(() => {
+    if (!missionId || !isTrackingActiveStatus(normalized)) return;
+    if (!isFeatureEnabled("tracking_self_heal_cold_start_enabled")) return;
+    const tick = () => {
+      const snap = getTrackingSnapshot();
+      if (
+        !shouldTriggerColdStart({
+          hasActiveMission: true,
+          isTrackingRunning: snap.isRunning,
+          lastSentAt: snap.lastSentAt,
+        })
+      ) {
+        return;
+      }
+      markColdStartTriggered();
+      emitDriverTelemetry("tracking.cold_start.triggered", {
+        source: "driver.hooks.cold_start",
+        mission_id: missionId,
+        mission_status: normalized,
+        last_sent_at: snap.lastSentAt,
+        app_state: snap.appState,
+      });
+      startDriverTracking(missionId, normalized, scheduling);
+    };
+    const interval = setInterval(tick, COLD_START_REARM_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [missionId, normalized, scheduling?.scheduled_time, scheduling?.time_confirmed]);
 }
 
 /**

@@ -120,6 +120,12 @@ export function shouldTriggerAntiZombie(input: {
   isTrackingRunning: boolean;
   lastFixProducedAtMs: number | null;
   lastSentAt: string | null;
+  /**
+   * Horodatage de démarrage du runtime tracking. Permet de couvrir le cas
+   * « tracking lancé mais aucun fix jamais produit » (zombie dès le départ),
+   * où `lastFixProducedAtMs` reste `null`.
+   */
+  trackingStartedAtMs?: number | null;
   nowMs?: number;
 }): boolean {
   if (!isFeatureEnabled("tracking_self_heal_watch_restart_enabled")) {
@@ -133,7 +139,16 @@ export function shouldTriggerAntiZombie(input: {
     return false;
   }
   const fixAge = getFixAgeSeconds(input.lastFixProducedAtMs, nowMs);
-  if (fixAge === null || fixAge <= ANTI_ZOMBIE_FIX_AGE_SEC) {
+  let stale: boolean;
+  if (fixAge !== null) {
+    stale = fixAge > ANTI_ZOMBIE_FIX_AGE_SEC;
+  } else if (input.trackingStartedAtMs != null) {
+    // Aucun fix jamais produit : zombie si le runtime tourne depuis > seuil.
+    stale = (nowMs - input.trackingStartedAtMs) / 1000 > ANTI_ZOMBIE_FIX_AGE_SEC;
+  } else {
+    stale = false;
+  }
+  if (!stale) {
     return false;
   }
   if (input.lastSentAt) {
@@ -151,4 +166,61 @@ export function markAntiZombieTriggered(nowMs: number = Date.now()): void {
 
 export function resetAntiZombieForTests(): void {
   lastAntiZombieTriggeredAtMs = 0;
+}
+
+/**
+ * Seuil (s) au-delà duquel un tracking « à froid » (manager arrêté) est
+ * considéré gelé alors qu'une mission est active. Si aucune position n'a été
+ * envoyée depuis ce délai, on re-arme le runtime.
+ */
+export const COLD_START_THRESHOLD_SEC = 120;
+const COLD_START_COOLDOWN_MS = 60_000;
+let lastColdStartTriggeredAtMs = 0;
+
+/**
+ * Catch-22 corrigé : `shouldTriggerAntiZombie` exige `isTrackingRunning=true`
+ * et ne couvre donc pas le cas « le manager ne tourne pas du tout malgré une
+ * mission active » (observé après login/logout, FGS tué par l'OS, JS timers
+ * suspendus). Cette garde symétrique se déclenche **uniquement** quand le
+ * tracking est arrêté (`isTrackingRunning=false`) pour relancer le runtime
+ * complet via `startDriverTrackingBridge`.
+ */
+export function shouldTriggerColdStart(input: {
+  hasActiveMission: boolean;
+  isTrackingRunning: boolean;
+  lastSentAt: string | null;
+  nowMs?: number;
+}): boolean {
+  if (!isFeatureEnabled("tracking_self_heal_cold_start_enabled")) {
+    return false;
+  }
+  if (!input.hasActiveMission) {
+    return false;
+  }
+  // Cas « tracking en cours mais gelé » : couvert par l'anti-zombie.
+  if (input.isTrackingRunning) {
+    return false;
+  }
+  const nowMs = input.nowMs ?? Date.now();
+  if (nowMs - lastColdStartTriggeredAtMs < COLD_START_COOLDOWN_MS) {
+    return false;
+  }
+  // Jamais aucune position envoyée alors qu'une mission est active : runtime à froid.
+  if (!input.lastSentAt) {
+    return true;
+  }
+  const sentAt = Date.parse(input.lastSentAt);
+  if (!Number.isFinite(sentAt)) {
+    return true;
+  }
+  const sentAgeSec = (nowMs - sentAt) / 1000;
+  return sentAgeSec > COLD_START_THRESHOLD_SEC;
+}
+
+export function markColdStartTriggered(nowMs: number = Date.now()): void {
+  lastColdStartTriggeredAtMs = nowMs;
+}
+
+export function resetColdStartForTests(): void {
+  lastColdStartTriggeredAtMs = 0;
 }

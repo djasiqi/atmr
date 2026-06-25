@@ -15,6 +15,21 @@ groups:
           severity: critical
         annotations:
           summary: "Aucune position reçue depuis 10 min"
+      - alert: TrackingProcessedFrozen
+        expr: increase(driver_location_processed_total{accept_status="accepted_canonical"}[10m]) == 0
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Aucune position canonical traitée (processed.v2) depuis 10 min"
+      - alert: TrackingActiveMissionFgsDown
+        expr: increase(tracking_stale_fix_watchdog_kick_total{reason="mobile_tracking_down"}[15m]) > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Watchdog kicke en continu des chauffeurs en mission live au tracking éteint (FGS down)"
+          description: "Le self-heal mobile cold-start ne réveille pas le runtime malgré le kick serveur ; vérifier le bridge mobile (tracking_self_heal_cold_start_enabled, force_tracking_restart)."
       - alert: TrackingStaleRateHigh
         expr: |
           sum(rate(driver_device_health_received_total{constraint_reason="fix_stale"}[5m]))
