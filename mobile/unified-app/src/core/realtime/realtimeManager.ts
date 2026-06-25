@@ -793,6 +793,15 @@ class RealtimeManager {
       });
     });
 
+    socket.on("rate_limit_exceeded", (payload: unknown) => {
+      this.onSocketPayload("rate_limit_exceeded", () => {
+        this.emitDriverEvent({
+          event_type: "rate_limit_exceeded",
+          payload,
+        });
+      });
+    });
+
     socket.on("team_chat_message", (payload: unknown) => {
       this.onSocketPayload("team_chat_message", () => {
         this.touchLastEventAtSilent();

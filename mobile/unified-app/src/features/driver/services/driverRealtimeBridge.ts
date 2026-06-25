@@ -115,6 +115,16 @@ export function startDriverRealtimeBridge(
       });
       return;
     }
+    if (event.event_type === "rate_limit_exceeded") {
+      void driverTrackingQueue.releaseSocketEmittedForHttpRetry().then(() =>
+        flushTrackingQueue().then(() => syncBridgeQueueDepthFromPersistence())
+      );
+      emitDriverTelemetry("tracking.batch.rate_limited", {
+        source: "driver.realtime.bridge",
+        context_id: contextId,
+      });
+      return;
+    }
     if (event.event_type === "eta_changed" && typeof (event as DriverSocketEvent).mission_id === "number") {
       applyDriverSocketEvent(queryClient, contextId, event as DriverSocketEvent);
       return;

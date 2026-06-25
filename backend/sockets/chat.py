@@ -2698,10 +2698,7 @@ def init_chat_socket(socketio: SocketIO):
                         if sent_at_value
                         else datetime.now(UTC)
                     )
-                    if (
-                        pos.get("location_mode") is None
-                        or pos.get("recorded_at") is None
-                    ):
+                    if pos.get("location_mode") is None or not recorded_at_value:
                         rejected_positions.append(
                             {
                                 "index": idx,
@@ -2710,6 +2707,9 @@ def init_chat_socket(socketio: SocketIO):
                             }
                         )
                         continue
+                    if pos.get("recorded_at") is None:
+                        pos = dict(pos)
+                        pos["recorded_at"] = recorded_at_value
                     if location_mode == "availability_presence":
                         inc_tracking_delivery_result(
                             mode="availability_presence",

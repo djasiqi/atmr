@@ -373,6 +373,15 @@ async function flushPoint(appState: AppStateStatus) {
   if (!granted) return;
   const mode = resolveTrackingMode(appState);
   const position = await resolvePositionFromWatchOrFallback(appState, mode);
+  if (!position) {
+    emitDriverTelemetry("tracking.send.skipped", {
+      source: "driver.tracking.bridge",
+      mission_id: state.missionId,
+      reason: "no_position_fix",
+      app_state: appState,
+    });
+    return;
+  }
   const cadence = getCadenceForTick(appState, mode);
   await driverTrackingQueue.enqueue({
     missionId: state.missionId,

@@ -245,3 +245,52 @@ class TestSocketDriverLocation:
         mock_inc_received.assert_not_called()
         mock_location_service.update_driver_location.assert_not_called()
         mock_inc_dedup.assert_called_once()
+
+    def test_driver_location_batch_accepts_timestamp_without_recorded_at(
+        self, app, db, test_driver
+    ):
+        """L'app mobile envoie ``timestamp`` ; le batch socket doit accepter ce fallback."""
+        from flask_jwt_extended import create_access_token
+
+        if not test_driver or not test_driver.user:
+            pytest.skip("test_driver fixture required")
+        user = test_driver.user
+        driver = test_driver
+        _ensure_socket_entities_committed(db, driver, user)
+
+        with app.app_context():
+            token = create_access_token(
+                identity=str(user.public_id),
+                additional_claims={"role": "driver", "aud": "atmr-api"},
+                expires_delta=timedelta(hours=1),
+            )
+            client = _build_socket_test_client(app, token)
+
+        if not client.is_connected():
+            pytest.skip("Socket client could not connect")
+
+        mock_location_service = MagicMock()
+        mock_location_service.resolve_normalized_location_mode.return_value = (
+            "mission_live"
+        )
+        with patch(
+            "sockets.chat.get_location_service",
+            return_value=mock_location_service,
+        ):
+            client.emit(
+                "driver_location_batch",
+                {
+                    "tracking_session_id": "trk_sess_test_timestamp_fallback",
+                    "positions": [
+                        {
+                            "latitude": 46.2044,
+                            "longitude": 6.1432,
+                            "location_mode": "mission_live",
+                            "timestamp": "2026-03-18T10:00:00Z",
+                            "tracking_event_id": "evt-timestamp-only",
+                        }
+                    ],
+                },
+            )
+
+        assert mock_location_service.update_driver_location.called

@@ -524,6 +524,7 @@ class DriverTrackingQueue {
               heading: item.payload.heading,
               speed: item.payload.speed,
               timestamp: item.payload.timestamp,
+              recorded_at: item.payload.timestamp,
               location_mode: item.locationMode,
               is_background: item.payload.isBackground,
               platform: Platform.OS === "ios" ? "ios" : "android",
@@ -586,6 +587,7 @@ class DriverTrackingQueue {
                 heading: item.payload.heading,
                 speed: item.payload.speed,
                 timestamp: item.payload.timestamp,
+                recorded_at: item.payload.timestamp,
                 location_mode: item.locationMode,
                 is_background: item.payload.isBackground,
                 platform: Platform.OS === "ios" ? "ios" : "android",
@@ -785,6 +787,26 @@ class DriverTrackingQueue {
       });
     }
     return ackedCount;
+  }
+
+  async releaseSocketEmittedForHttpRetry(): Promise<number> {
+    await this.ensureLoaded();
+    let released = 0;
+    for (const item of this.items) {
+      if (item.deliveryState === "socket_emitted") {
+        item.deliveryState = "retry_pending";
+        item.lastAttemptAt = null;
+        released += 1;
+      }
+    }
+    if (released > 0) {
+      await this.persist();
+      emitDriverTelemetry("tracking.queue.socket_release_for_http", {
+        source: "driver.tracking.queue",
+        released_count: released,
+      });
+    }
+    return released;
   }
 
   async markBackendAckedByWatermark(ackLastSequenceId: number): Promise<number> {
