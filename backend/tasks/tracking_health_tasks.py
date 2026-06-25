@@ -186,3 +186,19 @@ def purge_device_health_events_task() -> dict:
     deleted = purge_old_device_health_events()
     logger.info("[tracking_health] purged device_health_events deleted=%s", deleted)
     return {"ok": True, "deleted": deleted}
+
+
+@celery.task(name="tasks.tracking_health_tasks.stale_fix_watchdog_tick")
+def stale_fix_watchdog_tick() -> dict:
+    """Kick Socket.IO drivers en mission avec fix_stale prolongé."""
+    from services.tracking.stale_fix_watchdog import run_stale_fix_watchdog_tick
+
+    return run_stale_fix_watchdog_tick()
+
+
+@celery.task(name="tasks.tracking_health_tasks.tracking_health_engine_tick")
+def tracking_health_engine_tick() -> dict:
+    """Agrège états HEALTHY/WARNING/DEGRADED/BROKEN par flotte."""
+    from services.tracking.health_engine import run_health_engine_tick
+
+    return run_health_engine_tick()

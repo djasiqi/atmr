@@ -119,6 +119,27 @@ export const featureFlags = {
     enabled: envFlag(process.env.EXPO_PUBLIC_ENABLE_TRACKING_SAFE_STALE_FALLBACK),
     description: "Enable timeout/circuit-breaker protections for stale location fallback.",
   } satisfies FeatureFlagDefinition,
+  tracking_self_heal_watch_restart_enabled: {
+    key: "tracking_self_heal_watch_restart_enabled",
+    source: "env",
+    enabled:
+      process.env.EXPO_PUBLIC_ENABLE_TRACKING_SELF_HEAL_WATCH === undefined
+        ? true
+        : envFlag(process.env.EXPO_PUBLIC_ENABLE_TRACKING_SELF_HEAL_WATCH),
+    description: "Restart watch/FGS on stale_fallback breaker (Samsung zombie FGS).",
+  } satisfies FeatureFlagDefinition,
+  tracking_state_machine_enabled: {
+    key: "tracking_state_machine_enabled",
+    source: "env",
+    enabled: envFlag(process.env.EXPO_PUBLIC_ENABLE_TRACKING_STATE_MACHINE),
+    description: "Explicit FSM for tracking states (shadow/pilot).",
+  } satisfies FeatureFlagDefinition,
+  tracking_recovery_cascade_enabled: {
+    key: "tracking_recovery_cascade_enabled",
+    source: "env",
+    enabled: envFlag(process.env.EXPO_PUBLIC_ENABLE_TRACKING_RECOVERY_CASCADE),
+    description: "Global self-healing cascade GPS→FGS→Socket→Engine.",
+  } satisfies FeatureFlagDefinition,
   tracking_adaptive_cadence_enabled: {
     key: "tracking_adaptive_cadence_enabled",
     source: "env",

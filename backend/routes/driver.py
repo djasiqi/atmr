@@ -2776,8 +2776,10 @@ class UpdateBookingStatus(Resource):
                     ):
                         booking.driver_id = driver.id
                     elif booking.driver_id != driver.id:
-                        logger.error(
-                            "❌ Chauffeur %s (id=%s) essaie de modifier booking assigné à driver_id=%s",
+                        # Rejet métier attendu (course assignée à un autre chauffeur) :
+                        # niveau warning pour ne pas polluer les erreurs Sentry.
+                        logger.warning(
+                            "Chauffeur %s (id=%s) essaie de modifier booking assigné à driver_id=%s",
                             driver.user.username if driver.user else "Unknown",
                             driver.id,
                             booking.driver_id,

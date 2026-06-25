@@ -16,7 +16,7 @@ import {
   scheduleDriverMissionSync,
 } from "./missionSyncOrchestrator";
 import { driverTrackingQueue } from "./driverTrackingQueue";
-import { syncBridgeQueueDepthFromPersistence } from "./driverTrackingBridge";
+import { syncBridgeQueueDepthFromPersistence, forceRestartTrackingWatchFromBridge } from "./driverTrackingBridge";
 
 type BridgeOptions = {
   enableSocket: boolean;
@@ -61,6 +61,15 @@ export function startDriverRealtimeBridge(
         last_sync_at: new Date().toISOString(),
         mode: snapshot.mode,
       });
+    }
+    const justDisconnected = wasConnected && !snapshot.connected;
+    if (
+      justDisconnected &&
+      isFeatureEnabled("tracking_real_ack_semantics_enabled")
+    ) {
+      void driverTrackingQueue.releaseSocketEmittedForHttpRetry().then(() =>
+        flushTrackingQueue().then(() => syncBridgeQueueDepthFromPersistence())
+      );
     }
     wasConnected = snapshot.connected;
   });
@@ -120,6 +129,14 @@ export function startDriverRealtimeBridge(
         flushTrackingQueue().then(() => syncBridgeQueueDepthFromPersistence())
       );
       emitDriverTelemetry("tracking.batch.rate_limited", {
+        source: "driver.realtime.bridge",
+        context_id: contextId,
+      });
+      return;
+    }
+    if (event.event_type === "force_tracking_restart") {
+      void forceRestartTrackingWatchFromBridge("backend_remote_kick");
+      emitDriverTelemetry("tracking.remote_kick.received", {
         source: "driver.realtime.bridge",
         context_id: contextId,
       });

@@ -132,6 +132,27 @@ def persist_driver_location_from_kafka(
                 accept_reason=uc_result.accept_reason,
                 location_event_id=location_event_id,
             )
+            if uc_result.accept_status == "accepted_canonical" and recorded_at is not None:
+                try:
+                    from datetime import UTC, datetime
+
+                    from services.monitoring.driver_location_metrics import (
+                        observe_tracking_position_freshness_seconds,
+                    )
+
+                    rec_dt = datetime.fromisoformat(
+                        str(recorded_at).replace("Z", "+00:00")
+                    )
+                    if rec_dt.tzinfo is None:
+                        rec_dt = rec_dt.replace(tzinfo=UTC)
+                    age = (datetime.now(UTC) - rec_dt).total_seconds()
+                    observe_tracking_position_freshness_seconds(
+                        freshness_seconds=age,
+                        company_id=company_id,
+                        location_mode=norm_mode,
+                    )
+                except Exception:
+                    pass
 
     enriched_payload = {
         **payload,
@@ -152,5 +173,9 @@ def persist_driver_location_from_kafka(
             "snapped_lon": uc_result.snapped_lon,
             "dedup_skipped": uc_result.dedup_skipped,
         },
+        "pipeline_stages": [
+            {"stage": "ACK_INGESTED", "ok": True},
+            {"stage": "ACK_PROCESSED", "ok": uc_result.accept_status.startswith("accepted")},
+        ],
     }
     return enriched, uc_result

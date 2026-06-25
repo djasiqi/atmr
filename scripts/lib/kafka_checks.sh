@@ -8,6 +8,7 @@ KAFKA_REQUIRED_FLAGS=(
   TRACKING_INGEST_ASYNC_ENABLED
   TRACKING_PROCESSED_FANOUT_ENABLED
   WS_KAFKA_CONSUMER_ENABLED
+  TRACKING_INGEST_PERSIST_ENABLED
 )
 
 KAFKA_REQUIRED_COMPOSE_FILES=(
@@ -168,11 +169,32 @@ kafka_check_flags_all_true() {
     fi
   done
   if ((${#incoherent[@]})); then
-    log_fail "flags Kafka : attendu true pour les 4 — détail : ${incoherent[*]}"
+    log_fail "flags Kafka : attendu true pour les ${#KAFKA_REQUIRED_FLAGS[@]} — détail : ${incoherent[*]}"
     return 1
   fi
-  log_info "flags Kafka (4/4 = true)"
+  log_info "flags Kafka (${#KAFKA_REQUIRED_FLAGS[@]}/${#KAFKA_REQUIRED_FLAGS[@]} = true)"
   return 0
+}
+
+kafka_check_tracking_persist_coherence() {
+  local async persist allow
+  async="$(read_env_flag TRACKING_INGEST_ASYNC_ENABLED)"
+  persist="$(read_env_flag TRACKING_INGEST_PERSIST_ENABLED)"
+  allow="$(read_env_flag TRACKING_INGEST_ALLOW_REPUBLISH_ONLY)"
+  if [[ "${async}" != "true" ]]; then
+    log_info "ingest async OFF — cohérence persist non requise"
+    return 0
+  fi
+  if [[ "${persist}" == "true" ]]; then
+    log_info "TRACKING_INGEST_PERSIST_ENABLED=true (mode normal)"
+    return 0
+  fi
+  if [[ "${allow}" == "true" ]]; then
+    log_warn "MODE REPUBLISH-ONLY : PERSIST=false avec ALLOW_REPUBLISH_ONLY=true"
+    return 0
+  fi
+  log_fail "TRACKING_INGEST_ASYNC_ENABLED=true exige TRACKING_INGEST_PERSIST_ENABLED=true ou TRACKING_INGEST_ALLOW_REPUBLISH_ONLY=true (actuel PERSIST=${persist:-<empty>})"
+  return 1
 }
 
 kafka_check_flags_all_false() {

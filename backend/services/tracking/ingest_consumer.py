@@ -26,6 +26,7 @@ from .kafka_topics import (
 
 try:
     from services.monitoring.driver_location_metrics import (
+        inc_tracking_invalid_config,
         inc_tracking_kafka_dlq_force_commit,
         inc_tracking_kafka_dlq_messages,
         inc_tracking_kafka_messages_produced,
@@ -35,6 +36,10 @@ try:
         set_tracking_kafka_consumer_lag,
     )
 except Exception:  # pragma: no cover
+
+    def inc_tracking_invalid_config(*, reason: str) -> None:
+        _ = reason
+        pass
 
     def inc_tracking_kafka_messages_produced(*, topic: str) -> None:
         _ = topic
@@ -88,6 +93,9 @@ KAFKA_RETRY_BACKOFF_MS = int(os.getenv("KAFKA_RETRY_BACKOFF_MS", "300"))
 KAFKA_PUBLISH_ACK_TIMEOUT_S = float(os.getenv("KAFKA_PUBLISH_ACK_TIMEOUT_S", "2.0"))
 TRACKING_INGEST_PERSIST_ENABLED = (
     os.getenv("TRACKING_INGEST_PERSIST_ENABLED", "false").lower() == "true"
+)
+TRACKING_INGEST_ALLOW_REPUBLISH_ONLY = (
+    os.getenv("TRACKING_INGEST_ALLOW_REPUBLISH_ONLY", "false").lower() == "true"
 )
 TRACKING_INGEST_SEEK_TO_END_ON_START = (
     os.getenv("TRACKING_INGEST_SEEK_TO_END_ON_START", "false").lower() == "true"
@@ -598,6 +606,35 @@ def run_tracking_ingest_consumer() -> None:
             "[tracking_consumer] disabled (KAFKA_ENABLED or TRACKING_INGEST_ASYNC_ENABLED), exiting cleanly"
         )
         sys.exit(0)
+    if (
+        TRACKING_INGEST_ASYNC_ENABLED
+        and not TRACKING_INGEST_PERSIST_ENABLED
+        and not TRACKING_INGEST_ALLOW_REPUBLISH_ONLY
+    ):
+        logger.critical(
+            "[tracking_consumer] CONFIG INVALIDE: TRACKING_INGEST_ASYNC_ENABLED=true "
+            "mais TRACKING_INGEST_PERSIST_ENABLED=false -> positions enqueue Kafka "
+            "jamais persistees en DB. Definir TRACKING_INGEST_PERSIST_ENABLED=true, "
+            "ou TRACKING_INGEST_ALLOW_REPUBLISH_ONLY=true si rollback intentionnel "
+            "(cf. docs/ops/gps-tracking-pipeline.md). Refusing to start."
+        )
+        try:
+            inc_tracking_invalid_config(reason="async_without_persist")
+        except Exception:
+            logger.debug(
+                "[tracking_consumer] invalid_config metric unavailable", exc_info=True
+            )
+        sys.exit(1)
+    if (
+        TRACKING_INGEST_ASYNC_ENABLED
+        and not TRACKING_INGEST_PERSIST_ENABLED
+        and TRACKING_INGEST_ALLOW_REPUBLISH_ONLY
+    ):
+        logger.warning(
+            "[tracking_consumer] MODE REPUBLISH-ONLY: TRACKING_INGEST_PERSIST_ENABLED=false "
+            "avec TRACKING_INGEST_ALLOW_REPUBLISH_ONLY=true — positions Kafka republiees "
+            "sans ecriture DB (rollback intentionnel)."
+        )
     consumer = TrackingIngestConsumer()
     if not consumer.initialized:
         logger.error("[tracking_consumer] exiting (kafka clients not initialized)")

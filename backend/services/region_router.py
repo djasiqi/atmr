@@ -88,6 +88,16 @@ def kafka_partition_key(
     return f"{resolved_region}:unknown"
 
 
+def kafka_partition_key_for_driver_location(
+    *,
+    region_id: str | None,
+    driver_id: int,
+) -> str:
+    """Clé Kafka raw.v2 — granularité driver (répartition équitable)."""
+    resolved_region = region_id or DEFAULT_REGION
+    return f"{resolved_region}:driver:{driver_id}"
+
+
 def routing_metadata(*, region_id: str, fallback_used: bool = False) -> dict[str, Any]:
     return {
         "region_id": region_id,

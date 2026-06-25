@@ -3,6 +3,8 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from application.drivers.update_driver_location import UpdateDriverLocationResult
 from services.tracking.ingest_consumer import TrackingIngestConsumer
 from services.tracking.ingest_persist import persist_driver_location_from_kafka
@@ -168,3 +170,96 @@ def test_persist_driver_location_logs_correlation_for_kafka(monkeypatch):
         accept_reason="",
         location_event_id="ev-1",
     )
+
+
+def _patch_run_consumer_flags(monkeypatch, **flags):
+    defaults = {
+        "KAFKA_ENABLED": True,
+        "TRACKING_INGEST_ASYNC_ENABLED": True,
+        "TRACKING_INGEST_PERSIST_ENABLED": True,
+        "TRACKING_INGEST_ALLOW_REPUBLISH_ONLY": False,
+    }
+    defaults.update(flags)
+    for name, value in defaults.items():
+        monkeypatch.setattr(f"services.tracking.ingest_consumer.{name}", value)
+
+
+def test_run_tracking_ingest_consumer_exits_on_invalid_config(monkeypatch):
+    _patch_run_consumer_flags(
+        monkeypatch,
+        TRACKING_INGEST_PERSIST_ENABLED=False,
+        TRACKING_INGEST_ALLOW_REPUBLISH_ONLY=False,
+    )
+    with (
+        patch("shared.logging_utils.configure_kafka_log_noise"),
+        patch("shared.sentry_init.init_sentry"),
+        patch(
+            "services.monitoring.standalone_prometheus_server.start_standalone_prometheus_server"
+        ),
+        patch(
+            "services.tracking.ingest_consumer.inc_tracking_invalid_config",
+        ) as mock_metric,
+        pytest.raises(SystemExit) as exc,
+    ):
+        from services.tracking.ingest_consumer import run_tracking_ingest_consumer
+
+        run_tracking_ingest_consumer()
+
+    assert exc.value.code == 1
+    mock_metric.assert_called_once_with(reason="async_without_persist")
+
+
+def test_run_tracking_ingest_consumer_allows_republish_only_mode(monkeypatch):
+    _patch_run_consumer_flags(
+        monkeypatch,
+        TRACKING_INGEST_PERSIST_ENABLED=False,
+        TRACKING_INGEST_ALLOW_REPUBLISH_ONLY=True,
+    )
+    mock_consumer = MagicMock()
+    mock_consumer.initialized = True
+    with (
+        patch("shared.logging_utils.configure_kafka_log_noise"),
+        patch("shared.sentry_init.init_sentry"),
+        patch(
+            "services.monitoring.standalone_prometheus_server.start_standalone_prometheus_server"
+        ),
+        patch(
+            "services.tracking.ingest_consumer.TrackingIngestConsumer",
+            return_value=mock_consumer,
+        ),
+        patch(
+            "services.tracking.ingest_consumer.inc_tracking_invalid_config",
+        ) as mock_metric,
+    ):
+        from services.tracking.ingest_consumer import run_tracking_ingest_consumer
+
+        run_tracking_ingest_consumer()
+
+    mock_metric.assert_not_called()
+    mock_consumer.start.assert_called_once()
+
+
+def test_run_tracking_ingest_consumer_ok_when_persist_enabled(monkeypatch):
+    _patch_run_consumer_flags(monkeypatch, TRACKING_INGEST_PERSIST_ENABLED=True)
+    mock_consumer = MagicMock()
+    mock_consumer.initialized = True
+    with (
+        patch("shared.logging_utils.configure_kafka_log_noise"),
+        patch("shared.sentry_init.init_sentry"),
+        patch(
+            "services.monitoring.standalone_prometheus_server.start_standalone_prometheus_server"
+        ),
+        patch(
+            "services.tracking.ingest_consumer.TrackingIngestConsumer",
+            return_value=mock_consumer,
+        ),
+        patch(
+            "services.tracking.ingest_consumer.inc_tracking_invalid_config",
+        ) as mock_metric,
+    ):
+        from services.tracking.ingest_consumer import run_tracking_ingest_consumer
+
+        run_tracking_ingest_consumer()
+
+    mock_metric.assert_not_called()
+    mock_consumer.start.assert_called_once()

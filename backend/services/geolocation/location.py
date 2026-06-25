@@ -274,14 +274,28 @@ class LocationService:
         )
         normalized_mode = incoming_mode
         if incoming_mode == "mission_live" and mission_id is None:
+            logger.warning(
+                "mission_live downgraded, missing mission_id",
+                extra={
+                    "driver_id": driver_id,
+                    "company_id": company_id,
+                    "transport": transport,
+                },
+            )
             try:
                 from services.monitoring.driver_location_metrics import (
+                    inc_tracking_invariant_violation,
                     inc_tracking_mission_live_missing_mission_id,
                 )
 
                 inc_tracking_mission_live_missing_mission_id(
                     transport=transport,
                     action="downgraded",
+                )
+                inc_tracking_invariant_violation(
+                    invariant_id="INV-3",
+                    company_id=company_id,
+                    driver_id=driver_id,
                 )
             except Exception:
                 pass

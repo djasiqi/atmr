@@ -29,6 +29,7 @@ _KAFKA_PYTHON_LOGGERS = (
     "kafka.net.manager",
     "kafka.net.inet",
     "kafka.net.selector",
+    "kafka.net.transport",
     "kafka.cluster",
     "kafka.conn",
     "kafka.client",
@@ -50,6 +51,7 @@ _KAFKA_BOOTSTRAP_LOG_MARKERS = (
     "error sending heartbeatrequest",
     "task is already done",
     "invalid file descriptor",
+    "error receiving network data closing socket",
 )
 
 

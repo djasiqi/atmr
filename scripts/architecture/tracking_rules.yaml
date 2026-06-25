@@ -1,0 +1,16 @@
+# Règles architecture — chaîne GPS tracking (INV-4, INV-5, INV-6)
+frontend:
+  forbidden_import_patterns:
+    - "pg"
+    - "postgres"
+    - "redis"
+    - "DriverRepository"
+    - "driver_repository"
+  forbidden_path_patterns:
+    - "/models/driver"
+backend:
+  canonical_write_allowlist:
+    - "services/tracking/ingest_persist.py"
+    - "services/geolocation/location.py"
+  forbidden_route_patterns:
+    - "routes/internal_tracking.py:.*return jsonify.*ok.*accepted"

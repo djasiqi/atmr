@@ -60,6 +60,7 @@ echo "=== Kafka deploy : ${ROOT} (env=${ENV_FILE}, compose=${KAFKA_COMPOSE_FILE}
 echo "--- Phase 1/5 : preflight Kafka ON ---"
 PREFLIGHT_OK=1
 kafka_check_flags_all_true || PREFLIGHT_OK=0
+kafka_check_tracking_persist_coherence || PREFLIGHT_OK=0
 kafka_check_compose_files || PREFLIGHT_OK=0
 kafka_check_atmr_network || PREFLIGHT_OK=0
 kafka_check_compose_resolution || PREFLIGHT_OK=0
@@ -96,11 +97,11 @@ else
   echo "--- Phase 4/5 : init topics (skip — INIT_TOPICS!=1) ---"
 fi
 
-echo "--- Phase 5a/5 : up consumers (profile kafka) ---"
+echo "--- Phase 5a/5 : up consumers (profile kafka, force-recreate env) ---"
 if [[ "${KAFKA_UI_ENABLED:-0}" == "1" ]]; then
-  kafka_docker_compose --profile kafka-ui up -d "${KAFKA_CONSUMER_AND_UI_SERVICES[@]}"
+  kafka_docker_compose --profile kafka-ui up -d --force-recreate "${KAFKA_CONSUMER_AND_UI_SERVICES[@]}"
 else
-  kafka_docker_compose up -d "${KAFKA_CONSUMER_AND_UI_SERVICES[@]}"
+  kafka_docker_compose up -d --force-recreate "${KAFKA_CONSUMER_AND_UI_SERVICES[@]}"
 fi
 
 echo "--- Phase 5b/5 : validations post-deploy ---"

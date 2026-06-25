@@ -1,0 +1,47 @@
+groups:
+  - name: tracking_gps
+    rules:
+      - alert: TrackingInvariantViolation
+        expr: increase(tracking_invariant_violation_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Violation invariant GPS {{ $labels.invariant_id }}"
+      - alert: TrackingFleetFrozen
+        expr: increase(driver_location_received_total[10m]) == 0
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Aucune position reçue depuis 10 min"
+      - alert: TrackingStaleRateHigh
+        expr: |
+          sum(rate(driver_device_health_received_total{constraint_reason="fix_stale"}[5m]))
+          /
+          sum(rate(driver_device_health_received_total[5m])) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: ">5% drivers fix_stale"
+      - alert: TrackingPipelineStageSLOBreach
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(tracking_pipeline_stage_latency_seconds_bucket[5m])) by (le, stage)
+          ) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "SLO latence dépassé pour stage {{ $labels.stage }}"
+      - alert: KafkaPartitionImbalance
+        expr: |
+          max(kafka_consumergroup_lag) by (topic)
+          /
+          (avg(kafka_consumergroup_lag) by (topic) + 1) > 3
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Déséquilibre partitions Kafka tracking"

@@ -133,6 +133,9 @@
         "EXPO_PUBLIC_ENABLE_TRACKING_ADAPTIVE_CADENCE": "1",
         "EXPO_PUBLIC_ENABLE_TRACKING_REAL_ACK_SEMANTICS": "1",
         "EXPO_PUBLIC_ENABLE_TRACKING_QUEUE_COMPACTION": "1",
+        "EXPO_PUBLIC_ENABLE_TRACKING_SELF_HEAL_WATCH": "1",
+        "EXPO_PUBLIC_ENABLE_TRACKING_RECOVERY_CASCADE": "0",
+        "EXPO_PUBLIC_ENABLE_TRACKING_STATE_MACHINE": "0",
         "EXPO_PUBLIC_ENABLE_REALTIME_RECONNECT_CIRCUIT_BREAKER": "1",
         "EXPO_PUBLIC_ENABLE_REALTIME_RESYNC_TRANSITION_GATE": "1",
         "EXPO_PUBLIC_ENABLE_REALTIME_AUTH_EXHAUSTION_GUARD": "1",
@@ -165,6 +168,24 @@
       },
       "ios": {
         "simulator": false
+      }
+    },
+    "production-gps-phase2": {
+      "extends": "production",
+      "channel": "production-gps-phase2",
+      "env": {
+        "EXPO_PUBLIC_ENABLE_TRACKING_SELF_HEAL_WATCH": "1",
+        "EXPO_PUBLIC_ENABLE_TRACKING_RECOVERY_CASCADE": "1",
+        "EXPO_PUBLIC_ENABLE_TRACKING_STATE_MACHINE": "0"
+      }
+    },
+    "production-gps-phase3": {
+      "extends": "production",
+      "channel": "production-gps-phase3",
+      "env": {
+        "EXPO_PUBLIC_ENABLE_TRACKING_SELF_HEAL_WATCH": "1",
+        "EXPO_PUBLIC_ENABLE_TRACKING_RECOVERY_CASCADE": "1",
+        "EXPO_PUBLIC_ENABLE_TRACKING_STATE_MACHINE": "1"
       }
     }
   },

@@ -353,6 +353,24 @@ celery.conf.beat_schedule = {
             "jitter": 5,
         },
     },
+    # Kick Socket.IO force_tracking_restart (fix_stale prolongé)
+    "stale-fix-watchdog": {
+        "task": "tasks.tracking_health_tasks.stale_fix_watchdog_tick",
+        "schedule": 60.0,
+        "options": {
+            "expires": 120,
+            "jitter": 5,
+        },
+    },
+    # Health Engine agrégé
+    "tracking-health-engine": {
+        "task": "tasks.tracking_health_tasks.tracking_health_engine_tick",
+        "schedule": 30.0,
+        "options": {
+            "expires": 60,
+            "jitter": 5,
+        },
+    },
     # Purge historique device-health (>30 jours)
     "purge-device-health-events": {
         "task": "tasks.tracking_health_tasks.purge_device_health_events",

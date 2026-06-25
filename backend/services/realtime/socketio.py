@@ -325,6 +325,21 @@ def emit_driver_event(
     )
 
 
+def emit_force_tracking_restart(driver_id: int, *, reason: str) -> None:
+    """Kick mobile — redémarrage tracking (watch/FGS) via Socket.IO."""
+    from datetime import UTC, datetime
+
+    emit_driver_event(
+        driver_id,
+        "force_tracking_restart",
+        {
+            "reason": reason,
+            "at": datetime.now(UTC).isoformat(),
+            "event_type": "force_tracking_restart",
+        },
+    )
+
+
 def emit_company_event(
     company_id: int,
     event: str,

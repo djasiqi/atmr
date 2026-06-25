@@ -63,6 +63,17 @@ export function mergeDriverLiveUpdate(driver, update, fromLiveState) {
   const presenceStatus = update.presence_status ?? driver.presence_status ?? null;
   const status = fromLiveState ? update.status ?? driver.status : driver.status ?? update.status;
   const deviceHealth = update.device_health ?? driver.device_health ?? null;
+  const constraintReason =
+    update.constraint_reason ??
+    deviceHealth?.constraint_reason ??
+    driver.constraint_reason ??
+    null;
+  const trackingHealthState =
+    update.tracking_health_state ?? driver.tracking_health_state ?? null;
+  const lastPositionUpdateMs = canonicalTimeMs(update) ?? canonicalTimeMs(driver);
+  const isStale =
+    update.is_stale ??
+    (lastPositionUpdateMs != null && Date.now() - lastPositionUpdateMs > 120_000);
 
   return {
     ...driver,
@@ -73,6 +84,12 @@ export function mergeDriverLiveUpdate(driver, update, fromLiveState) {
     location_status: locationStatus,
     presence_status: presenceStatus,
     device_health: deviceHealth,
+    constraint_reason: constraintReason,
+    tracking_health_state: trackingHealthState,
+    is_stale: Boolean(isStale),
+    tracking_display_status:
+      update.tracking_display_status ??
+      (isStale || constraintReason === 'fix_stale' ? 'non_localise' : driver.tracking_display_status),
     status,
     mission_status: fromLiveState
       ? update.mission_status ?? driver.mission_status ?? null

@@ -71,8 +71,16 @@ jest.mock("../../../core/observability/driverTelemetry", () => ({
     mockEmitDriverTelemetry(event, payload as any),
 }));
 
+jest.mock("../../../core/featureFlags/registry", () => ({
+  isFeatureEnabled: (flag: string) =>
+    flag === "tracking_persistent_runtime_enabled" ||
+    flag === "tracking_http_fallback_enabled" ||
+    flag === "tracking_background_enabled",
+}));
+
 jest.mock("@sentry/react-native", () => ({
   addBreadcrumb: jest.fn(),
+  captureMessage: jest.fn(),
 }));
 
 jest.mock("../../../core/realtime/realtimeManager", () => ({
@@ -219,6 +227,33 @@ describe("driver tracking bridge", () => {
     getSnapshotSpy.mockRestore();
   });
 
+  it("flushPoint définit nowIso avant enqueue (régression ReferenceError)", async () => {
+    const enqueueSpy = jest.spyOn(driverTrackingQueue, "enqueue").mockResolvedValue(undefined);
+    jest.spyOn(driverTrackingQueue, "flush").mockResolvedValue({
+      sent: 1,
+      backendAcked: 1,
+      socketEmitted: 0,
+      dropped: 0,
+      retried: 0,
+      queueDepth: 0,
+      flushPathUsed: "socket_batch",
+      lastBackendAckAt: Date.now(),
+      lastBackendAckStatus: "accepted",
+      oldestItemAgeMs: null,
+      networkProfile: "normal",
+    });
+
+    startDriverTrackingBridge(13, "IN_PROGRESS");
+    await jest.advanceTimersByTimeAsync(0);
+
+    expect(enqueueSpy).toHaveBeenCalled();
+    const payload = enqueueSpy.mock.calls[0]?.[0]?.payload;
+    expect(payload?.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect(() => new Date(payload!.timestamp!).toISOString()).not.toThrow();
+
+    enqueueSpy.mockRestore();
+  });
+
   it("deduplicates concurrent stopDriverTrackingBridge calls", async () => {
     const flushSpy = jest.spyOn(driverTrackingQueue, "flush").mockResolvedValue({
       sent: 0,
@@ -234,6 +269,8 @@ describe("driver tracking bridge", () => {
     });
 
     startDriverTrackingBridge(12, "EN_ROUTE");
+    await jest.advanceTimersByTimeAsync(0);
+    flushSpy.mockClear();
     await Promise.all([stopDriverTrackingBridge(), stopDriverTrackingBridge()]);
     expect(flushSpy.mock.calls.length).toBe(1);
     flushSpy.mockRestore();

@@ -1784,6 +1784,9 @@ def create_app(config_name: str | None = None):
             from routes.internal_tracking import internal_tracking_bp
 
             app.register_blueprint(internal_tracking_bp)
+            from routes.tracking_health import tracking_health_bp
+
+            app.register_blueprint(tracking_health_bp)
             app.register_blueprint(feature_flags_bp)
             app.register_blueprint(ml_monitoring_bp)
 

@@ -24,7 +24,10 @@ import time
 import uuid
 from typing import Any
 
-from services.region_router import kafka_partition_key
+from services.region_router import (
+    kafka_partition_key,
+    kafka_partition_key_for_driver_location,
+)
 
 from .kafka_topics import TOPIC_DRIVER_LOCATION_RAW
 
@@ -203,11 +206,20 @@ class TrackingIngestProducer:
                 else None
             )
         )
-        key = kafka_partition_key(
-            region_id=region_id,
-            company_id=partition_company_id,
-            driver_id=driver_id,
-        )
+        use_driver_key = os.getenv(
+            "KAFKA_PARTITION_BY_DRIVER_ID_ENABLED", "true"
+        ).lower() not in ("0", "false", "no", "off")
+        if use_driver_key and driver_id is not None:
+            key = kafka_partition_key_for_driver_location(
+                region_id=region_id,
+                driver_id=int(driver_id),
+            )
+        else:
+            key = kafka_partition_key(
+                region_id=region_id,
+                company_id=partition_company_id,
+                driver_id=driver_id,
+            )
 
         try:
             future = self._producer.send(

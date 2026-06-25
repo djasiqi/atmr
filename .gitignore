@@ -139,6 +139,12 @@ backend/celerybeat-schedule*
 /docs/**
 !/docs/ops/
 !/docs/ops/**
+!/docs/architecture/
+!/docs/architecture/**
+!/docs/operations/
+!/docs/operations/**
+!/docs/development/
+!/docs/development/**
 # Exception: journal pilote requis par CI (prefill-pilot-log)
 !mobile/unified-app/docs/
 !mobile/unified-app/docs/PILOT_EXECUTION_LOG.md

@@ -91,6 +91,8 @@ _CANONICAL_REDIS_WRITE = None
 _CANONICAL_OVERWRITE = None
 _GPS_PROVIDER = None
 _TRACKING_MISSION_LIVE_MISSING_MISSION_ID = None
+_TRACKING_INVARIANT_VIOLATION = None
+_TRACKING_POSITION_FRESHNESS = None
 _TRACKING_DELIVERY_RESULT = None
 _TRACKING_HTTP_ACCEPTED_ASYNC = None
 _TRACKING_KAFKA_PERSIST = None
@@ -251,6 +253,17 @@ if Counter is not None:
             "compteur post-déploiement, non cumulatif Redis)"
         ),
         ["transport", "action"],
+    )
+    _TRACKING_INVARIANT_VIOLATION = Counter(
+        "tracking_invariant_violation_total",
+        "Violation d'invariant architecture GPS (INV-1 à INV-8)",
+        ["invariant_id", "company_id"],
+    )
+    _TRACKING_POSITION_FRESHNESS = Histogram(
+        "driver_tracking_position_freshness_seconds",
+        "Âge recorded_at → now à l'acceptation canonical (secondes)",
+        ["company_id", "location_mode"],
+        buckets=(0.1, 0.25, 0.5, 1.0, 2.0, 5.0, 15.0, 60.0, 300.0, 600.0),
     )
     _TRACKING_DELIVERY_RESULT = Counter(
         "tracking_delivery_result_total",
@@ -797,6 +810,43 @@ def inc_tracking_mission_live_missing_mission_id(
     t = _norm_transport(transport)
     act = action if action in ("downgraded", "rejected") else "_unknown"
     _TRACKING_MISSION_LIVE_MISSING_MISSION_ID.labels(transport=t, action=act).inc()
+
+
+def inc_tracking_invariant_violation(
+    *,
+    invariant_id: str,
+    company_id: int | str | None = None,
+    driver_id: int | None = None,
+) -> None:
+    """Compteur runtime violation invariant (INV-*). driver_id en log uniquement."""
+    if not _metrics_enabled() or _TRACKING_INVARIANT_VIOLATION is None:
+        return
+    inv = (invariant_id or "UNKNOWN").strip().upper()
+    if not inv.startswith("INV-"):
+        inv = f"INV-{inv}"
+    cid = str(company_id) if company_id is not None else "unknown"
+    _TRACKING_INVARIANT_VIOLATION.labels(invariant_id=inv, company_id=cid).inc()
+    _ = driver_id
+
+
+def observe_tracking_position_freshness_seconds(
+    *,
+    freshness_seconds: float,
+    company_id: int | str | None = None,
+    location_mode: str | None = None,
+) -> None:
+    """Histogramme fraîcheur position (N3 SLO)."""
+    if not _metrics_enabled() or _TRACKING_POSITION_FRESHNESS is None:
+        return
+    try:
+        val = max(0.0, float(freshness_seconds))
+    except (TypeError, ValueError):
+        return
+    cid = str(company_id) if company_id is not None else "unknown"
+    _TRACKING_POSITION_FRESHNESS.labels(
+        company_id=cid,
+        location_mode=_norm_mode(location_mode),
+    ).observe(val)
 
 
 _KAFKA_PERSIST_STATUSES = frozenset(

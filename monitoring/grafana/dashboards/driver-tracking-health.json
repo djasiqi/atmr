@@ -213,6 +213,77 @@
       ],
       "title": "STOP GATE — forbidden inattendu (48h, cible 0)",
       "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 48 },
+      "id": 15,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(driver_tracking_position_freshness_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p99 freshness"
+        },
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(driver_tracking_position_freshness_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p50 freshness"
+        }
+      ],
+      "title": "GPS freshness p50/p99 (pipeline)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 48 },
+      "id": 16,
+      "targets": [
+        {
+          "expr": "sum(rate(driver_device_health_received_total{constraint_reason=\"fix_stale\"}[5m])) / clamp_min(sum(rate(driver_device_health_received_total[5m])), 0.001)",
+          "legendFormat": "fix_stale rate"
+        }
+      ],
+      "title": "Drivers fix_stale ratio",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 56 },
+      "id": 17,
+      "targets": [
+        {
+          "expr": "sum(increase(driver_location_received_total[10m]))",
+          "legendFormat": "locations received"
+        }
+      ],
+      "title": "Ingest volume (10m)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 56 },
+      "id": 18,
+      "targets": [
+        {
+          "expr": "sum(increase(tracking_invariant_violation_total[1h])) by (invariant_id)",
+          "legendFormat": "{{invariant_id}}"
+        }
+      ],
+      "title": "Invariant violations (1h)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 56 },
+      "id": 19,
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(tracking_pipeline_stage_latency_seconds_bucket[5m])) by (le, stage))",
+          "legendFormat": "{{stage}} p95"
+        }
+      ],
+      "title": "Pipeline stage latency p95",
+      "type": "timeseries"
     }
   ],
   "refresh": "30s",

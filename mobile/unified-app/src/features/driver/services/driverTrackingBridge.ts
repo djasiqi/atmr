@@ -29,6 +29,24 @@ import {
   isPresenceDisclosureAccepted,
 } from "./liveTrackingDisclosureSession";
 import { emitBatteryBaselineIfTracing } from "../../../core/observability/gpsFidelityTrace";
+import {
+  canAttemptTrackingOperation,
+  recordTrackingCircuitFailure,
+  recordTrackingCircuitSuccess,
+} from "../tracking/trackingCircuitBreaker";
+import {
+  forceRestartTrackingWatch,
+  shouldForceRestartWatch,
+  shouldTriggerAntiZombie,
+  markAntiZombieTriggered,
+  type SelfHealBridgeSlice,
+  ANTI_ZOMBIE_FIX_AGE_SEC,
+} from "../tracking/trackingSelfHeal";
+import {
+  resolveTrackingFsmState,
+  type TrackingFsmState,
+} from "../tracking/TrackingStateMachine";
+import { runTrackingRecoveryCascade } from "../tracking/TrackingRecoveryOrchestrator";
 
 const FOREGROUND_INTERVAL_MS = Number(process.env.EXPO_PUBLIC_DRIVER_GPS_FOREGROUND_INTERVAL_MS ?? "8000");
 const AGGRESSIVE_FOREGROUND_INTERVAL_MS = Number(
@@ -128,6 +146,10 @@ type TrackingBridgeState = {
   lastStaleFallbackAttemptMs: number | null;
   lastHttpFallbackTrackingEventId: string | null;
   fallbackTrackingSeq: number;
+  lastWatchRestartAtMs: number;
+  watchRestartTimestampsMs: number[];
+  fsmState: TrackingFsmState;
+  lastFixProducedAtMs: number | null;
 };
 
 export type DriverTrackingPosition = {
@@ -178,6 +200,10 @@ const state: TrackingBridgeState = {
   lastStaleFallbackAttemptMs: null,
   lastHttpFallbackTrackingEventId: null,
   fallbackTrackingSeq: 0,
+  lastWatchRestartAtMs: 0,
+  watchRestartTimestampsMs: [],
+  fsmState: "IDLE",
+  lastFixProducedAtMs: null,
 };
 
 const trackingBridgeListeners = new Set<DriverTrackingBridgeListener>();
@@ -216,6 +242,128 @@ function notifyTrackingBridgeListeners() {
   const snapshot = buildTrackingBridgeSnapshot();
   trackingBridgeListeners.forEach((listener) => {
     listener(snapshot);
+  });
+}
+
+function getSelfHealSlice(): SelfHealBridgeSlice {
+  return {
+    watchSubscription: state.watchSubscription,
+    staleFallbackTimeouts: state.staleFallbackTimeouts,
+    staleFallbackBlockedUntilMs: state.staleFallbackBlockedUntilMs,
+    lastWatchAtMs: state.lastWatchAtMs,
+    lastWatchedPosition: state.lastWatchedPosition,
+    lastWatchRestartAtMs: state.lastWatchRestartAtMs,
+    watchRestartTimestampsMs: state.watchRestartTimestampsMs,
+    missionId: state.missionId,
+  };
+}
+
+function getSelfHealActions() {
+  return {
+    stopWatch: () => stopLocationWatch(),
+    stopBackground: (reason: string) => stopBackgroundLocationTask(reason),
+    ensureNativeForeground: async () => {
+      if (state.missionId != null && isFeatureEnabled("tracking_background_enabled")) {
+        await ensureNativeTrackingWhileForeground(
+          state.missionId,
+          state.missionStatus,
+          {},
+          "self_heal_restart"
+        );
+      }
+    },
+    ensureLocationWatch: () => ensureLocationWatch(),
+    triggerDeviceHealth: (reason: string) => {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const heartbeat = require("./deviceHealthHeartbeat") as typeof import("./deviceHealthHeartbeat");
+        if (typeof heartbeat.triggerDeviceHealthNow === "function") {
+          void heartbeat.triggerDeviceHealthNow(reason).catch(() => undefined);
+        }
+      } catch {
+        /* noop */
+      }
+    },
+  };
+}
+
+/** Remote kick backend — redémarrage watch/FGS. */
+export async function forceRestartTrackingWatchFromBridge(
+  reason: string,
+  appState: AppStateStatus = trackingManager.getSnapshot().appState
+): Promise<boolean> {
+  return forceRestartTrackingWatch(reason, getSelfHealSlice(), getSelfHealActions(), appState);
+}
+
+async function handleAntiZombieIfNeeded(appState: AppStateStatus): Promise<void> {
+  const managerSnapshot = trackingManager.getSnapshot();
+  if (
+    !shouldTriggerAntiZombie({
+      isTrackingRunning: managerSnapshot.isRunning,
+      lastFixProducedAtMs: state.lastFixProducedAtMs,
+      lastSentAt: state.lastSentAt,
+    })
+  ) {
+    return;
+  }
+  markAntiZombieTriggered();
+  emitDriverTelemetry("tracking.anti_zombie.triggered", {
+    source: "driver.tracking.bridge",
+    mission_id: state.missionId,
+    app_state: appState,
+    last_fix_age_sec: state.lastFixProducedAtMs
+      ? (Date.now() - state.lastFixProducedAtMs) / 1000
+      : null,
+    threshold_sec: ANTI_ZOMBIE_FIX_AGE_SEC,
+    fsm_state: state.fsmState,
+  });
+  getSelfHealActions().triggerDeviceHealth("anti_zombie_fix_stale");
+  if (isFeatureEnabled("tracking_recovery_cascade_enabled")) {
+    await runTrackingRecoveryCascade("anti_zombie_fix_stale", {
+      restartWatch: async (reason) => {
+        await forceRestartTrackingWatchFromBridge(reason, appState);
+      },
+      restartFgs: async (reason) => {
+        if (state.missionId != null && isFeatureEnabled("tracking_background_enabled")) {
+          await ensureNativeTrackingWhileForeground(
+            state.missionId,
+            state.missionStatus,
+            {},
+            reason
+          );
+        }
+      },
+      restartEngine: async () => {
+        await stopDriverTrackingBridge();
+        if (state.missionId != null && state.missionStatus != null) {
+          startDriverTrackingBridge(state.missionId, state.missionStatus);
+        }
+      },
+    });
+  } else {
+    await forceRestartTrackingWatchFromBridge("anti_zombie_fix_stale", appState);
+  }
+}
+
+function resolvePayloadLocationMode(mode: DriverTrackingMode): DriverTrackingMode {
+  if (state.missionId === null && mode === "mission_live") {
+    return "availability_presence";
+  }
+  return mode;
+}
+
+function refreshFsmState(appState: AppStateStatus, fixStale: boolean) {
+  if (!isFeatureEnabled("tracking_state_machine_enabled")) {
+    return;
+  }
+  state.fsmState = resolveTrackingFsmState({
+    hasMission: hasActiveMission(),
+    presenceWindow: state.presenceWindowActive,
+    appForeground: appState === "active",
+    missionLive: resolveTrackingMode(appState) === "mission_live",
+    fixStale,
+    circuitOpen: !canAttemptTrackingOperation(Date.now(), true),
+    missionTerminal: state.missionStatus != null && !isTrackingActiveStatus(state.missionStatus),
   });
 }
 
@@ -336,9 +484,12 @@ async function getCurrentPositionWithTimeout(
   ]);
   if (currentPosition) {
     state.staleFallbackTimeouts = 0;
+    recordTrackingCircuitSuccess();
+    state.lastFixProducedAtMs = Date.now();
     return currentPosition;
   }
   state.staleFallbackTimeouts += 1;
+  recordTrackingCircuitFailure();
   state.staleFallbackBlockedUntilMs = Date.now() + STALE_FALLBACK_BREAKER_MS;
   emitDriverTelemetry("tracking.stale_fallback.timeout", {
     source: "driver.tracking.bridge",
@@ -360,6 +511,14 @@ async function getCurrentPositionWithTimeout(
   } catch {
     /* noop */
   }
+  if (shouldForceRestartWatch(getSelfHealSlice())) {
+    void forceRestartTrackingWatch(
+      "stale_fallback_breaker",
+      getSelfHealSlice(),
+      getSelfHealActions(),
+      appState
+    );
+  }
   return Location.getLastKnownPositionAsync({
     maxAge: WATCH_STALE_MS,
     requiredAccuracy: 100,
@@ -368,12 +527,18 @@ async function getCurrentPositionWithTimeout(
 
 async function flushPoint(appState: AppStateStatus) {
   if (!isEligible()) return;
+  if (!canAttemptTrackingOperation(Date.now(), true)) {
+    return;
+  }
   void emitBatteryBaselineIfTracing("driver.tracking.bridge");
   const granted = await ensurePermission(appState);
   if (!granted) return;
   const mode = resolveTrackingMode(appState);
+  const payloadMode = resolvePayloadLocationMode(mode);
+  refreshFsmState(appState, false);
   const position = await resolvePositionFromWatchOrFallback(appState, mode);
   if (!position) {
+    refreshFsmState(appState, true);
     emitDriverTelemetry("tracking.send.skipped", {
       source: "driver.tracking.bridge",
       mission_id: state.missionId,
@@ -382,11 +547,14 @@ async function flushPoint(appState: AppStateStatus) {
     });
     return;
   }
+  const nowIso = new Date(position.timestamp ?? Date.now()).toISOString();
+  state.lastFixProducedAtMs = Date.now();
+  recordTrackingCircuitSuccess();
   const cadence = getCadenceForTick(appState, mode);
   await driverTrackingQueue.enqueue({
     missionId: state.missionId,
     appState,
-    locationMode: mode,
+    locationMode: payloadMode,
     payload: {
       latitude: position.coords.latitude,
       longitude: position.coords.longitude,
@@ -396,7 +564,7 @@ async function flushPoint(appState: AppStateStatus) {
       missionId: state.missionId,
       isBackground: appState !== "active",
       timestamp: nowIso,
-      locationMode: mode,
+      locationMode: payloadMode,
     },
   });
   const flushResult = await driverTrackingQueue.flush({
@@ -449,7 +617,7 @@ async function flushPoint(appState: AppStateStatus) {
       missionId: state.missionId,
       isBackground: appState !== "active",
       timestamp: nowIso,
-      locationMode: mode,
+      locationMode: payloadMode,
       trackingEventId: fallbackTrackingEventId,
     });
     state.lastAckAt = nowIso;
@@ -627,6 +795,7 @@ const trackingManager = new TrackingManager({
   onTick: async ({ appState }) => {
     if (!isEligible()) return "skipped";
     try {
+      await handleAntiZombieIfNeeded(appState);
       if (isFeatureEnabled("tracking_persistent_runtime_enabled")) {
         await flushPoint(appState);
       } else {
