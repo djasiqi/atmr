@@ -1,4 +1,4 @@
-# yaml-language-server: disable
+# ⏸️ Phase 1 allègement CI : manuel uniquement (réactiver push/PR quand la carte web repart).
 name: Frontend Tests
 
 # ⏸️ Workflow suspendu temporairement - focus sur lint backend

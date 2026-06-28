@@ -1,15 +1,17 @@
 # Contrat d'application du canon multi-surface (LIRIE) — semi-automatique.
+# Phase 1 allègement CI : manuel uniquement (discipline PR, hors prod GPS).
 # Si une PR touche ≥2 zones parmi unified-app, chauffeur web, dispatch web,
 # le titre ou le corps doit mentionner le canon, docs/adr/, ou API_CANON_RULES.
 name: Canon multi-surface
 
 on:
-  pull_request:
-    paths:
-      - 'mobile/unified-app/**'
-      - 'frontend/src/pages/driver/**'
-      - 'frontend/src/pages/company/**/Dispatch/**'
-      - 'frontend/src/pages/company/Dispatch/**'
+  workflow_dispatch:
+  # pull_request:
+  #   paths:
+  #     - 'mobile/unified-app/**'
+  #     - 'frontend/src/pages/driver/**'
+  #     - 'frontend/src/pages/company/**/Dispatch/**'
+  #     - 'frontend/src/pages/company/Dispatch/**'
 
 permissions:
   contents: read

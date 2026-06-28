@@ -1,21 +1,23 @@
 # yaml-language-server: disable
+# Phase 1 allègement CI : manuel uniquement (parcours démo commerciale, hors prod GPS).
 name: E2E Demo
 on:
   workflow_dispatch:
-  push:
-    branches: [main, develop]
-    paths:
-      - "frontend/**"
-      - "backend/**"
-      - "docker-compose.demo.yml"
-      - ".github/workflows/e2e-demo.yml"
-  pull_request:
-    branches: [main, develop]
-    paths:
-      - "frontend/**"
-      - "backend/**"
-      - "docker-compose.demo.yml"
-      - ".github/workflows/e2e-demo.yml"
+  # push / pull_request désactivés — relancer à la main avant une release démo.
+  # push:
+  #   branches: [main, develop]
+  #   paths:
+  #     - "frontend/**"
+  #     - "backend/**"
+  #     - "docker-compose.demo.yml"
+  #     - ".github/workflows/e2e-demo.yml"
+  # pull_request:
+  #   branches: [main, develop]
+  #   paths:
+  #     - "frontend/**"
+  #     - "backend/**"
+  #     - "docker-compose.demo.yml"
+  #     - ".github/workflows/e2e-demo.yml"
 
 permissions:
   contents: read
