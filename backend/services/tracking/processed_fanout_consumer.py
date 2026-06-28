@@ -84,6 +84,15 @@ def _iso_from_ms(ms: Any) -> str | None:
 
 
 def _fanout_processed_message(envelope: dict[str, Any]) -> None:
+    # Option A (voie socket → Kafka) : les points `source="socket_batch"` ont déjà
+    # été fannés en direct par le handler socket (voie live faible latence). Kafka
+    # ne sert ici qu'à la durabilité/analytics → on NE re-fanne PAS (évite le
+    # doublon d'événements `driver_location_update` côté entreprise). Ce skip est
+    # AVANT les imports lourds (certains chargent des modules exigeant les clés de
+    # chiffrement) pour ne rien déclencher inutilement sur la voie socket.
+    if str(envelope.get("source") or "") == "socket_batch":
+        return
+
     from celery_app import get_flask_app
     from ext import db
     from models import Driver
@@ -485,6 +494,9 @@ def run_processed_location_fanout_consumer() -> None:
             "[processed_fanout] disabled (need KAFKA_ENABLED, TRACKING_INGEST_ASYNC_ENABLED, TRACKING_PROCESSED_FANOUT_ENABLED), exiting cleanly"
         )
         sys.exit(0)
+    from services.tracking.worker_bootstrap import validate_tracking_worker_env
+
+    validate_tracking_worker_env("processed_fanout")
     consumer = ProcessedLocationFanoutConsumer()
     if not consumer.initialized:
         sys.exit(1)

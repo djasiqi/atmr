@@ -32,10 +32,21 @@ messages_ns = Namespace("messages", description="Messagerie entreprise")
 # Constantes pour l'upload de fichiers
 ALLOWED_IMAGE_EXT = {"png", "jpg", "jpeg", "gif", "webp"}
 ALLOWED_PDF_EXT = {"pdf"}
-ALLOWED_EXT = ALLOWED_IMAGE_EXT | ALLOWED_PDF_EXT
+ALLOWED_AUDIO_EXT = {"m4a", "mp3", "wav", "aac", "caf", "3gp", "webm"}
+ALLOWED_EXT = ALLOWED_IMAGE_EXT | ALLOWED_PDF_EXT | ALLOWED_AUDIO_EXT
 ALLOWED_IMAGE_MIME = {"image/jpeg", "image/png", "image/jpg", "image/webp", "image/gif"}
 ALLOWED_PDF_MIME = {"application/pdf"}
-ALLOWED_MIME = ALLOWED_IMAGE_MIME | ALLOWED_PDF_MIME
+ALLOWED_AUDIO_MIME = {
+    "audio/m4a",
+    "audio/mp4",
+    "audio/aac",
+    "audio/mpeg",
+    "audio/wav",
+    "audio/x-caf",
+    "audio/3gpp",
+    "audio/webm",
+}
+ALLOWED_MIME = ALLOWED_IMAGE_MIME | ALLOWED_PDF_MIME | ALLOWED_AUDIO_MIME
 MAX_FILE_SIZE_MB = 10  # 10 Mo max par fichier
 MAX_FILES_PER_MESSAGE = 1  # Limite: 1 fichier par message
 
@@ -62,6 +73,14 @@ def _is_pdf(filename: str) -> bool:
         return False
     ext = filename.rsplit(".", 1)[1].lower()
     return ext in ALLOWED_PDF_EXT
+
+
+def _is_audio(filename: str) -> bool:
+    """Vérifie si le fichier est un message vocal."""
+    if "." not in filename:
+        return False
+    ext = filename.rsplit(".", 1)[1].lower()
+    return ext in ALLOWED_AUDIO_EXT
 
 
 def _validate_file_upload(
@@ -108,10 +127,16 @@ def _validate_file_upload(
     # Validation type de fichier
     is_image_file = _is_image(filename) and mime_type in ALLOWED_IMAGE_MIME
     is_pdf_file = _is_pdf(filename) and mime_type in ALLOWED_PDF_MIME
+    is_audio_file = _is_audio(filename) and mime_type in ALLOWED_AUDIO_MIME
 
-    if not (is_image_file or is_pdf_file):
+    if not (is_image_file or is_pdf_file or is_audio_file):
         return (
-            {"error": "Type de fichier non reconnu (doit être une image ou un PDF)."},
+            {
+                "error": (
+                    "Type de fichier non reconnu "
+                    "(image, PDF ou message vocal)."
+                )
+            },
             400,
         )
 
@@ -364,6 +389,8 @@ class MessageUpload(Resource):
             response["file_type"] = "image"
         elif is_pdf_file:
             response["file_type"] = "pdf"
+        elif is_audio_file:
+            response["file_type"] = "audio"
 
         logger.info(
             "📎 Fichier uploadé: %s (%s bytes) -> %s par user %s",

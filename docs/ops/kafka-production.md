@@ -109,6 +109,19 @@ Codes `deploy-kafka-production.sh` : `0` OK, `2` preflight refusé, `3` post-dep
    scripts/check-kafka-production.sh off
    ```
 
+## Opérations Compose manuelles (serveur)
+
+Sur `/srv/atmr`, les blocs `environment:` de `docker-compose.production.yml` interpolent `${KAFKA_ENABLED:-false}`, etc. depuis le fichier `.env` **à côté du compose**. Le script `deploy-production.sh` fait `cp .env.production .env`, mais toute commande lancée à la main doit cibler explicitement la prod :
+
+```bash
+cd /srv/atmr
+docker compose --env-file .env.production -f docker-compose.production.yml up -d
+docker compose --env-file .env.production -f docker-compose.production.yml restart backend ws-service
+docker compose --env-file .env.production -f docker-compose.production.yml ps
+```
+
+Sans `--env-file .env.production`, les défauts `false` du compose peuvent **écraser** les valeurs du fragment Kafka dans les conteneurs.
+
 ## Erreurs fréquentes
 
 1. **`NoBrokersAvailable` (clients Python / ws-service)**  

@@ -68,7 +68,7 @@ import { resetDuplicationReport } from '../../../utils/companyDashboardDuplicati
 import styles from './CompanyDashboard.module.css';
 import Modal from '../../../components/common/Modal';
 import CompanyHeader from '../../../components/layout/Header/CompanyHeader';
-import DataFreshnessBadge from '../../../components/common/DataFreshnessBadge';
+import { CompanyDashboardFreshnessBadge } from './components/CompanyDashboardFreshnessBadge';
 import InlineDatePicker from '../../../components/ui/InlineDatePicker';
 import { toast } from 'sonner';
 import { lirieKeys, LIRIE_QK_PREFIX, lirieInvalidateCompanyReservationLists, listScopeHash } from '../../../queryKeys/lirie';
@@ -355,10 +355,16 @@ const CompanyDashboard = () => {
   }, [liveMapEnabled]);
 
   useEffect(() => {
-    if ((reservations || []).length > 0 || (driver || []).length > 0) {
+    if ((reservations || []).length > 0) {
       setLastDataSyncAt(Date.now());
     }
-  }, [reservations, driver, qualityMetrics]);
+  }, [reservations, qualityMetrics]);
+
+  useEffect(() => {
+    if (!loadingDriver && (driver?.length ?? 0) > 0) {
+      setLastDataSyncAt(Date.now());
+    }
+  }, [loadingDriver, driver?.length]);
 
   // Bannière sticky : chauffeurs ASSIGNED + batterie restreinte + mission < 30 min
   useEffect(() => {
@@ -1350,12 +1356,10 @@ const CompanyDashboard = () => {
               </button>
             </div>
           </header>
-          <DataFreshnessBadge
-            lastSyncAt={lastDataSyncAt}
+          <CompanyDashboardFreshnessBadge
+            lastHttpSyncAt={lastDataSyncAt}
             isSyncing={loadingReservations || loadingDriver || loadingRealtimeDashboard}
-            realtimeEnabled
             realtimeConnected={socketConnected}
-            sourceLabel="Dispatch"
             className={styles.dashboardFreshness}
           />
 

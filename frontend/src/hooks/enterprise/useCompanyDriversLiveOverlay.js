@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { getCompanySocket } from '../../services/companySocket';
-import { mergeOrUpdateDriverInList } from '../../utils/mergeDriverLiveUpdate';
+import { mergeOrUpdateDriverInList, hasExploitableCoords } from '../../utils/mergeDriverLiveUpdate';
 import {
   canonicalRealtimeTimeMs,
   shouldAcceptRealtimeEvent,
@@ -11,17 +11,18 @@ import { recordGpsEvent } from '../../utils/companyDashboardPerfInstrumentation'
 
 /** Si le snapshot TanStack est encore frais, pas d’invalidate complet (réduit pics en flapping WS). */
 const RECONNECT_MIN_FULL_REFETCH_MS = 60000;
-const SOCKET_SILENCE_WATCHDOG_MS = 60000;
+/** Silence sur les événements de position (pas sync/bookings) avant refetch HTTP. */
+const SOCKET_LOCATION_SILENCE_WATCHDOG_MS = 35000;
 const WATCHDOG_CHECK_INTERVAL_MS = 5000;
 const WATCHDOG_ENABLED = process.env.REACT_APP_COMPANY_REALTIME_WATCHDOG_ENABLED !== 'false';
 
 export function shouldTriggerCompanyDriversWatchdog({
   now,
-  lastSocketEventAt,
+  lastLocationEventAt,
   lastWatchdogInvalidateAt,
-  silenceMs = SOCKET_SILENCE_WATCHDOG_MS,
+  silenceMs = SOCKET_LOCATION_SILENCE_WATCHDOG_MS,
 }) {
-  if (now - lastSocketEventAt < silenceMs) return false;
+  if (now - lastLocationEventAt < silenceMs) return false;
   // Evite les invalidations en boucle pendant un même silence prolongé.
   if (now - lastWatchdogInvalidateAt < silenceMs) return false;
   return true;
@@ -61,8 +62,14 @@ export function useCompanyDriversLiveOverlay(companyId) {
   useEffect(() => {
     const socket = getCompanySocket();
     if (!socket) return;
-    let lastSocketEventAt = Date.now();
+    let lastLocationSocketEventAt = Date.now();
     let lastWatchdogInvalidateAt = 0;
+
+    const bumpSocketActivity = (payload) => {
+      if (hasExploitableCoords(payload)) {
+        lastLocationSocketEventAt = Date.now();
+      }
+    };
 
     const applyDelta = (payload, fromLiveState) => {
       const accepted = shouldAcceptRealtimeEvent({
@@ -78,18 +85,17 @@ export function useCompanyDriversLiveOverlay(companyId) {
     };
 
     const onLiveState = (payload) => {
-      lastSocketEventAt = Date.now();
+      bumpSocketActivity(payload);
       recordGpsEvent();
       applyDelta(payload, true);
     };
     const onLocationUpdate = (payload) => {
-      lastSocketEventAt = Date.now();
+      bumpSocketActivity(payload);
       recordGpsEvent();
       applyDelta(payload, false);
     };
     /** Reconnect : invalider seulement si pas de données récentes (overlay socket a déjà mis à jour le cache). */
     const onReconnected = () => {
-      lastSocketEventAt = Date.now();
       const state = queryClient.getQueryState(lirieKeys.companyDrivers());
       const updatedAt = state?.dataUpdatedAt ?? 0;
       if (
@@ -106,9 +112,9 @@ export function useCompanyDriversLiveOverlay(companyId) {
           if (
             !shouldTriggerCompanyDriversWatchdog({
               now,
-              lastSocketEventAt,
+              lastLocationEventAt: lastLocationSocketEventAt,
               lastWatchdogInvalidateAt,
-              silenceMs: SOCKET_SILENCE_WATCHDOG_MS,
+              silenceMs: SOCKET_LOCATION_SILENCE_WATCHDOG_MS,
             })
           ) {
             return;

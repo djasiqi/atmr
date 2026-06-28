@@ -6,8 +6,8 @@
 Utilise Redis sliding window si disponible, sinon cache mémoire.
 
 Variables d'environnement (PR4 — défauts = comportement historique) :
-- ``WS_DRIVER_LOCATION_BATCH_LIMIT`` (défaut ``1``)
-- ``WS_DRIVER_LOCATION_BATCH_WINDOW_SEC`` (défaut ``5``)
+- ``WS_DRIVER_LOCATION_BATCH_LIMIT`` (défaut ``2``)
+- ``WS_DRIVER_LOCATION_BATCH_WINDOW_SEC`` (défaut ``10``)
 - ``WS_DRIVER_LOCATION_LIMIT`` (défaut ``1``)
 - ``WS_DRIVER_LOCATION_WINDOW_SEC`` (défaut ``1``)
 """
@@ -57,8 +57,8 @@ def _build_rate_limits() -> dict[str, tuple[int, int]]:
             _env_int("WS_DRIVER_LOCATION_WINDOW_SEC", 1),
         ),
         "driver_location_batch": (
-            _env_int("WS_DRIVER_LOCATION_BATCH_LIMIT", 1),
-            _env_int("WS_DRIVER_LOCATION_BATCH_WINDOW_SEC", 5),
+            _env_int("WS_DRIVER_LOCATION_BATCH_LIMIT", 2),
+            _env_int("WS_DRIVER_LOCATION_BATCH_WINDOW_SEC", 10),
         ),
         "team_chat_message": (10, 60),
         "typing_start": (20, 60),

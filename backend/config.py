@@ -329,7 +329,7 @@ class Config:
     )
 
     # --- Redis / Socket.IO ---
-    REDIS_URL = os.getenv("REDIS_URL", "redis://127.00.1:6379/0")
+    REDIS_URL = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")
     # Liste d'origines autorisées pour Socket.IO (séparées par des virgules).
     # Exemple: SOCKETIO_CORS_ORIGINS="https://app.example.com,
     # https://admin.example.com,http://localhost:3000"

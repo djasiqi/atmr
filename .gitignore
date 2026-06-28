@@ -156,6 +156,9 @@ backend/celerybeat-schedule*
 ROLLBACK.md
 safety_report.txt
 patches/
+# Exception : les patches patch-package du mobile doivent être versionnés (requis par EAS Build / postinstall).
+!mobile/unified-app/patches/
+!mobile/unified-app/patches/**
 
 # ===== Fichiers temporaires =====
 *.tmp

@@ -419,3 +419,55 @@ Décision GO/NO-GO dans **5 jours ouvrés** après fin STOP GATE D. Résultats :
 Env clustering web : `REACT_APP_ENABLE_DRIVER_CLUSTERING` = `true` | `false` | absent (auto > `REACT_APP_DRIVER_CLUSTERING_THRESHOLD`, défaut 50).
 
 ⛔ **Sprint 2 impl** : bloqué jusqu'à STOP GATE + revue [`sprint2-fleet-tracking-design.md`](./sprint2-fleet-tracking-design.md) S2.1.
+
+---
+
+## Chaîne locale saine (Docker + localhost:3000)
+
+✅ **Implémenté** :
+
+| Élément | Description | Référence |
+|---------|-------------|-----------|
+| Stack Kafka dev | `docker compose -f docker-compose.yml -f docker-compose.kafka.dev.yml up -d` | `docker-compose.kafka.dev.yml` |
+| Parité env workers | `tracking-kafka-consumer` + `tracking-processed-fanout` : `env_file` + `FLASK_CONFIG=development`, `REDIS_URL`, `APP_ENCRYPTION_KEY_B64`, CORS | `docker-compose.kafka.dev.yml`, `docker-compose.kafka.single.yml` |
+| Bootstrap worker | Échec au démarrage si env incomplet (évite DLQ silencieuse) | `backend/services/tracking/worker_bootstrap.py` |
+| Preflight santé | Script vérif conteneurs, DLQ, Redis, métriques | `scripts/ops/gps-chain-health-local.sh`, `scripts/ops/gps-chain-health-local.ps1` |
+| Mobile double HTTP | Bridge ne relance pas HTTP si queue a déjà envoyé / ACK `queued` | `driverTrackingBridge.ts` |
+
+### Chemins par mode (résumé)
+
+| Contexte | Mobile | Backend ingress | Persistance | Carte entreprise |
+|----------|--------|-----------------|-------------|------------------|
+| FG `mission_live` | Socket `driver_location_batch` (+ HTTP fallback) | `chat.py` sync + fanout immédiat | Redis canonical + DB | Socket direct |
+| BG `mission_live` | HTTP PUT uniquement (FGS) | API 202 → Kafka raw | Consumer → Redis + `processed` | `processed_fanout` → socket |
+| `availability_presence` | HTTP uniquement | PUT sync ou 202→Kafka | idem | fanout |
+
+### Checklist santé locale
+
+```powershell
+# PowerShell (Windows)
+$env:DRIVER_ID=7135
+.\scripts\ops\gps-chain-health-local.ps1
+```
+
+```bash
+# Bash (Git Bash / CI)
+DRIVER_ID=7135 bash scripts/ops/gps-chain-health-local.sh
+```
+
+Critères PASS :
+
+1. Les 5 conteneurs tracking up (`atmr_api`, redis, kafka, kafka-consumer, processed-fanout)
+2. Consumer : `FLASK_CONFIG=development`, clés + `REDIS_URL` présentes
+3. **0** ligne `DLQ confirmed` sur 10 min
+4. Redis `driver:{id}:loc` avec `recorded_at` récent en mission BG (`is_background=1`)
+5. Dashboard `http://localhost:3000/dashboard/company/{id}` — marqueur bouge en BG
+
+### Erreurs DLQ fréquentes (local)
+
+| Message DLQ | Cause | Correctif |
+|-------------|-------|-----------|
+| `APP_ENCRYPTION_KEY_B64 manquante` | Worker sans `env_file` / clé | Merge kafka.dev + recreate consumers |
+| `SOCKETIO_CORS_ORIGINS... production` | `FLASK_CONFIG=production` sans CORS sur worker | `FLASK_CONFIG=development` ou CORS explicite |
+| `TRACKING_INGEST_PERSIST_ENABLED=false` | Consumer refuse le start | Ne jamais activer async sans persist |
+

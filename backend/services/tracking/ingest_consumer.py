@@ -418,7 +418,13 @@ class TrackingIngestConsumer:
         for attempt in range(1, KAFKA_MAX_RETRIES + 1):
             try:
                 validated = {**message_obj, "validated_at_ms": record.timestamp}
-                if TRACKING_INGEST_PERSIST_ENABLED:
+                # Option A (voie socket → Kafka) : les points `source="socket_batch"`
+                # ont DÉJÀ été persistés (canonical + Postgres) et fannés en direct
+                # par le handler socket. On NE re-persiste PAS ici (évite la
+                # double-écriture) ; on les republie quand même vers `processed`
+                # pour l'analytics/replay (le fanout consumer les ignorera).
+                _msg_source = str(message_obj.get("source") or "")
+                if TRACKING_INGEST_PERSIST_ENABLED and _msg_source != "socket_batch":
                     from services.tracking.ingest_persist import (
                         persist_driver_location_from_kafka,
                     )
@@ -635,6 +641,9 @@ def run_tracking_ingest_consumer() -> None:
             "avec TRACKING_INGEST_ALLOW_REPUBLISH_ONLY=true — positions Kafka republiees "
             "sans ecriture DB (rollback intentionnel)."
         )
+    from services.tracking.worker_bootstrap import validate_tracking_worker_env
+
+    validate_tracking_worker_env("tracking_consumer")
     consumer = TrackingIngestConsumer()
     if not consumer.initialized:
         logger.error("[tracking_consumer] exiting (kafka clients not initialized)")

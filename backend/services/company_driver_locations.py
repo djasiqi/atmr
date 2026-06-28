@@ -280,6 +280,7 @@ def build_company_driver_locations_items(
         is_available = status == "available"
 
         first_name = getattr(getattr(driver, "user", None), "first_name", None)
+        last_name = getattr(getattr(driver, "user", None), "last_name", None)
         accuracy_m: float | None = None
         if loc_data.get("accuracy") is not None:
             with suppress(Exception):
@@ -293,6 +294,7 @@ def build_company_driver_locations_items(
             "lat": float(lat),
             "lon": float(lon),
             "first_name": first_name,
+            "last_name": last_name,
             "timestamp": ts,
             "recorded_at": loc_data.get("recorded_at") or ts,
             "received_at": loc_data.get("received_at"),

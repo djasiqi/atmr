@@ -126,4 +126,31 @@ const OverviewCards = ({
   );
 };
 
-export default OverviewCards;
+function driverKpiSignature(driver) {
+  const list = Array.isArray(driver) ? driver : [];
+  let active = 0;
+  let available = 0;
+  list.forEach((d) => {
+    if (!d?.is_active) return;
+    active += 1;
+    if (String(d?.status || '').toLowerCase() === 'available') available += 1;
+  });
+  return `${active}:${available}`;
+}
+
+function areOverviewCardsPropsEqual(prev, next) {
+  if (prev === next) return true;
+  if (
+    prev.reservations !== next.reservations
+    || prev.day !== next.day
+    || prev.delayCount !== next.delayCount
+    || prev.hasCriticalDelays !== next.hasCriticalDelays
+    || prev.pendingReservations !== next.pendingReservations
+    || prev.assignedReservations !== next.assignedReservations
+  ) {
+    return false;
+  }
+  return driverKpiSignature(prev.driver) === driverKpiSignature(next.driver);
+}
+
+export default React.memo(OverviewCards, areOverviewCardsPropsEqual);

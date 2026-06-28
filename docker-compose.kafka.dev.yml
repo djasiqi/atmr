@@ -17,6 +17,11 @@ services:
       - KAFKA_ENABLED=true
       - TRACKING_INGEST_ASYNC_ENABLED=true
       - KAFKA_BOOTSTRAP_SERVERS=kafka-broker-1:29092
+      - KAFKA_MAX_BLOCK_MS=5000
+      - KAFKA_PUBLISH_ACK_TIMEOUT_S=10
+      # Option A : miroir fire-and-forget du chemin socket vers driver.location.raw
+      # (voie durable secondaire, non bloquant). Activé en dur pour le stack dev.
+      - TRACKING_SOCKET_KAFKA_MIRROR_ENABLED=true
 
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
@@ -127,10 +132,27 @@ services:
       kafka-topics-init:
         condition: service_completed_successfully
     command: python -m services.tracking.ingest_consumer
+    env_file:
+      - backend/.env
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-atmr}:${POSTGRES_PASSWORD:-atmr}@pgbouncer:6432/${POSTGRES_DB:-atmr}
+      REDIS_URL: redis://redis:6379/0
+      UD_OSRM_URL: ${UD_OSRM_URL:-http://osrm:5000}
+      APP_ENCRYPTION_KEY_B64: ${APP_ENCRYPTION_KEY_B64}
+      MASTER_ENCRYPTION_KEY: ${MASTER_ENCRYPTION_KEY}
+      SECRET_KEY: ${SECRET_KEY:-dev-secret}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-jwt-secret}
+      FLASK_CONFIG: ${FLASK_CONFIG:-development}
+      FLASK_ENV: ${FLASK_ENV:-development}
+      PYTHONPATH: /app
+      PDF_BASE_URL: ${PDF_BASE_URL:-http://127.0.0.1:5000}
+      SOCKETIO_CORS_ORIGINS: ${SOCKETIO_CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000,http://localhost:8081,http://127.0.0.1:8081}
       KAFKA_ENABLED: "true"
       TRACKING_INGEST_ASYNC_ENABLED: "true"
+      # Persiste les points du chemin HTTP/interne ; les points socket
+      # (source="socket_batch") sont déjà persistés en live et sont skippés
+      # par le consumer (cf. ingest_consumer) → pas de double-écriture.
+      TRACKING_INGEST_PERSIST_ENABLED: "true"
       KAFKA_BOOTSTRAP_SERVERS: kafka-broker-1:29092
       KAFKA_MAX_BLOCK_MS: "20000"
       KAFKA_PUBLISH_ACK_TIMEOUT_S: "10"
@@ -149,6 +171,8 @@ services:
       KAFKA_SSL_CAFILE: ${KAFKA_SSL_CAFILE:-}
       KAFKA_SSL_CERTFILE: ${KAFKA_SSL_CERTFILE:-}
       KAFKA_SSL_KEYFILE: ${KAFKA_SSL_KEYFILE:-}
+    volumes:
+      - ./backend:/app
     networks:
       - default
     restart: unless-stopped
@@ -179,9 +203,20 @@ services:
       kafka-topics-init:
         condition: service_completed_successfully
     command: python -m services.tracking.processed_fanout_consumer
+    env_file:
+      - backend/.env
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-atmr}:${POSTGRES_PASSWORD:-atmr}@pgbouncer:6432/${POSTGRES_DB:-atmr}
       REDIS_URL: redis://redis:6379/0
+      APP_ENCRYPTION_KEY_B64: ${APP_ENCRYPTION_KEY_B64}
+      MASTER_ENCRYPTION_KEY: ${MASTER_ENCRYPTION_KEY}
+      SECRET_KEY: ${SECRET_KEY:-dev-secret}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-jwt-secret}
+      FLASK_CONFIG: ${FLASK_CONFIG:-development}
+      FLASK_ENV: ${FLASK_ENV:-development}
+      PYTHONPATH: /app
+      PDF_BASE_URL: ${PDF_BASE_URL:-http://127.0.0.1:5000}
+      SOCKETIO_CORS_ORIGINS: ${SOCKETIO_CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000,http://localhost:8081,http://127.0.0.1:8081}
       KAFKA_ENABLED: "true"
       TRACKING_INGEST_ASYNC_ENABLED: "true"
       TRACKING_PROCESSED_FANOUT_ENABLED: "true"
@@ -196,6 +231,8 @@ services:
       KAFKA_SSL_CAFILE: ${KAFKA_SSL_CAFILE:-}
       KAFKA_SSL_CERTFILE: ${KAFKA_SSL_CERTFILE:-}
       KAFKA_SSL_KEYFILE: ${KAFKA_SSL_KEYFILE:-}
+    volumes:
+      - ./backend:/app
     networks:
       - default
     restart: unless-stopped

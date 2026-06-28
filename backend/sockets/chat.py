@@ -90,8 +90,30 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("socketio")
 
+
+def _parse_tracking_session_timestamp(session_id: str) -> int | None:
+    """Extrait le timestamp ms de trk_sess_{ts}_{suffix}."""
+    if not session_id or not session_id.startswith("trk_sess_"):
+        return None
+    parts = session_id.split("_", 3)
+    if len(parts) < 3:
+        return None
+    try:
+        return int(parts[2])
+    except (TypeError, ValueError):
+        return None
+
+
 # Cache local synchronisé avec sid_claims_registry (tests legacy peuvent patcher).
 _SID_INDEX: Dict[str, Dict[str, Any]] = {}
+
+# Option A — miroir Kafka du chemin socket (voie durable secondaire, opt-in).
+# Quand activé, chaque position acceptée via `driver_location_batch` est aussi
+# publiée fire-and-forget dans `driver.location.raw` (replay/analytics/persistance
+# multi-instance), SANS dégrader la latence du fanout live (pas d'attente d'ACK).
+_SOCKET_KAFKA_MIRROR_ENABLED = (
+    os.getenv("TRACKING_SOCKET_KAFKA_MIRROR_ENABLED", "false").lower() == "true"
+)
 
 
 def _store_sid_claims(sid: str, data: Dict[str, Any]) -> None:
@@ -876,7 +898,24 @@ def init_chat_socket(socketio: SocketIO):
             sid = _get_sid()
             trace_id = trace_id or f"socket-{sid[:8]}"
 
-            if user.role == UserRole.driver:
+            # Multi-contexte (app unifiée) : un compte dont le rôle BDD/JWT est
+            # ``company`` peut posséder un profil chauffeur et opérer en contexte
+            # ``driver`` (sélecteur de contexte mobile). Le handshake Socket.IO
+            # transporte ce contexte via la query (``surface`` / ``context_id``)
+            # — il n'envoie PAS le header ``X-Active-Context-Id`` utilisé en HTTP.
+            # On réplique ici la résolution de ``role_required`` (ext.py) pour que
+            # ce socket soit authentifié comme chauffeur (sinon ``driver_location_batch``
+            # est rejeté avec « Accès réservé aux chauffeurs »). La correspondance
+            # ne grant que la propre identité chauffeur de l'utilisateur.
+            driver_profile_for_ctx = getattr(user, "driver", None)
+            requested_surface = (request.args.get("surface") or "").strip()
+            requested_context_id = (request.args.get("context_id") or "").strip()
+            is_driver_context = driver_profile_for_ctx is not None and (
+                requested_surface == "driver"
+                or requested_context_id == f"driver:{driver_profile_for_ctx.id}"
+            )
+
+            if user.role == UserRole.driver or is_driver_context:
                 driver = Driver.query.filter_by(user_id=user.id).first()
                 if not driver or not driver.company_id:
                     logger.error(
@@ -895,6 +934,36 @@ def init_chat_socket(socketio: SocketIO):
                     ws_metrics.on_error("realtime_company_capacity_exceeded")
                     raise SocketConnectionRefusedError(
                         "COMPANY_REALTIME_CAPACITY_EXCEEDED"
+                    )
+
+                # Arbitrage de présence : un chauffeur ne doit avoir QU'UN seul
+                # socket actif. Des sockets dupliqués (reconnexions / churn) font
+                # que les ACK ``driver_location_batch`` partent vers un autre sid
+                # que celui qui émet → la file mobile ne draine jamais → boucle de
+                # retransmission → rate-limit permanent → canonical figé. On
+                # déconnecte donc les anciens sockets du même driver avant
+                # d'enregistrer le nouveau (single-socket canonique).
+                try:
+                    stale_driver_sids = [
+                        old_sid
+                        for old_sid, old_claims in list(_SID_INDEX.items())
+                        if old_sid != sid
+                        and isinstance(old_claims, dict)
+                        and old_claims.get("driver_id") == driver.id
+                    ]
+                    for old_sid in stale_driver_sids:
+                        logger.info(
+                            "socket presence arbitration: driver_id=%s old_sid=%s new_sid=%s",
+                            driver.id,
+                            old_sid,
+                            sid,
+                        )
+                        _SID_INDEX.pop(old_sid, None)
+                        with suppress(Exception):
+                            socketio.server.disconnect(old_sid, namespace="/")
+                except Exception:
+                    logger.debug(
+                        "[socketio] driver presence arbitration skipped", exc_info=True
                     )
 
                 company_room = f"company_{driver.company_id}"
@@ -2420,6 +2489,7 @@ def init_chat_socket(socketio: SocketIO):
         batch_t0 = time.perf_counter()
         batch_platform = "unknown"
         try:
+            db.session.rollback()
             current_sid = _get_sid()
             current_sid_log = current_sid
             logger.info(
@@ -2514,6 +2584,44 @@ def init_chat_socket(socketio: SocketIO):
                         "retry_after_seconds": retry_after,
                     },
                 )
+                # Anti-tempête : ACK quand même les tracking_event_id du batch rate-limité.
+                # Sinon un batch jamais ACK est retransmis en boucle par le client →
+                # re-rate-limité → famine permanente du canonical (le chauffeur reste
+                # « figé »). Les positions ne sont PAS ingérées ici ; le client draine sa
+                # file et le prochain batch autorisé (≤ fenêtre) portera des points frais.
+                rl_positions = data.get("positions") if isinstance(data, dict) else None
+                if isinstance(rl_positions, list) and rl_positions:
+                    rl_acked_ids: list[str] = []
+                    rl_last_seq: int | None = None
+                    for _rl_pos in rl_positions:
+                        if not isinstance(_rl_pos, dict):
+                            continue
+                        _rl_teid = _rl_pos.get("tracking_event_id")
+                        if isinstance(_rl_teid, str):
+                            rl_acked_ids.append(_rl_teid)
+                        _rl_seq = _rl_pos.get("sequence_id")
+                        if isinstance(_rl_seq, (int, str)):
+                            with suppress(Exception):
+                                _rl_seq_i = int(_rl_seq)
+                                rl_last_seq = (
+                                    _rl_seq_i
+                                    if rl_last_seq is None
+                                    else max(rl_last_seq, _rl_seq_i)
+                                )
+                    if rl_acked_ids or rl_last_seq is not None:
+                        rl_ack: dict[str, Any] = {
+                            "success": True,
+                            "rate_limited": True,
+                            "positions_count": 0,
+                            "total_positions": len(rl_positions),
+                            "driver_id": driver.id,
+                            "tracking_event_ids": rl_acked_ids,
+                        }
+                        if rl_last_seq is not None:
+                            rl_ack["ack_last_sequence_id"] = rl_last_seq
+                        if retry_after is not None:
+                            rl_ack["retry_after_seconds"] = retry_after
+                        emit("driver_location_batch_ack", rl_ack)
                 ws_metrics.on_error("rate_limit_exceeded")
                 ws_metrics.on_rate_limit_hit("driver_location_batch")
                 return {
@@ -2541,7 +2649,63 @@ def init_chat_socket(socketio: SocketIO):
                     else None
                 )
                 if active_value and active_value != tracking_session_id:
-                    return {"success": False, "error": "tracking_session_conflict"}
+                    active_ts = _parse_tracking_session_timestamp(active_value)
+                    incoming_ts = _parse_tracking_session_timestamp(
+                        tracking_session_id
+                    )
+                    if (
+                        incoming_ts is not None
+                        and active_ts is not None
+                        and incoming_ts < active_ts
+                    ):
+                        logger.warning(
+                            "⛔ driver_location_batch session stale: driver=%s active=%s incoming=%s",
+                            driver.id,
+                            active_value,
+                            tracking_session_id,
+                        )
+                        stale_positions = (
+                            data.get("positions") if isinstance(data, dict) else None
+                        )
+                        if isinstance(stale_positions, list) and stale_positions:
+                            stale_acked: list[str] = []
+                            stale_last_seq: int | None = None
+                            for _sp in stale_positions:
+                                if not isinstance(_sp, dict):
+                                    continue
+                                _steid = _sp.get("tracking_event_id")
+                                if isinstance(_steid, str):
+                                    stale_acked.append(_steid)
+                                _sseq = _sp.get("sequence_id")
+                                if isinstance(_sseq, (int, str)):
+                                    with suppress(Exception):
+                                        _sseq_i = int(_sseq)
+                                        stale_last_seq = (
+                                            _sseq_i
+                                            if stale_last_seq is None
+                                            else max(stale_last_seq, _sseq_i)
+                                        )
+                            stale_ack: dict[str, Any] = {
+                                "success": True,
+                                "session_conflict": True,
+                                "positions_count": 0,
+                                "total_positions": len(stale_positions),
+                                "driver_id": driver.id,
+                                "tracking_event_ids": stale_acked,
+                            }
+                            if stale_last_seq is not None:
+                                stale_ack["ack_last_sequence_id"] = stale_last_seq
+                            emit("driver_location_batch_ack", stale_ack)
+                        return {
+                            "success": False,
+                            "error": "tracking_session_conflict",
+                        }
+                    logger.warning(
+                        "♻️ tracking_session takeover driver=%s %s -> %s",
+                        driver.id,
+                        active_value,
+                        tracking_session_id,
+                    )
                 redis_client.setex(session_key, 1800, tracking_session_id)
             if not positions:
                 logger.warning("⚠️ driver_location_batch vide")
@@ -2935,6 +3099,37 @@ def init_chat_socket(socketio: SocketIO):
                         live_state_payload,
                         accept_status=accept_status,
                     )
+
+                    # Option A — miroir Kafka fire-and-forget (voie durable secondaire,
+                    # opt-in). La voie live (canonical + fanout ci-dessus) reste la
+                    # source du marqueur temps réel. Jamais bloquant ni d'exception.
+                    if _SOCKET_KAFKA_MIRROR_ENABLED:
+                        try:
+                            from services.tracking import enqueue_tracking_event_nowait
+
+                            _ff_payload: dict[str, Any] = {
+                                "latitude": latitude,
+                                "longitude": longitude,
+                                "recorded_at": ts_str,
+                                "timestamp": ts_str,
+                                "location_mode": location_mode,
+                            }
+                            if tracking_event_id_str:
+                                _ff_payload["tracking_event_id"] = tracking_event_id_str
+                            if isinstance(company_id_val, int):
+                                _ff_payload["company_id"] = company_id_val
+                            enqueue_tracking_event_nowait(
+                                driver_id=int(driver.id),
+                                company_id=company_id_val
+                                if isinstance(company_id_val, int)
+                                else None,
+                                source="socket_batch",
+                                payload=_ff_payload,
+                            )
+                        except Exception:
+                            logger.debug(
+                                "[socket_batch] kafka mirror unavailable", exc_info=True
+                            )
 
                     # ✅ P2: Incrémenter compteur de positions traitées avec succès
                     processed_count += 1

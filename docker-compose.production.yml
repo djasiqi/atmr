@@ -228,7 +228,8 @@ services:
       # Sécurité
       SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY is required}
-      APP_ENCRYPTION_KEY_B64: ${APP_ENCRYPTION_KEY_B64}
+      APP_ENCRYPTION_KEY_B64: ${APP_ENCRYPTION_KEY_B64:?APP_ENCRYPTION_KEY_B64 is required}
+      INSTITUTION_MULTI_STOP_ENABLED: ${INSTITUTION_MULTI_STOP_ENABLED:-true}
       # ✅ D2: Clé d'encryption maître pour chiffrement IBAN et données sensibles (AES-256)
       # Format: hexadécimal (64 caractères pour 32 bytes)
       # Générer avec: python -m scripts.generate_encryption_key
@@ -284,6 +285,13 @@ services:
       DB_POOL_RECYCLE: ${DB_POOL_RECYCLE:-1800}
       KAFKA_ENABLED: ${KAFKA_ENABLED:-false}
       TRACKING_INGEST_ASYNC_ENABLED: ${TRACKING_INGEST_ASYNC_ENABLED:-false}
+      # Option A — miroir fire-and-forget du chemin socket vers driver.location.raw
+      # (voie durable secondaire, non bloquant). OFF par défaut ; n'activer qu'avec
+      # le reste des flags Kafka (cf. env.kafka.production.example).
+      TRACKING_SOCKET_KAFKA_MIRROR_ENABLED: ${TRACKING_SOCKET_KAFKA_MIRROR_ENABLED:-false}
+      # Rate limit socket GPS (aligné cadence mobile ~8s FG). Défaut code = 2/10s.
+      WS_DRIVER_LOCATION_BATCH_LIMIT: ${WS_DRIVER_LOCATION_BATCH_LIMIT:-2}
+      WS_DRIVER_LOCATION_BATCH_WINDOW_SEC: ${WS_DRIVER_LOCATION_BATCH_WINDOW_SEC:-10}
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka-broker-1:29092,kafka-broker-2:29092,kafka-broker-3:29092}
       REALTIME_GATEWAY_CANARY_ENABLED: ${REALTIME_GATEWAY_CANARY_ENABLED:-false}
 
@@ -399,6 +407,8 @@ services:
     image: ${WS_SERVICE_IMAGE:-docker.io/djasiqi/atmr-ws-service}:${DOCKER_TAG:-latest}
     container_name: atmr-ws-service
     restart: unless-stopped
+    env_file:
+      - .env.production
     environment:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY is required}
@@ -531,7 +541,8 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       ML_MODELS_PATH: /app/data/ml
       RL_MODELS_PATH: /app/data/rl
-      APP_ENCRYPTION_KEY_B64: ${APP_ENCRYPTION_KEY_B64}
+      APP_ENCRYPTION_KEY_B64: ${APP_ENCRYPTION_KEY_B64:?APP_ENCRYPTION_KEY_B64 is required}
+      INSTITUTION_MULTI_STOP_ENABLED: ${INSTITUTION_MULTI_STOP_ENABLED:-true}
 
       # Firebase Cloud Messaging (FCM)
       FIREBASE_SERVICE_ACCOUNT_PATH: /app/firebase-service-account.json
@@ -816,7 +827,7 @@ services:
       DISPATCH_TASK_TIME_LIMIT_SEC: ${DISPATCH_TASK_TIME_LIMIT_SEC:-900}
       DISPATCH_TASK_SOFT_TIME_LIMIT_SEC: ${DISPATCH_TASK_SOFT_TIME_LIMIT_SEC:-840}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
-      APP_ENCRYPTION_KEY_B64: ${APP_ENCRYPTION_KEY_B64}
+      APP_ENCRYPTION_KEY_B64: ${APP_ENCRYPTION_KEY_B64:?APP_ENCRYPTION_KEY_B64 is required}
     volumes:
       - backend_logs:/app/logs
       - celery_beat_data:/app/celerybeat
@@ -877,7 +888,7 @@ services:
       REDIS_PORT: 6379
       REDIS_DB: "0"
       # Variables requises pour l'initialisation de l'application
-      APP_ENCRYPTION_KEY_B64: ${APP_ENCRYPTION_KEY_B64}
+      APP_ENCRYPTION_KEY_B64: ${APP_ENCRYPTION_KEY_B64:?APP_ENCRYPTION_KEY_B64 is required}
       # CELERY_BROKER_URL et CELERY_RESULT_BACKEND seront construits par celery_app.py
     ports:
       - "5555:5555"

@@ -59,6 +59,10 @@ KAFKA_SSL_KEYFILE = os.getenv("KAFKA_SSL_KEYFILE", "")
 # bloquer l'endpoint HTTP chauffeur en production.
 KAFKA_PRODUCE_TIMEOUT_S = float(os.getenv("KAFKA_PRODUCE_TIMEOUT_S", "1.5"))
 
+# Borne le blocage interne du producer (fetch metadata / buffer plein). Évite
+# qu'un `send()` sur le hot path socket stalle longtemps si le broker hoquette.
+KAFKA_MAX_BLOCK_MS = int(os.getenv("KAFKA_MAX_BLOCK_MS", "1000"))
+
 # Initialisation lazy : `flask db upgrade`, healthcheck et import de l’app ne tentent
 # plus de joindre Kafka tant qu’aucune position n’est mise en file.
 TRACKING_INGEST_EAGER_INIT = (
@@ -127,6 +131,7 @@ class TrackingIngestProducer:
                 compression_type=KAFKA_COMPRESSION_TYPE,
                 enable_idempotence=True,
                 retries=3,
+                max_block_ms=KAFKA_MAX_BLOCK_MS,
                 **_kafka_security_config(),
             )
             self._initialized = True
@@ -273,6 +278,151 @@ class TrackingIngestProducer:
                 pass
             return {"queued": False, "trace_id": trace_id, "reason": "kafka_error"}
 
+    def _build_message_and_key(
+        self,
+        *,
+        driver_id: int,
+        payload: dict[str, Any],
+        source: str,
+        company_id: int | None,
+        trace_id: str,
+    ) -> tuple[dict[str, Any], str | None]:
+        """Construit le message ``raw`` et la clé de partition (par driver_id)."""
+        now_ms = int(time.time() * 1000)
+        payload_event_id = payload.get("location_event_id") or payload.get(
+            "tracking_event_id"
+        )
+        message: dict[str, Any] = {
+            "trace_id": trace_id,
+            "driver_id": driver_id,
+            "source": source,
+            "received_at_ms": now_ms,
+            "payload": payload,
+        }
+        if company_id is not None:
+            message["company_id"] = int(company_id)
+        if payload_event_id is not None and str(payload_event_id).strip():
+            message["location_event_id"] = str(payload_event_id).strip()
+
+        payload_region_id_obj = payload.get("region_id")
+        payload_company_id_obj = payload.get("company_id")
+        region_id = (
+            payload_region_id_obj if isinstance(payload_region_id_obj, str) else None
+        )
+        partition_company_id = (
+            int(company_id)
+            if company_id is not None
+            else (
+                payload_company_id_obj
+                if isinstance(payload_company_id_obj, int)
+                else None
+            )
+        )
+        use_driver_key = os.getenv(
+            "KAFKA_PARTITION_BY_DRIVER_ID_ENABLED", "true"
+        ).lower() not in ("0", "false", "no", "off")
+        if use_driver_key and driver_id is not None:
+            key = kafka_partition_key_for_driver_location(
+                region_id=region_id,
+                driver_id=int(driver_id),
+            )
+        else:
+            key = kafka_partition_key(
+                region_id=region_id,
+                company_id=partition_company_id,
+                driver_id=driver_id,
+            )
+        return message, key
+
+    def enqueue_fire_and_forget(
+        self,
+        *,
+        driver_id: int,
+        payload: dict[str, Any],
+        source: str = "socket_batch",
+        company_id: int | None = None,
+    ) -> dict[str, Any]:
+        """Publie dans ``raw`` SANS attendre l'ACK broker (voie durable secondaire).
+
+        Pour le chemin socket temps réel : l'écriture canonical + fanout live est
+        déjà faite par l'appelant. Ici on bufferise le message (kafka-python
+        l'envoie via son thread interne, linger court) ⇒ coût hot path ~mémoire.
+        Ne bloque jamais sur l'ACK (pas de ``future.get()``) et n'élève jamais.
+        """
+        trace_id = str(uuid.uuid4())
+        try:
+            self._maybe_init_producer()
+            if not self._initialized or self._producer is None:
+                return {
+                    "queued": False,
+                    "trace_id": trace_id,
+                    "reason": "kafka_disabled",
+                }
+            message, key = self._build_message_and_key(
+                driver_id=driver_id,
+                payload=payload,
+                source=source,
+                company_id=company_id,
+                trace_id=trace_id,
+            )
+            future = self._producer.send(
+                TOPIC_DRIVER_LOCATION_RAW, value=message, key=key
+            )
+            future.add_callback(_on_ff_produce_success)
+            future.add_errback(_on_ff_produce_error)
+            return {
+                "queued": True,
+                "trace_id": trace_id,
+                "topic": TOPIC_DRIVER_LOCATION_RAW,
+            }
+        except Exception as exc:
+            logger.warning(
+                "[tracking_ingest] fire_and_forget enqueue failed (driver_id=%s trace_id=%s): %s",
+                driver_id,
+                trace_id,
+                exc,
+            )
+            try:
+                from services.monitoring.driver_location_metrics import (
+                    inc_tracking_kafka_publish_errors,
+                )
+
+                inc_tracking_kafka_publish_errors(
+                    topic=TOPIC_DRIVER_LOCATION_RAW, stage="raw_ff_enqueue_failed"
+                )
+            except Exception:
+                logger.debug(
+                    "[tracking_ingest] ff publish error metric unavailable",
+                    exc_info=True,
+                )
+            return {"queued": False, "trace_id": trace_id, "reason": "kafka_error"}
+
+
+def _on_ff_produce_success(_record_metadata: Any) -> None:
+    """Callback ACK fire-and-forget (thread sender kafka-python) — métrique only."""
+    try:
+        from services.monitoring.driver_location_metrics import (
+            inc_tracking_kafka_messages_produced,
+        )
+
+        inc_tracking_kafka_messages_produced(topic=TOPIC_DRIVER_LOCATION_RAW)
+    except Exception:
+        pass
+
+
+def _on_ff_produce_error(_exc: Exception) -> None:
+    """Errback fire-and-forget (thread sender kafka-python) — métrique only."""
+    try:
+        from services.monitoring.driver_location_metrics import (
+            inc_tracking_kafka_publish_errors,
+        )
+
+        inc_tracking_kafka_publish_errors(
+            topic=TOPIC_DRIVER_LOCATION_RAW, stage="raw_ff_delivery_failed"
+        )
+    except Exception:
+        pass
+
 
 tracking_ingest_producer = TrackingIngestProducer()
 
@@ -285,6 +435,22 @@ def enqueue_tracking_event(
     company_id: int | None = None,
 ) -> dict[str, Any]:
     return tracking_ingest_producer.enqueue(
+        driver_id=driver_id,
+        payload=payload,
+        source=source,
+        company_id=company_id,
+    )
+
+
+def enqueue_tracking_event_nowait(
+    *,
+    driver_id: int,
+    payload: dict[str, Any],
+    source: str = "socket_batch",
+    company_id: int | None = None,
+) -> dict[str, Any]:
+    """Variante non bloquante (fire-and-forget) — voie durable socket → Kafka."""
+    return tracking_ingest_producer.enqueue_fire_and_forget(
         driver_id=driver_id,
         payload=payload,
         source=source,

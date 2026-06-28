@@ -1,5 +1,8 @@
 // src/pages/company/Dashboard/components/DriverLiveMap.jsx
 import React, { useEffect, useLayoutEffect, useRef, useState, useMemo, useCallback, memo } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { lirieKeys } from '../../../../queryKeys/lirie';
+import { projectDriversForMap } from '../../../../utils/companyDriverProjections';
 import {
   buildDriverStructuralSetKey,
   isSameMarkerPosition,
@@ -36,8 +39,27 @@ import {
   makeCircleMarkerIcon,
   makeClusterIcon,
   iconAnchorToAdvancedMarkerCss,
-  GOOGLE_MAPS_USE_JS_STYLES,
 } from '../../../../utils/mapUtils';
+import {
+  interpolateMarkerPosition,
+  projectPositionAlongVelocity,
+  resolveMarkerMotionDurationMs,
+  resolveMotionDurationFromDistance,
+  haversineDistanceMeters,
+  MARKER_MOTION_DEFAULT_MS,
+  MARKER_MOTION_PROJECT_FRACTION,
+  MARKER_MOTION_PROJECT_VELOCITY_DECAY,
+} from '../../../../utils/driverMarkerMotion';
+
+/**
+ * AGENT FIX (P0 rendu marqueurs) : sur ce setup, les AdvancedMarkerElement
+ * restent ATTACHÉS à la carte mais NON PEINTS (sous-arbre content-visibility)
+ * → invariant prouvé : drivers=markersRef=attached=5 mais painted=0. Les
+ * marqueurs classiques (`google.maps.Marker`, rendus sur le canvas de la carte)
+ * ne souffrent pas de ce problème. On force donc le chemin classique pour le
+ * rendu des chauffeurs, indépendamment du style de carte (cloud/JS).
+ */
+const GOOGLE_MAPS_USE_JS_STYLES = true;
 
 /** Cercle chauffeur 24×24, ancrage au centre du disque (12, 12). */
 const DRIVER_MARKER_ANCHOR = iconAnchorToAdvancedMarkerCss(12, 12, 24, 24);
@@ -47,6 +69,8 @@ const MAP_DEBUG =
   (window.__MAP_DEBUG === true || sessionStorage.getItem('MAP_DEBUG') === '1');
 const AVAILABLE_LIGHT_GREEN = '#4ade80';
 const STALE_SECONDS_THRESHOLD = 120;
+/** Au-delà, interpolation désactivée (clustering / perf). */
+const MARKER_SMOOTH_MOTION_MAX_DRIVERS = 48;
 const STATUS_TITLE_LABELS = {
   available: 'Disponible',
   assigned: 'Assigné',
@@ -193,6 +217,14 @@ function getMarkerLatLngLiteral(marker) {
   return { lat: p.lat, lng: p.lng };
 }
 
+function setMarkerLatLng(marker, latLng) {
+  if (typeof marker.setPosition === 'function') {
+    marker.setPosition(latLng);
+  } else {
+    marker.position = latLng;
+  }
+}
+
 // Popup chauffeur — mini card structurée, classes CSS globales .lirie-popup-*
 const escapeHtml = (value) => {
   if (value == null) return '';
@@ -312,6 +344,11 @@ function DriverLiveMap({ drivers: propDrivers }) {
   const mapShellRef = useRef(null);
   const mapRef = useRef(null);
   const markersRef = useRef({});
+  const markerMotionRef = useRef({});
+  const markerMotionRafRef = useRef(null);
+  const markerLastMotionAtRef = useRef({});
+  const markerMotionLastFrameRef = useRef(null);
+  const smoothMotionEnabledRef = useRef(true);
   const clustererRef = useRef(null);
   const infoWindowRef = useRef(null);
   const locatedIdsRef = useRef(new Set());
@@ -326,7 +363,9 @@ function DriverLiveMap({ drivers: propDrivers }) {
   const firstMarkersMarkedRef = useRef(false);
   const mapConstructorMarkedRef = useRef(false);
   const idleMarkerCaptureScheduledRef = useRef(false);
+  const [mapViewLocked, setMapViewLocked] = useState(false);
   const { company } = useLirieCompany();
+  const queryClient = useQueryClient();
 
   const captureOverlayStats = useCallback(() => {
     if (!isCompanyDashboardPerfEnabled()) return;
@@ -374,6 +413,174 @@ function DriverLiveMap({ drivers: propDrivers }) {
   );
   const clusteringEnabledRef = useRef(clusteringEnabled);
   clusteringEnabledRef.current = clusteringEnabled;
+  smoothMotionEnabledRef.current = allDrivers.length <= MARKER_SMOOTH_MOTION_MAX_DRIVERS;
+
+  const stopMarkerMotionLoop = useCallback(() => {
+    if (markerMotionRafRef.current != null) {
+      cancelAnimationFrame(markerMotionRafRef.current);
+      markerMotionRafRef.current = null;
+    }
+  }, []);
+
+  const runMarkerMotionFrame = useCallback(() => {
+    markerMotionRafRef.current = null;
+    const motions = markerMotionRef.current;
+    const now = performance.now();
+    const prevFrame = markerMotionLastFrameRef.current;
+    const deltaMs = prevFrame != null ? Math.min(48, now - prevFrame) : 16;
+    markerMotionLastFrameRef.current = now;
+    let anyActive = false;
+
+    Object.keys(motions).forEach((key) => {
+      const motion = motions[key];
+      const marker = markersRef.current[key];
+      if (!marker) {
+        delete motions[key];
+        return;
+      }
+
+      if (motion.phase === 'project') {
+        if (now >= motion.projectUntilMs) {
+          delete motions[key];
+          return;
+        }
+        const projected = projectPositionAlongVelocity(
+          motion.currentLat,
+          motion.currentLng,
+          motion.velLatPerMs,
+          motion.velLngPerMs,
+          deltaMs
+        );
+        motion.currentLat = projected.lat;
+        motion.currentLng = projected.lng;
+        setMarkerLatLng(marker, projected);
+        anyActive = true;
+        return;
+      }
+
+      const progress = (now - motion.startMs) / motion.durationMs;
+      if (progress >= 1) {
+        setMarkerLatLng(marker, motion.to);
+        const velLat =
+          ((motion.to.lat - motion.from.lat) / motion.durationMs) *
+          MARKER_MOTION_PROJECT_VELOCITY_DECAY;
+        const velLng =
+          ((motion.to.lng - motion.from.lng) / motion.durationMs) *
+          MARKER_MOTION_PROJECT_VELOCITY_DECAY;
+        const speed = Math.hypot(velLat, velLng);
+        const intervalMs = motion.expectedIntervalMs || MARKER_MOTION_DEFAULT_MS;
+        const projectUntilMs =
+          motion.startMs +
+          motion.durationMs +
+          intervalMs * MARKER_MOTION_PROJECT_FRACTION;
+
+        if (speed > 1e-9 && projectUntilMs > now) {
+          motions[key] = {
+            phase: 'project',
+            currentLat: motion.to.lat,
+            currentLng: motion.to.lng,
+            velLatPerMs: velLat,
+            velLngPerMs: velLng,
+            projectUntilMs,
+          };
+          anyActive = true;
+        } else {
+          delete motions[key];
+        }
+        recordMarkerPositionUpdate();
+        return;
+      }
+
+      anyActive = true;
+      setMarkerLatLng(
+        marker,
+        interpolateMarkerPosition(motion.from, motion.to, progress)
+      );
+    });
+
+    if (anyActive) {
+      markerMotionRafRef.current = requestAnimationFrame(runMarkerMotionFrame);
+    } else {
+      markerMotionLastFrameRef.current = null;
+    }
+  }, []);
+
+  const scheduleMarkerMotionLoop = useCallback(() => {
+    if (markerMotionRafRef.current == null) {
+      markerMotionRafRef.current = requestAnimationFrame(runMarkerMotionFrame);
+    }
+  }, [runMarkerMotionFrame]);
+
+  const cancelMarkerMotion = useCallback((id) => {
+    const idKey = String(id);
+    delete markerMotionRef.current[idKey];
+    delete markerLastMotionAtRef.current[idKey];
+    if (Object.keys(markerMotionRef.current).length === 0) {
+      markerMotionLastFrameRef.current = null;
+    }
+  }, []);
+
+  const animateMarkerTo = useCallback(
+    (id, marker, targetPosition) => {
+      const idKey = String(id);
+      const target = { lat: Number(targetPosition.lat), lng: Number(targetPosition.lng) };
+      const current = getMarkerLatLngLiteral(marker);
+      if (isSameMarkerPosition(current, target)) return;
+
+      if (!current) {
+        setMarkerLatLng(marker, target);
+        markerLastMotionAtRef.current[idKey] = Date.now();
+        return;
+      }
+
+      const nowMs = Date.now();
+      const lastAt = markerLastMotionAtRef.current[idKey];
+      const expectedIntervalMs =
+        lastAt != null && Number.isFinite(lastAt) ? nowMs - lastAt : MARKER_MOTION_DEFAULT_MS;
+      let durationMs = resolveMarkerMotionDurationMs(lastAt, nowMs);
+      const from = getMarkerLatLngLiteral(marker) || current;
+      durationMs = resolveMotionDurationFromDistance(
+        durationMs,
+        haversineDistanceMeters(from, target)
+      );
+      markerLastMotionAtRef.current[idKey] = nowMs;
+
+      markerMotionRef.current[idKey] = {
+        phase: 'animate',
+        from: { lat: from.lat, lng: from.lng },
+        to: target,
+        startMs: performance.now(),
+        durationMs,
+        expectedIntervalMs,
+      };
+      markerMotionLastFrameRef.current = null;
+      scheduleMarkerMotionLoop();
+    },
+    [scheduleMarkerMotionLoop]
+  );
+
+  const applyMarkerPosition = useCallback(
+    (id, marker, position, { isStale, status }) => {
+      const prevPos = getMarkerLatLngLiteral(marker);
+      if (isSameMarkerPosition(prevPos, position)) return;
+
+      const canSmooth =
+        smoothMotionEnabledRef.current &&
+        !isStale &&
+        status !== 'constrained';
+
+      if (canSmooth) {
+        animateMarkerTo(id, marker, position);
+      } else {
+        setMarkerLatLng(marker, position);
+        markerLastMotionAtRef.current[String(id)] = Date.now();
+        recordMarkerPositionUpdate();
+      }
+    },
+    [animateMarkerTo]
+  );
+
+  useEffect(() => () => stopMarkerMotionLoop(), [stopMarkerMotionLoop]);
 
   const drivers = searchQuery
     ? allDrivers.filter((d) => {
@@ -443,7 +650,7 @@ function DriverLiveMap({ drivers: propDrivers }) {
           marker._driverStatus === status &&
           marker._iconUrl === iconUrl &&
           isSameMarkerPosition(prevPos, position);
-        marker.setPosition(position);
+        applyMarkerPosition(id, marker, position, { isStale, status });
         if (!positionOnly) {
           marker.setIcon({
             url: iconUrl,
@@ -505,6 +712,7 @@ function DriverLiveMap({ drivers: propDrivers }) {
       });
 
       markersRef.current[id] = marker;
+      markerLastMotionAtRef.current[String(id)] = Date.now();
       if (clustered && clustererRef.current) {
         clustererRef.current.addMarker(marker);
       }
@@ -521,7 +729,7 @@ function DriverLiveMap({ drivers: propDrivers }) {
         marker._driverStatus === status &&
         marker._iconUrl === iconUrl &&
         isSameMarkerPosition(prevPos, position);
-      marker.position = position;
+      applyMarkerPosition(id, marker, position, { isStale, status });
       if (!positionOnly) {
         marker.title = markerTitle;
         const img = marker._img;
@@ -592,16 +800,18 @@ function DriverLiveMap({ drivers: propDrivers }) {
     };
 
     markersRef.current[id] = marker;
+    markerLastMotionAtRef.current[String(id)] = Date.now();
 
     if (clustered && clustererRef.current) {
       clustererRef.current.addMarker(marker);
     }
 
     return marker;
-  }, []);
+  }, [applyMarkerPosition]);
 
   // Supprimer un marqueur
   const removeMarker = useCallback((id) => {
+    cancelMarkerMotion(id);
     const marker = markersRef.current[id];
     if (!marker) return;
     if (clusteringEnabledRef.current && clustererRef.current) {
@@ -614,7 +824,7 @@ function DriverLiveMap({ drivers: propDrivers }) {
       marker.map = null;
     }
     delete markersRef.current[id];
-  }, []);
+  }, [cancelMarkerMotion]);
 
   // Fit bounds sur tous les marqueurs visibles
   const fitBoundsToMarkers = useCallback((maxZoom = 14, { structural = true } = {}) => {
@@ -642,6 +852,7 @@ function DriverLiveMap({ drivers: propDrivers }) {
 
   const onMapLoad = useCallback((map) => {
     mapRef.current = map;
+    setMapViewLocked(true);
     setMapReady(true);
     perfMark('gmaps_map_loaded');
     if (MAP_DEBUG) console.log('[DriverLiveMap] Google Map chargée');
@@ -686,15 +897,33 @@ function DriverLiveMap({ drivers: propDrivers }) {
     [drivers, searchQuery]
   );
 
-  // Sync marqueurs (GPS tick → update position uniquement, pas de fitBounds)
-  useEffect(() => {
+  const syncMarkersFromCache = useCallback(() => {
     const map = mapRef.current;
-    if (!mapReady || !map || !Array.isArray(drivers)) return;
+    if (!mapReady || !map) return;
+
+    const raw = queryClient.getQueryData(lirieKeys.companyDrivers());
+    let list = projectDriversForMap(Array.isArray(raw) ? raw : []);
+    const q = searchQuery.trim().toLowerCase();
+    if (q) {
+      list = list.filter((d) => {
+        const blob = [
+          d.username,
+          d.full_name,
+          d.first_name,
+          d.last_name,
+          d.email,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        return blob.includes(q);
+      });
+    }
 
     let staleMarkersCount = 0;
     const newLocatedIds = new Set();
 
-    drivers.forEach((d) => {
+    list.forEach((d) => {
       const resolved = resolveDriverCoords(d, companyCoords);
       if (!resolved) return;
 
@@ -735,12 +964,15 @@ function DriverLiveMap({ drivers: propDrivers }) {
       upsertMarker(d.id, coords, visualStatus, isStaleMarker, d, tooltipOpts);
     });
 
-    // Synchroniser le compteur localisés
-    locatedIdsRef.current = newLocatedIds;
-    setLocatedCount(newLocatedIds.size);
+    const newLocatedSize = newLocatedIds.size;
+    if (newLocatedSize !== locatedIdsRef.current.size) {
+      locatedIdsRef.current = newLocatedIds;
+      setLocatedCount(newLocatedSize);
+    } else {
+      locatedIdsRef.current = newLocatedIds;
+    }
 
-    // Supprimer les marqueurs des chauffeurs qui ne sont plus dans la liste
-    const driverIds = new Set(drivers.map((d) => d.id));
+    const driverIds = new Set(list.map((d) => d.id));
     Object.keys(markersRef.current).forEach((driverId) => {
       if (!driverIds.has(Number(driverId))) {
         removeMarker(driverId);
@@ -748,19 +980,19 @@ function DriverLiveMap({ drivers: propDrivers }) {
     });
 
     const markerCount = Object.keys(markersRef.current).length;
-    setMapMarkerCount(markerCount);
+    setMapMarkerCount((prev) => (prev === markerCount ? prev : markerCount));
     if (markerCount > 0 && !firstMarkersMarkedRef.current) {
       firstMarkersMarkedRef.current = true;
       perfMark('gmaps_first_markers');
       captureOverlayStats();
-      const map = mapRef.current;
+      const mapInstance = mapRef.current;
       if (
-        map &&
+        mapInstance &&
         !idleMarkerCaptureScheduledRef.current &&
         window.google?.maps?.event
       ) {
         idleMarkerCaptureScheduledRef.current = true;
-        window.google.maps.event.addListenerOnce(map, 'idle', () => {
+        window.google.maps.event.addListenerOnce(mapInstance, 'idle', () => {
           window.setTimeout(() => {
             const count = Object.keys(markersRef.current).length;
             recordMapsOverlayStats({
@@ -781,7 +1013,29 @@ function DriverLiveMap({ drivers: propDrivers }) {
       lastStaleMetricAtRef.current = now;
       trackStaleMarkers(company?.id, staleMarkersCount);
     }
-  }, [mapReady, drivers, companyCoords, upsertMarker, removeMarker, company?.id, captureOverlayStats]);
+  }, [
+    mapReady,
+    searchQuery,
+    companyCoords,
+    upsertMarker,
+    removeMarker,
+    company?.id,
+    captureOverlayStats,
+    queryClient,
+  ]);
+
+  // Sync marqueurs via cache TanStack (tick GPS) sans re-render React du composant carte.
+  useEffect(() => {
+    syncMarkersFromCache();
+    const companyDriversKey = lirieKeys.companyDrivers();
+    const unsub = queryClient.getQueryCache().subscribe((event) => {
+      if (event?.type !== 'updated') return;
+      const key = event?.query?.queryKey;
+      if (!key || key[0] !== companyDriversKey[0] || key[1] !== companyDriversKey[1]) return;
+      syncMarkersFromCache();
+    });
+    return unsub;
+  }, [syncMarkersFromCache, queryClient]);
 
   // fitBounds uniquement si le set structurel visible change (pas sur tick GPS)
   useEffect(() => {
@@ -858,8 +1112,8 @@ function DriverLiveMap({ drivers: propDrivers }) {
         >
           <GoogleMap
             mapContainerStyle={CONTAINER_STYLE}
-            center={defaultMapCenter}
-            zoom={defaultZoom}
+            center={mapViewLocked ? undefined : defaultMapCenter}
+            zoom={mapViewLocked ? undefined : defaultZoom}
             options={DEFAULT_MAP_OPTIONS}
             onLoad={onMapLoad}
           />
@@ -1145,27 +1399,7 @@ function DriverLiveMap({ drivers: propDrivers }) {
 
 function areDriverLiveMapPropsEqual(prev, next) {
   if (prev === next) return true;
-  const prevDrivers = prev.drivers;
-  const nextDrivers = next.drivers;
-  if (prevDrivers === nextDrivers) return true;
-  if (!Array.isArray(prevDrivers) || !Array.isArray(nextDrivers)) return false;
-  if (prevDrivers.length !== nextDrivers.length) return false;
-  for (let i = 0; i < prevDrivers.length; i += 1) {
-    const a = prevDrivers[i];
-    const b = nextDrivers[i];
-    if (!a || !b || a.id !== b.id) return false;
-    if (a.latitude !== b.latitude || a.longitude !== b.longitude) return false;
-    if (a.status !== b.status) return false;
-    if (a.location_status !== b.location_status) return false;
-    if (a.last_seen_seconds !== b.last_seen_seconds) return false;
-    if (a.presence_status !== b.presence_status) return false;
-    const ah = a.device_health || null;
-    const bh = b.device_health || null;
-    const ar = ah ? ah.constraint_reason ?? null : null;
-    const br = bh ? bh.constraint_reason ?? null : null;
-    if (ar !== br) return false;
-  }
-  return true;
+  return buildDriverStructuralSetKey(prev.drivers, '') === buildDriverStructuralSetKey(next.drivers, '');
 }
 
 export default memo(DriverLiveMap, areDriverLiveMapPropsEqual);

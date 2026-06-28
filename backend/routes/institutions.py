@@ -9,6 +9,7 @@ Ce module fournit les endpoints API pour les institutions:
 
 # pyright: reportGeneralTypeIssues=false, reportArgumentType=false, reportOperatorIssue=false
 import logging
+import os
 import secrets
 import uuid
 from datetime import UTC, datetime
@@ -55,6 +56,13 @@ from shared.error_handlers import APIErrorHandler
 from shared.upload_validation import ALLOWED_LOGO_EXT, validate_file_upload
 
 logger = logging.getLogger(__name__)
+
+# Réinitialisation du mot de passe temporaire (admin institution) :
+# limite surchargeable via env pour permettre des campagnes de réinit. en masse.
+# Une garde par utilisateur cible (max 10 / 2h) reste appliquée dans la route.
+_RATELIMIT_INSTITUTION_RESET_PASSWORD = os.getenv(
+    "RATELIMIT_INSTITUTION_RESET_PASSWORD", "30 per hour"
+)
 
 MAX_LOGO_MB = 2
 MAX_LOGO_BYTES = MAX_LOGO_MB * 1024 * 1024
@@ -1738,7 +1746,7 @@ class InstitutionUserResetPassword(Resource):
         description="Génère un nouveau mot de passe temporaire (admin only).",
         security="Bearer",
     )
-    @limiter.limit("5 per hour")
+    @limiter.limit(_RATELIMIT_INSTITUTION_RESET_PASSWORD)
     @jwt_required()
     @role_required(UserRole.INSTITUTION)
     def post(self, user_id):

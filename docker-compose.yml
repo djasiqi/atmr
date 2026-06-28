@@ -145,6 +145,9 @@ services:
       - UD_OSRM_URL=${UD_OSRM_URL:-http://osrm:5000}
       # Socket.IO : ajoutez http://<votre-IP-LAN>:8081 si Expo Web / QR utilise l’IP (pas localhost).
       - SOCKETIO_CORS_ORIGINS=${SOCKETIO_CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000,http://localhost:8081,http://127.0.0.1:8081,http://192.168.1.146:8081}
+      # Rate limit socket GPS : 2 batches / 10 s / chauffeur (aligné cadence mobile ~8 s FG)
+      - WS_DRIVER_LOCATION_BATCH_LIMIT=${WS_DRIVER_LOCATION_BATCH_LIMIT:-2}
+      - WS_DRIVER_LOCATION_BATCH_WINDOW_SEC=${WS_DRIVER_LOCATION_BATCH_WINDOW_SEC:-10}
       - FLASK_CONFIG=${FLASK_CONFIG:-development}
       - DEBUG_LOG_PATH=/app/.cursor/debug.log
       - FLASK_ENV=${FLASK_ENV:-development}
@@ -181,6 +184,14 @@ services:
       - CHAOS_ENABLED=${CHAOS_ENABLED:-false}
       - CHAOS_OSRM_DOWN=${CHAOS_OSRM_DOWN:-false}
       - CHAOS_DB_READ_ONLY=${CHAOS_DB_READ_ONLY:-false}
+      # Tracking → Kafka (producteur API). Option A : miroir fire-and-forget du
+      # chemin socket vers driver.location.raw (voie durable, non bloquant). OFF
+      # par défaut ; activer via l'env hôte pour le stack Kafka dev.
+      - KAFKA_ENABLED=${KAFKA_ENABLED:-false}
+      - TRACKING_INGEST_ASYNC_ENABLED=${TRACKING_INGEST_ASYNC_ENABLED:-false}
+      - TRACKING_SOCKET_KAFKA_MIRROR_ENABLED=${TRACKING_SOCKET_KAFKA_MIRROR_ENABLED:-false}
+      - KAFKA_BOOTSTRAP_SERVERS=${KAFKA_BOOTSTRAP_SERVERS:-kafka-broker-1:29092}
+      - KAFKA_MAX_BLOCK_MS=${KAFKA_MAX_BLOCK_MS:-1000}
     volumes:
       - ./backend:/app
       # Volume explicite pour uploads (PDFs, logos) — évite ERR_CONNECTION_RESET
