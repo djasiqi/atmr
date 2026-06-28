@@ -18,6 +18,16 @@ import { resolveInitialRoute } from "../../src/core/navigation/resolveInitialRou
 import { useRuntimeUpdateGate } from "../../src/core/version/useRuntimeUpdateGate";
 import { getLastDraftId } from "../../src/core/public/preRequestDraft";
 import { queueExternalIntentResume } from "../../src/core/navigation/externalIntent";
+import { hasStoredRefreshToken } from "../../src/core/api/client";
+import {
+  authenticateWithBiometric,
+  isBiometricAvailable,
+} from "../../src/core/auth/biometricAuth";
+import { readAuthBiometricEnabled } from "../../src/core/auth/biometricPreference";
+import {
+  persistLoginRememberMe,
+  readLoginPreferences,
+} from "../../src/core/auth/loginPreferences";
 import {
   AppNotice,
   AppSwitch,
@@ -54,13 +64,17 @@ function asString(value: unknown): string {
 export default function LoginScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ next?: string }>();
-  const { login, error, bootstrap } = useSession();
+  const { login, error, bootstrap, bootstrapSession } = useSession();
   const [email, setEmail] = ReactRuntime.useState("");
   const [password, setPassword] = ReactRuntime.useState("");
   const [showPassword, setShowPassword] = ReactRuntime.useState(false);
   const [rememberSession, setRememberSession] = ReactRuntime.useState(true);
   const [submitting, setSubmitting] = ReactRuntime.useState(false);
   const [localError, setLocalError] = ReactRuntime.useState(null as string | null);
+  const [preferencesLoaded, setPreferencesLoaded] = ReactRuntime.useState(false);
+  const [biometricLoginAvailable, setBiometricLoginAvailable] = ReactRuntime.useState(false);
+  const [biometricPending, setBiometricPending] = ReactRuntime.useState(false);
+  const biometricAutoPromptedRef = ReactRuntime.useRef(false);
   const passwordInputRef = ReactRuntime.useRef(null as TextInputType | null);
   const loginScrollRef = ReactRuntime.useRef(null as ScrollView | null);
   const loginScrollOffsetYRef = ReactRuntime.useRef(0);
@@ -70,6 +84,101 @@ export default function LoginScreen() {
   const { topInset } = useAppViewport();
   /** Clavier dual : `useKeyboardHeight` remplace le doublon listeners + magic numbers (cf. plan Sprint 1). */
   const { keyboardVisible, scrollPaddingBottom: keyboardScrollPaddingBottom } = useKeyboardHeight();
+
+  ReactRuntime.useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const preferences = await readLoginPreferences();
+      if (cancelled) return;
+      setRememberSession(preferences.rememberMe);
+      if (preferences.email) {
+        setEmail(preferences.email);
+      }
+      if (preferences.password) {
+        setPassword(preferences.password);
+      }
+      setPreferencesLoaded(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  ReactRuntime.useEffect(() => {
+    if (!preferencesLoaded || bootstrap?.is_authenticated) return;
+    let cancelled = false;
+    void (async () => {
+      const [biometricEnabled, hasRefresh, available] = await Promise.all([
+        readAuthBiometricEnabled(),
+        hasStoredRefreshToken(),
+        isBiometricAvailable(),
+      ]);
+      if (cancelled) return;
+      setBiometricLoginAvailable(biometricEnabled && hasRefresh && available);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [bootstrap?.is_authenticated, preferencesLoaded]);
+
+  const navigateAfterAuth = ReactRuntime.useCallback(async () => {
+    const draftId = await getLastDraftId();
+    if (draftId) {
+      await queueExternalIntentResume({ type: "pre-request-resume", draftId });
+    }
+    if (params.next && typeof params.next === "string" && params.next.trim()) {
+      router.replace(params.next as any);
+      return;
+    }
+    router.replace("/");
+  }, [params.next, router]);
+
+  const resumeWithBiometric = ReactRuntime.useCallback(async () => {
+    if (biometricPending || submitting || updateGate.requiresUpdate) return;
+    setLocalError(null);
+    setBiometricPending(true);
+    try {
+      const ok = await authenticateWithBiometric({
+        promptMessage: "Connexion biométrique à Lirie",
+        cancelLabel: "Utiliser le mot de passe",
+      });
+      if (!ok) {
+        setLocalError("Connexion biométrique annulée ou refusée.");
+        return;
+      }
+      await bootstrapSession();
+      await navigateAfterAuth();
+    } catch (e) {
+      const typedError = (typeof e === "object" && e ? e : {}) as LoginApiError;
+      setLocalError(asString(typedError.message) || "Impossible de reprendre la session.");
+    } finally {
+      setBiometricPending(false);
+    }
+  }, [
+    biometricPending,
+    bootstrapSession,
+    navigateAfterAuth,
+    submitting,
+    updateGate.requiresUpdate,
+  ]);
+
+  ReactRuntime.useEffect(() => {
+    if (
+      !preferencesLoaded ||
+      !biometricLoginAvailable ||
+      biometricAutoPromptedRef.current ||
+      bootstrap?.is_authenticated
+    ) {
+      return;
+    }
+    biometricAutoPromptedRef.current = true;
+    void resumeWithBiometric();
+  }, [
+    biometricLoginAvailable,
+    bootstrap?.is_authenticated,
+    preferencesLoaded,
+    resumeWithBiometric,
+  ]);
 
   ReactRuntime.useEffect(() => {
     if (keyboardVisible) return;
@@ -90,15 +199,8 @@ export default function LoginScreen() {
     setSubmitting(true);
     try {
       await login(email, password);
-      const draftId = await getLastDraftId();
-      if (draftId) {
-        await queueExternalIntentResume({ type: "pre-request-resume", draftId });
-      }
-      if (params.next && typeof params.next === "string" && params.next.trim()) {
-        router.replace(params.next as any);
-        return;
-      }
-      router.replace("/");
+      await persistLoginRememberMe(email, password, rememberSession);
+      await navigateAfterAuth();
     } catch (e) {
       const typedError = (typeof e === "object" && e ? e : {}) as LoginApiError;
       const message = asString(typedError.message) || "Echec de connexion.";
@@ -282,7 +384,13 @@ export default function LoginScreen() {
 
           <AppSwitch
             value={rememberSession}
-            onValueChange={setRememberSession}
+            onValueChange={(next: boolean) => {
+              setRememberSession(next);
+              if (!next) {
+                setPassword("");
+                void persistLoginRememberMe("", "", false);
+              }
+            }}
             accessibilityLabel="Se souvenir de moi"
             style={styles.rememberRow}
             label={
@@ -291,6 +399,33 @@ export default function LoginScreen() {
               </Text>
             }
           />
+
+          {biometricLoginAvailable ? (
+            <Pressable
+              onPress={() => void resumeWithBiometric()}
+              disabled={biometricPending || submitting || updateGate.requiresUpdate}
+              style={({ pressed }) => [
+                styles.biometricButton,
+                pressed ? styles.biometricButtonPressed : null,
+                biometricPending || submitting || updateGate.requiresUpdate
+                  ? styles.biometricButtonDisabled
+                  : null,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Connexion biométrique"
+            >
+              {biometricPending ? (
+                <ActivityIndicator color={BRAND} />
+              ) : (
+                <>
+                  <Ionicons name="finger-print-outline" size={22} color={BRAND} />
+                  <Text style={styles.biometricButtonText} maxFontSizeMultiplier={1.28}>
+                    Connexion biométrique
+                  </Text>
+                </>
+              )}
+            </Pressable>
+          ) : null}
 
           {(localError || error) ? (
             <AppText variant="error" style={{ marginTop: 14 }} accessibilityRole="alert">
@@ -500,6 +635,30 @@ const styles = StyleSheet.create({
     color: UI_MUTED,
     fontSize: FONT_SIZE.px13,
     fontWeight: "500",
+  },
+  biometricButton: {
+    marginTop: 14,
+    minHeight: 48,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(10, 143, 122, 0.35)",
+    backgroundColor: "rgba(10, 143, 122, 0.08)",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    paddingHorizontal: 14,
+  },
+  biometricButtonPressed: {
+    backgroundColor: "rgba(10, 143, 122, 0.14)",
+  },
+  biometricButtonDisabled: {
+    opacity: 0.6,
+  },
+  biometricButtonText: {
+    color: BRAND,
+    fontSize: FONT_SIZE.px15,
+    fontWeight: "600",
   },
   submitButton: {
     marginTop: 22,

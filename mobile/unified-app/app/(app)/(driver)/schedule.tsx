@@ -12,6 +12,7 @@ import {
   useResponsiveTokens,
 } from "../../../src/design/responsive";
 import { useDriverMissionsQuery } from "../../../src/features/driver/hooks";
+import { MISSION_ROUTE_ARROW } from "../../../src/features/driver/domain/missionDisplay";
 import type { DriverMission } from "../../../src/features/driver/types";
 import { DRIVER_FLOATING_TAB_SCROLL_PADDING } from "../../../src/features/driver/navigation/DriverFloatingTabBar";
 
@@ -70,7 +71,7 @@ export default function DriverScheduleScreen() {
               </AppText>
               <AppText variant="body" style={styles.body}>
                 {(mission.pickup_location as string | undefined) ?? "Départ"}
-                {" → "}
+                {MISSION_ROUTE_ARROW}
                 {(mission.dropoff_location as string | undefined) ?? "Arrivée"}
               </AppText>
               <Pressable

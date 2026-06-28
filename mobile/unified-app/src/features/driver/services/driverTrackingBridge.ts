@@ -497,9 +497,13 @@ function getCadenceForTick(appState: AppStateStatus, mode: DriverTrackingMode) {
 async function getCurrentPositionWithTimeout(
   appState: AppStateStatus
 ): Promise<Location.LocationObject | null> {
+  // mission_live = navigation active → GPS précis (High) ; sinon coarse (Balanced) pour la batterie.
+  const positionAccuracy = hasActiveMission()
+    ? Location.Accuracy.High
+    : Location.Accuracy.Balanced;
   if (!isFeatureEnabled("tracking_safe_stale_fallback_enabled")) {
     return Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.Balanced,
+      accuracy: positionAccuracy,
       mayShowUserSettingsDialog: true,
     }).catch(() => null);
   }
@@ -519,7 +523,7 @@ async function getCurrentPositionWithTimeout(
   });
   const currentPosition = await Promise.race([
     Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.Balanced,
+      accuracy: positionAccuracy,
       mayShowUserSettingsDialog: true,
     }).catch(() => null),
     timeoutPromise,
@@ -624,7 +628,11 @@ async function flushPoint(appState: AppStateStatus) {
   }
 
   const lastAckMs = state.lastAckAt ? Date.parse(state.lastAckAt) : null;
-  const ackIsStale = lastAckMs !== null && Date.now() - lastAckMs > cadence.ackStaleMs;
+  // Un ACK `queued` (HTTP 202 + Kafka async) est valide : ne pas relancer un HTTP bridge.
+  const ackIsStale =
+    lastAckMs !== null &&
+    !state.lastAckIsQueued &&
+    Date.now() - lastAckMs > cadence.ackStaleMs;
   if (ackIsStale) {
     emitDriverTelemetry("tracking.send.backoff", {
       source: "driver.tracking.bridge",
@@ -637,8 +645,15 @@ async function flushPoint(appState: AppStateStatus) {
     });
   }
 
+  const queueHandledTransport =
+    flushResult.sent > 0 ||
+    flushResult.backendAcked > 0 ||
+    flushResult.flushPathUsed === "http_fallback" ||
+    flushResult.lastBackendAckStatus === "queued";
+
   const shouldFallback =
     isFeatureEnabled("tracking_http_fallback_enabled") &&
+    !queueHandledTransport &&
     (ackIsStale ||
       (flushResult.sent === 0 &&
         flushResult.backendAcked === 0 &&
@@ -736,7 +751,8 @@ async function ensureLocationWatch() {
   try {
     state.watchSubscription = await Location.watchPositionAsync(
       {
-        accuracy: Location.Accuracy.Balanced,
+        // mission_live = navigation active → GPS précis (High) ; présence → Balanced (batterie).
+        accuracy: hasActiveMission() ? Location.Accuracy.High : Location.Accuracy.Balanced,
         distanceInterval: resolveWatchDistanceMeters(),
         timeInterval: appState === "active" ? resolveForegroundIntervalMs() : BACKGROUND_INTERVAL_MS,
         mayShowUserSettingsDialog: true,

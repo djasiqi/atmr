@@ -36,7 +36,7 @@ export default function ContextSelectorScreen() {
     setPendingContextId(null);
     switch (activeContext.context_type) {
       case "company":
-        router.replace("/(app)/(company)" as any);
+        router.replace("/(app)/(company)/dashboard" as any);
         return;
       case "driver":
         router.replace("/(app)/(driver)" as any);

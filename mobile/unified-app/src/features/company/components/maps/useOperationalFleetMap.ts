@@ -71,6 +71,10 @@ type Options = {
   inlineDriverSelection?: boolean;
   /** Synchronise la sélection depuis le parent (ex. désélection via panneau ops). */
   syncSelectedDriverId?: number | null;
+  /** Avant recentrage explicite (bouton / sélection) — réautorise la caméra auto. */
+  onBeforeExplicitRecenter?: () => void;
+  /** Pan / zoom manuel sur la carte native. */
+  onUserCameraGesture?: () => void;
 };
 
 function computeMissionRouteFocusRegion(
@@ -129,6 +133,8 @@ export function useOperationalFleetMap({
   onMapSignalsChange,
   inlineDriverSelection = false,
   syncSelectedDriverId,
+  onBeforeExplicitRecenter,
+  onUserCameraGesture,
 }: Options) {
   const cockpitMapPolicy: CockpitMapPolicy = {
     ...DEFAULT_COCKPIT_MAP_POLICY,
@@ -161,6 +167,7 @@ export function useOperationalFleetMap({
   const recenterTokenRef = useRef(0);
   const [recenterToken, setRecenterToken] = useState(0);
   const [recenterMode, setRecenterMode] = useState<FleetMapRecenterMode>("all");
+  const [userGestureActive, setUserGestureActive] = useState(false);
   const decayUnfocusedAtRef = useRef<Map<number, number>>(new Map());
   const previousMissionIdRef = useRef<number | null>(null);
   const [visualDecayTick, setVisualDecayTick] = useState(0);
@@ -362,26 +369,39 @@ export function useOperationalFleetMap({
     return pickPrimaryFleetDriver(enriched);
   }, [enriched]);
 
+  const recenterRegionCacheRef = useRef<{
+    token: number;
+    mode: FleetMapRecenterMode;
+    region: ReturnType<typeof computeFleetFocusRegion> | null;
+  }>({ token: -1, mode: "all", region: null });
+
   const recenterRegion = useMemo(() => {
-    void recenterToken;
+    const cache = recenterRegionCacheRef.current;
+    if (cache.token === recenterToken && cache.mode === recenterMode) {
+      return cache.region;
+    }
+
+    let region: ReturnType<typeof computeFleetFocusRegion> | null = null;
     if ((recenterMode === "selected" || recenterMode === "mission") && selectedDriver) {
       const missionRouteRegion = computeMissionRouteFocusRegion(
         selectedDriver,
         selectedMissionOverlay,
         driverFocusVerticalBias
       );
-      if (missionRouteRegion) return missionRouteRegion;
-      return computeFleetFocusRegion(selectedDriver, {
-        verticalBias: driverFocusVerticalBias,
-      });
+      if (missionRouteRegion) region = missionRouteRegion;
+      else {
+        region = computeFleetFocusRegion(selectedDriver, {
+          verticalBias: driverFocusVerticalBias,
+        });
+      }
+    } else if (recenterMode === "mission" && selectedMissionOverlay && !selectedDriver) {
+      region = computeMissionOverlayFocusRegion(selectedMissionOverlay, driverFocusVerticalBias);
+    } else if (recenterMode === "urgent" && urgentDriver) {
+      region = computeFleetRegion([urgentDriver], 2.2);
     }
-    if (recenterMode === "mission" && selectedMissionOverlay && !selectedDriver) {
-      return computeMissionOverlayFocusRegion(selectedMissionOverlay, driverFocusVerticalBias);
-    }
-    if (recenterMode === "urgent" && urgentDriver) {
-      return computeFleetRegion([urgentDriver], 2.2);
-    }
-    return null;
+
+    recenterRegionCacheRef.current = { token: recenterToken, mode: recenterMode, region };
+    return region;
   }, [
     driverFocusVerticalBias,
     recenterMode,
@@ -575,10 +595,17 @@ export function useOperationalFleetMap({
   }, [filtered, pinnedClusterFocus, selectedDriverId]);
 
   const recenter = useCallback((mode: FleetMapRecenterMode = "all") => {
+    onBeforeExplicitRecenter?.();
+    setUserGestureActive(false);
     setRecenterMode(mode);
     recenterTokenRef.current += 1;
     setRecenterToken(recenterTokenRef.current);
-  }, []);
+  }, [onBeforeExplicitRecenter]);
+
+  const notifyUserCameraGesture = useCallback(() => {
+    setUserGestureActive(true);
+    onUserCameraGesture?.();
+  }, [onUserCameraGesture]);
 
   const lastCameraPolicyRef = useRef<CameraPolicy | undefined>(undefined);
   useEffect(() => {
@@ -604,10 +631,11 @@ export function useOperationalFleetMap({
   useEffect(() => {
     if (didInitialRecenterRef.current || enriched.length === 0) return;
     didInitialRecenterRef.current = true;
+    if (selectedDriverId != null) return;
     setRecenterMode("all");
     recenterTokenRef.current += 1;
     setRecenterToken(recenterTokenRef.current);
-  }, [enriched.length]);
+  }, [enriched.length, selectedDriverId]);
 
   // Auto-fit structurel uniquement (join/leave chauffeur) — jamais sur tick GPS.
   const driversBoundsSignature = useMemo(
@@ -618,6 +646,7 @@ export function useOperationalFleetMap({
   useEffect(() => {
     if (filtered.length === 0) return;
     if (selectedDriverId != null) return;
+    if (userGestureActive) return;
     if (cockpitMapPolicy.cameraPolicy === "user_gesture_preserve") return;
 
     const previousSignature = lastAutoFitBoundsRef.current;
@@ -645,6 +674,7 @@ export function useOperationalFleetMap({
     driversBoundsSignature,
     filtered.length,
     selectedDriverId,
+    userGestureActive,
   ]);
 
   const missionHasMapCoords = useCallback((mission: CompanyDispatchMission) => {
@@ -815,6 +845,7 @@ export function useOperationalFleetMap({
     recenterRegion,
     recenterToken,
     recenterMode,
+    notifyUserCameraGesture,
     closeDriverSheet,
     openDriverSheetFromPeek,
     driverOptions: enriched,

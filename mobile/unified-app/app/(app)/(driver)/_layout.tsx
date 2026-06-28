@@ -33,6 +33,7 @@ import { usePerfRouteTracking } from "../../../src/core/observability/usePerfRou
 import { DriverPresenceDisclosureHost } from "../../../src/features/driver/components/DriverPresenceDisclosureHost";
 import { DriverNotificationDisclosureHost } from "../../../src/features/driver/components/DriverNotificationDisclosureHost";
 import { DriverTrackingBannerHost } from "../../../src/features/driver/components/DriverTrackingBannerHost";
+import { DriverMissionLiveTrackingDisclosureHost } from "../../../src/features/driver/components/DriverMissionLiveTrackingDisclosureHost";
 import {
   hasActiveDriverMissionStatus,
   setOtaAutoReloadMissionBlocking,
@@ -130,6 +131,7 @@ export default function DriverLayout() {
         <DriverPresenceDisclosureHost />
         <DriverNotificationDisclosureHost />
         <DriverTrackingBannerHost />
+        <DriverMissionLiveTrackingDisclosureHost />
         <Tabs
           implementation={FLOATING_TAB_IMPLEMENTATION}
           screenOptions={{

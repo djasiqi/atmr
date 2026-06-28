@@ -1,0 +1,39 @@
+diff --git a/node_modules/expo-task-manager/android/src/main/java/expo/modules/taskManager/TaskService.java b/node_modules/expo-task-manager/android/src/main/java/expo/modules/taskManager/TaskService.java
+index 2b6c2fa..2bf0cd1 100644
+--- a/node_modules/expo-task-manager/android/src/main/java/expo/modules/taskManager/TaskService.java
++++ b/node_modules/expo-task-manager/android/src/main/java/expo/modules/taskManager/TaskService.java
+@@ -70,7 +70,9 @@ public class TaskService implements SingletonModule, TaskServiceInterface {
+ 
+   public TaskService(Context context) {
+     super();
+-    mContextRef = new WeakReference<>(context);
++    // patch(atmr): hold the application context so the WeakReference is never GC'd while the process lives.
++    // Fixes transient NPE in TasksPersistence.getAll() when the FGS/JobService context is reclaimed.
++    mContextRef = new WeakReference<>(context != null ? context.getApplicationContext() : null);
+     mTasksAndEventsRepository = TasksAndEventsRepository.create(context);
+ 
+     if (!mTasksAndEventsRepository.tasksExist()) {
+diff --git a/node_modules/expo-task-manager/android/src/main/java/expo/modules/taskManager/repository/TasksPersistence.java b/node_modules/expo-task-manager/android/src/main/java/expo/modules/taskManager/repository/TasksPersistence.java
+index a872533..f464dfc 100644
+--- a/node_modules/expo-task-manager/android/src/main/java/expo/modules/taskManager/repository/TasksPersistence.java
++++ b/node_modules/expo-task-manager/android/src/main/java/expo/modules/taskManager/repository/TasksPersistence.java
+@@ -16,6 +16,9 @@ import expo.modules.interfaces.taskManager.TaskInterface;
+ public class TasksPersistence {
+ 
+   public void clearTaskPersistence(SharedPreferences preferences, String but) {
++    if (preferences == null) {
++      return;
++    }
+     Map<String, ?> map = preferences.getAll();
+     for(String key: map.keySet()) {
+       if(!but.equals(key)) {
+@@ -56,6 +59,9 @@ public class TasksPersistence {
+   public Map<String, TasksAndEventsRepository.AppConfig> readPersistedTasks(SharedPreferences preferences) {
+     Map<String, TasksAndEventsRepository.AppConfig> result = new HashMap<>();
+ 
++    if (preferences == null) {
++      return result;
++    }
+     Map<String, ?> appScopeKeyToAppConfigsMap = preferences.getAll();
+ 
+     for (Map.Entry<String, ?> appScopeKeyToConfig : appScopeKeyToAppConfigsMap.entrySet()) {

@@ -3,7 +3,7 @@ import type { CompanyDriverLiveLocation } from "../api/contracts";
 export const STALE_SECONDS_THRESHOLD = 120;
 
 /** Diamètre pastille chauffeur carte flotte (identique natif et variante navigateur). */
-export const FLEET_DRIVER_MARKER_DISC_DP = 22;
+export const FLEET_DRIVER_MARKER_DISC_DP = 28;
 
 export type CompanyDriverMapCategory = "available" | "en_mission" | "last_known" | "offline";
 
@@ -48,32 +48,52 @@ export function resolveDriverDisplayName(
   driver: CompanyDriverLiveLocation,
   options?: DriverDisplayNameOptions
 ): string {
-  const full = cleanName(driver.driver_name) ?? cleanName(driver.full_name);
+  const full = cleanName(driver.full_name);
   if (full) return full;
-  const missionName = cleanName(options?.missionDriverName);
-  if (missionName) return missionName;
   const first = cleanName(driver.first_name);
   const last = cleanName(driver.last_name);
   const merged = [first, last].filter(Boolean).join(" ").trim();
   if (merged) return merged;
+  const driverName = cleanName(driver.driver_name);
+  if (driverName) return driverName;
+  const missionName = cleanName(options?.missionDriverName);
+  if (missionName) return missionName;
   const org = cleanName(options?.organizationName);
   if (org) return org;
   return `Chauffeur #${driver.driver_id}`;
 }
 
+/** Première lettre alphabétique d’un mot (accents conservés). */
+export function pickFleetMarkerWordInitial(word: string): string {
+  const letters = word.replace(/[^A-Za-zÀ-ÖØ-öø-ÿ]/g, "");
+  const initial = letters[0] ?? word[0] ?? "";
+  return initial.toUpperCase();
+}
+
+/**
+ * Initiales marqueur — parité web `getDriverMarkerLabel` (DriverLiveMap.jsx).
+ */
+export function resolveFleetMarkerInitialsFromDisplayName(fullName: string): string {
+  const words = fullName.trim().split(/\s+/).filter(Boolean);
+  if (words.length >= 2) {
+    return `${pickFleetMarkerWordInitial(words[0])}${pickFleetMarkerWordInitial(words[1])}`;
+  }
+  return fullName.trim().slice(0, 2).toUpperCase();
+}
+
 export function driverFleetMarkerInitials(driver: CompanyDriverLiveLocation): string {
-  const name = resolveDriverDisplayName(driver);
-  const parts = name.split(/\s+/).filter(Boolean);
-  if (parts.length >= 2) {
-    return `${parts[0][0] ?? ""}${parts[1][0] ?? ""}`.toUpperCase();
+  const first = cleanName(driver.first_name);
+  const last = cleanName(driver.last_name);
+  if (first && last) {
+    return `${pickFleetMarkerWordInitial(first)}${pickFleetMarkerWordInitial(last)}`;
   }
-  if (parts.length === 1) {
-    const p = parts[0];
-    const lettersOnly = p.replace(/[^A-Za-zÀ-ÖØ-öø-ÿ]/g, "");
-    if (lettersOnly.length >= 2) return lettersOnly.slice(0, 2).toUpperCase();
-    if (lettersOnly.length === 1) return lettersOnly.toUpperCase();
+  const full = cleanName(driver.full_name);
+  if (full) {
+    const fromFull = resolveFleetMarkerInitialsFromDisplayName(full);
+    const wordCount = full.trim().split(/\s+/).filter(Boolean).length;
+    if (wordCount >= 2) return fromFull;
   }
-  return "CH";
+  return resolveFleetMarkerInitialsFromDisplayName(resolveDriverDisplayName(driver));
 }
 
 export function driverFleetMarkerTitle(driver: CompanyDriverLiveLocation): string {

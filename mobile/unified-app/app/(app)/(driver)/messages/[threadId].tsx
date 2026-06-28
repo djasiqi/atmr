@@ -11,11 +11,13 @@ import { useSession } from "../../../../src/core/sessionProvider";
 import { Screen, AppText, useAppViewport } from "../../../../src/design/responsive";
 import {
   ChatComposer,
+  ChatComposerError,
   ChatConversationShell,
   ImagePreviewModal,
   PdfPreviewModal,
   TypingIndicator,
 } from "../../../../src/features/chat";
+import { uploadChatAttachment } from "../../../../src/features/chat/services/chatMediaUpload";
 import {
   useAckMessage,
   useDriverCompanyId,
@@ -134,6 +136,15 @@ export default function DriverMessageConversationScreen() {
   const etaQuery = useMissionEtaMinutes(thread?.booking_id ?? null, thread?.status);
   const [input, setInput] = useState("");
   const [sendError, setSendError] = useState<string | null>(null);
+  const [sendErrorOpensSettings, setSendErrorOpensSettings] = useState(false);
+  const clearSendError = () => {
+    setSendError(null);
+    setSendErrorOpensSettings(false);
+  };
+  const showSendError = (message: string, opensSettings = false) => {
+    setSendError(message);
+    setSendErrorOpensSettings(opensSettings);
+  };
   const [liveMessages, setLiveMessages] = useState<HubChatMessage[]>([]);
   const [typingNames, setTypingNames] = useState<string[]>([]);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -289,7 +300,7 @@ export default function DriverMessageConversationScreen() {
             resolveHubMessageLocalId(optimistic),
         })
       );
-      setSendError(null);
+      clearSendError();
     };
 
     if (realtimeManager.isDriverSocketReady()) {
@@ -301,7 +312,7 @@ export default function DriverMessageConversationScreen() {
     }
 
     if (!companyId) {
-      setSendError("Connexion indisponible. Réessayez.");
+      showSendError("Connexion indisponible. Réessayez.");
       return false;
     }
 
@@ -313,7 +324,7 @@ export default function DriverMessageConversationScreen() {
       .mutateAsync({ ...outbound, _localId: localId })
       .then((confirmed) => applySuccess(confirmed, localId))
       .catch(() => {
-        setSendError(
+        showSendError(
           realtimeManager.isDriverSocketReady()
             ? "Envoi impossible."
             : "Connexion indisponible. Réessayez."
@@ -346,24 +357,32 @@ export default function DriverMessageConversationScreen() {
     return ok;
   };
 
-  const sendVoiceMessage = (uri: string) => {
+  const sendVoiceMessage = async (uri: string) => {
     const localId = `local-voice-${Date.now()}`;
-    emitMessage(
-      { content: "Message vocal", audio_url: uri, _localId: localId },
-      {
-        id: localId,
-        _localId: localId,
-        sender_id: ownUserId,
-        content: "Message vocal",
-        sender_role: "DRIVER",
-        sender_name: ownDisplayName,
-        timestamp: new Date().toISOString(),
-        audio_url: uri,
-        thread_id: threadId,
-        message_type: "text",
-        priority: "normal",
-      }
-    );
+    const optimistic: HubChatMessage = {
+      id: localId,
+      _localId: localId,
+      sender_id: ownUserId,
+      content: "Message vocal",
+      sender_role: "DRIVER",
+      sender_name: ownDisplayName,
+      timestamp: new Date().toISOString(),
+      audio_url: uri,
+      thread_id: threadId,
+      message_type: "text",
+      priority: "normal",
+    };
+    setLiveMessages((prev) => upsertHubChatMessage(prev, optimistic, { replaceLocalId: localId }));
+    try {
+      const publicUrl = await uploadChatAttachment({ uri });
+      emitMessage(
+        { content: "Message vocal", audio_url: publicUrl, _localId: localId },
+        { ...optimistic, audio_url: publicUrl }
+      );
+    } catch {
+      setLiveMessages((prev) => prev.filter((m) => String(m.id) !== localId && m._localId !== localId));
+      showSendError("Impossible d'envoyer le message vocal.");
+    }
   };
 
   const loadMore = async () => {
@@ -376,7 +395,7 @@ export default function DriverMessageConversationScreen() {
       });
       setLiveMessages((prev) => [...older, ...prev]);
     } catch {
-      setSendError("Impossible de charger les messages plus anciens.");
+      showSendError("Impossible de charger les messages plus anciens.");
     } finally {
       setLoadingMore(false);
     }
@@ -412,10 +431,10 @@ export default function DriverMessageConversationScreen() {
             setLiveMessages((prev) => upsertHubChatMessage(prev, parsed));
           }
           void messagesQuery.refetch();
-          setSendError(null);
+          clearSendError();
         })
         .catch(() => {
-          setSendError("Impossible de signaler le problème. Réessayez.");
+          showSendError("Impossible de signaler le problème. Réessayez.");
         });
     },
     [emergencyMutation, messagesQuery, thread?.booking_id, threadId]
@@ -559,11 +578,16 @@ export default function DriverMessageConversationScreen() {
                       );
                     }}
                     onVoiceMessage={sendVoiceMessage}
+                    onVoiceError={(message, kind) =>
+                      showSendError(message, kind === "permission")
+                    }
                   />
                 ) : (
                   <View style={styles.composerPlaceholder} />
                 )}
-                {sendError ? <AppText variant="error">{sendError}</AppText> : null}
+                {sendError ? (
+                  <ChatComposerError message={sendError} openSettings={sendErrorOpensSettings} />
+                ) : null}
               </>
             }
           />

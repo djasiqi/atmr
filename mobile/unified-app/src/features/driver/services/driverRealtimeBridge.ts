@@ -24,6 +24,7 @@ import {
 import { pickTrackingMission } from "../domain/pickTrackingMission";
 import { isTrackingActiveStatus } from "../domain/status";
 import { normalizeDriverMissionStatus } from "../statusDictionary";
+import { recordSocketBatchRateLimited } from "./socketBatchPacing";
 
 type BridgeOptions = {
   enableSocket: boolean;
@@ -40,6 +41,69 @@ const REMOTE_KICK_COOLDOWN_MS = Number(
   process.env.EXPO_PUBLIC_REMOTE_KICK_COOLDOWN_MS ?? "60000"
 );
 let lastRemoteKickAtMs = 0;
+
+/**
+ * Backoff `rate_limit_exceeded` : un seul flush différé en vol à la fois. Évite
+ * la tempête de retransmission (re-flush immédiat → re-rate-limité → famine du
+ * canonical côté backend). On respecte le `retry_after` serveur (borné 1–10 s).
+ */
+let rateLimitFlushTimer: ReturnType<typeof setTimeout> | null = null;
+
+function resolveRateLimitRetryAfterMs(raw: unknown): number {
+  const retryAfterRaw =
+    typeof raw === "number"
+      ? raw
+      : typeof raw === "string"
+        ? Number(raw)
+        : Number.NaN;
+  return Number.isFinite(retryAfterRaw)
+    ? Math.min(10_000, Math.max(1_000, retryAfterRaw * 1000))
+    : 5_000;
+}
+
+/** ACK session stale : draine le batch mort puis repart avec une nouvelle session tracking. */
+function handleSessionConflictAck(
+  contextId: string,
+  trackingEventIds: string[],
+  ackLastSequenceId: number | null
+): void {
+  void (async () => {
+    if (trackingEventIds.length > 0) {
+      await driverTrackingQueue.markBackendAckedByIds(trackingEventIds);
+    }
+    if (ackLastSequenceId != null && Number.isFinite(ackLastSequenceId)) {
+      await driverTrackingQueue.markBackendAckedByWatermark(ackLastSequenceId);
+    }
+    await driverTrackingQueue.reconcileAfterSessionConflict();
+    await syncBridgeQueueDepthFromPersistence();
+    await flushTrackingQueue();
+  })();
+  emitDriverTelemetry("tracking.batch.session_conflict", {
+    source: "driver.realtime.bridge",
+    context_id: contextId,
+    stale_acked_count: trackingEventIds.length,
+    ack_last_sequence_id: ackLastSequenceId,
+  });
+}
+
+/** Rate-limit socket batch : libère pour HTTP + un seul flush différé (anti-tempête). */
+function scheduleRateLimitRecovery(contextId: string, retryAfterMs: number): void {
+  recordSocketBatchRateLimited(retryAfterMs);
+  void driverTrackingQueue
+    .releaseSocketEmittedForHttpRetry()
+    .then(() => syncBridgeQueueDepthFromPersistence());
+  if (rateLimitFlushTimer == null) {
+    rateLimitFlushTimer = setTimeout(() => {
+      rateLimitFlushTimer = null;
+      void flushTrackingQueue().then(() => syncBridgeQueueDepthFromPersistence());
+    }, retryAfterMs);
+  }
+  emitDriverTelemetry("tracking.batch.rate_limited", {
+    source: "driver.realtime.bridge",
+    context_id: contextId,
+    retry_after_ms: retryAfterMs,
+  });
+}
 
 /**
  * Kick backend `force_tracking_restart`. Le serveur n'émet ce kick que lorsqu'il
@@ -140,7 +204,11 @@ export function startDriverRealtimeBridge(
       lastReconnectResyncAtMs = now;
       scheduleDriverMissionSync(queryClient, contextId, "reconnect");
       if (isFeatureEnabled("tracking_resume_resync_enabled")) {
-        void flushTrackingQueue();
+        void driverTrackingQueue
+          .releaseSocketEmittedForHttpRetry()
+          .then(() => driverTrackingQueue.reconcileAfterSessionConflict())
+          .then(() => flushTrackingQueue())
+          .then(() => syncBridgeQueueDepthFromPersistence());
       }
       queryClient.setQueryData(driverQueryKeys.syncState(contextId), {
         last_sync_at: new Date().toISOString(),
@@ -178,45 +246,66 @@ export function startDriverRealtimeBridge(
             tracking_event_ids?: unknown;
             tracking_event_id?: unknown;
             ack_last_sequence_id?: unknown;
+            rate_limited?: unknown;
+            session_conflict?: unknown;
+            positions_count?: unknown;
+            retry_after?: unknown;
+            retry_after_seconds?: unknown;
           }
         | undefined;
+      if (payload?.rate_limited === true) {
+        /* ACK anti-tempête backend : positions NON ingérées (positions_count=0).
+         * Ne pas drainer la queue ici — sinon famine permanente du canonical Redis. */
+        scheduleRateLimitRecovery(
+          contextId,
+          resolveRateLimitRetryAfterMs(payload.retry_after ?? payload.retry_after_seconds)
+        );
+        return;
+      }
       const trackingEventIds = Array.isArray(payload?.tracking_event_ids)
         ? payload?.tracking_event_ids.filter((value): value is string => typeof value === "string")
         : typeof payload?.tracking_event_id === "string"
           ? [payload.tracking_event_id]
           : [];
-      if (trackingEventIds.length > 0) {
-        void driverTrackingQueue.markBackendAckedByIds(trackingEventIds).then(() =>
-          syncBridgeQueueDepthFromPersistence()
-        );
-      }
       const ackLastSequenceId =
         typeof payload?.ack_last_sequence_id === "number"
           ? payload.ack_last_sequence_id
           : typeof payload?.ack_last_sequence_id === "string"
             ? Number(payload.ack_last_sequence_id)
             : null;
-      if (ackLastSequenceId && Number.isFinite(ackLastSequenceId)) {
+      if (payload?.session_conflict === true) {
+        /* Batch d'une session périmée : positions NON ingérées — drainer puis rebinder. */
+        handleSessionConflictAck(contextId, trackingEventIds, ackLastSequenceId);
+        return;
+      }
+      if (trackingEventIds.length > 0) {
+        void driverTrackingQueue.markBackendAckedByIds(trackingEventIds).then(() =>
+          syncBridgeQueueDepthFromPersistence()
+        );
+      }
+      const ackLastSequenceIdResolved =
+        ackLastSequenceId && Number.isFinite(ackLastSequenceId) ? ackLastSequenceId : null;
+      if (ackLastSequenceIdResolved != null) {
         void driverTrackingQueue
-          .markBackendAckedByWatermark(ackLastSequenceId)
+          .markBackendAckedByWatermark(ackLastSequenceIdResolved)
           .then(() => syncBridgeQueueDepthFromPersistence());
       }
       emitDriverTelemetry("tracking.batch.ack", {
         source: "driver.realtime.bridge",
         context_id: contextId,
         backend_acked_count: trackingEventIds.length,
-        ack_last_sequence_id: ackLastSequenceId,
+        ack_last_sequence_id: ackLastSequenceIdResolved,
       });
       return;
     }
     if (event.event_type === "rate_limit_exceeded") {
-      void driverTrackingQueue.releaseSocketEmittedForHttpRetry().then(() =>
-        flushTrackingQueue().then(() => syncBridgeQueueDepthFromPersistence())
+      const rlPayload = (event as { payload?: unknown }).payload as
+        | { retry_after_seconds?: unknown }
+        | undefined;
+      scheduleRateLimitRecovery(
+        contextId,
+        resolveRateLimitRetryAfterMs(rlPayload?.retry_after_seconds)
       );
-      emitDriverTelemetry("tracking.batch.rate_limited", {
-        source: "driver.realtime.bridge",
-        context_id: contextId,
-      });
       return;
     }
     if (event.event_type === "force_tracking_restart") {

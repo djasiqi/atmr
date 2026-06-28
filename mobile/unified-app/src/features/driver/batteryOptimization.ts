@@ -5,5 +5,7 @@
 export {
   checkBatteryOptimizationStatus,
   openBatteryOptimizationSettings,
+  openBatteryOptimizationSettingsScreen,
+  openDriverBatteryUnrestrictedSettings,
   requestIgnoreBatteryOptimizations,
 } from "./services/batteryOptimization";

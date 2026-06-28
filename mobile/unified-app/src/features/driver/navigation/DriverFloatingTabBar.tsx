@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Platform, Pressable, StyleSheet, View } from "react-native";
+import { useMemo, useRef, useState } from "react";
+import { Linking, Platform, Pressable, StyleSheet, View } from "react-native";
 import {
   BaseFloatingBar,
   computeCompanyFloatingBottomPad,
@@ -12,11 +12,13 @@ import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { useRouter, useSegments } from "expo-router";
 import { shouldShowCompanyDriverContextSwitch } from "../../../core/contextSwitchPolicy";
 import { useSession } from "../../../core/sessionProvider";
-import { useDriverMessageHubUnreadBadge } from "../messages/hooks";
+import { useDriverMessageHubUnreadBadge, useEnsureDriverSocketForHub } from "../messages/hooks";
 import { isFeatureEnabled } from "../../../core/featureFlags/registry";
 import { useDriverChatUnreadCount } from "../chatHooks";
 import { RadialActionMenu, type RadialAction } from "../../../components/RadialActionMenu";
 import { FONT_SIZE } from "../../../design/responsive/typographyTokens";
+import { DriverTeamVoiceFab } from "./DriverTeamVoiceFab";
+import type { DriverTeamVoiceFeedback } from "./useDriverTeamVoiceBroadcast";
 
 const C = {
   textMuted: "#7A808A",
@@ -83,7 +85,7 @@ function useDriverTabHighlight(): {
 
 /**
  * Barre d’onglets flottante alignée sur {@link CompanyFloatingTabBar} :
- * Accueil, Courses, FAB (liste missions), Chat + menu radial « Autres ».
+ * Accueil, Courses, micro vocal (canal équipe), Chat + menu radial « Autres ».
  */
 export function DriverFloatingTabBar({ navigation }: BottomTabBarProps) {
   const { usableWidth, bottomInset, horizontalPadding } = useAppViewport();
@@ -92,6 +94,9 @@ export function DriverFloatingTabBar({ navigation }: BottomTabBarProps) {
   const { activeContext, bootstrap, changeContext } = useSession();
   const [switchPending, setSwitchPending] = useState(false);
   const [switchMessage, setSwitchMessage] = useState<string | null>(null);
+  const [voiceFeedback, setVoiceFeedback] = useState<DriverTeamVoiceFeedback | null>(null);
+  const voiceFeedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEnsureDriverSocketForHub();
   const hubUnread = useDriverMessageHubUnreadBadge();
   const legacyChatUnread = useDriverChatUnreadCount();
   const messagesUnread = isFeatureEnabled("driver_messages_hub_enabled")
@@ -137,7 +142,7 @@ export function DriverFloatingTabBar({ navigation }: BottomTabBarProps) {
       },
       {
         key: "profile",
-        label: "Profil chauffeur",
+        label: "Paramètres",
         icon: <Ionicons name="person-outline" size={20} color="#FFFFFF" />,
         color: "#0E7490",
         onPress: () => {
@@ -157,14 +162,13 @@ export function DriverFloatingTabBar({ navigation }: BottomTabBarProps) {
             if (switchPending) return;
             setSwitchPending(true);
             setSwitchMessage("Bascule vers l'espace entreprise…");
-            const switchWork = withTimeout(
-              changeContext(targetCompanyContext.context_id),
-              45_000,
-              "La bascule a pris trop de temps. Vérifiez votre connexion et réessayez."
-            );
-            router.replace("/(app)/(company)/dashboard");
             try {
-              await switchWork;
+              await withTimeout(
+                changeContext(targetCompanyContext.context_id),
+                45_000,
+                "La bascule a pris trop de temps. Vérifiez votre connexion et réessayez."
+              );
+              router.replace("/(app)/(company)/dashboard");
               setSwitchMessage(null);
             } catch (error) {
               setSwitchMessage(
@@ -181,6 +185,20 @@ export function DriverFloatingTabBar({ navigation }: BottomTabBarProps) {
     }
     return items;
   }, [canSwitchToCompany, changeContext, router, switchPending, targetCompanyContext]);
+
+  const handleVoiceFeedback = (feedback: DriverTeamVoiceFeedback | null) => {
+    if (voiceFeedbackTimerRef.current) {
+      clearTimeout(voiceFeedbackTimerRef.current);
+      voiceFeedbackTimerRef.current = null;
+    }
+    setVoiceFeedback(feedback);
+    if (feedback) {
+      voiceFeedbackTimerRef.current = setTimeout(() => {
+        setVoiceFeedback(null);
+        voiceFeedbackTimerRef.current = null;
+      }, 6000);
+    }
+  };
 
   return (
     <>
@@ -211,25 +229,7 @@ export function DriverFloatingTabBar({ navigation }: BottomTabBarProps) {
           }}
         />
         <View style={styles.barSlot}>
-          <Pressable
-            onPress={() => {
-              navigation.navigate("missions" as never);
-            }}
-            accessibilityLabel="Missions"
-            accessibilityRole="button"
-            android_ripple={
-              Platform.OS === "android"
-                ? { color: "rgba(255, 255, 255, 0.35)", borderless: true }
-                : undefined
-            }
-            style={({ pressed }) => [
-              styles.fabOuter,
-              pressed && styles.fabOuterPressed,
-              Platform.OS === "web" ? PRESSABLE_WEB_SUPPRESS_SQUARE_HALO : null,
-            ]}
-          >
-            <Ionicons name="add" size={26} color="#FFFFFF" />
-          </Pressable>
+          <DriverTeamVoiceFab onFeedback={handleVoiceFeedback} />
         </View>
         <BarTabButton
           label="Messages"
@@ -264,6 +264,23 @@ export function DriverFloatingTabBar({ navigation }: BottomTabBarProps) {
           />
         </View>
       </BaseFloatingBar>
+      {voiceFeedback ? (
+        <Pressable
+          onPress={() => {
+            if (voiceFeedback.openSettings) {
+              void Linking.openSettings();
+            }
+          }}
+          disabled={!voiceFeedback.openSettings}
+          style={styles.voiceFeedbackFloating}
+          accessibilityRole={voiceFeedback.openSettings ? "button" : "text"}
+          accessibilityLabel={voiceFeedback.message}
+        >
+          <AppText variant="caption" style={styles.voiceFeedbackMessage}>
+            {voiceFeedback.message}
+          </AppText>
+        </Pressable>
+      ) : null}
       {switchMessage ? (
         <View pointerEvents="none" style={styles.switchMessageFloating}>
           <AppText variant="caption" style={styles.contextSwitchMessage}>
@@ -396,29 +413,31 @@ const styles = StyleSheet.create({
   badgeTextActive: {
     color: "#fff",
   },
-  fabOuter: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: C.brand,
-    alignItems: "center",
-    justifyContent: "center",
-    alignSelf: "center",
+  voiceFeedbackFloating: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    bottom: 140,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(180, 35, 24, 0.36)",
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
     ...Platform.select({
-      web: {
-        boxShadow: "0 1px 4px rgba(10, 58, 52, 0.2)",
-      } as const,
+      web: { boxShadow: "0 2px 8px rgba(15, 23, 42, 0.14)" } as const,
       default: {
         elevation: 2,
-        shadowColor: "#163A34",
-        shadowOpacity: 0.2,
+        shadowColor: "#0f172a",
+        shadowOpacity: 0.1,
         shadowOffset: { width: 0, height: 1 },
-        shadowRadius: 2,
+        shadowRadius: 4,
       },
     }),
   },
-  fabOuterPressed: {
-    opacity: 0.9,
+  voiceFeedbackMessage: {
+    color: "#B42318",
+    lineHeight: 16,
   },
   switchMessageFloating: {
     position: "absolute",

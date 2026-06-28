@@ -22,7 +22,6 @@ import { UnavailableConfirmationModal } from "../../../src/features/driver/compo
 import { getMissionClientDisplayName } from "../../../src/features/driver/domain/missionDisplay";
 import { DriverStateBanners } from "../../../src/features/driver/components/DriverStateBanners";
 import { DriverTrackingReadinessGate } from "../../../src/features/driver/components/DriverTrackingReadinessGate";
-import { MissionLiveTrackingDisclosureModal } from "../../../src/features/driver/components/MissionLiveTrackingDisclosureModal";
 import { useMissionLiveTrackingGuard } from "../../../src/features/driver/hooks/useMissionLiveTrackingGuard";
 import { useTrackingAttentionState } from "../../../src/features/driver/hooks/useTrackingAttentionState";
 import { requiresLiveTrackingPermission } from "../../../src/features/driver/services/missionLiveTrackingEligibility";
@@ -337,14 +336,6 @@ export default function DriverHomeScreen() {
             pending={availabilityPending}
             onCancel={cancelUnavailableConfirm}
             onConfirm={confirmUnavailable}
-          />
-          <MissionLiveTrackingDisclosureModal
-            visible={liveTrackingGuard.disclosureVisible}
-            pending={liveTrackingGuard.disclosurePending}
-            showOpenSettings={liveTrackingGuard.showOpenSettings}
-            onCancel={liveTrackingGuard.onDisclosureCancel}
-            onContinue={liveTrackingGuard.onDisclosureContinue}
-            onOpenSettings={liveTrackingGuard.onDisclosureOpenSettings}
           />
         </>
       </PermissionGuard>

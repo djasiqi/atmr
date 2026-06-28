@@ -118,25 +118,19 @@ export function DriverDashboardHeader({
   const syncLabel = useMemo(() => {
     if (!gpsEnabled) return "GPS indisponible";
     if (!tracking.isTracking) return "GPS prêt";
-    const lastSendTime = formatSyncTime(tracking.lastUpdate);
-    const lastAckTime = formatSyncTime(tracking.lastAckAt);
-    if (tracking.queueDepth > 0) {
-      return `GPS connecté • Dernier envoi ${lastSendTime}`;
+    // Label stable : queueDepth oscille entre enqueue/flush — ne pas basculer le texte.
+    if (tracking.lastAckAt != null) {
+      return `GPS connecté • Confirmé ${formatSyncTime(tracking.lastAckAt)}`;
     }
-    if (tracking.lastAckAt != null && tracking.queueDepth === 0) {
-      if (tracking.lastAckIsQueued) {
-        return `GPS connecté • En file (${lastAckTime})`;
-      }
-      return `GPS connecté • Confirmé backend ${lastAckTime}`;
+    if (tracking.lastUpdate != null) {
+      return `GPS connecté • Envoyé ${formatSyncTime(tracking.lastUpdate)}`;
     }
-    return `GPS connecté • Dernier envoi ${lastSendTime}`;
+    return "GPS connecté";
   }, [
     gpsEnabled,
     tracking.isTracking,
     tracking.lastUpdate,
     tracking.lastAckAt,
-    tracking.lastAckIsQueued,
-    tracking.queueDepth,
   ]);
 
   const initials = useMemo(() => {

@@ -170,14 +170,13 @@ export function CompanyFloatingTabBar({ state, navigation }: BottomTabBarProps) 
             if (switchPending) return;
             setSwitchPending(true);
             setSwitchMessage("Bascule vers l'espace chauffeur…");
-            const switchWork = withTimeout(
-              changeContext(primaryDriverContext.context_id),
-              CONTEXT_SWITCH_TIMEOUT_MS,
-              "La bascule a pris trop de temps. Vérifiez votre connexion et réessayez."
-            );
-            router.replace("/(app)/(driver)" as Href);
             try {
-              await switchWork;
+              await withTimeout(
+                changeContext(primaryDriverContext.context_id),
+                CONTEXT_SWITCH_TIMEOUT_MS,
+                "La bascule a pris trop de temps. Vérifiez votre connexion et réessayez."
+              );
+              router.replace("/(app)/(driver)" as Href);
               setSwitchMessage(null);
             } catch (error) {
               setSwitchMessage(

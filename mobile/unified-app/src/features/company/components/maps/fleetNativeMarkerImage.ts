@@ -1,4 +1,3 @@
-import { Platform } from "react-native";
 import * as Sentry from "@sentry/react-native";
 
 import { isFeatureEnabled } from "../../../../core/featureFlags/registry";
@@ -7,9 +6,8 @@ import {
   makeFleetCircleMarkerDataUrl,
   makeFleetEtaBadgeMarkerDataUrl,
   makeMissionAnchorMarkerDataUrl,
-  resolveDriverMarkerInitials,
 } from "./fleetMarkerIcons";
-import { buildDriverMarkerPngUri, buildClusterMarkerPngUri } from "./fleetMarkerPngEncode";
+import { buildClusterMarkerPngUri, buildDriverMarkerPngUri } from "./fleetMarkerPngEncode";
 
 import type { FleetMissionAnchorStyle } from "./fleetMapMissionVisual";
 
@@ -46,15 +44,15 @@ export type BuildFleetDriverMarkerOptions = {
   isStale?: boolean;
 };
 
-function emergencyGeneratedDriverMarker(
+function buildFleetDriverAndroidPngMarkerSource(
   status: FleetOperationalStatus,
   driver: FleetDriverMapItem,
   options?: BuildFleetDriverMarkerOptions
 ): FleetNativeMarkerImageSource {
+  const sizePx = FLEET_NATIVE_DRIVER_MARKER_SIZE_PX;
   const isStale = options?.isStale ?? isFleetDriverMarkerStale(driver);
   const visual = resolveMarkerVisual(status, isStale);
   const initials = driverFleetMarkerInitials(driver);
-  const sizePx = FLEET_NATIVE_DRIVER_MARKER_SIZE_PX;
   return {
     uri: buildDriverMarkerPngUri({
       fill: visual.fill,
@@ -67,7 +65,7 @@ function emergencyGeneratedDriverMarker(
   };
 }
 
-export function buildFleetDriverMarkerImageSource(
+function buildFleetDriverCircleMarkerSource(
   status: FleetOperationalStatus,
   driver: FleetDriverMapItem,
   options?: BuildFleetDriverMarkerOptions
@@ -76,7 +74,20 @@ export function buildFleetDriverMarkerImageSource(
   const isStale = options?.isStale ?? isFleetDriverMarkerStale(driver);
   const visual = resolveMarkerVisual(status, isStale);
   const initials = driverFleetMarkerInitials(driver);
+  return {
+    uri: makeFleetCircleMarkerDataUrl(visual.fill, sizePx, visual.opacity, {
+      label: initials,
+    }),
+    width: sizePx,
+    height: sizePx,
+  };
+}
 
+export function buildFleetDriverMarkerImageSource(
+  status: FleetOperationalStatus,
+  driver: FleetDriverMapItem,
+  options?: BuildFleetDriverMarkerOptions
+): FleetNativeMarkerImageSource {
   if (isFeatureEnabled("fleet_map_safe_markers")) {
     Sentry.addBreadcrumb({
       category: "fleet_map",
@@ -87,16 +98,9 @@ export function buildFleetDriverMarkerImageSource(
 
   try {
     if (usesAndroidFleetMarkerPng()) {
-      return emergencyGeneratedDriverMarker(status, driver, { isStale });
+      return buildFleetDriverAndroidPngMarkerSource(status, driver, options);
     }
-
-    return {
-      uri: makeFleetCircleMarkerDataUrl(visual.fill, sizePx, visual.opacity, {
-        label: initials,
-      }),
-      width: sizePx,
-      height: sizePx,
-    };
+    return buildFleetDriverCircleMarkerSource(status, driver, options);
   } catch (error) {
     const reason = error instanceof Error ? error.message : "build_marker_failed";
     Sentry.addBreadcrumb({
@@ -105,7 +109,10 @@ export function buildFleetDriverMarkerImageSource(
       level: "warning",
       data: { status, reason },
     });
-    return emergencyGeneratedDriverMarker(status, driver, { isStale });
+    if (usesAndroidFleetMarkerPng()) {
+      return buildFleetDriverAndroidPngMarkerSource(status, driver, options);
+    }
+    return buildFleetDriverCircleMarkerSource(status, driver, options);
   }
 }
 
@@ -182,4 +189,4 @@ export function buildMissionAnchorImageSource(
   });
 }
 
-export { resolveDriverMarkerInitials };
+export { resolveFleetMarkerInitialsFromDisplayName as resolveDriverMarkerInitials } from "../../utils/companyDriverMapStatus";

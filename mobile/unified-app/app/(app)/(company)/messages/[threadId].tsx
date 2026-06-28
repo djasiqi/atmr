@@ -13,10 +13,12 @@ import { useSession } from "../../../../src/core/sessionProvider";
 import { Screen, AppText, useAppViewport } from "../../../../src/design/responsive";
 import {
   ChatComposer,
+  ChatComposerError,
   ChatConversationShell,
   ImagePreviewModal,
   PdfPreviewModal,
 } from "../../../../src/features/chat";
+import { uploadChatAttachment } from "../../../../src/features/chat/services/chatMediaUpload";
 import { resolveConversationId, fetchThreadMessages } from "../../../../src/features/driver/messages/api";
 import { ChannelConversationHeader } from "../../../../src/features/driver/messages/components/ChannelConversationHeader";
 import { HubMessageFeed } from "../../../../src/features/driver/messages/components/HubMessageFeed";
@@ -90,6 +92,15 @@ export default function CompanyMessageConversationScreen() {
 
   const [input, setInput] = useState("");
   const [sendError, setSendError] = useState<string | null>(null);
+  const [sendErrorOpensSettings, setSendErrorOpensSettings] = useState(false);
+  const clearSendError = () => {
+    setSendError(null);
+    setSendErrorOpensSettings(false);
+  };
+  const showSendError = (message: string, opensSettings = false) => {
+    setSendError(message);
+    setSendErrorOpensSettings(opensSettings);
+  };
   const [liveMessages, setLiveMessages] = useState<HubChatMessage[]>([]);
   const [loadingMore, setLoadingMore] = useState(false);
   const [listAnchorKey, setListAnchorKey] = useState(0);
@@ -144,12 +155,12 @@ export default function CompanyMessageConversationScreen() {
           String(optimistic.id),
       })
     );
-    setSendError(null);
+    clearSendError();
   };
 
   const emitMessage = (payload: Record<string, unknown>, optimistic: HubChatMessage) => {
     if (!companyId) {
-      setSendError("Connexion indisponible. Réessayez.");
+      showSendError("Connexion indisponible. Réessayez.");
       return false;
     }
     const outbound: Record<string, unknown> = {
@@ -162,7 +173,7 @@ export default function CompanyMessageConversationScreen() {
     void sendMutation
       .mutateAsync(outbound)
       .then((confirmed) => applyOutbound(optimistic, confirmed))
-      .catch(() => setSendError("Envoi impossible. Réessayez."));
+      .catch(() => showSendError("Envoi impossible. Réessayez."));
     return true;
   };
 
@@ -190,24 +201,32 @@ export default function CompanyMessageConversationScreen() {
     return ok;
   };
 
-  const sendVoiceMessage = (uri: string) => {
+  const sendVoiceMessage = async (uri: string) => {
     const localId = `local-voice-${Date.now()}`;
-    emitMessage(
-      { content: "Message vocal", audio_url: uri, _localId: localId },
-      {
-        id: localId,
-        _localId: localId,
-        sender_id: ownUserId,
-        content: "Message vocal",
-        sender_role: "COMPANY",
-        sender_name: ownDisplayName,
-        timestamp: new Date().toISOString(),
-        audio_url: uri,
-        thread_id: threadId,
-        message_type: "text",
-        priority: "normal",
-      }
-    );
+    const optimistic: HubChatMessage = {
+      id: localId,
+      _localId: localId,
+      sender_id: ownUserId,
+      content: "Message vocal",
+      sender_role: "COMPANY",
+      sender_name: ownDisplayName,
+      timestamp: new Date().toISOString(),
+      audio_url: uri,
+      thread_id: threadId,
+      message_type: "text",
+      priority: "normal",
+    };
+    setLiveMessages((prev) => upsertHubChatMessage(prev, optimistic, { replaceLocalId: localId }));
+    try {
+      const publicUrl = await uploadChatAttachment({ uri });
+      emitMessage(
+        { content: "Message vocal", audio_url: publicUrl, _localId: localId },
+        { ...optimistic, audio_url: publicUrl }
+      );
+    } catch {
+      setLiveMessages((prev) => prev.filter((m) => String(m.id) !== localId && m._localId !== localId));
+      showSendError("Impossible d'envoyer le message vocal.");
+    }
   };
 
   const loadMore = async () => {
@@ -220,7 +239,7 @@ export default function CompanyMessageConversationScreen() {
       });
       setLiveMessages((prev) => [...older, ...prev]);
     } catch {
-      setSendError("Impossible de charger les messages plus anciens.");
+      showSendError("Impossible de charger les messages plus anciens.");
     } finally {
       setLoadingMore(false);
     }
@@ -381,8 +400,13 @@ export default function CompanyMessageConversationScreen() {
                     );
                   }}
                   onVoiceMessage={sendVoiceMessage}
+                  onVoiceError={(message, kind) =>
+                    showSendError(message, kind === "permission")
+                  }
                 />
-                {sendError ? <AppText variant="error">{sendError}</AppText> : null}
+                {sendError ? (
+                  <ChatComposerError message={sendError} openSettings={sendErrorOpensSettings} />
+                ) : null}
               </>
             }
           />

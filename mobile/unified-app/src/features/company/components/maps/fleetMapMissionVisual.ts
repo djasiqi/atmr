@@ -101,9 +101,9 @@ const etaSmoothCache = new Map<number, { label: string; atMs: number }>();
 export function resolveMissionLifecyclePhase(
   mission: CompanyDispatchMission
 ): FleetMissionLifecyclePhase {
+  if (mission.status === "in_progress") return "patient_on_board";
   if (isMissionDelayed(mission)) return "delayed";
   if (mission.status === "arrived") return "arrived";
-  if (mission.status === "in_progress") return "patient_on_board";
   if (mission.status === "en_route") return "en_route_pickup";
   return "assigned";
 }

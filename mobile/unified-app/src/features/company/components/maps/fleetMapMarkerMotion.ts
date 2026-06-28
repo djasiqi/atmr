@@ -18,13 +18,16 @@ export type FleetMarkerMotionPlan =
   | { mode: "snap" }
   | { mode: "animate"; durationMs: number };
 
+/** Parité web driverMarkerMotion.js — glide aligné sur l’intervalle GPS. */
+export const FLEET_MARKER_MOTION_MIN_MS = 2_200;
+export const FLEET_MARKER_MOTION_MAX_MS = 12_000;
+export const FLEET_MARKER_MOTION_DEFAULT_MS = 7_500;
+export const FLEET_MARKER_MOTION_DURATION_STRETCH = 1.42;
+
 export const DEFAULT_SNAP_DISTANCE_M = 250;
 export const NOOP_DISTANCE_M = 1;
-export const STALE_GAP_MS = 30_000;
-export const MIN_DURATION_MS = 800;
-export const MAX_DURATION_MS = 1_500;
-
-const DURATION_MS_PER_METER = 3;
+/** Snap seulement si écart GPS très long (reconnexion / perte signal). */
+export const STALE_RECORDED_GAP_MS = 120_000;
 
 const SNAP_LOCATION_STATUSES = new Set<NonNullable<CompanyDriverLiveLocation["location_status"]>>([
   "stale",
@@ -32,15 +35,74 @@ const SNAP_LOCATION_STATUSES = new Set<NonNullable<CompanyDriverLiveLocation["lo
   "last_known",
 ]);
 
-function clampDurationMs(distanceM: number): number {
-  const raw = MIN_DURATION_MS + distanceM * DURATION_MS_PER_METER;
-  return Math.min(MAX_DURATION_MS, Math.max(MIN_DURATION_MS, Math.round(raw)));
-}
-
 function resolveRecordedAtMs(value: string | null | undefined): number | null {
   if (!value) return null;
   const parsed = Date.parse(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+/** Courbe smoothstep — accélération / décélération (parité web). */
+export function easeSmoothStep(t: number): number {
+  const x = Math.min(1, Math.max(0, t));
+  return x * x * (3 - 2 * x);
+}
+
+export function interpolateFleetMarkerPosition(
+  from: FleetMapLatLng,
+  to: FleetMapLatLng,
+  progress: number
+): FleetMapLatLng {
+  const t = easeSmoothStep(progress);
+  return {
+    latitude: from.latitude + (to.latitude - from.latitude) * t,
+    longitude: from.longitude + (to.longitude - from.longitude) * t,
+  };
+}
+
+/** Ajuste la durée selon la distance (courts trajets = glide plus long). */
+export function resolveFleetMotionDurationFromDistance(durationMs: number, distanceM: number): number {
+  if (!Number.isFinite(distanceM) || distanceM <= 0) return durationMs;
+  if (distanceM < 12) return Math.max(durationMs, 3_000);
+  if (distanceM > 180) {
+    return Math.min(FLEET_MARKER_MOTION_MAX_MS, durationMs * 1.12);
+  }
+  return durationMs;
+}
+
+export function resolveFleetMarkerMotionDurationMs(
+  previousRecordedAtMs: number | null,
+  nextRecordedAtMs: number | null,
+  lastMotionAtMs: number | null,
+  distanceM: number,
+  nowMs = Date.now()
+): number {
+  let base: number;
+  if (
+    previousRecordedAtMs != null &&
+    nextRecordedAtMs != null &&
+    nextRecordedAtMs > previousRecordedAtMs
+  ) {
+    const elapsed = nextRecordedAtMs - previousRecordedAtMs;
+    const stretched = elapsed * FLEET_MARKER_MOTION_DURATION_STRETCH;
+    base = Math.min(
+      FLEET_MARKER_MOTION_MAX_MS,
+      Math.max(FLEET_MARKER_MOTION_MIN_MS, stretched)
+    );
+  } else if (lastMotionAtMs != null && Number.isFinite(lastMotionAtMs)) {
+    const elapsed = nowMs - lastMotionAtMs;
+    if (elapsed > 0) {
+      const stretched = elapsed * FLEET_MARKER_MOTION_DURATION_STRETCH;
+      base = Math.min(
+        FLEET_MARKER_MOTION_MAX_MS,
+        Math.max(FLEET_MARKER_MOTION_MIN_MS, stretched)
+      );
+    } else {
+      base = FLEET_MARKER_MOTION_MIN_MS;
+    }
+  } else {
+    base = FLEET_MARKER_MOTION_DEFAULT_MS;
+  }
+  return resolveFleetMotionDurationFromDistance(base, distanceM);
 }
 
 export type ResolveFleetMarkerMotionPlanInput = {
@@ -48,6 +110,7 @@ export type ResolveFleetMarkerMotionPlanInput = {
   to: FleetMapLatLng;
   previousRecordedAtMs?: number | null;
   nextRecordedAtMs?: number | null;
+  lastMotionAtMs?: number | null;
   locationStatus?: CompanyDriverLiveLocation["location_status"] | null;
   markerKeyChanged?: boolean;
   snapDistanceM?: number;
@@ -65,11 +128,7 @@ export function resolveFleetMarkerMotionPlan(
     return { mode: "snap" };
   }
 
-  if (!from) {
-    return { mode: "snap" };
-  }
-
-  if (!isValidFleetMapCoordinate(from)) {
+  if (!from || !isValidFleetMapCoordinate(from)) {
     return { mode: "snap" };
   }
 
@@ -92,7 +151,7 @@ export function resolveFleetMarkerMotionPlan(
   if (
     prevRecorded != null &&
     nextRecorded != null &&
-    nextRecorded - prevRecorded >= STALE_GAP_MS
+    nextRecorded - prevRecorded >= STALE_RECORDED_GAP_MS
   ) {
     return { mode: "snap" };
   }
@@ -101,7 +160,14 @@ export function resolveFleetMarkerMotionPlan(
     return { mode: "snap" };
   }
 
-  return { mode: "animate", durationMs: clampDurationMs(distanceM) };
+  const durationMs = resolveFleetMarkerMotionDurationMs(
+    prevRecorded,
+    nextRecorded,
+    input.lastMotionAtMs ?? null,
+    distanceM
+  );
+
+  return { mode: "animate", durationMs };
 }
 
 export function parseFleetMarkerRecordedAtMs(recordedAt: string | null | undefined): number | null {
@@ -131,6 +197,7 @@ function reportAnimationSkip(
   reportFleetMarkerAnimationSkipped(reason, extra);
 }
 
+/** Animation native (iOS raster) — secours si interpolation JS indisponible. */
 export function animateFleetMarkerToCoordinate({
   marker,
   from,

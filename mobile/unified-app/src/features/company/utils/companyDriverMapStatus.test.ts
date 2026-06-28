@@ -1,5 +1,9 @@
 import type { CompanyDriverLiveLocation } from "../api/contracts";
-import { resolveDriverDisplayName } from "./companyDriverMapStatus";
+import {
+  driverFleetMarkerInitials,
+  resolveDriverDisplayName,
+  resolveFleetMarkerInitialsFromDisplayName,
+} from "./companyDriverMapStatus";
 
 const baseDriver = (overrides?: Partial<CompanyDriverLiveLocation>): CompanyDriverLiveLocation => ({
   driver_id: 7,
@@ -39,5 +43,34 @@ describe("resolveDriverDisplayName", () => {
         baseDriver({ first_name: "Marie", last_name: "Dupont" })
       )
     ).toBe("Marie Dupont");
+  });
+});
+
+describe("driverFleetMarkerInitials", () => {
+  it("utilise prénom + nom quand disponibles (parité web)", () => {
+    expect(
+      driverFleetMarkerInitials(
+        baseDriver({
+          driver_name: "Khamsa",
+          first_name: "Khamsa",
+          last_name: "Ali",
+        })
+      )
+    ).toBe("KA");
+  });
+
+  it("utilise full_name multi-mots si prénom/nom incomplets", () => {
+    expect(
+      driverFleetMarkerInitials(
+        baseDriver({
+          driver_name: "Khamsa",
+          full_name: "Khamsa Ali",
+        })
+      )
+    ).toBe("KA");
+  });
+
+  it("dérive depuis le nom affiché si prénom/nom absents", () => {
+    expect(resolveFleetMarkerInitialsFromDisplayName("Jean Dupont")).toBe("JD");
   });
 });

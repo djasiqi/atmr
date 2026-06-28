@@ -48,7 +48,7 @@ describe("sortThreadsByRecent", () => {
       thread("team"),
       thread("dispatch"),
     ]);
-    expect(sorted.map((t) => t.thread_id)).toEqual(["dispatch", "team", "support"]);
+    expect(sorted.map((t) => t.thread_id)).toEqual(["team", "dispatch", "support"]);
   });
 
   it("sorts by timestamp when present", () => {
@@ -57,5 +57,10 @@ describe("sortThreadsByRecent", () => {
       thread("dispatch", "2026-05-19T12:00:00Z"),
     ]);
     expect(sorted[0]?.thread_id).toBe("dispatch");
+  });
+
+  it("pins team before dispatch when timestamps are equal", () => {
+    const sorted = sortThreadsByRecent([thread("dispatch"), thread("team")]);
+    expect(sorted[0]?.thread_id).toBe("team");
   });
 });

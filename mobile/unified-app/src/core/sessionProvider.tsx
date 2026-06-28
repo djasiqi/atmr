@@ -205,10 +205,10 @@ export function SessionProvider({ children }: PropsWithChildren) {
       setStatus("bootstrapping");
       setError(null);
       const bootstrapStartedAt = Date.now();
-      void appendSessionJournalEvent("session.bootstrap.start", undefined, activeContext?.context_id ?? null);
+      void appendSessionJournalEvent("session.bootstrap.start", undefined, activeContextRef.current?.context_id ?? null);
       try {
         await resumeSessionIfPossible();
-        const data = await fetchBootstrap(activeContext?.context_id ?? null);
+        const data = await fetchBootstrap(activeContextRef.current?.context_id ?? null);
       if (
         data.status_dictionary_version &&
         data.status_dictionary_version !==
@@ -329,7 +329,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
       bootstrapInFlightRef.current = null;
     });
     return bootstrapInFlightRef.current;
-  }, [activeContext, resumeSessionIfPossible]);
+  }, [resumeSessionIfPossible]);
 
   const loginAndBootstrap = ReactRuntime.useCallback(async (email: string, password: string) => {
     setError(null);
@@ -505,6 +505,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
       void purgeDriverProfileCache().catch(() => undefined);
       setBootstrap(null);
       setActiveContext(null);
+      activeContextRef.current = null;
       setActiveContextIdForApi(null);
       setStatus(next.status);
       setError(next.error);
@@ -526,7 +527,8 @@ export function SessionProvider({ children }: PropsWithChildren) {
       error: null,
       journalEvent: "session.logout",
     });
-  }, [clearSessionState]);
+    void bootstrapSession();
+  }, [bootstrapSession, clearSessionState]);
 
   ReactRuntime.useEffect(() => {
     return realtimeManager.onAuthExhausted((reason, code) => {

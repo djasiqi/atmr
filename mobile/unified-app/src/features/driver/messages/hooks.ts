@@ -25,6 +25,7 @@ import {
   mergeInboxThreads,
 } from "./buildLocalInbox";
 import { dedupeMessageHubThreads } from "./dedupeHubThreads";
+import { applyMobileInboxThreadPolicy } from "./inboxThreadPolicy";
 import type { HubChatMessage, MessageHubThread , EmergencyIssueType, SyncPresenceStatus } from "./types";
 
 import { realtimeManager } from "../../../core/realtime/realtimeManager";
@@ -184,9 +185,9 @@ function selectTopPrefetchThreads(threads: MessageHubThread[]): string[] {
     if (!id || picked.includes(id) || !byId.has(id)) return;
     picked.push(id);
   };
+  add("team");
   add("dispatch");
   add("support");
-  add("team");
   let costlyPicked = 0;
   const costlyPriorityThreads = [
     ...threads.filter((t) => t.thread_id.startsWith("company_driver:")),
@@ -510,10 +511,15 @@ export function useMessageHubThreads(companyId: number | null) {
       try {
         const hub = await fetchMessageHubThreads(companyId as number);
         const merged = dedupeMessageHubThreads(
-          filterMissionThreadsWithDiscussion(mergeInboxThreads(hub.threads, localBase))
+          applyMobileInboxThreadPolicy(
+            filterMissionThreadsWithDiscussion(mergeInboxThreads(hub.threads, localBase))
+          )
         );
         return {
-          threads: merged.length > 0 ? merged : filterMissionThreadsWithDiscussion(localBase),
+          threads:
+            merged.length > 0
+              ? merged
+              : applyMobileInboxThreadPolicy(filterMissionThreadsWithDiscussion(localBase)),
           unread_total: hub.unread_total,
           fromFallback: false,
         };
@@ -524,7 +530,7 @@ export function useMessageHubThreads(companyId: number | null) {
           (m) => String(m.sender_role ?? "").toUpperCase() !== "DRIVER"
         ).length;
         return {
-          threads: filterMissionThreadsWithDiscussion(local),
+          threads: applyMobileInboxThreadPolicy(filterMissionThreadsWithDiscussion(local)),
           unread_total: unread,
           fromFallback: true,
         };

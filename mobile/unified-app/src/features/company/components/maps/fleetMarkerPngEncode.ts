@@ -266,6 +266,7 @@ function fillRoundRect(
   }
 }
 
+/** Police bitmap 5×5 (chiffres, symboles ETA, initiales chauffeur a–z). */
 const DIGIT_FONT: Record<string, number[]> = {
   "0": [0x1c, 0x22, 0x22, 0x22, 0x1c],
   "1": [0x08, 0x18, 0x08, 0x08, 0x1c],
@@ -280,10 +281,70 @@ const DIGIT_FONT: Record<string, number[]> = {
   "+": [0x00, 0x08, 0x1c, 0x08, 0x00],
   "~": [0x00, 0x00, 0x12, 0x0c, 0x00],
   " ": [0x00, 0x00, 0x00, 0x00, 0x00],
-  m: [0x00, 0x2a, 0x2a, 0x2a, 0x00],
-  i: [0x08, 0x00, 0x18, 0x08, 0x1c],
-  n: [0x00, 0x1a, 0x26, 0x22, 0x00],
+  a: [0x0e, 0x11, 0x1f, 0x11, 0x11],
+  b: [0x1e, 0x10, 0x1e, 0x10, 0x1e],
+  c: [0x0e, 0x11, 0x11, 0x11, 0x0e],
+  d: [0x0e, 0x11, 0x11, 0x11, 0x1e],
+  e: [0x1f, 0x10, 0x1e, 0x10, 0x1f],
+  f: [0x1e, 0x10, 0x1c, 0x10, 0x10],
+  g: [0x0e, 0x11, 0x11, 0x0e, 0x01],
+  h: [0x10, 0x10, 0x1e, 0x11, 0x11],
+  i: [0x04, 0x00, 0x0c, 0x04, 0x0e],
+  j: [0x02, 0x00, 0x06, 0x02, 0x0c],
+  k: [0x10, 0x12, 0x1c, 0x12, 0x11],
+  l: [0x0c, 0x04, 0x04, 0x04, 0x0e],
+  m: [0x00, 0x1a, 0x15, 0x11, 0x11],
+  n: [0x00, 0x16, 0x19, 0x11, 0x11],
+  o: [0x0e, 0x11, 0x11, 0x11, 0x0e],
+  p: [0x1e, 0x11, 0x1e, 0x10, 0x10],
+  q: [0x0e, 0x11, 0x11, 0x0e, 0x01],
+  r: [0x16, 0x19, 0x10, 0x10, 0x10],
+  s: [0x0e, 0x10, 0x0e, 0x01, 0x0e],
+  t: [0x1f, 0x04, 0x04, 0x04, 0x04],
+  u: [0x11, 0x11, 0x11, 0x11, 0x0e],
+  v: [0x11, 0x11, 0x11, 0x0a, 0x04],
+  w: [0x11, 0x11, 0x15, 0x15, 0x0a],
+  x: [0x11, 0x0a, 0x04, 0x0a, 0x11],
+  y: [0x11, 0x11, 0x0e, 0x02, 0x04],
+  z: [0x1f, 0x02, 0x04, 0x08, 0x1f],
 };
+
+const GLYPH_ROWS = 5;
+const GLYPH_COLS = 5;
+const DEFAULT_GLYPH_ADVANCE = 6;
+
+function normalizeMarkerGlyphChar(raw: string): string {
+  return raw.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+}
+
+function measureBitmapLabelWidth(charCount: number, textScale: number, glyphAdvance: number): number {
+  return charCount * glyphAdvance * textScale;
+}
+
+/** Calcule échelle et espacement pour que les initiales restent dans le disque. */
+export function resolveDriverMarkerLabelBitmapLayout(
+  sizePx: number,
+  label: string
+): { trimmed: string; textScale: number; glyphAdvance: number } {
+  const trimmed = label.trim().slice(0, 2).toUpperCase();
+  const mapScale = sizePx / 24;
+  const coreR = 8.2 * mapScale;
+  const strokeW = 2.5;
+  const innerDiameter = (coreR - strokeW * 0.55) * 2;
+  const charCount = trimmed.length > 0 ? trimmed.length : 1;
+  const glyphAdvance = trimmed.length >= 2 ? 5 : DEFAULT_GLYPH_ADVANCE;
+  const maxTextW = innerDiameter * 0.8;
+  const maxTextH = innerDiameter * 0.58;
+
+  let textScale = Math.min(
+    Math.floor(maxTextH / GLYPH_ROWS),
+    Math.floor(maxTextW / (charCount * glyphAdvance))
+  );
+  const upperBound = Math.round(2.5 * mapScale);
+  textScale = Math.max(2, Math.min(textScale, upperBound));
+
+  return { trimmed, textScale, glyphAdvance };
+}
 
 function drawText(
   data: Uint8Array,
@@ -293,16 +354,17 @@ function drawText(
   startX: number,
   startY: number,
   color: Rgba,
-  scale = 1
+  scale = 1,
+  glyphAdvance = DEFAULT_GLYPH_ADVANCE
 ): void {
   let cursorX = startX;
-  for (const raw of text.toLowerCase()) {
-    const glyph = DIGIT_FONT[raw];
+  for (const raw of text) {
+    const glyph = DIGIT_FONT[normalizeMarkerGlyphChar(raw)];
     if (!glyph) continue;
     for (let row = 0; row < glyph.length; row += 1) {
       const bits = glyph[row] ?? 0;
-      for (let col = 0; col < 5; col += 1) {
-        if ((bits >> (4 - col)) & 1) {
+      for (let col = 0; col < GLYPH_COLS; col += 1) {
+        if ((bits >> (GLYPH_COLS - 1 - col)) & 1) {
           for (let sy = 0; sy < scale; sy += 1) {
             for (let sx = 0; sx < scale; sx += 1) {
               setPixel(data, width, cursorX + col * scale + sx, startY + row * scale + sy, color);
@@ -311,8 +373,35 @@ function drawText(
         }
       }
     }
-    cursorX += 6 * scale;
+    cursorX += glyphAdvance * scale;
   }
+}
+
+function drawCenteredMarkerLabel(
+  data: Uint8Array,
+  width: number,
+  height: number,
+  cx: number,
+  cy: number,
+  label: string,
+  color: Rgba,
+  layout: { trimmed: string; textScale: number; glyphAdvance: number }
+): void {
+  const { trimmed, textScale, glyphAdvance } = layout;
+  if (trimmed.length === 0) return;
+  const textHeight = GLYPH_ROWS * textScale;
+  const textWidth = measureBitmapLabelWidth(trimmed.length, textScale, glyphAdvance);
+  drawText(
+    data,
+    width,
+    height,
+    trimmed,
+    Math.round(cx - textWidth / 2),
+    Math.round(cy - textHeight / 2),
+    color,
+    textScale,
+    glyphAdvance
+  );
 }
 
 export function encodeFleetMarkerPngDataUri(
@@ -349,21 +438,17 @@ export function buildDriverMarkerPngUri(options: {
     const fillColor = parseHexColor(fill, Math.round(opacity * 255));
     strokeCircle(data, w, h, cx, cy, coreR, strokeW, parseHexColor("#ffffff", 245));
     fillCircle(data, w, h, cx, cy, coreR - strokeW * 0.4, fillColor);
-    const trimmed = label.trim().slice(0, 2).toUpperCase();
-    if (trimmed.length > 0) {
-      const textScale = Math.max(2, Math.round(2.2 * scale));
-      const textW = trimmed.length * 6 * textScale;
-      drawText(
-        data,
-        w,
-        h,
-        trimmed,
-        Math.round(cx - textW / 2),
-        Math.round(cy - 5 * textScale),
-        parseHexColor("#ffffff", 255),
-        textScale
-      );
-    }
+    const layout = resolveDriverMarkerLabelBitmapLayout(sizePx, label);
+    drawCenteredMarkerLabel(
+      data,
+      w,
+      h,
+      cx,
+      cy,
+      label,
+      parseHexColor("#ffffff", 255),
+      layout
+    );
   });
 }
 

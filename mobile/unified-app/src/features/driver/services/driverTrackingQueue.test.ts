@@ -5,6 +5,7 @@ const mockSendDriverLocation = jest.fn<
   (payload: unknown) => Promise<{ ack_status: "accepted" | "duplicate" | "stale" | "ignored" | "rejected" }>
 >();
 const mockSendDriverLocationBatch = jest.fn<(payload: unknown[]) => boolean>();
+const mockIsDriverSocketReady = jest.fn<() => boolean>().mockReturnValue(true);
 const mockEmitDriverTelemetry = jest.fn<(event: string, payload?: Record<string, unknown>) => void>();
 const mockAsyncStorageGetItem = jest.fn<(key: string) => Promise<string | null>>();
 const mockAsyncStorageSetItem = jest.fn<(key: string, value: string) => Promise<void>>();
@@ -24,7 +25,7 @@ jest.mock("../api/driverHttp", () => ({
 jest.mock("../../../core/realtime/realtimeManager", () => ({
   realtimeManager: {
     sendDriverLocationBatch: mockSendDriverLocationBatch,
-    isDriverSocketReady: () => true,
+    isDriverSocketReady: () => mockIsDriverSocketReady(),
   },
 }));
 
@@ -39,6 +40,13 @@ jest.mock("../../../core/featureFlags/registry", () => ({
   ),
 }));
 
+jest.mock("./socketBatchPacing", () => ({
+  canEmitSocketBatchNow: () => true,
+  getSocketBatchCooldownRemainingMs: () => 0,
+  recordSocketBatchSent: jest.fn(),
+  recordSocketBatchRateLimited: jest.fn(),
+}));
+
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { driverTrackingQueue } = require("./driverTrackingQueue") as typeof import("./driverTrackingQueue");
 
@@ -50,6 +58,8 @@ describe("driverTrackingQueue", () => {
     mockAsyncStorageSetItem.mockReset();
     mockSendDriverLocation.mockReset();
     mockSendDriverLocationBatch.mockReset();
+    mockIsDriverSocketReady.mockReset();
+    mockIsDriverSocketReady.mockReturnValue(true);
     mockEmitDriverTelemetry.mockReset();
     mockFF.mockClear();
     mockFF.mockImplementation(
@@ -189,5 +199,33 @@ describe("driverTrackingQueue", () => {
     expect(mockSendDriverLocationBatch).not.toHaveBeenCalled();
     expect(mockSendDriverLocation).toHaveBeenCalled();
     expect(flush.backendAcked).toBeGreaterThanOrEqual(1);
+  });
+
+  it("force HTTP drain when socket dead and backlog exceeds threshold", async () => {
+    mockIsDriverSocketReady.mockReturnValue(false);
+    mockSendDriverLocation.mockResolvedValue({ ack_status: "accepted" });
+    for (let index = 0; index < 35; index += 1) {
+      await driverTrackingQueue.enqueue({
+        missionId: 31770,
+        appState: "active",
+        locationMode: "mission_live",
+        payload: {
+          latitude: 46.2 + index * 0.0001,
+          longitude: 6.1,
+          missionId: 31770,
+          locationMode: "mission_live",
+        },
+      });
+    }
+    const flush = await driverTrackingQueue.flush({ ackStaleMs: 60_000, networkProfile: "normal" });
+    expect(mockSendDriverLocationBatch).not.toHaveBeenCalled();
+    expect(mockSendDriverLocation).toHaveBeenCalled();
+    expect(flush.sent).toBeGreaterThan(0);
+    expect(flush.backendAcked).toBeGreaterThan(0);
+    expect(
+      mockEmitDriverTelemetry.mock.calls.some(
+        (call) => call[0] === "tracking.queue.transport_unblock"
+      )
+    ).toBe(true);
   });
 });

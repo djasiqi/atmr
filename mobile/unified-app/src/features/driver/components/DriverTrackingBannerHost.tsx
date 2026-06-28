@@ -1,38 +1,31 @@
-import { useCallback, useState } from "react";
-import { Linking, Platform, StyleSheet, View } from "react-native";
-import * as Location from "expo-location";
+import { useCallback, useEffect, useState } from "react";
+import { Platform, StyleSheet, View } from "react-native";
 
 import { useDriverBackgroundTrackingUi } from "../hooks/useDriverBackgroundTrackingUi";
 import { useTransientTrackingBanner } from "../hooks/useTransientTrackingBanner";
-import { markLiveTrackingDisclosureAccepted } from "../services/liveTrackingDisclosureSession";
-import { notifyMissionTrackingCapabilityRefresh } from "../services/missionLiveTrackingEligibility";
+import {
+  getDriverDisclosureOrchestrationSnapshot,
+  subscribeDriverDisclosureOrchestration,
+} from "../services/driverDisclosureOrchestrator";
+import { openMissionLiveTrackingDisclosureForBanner } from "../services/missionLiveTrackingDisclosureBridge";
 import { DriverTrackingBanner } from "./DriverTrackingBanner";
-import { MissionLiveTrackingDisclosureModal } from "./MissionLiveTrackingDisclosureModal";
 
 export function DriverTrackingBannerHost() {
   const trackingUi = useDriverBackgroundTrackingUi();
-  const visible = useTransientTrackingBanner(trackingUi.showBanner, trackingUi.bannerKind);
-  const [disclosureVisible, setDisclosureVisible] = useState(false);
-  const [disclosurePending, setDisclosurePending] = useState(false);
+  const wantsBanner = useTransientTrackingBanner(trackingUi.showBanner, trackingUi.bannerKind);
+  const [orchestration, setOrchestration] = useState(getDriverDisclosureOrchestrationSnapshot());
+
+  useEffect(() => {
+    return subscribeDriverDisclosureOrchestration(() => {
+      setOrchestration(getDriverDisclosureOrchestrationSnapshot());
+    });
+  }, []);
 
   const handleRequestBgPermission = useCallback(() => {
-    setDisclosureVisible(true);
+    openMissionLiveTrackingDisclosureForBanner();
   }, []);
 
-  const handleDisclosureContinue = useCallback(async () => {
-    setDisclosurePending(true);
-    markLiveTrackingDisclosureAccepted();
-    const fg = await Location.requestForegroundPermissionsAsync().catch(() => ({ granted: false }));
-    if (!fg.granted) {
-      setDisclosurePending(false);
-      setDisclosureVisible(false);
-      return;
-    }
-    await Location.requestBackgroundPermissionsAsync().catch(() => undefined);
-    setDisclosurePending(false);
-    setDisclosureVisible(false);
-    notifyMissionTrackingCapabilityRefresh();
-  }, []);
+  const visible = wantsBanner && !orchestration.suppressTrackingBanner;
 
   if (!visible) return null;
 
@@ -41,17 +34,6 @@ export function DriverTrackingBannerHost() {
       <DriverTrackingBanner
         ui={{ ...trackingUi, showBanner: true }}
         onRequestPermission={handleRequestBgPermission}
-      />
-      <MissionLiveTrackingDisclosureModal
-        visible={disclosureVisible}
-        pending={disclosurePending}
-        showOpenSettings={false}
-        onCancel={() => {
-          setDisclosureVisible(false);
-          setDisclosurePending(false);
-        }}
-        onContinue={() => void handleDisclosureContinue()}
-        onOpenSettings={() => void Linking.openSettings()}
       />
     </View>
   );
@@ -63,7 +45,7 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    zIndex: 50,
+    zIndex: 48,
     paddingHorizontal: 12,
     paddingTop: Platform.OS === "ios" ? 4 : 6,
     paddingBottom: 4,

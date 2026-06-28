@@ -3,7 +3,13 @@
  * Les PNG sont générés à cette taille en pixels : Google Maps utilise souvent
  * la taille intrinsèque du bitmap quand width/height sur `icon` sont ignorés.
  */
-export const LIRIE_DRIVER_MARKER_DISPLAY_WIDTH_PX = 42;
+export const LIRIE_DRIVER_MARKER_DISPLAY_WIDTH_PX = 58;
+
+/**
+ * Pastille Android (Marker enfant react-native-maps) — plus petite pour éviter
+ * le rognage du bitmap natif Google Maps (~1/4 du cercle visible si trop grand).
+ */
+export const LIRIE_ANDROID_DRIVER_MARKER_VIEW_PX = 24;
 
 /** Référence web makeCircleMarkerIcon (proportions SVG). */
 export const FLEET_DRIVER_MARKER_WEB_BASE_PX = 24;

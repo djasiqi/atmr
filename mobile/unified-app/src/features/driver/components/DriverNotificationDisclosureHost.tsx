@@ -13,11 +13,17 @@ import {
   subscribePushRegistrationState,
 } from "../../../core/notifications/pushRegistrationState";
 import { useSession } from "../../../core/sessionProvider";
+import {
+  getDriverDisclosureOrchestrationSnapshot,
+  initDriverDisclosureOrchestration,
+  markDriverNotificationDisclosureDismissedSession,
+  subscribeDriverDisclosureOrchestration,
+} from "../services/driverDisclosureOrchestrator";
 import { NotificationPermissionDisclosure } from "./NotificationPermissionDisclosure";
 
 /**
  * Disclosure notifications indépendante du tracking BG.
- * N'appelle jamais requestPermissionsAsync — conformité Play Store.
+ * Orchestrée en priorité avant la disclosure flotte (P1).
  */
 export function DriverNotificationDisclosureHost() {
   const { status, activeContext } = useSession();
@@ -28,6 +34,7 @@ export function DriverNotificationDisclosureHost() {
   const [disclosureAccepted, setDisclosureAccepted] = useState<boolean | null>(null);
   const [disclosureVisible, setDisclosureVisible] = useState(false);
   const [disclosurePending, setDisclosurePending] = useState(false);
+  const [orchestration, setOrchestration] = useState(getDriverDisclosureOrchestrationSnapshot());
 
   const refreshDisclosureState = useCallback(async () => {
     await ensureNotificationDisclosureSyncedWithOsPermission();
@@ -39,6 +46,17 @@ export function DriverNotificationDisclosureHost() {
       setDisclosureVisible(false);
     }
   }, [pushEnabled, isDriverContext]);
+
+  useEffect(() => {
+    const unsubscribeOrchestrator = initDriverDisclosureOrchestration();
+    const unsubscribeSync = subscribeDriverDisclosureOrchestration(() => {
+      setOrchestration(getDriverDisclosureOrchestrationSnapshot());
+    });
+    return () => {
+      unsubscribeOrchestrator();
+      unsubscribeSync();
+    };
+  }, []);
 
   useEffect(() => {
     void refreshDisclosureState();
@@ -69,6 +87,7 @@ export function DriverNotificationDisclosureHost() {
   }, []);
 
   const handleCancel = useCallback(() => {
+    markDriverNotificationDisclosureDismissedSession();
     setDisclosureVisible(false);
   }, []);
 
@@ -76,10 +95,15 @@ export function DriverNotificationDisclosureHost() {
     return null;
   }
 
+  const modalVisible =
+    disclosureVisible &&
+    !orchestration.presenceModalVisible &&
+    !orchestration.missionDisclosureVisible;
+
   return (
     <View style={styles.host} pointerEvents="box-none">
       <NotificationPermissionDisclosure
-        visible={disclosureVisible}
+        visible={modalVisible}
         pending={disclosurePending}
         onCancel={handleCancel}
         onAccept={() => void handleAccept()}

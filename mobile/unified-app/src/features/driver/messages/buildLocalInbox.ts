@@ -228,32 +228,6 @@ export function buildLocalInboxThreads(
     threads.push(...buildColleagueThreadsFromLegacy(legacyMessages, myUserId));
   }
 
-  list
-    .filter((m) => isTerminalMission(m) && discussedMissionIds.has(m.id))
-    .slice(0, 12)
-    .forEach((mission) => {
-      const missionMsgs = (legacyMessages ?? []).filter(
-        (m) => m.thread_id === missionThreadId(mission.id) || m.booking_id === mission.id
-      );
-      const last = missionMsgs.reduce<HubChatMessage | null>((acc, m) => {
-        if (!acc || Date.parse(m.timestamp) > Date.parse(acc.timestamp)) return m;
-        return acc;
-      }, null);
-      if (!last) return;
-      threads.push({
-        thread_id: missionThreadId(mission.id),
-        section: "archives",
-        title: missionTitle(mission),
-        subtitle: `Mission #${mission.id}`,
-        booking_id: mission.id,
-        status: String(mission.status ?? ""),
-        unread_count: 0,
-        priority: "normal",
-        last_message_preview: last.content?.trim() || "Mission terminée",
-        last_message_at: last.timestamp,
-      });
-    });
-
   return threads;
 }
 

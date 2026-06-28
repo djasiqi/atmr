@@ -379,9 +379,6 @@ describe("session provider gates", () => {
     });
     await act(async () => {
       handle.current?.logout();
-      await Promise.resolve();
-    });
-    await act(async () => {
       await handle.current?.bootstrapSession();
     });
 
@@ -390,7 +387,7 @@ describe("session provider gates", () => {
     expect(mockPurgeDriverProfileCache).toHaveBeenCalled();
     expect(mockDisconnect).toHaveBeenCalled();
     expect(mockClearAllContextCache).toHaveBeenCalled();
-    expect(mockFetchBootstrap).toHaveBeenLastCalledWith(null);
+    expect(mockFetchBootstrap).toHaveBeenCalledWith(null);
     expect(handle.current?.status).toBe("ready");
     expect(handle.current?.activeContext?.context_id).toBe("driver:42");
     await act(async () => {

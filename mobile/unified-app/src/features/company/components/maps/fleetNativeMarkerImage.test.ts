@@ -1,3 +1,4 @@
+import { Platform } from "react-native";
 import type { CompanyDispatchMission, CompanyDriverLiveLocation } from "../../api/contracts";
 import {
   buildFleetClusterMarkerImageSource,
@@ -51,13 +52,17 @@ describe("fleetNativeMarkerImage", () => {
     clearMetroAssetResolveCacheForTests();
   });
 
-  it("retourne une source SVG cercle 42px", () => {
+  it("retourne PNG sur Android, SVG sur iOS", () => {
     const item = baseDriverItem("available");
     const src = buildFleetDriverMarkerImageSource("available", item);
     expect(src.uri.length).toBeGreaterThan(0);
     expect(src.width).toBe(FLEET_NATIVE_DRIVER_MARKER_SIZE_PX);
-    expect(src.height).toBe(42);
-    expect(src.uri).toMatch(/^data:image\/svg\+xml/);
+    expect(src.height).toBe(58);
+    if (Platform.OS === "android") {
+      expect(src.uri).toMatch(/^data:image\/png;base64,/);
+    } else {
+      expect(src.uri).toMatch(/^data:image\/svg\+xml/);
+    }
   });
 
   it("retourne toujours uri non vide pour tous les statuts", () => {

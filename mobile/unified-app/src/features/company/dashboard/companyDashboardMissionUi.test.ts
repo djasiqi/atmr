@@ -35,6 +35,21 @@ describe("companyDashboardMissionUi", () => {
     )).toBe(false);
   });
 
+  it("ne marque pas en retard une mission in_progress (client à bord) même avec retard pickup", () => {
+    const nowMs = Date.parse("2026-05-18T15:00:00+02:00");
+    const mission = {
+      mission_id: 3,
+      status: "in_progress" as const,
+      scheduled_at: "2026-05-18T08:00:00+02:00",
+      time_confirmed: true,
+      assignment_pickup_delay_minutes: 18,
+    };
+    const status = resolveMissionUiStatus(mission, nowMs);
+    expect(status.tone).toBe("in_progress");
+    expect(status.label).toBe("En cours");
+    expect(isMissionDelayed(mission, nowMs)).toBe(false);
+  });
+
   it("still marks past confirmed scheduled missions as delayed", () => {
     const nowMs = Date.parse("2026-05-18T15:00:00+02:00");
     const status = resolveMissionUiStatus(

@@ -28,7 +28,6 @@ import { DriverStateBanners } from "../../../../src/features/driver/components/D
 import { useMissionLayout } from "../../../../src/features/driver/hooks/useMissionLayout";
 import { DRIVER_FLOATING_TAB_SCROLL_PADDING } from "../../../../src/features/driver/navigation/DriverFloatingTabBar";
 import { FONT_SIZE } from "../../../../src/design/responsive/typographyTokens";
-import { MissionLiveTrackingDisclosureModal } from "../../../../src/features/driver/components/MissionLiveTrackingDisclosureModal";
 import { useMissionLiveTrackingGuard } from "../../../../src/features/driver/hooks/useMissionLiveTrackingGuard";
 import { requiresLiveTrackingPermission } from "../../../../src/features/driver/services/missionLiveTrackingEligibility";
 export default function DriverMissionDetailScreen() {
@@ -192,14 +191,6 @@ export default function DriverMissionDetailScreen() {
             transition.mutate({ missionId: mission.id, targetStatus: "CANCELLED", reason });
             setCancelOpen(false);
           }}
-        />
-        <MissionLiveTrackingDisclosureModal
-          visible={liveTrackingGuard.disclosureVisible}
-          pending={liveTrackingGuard.disclosurePending}
-          showOpenSettings={liveTrackingGuard.showOpenSettings}
-          onCancel={liveTrackingGuard.onDisclosureCancel}
-          onContinue={liveTrackingGuard.onDisclosureContinue}
-          onOpenSettings={liveTrackingGuard.onDisclosureOpenSettings}
         />
       </PermissionGuard>
     </DriverContextGuard>

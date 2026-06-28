@@ -30,12 +30,13 @@ import {
   openOemBatterySettings,
   requestIgnoreBatteryOptimizations,
 } from "../services/batteryOptimization";
-import { markLiveTrackingDisclosureAccepted } from "../services/liveTrackingDisclosureSession";
+import {
+  openMissionLiveTrackingDisclosureForReadiness,
+} from "../services/missionLiveTrackingDisclosureBridge";
 import {
   markTrackingOnboarded,
   setTrackingNeedsAttention,
 } from "../services/trackingReadinessPersistence";
-import { MissionLiveTrackingDisclosureModal } from "./MissionLiveTrackingDisclosureModal";
 
 export type TrackingReadinessSnapshot = {
   ready: boolean;
@@ -107,8 +108,6 @@ export function DriverTrackingReadinessGate(props: Props) {
   const { onReadyChange, silent, onDismiss } = props;
   const [loading, setLoading] = useState(true);
   const [snapshot, setSnapshot] = useState<TrackingReadinessSnapshot | null>(null);
-  const [bgDisclosureVisible, setBgDisclosureVisible] = useState(false);
-  const [bgDisclosurePending, setBgDisclosurePending] = useState(false);
   const onboardedRef = useRef(false);
 
   const refresh = useCallback(async () => {
@@ -136,24 +135,10 @@ export function DriverTrackingReadinessGate(props: Props) {
     return () => sub.remove();
   }, [refresh]);
 
-  const requestBgWithDisclosure = useCallback(async () => {
-    setBgDisclosureVisible(true);
-  }, []);
-
-  const handleBgDisclosureContinue = useCallback(async () => {
-    setBgDisclosurePending(true);
-    markLiveTrackingDisclosureAccepted();
-    const fg = await Location.requestForegroundPermissionsAsync().catch(() => ({ granted: false }));
-    if (!fg.granted) {
-      setBgDisclosurePending(false);
-      setBgDisclosureVisible(false);
-      await refresh();
-      return;
-    }
-    await Location.requestBackgroundPermissionsAsync().catch(() => undefined);
-    setBgDisclosurePending(false);
-    setBgDisclosureVisible(false);
-    await refresh();
+  const requestBgWithDisclosure = useCallback(() => {
+    openMissionLiveTrackingDisclosureForReadiness(() => {
+      void refresh();
+    });
   }, [refresh]);
 
   const checklist = useMemo(() => {
@@ -254,18 +239,6 @@ export function DriverTrackingReadinessGate(props: Props) {
           Vous pouvez continuer à consulter vos missions.
         </Text>
       </View>
-
-      <MissionLiveTrackingDisclosureModal
-        visible={bgDisclosureVisible}
-        pending={bgDisclosurePending}
-        showOpenSettings={false}
-        onCancel={() => {
-          setBgDisclosureVisible(false);
-          setBgDisclosurePending(false);
-        }}
-        onContinue={() => void handleBgDisclosureContinue()}
-        onOpenSettings={() => void Linking.openSettings()}
-      />
     </View>
   );
 }

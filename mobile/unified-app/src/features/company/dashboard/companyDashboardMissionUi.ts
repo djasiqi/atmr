@@ -91,6 +91,13 @@ export function missionHasDefinedPickupTime(
   return hasScheduledPickupTime({ scheduled_at: missionOrScheduledAt });
 }
 
+/** Client à bord ou en route vers la destination — le retard pickup n’est plus pertinent. */
+export function isMissionPostPickupPhase(
+  status: CompanyDispatchMission["status"] | undefined
+): boolean {
+  return status === "in_progress";
+}
+
 export function resolveMissionUiStatus(
   mission: CompanyDispatchMission,
   nowMs = Date.now()
@@ -116,7 +123,10 @@ export function resolveMissionUiStatus(
     return { label: "Annulée", tone: "cancelled", barColor: TONE_COLORS.cancelled };
   }
   if (!hasScheduled) {
-    if (status === "en_route" || status === "in_progress") {
+    if (status === "in_progress") {
+      return { label: "En cours", tone: "in_progress", barColor: TONE_COLORS.in_progress };
+    }
+    if (status === "en_route") {
       return { label: "En cours", tone: "in_progress", barColor: TONE_COLORS.in_progress };
     }
     if (status === "pending" || status === "proposed" || status === "accepted") {
@@ -127,10 +137,14 @@ export function resolveMissionUiStatus(
     }
     return { label: "Heure à définir", tone: "upcoming", barColor: TONE_COLORS.upcoming };
   }
-  if (isDelayedByAssignment || isPastScheduled) {
+  if (status === "in_progress") {
+    return { label: "En cours", tone: "in_progress", barColor: TONE_COLORS.in_progress };
+  }
+  const pickupDelayRelevant = !isMissionPostPickupPhase(status);
+  if (pickupDelayRelevant && (isDelayedByAssignment || isPastScheduled)) {
     return { label: "En retard", tone: "delayed", barColor: TONE_COLORS.delayed };
   }
-  if (status === "en_route" || status === "in_progress") {
+  if (status === "en_route") {
     return { label: "En cours", tone: "in_progress", barColor: TONE_COLORS.in_progress };
   }
   if (status === "pending" || status === "proposed" || status === "accepted") {

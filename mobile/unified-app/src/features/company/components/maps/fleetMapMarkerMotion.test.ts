@@ -1,7 +1,13 @@
 import {
   DEFAULT_SNAP_DISTANCE_M,
+  FLEET_MARKER_MOTION_MIN_MS,
+  FLEET_MARKER_MOTION_MAX_MS,
   NOOP_DISTANCE_M,
+  STALE_RECORDED_GAP_MS,
+  easeSmoothStep,
+  interpolateFleetMarkerPosition,
   isValidFleetMapCoordinate,
+  resolveFleetMarkerMotionDurationMs,
   resolveFleetMarkerMotionPlan,
   shouldApplyFleetMarkerCommit,
 } from "./fleetMapMarkerMotion";
@@ -29,16 +35,23 @@ describe("fleetMapMarkerMotion", () => {
     ).toEqual({ mode: "snap" });
   });
 
-  it("animate sur mouvement court (~20 m)", () => {
+  it("animate sur mouvement court (~20 m) avec durée alignée GPS", () => {
     const to = {
       latitude: genevaA.latitude + 0.00018,
       longitude: genevaA.longitude,
     };
-    const plan = resolveFleetMarkerMotionPlan({ from: genevaA, to });
+    const prev = 1_000_000;
+    const next = prev + 8_000;
+    const plan = resolveFleetMarkerMotionPlan({
+      from: genevaA,
+      to,
+      previousRecordedAtMs: prev,
+      nextRecordedAtMs: next,
+    });
     expect(plan.mode).toBe("animate");
     if (plan.mode === "animate") {
-      expect(plan.durationMs).toBeGreaterThanOrEqual(800);
-      expect(plan.durationMs).toBeLessThanOrEqual(1500);
+      expect(plan.durationMs).toBeGreaterThanOrEqual(FLEET_MARKER_MOTION_MIN_MS);
+      expect(plan.durationMs).toBeLessThanOrEqual(FLEET_MARKER_MOTION_MAX_MS);
     }
   });
 
@@ -80,7 +93,7 @@ describe("fleetMapMarkerMotion", () => {
     ).toBe("animate");
   });
 
-  it("snap sur gap recorded_at >= 30 s", () => {
+  it("animate si gap recorded_at < STALE_RECORDED_GAP_MS", () => {
     expect(
       resolveFleetMarkerMotionPlan({
         from: genevaA,
@@ -90,6 +103,20 @@ describe("fleetMapMarkerMotion", () => {
         },
         previousRecordedAtMs: 1_000_000,
         nextRecordedAtMs: 1_000_000 + 45_000,
+      }).mode
+    ).toBe("animate");
+  });
+
+  it("snap sur gap recorded_at >= STALE_RECORDED_GAP_MS", () => {
+    expect(
+      resolveFleetMarkerMotionPlan({
+        from: genevaA,
+        to: {
+          latitude: genevaA.latitude + 0.0002,
+          longitude: genevaA.longitude,
+        },
+        previousRecordedAtMs: 1_000_000,
+        nextRecordedAtMs: 1_000_000 + STALE_RECORDED_GAP_MS,
       })
     ).toEqual({ mode: "snap" });
   });
@@ -121,6 +148,23 @@ describe("fleetMapMarkerMotion", () => {
     expect(shouldApplyFleetMarkerCommit(2, 2)).toBe(true);
     expect(shouldApplyFleetMarkerCommit(1, 2)).toBe(false);
     expect(shouldApplyFleetMarkerCommit(2, 3)).toBe(false);
+  });
+
+  it("interpolation smoothstep au milieu", () => {
+    const mid = interpolateFleetMarkerPosition(genevaA, genevaB, 0.5);
+    expect(mid.latitude).toBeGreaterThan(genevaA.latitude);
+    expect(mid.latitude).toBeLessThan(genevaB.latitude);
+    expect(easeSmoothStep(0.5)).toBe(0.5);
+  });
+
+  it("durée étirée selon intervalle recorded_at", () => {
+    const duration = resolveFleetMarkerMotionDurationMs(
+      1_000_000,
+      1_000_000 + 10_000,
+      null,
+      20
+    );
+    expect(duration).toBeGreaterThanOrEqual(FLEET_MARKER_MOTION_MIN_MS);
   });
 
   it("snap si coordonnée cible invalide", () => {

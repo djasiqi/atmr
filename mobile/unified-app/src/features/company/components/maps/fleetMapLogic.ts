@@ -12,6 +12,7 @@ import {
   formatEtaLabel,
 
   isMissionDelayed,
+  isMissionPostPickupPhase,
 
 } from "../../dashboard/companyDashboardMissionUi";
 
@@ -274,17 +275,25 @@ export function resolveFleetOperationalStatus(
 
   if (isDriverEmergency(driver)) return "emergency";
 
+  const backendStatus = String(driver.status ?? "").toLowerCase();
+  if (backendStatus === "busy") return "busy";
+
   const delayMin = Number(activeMission?.assignment_pickup_delay_minutes);
-  if (activeMission && Number.isFinite(delayMin) && delayMin >= 20) return "incident";
-  if (activeMission && isMissionDelayed(activeMission)) return "delayed";
+  const pickupDelayRelevant =
+    activeMission != null && !isMissionPostPickupPhase(activeMission.status);
+  if (pickupDelayRelevant && activeMission && Number.isFinite(delayMin) && delayMin >= 20) {
+    return "incident";
+  }
+  if (pickupDelayRelevant && activeMission && isMissionDelayed(activeMission)) {
+    return "delayed";
+  }
 
   if (activeMission) {
-    const backendStatus = String(driver.status ?? "").toLowerCase();
+    if (isMissionPostPickupPhase(activeMission.status)) return "busy";
     if (backendStatus === "assigned" || activeMission.status === "assigned") return "assigned";
     return "busy";
   }
 
-  const backendStatus = String(driver.status ?? "").toLowerCase();
   if (backendStatus === "offline") return "offline";
   if (backendStatus === "assigned") return "assigned";
   if (backendStatus === "busy") return "busy";
@@ -341,15 +350,26 @@ export function enrichFleetDriver(
     organizationName,
   });
 
-
+  const first =
+    typeof driver.first_name === "string" && driver.first_name.trim()
+      ? driver.first_name.trim()
+      : null;
+  const last =
+    typeof driver.last_name === "string" && driver.last_name.trim()
+      ? driver.last_name.trim()
+      : null;
+  const mergedIdentity = [first, last].filter(Boolean).join(" ").trim() || null;
+  const existingFull =
+    typeof driver.full_name === "string" && driver.full_name.trim()
+      ? driver.full_name.trim()
+      : null;
 
   return {
-
     ...driver,
-
     driver_name: displayName,
-
-    full_name: displayName,
+    full_name: existingFull ?? mergedIdentity ?? displayName,
+    first_name: first ?? driver.first_name,
+    last_name: last ?? driver.last_name,
 
     enrichment: {
 

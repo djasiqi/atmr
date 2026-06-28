@@ -1,4 +1,5 @@
 import type { MessageHubThread } from "./types";
+import { filterThreadsForMobileTab } from "./inboxThreadPolicy";
 
 export type InboxTab = "all" | "missions" | "contacts";
 
@@ -6,24 +7,25 @@ const MISSION_SECTIONS = new Set(["mission_active", "archives", "urgent"]);
 const CONTACT_SECTIONS = new Set(["dispatch", "team", "support", "colleagues", "drivers"]);
 
 export function countUnreadForTab(threads: MessageHubThread[], tab: InboxTab): number {
-  return threads
-    .filter((t) => threadMatchesTab(t, tab))
-    .reduce((sum, t) => sum + (t.unread_count ?? 0), 0);
+  return filterThreadsForMobileTab(
+    threads.filter((t) => threadMatchesTab(t, tab)),
+    tab
+  ).reduce((sum, t) => sum + (t.unread_count ?? 0), 0);
 }
 
 export function threadMatchesTab(thread: MessageHubThread, tab: InboxTab): boolean {
   if (tab === "all") return true;
   const section = String(thread.section ?? "");
   if (tab === "missions") {
-    return MISSION_SECTIONS.has(section) || thread.booking_id != null;
+    return section === "mission_active" || (section === "urgent" && thread.booking_id != null);
   }
   return CONTACT_SECTIONS.has(section);
 }
 
 /** Ordre fixe des canaux système quand pas encore de message horodaté. */
 const CANONICAL_THREAD_ORDER: Record<string, number> = {
-  dispatch: 10,
-  team: 20,
+  team: 10,
+  dispatch: 20,
   support: 30,
 };
 

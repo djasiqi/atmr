@@ -4,8 +4,10 @@
   "private": true,
   "main": "index.js",
   "scripts": {
+    "postinstall": "patch-package",
     "start": "expo start",
     "android": "expo run:android",
+    "maps:android-check": "node scripts/print-android-maps-setup.js",
     "ios": "expo run:ios",
     "web": "expo start --web",
     "build:web": "expo export --platform web",
@@ -125,6 +127,7 @@
     "eslint-config-expo": "~10.0.0",
     "jest": "~29.7.0",
     "jest-expo": "~54.0.17",
+    "patch-package": "^8.0.1",
     "typescript": "~5.9.2"
   },
   "jest": {
@@ -135,6 +138,13 @@
     ]
   },
   "expo": {
+    "autolinking": {
+      "buildFromSource": [
+        "expo-task-manager",
+        "expo-location",
+        "unimodules-app-loader"
+      ]
+    },
     "doctor": {
       "reactNativeDirectoryCheck": {
         "exclude": [

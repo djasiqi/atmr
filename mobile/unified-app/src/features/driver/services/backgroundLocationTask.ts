@@ -7,6 +7,7 @@ import { isTrackingActiveStatus } from "../domain/status";
 import { resolveMissionTrackingMode } from "../domain/resolveMissionTrackingMode";
 import { driverTrackingQueue } from "./driverTrackingQueue";
 import { emitDriverTelemetry } from "../../../core/observability/driverTelemetry";
+import { PRODUCTION_LOCALE } from "../../../i18n/productionLocale";
 import { isFeatureEnabled } from "../../../core/featureFlags/registry";
 import { resolveTrackingCadence } from "../../../core/tracking/cadenceResolver";
 import {
@@ -66,14 +67,25 @@ const BACKGROUND_INTERVAL_MS = Number(
 const BACKGROUND_DISTANCE_METERS = Number(
   process.env.EXPO_PUBLIC_DRIVER_GPS_BACKGROUND_DISTANCE_METERS ?? "10"
 );
+/** Mission active : intervalle temporel seul (0 = pas de filtre distance, fix immobile). */
+const BACKGROUND_MISSION_DISTANCE_METERS = Number(
+  process.env.EXPO_PUBLIC_DRIVER_GPS_BACKGROUND_MISSION_DISTANCE_METERS ?? "0"
+);
 const FOREGROUND_SERVICE_TITLE =
-  process.env.EXPO_PUBLIC_DRIVER_BG_NOTIFICATION_TITLE ?? "Lirie Unified est active";
+  process.env.EXPO_PUBLIC_DRIVER_BG_NOTIFICATION_TITLE ?? PRODUCTION_LOCALE.fgsNotificationTitle;
 const FOREGROUND_SERVICE_BODY_MISSION =
   process.env.EXPO_PUBLIC_DRIVER_BG_NOTIFICATION_BODY ??
-  "Mission en cours — localisation active";
+  PRODUCTION_LOCALE.fgsNotificationBodyMission;
 const FOREGROUND_SERVICE_BODY_PRESENCE =
   process.env.EXPO_PUBLIC_DRIVER_BG_NOTIFICATION_BODY_PRESENCE ??
-  "Disponibilité active — localisation en cours";
+  PRODUCTION_LOCALE.fgsNotificationBodyPresence;
+
+function resolveBackgroundDistanceMeters(taskMode: BackgroundTrackingTaskMode): number {
+  if (taskMode === "presence_window") {
+    return BACKGROUND_DISTANCE_METERS;
+  }
+  return BACKGROUND_MISSION_DISTANCE_METERS;
+}
 
 function resolveForegroundServiceNotification(
   taskMode: BackgroundTrackingTaskMode
@@ -477,11 +489,18 @@ function defineTaskIfNeeded() {
             backgroundIntervalMs: BACKGROUND_INTERVAL_MS,
             ackStaleMs: 75_000,
           };
-      const flushResult = await driverTrackingQueue.flush({
+      let flushResult = await driverTrackingQueue.flush({
         ackStaleMs: cadence.ackStaleMs,
         networkProfile: cadence.networkProfile,
         forceHttpFallback: true,
       });
+      if (flushResult.sent === 0 && locations.length > 0 && flushResult.queueDepth > 0) {
+        flushResult = await driverTrackingQueue.flush({
+          ackStaleMs: cadence.ackStaleMs,
+          networkProfile: cadence.networkProfile,
+          forceHttpFallback: true,
+        });
+      }
       emitDriverTelemetry("tracking.background.task.flush", {
         source: "driver.services.backgroundLocationTask",
         task_name: BACKGROUND_LOCATION_TASK_NAME,
@@ -639,9 +658,14 @@ async function startBackgroundLocationTaskIfEligibleInternal(
 
   const batteryLevel = await Battery.getBatteryLevelAsync().catch(() => null);
   const isLowBattery = typeof batteryLevel === "number" && batteryLevel <= LOW_BATTERY_THRESHOLD;
+  const resolvedTrackingMode = resolveBackgroundTrackingMode(
+    missionStatus,
+    taskMode,
+    options.scheduling ?? null
+  );
+  const isMissionLiveMode = resolvedTrackingMode === "mission_live";
   const intervalBase =
-    resolveBackgroundTrackingMode(missionStatus, taskMode, options.scheduling ?? null) ===
-    "availability_presence"
+    resolvedTrackingMode === "availability_presence"
       ? Math.max(BACKGROUND_INTERVAL_MS, 90_000)
       : BACKGROUND_INTERVAL_MS;
   const effectiveIntervalMs = isLowBattery
@@ -660,10 +684,18 @@ async function startBackgroundLocationTaskIfEligibleInternal(
     task_mode: taskMode,
   });
 
+  const effectiveDistanceMeters = resolveBackgroundDistanceMeters(taskMode);
+
   const locationOptions: Location.LocationTaskOptions = {
-    accuracy: isLowBattery ? Location.Accuracy.Low : Location.Accuracy.Balanced,
+    // mission_live = navigation active → GPS précis (High). Présence/batterie faible → coarse pour
+    // économiser. Sans ça, expo-location renvoyait du réseau/wifi (~100 m) même en course.
+    accuracy: isLowBattery
+      ? Location.Accuracy.Low
+      : isMissionLiveMode
+        ? Location.Accuracy.High
+        : Location.Accuracy.Balanced,
     timeInterval: effectiveIntervalMs,
-    distanceInterval: BACKGROUND_DISTANCE_METERS,
+    distanceInterval: effectiveDistanceMeters,
     pausesUpdatesAutomatically: false,
     showsBackgroundLocationIndicator: true,
     foregroundService: (() => {
@@ -734,7 +766,7 @@ async function startBackgroundLocationTaskIfEligibleInternal(
       mission_id: missionId,
       task_mode: taskMode,
       interval_ms: effectiveIntervalMs,
-      distance_m: BACKGROUND_DISTANCE_METERS,
+      distance_m: effectiveDistanceMeters,
       low_battery_mode: isLowBattery,
       battery_level: batteryLevel,
     });
@@ -860,10 +892,47 @@ export async function ensureNativeTrackingWhileForeground(
   }
 
   const lifecycle = await getNativeTaskLifecycleStatus();
-  if (lifecycle.taskStarted) {
+  const taskMode: BackgroundTrackingTaskMode = isPresenceWindow ? "presence_window" : "mission";
+  const priorContext = await readTaskContext();
+
+  await setBackgroundTrackingMissionContext(
+    missionId,
+    missionStatus,
+    taskMode,
+    options.scheduling ?? null
+  );
+
+  const contextUpgradedToMission =
+    lifecycle.taskStarted &&
+    priorContext?.taskMode === "presence_window" &&
+    taskMode === "mission" &&
+    missionId != null;
+
+  if (lifecycle.taskStarted && !contextUpgradedToMission) {
     stopNativeTrackingWatchdog();
     clearPendingFgsStart();
+    const stillRunning = await Location.hasStartedLocationUpdatesAsync(
+      BACKGROUND_LOCATION_TASK_NAME
+    ).catch(() => false);
+    if (!stillRunning) {
+      emitDriverTelemetry("tracking.background.fgs_recover", {
+        source: "driver.services.backgroundLocationTask",
+        reason,
+        mission_id: missionId,
+        task_mode: taskMode,
+      });
+      await startBackgroundLocationTaskIfEligibleInternal(
+        missionId,
+        missionStatus,
+        options,
+        `${reason}:fgs_recover`
+      );
+    }
     return;
+  }
+
+  if (contextUpgradedToMission && AppState.currentState === "active") {
+    await stopNativeBackgroundLocationUpdatesSafely();
   }
 
   if (AppState.currentState !== "active") {

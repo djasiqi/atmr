@@ -9,6 +9,7 @@ type Props = {
   tab: InboxTab;
   hasSearch: boolean;
   urgentFilter: boolean;
+  onOpenTeam?: () => void;
   onOpenDispatch?: () => void;
   onOpenColleagues?: () => void;
   onOpenSupport?: () => void;
@@ -18,6 +19,7 @@ export function MessagesInboxEmpty({
   tab,
   hasSearch,
   urgentFilter,
+  onOpenTeam,
   onOpenDispatch,
   onOpenColleagues,
   onOpenSupport,
@@ -50,10 +52,18 @@ export function MessagesInboxEmpty({
     return (
       <View style={styles.wrap}>
         <AppEmptyState
-          icon={<Ionicons name="medical-outline" size={40} color={M.BRAND} />}
-          title="Aucune mission"
-          description="Les conversations liées à vos missions apparaîtront ici."
+          icon={<Ionicons name="car-outline" size={40} color={M.BRAND} />}
+          title="Pas de mission en cours"
+          description="Le chat par mission est limité sur mobile. Utilisez le canal équipe ou le dispatch pour vos échanges."
         />
+        <View style={styles.actions}>
+          {onOpenTeam ? (
+            <QuickAction icon="people-outline" label="Canal équipe" onPress={onOpenTeam} />
+          ) : null}
+          {onOpenDispatch ? (
+            <QuickAction icon="business-outline" label="Dispatch" onPress={onOpenDispatch} />
+          ) : null}
+        </View>
       </View>
     );
   }
@@ -86,9 +96,9 @@ export function MessagesInboxEmpty({
       <AppEmptyState
         icon={<Ionicons name="chatbubbles-outline" size={40} color={M.BRAND} />}
         title="Pas encore de messages"
-        description="Vos échanges mission et entreprise s'afficheront ici."
-        actionLabel={onOpenDispatch ? "Contacter le dispatch" : undefined}
-        onAction={onOpenDispatch}
+        description="Canal équipe, dispatch, collègues et assistance LIRIE."
+        actionLabel={onOpenTeam ? "Ouvrir le canal équipe" : undefined}
+        onAction={onOpenTeam ?? onOpenDispatch}
       />
     </View>
   );

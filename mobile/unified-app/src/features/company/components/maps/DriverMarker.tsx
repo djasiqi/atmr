@@ -1,7 +1,10 @@
-import { memo, useCallback, useEffect, useMemo } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { Platform } from "react-native";
+import { Marker } from "react-native-maps";
 
 import type { FleetDriverMapItem } from "./fleetMapTypes";
 import { FleetMapRasterMarker } from "./FleetMapRasterMarker";
+import { FleetDriverMarkerVisual } from "./FleetDriverMarkerVisual";
 import { FLEET_STATUS_THEME } from "./mapStatusTheme";
 import { driverFleetMarkerTitle } from "../../utils/companyDriverMapStatus";
 import { buildFleetDriverMarkerImageSource } from "./fleetNativeMarkerImage";
@@ -19,6 +22,17 @@ type Props = {
   vectorMode?: boolean;
   onPress?: (driverId: number) => void;
 };
+
+function useAndroidMarkerTracksViewChanges(visualKey: string): boolean {
+  const [tracksViewChanges, setTracksViewChanges] = useState(Platform.OS === "android");
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+    setTracksViewChanges(true);
+    const timer = setTimeout(() => setTracksViewChanges(false), 150);
+    return () => clearTimeout(timer);
+  }, [visualKey]);
+  return tracksViewChanges;
+}
 
 function DriverMarkerComponent({
   item,
@@ -52,6 +66,9 @@ function DriverMarkerComponent({
     locationStatus: item.location_status,
   });
 
+  const androidVisualKey = `${status}:${isStale}:${dimmed}:${selected}:${item.driver_id}:${item.first_name ?? ""}:${item.last_name ?? ""}:${item.full_name ?? ""}`;
+  const androidTracksViewChanges = useAndroidMarkerTracksViewChanges(androidVisualKey);
+
   useEffect(() => {
     countDriverMarkerRender(item.driver_id);
     recordDriverMarkerRender();
@@ -66,13 +83,35 @@ function DriverMarkerComponent({
   );
 
   void vectorMode;
-  void selected;
 
-  if (!imageSource.uri?.trim()) {
+  if (!isValidMapCoord(displayCoordinate.latitude, displayCoordinate.longitude)) {
     return null;
   }
 
-  if (!isValidMapCoord(displayCoordinate.latitude, displayCoordinate.longitude)) {
+  if (Platform.OS === "android") {
+    return (
+      <Marker
+        ref={primaryMarkerRef}
+        coordinate={displayCoordinate}
+        anchor={{ x: 0.5, y: 0.5 }}
+        tracksViewChanges={androidTracksViewChanges}
+        zIndex={theme.priority}
+        opacity={dimmed ? 0.45 : 1}
+        title={driverFleetMarkerTitle(item)}
+        onPress={handlePress}
+      >
+        <FleetDriverMarkerVisual
+          status={status}
+          selected={selected}
+          dimmed={false}
+          driver={item}
+          compactForMap
+        />
+      </Marker>
+    );
+  }
+
+  if (!imageSource.uri?.trim()) {
     return null;
   }
 
@@ -100,6 +139,10 @@ function areDriverMarkerPropsEqual(prev: Props, next: Props): boolean {
     prev.item.tracking_display_status === next.item.tracking_display_status &&
     prev.item.recorded_at === next.item.recorded_at &&
     prev.item.timestamp === next.item.timestamp &&
+    prev.item.driver_name === next.item.driver_name &&
+    prev.item.first_name === next.item.first_name &&
+    prev.item.last_name === next.item.last_name &&
+    prev.item.full_name === next.item.full_name &&
     prev.selected === next.selected &&
     prev.dimmed === next.dimmed &&
     prev.vectorMode === next.vectorMode &&

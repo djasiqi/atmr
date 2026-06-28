@@ -12,6 +12,12 @@ import { onAuthRefreshSuccess } from "../../../core/auth/authRefreshListeners";
 import { emitDriverTelemetry } from "../../../core/observability/driverTelemetry";
 import { realtimeManager } from "../../../core/realtime/realtimeManager";
 import { isFeatureEnabled } from "../../../core/featureFlags/registry";
+import {
+  canEmitSocketBatchNow,
+  getSocketBatchCooldownRemainingMs,
+  recordSocketBatchRateLimited,
+  recordSocketBatchSent,
+} from "./socketBatchPacing";
 
 export type TrackingDeliveryState =
   | "queued"
@@ -81,9 +87,13 @@ const SPEED_DELTA_PIVOT_MS = 4;
 const HEADING_DELTA_PIVOT_DEG = 30;
 const SOCKET_BATCH_MAX_POINTS = Number(process.env.EXPO_PUBLIC_DRIVER_SOCKET_BATCH_MAX_POINTS ?? "20");
 const DRAIN_BATCH_SIZE = Number(process.env.EXPO_PUBLIC_DRIVER_TRACKING_DRAIN_BATCH_SIZE ?? "50");
-const DRAIN_INTERVAL_MS = Number(process.env.EXPO_PUBLIC_DRIVER_TRACKING_DRAIN_INTERVAL_MS ?? "500");
+const DRAIN_INTERVAL_MS = Number(process.env.EXPO_PUBLIC_DRIVER_TRACKING_DRAIN_INTERVAL_MS ?? "2000");
 const MAX_DRAIN_POSITIONS_PER_MINUTE = Number(
   process.env.EXPO_PUBLIC_DRIVER_TRACKING_MAX_DRAIN_POSITIONS_PER_MINUTE ?? "1200"
+);
+/** Au-delà de ce seuil, bascule HTTP immédiate (évite la famine socket_emitted). */
+const BACKLOG_FORCE_HTTP_THRESHOLD = Number(
+  process.env.EXPO_PUBLIC_DRIVER_TRACKING_BACKLOG_FORCE_HTTP ?? "30"
 );
 const TRACKING_SESSION_TTL_MS = Number(
   process.env.EXPO_PUBLIC_DRIVER_TRACKING_SESSION_TTL_SEC ?? "1800"
@@ -122,6 +132,11 @@ function buildQueueId(): string {
 class DriverTrackingQueue {
   private loaded = false;
   private isFlushing = false;
+  private pendingFlushOptions: {
+    ackStaleMs?: number;
+    networkProfile?: "offline" | "poor" | "normal";
+    forceHttpFallback?: boolean;
+  } | null = null;
   private authListenerRegistered = false;
   private queueSuspend: QueueSuspendState | null = null;
   private items: DriverTrackingQueueItem[] = [];
@@ -130,6 +145,145 @@ class DriverTrackingQueue {
   private sessionCreatedAt = 0;
   private drainedInCurrentMinute = 0;
   private drainMinuteBucket = 0;
+  private drainTimer: ReturnType<typeof setTimeout> | null = null;
+
+  private clearDrainTimer(): void {
+    if (this.drainTimer) {
+      clearTimeout(this.drainTimer);
+      this.drainTimer = null;
+    }
+  }
+
+  /**
+   * Planifie au plus un drain : évite la tempête de flush quand des points
+   * attendent un ACK socket (état socket_emitted non stale).
+   */
+  private scheduleDrainIfNeeded(
+    options: {
+      ackStaleMs?: number;
+      networkProfile?: "offline" | "poor" | "normal";
+      forceHttpFallback?: boolean;
+    },
+    ackStaleMs: number
+  ): void {
+    if (this.items.length === 0) {
+      this.clearDrainTimer();
+      return;
+    }
+    const delayMs = this.computeNextDrainDelayMs(ackStaleMs);
+    if (delayMs == null) {
+      this.clearDrainTimer();
+      return;
+    }
+    const suspendDelay =
+      this.suspendActive() && this.queueSuspend
+        ? Math.max(delayMs, this.queueSuspend.untilMs - nowMs())
+        : delayMs;
+    if (this.drainTimer) {
+      return;
+    }
+    this.drainTimer = setTimeout(() => {
+      this.drainTimer = null;
+      void this.flush(options);
+    }, suspendDelay);
+  }
+
+  private computeNextDrainDelayMs(ackStaleMs: number): number | null {
+    const now = nowMs();
+    let hasSendable = false;
+    let nextWakeAt: number | null = null;
+
+    for (const item of this.items) {
+      if (item.deliveryState === "backend_acked") continue;
+      if (item.deliveryState === "queued" || item.deliveryState === "retry_pending") {
+        hasSendable = true;
+        continue;
+      }
+      if (item.deliveryState === "socket_emitted" && item.lastAttemptAt != null) {
+        const staleAt = item.lastAttemptAt + ackStaleMs;
+        if (now >= staleAt) {
+          hasSendable = true;
+        } else {
+          nextWakeAt = nextWakeAt == null ? staleAt : Math.min(nextWakeAt, staleAt);
+        }
+      }
+    }
+
+    if (!hasSendable) {
+      return nextWakeAt == null ? null : Math.max(DRAIN_INTERVAL_MS, nextWakeAt - now);
+    }
+
+    const pacingRemaining = getSocketBatchCooldownRemainingMs(now);
+    if (pacingRemaining > 0) {
+      const pacingWake = now + pacingRemaining;
+      nextWakeAt = nextWakeAt == null ? pacingWake : Math.min(nextWakeAt, pacingWake);
+    }
+
+    if (nextWakeAt != null) {
+      return Math.max(DRAIN_INTERVAL_MS, nextWakeAt - now);
+    }
+    return DRAIN_INTERVAL_MS;
+  }
+
+  /**
+   * Débloque la file quand le socket est mort ou la backlog explose :
+   * les points `socket_emitted` sans ACK ne doivent pas bloquer le repli HTTP 75 s.
+   */
+  private async prepareFlushTransport(): Promise<{
+    socketReady: boolean;
+    backlogPressure: boolean;
+    releasedCount: number;
+  }> {
+    const socketReady = realtimeManager.isDriverSocketReady();
+    const backlogPressure = this.items.length >= BACKLOG_FORCE_HTTP_THRESHOLD;
+    let releasedCount = 0;
+    const socketEmittedCount = this.items.filter((i) => i.deliveryState === "socket_emitted").length;
+    if (!socketReady || backlogPressure) {
+      releasedCount = await this.releaseSocketEmittedForHttpRetry();
+    }
+    if (releasedCount > 0 || backlogPressure) {
+      emitDriverTelemetry("tracking.queue.transport_unblock", {
+        source: "driver.tracking.queue",
+        queue_depth: this.items.length,
+        socket_ready: socketReady,
+        backlog_pressure: backlogPressure,
+        released_count: releasedCount,
+        socket_emitted_count: socketEmittedCount,
+      });
+    }
+    return { socketReady, backlogPressure, releasedCount };
+  }
+
+  private tryEmitSocketBatch(chunk: DriverTrackingQueueItem[]): boolean {
+    if (!canEmitSocketBatchNow()) {
+      return false;
+    }
+    const sentViaSocket = realtimeManager.sendDriverLocationBatch(
+      chunk.map((item) => ({
+        tracking_event_id: item.id,
+        sequence_id: item.sequenceId,
+        tracking_session_id: item.trackingSessionId,
+        position_id: item.positionId,
+        batch_id: item.batchId,
+        mission_id: item.missionId,
+        latitude: item.payload.latitude,
+        longitude: item.payload.longitude,
+        accuracy: item.payload.accuracy,
+        heading: item.payload.heading,
+        speed: item.payload.speed,
+        timestamp: item.payload.timestamp,
+        recorded_at: item.payload.timestamp,
+        location_mode: item.locationMode,
+        is_background: item.payload.isBackground,
+        platform: Platform.OS === "ios" ? "ios" : "android",
+      }))
+    );
+    if (!sentViaSocket) {
+      return false;
+    }
+    recordSocketBatchSent();
+    return true;
+  }
 
   private async readStorage(key: string): Promise<string | null> {
     const storage = AsyncStorage as unknown as {
@@ -406,6 +560,17 @@ class DriverTrackingQueue {
     const ackStaleMs = options?.ackStaleMs ?? SOCKET_ACK_DEFAULT_STALE_MS;
     const networkProfile = options?.networkProfile ?? "normal";
     if (this.isFlushing) {
+      this.pendingFlushOptions = {
+        ...this.pendingFlushOptions,
+        ...options,
+        forceHttpFallback:
+          options?.forceHttpFallback === true || this.pendingFlushOptions?.forceHttpFallback === true,
+      };
+      emitDriverTelemetry("tracking.queue.flush_coalesced", {
+        source: "driver.tracking.queue",
+        queue_depth: this.items.length,
+        force_http_fallback: this.pendingFlushOptions?.forceHttpFallback === true,
+      });
       return {
         sent: 0,
         backendAcked: 0,
@@ -431,6 +596,11 @@ class DriverTrackingQueue {
     let flushPathUsed: DriverTrackingFlushResult["flushPathUsed"] = "http_fallback";
     try {
       await this.loadSuspendState();
+      const transport = await this.prepareFlushTransport();
+      const effectiveForceHttp =
+        options?.forceHttpFallback === true ||
+        transport.backlogPressure ||
+        !transport.socketReady;
       if (this.suspendActive() && this.queueSuspend) {
         const waitMs = Math.max(0, this.queueSuspend.untilMs - nowMs());
         emitDriverTelemetry("tracking.queue.suspend_wait", {
@@ -495,8 +665,8 @@ class DriverTrackingQueue {
         };
       }
 
-      // Envoi batch socket reel
-      if (!options?.forceHttpFallback && realtimeManager.isDriverSocketReady()) {
+      // Envoi batch socket reel (cadence alignée rate limiter backend)
+      if (!effectiveForceHttp && transport.socketReady) {
         const socketCandidates = this.items.filter(
           (item) =>
             !this.isExpired(item) &&
@@ -506,31 +676,12 @@ class DriverTrackingQueue {
         let sentThisFlush = 0;
         for (let index = 0; index < socketCandidates.length; index += SOCKET_BATCH_MAX_POINTS) {
           if (sentThisFlush >= maxDrainNow) break;
+          if (!canEmitSocketBatchNow()) break;
           const chunk = socketCandidates.slice(
             index,
             Math.min(index + SOCKET_BATCH_MAX_POINTS, index + (maxDrainNow - sentThisFlush))
           );
-          const sentViaSocket = realtimeManager.sendDriverLocationBatch(
-            chunk.map((item) => ({
-              tracking_event_id: item.id,
-              sequence_id: item.sequenceId,
-              tracking_session_id: item.trackingSessionId,
-              position_id: item.positionId,
-              batch_id: item.batchId,
-              mission_id: item.missionId,
-              latitude: item.payload.latitude,
-              longitude: item.payload.longitude,
-              accuracy: item.payload.accuracy,
-              heading: item.payload.heading,
-              speed: item.payload.speed,
-              timestamp: item.payload.timestamp,
-              recorded_at: item.payload.timestamp,
-              location_mode: item.locationMode,
-              is_background: item.payload.isBackground,
-              platform: Platform.OS === "ios" ? "ios" : "android",
-            }))
-          );
-          if (!sentViaSocket) break;
+          if (!this.tryEmitSocketBatch(chunk)) break;
           for (const item of chunk) {
             sent += 1;
             sentThisFlush += 1;
@@ -569,31 +720,12 @@ class DriverTrackingQueue {
 
         try {
           const canTrySocket =
-            !options?.forceHttpFallback &&
+            !effectiveForceHttp &&
+            transport.socketReady &&
             isSocketEligibleLocationMode(item.locationMode) &&
             (item.deliveryState === "queued" || item.deliveryState === "retry_pending");
-          if (canTrySocket) {
-            const socketSent = realtimeManager.sendDriverLocationBatch([
-              {
-                tracking_event_id: item.id,
-                sequence_id: item.sequenceId,
-                tracking_session_id: item.trackingSessionId,
-                position_id: item.positionId,
-                batch_id: item.batchId,
-                mission_id: item.missionId,
-                latitude: item.payload.latitude,
-                longitude: item.payload.longitude,
-                accuracy: item.payload.accuracy,
-                heading: item.payload.heading,
-                speed: item.payload.speed,
-                timestamp: item.payload.timestamp,
-                recorded_at: item.payload.timestamp,
-                location_mode: item.locationMode,
-                is_background: item.payload.isBackground,
-                platform: Platform.OS === "ios" ? "ios" : "android",
-              },
-            ]);
-            if (socketSent) {
+          if (canTrySocket && canEmitSocketBatchNow()) {
+            if (this.tryEmitSocketBatch([item])) {
               sent += 1;
               this.drainedInCurrentMinute += 1;
               socketEmitted += 1;
@@ -627,8 +759,9 @@ class DriverTrackingQueue {
           const socketEmitStale =
             item.deliveryState === "socket_emitted" &&
             item.lastAttemptAt !== null &&
-            nowMs() - item.lastAttemptAt < ackStaleMs;
-          if (socketEmitStale && !options?.forceHttpFallback) {
+            nowMs() - item.lastAttemptAt < ackStaleMs &&
+            transport.socketReady;
+          if (socketEmitStale && !effectiveForceHttp) {
             remaining.push(item);
             continue;
           }
@@ -676,6 +809,20 @@ class DriverTrackingQueue {
           });
         } catch (error) {
           const meta = formatTrackingSendError(error);
+          emitDriverTelemetry("tracking.queue.http_send_failure", {
+            source: "driver.tracking.queue",
+            mission_id: item.missionId,
+            queue_item_id: item.id,
+            app_state: item.appState,
+            error_class: meta.error_class,
+            error_message: meta.error_message,
+            http_status: meta.http_status,
+            api_error_code: meta.api_error_code,
+            transport_code: meta.transport_code,
+            retry_count: item.retryCount,
+            queue_depth: this.items.length,
+            force_http_fallback: effectiveForceHttp,
+          });
           const suspendPlan = resolveQueueSuspendMs(meta, meta.retry_after_seconds);
           if (suspendPlan) {
             await this.activateSuspension(suspendPlan.suspendMs, suspendPlan.reason);
@@ -704,14 +851,14 @@ class DriverTrackingQueue {
       }
       this.items = remaining;
       await this.persist();
-      if (this.items.length > 0 && DRAIN_INTERVAL_MS > 0) {
-        const delayMs = this.suspendActive() && this.queueSuspend
-          ? Math.max(DRAIN_INTERVAL_MS, this.queueSuspend.untilMs - nowMs())
-          : DRAIN_INTERVAL_MS;
-        setTimeout(() => {
-          void this.flush(options);
-        }, delayMs);
-      }
+      this.scheduleDrainIfNeeded(
+        {
+          ackStaleMs: options?.ackStaleMs,
+          networkProfile: options?.networkProfile,
+          forceHttpFallback: effectiveForceHttp,
+        },
+        ackStaleMs
+      );
       emitDriverTelemetry("tracking.queue.flush", {
         source: "driver.tracking.queue",
         sent,
@@ -747,6 +894,11 @@ class DriverTrackingQueue {
       };
     } finally {
       this.isFlushing = false;
+      const pendingFlush = this.pendingFlushOptions;
+      this.pendingFlushOptions = null;
+      if (pendingFlush) {
+        void this.flush(pendingFlush);
+      }
     }
   }
 
@@ -787,6 +939,33 @@ class DriverTrackingQueue {
       });
     }
     return ackedCount;
+  }
+
+  /** Reprendre après ACK `session_conflict` : nouvelle session + rebinder la file restante. */
+  async reconcileAfterSessionConflict(): Promise<string> {
+    await this.ensureLoaded();
+    const previousSessionId = this.trackingSessionId;
+    this.rotateTrackingSession();
+    let rebound = 0;
+    for (const item of this.items) {
+      item.trackingSessionId = this.trackingSessionId;
+      if (item.deliveryState === "socket_emitted") {
+        item.deliveryState = "retry_pending";
+        item.lastAttemptAt = null;
+      }
+      rebound += 1;
+    }
+    await this.persistSession();
+    if (rebound > 0) {
+      await this.persist();
+    }
+    emitDriverTelemetry("tracking.session.reconciled", {
+      source: "driver.tracking.queue",
+      previous_session_id: previousSessionId,
+      tracking_session_id: this.trackingSessionId,
+      rebound_count: rebound,
+    });
+    return this.trackingSessionId;
   }
 
   async releaseSocketEmittedForHttpRetry(): Promise<number> {

@@ -321,11 +321,12 @@ function shouldFailFastOffline(url: string): boolean {
   if (!isFeatureEnabled("driver_http_adaptive_timeout_enabled") || !isDriverEndpoint(url)) {
     return false;
   }
-  const policy = evaluateConnectivityPolicy(getNetworkSnapshot());
-  if (policy.mode !== "offline") {
+  const snapshot = getNetworkSnapshot();
+  // Android BG : isInternetReachable est souvent false alors que le réseau fonctionne (FGS).
+  // Ne fail-fast que si le radio est déconnecté ; la queue tracking gère les retries.
+  if (snapshot.connected) {
     return false;
   }
-  // Location and status transitions can be queued/retried by runtime queues.
   const failFastCandidates = ["/driver/me/location", "/driver/me/bookings/", "/driver/me/bookings/since"];
   return failFastCandidates.some((candidate) => url.includes(candidate));
 }
@@ -486,6 +487,14 @@ apiClient.interceptors.request.use(async (config) => {
     });
   }
   if (shouldFailFastOffline(requestUrl) && !config.headers["X-Allow-Offline-Attempt"]) {
+    const offlineSnapshot = getNetworkSnapshot();
+    emitDriverTelemetry("driver.http.fail_fast_offline", {
+      source: "core.api.client",
+      endpoint: requestUrl,
+      connected: offlineSnapshot.connected,
+      internet_reachable: offlineSnapshot.internetReachable,
+      network_type: offlineSnapshot.type,
+    });
     throw new AxiosError(
       `Offline fail-fast for ${requestUrl}`,
       "ERR_DRIVER_OFFLINE_FAIL_FAST",

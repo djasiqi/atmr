@@ -4,6 +4,7 @@ import { useAppViewport } from "../../design/responsive/useAppViewport";
 import { useSession } from "../sessionProvider";
 import { BOOT_LOTTIE_FIRST_LAUNCH_ONLY } from "./bootSplashConfig";
 import { getBootLottieIntroSeen, setBootLottieIntroSeen } from "./bootSplashStorage";
+import { resolveBootSplashSessionBlocksOverlay } from "./bootSplashSessionLogic";
 import { computeBootLottieDisplaySize } from "./bootLottieLayout";
 import { reportBootFallback } from "../observability/bootDiagnostics";
 import { resolveBootLottieSource } from "./resolveBootLottieSource";
@@ -63,6 +64,8 @@ export function useBootSplashGate(): {
   const bootStartedAtRef = useRef(Date.now());
   const lastSnapshotRef = useRef("");
   const fallbackWarnedRef = useRef(false);
+  /** Après le premier boot réussi, ne plus bloquer l'UI sur idle/bootstrapping (ex. logout). */
+  const hasCompletedInitialBootRef = useRef(false);
   const fadeOpacity = useRef(new Animated.Value(1)).current;
   const lottieOpacity = useRef(new Animated.Value(1)).current;
 
@@ -99,6 +102,9 @@ export function useBootSplashGate(): {
     if (prevStatusRef.current !== status) {
       console.log("[BootSplash] status transition", prevStatusRef.current, "->", status);
     }
+    if (status === "ready" || status === "error") {
+      hasCompletedInitialBootRef.current = true;
+    }
     if (prevStatusRef.current === "error" && status === "bootstrapping") {
       setAnimFinished(false);
     }
@@ -117,8 +123,11 @@ export function useBootSplashGate(): {
   const skipEntireIntro = BOOT_LOTTIE_FIRST_LAUNCH_ONLY && introState === "skip";
   const waitingIntroStorage = BOOT_LOTTIE_FIRST_LAUNCH_ONLY && introState === "loading";
 
-  const sessionBlocksOverlay =
-    status === "idle" || status === "bootstrapping" || (status === "ready" && !introGateDone);
+  const sessionBlocksOverlay = resolveBootSplashSessionBlocksOverlay(
+    status,
+    hasCompletedInitialBootRef.current,
+    introGateDone
+  );
 
   const showOverlay =
     status !== "error" && !skipEntireIntro && (waitingIntroStorage || sessionBlocksOverlay);

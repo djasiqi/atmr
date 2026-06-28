@@ -2,7 +2,7 @@ import { StyleSheet } from "react-native";
 import { usePerfScreenReady } from "../../../src/core/observability/usePerfScreenReady";
 import { useRouter } from "expo-router";
 import { DriverContextGuard, PermissionGuard } from "../../../src/core/guards";
-import { useDriverMissionsQuery } from "../../../src/features/driver/hooks";
+import { MISSION_ROUTE_ARROW } from "../../../src/features/driver/domain/missionDisplay";
 import { getDriverStatusUx } from "../../../src/features/driver/statusDictionary";
 import {
   AppButton,
@@ -17,6 +17,7 @@ import { groupMissionsByPickupWindow } from "../../../src/features/driver/domain
 import { DRIVER_FLOATING_TAB_SCROLL_PADDING } from "../../../src/features/driver/navigation/DriverFloatingTabBar";
 import { FONT_SIZE } from "../../../src/design/responsive/typographyTokens";
 import { DriverTrackingQaPanel } from "../../../src/features/driver/components/DriverTrackingQaPanel";
+import { useDriverMissionsQuery } from "../../../src/features/driver/hooks";
 import {
   isTrackingQaPanelEnabled,
   useDriverBackgroundTrackingUi,
@@ -92,7 +93,7 @@ export default function DriverMissionsScreen() {
                     </AppText>
                     <AppText variant="body" style={styles.body}>
                       {(mission.pickup_location as string | undefined) ?? "Départ"}
-                      {" → "}
+                      {MISSION_ROUTE_ARROW}
                       {(mission.dropoff_location as string | undefined) ?? "Arrivée"}
                     </AppText>
                     <AppButton

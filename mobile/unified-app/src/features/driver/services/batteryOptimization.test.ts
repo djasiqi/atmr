@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals
 import {
   __resetBatteryOptimizationCacheForTests,
   checkBatteryOptimizationStatus,
+  openBatteryOptimizationSettingsScreen,
+  openDriverBatteryUnrestrictedSettings,
   requestIgnoreBatteryOptimizations,
 } from "./batteryOptimization";
 
@@ -32,6 +34,7 @@ jest.mock("expo-intent-launcher", () => ({
   ActivityAction: {
     REQUEST_IGNORE_BATTERY_OPTIMIZATIONS: "android.settings.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
     IGNORE_BATTERY_OPTIMIZATION_SETTINGS: "android.settings.IGNORE_BATTERY_OPTIMIZATION_SETTINGS",
+    APPLICATION_DETAILS_SETTINGS: "android.settings.APPLICATION_DETAILS_SETTINGS",
   },
 }));
 
@@ -102,17 +105,17 @@ describe("batteryOptimization service", () => {
     });
   });
 
-  describe("requestIgnoreBatteryOptimizations", () => {
+  describe("openDriverBatteryUnrestrictedSettings", () => {
     it("is a no-op on iOS", async () => {
       mockPlatformOS = "ios";
-      const result = await requestIgnoreBatteryOptimizations();
+      const result = await openDriverBatteryUnrestrictedSettings();
       expect(result).toEqual({ intent: null, opened: false });
       expect(mockStartActivityAsync).not.toHaveBeenCalled();
     });
 
-    it("fires REQUEST_IGNORE intent with package data and emits user_action", async () => {
+    it("fires REQUEST_IGNORE intent with package data", async () => {
       mockStartActivityAsync.mockResolvedValue(undefined);
-      const result = await requestIgnoreBatteryOptimizations();
+      const result = await openDriverBatteryUnrestrictedSettings();
       expect(result).toEqual({ intent: "request_ignore", opened: true });
       expect(mockStartActivityAsync).toHaveBeenCalledWith(
         "android.settings.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
@@ -120,32 +123,51 @@ describe("batteryOptimization service", () => {
       );
       expect(mockEmit).toHaveBeenCalledWith(
         "tracking.battery_optimization.user_action",
-        expect.objectContaining({ action: "open_request_dialog" })
+        expect.objectContaining({ action: "open_unrestricted_settings" })
       );
     });
 
-    it("falls back to IGNORE_BATTERY_OPTIMIZATION_SETTINGS when request intent fails", async () => {
+    it("falls back to APPLICATION_DETAILS when request intent fails", async () => {
       mockStartActivityAsync
         .mockRejectedValueOnce(new Error("ActivityNotFoundException"))
         .mockResolvedValueOnce(undefined);
-      const result = await requestIgnoreBatteryOptimizations();
-      expect(result).toEqual({ intent: "settings", opened: true });
+      const result = await openDriverBatteryUnrestrictedSettings();
+      expect(result).toEqual({ intent: "app_details", opened: true });
       expect(mockStartActivityAsync.mock.calls[0]?.[0]).toBe(
         "android.settings.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
       );
       expect(mockStartActivityAsync.mock.calls[1]?.[0]).toBe(
-        "android.settings.IGNORE_BATTERY_OPTIMIZATION_SETTINGS"
+        "android.settings.APPLICATION_DETAILS_SETTINGS"
       );
+      expect(mockStartActivityAsync.mock.calls[1]?.[1]).toEqual({
+        data: "package:ch.liri.operations",
+      });
     });
 
-    it("reports unavailable when both intents fail", async () => {
+    it("reports unavailable when request and app details fail", async () => {
       mockStartActivityAsync.mockRejectedValue(new Error("no activity"));
-      const result = await requestIgnoreBatteryOptimizations();
+      const result = await openDriverBatteryUnrestrictedSettings();
       expect(result).toEqual({ intent: null, opened: false });
-      const unavailable = mockEmit.mock.calls.filter(
-        (call) => call[0] === "driver.battery_optimization.unavailable"
+    });
+  });
+
+  describe("requestIgnoreBatteryOptimizations", () => {
+    it("delegates to openDriverBatteryUnrestrictedSettings", async () => {
+      mockStartActivityAsync.mockResolvedValue(undefined);
+      const result = await requestIgnoreBatteryOptimizations();
+      expect(result).toEqual({ intent: "request_ignore", opened: true });
+    });
+  });
+
+  describe("openBatteryOptimizationSettingsScreen", () => {
+    it("opens IGNORE_BATTERY_OPTIMIZATION_SETTINGS directly", async () => {
+      mockStartActivityAsync.mockResolvedValue(undefined);
+      const result = await openBatteryOptimizationSettingsScreen();
+      expect(result).toEqual({ intent: "settings", opened: true });
+      expect(mockStartActivityAsync).toHaveBeenCalledWith(
+        "android.settings.IGNORE_BATTERY_OPTIMIZATION_SETTINGS",
+        undefined
       );
-      expect(unavailable.length).toBeGreaterThanOrEqual(2);
     });
   });
 });

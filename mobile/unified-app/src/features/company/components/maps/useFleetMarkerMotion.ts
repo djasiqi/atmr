@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import type { Marker } from "react-native-maps";
 
-import { reportFleetMarkerAnimationSkipped } from "../../../../core/observability/fleetMapDiagnostics";
 import type { CompanyDriverLiveLocation } from "../../api/contracts";
 import {
-  animateFleetMarkerToCoordinate,
+  interpolateFleetMarkerPosition,
   isValidFleetMapCoordinate,
   parseFleetMarkerRecordedAtMs,
   resolveFleetMarkerMotionPlan,
@@ -20,132 +19,78 @@ type Options = {
   secondaryMarkerRef?: RefObject<Marker | null>;
 };
 
-function scheduleNativeMarkerReady(onReady: () => void): () => void {
-  let cancelled = false;
-  const frame1 = requestAnimationFrame(() => {
-    if (cancelled) return;
-    requestAnimationFrame(() => {
-      if (!cancelled) {
-        onReady();
-      }
-    });
-  });
-  return () => {
-    cancelled = true;
-    cancelAnimationFrame(frame1);
-  };
-}
-
 export function useFleetMarkerMotion({
   target,
   markerKey,
   recordedAt,
   locationStatus,
-  secondaryMarkerRef,
 }: Options) {
   const [displayCoordinate, setDisplayCoordinate] = useState<FleetMapLatLng>(target);
+  const displayCoordinateRef = useRef<FleetMapLatLng>(target);
   const committedCoordinateRef = useRef<FleetMapLatLng>(target);
   const previousMarkerKeyRef = useRef(markerKey);
   const previousRecordedAtMsRef = useRef<number | null>(parseFleetMarkerRecordedAtMs(recordedAt));
+  const lastMotionAtMsRef = useRef<number | null>(null);
   const primaryMarkerRef = useRef<Marker | null>(null);
-  const commitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const animationSeqRef = useRef(0);
-  const primaryNativeReadyRef = useRef(false);
-  const secondaryNativeReadyRef = useRef(false);
-  const nativeReadyCleanupRef = useRef<(() => void) | null>(null);
+  const rafCleanupRef = useRef<(() => void) | null>(null);
 
-  const markPrimaryNativePending = useCallback(() => {
-    primaryNativeReadyRef.current = false;
-    nativeReadyCleanupRef.current?.();
-    nativeReadyCleanupRef.current = scheduleNativeMarkerReady(() => {
-      primaryNativeReadyRef.current = true;
-      nativeReadyCleanupRef.current = null;
-    });
-  }, []);
-
-  const markSecondaryNativePending = useCallback(() => {
-    secondaryNativeReadyRef.current = false;
-    if (!secondaryMarkerRef?.current) {
-      return;
-    }
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        if (secondaryMarkerRef.current) {
-          secondaryNativeReadyRef.current = true;
-        }
-      });
-    });
-  }, [secondaryMarkerRef]);
-
-  const clearCommitTimer = useCallback(() => {
-    if (commitTimerRef.current != null) {
-      clearTimeout(commitTimerRef.current);
-      commitTimerRef.current = null;
-    }
+  const clearRaf = useCallback(() => {
+    rafCleanupRef.current?.();
+    rafCleanupRef.current = null;
   }, []);
 
   const snapTo = useCallback(
     (coordinate: FleetMapLatLng, seq: number) => {
       if (!shouldApplyFleetMarkerCommit(seq, animationSeqRef.current)) return;
+      clearRaf();
       committedCoordinateRef.current = coordinate;
+      displayCoordinateRef.current = coordinate;
       setDisplayCoordinate(coordinate);
-      markPrimaryNativePending();
-      markSecondaryNativePending();
+      lastMotionAtMsRef.current = Date.now();
     },
-    [markPrimaryNativePending, markSecondaryNativePending]
+    [clearRaf]
   );
 
-  const animateMarkers = useCallback(
-    (from: FleetMapLatLng, to: FleetMapLatLng, durationMs: number): boolean => {
-      if (!primaryNativeReadyRef.current) {
-        reportFleetMarkerAnimationSkipped("native_not_ready", { markerKey });
-        return false;
-      }
+  const runJsInterpolation = useCallback(
+    (from: FleetMapLatLng, to: FleetMapLatLng, durationMs: number, seq: number) => {
+      clearRaf();
+      const startMs = performance.now();
+      let rafId = 0;
 
-      const primaryOk = animateFleetMarkerToCoordinate({
-        marker: primaryMarkerRef.current,
-        from,
-        to,
-        durationMs,
-      });
+      const step = () => {
+        if (!shouldApplyFleetMarkerCommit(seq, animationSeqRef.current)) return;
+        const elapsed = performance.now() - startMs;
+        const progress = durationMs <= 0 ? 1 : Math.min(1, elapsed / durationMs);
+        const coord = interpolateFleetMarkerPosition(from, to, progress);
+        setDisplayCoordinate(coord);
+        if (progress < 1) {
+          rafId = requestAnimationFrame(step);
+        } else {
+          committedCoordinateRef.current = to;
+          lastMotionAtMsRef.current = Date.now();
+          rafCleanupRef.current = null;
+        }
+      };
 
-      if (
-        secondaryMarkerRef?.current &&
-        secondaryNativeReadyRef.current &&
-        isValidFleetMapCoordinate(from) &&
-        isValidFleetMapCoordinate(to)
-      ) {
-        animateFleetMarkerToCoordinate({
-          marker: secondaryMarkerRef.current,
-          from,
-          to,
-          durationMs,
-          reportSkip: false,
-        });
-      }
-
-      return primaryOk;
+      rafId = requestAnimationFrame(step);
+      rafCleanupRef.current = () => cancelAnimationFrame(rafId);
     },
-    [markerKey, secondaryMarkerRef]
+    [clearRaf]
   );
 
   useEffect(() => {
-    markPrimaryNativePending();
     return () => {
-      clearCommitTimer();
       animationSeqRef.current += 1;
-      nativeReadyCleanupRef.current?.();
-      nativeReadyCleanupRef.current = null;
+      clearRaf();
     };
-  }, [clearCommitTimer, markPrimaryNativePending]);
+  }, [clearRaf]);
 
   useEffect(() => {
-    const from = committedCoordinateRef.current;
+    const from = displayCoordinateRef.current;
     const markerKeyChanged = markerKey !== previousMarkerKeyRef.current;
     if (markerKeyChanged) {
       previousMarkerKeyRef.current = markerKey;
-      markPrimaryNativePending();
-      markSecondaryNativePending();
     }
 
     const nextRecordedAtMs = parseFleetMarkerRecordedAtMs(recordedAt);
@@ -154,13 +99,13 @@ export function useFleetMarkerMotion({
       to: target,
       previousRecordedAtMs: previousRecordedAtMsRef.current,
       nextRecordedAtMs,
+      lastMotionAtMs: lastMotionAtMsRef.current,
       locationStatus,
       markerKeyChanged,
     });
 
     previousRecordedAtMsRef.current = nextRecordedAtMs ?? previousRecordedAtMsRef.current;
 
-    clearCommitTimer();
     animationSeqRef.current += 1;
     const seq = animationSeqRef.current;
 
@@ -169,26 +114,17 @@ export function useFleetMarkerMotion({
       return;
     }
 
-    const animated = animateMarkers(from, target, plan.durationMs);
-    if (!animated) {
+    if (!isValidFleetMapCoordinate(from)) {
       snapTo(target, seq);
       return;
     }
 
-    commitTimerRef.current = setTimeout(() => {
-      commitTimerRef.current = null;
-      if (!shouldApplyFleetMarkerCommit(seq, animationSeqRef.current)) return;
-      committedCoordinateRef.current = target;
-      setDisplayCoordinate(target);
-    }, plan.durationMs);
+    runJsInterpolation(from, target, plan.durationMs, seq);
   }, [
-    animateMarkers,
-    clearCommitTimer,
     locationStatus,
-    markPrimaryNativePending,
-    markSecondaryNativePending,
     markerKey,
     recordedAt,
+    runJsInterpolation,
     snapTo,
     target.latitude,
     target.longitude,

@@ -11,6 +11,7 @@ export type AppSwitchProps = {
   /** Style du conteneur ligne (flexDirection row). */
   style?: StyleProp<ViewStyle>;
   accessibilityLabel?: string;
+  disabled?: boolean;
 };
 
 export function AppSwitch({
@@ -19,6 +20,7 @@ export function AppSwitch({
   label,
   style,
   accessibilityLabel,
+  disabled = false,
 }: AppSwitchProps) {
   const t = useResponsiveTokens();
   const trackOff = "#E6EEEB";
@@ -29,6 +31,7 @@ export function AppSwitch({
       <Switch
         value={value}
         onValueChange={onValueChange}
+        disabled={disabled}
         trackColor={{ false: trackOff, true: trackOn }}
         thumbColor="#FFFFFF"
         ios_backgroundColor={trackOff}
@@ -37,7 +40,10 @@ export function AppSwitch({
         accessibilityLabel={accessibilityLabel}
       />
       <Pressable
-        onPress={() => onValueChange(!value)}
+        onPress={() => {
+          if (disabled) return;
+          onValueChange(!value);
+        }}
         accessibilityRole="none"
         importantForAccessibility="no-hide-descendants"
       >

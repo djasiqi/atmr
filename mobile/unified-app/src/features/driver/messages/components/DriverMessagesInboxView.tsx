@@ -21,9 +21,12 @@ import { useInboxSyncBanner } from "../useInboxSyncBanner";
 import {
   type InboxTab,
   countUnreadForTab,
-  sortThreadsByRecent,
   threadMatchesTab,
 } from "../inboxDisplay";
+import {
+  filterThreadsForMobileTab,
+  sortThreadsForMobileInbox,
+} from "../inboxThreadPolicy";
 import type { MessageHubThread } from "../types";
 import { inboxThreadListKey } from "../dedupeHubThreads";
 import { InboxThreadRow } from "./InboxThreadRow";
@@ -59,7 +62,7 @@ export function DriverMessagesInboxView() {
   const markAllRead = useMarkAllInboxRead(companyId);
   const [search, setSearch] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<InboxTab>("all");
+  const [activeTab, setActiveTab] = useState<InboxTab>("contacts");
   const [menuOpen, setMenuOpen] = useState(false);
   const [unreadOnly, setUnreadOnly] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -92,6 +95,7 @@ export function DriverMessagesInboxView() {
   const filteredThreads = useMemo(() => {
     const q = search.trim().toLowerCase();
     let list = allThreads.filter((t) => threadMatchesTab(t, activeTab));
+    list = filterThreadsForMobileTab(list, activeTab);
     if (unreadOnly) {
       list = list.filter((t) => (t.unread_count ?? 0) > 0);
     }
@@ -104,7 +108,7 @@ export function DriverMessagesInboxView() {
           String(t.booking_id ?? "").includes(q)
       );
     }
-    return sortThreadsByRecent(list);
+    return sortThreadsForMobileInbox(list);
   }, [activeTab, allThreads, search, unreadOnly]);
 
   const unreadThreadIds = useMemo(
@@ -133,9 +137,12 @@ export function DriverMessagesInboxView() {
     threadsQuery.isLoading && !threadsQuery.data && allThreads.length === 0;
 
   const listHeader = useMemo(() => {
-    if (activeTab === "contacts" && !search.trim()) {
+    if (activeTab === "contacts" || activeTab === "all") {
+      if (search.trim()) return null;
       return (
         <ContactsInboxShortcuts
+          onOpenTeam={() => openThread("team")}
+          onOpenDispatch={() => openThread("dispatch")}
           onNewColleague={() => router.push("/(app)/(driver)/messages/colleagues")}
           onOpenSupport={() => openThread("support")}
         />
@@ -242,6 +249,7 @@ export function DriverMessagesInboxView() {
                 tab={activeTab}
                 hasSearch={Boolean(search.trim())}
                 urgentFilter={unreadOnly}
+                onOpenTeam={() => openThread("team")}
                 onOpenDispatch={() => openThread("dispatch")}
                 onOpenColleagues={() => router.push("/(app)/(driver)/messages/colleagues")}
                 onOpenSupport={() => openThread("support")}

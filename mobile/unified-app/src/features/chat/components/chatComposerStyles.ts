@@ -159,10 +159,14 @@ export const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 0,
+    zIndex: 4,
     ...composerSoftShadow,
   },
   sendCirclePressed: {
     backgroundColor: C_BRAND_STRONG,
+  },
+  sendCircleBusy: {
+    opacity: 0.75,
   },
   sendCircleDisabled: {
     backgroundColor: "#f1f5f9",

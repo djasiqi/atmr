@@ -2,6 +2,7 @@ import React from "react";
 import { act, create } from "react-test-renderer";
 
 import { useMissionLiveTrackingGuard } from "./useMissionLiveTrackingGuard";
+import { __resetMissionLiveTrackingDisclosureBridgeForTests } from "../services/missionLiveTrackingDisclosureBridge";
 
 jest.mock("../../../core/featureFlags/registry", () => ({
   isFeatureEnabled: (key: string) =>
@@ -24,6 +25,12 @@ jest.mock("../services/trackingReadinessPersistence", () => ({
   setTrackingNeedsAttention: jest.fn(),
 }));
 
+jest.mock("../services/liveTrackingDisclosureSession", () => ({
+  isPresenceDisclosureAccepted: () => false,
+  isLiveTrackingDisclosureAccepted: () => false,
+  markLiveTrackingDisclosureAccepted: jest.fn(),
+}));
+
 jest.mock("expo-location", () => ({
   requestForegroundPermissionsAsync: jest.fn(),
   requestBackgroundPermissionsAsync: jest.fn(),
@@ -43,6 +50,7 @@ function Probe(props: { onReady: (api: ReturnType<typeof useMissionLiveTrackingG
 
 describe("useMissionLiveTrackingGuard", () => {
   beforeEach(() => {
+    __resetMissionLiveTrackingDisclosureBridgeForTests();
     jest.clearAllMocks();
     eligibility.evaluateMissionTrackingCapability.mockResolvedValue({
       capable: false,

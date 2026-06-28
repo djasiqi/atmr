@@ -28,6 +28,19 @@ import { buildIdentityFromMission } from "../../../src/features/company/utils/bo
 import type { CompanyDispatchMission } from "../../../src/features/company/api/contracts";
 import { TransferRideModal } from "../../../src/features/company/components/transfers/TransferRideModal";
 import {
+  RideDetailBillingSection,
+  RideDetailDestinationSection,
+  RideDetailInfoSection,
+  RideDetailRouteSection,
+  RideDetailTimelineSection,
+} from "../../../src/features/company/components/rides/CompanyRideDetailSections";
+import {
+  buildRideBillingSummary,
+  buildRideDetailInfoRows,
+  buildRideTimeline,
+  readRideDestinationDetails,
+} from "../../../src/features/company/utils/companyRideDetailPresentation";
+import {
   EnterpriseActionChip,
   EnterpriseFooterActionRow,
 } from "../../../src/features/company/components/EnterpriseActionChip";
@@ -64,18 +77,6 @@ function readPassengerLabel(data: Record<string, unknown> | null | undefined): s
     }
   }
   return readClientName(data);
-}
-
-function readIdentitySourceName(data: Record<string, unknown> | null | undefined): string | null {
-  if (!data) return null;
-  const identity = data.identity;
-  if (identity && typeof identity === "object") {
-    const source = (identity as { source?: { name?: string } }).source;
-    if (source && typeof source.name === "string" && source.name.trim()) {
-      return source.name.trim();
-    }
-  }
-  return null;
 }
 
 function readClientName(data: Record<string, unknown> | null | undefined): string | null {
@@ -276,11 +277,6 @@ export default function CompanyRideDetailsScreen() {
       }) ?? null
     );
   }, [invoicesQuery.data, rideIdNumber]);
-  const hasUnpaidInvoice = useMemo(() => {
-    if (!linkedInvoice) return false;
-    const status = String(linkedInvoice.status ?? linkedInvoice.payment_status ?? "").toLowerCase();
-    return status === "unpaid" || status === "pending" || status === "overdue";
-  }, [linkedInvoice]);
 
   useEffect(() => {
     emitCompanyDispatchTelemetry(
@@ -406,7 +402,6 @@ export default function CompanyRideDetailsScreen() {
   const statusStr = d ? String((d as { status?: string }).status ?? "pending") : "pending";
   const statusStyle = getEnterpriseStatusColors(statusStr);
   const clientTitle = d ? readPassengerLabel(d) : null;
-  const sourceTitle = d ? readIdentitySourceName(d) : null;
   const detailIdentity = d
     ? buildIdentityFromMission(d as unknown as CompanyDispatchMission)
     : null;
@@ -419,7 +414,6 @@ export default function CompanyRideDetailsScreen() {
       }`
     : "Course";
   const idLine = d ? String((d as { mission_id?: number }).mission_id ?? rideId ?? "—") : (rideId ?? "—");
-  const scheduled = scheduledIso ? dayjs(String(scheduledIso)).format("DD/MM/YYYY HH:mm") : "n/a";
   const pickup = readLocationLabel(d, "pickup") ?? "—";
   const drop = readLocationLabel(d, "dropoff") ?? "—";
   const driverId = d
@@ -433,6 +427,18 @@ export default function CompanyRideDetailsScreen() {
   const hasAssignedDriver = driverId != null || Boolean(driverLabel);
   const driverDisplay = driverLabel ?? (driverId != null ? `#${driverId}` : "Non assigné");
   const showUrgentAction = d ? canMarkRideUrgent(d as unknown as CompanyDispatchMission) : false;
+  const billingSummary = d ? buildRideBillingSummary(d, linkedInvoice) : null;
+  const destinationDetails = d ? readRideDestinationDetails(d) : null;
+  const timelineItems = d ? buildRideTimeline(d, driverLabel) : [];
+  const infoRows =
+    d && billingSummary
+      ? buildRideDetailInfoRows(d, detailIdentity, {
+          statusLabel: mapStatusToLabel(statusStr),
+          scheduledIso,
+          driverDisplay,
+          billingSummary,
+        })
+      : [];
 
   if (missionQuery.isLoading && !d) {
     return (
@@ -487,85 +493,17 @@ export default function CompanyRideDetailsScreen() {
                 </AppText>
               </View>
             </View>
-            <View style={styles.section}>
-              <AppText variant="sectionTitle" style={styles.sectionTitle}>
-                Trajet
-              </AppText>
-              <View style={styles.routeCard}>
-                <View style={styles.routeRow}>
-                  <View style={styles.routeIconWrap}>
-                    <Ionicons name="location-outline" size={16} color={E.BRAND} />
-                  </View>
-                  <AppText variant="body" style={styles.routeText} numberOfLines={3}>
-                    {pickup}
-                  </AppText>
-                </View>
-                <View style={styles.routeDivider} />
-                <View style={styles.routeRow}>
-                  <View style={styles.routeIconWrap}>
-                    <Ionicons name="flag-outline" size={16} color={E.BRAND} />
-                  </View>
-                  <AppText variant="body" style={styles.routeText} numberOfLines={3}>
-                    {drop}
-                  </AppText>
-                </View>
-              </View>
-            </View>
-            <View style={styles.section}>
-              <AppText variant="sectionTitle" style={styles.sectionTitle}>
-                Informations
-              </AppText>
-              {[
-                ...(detailIdentity?.passengerLabel
-                  ? [{ label: "Passager", value: detailIdentity.passengerLabel }] as const
-                  : []),
-                ...(detailIdentity?.source?.name
-                  ? [{ label: "Origine", value: detailIdentity.source.name }] as const
-                  : sourceTitle
-                    ? [{ label: "Origine", value: sourceTitle }] as const
-                    : []),
-                ...(detailIdentity?.ownership?.owner_company_name
-                  ? [{ label: "Propriétaire", value: detailIdentity.ownership.owner_company_name }] as const
-                  : []),
-                ...(detailIdentity?.execution?.executing_company_name
-                  ? [{ label: "Exécutant", value: detailIdentity.execution.executing_company_name }] as const
-                  : []),
-                ...(detailIdentity?.upstream?.name
-                  ? [{ label: "Source amont", value: detailIdentity.upstream.name }] as const
-                  : []),
-                { label: "Statut", value: mapStatusToLabel(statusStr) },
-                { label: "Prévue", value: scheduled },
-                { label: "Chauffeur", value: driverDisplay },
-                {
-                  label: "Facturation",
-                  value: linkedInvoice
-                    ? String(linkedInvoice.status ?? linkedInvoice.payment_status ?? "n/a")
-                    : "Aucune facture liée",
-                },
-                ...(hasUnpaidInvoice ? [{ label: "Alerte", value: "Impayé" }] as const : []),
-              ].map((row, idx, arr) => (
-                <View
-                  key={row.label + String(idx)}
-                  style={[
-                    styles.infoRow,
-                    idx === arr.length - 1 ? styles.infoRowLast : null,
-                  ]}
-                >
-                  <AppText variant="bodyMuted" style={styles.infoLabel}>
-                    {row.label}
-                  </AppText>
-                  <AppText
-                    variant="body"
-                    style={[
-                      styles.infoValue,
-                      row.label === "Alerte" ? { color: E.DANGER, fontWeight: "600" } : null,
-                    ]}
-                  >
-                    {row.value}
-                  </AppText>
-                </View>
-              ))}
-            </View>
+            <RideDetailInfoSection rows={infoRows} />
+            <RideDetailRouteSection
+              pickup={pickup}
+              dropoff={drop}
+              clinicalLine={destinationDetails?.clinicalLine ?? null}
+            />
+            {destinationDetails ? (
+              <RideDetailDestinationSection destination={destinationDetails} />
+            ) : null}
+            {billingSummary ? <RideDetailBillingSection billing={billingSummary} /> : null}
+            <RideDetailTimelineSection items={timelineItems} />
             <View style={styles.section}>
               <AppText variant="sectionTitle" style={styles.sectionTitle}>
                 Actions
@@ -764,52 +702,6 @@ const styles = StyleSheet.create({
   actionsWrap: {
     marginTop: 2,
   },
-  routeCard: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: E.BORDER,
-    backgroundColor: E.BG,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 8,
-  },
-  routeRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 10,
-  },
-  routeIconWrap: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(0, 121, 107, 0.10)",
-    marginTop: 1,
-  },
-  routeText: {
-    flex: 1,
-    color: E.TEXT_SEC,
-    fontSize: FONT_SIZE.px13,
-    lineHeight: 19,
-  },
-  routeDivider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: E.BORDER,
-    marginVertical: 2,
-    marginLeft: 32,
-  },
-  infoRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 10,
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: E.BORDER,
-  },
-  infoRowLast: { marginBottom: 0, paddingBottom: 0, borderBottomWidth: 0 },
-  infoLabel: { color: E.TEXT_SEC, fontSize: FONT_SIZE.px13, flex: 1, paddingRight: 8 },
-  infoValue: { color: E.TEXT, fontSize: FONT_SIZE.px13, flex: 1, textAlign: "right", fontWeight: "500" as const },
   mutationErr: { marginHorizontal: 16, marginTop: 8, fontWeight: "600" },
   backCta: {
     flexDirection: "row",

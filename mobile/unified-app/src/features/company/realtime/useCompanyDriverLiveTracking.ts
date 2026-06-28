@@ -91,12 +91,14 @@ export function normalizeRealtimeLocation(payload: DriverRealtimePayload): Compa
       ? payload.last_name.trim()
       : null;
   const mergedFromParts = [firstName, lastName].filter(Boolean).join(" ").trim() || null;
+  const fullName =
+    typeof payload.full_name === "string" && payload.full_name.trim()
+      ? payload.full_name.trim()
+      : mergedFromParts;
   const driverName =
     typeof payload.driver_name === "string" && payload.driver_name.trim()
       ? payload.driver_name.trim()
-      : typeof payload.full_name === "string" && payload.full_name.trim()
-        ? payload.full_name.trim()
-        : mergedFromParts;
+      : fullName;
   const missionStatus =
     typeof payload.mission_status === "string" ? payload.mission_status.trim().toUpperCase() : "";
   const driverStatus =
@@ -114,7 +116,7 @@ export function normalizeRealtimeLocation(payload: DriverRealtimePayload): Compa
   return {
     driver_id: driverId,
     driver_name: driverName,
-    full_name: driverName,
+    full_name: fullName ?? driverName,
     first_name: firstName,
     last_name: lastName,
     mission_id: missionId,
@@ -194,7 +196,27 @@ function mergeRealtimeDriver(
     device_health: normalized.device_health ?? existing?.device_health ?? undefined,
   };
   if (!shouldReplaceDriverLocation(existing, normalized)) return null;
-  return mergeDriverLocationPreserveReference(existing, merged);
+  const preserved = mergeDriverLocationPreserveReference(existing, merged);
+  if (preserved !== existing) return preserved;
+  // Parité web : appliquer les micro-mouvements GPS même sous le seuil métier (5 m).
+  return {
+    ...existing,
+    latitude: merged.latitude,
+    longitude: merged.longitude,
+    recorded_at: merged.recorded_at ?? existing.recorded_at,
+    received_at: merged.received_at ?? existing.received_at,
+    timestamp: merged.timestamp,
+    heading: merged.heading ?? existing.heading,
+    speed: merged.speed ?? existing.speed,
+    accuracy: merged.accuracy ?? existing.accuracy,
+    location_status: merged.location_status ?? existing.location_status,
+    tracking_display_status:
+      merged.tracking_display_status ?? existing.tracking_display_status,
+    last_seen_seconds: merged.last_seen_seconds ?? existing.last_seen_seconds,
+    status: merged.status ?? existing.status,
+    mission_id: merged.mission_id ?? existing.mission_id,
+    is_background: merged.is_background ?? existing.is_background,
+  };
 }
 
 export function applyPendingDriverUpdates(
@@ -404,18 +426,22 @@ export function useCompanyDriverLiveTracking() {
       const normalized = normalizeRealtimeLocation(payload);
       if (!normalized) return;
 
+      const isLocationUpdate = payload.event_type === "driver_location_update";
       const immediate =
         isCriticalStateEvent ||
-        (firstGpsAfterReconnectRef.current && payload.event_type === "driver_location_update");
+        isLocationUpdate ||
+        (firstGpsAfterReconnectRef.current && isLocationUpdate);
 
-      if (firstGpsAfterReconnectRef.current && payload.event_type === "driver_location_update") {
+      if (firstGpsAfterReconnectRef.current && isLocationUpdate) {
         firstGpsAfterReconnectRef.current = false;
       }
 
-      const priority = resolveGpsEventFlushPriority(payload.event_type ?? "", {
-        immediate,
-        observabilityOnly: Boolean(normalized.accepted_observability_only),
-      });
+      const priority: GpsFlushPriority = isLocationUpdate
+        ? "critical"
+        : resolveGpsEventFlushPriority(payload.event_type ?? "", {
+            immediate,
+            observabilityOnly: Boolean(normalized.accepted_observability_only),
+          });
 
       enqueueDriverUpdate(normalized, { immediate, priority });
     });

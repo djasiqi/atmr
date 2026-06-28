@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement, type MutableRefObject } from "react";
 import { Platform, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 import MapView, { Circle, Polyline, PROVIDER_GOOGLE, type Region } from "react-native-maps";
 import { LirieMapLogoClip } from "../../maps/LirieMapLogoClip";
@@ -47,6 +47,10 @@ import {
   type MapEdgePadding,
 } from "./maps/fleetMapFitPadding";
 
+export type FleetMapCameraControl = {
+  clearUserCameraLock: () => void;
+};
+
 export type EnterpriseDriversMapProps = {
   drivers: CompanyDriverLiveLocation[];
   markers?: FleetMapMarker[];
@@ -82,6 +86,10 @@ export type EnterpriseDriversMapProps = {
    * pendant reconnexion (crash natif New Arch).
    */
   nativeOverlaysEnabled?: boolean;
+  /** Pan / zoom manuel : bloque le recentrage auto sur tick GPS. */
+  onUserCameraGesture?: () => void;
+  /** Référence pour réautoriser le recentrage (bouton centrer). */
+  cameraControlRef?: MutableRefObject<FleetMapCameraControl | null>;
 };
 
 const BORDER = "rgba(145, 165, 157, 0.45)";
@@ -149,11 +157,15 @@ export function EnterpriseDriversMap({
   cameraVerticalBias = 0,
   constrainFleetZoom = false,
   nativeOverlaysEnabled = true,
+  onUserCameraGesture,
+  cameraControlRef,
 }: EnterpriseDriversMapProps) {
   const mapRef = useRef<MapView | null>(null);
   const mapReadyRef = useRef(false);
   const [mapReady, setMapReady] = useState(false);
   const pendingFitRef = useRef(false);
+  const userCameraLockedRef = useRef(false);
+  const programmaticCameraRef = useRef(false);
   const driversRef = useRef(drivers);
   const markersRef = useRef<FleetMapMarker[]>(markersProp ?? []);
   const driversByIdRef = useRef<Map<number, FleetDriverMapItem>>(new Map());
@@ -182,10 +194,25 @@ export function EnterpriseDriversMap({
     return applyFleetFitVerticalBias(base, cameraVerticalBias);
   }, [cameraInsets, cameraVerticalBias, fitEdgePadding, logoClipFill]);
 
-  const fleetMaxDelta = useMemo(
-    () => (constrainFleetZoom ? computeFleetMaxRegionDelta(drivers) : undefined),
-    [constrainFleetZoom, drivers]
+  const driversStructuralKey = useMemo(
+    () =>
+      drivers
+        .map((d) => d.driver_id)
+        .sort((a, b) => a - b)
+        .join("|"),
+    [drivers]
   );
+  const maxDeltaCacheRef = useRef<{ key: string; value: number | undefined }>({
+    key: "",
+    value: undefined,
+  });
+  if (maxDeltaCacheRef.current.key !== driversStructuralKey) {
+    maxDeltaCacheRef.current = {
+      key: driversStructuralKey,
+      value: constrainFleetZoom ? computeFleetMaxRegionDelta(drivers) : undefined,
+    };
+  }
+  const fleetMaxDelta = maxDeltaCacheRef.current.value;
 
   const mapStyleProps = useMemo(() => getNativeGoogleMapViewStyleProps(), []);
   const mapDims = { height: mapHeight, width: "100%" as const };
@@ -205,6 +232,7 @@ export function EnterpriseDriversMap({
       return;
     }
     pendingFitRef.current = false;
+    programmaticCameraRef.current = true;
 
     const currentDrivers = driversRef.current;
     const currentMarkers = markersRef.current;
@@ -235,13 +263,63 @@ export function EnterpriseDriversMap({
     });
   }, [resolvedFitPadding]);
 
+  const fitAllDriversRef = useRef(fitAllDrivers);
+  fitAllDriversRef.current = fitAllDrivers;
+
+  const recenterRegionRef = useRef(recenterRegion);
+  recenterRegionRef.current = recenterRegion;
+
+  const clearUserCameraLock = useCallback(() => {
+    userCameraLockedRef.current = false;
+  }, []);
+
+  useEffect(() => {
+    if (!cameraControlRef) return;
+    cameraControlRef.current = { clearUserCameraLock };
+    return () => {
+      cameraControlRef.current = null;
+    };
+  }, [cameraControlRef, clearUserCameraLock]);
+
+  const applyExplicitRecenter = useCallback(() => {
+    programmaticCameraRef.current = true;
+    if (recenterMode === "all") {
+      fitAllDrivers();
+      return;
+    }
+    const map = mapRef.current;
+    const region = recenterRegionRef.current;
+    if (!map || !region) return;
+    void map.animateToRegion(region, FLEET_MISSION_MAP_POLICY.cameraAnimationMs);
+  }, [fitAllDrivers, recenterMode]);
+
+  const handleRegionChangeComplete = useCallback(
+    (region: Region, details?: { isGesture?: boolean }) => {
+      void region;
+      if (programmaticCameraRef.current) {
+        programmaticCameraRef.current = false;
+        return;
+      }
+      if (details?.isGesture !== false) {
+        userCameraLockedRef.current = true;
+        onUserCameraGesture?.();
+      }
+    },
+    [onUserCameraGesture]
+  );
+
   const onMapReady = useCallback(() => {
     mapReadyRef.current = true;
     setMapReady(true);
-    if (pendingFitRef.current || recenterMode === "all") {
+    if (pendingFitRef.current) {
+      pendingFitRef.current = false;
+      applyExplicitRecenter();
+      return;
+    }
+    if (recenterMode === "all") {
       fitAllDrivers();
     }
-  }, [fitAllDrivers, recenterMode]);
+  }, [applyExplicitRecenter, fitAllDrivers, recenterMode]);
 
   useEffect(() => {
     void recenterToken;
@@ -249,14 +327,18 @@ export function EnterpriseDriversMap({
       pendingFitRef.current = true;
       return;
     }
+    pendingFitRef.current = false;
+    if (userCameraLockedRef.current) return;
+    programmaticCameraRef.current = true;
     if (recenterMode === "all") {
-      fitAllDrivers();
+      fitAllDriversRef.current();
       return;
     }
     const map = mapRef.current;
-    if (!map || !recenterRegion) return;
-    void map.animateToRegion(recenterRegion, FLEET_MISSION_MAP_POLICY.cameraAnimationMs);
-  }, [fitAllDrivers, recenterMode, recenterRegion, recenterToken]);
+    const region = recenterRegionRef.current;
+    if (!map || !region) return;
+    void map.animateToRegion(region, FLEET_MISSION_MAP_POLICY.cameraAnimationMs);
+  }, [recenterToken, recenterMode]);
 
   const handleDriverMarkerPress = useCallback(
     (driverId: number) => {
@@ -479,6 +561,7 @@ export function EnterpriseDriversMap({
     showsUserLocation: false,
     mapPadding,
     onMapReady,
+    onRegionChangeComplete: handleRegionChangeComplete,
     ...(fleetMaxDelta != null ? { maxDelta: fleetMaxDelta } : {}),
     ...Platform.select({
       ios: {
@@ -488,6 +571,7 @@ export function EnterpriseDriversMap({
       default: {},
     }),
     ...mapStyleProps,
+    ...(mapsApiKey ? { googleMapApiKey: mapsApiKey } : {}),
   };
 
   const etaBubble =

@@ -328,6 +328,10 @@ function normalizeMission(raw: RawRide): CompanyDispatchMission | null {
     status = "cancelled";
   } else if (status === "awaiting_client_payment" || status === "awaiting_payment") {
     status = "pending";
+  } else if (status === "onboard" || status === "en_route_dropoff") {
+    status = "in_progress";
+  } else if (status === "en_route_pickup") {
+    status = "en_route";
   }
   const normalizedStatus: CompanyDispatchMission["status"] =
     status === "pending" ||
@@ -442,9 +446,9 @@ function normalizeMission(raw: RawRide): CompanyDispatchMission | null {
 }
 
 function normalizeLocation(
-  raw: NonNullable<RawDriversResponse["locations"]>[number]
+  raw: NonNullable<RawDriversResponse["locations"]>[number] & { id?: number | string }
 ): CompanyDriverLiveLocation | null {
-  const driverId = toFiniteNumber(raw.driver_id);
+  const driverId = toFiniteNumber(raw.driver_id ?? raw.id);
   const latitude = toFiniteNumber(raw.latitude ?? raw.lat);
   const longitude = toFiniteNumber(raw.longitude ?? raw.lon ?? raw.lng);
   if (driverId == null || latitude == null || longitude == null) return null;
@@ -457,16 +461,18 @@ function normalizeLocation(
       ? raw.last_name.trim()
       : null;
   const mergedFromParts = [firstName, lastName].filter(Boolean).join(" ").trim() || null;
+  const fullName =
+    typeof raw.full_name === "string" && raw.full_name.trim()
+      ? raw.full_name.trim()
+      : mergedFromParts;
   const driverName =
     typeof raw.driver_name === "string" && raw.driver_name.trim()
       ? raw.driver_name.trim()
-      : typeof raw.full_name === "string" && raw.full_name.trim()
-        ? raw.full_name.trim()
-        : mergedFromParts;
+      : fullName;
   return {
     driver_id: driverId,
     driver_name: driverName,
-    full_name: driverName,
+    full_name: fullName ?? driverName,
     first_name: firstName,
     last_name: lastName,
     mission_id:
@@ -613,7 +619,12 @@ async function fetchDriverLocationsEndpoint(
   });
   const rawRows = response.data.locations ?? response.data.drivers ?? [];
   const locations = rawRows
-    .map(normalizeLocation)
+    .map((row) =>
+      normalizeLocation({
+        ...row,
+        driver_id: row.driver_id ?? (row as { id?: number | string }).id,
+      })
+    )
     .filter((location): location is CompanyDriverLiveLocation => location !== null);
   const normalized: CompanyDriverLiveLocationResponse = {
     context_id: contextId,
@@ -632,10 +643,13 @@ export async function getDriversLocationsSnapshot(
   try {
     return await fetchDriverLocationsEndpoint(
       options.contextId,
-      COMPANY_BACKEND_ENDPOINTS.driversLocations
+      COMPANY_BACKEND_ENDPOINTS.driversLive
     );
   } catch {
-    return fetchDriverLocationsEndpoint(options.contextId, COMPANY_BACKEND_ENDPOINTS.driversLive);
+    return await fetchDriverLocationsEndpoint(
+      options.contextId,
+      COMPANY_BACKEND_ENDPOINTS.driversLocations
+    );
   }
 }
 
@@ -1778,6 +1792,21 @@ export async function transferCompanyRide(
 export async function getCompanyBillingSettings(options: CompanyRequestOptions) {
   const response = await apiClient.get("/company-settings/billing", withContextHeaders(options));
   return response.data as CompanyAnyPayload;
+}
+
+function unwrapCompanyMePayload(data: unknown): CompanyAnyPayload {
+  if (data && typeof data === "object" && "data" in data && !("error" in data)) {
+    const inner = (data as Record<string, unknown>).data;
+    if (inner && typeof inner === "object") return inner as CompanyAnyPayload;
+  }
+  if (data && typeof data === "object") return data as CompanyAnyPayload;
+  return {};
+}
+
+/** Profil entreprise (`GET /companies/me`) — aligné sur le portail web. */
+export async function getCompanyProfile(options: CompanyRequestOptions): Promise<CompanyAnyPayload> {
+  const response = await apiClient.get("/companies/me", withContextHeaders(options));
+  return unwrapCompanyMePayload(response.data);
 }
 
 export async function simulateCompanyPricing(

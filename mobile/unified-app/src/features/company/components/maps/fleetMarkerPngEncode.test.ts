@@ -6,6 +6,7 @@ import {
   buildEtaBadgePngUri,
   buildMissionAnchorPngUri,
   clearFleetMarkerPngCache,
+  resolveDriverMarkerLabelBitmapLayout,
 } from "./fleetMarkerPngEncode";
 
 describe("fleetMarkerPngEncode", () => {
@@ -15,10 +16,36 @@ describe("fleetMarkerPngEncode", () => {
       fill: "#4ade80",
       opacity: 1,
       label: "JD",
-      sizePx: 42,
+      sizePx: 58,
     });
     expect(uri.startsWith("data:image/png;base64,")).toBe(true);
     expect(uri.length).toBeGreaterThan(120);
+  });
+
+  it("cale les initiales dans le disque (2 lettres)", () => {
+    const layout = resolveDriverMarkerLabelBitmapLayout(58, "KA");
+    expect(layout.trimmed).toBe("KA");
+    expect(layout.textScale).toBeLessThanOrEqual(3);
+    expect(layout.glyphAdvance).toBe(5);
+    const textW = layout.trimmed.length * layout.glyphAdvance * layout.textScale;
+    expect(textW).toBeLessThanOrEqual(58 * 0.72);
+  });
+
+  it("encode les initiales alphabétiques (Android)", () => {
+    clearFleetMarkerPngCache();
+    const withLabel = buildDriverMarkerPngUri({
+      fill: "#4ade80",
+      opacity: 1,
+      label: "KA",
+      sizePx: 58,
+    });
+    const withoutLabel = buildDriverMarkerPngUri({
+      fill: "#4ade80",
+      opacity: 1,
+      label: "",
+      sizePx: 58,
+    });
+    expect(withLabel).not.toBe(withoutLabel);
   });
 
   it("met en cache les encodages identiques", () => {

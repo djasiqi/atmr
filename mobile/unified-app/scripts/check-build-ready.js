@@ -77,6 +77,79 @@ function checkDisplayName() {
   }
 }
 
+function checkGpsProductionReadiness(prodEnv) {
+  const requiredTrackingFlags = [
+    ["EXPO_PUBLIC_ENABLE_BG_LOCATION", "1"],
+    ["EXPO_PUBLIC_ENABLE_DRIVER_SOCKET", "1"],
+    ["EXPO_PUBLIC_ENABLE_TRACKING_PERSISTENT_QUEUE", "1"],
+    ["EXPO_PUBLIC_ENABLE_TRACKING_HTTP_FALLBACK", "1"],
+    ["EXPO_PUBLIC_ENABLE_TRACKING_PRESENCE_MODE", "1"],
+    ["EXPO_PUBLIC_ENABLE_TRACKING_SELF_HEAL_WATCH", "1"],
+  ];
+
+  for (const [key, expected] of requiredTrackingFlags) {
+    if (prodEnv[key] === expected) {
+      checks.push(`✅ ${key}=${expected} (production GPS)`);
+    } else {
+      errors.push(`❌ ${key} doit être "${expected}" dans eas.json (production) — tracking GPS désactivé au build`);
+    }
+  }
+
+  if (prodEnv.EXPO_PUBLIC_DRIVER_SOCKET_BATCH_MIN_INTERVAL_MS === "5000") {
+    checks.push("✅ EXPO_PUBLIC_DRIVER_SOCKET_BATCH_MIN_INTERVAL_MS=5000 (aligné rate limiter WS)");
+  } else {
+    errors.push(
+      "❌ EXPO_PUBLIC_DRIVER_SOCKET_BATCH_MIN_INTERVAL_MS doit être \"5000\" dans eas.json (production)"
+    );
+  }
+
+  const fgsTitle = prodEnv.EXPO_PUBLIC_DRIVER_BG_NOTIFICATION_TITLE?.trim();
+  const fgsMission = prodEnv.EXPO_PUBLIC_DRIVER_BG_NOTIFICATION_BODY?.trim();
+  const fgsPresence = prodEnv.EXPO_PUBLIC_DRIVER_BG_NOTIFICATION_BODY_PRESENCE?.trim();
+  if (fgsTitle && fgsMission && fgsPresence) {
+    checks.push("✅ Textes FGS fr-CH définis dans eas.json (production)");
+    if (fgsTitle.includes("Unified")) {
+      warnings.push("⚠️ EXPO_PUBLIC_DRIVER_BG_NOTIFICATION_TITLE contient encore « Unified »");
+    }
+  } else {
+    errors.push(
+      "❌ Textes FGS manquants dans eas.json (EXPO_PUBLIC_DRIVER_BG_NOTIFICATION_TITLE/BODY/BODY_PRESENCE)"
+    );
+  }
+
+  const appJsonPath = path.join(ROOT, "app.json");
+  if (fs.existsSync(appJsonPath)) {
+    const app = JSON.parse(fs.readFileSync(appJsonPath, "utf8"));
+    const perms = app.expo?.android?.permissions ?? [];
+    const needs = [
+      "android.permission.ACCESS_BACKGROUND_LOCATION",
+      "android.permission.FOREGROUND_SERVICE_LOCATION",
+      "android.permission.RECORD_AUDIO",
+    ];
+    for (const perm of needs) {
+      if (perms.includes(perm)) {
+        checks.push(`✅ app.json permission ${perm}`);
+      } else {
+        errors.push(`❌ app.json : permission manquante ${perm}`);
+      }
+    }
+
+    const iosLoc = app.expo?.ios?.infoPlist?.NSLocationWhenInUseUsageDescription ?? "";
+    if (iosLoc.startsWith("La localisation")) {
+      checks.push("✅ app.json permissions iOS localisation en français");
+    } else {
+      warnings.push("⚠️ app.json : NSLocation* iOS pas en français — aligner avec modales disclosure");
+    }
+
+    const patchPath = path.join(ROOT, "patches", "expo-location+19.0.8.patch");
+    if (fs.existsSync(patchPath)) {
+      checks.push("✅ Patch natif expo-location Android 16 présent");
+    } else {
+      errors.push("❌ patches/expo-location+19.0.8.patch manquant — BG Android 16 non couvert");
+    }
+  }
+}
+
 function checkEasProduction() {
   const easPath = path.join(ROOT, "eas.json");
   if (!fs.existsSync(easPath)) {
@@ -140,6 +213,7 @@ function checkEasProduction() {
       );
     }
   }
+  checkGpsProductionReadiness(prodEnv);
 }
 
 function checkNativeDirsAbsentForEas() {

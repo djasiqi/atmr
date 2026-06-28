@@ -2,6 +2,9 @@ import type { DriverMission, DriverMissionStatus } from "../types";
 
 const SWISS_TZ = "Europe/Zurich";
 
+/** Flèche trajet — échappement Unicode pour éviter la corruption « â†' » en source. */
+export const MISSION_ROUTE_ARROW = " \u2192 ";
+
 /** Convention typographique FR : prénom(s) + NOM en majuscules. */
 export function formatClientHeaderName(raw: string): string {
   const t = raw.trim().replace(/\s+/g, " ");

@@ -33,7 +33,6 @@
       ],
       "blockedPermissions": [
         "android.permission.SYSTEM_ALERT_WINDOW",
-        "android.permission.RECORD_AUDIO",
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.READ_MEDIA_IMAGES",
@@ -63,7 +62,7 @@
           ]
         }
       ],
-      "versionCode": 118
+      "versionCode": 119
     },
     "ios": {
       "supportsTablet": false,
@@ -74,6 +73,7 @@
         "applinks:app.lirie.ch"
       ],
       "infoPlist": {
+        "CFBundleDevelopmentRegion": "fr_CH",
         "UIBackgroundModes": [
           "fetch",
           "remote-notification",
@@ -83,12 +83,12 @@
           "tel",
           "comgooglemaps"
         ],
-        "NSLocationWhenInUseUsageDescription": "Location is used for real-time mission tracking during active transport, and when you are marked available during the operational window so your company can dispatch fleet missions.",
-        "NSLocationAlwaysUsageDescription": "Location is used for real-time mission tracking and, when you are marked available during the operational window (typically 07:00–19:00), for fleet availability so your company can assign missions efficiently.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "Location is used for real-time mission tracking and, when you are marked available during the operational window (typically 07:00–19:00), for fleet availability so your company can assign missions efficiently.",
-        "NSPhotoLibraryUsageDescription": "Photo access is required to send attachments.",
-        "NSCameraUsageDescription": "Camera access is required for mission/photo capture.",
-        "NSMicrophoneUsageDescription": "Le micro sert a enregistrer des messages vocaux dans le chat."
+        "NSLocationWhenInUseUsageDescription": "La localisation permet le suivi temps réel des missions en cours et, lorsque vous êtes disponible pendant la plage opérationnelle (07h–19h), la visibilité sur la carte dispatch de votre entreprise.",
+        "NSLocationAlwaysUsageDescription": "La localisation en arrière-plan permet le suivi des missions lorsque l'écran est verrouillé et, lorsque vous êtes disponible pendant la plage opérationnelle (07h–19h), la visibilité flotte pour le dispatch.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "La localisation en arrière-plan permet le suivi des missions lorsque l'écran est verrouillé et, lorsque vous êtes disponible pendant la plage opérationnelle (07h–19h), la visibilité flotte pour le dispatch.",
+        "NSPhotoLibraryUsageDescription": "L'accès aux photos permet d'envoyer des pièces jointes dans le chat.",
+        "NSCameraUsageDescription": "L'accès à la caméra permet de prendre des photos pour les missions.",
+        "NSMicrophoneUsageDescription": "Le micro sert à enregistrer des messages vocaux dans le chat."
       },
       "config": {
         "googleMapsApiKey": "",
@@ -133,7 +133,7 @@
           "isAndroidBackgroundLocationEnabled": true,
           "isAndroidForegroundServiceEnabled": true,
           "isIosBackgroundLocationEnabled": true,
-          "locationAlwaysAndWhenInUsePermission": "Location is used to provide real-time mission tracking during active transport, including in background while a mission is running.",
+          "locationAlwaysAndWhenInUsePermission": "La localisation permet le suivi opérationnel des missions en cours, y compris lorsque l'écran est verrouillé.",
           "androidForegroundServiceIcon": "./assets/images/icon.png"
         }
       ],
@@ -146,8 +146,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Photo library access is required to send attachments.",
-          "cameraPermission": "Camera access is required to capture mission photos."
+          "photosPermission": "L'accès aux photos permet d'envoyer des pièces jointes dans le chat.",
+          "cameraPermission": "L'accès à la caméra permet de prendre des photos pour les missions."
         }
       ],
       "expo-document-picker",

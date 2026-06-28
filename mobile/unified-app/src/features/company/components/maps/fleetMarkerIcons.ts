@@ -1,5 +1,6 @@
 import type { FleetMarkerVariant } from "./mapStatusTheme";
 import { FLEET_DRIVER_MARKER_WEB_BASE_PX } from "./fleetLirieMarkerSizing";
+import { resolveFleetMarkerInitialsFromDisplayName } from "../../utils/companyDriverMapStatus";
 
 /** Canvas SVG avec marge transparente (évite le rognage react-native-maps). */
 const VIEWBOX = 56;
@@ -25,10 +26,9 @@ function escapeSvgText(input: string): string {
     .replaceAll("'", "&#39;");
 }
 
-/** Initiales marqueur (2 lettres max) — parité web makeCircleMarkerIcon. */
+/** Initiales depuis un libellé affiché — parité web getDriverMarkerLabel. */
 export function resolveDriverMarkerInitials(driverName: string): string {
-  const labelRaw = driverName.trim().toUpperCase();
-  return labelRaw.slice(0, 2);
+  return resolveFleetMarkerInitialsFromDisplayName(driverName);
 }
 
 type FleetCircleMarkerOptions = {

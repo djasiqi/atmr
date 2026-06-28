@@ -233,13 +233,14 @@ export async function sendDriverLocation(payload: DriverLocationPayload): Promis
       location_mode: payload.locationMode ?? "availability_presence",
       tracking_event_id: payload.trackingEventId ?? null,
     }, {
-      headers: payload.trackingEventId
-        ? {
-            "X-Location-Event-Id": payload.trackingEventId,
-          }
-        : undefined,
+      headers: {
+        "X-Allow-Offline-Attempt": "1",
+        ...(payload.trackingEventId
+          ? { "X-Location-Event-Id": payload.trackingEventId }
+          : {}),
+      },
     });
-    const payload = data as {
+    const ackBody = data as {
       ack_status?: unknown;
       accept_status?: unknown;
       accept_reason?: unknown;
@@ -248,20 +249,20 @@ export async function sendDriverLocation(payload: DriverLocationPayload): Promis
       trace_id?: unknown;
     };
     const acceptStatus =
-      typeof payload.accept_status === "string" ? payload.accept_status : null;
-    if (acceptStatus === "accepted_async" || payload.queued === true) {
+      typeof ackBody.accept_status === "string" ? ackBody.accept_status : null;
+    if (acceptStatus === "accepted_async" || ackBody.queued === true) {
       return {
         ack_status: "queued",
         accept_reason:
-          typeof payload.accept_reason === "string" ? payload.accept_reason : "queued_kafka",
+          typeof ackBody.accept_reason === "string" ? ackBody.accept_reason : "queued_kafka",
         tracking_event_id:
-          typeof payload.tracking_event_id === "string"
-            ? String(payload.tracking_event_id)
+          typeof ackBody.tracking_event_id === "string"
+            ? String(ackBody.tracking_event_id)
             : null,
-        trace_id: typeof payload.trace_id === "string" ? String(payload.trace_id) : null,
+        trace_id: typeof ackBody.trace_id === "string" ? String(ackBody.trace_id) : null,
       };
     }
-    const status = String(payload.ack_status ?? "accepted");
+    const status = String(ackBody.ack_status ?? "accepted");
     const ackStatus: DriverLocationAck["ack_status"] =
       status === "accepted" ||
       status === "queued" ||
@@ -273,14 +274,14 @@ export async function sendDriverLocation(payload: DriverLocationPayload): Promis
         : "accepted";
     return {
       ack_status: ackStatus,
-      accept_reason: typeof payload.accept_reason === "string"
-        ? String(payload.accept_reason)
+      accept_reason: typeof ackBody.accept_reason === "string"
+        ? String(ackBody.accept_reason)
         : null,
       tracking_event_id:
-        typeof payload.tracking_event_id === "string"
-          ? String(payload.tracking_event_id)
+        typeof ackBody.tracking_event_id === "string"
+          ? String(ackBody.tracking_event_id)
           : null,
-      trace_id: typeof payload.trace_id === "string" ? String(payload.trace_id) : null,
+      trace_id: typeof ackBody.trace_id === "string" ? String(ackBody.trace_id) : null,
     };
   });
 }

@@ -66,18 +66,30 @@ export const DriverIdleState = memo(function DriverIdleState({
     () => deriveTodayStats(todayMissions ?? []),
     [todayMissions]
   );
+  const idleTitle = isAvailable
+    ? "Prêt à recevoir une mission"
+    : "Vous êtes indisponible";
+  const idleSubtitle = isAvailable
+    ? realtimeConnected || gpsConnected
+      ? "Vous êtes disponible et connecté. Les nouvelles missions apparaîtront automatiquement."
+      : "Connexion en cours. Les missions apparaîtront dès que le lien est établi."
+    : "Passez disponible pour recevoir de nouvelles missions.";
 
   return (
-    <View style={styles.root} accessibilityLabel="État chauffeur disponible">
+    <View
+      style={styles.root}
+      accessibilityLabel={
+        isAvailable ? "État chauffeur disponible" : "État chauffeur indisponible"
+      }
+    >
       <View style={styles.mainCard}>
         <RadarPulse active={isAvailable && (realtimeConnected || gpsConnected)} />
         <View style={styles.headerTextBlock}>
           <AppText variant="sectionTitle" style={styles.title}>
-            Prêt à recevoir une mission
+            {idleTitle}
           </AppText>
           <AppText variant="bodyMuted" style={styles.subtitle}>
-            Vous êtes disponible et connecté. Les nouvelles missions apparaîtront
-            automatiquement.
+            {idleSubtitle}
           </AppText>
         </View>
 

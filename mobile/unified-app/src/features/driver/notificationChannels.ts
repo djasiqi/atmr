@@ -1,5 +1,6 @@
 import { getExpoNotificationsModule } from "../../core/notifications/expoNotificationsCompat";
 import { normalizeDriverEventType } from "../../core/realtime/eventContracts";
+import { PRODUCTION_LOCALE } from "../../i18n/productionLocale";
 
 /**
  * Channel generique, cree pour TOUS les contextes (driver/company/client) des le
@@ -105,7 +106,7 @@ export async function ensureBaseNotificationChannels(): Promise<void> {
   if (!Notifications) return;
 
   await Notifications.setNotificationChannelAsync(GENERIC_NOTIFICATION_CHANNEL_ID, {
-    name: "Général",
+    name: PRODUCTION_LOCALE.notificationChannelGeneral,
     importance: Notifications.AndroidImportance.HIGH,
     lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
   });
@@ -132,37 +133,37 @@ export async function ensureDriverNotificationChannels(): Promise<void> {
   if (!Notifications) return;
 
   await Notifications.setNotificationChannelAsync(DRIVER_NOTIFICATION_CHANNELS.urgent, {
-    name: "Urgent",
+    name: PRODUCTION_LOCALE.notificationChannelUrgent,
     importance: Notifications.AndroidImportance.MAX,
     vibrationPattern: [0, 300, 150, 300],
     lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
   });
   await Notifications.setNotificationChannelAsync(DRIVER_NOTIFICATION_CHANNELS.missionUpdates, {
-    name: "Mission updates",
+    name: PRODUCTION_LOCALE.notificationChannelMissionUpdates,
     importance: Notifications.AndroidImportance.HIGH,
     vibrationPattern: [0, 180, 100, 180],
     lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
   });
   await Notifications.setNotificationChannelAsync(DRIVER_NOTIFICATION_CHANNELS.chat, {
-    name: "Chat",
+    name: PRODUCTION_LOCALE.notificationChannelChat,
     importance: Notifications.AndroidImportance.DEFAULT,
     vibrationPattern: [0, 120],
     lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE,
   });
   await Notifications.setNotificationChannelAsync(DRIVER_NOTIFICATION_CHANNELS.silent, {
-    name: "Silent sync",
+    name: PRODUCTION_LOCALE.notificationChannelSilentSync,
     importance: Notifications.AndroidImportance.LOW,
     sound: null,
     vibrationPattern: [0],
     lockscreenVisibility: Notifications.AndroidNotificationVisibility.SECRET,
   });
   await Notifications.setNotificationChannelAsync(DRIVER_NOTIFICATION_CHANNELS.lockscreen, {
-    name: "Lock screen",
+    name: PRODUCTION_LOCALE.notificationChannelLockScreen,
     importance: Notifications.AndroidImportance.HIGH,
     lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
   });
   await Notifications.setNotificationChannelAsync(DRIVER_NOTIFICATION_CHANNELS.missionActive, {
-    name: "Mission active",
+    name: PRODUCTION_LOCALE.notificationChannelMissionActive,
     importance: Notifications.AndroidImportance.HIGH,
     sound: null,
   });

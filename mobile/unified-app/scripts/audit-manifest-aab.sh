@@ -19,9 +19,11 @@ echo "$DUMP"
 
 FAIL=0
 
-if echo "$DUMP" | grep -q "RECORD_AUDIO"; then
-  echo "FAIL: RECORD_AUDIO présent dans le manifest" >&2
+if ! echo "$DUMP" | grep -q "RECORD_AUDIO"; then
+  echo "FAIL: RECORD_AUDIO absent du manifest (requis pour les messages vocaux)" >&2
   FAIL=1
+else
+  echo "OK: RECORD_AUDIO présent (messages vocaux)"
 fi
 
 if ! echo "$DUMP" | grep -q "foregroundServiceType"; then

@@ -3,6 +3,7 @@ export { getChatListInitialScroll } from "./chatScrollTarget";
 export * from "./components/ChatList";
 export * from "./components/ChatConversationShell";
 export * from "./components/ChatComposer";
+export * from "./components/ChatComposerError";
 export {
   COMPOSER_EDGE_GAP,
   OEM_TOOLBAR_SAFETY_MARGIN_PX,

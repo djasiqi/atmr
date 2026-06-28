@@ -27,7 +27,6 @@ import {
   resolveDriverStatusForUx,
 } from "../../../src/features/driver/statusDictionary";
 import type { DriverMission, DriverTransitionStatus } from "../../../src/features/driver/types";
-import { MissionLiveTrackingDisclosureModal } from "../../../src/features/driver/components/MissionLiveTrackingDisclosureModal";
 import { useMissionLiveTrackingGuard } from "../../../src/features/driver/hooks/useMissionLiveTrackingGuard";
 import { requiresLiveTrackingPermission } from "../../../src/features/driver/services/missionLiveTrackingEligibility";
 import { missionActiveCardShadow } from "../../../src/features/driver/theme/driverDashboardTheme";
@@ -38,6 +37,7 @@ import {
   driverHasScheduledPickupTime,
   formatDriverScheduleTimeLabel,
 } from "../../../src/features/driver/utils/pickupScheduling";
+import { MISSION_ROUTE_ARROW } from "../../../src/features/driver/domain/missionDisplay";
 
 const softCardShadow = createShadow(missionActiveCardShadow);
 
@@ -460,7 +460,7 @@ function MissionAccordionCard({
         <View style={styles.routeRow}>
           <Ionicons name="ellipse" size={8} color={done ? "#94A3B8" : statusColor} />
           <AppText variant="body" style={[styles.route, { color: theme.bodyText }, done && styles.routeDone, done && { color: theme.mutedText }]} numberOfLines={1}>
-            {pickupCompact} {" â†’ "} {destinationCompact}
+            {pickupCompact}{MISSION_ROUTE_ARROW}{destinationCompact}
           </AppText>
         </View>
 
@@ -866,14 +866,6 @@ export default function DriverTripsScreen() {
             )}
           </View>
         </Screen>
-        <MissionLiveTrackingDisclosureModal
-          visible={liveTrackingGuard.disclosureVisible}
-          pending={liveTrackingGuard.disclosurePending}
-          showOpenSettings={liveTrackingGuard.showOpenSettings}
-          onCancel={liveTrackingGuard.onDisclosureCancel}
-          onContinue={liveTrackingGuard.onDisclosureContinue}
-          onOpenSettings={liveTrackingGuard.onDisclosureOpenSettings}
-        />
       </PermissionGuard>
     </DriverContextGuard>
   );

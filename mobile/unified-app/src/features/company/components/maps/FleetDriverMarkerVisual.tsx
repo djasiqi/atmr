@@ -1,12 +1,13 @@
 import { Platform, StyleSheet, Text, View } from "react-native";
 
-import { resolveDriverMarkerInitials } from "./fleetMarkerIcons";
+import type { CompanyDriverLiveLocation } from "../../api/contracts";
+import { driverFleetMarkerInitials, resolveFleetMarkerInitialsFromDisplayName } from "../../utils/companyDriverMapStatus";
 import {
   FLEET_STATUS_THEME,
   type FleetMarkerVariant,
   type FleetOperationalStatus,
 } from "./mapStatusTheme";
-import { FLEET_NATIVE_DRIVER_MARKER_SIZE_PX } from "./fleetLirieMarkerSizing";
+import { FLEET_DRIVER_MARKER_WEB_BASE_PX, FLEET_NATIVE_DRIVER_MARKER_SIZE_PX, LIRIE_ANDROID_DRIVER_MARKER_VIEW_PX } from "./fleetLirieMarkerSizing";
 
 export const FLEET_DRIVER_MARKER_BOX_PX = FLEET_NATIVE_DRIVER_MARKER_SIZE_PX;
 export const FLEET_DRIVER_MARKER_BOX_SELECTED_PX = FLEET_NATIVE_DRIVER_MARKER_SIZE_PX;
@@ -19,19 +20,29 @@ type Props = {
   status: FleetOperationalStatus;
   selected?: boolean;
   dimmed?: boolean;
+  driver?: CompanyDriverLiveLocation;
   driverName?: string;
+  /** Android Marker enfant — taille réduite sans ombre (évite rognage carte). */
+  compactForMap?: boolean;
 };
 
-/** Fallback RN — cercle + initiales (parité web). */
+/** Marqueur RN — cercle + initiales (typo système, parité web). */
 export function FleetDriverMarkerVisual({
   status,
   selected = false,
   dimmed = false,
+  driver,
   driverName = "CH",
+  compactForMap = false,
 }: Props) {
   const theme = FLEET_STATUS_THEME[status];
-  const size = FLEET_DRIVER_MARKER_BOX_PX;
-  const initials = resolveDriverMarkerInitials(driverName);
+  const useCompact = compactForMap && Platform.OS === "android";
+  const size = useCompact ? LIRIE_ANDROID_DRIVER_MARKER_VIEW_PX : FLEET_DRIVER_MARKER_BOX_PX;
+  const borderWidth = useCompact ? 2 : 2.5;
+  const initials = driver
+    ? driverFleetMarkerInitials(driver)
+    : resolveFleetMarkerInitialsFromDisplayName(driverName);
+  const fontSize = Math.round(7.4 * (size / FLEET_DRIVER_MARKER_WEB_BASE_PX));
 
   return (
     <View
@@ -45,19 +56,19 @@ export function FleetDriverMarkerVisual({
     >
       <View
         style={[
-          s.disc,
+          useCompact ? s.discCompact : s.disc,
           {
             width: size,
             height: size,
             borderRadius: size / 2,
             backgroundColor: theme.fill,
-            borderWidth: 2.5,
+            borderWidth,
             borderColor: "#ffffff",
           },
           selected && s.discSelected,
         ]}
       >
-        <Text style={s.initials}>{initials}</Text>
+        <Text style={[s.initials, { fontSize }]}>{initials}</Text>
       </View>
     </View>
   );
@@ -104,14 +115,22 @@ const s = StyleSheet.create({
     justifyContent: "center",
     ...discShadow,
   },
+  discCompact: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
   discSelected: {
     opacity: 1,
   },
   initials: {
     color: "#ffffff",
-    fontSize: 13,
     fontWeight: "700",
     letterSpacing: 0.2,
+    fontFamily: Platform.select({
+      android: "sans-serif-medium",
+      ios: "System",
+      default: "System",
+    }),
   },
   legendBox: {
     width: 18,

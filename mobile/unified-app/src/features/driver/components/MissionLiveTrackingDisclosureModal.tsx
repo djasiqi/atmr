@@ -8,6 +8,8 @@ type Props = {
   visible: boolean;
   pending: boolean;
   showOpenSettings: boolean;
+  /** Version courte si la disclosure localisation a déjà été acceptée (P3). */
+  compact?: boolean;
   onCancel: () => void;
   onContinue: () => void;
   onOpenSettings: () => void;
@@ -17,6 +19,7 @@ export function MissionLiveTrackingDisclosureModal({
   visible,
   pending,
   showOpenSettings,
+  compact = false,
   onCancel,
   onContinue,
   onOpenSettings,
@@ -24,8 +27,8 @@ export function MissionLiveTrackingDisclosureModal({
   return (
     <Modal
       visible={visible}
-      title="Suivi de mission"
-      subtitle="Localisation · mission en cours"
+      title={compact ? "Permission localisation" : "Suivi de mission"}
+      subtitle={compact ? "Réglage requis" : "Localisation · mission en cours"}
       onClose={onCancel}
       presentation="bottomSheet"
       sheetBodyMaxHeightRatio={0.62}
@@ -67,22 +70,33 @@ export function MissionLiveTrackingDisclosureModal({
           </View>
           <View style={styles.heroContent}>
             <AppText variant="body" style={styles.heroTitle}>
-              Suivi lorsque l&apos;écran est verrouillé
+              {compact
+                ? "Autorisation « Toujours » requise"
+                : "Suivi lorsque l&apos;écran est verrouillé"}
             </AppText>
           </View>
         </View>
 
-        <AppText variant="body" style={styles.bodyText}>
-          Pour permettre le suivi de la mission lorsque l&apos;écran est verrouillé,
-          l&apos;autorisation de localisation en arrière-plan est requise. Cette
-          localisation est utilisée uniquement pour le suivi opérationnel de la mission
-          en cours.
-        </AppText>
-        <AppText variant="caption" style={styles.bodyMuted}>
-          Vous pouvez consulter vos missions sans cette autorisation.
-        </AppText>
+        {compact ? (
+          <AppText variant="body" style={styles.bodyText}>
+            La localisation en arrière-plan n&apos;est pas encore active. Ouvrez les réglages
+            et autorisez « Toujours » pour permettre le suivi de mission.
+          </AppText>
+        ) : (
+          <>
+            <AppText variant="body" style={styles.bodyText}>
+              Pour permettre le suivi de la mission lorsque l&apos;écran est verrouillé,
+              l&apos;autorisation de localisation en arrière-plan est requise. Cette
+              localisation est utilisée uniquement pour le suivi opérationnel de la mission
+              en cours.
+            </AppText>
+            <AppText variant="caption" style={styles.bodyMuted}>
+              Vous pouvez consulter vos missions sans cette autorisation.
+            </AppText>
+          </>
+        )}
 
-        {Platform.OS === "android" ? (
+        {!compact && Platform.OS === "android" ? (
           <View style={styles.infoCard}>
             <Ionicons name="information-circle-outline" size={16} color={E.BRAND} />
             <AppText variant="caption" style={styles.infoText}>

@@ -60,6 +60,10 @@ export function NotificationPermissionDisclosure({
           d&apos;équipe et les mises à jour de statut. Vous pouvez refuser l&apos;autorisation
           dans les réglages système ; l&apos;application reste utilisable sans notifications.
         </AppText>
+        <AppText variant="caption" style={styles.bodyMuted}>
+          En appuyant sur Continuer, la permission système de notifications s&apos;ouvrira
+          juste après cette étape.
+        </AppText>
       </View>
     </Modal>
   );
@@ -78,6 +82,7 @@ const styles = StyleSheet.create({
   },
   heroTitle: { flex: 1, fontWeight: "600", color: "#163A34" },
   bodyText: { color: "#5F7369", lineHeight: 22 },
+  bodyMuted: { color: "#7A8F85", lineHeight: 18 },
   footerWrap: { width: "100%" },
   footerRow: { flexDirection: "row", gap: 10 },
   footerButtonSecondary: { flex: 1 },

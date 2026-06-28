@@ -28,14 +28,18 @@ export function resolveDriverSocketUrl(): string | null {
   const fromEnv =
     process.env.EXPO_PUBLIC_DRIVER_SOCKET_URL?.trim() ||
     process.env.EXPO_PUBLIC_SOCKET_URL?.trim();
+  let resolved: string | null;
   if (fromEnv) {
-    return !__DEV__ && isUnsafeProductionSocketUrl(fromEnv)
-      ? DEFAULT_PROD_DRIVER_SOCKET_URL
-      : alignDevLocalUrlWithBundleHost(fromEnv);
+    resolved =
+      !__DEV__ && isUnsafeProductionSocketUrl(fromEnv)
+        ? DEFAULT_PROD_DRIVER_SOCKET_URL
+        : alignDevLocalUrlWithBundleHost(fromEnv);
+  } else {
+    try {
+      resolved = new URL(getResolvedApiBaseUrl()).origin;
+    } catch {
+      resolved = null;
+    }
   }
-  try {
-    return new URL(getResolvedApiBaseUrl()).origin;
-  } catch {
-    return null;
-  }
+  return resolved;
 }

@@ -30,6 +30,11 @@ export function markPresenceDisclosureDeclined(): void {
   presenceDisclosureDeclined = true;
 }
 
+/** Permet de rouvrir la modale après un refus (session courante). */
+export function clearPresenceDisclosureDeclined(): void {
+  presenceDisclosureDeclined = false;
+}
+
 export function resetLiveTrackingDisclosureSession(): void {
   missionDisclosureAccepted = false;
   presenceDisclosureAccepted = false;

@@ -175,6 +175,33 @@ describe("backgroundLocationTask", () => {
     );
   });
 
+  it("refresh mission context when native task is already started", async () => {
+    bgTask.initializeBackgroundLocationTask();
+    mockHasStarted.mockResolvedValue(true);
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const asyncStorage = require("@react-native-async-storage/async-storage") as {
+      setItem: jest.Mock;
+    };
+    asyncStorage.setItem.mockClear();
+
+    await bgTask.ensureNativeTrackingWhileForeground(31770, "ASSIGNED", {}, "mission_context_refresh");
+
+    expect(mockStart).not.toHaveBeenCalled();
+    expect(asyncStorage.setItem).toHaveBeenCalledWith(
+      "@driver:bg_tracking_context_v1",
+      expect.stringContaining('"missionId":31770')
+    );
+  });
+
+  it("uses distanceInterval 0 for mission background updates", async () => {
+    bgTask.initializeBackgroundLocationTask();
+    await bgTask.ensureNativeTrackingWhileForeground(11, "EN_ROUTE", {}, "distance_test");
+
+    expect(mockStart).toHaveBeenCalled();
+    const options = mockStart.mock.calls[0]?.[1] as { distanceInterval?: number };
+    expect(options.distanceInterval).toBe(0);
+  });
+
   it("records startup_timeout when watchdog exhausts without task started", async () => {
     jest.useFakeTimers();
     bgTask.initializeBackgroundLocationTask();

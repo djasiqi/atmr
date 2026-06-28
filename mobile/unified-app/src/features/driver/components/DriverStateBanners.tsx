@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { AppState, Linking, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { semanticDanger, semanticWarning } from "../../../design/responsive/colors";
 import NetInfo from "@react-native-community/netinfo";
@@ -14,7 +14,6 @@ import {
   subscribePushRegistrationRefresh,
   type PushRegistrationBannerState,
 } from "../../../core/notifications/pushRegistrationState";
-import { getTrackingSnapshot, subscribeTrackingSnapshot } from "../tracking";
 import { useSocketStatus } from "../hooks";
 import { FONT_SIZE } from "../../../design/responsive/typographyTokens";
 import {
@@ -64,7 +63,6 @@ export function DriverStateBanners() {
   const socketStatus = useSocketStatus();
   const [isOffline, setIsOffline] = useState(false);
   const [gpsEnabled, setGpsEnabled] = useState(true);
-  const [trackingDepth, setTrackingDepth] = useState(0);
   const [pushPermissionDenied, setPushPermissionDeniedState] = useState(getPushPermissionDenied());
   const [pushRegistrationState, setPushRegistrationState] =
     useState<PushRegistrationBannerState>("ok");
@@ -123,14 +121,6 @@ export function DriverStateBanners() {
 
   useEffect(() => {
     let mounted = true;
-    const refreshTrackingDepth = () => {
-      if (!mounted) return;
-      const snapshot = getTrackingSnapshot();
-      const showWarning = snapshot.isRunning && (snapshot.queueDepth ?? 0) > 0;
-      setTrackingDepth(showWarning ? snapshot.queueDepth ?? 0 : 0);
-    };
-    refreshTrackingDepth();
-    const unsubscribe = subscribeTrackingSnapshot(refreshTrackingDepth);
     const tick = async () => {
       try {
         const enabled = await Location.hasServicesEnabledAsync();
@@ -138,18 +128,14 @@ export function DriverStateBanners() {
       } catch {
         if (mounted) setGpsEnabled(false);
       }
-      refreshTrackingDepth();
     };
     void tick();
     const interval = setInterval(() => void tick(), 10_000);
     return () => {
       mounted = false;
-      unsubscribe();
       clearInterval(interval);
     };
   }, []);
-
-  const showTrackingWarning = useMemo(() => trackingDepth > 0, [trackingDepth]);
 
   const showPushRegistrationBanner =
     pushRegistrationState === "disclosure_required" ||
@@ -163,8 +149,7 @@ export function DriverStateBanners() {
     (socketStatus.degraded && socketStatus.connected) ||
     !gpsEnabled ||
     batteryOptimizationActive ||
-    status === "error" ||
-    showTrackingWarning;
+    status === "error";
 
   if (!hasBanner) return null;
 
@@ -259,13 +244,6 @@ export function DriverStateBanners() {
           title="Session indisponible"
           message="La session a expire ou le bootstrap a echoue. Reconnectez-vous."
           tone="error"
-        />
-      ) : null}
-      {showTrackingWarning ? (
-        <Banner
-          title="Synchronisation en cours"
-          message={`Position en attente d'envoi (${trackingDepth}).`}
-          tone="warn"
         />
       ) : null}
     </View>

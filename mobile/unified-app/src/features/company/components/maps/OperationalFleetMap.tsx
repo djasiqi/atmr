@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import {
 
@@ -23,7 +23,7 @@ import { useAppViewport } from "../../../../design/responsive/useAppViewport";
 
 import type { CompanyDispatchMission, CompanyDriverLiveLocation } from "../../api/contracts";
 import { useCompanyRealtimeStatus } from "../../hooks";
-import { EnterpriseDriversMap } from "../EnterpriseDriversMap";
+import { EnterpriseDriversMap, type FleetMapCameraControl } from "../EnterpriseDriversMap";
 
 import { MapFloatingControls } from "./MapFloatingControls";
 
@@ -183,6 +183,10 @@ type FleetMapSurfaceProps = {
 
   socketConnected?: boolean;
 
+  cameraControlRef?: import("react").MutableRefObject<FleetMapCameraControl | null>;
+
+  onUserCameraGesture?: () => void;
+
 };
 
 
@@ -241,12 +245,20 @@ function FleetMapSurface({
 
   socketConnected = true,
 
+  cameraControlRef,
+
+  onUserCameraGesture,
+
 }: FleetMapSurfaceProps) {
 
   const defaultInsets = { top: 52, right: 52, bottom: 52, left: 52 };
-  const fitEdgePadding = computeFleetMapFitEdgePadding(cameraInsets ?? defaultInsets, {
-    immersive: isCockpit && cockpitImmersive,
-  });
+  const fitEdgePadding = useMemo(
+    () =>
+      computeFleetMapFitEdgePadding(cameraInsets ?? defaultInsets, {
+        immersive: isCockpit && cockpitImmersive,
+      }),
+    [cameraInsets, isCockpit, cockpitImmersive]
+  );
 
   return (
 
@@ -326,6 +338,10 @@ function FleetMapSurface({
         fitEdgePadding={fitEdgePadding}
 
         nativeOverlaysEnabled={nativeOverlaysEnabled}
+
+        onUserCameraGesture={onUserCameraGesture}
+
+        cameraControlRef={cameraControlRef}
 
       />
 
@@ -579,6 +595,8 @@ export function OperationalFleetMap({
   /** simplifyClustering : désactive le regroupement (marqueurs individuels). */
   const clusteringEnabled = !simplifyClustering;
 
+  const fleetMapCameraControlRef = useRef<FleetMapCameraControl | null>(null);
+
   const fleet = useOperationalFleetMap({
 
     drivers,
@@ -599,6 +617,7 @@ export function OperationalFleetMap({
     onMapSignalsChange,
     inlineDriverSelection: isCockpit,
     syncSelectedDriverId: isCockpit ? syncSelectedDriverId : undefined,
+    onBeforeExplicitRecenter: () => fleetMapCameraControlRef.current?.clearUserCameraLock(),
 
   });
 
@@ -707,6 +726,10 @@ export function OperationalFleetMap({
     onUpcomingTableExpandedChange,
 
     socketConnected: realtime.transportStatus === "healthy",
+
+    cameraControlRef: fleetMapCameraControlRef,
+
+    onUserCameraGesture: fleet.notifyUserCameraGesture,
 
   };
 
