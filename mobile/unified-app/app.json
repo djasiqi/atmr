@@ -67,7 +67,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "ch.liri.operations",
-      "buildNumber": "65",
+      "buildNumber": "66",
       "googleServicesFile": "./GoogleService-Info.plist",
       "associatedDomains": [
         "applinks:app.lirie.ch"
