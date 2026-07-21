@@ -367,6 +367,7 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onRese
   }, [
     reservation?.id,
     reservation?.active_change_request?.status,
+    reservation?.active_change_request?.pending,
     searchParams,
     setSearchParams,
   ]);
@@ -419,11 +420,7 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onRese
     setBillingComment('');
     setReportProblemOpen(false);
     setRespondUiOverride(null);
-  }, [
-    isCancellationActionForEffect,
-    respondUiForEffect?.respond_context_version,
-    respondUiForEffect?.suggested_outcome?.code,
-  ]);
+  }, [isCancellationActionForEffect, respondUiForEffect]);
 
   useEffect(() => {
     if (!reservation?.id) {
