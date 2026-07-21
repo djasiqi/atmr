@@ -66,7 +66,7 @@ _EVENT_LABELS: dict[str, str] = {
     "field_updated": "Modification",
     "cancelled": "Annulation",
     "billing_changed": "Facturation modifiée",
-    "change_confirmation_requested": "Demande de validation envoyée",
+    "change_confirmation_requested": "Modification institution",
     "change_accepted_by_company": "Modification acceptée par le transporteur",
     "change_refused_by_company": "Modification refusée par le transporteur",
     "change_refused_by_driver": "Chauffeur indisponible après modification",
@@ -332,9 +332,39 @@ def list_timeline_events(
     )
 
     if transport_request_id is not None:
-        q = q.filter(
-            TransportTimelineEvent.transport_request_id == transport_request_id
-        )
+        from sqlalchemy import or_
+
+        # Inclure aussi les événements indexés seulement par booking_id
+        # (ex. field_updated company sans transport_request_id).
+        linked_booking_ids: list[int] = []
+        tr = db.session.get(TransportRequest, transport_request_id)
+        if tr and getattr(tr, "booking_id", None):
+            linked_booking_ids.append(int(tr.booking_id))
+        extra_ids = [
+            row[0]
+            for row in db.session.query(TransportTimelineEvent.booking_id)
+            .filter(
+                TransportTimelineEvent.transport_request_id == transport_request_id,
+                TransportTimelineEvent.booking_id.isnot(None),
+            )
+            .distinct()
+            .all()
+        ]
+        for bid in extra_ids:
+            if bid and int(bid) not in linked_booking_ids:
+                linked_booking_ids.append(int(bid))
+
+        if linked_booking_ids:
+            q = q.filter(
+                or_(
+                    TransportTimelineEvent.transport_request_id == transport_request_id,
+                    TransportTimelineEvent.booking_id.in_(linked_booking_ids),
+                )
+            )
+        else:
+            q = q.filter(
+                TransportTimelineEvent.transport_request_id == transport_request_id
+            )
     elif booking_id is not None:
         q = q.filter(TransportTimelineEvent.booking_id == booking_id)
     elif patient_id is not None:

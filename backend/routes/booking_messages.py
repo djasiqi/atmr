@@ -46,45 +46,13 @@ def _normalize_booking_status(raw_status: object) -> str:
     return str(val).upper()
 
 
-def _is_leg_active(leg: Booking) -> bool:
-    """True si le leg ou son retour A/R lié n'est pas terminal."""
-    status = _normalize_booking_status(getattr(leg, "status", None))
-    if status not in TERMINAL_BOOKING_STATUSES:
-        return True
-    ret = resolve_return_child_booking(leg)
-    if ret is not None:
-        ret_status = _normalize_booking_status(getattr(ret, "status", None))
-        if ret_status not in TERMINAL_BOOKING_STATUSES:
-            return True
-    return False
-
-
-def _route_group_has_active_leg(booking: Booking) -> bool:
-    """Parcours multi-étapes : au moins un leg du groupe n'est pas terminal."""
-    route_group_id = getattr(booking, "route_group_id", None)
-    if not route_group_id:
-        return False
-    legs = (
-        Booking.query.filter_by(route_group_id=route_group_id)
-        .order_by(Booking.route_sequence_number.asc(), Booking.id.asc())
-        .all()
-    )
-    return any(_is_leg_active(leg) for leg in legs)
-
-
 def _is_conversation_closed(booking: Booking) -> bool:
     """Détermine si la conversation booking doit être clôturée.
 
-    Règles:
-    - parcours multi-étapes (``route_group_id``) : ouvert tant qu'un leg (ou son
-      retour A/R) n'est pas terminal ;
-    - A/R classique : thread sur l'aller, ouvert tant que le retour n'est pas
-      terminal ;
-    - aller simple : fermé dès statut terminal.
+    Règle métier A/R:
+    - thread unifié sur l'aller (booking parent)
+    - tant que le retour existe ET n'est pas terminal, la conversation reste ouverte
     """
-    if _route_group_has_active_leg(booking):
-        return False
-
     return_booking = resolve_return_child_booking(booking)
     if return_booking is not None:
         return_status = _normalize_booking_status(
@@ -291,7 +259,6 @@ class BookingMessageList(Resource):
                 # booking_id canonique du fil (peut différer du leg demandé pour
                 # un A/R ou un parcours multi-étapes unifié).
                 "booking_id": booking.id,
-                "conversation_closed": _is_conversation_closed(booking),
             }, 200
 
         except Exception as exc:

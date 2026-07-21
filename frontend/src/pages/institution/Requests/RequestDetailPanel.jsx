@@ -833,7 +833,7 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
 
   const handleConfirmCancelBooking = async (reason) => {
     try {
-      await cancelBookingMutation.mutateAsync({
+      const res = await cancelBookingMutation.mutateAsync({
         bookingId: cancelBookingModal.bookingId,
         data: {
           version: request.booking_summary?.edit_version || 1,
@@ -841,7 +841,11 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
           reason_code: 'CLIENT_REQUEST',
         },
       });
-      toast.success('Transport annulé');
+      toast.success(
+        res?.status === 'pending_action' || res?.pending_revalidation
+          ? 'Demande d’annulation envoyée au transporteur'
+          : 'Transport annulé'
+      );
       setCancelBookingModal({ open: false, bookingId: null });
     } catch (e2) {
       toast.error(e2?.response?.data?.error || 'Erreur annulation transport');

@@ -8,12 +8,25 @@ const TYPE_LABELS = {
   district: 'District',
 };
 const CANONICAL_TOKEN_REGEX = /^(commune|canton|district):[A-Za-z0-9_-]+$/;
-/** Aligné sur OperationsTab / backend : GeoAdmin ou fallback Photon peuvent renvoyer canton_name:… */
-const NAMED_TOKEN_REGEX = /^(commune_name|canton_name|district_name):.+$/;
 
-const isPersistableZoneToken = (token) => {
-  const t = String(token || '');
-  return CANONICAL_TOKEN_REGEX.test(t) || NAMED_TOKEN_REGEX.test(t);
+const isPersistableZoneToken = (item) => {
+  const token = String(item?.token || '');
+  if (CANONICAL_TOKEN_REGEX.test(token)) {
+    return true;
+  }
+  const zoneType = String(item?.type || '').toLowerCase();
+  const code = String(item?.code || '').trim();
+  const cantonCode = String(item?.canton_code || '').trim();
+  if (zoneType === 'canton' && /^[A-Za-z0-9_-]+$/.test(cantonCode || code)) {
+    return true;
+  }
+  if (zoneType === 'district' && /^[A-Za-z0-9_-]+$/.test(code)) {
+    return true;
+  }
+  if (zoneType === 'commune' && /^[A-Za-z0-9_-]+$/.test(code)) {
+    return true;
+  }
+  return false;
 };
 const normalizeKey = (item) =>
   `${String(item?.type || '').toLowerCase()}::${String(item?.name || '').trim().toLowerCase()}`;
@@ -72,9 +85,7 @@ export default function ServiceAreaZonesAutocomplete({
         });
         const rawItems = Array.isArray(response?.items) ? response.items : [];
         const degraded = Boolean(response?.meta?.degraded);
-        const persistableItems = rawItems.filter((item) =>
-          isPersistableZoneToken(String(item?.token || ''))
-        );
+        const persistableItems = rawItems.filter((item) => isPersistableZoneToken(item));
         let filteredItems = persistableItems;
         if (allowFallbackResults && degraded) {
           filteredItems = persistableItems.length > 0 ? persistableItems : rawItems;
@@ -87,7 +98,7 @@ export default function ServiceAreaZonesAutocomplete({
         });
         const nextItems = [];
         grouped.forEach((group) => {
-          const preferred = group.filter((item) => isPersistableZoneToken(String(item?.token || '')));
+          const preferred = group.filter((item) => isPersistableZoneToken(item));
           if (preferred.length > 0) {
             nextItems.push(...preferred);
             return;

@@ -19,6 +19,7 @@ import pytest
 from application.institutions.accept_offer import (
     AcceptOfferInput,
     AcceptOfferUseCase,
+    _should_use_legs_conversion,
 )
 from schemas.institution_schemas import TransportRequestCreateSchema
 
@@ -66,6 +67,8 @@ class _Leg:
     pickup_lng: float | None = None
     dropoff_lat: float | None = None
     dropoff_lng: float | None = None
+    is_return_stop: bool = False
+    booking_id: int | None = None
 
 
 @dataclass
@@ -158,6 +161,8 @@ class _TransportRequest:
     dropoff_type: str | None = None
     legs: list | None = None
     status: str = "SENT"
+    multi_stop: bool = False
+    return_to_institution: bool = False
 
 
 # ── Schema validation tests ──
@@ -571,6 +576,88 @@ class TestAcceptOfferRoundTrip:
         assert return_booking.time_confirmed is True
         assert return_booking.scheduled_time.hour == 0
         assert return_booking.scheduled_time.minute == 0
+
+
+class TestMultiStopReturnConversion:
+    """A/R multi-étapes : return_to_institution + legs sans is_round_trip."""
+
+    def test_should_use_legs_conversion_with_two_legs_without_flag(self):
+        tr = _TransportRequest(
+            multi_stop=False,
+            return_to_institution=True,
+            legs=[
+                _Leg(sequence_index=0, pickup_location="Clinique", dropoff_location="HUG"),
+                _Leg(
+                    sequence_index=1,
+                    pickup_location="HUG",
+                    dropoff_location="Clinique",
+                    is_return_stop=True,
+                ),
+            ],
+        )
+        assert _should_use_legs_conversion(tr) is True
+
+    def test_should_use_legs_conversion_false_for_simple_trip(self):
+        tr = _TransportRequest(is_round_trip=False, legs=[])
+        assert _should_use_legs_conversion(tr) is False
+
+    @patch("application.institutions.accept_offer.db")
+    def test_institution_return_without_is_round_trip(self, mock_db: MagicMock):
+        """return_to_institution + leg retour → booking retour + legs liés."""
+        uc = AcceptOfferUseCase()
+        uc._get_or_create_institution_client = MagicMock(return_value=_Client())  # type: ignore[assignment]
+        uc._resolve_billing_party = MagicMock()  # type: ignore[assignment]
+
+        return_leg = _Leg(
+            sequence_index=1,
+            pickup_location="HUG",
+            dropoff_location="Courbes 9",
+            is_return_stop=True,
+            scheduled_time=None,
+            time_confirmed=False,
+        )
+        outbound_leg = _Leg(
+            sequence_index=0,
+            pickup_location="Courbes 9",
+            dropoff_location="HUG",
+        )
+        tr = _TransportRequest(
+            is_round_trip=False,
+            multi_stop=False,
+            return_to_institution=True,
+            return_date=date(2026, 7, 10),
+            return_time=None,
+            pickup_location="Courbes 9",
+            dropoff_location="HUG",
+            legs=[outbound_leg, return_leg],
+        )
+
+        _next_id = iter(range(1, 100))
+
+        def _flush_side_effect():
+            for call_args in mock_db.session.add.call_args_list:
+                b = call_args[0][0]
+                if getattr(b, "id", 0) == 0:
+                    b.id = next(_next_id)
+
+        mock_db.session.flush.side_effect = _flush_side_effect
+
+        outbound, return_booking = uc._create_booking_from_request(
+            transport_request=tr,  # type: ignore[arg-type]
+            company_id=5,
+            user_id=1,
+        )
+
+        assert outbound is not None
+        assert return_booking is not None
+        assert return_booking.is_return is True
+        assert return_booking.parent_booking_id == outbound.id
+        assert return_booking.pickup_location == "HUG"
+        assert return_booking.dropoff_location == "Courbes 9"
+        assert return_booking.scheduled_time is None
+        assert return_booking.time_confirmed is False
+        assert outbound_leg.booking_id == outbound.id
+        assert return_leg.booking_id == return_booking.id
 
 
 # ── booking_summary aggregation ──

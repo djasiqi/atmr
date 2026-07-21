@@ -3258,18 +3258,34 @@ class SavePushToken(Resource):
             )
             from repositories.driver_repository import DriverRepository
             from repositories.user_repository import UserRepository
+            from sqlalchemy.orm.exc import PendingRollbackError
 
             uc = SaveDriverPushTokenUseCase(
                 user_repo=UserRepository(),
                 driver_repo=DriverRepository(),
             )
-            uc_res = uc.execute(payload=payload, jwt_identity=get_jwt_identity())
-            result = uc_res.response
-            status_code = uc_res.status_code
 
-            if uc_res.should_commit and status_code == HTTPStatus.OK:
-                db.session.commit()
-                should_refresh_gauges = True
+            for attempt in range(2):
+                try:
+                    uc_res = uc.execute(payload=payload, jwt_identity=get_jwt_identity())
+                    result = uc_res.response
+                    status_code = uc_res.status_code
+
+                    if uc_res.should_commit and status_code == HTTPStatus.OK:
+                        db.session.commit()
+                        should_refresh_gauges = True
+                    break
+                except PendingRollbackError:
+                    db.session.rollback()
+                    if attempt == 0:
+                        logger.warning(
+                            "[push-token] PendingRollbackError — retry upsert "
+                            "driver_id=%s device_id=%s",
+                            driver_id_hint,
+                            device_id,
+                        )
+                        continue
+                    raise
 
         except (ValueError, TypeError, AttributeError) as e:
             db.session.rollback()

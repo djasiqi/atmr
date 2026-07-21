@@ -95,8 +95,6 @@ const detectScheduleIncoherence = (timesInOrder) => {
 const BILLING_INTENTS = [
   { value: 'patient', label: 'Patient' },
   { value: 'institution', label: 'Institution' },
-  { value: 'insurance', label: 'Assurance' },
-  { value: 'other', label: 'Autre' },
 ];
 
 const TRIP_TYPES = [
@@ -355,8 +353,15 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
     setFormData(prev => {
       const updates = {};
 
-      // Billing intent
-      if (defaultIntent && BILLING_INTENTS.some(b => b.value === defaultIntent) && prev.billing_intent === 'patient') {
+      // Billing intent — uniquement patient | institution
+      const allowedDefaults = new Set(BILLING_INTENTS.map((b) => b.value));
+      if (!allowedDefaults.has(prev.billing_intent)) {
+        updates.billing_intent = allowedDefaults.has(defaultIntent) ? defaultIntent : 'patient';
+      } else if (
+        defaultIntent
+        && allowedDefaults.has(defaultIntent)
+        && prev.billing_intent === 'patient'
+      ) {
         updates.billing_intent = defaultIntent;
       }
 
@@ -1183,14 +1188,6 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
           action: 'Allez dans Paramètres > Facturation pour renseigner l\'adresse.',
         });
       }
-    }
-
-    if (intent === 'other' || intent === 'insurance') {
-      // Tiers payeur sans billing_details (pas encore implémenté dans le form)
-      warnings.push({
-        level: 'info',
-        message: 'Pensez à communiquer les coordonnées du tiers payeur au transporteur.',
-      });
     }
 
     if (intent === 'patient' && selectedPatient) {

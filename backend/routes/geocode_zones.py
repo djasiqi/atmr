@@ -241,42 +241,62 @@ class GeocodeZones(Resource):
                 },
             }, 200
 
-        geoadmin_items, geoadmin_degraded, geoadmin_breaker_open = (
-            G._search_geoadmin_zones(q, lang=lang, types=zone_types, limit=limit)
+        intent_items = G._search_canton_intent_zones(
+            q, types=zone_types, limit=limit
         )
-        degraded = degraded or geoadmin_degraded
-        breaker_open = breaker_open or geoadmin_breaker_open
-        if geoadmin_items:
-            sources_used.append("geoadmin")
+        if intent_items:
+            sources_used.append("db")
 
-        q_norm = G._normalize_zone_search_text(q)
+        geoadmin_items: list[Dict[str, Any]] = []
+        if not G._should_skip_geoadmin_for_canton_query(q):
+            geoadmin_items, geoadmin_degraded, geoadmin_breaker_open = (
+                G._search_geoadmin_zones(q, lang=lang, types=zone_types, limit=limit)
+            )
+            degraded = degraded or geoadmin_degraded
+            breaker_open = breaker_open or geoadmin_breaker_open
+            if geoadmin_items:
+                sources_used.append("geoadmin")
+
+        search_terms = G._db_zone_search_terms(q)
         candidates = base_query.all()
         ranked: list[tuple[int, GeoUnit]] = []
         for item in candidates:
             name_norm = G._normalize_zone_search_text(item.name or "")
             if not name_norm:
                 continue
-            if name_norm == q_norm:
-                score = 0
-            elif name_norm.startswith(q_norm):
-                score = 1
-            elif q_norm in name_norm:
-                score = 2
-            else:
-                continue
-            ranked.append((score, item))
+            code_norm = (
+                G._normalize_zone_search_text(item.code or "")
+                if str(item.type.value) == "canton"
+                else ""
+            )
+            best_score: int | None = None
+            for term in search_terms:
+                if name_norm == term or (code_norm and code_norm == term):
+                    best_score = 0 if best_score is None else min(best_score, 0)
+                elif name_norm.startswith(term) or (
+                    code_norm and code_norm.startswith(term)
+                ):
+                    best_score = 1 if best_score is None else min(best_score, 1)
+                elif term in name_norm or (code_norm and term in code_norm):
+                    best_score = 2 if best_score is None else min(best_score, 2)
+            if best_score is not None:
+                ranked.append((best_score, item))
 
         ranked.sort(key=lambda x: (x[0], x[1].name.lower()))
         db_items = [G._serialize_zone_item(item) for _, item in ranked[:limit]]
         if db_items:
             sources_used.append("db")
 
-        fallback_items = G._fallback_geocode_zones(q, limit)
+        fallback_items = (
+            []
+            if intent_items
+            else G._fallback_geocode_zones(q, limit)
+        )
         if fallback_items:
             sources_used.append("photon")
 
         merged_items: list[Dict[str, Any]] = []
-        for collection in [geoadmin_items, db_items, fallback_items]:
+        for collection in [intent_items, db_items, geoadmin_items, fallback_items]:
             merged_items.extend(collection)
 
         seen_tokens: set[str] = set()

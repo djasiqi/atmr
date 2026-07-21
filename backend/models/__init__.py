@@ -108,7 +108,18 @@ from .enums import (
 from .billing_profile import CompanyBillingProfile
 from .billing_audit_log import BillingAuditLog
 from .booking_change_event import BookingChangeAcknowledgement, BookingChangeEvent
-from .booking_change_request import BookingChangeRequest
+from .booking_change_request import (
+    BookingChangeRequest,
+    BookingChangeRequestStatus,
+    TransportActionEffectStatus,
+    TransportActionNextActor,
+    TransportActionStatus,
+    TransportActionType,
+)
+from .transport_action_exchange import (
+    TransportActionExchange,
+    TransportActionExchangeDecision,
+)
 from .billing_party import BillingParty, ClientBillingParty
 from .contact_request import ContactRequest
 from .curator_team import CuratorTeam, CuratorTeamMember
@@ -223,6 +234,13 @@ __all__ = [
     "BookingChangeAcknowledgement",
     "BookingChangeEvent",
     "BookingChangeRequest",
+    "BookingChangeRequestStatus",
+    "TransportActionExchange",
+    "TransportActionExchangeDecision",
+    "TransportActionStatus",
+    "TransportActionEffectStatus",
+    "TransportActionType",
+    "TransportActionNextActor",
     "BillingReviewStatus",
     "BillingSource",
     "ClientBillingParty",

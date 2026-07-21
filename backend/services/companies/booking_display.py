@@ -34,7 +34,13 @@ LIRIE_PLATFORM_NAME = "LIRIE"
 GUEST_DISPLAY_NAME = "Invité LIRIE"
 
 _CHANGE_REQUEST_PENDING_STATUSES = frozenset(
-    {"pending", "escalation_required", "expired"}
+    {
+        "pending",
+        "requested",
+        "counter_pending",
+        "escalation_required",
+        "expired",
+    }
 )
 
 

@@ -132,6 +132,7 @@ def compute_cancellation_fee(
     reason_code: str | None,
     cancel_source: str | None = None,
     policy: dict[str, Any] | None = None,
+    ignore_assignment_gate: bool = False,
 ) -> CancellationFeeResult:
     """Compute cancellation fee based on company policy.
 
@@ -142,6 +143,8 @@ def compute_cancellation_fee(
         reason_code: raw reason code (will be normalized)
         cancel_source: "cascade_from_outbound" for R5, else None
         policy: CompanyBillingSettings.cancellation_policy JSON dict, or None
+        ignore_assignment_gate: si True, ignore « uniquement si chauffeur assigné »
+            (ex. choix commercial explicite POLICY_FEE côté entreprise)
 
     Returns:
         CancellationFeeResult with is_billable = (fee_amount > 0)
@@ -185,8 +188,10 @@ def compute_cancellation_fee(
             fee_label="Motif non facturable",
         )
 
-    if policy.get("apply_when_driver_assigned_only") and not getattr(
-        booking, "driver_id", None
+    if (
+        not ignore_assignment_gate
+        and policy.get("apply_when_driver_assigned_only")
+        and not getattr(booking, "driver_id", None)
     ):
         return CancellationFeeResult(
             is_billable=False,
@@ -197,6 +202,9 @@ def compute_cancellation_fee(
         )
 
     amount = getattr(booking, "amount", None)
+    if amount is None or float(amount) <= 0:
+        # Fallback tarif contractuel alternatif
+        amount = getattr(booking, "price_amount", None)
     if amount is None or float(amount) <= 0:
         return CancellationFeeResult(
             is_billable=False,
@@ -222,14 +230,33 @@ def compute_cancellation_fee(
     else:
         scheduled = getattr(booking, "scheduled_time", None)
         if scheduled:
-            delta = (scheduled - cancelled_at).total_seconds() / 3600
+            # Normaliser tz pour éviter les écarts naive/aware
+            aware_sched = (
+                scheduled
+                if getattr(scheduled, "tzinfo", None)
+                else scheduled.replace(tzinfo=UTC)
+            )
+            aware_cancel = (
+                cancelled_at
+                if getattr(cancelled_at, "tzinfo", None)
+                else cancelled_at.replace(tzinfo=UTC)
+            )
+            delta = (aware_sched - aware_cancel).total_seconds() / 3600
             hours_before = max(0.0, delta)
         else:
             hours_before = 0.0
 
-        time_tiers = [t for t in tiers if t.get("type") == "time"]
+        # Ordre croissant obligatoire : premier seuil dépassé = palier le plus serré
+        time_tiers = sorted(
+            [t for t in tiers if t.get("type") == "time"],
+            key=lambda t: float(t.get("hours_before") or 0),
+        )
         for t in time_tiers:
-            if hours_before < t["hours_before"]:
+            try:
+                threshold = float(t["hours_before"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            if hours_before < threshold:
                 selected_tier = t
                 break
 
@@ -243,24 +270,34 @@ def compute_cancellation_fee(
         )
 
     base = Decimal(str(amount))
-    pct = selected_tier["percent"]
+    pct = int(selected_tier["percent"])
     fee = base * pct / 100
 
     min_fee = Decimal(str(policy.get("min_fee_chf") or 0))
     max_fee_raw = policy.get("max_fee_chf")
     fee = max(fee, min_fee)
-    if max_fee_raw is not None:
+    if max_fee_raw is not None and str(max_fee_raw).strip() != "":
         fee = min(fee, Decimal(str(max_fee_raw)))
 
     fee = fee.quantize(Decimal("0.01"))
+
+    tier_label = (selected_tier.get("label") or "").strip()
+    if not tier_label:
+        if selected_tier.get("type") == "status":
+            tier_label = str(selected_tier.get("status") or "EN_ROUTE")
+        else:
+            try:
+                hours = int(float(selected_tier.get("hours_before")))
+                tier_label = f"< {hours}h"
+            except (TypeError, ValueError):
+                tier_label = f"< {selected_tier.get('hours_before', '?')}h"
 
     return CancellationFeeResult(
         is_billable=(fee > 0),
         percent=pct,
         tier_id=selected_tier.get("id"),
         fee_amount=fee,
-        fee_label=selected_tier.get("label")
-        or f"< {selected_tier.get('hours_before', '?')}h",
+        fee_label=tier_label,
     )
 
 

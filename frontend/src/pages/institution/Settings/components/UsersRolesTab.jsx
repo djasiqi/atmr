@@ -11,7 +11,7 @@
  */
 
 import React, { useState } from 'react';
-import { FaCopy, FaTrash, FaTimes, FaEnvelope, FaBan, FaRedo, FaLink, FaCheckCircle, FaTimesCircle, FaShieldAlt, FaKey, FaUserPlus, FaPencilAlt } from 'react-icons/fa';
+import { FaCopy, FaTrash, FaTimes, FaEnvelope, FaBan, FaRedo, FaLink, FaCheckCircle, FaTimesCircle, FaShieldAlt, FaKey, FaUserPlus, FaEdit } from 'react-icons/fa';
 import {
   useInstitutionUsers,
   useInviteInstitutionUser,
@@ -55,8 +55,7 @@ const BASE_ROLE_OPTIONS = [
   { value: 'institution_admin', label: 'Administrateur', labelCuratelle: 'Direction', desc: 'Accès complet : paramètres, utilisateurs, transporteurs, clés API', descCuratelle: 'Accès complet : gestion des équipes, curateurs, paramètres et supervision' },
   { value: 'institution_curator', label: 'Curateur', desc: 'Gère les demandes et la facturation pour ses protégés (scope équipe)', curatelle_only: true },
   { value: 'institution_requester', label: 'Demandeur', desc: 'Créer et envoyer des demandes de transport, gérer les patients' },
-  { value: 'institution_billing', label: 'Facturation', desc: 'Mêmes droits que demandeur + gestion de la facturation (destinataire, montants)' },
-  { value: 'institution_reception', label: 'Réception', desc: 'Consultation et export des transports (PDF/CSV), sans modification' },
+  { value: 'institution_billing', label: 'Facturation', desc: 'Gérer la facturation et les paramètres de billing' },
   { value: 'institution_reader', label: 'Lecteur', desc: 'Consultation uniquement, aucune modification' },
 ];
 
@@ -84,7 +83,6 @@ const getRoleBadgeStyle = (role) => {
     institution_curator: { bg: '#ede7f6', color: '#7C3AED' },
     institution_requester: { bg: '#e8f5e9', color: '#2e7d32' },
     institution_billing: { bg: '#fff3e0', color: '#e65100' },
-    institution_reception: { bg: '#fef3c7', color: '#b45309' },
     institution_reader: { bg: '#f5f5f5', color: '#616161' },
   };
   return colors[role] || colors.institution_reader;
@@ -174,14 +172,15 @@ const UsersRolesTab = () => {
   const [inviteFirstName, setInviteFirstName] = useState('');
   const [inviteLastName, setInviteLastName] = useState('');
   const [inviteJobTitle, setInviteJobTitle] = useState('');
-  const [inviteContactEmail, setInviteContactEmail] = useState('');
 
   // Confirmation modal state
   const [confirmAction, setConfirmAction] = useState(null);
-  const [editingUser, setEditingUser] = useState(null);
+
+  // Édition profil utilisateur (admin)
+  const [editProfileUser, setEditProfileUser] = useState(null);
   const [editFirstName, setEditFirstName] = useState('');
   const [editLastName, setEditLastName] = useState('');
-  const [editContactEmail, setEditContactEmail] = useState('');
+  const [editEmail, setEditEmail] = useState('');
 
   // Résultat de la dernière invitation (lien fallback ou credentials one-shot)
   const [lastInviteResult, setLastInviteResult] = useState(null);
@@ -215,9 +214,8 @@ const UsersRolesTab = () => {
         payload.email = inviteEmail.trim().toLowerCase();
       } else {
         payload.username = inviteUsername.trim().toLowerCase();
-        const contactEmail = inviteContactEmail.trim().toLowerCase();
-        if (contactEmail) {
-          payload.email = contactEmail;
+        if (inviteEmail.trim()) {
+          payload.email = inviteEmail.trim().toLowerCase();
         }
       }
 
@@ -248,7 +246,6 @@ const UsersRolesTab = () => {
       setInviteFirstName('');
       setInviteLastName('');
       setInviteJobTitle('');
-      setInviteContactEmail('');
       setShowInvite(false);
     } catch (err) {
       const msg = err.response?.data?.error || 'Erreur lors de l\'invitation';
@@ -262,6 +259,32 @@ const UsersRolesTab = () => {
       toast.success('Rôle mis à jour');
     } catch (err) {
       const msg = err.response?.data?.error || 'Erreur lors de la mise à jour du rôle';
+      toast.error(msg);
+    }
+  };
+
+  const openEditProfile = (user) => {
+    setEditProfileUser(user);
+    setEditFirstName(user.first_name || '');
+    setEditLastName(user.last_name || '');
+    setEditEmail(user.email || '');
+  };
+
+  const handleEditProfileSave = async (e) => {
+    e.preventDefault();
+    if (!editProfileUser) return;
+
+    try {
+      await updateProfileMutation.mutateAsync({
+        userId: editProfileUser.id,
+        first_name: editFirstName.trim() || null,
+        last_name: editLastName.trim() || null,
+        email: editEmail.trim() ? editEmail.trim().toLowerCase() : null,
+      });
+      toast.success('Profil mis à jour');
+      setEditProfileUser(null);
+    } catch (err) {
+      const msg = err.response?.data?.error || 'Erreur lors de la mise à jour du profil';
       toast.error(msg);
     }
   };
@@ -281,52 +304,6 @@ const UsersRolesTab = () => {
       toast.error(msg);
     }
   };
-
-  const openEditProfile = (user) => {
-    setEditingUser(user);
-    setEditFirstName(user.first_name || '');
-    setEditLastName(user.last_name || '');
-    setEditContactEmail(user.email || '');
-  };
-
-  const closeEditProfile = () => {
-    setEditingUser(null);
-    setEditFirstName('');
-    setEditLastName('');
-    setEditContactEmail('');
-  };
-
-  const handleProfileSave = async (e) => {
-    e.preventDefault();
-    if (!editingUser) return;
-
-    try {
-      await updateProfileMutation.mutateAsync({
-        userId: editingUser.id,
-        first_name: editFirstName.trim() || null,
-        last_name: editLastName.trim() || null,
-        email: editContactEmail.trim().toLowerCase() || null,
-      });
-      toast.success('Profil mis à jour');
-      closeEditProfile();
-    } catch (err) {
-      const status = err.response?.status;
-      const msg = err.response?.data?.error
-        || (status === 409 ? 'Cet email est déjà utilisé sur la plateforme' : 'Erreur lors de la mise à jour du profil');
-      toast.error(msg);
-    }
-  };
-
-  const formatUserDisplayName = (user) => {
-    const first = user.first_name?.trim();
-    const last = user.last_name?.trim();
-    if (first || last) {
-      return `${first || ''} ${last || ''}`.trim();
-    }
-    return user.username || '-';
-  };
-
-  const formatUserContactLine = (user) => user.email?.trim() || user.username;
 
   const handleRemove = async (userId) => {
     try {
@@ -547,31 +524,55 @@ const UsersRolesTab = () => {
                 />
               </div>
             ) : (
-              <div>
-                <label htmlFor="invite-username" style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 4 }}>
-                  Identifiant local *
-                </label>
-                <input
-                  id="invite-username"
-                  name="username"
-                  type="text"
-                  value={inviteUsername}
-                  onChange={(e) => setInviteUsername(e.target.value.toLowerCase())}
-                  placeholder="s.dupont"
-                  autoComplete="off"
-                  required
-                  minLength={3}
-                  pattern="[a-z0-9._-]+"
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    border: '1px solid #ddd',
-                    borderRadius: 6,
-                    fontSize: 14,
-                    boxSizing: 'border-box',
-                  }}
-                />
-              </div>
+              <>
+                <div>
+                  <label htmlFor="invite-username" style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 4 }}>
+                    Identifiant local *
+                  </label>
+                  <input
+                    id="invite-username"
+                    name="username"
+                    type="text"
+                    value={inviteUsername}
+                    onChange={(e) => setInviteUsername(e.target.value.toLowerCase())}
+                    placeholder="s.dupont"
+                    autoComplete="off"
+                    required
+                    minLength={3}
+                    pattern="[a-z0-9._-]+"
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      border: '1px solid #ddd',
+                      borderRadius: 6,
+                      fontSize: 14,
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="invite-contact-email" style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 4 }}>
+                    Email de contact
+                  </label>
+                  <input
+                    id="invite-contact-email"
+                    name="contact_email"
+                    type="email"
+                    value={inviteEmail}
+                    onChange={(e) => setInviteEmail(e.target.value)}
+                    placeholder="prenom.nom@institution.ch"
+                    autoComplete="off"
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      border: '1px solid #ddd',
+                      borderRadius: 6,
+                      fontSize: 14,
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+              </>
             )}
             <div>
               <label htmlFor="invite-role" style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 4 }}>
@@ -637,33 +638,6 @@ const UsersRolesTab = () => {
               />
             </div>
           </div>
-          {inviteCreationMode === 'username' && (
-            <div style={{ marginBottom: 12 }}>
-              <label htmlFor="invite-contact-email" style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 4 }}>
-                Email de contact
-              </label>
-              <input
-                id="invite-contact-email"
-                name="contact_email"
-                type="email"
-                value={inviteContactEmail}
-                onChange={(e) => setInviteContactEmail(e.target.value)}
-                placeholder="contact@exemple.ch"
-                autoComplete="off"
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  border: '1px solid #ddd',
-                  borderRadius: 6,
-                  fontSize: 14,
-                  boxSizing: 'border-box',
-                }}
-              />
-              <div style={{ fontSize: 11, color: '#888', marginTop: 4 }}>
-                Affiché dans la liste des utilisateurs. Ne sert pas à la connexion.
-              </div>
-            </div>
-          )}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16, alignItems: 'start' }}>
             <div>
               <label htmlFor="invite-job-title" style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 4 }}>
@@ -1025,7 +999,9 @@ const UsersRolesTab = () => {
                 >
                   <td style={{ padding: '12px' }}>
                     <div style={{ fontWeight: 500, fontSize: 14, color: '#333' }}>
-                      {formatUserDisplayName(user)}
+                      {user.first_name || user.last_name
+                        ? `${user.first_name || ''} ${user.last_name || ''}`.trim()
+                        : user.username || '-'}
                       {isSelf && (
                         <span style={{ marginLeft: 8, fontSize: 11, color: '#999', fontWeight: 400 }}>
                           (vous)
@@ -1033,7 +1009,7 @@ const UsersRolesTab = () => {
                       )}
                     </div>
                     <div style={{ fontSize: 13, color: '#888' }}>
-                      {formatUserContactLine(user)}
+                      {user.email || user.username}
                     </div>
                     {user.authentication_method === 'username' && user.force_password_change && (
                       <span style={{
@@ -1134,9 +1110,9 @@ const UsersRolesTab = () => {
                         <button
                           onClick={() => openEditProfile(user)}
                           title="Modifier le profil"
-                          style={actionBtnStyle('#1565c0', '#e3f2fd')}
+                          style={actionBtnStyle('#5e35b1', '#ede7f6')}
                         >
-                          <FaPencilAlt style={{ fontSize: 11 }} />
+                          <FaEdit style={{ fontSize: 11 }} />
                         </button>
                         {/* Renvoyer invitation - email mode only */}
                         {!isUsernameAuth && (isInvited || isDisabled) && (
@@ -1192,62 +1168,23 @@ const UsersRolesTab = () => {
         </table>
       )}
 
-      {/* Modale édition profil */}
-      {editingUser && (
+      {/* Modal édition profil */}
+      {editProfileUser && (
         <div className={styles.modal}>
           <div className={styles.modalContent} style={{ maxWidth: 480 }}>
             <div className={styles.modalHeader}>
               <h3>Modifier le profil</h3>
-              <button type="button" onClick={closeEditProfile}>
+              <button onClick={() => setEditProfileUser(null)}>
                 <FaTimes />
               </button>
             </div>
-            <form onSubmit={handleProfileSave}>
+            <form onSubmit={handleEditProfileSave}>
               <div className={styles.modalBody}>
-                {editingUser.account_status && editingUser.account_status !== 'active' && (
-                  <span style={{
-                    display: 'inline-block',
-                    marginBottom: 12,
-                    padding: '4px 10px',
-                    borderRadius: 12,
-                    fontSize: 12,
-                    fontWeight: 500,
-                    backgroundColor: getStatusConfig(editingUser.account_status).bg,
-                    color: getStatusConfig(editingUser.account_status).color,
-                  }}>
-                    {getStatusConfig(editingUser.account_status).label}
-                  </span>
+                {editProfileUser.username && (
+                  <p style={{ fontSize: 13, color: '#666', marginBottom: 12 }}>
+                    Identifiant de connexion : <strong>{editProfileUser.username}</strong>
+                  </p>
                 )}
-                <div style={{
-                  marginBottom: 16,
-                  padding: 12,
-                  background: '#f5f5f5',
-                  borderRadius: 6,
-                  fontSize: 13,
-                  color: '#555',
-                }}>
-                  {editingUser.authentication_method === 'username' ? (
-                    <>
-                      <div><strong>Mode de connexion :</strong> Identifiant</div>
-                      <div style={{ marginTop: 4, fontFamily: 'monospace' }}>
-                        Identifiant : {editingUser.username}
-                      </div>
-                      <div style={{ fontSize: 11, color: '#888', marginTop: 4 }}>
-                        La connexion se fait via l&apos;identifiant. Il ne peut pas être modifié ici.
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div><strong>Mode de connexion :</strong> Email</div>
-                      <div style={{ marginTop: 4 }}>
-                        Email de connexion : {editingUser.email?.trim() || '—'}
-                      </div>
-                      <div style={{ fontSize: 11, color: '#888', marginTop: 4 }}>
-                        L&apos;identifiant de connexion ne peut pas être modifié ici.
-                      </div>
-                    </>
-                  )}
-                </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
                   <div>
                     <label htmlFor="edit-first-name" style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 4 }}>
@@ -1258,6 +1195,7 @@ const UsersRolesTab = () => {
                       type="text"
                       value={editFirstName}
                       onChange={(e) => setEditFirstName(e.target.value)}
+                      placeholder="Prénom"
                       autoComplete="off"
                       style={{
                         width: '100%',
@@ -1278,6 +1216,7 @@ const UsersRolesTab = () => {
                       type="text"
                       value={editLastName}
                       onChange={(e) => setEditLastName(e.target.value)}
+                      placeholder="Nom"
                       autoComplete="off"
                       style={{
                         width: '100%',
@@ -1291,15 +1230,15 @@ const UsersRolesTab = () => {
                   </div>
                 </div>
                 <div>
-                  <label htmlFor="edit-contact-email" style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 4 }}>
+                  <label htmlFor="edit-email" style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 4 }}>
                     Email de contact
                   </label>
                   <input
-                    id="edit-contact-email"
+                    id="edit-email"
                     type="email"
-                    value={editContactEmail}
-                    onChange={(e) => setEditContactEmail(e.target.value)}
-                    placeholder="contact@exemple.ch"
+                    value={editEmail}
+                    onChange={(e) => setEditEmail(e.target.value)}
+                    placeholder="email@institution.ch"
                     autoComplete="off"
                     style={{
                       width: '100%',
@@ -1310,18 +1249,13 @@ const UsersRolesTab = () => {
                       boxSizing: 'border-box',
                     }}
                   />
-                  {editingUser.authentication_method === 'username' && (
-                    <div style={{ fontSize: 11, color: '#888', marginTop: 4 }}>
-                      Affiché dans la liste. Ne modifie pas l&apos;identifiant de connexion.
-                    </div>
-                  )}
                 </div>
               </div>
               <div className={styles.modalActions}>
-                <button type="button" onClick={closeEditProfile}>Annuler</button>
+                <button type="button" onClick={() => setEditProfileUser(null)}>Annuler</button>
                 <button
                   type="submit"
-                  style={{ backgroundColor: '#1565c0', color: 'white' }}
+                  style={{ backgroundColor: '#5e35b1', color: 'white' }}
                   disabled={updateProfileMutation.isPending}
                 >
                   {updateProfileMutation.isPending ? 'Enregistrement...' : 'Enregistrer'}
@@ -1351,7 +1285,7 @@ const UsersRolesTab = () => {
                 <>
                   <p>
                     Voulez-vous vraiment désactiver{' '}
-                    <strong>{confirmAction.user.email}</strong> ?
+                    <strong>{confirmAction.user.email || confirmAction.user.username}</strong> ?
                   </p>
                   <p style={{ fontSize: 13, color: '#666', marginTop: 8 }}>
                     L'utilisateur ne pourra plus se connecter au portail.
@@ -1362,7 +1296,7 @@ const UsersRolesTab = () => {
                 <>
                   <p>
                     Voulez-vous vraiment retirer{' '}
-                    <strong>{confirmAction.user.email}</strong>{' '}
+                    <strong>{confirmAction.user.email || confirmAction.user.username}</strong>{' '}
                     de l'institution ?
                   </p>
                   <p style={{ fontSize: 13, color: '#666', marginTop: 8 }}>

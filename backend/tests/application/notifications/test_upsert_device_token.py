@@ -8,6 +8,7 @@ import pytest
 
 from application.notifications.upsert_device_token import (
     _deactivate_other_rows_with_same_token,
+    _resolve_row_after_unique_violation,
     deactivate_device_tokens_for_logout,
     upsert_device_token,
 )
@@ -128,3 +129,21 @@ def test_deactivate_other_rows_with_same_token_noop_without_owner():
         )
         == 0
     )
+
+
+@patch("application.notifications.upsert_device_token.time.sleep")
+@patch("application.notifications.upsert_device_token._find_row_by_unique_key")
+def test_resolve_row_after_unique_violation_retries(mock_find, _mock_sleep):
+    existing = MagicMock()
+    mock_find.side_effect = [None, None, existing]
+
+    result = _resolve_row_after_unique_violation(
+        driver_id=4,
+        company_id=None,
+        device_id="dev-abc",
+        provider="expo",
+        attempts=3,
+    )
+
+    assert result is existing
+    assert mock_find.call_count == 3

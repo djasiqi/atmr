@@ -563,7 +563,7 @@ class InstitutionPatientQuerySchema(Schema):
         load_default=1,
     )
     per_page = fields.Int(
-        validate=validate.Range(min=1, max=100),
+        validate=validate.Range(min=1, max=500),
         load_default=20,
     )
 

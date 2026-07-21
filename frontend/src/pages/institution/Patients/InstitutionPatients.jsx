@@ -44,7 +44,10 @@ const getInitials = (first, last) => {
 // ─── Component ─────────────────────────────────────────────
 const InstitutionPatients = () => {
   const { data: meData } = useInstitutionMe();
-  const { data: patientsData, isLoading, error } = useInstitutionPatients();
+  const { data: patientsData, isLoading, error } = useInstitutionPatients({
+    fetchAll: true,
+    per_page: 500,
+  });
 
   const institutionRole = meData?.institution_role;
   const canManage = canManageRequests(institutionRole);
@@ -59,6 +62,8 @@ const InstitutionPatients = () => {
     [patientsData]
   );
 
+  const totalPatients = patientsData?.total ?? patients.length;
+
   const filteredPatients = useMemo(() => {
     if (!searchQuery) return patients;
     const q = searchQuery.toLowerCase();
@@ -67,9 +72,12 @@ const InstitutionPatients = () => {
       p.last_name?.toLowerCase().includes(q) ||
       p.phone?.includes(q) ||
       p.city?.toLowerCase().includes(q) ||
-      p.residence_name?.toLowerCase().includes(q)
+      p.residence_name?.toLowerCase().includes(q) ||
+      p.address?.toLowerCase().includes(q)
     );
   }, [patients, searchQuery]);
+
+  const displayCount = searchQuery ? filteredPatients.length : totalPatients;
 
   // Group alphabetically by last name
   const grouped = useMemo(() => {
@@ -125,8 +133,8 @@ const InstitutionPatients = () => {
           />
         </div>
         <div className={s.toolbarRight}>
-          {filteredPatients.length > 0 && (
-            <span className={s.patientCount}>{filteredPatients.length} patient{filteredPatients.length > 1 ? 's' : ''}</span>
+          {displayCount > 0 && (
+            <span className={s.patientCount}>{displayCount} patient{displayCount > 1 ? 's' : ''}</span>
           )}
           {canManage && (
             <button className={s.addBtn} onClick={openCreateModal}>

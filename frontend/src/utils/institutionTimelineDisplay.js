@@ -34,16 +34,14 @@ const ALWAYS_HIDDEN_TYPES = new Set([
   'status_changed',
   'driver_reassigned',
   'driver_reassignment_attempted',
-  'change_confirmation_requested',
-  'change_accepted_by_company',
-  'change_refused_by_company',
-  'change_refused_by_driver',
+  // Les décisions de modification / annulation sont affichées (change_*)
   'change_expired',
   'escalation_required',
   'redispatched',
   'billing_changed',
   'offer_expired',
   'offer_rejected',
+  'change_refused_by_driver',
 ]);
 
 const SEND_EVENT_TYPES = new Set(['request_sent', 'offer_sent']);
@@ -72,6 +70,14 @@ const normalizeChangedFields = (raw) => {
   if (Array.isArray(raw)) return raw.map(String);
   if (typeof raw === 'object') return Object.keys(raw).filter((k) => raw[k]);
   return [];
+};
+
+const isCancellationChangePayload = (payload = {}) => {
+  const patch = payload.proposed_patch || {};
+  if (patch._cancellation === true || patch.cancellation === true) return true;
+  const fields = normalizeChangedFields(payload.changed_fields);
+  const afterStatus = String(payload.after_snapshot?.status || '').toUpperCase();
+  return fields.includes('status') && (afterStatus === 'CANCELED' || afterStatus === 'CANCELLED');
 };
 
 const classifyChangedFields = (fields) => {
@@ -157,6 +163,13 @@ const shouldHideFieldUpdated = (event, context) => {
         && isSameTimelineMinute(other.created_at, event.created_at),
     );
   }
+  // Doublon avec la décision transporteur explicite
+  if (context.apiEvents.some(
+    (other) => other.event_type === 'change_accepted_by_company'
+      && isSameTimelineMinute(other.created_at, event.created_at),
+  )) {
+    return true;
+  }
   return false;
 };
 
@@ -204,6 +217,7 @@ export function getTimelineDisplayEvent(event, context, sendAggregate) {
 
   const type = event.event_type;
   const payload = event.payload || {};
+  const isCancelChange = isCancellationChangePayload(payload);
   let label = null;
   let importance = 'primary';
   let category = 'request';
@@ -213,6 +227,29 @@ export function getTimelineDisplayEvent(event, context, sendAggregate) {
   } else if (type === 'request_converted') {
     const name = resolveCarrierName(event, context);
     label = name ? `Réservation confirmée — ${name}` : 'Réservation confirmée';
+  } else if (type === 'change_confirmation_requested') {
+    // Aligné sur le panneau transporteur (« Modification institution — … »)
+    label = isCancelChange
+      ? 'Demande d’annulation institution'
+      : 'Modification institution';
+    label = withActorName(label, payload);
+    category = isCancelChange ? 'cancellation' : 'change';
+  } else if (type === 'change_accepted_by_company') {
+    const actionType = String(payload.action_type || '').toUpperCase();
+    const cancelDecision = isCancelChange || actionType === 'CANCELLATION';
+    label = cancelDecision
+      ? 'Annulation confirmée par le transporteur'
+      : 'Modification acceptée par le transporteur';
+    label = withActorName(label, payload);
+    category = cancelDecision ? 'cancellation' : 'change';
+  } else if (type === 'change_refused_by_company') {
+    const actionType = String(payload.action_type || '').toUpperCase();
+    const cancelDecision = isCancelChange || actionType === 'CANCELLATION';
+    label = cancelDecision
+      ? 'Problème signalé par le transporteur'
+      : 'Modification refusée par le transporteur';
+    label = withActorName(label, payload);
+    category = 'change';
   } else if (type === 'driver_assigned') {
     const driverName = payload.driver_name;
     if (!driverName) return null;
@@ -255,7 +292,7 @@ export function getTimelineDisplayEvent(event, context, sendAggregate) {
     timestamp: event.created_at,
     importance,
     source: 'api',
-    type: type === 'cancelled' ? 'cancel' : undefined,
+    type: (type === 'cancelled' || category === 'cancellation') ? 'cancel' : undefined,
     eventId: event.id,
   };
 }

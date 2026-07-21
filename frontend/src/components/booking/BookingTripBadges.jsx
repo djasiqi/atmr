@@ -18,7 +18,6 @@ const BookingTripBadges = ({ booking, routeGroupSizes = {}, className = '' }) =>
     returnLeg: tableStyles.returnLegBadge,
     routeLeg: tableStyles.routeLegBadge,
     transfer: tableStyles.transferBadge,
-    changeRequest: tableStyles.transferBadge,
   };
 
   return (

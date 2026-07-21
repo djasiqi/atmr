@@ -81,6 +81,16 @@ cancel_model = institution_bookings_ns.model(
 )
 
 
+class InstitutionBookingLegAppointmentSchema(Schema):
+    """Heure RDV d’un leg destination — null = « À définir » (clear)."""
+
+    class Meta:
+        unknown = EXCLUDE
+
+    index = ma_fields.Integer(required=True)
+    scheduled_time = ma_fields.String(required=False, allow_none=True)
+
+
 class InstitutionBookingPatchSchema(Schema):
     class Meta:
         unknown = EXCLUDE
@@ -112,7 +122,7 @@ class InstitutionBookingPatchSchema(Schema):
     appointment_time = ma_fields.String(required=False, allow_none=True)
     return_appointment_time = ma_fields.String(required=False, allow_none=True)
     leg_appointments = ma_fields.List(
-        ma_fields.Dict(keys=ma_fields.Str(), values=ma_fields.Raw()),
+        ma_fields.Nested(InstitutionBookingLegAppointmentSchema),
         required=False,
         allow_none=True,
     )

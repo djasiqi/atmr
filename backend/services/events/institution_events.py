@@ -3,8 +3,8 @@
 
 Ce module gère les événements Socket.IO envoyés aux institutions:
 - request_sent: Demande envoyée aux transporteurs
-- offer_accepted: Offre acceptée par un transporteur
-- request_converted: Demande convertie en booking
+- offer_accepted: Offre acceptée (socket UI ; pas de notif cloche — voir request_converted)
+- request_converted: Demande convertie en booking (+ notification cloche unique)
 - booking_status_updated: Statut du booking mis à jour
 """
 
@@ -244,22 +244,12 @@ def emit_offer_accepted(
     offer_id: int,
     company_name: str | None = None,  # Optionnel, peut être masqué
 ) -> bool:
-    """Émet l'événement offer_accepted.
+    """Émet l'événement offer_accepted (socket uniquement).
 
-    Appelé quand un transporteur accepte une offre.
+    Pas de notification cloche ici : ``emit_request_converted`` couvre
+    le même moment métier (acceptation = conversion) et évite le doublon
+    « Transporteur trouvé » / « Transport confirmé ».
     """
-    name = company_name or "Un transporteur"
-    _persist_notification(
-        institution_id=institution_id,
-        event_type="offer_accepted",
-        message=f"{name} a accepté la demande #{request_id}",
-        metadata={
-            "request_id": request_id,
-            "public_id": public_id,
-            "offer_id": offer_id,
-            "company_name": company_name,
-        },
-    )
     return emit_institution_event(
         institution_id=institution_id,
         event_name="offer_accepted",
@@ -281,9 +271,9 @@ def emit_request_converted(
     company_id: int | None = None,  # Masqué si None
     company_name: str | None = None,
 ) -> bool:
-    """Émet l'événement request_converted.
+    """Émet l'événement request_converted + notification cloche unique.
 
-    Appelé quand une demande est convertie en booking.
+    Appelé quand une demande est convertie en booking (acceptation transporteur).
     """
     name = company_name or "un transporteur"
     _persist_notification(
@@ -296,6 +286,7 @@ def emit_request_converted(
             "booking_id": booking_id,
             "company_name": company_name,
         },
+        dedupe_key=f"request_converted:{request_id}",
     )
     return emit_institution_event(
         institution_id=institution_id,

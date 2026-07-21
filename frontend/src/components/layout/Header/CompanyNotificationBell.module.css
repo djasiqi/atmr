@@ -10,14 +10,18 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: 30px;
+  height: 30px;
+  min-height: 30px;
+  max-height: 30px;
+  box-sizing: border-box;
   border: 1px solid var(--border-primary, #e2e8f0);
-  border-radius: 8px;
+  border-radius: 999px;
   background: var(--bg-primary, #fff);
   cursor: pointer;
   transition: all 0.2s ease;
   color: var(--text-tertiary, #94a3b8);
+  padding: 0;
 }
 
 .bellBtn:hover {
@@ -31,7 +35,7 @@
 }
 
 .bellIcon {
-  font-size: 16px;
+  font-size: 14px;
 }
 
 /* ── Badge ── */

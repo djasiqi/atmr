@@ -16,7 +16,11 @@ from ext import db
 from models.booking import Booking
 from models.company import Company
 from models.driver import Driver
-from models.enums import BookingStatus
+from models.enums import BookingStatus, GeoUnitType
+from models.geo_unit import GeoUnit
+from models.institution import Institution
+from models.service_area_pricing import ServiceArea
+from services.geo.geo_resolver import resolve_legacy_service_area_to_canton_codes
 
 # Aligné sur routes.geocode — évite un import lourd au chargement du module
 _SWISS_CANTON_CODES = frozenset(
@@ -117,7 +121,46 @@ def _cantons_from_service_area(
         pass
     if not parsed_as_json:
         for part in s.split(","):
-            out.update(_codes_from_token_string(part.strip(), name_to_code))
+            token = part.strip()
+            token_codes = _codes_from_token_string(token, name_to_code)
+            if token_codes:
+                out.update(token_codes)
+                continue
+            # Texte libre legacy (ex. « Geneve », « Vaud ») sans préfixe canton:
+            plain_code = name_to_code.get(_norm_canton_name_lookup(token))
+            if plain_code:
+                out.add(plain_code)
+    if not out:
+        out.update(resolve_legacy_service_area_to_canton_codes(s))
+    return out
+
+
+def _canton_code_from_geo_unit(unit: GeoUnit) -> str | None:
+    for node in unit.lineage():
+        if node.type == GeoUnitType.CANTON:
+            code = node.code.upper()
+            if code in _SWISS_CANTON_CODES:
+                return code
+    return None
+
+
+def _cantons_from_service_areas_table() -> set[str]:
+    """Cantons couverts via la table service_area (modèle géo structuré)."""
+    out: set[str] = set()
+    units = (
+        db.session.query(GeoUnit)
+        .join(ServiceArea, ServiceArea.geo_unit_id == GeoUnit.id)
+        .join(Company, Company.id == ServiceArea.company_id)
+        .filter(
+            Company.is_approved.is_(True),
+            ServiceArea.is_active.is_(True),
+        )
+        .all()
+    )
+    for unit in units:
+        code = _canton_code_from_geo_unit(unit)
+        if code:
+            out.add(code)
     return out
 
 
@@ -153,6 +196,8 @@ def _fetch_stats() -> dict:
         or 0
     )
 
+    active_institutions = db.session.query(func.count(Institution.id)).scalar() or 0
+
     name_to_code = _swiss_canton_name_to_code()
     cantons_served: set[str] = set()
     for (service_area,) in (
@@ -165,10 +210,12 @@ def _fetch_stats() -> dict:
         .all()
     ):
         cantons_served.update(_cantons_from_service_area(service_area, name_to_code))
+    cantons_served.update(_cantons_from_service_areas_table())
 
     return {
         "completedBookings": completed,
         "activeCompanies": active_companies,
+        "activeInstitutions": active_institutions,
         "activeDrivers": active_drivers,
         "cantonsServed": len(cantons_served),
     }

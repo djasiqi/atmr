@@ -310,7 +310,12 @@ const InstitutionRequests = () => {
   );
   const totalPages = Math.ceil((requestsData?.total || 0) / filters.per_page);
 
-  const handleFilter = (key, value) => setFilters(prev => ({ ...prev, [key]: value, page: 1 }));
+  const handleFilter = (key, value) =>
+    setFilters((prev) => ({
+      ...prev,
+      [key]: value,
+      ...(key !== 'page' ? { page: 1 } : {}),
+    }));
 
   const handleSelectRequest = useCallback((req) => {
     setSelectedId((prev) => {
@@ -745,11 +750,11 @@ const InstitutionRequests = () => {
 
             {totalPages > 1 && (
               <div className={s.pagination}>
-                <button onClick={() => handleFilter('page', filters.page - 1)} disabled={filters.page <= 1}>
+                <button type="button" onClick={() => handleFilter('page', filters.page - 1)} disabled={filters.page <= 1}>
                   Précédent
                 </button>
                 <span>Page {filters.page} / {totalPages}</span>
-                <button onClick={() => handleFilter('page', filters.page + 1)} disabled={filters.page >= totalPages}>
+                <button type="button" onClick={() => handleFilter('page', filters.page + 1)} disabled={filters.page >= totalPages}>
                   Suivant
                 </button>
               </div>

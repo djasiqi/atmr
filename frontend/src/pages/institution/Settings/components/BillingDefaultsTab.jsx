@@ -25,7 +25,6 @@ import styles from '../InstitutionSettings.module.css';
 const BILLING_INTENT_OPTIONS = [
   { value: 'patient', label: 'Patient — le patient est facturé directement' },
   { value: 'institution', label: 'Institution — l\'institution prend en charge' },
-  { value: 'third_party', label: 'Tiers payeur — un tiers (assurance, commune, curatelle) est facturé' },
 ];
 
 const BillingDefaultsTab = () => {
@@ -70,7 +69,9 @@ const BillingDefaultsTab = () => {
         billing_email: inst.billing_email || '',
         billing_address: inst.billing_address || '',
         vat_number: inst.vat_number || '',
-        default_billing_intent: settings.default_billing_intent || 'patient',
+        default_billing_intent: ['patient', 'institution'].includes(settings.default_billing_intent)
+          ? settings.default_billing_intent
+          : 'patient',
         default_vat_rate: settings.default_vat_rate != null ? String(settings.default_vat_rate) : '',
         default_payment_terms_days: settings.default_payment_terms_days ?? 30,
         timeout_same_day_minutes: settings.timeout_same_day_minutes ?? 5,

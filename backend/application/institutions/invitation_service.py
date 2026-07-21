@@ -17,13 +17,16 @@ import secrets
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from flask import current_app, render_template
 
 from ext import db
 from models import Institution, User, UserRole
 from services.email.brevo_provider import BrevoEmailProvider
+
+if TYPE_CHECKING:
+    from models.enums import InstitutionRole
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +40,6 @@ ROLE_LABELS = {
     "institution_reader": "Lecteur",
     "institution_billing": "Facturation",
     "institution_curator": "Curateur",
-    "institution_reception": "Réception",
 }
 
 InvitePath = Literal[
@@ -285,20 +287,17 @@ def invite_or_attach_institution_user(
     )
 
     if creation_mode == "username":
-        from application.users.normalization import normalize_contact_email
-
-        contact_email = normalize_contact_email(email)
         return _create_username_mode_user(
             institution=institution,
             admin_user=admin_user,
             role_value=role_value,
             first_name=first_name,
             last_name=last_name,
+            email=email.strip().lower() if email else None,
             local_username=str(local_username or "").strip().lower(),
             admin_name=admin_name,
             institution_name=institution_name,
             job_title=job_title,
-            contact_email=contact_email,
         )
 
     if not email:
@@ -485,14 +484,15 @@ def _create_username_mode_user(
     role_value: str,
     first_name: str | None,
     last_name: str | None,
+    email: str | None = None,
     local_username: str,
     admin_name: str,
     institution_name: str,
     job_title: str | None = None,
-    contact_email: str | None = None,
 ) -> InviteAttachResult:
     local_username = local_username.strip().lower()
     job_title = _normalize_job_title(job_title)
+    contact_email = email.strip().lower() if email else None
 
     if not local_username or len(local_username) < 3:
         return InviteAttachResult(
@@ -512,9 +512,9 @@ def _create_username_mode_user(
         )
 
     if contact_email:
-        from application.users.normalization import find_user_by_normalized_email
-
-        email_conflict = find_user_by_normalized_email(contact_email)
+        email_conflict = User.query.filter(
+            func.lower(User.email) == contact_email
+        ).first()
         if email_conflict:
             return InviteAttachResult(
                 path="conflict_email",

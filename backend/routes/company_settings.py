@@ -47,6 +47,50 @@ SERVICE_AREA_MAX_LENGTH = 200
 SERVICE_AREA_JSON_VERSION = 1
 SERVICE_AREA_MODE_SET = {"canton", "district", "commune"}
 SERVICE_AREA_TOKEN_PATTERN = re.compile(r"^(commune|district|canton):[A-Za-z0-9_-]+$")
+_SERVICE_AREA_NAMED_TOKEN_PATTERN = re.compile(
+    r"^(commune_name|canton_name|district_name):.+$"
+)
+
+
+def _canonicalize_service_area_token(token: str) -> str | None:
+    """Normalise un token canonique ou nommé (ex. canton_name:Genève → canton:GE)."""
+    text = str(token or "").strip()
+    if not text:
+        return None
+    if SERVICE_AREA_TOKEN_PATTERN.match(text):
+        return text
+    if not _SERVICE_AREA_NAMED_TOKEN_PATTERN.match(text):
+        return None
+
+    from routes.geocode import (
+        SWISS_CANTON_NAME_TO_CODE,
+        _decode_named_zone_token,
+        _normalize_zone_search_text,
+    )
+    from models.enums import GeoUnitType
+
+    decoded = _decode_named_zone_token(text)
+    if not decoded:
+        return None
+    zone_type, zone_name = decoded
+    if zone_type == "canton":
+        code = SWISS_CANTON_NAME_TO_CODE.get(_normalize_zone_search_text(zone_name))
+        if code:
+            return f"canton:{code}"
+
+    type_map = {
+        "commune": GeoUnitType.COMMUNE,
+        "district": GeoUnitType.DISTRICT,
+        "canton": GeoUnitType.CANTON,
+    }
+    gu_type = type_map.get(zone_type)
+    if not gu_type:
+        return None
+    target_norm = _normalize_zone_search_text(zone_name)
+    for unit in GeoUnit.query.filter(GeoUnit.type == gu_type).all():
+        if _normalize_zone_search_text(unit.name or "") == target_norm:
+            return f"{zone_type}:{unit.code}"
+    return None
 
 
 def _to_float_or_none(value: object) -> float | None:
@@ -270,8 +314,14 @@ def _validate_service_area_value(value: object) -> str:
     norm_tokens = [str(token).strip() for token in tokens if str(token).strip()]
     if len(norm_tokens) == 0:
         raise ValueError("service_area JSON invalide: tokens vides.")
-    if any(not SERVICE_AREA_TOKEN_PATTERN.match(token) for token in norm_tokens):
-        raise ValueError("service_area JSON invalide: token non canonique.")
+    canonical_tokens: list[str] = []
+    for token in norm_tokens:
+        canonical = _canonicalize_service_area_token(token)
+        if not canonical:
+            raise ValueError("service_area JSON invalide: token non canonique.")
+        if canonical not in canonical_tokens:
+            canonical_tokens.append(canonical)
+    norm_tokens = canonical_tokens
     if mode in {"canton", "district"} and len(norm_tokens) != 1:
         raise ValueError(
             "service_area JSON invalide: canton/district accepte un seul token."

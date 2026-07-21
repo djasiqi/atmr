@@ -25,40 +25,310 @@
 
 .hero {
   position: relative;
-  overflow: hidden;
-  background: linear-gradient(180deg, #f0faf7 0%, #ffffff 60%, #fafafa 100%);
-  padding: 72px 0 88px;
+  overflow-x: clip;
+  overflow-y: visible;
+  background:
+    radial-gradient(ellipse 80% 55% at 12% -8%, rgba(13, 127, 114, 0.14) 0%, transparent 58%),
+    linear-gradient(180deg, #edf8f5 0%, #ffffff 42%, #fafbfc 100%);
+  padding: 48px 0 104px;
+}
+
+.hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(rgba(13, 127, 114, 0.055) 1px, transparent 1px);
+  background-size: 28px 28px;
+  opacity: 0.45;
+  pointer-events: none;
+  mask-image: linear-gradient(180deg, #000 0%, transparent 88%);
 }
 
 .heroInner {
+  position: relative;
+  z-index: 1;
   max-width: 1200px;
   margin: 0 auto;
   padding: 0 var(--spacing-lg);
+  overflow: visible;
 }
 
-.heroTop {
-  max-width: none;
-  width: 100%;
-  margin-bottom: 28px;
-}
-
-.heroMainGrid {
+.heroStage {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 48px;
+  grid-template-columns: minmax(0, 48fr) minmax(0, 52fr);
+  gap: 0;
   align-items: stretch;
 }
 
-/* ── Hero Left — Content + Booking ── */
-
 .heroContent {
+  position: relative;
+  z-index: 2;
   display: flex;
   flex-direction: column;
+  padding-right: 24px;
 }
 
-.bookingColumn {
-  min-width: 0;
+.heroIntro {
+  max-width: none;
+  margin-bottom: 1.5rem;
+}
+
+.heroProofs {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 0;
+  margin-bottom: 0.875rem;
+}
+
+.heroProofItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  line-height: 1.3;
+}
+
+.heroProofItem:not(:last-child)::after {
+  content: '·';
+  margin: 0 10px;
+  color: rgba(13, 127, 114, 0.35);
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.heroProofMark {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.heroProofMark::after {
+  content: '✓';
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--brand-primary);
+  line-height: 1;
+}
+
+.heroBookingForm {
+  width: 100%;
+  margin-top: 6px;
+}
+
+.heroMapBackdrop {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 580px;
+  margin-top: -8px;
+  margin-right: 0;
+  width: 100%;
+  overflow: visible;
+  isolation: isolate;
+}
+
+.heroMapBackdrop::before {
+  content: '';
+  position: absolute;
+  inset: -6% 0 -6% 10%;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse 68% 62% at 48% 46%,
+    rgba(13, 127, 114, 0.16) 0%,
+    rgba(13, 127, 114, 0.05) 38%,
+    transparent 72%
+  );
+  filter: blur(2px);
+}
+
+.heroMapBackdrop .mapShowcase {
+  position: relative;
+  z-index: 1;
+  flex: 1 1 auto;
+  min-height: 580px;
+  width: 100%;
+  height: 100%;
+  border-radius: 28px 22px 22px 28px;
+  overflow: hidden;
+  box-shadow:
+    -16px 28px 56px -24px rgba(13, 127, 114, 0.2),
+    0 36px 72px -36px rgba(15, 23, 42, 0.14);
+  background: #eef2f1;
+  animation: heroMapReveal 1.15s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Chrome Google Maps (logo, échelle, mentions) — carte décorative hero uniquement */
+.heroMapBackdrop .mapShowcase :global(.gmnoprint),
+.heroMapBackdrop .mapShowcase :global(.gm-style-cc),
+.heroMapBackdrop .mapShowcase :global(.gm-style-mtc),
+.heroMapBackdrop .mapShowcase :global(a[href*='maps.google.com']),
+.heroMapBackdrop .mapShowcase :global(a[href*='google.com/maps']),
+.heroMapBackdrop .mapShowcase :global(a[href*='google.com'][target='_blank']),
+.heroMapBackdrop .mapShowcase :global(img[alt='Google']),
+.heroMapBackdrop .mapShowcase :global(img[src*='google_white']),
+.heroMapBackdrop .mapShowcase :global(img[src*='google4']) {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+.heroMapLogoMask {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  z-index: 6;
+  width: 108px;
+  height: 36px;
+  pointer-events: none;
+  background: linear-gradient(
+    135deg,
+    rgba(238, 242, 241, 0.98) 0%,
+    rgba(238, 242, 241, 0.92) 42%,
+    rgba(238, 242, 241, 0.55) 72%,
+    transparent 100%
+  );
+}
+
+@keyframes heroMapReveal {
+  from {
+    opacity: 0.82;
+    transform: translateX(8px) scale(0.988);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+.heroMapBackdrop .mapShowcase::after {
+  display: none;
+}
+
+.heroMissionStrip {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  left: auto;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(13, 127, 114, 0.18);
+  box-shadow: 0 6px 18px -10px rgba(15, 23, 42, 0.35);
+  pointer-events: none;
+  text-align: right;
+}
+
+.heroMissionStatus {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--brand-primary-dark);
+  line-height: 1.25;
+}
+
+.heroMissionMeta {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  line-height: 1.25;
+  letter-spacing: 0.01em;
+}
+
+.mapVignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, transparent 20%),
+    linear-gradient(0deg, rgba(247, 251, 249, 0.72) 0%, rgba(247, 251, 249, 0.35) 18%, transparent 32%);
+}
+
+.heroContent .bookingCard {
+  border: 1px solid rgba(13, 127, 114, 0.11);
+  box-shadow:
+    0 24px 48px -28px rgba(13, 127, 114, 0.16),
+    0 10px 28px -14px rgba(15, 23, 42, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  border-radius: 20px;
+  padding: 22px 24px 20px;
+  background: linear-gradient(180deg, #ffffff 0%, #f9fcfb 100%);
+}
+
+.heroContent .fieldGroup {
+  min-height: 34px;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 14px;
+  border-color: rgba(13, 127, 114, 0.14);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.03);
+}
+
+.heroContent .fieldGroup:focus-within {
+  border-color: var(--brand-primary);
+  box-shadow:
+    0 0 0 3px rgba(13, 127, 114, 0.1),
+    inset 0 1px 2px rgba(15, 23, 42, 0.02);
+}
+
+.heroContent .fieldGroup :global(.AddressAutocomplete_wrapper__GGoNt),
+.heroContent .fieldGroup :global(.AddressAutocomplete_input__SgZs\+),
+.heroContent .fieldGroup input[type='text']:not([class*='AddressAutocomplete_inputFlush__']) {
+  min-height: 34px;
+  height: 34px;
+  line-height: 34px;
+}
+
+.heroContent .stepPill {
+  border-radius: 999px;
+  padding: 5px 11px;
+}
+
+.heroContent .ctaButton {
+  margin-top: 14px;
+  padding: 15px 28px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, var(--brand-primary) 0%, var(--brand-primary-dark) 100%);
+  box-shadow:
+    0 14px 28px -10px rgba(13, 127, 114, 0.48),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  letter-spacing: 0.01em;
+}
+
+.heroContent .ctaButton:hover:not(:disabled) {
+  background: linear-gradient(180deg, var(--brand-primary-dark) 0%, #005a4f 100%);
+  box-shadow:
+    0 16px 32px -10px rgba(13, 127, 114, 0.52),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+
+.heroContent .bookingTitle {
+  font-size: 1.0625rem;
+  font-weight: 700;
 }
 
 .heroBadge {
@@ -76,7 +346,7 @@
   letter-spacing: 0.05em;
   text-transform: uppercase;
   width: fit-content;
-  margin-bottom: 1rem;
+  margin-bottom: 1.25rem;
 }
 
 .heroBadge svg {
@@ -89,27 +359,58 @@
 }
 
 .heroTitle {
-  font-size: clamp(1.85rem, 4.2vw, 2.5rem);
-  font-weight: var(--font-weight-bold);
-  line-height: var(--line-height-tight);
+  font-size: clamp(2.25rem, 5.6vw, 3.2rem);
+  font-weight: 800;
+  line-height: 1;
   color: var(--text-primary);
-  letter-spacing: -0.03em;
-  margin: 0 0 0.35rem;
-  max-width: 22ch;
+  letter-spacing: -0.045em;
+  margin: 0 0 0.375rem;
+  max-width: none;
+}
+
+.heroTitleLine {
+  display: block;
+  color: #0f172a;
+  text-shadow: 0 2px 32px rgba(15, 23, 42, 0.08);
+}
+
+.heroTitleRule {
+  width: min(168px, 38%);
+  height: 4px;
+  margin: 0 0 1rem;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    var(--brand-primary) 0%,
+    rgba(13, 127, 114, 0.35) 72%,
+    transparent 100%
+  );
+}
+
+.heroTagline {
+  font-size: clamp(1.05rem, 2.2vw, 1.2rem);
+  font-weight: var(--font-weight-medium);
+  font-style: italic;
+  color: var(--brand-primary-dark);
+  line-height: var(--line-height-relaxed);
+  max-width: 34ch;
+  margin: 0 0 1.125rem;
+  letter-spacing: -0.01em;
 }
 
 .heroSubtitle {
-  font-size: var(--font-lg);
+  font-size: var(--font-base);
   color: var(--text-secondary);
-  line-height: var(--line-height-relaxed);
-  max-width: 38rem;
-  margin: 0 0 1.5rem;
+  line-height: 1.65;
+  max-width: none;
+  margin: 0;
 }
 
 .heroTitleAccent {
   display: block;
+  margin-top: 0.16em;
   color: var(--brand-primary-dark);
-  letter-spacing: -0.03em;
+  letter-spacing: -0.035em;
 }
 
 .heroTrust {
@@ -117,7 +418,6 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 14px 18px;
-  margin-bottom: 18px;
 }
 
 .heroTrustItem {
@@ -144,88 +444,12 @@
   background: rgba(148, 163, 184, 0.45);
 }
 
-.heroQuickLinks {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 4px;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.heroQuickLink {
-  color: var(--brand-primary);
-  text-decoration: none !important;
-  padding: 4px 2px;
-  border-radius: 6px;
-  transition: background-color var(--transition-fast), color var(--transition-fast);
-}
-
-.heroQuickLink:hover {
-  color: var(--brand-primary-dark);
-  background: var(--brand-primary-lightest);
-}
-
-.heroQuickSep {
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: rgba(148, 163, 184, 0.55);
-  margin: 0 6px;
-}
-
-/* ── Bande réassurance (sous hero) ─────────────────────── */
-
-.trustBand {
-  border-top: 1px solid rgba(13, 127, 114, 0.12);
-  border-bottom: 1px solid rgba(13, 127, 114, 0.12);
-  background: var(--brand-primary-lightest);
-}
-
-.trustBandInner {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 0 var(--spacing-lg);
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 0;
-}
-
-.trustBandItem {
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
-  padding: 22px 20px;
-  border-right: 1px solid rgba(13, 127, 114, 0.1);
-}
-
-.trustBandItem:last-child {
-  border-right: none;
-}
-
-.trustBandDot {
-  width: 8px;
-  height: 8px;
-  margin-top: 6px;
-  border-radius: 50%;
-  background: var(--brand-primary);
-  opacity: 0.45;
-  flex-shrink: 0;
-}
-
-.trustBandTitle {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--text-primary);
-  margin-bottom: 4px;
-  line-height: 1.25;
-}
-
-.trustBandDesc {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.45;
-  color: var(--text-tertiary);
+@media (prefers-reduced-motion: reduce) {
+  .heroMapBackdrop .mapShowcase,
+  .mapBrandBadge,
+  .mapBrandDot {
+    animation: none;
+  }
 }
 
 /* ── Booking Card ── */
@@ -262,6 +486,116 @@
   margin: 0;
   font-size: var(--font-sm);
   color: var(--text-tertiary);
+}
+
+.stepIndicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.stepPill {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--bg-tertiary);
+  border: 1px solid transparent;
+  transition:
+    color var(--transition-fast),
+    background-color var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+.stepPillActive {
+  color: var(--brand-primary);
+  background: var(--brand-primary-lightest);
+  border-color: rgba(13, 127, 114, 0.2);
+}
+
+.stepPillDone {
+  color: var(--brand-primary-dark);
+}
+
+.stepIndicatorSep {
+  flex: 1;
+  height: 1px;
+  background: rgba(148, 163, 184, 0.35);
+  min-width: 12px;
+}
+
+.routePreview {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  align-self: flex-start;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--brand-primary-lightest);
+  color: var(--brand-primary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.routePreviewSep {
+  width: 1px;
+  height: 12px;
+  background: rgba(13, 127, 114, 0.25);
+}
+
+.routeRecap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.routeRecapBack {
+  align-self: flex-start;
+  margin: 0 0 2px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--brand-primary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.routeRecapBack:hover {
+  color: var(--brand-primary-dark);
+}
+
+.routeRecapText {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-primary);
+  line-height: 1.4;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.routeRecapLabel {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.35px;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.routeRecapMeta {
+  margin: 4px 0 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--brand-primary);
 }
 
 .progressBlock {
@@ -814,22 +1148,6 @@
   color: #92400e;
 }
 
-.bookingMeta {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 16px;
-  margin-top: 2px;
-  padding-top: 4px;
-  border-top: 1px solid rgba(15, 23, 42, 0.08);
-}
-
-.bookingMetaItem {
-  font-size: 12px;
-  color: var(--text-tertiary);
-  font-weight: 600;
-}
-
 .routeInfo {
   display: flex;
   align-items: center;
@@ -858,7 +1176,6 @@
   margin: 0 12px;
 }
 
-/* Overlay itinéraire sur la carte */
 .mapRouteOverlay {
   position: absolute;
   bottom: 16px;
@@ -900,13 +1217,79 @@
   margin: 0 14px;
 }
 
-/* ── Hero Right — Visual Composition ── */
+.mapBrandBadge {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(13, 127, 114, 0.18);
+  box-shadow: 0 6px 18px -10px rgba(15, 23, 42, 0.35);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--brand-primary-dark);
+  letter-spacing: 0.2px;
+  pointer-events: none;
+  animation: mapBadgeIntro 2.6s ease-out 1 both;
+}
 
-.heroVisual {
-  position: relative;
-  z-index: 0;
-  min-height: 460px;
-  isolation: isolate;
+@keyframes mapBadgeIntro {
+  0% {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.94);
+  }
+  18% {
+    opacity: 1;
+    transform: translateY(0) scale(1.04);
+  }
+  32% {
+    transform: scale(1);
+    box-shadow: 0 6px 18px -10px rgba(15, 23, 42, 0.35), 0 0 0 6px rgba(13, 127, 114, 0.1);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 6px 18px -10px rgba(15, 23, 42, 0.35);
+  }
+}
+
+.mapBrandDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--brand-primary);
+  box-shadow: 0 0 0 3px rgba(13, 127, 114, 0.18);
+  flex-shrink: 0;
+  animation: mapBrandDotPulse 2.6s ease-out 1 both;
+}
+
+@keyframes mapBrandDotPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 3px rgba(13, 127, 114, 0.18);
+  }
+  32% {
+    box-shadow: 0 0 0 7px rgba(13, 127, 114, 0.12);
+  }
+}
+
+.mapMissionBadge {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 10;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: var(--brand-primary);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.25px;
+  box-shadow: 0 8px 20px -12px rgba(0, 121, 107, 0.65);
+  pointer-events: none;
 }
 
 /* Map — element principal, pleine taille */
@@ -1023,52 +1406,7 @@
   font-size: var(--font-sm);
   color: var(--text-tertiary);
   line-height: 1.6;
-  margin: 0 0 14px;
-}
-
-.valueProof {
   margin: 0;
-  display: inline-flex;
-  align-items: center;
-  min-height: 24px;
-  padding: 0 10px;
-  border-radius: 999px;
-  background: rgba(13, 127, 114, 0.08);
-  color: var(--brand-primary);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.2px;
-}
-
-.valuesCta {
-  margin-top: 20px;
-  display: flex;
-  justify-content: center;
-}
-
-.valuesCtaBtn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 38px;
-  padding: 0 18px;
-  border-radius: 999px;
-  border: 1px solid rgba(13, 127, 114, 0.28);
-  background: #ffffff;
-  color: var(--brand-primary);
-  text-decoration: none !important;
-  font-size: 13px;
-  font-weight: 700;
-  transition:
-    background-color var(--transition-fast),
-    border-color var(--transition-fast),
-    box-shadow var(--transition-fast);
-}
-
-.valuesCtaBtn:hover {
-  background: rgba(13, 127, 114, 0.06);
-  border-color: rgba(13, 127, 114, 0.4);
-  box-shadow: 0 8px 20px -16px rgba(13, 127, 114, 0.5);
 }
 
 /* ── How It Works ──────────────────────────────────────── */
@@ -1097,16 +1435,8 @@
   font-size: var(--font-md);
   color: var(--text-tertiary);
   line-height: 1.6;
-  margin: 0 auto 14px;
-  max-width: 640px;
-}
-
-.howCoordination {
-  font-size: var(--font-sm);
-  color: var(--text-secondary);
-  line-height: 1.65;
   margin: 0 auto 48px;
-  max-width: 620px;
+  max-width: 640px;
 }
 
 .stepsGrid {
@@ -1207,38 +1537,38 @@
   font-size: var(--font-md);
   color: var(--text-tertiary);
   line-height: var(--line-height-relaxed);
-  margin: 0 auto 40px;
+  margin: 0 auto 48px;
   max-width: 560px;
 }
 
-.roleCard {
+.roleGrid {
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  gap: 0 var(--spacing-xl);
-  align-items: start;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
   text-align: left;
+  align-items: stretch;
+}
+
+.rolePanel {
   background: var(--bg-primary);
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-2xl);
-  padding: var(--spacing-xl) var(--spacing-xl);
+  padding: 32px 28px;
   box-shadow: var(--shadow-sm);
-}
-
-.roleCol {
   min-width: 0;
 }
 
 .roleColHead {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: var(--spacing-md);
+  gap: 12px;
+  margin-bottom: 22px;
 }
 
 .roleColIconYes,
 .roleColIconNo {
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   border-radius: var(--radius-lg);
   display: inline-flex;
   align-items: center;
@@ -1270,20 +1600,13 @@
   color: var(--danger-dark);
 }
 
-.roleDivider {
-  width: 1px;
-  align-self: stretch;
-  min-height: 120px;
-  background: var(--border-primary);
-}
-
 .roleList {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-sm);
+  gap: 16px;
 }
 
 .roleItem {
@@ -1341,7 +1664,7 @@
 .audienceSection {
   background: var(--bg-primary);
   content-visibility: auto;
-  contain-intrinsic-size: 560px;
+  contain-intrinsic-size: 680px;
 }
 
 .audienceInner {
@@ -1376,13 +1699,14 @@
 .audienceCard {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 26px 22px;
+  gap: 0;
+  padding: 0;
   border-radius: 18px;
   border: 1px solid rgba(148, 163, 184, 0.28);
   background: linear-gradient(180deg, #ffffff 0%, #fcfdfd 100%);
   text-decoration: none !important;
   color: inherit;
+  overflow: hidden;
   transition:
     border-color var(--transition-base),
     box-shadow var(--transition-base),
@@ -1395,19 +1719,142 @@
   transform: translateY(-2px);
 }
 
+.audienceCard:hover .audienceCardImage {
+  transform: scale(1.04);
+}
+
 .audienceCard:focus-visible {
   outline: 2px solid var(--brand-primary);
   outline-offset: 3px;
 }
 
-.audienceCardIcon {
-  width: 48px;
-  height: 48px;
-  border-radius: 14px;
-  background: var(--brand-primary-lightest);
+.audienceCardVisual {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  flex-shrink: 0;
+  overflow: hidden;
+  background: #e8ece9;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.05);
+}
+
+/* Direction artistique unifiée : même lumière, température et finition éditoriale */
+.audienceCardVisual::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 14% 12%, rgba(255, 252, 246, 0.34) 0%, transparent 46%),
+    linear-gradient(135deg, rgba(13, 127, 114, 0.07) 0%, transparent 52%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, rgba(15, 23, 42, 0.1) 100%);
+  mix-blend-mode: soft-light;
+}
+
+.audienceCardVisual::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.07) 0%, transparent 24%),
+    linear-gradient(180deg, transparent 56%, rgba(15, 23, 42, 0.18) 100%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.audienceCardVisual_patient .audienceCardImage {
+  object-position: 42% center;
+  filter: brightness(1.03) contrast(1.07) saturate(0.86) sepia(0.05);
+}
+
+.audienceCardVisual_transport .audienceCardImage {
+  object-position: 55% center;
+  filter: brightness(1.05) contrast(1.07) saturate(0.9) sepia(0.11);
+}
+
+.audienceCardVisual_institution .audienceCardImage {
+  object-position: 48% center;
+  filter: brightness(1.02) contrast(1.06) saturate(0.84) sepia(0.08);
+}
+
+.audienceCardImage {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.45s ease, filter 0.45s ease;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-user-drag: none;
+  user-drag: none;
+  pointer-events: none;
+}
+
+.audienceCard:hover .audienceCardVisual_patient .audienceCardImage {
+  filter: brightness(1.05) contrast(1.08) saturate(0.88) sepia(0.05);
+}
+
+.audienceCard:hover .audienceCardVisual_transport .audienceCardImage {
+  filter: brightness(1.07) contrast(1.08) saturate(0.92) sepia(0.11);
+}
+
+.audienceCard:hover .audienceCardVisual_institution .audienceCardImage {
+  filter: brightness(1.04) contrast(1.07) saturate(0.86) sepia(0.08);
+}
+
+.audienceCardImageShield {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: transparent;
+  cursor: pointer;
+}
+
+.audienceVisualPlaceholder {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+}
+
+.audienceVisualPatient {
+  background:
+    radial-gradient(circle at 85% 20%, rgba(13, 127, 114, 0.14) 0%, transparent 42%),
+    linear-gradient(145deg, #e4f5f1 0%, #f0faf7 55%, #dceeea 100%);
+}
+
+.audienceVisualTransport {
+  background:
+    radial-gradient(circle at 80% 15%, rgba(10, 136, 239, 0.12) 0%, transparent 40%),
+    linear-gradient(145deg, #e8eef6 0%, #f4f7fb 55%, #dde6f0 100%);
+}
+
+.audienceVisualInstitution {
+  background:
+    radial-gradient(circle at 78% 18%, rgba(13, 127, 114, 0.1) 0%, transparent 38%),
+    linear-gradient(145deg, #e6f0ec 0%, #f5faf8 55%, #d9e8e3 100%);
+}
+
+.audienceVisualWatermark {
+  position: absolute;
+  right: -6%;
+  bottom: -14%;
+  color: var(--brand-primary);
+  opacity: 0.14;
+  pointer-events: none;
+  line-height: 0;
+}
+
+.audienceCardBody {
   display: flex;
-  align-items: center;
-  justify-content: center;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+  padding: 20px 22px 24px;
 }
 
 .audienceCardTitle {
@@ -1442,16 +1889,21 @@
 .statsContent {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 44px var(--spacing-lg) 52px;
+  padding: 44px var(--spacing-lg) 48px;
 }
 
-.statsCaption {
-  margin: 0 0 28px;
+.statsHeader {
   text-align: center;
-  font-size: 13px;
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.72);
-  line-height: 1.5;
+  margin-bottom: 28px;
+}
+
+.statsTitle {
+  margin: 0;
+  font-size: clamp(0.95rem, 1.6vw, 1.1rem);
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  letter-spacing: 0.04em;
+  line-height: 1.3;
 }
 
 .statsInner {
@@ -1489,6 +1941,25 @@
   letter-spacing: 0.3px;
 }
 
+/* ── Phrase-pont (stats → parcours) ─────────────────────── */
+
+.valueBridge {
+  background: #fff;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.valueBridgeText {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 40px var(--spacing-lg) 44px;
+  text-align: center;
+  font-size: clamp(1.05rem, 2vw, 1.25rem);
+  font-weight: 500;
+  line-height: 1.55;
+  letter-spacing: -0.015em;
+  color: var(--text-secondary);
+}
+
 /* ── CTA Section ───────────────────────────────────────── */
 
 .ctaSection {
@@ -1515,8 +1986,17 @@
   font-size: var(--font-md);
   color: var(--text-tertiary);
   line-height: 1.6;
-  margin: 0 auto 40px;
+  margin: 0 auto 10px;
   max-width: 460px;
+}
+
+.ctaReassurance {
+  margin: 0 auto 32px;
+  max-width: 460px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--brand-primary);
+  line-height: 1.5;
 }
 
 .ctaActions {
@@ -1618,35 +2098,81 @@ a.ctaSecondary:focus-visible {
   text-decoration: none !important;
 }
 
-a.valuesCtaBtn,
-a.valuesCtaBtn:hover,
-a.valuesCtaBtn:focus-visible {
-  color: var(--brand-primary);
-  text-decoration: none !important;
-}
-
 /* ── Responsive ─────────────────────────────────────────── */
 
 @media (max-width: 1024px) {
   .hero {
-    padding: 48px 0 64px;
+    padding: 40px 0 72px;
   }
 
-  .heroMainGrid {
+  .heroStage {
     grid-template-columns: 1fr;
-    gap: 40px;
+    gap: 28px;
   }
 
-  .heroTop {
-    margin-bottom: 20px;
+  .heroContent {
+    padding-right: 0;
   }
 
-  .heroVisual {
-    min-height: 360px;
+  .heroIntro {
+    margin-bottom: 1.25rem;
   }
 
-  .mapShowcase {
-    min-height: 360px;
+  .heroProofs {
+    gap: 4px 0;
+    margin-bottom: 1rem;
+  }
+
+  .heroProofItem {
+    font-size: 12px;
+  }
+
+  .heroProofItem:not(:last-child)::after {
+    margin: 0 8px;
+  }
+
+  .heroMapBackdrop {
+    min-height: 0;
+    margin-top: 0;
+    margin-right: 0;
+    width: 100%;
+  }
+
+  .heroMapBackdrop::before {
+    inset: -4% 0 -4% 0;
+    background: radial-gradient(
+      ellipse 85% 60% at 50% 42%,
+      rgba(13, 127, 114, 0.14) 0%,
+      transparent 68%
+    );
+  }
+
+  .heroMapBackdrop .mapShowcase {
+    min-height: 380px;
+    border-radius: 16px;
+    box-shadow:
+      0 20px 40px -24px rgba(13, 127, 114, 0.16),
+      0 12px 32px -20px rgba(15, 23, 42, 0.1);
+  }
+
+  .heroMissionStrip {
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 6px 10px;
+    max-width: none;
+    margin-top: 0;
+    padding: 10px 14px;
+    border-radius: 0 0 16px 16px;
+    border-top: 1px solid rgba(13, 127, 114, 0.1);
+    box-shadow: none;
+    pointer-events: auto;
+  }
+
+  .heroMissionStatus {
+    letter-spacing: 0.04em;
   }
 
   .valuesGrid {
@@ -1654,39 +2180,17 @@ a.valuesCtaBtn:focus-visible {
     gap: 20px;
   }
 
-  .trustBandInner {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
-  .trustBandItem {
-    padding: 20px 16px;
-    border-right: 1px solid rgba(13, 127, 114, 0.1);
-    border-bottom: 1px solid rgba(13, 127, 114, 0.1);
-  }
-
-  .trustBandItem:nth-child(2n) {
-    border-right: none;
-  }
-
-  .trustBandItem:nth-child(n + 3) {
-    border-bottom: none;
-  }
-
   .audienceGrid {
     grid-template-columns: 1fr;
   }
 
-  .roleCard {
+  .roleGrid {
     grid-template-columns: 1fr;
-    gap: var(--spacing-lg);
-    padding: var(--spacing-lg);
+    gap: 16px;
   }
 
-  .roleDivider {
-    width: 100%;
-    height: 1px;
-    min-height: 0;
-    align-self: stretch;
+  .rolePanel {
+    padding: 24px 20px;
   }
 
   /* Steps → vertical on tablet */
@@ -1724,34 +2228,42 @@ a.valuesCtaBtn:focus-visible {
 
 @media (max-width: 768px) {
   .hero {
-    padding: 32px 0 48px;
+    padding: 24px 0 48px;
   }
 
   .heroTitle {
-    font-size: 1.75rem;
+    font-size: 1.85rem;
+  }
+
+  .heroTitleRule {
+    width: min(120px, 32%);
+    margin-bottom: 0.875rem;
+  }
+
+  .heroBookingForm {
+    margin-top: 4px;
   }
 
   .heroSubtitle {
     font-size: var(--font-md);
   }
 
-  .heroTrust {
-    display: none;
-  }
-
-  .heroTrustSep,
-  .heroQuickSep {
-    display: none;
-  }
-
-  .heroQuickLinks {
+  .heroProofs {
     flex-direction: column;
     align-items: flex-start;
     gap: 4px;
   }
 
-  .heroTop {
-    margin-bottom: 16px;
+  .heroProofItem:not(:last-child)::after {
+    content: none;
+  }
+
+  .heroIntro {
+    margin-bottom: 0.875rem;
+  }
+
+  .heroContent .bookingCard {
+    padding: 20px;
   }
 
   .bookingCard {
@@ -1766,8 +2278,8 @@ a.valuesCtaBtn:focus-visible {
     font-size: 13px;
   }
 
-  .bookingMeta {
-    justify-content: flex-start;
+  .heroMapBackdrop .mapShowcase {
+    min-height: 360px;
   }
 
   .progressTop {
@@ -1784,10 +2296,6 @@ a.valuesCtaBtn:focus-visible {
     gap: 6px;
   }
 
-  .heroVisual {
-    min-height: 280px;
-  }
-
   .mapShowcase {
     min-height: 280px;
     border-radius: 18px;
@@ -1801,42 +2309,12 @@ a.valuesCtaBtn:focus-visible {
     padding: 24px 20px;
   }
 
-  .valueProof {
-    width: 100%;
-    justify-content: center;
-  }
-
-  .valuesCta {
-    margin-top: 22px;
-  }
-
-  .valuesCtaBtn {
-    width: 100%;
-  }
-
   .howInner {
     padding: 48px var(--spacing-md) 64px;
   }
 
-  .howCoordination {
-    margin-bottom: 36px;
-  }
-
   .howTitle {
     font-size: var(--font-2xl);
-  }
-
-  .trustBandInner {
-    grid-template-columns: 1fr;
-  }
-
-  .trustBandItem {
-    border-right: none !important;
-    border-bottom: 1px solid rgba(13, 127, 114, 0.1);
-  }
-
-  .trustBandItem:last-child {
-    border-bottom: none;
   }
 
   .audienceInner {

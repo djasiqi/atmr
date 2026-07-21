@@ -15,6 +15,8 @@ import {
   FaBell,
   FaCommentDots,
   FaAmbulance,
+  FaBan,
+  FaExchangeAlt,
 } from 'react-icons/fa';
 import { resolveCompanyNotificationLink } from '../../../utils/companyNotificationNavigation';
 import {
@@ -34,12 +36,38 @@ const hasCompanyToken = () => hasCompanyScopedAccessToken(getCurrentAuthEnv());
 const EVENT_ICONS = {
   booking_message: FaCommentDots,
   new_request: FaAmbulance,
+  institution_change_request: FaExchangeAlt,
 };
 
 const EVENT_COLORS = {
   booking_message: '#0d9488',
   new_request: '#d97706',
+  institution_change_request: '#0d9488',
 };
+
+const CANCEL_COLOR = '#ef4444';
+const CHANGE_REQUEST_COLOR = '#0d9488';
+
+function resolveNotificationVisual(notif) {
+  const meta = notif?.metadata && typeof notif.metadata === 'object' ? notif.metadata : {};
+  const actionType = String(meta.action_type || '').toUpperCase();
+  const title = String(notif?.title || '');
+  const isCancellation =
+    actionType === 'CANCELLATION'
+    || /annulation/i.test(title);
+
+  if (notif?.event_type === 'institution_change_request') {
+    if (isCancellation) {
+      return { Icon: FaBan, color: CANCEL_COLOR };
+    }
+    return { Icon: FaExchangeAlt, color: CHANGE_REQUEST_COLOR };
+  }
+
+  return {
+    Icon: EVENT_ICONS[notif?.event_type] || FaBell,
+    color: EVENT_COLORS[notif?.event_type] || '#64748b',
+  };
+}
 
 /** Resync HTTP périodique long (pas de GET sur chaque event socket). */
 const NOTIFICATIONS_RESYNC_INTERVAL_MS = 10 * 60 * 1000;
@@ -281,8 +309,7 @@ const CompanyNotificationBell = () => {
 
             {!isLoading &&
               notifications.map((notif) => {
-                const Icon = EVENT_ICONS[notif.event_type] || FaBell;
-                const color = EVENT_COLORS[notif.event_type] || '#64748b';
+                const { Icon, color } = resolveNotificationVisual(notif);
 
                 return (
                   <button

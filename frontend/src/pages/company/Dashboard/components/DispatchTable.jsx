@@ -18,6 +18,13 @@ import {
   getDispatchRowDelayInfo,
   normalizeDispatchDelayMapKey,
 } from '../../../../utils/dispatchDelayMapKey';
+import {
+  getPendingActionBadge,
+  indexPendingActionsByRouteGroup,
+  resolvePendingTransportAction,
+  resolveRespondTargetBooking,
+} from '../../../../utils/transportActionPending';
+import { useSearchParams } from 'react-router-dom';
 
 // V11: Cle unifiee
 const getDispatchKey = (d) => d.booking_id ?? d.id;
@@ -109,11 +116,26 @@ const DispatchTable = ({
 }) => {
   const [localAutoOpenId, _setLocalAutoOpenId] = useState(null);
   const effectiveAutoOpenId = autoOpenId ?? localAutoOpenId;
+  const [, setSearchParams] = useSearchParams();
 
   const data = React.useMemo(
     () => dispatches || reservations || EMPTY_ROWS,
     [dispatches, reservations]
   );
+  const pendingByRouteGroup = React.useMemo(
+    () => indexPendingActionsByRouteGroup(data),
+    [data],
+  );
+
+  const openRespondPanel = useCallback((row) => {
+    const target = resolveRespondTargetBooking(row, pendingByRouteGroup, data);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('focus', 'change_request');
+      return next;
+    }, { replace: true });
+    onRowClick?.(target);
+  }, [pendingByRouteGroup, data, onRowClick, setSearchParams]);
   const firstUnassignedIndex = data.findIndex((r) => !r.driver_id && !r.driver);
   const fallbackDriverAnchorIndex = firstUnassignedIndex >= 0 ? firstUnassignedIndex : 0;
   const firstStatusAnchorIndex = data.length > 0 ? 0 : -1;
@@ -201,6 +223,9 @@ const DispatchTable = ({
 
             const isTransferredSender = currentCompanyId && r.is_transferred && r.active_transfer && r.active_transfer.owner_company_id === currentCompanyId;
             const canManageReservation = !isTransferredSender || status === 'pending';
+            const pendingBadge = getPendingActionBadge(
+              resolvePendingTransportAction(r, pendingByRouteGroup),
+            );
 
             return (
               <tr
@@ -297,7 +322,18 @@ const DispatchTable = ({
                   className={styles.actionsCell}
                   onClick={(e) => e.stopPropagation()}
                 >
-                  {!hasActions ? (
+                  {pendingBadge && canManageReservation ? (
+                    <button
+                      type="button"
+                      className={`${styles.actionPendingBadge} ${
+                        pendingBadge.isCancellation ? styles.actionPendingBadgeCancel : ''
+                      } ${styles.actionPendingBadgeBtn}`}
+                      title={pendingBadge.title}
+                      onClick={() => openRespondPanel(r)}
+                    >
+                      Répondre
+                    </button>
+                  ) : !hasActions ? (
                     <span className={styles.noActionLabel}>Aucune action</span>
                   ) : !canManageReservation ? (
                     <span className={styles.readOnlyLabel} title="Cette course est geree par l'entreprise partenaire">

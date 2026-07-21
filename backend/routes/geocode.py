@@ -182,6 +182,92 @@ SWISS_CANTON_NAME_TO_CODE = {
     "zuerich": "ZH",
 }
 
+_CANTON_QUERY_PREFIX_RE = re.compile(
+    r"^canton\s+(?:de\s+|du\s+|des\s+|d['\u2019]\s*)?",
+    re.IGNORECASE,
+)
+
+
+def _parse_canton_search_intent(q: str) -> str | None:
+    """Détecte une recherche canton (ex. « Canton GE », « Genève », « GE »)."""
+    q_norm = _normalize_zone_search_text(q)
+    if not q_norm:
+        return None
+    if len(q_norm) == 2:
+        code = q_norm.upper()
+        if code in SWISS_CANTON_CODES:
+            return code
+    remainder = _CANTON_QUERY_PREFIX_RE.sub("", q_norm).strip()
+    if len(remainder) == 2:
+        code = remainder.upper()
+        if code in SWISS_CANTON_CODES:
+            return code
+    for candidate in (remainder, q_norm):
+        if not candidate:
+            continue
+        code = SWISS_CANTON_NAME_TO_CODE.get(candidate)
+        if code:
+            return code
+    return None
+
+
+def _db_zone_search_terms(q: str) -> list[str]:
+    """Termes normalisés pour la recherche locale (sans bruit « canton »)."""
+    terms: list[str] = []
+    q_norm = _normalize_zone_search_text(q)
+    if q_norm:
+        terms.append(q_norm)
+    stripped = _CANTON_QUERY_PREFIX_RE.sub("", q_norm).strip()
+    if stripped and stripped not in terms:
+        terms.append(stripped)
+    intent = _parse_canton_search_intent(q)
+    if intent:
+        code = intent.lower()
+        if code not in terms:
+            terms.append(code)
+    return terms
+
+
+def _search_canton_intent_zones(
+    q: str, *, types: list[GeoUnitType], limit: int
+) -> list[Dict[str, Any]]:
+    if GeoUnitType.CANTON not in types or limit <= 0:
+        return []
+    code = _parse_canton_search_intent(q)
+    if not code:
+        return []
+    unit = GeoUnit.query.filter(
+        GeoUnit.type == GeoUnitType.CANTON, GeoUnit.code == code
+    ).first()
+    if unit:
+        return [_serialize_zone_item(unit)]
+    return [
+        {
+            "id": None,
+            "type": "canton",
+            "code": code,
+            "name": code,
+            "canton_code": code,
+            "token": f"canton:{code}",
+            "source": "db",
+            "confidence": "authoritative",
+        }
+    ]
+
+
+def _should_skip_geoadmin_for_canton_query(q: str) -> bool:
+    """Évite le bruit GeoAdmin quand l'utilisateur cherche explicitement un canton."""
+    q_norm = _normalize_zone_search_text(q)
+    if not q_norm:
+        return False
+    if _parse_canton_search_intent(q):
+        if _CANTON_QUERY_PREFIX_RE.match(q_norm):
+            return True
+        if len(q_norm) == 2:
+            return True
+    return False
+
+
 _geoadmin_breaker_state: dict[str, Any] = {
     "open_until": 0.0,
     "failures": [],
@@ -761,31 +847,15 @@ def _strip_tags(value: str) -> str:
 
 
 def _extract_zone_type_from_geoadmin(attrs: Dict[str, Any]) -> str | None:
+    """Type de zone GeoAdmin — strict pour éviter les POI libellés « Canton, XX »."""
     origin = str(attrs.get("origin") or attrs.get("layerBodId") or "").lower()
-    detail = str(attrs.get("detail") or "").lower()
-    zone_type: str | None = None
-    if origin.startswith("gg25"):
-        zone_type = "commune"
-    elif origin.startswith("kantone"):
-        zone_type = "canton"
-    elif origin.startswith("district") or "district" in origin or "district" in detail:
-        zone_type = "district"
-    elif (
-        "kanton" in origin
-        or "canton" in origin
-        or "kanton" in detail
-        or "canton" in detail
-    ):
-        zone_type = "canton"
-    elif (
-        "municipality" in origin
-        or "commune" in origin
-        or "city" in origin
-        or "ville" in detail
-        or "commune" in detail
-    ):
-        zone_type = "commune"
-    return zone_type
+    if origin.startswith("gg25") or "municipality" in origin:
+        return "commune"
+    if origin.startswith("kantone") or origin.startswith("ch.swisstopo.kantone"):
+        return "canton"
+    if origin.startswith("district") or "bezirk" in origin:
+        return "district"
+    return None
 
 
 def _extract_zone_code(

@@ -19,7 +19,12 @@ from typing import Any
 from celery_app import celery
 from ext import db
 from models import Booking, BookingChangeRequest
-from models.booking_change_request import BookingChangeRequestStatus
+from models.booking_change_request import (
+    BookingChangeRequestStatus,
+    TransportActionEffectStatus,
+    TransportActionNextActor,
+    TransportActionStatus,
+)
 from security.audit_log import AuditLogger
 
 logger = logging.getLogger(__name__)
@@ -52,7 +57,7 @@ def expire_pending_change_requests(_self: Any) -> dict[str, int]:
 
     try:
         expired = BookingChangeRequest.query.filter(
-            BookingChangeRequest.status == BookingChangeRequestStatus.PENDING,
+            BookingChangeRequest.status.in_(list(TransportActionStatus.OPEN)),
             BookingChangeRequest.expires_at.isnot(None),
             BookingChangeRequest.expires_at < now,
         ).all()
@@ -100,93 +105,73 @@ def expire_pending_change_requests(_self: Any) -> dict[str, int]:
 def _escalate_change_request(
     change_request: BookingChangeRequest, now: datetime
 ) -> None:
-    """Marque la BCR EXPIRED puis ESCALATION_REQUIRED (action institution requise).
-
-    Le transporteur reste engagé tant que l'institution n'a pas tranché : on ne
-    libère PAS la course automatiquement (comportement par défaut, conforme au
-    stop-gate). Une seconde transition vers ESCALATION_REQUIRED matérialise le
-    besoin d'action côté institution.
-    """
+    """V1 : expiration clôture l'action entière ; mission inchangée."""
     change_request.status = BookingChangeRequestStatus.EXPIRED
-    change_request.version = int(change_request.version or 1) + 1
-    change_request.updated_at = now
-    db.session.flush()
-
-    change_request.status = BookingChangeRequestStatus.ESCALATION_REQUIRED
+    change_request.effect_status = TransportActionEffectStatus.NONE
+    change_request.next_actor_type = TransportActionNextActor.NONE
     change_request.version = int(change_request.version or 1) + 1
     change_request.updated_at = now
 
     booking = Booking.query.get(change_request.booking_id)
-    if booking and int(booking.active_change_request_id or 0) == int(change_request.id):
-        # On conserve active_change_request_id : l'institution doit agir.
+    if booking:
+        from application.institutions.transport_action_workflow import (
+            clear_active_change_request_refs,
+        )
+
+        clear_active_change_request_refs(change_request.id)
         booking.updated_at = now
 
     _record_timeline(change_request, "change_expired")
-    _record_timeline(change_request, "escalation_required")
 
     with contextlib.suppress(Exception):
         AuditLogger.log_action(
-            action_type="change_request_expired",
+            action_type="transport_action_expired",
             action_category="institution",
             institution_id=change_request.institution_id,
             result_status="success",
             action_details={
                 "change_request_id": change_request.id,
                 "booking_id": change_request.booking_id,
-                "escalation_required": True,
+                "mission_unchanged": True,
             },
         )
 
 
 def _auto_refuse_change_request(change_request: BookingChangeRequest) -> None:
-    """Traite l'expiration comme un refus transporteur (flag opt-in)."""
-    from application.institutions.release_booking_for_redispatch import (
-        ReleaseBookingForRedispatchInput,
-        ReleaseBookingForRedispatchUseCase,
-    )
-
+    """Expiration = clôture action, mission inchangée (pas d'apply / redispatch)."""
     now = datetime.now(UTC)
     booking = Booking.query.get(change_request.booking_id)
 
-    # Appliquer le patch demandé (la modification institution fait foi)
-    if booking:
-        with contextlib.suppress(Exception):
-            from services.institutions.booking_change_service import (
-                apply_operational_patch,
-                bump_edit_version,
-            )
-
-            apply_operational_patch(booking, change_request.proposed_patch or {})
-            bump_edit_version(booking)
-
-    change_request.status = BookingChangeRequestStatus.REFUSED
+    change_request.status = BookingChangeRequestStatus.EXPIRED
+    change_request.effect_status = TransportActionEffectStatus.NONE
+    change_request.next_actor_type = TransportActionNextActor.NONE
     change_request.responded_by_role = "system"
     change_request.responded_at = now
     change_request.version = int(change_request.version or 1) + 1
     change_request.updated_at = now
     if booking:
-        booking.active_change_request_id = None
+        from application.institutions.transport_action_workflow import (
+            clear_active_change_request_refs,
+        )
+
+        clear_active_change_request_refs(change_request.id)
+        booking.updated_at = now
     db.session.flush()
 
     _record_timeline(change_request, "change_expired")
-    _record_timeline(change_request, "change_refused_by_company")
 
-    previous_company_id = None
-    if booking:
-        previous_company_id = booking.company_id or booking.executing_company_id
-
-    ReleaseBookingForRedispatchUseCase().execute(
-        ReleaseBookingForRedispatchInput(
-            booking_id=change_request.booking_id,
+    with contextlib.suppress(Exception):
+        AuditLogger.log_action(
+            action_type="transport_action_expired",
+            action_category="institution",
             institution_id=change_request.institution_id,
-            reason="Expiration demande de validation (auto-refus)",
-            previous_company_id=(
-                int(previous_company_id) if previous_company_id else None
-            ),
-            actor_user_id=None,
-            trigger_redispatch=True,
+            result_status="success",
+            action_details={
+                "change_request_id": change_request.id,
+                "booking_id": change_request.booking_id,
+                "mission_unchanged": True,
+            },
         )
-    )
 
     with contextlib.suppress(Exception):
         AuditLogger.log_action(

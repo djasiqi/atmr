@@ -12,6 +12,13 @@ import BookingStatusBadge from '../../../../components/booking/BookingStatusBadg
 import { canRespondToInstitutionOffer, isInstitutionOfferExpired } from '../../../../utils/institutionOfferResponse';
 import { resolveInstitutionOfferActions } from '../../../../utils/institutionOfferActions';
 import { institutionOfferEstimateLabel } from '../../../../utils/institutionOfferEstimateLabel';
+import {
+  getPendingActionBadge,
+  indexPendingActionsByRouteGroup,
+  resolvePendingTransportAction,
+  resolveRespondTargetBooking,
+} from '../../../../utils/transportActionPending';
+import { useSearchParams } from 'react-router-dom';
 
 const renderInstitutionOfferActionButtons = (r, styles, handlers) => {
   const actions = resolveInstitutionOfferActions(r.__offer || r);
@@ -238,6 +245,7 @@ const ReservationTable = ({
   const delaysMap = delays || {};
 
   const [displayLimit, setDisplayLimit] = useState(DISPLAY_INCREMENT);
+  const [, setSearchParams] = useSearchParams();
 
   if (!loading && (!reservations || reservations.length === 0)) {
     return (
@@ -253,6 +261,17 @@ const ReservationTable = ({
   const displayedReservations = orderedReservations.slice(0, displayLimit);
   const hasMore = orderedReservations.length > displayLimit;
   const remainingCount = orderedReservations.length - displayLimit;
+  const pendingByRouteGroup = indexPendingActionsByRouteGroup(reservations);
+
+  const openRespondPanel = (row) => {
+    const target = resolveRespondTargetBooking(row, pendingByRouteGroup, reservations);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('focus', 'change_request');
+      return next;
+    }, { replace: true });
+    onRowClick?.(target);
+  };
 
   // Nombre de legs par parcours multi-destinations (pour le badge "Trajet N/M").
   const routeGroupSizes = {};
@@ -264,6 +283,8 @@ const ReservationTable = ({
 
   const renderRow = (r) => {
     const status = r.status?.toLowerCase() || 'unknown';
+    const pendingAction = resolvePendingTransportAction(r, pendingByRouteGroup);
+    const pendingBadge = getPendingActionBadge(pendingAction);
     const _isDeletable = deletableStatuses.includes(status);
     const isReturn = !!r.is_return;
     const noActionStatuses = ['canceled', 'cancelled', 'completed', 'return_completed', 'rejected', 'no_show'];
@@ -305,6 +326,7 @@ const ReservationTable = ({
       pickupArrivalLabel,
       offerCanRespond,
       offerExpired,
+      pendingBadge,
     };
   };
 
@@ -334,6 +356,7 @@ const ReservationTable = ({
                 pickupArrivalLabel,
                 offerCanRespond,
                 offerExpired,
+                pendingBadge,
               } = renderRow(r);
 
               return (
@@ -418,15 +441,6 @@ const ReservationTable = ({
                     ) : (
                       <>
                         <BookingStatusBadge status={status} />
-                        {r.active_change_request?.status === 'pending' && (
-                          <span
-                            className={styles.transferBadge}
-                            title="Modification institution en attente de validation"
-                            style={{ background: '#fef3c7', color: '#92400e' }}
-                          >
-                            Modif. en attente
-                          </span>
-                        )}
                         {r.active_change_request?.status === 'escalation_required' && (
                           <span
                             className={styles.transferBadge}
@@ -449,7 +463,18 @@ const ReservationTable = ({
                     )}
                   </td>
                   <td className={styles.actionsCell} onClick={(e) => e.stopPropagation()}>
-                    {r.__institutionOffer ? (
+                    {pendingBadge && canManageReservation && !r.__institutionOffer ? (
+                      <button
+                        type="button"
+                        className={`${styles.actionPendingBadge} ${
+                          pendingBadge.isCancellation ? styles.actionPendingBadgeCancel : ''
+                        } ${styles.actionPendingBadgeBtn}`}
+                        title={pendingBadge.title}
+                        onClick={() => openRespondPanel(r)}
+                      >
+                        Répondre
+                      </button>
+                    ) : r.__institutionOffer ? (
                       offerCanRespond ? (
                         renderInstitutionOfferActionButtons(r, styles, {
                           onValidate: onValidateInstitutionOffer || onAcceptInstitutionOffer,
@@ -521,6 +546,7 @@ const ReservationTable = ({
             pickupArrivalLabel,
             offerCanRespond,
             offerExpired,
+            pendingBadge,
           } = renderRow(r);
 
           return (
@@ -541,14 +567,27 @@ const ReservationTable = ({
                 ) : (
                   <BookingStatusBadge status={status} />
                 )}
-                {r.active_change_request?.status === 'pending' && (
-                  <span style={{ marginLeft: 6, fontSize: 10, color: '#92400e' }}>Modif. en attente</span>
-                )}
                 {r.active_change_request?.status === 'escalation_required' && (
                   <span style={{ marginLeft: 6, fontSize: 10, color: '#c2410c' }}>Escalade</span>
                 )}
               </div>
               <div className={styles.mobileCardBody}>
+                {pendingBadge && (
+                  <button
+                    type="button"
+                    className={`${styles.actionPendingBadge} ${
+                      pendingBadge.isCancellation ? styles.actionPendingBadgeCancel : ''
+                    } ${styles.actionPendingBadgeBtn}`}
+                    title={pendingBadge.title}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openRespondPanel(r);
+                    }}
+                    style={{ marginBottom: 8 }}
+                  >
+                    Répondre
+                  </button>
+                )}
                 <div className={styles.mobileCardRow}>
                   <span className={styles.mobileCardLabel}>Horaire</span>
                   <span className={styles.mobileCardValue}>
@@ -619,7 +658,7 @@ const ReservationTable = ({
                     </span>
                   )}
                 </div>
-              ) : hasActions && canManageReservation && (
+              ) : hasActions && canManageReservation && !pendingBadge && (
                 <div className={styles.mobileCardActions} onClick={(e) => e.stopPropagation()}>
                   <ReservationActions
                     reservation={r}

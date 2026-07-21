@@ -70,6 +70,24 @@ function timeAgo(dateString) {
   return date.toLocaleDateString('fr-CH', { day: '2-digit', month: '2-digit' });
 }
 
+/**
+ * Masque les anciens doublons offer_accepted quand request_converted
+ * existe déjà pour la même demande (acceptation = une seule notif).
+ */
+function dedupeAcceptNotifications(list) {
+  const convertedRequestIds = new Set(
+    list
+      .filter((n) => n.event_type === 'request_converted')
+      .map((n) => n.metadata?.request_id)
+      .filter((id) => id != null),
+  );
+  return list.filter((n) => {
+    if (n.event_type !== 'offer_accepted') return true;
+    const rid = n.metadata?.request_id;
+    return rid == null || !convertedRequestIds.has(rid);
+  });
+}
+
 const NotificationBell = () => {
   const { public_id } = useParams();
   const navigate = useNavigate();
@@ -83,8 +101,8 @@ const NotificationBell = () => {
   const markRead = useMarkNotificationRead();
   const markAllRead = useMarkAllNotificationsRead();
 
-  const notifications = data?.notifications || [];
-  const unreadCount = data?.unread_count || 0;
+  const notifications = dedupeAcceptNotifications(data?.notifications || []);
+  const unreadCount = notifications.filter((n) => !n.is_read).length;
 
   // Fermer au clic en dehors
   useEffect(() => {

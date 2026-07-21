@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import time
 from datetime import UTC, datetime
+
 from ext import app_logger, db
 from models import DeviceToken
 from services.notifications.push_token_platform import infer_fcm_platform
@@ -37,6 +39,79 @@ def _find_row_by_unique_key(
     else:
         return None
     return q.first()
+
+
+def _resolve_row_after_unique_violation(
+    *,
+    driver_id: int | None,
+    company_id: int | None,
+    device_id: str | None,
+    provider: str,
+    attempts: int = 3,
+) -> DeviceToken | None:
+    """Récupère la ligne existante après une course d'insertion concurrente.
+
+    Une requête concurrente peut committer entre le SAVEPOINT rollback et notre
+    SELECT ; un court backoff évite le PendingRollbackError au commit parent.
+    """
+    for attempt in range(attempts):
+        existing = _find_row_by_unique_key(
+            driver_id=driver_id,
+            company_id=company_id,
+            device_id=device_id,
+            provider=provider,
+        )
+        if existing is not None:
+            return existing
+        if attempt + 1 < attempts:
+            time.sleep(0.05 * (attempt + 1))
+    return None
+
+
+def _apply_token_update_to_row(
+    row: DeviceToken,
+    *,
+    driver_id: int | None,
+    company_id: int | None,
+    device_id: str | None,
+    token: str,
+    platform: str | None,
+    provider: str,
+    now: datetime,
+) -> DeviceToken:
+    row.token = token
+    row.is_active = True
+    row.updated_at = now
+    row.last_seen_at = now
+    if device_id and not row.device_id:
+        row.device_id = str(device_id).strip()
+    if platform:
+        row.platform = platform
+    row.provider = provider
+    if driver_id is not None:
+        row.driver_id = driver_id
+    if company_id is not None:
+        row.company_id = company_id
+    _deactivate_other_rows_with_same_token(
+        driver_id=driver_id,
+        company_id=company_id,
+        token=token,
+        keep_row_id=row.id,
+    )
+    if (
+        driver_id is not None
+        and provider == "fcm"
+        and (platform or "").lower() == "android"
+    ):
+        _deactivate_stale_android_fcm_for_driver(
+            driver_id=driver_id,
+            keep_row_id=row.id,
+        )
+        _deactivate_android_expo_legacy_for_driver(
+            driver_id=driver_id,
+            keep_row_id=row.id,
+        )
+    return row
 
 
 def _deactivate_other_rows_with_same_token(
@@ -200,24 +275,15 @@ def upsert_device_token(
             ).first()
 
     if row is not None:
-        row.token = token
-        row.is_active = True
-        row.updated_at = now
-        row.last_seen_at = now
-        if device_id and not row.device_id:
-            row.device_id = str(device_id).strip()
-        if platform:
-            row.platform = platform
-        row.provider = resolved_provider
-        if driver_id is not None:
-            row.driver_id = driver_id
-        if company_id is not None:
-            row.company_id = company_id
-        _deactivate_other_rows_with_same_token(
+        _apply_token_update_to_row(
+            row,
             driver_id=driver_id,
             company_id=company_id,
+            device_id=device_id,
             token=token,
-            keep_row_id=row.id,
+            platform=platform,
+            provider=resolved_provider,
+            now=now,
         )
         app_logger.info(
             "[push-token] Token mis à jour owner driver=%s company=%s device_id=%s provider=%s",
@@ -226,19 +292,6 @@ def upsert_device_token(
             row.device_id,
             resolved_provider,
         )
-        if (
-            driver_id is not None
-            and resolved_provider == "fcm"
-            and (platform or "").lower() == "android"
-        ):
-            _deactivate_stale_android_fcm_for_driver(
-                driver_id=driver_id,
-                keep_row_id=row.id,
-            )
-            _deactivate_android_expo_legacy_for_driver(
-                driver_id=driver_id,
-                keep_row_id=row.id,
-            )
         return row
 
     row = DeviceToken()
@@ -264,7 +317,7 @@ def upsert_device_token(
         # récupère la ligne existante et on la met à jour plutôt que d'échouer.
         if row in db.session:
             db.session.expunge(row)
-        existing = _find_row_by_unique_key(
+        existing = _resolve_row_after_unique_violation(
             driver_id=driver_id,
             company_id=company_id,
             device_id=device_id,
@@ -280,39 +333,16 @@ def upsert_device_token(
             existing.device_id,
             resolved_provider,
         )
-        existing.token = token
-        existing.is_active = True
-        existing.updated_at = now
-        existing.last_seen_at = now
-        if device_id and not existing.device_id:
-            existing.device_id = str(device_id).strip()
-        if platform:
-            existing.platform = platform
-        existing.provider = resolved_provider
-        if driver_id is not None:
-            existing.driver_id = driver_id
-        if company_id is not None:
-            existing.company_id = company_id
-        _deactivate_other_rows_with_same_token(
+        return _apply_token_update_to_row(
+            existing,
             driver_id=driver_id,
             company_id=company_id,
+            device_id=device_id,
             token=token,
-            keep_row_id=existing.id,
+            platform=platform,
+            provider=resolved_provider,
+            now=now,
         )
-        if (
-            driver_id is not None
-            and resolved_provider == "fcm"
-            and (platform or "").lower() == "android"
-        ):
-            _deactivate_stale_android_fcm_for_driver(
-                driver_id=driver_id,
-                keep_row_id=existing.id,
-            )
-            _deactivate_android_expo_legacy_for_driver(
-                driver_id=driver_id,
-                keep_row_id=existing.id,
-            )
-        return existing
     _deactivate_other_rows_with_same_token(
         driver_id=driver_id,
         company_id=company_id,

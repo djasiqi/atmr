@@ -337,7 +337,7 @@ def geocode_address(
             return None
         except requests.Timeout as e:
             # ✅ P2: Gestion spécifique des timeouts pour meilleure observabilité
-            app_logger.error(
+            app_logger.warning(
                 "⏱️ Timeout API Google Maps Geocoding pour '%s' (country=%s, timeout=%ds): %s",
                 address,
                 country,
@@ -345,9 +345,17 @@ def geocode_address(
                 e,
             )
             raise
+        except requests.ConnectionError as e:
+            app_logger.warning(
+                "⚠️ Connexion interrompue API Google Maps pour '%s' (country=%s): %s",
+                address,
+                country,
+                e,
+            )
+            raise
         except requests.RequestException as e:
-            app_logger.error(
-                "❌ Erreur API Google Maps pour '%s' (country=%s): %s",
+            app_logger.warning(
+                "⚠️ Erreur API Google Maps pour '%s' (country=%s): %s",
                 address,
                 country,
                 e,
@@ -360,7 +368,7 @@ def geocode_address(
         # Sprint 2 H13: limiter les retries Google Maps pour préserver la latence.
         result = retry_http_request(
             _geocode_request,
-            max_retries=1,
+            max_retries=2,
             base_delay_ms=250,
         )
     except Exception as e:

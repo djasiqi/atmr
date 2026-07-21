@@ -73,6 +73,24 @@ def _collect_system_metrics() -> dict[str, Any]:
         }
 
 
+def _extract_profiler_total_stats(
+    profiler: cProfile.Profile, stats: pstats.Stats
+) -> dict[str, int | None]:
+    """Extrait total_calls / primitive_calls (compat Python 3.11–3.14+)."""
+    stats_any = cast(Any, stats)
+    total_calls = getattr(stats_any, "total_calls", None)
+    primitive_calls = getattr(stats_any, "primitive_calls", None)
+    if total_calls is None and hasattr(profiler, "stats"):
+        profiler_stats = getattr(profiler, "stats", None) or {}
+        total_calls = sum(entry[0] for entry in profiler_stats.values())
+    if primitive_calls is None:
+        primitive_calls = total_calls
+    return {
+        "total_calls": total_calls,
+        "primitive_calls": primitive_calls,
+    }
+
+
 def _profile_endpoints(
     profiler: cProfile.Profile, duration_seconds: int = 30
 ) -> dict[str, Any]:
@@ -126,13 +144,12 @@ def _profile_endpoints(
         stats_buffer = StringIO()
         stats = pstats.Stats(profiler, stream=stats_buffer)
         stats.sort_stats("cumulative")
-        # Cast pour éviter les erreurs mypy (les attributs existent à l'exécution)
-        stats_any = cast(Any, stats)
 
         # Extraire top N fonctions
         top_functions = []
         stats.print_stats(TOP_FUNCTIONS_COUNT)
         output = stats_buffer.getvalue()
+        total_stats = _extract_profiler_total_stats(profiler, stats)
 
         # Parser les résultats
         HEADER_LINES = 5
@@ -172,10 +189,7 @@ def _profile_endpoints(
             "request_count": request_count,
             "duration_seconds": round(actual_duration, 2),
             "top_functions": top_functions[:TOP_FUNCTIONS_COUNT],
-            "total_stats": {
-                "total_calls": stats_any.total_calls,
-                "primitive_calls": stats_any.primitive_calls,
-            },
+            "total_stats": total_stats,
         }
 
     except Exception as e:

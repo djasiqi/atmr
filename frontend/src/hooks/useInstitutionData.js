@@ -163,9 +163,13 @@ export function useCompleteExternalMission() {
 // ============================================================================
 
 export function useInstitutionPatients(filters = {}) {
+  const { fetchAll = false, ...queryFilters } = filters;
   return useQuery({
-    queryKey: institutionQueryKeys.patientsList(filters),
-    queryFn: () => institutionService.listPatients(filters),
+    queryKey: institutionQueryKeys.patientsList({ fetchAll, ...queryFilters }),
+    queryFn: () =>
+      fetchAll
+        ? institutionService.listAllPatients(queryFilters)
+        : institutionService.listPatients(queryFilters),
     staleTime: 60 * 1000, // 1 minute
   });
 }

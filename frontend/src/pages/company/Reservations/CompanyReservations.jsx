@@ -231,6 +231,45 @@ const CompanyReservations = () => {
     setSelectedReservation(reservation);
   }, []);
 
+  // Garde le panneau ouvert aligné sur la liste (ex. après acceptation d'une modif)
+  // sans remonter tout le panneau : fusion ciblée des champs opérationnels.
+  useEffect(() => {
+    const selectedId = selectedReservation?.id;
+    if (!selectedId) return;
+    const fresh = reservations.find((r) => r.id === selectedId);
+    if (!fresh) return;
+    const syncKeys = [
+      'scheduled_time',
+      'pickup_location',
+      'dropoff_location',
+      'wheelchair_client_has',
+      'wheelchair_need',
+      'requires_wheelchair',
+      'medical_facility',
+      'hospital_service',
+      'doctor_name',
+      'notes_medical',
+      'amount',
+      'status',
+      'edit_version',
+      'active_change_request',
+      'active_change_request_id',
+    ];
+    setSelectedReservation((prev) => {
+      if (!prev || prev.id !== fresh.id) return prev;
+      let changed = false;
+      const next = { ...prev };
+      for (const key of syncKeys) {
+        if (!Object.prototype.hasOwnProperty.call(fresh, key)) continue;
+        if (JSON.stringify(prev[key]) !== JSON.stringify(fresh[key])) {
+          next[key] = fresh[key];
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [reservations, selectedReservation?.id]);
+
   const openOfferPanel = useCallback((offer) => {
     setSelectedReservation(null);
     setSelectedOffer(offer);

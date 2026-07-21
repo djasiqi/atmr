@@ -2506,6 +2506,36 @@ def _respond_to_change_request(reservation_id: int, change_id: int, action: str)
     except Exception:
         user_id = None
 
+    billing_keys = (
+        "billing_outcome",
+        "fee_amount",
+        "billing_comment",
+        "policy_version",
+        "respond_context_version",
+    )
+    billing_body_provided = any(k in data for k in billing_keys)
+
+    respond_context_version = data.get("respond_context_version")
+    respond_context_version_int = None
+    if respond_context_version is not None:
+        try:
+            respond_context_version_int = int(respond_context_version)
+        except (TypeError, ValueError):
+            return APIErrorHandler.handle_validation_error(
+                "respond_context_version doit être un entier.",
+                field="respond_context_version",
+                logger_instance=logger,
+            )
+
+    fee_amount_raw = data.get("fee_amount")
+    fee_amount_str = None
+    if fee_amount_raw is not None:
+        # Accepter uniquement une chaîne (contrat monétaire V1) — sinon laisser
+        # la policy lever FEE_AMOUNT_NOT_ALLOWED / CUSTOM_FEE_AMOUNT_INVALID.
+        fee_amount_str = (
+            fee_amount_raw if isinstance(fee_amount_raw, str) else fee_amount_raw
+        )
+
     uc = RespondToChangeRequestUseCase()
     result = uc.execute(
         RespondToChangeRequestInput(
@@ -2515,7 +2545,31 @@ def _respond_to_change_request(reservation_id: int, change_id: int, action: str)
             user_id=user_id,
             action=action,
             version=version_int,
-            reason=(data.get("reason") or None),
+            reason=(data.get("reason") or data.get("billing_comment") or None),
+            billing_outcome=(data.get("billing_outcome") or None),
+            fee_amount=fee_amount_str if isinstance(fee_amount_str, str) else (
+                None if fee_amount_raw is None else fee_amount_raw
+            ),
+            billing_comment=(data.get("billing_comment") or None),
+            policy_version=(data.get("policy_version") or None),
+            respond_context_version=respond_context_version_int,
+            billing_body_provided=billing_body_provided,
+            rejection_reason_code=(data.get("rejection_reason_code") or None),
+            client_situation=(data.get("situation") or None),
+            client_suggested_amount=(
+                data.get("suggested_amount")
+                if data.get("suggested_amount") is not None
+                else (
+                    (data.get("suggested_outcome") or {}).get("amount")
+                    if isinstance(data.get("suggested_outcome"), dict)
+                    else None
+                )
+            ),
+            client_cancelable_booking_ids=(
+                data.get("cancelable_booking_ids")
+                if isinstance(data.get("cancelable_booking_ids"), list)
+                else None
+            ),
         )
     )
 
@@ -2560,13 +2614,35 @@ class RefuseBookingChangeRequest(Resource):
     @role_required(UserRole.company)
     @limiter.limit("200 per hour")
     def post(self, reservation_id: int, change_id: int):
-        """Le transporteur refuse une modification → remise en diffusion."""
+        """Le transporteur refuse — mission inchangée (TransportAction REJECTED)."""
         try:
             return _respond_to_change_request(reservation_id, change_id, "refuse")
         except Exception as e:
             sentry_sdk.capture_exception(e)
             db.session.rollback()
             return APIErrorHandler.handle_exception(e, logger)
+
+
+@companies_ns.route("/me/transport-actions/required")
+class CompanyTransportActionsRequired(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    @limiter.limit("120 per hour")
+    def get(self):
+        """File minimale « Actions requises » (TransportActions next_actor=COMPANY)."""
+        from application.institutions.transport_action_visibility import (
+            count_company_actions_required,
+            list_company_actions_required,
+        )
+
+        company, error_response, status_code = _get_current_company_via_use_case()
+        if error_response:
+            return error_response, status_code
+        company_id = int(getattr(company, "id"))
+        return {
+            "count": count_company_actions_required(company_id),
+            "items": list_company_actions_required(company_id),
+        }, 200
 
 
 # ======================================================

@@ -105,6 +105,12 @@ export function useInstitutionSocket(institutionId) {
     console.log('[InstitutionSocket] new_notification:', data);
     if (!mountedRef.current || !data?.id) return;
 
+    // offer_accepted est couvert par request_converted (évite le doublon cloche)
+    const eventType = data?.event_type || data?.payload?.event_type;
+    if (eventType === 'offer_accepted') {
+      return;
+    }
+
     queryClient.setQueryData(institutionQueryKeys.notifications(), (old) => {
       if (!old) return old;
       const list = old.notifications || [];
@@ -121,11 +127,6 @@ export function useInstitutionSocket(institutionId) {
         unread_count: incoming.is_read ? old.unread_count : (old.unread_count || 0) + 1,
       };
     });
-
-    const eventType = data?.event_type || data?.payload?.event_type;
-    if (eventType === 'offer_accepted') {
-      return;
-    }
 
     const dedupeKey = data?.id || data?.dedupe_key || data?.message;
     if (dedupeKey && lastNotifToastRef.current === dedupeKey) {

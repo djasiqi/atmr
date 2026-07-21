@@ -16,6 +16,7 @@ import unicodedata
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func
@@ -39,7 +40,59 @@ from shared.time_utils import (
     normalize_mission_wall_clock,
 )
 
+if TYPE_CHECKING:
+    from models.transport_request_leg import TransportRequestLeg
+
 logger = logging.getLogger(__name__)
+
+
+def _load_transport_request_legs(
+    transport_request: TransportRequest,
+) -> list[TransportRequestLeg]:
+    """Charge les legs ordonnés (relation ORM ou requête directe)."""
+    from sqlalchemy import inspect as sa_inspect
+
+    from models.transport_request_leg import TransportRequestLeg
+
+    legs_attr = getattr(transport_request, "legs", None)
+    if legs_attr is not None:
+        return sorted(legs_attr, key=lambda leg: getattr(leg, "sequence_index", 0))
+
+    if sa_inspect(transport_request, raiseerr=False) is not None:
+        return sorted(
+            transport_request.legs,
+            key=lambda leg: getattr(leg, "sequence_index", 0),
+        )
+
+    return []
+
+
+def _find_return_leg(
+    transport_request: TransportRequest,
+    legs: list[TransportRequestLeg],
+) -> TransportRequestLeg | None:
+    """Retourne le leg retour institution (is_return_stop ou dernier leg A/R)."""
+    for leg in reversed(legs):
+        if getattr(leg, "is_return_stop", False):
+            return leg
+    if (
+        getattr(transport_request, "return_to_institution", False)
+        and len(legs) >= 2
+    ):
+        return legs[-1]
+    return None
+
+
+def _should_use_legs_conversion(transport_request: TransportRequest) -> bool:
+    """Parcours multi-segments : conversion atomique 1 booking par leg."""
+    if getattr(transport_request, "multi_stop", False):
+        return True
+    legs = _load_transport_request_legs(transport_request)
+    if len(legs) >= 2:
+        return True
+    if any(getattr(leg, "is_return_stop", False) for leg in legs):
+        return True
+    return False
 
 
 def _normalize_institution_name(value: str | None) -> str:
@@ -359,7 +412,7 @@ class AcceptOfferUseCase:
                 transport_request.pickup_time_confirmed = True
 
             # 9. Créer le(s) Booking(s)
-            if getattr(transport_request, "multi_stop", False):
+            if _should_use_legs_conversion(transport_request):
                 booking, return_booking = self._create_bookings_from_legs(
                     transport_request=transport_request,
                     company_id=input_data.company_id,
@@ -895,7 +948,168 @@ class AcceptOfferUseCase:
                 transport_request.id,
             )
 
+        if return_booking is None:
+            return_booking = self._create_return_booking_for_institution_return(
+                transport_request=transport_request,
+                outbound_booking=booking,
+                company_id=company_id,
+                user_id=user_id,
+            )
+
         return booking, return_booking
+
+    def _create_return_booking_for_institution_return(
+        self,
+        transport_request: TransportRequest,
+        outbound_booking: Booking,
+        company_id: int,
+        user_id: int,
+    ) -> Booking | None:
+        """Crée le booking retour pour A/R multi-étapes (return_to_institution / legs).
+
+        Filet de sécurité lorsque la demande n'a pas is_round_trip mais possède
+        un leg retour ou return_date (modèle multi_stop institution).
+        """
+        if getattr(transport_request, "is_round_trip", False):
+            return None
+
+        return_to_inst = bool(
+            getattr(transport_request, "return_to_institution", False)
+        )
+        return_date_raw = getattr(transport_request, "return_date", None)
+        if not return_to_inst and return_date_raw is None:
+            legs = _load_transport_request_legs(transport_request)
+            if not any(getattr(leg, "is_return_stop", False) for leg in legs):
+                return None
+        else:
+            legs = _load_transport_request_legs(transport_request)
+        return_leg = _find_return_leg(transport_request, legs)
+
+        if not return_to_inst and return_leg is None:
+            return None
+
+        if return_leg is None and return_date_raw is None:
+            logger.warning(
+                "[AcceptOffer] return_to_institution sans leg retour ni return_date, "
+                "skip retour request_id=%s",
+                transport_request.id,
+            )
+            return None
+
+        leg_confirmed = bool(getattr(return_leg, "time_confirmed", False)) if return_leg else False
+        return_time_raw = (
+            getattr(return_leg, "scheduled_time", None) if return_leg else None
+        )
+        if return_time_raw is None:
+            return_time_raw = getattr(transport_request, "return_time", None)
+
+        return_time_naive = (
+            normalize_mission_wall_clock(return_time_raw)
+            if return_time_raw is not None
+            else None
+        )
+
+        if return_time_naive is not None and leg_confirmed:
+            ret_scheduled = return_time_naive
+            ret_time_confirmed = True
+        else:
+            ret_scheduled = None
+            ret_time_confirmed = False
+
+        if return_leg is not None:
+            pickup_location = return_leg.pickup_location
+            pickup_lat = (
+                float(return_leg.pickup_lat) if return_leg.pickup_lat else None
+            )
+            pickup_lon = (
+                float(return_leg.pickup_lng) if return_leg.pickup_lng else None
+            )
+            dropoff_location = return_leg.dropoff_location
+            dropoff_lat = (
+                float(return_leg.dropoff_lat) if return_leg.dropoff_lat else None
+            )
+            dropoff_lon = (
+                float(return_leg.dropoff_lng) if return_leg.dropoff_lng else None
+            )
+        else:
+            pickup_location = outbound_booking.dropoff_location
+            pickup_lat = outbound_booking.dropoff_lat
+            pickup_lon = outbound_booking.dropoff_lon
+            dropoff_location = outbound_booking.pickup_location
+            dropoff_lat = outbound_booking.pickup_lat
+            dropoff_lon = outbound_booking.pickup_lon
+
+        return_booking = Booking(
+            company_id=company_id,
+            user_id=user_id,
+            client_id=outbound_booking.client_id,
+            customer_name=outbound_booking.customer_name,
+            mission_type=outbound_booking.mission_type,
+            delivery_description=outbound_booking.delivery_description,
+            scheduled_time=ret_scheduled,
+            time_confirmed=ret_time_confirmed,
+            is_round_trip=False,
+            is_return=True,
+            parent_booking_id=outbound_booking.id,
+            pickup_location=pickup_location,
+            pickup_lat=pickup_lat,
+            pickup_lon=pickup_lon,
+            pickup_access_notes=outbound_booking.dropoff_access_notes,
+            pickup_floor=outbound_booking.dropoff_floor,
+            pickup_door_code=outbound_booking.dropoff_door_code,
+            dropoff_location=dropoff_location,
+            dropoff_lat=dropoff_lat,
+            dropoff_lon=dropoff_lon,
+            dropoff_access_notes=outbound_booking.pickup_access_notes,
+            dropoff_floor=outbound_booking.pickup_floor,
+            dropoff_door_code=outbound_booking.pickup_door_code,
+            hospital_service=outbound_booking.hospital_service,
+            wheelchair_client_has=outbound_booking.wheelchair_client_has,
+            wheelchair_need=outbound_booking.wheelchair_need,
+            notes_medical=outbound_booking.notes_medical,
+            billed_to_type=outbound_booking.billed_to_type,
+            status=BookingStatus.ACCEPTED.value,
+            amount=outbound_booking.amount,
+            created_via=BookingCreatedVia.INSTITUTION_PORTAL,
+        )
+        if outbound_booking.billed_to_company_id is not None:
+            return_booking.billed_to_company_id = outbound_booking.billed_to_company_id
+
+        return_booking.pricing_profile_id = outbound_booking.pricing_profile_id
+        return_booking.pricing_profile_version_id = (
+            outbound_booking.pricing_profile_version_id
+        )
+        return_booking.price_amount = outbound_booking.price_amount
+        return_booking.price_breakdown_json = outbound_booking.price_breakdown_json
+
+        if return_leg is not None:
+            self._apply_clinical_dropoff_from_leg(return_booking, return_leg)
+
+        db.session.add(return_booking)
+        db.session.flush()
+
+        self._resolve_billing_party(return_booking, transport_request, company_id)
+
+        if legs:
+            outbound_leg = next(
+                (leg for leg in legs if leg.sequence_index == 0),
+                legs[0],
+            )
+            if outbound_leg.booking_id is None:
+                outbound_leg.booking_id = outbound_booking.id
+            if return_leg is not None:
+                return_leg.booking_id = return_booking.id
+
+        logger.info(
+            "[AcceptOffer] Institution return booking %s created (parent=%s, "
+            "time_confirmed=%s, from_leg=%s) for request %s",
+            return_booking.id,
+            outbound_booking.id,
+            ret_time_confirmed,
+            return_leg is not None,
+            transport_request.id,
+        )
+        return return_booking
 
     def _create_bookings_from_legs(
         self,
@@ -935,6 +1149,7 @@ class AcceptOfferUseCase:
         route_group_id = getattr(transport_request, "route_group_id", None)
         customer_name = self._get_customer_name(transport_request)
         primary: Booking | None = None
+        return_leg_booking: Booking | None = None
 
         for leg in legs:
             effective_intent = effective_billing_for_leg(leg, transport_request)
@@ -1073,6 +1288,8 @@ class AcceptOfferUseCase:
 
             if primary is None:
                 primary = booking
+            if is_return_leg:
+                return_leg_booking = booking
 
         if primary is None:
             raise ValueError("Conversion multi-stop sans booking créé")
@@ -1083,7 +1300,7 @@ class AcceptOfferUseCase:
             len(legs),
             route_group_id,
         )
-        return primary, None
+        return primary, return_leg_booking
 
     @staticmethod
     def _resolve_billed_to_company_id_before_flush(

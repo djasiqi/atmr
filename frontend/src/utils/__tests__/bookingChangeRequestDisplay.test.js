@@ -5,6 +5,7 @@ import {
   formatChangeRequestExpiry,
   formatFieldChangeLine,
   formatSnapshotValue,
+  mergeAcceptedChangeIntoReservation,
   summarizeBookingChangeRequest,
 } from '../bookingChangeRequestDisplay';
 
@@ -24,6 +25,13 @@ describe('bookingChangeRequestDisplay', () => {
       'Médecin',
       'Étage départ',
     ]);
+  });
+
+  it('masque les champs techniques comme status dans les libellés', () => {
+    expect(formatChangedFieldLabels({ status: true, scheduled_time: true })).toEqual([
+      'Horaire prévu',
+    ]);
+    expect(formatChangedFieldLabels({ status: true })).toEqual([]);
   });
 
   it('formate les valeurs de snapshot', () => {
@@ -96,5 +104,30 @@ describe('bookingChangeRequestDisplay', () => {
     const label = formatChangeRequestExpiry('2026-06-16T14:30:00Z');
     expect(label).toMatch(/16\/06/);
     expect(label).toMatch(/\d{2}:\d{2}/);
+  });
+
+  it('fusionne les champs acceptés dans la réservation locale', () => {
+    const reservation = {
+      id: 31777,
+      scheduled_time: '2026-07-22T09:15:00',
+      wheelchair_client_has: false,
+      status: 'accepted',
+    };
+    const merged = mergeAcceptedChangeIntoReservation(reservation, {
+      changed_fields: { scheduled_time: true, wheelchair_client_has: true, status: true },
+      proposed_patch: {
+        scheduled_time: '2026-07-22T11:15:00',
+        wheelchair_client_has: true,
+      },
+      after_snapshot: {
+        scheduled_time: '2026-07-22T11:15:00',
+        wheelchair_client_has: true,
+        status: 'accepted',
+      },
+    });
+    expect(merged.scheduled_time).toBe('2026-07-22T11:15:00');
+    expect(merged.wheelchair_client_has).toBe(true);
+    expect(merged.status).toBe('accepted');
+    expect(merged.id).toBe(31777);
   });
 });

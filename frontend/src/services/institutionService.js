@@ -163,6 +163,35 @@ export const listPatients = async (params = {}) => {
 };
 
 /**
+ * Liste tous les patients (agrège les pages API).
+ * Utile pour l'annuaire institution où la pagination UI n'est pas souhaitée.
+ */
+export const listAllPatients = async (params = {}) => {
+  const perPage = Math.min(Number(params.per_page) || 500, 500);
+  const { page: _ignoredPage, per_page: _ignoredPerPage, ...rest } = params;
+  let page = 1;
+  let pages = 1;
+  let total = 0;
+  const patients = [];
+
+  do {
+    const data = await listPatients({ ...rest, page, per_page: perPage });
+    patients.push(...(data.patients || []));
+    total = data.total ?? patients.length;
+    pages = data.pages ?? 1;
+    page += 1;
+  } while (page <= pages);
+
+  return {
+    patients,
+    total,
+    page: 1,
+    per_page: patients.length,
+    pages: 1,
+  };
+};
+
+/**
  * Récupère un patient par son ID
  */
 export const getPatient = async (patientId) => {
@@ -826,6 +855,7 @@ const institutionService = {
   getRequestByReference,
   // Patients
   listPatients,
+  listAllPatients,
   getPatient,
   createPatient,
   updatePatient,

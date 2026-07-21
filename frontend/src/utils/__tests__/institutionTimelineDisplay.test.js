@@ -320,4 +320,70 @@ describe('institutionTimelineDisplay', () => {
     expect(getTimelineDisplayEvent({ event_type: 'status_changed', created_at: baseTime }, ctx, send)).toBeNull();
     expect(getTimelineDisplayEvent({ event_type: 'driver_reassigned', created_at: baseTime, payload: { driver_name: 'X' } }, ctx, send)).toBeNull();
   });
+
+  it('affiche demande + acceptation de modification (aligné transporteur)', () => {
+    const events = [
+      { id: 1, event_type: 'request_sent', created_at: '2026-07-21T22:23:00+02:00', payload: { actor_name: 'Drin Jasiqi' } },
+      {
+        id: 2,
+        event_type: 'request_converted',
+        created_at: '2026-07-21T22:24:00+02:00',
+        payload: { company_name: 'Emmenez Moi' },
+      },
+      {
+        id: 3,
+        event_type: 'change_confirmation_requested',
+        created_at: '2026-07-21T22:28:00+02:00',
+        payload: {
+          actor_name: 'Drin Jasiqi',
+          changed_fields: { scheduled_time: true },
+          proposed_patch: { scheduled_time: '2026-07-22T11:15:00' },
+        },
+      },
+      {
+        id: 4,
+        event_type: 'change_accepted_by_company',
+        created_at: '2026-07-21T22:30:00+02:00',
+        payload: { action_type: 'CHANGE_TIME' },
+      },
+      {
+        id: 5,
+        event_type: 'field_updated',
+        created_at: '2026-07-21T22:30:10+02:00',
+        payload: { changed_fields: { scheduled_time: true } },
+      },
+    ];
+    const out = buildOperationalTimeline({ apiEvents: events });
+    expect(out.map((e) => e.event)).toEqual([
+      'Modification acceptée par le transporteur',
+      'Modification institution — Drin Jasiqi',
+      'Réservation confirmée — Emmenez Moi',
+      'Demande envoyée — Drin Jasiqi',
+    ]);
+  });
+
+  it('affiche demande d’annulation institution + confirmation transporteur', () => {
+    const events = [
+      {
+        id: 1,
+        event_type: 'change_confirmation_requested',
+        created_at: '2026-07-21T20:40:00+02:00',
+        payload: {
+          actor_name: 'Drin Jasiqi',
+          proposed_patch: { _cancellation: true },
+        },
+      },
+      {
+        id: 2,
+        event_type: 'change_accepted_by_company',
+        created_at: '2026-07-21T22:17:00+02:00',
+        payload: { action_type: 'CANCELLATION' },
+      },
+    ];
+    const out = buildOperationalTimeline({ apiEvents: events });
+    expect(out.map((e) => e.event)).toEqual([
+      'Annulation confirmée par le transporteur',
+      'Demande d’annulation institution — Drin Jasiqi',
+    ]);
+  });
 });

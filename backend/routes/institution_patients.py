@@ -300,6 +300,10 @@ def _apply_smart_search(query, raw_query: str):
                     InstitutionPatient.first_name.ilike(like),
                     InstitutionPatient.last_name.ilike(like),
                     InstitutionPatient.external_reference.ilike(like),
+                    InstitutionPatient.phone.ilike(like),
+                    InstitutionPatient.city.ilike(like),
+                    InstitutionPatient.residence_name.ilike(like),
+                    InstitutionPatient.address.ilike(like),
                 )
             )
 
@@ -319,7 +323,7 @@ class InstitutionPatientList(Resource):
             "query": "Recherche par nom/prénom",
             "external_reference": "Filtre par référence externe",
             "page": "Numéro de page (défaut: 1)",
-            "per_page": "Résultats par page (défaut: 20, max: 100)",
+            "per_page": "Résultats par page (défaut: 20, max: 500)",
         },
     )
     @institution_patients_ns.response(200, "Succès", patient_list_model)

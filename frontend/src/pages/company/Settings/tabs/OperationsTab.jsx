@@ -27,9 +27,37 @@ const SERVICE_AREA_JSON_VERSION = 1;
 const SERVICE_AREA_TOKEN_REGEX = /^(commune|district|canton):[A-Za-z0-9_-]+$/;
 const SERVICE_AREA_NAMED_REGEX = /^(commune_name|canton_name|district_name):.+$/;
 
-const isPersistableServiceAreaToken = (token) => {
-  const t = String(token || '');
-  return SERVICE_AREA_TOKEN_REGEX.test(t) || SERVICE_AREA_NAMED_REGEX.test(t);
+const isPersistableServiceAreaToken = (token) =>
+  SERVICE_AREA_TOKEN_REGEX.test(String(token || ''));
+
+const resolveCanonicalServiceAreaToken = (item) => {
+  const token = String(item?.token || '').trim();
+  if (SERVICE_AREA_TOKEN_REGEX.test(token)) {
+    return token;
+  }
+  const zoneType = String(item?.type || '').toLowerCase();
+  const code = String(item?.code || '').trim();
+  const cantonCode = String(item?.canton_code || '').trim();
+  if (zoneType === 'canton' && /^[A-Za-z0-9_-]+$/.test(cantonCode)) {
+    return `canton:${cantonCode}`;
+  }
+  if (zoneType === 'canton' && /^[A-Za-z0-9_-]+$/.test(code)) {
+    return `canton:${code}`;
+  }
+  if (zoneType === 'district' && /^[A-Za-z0-9_-]+$/.test(code)) {
+    return `district:${code}`;
+  }
+  if (zoneType === 'commune' && /^[A-Za-z0-9_-]+$/.test(code)) {
+    return `commune:${code}`;
+  }
+  if (SERVICE_AREA_NAMED_REGEX.test(token)) {
+    return null;
+  }
+  const nextId = Number(item?.id);
+  if (Number.isFinite(nextId) && SERVICE_AREA_ALLOWED_TYPES.has(zoneType)) {
+    return `${zoneType}:${nextId}`;
+  }
+  return null;
 };
 const TOKEN_LOOKS_RAW_REGEX = /^(commune|district|canton):[A-Za-z0-9_-]+$/;
 const TYPE_LABELS = {
@@ -388,7 +416,7 @@ const OperationsTab = forwardRef(({ isEditing }, ref) => {
 
     const nextIdRaw = item?.id;
     const nextId = Number.isFinite(Number(nextIdRaw)) ? Number(nextIdRaw) : null;
-    const nextToken = item?.token || (nextId != null ? `${nextType}:${nextId}` : null);
+    const nextToken = resolveCanonicalServiceAreaToken(item);
     if (!nextToken) {
       showError('Zone de service invalide.');
       return;

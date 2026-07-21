@@ -177,6 +177,38 @@ class TestInstitutionPatientsCRUD:
         assert len(data["patients"]) >= 3
         assert "total" in data
 
+    def test_list_patients_pagination_default_limit(
+        self, client, db, admin_auth_headers, sample_institution
+    ):
+        """Test: sans per_page, la liste est plafonnée à 20 (défaut API)."""
+        for i in range(25):
+            patient = InstitutionPatient()
+            patient.institution_id = sample_institution.id
+            patient.first_name = f"Pag{i}"
+            patient.last_name = f"Limit{i:02d}"
+            patient.public_id = str(uuid.uuid4())
+            db.session.add(patient)
+        db.session.commit()
+
+        default_resp = client.get(
+            "/api/v1/institutions/patients",
+            headers=admin_auth_headers,
+        )
+        assert default_resp.status_code == 200
+        default_data = default_resp.get_json()
+        assert default_data["total"] >= 25
+        assert default_data["per_page"] == 20
+        assert len(default_data["patients"]) == 20
+
+        full_resp = client.get(
+            "/api/v1/institutions/patients?per_page=500",
+            headers=admin_auth_headers,
+        )
+        assert full_resp.status_code == 200
+        full_data = full_resp.get_json()
+        assert full_data["total"] >= 25
+        assert len(full_data["patients"]) >= 25
+
     def test_list_patients_search(
         self, client, db, admin_auth_headers, sample_institution
     ):
@@ -199,6 +231,36 @@ class TestInstitutionPatientsCRUD:
         data = response.get_json()
         assert len(data["patients"]) >= 1
         assert any(p["first_name"] == "UniqueFirstName" for p in data["patients"])
+
+    def test_list_patients_search_by_city_and_phone(
+        self, client, db, admin_auth_headers, sample_institution
+    ):
+        """Test: recherche par ville et téléphone."""
+        patient = InstitutionPatient()
+        patient.institution_id = sample_institution.id
+        patient.first_name = "Marie"
+        patient.last_name = "VillePhone"
+        patient.city = "Carouge"
+        patient.phone = "+41791112233"
+        patient.public_id = str(uuid.uuid4())
+        db.session.add(patient)
+        db.session.commit()
+
+        by_city = client.get(
+            "/api/v1/institutions/patients?query=Carouge",
+            headers=admin_auth_headers,
+        )
+        assert by_city.status_code == 200
+        city_data = by_city.get_json()
+        assert any(p["last_name"] == "VillePhone" for p in city_data["patients"])
+
+        by_phone = client.get(
+            "/api/v1/institutions/patients?query=41791112233",
+            headers=admin_auth_headers,
+        )
+        assert by_phone.status_code == 200
+        phone_data = by_phone.get_json()
+        assert any(p["last_name"] == "VillePhone" for p in phone_data["patients"])
 
     def test_get_patient_by_id(
         self, client, db, admin_auth_headers, sample_institution

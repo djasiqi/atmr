@@ -66,6 +66,31 @@ def test_before_send_drops_institution_read_all_jwt_log_noise():
     assert before_send(event, None) is None
 
 
+def test_before_send_drops_institution_timeline_jwt_log_noise():
+    event = {
+        "logentry": {
+            "message": "[Timeline] GET request 2606: Signature has expired",
+        },
+        "request": {
+            "url": "http://api.example.com/api/v1/institutions/requests/2606/timeline",
+        },
+    }
+    assert before_send(event, None) is None
+
+
+def test_before_send_drops_google_maps_remote_disconnected_log_noise():
+    event = {
+        "logentry": {
+            "message": (
+                "⚠️ Erreur API Google Maps pour 'Clinique' (country=CH): "
+                "('Connection aborted.', RemoteDisconnected('Remote end closed connection without response'))"
+            ),
+        },
+        "logger": "app",
+    }
+    assert before_send(event, None) is None
+
+
 def test_before_send_drops_concurrent_object_use_error():
     class ConcurrentObjectUseError(Exception):
         pass

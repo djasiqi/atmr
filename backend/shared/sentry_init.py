@@ -116,10 +116,14 @@ def before_send(event: dict[str, Any], hint: dict[str, Any] | None) -> dict[str,
     elif "task is already done" in message.lower() and logger_name.startswith("kafka."):
         return None
 
-    # logger.exception() sur routes notifications : JWT expiré remonté comme erreur 500
+    # logger.exception() sur routes notifications / timeline : JWT expiré remonté comme erreur 500
     if "Signature has expired" in message and (
-        "InstitutionNotifications" in message or "CompanyNotifications" in message
+        "InstitutionNotifications" in message
+        or "CompanyNotifications" in message
+        or "[Timeline]" in message
     ):
+        return None
+    if "RemoteDisconnected" in message and "Google Maps" in message:
         return None
     if "Accès conversation refusé" in message and (
         "mark_read" in message or "messages_hub" in message

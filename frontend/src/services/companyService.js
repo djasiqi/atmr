@@ -212,13 +212,56 @@ export const acknowledgeBookingChangeEvent = async (bookingId, eventId) => {
   return data;
 };
 
-/** Accepte ou refuse une demande de modification institution (révalidation PR2) */
-export const respondToChangeRequest = async (bookingId, changeId, action, version) => {
+/** Accepte ou refuse une demande de modification / annulation institution */
+export const respondToChangeRequest = async (
+  bookingId,
+  changeId,
+  action,
+  version,
+  reason,
+  billingOptions = null,
+) => {
   const path =
     action === 'accept'
       ? `/companies/me/reservations/${bookingId}/change-requests/${changeId}/accept`
       : `/companies/me/reservations/${bookingId}/change-requests/${changeId}/refuse`;
-  const { data } = await apiClient.post(path, { version });
+  const body = {
+    version,
+    reason: reason || undefined,
+  };
+  if (billingOptions && typeof billingOptions === 'object') {
+    if (billingOptions.billing_outcome != null) {
+      body.billing_outcome = billingOptions.billing_outcome;
+    }
+    if (billingOptions.fee_amount != null) {
+      body.fee_amount = billingOptions.fee_amount;
+    }
+    if (billingOptions.billing_comment != null) {
+      body.billing_comment = billingOptions.billing_comment;
+    }
+    if (billingOptions.policy_version != null) {
+      body.policy_version = billingOptions.policy_version;
+    }
+    if (billingOptions.situation != null) {
+      body.situation = billingOptions.situation;
+    }
+    if (billingOptions.suggested_amount != null) {
+      body.suggested_amount = billingOptions.suggested_amount;
+    }
+    if (billingOptions.cancelable_booking_ids != null) {
+      body.cancelable_booking_ids = billingOptions.cancelable_booking_ids;
+    }
+    if (billingOptions.rejection_reason_code != null) {
+      body.rejection_reason_code = billingOptions.rejection_reason_code;
+    }
+  }
+  const { data } = await apiClient.post(path, body);
+  return data;
+};
+
+/** Compteur + file Actions requises (TransportAction) */
+export const fetchTransportActionsRequired = async () => {
+  const { data } = await apiClient.get('/companies/me/transport-actions/required');
   return data;
 };
 

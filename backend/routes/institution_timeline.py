@@ -10,7 +10,9 @@ from typing import Any
 import sentry_sdk
 from flask import request
 from flask_jwt_extended import verify_jwt_in_request
+from flask_jwt_extended.exceptions import JWTExtendedException
 from flask_restx import Namespace, Resource, fields
+from jwt.exceptions import PyJWTError
 
 from routes.api_error_models import (
     create_not_found_error_model,
@@ -43,6 +45,14 @@ timeline_event_model = institution_timeline_ns.model(
         "created_at": fields.String(),
     },
 )
+
+
+def _reraise_auth_errors(exc: Exception) -> None:
+    """Ne pas transformer les erreurs JWT/auth en 500 ni les remonter à Sentry."""
+    if isinstance(exc, (JWTExtendedException, PyJWTError)):
+        raise exc
+    if hasattr(exc, "code"):
+        raise exc
 
 
 def _parse_date(name: str) -> datetime | None:
@@ -93,8 +103,9 @@ class RequestTimeline(Resource):
             )
             return _timeline_response(events), 200
         except Exception as e:
+            _reraise_auth_errors(e)
             sentry_sdk.capture_exception(e)
-            logger.error("[Timeline] GET request %s: %s", request_id, e)
+            logger.exception("[Timeline] GET request %s: %s", request_id, e)
             return {"error": "Erreur serveur"}, 500
 
 
@@ -126,8 +137,9 @@ class BookingTimeline(Resource):
             )
             return _timeline_response(events), 200
         except Exception as e:
+            _reraise_auth_errors(e)
             sentry_sdk.capture_exception(e)
-            logger.error("[Timeline] GET booking %s: %s", booking_id, e)
+            logger.exception("[Timeline] GET booking %s: %s", booking_id, e)
             return {"error": "Erreur serveur"}, 500
 
 
@@ -159,6 +171,7 @@ class PatientTransportHistory(Resource):
             )
             return _timeline_response(events), 200
         except Exception as e:
+            _reraise_auth_errors(e)
             sentry_sdk.capture_exception(e)
-            logger.error("[Timeline] GET patient %s: %s", patient_id, e)
+            logger.exception("[Timeline] GET patient %s: %s", patient_id, e)
             return {"error": "Erreur serveur"}, 500

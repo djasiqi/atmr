@@ -130,6 +130,12 @@ export const PUBLIC_MAP_OPTIONS = {
   ...DEFAULT_MAP_OPTIONS,
 };
 
+/** Carte hero homepage — sans échelle ni chrome Google (masqué en CSS) */
+export const HERO_MAP_OPTIONS = {
+  ...DEFAULT_MAP_OPTIONS,
+  scaleControl: false,
+};
+
 // ─── Validation coordonnées ───
 
 const toNumOrNull = (v) => {
@@ -337,12 +343,17 @@ export function resolveLiriePointMarkerIcon(gmaps, type = 'default') {
  * @param {string} bgColor - couleur de fond
  */
 export const makePoiMarkerIcon = (label, bgColor) => {
+  const isPickup = label === 'P';
+  const ring = isPickup
+    ? `<circle cx="14" cy="14" r="13.2" fill="none" stroke="${MAP_COLORS.brandLight}" stroke-width="1.2" opacity="0.55"/>`
+    : '';
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28">
     <defs>
       <filter id="pf" x="-15%" y="-15%" width="130%" height="130%">
         <feDropShadow dx="0" dy="1" stdDeviation="1.5" flood-color="#000" flood-opacity="0.2"/>
       </filter>
     </defs>
+    ${ring}
     <circle cx="14" cy="14" r="12" fill="${bgColor}" stroke="#fff" stroke-width="2" filter="url(#pf)"/>
     <text x="14" y="14" text-anchor="middle" dominant-baseline="central" fill="#fff" font-size="12" font-weight="700" font-family="-apple-system,system-ui,sans-serif">${label}</text>
   </svg>`;
@@ -397,6 +408,31 @@ export const ROUTE_OUTLINE_OPTIONS = {
   strokeOpacity: 0.12,
   geodesic: true,
   zIndex: 0,
+};
+
+/** Itinéraire hero homepage — halo + trait Lirie plus marqué */
+export const HERO_ROUTE_GLOW_OPTIONS = {
+  strokeColor: MAP_COLORS.brand,
+  strokeWeight: 14,
+  strokeOpacity: 0.07,
+  geodesic: true,
+  zIndex: 0,
+};
+
+export const HERO_ROUTE_OUTLINE_OPTIONS = {
+  strokeColor: MAP_COLORS.brandDark,
+  strokeWeight: 7,
+  strokeOpacity: 0.16,
+  geodesic: true,
+  zIndex: 1,
+};
+
+export const HERO_ROUTE_OPTIONS = {
+  strokeColor: MAP_COLORS.brandLight,
+  strokeWeight: 4.5,
+  strokeOpacity: 0.95,
+  geodesic: true,
+  zIndex: 2,
 };
 
 // ─── Style InfoWindow partagé (HTML string) ───

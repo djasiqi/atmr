@@ -128,3 +128,36 @@ class AssignmentCancelledEvent(DomainEvent):
     booking_id: int = 0
     driver_id: int = 0
     company_id: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class TransportActionCompletedEvent(DomainEvent):
+    """Événement métier central — publié APRÈS commit des effects."""
+
+    event_type = "TransportActionCompletedEvent"
+
+    action_id: int = 0
+    booking_id: int = 0
+    action_type: str = ""
+    accepted_exchange_id: int | None = None
+    is_cancellation: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class TransportActionRequestedEvent(DomainEvent):
+    event_type = "TransportActionRequestedEvent"
+
+    action_id: int = 0
+    booking_id: int = 0
+    action_type: str = ""
+    institution_id: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class TransportActionRejectedEvent(DomainEvent):
+    event_type = "TransportActionRejectedEvent"
+
+    action_id: int = 0
+    booking_id: int = 0
+    action_type: str = ""
+    rejection_reason: str | None = None

@@ -30,8 +30,12 @@ import {
 import { fetchClinicBillingMappings } from '../../../../services/settingsService';
 import {
   formatChangeRequestExpiry,
+  mergeAcceptedChangeIntoReservation,
   summarizeBookingChangeRequest,
 } from '../../../../utils/bookingChangeRequestDisplay';
+import {
+  isTransportActionPending,
+} from '../../../../utils/transportActionPending';
 import {
   formatNameWithCivility,
   resolvePassengerGender,
@@ -76,6 +80,40 @@ const fmtShort = (dateStr) => {
   return new Date(dateStr).toLocaleString('fr-CH', {
     day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
   });
+};
+
+const formatChangeEventLabel = (ev) => {
+  const isCancelScope = ev.change_scope === 'cancellation' || ev.action_type === 'cancelled';
+  const isRequest = ev.action_type === 'change_request_created';
+  const isCompany = ev.source === 'company_portal' || ev.actor_type === 'company';
+  const isRefuse = ev.action_type === 'change_request_refused';
+  const critical = ev.severity === 'CRITICAL' ? ' (en route)' : '';
+  const actor = ev.actor_display_name ? ` — ${ev.actor_display_name}` : '';
+
+  if (isRefuse && isCancelScope) {
+    return `Problème signalé par le transporteur${actor}`;
+  }
+  if (isRefuse) {
+    return `Modification refusée par le transporteur${actor}`;
+  }
+  if (isCancelScope && isRequest) {
+    return `Demande d’annulation institution${critical}${actor}`;
+  }
+  if (isCancelScope && isCompany) {
+    const fee = ev.operational_impact?.commercial_terms?.fee_amount;
+    const feeNum = fee != null && fee !== '' ? Number(fee) : null;
+    const feePart = Number.isFinite(feeNum)
+      ? (feeNum > 0 ? ` — ${fee} CHF` : ' — sans frais')
+      : '';
+    return `Annulation confirmée par le transporteur${feePart}${actor}`;
+  }
+  if (isCancelScope) {
+    return `Annulation institution${critical}${actor}`;
+  }
+  if (isCompany) {
+    return `Modification acceptée par le transporteur${actor}`;
+  }
+  return `Modification institution${critical}${actor}`;
 };
 
 const buildTimeline = (r) => {
@@ -127,18 +165,23 @@ const buildTimeline = (r) => {
   }
   if (r.started_at) events.push({ event: 'Course démarrée', date: r.started_at });
   if ((r.cancelled_at || r.canceled_at) && !it?.cancelled_at) {
-    const roleMap = { company: 'Entreprise', driver: 'Chauffeur', admin: 'Admin', system: 'Système' };
-    const byLabel = roleMap[r.cancelled_by_role] || '';
-    const reasonLabel = r.cancellation_display_label || r.cancellation_reason_code || '';
-    const billable = r.is_cancellation_billable;
+    // Courses institution : le détail (demande + confirmation transporteur)
+    // vient des change-events — éviter le doublon générique « Annulée ».
+    const fromInstitution = !!it || !!(r.metadata_json || {}).institution_id;
+    if (!fromInstitution) {
+      const roleMap = { company: 'Entreprise', driver: 'Chauffeur', admin: 'Admin', system: 'Système' };
+      const byLabel = roleMap[r.cancelled_by_role] || '';
+      const reasonLabel = r.cancellation_display_label || r.cancellation_reason_code || '';
+      const billable = r.is_cancellation_billable;
 
-    let detail = 'Annulée';
-    if (byLabel) detail += ` par ${byLabel}`;
-    if (reasonLabel) detail += ` — ${reasonLabel}`;
-    if (billable === true) detail += ' (facturée)';
-    else if (billable === false) detail += ' (non facturée)';
+      let detail = 'Annulée';
+      if (byLabel) detail += ` par ${byLabel}`;
+      if (reasonLabel) detail += ` — ${reasonLabel}`;
+      if (billable === true) detail += ' (facturée)';
+      else if (billable === false) detail += ' (non facturée)';
 
-    events.push({ event: detail, date: r.cancelled_at || r.canceled_at, type: 'cancel' });
+      events.push({ event: detail, date: r.cancelled_at || r.canceled_at, type: 'cancel' });
+    }
   }
 
   return events.sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -308,7 +351,8 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onRese
 
   useEffect(() => {
     if (searchParams.get('focus') !== 'change_request') return undefined;
-    if (reservation?.active_change_request?.status !== 'pending') return undefined;
+    if (!['pending', 'requested', 'counter_pending'].includes(reservation?.active_change_request?.status)
+      && !reservation?.active_change_request?.pending) return undefined;
 
     const timer = window.setTimeout(() => {
       changeRequestBannerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -349,6 +393,37 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onRese
 
   const [institutionChangeEvents, setInstitutionChangeEvents] = useState([]);
   const [respondingChange, setRespondingChange] = useState(false);
+  const [billingOutcome, setBillingOutcome] = useState(null);
+  const [customFeeAmount, setCustomFeeAmount] = useState('');
+  const [billingComment, setBillingComment] = useState('');
+  const [reportProblemOpen, setReportProblemOpen] = useState(false);
+  const [reportProblemReason, setReportProblemReason] = useState('');
+  const [respondUiOverride, setRespondUiOverride] = useState(null);
+
+  const respondUiForEffect = reservation?.active_change_request?.respond_ui || null;
+  const isCancellationActionForEffect =
+    reservation?.active_change_request?.action_type === 'CANCELLATION';
+
+  useEffect(() => {
+    if (!isCancellationActionForEffect || !respondUiForEffect) {
+      setBillingOutcome(null);
+      setCustomFeeAmount('');
+      setBillingComment('');
+      setReportProblemOpen(false);
+      setRespondUiOverride(null);
+      return;
+    }
+    const suggested = respondUiForEffect.suggested_outcome?.code || null;
+    setBillingOutcome(suggested);
+    setCustomFeeAmount('');
+    setBillingComment('');
+    setReportProblemOpen(false);
+    setRespondUiOverride(null);
+  }, [
+    isCancellationActionForEffect,
+    respondUiForEffect?.respond_context_version,
+    respondUiForEffect?.suggested_outcome?.code,
+  ]);
 
   useEffect(() => {
     if (!reservation?.id) {
@@ -366,7 +441,11 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onRese
       .then((data) => {
         if (!cancelled) {
           setInstitutionChangeEvents(
-            (data?.events || []).filter((ev) => ev.source === 'institution_portal'),
+            (data?.events || []).filter((ev) => (
+              ev.source === 'institution_portal'
+              || ev.source === 'company_portal'
+              || ['change_request_created', 'cancelled', 'change_request_refused', 'field_updated'].includes(ev.action_type)
+            )),
           );
         }
       })
@@ -671,6 +750,148 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onRese
   })();
   const changeRequestSummary = summarizeBookingChangeRequest(reservation.active_change_request);
   const changeRequestExpiryLabel = formatChangeRequestExpiry(changeRequestSummary.expiresAt);
+  const showChangeRequestBanner = isTransportActionPending(reservation.active_change_request)
+    && isInstitutionBooking;
+  const isCancellationAction = reservation.active_change_request?.action_type === 'CANCELLATION';
+  const respondUi = respondUiOverride
+    || reservation.active_change_request?.respond_ui
+    || null;
+  const cancellationPrimaryCta = respondUi?.primary_cta || 'acknowledge_cancellation';
+  const needsBillingChoice = isCancellationAction
+    && cancellationPrimaryCta === 'confirm_with_billing';
+  const allowedOutcomes = Array.isArray(respondUi?.allowed_outcomes)
+    ? respondUi.allowed_outcomes
+    : [];
+
+  const handleAcceptChangeRequest = async () => {
+    setRespondingChange(true);
+    try {
+      const billingOptions = isCancellationAction && respondUi
+        ? {
+          policy_version: respondUi.policy_version,
+          situation: respondUi.situation,
+          suggested_amount: respondUi.suggested_outcome?.amount,
+          cancelable_booking_ids: respondUi.cancelable_booking_ids,
+          ...(needsBillingChoice
+            ? {
+              billing_outcome: billingOutcome,
+              ...(billingOutcome === 'CUSTOM'
+                ? {
+                  fee_amount: customFeeAmount,
+                  billing_comment: billingComment,
+                }
+                : {}),
+            }
+            : {}),
+        }
+        : null;
+      const data = await respondToChangeRequest(
+        reservation.id,
+        reservation.active_change_request.id,
+        'accept',
+        reservation.active_change_request.version,
+        undefined,
+        billingOptions,
+      );
+      toast.success(
+        isCancellationAction
+          ? 'Prise en compte confirmée'
+          : 'Modification acceptée',
+      );
+      setRespondUiOverride(null);
+      const cr = data?.change_request;
+      const actionClosed = cr ? !isTransportActionPending(cr) : true;
+      const commercial = data?.commercial_terms || null;
+      const sourceCr = reservation.active_change_request;
+      const withAcceptedFields = isCancellationAction
+        ? reservation
+        : mergeAcceptedChangeIntoReservation(reservation, sourceCr);
+      const updated = {
+        ...withAcceptedFields,
+        edit_version: data?.edit_version ?? withAcceptedFields.edit_version,
+        active_change_request: actionClosed ? null : cr,
+        active_change_request_id: actionClosed ? null : (cr?.id ?? null),
+        ...(isCancellationAction
+          ? {
+            status: 'canceled',
+            cancelled_at: new Date().toISOString(),
+            ...(commercial
+              ? {
+                is_cancellation_billable: Number(commercial.fee_amount) > 0,
+                cancellation_fee_amount: commercial.fee_amount,
+              }
+              : {}),
+          }
+          : {}),
+      };
+      onReservationUpdated?.(updated);
+      // Historique : recharger seulement les change-events (pas tout le panneau).
+      if (reservation?.id) {
+        fetchBookingChangeEvents(reservation.id)
+          .then((eventsData) => {
+            setInstitutionChangeEvents(
+              (eventsData?.events || []).filter((ev) => (
+                ev.source === 'institution_portal'
+                || ev.source === 'company_portal'
+                || ['change_request_created', 'cancelled', 'change_request_refused', 'field_updated'].includes(ev.action_type)
+              )),
+            );
+          })
+          .catch(() => {});
+      }
+    } catch (e) {
+      const data = e?.response?.data;
+      if (data?.code === 'CANCELLATION_RESPONSE_CONTEXT_CHANGED') {
+        if (data?.respond_ui) {
+          setRespondUiOverride(data.respond_ui);
+          const nextSuggested = data.respond_ui?.suggested_outcome?.code || null;
+          if (nextSuggested) setBillingOutcome(nextSuggested);
+        }
+        toast.error('Le contexte a évolué — vérifiez le montant puis confirmez à nouveau.');
+        onReservationUpdated?.();
+      } else {
+        toast.error(data?.error || data?.code || 'Échec');
+      }
+    } finally {
+      setRespondingChange(false);
+    }
+  };
+
+  const handleReportProblem = async () => {
+    const reason = reportProblemReason.trim();
+    if (!reason) {
+      toast.error('Indiquez le motif du signalement.');
+      return;
+    }
+    setRespondingChange(true);
+    try {
+      const data = await respondToChangeRequest(
+        reservation.id,
+        reservation.active_change_request.id,
+        'refuse',
+        reservation.active_change_request.version,
+        reason,
+        { rejection_reason_code: 'COMPANY_REPORT_PROBLEM' },
+      );
+      toast.success(
+        isCancellationAction
+          ? 'Problème signalé — la course reste planifiée'
+          : 'Modification refusée — la course reste inchangée',
+      );
+      setRespondUiOverride(null);
+      const cr = data?.change_request;
+      const actionClosed = cr ? !isTransportActionPending(cr) : true;
+      onReservationUpdated?.({
+        ...reservation,
+        active_change_request: actionClosed ? null : cr,
+        active_change_request_id: actionClosed ? null : (cr?.id ?? null),
+      });
+    } catch (e) {
+      toast.error(e?.response?.data?.error || 'Échec');
+    } finally {
+      setRespondingChange(false);
+    }
+  };
 
   return (
     <div className={s.panel} data-tour-id="ReservationDetailPanel_panel">
@@ -695,136 +916,206 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onRese
       {/* Scrollable body */}
       <div className={s.panelBody}>
 
-        {reservation.active_change_request?.status === 'pending' && isInstitutionBooking && (
+        {showChangeRequestBanner && (
           <div
             ref={changeRequestBannerRef}
             id="company-change-request-validation"
-            style={{
-              marginBottom: 12,
-              padding: '10px 12px',
-              borderRadius: 8,
-              border: '1px solid #fcd34d',
-              background: '#fffbeb',
-            }}
+            className={s.changeRequestBanner}
           >
-            <p style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 600, color: '#92400e' }}>
-              Modification institution — validation requise
+            <p className={s.changeRequestTitle}>
+              {isCancellationAction
+                ? 'Annulation'
+                : 'Modification à confirmer'}
             </p>
-            <p style={{ margin: '0 0 6px', fontSize: 12, color: '#78350f' }}>
-              Modifications proposées par l&apos;institution :
+            <p className={s.changeRequestLead}>
+              {isCancellationAction
+                ? (respondUi?.situation === 'NON_BILLABLE_RETURN'
+                  ? 'Retour · 0 CHF — confirmez la prise en compte.'
+                  : respondUi?.situation === 'FREE_WINDOW'
+                    ? 'Délai libre · 0 CHF — confirmez la prise en compte.'
+                    : 'Choisissez les frais applicables.')
+                : 'Proposition de l’institution'}
             </p>
             {changeRequestSummary.changeLines.length > 0 ? (
-              <ul
-                style={{
-                  margin: '0 0 8px',
-                  paddingLeft: 18,
-                  fontSize: 12,
-                  color: '#92400e',
-                  lineHeight: 1.45,
-                }}
-              >
+              <ul className={s.changeRequestList}>
                 {changeRequestSummary.changeLines.map((line) => (
-                  <li key={line.key} style={{ marginBottom: 3 }}>
+                  <li key={line.key} className={s.changeRequestItem}>
                     {line.text}
                   </li>
                 ))}
               </ul>
             ) : changeRequestSummary.fieldLabels.length > 0 && (
-              <p style={{ margin: '0 0 8px', fontSize: 12, color: '#92400e', fontWeight: 500 }}>
+              <p className={s.changeRequestFields}>
                 {changeRequestSummary.fieldLabels.join(' · ')}
               </p>
             )}
-            {changeRequestSummary.reason && (
-              <p style={{ margin: '0 0 8px', fontSize: 12, color: '#78350f' }}>
-                Motif : {changeRequestSummary.reason}
-              </p>
+            {(changeRequestSummary.reason || changeRequestExpiryLabel) && (
+              <div className={s.changeRequestMeta}>
+                {changeRequestSummary.reason && (
+                  <span className={s.changeRequestReason}>
+                    {changeRequestSummary.reason}
+                  </span>
+                )}
+                {changeRequestExpiryLabel && (
+                  <span className={s.changeRequestDeadline}>
+                    avant {changeRequestExpiryLabel}
+                  </span>
+                )}
+              </div>
             )}
-            {changeRequestExpiryLabel && (
-              <p style={{ margin: '0 0 10px', fontSize: 11, color: '#a16207' }}>
-                Répondre avant le {changeRequestExpiryLabel}
-              </p>
-            )}
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button
-                type="button"
-                disabled={respondingChange}
-                onClick={async () => {
-                  setRespondingChange(true);
-                  try {
-                    await respondToChangeRequest(
-                      reservation.id,
-                      reservation.active_change_request.id,
-                      'accept',
-                      reservation.active_change_request.version
-                    );
-                    toast.success('Modification acceptée');
-                    onReservationUpdated?.();
-                  } catch (e) {
-                    toast.error(e?.response?.data?.error || 'Échec');
-                  } finally {
-                    setRespondingChange(false);
-                  }
-                }}
-                style={{
-                  padding: '6px 12px',
-                  borderRadius: 6,
-                  border: 'none',
-                  background: '#059669',
-                  color: '#fff',
-                  fontSize: 12,
-                  fontWeight: 600,
-                  cursor: respondingChange ? 'default' : 'pointer',
-                }}
-              >
-                Accepter
-              </button>
-              <button
-                type="button"
-                disabled={respondingChange}
-                onClick={async () => {
-                  setRespondingChange(true);
-                  try {
-                    await respondToChangeRequest(
-                      reservation.id,
-                      reservation.active_change_request.id,
-                      'refuse',
-                      reservation.active_change_request.version
-                    );
-                    toast.success('Modification refusée');
-                    onReservationUpdated?.();
-                  } catch (e) {
-                    toast.error(e?.response?.data?.error || 'Échec');
-                  } finally {
-                    setRespondingChange(false);
-                  }
-                }}
-                style={{
-                  padding: '6px 12px',
-                  borderRadius: 6,
-                  border: '1px solid #cbd5e1',
-                  background: '#fff',
-                  color: '#334155',
-                  fontSize: 12,
-                  fontWeight: 600,
-                  cursor: respondingChange ? 'default' : 'pointer',
-                }}
-              >
-                Refuser
-              </button>
-            </div>
-          </div>
-        )}
 
-        {reservation.route_group_id && (
-          <p style={{ margin: '0 0 10px', fontSize: 12, color: '#475569' }}>
-            Parcours multi-étapes — acceptation globale
-            {reservation.route_sequence_number
-              ? ` · étape ${reservation.route_sequence_number}`
-              : ''}
-            {reservation.route_group_id
-              ? ` · #${String(reservation.route_group_id).slice(-6)}`
-              : ''}
-          </p>
+            {needsBillingChoice && allowedOutcomes.length > 0 && (
+              <>
+                <p className={s.billingOutcomesLabel}>Frais d’annulation</p>
+                <div
+                  className={s.billingOutcomes}
+                  role="radiogroup"
+                  aria-label="Frais d’annulation"
+                  style={{ gridTemplateColumns: `repeat(${allowedOutcomes.length}, minmax(0, 1fr))` }}
+                >
+                  {allowedOutcomes.map((outcome) => {
+                    const selected = billingOutcome === outcome.code;
+                    const amount = outcome.amount;
+                    const currency = outcome.currency || 'CHF';
+                    const title = (() => {
+                      if (outcome.code === 'ZERO') return 'Sans frais';
+                      if (outcome.code === 'POLICY_FEE') return 'Selon conditions';
+                      if (outcome.code === 'APPROACH_FEE') return 'Approche';
+                      if (outcome.code === 'FULL_FARE') return 'Plein tarif';
+                      if (outcome.code === 'CUSTOM') return 'Personnalisé';
+                      return outcome.code;
+                    })();
+                    const amountText = (() => {
+                      if (outcome.code === 'CUSTOM') return '—';
+                      if (outcome.code === 'ZERO') return `0.00 ${currency}`;
+                      return `${amount} ${currency}`;
+                    })();
+                    return (
+                      <label
+                        key={outcome.code}
+                        className={`${s.billingOutcomeOption}${selected ? ` ${s.billingOutcomeSelected}` : ''}`}
+                      >
+                        <input
+                          type="radio"
+                          name="billing_outcome"
+                          value={outcome.code}
+                          checked={selected}
+                          onChange={() => setBillingOutcome(outcome.code)}
+                          disabled={respondingChange}
+                        />
+                        <span className={s.billingOutcomeAmount}>{amountText}</span>
+                        <span className={s.billingOutcomeTitle}>{title}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+                {billingOutcome === 'CUSTOM' && (
+                  <div className={s.customFeeFields}>
+                    <label className={s.customFeeLabel}>
+                      Montant (CHF)
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        className={s.customFeeInput}
+                        value={customFeeAmount}
+                        onChange={(e) => setCustomFeeAmount(e.target.value)}
+                        placeholder="50.00"
+                        disabled={respondingChange}
+                      />
+                    </label>
+                    <label className={s.customFeeLabel}>
+                      Motif
+                      <input
+                        type="text"
+                        className={s.customFeeInput}
+                        value={billingComment}
+                        onChange={(e) => setBillingComment(e.target.value)}
+                        placeholder="Ex. chauffeur mobilisé"
+                        disabled={respondingChange}
+                      />
+                    </label>
+                  </div>
+                )}
+              </>
+            )}
+
+            <div className={s.changeRequestActions}>
+              <button
+                type="button"
+                className={s.changeRequestAcceptBtn}
+                disabled={respondingChange || (needsBillingChoice && !billingOutcome)}
+                onClick={handleAcceptChangeRequest}
+              >
+                {isCancellationAction
+                  ? (needsBillingChoice ? 'Confirmer' : 'Prendre en compte')
+                  : 'Accepter'}
+              </button>
+              {isCancellationAction ? (
+                <button
+                  type="button"
+                  className={s.changeRequestRefuseBtn}
+                  disabled={respondingChange}
+                  onClick={() => setReportProblemOpen((v) => !v)}
+                >
+                  Problème
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className={s.changeRequestRefuseBtn}
+                  disabled={respondingChange}
+                  onClick={async () => {
+                    setRespondingChange(true);
+                    try {
+                      const data = await respondToChangeRequest(
+                        reservation.id,
+                        reservation.active_change_request.id,
+                        'refuse',
+                        reservation.active_change_request.version,
+                      );
+                      toast.success('Modification refusée — la course reste inchangée');
+                      const cr = data?.change_request;
+                      const actionClosed = cr ? !isTransportActionPending(cr) : true;
+                      onReservationUpdated?.({
+                        ...reservation,
+                        active_change_request: actionClosed ? null : cr,
+                        active_change_request_id: actionClosed ? null : (cr?.id ?? null),
+                      });
+                    } catch (e) {
+                      toast.error(e?.response?.data?.error || 'Échec');
+                    } finally {
+                      setRespondingChange(false);
+                    }
+                  }}
+                >
+                  Refuser
+                </button>
+              )}
+            </div>
+            {isCancellationAction && reportProblemOpen && (
+              <div className={s.reportProblemBox}>
+                <label className={s.customFeeLabel}>
+                  Motif
+                  <input
+                    type="text"
+                    className={s.customFeeInput}
+                    value={reportProblemReason}
+                    onChange={(e) => setReportProblemReason(e.target.value)}
+                    placeholder="Ex. demande erronée"
+                    disabled={respondingChange}
+                  />
+                </label>
+                <button
+                  type="button"
+                  className={s.changeRequestRefuseBtn}
+                  disabled={respondingChange}
+                  onClick={handleReportProblem}
+                >
+                  Envoyer
+                </button>
+              </div>
+            )}
+          </div>
         )}
 
         {/* ── EDIT MODE ── */}
@@ -1617,14 +1908,23 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onRese
             {/* Historique */}
             {(() => {
               const timeline = buildTimeline(reservation);
-              const instEvents = institutionChangeEvents.map((ev) => ({
-                event: `Modification institution${ev.severity === 'CRITICAL' ? ' (en route)' : ''}${ev.actor_display_name ? ` — ${ev.actor_display_name}` : ''}`,
-                date: ev.created_at,
-                type: ev.severity === 'CRITICAL' ? 'institution_critical' : 'institution',
-                eventId: ev.id,
-                ackRequired: ev.ack_required,
-                ackCount: ev.ack_received_count,
-              }));
+              const instEvents = institutionChangeEvents.map((ev) => {
+                const isCancel = ev.change_scope === 'cancellation'
+                  || ev.action_type === 'cancelled';
+                const isCompanyConfirm = isCancel
+                  && (ev.source === 'company_portal' || ev.actor_type === 'company')
+                  && ev.action_type !== 'change_request_created';
+                return {
+                  event: formatChangeEventLabel(ev),
+                  date: ev.created_at,
+                  type: isCompanyConfirm || isCancel ? 'cancel' : (
+                    ev.severity === 'CRITICAL' ? 'institution_critical' : 'institution'
+                  ),
+                  eventId: ev.id,
+                  ackRequired: ev.ack_required && ev.source === 'institution_portal',
+                  ackCount: ev.ack_received_count,
+                };
+              });
               const merged = [...timeline, ...instEvents].sort(
                 (a, b) => new Date(b.date) - new Date(a.date),
               );
@@ -1656,7 +1956,11 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onRese
                                   toast.success('Accusé de réception enregistré');
                                   const data = await fetchBookingChangeEvents(reservation.id);
                                   setInstitutionChangeEvents(
-                                    (data?.events || []).filter((ev) => ev.source === 'institution_portal'),
+                                    (data?.events || []).filter((ev) => (
+                                      ev.source === 'institution_portal'
+                                      || ev.source === 'company_portal'
+                                      || ['change_request_created', 'cancelled', 'change_request_refused', 'field_updated'].includes(ev.action_type)
+                                    )),
                                   );
                                 } catch (e) {
                                   toast.error(e?.response?.data?.error || 'Erreur ACK');

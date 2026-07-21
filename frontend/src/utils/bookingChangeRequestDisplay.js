@@ -104,7 +104,8 @@ export const extractChangedFieldKeys = (changedFields) => {
  * @returns {string[]}
  */
 export const formatChangedFieldLabels = (changedFields) => {
-  const keys = extractChangedFieldKeys(changedFields);
+  const keys = extractChangedFieldKeys(changedFields)
+    .filter((key) => !HIDDEN_SNAPSHOT_FIELDS.has(key));
   const labels = keys.map((key) => BOOKING_CHANGE_FIELD_LABELS[key] || key);
   return [...new Set(labels)];
 };
@@ -218,6 +219,42 @@ export const summarizeBookingChangeRequest = (changeRequest) => {
     reason: changeRequest.reason?.trim() || null,
     expiresAt: changeRequest.expires_at || null,
   };
+};
+
+/**
+ * Fusionne les champs acceptés d'une TransportAction dans l'objet réservation local
+ * (mise à jour ciblée du panneau, sans refetch complet).
+ * @param {object} reservation
+ * @param {object|null|undefined} changeRequest
+ * @returns {object}
+ */
+export const mergeAcceptedChangeIntoReservation = (reservation, changeRequest) => {
+  if (!reservation || !changeRequest) return reservation;
+
+  const after = {
+    ...(changeRequest.after_snapshot || {}),
+    ...(changeRequest.proposed_patch || {}),
+  };
+
+  let keys = extractChangedFieldKeys(changeRequest.changed_fields)
+    .filter((key) => !HIDDEN_SNAPSHOT_FIELDS.has(key));
+
+  if (!keys.length) {
+    keys = Object.keys(changeRequest.proposed_patch || {})
+      .filter((key) => !HIDDEN_SNAPSHOT_FIELDS.has(key));
+  }
+
+  if (!keys.length) return reservation;
+
+  const updates = {};
+  for (const key of keys) {
+    if (Object.prototype.hasOwnProperty.call(after, key)) {
+      updates[key] = after[key];
+    }
+  }
+
+  if (!Object.keys(updates).length) return reservation;
+  return { ...reservation, ...updates };
 };
 
 /**

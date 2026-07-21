@@ -27,16 +27,16 @@ const ConfirmCancelModal = ({
           <div className={styles.iconWrapper}>
             <FaBan size={16} />
           </div>
-          <h3 className={styles.title}>Annuler le transport</h3>
+          <h3 className={styles.title}>Demander l&apos;annulation</h3>
         </div>
 
         <div className={styles.body}>
           <p className={styles.message}>
-            Cette action <strong>annule définitivement</strong> le transport.
-            Le transporteur sera informé de l'annulation.
+            Une demande sera envoyée au transporteur. La course reste active
+            jusqu&apos;à sa confirmation.
           </p>
           <label className={styles.label} htmlFor="cancel-reason">
-            Motif d'annulation
+            Motif d&apos;annulation
             {requireReason && <span className={styles.required}> *</span>}
           </label>
           <textarea
@@ -71,10 +71,10 @@ const ConfirmCancelModal = ({
             onClick={handleConfirm}
             disabled={loading || tooShort}
           >
-            {loading ? 'Annulation…' : (
+            {loading ? 'Envoi…' : (
               <>
                 <FaBan size={12} />
-                Confirmer l'annulation
+                Demander l&apos;annulation
               </>
             )}
           </button>

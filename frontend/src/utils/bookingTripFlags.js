@@ -79,12 +79,5 @@ export function buildTripBadgeDescriptors(flags) {
       variant: 'transfer',
     });
   }
-  if (flags.changeRequestPending) {
-    badges.push({
-      key: 'change_request',
-      label: 'Modif. en attente',
-      variant: 'changeRequest',
-    });
-  }
   return badges;
 }

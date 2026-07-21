@@ -1,0 +1,77 @@
+.section {
+  width: 100%;
+}
+
+.toneDefault {
+  background: transparent;
+}
+
+.tonePlain {
+  background: var(--bg-primary);
+}
+
+.toneTint {
+  background: linear-gradient(180deg, #f4f7f6 0%, #eef2f1 100%);
+}
+
+.header {
+  margin-bottom: 1.75rem;
+}
+
+.headerStart {
+  text-align: left;
+}
+
+.headerCenter {
+  text-align: center;
+}
+
+.headerCenter .lead {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  margin-bottom: 0.65rem;
+}
+
+.eyebrowLine {
+  width: 26px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--brand-primary);
+  flex-shrink: 0;
+}
+
+.title {
+  font-size: clamp(1.25rem, 2.8vw, 1.5rem);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-primary);
+  margin: 0 0 0.65rem;
+  letter-spacing: -0.02em;
+  line-height: var(--line-height-tight);
+}
+
+.lead {
+  font-size: var(--font-md, 1rem);
+  line-height: 1.7;
+  color: var(--text-secondary);
+  margin: 0;
+  max-width: 44rem;
+}
+
+.body {
+  min-width: 0;
+}
+
+.footer {
+  margin-top: 1.5rem;
+}

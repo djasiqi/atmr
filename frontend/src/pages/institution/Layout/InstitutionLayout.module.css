@@ -490,7 +490,11 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 12px;
+  height: 32px;
+  min-height: 32px;
+  max-height: 32px;
+  box-sizing: border-box;
+  padding: 0 12px;
   background: var(--brand-light);
   border-radius: var(--radius-pill);
   white-space: nowrap;
@@ -507,6 +511,7 @@
 .headerIndicator .indicatorText {
   font-size: 12px;
   font-weight: 600;
+  line-height: 1;
   color: var(--brand);
 }
 
@@ -526,7 +531,7 @@
 
 .headerDivider {
   width: 1px;
-  height: 24px;
+  height: 20px;
   background: var(--border);
   flex-shrink: 0;
 }
@@ -537,13 +542,18 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 7px 14px;
+  height: 32px;
+  min-height: 32px;
+  max-height: 32px;
+  box-sizing: border-box;
+  padding: 0 14px;
   background: var(--brand);
   color: white;
   border: none;
   border-radius: var(--radius-sm);
   font-size: 13px;
   font-weight: 500;
+  line-height: 1;
   cursor: pointer;
   text-decoration: none;
   transition: all 0.15s ease;
@@ -727,7 +737,7 @@
   }
 
   .newRequestBtn {
-    padding: 7px 12px;
+    padding: 0 12px;
     font-size: 12px;
   }
 
@@ -864,7 +874,7 @@
   }
 
   .newRequestBtn {
-    padding: 7px 10px;
+    padding: 0 10px;
     font-size: 12px;
   }
 }
@@ -881,9 +891,11 @@
   }
 
   .newRequestBtn {
-    padding: 8px;
+    width: 32px;
+    padding: 0;
     border-radius: 8px;
     gap: 0;
+    justify-content: center;
   }
 }
 
