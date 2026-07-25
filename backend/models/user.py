@@ -90,6 +90,10 @@ class User(db.Model):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     force_password_change = Column(Boolean, default=False, nullable=False)
+    # Lot 0 SEC-02: invalide tous les access tokens JWT après changement de mot de passe
+    token_version: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0", nullable=False
+    )
     # ✅ S3: Date d'expiration du mot de passe (optionnel)
     password_expires_at = Column(DateTime(timezone=True), nullable=True, index=True)
 

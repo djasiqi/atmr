@@ -239,9 +239,7 @@ def _resolve_remember_me_from_refresh_token(
     )
     if ttl <= short_seconds * 2:
         return False
-    if ttl >= long_seconds // 2:
-        return True
-    return False
+    return ttl >= long_seconds // 2
 
 
 def _refresh_cookie_max_age(
@@ -295,6 +293,8 @@ def _build_activation_status(session: ActivationSession) -> dict[str, object]:
         "phone_verified": bool(session.phone_verified_at),
         "is_complete": bool(session.email_verified_at and session.phone_verified_at),
         "is_finalized": bool(session.consumed_at),
+        # Statut livraison (pas email_last_error — interne uniquement)
+        "email_delivery_status": session.email_delivery_status,
     }
 
 
@@ -303,7 +303,7 @@ def _build_activation_email_link(token: str) -> str:
     default_frontend_url = (
         "http://localhost:3000"
         if environment in {"development", "testing"}
-        else "https://app.lirie.ch"
+        else "https://www.lirie.ch"
     )
     frontend_url = (
         os.getenv("FRONTEND_URL")
@@ -319,7 +319,7 @@ def _resolve_public_web_base_url() -> str:
     default_frontend_url = (
         "http://localhost:3000"
         if environment in {"development", "testing"}
-        else "https://app.lirie.ch"
+        else "https://www.lirie.ch"
     )
     return (
         os.getenv("FRONTEND_URL")
@@ -408,6 +408,25 @@ def _resolve_passwordless_otp_ttl_seconds() -> int:
 
 def _create_passwordless_otp_code() -> str:
     return f"{secrets.randbelow(1000000):06d}"
+
+
+def _user_token_version(user: User) -> int:
+    """Version JWT pour révocation globale après changement de mot de passe."""
+    return int(getattr(user, "token_version", 0) or 0)
+
+
+def _passwordless_allowed_in_environment() -> bool:
+    """Passwordless OTP uniquement en développement (Lot 0 SEC-03)."""
+    environment = str(current_app.config.get("ENVIRONMENT", "")).strip().lower()
+    return environment == "development"
+
+
+def _passwordless_debug_code_enabled() -> bool:
+    """debug_code uniquement si ENVIRONMENT=development ET PASSWORDLESS_DEBUG_CODE=true."""
+    if not _passwordless_allowed_in_environment():
+        return False
+    flag = str(os.getenv("PASSWORDLESS_DEBUG_CODE", "false")).strip().lower()
+    return flag in {"1", "true", "yes", "on"}
 
 
 def _public_cache_get(key: str) -> str | None:
@@ -522,6 +541,8 @@ def _reset_user_password_with_policy(user: User, new_password: str):
     was_forced = bool(getattr(user, "force_password_change", False))
     user.set_password(new_password)  # nosem
     user.force_password_change = False
+    # Lot 0 SEC-02: invalider tous les access tokens déjà émis
+    user.token_version = int(getattr(user, "token_version", 0) or 0) + 1
     if hasattr(user, "password_expires_at"):
         user.password_expires_at = None
     if hasattr(user, "temporary_password_created_at"):
@@ -536,7 +557,9 @@ def _reset_user_password_with_policy(user: User, new_password: str):
         user.first_login_completed_at = datetime.now(UTC)
         if was_forced:
             try:
-                from models.institution_user_audit_event import InstitutionUserAuditEvent
+                from models.institution_user_audit_event import (
+                    InstitutionUserAuditEvent,
+                )
 
                 InstitutionUserAuditEvent.record(
                     institution_id=user.institution_id,
@@ -555,9 +578,12 @@ def _reset_user_password_with_policy(user: User, new_password: str):
         from security.security_metrics import (
             security_token_invalidations_total,
         )
+        from security.token_blacklist import revoke_token
 
         revoke_all_user_tokens(user.id, reason="Changement de mot de passe")
         security_token_invalidations_total.labels(reason="password_change").inc()
+        with suppress(Exception):
+            revoke_token()
     except Exception as revoke_error:
         logger.warning(
             "Échec révocation tokens lors changement mot de passe (ignoré): %s",
@@ -570,6 +596,7 @@ def _reset_user_password_with_policy(user: User, new_password: str):
         "reason": "password_reset_succeeded",
         "outcome_class": "success",
         "retryable": False,
+        "require_relogin": True,
     }, 200
 
 
@@ -611,13 +638,14 @@ def _enforce_resend_policy(
 
 
 def _send_activation_email(user: User, token: str) -> None:
+    """Envoi synchrone (tests / fallback). Lève sur échec — pas de return silencieux."""
     user_email_raw = getattr(user, "email", None)
     if user_email_raw is None or not str(user_email_raw).strip():
         raise ValueError("Email utilisateur manquant pour envoi activation")
     user_email = str(user_email_raw).strip()
     verification_link = _build_activation_email_link(token)
     text_body = (
-        "Bienvenue sur ATMR.\n\n"
+        "Bienvenue sur LIRIE.\n\n"
         "Cliquez sur ce lien pour confirmer votre email:\n"
         f"{verification_link}\n\n"
         "Ce lien expire rapidement. Si vous n'etes pas a l'origine de cette action, ignorez cet email."
@@ -628,7 +656,7 @@ def _send_activation_email(user: User, token: str) -> None:
         html_body = render_template(
             "emails/activation_email.html",
             activation_link=verification_link,
-            product_name="ATMR",
+            product_name="LIRIE",
             company_name="LIRIE",
             current_year=datetime.now(UTC).year,
         )
@@ -642,17 +670,29 @@ def _send_activation_email(user: User, token: str) -> None:
         from_name=os.getenv("ACTIVATION_EMAIL_FROM_NAME", "LIRIE"),
         from_email=os.getenv("ACTIVATION_EMAIL_FROM", "noreply@lirie.ch"),
         reply_to=os.getenv("ACTIVATION_EMAIL_REPLY_TO", "support@lirie.ch"),
+        raise_on_error=True,
     )
     if not bool(send_result.get("ok")):
         error_msg = str(send_result.get("error", "Email provider error"))
-        # Email désactivé ou provider non configuré : dégradation silencieuse en dev/test.
-        # Raise seulement sur une vraie erreur provider (pas sur "disabled").
-        if "disabled" in error_msg.lower() or "not configured" in error_msg.lower():
-            logger.warning(
-                "[auth] Email activation non envoyé (service désactivé): %s", error_msg
-            )
-            return
         raise RuntimeError(error_msg)
+
+
+def _activation_email_send_failed_body(
+    *,
+    activation_session_id: str,
+    user: User,
+    message: str = "Impossible d'envoyer l'email pour le moment. Vérifiez l'adresse puis réessayez.",
+) -> tuple[dict[str, object], int]:
+    return (
+        {
+            "error": "email_send_failed",
+            "message": message,
+            "activation_session_id": activation_session_id,
+            "masked_email": mask_email(user.email or ""),
+            "masked_phone": _mask_phone(user.phone),
+        },
+        502,
+    )
 
 
 def _send_activation_sms(user: User, code: str) -> bool:
@@ -1027,6 +1067,7 @@ def _login_post_body():
         "institution_id": getattr(user, "institution_id", None),
         "institution_role": getattr(user, "institution_role", None),
         "aud": "atmr-api",  # Audience claim pour sécurité
+        "token_version": _user_token_version(user),
     }
     access_token = create_access_token(
         identity=str(user.public_id),
@@ -1047,6 +1088,7 @@ def _login_post_body():
     refresh_claims: dict[str, object] = {
         "aud": "atmr-api",
         "pwd_hash": pwd_hash_version,
+        "token_version": _user_token_version(user),
     }
     if not is_mobile_request:
         refresh_claims["remember_me"] = remember_me
@@ -1289,7 +1331,9 @@ def _feature_flags_config() -> dict[str, object]:
             flags["saferpay_enabled"] = False
 
     try:
-        from services.infrastructure.runtime_flags import get_mobile_startup_runtime_flags
+        from services.infrastructure.runtime_flags import (
+            get_mobile_startup_runtime_flags,
+        )
 
         flags.update(get_mobile_startup_runtime_flags())
     except Exception:
@@ -1980,6 +2024,7 @@ class LoginTest(Resource):
             "institution_id": getattr(user, "institution_id", None),
             "institution_role": getattr(user, "institution_role", None),
             "aud": "atmr-api",  # ✅ Audience claim pour passer validation JWT
+            "token_version": _user_token_version(user),
         }
         access_token = create_access_token(
             identity=str(user.public_id),
@@ -2159,6 +2204,7 @@ class RefreshToken(Resource):
                 "institution_id": getattr(user, "institution_id", None),
                 "institution_role": getattr(user, "institution_role", None),
                 "aud": "atmr-api",  # Audience claim pour sécurité
+                "token_version": _user_token_version(user),
             }
 
             # 6. Générer nouveau access_token
@@ -2183,6 +2229,7 @@ class RefreshToken(Resource):
             new_refresh_claims: dict[str, object] = {
                 "aud": "atmr-api",
                 "pwd_hash": pwd_hash_version,
+                "token_version": _user_token_version(user),
             }
             if not is_mobile_request:
                 new_refresh_claims["remember_me"] = remember_me
@@ -2428,6 +2475,7 @@ class FreshToken(Resource):
                 "institution_id": getattr(user, "institution_id", None),
                 "institution_role": getattr(user, "institution_role", None),
                 "aud": "atmr-api",
+                "token_version": _user_token_version(user),
             }
             fresh_token = create_access_token(
                 identity=str(user.public_id),
@@ -2764,7 +2812,7 @@ class AuthBootstrap(Resource):
             is_authenticated=True,
         )
 
-        is_active, denial_message = _check_user_profile_active(user)
+        is_active, _denial_message = _check_user_profile_active(user)
         account_status = _normalized_account_status(user)
         if not is_active and account_status == "active":
             account_status = "suspended"
@@ -3506,6 +3554,9 @@ class PublicGuestBookingLink(Resource):
 class PasswordlessOtpRequest(Resource):
     @limiter.limit("40 per hour")
     def post(self):
+        if not _passwordless_allowed_in_environment():
+            return {"error": "Not Found"}, 404
+
         try:
             data = validate_request(
                 PasswordlessOtpRequestSchema(),
@@ -3553,22 +3604,26 @@ class PasswordlessOtpRequest(Resource):
             _resolve_passwordless_otp_ttl_seconds(),
             json.dumps(payload),
         )
-        # Mode dev: on renvoie le code explicitement. En prod, il serait transmis via provider email/SMS.
-        return {
+        response_body: dict[str, Any] = {
             "otp_session_id": otp_session_id,
             "channel": channel,
             "masked_identifier": mask_email(identifier)
             if channel == "email"
             else _mask_phone(identifier),
             "expires_in_seconds": _resolve_passwordless_otp_ttl_seconds(),
-            "debug_code": code,
-        }, 200
+        }
+        if _passwordless_debug_code_enabled():
+            response_body["debug_code"] = code
+        return response_body, 200
 
 
 @auth_ns.route("/passwordless/otp/verify")
 class PasswordlessOtpVerify(Resource):
     @limiter.limit("60 per hour")
     def post(self):
+        if not _passwordless_allowed_in_environment():
+            return {"error": "Not Found"}, 404
+
         try:
             data = validate_request(
                 PasswordlessOtpVerifySchema(),
@@ -3613,6 +3668,7 @@ class PasswordlessOtpVerify(Resource):
                 "institution_id": getattr(user, "institution_id", None),
                 "institution_role": getattr(user, "institution_role", None),
                 "aud": "atmr-api",
+                "token_version": _user_token_version(user),
             }
             access_token = create_access_token(
                 identity=str(user.public_id),
@@ -3625,6 +3681,7 @@ class PasswordlessOtpVerify(Resource):
                 additional_claims={
                     "aud": "atmr-api",
                     "pwd_hash": _get_password_hash_version(user),
+                    "token_version": _user_token_version(user),
                 },
                 expires_delta=current_app.config["JWT_REFRESH_TOKEN_EXPIRES"],
             )
@@ -3698,7 +3755,13 @@ class Register(Resource):
 
         try:
             data = request.get_json() or {}
-            logger.info("Données reçues dans /auth/register : %s", data)
+            logger.info(
+                "Inscription reçue: email=%s role=%s has_password=%s username_len=%s",
+                mask_email(str(data.get("email") or "")),
+                data.get("role"),
+                bool(data.get("password")),
+                len(str(data.get("username") or "")),
+            )
 
             # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
             try:
@@ -3708,7 +3771,12 @@ class Register(Resource):
                 body, code = handle_validation_error(e)
                 return body, code or 400
 
-            logger.info("Données validées : %s", validated_data)
+            logger.info(
+                "Inscription validée: email=%s has_password=%s username_len=%s",
+                mask_email(str(validated_data.get("email") or "")),
+                bool(validated_data.get("password")),
+                len(str(validated_data.get("username") or "")),
+            )
 
             # ✅ DDD: Utiliser le use case pour enregistrer l'utilisateur
             username: str = cast("str", validated_data.get("username"))
@@ -3827,51 +3895,57 @@ class Register(Resource):
             db.session.add(activation_session)
             db.session.commit()
 
-            email_sent = False
-            activation_email_queued = False
+            from models.activation_session import EMAIL_DELIVERY_KIND_INITIAL
+            from services.notifications.activation_email_delivery import (
+                try_enqueue_activation_email,
+            )
+
+            environment = str(current_app.config.get("ENVIRONMENT", "")).strip().lower()
+            enqueue_result = try_enqueue_activation_email(
+                activation_session,
+                kind=EMAIL_DELIVERY_KIND_INITIAL,
+                email_token=email_token,
+                email_token_hash=_hash_plain_value(email_token),
+                environment=environment,
+                is_testing=bool(current_app.config.get("TESTING")),
+            )
+
             sms_sent = False
-            try:
-                from tasks.notification_tasks import send_activation_email_task
-
-                cast("Any", send_activation_email_task).delay(
-                    user_id=user.id,
-                    email=str(user.email or "").strip(),
-                    verification_link=_build_activation_email_link(email_token),
-                )
-                activation_email_queued = True
-                email_sent = True
-                activation_session.last_email_sent_at = datetime.now(UTC)
-            except Exception as email_err:
-                activation_email_queued = False
-                email_sent = False
-                logger.error(
-                    "[Activation] Impossible de queue l'email d'activation user_id=%s: %s",
-                    user.id,
-                    email_err,
-                )
-
             try:
                 sms_sent = _send_activation_sms(user, sms_code)
                 if sms_sent:
                     activation_session.last_sms_sent_at = datetime.now(UTC)
+                    db.session.commit()
             except Exception as sms_err:
                 logger.warning("[Activation] Echec envoi SMS activation: %s", sms_err)
-            db.session.commit()
 
             logger.info("Client créé : user_id=%s, client_id=%s", user.id, client.id)
 
-            logger.info("Utilisateur et client enregistrés avec succès : %s", user.id)
-            return {
+            if enqueue_result.get("require_502"):
+                body, code = _activation_email_send_failed_body(
+                    activation_session_id=activation_session.activation_session_id,
+                    user=user,
+                )
+                if enqueue_result.get("debug_activation_link"):
+                    body["debug_activation_link"] = enqueue_result["debug_activation_link"]
+                return body, code
+
+            response_body: dict[str, object] = {
                 "message": "Inscription créée. Activez votre compte via email et SMS.",
                 "user_id": user.public_id,
                 "username": user.username,
                 "activation_session_id": activation_session.activation_session_id,
                 "masked_email": mask_email(user.email or ""),
                 "masked_phone": _mask_phone(user.phone),
-                "email_sent": email_sent,
-                "activation_email_queued": activation_email_queued,
+                "email_sent": None,
+                "activation_email_queued": bool(enqueue_result.get("queued")),
                 "sms_sent": sms_sent,
-            }, 201
+            }
+            if enqueue_result.get("debug_activation_link"):
+                response_body["debug_activation_link"] = enqueue_result[
+                    "debug_activation_link"
+                ]
+            return response_body, 201
 
         except ValidationError as e:
             logger.error("Erreur de validation : %s", e.messages)
@@ -4144,7 +4218,7 @@ class FinalizeActivation(Resource):
 class ResendActivationEmail(Resource):
     @limiter.limit("10 per hour")
     def post(self):
-        """Renvoyer un email d'activation."""
+        """Renvoyer un email d'activation (asynchrone via Celery)."""
         try:
             data = request.get_json() or {}
             validated_data = validate_request(ResendActivationSchema(), data)
@@ -4159,6 +4233,20 @@ class ResendActivationEmail(Resource):
             if activation_session.email_verified_at:
                 return {"message": "Email déjà confirmé."}, 200
 
+            from models.activation_session import (
+                EMAIL_DELIVERY_KIND_RESEND,
+                EMAIL_DELIVERY_SENDING,
+            )
+
+            # Envoi déjà en cours pour un delivery actif
+            if activation_session.email_delivery_status == EMAIL_DELIVERY_SENDING:
+                return auth_error(
+                    AuthErrorCodes.RATE_LIMITED,
+                    "Envoi déjà en cours. Veuillez patienter.",
+                    429,
+                    details={"retry_after_seconds": ACTIVATION_RESEND_COOLDOWN_SECONDS},
+                )
+
             now = datetime.now(UTC)
             daily_count = int(activation_session.resend_count_email or 0)
             if activation_session.last_email_sent_at and not _is_same_utc_day(
@@ -4166,6 +4254,7 @@ class ResendActivationEmail(Resource):
             ):
                 daily_count = 0
 
+            # Cooldown basé sur dernier succès Brevo uniquement (last_email_sent_at)
             allowed, policy_error, retry_after = _enforce_resend_policy(
                 last_sent_at=activation_session.last_email_sent_at,
                 resend_count=daily_count,
@@ -4183,6 +4272,10 @@ class ResendActivationEmail(Resource):
                     details={"retry_after_seconds": retry_after},
                 )
 
+            user = User.query.get(activation_session.user_id)
+            if not user:
+                return {"error": "Utilisateur introuvable."}, 404
+
             token = _activation_serializer().dumps(
                 {
                     "sid": activation_session.activation_session_id,
@@ -4190,55 +4283,51 @@ class ResendActivationEmail(Resource):
                 },
                 salt="activation-email-salt",
             )
-            activation_session.email_token_hash = _hash_plain_value(token)
-            activation_session.email_token_expires_at = now + timedelta(
-                minutes=ACTIVATION_EMAIL_TTL_MINUTES
+
+            from services.notifications.activation_email_delivery import (
+                try_enqueue_activation_email,
             )
-            activation_session.last_email_sent_at = now
-            activation_session.resend_count_email = daily_count + 1
 
-            user = User.query.get(activation_session.user_id)
-            if not user:
-                return {"error": "Utilisateur introuvable."}, 404
-            try:
-                _send_activation_email(user, token)
-            except Exception as email_err:
-                environment = (
-                    str(current_app.config.get("ENVIRONMENT", "")).strip().lower()
-                )
-                is_local_dev = environment == "development" and not bool(
-                    current_app.config.get("TESTING")
-                )
-                if is_local_dev:
-                    # En local, on ne bloque pas le parcours d'activation si SMTP/Brevo est indisponible.
-                    db.session.commit()
-                    logger.warning(
-                        "[Activation] Fallback dev resend-email (session=%s): %s",
-                        activation_session.activation_session_id,
-                        email_err,
-                    )
-                    return {
-                        "message": (
-                            "Service email indisponible en local. "
-                            "Utilisez le lien de secours ci-dessous pour continuer l'activation."
-                        ),
-                        "email_sent": False,
-                        "debug_activation_link": _build_activation_email_link(token),
-                    }, 200
+            environment = str(current_app.config.get("ENVIRONMENT", "")).strip().lower()
+            enqueue_result = try_enqueue_activation_email(
+                activation_session,
+                kind=EMAIL_DELIVERY_KIND_RESEND,
+                email_token=token,
+                email_token_hash=_hash_plain_value(token),
+                environment=environment,
+                is_testing=bool(current_app.config.get("TESTING")),
+            )
 
-                db.session.rollback()
-                logger.warning(
-                    "[Activation] Echec envoi email resend (session=%s): %s",
-                    activation_session.activation_session_id,
-                    email_err,
+            if enqueue_result.get("require_502"):
+                body, code = _activation_email_send_failed_body(
+                    activation_session_id=activation_session.activation_session_id,
+                    user=user,
                 )
-                return auth_error(
-                    "email_send_failed",
-                    "Impossible d'envoyer l'email pour le moment. Vérifiez l'adresse puis réessayez.",
-                    502,
+                if enqueue_result.get("debug_activation_link"):
+                    body["debug_activation_link"] = enqueue_result[
+                        "debug_activation_link"
+                    ]
+                return body, code
+
+            response_body: dict[str, object] = {
+                "message": (
+                    "Email d'activation en cours d'envoi."
+                    if enqueue_result.get("queued")
+                    else "Préparation de l'email d'activation."
+                ),
+                "activation_email_queued": bool(enqueue_result.get("queued")),
+                "email_sent": None,
+                "activation_status": _build_activation_status(activation_session),
+            }
+            if enqueue_result.get("debug_activation_link"):
+                response_body["debug_activation_link"] = enqueue_result[
+                    "debug_activation_link"
+                ]
+                response_body["message"] = (
+                    "Service email indisponible en local. "
+                    "Utilisez le lien de secours ci-dessous pour continuer l'activation."
                 )
-            db.session.commit()
-            return {"message": "Email d'activation renvoyé."}, 200
+            return response_body, 200
         except ValidationError as e:
             return handle_validation_error(e)
         except Exception as e:
@@ -4577,37 +4666,71 @@ class ForgotPassword(Resource):
 class ResetPassword(Resource):
     # ✅ S2: Rate limiting strict pour reset-password (protection brute force)
     @limiter.limit("3 per minute")
-    def post(self, public_id):
-        """Réinitialise le mot de passe via un lien contenant le public_id."""
+    def post(self, public_id):  # noqa: ARG002
+        """Ancien reset par public_id — retiré (Lot 0 SEC-02).
+
+        Utiliser POST /auth/change-password (session JWT) ou
+        POST /auth/reset-password (token signé forgot-password).
+        """
+        return {
+            "error": "endpoint_removed",
+            "message": "Utilisez POST /auth/change-password avec votre session.",
+            "reason": "reset_password_by_public_id_removed",
+            "outcome_class": "terminal_error",
+            "retryable": False,
+        }, 410
+
+
+@auth_ns.route("/change-password")
+class ChangePassword(Resource):
+    """Changement de mot de passe authentifié (force-reset ou volontaire)."""
+
+    @jwt_required()
+    @limiter.limit("5 per minute")
+    def post(self):
+        """Change le mot de passe de l'utilisateur connecté.
+
+        Autorisé si force_password_change=True, ou si current_password est valide.
+        Après succès : token_version incrémenté, sessions révoquées, re-login requis.
+        """
         try:
+            user = User.query.filter_by(public_id=get_jwt_identity()).first()
+            if not user:
+                return APIErrorHandler.handle_not_found(
+                    "Utilisateur",
+                    get_jwt_identity(),
+                    logger,
+                )
+
             data = request.get_json() or {}
             new_password = data.get("new_password")
+            confirm_password = data.get("confirm_password")
+            current_password = data.get("current_password")
+
             if not new_password:
                 return APIErrorHandler.handle_validation_error(
                     "Un nouveau mot de passe est requis.",
                     field="new_password",
                     logger_instance=logger,
                 )
-
-            user_dto = user_repo.find_by_public_id(public_id)
-            if not user_dto:
-                return APIErrorHandler.handle_not_found(
-                    "Utilisateur",
-                    public_id,
-                    logger,
+            if confirm_password is not None and confirm_password != new_password:
+                return APIErrorHandler.handle_validation_error(
+                    "Les mots de passe ne correspondent pas.",
+                    field="confirm_password",
+                    logger_instance=logger,
                 )
 
-            # Obtenir le modèle User pour les opérations de modification
-            user = User.query.filter(User.public_id == public_id).first()
-            if not user:
-                return APIErrorHandler.handle_not_found(
-                    "Utilisateur",
-                    public_id,
-                    logger,
+            forced = bool(getattr(user, "force_password_change", False))
+            if not forced and (
+                not current_password or not user.check_password(current_password)
+            ):
+                return auth_error(
+                    AuthErrorCodes.INVALID_CREDENTIALS,
+                    "Mot de passe actuel incorrect.",
+                    401,
                 )
 
             return _reset_user_password_with_policy(user, new_password)
-
         except Exception as e:
             sentry_sdk.capture_exception(e)
             return APIErrorHandler.handle_exception(e, logger)
@@ -5215,8 +5338,12 @@ class TOTPChallenge(Resource):
 
             reset_2fa_failures(user.id)
 
+            # Charger le modèle User pour token_version
+            db_user = User.query.filter_by(public_id=user.public_id).first() or user
             additional_claims = {
                 "role": user.role.value if user.role else "unknown",
+                "aud": "atmr-api",
+                "token_version": _user_token_version(db_user),
             }
             if user.company:
                 additional_claims["company_id"] = user.company.id
@@ -5226,7 +5353,13 @@ class TOTPChallenge(Resource):
                 additional_claims=additional_claims,
                 fresh=True,
             )
-            refresh_token = create_refresh_token(identity=user.public_id)
+            refresh_token = create_refresh_token(
+                identity=user.public_id,
+                additional_claims={
+                    "aud": "atmr-api",
+                    "token_version": _user_token_version(db_user),
+                },
+            )
 
             device_id = request.headers.get("X-Device-Id")
             from security.refresh_token_service import store_refresh_token
@@ -5556,6 +5689,7 @@ class ActivateAccount(Resource):
                 "institution_id": getattr(user, "institution_id", None),
                 "institution_role": getattr(user, "institution_role", None),
                 "aud": "atmr-api",
+                "token_version": _user_token_version(user),
             }
             access_token = create_access_token(
                 identity=str(user.public_id),
@@ -5564,7 +5698,10 @@ class ActivateAccount(Resource):
             )
             refresh_token = create_refresh_token(
                 identity=str(user.public_id),
-                additional_claims={"aud": "atmr-api"},
+                additional_claims={
+                    "aud": "atmr-api",
+                    "token_version": _user_token_version(user),
+                },
             )
 
             return {

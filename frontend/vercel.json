@@ -18,8 +18,12 @@
       "destination": "https://api.lirie.ch/socket.io"
     },
     {
-      "source": "/uploads/:path*",
-      "destination": "https://api.lirie.ch/uploads/:path*"
+      "source": "/uploads/company_logos/:path*",
+      "destination": "https://api.lirie.ch/uploads/company_logos/:path*"
+    },
+    {
+      "source": "/uploads/institution_logos/:path*",
+      "destination": "https://api.lirie.ch/uploads/institution_logos/:path*"
     }
   ]
 }

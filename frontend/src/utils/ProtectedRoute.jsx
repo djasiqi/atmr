@@ -41,7 +41,7 @@ const normalizeRole = (rawRole) => {
 // de mot de passe est cable. Etendre ici pour CGU / profil / MFA.
 export const resolveOnboardingRedirect = (u, pathname) => {
   if (u?.force_password_change && !pathname.startsWith('/force-reset-password')) {
-    return `/force-reset-password/${u.public_id || u.sub}`;
+    return '/force-reset-password';
   }
   return null;
 };

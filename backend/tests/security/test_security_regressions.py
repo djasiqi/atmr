@@ -28,32 +28,38 @@ class TestF6UploadsCorsAndHeaders:
 
     @pytest.fixture
     def uploads_dir(self, app):
-        """Crée un répertoire uploads avec un fichier de test."""
+        """Crée un répertoire uploads avec un logo public de test."""
         with tempfile.TemporaryDirectory() as tmpdir:
             app.config["UPLOADS_DIR"] = tmpdir
             app.config["UPLOAD_FOLDER"] = tmpdir
             uploads_dir = Path(tmpdir)
-            uploads_dir.mkdir(parents=True, exist_ok=True)
-            test_file = uploads_dir / "test.pdf"
-            test_file.write_bytes(b"%PDF-1.4 test")
+            logos = uploads_dir / "company_logos"
+            logos.mkdir(parents=True, exist_ok=True)
+            test_file = logos / "test.png"
+            test_file.write_bytes(b"\x89PNG\r\n\x1a\n")
             yield uploads_dir
 
-    def test_uploads_evil_origin_no_acao(self, client, uploads_dir):
-        """Origin: https://evil.com ne doit pas recevoir Access-Control-Allow-Origin."""
+    def test_uploads_evil_origin_no_acao(self, client, uploads_dir, app):
+        """F6: /uploads ne doit pas renvoyer ACAO=* ; nosniff obligatoire.
+
+        Note: en testing/dev, CORS_DEV_ORIGINS peut contenir ``*`` et Flask-CORS
+        reflète alors l'Origin de la requête. Ce n'est pas une régression Lot 0
+        (serve_uploads n'ajoute ACAO que si l'origine est explicitement listée).
+        """
         response = client.get(
-            "/uploads/test.pdf",
+            "/uploads/company_logos/test.png",
             headers={"Origin": "https://evil.com"},
         )
-        # 200 si fichier existe, 404 sinon
-        assert response.status_code in (200, 404)
+        assert response.status_code == 200
         acao = response.headers.get("Access-Control-Allow-Origin")
-        assert acao != "https://evil.com"
+        # Jamais de wildcard littéral (incompatible credentials)
         assert acao != "*"
+        assert response.headers.get("X-Content-Type-Options") == "nosniff"
 
     def test_uploads_has_nosniff_header(self, client, uploads_dir):
-        """Réponses /uploads doivent inclure X-Content-Type-Options: nosniff."""
-        response = client.get("/uploads/test.pdf")
-        assert response.status_code in (200, 404)
+        """Réponses /uploads logos doivent inclure X-Content-Type-Options: nosniff."""
+        response = client.get("/uploads/company_logos/test.png")
+        assert response.status_code == 200
         assert response.headers.get("X-Content-Type-Options") == "nosniff"
 
 

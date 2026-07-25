@@ -117,9 +117,13 @@ class TestRateLimitingPublicEndpoints:
             )
 
     def test_rate_limiting_reset_password(self, app, client):
-        """Test que le rate limiting fonctionne sur /auth/reset-password (5 per minute)."""
-        endpoint = "/api/v1/auth/reset-password/test-public-id"
-        payload = {"new_password": "NewPassword123"}
+        """Test que le rate limiting fonctionne sur /auth/reset-password (5 per minute).
+
+        Lot 0 SEC-02 : la route par public_id est 410 Gone (sans limiter métier).
+        On teste le reset par token signé, qui conserve le limitateur.
+        """
+        endpoint = "/api/v1/auth/reset-password"
+        payload = {"token": "invalid-token", "new_password": "NewPassword123"}
         env = {"REMOTE_ADDR": "10.10.0.5"}
         ratelimit_enabled = bool(app.config.get("RATELIMIT_ENABLED", True))
 
@@ -129,9 +133,9 @@ class TestRateLimitingPublicEndpoints:
             response = client.post(endpoint, json=payload, environ_overrides=env)
             responses.append(response.status_code)
 
-        # Les 5 premières devraient passer (même si erreur)
+        # Les 5 premières devraient passer (même si erreur métier)
         # La 6ème devrait être limitée (429)
-        assert all(status in [200, 400, 403, 404] for status in responses[:5]), (
+        assert all(status in [200, 400, 403, 404, 410] for status in responses[:5]), (
             "Les 5 premières requêtes devraient passer"
         )
         if ratelimit_enabled:

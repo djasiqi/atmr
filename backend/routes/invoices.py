@@ -353,8 +353,18 @@ filter_parser.add_argument("with_reminders", type=bool, help="Avec rappels en co
 
 @invoices_ns.route("/companies/<int:company_id>/invoices")
 class InvoicesList(Resource):
+    @jwt_required()
+    @role_required(["ADMIN", "COMPANY"])
     def get(self, company_id):
         """Récupère la liste des factures avec filtres et pagination."""
+        from shared.tenant_guard import assert_company_access
+
+        _user, access_err = assert_company_access(
+            company_id, resource="invoices_list"
+        )
+        if access_err:
+            return access_err
+
         args = request.args
         status_raw = (args.get("status") or "").strip().lower()
         client_id = args.get("client_id", type=int)
@@ -887,6 +897,14 @@ class InvoicesDebug(Resource):
     @role_required(["ADMIN", "COMPANY"])
     def get(self, company_id):
         """Debug: Liste toutes les factures de l'entreprise."""
+        from shared.tenant_guard import assert_company_access
+
+        _user, access_err = assert_company_access(
+            company_id, resource="invoices_debug"
+        )
+        if access_err:
+            return access_err
+
         from sqlalchemy import func
 
         from models.enums import InvoiceStatus
@@ -2876,6 +2894,128 @@ class GenerateInvoice(Resource):
             result, status_code = APIErrorHandler.handle_exception(e, logger)
 
         return result, status_code
+
+
+@invoices_ns.route("/companies/<int:company_id>/invoices/<int:invoice_id>/pdf")
+class InvoicePdfDownload(Resource):
+    """Téléchargement PDF facture via lookup DB (Lot 0 SEC-06)."""
+
+    @jwt_required()
+    @role_required(["ADMIN", "COMPANY"])
+    def get(self, company_id, invoice_id):
+        from werkzeug.exceptions import NotFound as WzNotFound
+
+        from shared.tenant_guard import assert_company_access
+        from shared.upload_path_resolver import serve_stored_upload
+
+        _user, access_err = assert_company_access(
+            company_id, resource="invoice_pdf"
+        )
+        if access_err:
+            return access_err
+
+        invoice = Invoice.query.get(invoice_id)
+        if not invoice or invoice.company_id != company_id:
+            return APIErrorHandler.handle_not_found("Invoice", invoice_id, logger)
+        if not invoice.pdf_url:
+            return APIErrorHandler.handle_not_found("Invoice PDF", invoice_id, logger)
+        try:
+            return serve_stored_upload(invoice.pdf_url)
+        except WzNotFound:
+            return APIErrorHandler.handle_not_found("Invoice PDF", invoice_id, logger)
+
+
+@invoices_ns.route(
+    "/companies/<int:company_id>/invoices/<int:invoice_id>/reminders/<int:reminder_id>/pdf"
+)
+class InvoiceReminderPdfDownload(Resource):
+    """Téléchargement PDF rappel via lookup DB (Lot 0 SEC-06)."""
+
+    @jwt_required()
+    @role_required(["ADMIN", "COMPANY"])
+    def get(self, company_id, invoice_id, reminder_id):
+        from werkzeug.exceptions import NotFound as WzNotFound
+
+        from models.invoice import InvoiceReminder
+        from shared.tenant_guard import assert_company_access
+        from shared.upload_path_resolver import serve_stored_upload
+
+        _user, access_err = assert_company_access(
+            company_id, resource="invoice_reminder_pdf"
+        )
+        if access_err:
+            return access_err
+
+        invoice = Invoice.query.get(invoice_id)
+        if not invoice or invoice.company_id != company_id:
+            return APIErrorHandler.handle_not_found("Invoice", invoice_id, logger)
+
+        reminder = InvoiceReminder.query.filter_by(
+            id=reminder_id, invoice_id=invoice_id
+        ).first()
+        if not reminder or not reminder.pdf_url:
+            return APIErrorHandler.handle_not_found(
+                "InvoiceReminder PDF", reminder_id, logger
+            )
+        try:
+            return serve_stored_upload(reminder.pdf_url)
+        except WzNotFound:
+            return APIErrorHandler.handle_not_found(
+                "InvoiceReminder PDF", reminder_id, logger
+            )
+
+
+@invoices_ns.route(
+    "/companies/<int:company_id>/partner-invoices/<int:partner_invoice_id>/pdf"
+)
+class PartnerInvoicePdfDownload(Resource):
+    """Téléchargement PDF facture partenaire via lookup DB (Lot 0 SEC-06)."""
+
+    @jwt_required()
+    @role_required(["ADMIN", "COMPANY"])
+    def get(self, company_id, partner_invoice_id):
+        from werkzeug.exceptions import NotFound as WzNotFound
+
+        from models.partner_invoice import PartnerInvoice
+        from models.partnership import Partnership
+        from shared.tenant_guard import assert_company_access
+        from shared.upload_path_resolver import serve_stored_upload
+
+        _user, access_err = assert_company_access(
+            company_id, resource="partner_invoice_pdf"
+        )
+        if access_err:
+            return access_err
+
+        partner_invoice = PartnerInvoice.query.get(partner_invoice_id)
+        if not partner_invoice or not partner_invoice.pdf_url:
+            return APIErrorHandler.handle_not_found(
+                "PartnerInvoice", partner_invoice_id, logger
+            )
+
+        partnership = Partnership.query.get(partner_invoice.partnership_id)
+        if not partnership:
+            return APIErrorHandler.handle_not_found(
+                "PartnerInvoice", partner_invoice_id, logger
+            )
+
+        allowed_ids = {
+            partnership.owner_company_id,
+            partnership.partner_company_id,
+            partner_invoice.executing_company_id,
+        }
+        if company_id not in allowed_ids:
+            return APIErrorHandler.handle_permission_error(
+                "Accès non autorisé à cette ressource",
+                logger_instance=logger,
+            )
+
+        try:
+            return serve_stored_upload(partner_invoice.pdf_url)
+        except WzNotFound:
+            return APIErrorHandler.handle_not_found(
+                "PartnerInvoice PDF", partner_invoice_id, logger
+            )
 
 
 @invoices_ns.route("/companies/<int:company_id>/invoices/<int:invoice_id>")
@@ -6017,7 +6157,15 @@ class ExportPaymentsCSV(Resource):
             assert year is not None
             assert month is not None
 
-            # Vérifier que l'entreprise existe et que l'utilisateur y a accès
+            from shared.tenant_guard import assert_company_access
+
+            _user, access_err = assert_company_access(
+                company_id, resource="exports_payments_csv"
+            )
+            if access_err:
+                return access_err
+
+            # Vérifier que l'entreprise existe
             company = Company.query.get(company_id)
             if not company:
                 return APIErrorHandler.handle_not_found("Company", company_id, logger)

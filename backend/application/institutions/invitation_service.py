@@ -26,7 +26,7 @@ from models import Institution, User, UserRole
 from services.email.brevo_provider import BrevoEmailProvider
 
 if TYPE_CHECKING:
-    from models.enums import InstitutionRole
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -183,7 +183,9 @@ def _send_html_email(
             logger.info("%s Email envoyé à %s", log_prefix, to_email)
             return InviteResult(success=True, token=raw_token)
 
-        logger.error("%s Échec envoi email à %s: %s", log_prefix, to_email, result.error)
+        logger.error(
+            "%s Échec envoi email à %s: %s", log_prefix, to_email, result.error
+        )
         return InviteResult(success=False, error=_sanitize_email_error(result.error))
     except Exception as e:
         logger.exception("%s Erreur envoi email à %s: %s", log_prefix, to_email, e)
@@ -289,14 +291,14 @@ def invite_or_attach_institution_user(
     if creation_mode == "username":
         return _create_username_mode_user(
             institution=institution,
-            admin_user=admin_user,
+            _admin_user=admin_user,
             role_value=role_value,
             first_name=first_name,
             last_name=last_name,
             email=email.strip().lower() if email else None,
             local_username=str(local_username or "").strip().lower(),
-            admin_name=admin_name,
-            institution_name=institution_name,
+            _admin_name=admin_name,
+            _institution_name=institution_name,
             job_title=job_title,
         )
 
@@ -480,14 +482,14 @@ def invite_or_attach_institution_user(
 def _create_username_mode_user(
     *,
     institution: Institution,
-    admin_user: User,
+    _admin_user: User,
     role_value: str,
     first_name: str | None,
     last_name: str | None,
     email: str | None = None,
     local_username: str,
-    admin_name: str,
-    institution_name: str,
+    _admin_name: str,
+    _institution_name: str,
     job_title: str | None = None,
 ) -> InviteAttachResult:
     local_username = local_username.strip().lower()

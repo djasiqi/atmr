@@ -572,6 +572,49 @@ class TransportVoucherReject(Resource):
         return {"success": True, "data": _serialize_transport_voucher(voucher)}, 200
 
 
+@transport_vouchers_ns.route("/<int:voucher_id>/files/<int:file_id>")
+class TransportVoucherFileDownload(Resource):
+    """Téléchargement fichier bon via lookup DB (Lot 0 SEC-06)."""
+
+    @jwt_required()
+    @role_required(UserRole.company, UserRole.admin)
+    def get(self, voucher_id: int, file_id: int):
+        from werkzeug.exceptions import NotFound as WzNotFound
+
+        from shared.tenant_guard import assert_company_access, get_current_user_from_jwt
+        from shared.upload_path_resolver import serve_stored_upload
+
+        voucher = TransportVoucher.query.get(voucher_id)
+        if not voucher:
+            return APIErrorHandler.handle_not_found(
+                "TransportVoucher", voucher_id, logger
+            )
+
+        user = get_current_user_from_jwt()
+        _user, access_err = assert_company_access(
+            voucher.company_id,
+            resource="transport_voucher_file",
+            user=user,
+        )
+        if access_err:
+            return access_err
+
+        voucher_file = TransportVoucherFile.query.filter_by(
+            id=file_id, voucher_id=voucher.id
+        ).first()
+        if not voucher_file or not voucher_file.file_url:
+            return APIErrorHandler.handle_not_found(
+                "TransportVoucherFile", file_id, logger
+            )
+
+        try:
+            return serve_stored_upload(voucher_file.file_url)
+        except WzNotFound:
+            return APIErrorHandler.handle_not_found(
+                "TransportVoucherFile", file_id, logger
+            )
+
+
 @transport_vouchers_ns.route("/<int:voucher_id>/files")
 class TransportVoucherFiles(Resource):
     """Gestion des fichiers attachés à un bon."""

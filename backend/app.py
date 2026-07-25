@@ -1080,55 +1080,27 @@ def create_app(config_name: str | None = None):
             response.headers["Access-Control-Allow-Headers"] = "Content-Type"
             return response
 
-        base = Path(app.config["UPLOADS_DIR"]).resolve()
-        try:
-            candidate = (base / filename).resolve()
-        except (ValueError, RuntimeError):
-            # Ex: "embedded null byte" ou erreurs de résolution de chemin
-            msg = (
-                "Tentative de path traversal / chemin invalide bloquée: "
-                "filename=%s, base=%s"
-            )
-            app.logger.warning(
-                msg,
-                filename,
-                base,
-            )
-            raise NotFound from None
+        # Lot 0 SEC-06: seuls les logos restent publics sous /uploads
+        from shared.upload_path_resolver import (
+            is_public_upload_prefix,
+            resolve_safe_upload_path,
+        )
 
-        # ✅ S2: Protection path traversal améliorée avec Path.is_relative_to()
-        # (Python 3.9+)
-        # Plus robuste que startswith() car gère correctement les chemins
-        # Windows et liens symboliques
-        try:
-            # Vérifier que le chemin résolu est bien relatif au répertoire de base
-            # is_relative_to() lève ValueError si le chemin n'est pas relatif
-            candidate.relative_to(base)
-        except (ValueError, RuntimeError):
-            # Path traversal détecté : le chemin résolu sort du répertoire
-            # autorisé
-            msg = (
-                "Tentative de path traversal bloquée: filename=%s, resolved=%s, base=%s"
-            )
-            app.logger.warning(
-                msg,
-                filename,
-                candidate,
-                base,
-            )
-            raise NotFound from None
-
-        # Vérifier que le fichier existe
-        if not candidate.exists():
-            app.logger.warning(
-                "Fichier upload introuvable: %s (chemin résolu: %s, base: %s)",
-                filename,
-                candidate,
-                base,
-            )
+        if not is_public_upload_prefix(filename):
             raise NotFound
 
-        app.logger.info("Serving upload file: %s -> %s", filename, candidate)
+        base = Path(app.config["UPLOADS_DIR"]).resolve()
+        try:
+            candidate = resolve_safe_upload_path(filename, uploads_base=base)
+        except NotFound:
+            app.logger.warning(
+                "Upload public refusé ou introuvable: filename=%s base=%s",
+                filename,
+                base,
+            )
+            raise
+
+        app.logger.info("Serving public upload file: %s -> %s", filename, candidate)
 
         # Contournement Gunicorn+eventlet : send_from_directory provoque ERR_CONNECTION_RESET
         # sur les fichiers (streaming incompatible). Lecture en mémoire + Response évite le bug.

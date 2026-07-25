@@ -49,6 +49,8 @@ class EmailResult:
     message_id: str | None = None
     error: str | None = None
     provider_response: dict[str, Any] | None = None
+    status_code: int | None = None
+    retryable: bool = False
 
 
 @dataclass
@@ -95,6 +97,112 @@ class BrevoEmailProvider:
             "content-type": "application/json",
             "api-key": self.api_key,
         }
+        # Timeout HTTP < task_soft_time_limit Celery (défaut soft=20s).
+        self.http_timeout = float(os.getenv("BREVO_HTTP_TIMEOUT_SECONDS", "8"))
+
+    def send_transactional(
+        self,
+        *,
+        to_email: str,
+        subject: str,
+        html_content: str | None = None,
+        text_content: str | None = None,
+        from_email: str,
+        from_name: str,
+        reply_to: str | None = None,
+        notification_type: str = "transactional",
+    ) -> EmailResult:
+        """Envoie un email transactionnel simple via l'API Brevo.
+
+        Returns:
+            EmailResult avec status_code et retryable renseignés.
+        """
+        payload: dict[str, Any] = {
+            "sender": {
+                "name": from_name.strip(),
+                "email": from_email.strip(),
+            },
+            "to": [{"email": to_email}],
+            "subject": subject,
+        }
+        if reply_to:
+            payload["replyTo"] = {"email": reply_to.strip()}
+        if html_content:
+            payload["htmlContent"] = html_content
+            payload["textContent"] = text_content or re.sub(
+                r"<[^>]+>", " ", html_content
+            )
+        elif text_content:
+            payload["textContent"] = text_content
+        else:
+            return EmailResult(
+                success=False,
+                error="Contenu email manquant",
+                status_code=400,
+                retryable=False,
+            )
+
+        try:
+            logger.info(
+                "Envoi transactionnel Brevo type=%s to=%s***",
+                notification_type,
+                to_email.split("@")[0][:3],
+            )
+            response = requests.post(
+                f"{self.base_url}/smtp/email",
+                json=payload,
+                headers=self.headers,
+                timeout=self.http_timeout,
+            )
+            if response.status_code == HTTP_CREATED:
+                data = response.json() if response.text else {}
+                return EmailResult(
+                    success=True,
+                    message_id=data.get("messageId"),
+                    provider_response=data,
+                    status_code=HTTP_CREATED,
+                    retryable=False,
+                )
+
+            status = int(response.status_code)
+            retryable = status == 429 or status >= 500
+            # Ne pas logger le corps brut (peut contenir des données sensibles).
+            error_msg = f"Erreur Brevo HTTP {status}"
+            logger.error("❌ %s (type=%s)", error_msg, notification_type)
+            return EmailResult(
+                success=False,
+                error=error_msg,
+                status_code=status,
+                retryable=retryable,
+                provider_response=None,
+            )
+        except requests.exceptions.Timeout as e:
+            error_msg = f"Timeout Brevo : {e!s}"
+            logger.error("❌ %s", error_msg)
+            return EmailResult(
+                success=False,
+                error=error_msg,
+                status_code=None,
+                retryable=True,
+            )
+        except requests.exceptions.RequestException as e:
+            error_msg = f"Erreur réseau Brevo : {e!s}"
+            logger.error("❌ %s", error_msg)
+            return EmailResult(
+                success=False,
+                error=error_msg,
+                status_code=None,
+                retryable=True,
+            )
+        except Exception as e:
+            error_msg = f"Erreur inattendue Brevo : {type(e).__name__}"
+            logger.exception("❌ %s", error_msg)
+            return EmailResult(
+                success=False,
+                error=error_msg,
+                status_code=None,
+                retryable=False,
+            )
 
     def send_invoice_email(
         self,

@@ -5,10 +5,19 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, func
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ext import db
+
+# Statuts de livraison email d'activation
+EMAIL_DELIVERY_QUEUED = "queued"
+EMAIL_DELIVERY_SENDING = "sending"
+EMAIL_DELIVERY_SENT = "sent"
+EMAIL_DELIVERY_FAILED = "failed"
+
+EMAIL_DELIVERY_KIND_INITIAL = "initial"
+EMAIL_DELIVERY_KIND_RESEND = "resend"
 
 
 class ActivationSession(db.Model):
@@ -17,6 +26,7 @@ class ActivationSession(db.Model):
         Index("ix_activation_session_user_id", "user_id"),
         Index("ix_activation_session_session_id", "activation_session_id"),
         Index("ix_activation_session_email_token_hash", "email_token_hash"),
+        Index("ix_activation_session_email_delivery_id", "email_delivery_id"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -42,6 +52,21 @@ class ActivationSession(db.Model):
     )
     email_verified_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
+    )
+
+    # Suivi livraison email (queued → sending → sent | failed)
+    email_delivery_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True, index=True
+    )
+    email_delivery_status: Mapped[str | None] = mapped_column(
+        String(16), nullable=True
+    )
+    email_delivery_kind: Mapped[str | None] = mapped_column(
+        String(16), nullable=True
+    )
+    email_last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    email_provider_message_id: Mapped[str | None] = mapped_column(
+        String(128), nullable=True
     )
 
     sms_code_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)

@@ -764,7 +764,7 @@ class TestInstitutionInvitation:
         assert protected.status_code == 403
         data = protected.get_json()
         assert data["error"] == "password_change_required"
-        assert data["redirect_to"] == f"/force-reset-password/{user.public_id}"
+        assert data["redirect_to"] == "/force-reset-password"
 
     def test_force_password_change_full_cycle(
         self, client, db, institution, admin_user, admin_headers
@@ -803,15 +803,19 @@ class TestInstitutionInvitation:
             json={"email": local_username, "password": temp_password},
         )
         assert login.status_code == 200
-        assert login.get_json()["user"]["force_password_change"] is True
+        login_data = login.get_json()
+        assert login_data["user"]["force_password_change"] is True
+        access_token = login_data.get("access_token") or login_data.get("token")
+        assert access_token
 
-        # 3. Changement de mot de passe (endpoint non bloqué par le guard)
+        # 3. Changement de mot de passe via JWT (SEC-02 — plus de reset par public_id)
         new_password = "Brandnew!Pwd2026Xyz"
         change = client.post(
-            f"/api/v1/auth/reset-password/{public_id}",
+            "/api/v1/auth/change-password",
             json={"new_password": new_password, "confirm_password": new_password},
+            headers={"Authorization": f"Bearer {access_token}"},
         )
-        assert change.status_code == 200
+        assert change.status_code == 200, change.get_json()
 
         db.session.refresh(created_user)
         assert created_user.force_password_change is False
@@ -831,6 +835,7 @@ class TestInstitutionInvitation:
             "institution_id": institution.id,
             "institution_role": created_user.institution_role,
             "aud": "atmr-api",
+            "token_version": int(getattr(created_user, "token_version", 0) or 0),
         }
         with client.application.app_context():
             token = create_access_token(
@@ -1012,7 +1017,9 @@ class TestInstitutionUserJobTitle:
             )
         return {"Authorization": f"Bearer {token}"}
 
-    def _make_target(self, db, institution, *, status="active", job_title=None, role=None):
+    def _make_target(
+        self, db, institution, *, status="active", job_title=None, role=None
+    ):
         uid = str(uuid.uuid4())[:8]
         target = User()
         target.username = f"jt_target_{uid}"
@@ -1177,9 +1184,7 @@ class TestInstitutionUserJobTitle:
         self, client, db, institution, admin_user, admin_headers
     ):
         """job_title est éditable même pour un compte désactivé/archivé."""
-        target = self._make_target(
-            db, institution, status="disabled", job_title="ASSC"
-        )
+        target = self._make_target(db, institution, status="disabled", job_title="ASSC")
         target.archived_at = datetime.now(UTC)
         db.session.commit()
 
@@ -1222,7 +1227,10 @@ class TestInstitutionUserJobTitle:
 
         response = client.patch(
             f"/api/v1/institutions/users/{target.id}",
-            json={"job_title": "Infirmier diplômé(e)", "institution_role": "institution_admin"},
+            json={
+                "job_title": "Infirmier diplômé(e)",
+                "institution_role": "institution_admin",
+            },
             headers=admin_headers,
         )
 

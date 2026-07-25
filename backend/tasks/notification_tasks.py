@@ -602,79 +602,192 @@ def send_push_company_notification_task(
     name="tasks.notification_tasks.send_activation_email",
     bind=True,
     acks_late=True,
-    task_time_limit=20,
-    task_soft_time_limit=10,
+    # soft 20s > BREVO_HTTP_TIMEOUT_SECONDS (8s) pour permettre EmailRetryableError
+    # avant SoftTimeLimitExceeded. max_retries=2 ⇒ 3 tentatives au total.
+    task_time_limit=30,
+    task_soft_time_limit=20,
     max_retries=2,
-    autoretry_for=(ConnectionError, TimeoutError),
     default_retry_delay=2,
 )
 def send_activation_email_task(
     self,
     *,
-    user_id: int,
-    email: str,
-    verification_link: str,
+    activation_session_id: str,
+    email_delivery_id: str,
 ) -> Dict[str, Any]:
-    """Envoie l'email d'activation en asynchrone via Celery."""
+    """Envoie l'email d'activation (args non sensibles : session + delivery_id).
+
+    max_retries=2 ⇒ 3 tentatives au total. Le jeton Redis est stable par delivery_id.
+    """
+    import random
+
     from celery_app import get_flask_app
 
     app = get_flask_app()
     with app.app_context():
-        try:
-            from datetime import UTC, datetime
+        from datetime import UTC, datetime
 
-            from flask import render_template
+        from flask import render_template
 
-            from services.notifications.email import send_email_notification
+        from ext import db
+        from models import ActivationSession, User
+        from services.notifications.activation_email_delivery import (
+            cas_claim_sending,
+            get_activation_email_token,
+            mark_delivery_failed,
+            mark_delivery_sent,
+            purge_activation_email_token,
+            sanitize_email_error,
+        )
+        from services.notifications.email import send_email_notification
+        from services.notifications.email_errors import (
+            EmailPermanentError,
+            EmailRetryableError,
+        )
 
-            html_body = ""
-            try:
-                html_body = render_template(
-                    "emails/activation_email.html",
-                    activation_link=verification_link,
-                    product_name="ATMR",
-                    company_name="LIRIE",
-                    current_year=datetime.now(UTC).year,
-                )
-            except Exception:
-                html_body = ""
-
-            text_body = (
-                "Bienvenue sur ATMR.\n\n"
-                "Cliquez sur ce lien pour confirmer votre email:\n"
-                f"{verification_link}\n\n"
-                "Ce lien expire rapidement. Si vous n'etes pas a l'origine de cette action, ignorez cet email."
+        def _build_link(token: str) -> str:
+            environment = str(app.config.get("ENVIRONMENT", "")).strip().lower()
+            default_frontend_url = (
+                "http://localhost:3000"
+                if environment in {"development", "testing"}
+                else "https://www.lirie.ch"
             )
+            import os
 
+            frontend_url = (
+                os.getenv("FRONTEND_URL")
+                or os.getenv("PUBLIC_FRONTEND_URL")
+                or os.getenv("PUBLIC_APP_URL")
+                or default_frontend_url
+            ).rstrip("/")
+            return f"{frontend_url}/activate-account?token={token}"
+
+        session = ActivationSession.query.filter_by(
+            activation_session_id=activation_session_id
+        ).first()
+        if not session:
+            logger.warning(
+                "[notification_task] activation session introuvable sid=%s",
+                activation_session_id,
+            )
+            return {"ok": False, "error": "session_not_found"}
+
+        claim = cas_claim_sending(session, email_delivery_id)
+        if claim == "ignore":
+            logger.info(
+                "[notification_task] ignore stale/duplicate delivery_id=%s sid=%s",
+                email_delivery_id,
+                activation_session_id,
+            )
+            return {"ok": True, "ignored": True}
+
+        token = get_activation_email_token(email_delivery_id)
+        if not token:
+            mark_delivery_failed(
+                session,
+                "activation_token_missing_in_redis",
+                email_delivery_id=email_delivery_id,
+            )
+            db.session.commit()
+            return {"ok": False, "error": "token_missing"}
+
+        user = User.query.get(session.user_id)
+        if not user or not user.email:
+            mark_delivery_failed(
+                session, "user_or_email_missing", email_delivery_id=email_delivery_id
+            )
+            purge_activation_email_token(email_delivery_id)
+            db.session.commit()
+            return {"ok": False, "error": "user_missing"}
+
+        verification_link = _build_link(token)
+        html_body = ""
+        try:
+            html_body = render_template(
+                "emails/activation_email.html",
+                activation_link=verification_link,
+                product_name="LIRIE",
+                company_name="LIRIE",
+                current_year=datetime.now(UTC).year,
+            )
+        except Exception:
+            html_body = ""
+
+        text_body = (
+            "Bienvenue sur LIRIE.\n\n"
+            "Cliquez sur ce lien pour confirmer votre email:\n"
+            f"{verification_link}\n\n"
+            "Ce lien expire rapidement. Si vous n'etes pas a l'origine de cette action, "
+            "ignorez cet email."
+        )
+
+        import os
+
+        from_email = os.getenv("ACTIVATION_EMAIL_FROM", "noreply@lirie.ch")
+        from_name = os.getenv("ACTIVATION_EMAIL_FROM_NAME", "LIRIE")
+        reply_to = os.getenv("ACTIVATION_EMAIL_REPLY_TO", "support@lirie.ch")
+
+        try:
             send_result = send_email_notification(
-                email=str(email).strip(),
+                email=str(user.email).strip(),
                 subject="Activation de votre compte",
                 body=html_body or text_body,
                 html=bool(html_body),
                 notification_type="activation_signup",
+                from_email=from_email,
+                from_name=from_name,
+                reply_to=reply_to,
+                raise_on_error=True,
             )
-            if not bool(send_result.get("ok")):
-                error_message = str(send_result.get("error") or "Email provider error")
-                logger.warning(
-                    "[notification_task] Activation email failed for user_id=%s: %s",
-                    user_id,
-                    error_message,
+        except EmailRetryableError as e:
+            logger.warning(
+                "[notification_task] activation retryable delivery_id=%s: %s",
+                email_delivery_id,
+                sanitize_email_error(str(e)),
+            )
+            # Backoff exponentiel + jitter ; ne pas régénérer le jeton.
+            if self.request.retries >= self.max_retries:
+                mark_delivery_failed(
+                    session, str(e), email_delivery_id=email_delivery_id
                 )
-                raise RuntimeError(error_message)
+                purge_activation_email_token(email_delivery_id)
+                db.session.commit()
+                return {
+                    "ok": False,
+                    "error": "max_retries",
+                    "delivery_id": email_delivery_id,
+                }
+            countdown = int((2**self.request.retries) + random.uniform(0, 1))
+            raise self.retry(exc=e, countdown=countdown) from e
+        except EmailPermanentError as e:
+            logger.warning(
+                "[notification_task] activation permanent fail delivery_id=%s: %s",
+                email_delivery_id,
+                sanitize_email_error(str(e)),
+            )
+            mark_delivery_failed(session, str(e), email_delivery_id=email_delivery_id)
+            purge_activation_email_token(email_delivery_id)
+            db.session.commit()
+            return {"ok": False, "error": "permanent", "delivery_id": email_delivery_id}
 
-            logger.info(
-                "[notification_task] Activation email sent for user_id=%s task_id=%s",
-                user_id,
-                getattr(self.request, "id", None),
-            )
-            return {"ok": True, "channel": "email", "user_id": user_id}
-        except Exception as e:
-            logger.exception(
-                "[notification_task] send_activation_email_task failed for user_id=%s: %s",
-                user_id,
-                e,
-            )
-            return {"ok": False, "error": str(e), "user_id": user_id}
+        mark_delivery_sent(
+            session,
+            email_delivery_id=email_delivery_id,
+            message_id=str(send_result.get("message_id") or "") or None,
+        )
+        db.session.commit()
+        logger.info(
+            "[notification_task] Activation email sent sid=%s delivery_id=%s task_id=%s",
+            activation_session_id,
+            email_delivery_id,
+            getattr(self.request, "id", None),
+        )
+        return {
+            "ok": True,
+            "channel": "email",
+            "activation_session_id": activation_session_id,
+            "email_delivery_id": email_delivery_id,
+        }
 
 
 def _send_sms_fallback(

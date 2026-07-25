@@ -2,6 +2,7 @@
 """Service d'envoi d'emails via SMTP ou Brevo (ex-Sendinblue).
 
 Utilisé comme fallback ultime quand push et SMS échouent.
+L'envoi Brevo délègue à BrevoEmailProvider (chemin unique).
 """
 
 from __future__ import annotations
@@ -11,6 +12,11 @@ import logging
 import os
 import re
 from typing import Any, Dict
+
+from services.notifications.email_errors import (
+    EmailPermanentError,
+    EmailRetryableError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +34,19 @@ SMTP_FROM_NAME = os.getenv("SMTP_FROM_NAME", "ATMR Notifications")
 
 # Configuration Brevo
 BREVO_API_KEY = os.getenv("BREVO_API_KEY")
+
+
+def is_email_provider_configured() -> tuple[bool, str | None]:
+    """Vérifie si le provider email est activé et configuré (pré-check enqueue)."""
+    if not EMAIL_ENABLED:
+        return False, "Email notifications disabled"
+    if EMAIL_PROVIDER == "brevo":
+        if not (BREVO_API_KEY or os.getenv("BREVO_API_KEY")):
+            return False, "Brevo not configured"
+        return True, None
+    if not all([SMTP_HOST, SMTP_USER, SMTP_PASSWORD]):
+        return False, "SMTP not configured"
+    return True, None
 
 
 def _html_to_text(html_content: str) -> str:
@@ -53,15 +72,13 @@ def send_email_notification(
     reply_to: str | None = None,
     from_email: str | None = None,
     from_name: str | None = None,
+    raise_on_error: bool = False,
 ) -> Dict[str, Any]:
     """Envoie un email via SMTP ou Brevo.
 
     Args:
-        email: Adresse email du destinataire
-        subject: Sujet de l'email
-        body: Corps de l'email (texte ou HTML)
-        notification_type: Type de notification pour logging
-        html: Si True, body est du HTML
+        raise_on_error: Si True, lève EmailRetryableError / EmailPermanentError
+            au lieu de retourner {"ok": False}.
 
     Returns:
         Dict avec "ok" (bool) et "error" (str) ou "message_id"
@@ -70,7 +87,10 @@ def send_email_notification(
         logger.debug(
             "[email] Email notifications disabled (EMAIL_NOTIFICATIONS_ENABLED=false)"
         )
-        return {"ok": False, "error": "Email notifications disabled"}
+        result = {"ok": False, "error": "Email notifications disabled", "retryable": False}
+        if raise_on_error:
+            raise EmailPermanentError("Email notifications disabled")
+        return result
 
     if EMAIL_PROVIDER == "brevo":
         return _send_via_brevo(
@@ -82,6 +102,7 @@ def send_email_notification(
             reply_to=reply_to,
             from_email=from_email,
             from_name=from_name,
+            raise_on_error=raise_on_error,
         )
 
     return _send_via_smtp(
@@ -93,6 +114,7 @@ def send_email_notification(
         reply_to=reply_to,
         from_email=from_email,
         from_name=from_name,
+        raise_on_error=raise_on_error,
     )
 
 
@@ -106,27 +128,20 @@ def _send_via_smtp(
     reply_to: str | None = None,
     from_email: str | None = None,
     from_name: str | None = None,
+    raise_on_error: bool = False,
 ) -> Dict[str, Any]:
-    """Envoie un email via SMTP.
-
-    Args:
-        email: Adresse email du destinataire
-        subject: Sujet de l'email
-        body: Corps de l'email
-        notification_type: Type de notification
-        html: Si True, body est du HTML
-
-    Returns:
-        Dict avec status de l'envoi
-    """
+    """Envoie un email via SMTP."""
     if not all([SMTP_HOST, SMTP_USER, SMTP_PASSWORD]):
         logger.error("[email] SMTP credentials not configured")
-        return {"ok": False, "error": "SMTP not configured"}
+        if raise_on_error:
+            raise EmailPermanentError("SMTP not configured")
+        return {"ok": False, "error": "SMTP not configured", "retryable": False}
 
-    # Type narrowing pour basedpyright
     if not SMTP_USER or not SMTP_PASSWORD:
         logger.error("[email] SMTP credentials are None")
-        return {"ok": False, "error": "SMTP credentials are None"}
+        if raise_on_error:
+            raise EmailPermanentError("SMTP credentials are None")
+        return {"ok": False, "error": "SMTP credentials are None", "retryable": False}
 
     try:
         import smtplib
@@ -135,13 +150,12 @@ def _send_via_smtp(
 
         logger.info(
             "[email] Sending email to %s via SMTP (type: %s)",
-            email.split("@")[0][:3] + "***",  # Masquer pour privacy
+            email.split("@")[0][:3] + "***",
             notification_type,
         )
         sender_email = (from_email or SMTP_FROM_EMAIL).strip()
         sender_name = (from_name or SMTP_FROM_NAME).strip()
 
-        # Créer le message
         msg = MIMEMultipart("alternative")
         msg["From"] = f"{sender_name} <{sender_email}>"
         msg["To"] = email
@@ -149,7 +163,6 @@ def _send_via_smtp(
         if reply_to:
             msg["Reply-To"] = reply_to
 
-        # Ajouter le corps (texte + HTML quand disponible) pour une meilleure délivrabilité.
         if html:
             text_part = MIMEText(_html_to_text(body), "plain", "utf-8")
             html_part = MIMEText(body, "html", "utf-8")
@@ -159,7 +172,6 @@ def _send_via_smtp(
             part = MIMEText(body, "plain", "utf-8")
             msg.attach(part)
 
-        # Envoyer via SMTP
         with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
             server.starttls()
             server.login(SMTP_USER, SMTP_PASSWORD)
@@ -168,9 +180,16 @@ def _send_via_smtp(
         logger.info("[email] Email sent successfully via SMTP")
         return {"ok": True, "provider": "smtp"}
 
+    except (TimeoutError, ConnectionError, OSError) as e:
+        logger.exception("[email] SMTP sending failed (retryable): %s", e)
+        if raise_on_error:
+            raise EmailRetryableError(str(e)) from e
+        return {"ok": False, "error": str(e), "retryable": True}
     except Exception as e:
         logger.exception("[email] SMTP sending failed: %s", e)
-        return {"ok": False, "error": str(e)}
+        if raise_on_error:
+            raise EmailPermanentError(str(e)) from e
+        return {"ok": False, "error": str(e), "retryable": False}
 
 
 def _send_via_brevo(
@@ -183,94 +202,62 @@ def _send_via_brevo(
     reply_to: str | None = None,
     from_email: str | None = None,
     from_name: str | None = None,
+    raise_on_error: bool = False,
 ) -> Dict[str, Any]:
-    """Envoie un email via Brevo API.
-
-    Args:
-        email: Adresse email du destinataire
-        subject: Sujet de l'email
-        body: Corps de l'email
-        notification_type: Type de notification
-        html: Si True, body est du HTML
-
-    Returns:
-        Dict avec status de l'envoi
-    """
-    if not BREVO_API_KEY:
+    """Envoie un email via BrevoEmailProvider (chemin unique)."""
+    api_key = BREVO_API_KEY or os.getenv("BREVO_API_KEY")
+    if not api_key:
         logger.error("[email] Brevo API key not configured")
-        return {"ok": False, "error": "Brevo not configured"}
+        if raise_on_error:
+            raise EmailPermanentError("Brevo not configured")
+        return {"ok": False, "error": "Brevo not configured", "retryable": False}
 
     try:
-        import requests
+        from services.email.brevo_provider import BrevoEmailProvider
 
-        logger.info(
-            "[email] Sending email to %s via Brevo (type: %s)",
-            email.split("@")[0][:3] + "***",  # Masquer pour privacy
-            notification_type,
+        provider = BrevoEmailProvider(api_key=api_key)
+        result = provider.send_transactional(
+            to_email=email,
+            subject=subject,
+            html_content=body if html else None,
+            text_content=None if html else body,
+            from_email=(from_email or SMTP_FROM_EMAIL).strip(),
+            from_name=(from_name or SMTP_FROM_NAME).strip(),
+            reply_to=reply_to,
+            notification_type=notification_type,
         )
+    except ValueError as e:
+        if raise_on_error:
+            raise EmailPermanentError(str(e)) from e
+        return {"ok": False, "error": str(e), "retryable": False}
 
-        # Préparer le payload Brevo
-        payload = {
-            "sender": {
-                "name": (from_name or SMTP_FROM_NAME).strip(),
-                "email": (from_email or SMTP_FROM_EMAIL).strip(),
-            },
-            "to": [{"email": email}],
-            "subject": subject,
-        }
-        if reply_to:
-            payload["replyTo"] = {"email": reply_to}
-
-        if html:
-            payload["htmlContent"] = body
-            payload["textContent"] = _html_to_text(body)
-        else:
-            payload["textContent"] = body
-
-        # Envoyer via API Brevo
-        response = requests.post(
-            "https://api.brevo.com/v3/smtp/email",
-            headers={
-                "accept": "application/json",
-                "api-key": BREVO_API_KEY,
-                "content-type": "application/json",
-            },
-            json=payload,
-            timeout=10,
-        )
-
-        response.raise_for_status()
-        data = response.json()
-
-        logger.info(
-            "[email] Email sent successfully via Brevo (message_id: %s)",
-            data.get("messageId"),
-        )
-
+    if result.success:
         return {
             "ok": True,
             "provider": "brevo",
-            "message_id": data.get("messageId"),
+            "message_id": result.message_id,
+            "status_code": result.status_code,
         }
 
-    except Exception as e:
-        logger.exception("[email] Brevo sending failed: %s", e)
-        return {"ok": False, "error": str(e)}
+    error_msg = result.error or "Brevo provider error"
+    if raise_on_error:
+        if result.retryable:
+            raise EmailRetryableError(error_msg, status_code=result.status_code)
+        raise EmailPermanentError(error_msg, status_code=result.status_code)
+
+    return {
+        "ok": False,
+        "error": error_msg,
+        "retryable": result.retryable,
+        "status_code": result.status_code,
+    }
 
 
 def send_bulk_emails(
     recipients: list[tuple[str, str, str]],  # (email, subject, body)
     notification_type: str = "unknown",
 ) -> Dict[str, Any]:
-    """Envoie des emails en masse.
-
-    Args:
-        recipients: Liste de tuples (email, subject, body)
-        notification_type: Type de notification pour logging
-
-    Returns:
-        Dict avec statistiques d'envoi
-    """
+    """Envoie des emails en masse."""
     success_count = 0
     failed_count = 0
     errors = []
@@ -283,7 +270,7 @@ def send_bulk_emails(
             failed_count += 1
             errors.append(
                 {
-                    "email": email.split("@")[0][:3] + "***",  # Masquer
+                    "email": email.split("@")[0][:3] + "***",
                     "error": result.get("error"),
                 }
             )

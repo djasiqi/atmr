@@ -25,11 +25,10 @@ const EyeOffIcon = () => (
 );
 
 const ResetPassword = ({ resetMode } = {}) => {
-  const { token, userId } = useParams();
+  const { token } = useParams();
   const navigate = useNavigate();
   const isForcedMode = resetMode === 'forced';
   const resetToken = isForcedMode ? null : token;
-  const forcedUserId = isForcedMode ? (userId || token) : userId;
 
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -174,24 +173,23 @@ const ResetPassword = ({ resetMode } = {}) => {
         navigate('/login');
 
         // ------------------------------------------------------------------
-        // 2) Mode "réinitialisation forcée par userId"
-        //    => URL /force-reset-password/:userId
+        // 2) Mode "réinitialisation forcée" (session JWT)
+        //    => URL /force-reset-password
         // ------------------------------------------------------------------
-      } else if (forcedUserId) {
-        response = await apiClient.post(`/auth/reset-password/${forcedUserId}`, {
+      } else if (isForced || isForcedMode) {
+        response = await apiClient.post('/auth/change-password', {
           new_password: newPassword,
           confirm_password: confirmPassword,
         });
 
-        console.log('✅ Réinitialisation (par userId) réussie :', response.data);
+        console.log('✅ Réinitialisation forcée réussie :', response.data);
         setMessage('Mot de passe mis à jour. Connexion en cours...');
 
-        // Le changement forcé révoque l'ancienne session côté backend.
-        // On se reconnecte automatiquement avec le nouvel identifiant pour
-        // établir une session valide et rediriger normalement vers le dashboard.
+        // Le changement forcé révoque toutes les sessions (token_version).
+        // On se reconnecte avec le nouveau mot de passe.
         await autoLoginAfterForcedReset();
       } else {
-        setError("Aucun token ni identifiant utilisateur n'est fourni.");
+        setError("Aucun token ni session d'authentification n'est fourni.");
         return;
       }
     } catch (err) {

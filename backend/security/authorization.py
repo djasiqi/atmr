@@ -282,7 +282,7 @@ class AuthorizationService:
                 {
                     "error": "password_change_required",
                     "message": "Vous devez modifier votre mot de passe avant de continuer.",
-                    "redirect_to": f"/force-reset-password/{user.public_id}",
+                    "redirect_to": "/force-reset-password",
                 }
             )
             response.status_code = 403

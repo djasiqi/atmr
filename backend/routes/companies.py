@@ -1275,6 +1275,70 @@ class CompanyPartnership(Resource):
             return APIErrorHandler.handle_exception(e, logger)
 
 
+@companies_ns.route("/me/partnerships/statements/pdf/<path:filename>")
+class CompanyPartnershipStatementPdf(Resource):
+    """Téléchargement PDF décompte via filename validé + lookup DB (Lot 0 SEC-06)."""
+
+    @jwt_required()
+    @role_required(["ADMIN", "COMPANY"])
+    def get(self, filename: str):
+        import re
+
+        from models.partnership import Partnership
+        from shared.tenant_guard import assert_company_access, get_current_user_from_jwt
+        from shared.upload_path_resolver import serve_stored_upload
+        from werkzeug.exceptions import NotFound as WzNotFound
+
+        safe_name = Path(filename).name
+        consolidated = re.fullmatch(
+            r"decompte_consolide_(\d+)_\d{8}_\d{6}\.pdf", safe_name
+        )
+        partner = re.fullmatch(
+            r"decompte_partenaire_(\d+)_\d{8}_\d{6}\.pdf", safe_name
+        )
+
+        user = get_current_user_from_jwt()
+        if not user:
+            return {"error": "Utilisateur non trouvé"}, 401
+
+        if consolidated:
+            company_id = int(consolidated.group(1))
+            _u, access_err = assert_company_access(
+                company_id, resource="statement_pdf", user=user
+            )
+            if access_err:
+                return access_err
+        elif partner:
+            partnership_id = int(partner.group(1))
+            partnership = Partnership.query.get(partnership_id)
+            if not partnership:
+                return APIErrorHandler.handle_not_found(
+                    "Partnership", partnership_id, logger
+                )
+            # Accès si owner ou partner
+            for cid in (
+                partnership.owner_company_id,
+                partnership.partner_company_id,
+            ):
+                _u, access_err = assert_company_access(
+                    cid, resource="statement_pdf", user=user
+                )
+                if not access_err:
+                    break
+            else:
+                return APIErrorHandler.handle_permission_error(
+                    "Accès non autorisé à cette ressource",
+                    logger_instance=logger,
+                )
+        else:
+            return {"error": "Nom de fichier de décompte invalide"}, 400
+
+        try:
+            return serve_stored_upload(f"/uploads/statements/{safe_name}")
+        except WzNotFound:
+            return APIErrorHandler.handle_not_found("Statement PDF", safe_name, logger)
+
+
 @companies_ns.route("/me/partnerships/statements/generate")
 class CompanyPartnershipsStatement(Resource):
     @jwt_required()
@@ -6653,10 +6717,17 @@ class DebugBookingTransfer(Resource):
         """Récupère les informations de transfert pour une réservation."""
         from models.booking_transfer import BookingTransfer
         from models.enums import TransferModel
+        from shared.tenant_guard import assert_company_access
 
         booking = Booking.query.get(booking_id)
         if not booking:
             return {"error": f"Réservation #{booking_id} non trouvée"}, 404
+
+        _user, access_err = assert_company_access(
+            booking.company_id, resource="debug_booking_transfer"
+        )
+        if access_err:
+            return access_err
 
         owner_company = (
             Company.query.get(booking.company_id) if booking.company_id else None

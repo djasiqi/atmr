@@ -131,12 +131,7 @@ def _validate_file_upload(
 
     if not (is_image_file or is_pdf_file or is_audio_file):
         return (
-            {
-                "error": (
-                    "Type de fichier non reconnu "
-                    "(image, PDF ou message vocal)."
-                )
-            },
+            {"error": ("Type de fichier non reconnu (image, PDF ou message vocal).")},
             400,
         )
 
@@ -292,6 +287,54 @@ class MessagesList(Resource):
         return result, status_code
 
 
+@messages_ns.route("/<int:message_id>/attachment")
+class MessageAttachmentDownload(Resource):
+    """Téléchargement pièce jointe message via lookup DB (Lot 0 SEC-06)."""
+
+    @jwt_required()
+    def get(self, message_id: int):
+        from werkzeug.exceptions import NotFound as WzNotFound
+
+        from models import Conversation, Message, User
+        from services.messaging.permission_service import MessagingPermissionService
+        from shared.upload_path_resolver import serve_stored_upload
+
+        user = User.query.filter_by(public_id=get_jwt_identity()).first()
+        if not user:
+            return {"error": "Utilisateur introuvable"}, 404
+
+        message = Message.query.get(message_id)
+        if not message:
+            return {"error": "Message introuvable"}, 404
+
+        conversation = None
+        conversation_id = getattr(message, "conversation_id", None)
+        if conversation_id:
+            conversation = Conversation.query.get(conversation_id)
+
+        participant = None
+        if conversation:
+            participant = MessagingPermissionService.participant_for(
+                conversation.id, user.id
+            )
+
+        if not MessagingPermissionService.can_read_message(
+            user, message, conversation, participant
+        ):
+            return {"error": "Accès non autorisé"}, 403
+
+        stored_url = getattr(message, "pdf_url", None) or getattr(
+            message, "image_url", None
+        )
+        if not stored_url:
+            return {"error": "Aucune pièce jointe"}, 404
+
+        try:
+            return serve_stored_upload(stored_url)
+        except WzNotFound:
+            return {"error": "Fichier introuvable"}, 404
+
+
 @messages_ns.route("/upload")
 class MessageUpload(Resource):
     @jwt_required()
@@ -355,6 +398,7 @@ class MessageUpload(Resource):
         mime_type = file.content_type or ""
         is_image_file = _is_image(filename) and mime_type in ALLOWED_IMAGE_MIME
         is_pdf_file = _is_pdf(filename) and mime_type in ALLOWED_PDF_MIME
+        is_audio_file = _is_audio(filename) and mime_type in ALLOWED_AUDIO_MIME
 
         # Créer le dossier de stockage
         upload_root = current_app.config.get(

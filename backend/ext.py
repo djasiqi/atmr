@@ -128,24 +128,26 @@ _skip_socketio_boot = os.getenv("SKIP_SOCKETIO", "false").strip().lower() in (
 class _NoOpSocketIO:
     """Stub minimal quand SKIP_SOCKETIO=1 (mode REST pur, PR A / PR D)."""
 
-    def init_app(self, app: Any, **kwargs: Any) -> None:
+    def init_app(self, _app: Any, **_kwargs: Any) -> None:
         return None
 
-    def emit(self, *args: Any, **kwargs: Any) -> None:
+    def emit(self, *_args: Any, **_kwargs: Any) -> None:
         return None
 
-    def on(self, *args: Any, **kwargs: Any) -> Any:
+    def on(self, *_args: Any, **_kwargs: Any) -> Any:
         def _decorator(fn: Any) -> Any:
             return fn
 
         return _decorator
 
-    def run(self, *args: Any, **kwargs: Any) -> None:
+    def run(self, *_args: Any, **_kwargs: Any) -> None:
         return None
 
 
 if _skip_socketio_boot:
-    app_logger.info("[Socket.IO] SKIP_SOCKETIO=1 — stub NoOp (pas de message_queue Redis)")
+    app_logger.info(
+        "[Socket.IO] SKIP_SOCKETIO=1 — stub NoOp (pas de message_queue Redis)"
+    )
     socketio: SocketIO | _NoOpSocketIO = _NoOpSocketIO()  # type: ignore[assignment]
 else:
     socketio = SocketIO(
@@ -658,10 +660,30 @@ def check_if_token_revoked(_jwt_header, jwt_payload):
                 demo_valid, _demo_error = enforce_demo_user_access_validity(user)
                 if not demo_valid:
                     return True
+                # Lot 0 SEC-02: invalider tous les access tokens après password change
+                claim_version = jwt_payload.get("token_version")
+                if claim_version is None:
+                    # Tokens pré-migration : accepter jusqu'au prochain refresh/login
+                    pass
+                else:
+                    current_version = int(getattr(user, "token_version", 0) or 0)
+                    try:
+                        claim_version_int = int(claim_version)
+                    except (TypeError, ValueError):
+                        return True
+                    if claim_version_int != current_version:
+                        app_logger.info(
+                            "[JWT Security] token_version mismatch public_id=%s "
+                            "claim=%s db=%s",
+                            user_public_id,
+                            claim_version_int,
+                            current_version,
+                        )
+                        return True
         except Exception:
             # Ne pas casser le pipeline JWT sur incident annexe.
             app_logger.exception(
-                "[JWT Security] Demo validity check failed for public_id=%s",
+                "[JWT Security] Demo/token_version check failed for public_id=%s",
                 user_public_id,
             )
 
@@ -875,16 +897,17 @@ def role_required(*roles):
 
             if getattr(user, "force_password_change", False):
                 allowed_prefixes = (
-                    "/api/v1/auth/reset-password",
+                    "/api/v1/auth/change-password",
                     "/api/v1/auth/logout",
                     "/api/v1/auth/bootstrap",
                     "/api/v1/auth/refresh",
+                    "/api/v1/auth/refresh-token",
                 )
                 if not request.path.startswith(allowed_prefixes):
                     return {
                         "error": "password_change_required",
                         "message": "Vous devez modifier votre mot de passe avant de continuer.",
-                        "redirect_to": f"/force-reset-password/{user.public_id}",
+                        "redirect_to": "/force-reset-password",
                     }, 403
 
             # Convertir les rôles en objets UserRole pour la comparaison

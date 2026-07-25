@@ -18,12 +18,13 @@ def uploads_dir(app):
         uploads_dir = Path(tmpdir)
         uploads_dir.mkdir(parents=True, exist_ok=True)
 
-        # Créer un fichier de test
-        test_file = uploads_dir / "test.txt"
+        # Logos publics uniquement (Lot 0 SEC-06)
+        logos = uploads_dir / "company_logos"
+        logos.mkdir(parents=True, exist_ok=True)
+        test_file = logos / "test.txt"
         test_file.write_text("test content")
 
-        # Créer un sous-répertoire avec un fichier
-        subdir = uploads_dir / "subdir"
+        subdir = logos / "subdir"
         subdir.mkdir(exist_ok=True)
         subdir_file = subdir / "subfile.txt"
         subdir_file.write_text("subfile content")
@@ -35,16 +36,24 @@ class TestPathTraversalProtection:
     """Tests pour la protection contre le path traversal."""
 
     def test_valid_file_access(self, client, uploads_dir):
-        """Test que l'accès à un fichier valide fonctionne."""
-        response = client.get("/uploads/test.txt")
+        """Test que l'accès à un logo public fonctionne."""
+        response = client.get("/uploads/company_logos/test.txt")
         assert response.status_code == 200
         assert b"test content" in response.data
 
     def test_valid_subdirectory_file_access(self, client, uploads_dir):
-        """Test que l'accès à un fichier dans un sous-répertoire fonctionne."""
-        response = client.get("/uploads/subdir/subfile.txt")
+        """Test que l'accès à un fichier logo dans un sous-répertoire fonctionne."""
+        response = client.get("/uploads/company_logos/subdir/subfile.txt")
         assert response.status_code == 200
         assert b"subfile content" in response.data
+
+    def test_non_public_prefix_returns_404(self, client, uploads_dir):
+        """Lot 0 SEC-06: hors logos → 404 même si le fichier existe."""
+        private = uploads_dir / "invoices"
+        private.mkdir(parents=True, exist_ok=True)
+        (private / "x.pdf").write_bytes(b"%PDF")
+        response = client.get("/uploads/invoices/x.pdf")
+        assert response.status_code == 404
 
     def test_path_traversal_dot_dot_slash(self, client, uploads_dir):
         """Test que ../ est bloqué."""
@@ -91,35 +100,27 @@ class TestPathTraversalProtection:
 
     def test_path_traversal_null_byte(self, client, uploads_dir):
         """Test que les null bytes sont gérés correctement."""
-        # Les null bytes peuvent être utilisés pour contourner certaines validations
-        # Flask devrait les normaliser, mais testons
-        response = client.get("/uploads/test.txt%00")
-        # Soit 404 (fichier non trouvé), soit 200 (si Flask ignore le null byte)
+        response = client.get("/uploads/company_logos/test.txt%00")
         assert response.status_code in (200, 404)
 
     def test_path_traversal_symlink(self, client, uploads_dir, tmp_path):
-        """Test que les liens symboliques sont gérés correctement."""
-        # Créer un lien symbolique pointant vers l'extérieur
+        """Test que les liens symboliques hors base sont bloqués."""
         external_dir = tmp_path / "external"
         external_dir.mkdir()
         external_file = external_dir / "secret.txt"
         external_file.write_text("secret content")
 
-        # Créer un lien symbolique dans uploads
-        symlink = uploads_dir / "symlink"
+        symlink = uploads_dir / "company_logos" / "symlink"
         try:
             symlink.symlink_to(external_dir)
-            # Tenter d'accéder via le lien symbolique
-            response = client.get("/uploads/symlink/secret.txt")
-            # Le lien symbolique devrait être bloqué par Path.is_relative_to()
+            response = client.get("/uploads/company_logos/symlink/secret.txt")
             assert response.status_code == 404
         except OSError:
-            # Sur Windows, les liens symboliques peuvent nécessiter des privilèges
             pytest.skip("Symlinks not supported on this platform")
 
     def test_nonexistent_file(self, client, uploads_dir):
         """Test que les fichiers inexistants retournent 404."""
-        response = client.get("/uploads/nonexistent.txt")
+        response = client.get("/uploads/company_logos/nonexistent.txt")
         assert response.status_code == 404
 
     def test_empty_filename(self, client, uploads_dir):
@@ -128,21 +129,15 @@ class TestPathTraversalProtection:
         # Flask peut rediriger ou retourner 404
         assert response.status_code in (404, 405)
 
-    def test_invoices_pdf_200(self, client, uploads_dir):
-        """Test que /uploads/invoices/<file>.pdf retourne 200 avec Content-Type PDF."""
+    def test_invoices_pdf_404_public_route_removed(self, client, uploads_dir):
+        """Lot 0 SEC-06: /uploads/invoices/... n'est plus public (404)."""
         invoices_dir = uploads_dir / "invoices"
         invoices_dir.mkdir(parents=True, exist_ok=True)
         dummy_pdf = invoices_dir / "invoice_test_20260101_120000.pdf"
         dummy_pdf.write_bytes(b"%PDF-1.4 dummy content")
 
         response = client.get("/uploads/invoices/invoice_test_20260101_120000.pdf")
-        assert response.status_code == 200
-        assert response.headers.get("Content-Type") == "application/pdf"
-        assert "inline" in response.headers.get("Content-Disposition", "")
-        assert "invoice_test_20260101_120000.pdf" in response.headers.get(
-            "Content-Disposition", ""
-        )
-        assert b"%PDF" in response.data
+        assert response.status_code == 404
 
     def test_invoices_pdf_404_if_absent(self, client, uploads_dir):
         """Test que /uploads/invoices/<absent>.pdf retourne 404."""

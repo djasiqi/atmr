@@ -50,6 +50,30 @@ export function ensurePdfUrlWorksInDev(url) {
 }
 
 /**
+ * Construit l'URL API protégée pour le PDF d'une facture (Lot 0 SEC-06).
+ * Les anciens liens /uploads/invoices/... ne sont plus publics.
+ *
+ * @param {{ id: number, company_id?: number }} invoice
+ * @returns {string|null}
+ */
+export function buildInvoicePdfApiUrl(invoice) {
+  if (!invoice?.id || !invoice?.company_id) return null;
+  return `/api/v1/invoices/companies/${invoice.company_id}/invoices/${invoice.id}/pdf`;
+}
+
+/**
+ * Construit l'URL API protégée pour le PDF d'un rappel.
+ *
+ * @param {{ id: number, company_id?: number }} invoice
+ * @param {{ id: number }} reminder
+ * @returns {string|null}
+ */
+export function buildReminderPdfApiUrl(invoice, reminder) {
+  if (!invoice?.id || !invoice?.company_id || !reminder?.id) return null;
+  return `/api/v1/invoices/companies/${invoice.company_id}/invoices/${invoice.id}/reminders/${reminder.id}/pdf`;
+}
+
+/**
  * Ajoute un fragment « PDF Open » (#toolbar=0&navpanes=0) pour masquer la barre d’outils
  * du lecteur PDF **intégré à Chromium** (Chrome, Edge, etc.) dans un `<iframe>`.
  *

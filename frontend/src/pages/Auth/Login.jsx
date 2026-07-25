@@ -396,7 +396,7 @@ const Login = () => {
       loginSucceeded = true;
 
       if (user.force_password_change) {
-        navigate(`/force-reset-password/${user.public_id}`, { replace: true });
+        navigate('/force-reset-password', { replace: true });
       } else {
         const preferredReturn = firstAllowedReturnPath(
           roleSegment,

@@ -518,6 +518,14 @@ const App = () => {
               }
             />
             <Route
+              path="/force-reset-password"
+              element={
+                <DefaultLayout hideAuthEntry>
+                  <ResetPassword resetMode="forced" />
+                </DefaultLayout>
+              }
+            />
+            <Route
               path="/force-reset-password/:token"
               element={
                 <DefaultLayout hideAuthEntry>

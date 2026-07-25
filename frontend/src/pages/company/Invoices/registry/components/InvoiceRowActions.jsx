@@ -12,7 +12,8 @@ import {
   FiSend,
 } from 'react-icons/fi';
 import styles from './InvoiceRowActions.module.css';
-import { ensurePdfUrlWorksInDev } from '../../../../../utils/pdfUrlFallback';
+import { ensurePdfUrlWorksInDev, buildInvoicePdfApiUrl, buildReminderPdfApiUrl } from '../../../../../utils/pdfUrlFallback';
+import apiClient from '../../../../../utils/apiClient';
 import {
   canSendInvoice,
   canAddPayment,
@@ -96,6 +97,28 @@ const InvoiceRowActions = ({
       ? `Voir ${getReminderLabel(invoice.reminder_level)} (PDF)`
       : 'Voir rappel (PDF)';
 
+  const openProtectedPdf = async (apiUrl, fallbackUrl) => {
+    const target = apiUrl || (fallbackUrl ? ensurePdfUrlWorksInDev(fallbackUrl) : null);
+    if (!target) return;
+    // Routes API protégées : télécharger via apiClient (JWT/cookie) puis blob URL
+    if (target.startsWith('/api/')) {
+      try {
+        const response = await apiClient.get(target, { responseType: 'blob' });
+        const blobUrl = URL.createObjectURL(response.data);
+        window.open(blobUrl, '_blank');
+        return;
+      } catch (err) {
+        console.error('Ouverture PDF protégé échouée:', err);
+        return;
+      }
+    }
+    if (typeof onViewPdf === 'function') {
+      onViewPdf(target);
+    } else {
+      window.open(target, '_blank');
+    }
+  };
+
   const actions = [
     {
       key: 'editDraft',
@@ -112,7 +135,8 @@ const InvoiceRowActions = ({
       key: 'viewInitial',
       label: 'Voir facture initiale',
       icon: <FiFileText size={14} />,
-      onClick: () => onViewPdf(ensurePdfUrlWorksInDev(invoice.pdf_url)),
+      onClick: () =>
+        openProtectedPdf(buildInvoicePdfApiUrl(invoice), invoice.pdf_url),
       className: styles.actionBtnSecondary,
       show: !!invoice.pdf_url,
     },
@@ -121,8 +145,11 @@ const InvoiceRowActions = ({
       label: reminderViewLabel,
       icon: <FiBell size={14} />,
       onClick: () => {
-        if (latestReminder?.pdf_url) {
-          window.open(ensurePdfUrlWorksInDev(latestReminder.pdf_url), '_blank');
+        if (latestReminder) {
+          openProtectedPdf(
+            buildReminderPdfApiUrl(invoice, latestReminder),
+            latestReminder.pdf_url
+          );
         }
       },
       className: styles.actionBtnSecondary,
