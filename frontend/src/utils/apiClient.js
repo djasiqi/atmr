@@ -567,26 +567,6 @@ export const logoutUser = async (options = {}) => {
 
     const serverCleanup = (async () => {
       try {
-        // Blueprint Flask : url_prefix=/api/shadow-mode (PAS /api/v1/...).
-        // Réservé admin — inutile pour company/institution (évite 404/403 au logout).
-        const { getEnvUser } = await import('./webAuthSession');
-        const role = String(getEnvUser()?.role || '').toLowerCase();
-        if (role === 'admin') {
-          await apiClient.delete('/shadow-mode/session', {
-            baseURL: '/api',
-            skipAuthRedirect: true,
-          });
-        }
-      } catch (error) {
-        if (error?.response?.status !== 404) {
-          console.warn(
-            '⚠️ Impossible de désactiver le Shadow Mode lors de la déconnexion:',
-            error?.response?.data || error?.message || error
-          );
-        }
-      }
-
-      try {
         // Révoque les tokens côté serveur et supprime les cookies httpOnly.
         // Sans cet appel, auth-changed relance /auth/me avec les cookies encore valides
         // et reconnecte l'utilisateur immédiatement après le nettoyage local.
