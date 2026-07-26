@@ -567,13 +567,17 @@ export const logoutUser = async (options = {}) => {
 
     const serverCleanup = (async () => {
       try {
-        const isUnified = isUnifiedGatewayHost();
-        await apiClient.delete('/shadow-mode/session', {
-          baseURL: isUnified ? API_BASES.app : '/api',
-          skipAuthRedirect: true,
-        });
+        // Blueprint Flask : url_prefix=/api/shadow-mode (PAS /api/v1/...).
+        // Réservé admin — inutile pour company/institution (évite 404/403 au logout).
+        const { getEnvUser } = await import('./webAuthSession');
+        const role = String(getEnvUser()?.role || '').toLowerCase();
+        if (role === 'admin') {
+          await apiClient.delete('/shadow-mode/session', {
+            baseURL: '/api',
+            skipAuthRedirect: true,
+          });
+        }
       } catch (error) {
-        // Route absente en prod (404) : silencieux — ne pas polluer la console au logout.
         if (error?.response?.status !== 404) {
           console.warn(
             '⚠️ Impossible de désactiver le Shadow Mode lors de la déconnexion:',

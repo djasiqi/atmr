@@ -57,10 +57,31 @@ describe('logoutUser', () => {
     await logoutUser({ redirect: false });
 
     expect(postSpy).toHaveBeenCalledWith('/auth/logout', {}, { skipAuthRedirect: true });
+    expect(deleteSpy).toHaveBeenCalledWith('/shadow-mode/session', {
+      baseURL: '/api',
+      skipAuthRedirect: true,
+    });
     expect(callOrder.indexOf('logout')).toBeGreaterThan(callOrder.indexOf('shadow'));
     expect(localStorage.getItem('app_user')).toBeNull();
     expect(authChangedHandler).toHaveBeenCalledTimes(1);
     expect(navigateHandler).not.toHaveBeenCalled();
+
+    window.location = originalLocation;
+  });
+
+  it('n’appelle pas shadow-mode au logout hors admin', async () => {
+    localStorage.setItem(
+      'app_user',
+      JSON.stringify({ public_id: 'u-inst', role: 'institution' })
+    );
+    const originalLocation = window.location;
+    delete window.location;
+    window.location = { pathname: '/dashboard/institution/x', search: '', href: '' };
+
+    await logoutUser({ redirect: false });
+
+    expect(deleteSpy).not.toHaveBeenCalled();
+    expect(postSpy).toHaveBeenCalledWith('/auth/logout', {}, { skipAuthRedirect: true });
 
     window.location = originalLocation;
   });
