@@ -3,8 +3,12 @@ import logging
 from typing import Any
 
 from flask import Blueprint, jsonify, request  # pyright: ignore[reportMissingImports]
+from flask_jwt_extended import jwt_required  # pyright: ignore[reportMissingImports]
 from werkzeug.exceptions import BadRequest  # pyright: ignore[reportMissingImports]
 
+from ext import role_required
+from models import UserRole
+from security.ip_whitelist import ip_whitelist_required
 from services.infrastructure.feature_flags import FeatureFlags, get_feature_flags_status
 from services.infrastructure.runtime_flags import get_runtime_flags_status
 
@@ -13,7 +17,7 @@ MIN_SUCCESS_RATE = 0.95
 MIN_REQUESTS_FOR_ALERT = 10
 MAX_FAILURES_THRESHOLD = 50
 
-"""Routes API pour gérer les feature flags.
+"""Routes API pour gérer les feature flags (F-04 : ADMIN + IP uniquement).
 
 Endpoints:
     GET  /api/feature-flags/status         - Statut actuel
@@ -33,31 +37,27 @@ feature_flags_bp = Blueprint("feature_flags", __name__, url_prefix="/api/feature
 
 
 @feature_flags_bp.route("/status", methods=["GET"])
+@jwt_required()
+@role_required(UserRole.admin)
+@ip_whitelist_required()
 def get_status() -> tuple[dict[str, Any], int]:
-    """Récupère le statut actuel des feature flags.
-
-    Returns:
-        JSON avec configuration, stats et santé
-
-    """
+    """Récupère le statut actuel des feature flags."""
     try:
         status = get_feature_flags_status()
         return jsonify(status), 200
 
     except Exception as e:
-        # ✅ REFACTORING: Utilisation de APIErrorHandler pour centraliser la gestion des erreurs
         from shared.error_handlers import APIErrorHandler
 
         return APIErrorHandler.handle_exception(e, logger)
 
 
 @feature_flags_bp.route("/runtime-status", methods=["GET"])
+@jwt_required()
+@role_required(UserRole.admin)
+@ip_whitelist_required()
 def get_runtime_status() -> tuple[dict[str, Any], int]:
-    """Statut des flags runtime (Socket.IO, relay, kill-switch startup iOS).
-
-    Usage ops: vérifier IOS_STARTUP_FATAL_RECOVERY_DISABLED sans redéploiement mobile.
-    Note: les builds anciens ignorent ce flag tant que le hotfix mobile ne le consomme pas.
-    """
+    """Statut des flags runtime (Socket.IO, relay, kill-switch startup iOS)."""
     try:
         return jsonify(get_runtime_flags_status()), 200
     except Exception as e:
@@ -67,17 +67,11 @@ def get_runtime_status() -> tuple[dict[str, Any], int]:
 
 
 @feature_flags_bp.route("/ml/enable", methods=["POST"])
+@jwt_required()
+@role_required(UserRole.admin)
+@ip_whitelist_required()
 def enable_ml() -> tuple[dict[str, Any], int]:
-    """Active le ML.
-    Body (optionnel):
-        {
-            "percentage": 10  // 0-100, défaut: 10
-        }.
-
-    Returns:
-        JSON avec nouveau statut
-
-    """
+    """Active le ML."""
     try:
         data = request.get_json() or {}
         percentage = data.get("percentage", 10)
@@ -100,25 +94,21 @@ def enable_ml() -> tuple[dict[str, Any], int]:
         ), 200
 
     except BadRequest as e:
-        # ✅ REFACTORING: Utilisation de APIErrorHandler pour BadRequest
         from shared.error_handlers import APIErrorHandler
 
         return APIErrorHandler.handle_validation_error(str(e), logger_instance=logger)
     except Exception as e:
-        # ✅ REFACTORING: Utilisation de APIErrorHandler pour centraliser la gestion des erreurs
         from shared.error_handlers import APIErrorHandler
 
         return APIErrorHandler.handle_exception(e, logger)
 
 
 @feature_flags_bp.route("/ml/disable", methods=["POST"])
+@jwt_required()
+@role_required(UserRole.admin)
+@ip_whitelist_required()
 def disable_ml() -> tuple[dict[str, Any], int]:
-    """Désactive le ML.
-
-    Returns:
-        JSON avec nouveau statut
-
-    """
+    """Désactive le ML."""
     try:
         FeatureFlags.set_ml_enabled(False)
         FeatureFlags.set_ml_traffic_percentage(0)
@@ -134,24 +124,17 @@ def disable_ml() -> tuple[dict[str, Any], int]:
         ), 200
 
     except Exception as e:
-        # ✅ REFACTORING: Utilisation de APIErrorHandler pour centraliser la gestion des erreurs
         from shared.error_handlers import APIErrorHandler
 
         return APIErrorHandler.handle_exception(e, logger)
 
 
 @feature_flags_bp.route("/ml/percentage", methods=["POST"])
+@jwt_required()
+@role_required(UserRole.admin)
+@ip_whitelist_required()
 def set_percentage() -> tuple[dict[str, Any], int]:
-    """Modifie le pourcentage de trafic ML.
-    Body:
-        {
-            "percentage": 50  // 0-100
-        }.
-
-    Returns:
-        JSON avec nouveau statut
-
-    """
+    """Modifie le pourcentage de trafic ML."""
     try:
         data = request.get_json()
         if not data or "percentage" not in data:
@@ -179,25 +162,21 @@ def set_percentage() -> tuple[dict[str, Any], int]:
         ), 200
 
     except BadRequest as e:
-        # ✅ REFACTORING: Utilisation de APIErrorHandler pour BadRequest
         from shared.error_handlers import APIErrorHandler
 
         return APIErrorHandler.handle_validation_error(str(e), logger_instance=logger)
     except Exception as e:
-        # ✅ REFACTORING: Utilisation de APIErrorHandler pour centraliser la gestion des erreurs
         from shared.error_handlers import APIErrorHandler
 
         return APIErrorHandler.handle_exception(e, logger)
 
 
 @feature_flags_bp.route("/reset-stats", methods=["POST"])
+@jwt_required()
+@role_required(UserRole.admin)
+@ip_whitelist_required()
 def reset_stats() -> tuple[dict[str, Any], int]:
-    """Réinitialise les statistiques.
-
-    Returns:
-        JSON avec confirmation
-
-    """
+    """Réinitialise les statistiques."""
     try:
         FeatureFlags.reset_stats()
 
@@ -212,25 +191,21 @@ def reset_stats() -> tuple[dict[str, Any], int]:
         ), 200
 
     except Exception as e:
-        # ✅ REFACTORING: Utilisation de APIErrorHandler pour centraliser la gestion des erreurs
         from shared.error_handlers import APIErrorHandler
 
         return APIErrorHandler.handle_exception(e, logger)
 
 
 @feature_flags_bp.route("/ml/health", methods=["GET"])
+@jwt_required()
+@role_required(UserRole.admin)
+@ip_whitelist_required()
 def ml_health() -> tuple[dict[str, Any], int]:
-    """Vérifie la santé du système ML.
-
-    Returns:
-        JSON avec status de santé
-
-    """
+    """Vérifie la santé du système ML."""
     try:
         status = get_feature_flags_status()
         stats = status["stats"]
 
-        # Déterminer le status
         is_healthy = (
             status["config"]["ML_ENABLED"]
             and stats["ml_requests"] > 0
@@ -239,7 +214,6 @@ def ml_health() -> tuple[dict[str, Any], int]:
 
         health_status = "healthy" if is_healthy else "degraded"
 
-        # Alertes
         alerts = []
         if (
             stats["ml_success_rate"] < MIN_SUCCESS_RATE
@@ -263,11 +237,9 @@ def ml_health() -> tuple[dict[str, Any], int]:
         ), 200 if is_healthy else 503
 
     except Exception as e:
-        # ✅ REFACTORING: Utilisation de APIErrorHandler pour centraliser la gestion des erreurs
         from shared.error_handlers import APIErrorHandler
 
         error_response, status_code = APIErrorHandler.handle_exception(e, logger)
-        # Adapter la réponse pour le format health check
         error_response["status"] = "error"
         error_response["healthy"] = False
         return jsonify(error_response), status_code

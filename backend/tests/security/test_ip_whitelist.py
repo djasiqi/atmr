@@ -120,68 +120,63 @@ class TestIPWhitelistAllowed:
         assert response.status_code == 200
         assert response.get_json() == {"status": "ok"}
 
+    @patch("security.ip_whitelist.send_ip_whitelist_alert")
     @patch("security.ip_whitelist.os.getenv")
-    def test_ip_whitelist_x_forwarded_for(self, mock_getenv, fresh_app):
-        """Test détection IP via X-Forwarded-For."""
-        # Mock whitelist
+    def test_ip_whitelist_ignores_x_forwarded_for_spoof(
+        self, mock_getenv, mock_send_alert, fresh_app
+    ):
+        """X-Forwarded-For ne doit pas contourner request.remote_addr (F-04)."""
         mock_getenv.return_value = None
 
-        # Créer une route de test avec le décorateur
         @fresh_app.route("/test-whitelist-xff", methods=["GET"])
         @ip_whitelist_required(allowed_ips=["192.168.1.100"])
         def test_endpoint():
             return {"status": "ok"}
 
-        # Utiliser test_client pour faire une vraie requête HTTP
         client = fresh_app.test_client()
         response = client.get(
             "/test-whitelist-xff",
-            environ_base={"REMOTE_ADDR": "10.0.0.1"},
-            headers={"X-Forwarded-For": "192.168.1.100"},
+            environ_base={"REMOTE_ADDR": "203.0.113.50"},
+            headers={"X-Forwarded-For": "192.168.1.100, 203.0.113.50"},
         )
-        assert response.status_code == 200
-        assert response.get_json() == {"status": "ok"}
+        assert response.status_code == 403
 
+    @patch("security.ip_whitelist.send_ip_whitelist_alert")
     @patch("security.ip_whitelist.os.getenv")
-    def test_ip_whitelist_x_real_ip(self, mock_getenv, fresh_app):
-        """Test détection IP via X-Real-IP."""
-        # Mock whitelist
+    def test_ip_whitelist_ignores_x_real_ip(
+        self, mock_getenv, mock_send_alert, fresh_app
+    ):
+        """X-Real-IP ne doit pas remplacer remote_addr."""
         mock_getenv.return_value = None
 
-        # Créer une route de test avec le décorateur
         @fresh_app.route("/test-whitelist-xri", methods=["GET"])
         @ip_whitelist_required(allowed_ips=["192.168.1.200"])
         def test_endpoint():
             return {"status": "ok"}
 
-        # Utiliser test_client pour faire une vraie requête HTTP
         client = fresh_app.test_client()
         response = client.get(
             "/test-whitelist-xri",
-            environ_base={"REMOTE_ADDR": "10.0.0.1"},
+            environ_base={"REMOTE_ADDR": "203.0.113.50"},
             headers={"X-Real-IP": "192.168.1.200"},
         )
-        assert response.status_code == 200
-        assert response.get_json() == {"status": "ok"}
+        assert response.status_code == 403
 
     @patch("security.ip_whitelist.os.getenv")
-    def test_ip_whitelist_x_forwarded_for_multiple(self, mock_getenv, fresh_app):
-        """Test X-Forwarded-For avec plusieurs IPs (prend la première)."""
-        # Mock whitelist
+    def test_ip_whitelist_uses_remote_addr(self, mock_getenv, fresh_app):
+        """Autorisation basée uniquement sur REMOTE_ADDR."""
         mock_getenv.return_value = None
 
-        # Créer une route de test avec le décorateur
-        @fresh_app.route("/test-whitelist-xff-multi", methods=["GET"])
+        @fresh_app.route("/test-whitelist-remote", methods=["GET"])
         @ip_whitelist_required(allowed_ips=["192.168.1.100"])
         def test_endpoint():
             return {"status": "ok"}
 
-        # Utiliser test_client pour faire une vraie requête HTTP
         client = fresh_app.test_client()
         response = client.get(
-            "/test-whitelist-xff-multi",
-            environ_base={"REMOTE_ADDR": "10.0.0.1"},
-            headers={"X-Forwarded-For": "192.168.1.100, 10.0.0.2, 172.16.0.1"},
+            "/test-whitelist-remote",
+            environ_base={"REMOTE_ADDR": "192.168.1.100"},
+            headers={"X-Forwarded-For": "203.0.113.50"},
         )
         assert response.status_code == 200
         assert response.get_json() == {"status": "ok"}

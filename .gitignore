@@ -81,6 +81,7 @@ frontend/.env
 frontend/.env.local
 frontend/.env.*.local
 **/.env.production.local
+scripts/env.production.local.fragment
 
 # Déploiement : secrets d’inventaire (hôte SSH, etc.)
 .local.deploy.env

@@ -55,23 +55,12 @@ def _parse_ip_whitelist(
 
 
 def _get_client_ip() -> str | None:
-    """Récupère l'IP réelle du client (en tenant compte des proxies).
+    """IP client après ProxyFix (request.remote_addr).
 
-    Returns:
-        IP du client ou None
+    Ne pas lire X-Forwarded-For / X-Real-IP ici : un client peut préfixer
+    une IP autorisée. La confiance proxy est gérée par ProxyFix(x_for=1).
     """
-    # Vérifier les headers de proxy courants
-    forwarded_for = request.headers.get("X-Forwarded-For")
-    if forwarded_for:
-        # X-Forwarded-For peut contenir plusieurs IPs (première = client original)
-        return forwarded_for.split(",")[0].strip()
-
-    real_ip = request.headers.get("X-Real-IP")
-    if real_ip:
-        return real_ip.strip()
-
-    # Fallback vers remote_addr
-    return request.environ.get("REMOTE_ADDR")
+    return request.remote_addr
 
 
 def _is_ip_allowed(

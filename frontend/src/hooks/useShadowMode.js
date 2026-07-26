@@ -56,15 +56,22 @@ export const useShadowMode = (options = {}) => {
       setError(null);
     } catch (err) {
       const statusCode = err?.response?.status;
+      const errorCode = err?.response?.data?.error;
+      const controlPlaneDisabled =
+        statusCode === 503 && errorCode === 'ml_control_plane_disabled';
 
-      if (statusCode === 404 || statusCode === 403) {
+      // 403/404 historiques + kill-switch F-04/F-05 : arrêter le polling sans alarme
+      if (statusCode === 404 || statusCode === 403 || controlPlaneDisabled) {
         setIsBackendAvailable(false);
-        setStatus({ status: 'unavailable' });
+        setStatus({
+          status: controlPlaneDisabled ? 'disabled' : 'unavailable',
+        });
         setStats(null);
         setPredictions([]);
         setComparisons([]);
         setError(null);
       } else {
+        // Autres 503 = vraie panne : conserver l'erreur, ne pas couper le poll
         console.error('[useShadowMode] Error:', err);
         setError(err.message || 'Erreur inconnue lors du chargement du Shadow Mode');
       }

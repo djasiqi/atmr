@@ -29,6 +29,16 @@ for f in .env.production .env.production.local .env firebase-service-account.jso
 done
 echo ""
 
+echo "--- scripts/env.production.local.fragment (structure) ---"
+if [ -f scripts/env.production.local.fragment ]; then
+  for k in INTERNAL_SERVICE_TOKEN INTERNAL_SERVICE_TOKEN_NEXT; do
+    check_key scripts/env.production.local.fragment "$k"
+  done
+else
+  echo "ABSENT — créer depuis scripts/env.production.local.fragment.example"
+fi
+echo ""
+
 echo "--- .env.production.local (structure) ---"
 if [ -f .env.production.local ]; then
   lines=$(wc -l < .env.production.local)
@@ -40,7 +50,7 @@ if [ -f .env.production.local ]; then
   echo "topics v2 dans local:"
   grep -E '^KAFKA_TOPIC_.*\.v2' .env.production.local 2>/dev/null | sed 's/=.*$/' || echo "  (aucun topic .v2 explicite dans local)"
   echo "cles sensibles dans local (presence):"
-  for k in OPENWEATHER_API_KEY BREVO_SMTP_PASSWORD ADMIN_IP_WHITELIST ALERTING_EMAIL_WEBHOOK_URL; do
+  for k in INTERNAL_SERVICE_TOKEN INTERNAL_SERVICE_TOKEN_NEXT OPENWEATHER_API_KEY BREVO_SMTP_PASSWORD ADMIN_IP_WHITELIST ALERTING_EMAIL_WEBHOOK_URL; do
     check_key .env.production.local "$k"
   done
 else
@@ -53,6 +63,7 @@ if [ -f .env.production ]; then
   for k in KAFKA_ENABLED TRACKING_INGEST_ASYNC_ENABLED TRACKING_PROCESSED_FANOUT_ENABLED WS_KAFKA_CONSUMER_ENABLED TRACKING_INGEST_PERSIST_ENABLED \
            KAFKA_TOPIC_DRIVER_LOCATION_RAW KAFKA_TOPIC_DRIVER_LOCATION_PROCESSED KAFKA_TOPIC_DRIVER_LOCATION_DLQ \
            APP_ENCRYPTION_KEY_B64 MASTER_ENCRYPTION_KEY SENTRY_DSN \
+           INTERNAL_SERVICE_TOKEN INTERNAL_SERVICE_TOKEN_NEXT \
            BREVO_API_KEY BREVO_SMTP_PASSWORD SMTP_HOST SMTP_USERNAME SMTP_PASSWORD EMAIL_PROVIDER_MODE EMAIL_PROVIDER; do
     check_key .env.production "$k"
   done

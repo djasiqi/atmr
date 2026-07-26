@@ -331,6 +331,9 @@ jobs:
       ENVIRONMENT: ${{ secrets.ENVIRONMENT }}
       # Firebase Cloud Messaging
       FIREBASE_SERVICE_ACCOUNT_B64: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_B64 }}
+      # F-01 : token interne ws-service → backend (ingestion GPS)
+      INTERNAL_SERVICE_TOKEN: ${{ secrets.INTERNAL_SERVICE_TOKEN }}
+      INTERNAL_SERVICE_TOKEN_NEXT: ${{ secrets.INTERNAL_SERVICE_TOKEN_NEXT }}
 
     steps:
       - name: Checkout code
@@ -358,6 +361,7 @@ jobs:
             "FLASK_ENV"
             "FLASK_CONFIG"
             "ENVIRONMENT"
+            "INTERNAL_SERVICE_TOKEN"
           )
           MISSING_SECRETS=()
           for secret in "${REQUIRED_SECRETS[@]}"; do
@@ -367,6 +371,10 @@ jobs:
           done
           if [ ${#MISSING_SECRETS[@]} -ne 0 ]; then
             echo "❌ Secrets manquants: ${MISSING_SECRETS[*]}"
+            exit 1
+          fi
+          if [ "${#INTERNAL_SERVICE_TOKEN}" -lt 32 ]; then
+            echo "❌ INTERNAL_SERVICE_TOKEN trop court (min 32 caractères, F-01)"
             exit 1
           fi
           echo "✅ Tous les secrets requis sont présents"
@@ -535,4 +543,6 @@ jobs:
               "${{ secrets.SMS_NOTIFICATIONS_ENABLED }}" \
               "${{ secrets.TWILIO_ACCOUNT_SID }}" \
               "${{ secrets.TWILIO_AUTH_TOKEN }}" \
-              "${{ secrets.TWILIO_PHONE_NUMBER }}"
+              "${{ secrets.TWILIO_PHONE_NUMBER }}" \
+              "${{ secrets.INTERNAL_SERVICE_TOKEN }}" \
+              "${{ secrets.INTERNAL_SERVICE_TOKEN_NEXT }}"

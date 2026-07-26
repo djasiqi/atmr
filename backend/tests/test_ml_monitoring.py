@@ -140,66 +140,42 @@ class TestMLMonitoringService:
 
 
 class TestMLMonitoringAPI:
-    """Tests des routes API monitoring ML."""
+    """Tests des routes API monitoring ML (ADMIN requis — F-05)."""
 
-    def test_get_metrics(self, client, auth_headers):
-        """Test endpoint GET /api/ml-monitoring/metrics."""
+    def test_company_forbidden(self, client, auth_headers):
         response = client.get(
             "/api/ml-monitoring/metrics?hours=24", headers=auth_headers
         )
+        assert response.status_code == 403
 
-        # ✅ FIX: Accepter 404 si la route n'existe pas
-        assert response.status_code in [200, 404]
-
-        if response.status_code == 404:
-            print("⚠️  Route /ml-monitoring/metrics non trouvée (404)")
-            return
-
+    def test_get_metrics(self, client, admin_headers):
+        """Test endpoint GET /api/ml-monitoring/metrics."""
+        response = client.get(
+            "/api/ml-monitoring/metrics?hours=24", headers=admin_headers
+        )
+        assert response.status_code == 200
         data = response.get_json()
-
         assert "count" in data
         assert "mae" in data
         assert "r2" in data
 
-        print(f"✅ GET /metrics OK (count: {data['count']})")
-
-    def test_get_daily_metrics(self, client, auth_headers):
+    def test_get_daily_metrics(self, client, admin_headers):
         """Test endpoint GET /api/ml-monitoring/daily."""
-        response = client.get("/api/ml-monitoring/daily?days=7", headers=auth_headers)
-
-        # ✅ FIX: Accepter 404 si la route n'existe pas
-        assert response.status_code in [200, 404]
-
-        if response.status_code == 404:
-            print("⚠️  Route /ml-monitoring/daily non trouvée (404)")
-            return
-
+        response = client.get("/api/ml-monitoring/daily?days=7", headers=admin_headers)
+        assert response.status_code == 200
         data = response.get_json()
-
         assert "days" in data
         assert "data" in data
         assert len(data["data"]) <= 7
 
-        print(f"✅ GET /daily OK ({len(data['data'])} jours)")
-
-    def test_get_summary(self, client, auth_headers):
+    def test_get_summary(self, client, admin_headers):
         """Test endpoint GET /api/ml-monitoring/summary."""
-        response = client.get("/api/ml-monitoring/summary", headers=auth_headers)
-
-        # ✅ FIX: Accepter 404 si la route n'existe pas
-        assert response.status_code in [200, 404]
-
-        if response.status_code == 404:
-            print("⚠️  Route /ml-monitoring/summary non trouvée (404)")
-            return
-
+        response = client.get("/api/ml-monitoring/summary", headers=admin_headers)
+        assert response.status_code == 200
         data = response.get_json()
-
         assert "metrics_24h" in data
         assert "feature_flags" in data
         assert "total_predictions" in data
-
-        print("✅ GET /summary OK")
 
 
 if __name__ == "__main__":

@@ -105,142 +105,88 @@ class TestFeatureFlags:
 
 
 class TestFeatureFlagsAPI:
-    """Tests des routes API feature flags."""
+    """Tests des routes API feature flags (ADMIN requis — F-04)."""
 
-    def test_get_status(self, client, auth_headers):
-        """Test endpoint GET /api/feature-flags/status."""
+    def test_company_forbidden(self, client, auth_headers):
         response = client.get("/api/feature-flags/status", headers=auth_headers)
+        assert response.status_code == 403
 
-        # ✅ FIX: Accepter 404 si la route n'existe pas
-        assert response.status_code in [200, 404]
+    def test_get_status(self, client, admin_headers):
+        """Test endpoint GET /api/feature-flags/status."""
+        response = client.get("/api/feature-flags/status", headers=admin_headers)
+        assert response.status_code == 200
+        data = response.get_json()
+        assert "config" in data
+        assert "stats" in data
 
-        if response.status_code == 200:
-            data = response.get_json()
-
-            assert "config" in data
-            assert "stats" in data
-            # Le champ "health" est optionnel selon l'implémentation (peut être omis).
-            if "health" in data:
-                print(f"✅ GET /status OK (health: {data['health']['status']})")
-            else:
-                print("✅ GET /status OK")
-
-    def test_enable_ml(self, client, auth_headers):
+    def test_enable_ml(self, client, admin_headers):
         """Test endpoint POST /api/feature-flags/ml/enable."""
         response = client.post(
             "/api/feature-flags/ml/enable",
             json={"percentage": 25},
-            headers=auth_headers,
+            headers=admin_headers,
         )
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["success"] is True
+        assert "ML activé" in data["message"]
+        assert data["status"]["config"]["ML_ENABLED"] is True
+        assert data["status"]["config"]["ML_TRAFFIC_PERCENTAGE"] == 25
 
-        # ✅ FIX: Accepter 404 si la route n'existe pas
-        assert response.status_code in [200, 404]
-
-        if response.status_code == 200:
-            data = response.get_json()
-
-            assert data["success"] is True
-            assert "ML activé" in data["message"]
-            assert data["status"]["config"]["ML_ENABLED"] is True
-            assert data["status"]["config"]["ML_TRAFFIC_PERCENTAGE"] == 25
-
-            print("✅ POST /ml/enable OK (25%)")
-
-    def test_disable_ml(self, client, auth_headers):
+    def test_disable_ml(self, client, admin_headers):
         """Test endpoint POST /api/feature-flags/ml/disable."""
-        response = client.post("/api/feature-flags/ml/disable", headers=auth_headers)
+        response = client.post("/api/feature-flags/ml/disable", headers=admin_headers)
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["success"] is True
+        assert "désactivé" in data["message"]
+        assert data["status"]["config"]["ML_ENABLED"] is False
 
-        # ✅ FIX: Accepter 404 si la route n'existe pas
-        assert response.status_code in [200, 404]
-
-        if response.status_code == 200:
-            data = response.get_json()
-
-            assert data["success"] is True
-            assert "désactivé" in data["message"]
-            assert data["status"]["config"]["ML_ENABLED"] is False
-
-            print("✅ POST /ml/disable OK")
-
-    def test_set_percentage(self, client, auth_headers):
+    def test_set_percentage(self, client, admin_headers):
         """Test endpoint POST /api/feature-flags/ml/percentage."""
         response = client.post(
             "/api/feature-flags/ml/percentage",
             json={"percentage": 75},
-            headers=auth_headers,
+            headers=admin_headers,
         )
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["success"] is True
+        assert data["status"]["config"]["ML_TRAFFIC_PERCENTAGE"] == 75
 
-        # ✅ FIX: Accepter 404 si la route n'existe pas
-        assert response.status_code in [200, 404]
-
-        if response.status_code == 200:
-            data = response.get_json()
-
-            assert data["success"] is True
-            assert data["status"]["config"]["ML_TRAFFIC_PERCENTAGE"] == 75
-
-            print("✅ POST /ml/percentage OK (75%)")
-
-    def test_set_invalid_percentage(self, client, auth_headers):
+    def test_set_invalid_percentage(self, client, admin_headers):
         """Test validation pourcentage invalide."""
         response = client.post(
             "/api/feature-flags/ml/percentage",
-            json={"percentage": 150},  # Invalide
-            headers=auth_headers,
+            json={"percentage": 150},
+            headers=admin_headers,
         )
+        assert response.status_code == 400
+        data = response.get_json()
+        assert "error" in data
 
-        # ✅ FIX: Accepter 404 si la route n'existe pas, sinon 400 pour validation
-        assert response.status_code in [400, 404]
-
-        if response.status_code == 400:
-            data = response.get_json()
-
-            assert "error" in data
-
-            print("✅ Validation percentage OK (rejection 150%)")
-
-    def test_reset_stats(self, client, auth_headers):
+    def test_reset_stats(self, client, admin_headers):
         """Test endpoint POST /api/feature-flags/reset-stats."""
-        # D'abord créer des stats
         client.post(
             "/api/feature-flags/ml/enable",
             json={"percentage": 100},
-            headers=auth_headers,
+            headers=admin_headers,
         )
-
-        # Reset
-        response = client.post("/api/feature-flags/reset-stats", headers=auth_headers)
-
-        # ✅ FIX: Accepter 404 si la route n'existe pas
-        assert response.status_code in [200, 404]
-
-        if response.status_code == 200:
-            data = response.get_json()
-
-            assert data["success"] is True
-            assert data["status"]["stats"]["total_requests"] == 0
-
-            print("✅ POST /reset-stats OK")
-
-    def test_ml_health(self, client, auth_headers):
-        """Test endpoint GET /api/feature-flags/ml/health."""
-        response = client.get("/api/feature-flags/ml/health", headers=auth_headers)
-
-        # ✅ FIX: Accepter 404 si la route n'existe pas
-        # Le code peut être 200 (healthy), 503 (degraded), ou 404 (route non trouvée)
-        assert response.status_code in [200, 503, 404]
-
-        if response.status_code == 404:
-            print("⚠️  Route /ml/health non trouvée (404)")
-            return
-
+        response = client.post("/api/feature-flags/reset-stats", headers=admin_headers)
+        assert response.status_code == 200
         data = response.get_json()
+        assert data["success"] is True
+        assert data["status"]["stats"]["total_requests"] == 0
 
+    def test_ml_health(self, client, admin_headers):
+        """Test endpoint GET /api/feature-flags/ml/health."""
+        response = client.get("/api/feature-flags/ml/health", headers=admin_headers)
+        assert response.status_code in (200, 503)
+        data = response.get_json()
         assert "status" in data
         assert "healthy" in data
         assert "success_rate" in data
-
-        print("✅ GET /ml/health OK (status: {data['status']})")
+        assert data.get("error") != "ml_control_plane_disabled"
 
 
 if __name__ == "__main__":

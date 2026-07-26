@@ -614,23 +614,13 @@ class ShadowModeManager:
 
         return impact
 
-    def generate_daily_report(
+    def build_daily_report(
         self, company_id: str, date: date | None = None
     ) -> Dict[str, Any]:
-        """Génère un rapport quotidien pour une entreprise.
-
-        Args:
-            company_id: ID de l'entreprise
-            date: Date du rapport (par défaut aujourd'hui)
-
-        Returns:
-            Dictionnaire du rapport quotidien
-
-        """
+        """Construit un rapport quotidien sans écriture disque (lectures API)."""
         if date is None:
             date = datetime.now(UTC).date()
 
-        # Filtrer les données pour cette entreprise et cette date
         company_data = self._filter_data_by_company_and_date(company_id, date)
 
         if not company_data["decisions"]:
@@ -641,11 +631,8 @@ class ShadowModeManager:
                 "message": "Aucune décision enregistrée pour cette date",
             }
 
-        # Calculer les statistiques
         stats = self._calculate_daily_statistics(company_data)
-
-        # Générer le rapport
-        report = {
+        return {
             "company_id": company_id,
             "date": date.isoformat(),
             "total_decisions": len(company_data["decisions"]),
@@ -655,9 +642,18 @@ class ShadowModeManager:
             "recommendations": self._generate_recommendations(company_data),
         }
 
-        # Sauvegarder le rapport
+    def persist_daily_report(self, report: Dict[str, Any]) -> None:
+        """Persiste un rapport quotidien (écriture explicite, ADMIN / jobs)."""
+        if report.get("total_decisions", 0) <= 0:
+            return
         self._save_daily_report(report)
 
+    def generate_daily_report(
+        self, company_id: str, date: date | None = None
+    ) -> Dict[str, Any]:
+        """Compat jobs internes : build + persist si des décisions existent."""
+        report = self.build_daily_report(company_id, date)
+        self.persist_daily_report(report)
         return report
 
     def _filter_data_by_company_and_date(
@@ -997,7 +993,7 @@ class ShadowModeManager:
         daily_reports = []
         for i in range(days):
             date = start_date + timedelta(days=i)
-            report = self.generate_daily_report(company_id, date)
+            report = self.build_daily_report(company_id, date)
             if report["total_decisions"] > 0:
                 daily_reports.append(report)
 

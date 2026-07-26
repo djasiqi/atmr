@@ -203,7 +203,7 @@ def validate_required_env_vars(config_name: str) -> None:
                 + f"Valeur actuelle: {pdf_base_url}"
             )
 
-        # Admin Ops : GET /api/v1/platform/status — whitelist IP obligatoire si demandé
+        # Whitelist IP admin obligatoire si demandé (platform ops + plan ML F-04/F-05)
         wl_required = os.getenv(
             "ADMIN_IP_WHITELIST_REQUIRED", "false"
         ).strip().lower() in (
@@ -212,19 +212,25 @@ def validate_required_env_vars(config_name: str) -> None:
             "yes",
         )
         wl_raw = (os.getenv("ADMIN_IP_WHITELIST") or "").strip()
-        if wl_required and not wl_raw:
-            import logging
+        if wl_required:
+            from security.ip_whitelist import _parse_ip_whitelist
 
-            _wl_log = logging.getLogger(__name__)
-            _wl_log.error(
-                "Sécurité : ADMIN_IP_WHITELIST_REQUIRED=true mais "
-                + "ADMIN_IP_WHITELIST est vide. Définissez au moins une IP ou un "
-                + "CIDR autorisé pour GET /api/v1/platform/status (console Admin Ops)."
-            )
-            raise RuntimeError(
-                "Sécurité : en production, ADMIN_IP_WHITELIST_REQUIRED=true exige "
-                + "ADMIN_IP_WHITELIST non vide (accès /api/v1/platform/status)."
-            )
+            parsed = _parse_ip_whitelist(wl_raw) if wl_raw else []
+            if not parsed:
+                import logging
+
+                _wl_log = logging.getLogger(__name__)
+                _wl_log.error(
+                    "Sécurité : ADMIN_IP_WHITELIST_REQUIRED=true mais "
+                    + "ADMIN_IP_WHITELIST est vide ou ne contient aucun IP/CIDR "
+                    + "valide. Requis pour /api/v1/platform/*, "
+                    + "/api/feature-flags, /api/shadow-mode, /api/ml-monitoring."
+                )
+                raise RuntimeError(
+                    "Sécurité : ADMIN_IP_WHITELIST_REQUIRED=true exige "
+                    + "ADMIN_IP_WHITELIST avec au moins un IP ou CIDR valide "
+                    + "(platform ops + plan de contrôle ML)."
+                )
 
         # SENTRY_DSN est optionnel mais recommandé
         recommended_vars = {
@@ -535,6 +541,17 @@ def create_app(config_name: str | None = None):
 
     if app.config.get("RATELIMIT_ENABLED", True):
         limiter.init_app(app)
+
+    # F-04/F-05 : kill-switch plan ML avant CSRF (contrat 503 exact)
+    try:
+        from services.infrastructure.ml_control_plane import (
+            register_ml_control_plane_kill_switch,
+        )
+
+        register_ml_control_plane_kill_switch(app)
+        app.logger.info("[MLControlPlane] ✅ Kill-switch enregistré (avant CSRF)")
+    except Exception as e:
+        app.logger.warning("[MLControlPlane] ⚠️ Échec enregistrement kill-switch: %s", e)
 
     # ✅ S1: Setup protection CSRF pour requêtes mutantes
     try:

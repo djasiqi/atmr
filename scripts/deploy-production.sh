@@ -13,6 +13,42 @@ set -o errexit -o nounset -o pipefail
 
 cd /srv/atmr
 
+LOCAL_ENV_FRAGMENT="scripts/env.production.local.fragment"
+
+# Lit la dernière valeur KEY= depuis un fichier fragment (sans logger la valeur).
+read_env_fragment_key() {
+  local file="$1" key="$2"
+  [ -f "$file" ] || return 1
+  local line val
+  line=$(grep -E "^${key}=" "$file" 2>/dev/null | tail -1 || true)
+  [ -n "$line" ] || return 1
+  val="${line#*=}"
+  val="${val%\"}"
+  val="${val#\"}"
+  [ -n "$val" ] || return 1
+  printf '%s' "$val"
+}
+
+load_internal_service_token() {
+  local key="$1" current="$2"
+  if [ -n "${current:-}" ]; then
+    printf '%s' "$current"
+    return 0
+  fi
+  local from_fragment from_local
+  from_fragment=$(read_env_fragment_key "$LOCAL_ENV_FRAGMENT" "$key" 2>/dev/null || true)
+  if [ -n "${from_fragment:-}" ]; then
+    printf '%s' "$from_fragment"
+    return 0
+  fi
+  from_local=$(read_env_fragment_key ".env.production.local" "$key" 2>/dev/null || true)
+  if [ -n "${from_local:-}" ]; then
+    printf '%s' "$from_local"
+    return 0
+  fi
+  return 1
+}
+
 # Alembic / flask db upgrade : connexion directe Postgres (pas PgBouncer) pour éviter les effets du pool transactionnel.
 migration_exec() {
   docker compose -f docker-compose.production.yml exec -T \
@@ -175,6 +211,11 @@ export SMS_NOTIFICATIONS_ENABLED="${38:-false}"
 export TWILIO_ACCOUNT_SID="${39:-}"
 export TWILIO_AUTH_TOKEN="${40:-}"
 export TWILIO_PHONE_NUMBER="${41:-}"
+export INTERNAL_SERVICE_TOKEN="${42:-}"
+export INTERNAL_SERVICE_TOKEN_NEXT="${43:-}"
+INTERNAL_SERVICE_TOKEN="$(load_internal_service_token INTERNAL_SERVICE_TOKEN "${INTERNAL_SERVICE_TOKEN:-}")" || true
+INTERNAL_SERVICE_TOKEN_NEXT="$(load_internal_service_token INTERNAL_SERVICE_TOKEN_NEXT "${INTERNAL_SERVICE_TOKEN_NEXT:-}")" || true
+export INTERNAL_SERVICE_TOKEN INTERNAL_SERVICE_TOKEN_NEXT
 # SAFERPAY_API_BASE_URL + SAFERPAY_ALLOW_TEST_API_IN_PRODUCTION : non sensibles →
 # scripts/env.production.defaults.fragment (append après le bloc CI).
 # Réglages mobile/token/websocket (optionnels, avec defaults robustes)
@@ -200,7 +241,16 @@ MISSING_SECRETS=()
 [ -z "${FLASK_ENV:-}" ] && MISSING_SECRETS+=("FLASK_ENV")
 [ -z "${FLASK_CONFIG:-}" ] && MISSING_SECRETS+=("FLASK_CONFIG")
 [ -z "${ENVIRONMENT:-}" ] && MISSING_SECRETS+=("ENVIRONMENT")
+[ -z "${INTERNAL_SERVICE_TOKEN:-}" ] && MISSING_SECRETS+=("INTERNAL_SERVICE_TOKEN")
 [ ${#MISSING_SECRETS[@]} -ne 0 ] && { echo "❌ Secrets manquants: ${MISSING_SECRETS[*]}"; exit 1; }
+if [ "${#INTERNAL_SERVICE_TOKEN}" -lt 32 ]; then
+  echo "❌ INTERNAL_SERVICE_TOKEN trop court (min 32 caractères, F-01)"
+  exit 1
+fi
+if [ -n "${INTERNAL_SERVICE_TOKEN_NEXT:-}" ] && [ "${#INTERNAL_SERVICE_TOKEN_NEXT}" -lt 32 ]; then
+  echo "❌ INTERNAL_SERVICE_TOKEN_NEXT trop court (min 32 caractères, F-01)"
+  exit 1
+fi
 
 # Construction des URLs
 ESCAPED_PASSWORD=$(python3 -c "from urllib.parse import quote_plus; import sys; print(quote_plus(sys.argv[1]))" "${POSTGRES_PASSWORD}")
@@ -331,6 +381,21 @@ fi
 # Complément prod (contact, cookies, perf, rate limit) — scripts/env.production.defaults.fragment
 if [ -f "scripts/env.production.defaults.fragment" ]; then
   cat scripts/env.production.defaults.fragment >> .env.production
+fi
+# Secrets locaux (non versionnés) — INTERNAL_SERVICE_TOKEN F-01, etc.
+if [ -f "$LOCAL_ENV_FRAGMENT" ]; then
+  {
+    echo ""
+    echo "# --- Secrets locaux ($LOCAL_ENV_FRAGMENT, non commit)"
+    cat "$LOCAL_ENV_FRAGMENT"
+  } >> .env.production
+elif [ -n "${INTERNAL_SERVICE_TOKEN:-}" ]; then
+  {
+    echo ""
+    echo "# --- F-01 INTERNAL_SERVICE_TOKEN (CI / GitHub Actions)"
+    echo "INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN}"
+    [ -n "${INTERNAL_SERVICE_TOKEN_NEXT:-}" ] && echo "INTERNAL_SERVICE_TOKEN_NEXT=${INTERNAL_SERVICE_TOKEN_NEXT}"
+  } >> .env.production
 fi
 # Celery : même broker que REDIS (URL déjà calculée dans ce shell)
 cat >> .env.production <<EOF
