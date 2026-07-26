@@ -1,4 +1,7 @@
-"""Idempotence Redis pending→done (Lua + nonce) pour l'ingest GPS F-01."""
+"""Idempotence Redis pending→done (accélérateur F-01/F-02).
+
+PostgreSQL (ledger) est l'autorité. Redis ne décide jamais seul un HTTP 200.
+"""
 
 from __future__ import annotations
 
@@ -12,7 +15,13 @@ from services.security.internal_service_auth import get_idempotency_ttls
 
 logger = logging.getLogger(__name__)
 
-IdempotencyOutcome = Literal["reserved", "duplicate", "retry_later", "redis_unavailable"]
+# F-02 : plus de retry_later bloquant — pending = accélérateur seulement
+IdempotencyOutcome = Literal[
+    "reserved",
+    "duplicate_hint",
+    "pending_hint",
+    "unavailable",
+]
 
 _LUA_MARK_DONE = """
 local current = redis.call("GET", KEYS[1])
@@ -50,19 +59,43 @@ def _get_redis() -> Any | None:
         return None
 
 
+def peek_idempotency_state(
+    *, driver_id: int, location_event_id: str
+) -> Literal["done", "pending", "absent", "unavailable"]:
+    client = _get_redis()
+    if client is None:
+        return "unavailable"
+    key = redis_key_for_event(driver_id=driver_id, location_event_id=location_event_id)
+    try:
+        existing = client.get(key)
+        if existing is None:
+            return "absent"
+        if isinstance(existing, bytes):
+            existing_s = existing.decode("utf-8", errors="replace")
+        else:
+            existing_s = str(existing)
+        if existing_s == "done":
+            return "done"
+        if existing_s.startswith("pending:"):
+            return "pending"
+        return "absent"
+    except Exception:
+        return "unavailable"
+
+
 def try_reserve(
     *,
     driver_id: int,
     location_event_id: str,
 ) -> tuple[IdempotencyOutcome, str | None]:
-    """Réserve pending:{nonce} avec SET NX EX.
+    """Réserve pending:{nonce} avec SET NX EX (accélérateur).
 
-    Returns:
-        (outcome, nonce) — nonce non-None seulement si reserved.
+    F-02 : ``unavailable`` / ``pending_hint`` / ``duplicate_hint`` n'imposent
+    pas de HTTP 503 — la route continue vers PostgreSQL.
     """
     client = _get_redis()
     if client is None:
-        return "redis_unavailable", None
+        return "unavailable", None
 
     pending_ttl, _done_ttl = get_idempotency_ttls()
     key = redis_key_for_event(driver_id=driver_id, location_event_id=location_event_id)
@@ -75,49 +108,45 @@ def try_reserve(
             return "reserved", nonce
         existing = client.get(key)
         if existing is None:
-            # Course rare : clé expirée entre SET NX et GET — retry_later
-            return "retry_later", None
+            return "pending_hint", None
         if isinstance(existing, bytes):
             existing_s = existing.decode("utf-8", errors="replace")
         else:
             existing_s = str(existing)
         if existing_s == "done":
-            return "duplicate", None
+            return "duplicate_hint", None
         if existing_s.startswith("pending:"):
-            return "retry_later", None
+            return "pending_hint", None
         logger.warning(
             "[ingest_idempotency] valeur Redis inattendue key=%s value=%s",
             key,
             existing_s[:64],
         )
-        return "retry_later", None
+        return "pending_hint", None
     except Exception as exc:
         logger.warning(
             "[ingest_idempotency] reserve failed: %s", type(exc).__name__
         )
-        return "redis_unavailable", None
+        return "unavailable", None
 
 
-def mark_done(*, driver_id: int, location_event_id: str, nonce: str) -> bool:
-    """Après ACK Kafka : pending:{nonce} → done via Lua atomique."""
+def mark_done(*, driver_id: int, location_event_id: str, nonce: str | None) -> bool:
+    """Best-effort post-commit PostgreSQL.
+
+    - nonce fourni : Lua compare-and-set pending→done uniquement
+    - nonce absent : SET done (accélérateur, pas d'autorité)
+    """
     client = _get_redis()
     if client is None:
         return False
     _pending_ttl, done_ttl = get_idempotency_ttls()
     key = redis_key_for_event(driver_id=driver_id, location_event_id=location_event_id)
-    expected = f"pending:{nonce}"
     try:
-        result = client.eval(_LUA_MARK_DONE, 1, key, expected, str(done_ttl))
-        if int(result or 0) != 1:
-            observed = client.get(key)
-            logger.warning(
-                "[ingest_idempotency] mark_done no-op (concurrent) key=%s "
-                "expected_nonce=%s observed=%s",
-                key,
-                nonce[:8],
-                observed,
-            )
-            return False
+        if nonce:
+            expected = f"pending:{nonce}"
+            result = client.eval(_LUA_MARK_DONE, 1, key, expected, str(done_ttl))
+            return int(result or 0) == 1
+        client.set(key, "done", ex=done_ttl)
         return True
     except Exception as exc:
         logger.warning(
@@ -127,7 +156,6 @@ def mark_done(*, driver_id: int, location_event_id: str, nonce: str) -> bool:
 
 
 def release_pending(*, driver_id: int, location_event_id: str, nonce: str) -> bool:
-    """Échec Kafka : DEL atomique si valeur == pending:{nonce}."""
     client = _get_redis()
     if client is None:
         return False
@@ -135,17 +163,7 @@ def release_pending(*, driver_id: int, location_event_id: str, nonce: str) -> bo
     expected = f"pending:{nonce}"
     try:
         result = client.eval(_LUA_RELEASE_PENDING, 1, key, expected)
-        if int(result or 0) != 1:
-            observed = client.get(key)
-            logger.warning(
-                "[ingest_idempotency] release_pending no-op (concurrent) key=%s "
-                "expected_nonce=%s observed=%s",
-                key,
-                nonce[:8],
-                observed,
-            )
-            return False
-        return True
+        return int(result or 0) == 1
     except Exception as exc:
         logger.warning(
             "[ingest_idempotency] release_pending failed: %s", type(exc).__name__

@@ -1032,6 +1032,21 @@ async def startup() -> None:
     from gps_ingest import flush_loop
     from kafka_lag_metrics import lag_publish_loop
 
+    # F-02 : spool Redis Streams (client sync dédié aux scripts Lua)
+    try:
+        import redis as redis_sync
+
+        import gps_spool as _gps_spool
+
+        sync_url = _build_redis_connection_url()
+        sync_client = redis_sync.from_url(sync_url, decode_responses=True)
+        sync_client.ping()
+        _gps_spool.configure_redis(sync_client)
+        _gps_spool.reconcile_stats(sync_client)
+        logger.info("gps_spool redis configured")
+    except Exception:
+        logger.exception("gps_spool redis unavailable — memory spool / NACK on redis_stream")
+
     kafka_lag_stop_event = asyncio.Event()
     kafka_lag_loop_task = asyncio.create_task(lag_publish_loop(kafka_lag_stop_event))
     asyncio.create_task(flush_loop())
@@ -1048,7 +1063,17 @@ async def driver_location(sid: str, data: dict[str, Any] | None = None) -> None:
         return
     from gps_ingest import enqueue_point
 
-    enqueue_point(driver_id, data)
+    payload = dict(data)
+    company_id = session.get("company_id") if isinstance(session, dict) else None
+    if isinstance(company_id, int) and not isinstance(company_id, bool):
+        payload["company_id"] = company_id
+    accepted = enqueue_point(driver_id, payload)
+    if not accepted:
+        await sio.emit(
+            "driver_location_nack",
+            {"reason": "spool_full_or_unavailable"},
+            to=sid,
+        )
 
 
 @sio.event
@@ -1065,9 +1090,21 @@ async def driver_location_batch(sid: str, data: dict[str, Any] | None = None) ->
         return
     from gps_ingest import enqueue_point
 
+    company_id = session.get("company_id") if isinstance(session, dict) else None
+    nacked = 0
     for pos in positions:
         if isinstance(pos, dict):
-            enqueue_point(driver_id, pos)
+            payload = dict(pos)
+            if isinstance(company_id, int) and not isinstance(company_id, bool):
+                payload["company_id"] = company_id
+            if not enqueue_point(driver_id, payload):
+                nacked += 1
+    if nacked:
+        await sio.emit(
+            "driver_location_nack",
+            {"reason": "spool_full_or_unavailable", "nacked": nacked},
+            to=sid,
+        )
 
 
 @fastapi_app.on_event("shutdown")

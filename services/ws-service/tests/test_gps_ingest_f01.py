@@ -34,16 +34,23 @@ def test_binding_strips_payload_driver_id() -> None:
     assert "driver_id" not in point
 
 
-def test_buffer_global_max_drops_oldest() -> None:
+def test_buffer_global_max_refuses() -> None:
+    """F-02 : saturation → refus explicite, pas de drop oldest."""
     old_max = gi.MAX_BUFFER_POINTS
     try:
         gi.MAX_BUFFER_POINTS = 3
+        ok = []
         for i in range(5):
-            gi.enqueue_point(1, {"latitude": float(i), "recorded_at": "2026-01-01T00:00:00Z"})
+            ok.append(
+                gi.enqueue_point(
+                    1, {"latitude": float(i), "recorded_at": "2026-01-01T00:00:00Z"}
+                )
+            )
         with gi._lock:
             assert len(gi._buffer) == 3
-            assert gi._buffer[0][1]["latitude"] == 2.0
-        assert gi.stats()["dropped_oldest"] == 2
+        assert ok == [True, True, True, False, False]
+        assert gi.stats()["rejected_total"] >= 2
+        assert gi.stats()["dropped_oldest"] == 0
     finally:
         gi.MAX_BUFFER_POINTS = old_max
 

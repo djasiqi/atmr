@@ -16,6 +16,40 @@ TOKEN_NEXT = "b" * 32
 INGEST_PATH = "/api/internal/tracking/ingest"
 
 
+def _mock_persist_success():
+    """Patches pour un ingest 200 sans DB réelle (F-02 sync_db)."""
+    from services.tracking.ingest_durability import BatchPersistResult
+    from unittest.mock import MagicMock
+
+    def _persist(**kwargs):
+        prep = kwargs["prepared"]
+        eids = tuple(p.payload["location_event_id"] for p in prep.points)
+        return BatchPersistResult(
+            received=len(eids),
+            persisted=len(eids),
+            duplicates=0,
+            batch_id=prep.batch_id,
+            trace_id="t1",
+            event_ids_persisted=eids,
+            event_ids_duplicate=(),
+        )
+
+    mock_db = MagicMock()
+    cm = MagicMock()
+    cm.__enter__ = MagicMock(return_value=None)
+    cm.__exit__ = MagicMock(return_value=None)
+    mock_db.session.begin.return_value = cm
+    return [
+        patch(
+            "routes.internal_tracking.persist_tracking_batch",
+            side_effect=_persist,
+        ),
+        patch("routes.internal_tracking.attempt_redis_canonical_repair", return_value=True),
+        patch("routes.internal_tracking.mark_repair_done_if_current"),
+        patch("routes.internal_tracking.db", mock_db),
+    ]
+
+
 def _auth_headers(**extra: str) -> dict[str, str]:
     h = {
         "X-Internal-Token": TOKEN,
@@ -47,6 +81,7 @@ def f01_env(monkeypatch):
     monkeypatch.setenv("INTERNAL_TRACKING_INGEST_ENABLED", "true")
     monkeypatch.setenv("INTERNAL_TRACKING_IDEMPOTENCY_PENDING_TTL_SEC", "60")
     monkeypatch.setenv("INTERNAL_TRACKING_IDEMPOTENCY_DONE_TTL_SEC", "86400")
+    monkeypatch.setenv("INTERNAL_TRACKING_DURABILITY_MODE", "sync_db")
     monkeypatch.setenv("KAFKA_PRODUCE_TIMEOUT_S", "1.5")
     monkeypatch.setenv("KAFKA_MAX_BLOCK_MS", "1000")
 
@@ -177,19 +212,18 @@ class TestAuthAudience:
 
     def test_dual_token_next_accepted(self, client, f01_env, monkeypatch, fake_redis):
         monkeypatch.setenv("INTERNAL_SERVICE_TOKEN_NEXT", TOKEN_NEXT)
+        monkeypatch.setenv("INTERNAL_TRACKING_DURABILITY_MODE", "sync_db")
         redis, _ = fake_redis
-        with (
+        patches = [
             patch("routes.internal_tracking.redis_client", redis),
             patch("services.tracking.ingest_idempotency._get_redis", return_value=redis),
             patch(
                 "routes.internal_tracking._resolve_driver_tenant",
                 return_value=(10, None),
             ),
-            patch(
-                "services.tracking.enqueue_tracking_event",
-                return_value={"queued": True, "trace_id": "t1"},
-            ),
-        ):
+            *_mock_persist_success(),
+        ]
+        with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5], patches[6]:
             resp = client.post(
                 INGEST_PATH,
                 data=json.dumps({"driver_id": 1, "points": [_point()]}),
@@ -200,18 +234,19 @@ class TestAuthAudience:
 
 class TestValidation:
     def _post(self, client, redis, body, headers=None):
-        with (
+        patches = [
             patch("routes.internal_tracking.redis_client", redis),
             patch("services.tracking.ingest_idempotency._get_redis", return_value=redis),
             patch(
                 "routes.internal_tracking._resolve_driver_tenant",
                 return_value=(10, None),
             ),
-            patch(
-                "services.tracking.enqueue_tracking_event",
-                return_value={"queued": True, "trace_id": "t1"},
-            ) as enq,
-        ):
+            *_mock_persist_success(),
+        ]
+        with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5], patches[6]:
+            from unittest.mock import MagicMock
+
+            enq = MagicMock()
             resp = client.post(
                 INGEST_PATH,
                 data=json.dumps(body),
@@ -306,13 +341,7 @@ class TestValidation:
     def test_ingest_disabled_503(self, client, f01_env, monkeypatch, fake_redis):
         monkeypatch.setenv("INTERNAL_TRACKING_INGEST_ENABLED", "false")
         redis, store = fake_redis
-        with (
-            patch("routes.internal_tracking.redis_client", redis),
-            patch(
-                "services.tracking.enqueue_tracking_event",
-                return_value={"queued": True},
-            ) as enq,
-        ):
+        with patch("routes.internal_tracking.redis_client", redis):
             resp = client.post(
                 INGEST_PATH,
                 data=json.dumps({"driver_id": 1, "points": [_point()]}),
@@ -320,7 +349,6 @@ class TestValidation:
             )
         assert resp.status_code == 503
         assert resp.get_json()["error"] == "ingest_disabled"
-        enq.assert_not_called()
         assert store == {}
 
     def test_driver_inactive_403(self, client, f01_env, fake_redis):
@@ -331,10 +359,6 @@ class TestValidation:
                 "routes.internal_tracking._resolve_driver_tenant",
                 return_value=(None, "driver_inactive"),
             ),
-            patch(
-                "services.tracking.enqueue_tracking_event",
-                return_value={"queued": True},
-            ) as enq,
         ):
             resp = client.post(
                 INGEST_PATH,
@@ -342,10 +366,36 @@ class TestValidation:
                 headers=_auth_headers(),
             )
         assert resp.status_code == 403
-        enq.assert_not_called()
 
     def test_happy_path_and_duplicate(self, client, f01_env, fake_redis):
         redis, store = fake_redis
+        from services.tracking.ingest_durability import BatchPersistResult
+
+        calls = {"n": 0}
+
+        def _persist(**kwargs):
+            calls["n"] += 1
+            prep = kwargs["prepared"]
+            if calls["n"] == 1:
+                return BatchPersistResult(
+                    received=1,
+                    persisted=1,
+                    duplicates=0,
+                    batch_id=prep.batch_id,
+                    trace_id="t1",
+                    event_ids_persisted=(prep.points[0].payload["location_event_id"],),
+                    event_ids_duplicate=(),
+                )
+            return BatchPersistResult(
+                received=1,
+                persisted=0,
+                duplicates=1,
+                batch_id=prep.batch_id,
+                trace_id="t2",
+                event_ids_persisted=(),
+                event_ids_duplicate=(prep.points[0].payload["location_event_id"],),
+            )
+
         with (
             patch("routes.internal_tracking.redis_client", redis),
             patch("services.tracking.ingest_idempotency._get_redis", return_value=redis),
@@ -354,27 +404,29 @@ class TestValidation:
                 return_value=(10, None),
             ),
             patch(
-                "services.tracking.enqueue_tracking_event",
-                return_value={"queued": True, "trace_id": "t1"},
-            ) as enq,
+                "routes.internal_tracking.persist_tracking_batch",
+                side_effect=_persist,
+            ),
+            patch("routes.internal_tracking.attempt_redis_canonical_repair", return_value=True),
+            patch("routes.internal_tracking.mark_repair_done_if_current"),
+            patch("routes.internal_tracking.db") as mock_db,
         ):
+            mock_db.session.begin.return_value.__enter__ = lambda s: s
+            mock_db.session.begin.return_value.__exit__ = lambda *a: None
             body = {"driver_id": 1, "points": [_point(location_event_id="dup-1")]}
             r1 = client.post(
                 INGEST_PATH, data=json.dumps(body), headers=_auth_headers()
             )
-            # Force done state for second call
-            for k in list(store.keys()):
-                store[k] = "done"
             r2 = client.post(
                 INGEST_PATH, data=json.dumps(body), headers=_auth_headers()
             )
         assert r1.status_code == 200
-        assert r1.get_json()["accepted"] == 1
+        assert r1.get_json()["persisted"] == 1
+        assert r1.get_json()["durability"] == "postgres_committed"
         assert r2.status_code == 200
         assert r2.get_json()["duplicates"] == 1
-        assert enq.call_count == 1
 
-    def test_kafka_fail_releases_pending(self, client, f01_env, fake_redis):
+    def test_persist_fail_503(self, client, f01_env, fake_redis):
         redis, store = fake_redis
         with (
             patch("routes.internal_tracking.redis_client", redis),
@@ -384,10 +436,22 @@ class TestValidation:
                 return_value=(10, None),
             ),
             patch(
-                "services.tracking.enqueue_tracking_event",
-                return_value={"queued": False, "reason": "kafka_disabled"},
+                "routes.internal_tracking.persist_tracking_batch",
+                side_effect=RuntimeError("db down"),
             ),
+            patch("routes.internal_tracking.db") as mock_db,
         ):
+            mock_db.session.begin.return_value.__enter__ = lambda s: s
+            mock_db.session.begin.return_value.__exit__ = lambda *a: True
+            # begin context raising
+            class _CM:
+                def __enter__(self):
+                    raise RuntimeError("db down")
+
+                def __exit__(self, *a):
+                    return False
+
+            mock_db.session.begin.return_value = _CM()
             resp = client.post(
                 INGEST_PATH,
                 data=json.dumps(
@@ -396,23 +460,29 @@ class TestValidation:
                 headers=_auth_headers(),
             )
         assert resp.status_code == 503
-        assert store == {}
+        assert resp.get_json()["error"] == "ingest_persistence_failed"
 
-    def test_redis_down_503(self, client, f01_env):
+    def test_redis_down_continues_to_pg(self, client, f01_env):
+        """F-02 : Redis KO n'empêche pas sync_db (accélérateur seulement)."""
+        patches = _mock_persist_success()
         with (
             patch("routes.internal_tracking.redis_client", None),
             patch(
-                "services.tracking.enqueue_tracking_event",
-                return_value={"queued": True},
-            ) as enq,
+                "routes.internal_tracking._resolve_driver_tenant",
+                return_value=(10, None),
+            ),
+            patches[0],
+            patches[1],
+            patches[2],
+            patches[3],
         ):
             resp = client.post(
                 INGEST_PATH,
                 data=json.dumps({"driver_id": 1, "points": [_point()]}),
                 headers=_auth_headers(),
             )
-        assert resp.status_code == 503
-        enq.assert_not_called()
+        assert resp.status_code == 200
+        assert resp.get_json()["durability"] == "postgres_committed"
 
     def test_body_too_large_413(self, client, f01_env, fake_redis):
         redis, _ = fake_redis

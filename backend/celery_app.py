@@ -118,6 +118,7 @@ celery: Celery = Celery(
         "tasks.transport_invoicing_automation",  # V3 : rappel mensuel / batch (stubs)
         "tasks.health_tasks",  # Smoke test Celery broker/worker (runbook incident)
         "tasks.tracking_health_tasks",  # Tracking BG: silent wake stale + purge device health
+        "tasks.tracking_repair_tasks",  # F-02: repair Redis canonical pending
     ],
 )
 
@@ -378,6 +379,15 @@ celery.conf.beat_schedule = {
         "options": {
             "expires": 6 * 3600,
             "jitter": 600,
+        },
+    },
+    # F-02 : reprise repair Redis canonical (UPSERT en TX, worker post-commit)
+    "tracking-derived-repair": {
+        "task": "tasks.tracking_repair_tasks.process_derived_repairs",
+        "schedule": float(os.getenv("TRACKING_DERIVED_REPAIR_INTERVAL_SEC", "60")),
+        "options": {
+            "expires": 120,
+            "jitter": 10,
         },
     },
     # Marché ouvert : PENDING sans entreprise et sans offre PROPOSED (rattrapage centralisé)

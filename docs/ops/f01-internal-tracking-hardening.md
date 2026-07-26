@@ -2,9 +2,13 @@
 
 **Statut** : Plan verrouillé implémenté — clôture du scénario P0 « appelant public anonyme ».
 
+> **Suite F-02** : perte silencieuse post-acceptation ws →
+> [`f02-internal-tracking-durability.md`](f02-internal-tracking-durability.md)
+> (ACK = commit PostgreSQL ; Kafka hors frontière ACK).
+
 ## Objectif
 
-Empêcher l’accès anonyme / public à `POST /api/internal/tracking/ingest` et garantir un chemin fail-closed ws-service → backend → Kafka.
+Empêcher l’accès anonyme / public à `POST /api/internal/tracking/ingest` et garantir un chemin fail-closed ws-service → backend.
 
 ## Risque résiduel accepté
 
@@ -19,15 +23,16 @@ Frontière de confiance = ws-service (JWT/socket). Pas de mTLS ni d’assertion 
 
 ## Flag d’arrêt
 
-`INTERNAL_TRACKING_INGEST_ENABLED=false` → réponse `503 ingest_disabled` **avant** Redis / Kafka.  
-Le ws-service traite comme `5xx` (requeue + backoff), dans la limite du buffer global (2000 points).
+`INTERNAL_TRACKING_INGEST_ENABLED=false` → réponse `503 ingest_disabled` **avant** Redis.  
+Le ws-service traite comme `5xx` (requeue + backoff), dans la limite du buffer / spool.
 
-## Idempotence Redis
+## Idempotence Redis (accélérateur ; autorité = PG depuis F-02)
 
 - Clé : `tracking:ingest:{driver_id}:{sha256(location_event_id)}`
-- `pending:{nonce}` (TTL **60 s**) → Kafka ACK → Lua `done` (TTL **24 h**) si nonce match
-- Échec Kafka → Lua DEL si nonce match
-- `done` → duplicate ; `pending` concurrent → `503 retry_later` ; Redis KO → `503`
+- `pending:{nonce}` (TTL **60 s**) → commit PG → Lua `done` (TTL **24 h**) si nonce match
+- Échec persist → Lua DEL si nonce match
+- `done` / `pending` : indices ; **pas de 503 contention Redis seule** (F-02)
+- Redis KO → continuer vers PostgreSQL
 
 ## Isolation réseau / Traefik
 
@@ -46,7 +51,7 @@ Le ws-service traite comme `5xx` (requeue + backoff), dans la limite du buffer g
 6. Déployer **backend** fail-closed.
 7. Smoke interne (réseau Docker) : 401 sans token, 200 avec token.
 8. Re-smoke public → **404**.
-9. Vérifier Kafka, Redis (pending/done), métriques ws (retry / circuit / drop).
+9. Vérifier Redis (pending/done), métriques ws (retry / circuit) ; ledger F-02 si activé.
 
 ## Rotation dual-token (9 étapes)
 
@@ -74,6 +79,7 @@ Le ws-service traite comme `5xx` (requeue + backoff), dans la limite du buffer g
 - [ ] `curl -X POST https://api.lirie.ch/api/internal/tracking/ingest/` → **404**
 - [ ] Smoke interne avec token → 2xx / ingest
 - [ ] Tests : `docker compose … exec -T backend python -m pytest tests/security/test_internal_tracking_f01.py -q`
+- [ ] Suite F-02 : [`f02-internal-tracking-durability.md`](f02-internal-tracking-durability.md) (capacité duale + tests §17)
 
 ## Checklist ROLLBACK
 

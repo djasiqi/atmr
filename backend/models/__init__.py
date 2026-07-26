@@ -211,6 +211,10 @@ from .rl_suggestion import RLSuggestion
 from .rl_suggestion_metric import RLSuggestionMetric
 from .secret_rotation import SecretRotation
 from .task_failure import TaskFailure
+from .tracking_ingest_event import (
+    TrackingDerivedRepairPending,
+    TrackingIngestEvent,
+)
 from .trip_tracking import TripTracking
 from .trip_tracking_archive import TripTrackingArchive
 from .user import User
@@ -384,6 +388,8 @@ __all__ = [
     "TransportVoucherFile",
     "TransportVoucherStatus",
     "TransportVoucherType",
+    "TrackingDerivedRepairPending",
+    "TrackingIngestEvent",
     "TripTracking",  # ✅ 3.3.3: Historique trajets
     "TripTrackingArchive",  # ✅ 3.5.2: Archive positions (partitionnée)
     "UnavailabilityReason",

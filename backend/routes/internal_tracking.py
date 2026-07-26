@@ -1,7 +1,7 @@
-"""Ingestion GPS interne (ws-service → backend, pas d'écriture DB depuis ws-service).
+"""Ingestion GPS interne (ws-service → backend).
 
-F-01 : endpoint fail-closed — secret obligatoire, audience exacte, validation
-atomique du batch, idempotence Redis pending→done, rate-limit Redis.
+F-01 : auth fail-closed, validation atomique, rate-limit.
+F-02 : ACK uniquement après commit PostgreSQL (sync_db) ; Kafka hors frontière.
 """
 
 from __future__ import annotations
@@ -14,11 +14,20 @@ from typing import Any
 
 from flask import Blueprint, jsonify, request
 
-from ext import limiter, redis_client
+from ext import db, limiter, redis_client
 from services.security.internal_service_auth import (
     authorize_internal_request,
     ingest_enabled,
     rate_limit_principal,
+)
+from services.tracking.event_payload_hash import PayloadHashError
+from services.tracking.ingest_durability import (
+    PayloadConflictError,
+    attempt_redis_canonical_repair,
+    mark_repair_done_if_current,
+    persist_tracking_batch,
+    prepare_tracking_batch,
+    require_durability_mode,
 )
 from services.tracking.ingest_idempotency import (
     mark_done,
@@ -54,7 +63,6 @@ def _rate_limit_key() -> str:
 
 
 def _safe_finite_float(value: Any, *, lo: float, hi: float) -> float | None:
-    """Parse float strict : refuse bool, NaN, Inf."""
     if isinstance(value, bool) or value is None:
         return None
     if not isinstance(value, (int, float, str)):
@@ -71,7 +79,6 @@ def _safe_finite_float(value: Any, *, lo: float, hi: float) -> float | None:
 
 
 def _resolve_driver_tenant(driver_id: int) -> tuple[int | None, str | None]:
-    """Chauffeur actif + entreprise approuvée → company_id."""
     try:
         from models.company import Company
         from models.driver import Driver
@@ -163,7 +170,6 @@ def _normalize_point(
         return None, header_err
 
     if batch_size > 1:
-        # Header refusé pour batch multi (géré en amont) — ici body ou déterministe.
         raw_id = body_id
     else:
         if header_id and body_id and header_id != body_id:
@@ -182,6 +188,7 @@ def _normalize_point(
     heading = raw.get("heading")
     speed = raw.get("speed")
     mission_id = raw.get("mission_id")
+    sequence_id = raw.get("sequence_id")
 
     payload: dict[str, Any] = {
         "latitude": lat,
@@ -200,7 +207,9 @@ def _normalize_point(
         "location_mode": mode,
         "location_event_id": event_id,
     }
-    # Champs optionnels invalides (bool/NaN) → rejet atomique
+    if isinstance(sequence_id, int) and not isinstance(sequence_id, bool):
+        payload["sequence_id"] = sequence_id
+
     for opt_key, opt_raw in (
         ("accuracy", accuracy),
         ("heading", heading),
@@ -215,7 +224,12 @@ def _normalize_point(
 @internal_tracking_bp.route("/api/internal/tracking/ingest", methods=["POST"])
 @limiter.limit(_DEFAULT_RATE_LIMIT, key_func=_rate_limit_key)
 def tracking_ingest():
-    # Flag d'arrêt : avant Redis / Kafka
+    try:
+        require_durability_mode()
+    except RuntimeError as exc:
+        logger.error("[internal_tracking] %s", exc)
+        return jsonify({"error": "durable_ingest_unavailable"}), 503
+
     if not ingest_enabled():
         return jsonify({"error": "ingest_disabled"}), 503
 
@@ -224,13 +238,18 @@ def tracking_ingest():
         status = 503 if auth_error == "missing_token" else 401
         return jsonify({"error": auth_error or "unauthorized"}), status
 
-    # Redis obligatoire pour rate-limit partagé + idempotence (pas de memory://)
-    if redis_client is None:
-        return jsonify({"error": "redis_unavailable"}), 503
-    try:
-        redis_client.ping()
-    except Exception:
-        return jsonify({"error": "redis_unavailable"}), 503
+    # Rate-limit partagé : Redis préféré ; si KO on continue (PG autorité F-02)
+    redis_ok = False
+    if redis_client is not None:
+        try:
+            redis_client.ping()
+            redis_ok = True
+        except Exception:
+            redis_ok = False
+    if not redis_ok:
+        logger.warning(
+            "[internal_tracking] redis unavailable — continue sync_db sans accélérateur"
+        )
 
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
@@ -257,15 +276,14 @@ def tracking_ingest():
         return jsonify({"error": "header_event_id_not_allowed_for_batch"}), 400
 
     tenant_company_id, tenant_error = _resolve_driver_tenant(driver_id)
-    if tenant_error:
-        return jsonify({"error": tenant_error}), 403
+    if tenant_error or tenant_company_id is None:
+        return jsonify({"error": tenant_error or "driver_without_tenant"}), 403
 
     claimed_company = data.get("company_id")
     if isinstance(claimed_company, int) and not isinstance(claimed_company, bool):
         if claimed_company != tenant_company_id:
             return jsonify({"error": "company_mismatch"}), 403
 
-    # Validation atomique : tout le batch ou rien
     normalized: list[dict[str, Any]] = []
     seen_ids: set[str] = set()
     for raw in points:
@@ -283,55 +301,115 @@ def tracking_ingest():
         seen_ids.add(eid)
         normalized.append(payload)
 
-    from services.tracking import enqueue_tracking_event
-
-    accepted = 0
-    duplicates = 0
-    for payload in normalized:
-        event_id = str(payload["location_event_id"])
-        outcome, nonce = try_reserve(
-            driver_id=driver_id, location_event_id=event_id
-        )
-        if outcome == "redis_unavailable":
-            return jsonify({"error": "redis_unavailable"}), 503
-        if outcome == "duplicate":
-            duplicates += 1
-            continue
-        if outcome == "retry_later":
-            return jsonify({"error": "retry_later"}), 503
-        assert nonce is not None
-
-        result = enqueue_tracking_event(
+    client_batch_id = data.get("batch_id")
+    try:
+        prepared = prepare_tracking_batch(
             driver_id=driver_id,
-            payload=payload,
-            source="internal_http",
             company_id=tenant_company_id,
+            points=normalized,
+            source="internal_http",
+            client_batch_id=str(client_batch_id) if client_batch_id else None,
         )
-        # queued=True uniquement après ACK broker ; sinon libérer pending (Lua).
-        if not result.get("queued"):
-            release_pending(
-                driver_id=driver_id, location_event_id=event_id, nonce=nonce
-            )
-            return jsonify({"error": "kafka_unavailable"}), 503
+    except ValueError as exc:
+        code = str(exc)
+        if code == "batch_id_mismatch":
+            return jsonify({"error": "batch_id_mismatch"}), 400
+        return jsonify({"error": code}), 400
+    except PayloadHashError as exc:
+        return jsonify({"error": exc.code}), 400
 
-        mark_done(driver_id=driver_id, location_event_id=event_id, nonce=nonce)
-        accepted += 1
+    # Réservations Redis (accélérateur) — jamais bloquantes
+    reserved: list[tuple[str, str]] = []
+    for pt in prepared.points:
+        eid = str(pt.payload["location_event_id"])
+        outcome, nonce = try_reserve(driver_id=driver_id, location_event_id=eid)
+        if outcome == "reserved" and nonce:
+            reserved.append((eid, nonce))
+
+    try:
+        with db.session.begin():
+            result = persist_tracking_batch(prepared=prepared, session=db.session)
+    except PayloadConflictError as exc:
+        for eid, nonce in reserved:
+            release_pending(driver_id=driver_id, location_event_id=eid, nonce=nonce)
+        return jsonify(
+            {
+                "ok": False,
+                "batch_id": prepared.batch_id,
+                "error_code": exc.code,
+                "conflicting_event_ids": exc.conflicting_event_ids,
+                "durability": "none",
+            }
+        ), 409
+    except ValueError as exc:
+        for eid, nonce in reserved:
+            release_pending(driver_id=driver_id, location_event_id=eid, nonce=nonce)
+        return jsonify({"error": str(exc)}), 403
+    except Exception:
+        for eid, nonce in reserved:
+            release_pending(driver_id=driver_id, location_event_id=eid, nonce=nonce)
+        logger.exception("[internal_tracking] persist failed")
+        return jsonify({"error": "ingest_persistence_failed"}), 503
+
+    # Post-commit best-effort
+    nonce_by_eid = dict(reserved)
+    for eid in list(result.event_ids_persisted) + list(result.event_ids_duplicate):
+        mark_done(
+            driver_id=driver_id,
+            location_event_id=eid,
+            nonce=nonce_by_eid.get(eid),
+        )
+
+    # Tentative Redis canonical pour le point le plus récent persisté
+    try:
+        latest = None
+        for pt in prepared.points:
+            eid = str(pt.payload["location_event_id"])
+            if eid in result.event_ids_persisted or eid in result.event_ids_duplicate:
+                if latest is None or pt.recorded_at > latest.recorded_at:
+                    latest = pt
+        if latest is not None:
+            eid = str(latest.payload["location_event_id"])
+            ok_redis = attempt_redis_canonical_repair(
+                driver_id=driver_id,
+                company_id=tenant_company_id,
+                latitude=latest.latitude,
+                longitude=latest.longitude,
+                recorded_at=latest.recorded_at,
+                location_event_id=eid,
+                location_mode=str(latest.payload.get("location_mode") or "mission_live"),
+            )
+            if ok_redis:
+                mark_repair_done_if_current(
+                    driver_id=driver_id,
+                    location_event_id=eid,
+                    target_recorded_at=latest.recorded_at,
+                )
+    except Exception:
+        logger.warning(
+            "[internal_tracking] post-commit repair attempt failed", exc_info=True
+        )
 
     logger.info(
         "[internal_tracking] ingest driver_id=%s company_id=%s "
-        "accepted=%s duplicates=%s total=%s audience=%s",
+        "persisted=%s duplicates=%s received=%s batch_id=%s audience=%s",
         driver_id,
         tenant_company_id,
-        accepted,
-        duplicates,
-        len(normalized),
+        result.persisted,
+        result.duplicates,
+        result.received,
+        result.batch_id,
         rate_limit_principal(),
     )
     return jsonify(
         {
             "ok": True,
-            "accepted": accepted,
-            "duplicates": duplicates,
+            "trace_id": result.trace_id,
+            "batch_id": result.batch_id,
+            "durability": "postgres_committed",
+            "received": result.received,
+            "persisted": result.persisted,
+            "duplicates": result.duplicates,
             "driver_id": driver_id,
             "company_id": tenant_company_id,
         }
