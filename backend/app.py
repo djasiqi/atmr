@@ -502,7 +502,14 @@ def create_app(config_name: str | None = None):
     jwt.init_app(app)
     mail.init_app(app)
     bcrypt.init_app(app)
-    migrate.init_app(app, db, compare_type=True, render_as_batch=True)
+    migrate.init_app(
+        app,
+        db,
+        compare_type=True,
+        compare_column_comment=False,
+        compare_server_default=False,
+        render_as_batch=True,
+    )
 
     # ✅ A2: Détection N+1 queries en développement
     if app.config.get("ENV") == "development" or app.config.get("SQLALCHEMY_ECHO"):

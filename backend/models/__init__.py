@@ -204,6 +204,7 @@ from .platform_change_request import PlatformChangeRequest
 from .platform_runbook_execution import PlatformRunbookExecution
 from .password_history import PasswordHistory  # ✅ S3: Historique mots de passe
 from .payment import Payment
+from .worldline_webhook_event import WorldlineWebhookEvent
 from .profiling_metrics import ProfilingMetrics  # ✅ 3.4: Profiling automatique
 from .refresh_token import RefreshToken
 from .rl_feedback import RLFeedback
@@ -355,6 +356,7 @@ __all__ = [
     "PartnershipStatus",
     "PasswordHistory",  # ✅ S3: Historique mots de passe
     "Payment",
+    "WorldlineWebhookEvent",
     "PaymentMethod",
     "PaymentStatus",
     "PricingModelType",

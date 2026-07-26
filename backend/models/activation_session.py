@@ -35,7 +35,6 @@ class ActivationSession(db.Model):
         nullable=False,
         unique=True,
         default=lambda: str(uuid.uuid4()),
-        index=True,
     )
     user_id: Mapped[int] = mapped_column(
         Integer,

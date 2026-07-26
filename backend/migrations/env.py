@@ -149,6 +149,21 @@ def get_metadata():
     return FALLBACK_METADATA
 
 
+def include_object(object, name, type_, reflected, compare_to):
+    """Filtre autogenerate : extensions PostGIS, dérive cosmétique index/contraintes."""
+    del compare_to
+    if type_ == "table" and name in {"spatial_ref_sys"}:
+        return False
+    if type_ == "column" and name == "geom":
+        return False
+    if os.getenv("AUTOGENERATE_SKIP_INDEXES") == "1" and type_ in {
+        "index",
+        "unique_constraint",
+    }:
+        return False
+    return True
+
+
 def run_migrations_offline():
     """Run migrations in 'offline' mode.
 
@@ -162,7 +177,14 @@ def run_migrations_offline():
 
     """
     url = config.get_main_option("sqlalchemy.url")
-    context.configure(url=url, target_metadata=get_metadata(), literal_binds=True)
+    context.configure(
+        url=url,
+        target_metadata=get_metadata(),
+        literal_binds=True,
+        include_object=include_object,
+        compare_column_comment=False,
+        compare_server_default=False,
+    )
 
     with context.begin_transaction():
         context.run_migrations()
@@ -207,9 +229,12 @@ def run_migrations_online():
 
     conf_args = {}
     if has_app_context():
-        conf_args = current_app.extensions["migrate"].configure_args
+        conf_args = dict(current_app.extensions["migrate"].configure_args)
         if conf_args.get("process_revision_directives") is None:
             conf_args["process_revision_directives"] = process_revision_directives
+    conf_args["include_object"] = include_object
+    conf_args["compare_column_comment"] = False
+    conf_args["compare_server_default"] = False
 
     connectable = get_engine()
 

@@ -885,6 +885,8 @@ jobs:
       - name: Check for pending migrations
         env:
           FLASK_APP: backend.wsgi
+          DISABLE_EVENTLET: "1"
+          AUTOGENERATE_SKIP_INDEXES: "1"
         run: |
           cd backend
           # Vérifier aucune migration auto-détectée non commitée

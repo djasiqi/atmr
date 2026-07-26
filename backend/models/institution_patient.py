@@ -23,7 +23,7 @@ from sqlalchemy import (
     Text,
     func,
 )
-from sqlalchemy.dialects.postgresql import JSON
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 from typing_extensions import override
 
@@ -169,7 +169,7 @@ class InstitutionPatient(db.Model):
 
     # Traçabilité sync curatelle : quels champs proviennent d'une synchronisation
     data_source_flags: Mapped[dict[str, Any] | None] = mapped_column(
-        JSON,
+        JSONB,
         nullable=True,
         comment='Ex: {"address": "sync_curatelle", "phone": "local"}',
     )

@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from typing import Any, cast
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     CheckConstraint,
     Column,
@@ -154,7 +155,7 @@ class Booking(db.Model):
         server_default=BookingStatus.PENDING.value,
     )
 
-    user_id = Column(Integer, ForeignKey("user.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Integer, ForeignKey("user.id", ondelete="CASCADE"), nullable=True)
     rejected_by = Column(
         JSONB, nullable=False, default=list, server_default=text("'[]'::jsonb")
     )
@@ -280,7 +281,7 @@ class Booking(db.Model):
     )
 
     active_change_request_id: Mapped[int | None] = mapped_column(
-        Integer,
+        BigInteger,
         ForeignKey("booking_change_requests.id", ondelete="SET NULL"),
         nullable=True,
     )

@@ -100,12 +100,12 @@ class User(db.Model):
     # ✅ Security V2: TOTP 2FA
     totp_secret_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
     totp_enabled: Mapped[bool] = mapped_column(
-        Boolean, default=False, server_default="false"
+        Boolean, default=False, server_default="false", nullable=False
     )
     totp_enabled_at = Column(DateTime(timezone=True), nullable=True)
     recovery_codes_hash: Mapped[str | None] = mapped_column(Text, nullable=True)
     recovery_codes_remaining: Mapped[int] = mapped_column(
-        Integer, default=0, server_default="0"
+        Integer, default=0, server_default="0", nullable=False
     )
 
     # ✅ D2: Colonnes chiffrées (stockage)

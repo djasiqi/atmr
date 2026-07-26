@@ -27,7 +27,7 @@ from sqlalchemy import (
     func,
     text,
 )
-from sqlalchemy.dialects.postgresql import JSON
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ext import db
@@ -77,7 +77,7 @@ class PatientIdentity(db.Model):
     canonical_last_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     canonical_dob: Mapped[Any] = mapped_column(Date, nullable=True)
     canonical_source: Mapped[dict[str, Any] | None] = mapped_column(
-        JSON,
+        JSONB,
         nullable=True,
         comment='Source par champ: {"first_name": "curatelle", "dob": "clinic"}',
     )
@@ -249,7 +249,7 @@ class PatientSyncEvent(db.Model):
 
     # Delta avec before/after pour debug + rollback
     changed_fields: Mapped[dict[str, Any]] = mapped_column(
-        JSON,
+        JSONB,
         nullable=False,
         comment='{"field": {"before": "old", "after": "new"}}',
     )
@@ -317,7 +317,7 @@ class PatientAuditLog(db.Model):
     entity_type: Mapped[str | None] = mapped_column(String(30), nullable=True)
     entity_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     metadata_json: Mapped[dict[str, Any] | None] = mapped_column(
-        JSON,
+        JSONB,
         nullable=True,
         comment="Détails complémentaires",
     )
@@ -397,7 +397,7 @@ class PatientLinkSuggestion(db.Model):
         default=0,
     )
     match_signals: Mapped[dict[str, Any] | None] = mapped_column(
-        JSON,
+        JSONB,
         nullable=True,
         comment='{"name_exact": true, "dob_exact": true, ...}',
     )
