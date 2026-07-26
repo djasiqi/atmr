@@ -6,35 +6,32 @@ Baseline Lot 0 : `f920d42d` — voir [lot0-p0-security-validation.md](lot0-p0-se
 
 | Niveau | Statut | Détail |
 |--------|--------|--------|
-| Code + tests Docker (RC) | **Vert** | **64 passed** (rejoué 2026-07-26) |
-| Prérequis frontend `www` | **Vert** | `https://www.lirie.ch/activate-account` sert le SPA + `SignupActivation` (accès direct + query `?token=`) |
-| SHA figé Lot 1 | **Bloqué** | Code Lot 1 encore **non commité** (working tree sale) — pas de SHA déployable |
-| Production validée | **Bloqué** | Attente commit Lot 1 dédié + checklist ops 3→10 |
+| Code + tests Docker (RC) | **Vert** | **64 passed** sur SHA figé (rejoué 2026-07-26) |
+| Prérequis frontend `www` | **Vert** | `https://www.lirie.ch/activate-account` sert le SPA + `SignupActivation` |
+| SHA figé Lot 1 | **Vert** | `4ccd61fa2879318aa946cd18499338f3c38f3419` — **unique candidat déploiement** |
+| Production validée | **Bloqué** | Checklist ops secrets → Brevo → backup → migration → smoke → `GO`/`ROLLBACK` |
 
-**Prochain objectif concret :** commit Lot 1 uniquement → secrets/config → sauvegarde → migration → déploiement → smoke → surveillance → clôture `GO`/`ROLLBACK`.
+**Prochain objectif concret :** secrets / Brevo → backup PostgreSQL → migration `16f950e9a85f` → déploiement de `4ccd61fa` → smoke → surveillance → clôture.
 
 ---
 
 ## 1. Figer la version à déployer
 
-### État au 2026-07-26
-
-- HEAD actuel (sans Lot 1) : `88c53c2e42ed2744f8135354a49251b86d0f1098` (docs Lot 0)
-- Migration Lot 1 présente en working tree : `backend/migrations/versions/16f950e9a85f_lot1_activation_email_deliveries_brevo_.py` (**untracked**)
-- Suite RC rejouée : **64 passed**
-
-### À faire avant tout deploy
-
-- [ ] Créer un **commit dédié Lot 1 uniquement** (exclure tracking, mobile boot, pages marketing, etc.)
-- [ ] Noter le **SHA Git exact** ci-dessous
-- [ ] Confirmer que `16f950e9a85f` est dans ce commit (`git ls-tree -r <SHA> --name-only | findstr 16f950e9a85f`)
-- [ ] Rejouer les 64 tests sur ce SHA
-- [ ] Ne plus ajouter de changements fonctionnels dans ce déploiement
+### État figé (2026-07-26)
 
 ```text
-SHA Lot 1 figé : ______________________________
-Date gel : ______________________________
+SHA Lot 1 figé : 4ccd61fa2879318aa946cd18499338f3c38f3419
+Message       : feat(security): implement Lot 1 activation and auth hardening
+Date gel      : 2026-07-26
+Migration     : 16f950e9a85f (incluse et suivie dans le commit)
+Tests RC      : 64 passed (rejoués sur ce contenu)
 ```
+
+- [x] Commit dédié Lot 1 uniquement (31 fichiers)
+- [x] Migration `16f950e9a85f` suivie dans le commit
+- [x] 64 tests rejoués verts
+- [x] Pas de secrets dans le commit
+- [x] Ne plus modifier ce SHA (candidat déploiement unique)
 
 ### Commande validation Docker (RC)
 
@@ -58,6 +55,7 @@ docker compose exec -e ENVIRONMENT=production \
 |------|----------|
 | 2026-07-26 (1er run) | 64 passed |
 | 2026-07-26 (rejeu RC→prod) | 64 passed |
+| 2026-07-26 (post-commit `4ccd61fa`) | 64 passed |
 
 ---
 
