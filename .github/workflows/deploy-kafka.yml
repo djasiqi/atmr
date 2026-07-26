@@ -100,7 +100,7 @@ jobs:
           username: ${{ env.SSH_USER }}
           key: ${{ env.SSH_KEY }}
           port: ${{ env.SSH_PORT }}
-          source: "scripts/deploy-kafka-production.sh,scripts/check-kafka-production.sh,scripts/check-kafka-tracking-pipeline.sh,scripts/kafka-init-topics-compose.sh,scripts/kafka-env-effective.sh,scripts/apply-kafka-topics-v2-local.sh,scripts/kafka-topics.contract.json,scripts/env.production.local.kafka-v2.example"
+          source: "scripts/deploy-kafka-production.sh,scripts/check-kafka-production.sh,scripts/check-kafka-tracking-pipeline.sh,scripts/kafka-init-topics.sh,scripts/kafka-init-topics-compose.sh,scripts/kafka-env-effective.sh,scripts/apply-kafka-topics-v2-local.sh,scripts/kafka-topics.contract.json,scripts/env.production.local.kafka-v2.example"
           target: "/srv/atmr/"
 
       - name: Copy Kafka lib scripts
@@ -126,6 +126,7 @@ jobs:
             test -f /srv/atmr/scripts/deploy-kafka-production.sh
             test -f /srv/atmr/scripts/check-kafka-production.sh
             test -f /srv/atmr/scripts/check-kafka-tracking-pipeline.sh
+            test -f /srv/atmr/scripts/kafka-init-topics.sh
             test -f /srv/atmr/scripts/kafka-init-topics-compose.sh
             test -f /srv/atmr/scripts/kafka-env-effective.sh
             test -f /srv/atmr/scripts/apply-kafka-topics-v2-local.sh
@@ -149,6 +150,7 @@ jobs:
               scripts/deploy-kafka-production.sh \
               scripts/check-kafka-production.sh \
               scripts/check-kafka-tracking-pipeline.sh \
+              scripts/kafka-init-topics.sh \
               scripts/kafka-init-topics-compose.sh \
               scripts/kafka-env-effective.sh \
               scripts/apply-kafka-topics-v2-local.sh; do
