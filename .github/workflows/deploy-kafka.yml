@@ -157,7 +157,7 @@ jobs:
             done
 
       - name: Apply topics v2 env (optional)
-        if: ${{ github.event.inputs.apply_topics_v2_env }}
+        if: ${{ github.event.inputs.apply_topics_v2_env == 'true' }}
         uses: appleboy/ssh-action@master
         with:
           host: ${{ env.SSH_HOST }}
@@ -171,7 +171,7 @@ jobs:
             ./scripts/apply-kafka-topics-v2-local.sh
 
       - name: Dry run (preflight-on only)
-        if: ${{ github.event.inputs.dry_run }}
+        if: ${{ github.event.inputs.dry_run == 'true' }}
         uses: appleboy/ssh-action@master
         with:
           host: ${{ env.SSH_HOST }}
@@ -186,7 +186,7 @@ jobs:
             ./scripts/check-kafka-production.sh preflight-on
 
       - name: Deploy Kafka + validate (no FORCE)
-        if: ${{ !github.event.inputs.dry_run }}
+        if: ${{ github.event.inputs.dry_run != 'true' }}
         uses: appleboy/ssh-action@master
         with:
           host: ${{ env.SSH_HOST }}
