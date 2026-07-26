@@ -95,6 +95,11 @@ class ActivationEmailDelivery(db.Model):
         Index("ix_act_email_del_delivery_id", "email_delivery_id", unique=True),
         Index("ix_act_email_del_provider_msg", "provider_message_id"),
         Index("ix_act_email_del_token_hash", "email_token_hash"),
+        Index(
+            "ix_act_email_del_session_superseded",
+            "activation_session_pk",
+            "superseded_at",
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -128,6 +133,13 @@ class ActivationEmailDelivery(db.Model):
         DateTime(timezone=True), nullable=True
     )
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # F-03 : cycle de vie jeton (séparé de delivery.status transport Brevo)
+    superseded_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    superseded_by_delivery_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

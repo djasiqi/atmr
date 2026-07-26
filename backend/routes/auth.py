@@ -4048,86 +4048,227 @@ class Register(Resource):
 class VerifyActivationEmail(Resource):
     @limiter.limit("20 per hour")
     def post(self):
-        """Valide le lien email d'une session d'activation client."""
+        """Valide le lien email d'une session d'activation client (F-03)."""
         try:
             data = request.get_json() or {}
             validated_data = validate_request(VerifyEmailActivationSchema(), data)
             token = cast("str", validated_data.get("token", ""))
 
             from models.activation_email_delivery import ActivationEmailDelivery
+            from services.notifications.activation_email_delivery import (
+                get_activation_session_for_update,
+            )
             from services.notifications.activation_token import (
                 hash_activation_token,
                 verify_activation_token,
             )
+            from services.security.activation_legacy import is_legacy_acceptance_active
 
             token_hash = hash_activation_token(token)
-            activation_session: ActivationSession | None = None
+            matches = (
+                ActivationEmailDelivery.query.filter_by(email_token_hash=token_hash)
+                .limit(2)
+                .all()
+            )
 
-            # Lot 1 : jeton HMAC — lookup par hash sur livraison / session
-            delivery = ActivationEmailDelivery.query.filter_by(
-                email_token_hash=token_hash
-            ).first()
-            if delivery is not None:
+            # --- Branche HMAC moderne ---
+            if matches:
+                if len(matches) != 1:
+                    logger.warning(
+                        "activation_email_verify_rejected reason=duplicate_hash"
+                    )
+                    return auth_error(
+                        AuthErrorCodes.TOKEN_INVALID,
+                        "Lien d'activation invalide.",
+                        400,
+                    )
+                delivery = matches[0]
                 if not verify_activation_token(
                     token,
                     delivery.email_delivery_id,
                     key_version=int(delivery.token_key_version or 1),
                 ):
-                    return auth_error(
-                        AuthErrorCodes.TOKEN_INVALID,
-                        "Lien d'activation invalide.",
-                        400,
+                    logger.warning(
+                        "activation_email_verify_rejected reason=invalid "
+                        "email_delivery_id=%s",
+                        delivery.email_delivery_id,
                     )
-                activation_session = ActivationSession.query.get(
-                    delivery.activation_session_pk
-                )
-            else:
-                # Compat jetons itsdangerous pré-Lot 1
-                try:
-                    payload = _activation_serializer().loads(
-                        token,
-                        salt="activation-email-salt",
-                        max_age=ACTIVATION_EMAIL_TTL_MINUTES * 60,
-                    )
-                except SignatureExpired:
-                    return auth_error(
-                        AuthErrorCodes.TOKEN_EXPIRED,
-                        "Le lien email a expiré. Demandez un nouvel envoi.",
-                        400,
-                    )
-                except BadSignature:
-                    return auth_error(
-                        AuthErrorCodes.TOKEN_INVALID,
-                        "Lien d'activation invalide.",
-                        400,
-                    )
-                session_id = payload.get("sid")
-                if not session_id:
-                    return auth_error(
-                        AuthErrorCodes.TOKEN_INVALID,
-                        "Lien d'activation invalide.",
-                        400,
-                    )
-                activation_session = ActivationSession.query.filter_by(
-                    activation_session_id=session_id
-                ).first()
-                if activation_session and not hmac.compare_digest(
-                    _hash_plain_value(token),
-                    activation_session.email_token_hash or "",
-                ):
                     return auth_error(
                         AuthErrorCodes.TOKEN_INVALID,
                         "Lien d'activation invalide.",
                         400,
                     )
 
+                locked = get_activation_session_for_update(
+                    delivery.activation_session_pk
+                )
+                delivery = (
+                    ActivationEmailDelivery.query.filter_by(
+                        email_delivery_id=delivery.email_delivery_id
+                    )
+                    .populate_existing()
+                    .with_for_update()
+                    .one()
+                )
+                if delivery.activation_session_pk != locked.id:
+                    db.session.rollback()
+                    logger.warning(
+                        "activation_email_verify_rejected reason=invalid "
+                        "email_delivery_id=%s",
+                        delivery.email_delivery_id,
+                    )
+                    return auth_error(
+                        AuthErrorCodes.TOKEN_INVALID,
+                        "Lien d'activation invalide.",
+                        400,
+                    )
+
+                now = datetime.now(UTC)
+                if (
+                    locked.email_delivery_id != delivery.email_delivery_id
+                    or delivery.superseded_at is not None
+                ):
+                    db.session.rollback()
+                    logger.warning(
+                        "activation_email_verify_rejected reason=superseded "
+                        "email_delivery_id=%s",
+                        delivery.email_delivery_id,
+                    )
+                    return auth_error(
+                        AuthErrorCodes.TOKEN_EXPIRED,
+                        "Ce lien a été remplacé. Utilisez le dernier email reçu.",
+                        400,
+                    )
+                if delivery.token_expires_at is None:
+                    db.session.rollback()
+                    logger.warning(
+                        "activation_email_verify_rejected reason=invalid "
+                        "email_delivery_id=%s",
+                        delivery.email_delivery_id,
+                    )
+                    return auth_error(
+                        AuthErrorCodes.TOKEN_INVALID,
+                        "Lien d'activation invalide.",
+                        400,
+                    )
+                expires = delivery.token_expires_at
+                if expires.tzinfo is None:
+                    expires = expires.replace(tzinfo=UTC)
+                if now >= expires:
+                    db.session.rollback()
+                    logger.warning(
+                        "activation_email_verify_rejected reason=expired "
+                        "email_delivery_id=%s",
+                        delivery.email_delivery_id,
+                    )
+                    return auth_error(
+                        AuthErrorCodes.TOKEN_EXPIRED,
+                        "Le lien email a expiré. Demandez un nouvel envoi.",
+                        400,
+                    )
+
+                if locked.email_verified_at:
+                    db.session.commit()
+                    user = User.query.get(locked.user_id)
+                    return {
+                        "message": "Email déjà confirmé.",
+                        "activation_session_id": locked.activation_session_id,
+                        "masked_email": mask_email(user.email or "") if user else None,
+                        "masked_phone": _mask_phone(user.phone) if user else None,
+                        "activation_status": _build_activation_status(locked),
+                    }, 200
+
+                locked.email_verified_at = now
+                db.session.commit()
+                user = User.query.get(locked.user_id)
+                return {
+                    "message": "Email confirmé.",
+                    "activation_session_id": locked.activation_session_id,
+                    "masked_email": mask_email(user.email or "") if user else None,
+                    "masked_phone": _mask_phone(user.phone) if user else None,
+                    "activation_status": _build_activation_status(locked),
+                }, 200
+
+            # --- Branche legacy itsdangerous (bornée F-03) ---
+            if not is_legacy_acceptance_active():
+                logger.warning(
+                    "activation_email_verify_rejected reason=legacy_disabled"
+                )
+                return auth_error(
+                    AuthErrorCodes.TOKEN_INVALID,
+                    "Lien d'activation invalide.",
+                    400,
+                )
+            try:
+                payload = _activation_serializer().loads(
+                    token,
+                    salt="activation-email-salt",
+                    max_age=1800,
+                )
+            except SignatureExpired:
+                return auth_error(
+                    AuthErrorCodes.TOKEN_EXPIRED,
+                    "Le lien email a expiré. Demandez un nouvel envoi.",
+                    400,
+                )
+            except BadSignature:
+                return auth_error(
+                    AuthErrorCodes.TOKEN_INVALID,
+                    "Lien d'activation invalide.",
+                    400,
+                )
+            session_id = payload.get("sid")
+            if not session_id:
+                return auth_error(
+                    AuthErrorCodes.TOKEN_INVALID,
+                    "Lien d'activation invalide.",
+                    400,
+                )
+            activation_session = ActivationSession.query.filter_by(
+                activation_session_id=session_id
+            ).first()
             if not activation_session:
                 return auth_error(
                     AuthErrorCodes.TOKEN_INVALID,
                     "Lien d'activation invalide.",
                     400,
                 )
-
+            if activation_session.email_delivery_id is not None:
+                return auth_error(
+                    AuthErrorCodes.TOKEN_INVALID,
+                    "Lien d'activation invalide.",
+                    400,
+                )
+            if (
+                ActivationEmailDelivery.query.filter_by(
+                    activation_session_pk=activation_session.id
+                ).first()
+                is not None
+            ):
+                return auth_error(
+                    AuthErrorCodes.TOKEN_INVALID,
+                    "Lien d'activation invalide.",
+                    400,
+                )
+            if not hmac.compare_digest(
+                _hash_plain_value(token),
+                activation_session.email_token_hash or "",
+            ):
+                return auth_error(
+                    AuthErrorCodes.TOKEN_INVALID,
+                    "Lien d'activation invalide.",
+                    400,
+                )
+            now = datetime.now(UTC)
+            if (
+                not activation_session.email_token_expires_at
+                or activation_session.email_token_expires_at <= now
+            ):
+                return auth_error(
+                    AuthErrorCodes.TOKEN_EXPIRED,
+                    "Le lien email a expiré. Demandez un nouvel envoi.",
+                    400,
+                )
             if activation_session.email_verified_at:
                 user = User.query.get(activation_session.user_id)
                 return {
@@ -4137,18 +4278,6 @@ class VerifyActivationEmail(Resource):
                     "masked_phone": _mask_phone(user.phone) if user else None,
                     "activation_status": _build_activation_status(activation_session),
                 }, 200
-
-            now = datetime.now(UTC)
-            if (
-                activation_session.email_token_expires_at
-                and activation_session.email_token_expires_at < now
-            ):
-                return auth_error(
-                    AuthErrorCodes.TOKEN_EXPIRED,
-                    "Le lien email a expiré. Demandez un nouvel envoi.",
-                    400,
-                )
-
             activation_session.email_verified_at = now
             db.session.commit()
             user = User.query.get(activation_session.user_id)
@@ -4338,12 +4467,18 @@ class ResendActivationEmail(Resource):
 
             from models.activation_session import EMAIL_DELIVERY_KIND_RESEND
             from services.notifications.activation_email_delivery import (
-                can_start_new_delivery,
+                can_start_new_delivery_snapshot,
                 try_enqueue_activation_email,
             )
+            from services.notifications.activation_email_policy import (
+                enforce_resend_policy,
+                is_same_utc_day,
+            )
 
-            # Lot 1 : bloquer si queued/sending (sauf lease expirée)
-            can_send, block_reason = can_start_new_delivery(activation_session)
+            # Précontrôles indicatifs (non mutatifs) — autorité = service sous verrou
+            can_send, block_reason = can_start_new_delivery_snapshot(
+                activation_session
+            )
             if not can_send:
                 return auth_error(
                     AuthErrorCodes.RATE_LIMITED,
@@ -4357,13 +4492,12 @@ class ResendActivationEmail(Resource):
 
             now = datetime.now(UTC)
             daily_count = int(activation_session.resend_count_email or 0)
-            if activation_session.last_email_sent_at and not _is_same_utc_day(
+            if activation_session.last_email_sent_at and not is_same_utc_day(
                 activation_session.last_email_sent_at, now
             ):
                 daily_count = 0
 
-            # Cooldown basé sur dernier succès Brevo uniquement (last_email_sent_at)
-            allowed, policy_error, retry_after = _enforce_resend_policy(
+            allowed, policy_error, retry_after = enforce_resend_policy(
                 last_sent_at=activation_session.last_email_sent_at,
                 resend_count=daily_count,
             )
@@ -4391,6 +4525,27 @@ class ResendActivationEmail(Resource):
                 environment=environment,
                 is_testing=bool(current_app.config.get("TESTING")),
             )
+            if enqueue_result.get("error") == "email_delivery_in_progress":
+                return auth_error(
+                    AuthErrorCodes.RATE_LIMITED,
+                    "Envoi déjà en cours. Veuillez patienter.",
+                    429,
+                    details={
+                        "retry_after_seconds": ACTIVATION_RESEND_COOLDOWN_SECONDS,
+                        "reason": "email_delivery_in_progress",
+                    },
+                )
+            if enqueue_result.get("error") in {"cooldown", "daily_limit"}:
+                return auth_error(
+                    AuthErrorCodes.RATE_LIMITED,
+                    (
+                        "Veuillez patienter avant de renvoyer l'email."
+                        if enqueue_result.get("error") == "cooldown"
+                        else "Limite journalière de renvoi email atteinte."
+                    ),
+                    429,
+                    details={"retry_after_seconds": retry_after},
+                )
 
             if enqueue_result.get("require_502"):
                 body, code = _activation_email_send_failed_body(

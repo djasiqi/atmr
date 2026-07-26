@@ -269,6 +269,13 @@ def validate_required_env_vars(config_name: str) -> None:
 
         validate_internal_service_token_for_boot(config_name=config_name)
 
+        # F-03 : fenêtre legacy activation (FROM/UNTIL absolus, sans cycle routes)
+        from services.security.activation_legacy import (
+            validate_activation_legacy_for_boot,
+        )
+
+        validate_activation_legacy_for_boot(config_name=config_name)
+
     # Variables critiques pour la stack démo
     if config_name == "demo" or (os.getenv("APP_ENV", "").strip().lower() == "demo"):
         if os.getenv("APP_ENV", "").strip().lower() != "demo":

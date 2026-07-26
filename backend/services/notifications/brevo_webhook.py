@@ -20,10 +20,11 @@ from models.activation_email_delivery import (
     EMAIL_DELIVERY_SPAM,
     ActivationEmailDelivery,
 )
-from models.activation_session import ActivationSession
 from services.notifications.activation_email_delivery import (
     apply_delivery_transition,
+    get_activation_session_for_update,
     get_delivery_by_id,
+    sync_current_delivery_mirror,
 )
 
 logger = logging.getLogger(__name__)
@@ -190,22 +191,35 @@ def process_brevo_webhook_event(payload: dict[str, Any]) -> dict[str, Any]:
         if applied and not delivery.provider_message_id and message_id:
             delivery.provider_message_id = message_id
 
-        # Sync session courante uniquement si c'est la livraison active
-        session = ActivationSession.query.get(delivery.activation_session_pk)
+        # Sync miroir uniquement si courant + non superseded (jamais le pointeur)
+        session = get_activation_session_for_update(delivery.activation_session_pk)
+        delivery = (
+            ActivationEmailDelivery.query.filter_by(
+                email_delivery_id=delivery.email_delivery_id
+            )
+            .populate_existing()
+            .with_for_update()
+            .one()
+        )
         if (
-            session
+            applied
+            and delivery.superseded_at is None
             and session.email_delivery_id == delivery.email_delivery_id
-            and applied
         ):
-            session.email_delivery_status = delivery.status
-            session.email_provider_message_id = delivery.provider_message_id
             if new_status in {
                 EMAIL_DELIVERY_HARD_BOUNCED,
                 EMAIL_DELIVERY_SPAM,
                 EMAIL_DELIVERY_BLOCKED,
                 EMAIL_DELIVERY_INVALID,
             }:
-                session.email_last_error = f"brevo_{event}"
+                delivery.last_error = f"brevo_{event}"
+            sync_current_delivery_mirror(session, delivery)
+        elif applied:
+            logger.info(
+                "activation_email_delivery_ignored reason=not_current "
+                "email_delivery_id=%s",
+                delivery.email_delivery_id,
+            )
 
         db.session.commit()
         return {

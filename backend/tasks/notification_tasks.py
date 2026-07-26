@@ -773,7 +773,7 @@ def send_activation_email_task(
             email_delivery_id=email_delivery_id,
             message_id=str(send_result.get("message_id") or "") or None,
         )
-        db.session.commit()
+        # finalize_after_provider_accepted commit déjà (F-03)
         logger.info(
             "[notification_task] Activation email sent sid=%s delivery_id=%s task_id=%s",
             activation_session_id,

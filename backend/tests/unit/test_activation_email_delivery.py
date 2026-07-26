@@ -121,7 +121,9 @@ class TestTryEnqueueActivationEmail:
         assert result["queued"] is False
         assert result["email_sent"] is None
         db.session.refresh(session)
-        assert session.email_delivery_status == "failed"
+        # F-03 : préflight provider — A inchangée, pas de supersession / failed
+        assert session.email_delivery_status != "failed"
+        assert session.email_delivery_id is None
 
     def test_enqueue_passes_session_and_delivery_id_only(self, db, monkeypatch):
         monkeypatch.setenv("ACTIVATION_TOKEN_KEY_V1", "test-activation-key-v1")

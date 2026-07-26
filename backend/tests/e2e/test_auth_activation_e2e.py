@@ -3,13 +3,78 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import uuid
 from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
-from itsdangerous import URLSafeTimedSerializer
-
 from models import ActivationSession
+from models.activation_email_delivery import (
+    EMAIL_DELIVERY_KIND_INITIAL,
+    EMAIL_DELIVERY_QUEUED,
+    EMAIL_DELIVERY_SENT,
+    ActivationEmailDelivery,
+)
+from services.notifications.activation_token import (
+    derive_activation_token,
+    hash_activation_token,
+)
+
+
+def _ensure_hmac_activation_token(
+    db,
+    session: ActivationSession,
+    *,
+    expires_delta: timedelta | None = None,
+) -> str:
+    """Crée/aligne une livraison HMAC courante et retourne le jeton."""
+    os.environ.setdefault("ACTIVATION_TOKEN_KEY_V1", "test-activation-key-v1")
+    did = session.email_delivery_id or str(uuid.uuid4())
+    token = derive_activation_token(did, key_version=1)
+    token_hash = hash_activation_token(token)
+    expires = datetime.now(UTC) + (
+        expires_delta if expires_delta is not None else timedelta(minutes=30)
+    )
+    delivery = ActivationEmailDelivery.query.filter_by(email_delivery_id=did).first()
+    if delivery is None:
+        delivery = ActivationEmailDelivery(
+            activation_session_pk=session.id,
+            email_delivery_id=did,
+            kind=EMAIL_DELIVERY_KIND_INITIAL,
+            status=EMAIL_DELIVERY_QUEUED,
+            token_key_version=1,
+            email_token_hash=token_hash,
+            token_expires_at=expires,
+            superseded_at=None,
+        )
+        db.session.add(delivery)
+    else:
+        delivery.email_token_hash = token_hash
+        delivery.token_expires_at = expires
+        delivery.superseded_at = None
+        delivery.activation_session_pk = session.id
+    session.email_delivery_id = did
+    session.email_token_hash = token_hash
+    session.email_token_expires_at = expires
+    session.email_delivery_status = EMAIL_DELIVERY_QUEUED
+    session.email_delivery_kind = EMAIL_DELIVERY_KIND_INITIAL
+    db.session.commit()
+    return token
+
+
+def _mark_current_delivery_sent(db, session: ActivationSession) -> None:
+    """Libère le blocage F-03 queued/sending pour permettre un renvoi de test."""
+    if not session.email_delivery_id:
+        return
+    delivery = ActivationEmailDelivery.query.filter_by(
+        email_delivery_id=session.email_delivery_id
+    ).first()
+    if delivery is None:
+        return
+    delivery.status = EMAIL_DELIVERY_SENT
+    delivery.provider_accepted_at = datetime.now(UTC)
+    session.email_delivery_status = EMAIL_DELIVERY_SENT
+    db.session.commit()
 
 
 class TestAuthActivationFlow:
@@ -59,23 +124,12 @@ class TestAuthActivationFlow:
         login_before_data = login_before_response.get_json() or {}
         assert login_before_data.get("reason") == "account_pending_activation"
 
-        # 3) Verify-email (token reconstruit depuis session id)
-        secret_key = e2e_client.application.config.get("SECRET_KEY")
-        assert secret_key, "SECRET_KEY doit etre definie pour verifier l'email"
-        serializer = URLSafeTimedSerializer(secret_key)
-        email_token = serializer.dumps(
-            {"sid": activation_session_id, "kind": "signup_activation"},
-            salt="activation-email-salt",
-        )
+        # 3) Verify-email (jeton HMAC livraison courante)
         session = ActivationSession.query.filter_by(
             activation_session_id=activation_session_id
         ).first()
         assert session is not None, "Session d'activation introuvable en base"
-        session.email_token_hash = hashlib.sha256(
-            email_token.encode("utf-8")
-        ).hexdigest()
-        session.email_token_expires_at = datetime.now(UTC) + timedelta(minutes=30)
-        db.session.commit()
+        email_token = _ensure_hmac_activation_token(db, session)
 
         verify_email_response = e2e_client.post(
             "/api/v1/auth/activation/verify-email",
@@ -267,24 +321,14 @@ class TestAuthActivationFlow:
         )
         assert activation_session_id, "activation_session_id manquant apres register"
 
-        secret_key = e2e_client.application.config.get("SECRET_KEY")
-        assert secret_key, "SECRET_KEY doit etre definie pour verifier l'email"
-        serializer = URLSafeTimedSerializer(secret_key)
-        email_token = serializer.dumps(
-            {"sid": activation_session_id, "kind": "signup_activation"},
-            salt="activation-email-salt",
-        )
-
         session = ActivationSession.query.filter_by(
             activation_session_id=activation_session_id
         ).first()
         assert session is not None, "Session d'activation introuvable en base"
-        session.email_token_hash = hashlib.sha256(
-            email_token.encode("utf-8")
-        ).hexdigest()
-        session.email_token_expires_at = datetime.now(UTC) - timedelta(minutes=1)
         session.email_verified_at = None
-        db.session.commit()
+        email_token = _ensure_hmac_activation_token(
+            db, session, expires_delta=timedelta(minutes=-1)
+        )
 
         verify_email_response = e2e_client.post(
             "/api/v1/auth/activation/verify-email",
@@ -328,23 +372,12 @@ class TestAuthActivationFlow:
         assert activation_session_id, "activation_session_id manquant apres register"
 
         # Email confirmé, SMS non confirmé.
-        secret_key = e2e_client.application.config.get("SECRET_KEY")
-        assert secret_key, "SECRET_KEY doit etre definie pour verifier l'email"
-        serializer = URLSafeTimedSerializer(secret_key)
-        email_token = serializer.dumps(
-            {"sid": activation_session_id, "kind": "signup_activation"},
-            salt="activation-email-salt",
-        )
         session = ActivationSession.query.filter_by(
             activation_session_id=activation_session_id
         ).first()
         assert session is not None, "Session d'activation introuvable en base"
-        session.email_token_hash = hashlib.sha256(
-            email_token.encode("utf-8")
-        ).hexdigest()
-        session.email_token_expires_at = datetime.now(UTC) + timedelta(minutes=30)
         session.phone_verified_at = None
-        db.session.commit()
+        email_token = _ensure_hmac_activation_token(db, session)
 
         verify_email_response = e2e_client.post(
             "/api/v1/auth/activation/verify-email",
@@ -467,6 +500,7 @@ class TestAuthActivationFlow:
         ).first()
         assert session is not None, "Session d'activation introuvable en base"
         session.email_verified_at = None
+        _mark_current_delivery_sent(db, session)
         # Bypass cooldown mais dépassement certain du quota journalier.
         session.last_email_sent_at = datetime.now(UTC) - timedelta(minutes=10)
         session.resend_count_email = 9999
@@ -568,6 +602,7 @@ class TestAuthActivationFlow:
             activation_session_id=activation_session_id
         ).first()
         assert session is not None, "Session d'activation introuvable en base"
+        _mark_current_delivery_sent(db, session)
         # Bypass cooldown pour forcer l'appel d'envoi.
         session.last_email_sent_at = datetime.now(UTC) - timedelta(minutes=10)
         session.resend_count_email = 0
