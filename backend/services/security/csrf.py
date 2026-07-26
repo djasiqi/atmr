@@ -367,6 +367,8 @@ def setup_csrf_protection(app: Any) -> None:
         "/api/demo/demo_access/analytics",
         "/api/v1/app/version-check",
         "/api/v1/company_mobile/auth/login",
+        # F-01 : M2M token (pas de cookie) — exemption exacte uniquement
+        "/api/internal/tracking/ingest",
     }
     # Hors CSRF_STRICT : refresh encore exempt (compat progressive)
     if not _csrf_strict_enabled():

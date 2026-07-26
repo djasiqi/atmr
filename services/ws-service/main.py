@@ -1042,6 +1042,7 @@ async def driver_location(sid: str, data: dict[str, Any] | None = None) -> None:
     if not isinstance(data, dict):
         return
     session = await sio.get_session(sid)
+    # F-01 : driver_id exclusivement depuis la session JWT/socket (ignorer payload mobile)
     driver_id = session.get("driver_id") if isinstance(session, dict) else None
     if not isinstance(driver_id, int):
         return
@@ -1055,6 +1056,7 @@ async def driver_location_batch(sid: str, data: dict[str, Any] | None = None) ->
     if not isinstance(data, dict):
         return
     session = await sio.get_session(sid)
+    # F-01 : driver_id exclusivement depuis la session JWT/socket
     driver_id = session.get("driver_id") if isinstance(session, dict) else None
     if not isinstance(driver_id, int):
         return

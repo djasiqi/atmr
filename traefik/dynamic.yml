@@ -32,7 +32,8 @@ http:
 
   routers:
     atmr_api:
-      rule: Host(`api.lirie.ch`)
+      # F-01 : exclure /api/internal (ingestion GPS réservée au réseau Docker)
+      rule: Host(`api.lirie.ch`) && !PathPrefix(`/api/internal`)
       entryPoints: [ websecure ]
       tls:
         certResolver: letsencrypt

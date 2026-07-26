@@ -21,11 +21,16 @@ class SilentJSONRequest(Request):
 
 
 def register_json_body_precache(app: Flask) -> None:
-    """Met en cache le corps brut avant tout middleware qui le consommerait."""
+    """Met en cache le corps brut avant tout middleware qui le consommerait.
+
+    F-01 : ignore ``/api/internal/tracking/ingest`` (garde bornée dédiée en amont).
+    """
 
     @app.before_request
     def _precache_json_request_body():  # pyright: ignore[reportUnusedFunction]
         if request.method not in {"POST", "PUT", "PATCH", "DELETE"}:
+            return
+        if request.path == "/api/internal/tracking/ingest":
             return
         content_type = (request.content_type or "").lower()
         if "json" not in content_type:

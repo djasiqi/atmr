@@ -294,6 +294,14 @@ services:
       WS_DRIVER_LOCATION_BATCH_WINDOW_SEC: ${WS_DRIVER_LOCATION_BATCH_WINDOW_SEC:-10}
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka-broker-1:29092,kafka-broker-2:29092,kafka-broker-3:29092}
       REALTIME_GATEWAY_CANARY_ENABLED: ${REALTIME_GATEWAY_CANARY_ENABLED:-false}
+      # F-01 : ingestion GPS interne fail-closed (même secret que ws-service)
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?INTERNAL_SERVICE_TOKEN requis}
+      INTERNAL_SERVICE_TOKEN_NEXT: ${INTERNAL_SERVICE_TOKEN_NEXT:-}
+      INTERNAL_SERVICE_AUDIENCE: ${INTERNAL_SERVICE_AUDIENCE:-ws-service}
+      INTERNAL_TRACKING_INGEST_ENABLED: ${INTERNAL_TRACKING_INGEST_ENABLED:-true}
+      INTERNAL_TRACKING_IDEMPOTENCY_PENDING_TTL_SEC: ${INTERNAL_TRACKING_IDEMPOTENCY_PENDING_TTL_SEC:-60}
+      INTERNAL_TRACKING_IDEMPOTENCY_DONE_TTL_SEC: ${INTERNAL_TRACKING_IDEMPOTENCY_DONE_TTL_SEC:-86400}
+      INTERNAL_TRACKING_INGEST_RATE_LIMIT: ${INTERNAL_TRACKING_INGEST_RATE_LIMIT:-6000 per minute}
 
       # Firebase Cloud Messaging (FCM)
       FIREBASE_SERVICE_ACCOUNT_PATH: /app/firebase-service-account.json
@@ -327,8 +335,8 @@ services:
       - backend_uploads:/app/uploads # Volume pour les logos de compagnie et autres uploads
       - ./firebase-service-account.json:/app/firebase-service-account.json:ro
       # Les modèles ML/RL sont inclus dans l'image Docker
-    ports:
-      - "5000:5000"
+    # F-01 : pas de publication hôte 5000 — accès uniquement via réseau Docker
+    # (backend:5000) et Traefik (api.lirie.ch hors /api/internal).
     networks:
       - atmr-network
       - traefik-network
@@ -338,12 +346,13 @@ services:
       - "autoheal=true"
       # Activer Traefik pour ce conteneur
       - "traefik.enable=true"
-      # Router les requêtes vers le backend sur www.lirie.ch et api.lirie.ch
+      # Router les requêtes vers le backend sur api.lirie.ch
+      # F-01 : exclure /api/internal (ingestion GPS réservée au réseau Docker)
       # Router HTTP (port 80) - redirige vers HTTPS
-      - "traefik.http.routers.backend.rule=Host(`api.lirie.ch`)"
+      - "traefik.http.routers.backend.rule=Host(`api.lirie.ch`) && !PathPrefix(`/api/internal`)"
       - "traefik.http.routers.backend.entrypoints=web"
       # Router HTTPS (port 443) avec certificat SSL automatique
-      - "traefik.http.routers.backend-secure.rule=Host(`api.lirie.ch`)"
+      - "traefik.http.routers.backend-secure.rule=Host(`api.lirie.ch`) && !PathPrefix(`/api/internal`)"
       - "traefik.http.routers.backend-secure.entrypoints=websecure"
       - "traefik.http.routers.backend-secure.tls.certresolver=letsencrypt"
       # Redirection HTTP vers HTTPS
@@ -448,7 +457,9 @@ services:
       WS_SERVICE_ACCEPT_CONNECTIONS: ${WS_SERVICE_ACCEPT_CONNECTIONS:-true}
       WS_KILL_SWITCH_DRAIN_SEC: ${WS_KILL_SWITCH_DRAIN_SEC:-30}
       BACKEND_INTERNAL_TRACKING_INGEST_URL: ${BACKEND_INTERNAL_TRACKING_INGEST_URL:-http://backend:5000/api/internal/tracking/ingest}
-      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
+      # F-01 : pas de défaut vide — à fournir via .env.production / secrets
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?INTERNAL_SERVICE_TOKEN requis}
+      INTERNAL_SERVICE_AUDIENCE: ${INTERNAL_SERVICE_AUDIENCE:-ws-service}
     expose:
       - "8001"
     networks:

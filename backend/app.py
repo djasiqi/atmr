@@ -262,6 +262,13 @@ def validate_required_env_vars(config_name: str) -> None:
             )
             logger.warning(warning_msg, missing_str)
 
+        # F-01 : secret ingest GPS + TTL idempotence (module sans cycle routes)
+        from services.security.internal_service_auth import (
+            validate_internal_service_token_for_boot,
+        )
+
+        validate_internal_service_token_for_boot(config_name=config_name)
+
     # Variables critiques pour la stack démo
     if config_name == "demo" or (os.getenv("APP_ENV", "").strip().lower() == "demo"):
         if os.getenv("APP_ENV", "").strip().lower() != "demo":
@@ -409,6 +416,12 @@ def create_app(config_name: str | None = None):
     )
 
     app.request_class = SilentJSONRequest
+    # F-01 : garde body bornée AVANT le précache JSON global
+    from middleware.internal_tracking_body_guard import (
+        register_internal_tracking_ingest_body_guard,
+    )
+
+    register_internal_tracking_ingest_body_guard(app)
     register_json_body_precache(app)
 
     # Désactiver les slashes stricts pour éviter les redirections 308
