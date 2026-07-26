@@ -37,9 +37,7 @@ def require_activation_token_key_in_production() -> None:
     get_activation_token_key(1)
 
 
-def derive_activation_token(
-    email_delivery_id: str, *, key_version: int = 1
-) -> str:
+def derive_activation_token(email_delivery_id: str, *, key_version: int = 1) -> str:
     """token = hex(HMAC-SHA256(ACTIVATION_TOKEN_KEY_Vn, email_delivery_id))."""
     key = get_activation_token_key(key_version)
     return hmac.new(
@@ -59,7 +57,5 @@ def verify_activation_token(
     *,
     key_version: int = 1,
 ) -> bool:
-    expected = derive_activation_token(
-        email_delivery_id, key_version=key_version
-    )
+    expected = derive_activation_token(email_delivery_id, key_version=key_version)
     return hmac.compare_digest(expected, token)

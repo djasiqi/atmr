@@ -313,18 +313,21 @@ class TestBrevoTransactional:
 
 class TestSendEmailNotificationRaises:
     def test_raise_on_error_maps_retryable(self):
-        with patch(
-            "services.notifications.email.EMAIL_ENABLED",
-            True,
-        ), patch(
-            "services.notifications.email.EMAIL_PROVIDER",
-            "brevo",
-        ), patch(
-            "services.notifications.email.BREVO_API_KEY",
-            "key",
-        ), patch(
-            "services.email.brevo_provider.BrevoEmailProvider"
-        ) as provider_cls:
+        with (
+            patch(
+                "services.notifications.email.EMAIL_ENABLED",
+                True,
+            ),
+            patch(
+                "services.notifications.email.EMAIL_PROVIDER",
+                "brevo",
+            ),
+            patch(
+                "services.notifications.email.BREVO_API_KEY",
+                "key",
+            ),
+            patch("services.email.brevo_provider.BrevoEmailProvider") as provider_cls,
+        ):
             instance = provider_cls.return_value
             instance.send_transactional.return_value = MagicMock(
                 success=False,
@@ -344,18 +347,21 @@ class TestSendEmailNotificationRaises:
                 )
 
     def test_raise_on_error_maps_permanent(self):
-        with patch(
-            "services.notifications.email.EMAIL_ENABLED",
-            True,
-        ), patch(
-            "services.notifications.email.EMAIL_PROVIDER",
-            "brevo",
-        ), patch(
-            "services.notifications.email.BREVO_API_KEY",
-            "key",
-        ), patch(
-            "services.email.brevo_provider.BrevoEmailProvider"
-        ) as provider_cls:
+        with (
+            patch(
+                "services.notifications.email.EMAIL_ENABLED",
+                True,
+            ),
+            patch(
+                "services.notifications.email.EMAIL_PROVIDER",
+                "brevo",
+            ),
+            patch(
+                "services.notifications.email.BREVO_API_KEY",
+                "key",
+            ),
+            patch("services.email.brevo_provider.BrevoEmailProvider") as provider_cls,
+        ):
             instance = provider_cls.return_value
             instance.send_transactional.return_value = MagicMock(
                 success=False,

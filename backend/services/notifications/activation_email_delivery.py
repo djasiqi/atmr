@@ -336,18 +336,16 @@ def cas_claim_sending(
 
     now = datetime.now(UTC)
     if delivery.status == EMAIL_DELIVERY_QUEUED:
-        updated = (
-            ActivationEmailDelivery.query.filter_by(
-                id=delivery.id,
-                email_delivery_id=email_delivery_id,
-                status=EMAIL_DELIVERY_QUEUED,
-            ).update(
-                {
-                    "status": EMAIL_DELIVERY_SENDING,
-                    "sending_started_at": now,
-                },
-                synchronize_session=False,
-            )
+        updated = ActivationEmailDelivery.query.filter_by(
+            id=delivery.id,
+            email_delivery_id=email_delivery_id,
+            status=EMAIL_DELIVERY_QUEUED,
+        ).update(
+            {
+                "status": EMAIL_DELIVERY_SENDING,
+                "sending_started_at": now,
+            },
+            synchronize_session=False,
         )
         db.session.commit()
         if updated == 0:

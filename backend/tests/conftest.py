@@ -916,9 +916,7 @@ def mock_external_services(monkeypatch):
         return len(_redis_zsets.get(key, {}))
 
     def _redis_zrange(key, start, end):
-        items = sorted(
-            _redis_zsets.get(key, {}).items(), key=lambda kv: kv[1]
-        )
+        items = sorted(_redis_zsets.get(key, {}).items(), key=lambda kv: kv[1])
         if end == -1:
             end = len(items) - 1
         return [k for k, _ in items[start : end + 1]]

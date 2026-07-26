@@ -36,9 +36,7 @@ class TestIsTokenRevokedFailClosed:
             app.app_context(),
             patch("security.refresh_token_service.RefreshToken.query") as q,
         ):
-            q.filter_by.side_effect = OperationalError(
-                "stmt", {}, Exception()
-            )
+            q.filter_by.side_effect = OperationalError("stmt", {}, Exception())
             with pytest.raises(RefreshStoreUnavailableError):
                 is_token_revoked("any-token")
 
@@ -72,9 +70,7 @@ class TestRefreshEndpoint:
         )
         assert login.status_code == 200
         rt = login.get_json()["refresh_token"]
-        with patch(
-            "routes.auth.RefreshTokenService"
-        ) as svc_cls:
+        with patch("routes.auth.RefreshTokenService") as svc_cls:
             instance = svc_cls.return_value
             instance.is_token_valid.side_effect = RefreshStoreUnavailableError(
                 "redis_unavailable"

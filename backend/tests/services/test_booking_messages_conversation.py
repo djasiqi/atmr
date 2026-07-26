@@ -112,7 +112,7 @@ def test_conversation_open_when_multi_leg_route_group_active():
         assert _is_conversation_closed(booking) is False
 
 
-def test_route_group_has_active_leg_second_leg_in_progress():
+def test_route_group_has_active_leg_second_leg_in_progress(app):
     leg1 = _booking(id=35210, status="COMPLETED", route_group_id="grp-karan")
     leg2 = _booking(id=35211, status="IN_PROGRESS", route_group_id="grp-karan")
     primary = _booking(id=35210, route_group_id="grp-karan", status="COMPLETED")
@@ -124,6 +124,7 @@ def test_route_group_has_active_leg_second_leg_in_progress():
     ]
 
     with (
+        app.app_context(),
         patch.object(Booking, "query", mock_query),
         patch(
             "routes.booking_messages.resolve_return_child_booking",
@@ -133,7 +134,7 @@ def test_route_group_has_active_leg_second_leg_in_progress():
         assert _route_group_has_active_leg(primary) is True
 
 
-def test_route_group_all_legs_terminal():
+def test_route_group_all_legs_terminal(app):
     leg1 = _booking(id=1, status="COMPLETED", route_group_id="grp-done")
     leg2 = _booking(id=2, status="COMPLETED", route_group_id="grp-done")
     primary = _booking(id=1, route_group_id="grp-done", status="COMPLETED")
@@ -145,6 +146,7 @@ def test_route_group_all_legs_terminal():
     ]
 
     with (
+        app.app_context(),
         patch.object(Booking, "query", mock_query),
         patch(
             "routes.booking_messages.resolve_return_child_booking",

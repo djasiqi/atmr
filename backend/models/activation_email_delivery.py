@@ -27,9 +27,7 @@ EMAIL_DELIVERY_KIND_RESEND = "resend"
 
 # Transitions autorisées (Lot 1 v5.1)
 ALLOWED_TRANSITIONS: dict[str, frozenset[str]] = {
-    EMAIL_DELIVERY_QUEUED: frozenset(
-        {EMAIL_DELIVERY_SENDING, EMAIL_DELIVERY_FAILED}
-    ),
+    EMAIL_DELIVERY_QUEUED: frozenset({EMAIL_DELIVERY_SENDING, EMAIL_DELIVERY_FAILED}),
     EMAIL_DELIVERY_SENDING: frozenset(
         {
             EMAIL_DELIVERY_SENT,
@@ -122,9 +120,7 @@ class ActivationEmailDelivery(db.Model):
     token_expires_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    provider_message_id: Mapped[str | None] = mapped_column(
-        String(128), nullable=True
-    )
+    provider_message_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     provider_accepted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
@@ -156,9 +152,7 @@ class BrevoWebhookEvent(db.Model):
         String(64), nullable=False, unique=True
     )
     event_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    provider_message_id: Mapped[str | None] = mapped_column(
-        String(128), nullable=True
-    )
+    provider_message_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     email_delivery_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     processed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()

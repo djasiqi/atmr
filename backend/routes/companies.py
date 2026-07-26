@@ -1291,9 +1291,7 @@ class CompanyPartnershipStatementPdf(Resource):
         consolidated = re.fullmatch(
             r"decompte_consolide_(\d+)_\d{8}_\d{6}\.pdf", safe_name
         )
-        partner = re.fullmatch(
-            r"decompte_partenaire_(\d+)_\d{8}_\d{6}\.pdf", safe_name
-        )
+        partner = re.fullmatch(r"decompte_partenaire_(\d+)_\d{8}_\d{6}\.pdf", safe_name)
 
         user = get_current_user_from_jwt()
         if not user:

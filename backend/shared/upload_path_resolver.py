@@ -99,9 +99,7 @@ def build_file_response(candidate: Path, *, as_attachment: bool = False) -> Resp
         ".webp",
     }
     disposition = (
-        "attachment"
-        if as_attachment or ext not in inline_extensions
-        else "inline"
+        "attachment" if as_attachment or ext not in inline_extensions else "inline"
     )
     data = candidate.read_bytes()
     headers = {

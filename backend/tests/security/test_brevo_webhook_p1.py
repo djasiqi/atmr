@@ -77,9 +77,7 @@ class TestBrevoBearer:
         assert resp.status_code == 401
 
     def test_valid_bearer_ok(self, client, db, brevo_secret):
-        _session, delivery = _session_with_delivery(
-            db.session, mid="<msg@brevo>"
-        )
+        _session, delivery = _session_with_delivery(db.session, mid="<msg@brevo>")
         resp = client.post(
             "/api/v1/webhooks/brevo",
             json={
@@ -125,12 +123,18 @@ class TestBrevoIdempotence:
             "ts_event": "1",
             "X-Mailin-custom": delivery.email_delivery_id,
         }
-        assert process_brevo_webhook_event({**base, "event": "delivered"})["status"] == "ok"
+        assert (
+            process_brevo_webhook_event({**base, "event": "delivered"})["status"]
+            == "ok"
+        )
         db.session.refresh(delivery)
         assert delivery.status == EMAIL_DELIVERY_DELIVERED
-        assert process_brevo_webhook_event({**base, "event": "spam", "ts_event": "2"})[
-            "status"
-        ] == "ok"
+        assert (
+            process_brevo_webhook_event({**base, "event": "spam", "ts_event": "2"})[
+                "status"
+            ]
+            == "ok"
+        )
         db.session.refresh(delivery)
         assert delivery.status == EMAIL_DELIVERY_SPAM
         k1 = compute_idempotency_key(

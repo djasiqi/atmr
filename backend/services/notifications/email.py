@@ -89,7 +89,11 @@ def send_email_notification(
         logger.debug(
             "[email] Email notifications disabled (EMAIL_NOTIFICATIONS_ENABLED=false)"
         )
-        result = {"ok": False, "error": "Email notifications disabled", "retryable": False}
+        result = {
+            "ok": False,
+            "error": "Email notifications disabled",
+            "retryable": False,
+        }
         if raise_on_error:
             raise EmailPermanentError("Email notifications disabled")
         return result

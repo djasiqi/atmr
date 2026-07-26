@@ -123,9 +123,7 @@ def archive_positions_older_than(
                 "dry_run": False,
                 "error": str(e),
             }
-        logger.warning(
-            "Partition setup skipped (non-partitioned archive table): %s", e
-        )
+        logger.warning("Partition setup skipped (non-partitioned archive table): %s", e)
         db.session.rollback()
 
     archived = 0

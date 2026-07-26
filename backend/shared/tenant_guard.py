@@ -58,7 +58,9 @@ def assert_company_access(
 
             own_company = Company.query.filter_by(user_id=user.id).first()
         except Exception:
-            logger.debug("Impossible de résoudre company ADMIN pour audit", exc_info=True)
+            logger.debug(
+                "Impossible de résoudre company ADMIN pour audit", exc_info=True
+            )
 
         is_cross_tenant = own_company is None or own_company.id != company_id
         if is_cross_tenant:

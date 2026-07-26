@@ -359,9 +359,7 @@ class InvoicesList(Resource):
         """Récupère la liste des factures avec filtres et pagination."""
         from shared.tenant_guard import assert_company_access
 
-        _user, access_err = assert_company_access(
-            company_id, resource="invoices_list"
-        )
+        _user, access_err = assert_company_access(company_id, resource="invoices_list")
         if access_err:
             return access_err
 
@@ -899,9 +897,7 @@ class InvoicesDebug(Resource):
         """Debug: Liste toutes les factures de l'entreprise."""
         from shared.tenant_guard import assert_company_access
 
-        _user, access_err = assert_company_access(
-            company_id, resource="invoices_debug"
-        )
+        _user, access_err = assert_company_access(company_id, resource="invoices_debug")
         if access_err:
             return access_err
 
@@ -2908,9 +2904,7 @@ class InvoicePdfDownload(Resource):
         from shared.tenant_guard import assert_company_access
         from shared.upload_path_resolver import serve_stored_upload
 
-        _user, access_err = assert_company_access(
-            company_id, resource="invoice_pdf"
-        )
+        _user, access_err = assert_company_access(company_id, resource="invoice_pdf")
         if access_err:
             return access_err
 

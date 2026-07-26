@@ -59,7 +59,8 @@ class TestLoginOrigin:
             assert ok is False
             assert err == "missing_origin"
 
-    def test_expo_does_not_bypass(self, app, csrf_strict_env, monkeypatch):
+    def test_login_origin_helper_ignores_expo_header(self, app, csrf_strict_env, monkeypatch):
+        """Le helper reste strict : le bypass mobile est dans routes.auth.Login."""
         monkeypatch.setitem(app.config, "TESTING", False)
         with app.test_request_context(
             "/api/v1/auth/login",
@@ -69,8 +70,9 @@ class TestLoginOrigin:
                 "Origin": "https://evil.example",
             },
         ):
-            ok, _err = validate_login_origin_for_web()
+            ok, err = validate_login_origin_for_web()
             assert ok is False
+            assert err == "origin_not_allowed"
 
 
 class TestCsrfStrictConfig:

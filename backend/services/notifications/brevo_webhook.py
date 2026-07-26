@@ -180,7 +180,11 @@ def process_brevo_webhook_event(payload: dict[str, Any]) -> dict[str, Any]:
         if delivery is None:
             # Événement enregistré mais livraison inconnue — commit event seul
             db.session.commit()
-            return {"status": "ignored", "http_status": 200, "reason": "unknown_delivery"}
+            return {
+                "status": "ignored",
+                "http_status": 200,
+                "reason": "unknown_delivery",
+            }
 
         applied = apply_delivery_transition(delivery, new_status)
         if applied and not delivery.provider_message_id and message_id:

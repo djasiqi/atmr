@@ -236,9 +236,7 @@ class RefreshTokenService:
                     str(redis_error),
                     user_id,
                 )
-                raise RefreshStoreUnavailableError(
-                    "redis_unavailable"
-                ) from redis_error
+                raise RefreshStoreUnavailableError("redis_unavailable") from redis_error
             logger.warning(
                 "Erreur Redis lors validation token. Fallback gracieux activé (validation JWT uniquement): %s, user_id=%s",
                 str(redis_error),

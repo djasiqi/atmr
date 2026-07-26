@@ -58,12 +58,8 @@ class ActivationSession(db.Model):
     email_delivery_id: Mapped[str | None] = mapped_column(
         String(36), nullable=True, index=True
     )
-    email_delivery_status: Mapped[str | None] = mapped_column(
-        String(16), nullable=True
-    )
-    email_delivery_kind: Mapped[str | None] = mapped_column(
-        String(16), nullable=True
-    )
+    email_delivery_status: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    email_delivery_kind: Mapped[str | None] = mapped_column(String(16), nullable=True)
     email_last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     email_provider_message_id: Mapped[str | None] = mapped_column(
         String(128), nullable=True
