@@ -79,9 +79,11 @@ Vérification live (2026-07-26) :
 
 ## 3. Secrets de production
 
-- [ ] Générer `ACTIVATION_TOKEN_KEY_V1` (fort, aléatoire, **≠ JWT/CSRF**)
-- [ ] Générer `BREVO_WEBHOOK_SECRET` (fort, aléatoire, **≠ JWT/CSRF**)
-- [ ] Sauvegarder hors dépôt (coffre / `.env.production.local` serveur uniquement)
+- [x] Générer `ACTIVATION_TOKEN_KEY_V1` (fort, aléatoire, **≠ JWT/CSRF**) — 2026-07-26 serveur
+- [x] Générer `BREVO_WEBHOOK_SECRET` (fort, aléatoire, **≠ JWT/CSRF**) — 2026-07-26 serveur
+- [x] Enregistrés dans `.env.production.local`, `.env.production` et `.env` (chmod 600) — **valeurs jamais dans Git**
+- [x] Présence vérifiée dans conteneurs `backend` et `celery-worker` (sans affichage des valeurs)
+- [ ] Sauvegarder dans le coffre-fort ops (copie hors serveur) : surtout `ACTIVATION_TOKEN_KEY_V1`
 - [ ] Documenter : perdre `ACTIVATION_TOKEN_KEY_V1` invalide les activations en cours
 
 Ne jamais committer ces valeurs.
@@ -103,7 +105,8 @@ Cookies déjà prévus dans le fragment : `COOKIE_SECURE=true`, `COOKIE_HTTP_ONL
 
 Contrôles manuels prod :
 
-- [ ] `ACTIVATION_TOKEN_KEY_V1` / `BREVO_WEBHOOK_SECRET` présents dans `.env.production.local`
+- [x] `ACTIVATION_TOKEN_KEY_V1` / `BREVO_WEBHOOK_SECRET` présents dans `.env.production.local` (+ `.env.production` / `.env`)
+- [x] `CSRF_ENABLED=true`, `CSRF_STRICT=true`, `REFRESH_FAIL_CLOSED=true` injectés en prod (2026-07-26)
 - [ ] Origines exactes incluent `https://www.lirie.ch`
 - [ ] `FRONTEND_URL=https://www.lirie.ch/` (URL canonique d’activation)
 - [ ] Identité d’envoi LIRIE (Brevo sender / reply-to)
@@ -120,8 +123,8 @@ Authorization: Bearer <BREVO_WEBHOOK_SECRET>
 
 Événements : delivered, soft_bounce, hard_bounce, spam/complaint, blocked, invalid_email.
 
-- [ ] Webhook créé / mis à jour
-- [ ] Bearer aligné avec `BREVO_WEBHOOK_SECRET`
+- [ ] Webhook créé / mis à jour → `https://api.lirie.ch/api/v1/webhooks/brevo`
+- [ ] Bearer aligné avec `BREVO_WEBHOOK_SECRET` (même valeur que le serveur)
 - [ ] Événements sélectionnés
 - [ ] Note ID webhook Brevo (non sensible) : ______________
 
