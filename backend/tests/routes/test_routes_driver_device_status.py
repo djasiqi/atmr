@@ -50,8 +50,11 @@ def test_post_device_status_204_and_redis_write(client, sample_driver, db) -> No
     headers = _driver_headers(client, sample_driver)
     body = _valid_payload()
 
-    with patch("routes.driver.redis_client", mock_redis), patch(
-        "services.monitoring.driver_location_metrics.inc_driver_device_health_received"
+    with (
+        patch("routes.driver.redis_client", mock_redis),
+        patch(
+            "services.monitoring.driver_location_metrics.inc_driver_device_health_received"
+        ),
     ):
         response = client.post(
             "/api/v1/driver/me/device-status",
@@ -132,4 +135,6 @@ def test_write_device_health_redis_key_and_ttl() -> None:
     assert ok is True
     mock_redis.hset.assert_called_once()
     assert mock_redis.hset.call_args[0][0] == "driver:42:device_health"
-    mock_redis.expire.assert_called_with("driver:42:device_health", DEVICE_HEALTH_TTL_SEC)
+    mock_redis.expire.assert_called_with(
+        "driver:42:device_health", DEVICE_HEALTH_TTL_SEC
+    )

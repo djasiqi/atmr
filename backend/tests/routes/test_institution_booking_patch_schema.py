@@ -26,4 +26,6 @@ def test_leg_appointments_scheduled_time_iso_ok():
         ],
     }
     result = InstitutionBookingPatchSchema().load(payload)
-    assert result["leg_appointments"][0]["scheduled_time"] == "2026-07-22T11:30:00+02:00"
+    assert (
+        result["leg_appointments"][0]["scheduled_time"] == "2026-07-22T11:30:00+02:00"
+    )

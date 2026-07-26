@@ -77,9 +77,7 @@ def test_pdf_preconsolidated_merges_partner_amounts(monkeypatch):
         _fake_enrich,
     )
     enriched = _build_enriched_line_meta_by_line_id(invoice, bookings_by_id)
-    pre, used = _pdf_build_preconsolidated_ar_items(
-        invoice, bookings_by_id, enriched
-    )
+    pre, used = _pdf_build_preconsolidated_ar_items(invoice, bookings_by_id, enriched)
 
     assert len(pre) == 1
     assert pre[0]["is_round_trip"] is True

@@ -504,7 +504,9 @@ def track_company_push_new_request_expired(*, company_id: int) -> None:
 
         inc_company_push_new_request_expired()
     except Exception:
-        logger.debug("company_push_new_request_expired prometheus failed", exc_info=True)
+        logger.debug(
+            "company_push_new_request_expired prometheus failed", exc_info=True
+        )
 
 
 def track_company_push_open_to_accept_seconds(*, seconds: float) -> None:
@@ -514,11 +516,15 @@ def track_company_push_open_to_accept_seconds(*, seconds: float) -> None:
         seconds,
     )
     try:
-        from services.monitoring.prometheus import observe_company_push_open_to_accept_seconds
+        from services.monitoring.prometheus import (
+            observe_company_push_open_to_accept_seconds,
+        )
 
         observe_company_push_open_to_accept_seconds(seconds=seconds)
     except Exception:
-        logger.debug("company_push_open_to_accept_seconds prometheus failed", exc_info=True)
+        logger.debug(
+            "company_push_open_to_accept_seconds prometheus failed", exc_info=True
+        )
 
 
 def track_company_push_tap_without_network(*, company_id: int | None = None) -> None:
@@ -532,4 +538,6 @@ def track_company_push_tap_without_network(*, company_id: int | None = None) -> 
 
         inc_company_push_tap_without_network()
     except Exception:
-        logger.debug("company_push_tap_without_network prometheus failed", exc_info=True)
+        logger.debug(
+            "company_push_tap_without_network prometheus failed", exc_info=True
+        )

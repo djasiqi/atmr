@@ -472,7 +472,7 @@ def purge_old_task_failures(
 
 
 @celery.task(bind=True, name="tasks.purge_tasks.purge_all_old_data")
-def purge_all_old_data(self: Task) -> dict[str, Any]:
+def purge_all_old_data(_self: Task) -> dict[str, Any]:
     """✅ 3.3: Purge toutes les données anciennes (tâche principale).
 
     Appelle toutes les tâches de purge individuellement et agrège les résultats.

@@ -25,10 +25,10 @@ from services.unified_dispatch.core import queue as ud_queue
 # ---------------------------------------------------------------------------
 class TestIsAutomationAllowed:
     def test_manual_never_allows_automation(self, db):
-        from tests.factories import CompanyFactory
         from services.unified_dispatch.utils.autonomous import (
             get_manager_for_company,
         )
+        from tests.factories import CompanyFactory
 
         company = CompanyFactory(
             dispatch_mode=DispatchMode.MANUAL, dispatch_enabled=False
@@ -37,10 +37,10 @@ class TestIsAutomationAllowed:
         assert manager.is_automation_allowed() is False
 
     def test_fully_auto_allows_automation(self, db):
-        from tests.factories import CompanyFactory
         from services.unified_dispatch.utils.autonomous import (
             get_manager_for_company,
         )
+        from tests.factories import CompanyFactory
 
         company = CompanyFactory(
             dispatch_mode=DispatchMode.FULLY_AUTO, dispatch_enabled=True
@@ -49,10 +49,10 @@ class TestIsAutomationAllowed:
         assert manager.is_automation_allowed() is True
 
     def test_semi_auto_follows_config(self, db):
-        from tests.factories import CompanyFactory
         from services.unified_dispatch.utils.autonomous import (
             get_manager_for_company,
         )
+        from tests.factories import CompanyFactory
 
         company = CompanyFactory(
             dispatch_mode=DispatchMode.SEMI_AUTO, dispatch_enabled=True

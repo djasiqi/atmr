@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Animated, Easing, Platform, StyleSheet } from "react-native";
+import { Animated, AppState, Easing, Platform, StyleSheet } from "react-native";
 import { useAppViewport } from "../../design/responsive/useAppViewport";
 import { useSession } from "../sessionProvider";
 import { BOOT_LOTTIE_FIRST_LAUNCH_ONLY } from "./bootSplashConfig";
 import { getBootLottieIntroSeen, setBootLottieIntroSeen } from "./bootSplashStorage";
 import { resolveBootSplashSessionBlocksOverlay } from "./bootSplashSessionLogic";
+import { shouldReportBootSplashFallback } from "./bootSplashFallbackLogic";
 import { computeBootLottieDisplaySize } from "./bootLottieLayout";
 import { reportBootFallback } from "../observability/bootDiagnostics";
 import { resolveBootLottieSource } from "./resolveBootLottieSource";
@@ -62,8 +63,16 @@ export function useBootSplashGate(): {
   const { status } = useSession();
   const prevStatusRef = useRef(status);
   const bootStartedAtRef = useRef(Date.now());
+  const overlayBootAtRef = useRef(Date.now());
   const lastSnapshotRef = useRef("");
   const fallbackWarnedRef = useRef(false);
+  const fallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const overlayMountedRef = useRef(false);
+  const animFinishedRef = useRef(false);
+  const statusRef = useRef(status);
+  const introStateRef = useRef(introState);
+  statusRef.current = status;
+  introStateRef.current = introState;
   /** Après le premier boot réussi, ne plus bloquer l'UI sur idle/bootstrapping (ex. logout). */
   const hasCompletedInitialBootRef = useRef(false);
   const fadeOpacity = useRef(new Animated.Value(1)).current;
@@ -198,6 +207,49 @@ export function useBootSplashGate(): {
     }
   }, [introState]);
 
+  const onLottieFinishRef = useRef(onLottieFinish);
+  onLottieFinishRef.current = onLottieFinish;
+
+  const clearSplashFallbackTimer = useCallback(() => {
+    if (fallbackTimerRef.current != null) {
+      clearTimeout(fallbackTimerRef.current);
+      fallbackTimerRef.current = null;
+    }
+  }, []);
+
+  const triggerSplashFallback = useCallback(() => {
+    const elapsedMs = Date.now() - bootStartedAtRef.current;
+    const elapsedSinceOverlayMs = Date.now() - overlayBootAtRef.current;
+    if (!fallbackWarnedRef.current) {
+      fallbackWarnedRef.current = true;
+      if (
+        shouldReportBootSplashFallback({
+          elapsedSinceOverlayMs,
+          elapsedSinceSessionMs: elapsedMs,
+        })
+      ) {
+        reportBootFallback("BootSplashFallbackTriggered", {
+          elapsedMs,
+          elapsedSinceOverlayMs,
+          status: statusRef.current,
+          introState: introStateRef.current,
+        });
+      }
+    }
+    onLottieFinishRef.current();
+  }, []);
+
+  const armSplashFallbackTimer = useCallback(() => {
+    if (Platform.OS === "web") {
+      return;
+    }
+    clearSplashFallbackTimer();
+    fallbackTimerRef.current = setTimeout(() => {
+      fallbackTimerRef.current = null;
+      triggerSplashFallback();
+    }, SPLASH_LOTTIE_FALLBACK_TIMEOUT_MS);
+  }, [clearSplashFallbackTimer, triggerSplashFallback]);
+
   // Complétion DÉTERMINISTE de l'intro, indépendante de `onAnimationFinish`.
   // Ce callback Lottie est non fiable sous Fabric/Hermes (il peut ne jamais arriver
   // → splash bloqué jusqu'au filet de secours à 4 s, cf. BootSplashFallbackTriggered).
@@ -218,31 +270,63 @@ export function useBootSplashGate(): {
   }, [showLottieLayer, showOverlay, animFinished, onLottieFinish]);
 
   useEffect(() => {
+    animFinishedRef.current = animFinished;
+  }, [animFinished]);
+
+  useEffect(() => {
+    overlayMountedRef.current = overlayMounted;
+    if (!overlayMounted) {
+      fallbackWarnedRef.current = false;
+      clearSplashFallbackTimer();
+      return;
+    }
+    if (showOverlay) {
+      overlayBootAtRef.current = Date.now();
+    }
+  }, [clearSplashFallbackTimer, overlayMounted, showOverlay]);
+
+  useEffect(() => {
     if (Platform.OS === "web") {
       return;
     }
-    // On arme le filet dès que l'overlay est monté (et non quand le calque Lottie
-    // est visible) : si `autoPlay` ne démarre jamais l'animation (New Architecture /
-    // Android Samsung), `onAnimationFinish` ne se déclenche pas — ce timeout garantit
-    // tout de même la sortie du splash.
+    // Filet dès que l'overlay est monté (pas seulement le calque Lottie).
     if (!overlayMounted || animFinished) {
+      clearSplashFallbackTimer();
       return;
     }
 
-    const id = setTimeout(() => {
-      if (!fallbackWarnedRef.current) {
-        fallbackWarnedRef.current = true;
-        reportBootFallback("BootSplashFallbackTriggered", {
-          elapsedMs: Date.now() - bootStartedAtRef.current,
-          status,
-          introState,
-        });
-      }
-      onLottieFinish();
-    }, SPLASH_LOTTIE_FALLBACK_TIMEOUT_MS);
+    armSplashFallbackTimer();
+    return clearSplashFallbackTimer;
+  }, [animFinished, armSplashFallbackTimer, clearSplashFallbackTimer, overlayMounted]);
 
-    return () => clearTimeout(id);
-  }, [overlayMounted, animFinished, introState, onLottieFinish, status]);
+  useEffect(() => {
+    if (Platform.OS === "web") {
+      return;
+    }
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState !== "active") {
+        clearSplashFallbackTimer();
+        return;
+      }
+      if (!overlayMountedRef.current || animFinishedRef.current) {
+        return;
+      }
+      const elapsedSinceOverlayMs = Date.now() - overlayBootAtRef.current;
+      // Timer throttlé en arrière-plan : terminer sans alerter Sentry si hors fenêtre boot.
+      if (!shouldReportBootSplashFallback({
+        elapsedSinceOverlayMs,
+        elapsedSinceSessionMs: Date.now() - bootStartedAtRef.current,
+      })) {
+        onLottieFinishRef.current();
+        return;
+      }
+      armSplashFallbackTimer();
+    });
+    return () => {
+      subscription.remove();
+      clearSplashFallbackTimer();
+    };
+  }, [armSplashFallbackTimer, clearSplashFallbackTimer]);
 
   useEffect(() => {
     const elapsedMs = Date.now() - bootStartedAtRef.current;

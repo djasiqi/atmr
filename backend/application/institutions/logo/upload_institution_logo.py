@@ -24,7 +24,9 @@ class UploadInstitutionLogoUseCase:
 
     _ALLOWED_EXT: ClassVar[set[str]] = {"png", "jpg", "jpeg", "svg"}
 
-    def __init__(self, *, storage: InstitutionLogoStoragePort, public_base: str) -> None:
+    def __init__(
+        self, *, storage: InstitutionLogoStoragePort, public_base: str
+    ) -> None:
         super().__init__()
         self._storage = storage
         self._public_base = public_base.rstrip("/")

@@ -69,7 +69,7 @@ def build_billing_summary(transport_request: TransportRequest) -> dict[str, Any]
     """Résumé facturation pour l'UI institution (payeur principal + exceptions)."""
     primary = (transport_request.billing_intent or "patient").lower()
     legs = sorted(
-        list(getattr(transport_request, "legs", None) or []),
+        getattr(transport_request, "legs", None) or [],
         key=lambda item: item.sequence_index,
     )
 

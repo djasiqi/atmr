@@ -107,10 +107,14 @@ Contrôles manuels prod :
 
 - [x] `ACTIVATION_TOKEN_KEY_V1` / `BREVO_WEBHOOK_SECRET` présents dans `.env.production.local` (+ `.env.production` / `.env`)
 - [x] `CSRF_ENABLED=true`, `CSRF_STRICT=true`, `REFRESH_FAIL_CLOSED=true` injectés en prod (2026-07-26)
-- [ ] Origines exactes incluent `https://www.lirie.ch`
-- [ ] `FRONTEND_URL=https://www.lirie.ch/` (URL canonique d’activation)
+- [x] Origines exactes incluent `https://www.lirie.ch` (`LOGIN_ALLOWED_ORIGINS` ajouté dans `.env.production` le 2026-07-26)
+- [x] `FRONTEND_URL=https://www.lirie.ch/` (URL canonique d’activation)
 - [ ] Identité d’envoi LIRIE (Brevo sender / reply-to)
-- [ ] URL publique webhook : `https://api.lirie.ch/api/v1/webhooks/brevo`
+- [x] URL publique webhook : `https://api.lirie.ch/api/v1/webhooks/brevo`
+
+**Coffre-fort (manuel, hors serveur)** : sauvegarder `ACTIVATION_TOKEN_KEY_V1` et `BREVO_WEBHOOK_SECRET` dans un coffre externe — **à confirmer par l’opérateur** (ne pas coller les valeurs ici).
+
+**Note duplication env** : Compose prod charge uniquement `.env.production` pour `backend` / `celery-worker`. Les copies dans `.env` / `.env.production.local` sont redondantes ; ne pas unifier pendant ce déploiement. Hashs des 2 secrets vérifiés identiques sur les 3 fichiers (2026-07-26).
 
 ---
 
@@ -123,10 +127,10 @@ Authorization: Bearer <BREVO_WEBHOOK_SECRET>
 
 Événements : delivered, soft_bounce, hard_bounce, spam/complaint, blocked, invalid_email.
 
-- [ ] Webhook créé / mis à jour → `https://api.lirie.ch/api/v1/webhooks/brevo`
-- [ ] Bearer aligné avec `BREVO_WEBHOOK_SECRET` (même valeur que le serveur)
-- [ ] Événements sélectionnés
-- [ ] Note ID webhook Brevo (non sensible) : ______________
+- [x] Webhook créé / mis à jour → `https://api.lirie.ch/api/v1/webhooks/brevo`
+- [x] Bearer aligné avec `BREVO_WEBHOOK_SECRET` (même valeur que le serveur)
+- [x] Événements sélectionnés : `delivered`, `softBounce`, `hardBounce`, `spam`, `blocked`, `invalid`
+- [x] Note ID webhook Brevo (non sensible) : `2097976`
 
 ---
 
@@ -134,22 +138,22 @@ Authorization: Bearer <BREVO_WEBHOOK_SECRET>
 
 Avant migration :
 
-- [ ] Sauvegarde datée créée
-- [ ] Fichier non vide (taille vérifiée)
-- [ ] Commande de restauration documentée
-- [ ] (Idéal) test de lecture / restore dry-run
+- [x] Sauvegarde datée créée
+- [x] Fichier non vide (taille vérifiée)
+- [x] Commande de restauration documentée
+- [x] (Idéal) test de lecture / restore dry-run (`pg_restore -l`, TOC Entries: 1512)
 
 ```text
-Fichier backup : ______________________________
-Checksum / taille : ______________________________
-Restore cmd : ______________________________
+Fichier backup : /srv/atmr/backups/atmr-pg-lot1-pre-16f950e9a85f-20260726-112801.dump
+Checksum / taille : sha256=0269b628054e7cdad10a25cb93d4e2f5e8f81f49435ce5e107888a09a3b912f4 / 3682318 octets
+Restore cmd : docker compose -f docker-compose.production.yml --env-file .env.production exec -T postgres sh -lc 'export PGPASSWORD="$POSTGRES_PASSWORD"; pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists' < /srv/atmr/backups/atmr-pg-lot1-pre-16f950e9a85f-20260726-112801.dump
 ```
 
 ---
 
 ## 7. Déployer + migration `16f950e9a85f`
 
-- [ ] Déployer le **SHA figé** uniquement
+- [ ] Déployer le **SHA figé** uniquement (`4ccd61fa` via tag git `lot1-4ccd61fa`, image `v5`, workflow run en cours)
 - [ ] Appliquer `16f950e9a85f` **une seule fois**
 - [ ] `flask db current` = `16f950e9a85f` (ou head l’incluant)
 - [ ] Tables `activation_email_deliveries`, `brevo_webhook_events`

@@ -341,6 +341,11 @@
   color: #1E293B;
 }
 
+.userDropdownItem:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
 /* ═══════════════════════════════════════════════════════════
    RESPONSIVE — automatique, pas de toggle
    ═══════════════════════════════════════════════════════════ */

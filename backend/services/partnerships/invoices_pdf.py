@@ -328,11 +328,6 @@ def generate_partner_invoice_pdf_content(
     # Informations entreprise émettrice
     company_name = executing_company.name or "[Nom entreprise non configuré]"
     company_address = _format_address_multiline(executing_company.address)
-    company_phone = executing_company.contact_phone or ""
-    company_email = (
-        executing_company.billing_email or executing_company.contact_email or ""
-    )
-    company_uid = executing_company.uid_ide or ""
 
     # Statut TVA (identique à pdf.py)
     vat_status_text = ""

@@ -30,7 +30,9 @@ def client_auth_headers(client, sample_client):
 
 
 class TestClientAccountDeletion:
-    def test_delete_account_success(self, client, db, sample_client, client_auth_headers):
+    def test_delete_account_success(
+        self, client, db, sample_client, client_auth_headers
+    ):
         token = client_auth_headers["Authorization"].split(" ", 1)[1]
         response = client.delete("/api/v1/clients/me", headers=client_auth_headers)
         assert response.status_code == 200

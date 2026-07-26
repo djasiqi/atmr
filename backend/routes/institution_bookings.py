@@ -10,17 +10,18 @@ import sentry_sdk
 from flask import request
 from flask_jwt_extended import get_jwt, get_jwt_identity, verify_jwt_in_request
 from flask_restx import Namespace, Resource, fields
-from marshmallow import EXCLUDE, Schema, ValidationError, fields as ma_fields, validate
+from marshmallow import EXCLUDE, Schema, ValidationError, validate
+from marshmallow import fields as ma_fields
 
 from ext import db
 from models.enums import InstitutionRole
-from schemas.validation_utils import parse_request_json
 from routes.api_error_models import (
     create_api_error_model,
     create_not_found_error_model,
     create_permission_error_model,
     create_validation_error_model,
 )
+from schemas.validation_utils import parse_request_json
 from security.audit_log import AuditLogger
 from services.institutions.booking_change_service import (
     INSTITUTION_OPERATIONAL_FIELDS,

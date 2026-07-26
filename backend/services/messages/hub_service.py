@@ -59,12 +59,19 @@ def parse_direct_thread(thread_id: str) -> int | None:
 
 def _driver_display_name(driver: Driver) -> str:
     user = getattr(driver, "user", None)
+    if user is None and getattr(driver, "user_id", None):
+        from models import User
+
+        user = User.query.get(int(driver.user_id))
     if user is not None:
-        first = getattr(user, "first_name", None) or ""
-        last = getattr(user, "last_name", None) or ""
+        first = (getattr(user, "first_name", None) or "").strip()
+        last = (getattr(user, "last_name", None) or "").strip()
         full = f"{first} {last}".strip()
         if full:
             return full
+        username = getattr(user, "username", None)
+        if username:
+            return str(username)
     return f"Chauffeur #{driver.id}"
 
 
@@ -104,9 +111,7 @@ def _message_in_thread(
         tid = getattr(message, "thread_id", None)
         if tid == THREAD_DISPATCH:
             return True
-        if tid in (None, "") and getattr(message, "receiver_id", None) is None:
-            return True
-        return False
+        return bool(tid in (None, "") and getattr(message, "receiver_id", None) is None)
     if thread_id == THREAD_SUPPORT:
         return getattr(message, "thread_id", None) == THREAD_SUPPORT
     return getattr(message, "thread_id", None) == thread_id
@@ -511,17 +516,21 @@ def get_thread_messages(
                 thread_id,
                 perm_err,
             )
-            if conv is not None and thread_id == THREAD_DISPATCH and driver is not None:
-                if ConversationService._sync_dispatch_driver_participants(
+            if (
+                conv is not None
+                and thread_id == THREAD_DISPATCH
+                and driver is not None
+                and ConversationService._sync_dispatch_driver_participants(
                     conv, company_id
-                ):
-                    try:
-                        MessagingPermissionService.assert_can_read(hub_reader, conv)
-                        return ConversationService.get_messages(
-                            conv, hub_reader, before=before, limit=limit
-                        )
-                    except PermissionError:
-                        pass
+                )
+            ):
+                try:
+                    MessagingPermissionService.assert_can_read(hub_reader, conv)
+                    return ConversationService.get_messages(
+                        conv, hub_reader, before=before, limit=limit
+                    )
+                except PermissionError:
+                    pass
             if conv is not None:
                 rows = _messages_for_conversation_legacy(
                     conv.id,
@@ -582,10 +591,10 @@ def get_thread_messages(
 def mark_thread_read(
     company_id: int,
     thread_id: str,
-    reader_role: SenderRole,
+    _reader_role: SenderRole,
     *,
     reader_user_id: int | None = None,
-    driver: Driver | None = None,
+    _driver: Driver | None = None,
 ) -> int:
     """Mark inbound messages as read for a thread."""
     rows = Message.query.filter(
@@ -631,24 +640,6 @@ EMERGENCY_LABELS = {
     "incident": "Incident",
     "besoin_assistance": "Besoin d'assistance",
 }
-
-
-def _driver_display_name(driver: Driver) -> str:
-    user = getattr(driver, "user", None)
-    if user is None and getattr(driver, "user_id", None):
-        from models import User
-
-        user = User.query.get(int(driver.user_id))
-    if user is not None:
-        first = (getattr(user, "first_name", None) or "").strip()
-        last = (getattr(user, "last_name", None) or "").strip()
-        full = f"{first} {last}".strip()
-        if full:
-            return full
-        username = getattr(user, "username", None)
-        if username:
-            return str(username)
-    return "Chauffeur"
 
 
 def report_hub_emergency(

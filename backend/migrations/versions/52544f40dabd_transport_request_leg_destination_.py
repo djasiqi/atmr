@@ -20,7 +20,9 @@ depends_on = None
 def upgrade():
     with op.batch_alter_table("transport_request_legs", schema=None) as batch_op:
         batch_op.add_column(
-            sa.Column("destination_billing_override", sa.String(length=50), nullable=True)
+            sa.Column(
+                "destination_billing_override", sa.String(length=50), nullable=True
+            )
         )
         batch_op.add_column(
             sa.Column(

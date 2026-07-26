@@ -106,7 +106,9 @@ def build_driver_push_coverage_row(driver: Driver) -> dict[str, Any]:
     )
     redis_seen = _read_driver_last_seen(int(driver.id))
     last_driver_activity_at = last_seen_db
-    if redis_seen and (last_driver_activity_at is None or redis_seen > last_driver_activity_at):
+    if redis_seen and (
+        last_driver_activity_at is None or redis_seen > last_driver_activity_at
+    ):
         last_driver_activity_at = redis_seen
 
     push_operational = bool(driver.is_active and driver.is_available)
@@ -130,7 +132,9 @@ def build_driver_push_coverage_row(driver: Driver) -> dict[str, Any]:
         "last_push_success_at": _iso(
             _max_push_success_at(active_tokens) if active_tokens else None
         ),
-        "last_push_error_code": latest_token.last_push_error_code if latest_token else None,
+        "last_push_error_code": latest_token.last_push_error_code
+        if latest_token
+        else None,
         "platform": latest_token.platform if latest_token else None,
         "provider": latest_token.provider if latest_token else None,
         "app_version": health.get("app_version") or "",

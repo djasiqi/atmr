@@ -51,7 +51,9 @@ class DriverDeviceHealthEvent(db.Model):
     ios_low_power_mode = db.Column(db.Boolean, nullable=True)
     ios_background_refresh_status = db.Column(db.String(16), nullable=True)
 
-    driver = db.relationship("Driver", backref=db.backref("device_health_events", lazy="dynamic"))
+    driver = db.relationship(
+        "Driver", backref=db.backref("device_health_events", lazy="dynamic")
+    )
 
     def to_dict(self) -> dict:
         return {

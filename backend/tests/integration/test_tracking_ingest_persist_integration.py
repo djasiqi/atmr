@@ -15,7 +15,10 @@ from models import Driver
 from models.enums import AssignmentStatus
 from models.trip_tracking import TripTracking
 from repositories.assignment_repository import AssignmentRepository
-from services.geolocation.location import LocationService, TRIP_TRACKING_ASSIGNMENT_STATUSES
+from services.geolocation.location import (
+    TRIP_TRACKING_ASSIGNMENT_STATUSES,
+    LocationService,
+)
 from services.tracking.ingest_consumer import TrackingIngestConsumer
 from services.tracking.kafka_topics import TOPIC_DRIVER_LOCATION_PROCESSED
 from tests.factories import create_assignment_with_booking_driver
@@ -91,7 +94,9 @@ def _aware(dt: datetime) -> datetime:
 
 
 @pytest.mark.integration
-def test_ingest_consumer_persist_and_dedup_integration(app, db, sample_company, monkeypatch):
+def test_ingest_consumer_persist_and_dedup_integration(
+    app, db, sample_company, monkeypatch
+):
     """Raw Kafka → persist → processed ; rejeu même event_id → skipped sans nouvelle ligne."""
     assignment = create_assignment_with_booking_driver(
         company=sample_company,
@@ -99,7 +104,8 @@ def test_ingest_consumer_persist_and_dedup_integration(app, db, sample_company, 
     )
     driver = assignment.driver
     booking = assignment.booking
-    assert driver is not None and booking is not None
+    assert driver is not None
+    assert booking is not None
 
     booking.driver_id = driver.id
     db.session.flush()
@@ -113,9 +119,13 @@ def test_ingest_consumer_persist_and_dedup_integration(app, db, sample_company, 
 
     fake_redis = _TrackingIntegrationRedis()
     monkeypatch.setattr("ext.redis_client", fake_redis)
-    monkeypatch.setattr("services.geolocation.location._location_service_instance", None)
+    monkeypatch.setattr(
+        "services.geolocation.location._location_service_instance", None
+    )
     loc_svc = LocationService(redis_client_instance=fake_redis)
-    monkeypatch.setattr("services.geolocation.location.get_location_service", lambda: loc_svc)
+    monkeypatch.setattr(
+        "services.geolocation.location.get_location_service", lambda: loc_svc
+    )
 
     _real_update_location = LocationService.update_driver_location
 
@@ -145,7 +155,9 @@ def test_ingest_consumer_persist_and_dedup_integration(app, db, sample_company, 
     consumer = TrackingIngestConsumer()
     published: list[dict[str, Any]] = []
 
-    def _capture_publish(*, topic: str, key: str, message: dict[str, Any], retry_count: int):
+    def _capture_publish(
+        *, topic: str, key: str, message: dict[str, Any], retry_count: int
+    ):
         published.append(
             {"topic": topic, "key": key, "message": message, "retry_count": retry_count}
         )

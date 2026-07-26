@@ -788,7 +788,11 @@ def generate_simple_signature_html(
             else:
                 city = tail
 
-    company_obj = SimpleNamespace(logo_url=logo_url, name=contact_name or "") if logo_url else None
+    company_obj = (
+        SimpleNamespace(logo_url=logo_url, name=contact_name or "")
+        if logo_url
+        else None
+    )
 
     return generate_signature_html_from_form(
         name=contact_name,

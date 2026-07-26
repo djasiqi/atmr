@@ -59,15 +59,27 @@ def test_s2_full_address_preserves_ar_independent_of_amount():
     """[A/R] basé sur statut métier, pas sur le montant."""
     line_80 = SimpleNamespace(
         id=1,
-        line_meta={"billing_unit": "round_trip", "round_trip_merge_partner_reservation_id": 99},
+        line_meta={
+            "billing_unit": "round_trip",
+            "round_trip_merge_partner_reservation_id": 99,
+        },
     )
     line_120 = SimpleNamespace(
         id=2,
-        line_meta={"billing_unit": "round_trip", "round_trip_merge_partner_reservation_id": 100},
+        line_meta={
+            "billing_unit": "round_trip",
+            "round_trip_merge_partner_reservation_id": 100,
+        },
     )
     enriched = {
-        1: {"billing_unit": "round_trip", "round_trip_merge_partner_reservation_id": 99},
-        2: {"billing_unit": "round_trip", "round_trip_merge_partner_reservation_id": 100},
+        1: {
+            "billing_unit": "round_trip",
+            "round_trip_merge_partner_reservation_id": 99,
+        },
+        2: {
+            "billing_unit": "round_trip",
+            "round_trip_merge_partner_reservation_id": 100,
+        },
     }
     item_80 = {"line": line_80, "amount": Decimal("80.00")}
     item_120 = {"line": line_120, "amount": Decimal("120.00")}
@@ -133,7 +145,15 @@ def _create_s2_round_trip_mono_line_invoice(db, *, num_lines: int = 3):
     import uuid
     from datetime import UTC, datetime, timedelta
 
-    from models import Booking, Client, Company, CompanyBillingSettings, Invoice, InvoiceLine, User
+    from models import (
+        Booking,
+        Client,
+        Company,
+        CompanyBillingSettings,
+        Invoice,
+        InvoiceLine,
+        User,
+    )
     from models.enums import (
         BookingStatus,
         InvoiceBillingStrategy,
@@ -187,9 +207,7 @@ def _create_s2_round_trip_mono_line_invoice(db, *, num_lines: int = 3):
     db.session.flush()
 
     hub = "Chemin des Courbes 9, 1247 Anières"
-    dest = (
-        "Centre d'Imagerie Rive Gauche - Vésenaz, Route de Thonon 61, 1222, Vésenaz"
-    )
+    dest = "Centre d'Imagerie Rive Gauche - Vésenaz, Route de Thonon 61, 1222, Vésenaz"
     total = Decimal("0.00")
     lines: list[InvoiceLine] = []
     for i in range(num_lines):
@@ -197,7 +215,7 @@ def _create_s2_round_trip_mono_line_invoice(db, *, num_lines: int = 3):
             company=company,
             client=client,
             user_id=owner.id,
-            customer_name=f"BADONNEL Marie-Claude",
+            customer_name="BADONNEL Marie-Claude",
             pickup_location=hub,
             dropoff_location=dest,
             scheduled_time=datetime(2026, 5, 4 + i, 9, 0, 0, tzinfo=UTC),

@@ -418,6 +418,10 @@ const requestDeferredSessionLogout = (cfg = {}) => {
 /** Renouvelle access + refresh token (cookies httpOnly + miroir localStorage). */
 export async function refreshSessionTokens(targetEnv = getCurrentAuthEnv()) {
   if (isRefreshing) {
+    // Pendant un logout explicite, ne pas attendre un refresh en cours (risque de blocage infini).
+    if (isExplicitLogoutInProgress()) {
+      return false;
+    }
     return new Promise((resolve, reject) => {
       failedQueue.push({
         resolve: () => resolve(true),
@@ -525,6 +529,18 @@ export const cleanLocalSession = () => {
   }
 };
 
+const LOGOUT_SERVER_TIMEOUT_MS = 8000;
+
+const withTimeout = (promise, timeoutMs, label = 'operation') =>
+  Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      setTimeout(() => {
+        reject(new Error(`${label} timeout after ${timeoutMs}ms`));
+      }, timeoutMs);
+    }),
+  ]);
+
 export const logoutUser = async (options = {}) => {
   const { redirect = true, preserveNext = false } = options;
 
@@ -532,56 +548,58 @@ export const logoutUser = async (options = {}) => {
   beginExplicitLogout();
 
   try {
-    const { cancelDeferredLogout } = await import('./deferredSessionLogout');
-    cancelDeferredLogout();
-  } catch (_) {
-    // ignore
-  }
+    try {
+      const { cancelDeferredLogout } = await import('./deferredSessionLogout');
+      cancelDeferredLogout();
+    } catch (_) {
+      // ignore
+    }
 
-  try {
-    const { suspendSessionKeepAlive } = await import('./sessionKeepAlive');
-    suspendSessionKeepAlive();
-  } catch (_) {
-    // ignore
-  }
+    try {
+      const { suspendSessionKeepAlive } = await import('./sessionKeepAlive');
+      suspendSessionKeepAlive();
+    } catch (_) {
+      // ignore
+    }
 
-  try {
-    const isUnified = isUnifiedGatewayHost();
-    await apiClient.delete('/shadow-mode/session', {
-      baseURL: isUnified ? API_BASES.app : '/api',
-      skipAuthRedirect: true,
-    });
-  } catch (error) {
-    console.warn(
-      '⚠️ Impossible de désactiver le Shadow Mode lors de la déconnexion:',
-      error?.response?.data || error?.message || error
-    );
-  }
+    const postLogout = () =>
+      apiClient.post('/auth/logout', {}, { skipAuthRedirect: true });
 
-  const postLogout = () =>
-    apiClient.post('/auth/logout', {}, { skipAuthRedirect: true });
-
-  try {
-    // Révoque les tokens côté serveur et supprime les cookies httpOnly.
-    // Sans cet appel, auth-changed relance /auth/me avec les cookies encore valides
-    // et reconnecte l'utilisateur immédiatement après le nettoyage local.
-    await postLogout();
-  } catch (error) {
-    // Access token expiré : tenter un refresh puis une nouvelle déconnexion.
-    if (error?.response?.status === 401) {
+    const serverCleanup = (async () => {
       try {
-        await refreshSessionTokens();
-        await postLogout();
-      } catch (retryError) {
+        const isUnified = isUnifiedGatewayHost();
+        await apiClient.delete('/shadow-mode/session', {
+          baseURL: isUnified ? API_BASES.app : '/api',
+          skipAuthRedirect: true,
+        });
+      } catch (error) {
         console.warn(
-          '⚠️ Déconnexion serveur impossible après refresh (session locale nettoyée quand même):',
-          retryError?.response?.data || retryError?.message || retryError
+          '⚠️ Impossible de désactiver le Shadow Mode lors de la déconnexion:',
+          error?.response?.data || error?.message || error
         );
       }
-    } else {
+
+      try {
+        // Révoque les tokens côté serveur et supprime les cookies httpOnly.
+        // Sans cet appel, auth-changed relance /auth/me avec les cookies encore valides
+        // et reconnecte l'utilisateur immédiatement après le nettoyage local.
+        await postLogout();
+      } catch (error) {
+        // Ne pas relancer refreshSessionTokens ici : peut bloquer indéfiniment si un refresh
+        // est déjà en cours. Le nettoyage local dans finally reste la source de vérité UI.
+        console.warn(
+          '⚠️ Déconnexion serveur impossible (session locale nettoyée quand même):',
+          error?.response?.data || error?.message || error
+        );
+      }
+    })();
+
+    try {
+      await withTimeout(serverCleanup, LOGOUT_SERVER_TIMEOUT_MS, 'logout server cleanup');
+    } catch (error) {
       console.warn(
-        '⚠️ Déconnexion serveur impossible (session locale nettoyée quand même):',
-        error?.response?.data || error?.message || error
+        '⚠️ Déconnexion serveur interrompue (session locale nettoyée quand même):',
+        error?.message || error
       );
     }
   } finally {
@@ -604,8 +622,8 @@ export const logoutUser = async (options = {}) => {
       // Silencieux si App pas encore chargé
     }
 
-    endExplicitLogout();
     window.dispatchEvent(new Event('auth-changed'));
+    endExplicitLogout();
 
     if (redirect !== false) {
       const path = `${window.location.pathname}${window.location.search || ''}`;

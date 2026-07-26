@@ -197,17 +197,14 @@ class ReleaseBookingForRedispatchUseCase:
                 institution_id=institution_id,
                 transport_request_id=transport_request_id,
                 booking_id=booking.id,
-                actor=TimelineActor(
-                    actor_type="system", actor_user_id=actor_user_id
-                ),
+                actor=TimelineActor(actor_type="system", actor_user_id=actor_user_id),
                 payload={
                     "previous_company_id": previous_company_id,
                     "previous_company_name": previous_company_name,
                     "reason": reason,
                 },
                 correlation_id=(
-                    f"redispatched:{booking.id}:"
-                    f"{int(datetime.now(UTC).timestamp())}"
+                    f"redispatched:{booking.id}:{int(datetime.now(UTC).timestamp())}"
                 ),
             )
         except Exception as timeline_err:

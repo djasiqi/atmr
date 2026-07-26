@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-from sqlalchemy.exc import IntegrityError
-
-from ext import db
 from models import Message
 from services.monitoring.chat_metrics import inc_chat_message_duplicate
 

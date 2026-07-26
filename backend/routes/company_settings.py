@@ -62,12 +62,12 @@ def _canonicalize_service_area_token(token: str) -> str | None:
     if not _SERVICE_AREA_NAMED_TOKEN_PATTERN.match(text):
         return None
 
+    from models.enums import GeoUnitType
     from routes.geocode import (
         SWISS_CANTON_NAME_TO_CODE,
         _decode_named_zone_token,
         _normalize_zone_search_text,
     )
-    from models.enums import GeoUnitType
 
     decoded = _decode_named_zone_token(text)
     if not decoded:

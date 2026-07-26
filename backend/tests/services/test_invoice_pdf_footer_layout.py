@@ -19,7 +19,15 @@ import pytest
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import cm
 
-from models import Booking, Client, Company, CompanyBillingSettings, Invoice, InvoiceLine, User
+from models import (
+    Booking,
+    Client,
+    Company,
+    CompanyBillingSettings,
+    Invoice,
+    InvoiceLine,
+    User,
+)
 from models.enums import BookingStatus, InvoiceLineType, InvoiceStatus, UserRole
 from services.documents.pdf import (
     PDF_FOOTER_GATE_MIN_PT,
@@ -51,8 +59,12 @@ def _assign_company_owner(db, company: Company, owner: User) -> None:
 
 def _unique_pdf_users() -> tuple[User, User]:
     suf = str(uuid.uuid4())[:8]
-    driver = User(username=f"pdf_ftr_drv_{suf}", email=f"pdf_ftr_drv_{suf}@test.example")
-    client_u = User(username=f"pdf_ftr_cli_{suf}", email=f"pdf_ftr_cli_{suf}@test.example")
+    driver = User(
+        username=f"pdf_ftr_drv_{suf}", email=f"pdf_ftr_drv_{suf}@test.example"
+    )
+    client_u = User(
+        username=f"pdf_ftr_cli_{suf}", email=f"pdf_ftr_cli_{suf}@test.example"
+    )
     driver.role = UserRole.company
     client_u.role = UserRole.client
     _ensure_users_with_password(driver, client_u)
@@ -129,9 +141,11 @@ def _bbox_for_text(pdf_content: bytes, snippet: str, page_index: int = 0):
         if page_no != page_index:
             continue
         for element in layout:
-            if isinstance(element, (LTTextBox, LTTextLine)):
-                if snippet in element.get_text():
-                    return element.bbox
+            if (
+                isinstance(element, (LTTextBox, LTTextLine))
+                and snippet in element.get_text()
+            ):
+                return element.bbox
     return None
 
 
@@ -158,8 +172,8 @@ def _assert_legend_and_reminder_do_not_overlap(pdf_bytes: bytes) -> None:
     assert not _bboxes_overlap(ar_bbox, reminder_bbox), (
         "Chevauchement détecté entre la légende [A/R] et le pied de page rappel"
     )
-    _x0a, y0a, _x1a, y1a = ar_bbox
-    _x0b, y0b, _x1b, y1b = reminder_bbox
+    _x0a, y0a, _x1a, _y1a = ar_bbox
+    _x0b, _y0b, _x1b, y1b = reminder_bbox
     assert y0a >= y1b - 1.0, (
         f"La légende [A/R] (bas y={y0a:.1f}) chevauche le rappel (haut y={y1b:.1f})"
     )
@@ -355,7 +369,7 @@ class TestInvoicePdfFooterLayout:
         reminder_bbox = _bbox_for_text(pdf_bytes, "Sauf erreur", page_index=0)
         if reminder_bbox is None:
             pytest.skip("pdfminer indisponible pour analyse bbox")
-        _x0, y0, _x1, y1 = reminder_bbox
+        _x0, y0, _x1, _y1 = reminder_bbox
         assert y0 < PDF_FOOTER_GATE_MIN_PT + 120, (
             "Le texte de rappel semble trop haut sur la page (chevauchement probable)"
         )
@@ -551,7 +565,7 @@ class TestInvoicePdfFooterHelpers:
             Spacer(1, 12),
             Paragraph("TOTAL À FACTURER : 360.00 CHF", styles["Normal"]),
         ]
-        body_table, tail_table = _paginate_table_no_orphan_totals(
+        _body_table, tail_table = _paginate_table_no_orphan_totals(
             table,
             avail_width_pt=390,
             first_page_avail_pt=120,

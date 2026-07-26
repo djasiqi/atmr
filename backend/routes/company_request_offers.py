@@ -293,7 +293,9 @@ class AcceptOffer(Resource):
     @company_offers_ns.response(404, "Offre non trouvée", not_found_error_model)
     @company_offers_ns.response(409, "Offre déjà traitée", api_error_model)
     @company_offers_ns.response(410, "Offre expirée", api_error_model)
-    @company_offers_ns.response(422, "Horaire de prise en charge requis", api_error_model)
+    @company_offers_ns.response(
+        422, "Horaire de prise en charge requis", api_error_model
+    )
     @jwt_required()
     def post(self, offer_id: int):
         """Accepte une offre et crée le booking correspondant.
@@ -316,10 +318,10 @@ class AcceptOffer(Resource):
             proposed_pickup_time = None
             raw_time = data.get("proposed_pickup_time")
             if raw_time:
-                from shared.time_utils import validate_proposed_pickup_time
                 from services.metrics.institution_metrics import (
                     track_proposed_pickup_time_validation_failed,
                 )
+                from shared.time_utils import validate_proposed_pickup_time
 
                 proposed_pickup_time, validation_error = validate_proposed_pickup_time(
                     raw_time

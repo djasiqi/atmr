@@ -28,7 +28,8 @@ class TestIsCancellationBillable:
         assert is_cancellation_billable("CLIENT_REQUEST") is False
 
     @pytest.mark.parametrize(
-        "code", ["COMPANY_ISSUE", "MAJOR_DELAY", "VEHICLE_ISSUE", "OTHER", "CLIENT_REQUEST"]
+        "code",
+        ["COMPANY_ISSUE", "MAJOR_DELAY", "VEHICLE_ISSUE", "OTHER", "CLIENT_REQUEST"],
     )
     def test_non_billable_reasons(self, code: str) -> None:
         """Motifs non facturables retournent False."""

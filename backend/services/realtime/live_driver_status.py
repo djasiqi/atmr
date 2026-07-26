@@ -77,7 +77,7 @@ def sanitize_fanout_mission_id(
     if client_mission_id is None:
         return active_id
     try:
-        client = int(client_mission_id)
+        int(client_mission_id)
     except (TypeError, ValueError):
         return active_id
     return active_id

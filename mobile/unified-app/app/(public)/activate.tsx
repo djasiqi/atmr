@@ -104,6 +104,18 @@ export default function ActivateScreen() {
     });
   };
 
+  const stripTokenFromRoute = (nextSessionId: string) => {
+    router.replace({
+      pathname: "/(public)/activate",
+      params: {
+        activation_session_id: nextSessionId,
+        masked_email: maskedEmail || "",
+        masked_phone: maskedPhone || "",
+        ...(nextRoute ? { next: nextRoute } : {}),
+      },
+    } as any);
+  };
+
   const fetchStatus = async (overrideSessionId?: string) => {
     const targetSessionId = (overrideSessionId ?? sessionId).trim();
     if (!targetSessionId) return;
@@ -126,6 +138,7 @@ export default function ActivateScreen() {
     const nextSessionId = String(res.data?.activation_session_id ?? "").trim();
     if (nextSessionId) {
       setSessionId(nextSessionId);
+      stripTokenFromRoute(nextSessionId);
     }
     if (res.data?.masked_email) setMaskedEmail(res.data.masked_email);
     if (res.data?.masked_phone) setMaskedPhone(res.data.masked_phone);
@@ -162,7 +175,7 @@ export default function ActivateScreen() {
         setDebugActivationLink(link);
         setInfoMsg("Service email indisponible (dev). Utilisez le lien ci-dessous.");
       } else {
-        setInfoMsg("Email renvoyé. Vérifiez votre boîte de réception.");
+        setInfoMsg("Email en cours d'envoi. Vérifiez votre boîte de réception.");
       }
     } catch (e: unknown) {
       const retryAfter = (e as any)?.response?.data?.details?.retry_after_seconds;

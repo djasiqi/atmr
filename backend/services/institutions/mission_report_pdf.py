@@ -36,7 +36,10 @@ BORDER = colors.HexColor("#d9dde1")
 ACCENT = colors.HexColor("#00796b")
 
 _LOGO_PATH = (
-    Path(__file__).resolve().parent.parent.parent / "assets" / "lirie" / "logo-lirie.png"
+    Path(__file__).resolve().parent.parent.parent
+    / "assets"
+    / "lirie"
+    / "logo-lirie.png"
 )
 _LOGO_TARGET_WIDTH = 2.2 * cm
 _LOGO_MAX_HEIGHT = 1.4 * cm
@@ -91,7 +94,9 @@ class VoucherLayoutOptions:
     """
 
     hero_style: Literal["inline", "split"] = "inline"
-    signature_style: Literal["confirmation_inline", "stack", "row"] = "confirmation_inline"
+    signature_style: Literal["confirmation_inline", "stack", "row"] = (
+        "confirmation_inline"
+    )
 
 
 @dataclass(frozen=True)
@@ -395,7 +400,10 @@ def _publisher_block(logo_url: str | None = None) -> Any:
             table = Table([[logo]], colWidths=[6 * cm])
             table.setStyle(
                 TableStyle(
-                    [("ALIGN", (0, 0), (-1, -1), "RIGHT"), ("VALIGN", (0, 0), (-1, -1), "TOP")]
+                    [
+                        ("ALIGN", (0, 0), (-1, -1), "RIGHT"),
+                        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ]
                 )
             )
             return table
@@ -475,9 +483,7 @@ def _voucher_header_table(
     return header_table
 
 
-def _report_header_table(
-    title_lines: list[Any], logo_url: str | None = None
-) -> Table:
+def _report_header_table(title_lines: list[Any], logo_url: str | None = None) -> Table:
     """Bandeau rapport : logo institution (gauche), puis titre/référence."""
     header_table = Table(
         [
@@ -561,7 +567,12 @@ def _compact_identity_table(rows: list[tuple[str, str | None]]) -> Table:
             ]
         )
     if not data:
-        data = [[Paragraph("—", st["identityValue"]), Paragraph(MISSING, st["identityValue"])]]
+        data = [
+            [
+                Paragraph("—", st["identityValue"]),
+                Paragraph(MISSING, st["identityValue"]),
+            ]
+        ]
     table = Table(data, colWidths=[3.8 * cm, 13.2 * cm])
     table.setStyle(
         TableStyle(
@@ -597,7 +608,9 @@ def _is_mission_cancelled(ctx: MissionReportContext) -> bool:
     return "annul" in ctx.status_label.lower()
 
 
-def _truncate_field(value: str | None, *, max_len: int = _IDENTITY_VALUE_MAX_LEN) -> str | None:
+def _truncate_field(
+    value: str | None, *, max_len: int = _IDENTITY_VALUE_MAX_LEN
+) -> str | None:
     """Limite un champ identité à ~2 lignes (ellipse au-delà)."""
     if value is None:
         return None
@@ -685,12 +698,18 @@ def _build_voucher_identity_table(ctx: MissionReportContext) -> list[Any]:
     bills_patient = ctx.request_classification.get("billing_target") == "patient"
 
     patient_group: list[tuple[str, str | None]] = [
-        ("Patient", _truncate_field(patient.get("full_name"), max_len=_MAX_VOUCHER_PATIENT)),
+        (
+            "Patient",
+            _truncate_field(patient.get("full_name"), max_len=_MAX_VOUCHER_PATIENT),
+        ),
         ("Naissance", patient.get("dob")),
     ]
     if bills_patient and _has_value(patient.get("address")):
         patient_group.append(
-            ("Adresse patient", _truncate_field(patient.get("address"), max_len=_MAX_ADDRESS))
+            (
+                "Adresse patient",
+                _truncate_field(patient.get("address"), max_len=_MAX_ADDRESS),
+            )
         )
     patient_group.append(
         ("Institution", _truncate_field(inst.get("name"), max_len=_MAX_INSTITUTION))
@@ -791,11 +810,21 @@ def _build_route_simple(ctx: MissionReportContext) -> list[Any]:
         rows.append(("Départ", _step_value_cell(departure, cancelled=cancelled)))
     if destination and _has_value(destination.get("address")):
         rows.append(
-            ("Destination", _step_value_cell(destination, cancelled=cancelled, max_addr=_MAX_DESTINATION))
+            (
+                "Destination",
+                _step_value_cell(
+                    destination, cancelled=cancelled, max_addr=_MAX_DESTINATION
+                ),
+            )
         )
     elif len(steps) >= 2 and _has_value(steps[-1].get("address")):
         rows.append(
-            ("Destination", _step_value_cell(steps[-1], cancelled=cancelled, max_addr=_MAX_DESTINATION))
+            (
+                "Destination",
+                _step_value_cell(
+                    steps[-1], cancelled=cancelled, max_addr=_MAX_DESTINATION
+                ),
+            )
         )
     if not rows:
         return [Paragraph(MISSING, _styles()["body"])]
@@ -814,7 +843,12 @@ def _build_route_round_trip(ctx: MissionReportContext) -> list[Any]:
         rows.append(("Départ", _step_value_cell(departure, cancelled=cancelled)))
     if destination and _has_value(destination.get("address")):
         rows.append(
-            ("Destination", _step_value_cell(destination, cancelled=cancelled, max_addr=_MAX_DESTINATION))
+            (
+                "Destination",
+                _step_value_cell(
+                    destination, cancelled=cancelled, max_addr=_MAX_DESTINATION
+                ),
+            )
         )
     if ret and _has_value(ret.get("address")):
         rows.append(("Retour", _step_value_cell(ret, cancelled=cancelled)))
@@ -869,7 +903,9 @@ def _build_route_multistop(ctx: MissionReportContext) -> list[Any]:
     return [table]
 
 
-def _select_route_builder(ctx: MissionReportContext) -> Callable[[MissionReportContext], list[Any]]:
+def _select_route_builder(
+    ctx: MissionReportContext,
+) -> Callable[[MissionReportContext], list[Any]]:
     trip_type = ctx.request_classification.get("trip_type", "one_way")
     if trip_type == "multi_stop":
         return _build_route_multistop
@@ -927,7 +963,11 @@ def _build_voucher_transport(ctx: MissionReportContext) -> list[Any]:
 
     rows: list[tuple[str, list[Any]]] = []
 
-    if trip_type != "multi_stop" and departure and _has_value(departure.get("planned_time")):
+    if (
+        trip_type != "multi_stop"
+        and departure
+        and _has_value(departure.get("planned_time"))
+    ):
         # scheduled_time_type = "arrival" → l'heure est un rendez-vous, pas une prise en charge
         is_appointment = classification.get("scheduled_time_type") == "arrival"
         time_label = "Rendez-vous" if is_appointment else "Prise en charge"
@@ -947,17 +987,27 @@ def _build_voucher_transport(ctx: MissionReportContext) -> list[Any]:
             else:
                 label = f"Étape {step_num} — {_short_step_title(str(title))}"
             addr_max = (
-                _MAX_ADDRESS if kind in {"departure", "return"} else _MAX_VOUCHER_DESTINATION
+                _MAX_ADDRESS
+                if kind in {"departure", "return"}
+                else _MAX_VOUCHER_DESTINATION
             )
             rows.append(
-                (label, _voucher_address_cell(step, max_addr=addr_max, show_planned=True))
+                (
+                    label,
+                    _voucher_address_cell(step, max_addr=addr_max, show_planned=True),
+                )
             )
     elif trip_type == "round_trip":
         if departure and _has_value(departure.get("address")):
             rows.append(("Départ", _voucher_address_cell(departure)))
         if destination and _has_value(destination.get("address")):
             rows.append(
-                ("Destination", _voucher_address_cell(destination, max_addr=_MAX_VOUCHER_DESTINATION))
+                (
+                    "Destination",
+                    _voucher_address_cell(
+                        destination, max_addr=_MAX_VOUCHER_DESTINATION
+                    ),
+                )
             )
         if ret and _has_value(ret.get("address")):
             rows.append(("Retour", _voucher_address_cell(ret)))
@@ -966,11 +1016,19 @@ def _build_voucher_transport(ctx: MissionReportContext) -> list[Any]:
             rows.append(("Départ", _voucher_address_cell(departure)))
         if destination and _has_value(destination.get("address")):
             rows.append(
-                ("Destination", _voucher_address_cell(destination, max_addr=_MAX_VOUCHER_DESTINATION))
+                (
+                    "Destination",
+                    _voucher_address_cell(
+                        destination, max_addr=_MAX_VOUCHER_DESTINATION
+                    ),
+                )
             )
         elif len(steps) >= 2 and _has_value(steps[-1].get("address")):
             rows.append(
-                ("Destination", _voucher_address_cell(steps[-1], max_addr=_MAX_VOUCHER_DESTINATION))
+                (
+                    "Destination",
+                    _voucher_address_cell(steps[-1], max_addr=_MAX_VOUCHER_DESTINATION),
+                )
             )
 
     if not rows:
@@ -1018,7 +1076,9 @@ def _build_voucher_needs_alert(ctx: MissionReportContext) -> list[Any]:
             )
         )
     if _has_value(medical.get("notes")):
-        notes = _truncate_medical_notes(str(medical.get("notes")), max_len=_MAX_VOUCHER_NOTES)
+        notes = _truncate_medical_notes(
+            str(medical.get("notes")), max_len=_MAX_VOUCHER_NOTES
+        )
         inner.append(Paragraph("Remarque :", st["body"]))
         inner.append(Paragraph(notes, st["noteItalic"]))
     box = Table([[inner]], colWidths=[17 * cm])
@@ -1067,7 +1127,9 @@ def _synthetic_history_table(rows: list[dict[str, Any]]) -> Table:
             ]
         )
     if not data:
-        data = [[Paragraph(MISSING, st["small"]), Paragraph("Aucun événement", st["body"])]]
+        data = [
+            [Paragraph(MISSING, st["small"]), Paragraph("Aucun événement", st["body"])]
+        ]
     table = Table(data, colWidths=[3.5 * cm, 13.5 * cm])
     table.setStyle(
         TableStyle(
@@ -1153,9 +1215,7 @@ def _has_medical_content(medical: dict[str, Any]) -> bool:
             return True
     if _has_value(medical.get("notes")):
         return True
-    if _has_value(medical.get("floor_elevator_info")):
-        return True
-    return False
+    return bool(_has_value(medical.get("floor_elevator_info")))
 
 
 def _billing_summary_line(billing: dict[str, Any]) -> str | None:
@@ -1176,10 +1236,14 @@ def _audit_execution_block(ctx: MissionReportContext) -> list[Any]:
     if _has_value(mode):
         lines.append(Paragraph(f"<b>Exécution :</b> {mode}", st["body"]))
     if _has_value(carrier.get("name")):
-        lines.append(Paragraph(f"<b>Transporteur :</b> {carrier.get('name')}", st["body"]))
+        lines.append(
+            Paragraph(f"<b>Transporteur :</b> {carrier.get('name')}", st["body"])
+        )
     if _has_value(carrier.get("reference")):
         lines.append(
-            Paragraph(f"<b>Référence externe :</b> {carrier.get('reference')}", st["body"])
+            Paragraph(
+                f"<b>Référence externe :</b> {carrier.get('reference')}", st["body"]
+            )
         )
     if _has_value(carrier.get("externalization_reason")):
         lines.append(
@@ -1197,9 +1261,13 @@ def _audit_execution_block(ctx: MissionReportContext) -> list[Any]:
         )
         if _has_value(carrier.get("declared_by")):
             lines.append(
-                Paragraph(f"<b>Déclarée par :</b> {carrier.get('declared_by')}", st["body"])
+                Paragraph(
+                    f"<b>Déclarée par :</b> {carrier.get('declared_by')}", st["body"]
+                )
             )
-        lines.append(Paragraph(f"<b>Date :</b> {carrier.get('declared_at')}", st["body"]))
+        lines.append(
+            Paragraph(f"<b>Date :</b> {carrier.get('declared_at')}", st["body"])
+        )
     if lines:
         lines.append(Spacer(1, 0.08 * cm))
     return lines
@@ -1270,7 +1338,7 @@ def _administrative_block(ctx: MissionReportContext) -> list[Any]:
     return [box]
 
 
-def _page_footer(canvas: Any, doc: Any, ctx: MissionReportContext) -> None:
+def _page_footer(canvas: Any, doc: Any, _ctx: MissionReportContext) -> None:
     """Pied de page émetteur LIRIE discret (une ligne à gauche, numéro à droite)."""
     canvas.saveState()
     canvas.setFont("Helvetica", 7)
@@ -1334,9 +1402,10 @@ def _build_voucher_presentation(ctx: MissionReportContext) -> VoucherPresentatio
     medical = ctx.medical_block
     classification = ctx.request_classification
 
-    patient_name = _truncate_field(
-        str(patient.get("full_name") or MISSING), max_len=_MAX_PATIENT
-    ) or MISSING
+    patient_name = (
+        _truncate_field(str(patient.get("full_name") or MISSING), max_len=_MAX_PATIENT)
+        or MISSING
+    )
     dob = patient.get("dob")
     patient_dob = str(dob) if _has_value(dob) else None
 
@@ -1346,15 +1415,22 @@ def _build_voucher_presentation(ctx: MissionReportContext) -> VoucherPresentatio
     if bills_patient:
         billing_label = "Patient"
         if _has_value(patient.get("address")):
-            patient_address = _truncate_field(str(patient.get("address")), max_len=_MAX_ADDRESS)
+            patient_address = _truncate_field(
+                str(patient.get("address")), max_len=_MAX_ADDRESS
+            )
 
-    type_label = _VOUCHER_TRANSPORT_TYPE_LABELS.get(classification.get("mobility_level"))
+    type_label = _VOUCHER_TRANSPORT_TYPE_LABELS.get(
+        classification.get("mobility_level")
+    )
 
     route_stops: list[RouteStop] = []
     for step in ctx.route_steps:
         kind = str(step.get("kind", ""))
         title = str(step.get("title", ""))
-        addr = _truncate_field(str(step.get("address", MISSING)), max_len=_MAX_ADDRESS) or MISSING
+        addr = (
+            _truncate_field(str(step.get("address", MISSING)), max_len=_MAX_ADDRESS)
+            or MISSING
+        )
         planned = step.get("planned_time")
         planned_time = str(planned) if _has_value(planned) else None
         route_stops.append(
@@ -1376,7 +1452,9 @@ def _build_voucher_presentation(ctx: MissionReportContext) -> VoucherPresentatio
 
     needs_remark: str | None = None
     if _has_value(medical.get("notes")):
-        needs_remark = _truncate_medical_notes(str(medical.get("notes")), max_len=_MAX_VOUCHER_NOTES)
+        needs_remark = _truncate_medical_notes(
+            str(medical.get("notes")), max_len=_MAX_VOUCHER_NOTES
+        )
 
     carrier_name = _truncate_field(carrier.get("name"), max_len=_MAX_CARRIER)
 
@@ -1447,9 +1525,7 @@ def _voucher_hero_block(
     if _has_value(pres.transport_type_label):
         flow.append(Paragraph(str(pres.transport_type_label), st["metaMuted"]))
     if _has_value(pres.patient_address):
-        flow.append(
-            Paragraph(f"Adresse patient : {pres.patient_address}", st["small"])
-        )
+        flow.append(Paragraph(f"Adresse patient : {pres.patient_address}", st["small"]))
     if _has_value(pres.billing_label):
         flow.append(Paragraph(f"Facturation : {pres.billing_label}", st["small"]))
     flow.append(Spacer(1, 0.15 * cm))
@@ -1515,7 +1591,9 @@ def _voucher_route_vertical(pres: VoucherPresentation) -> list[Any]:
             flow.append(Paragraph(stop.label, st["body"]))
             continue
         max_len = (
-            _MAX_ADDRESS if stop.kind in {"departure", "return"} else _MAX_VOUCHER_DESTINATION
+            _MAX_ADDRESS
+            if stop.kind in {"departure", "return"}
+            else _MAX_VOUCHER_DESTINATION
         )
         addr = _truncate_field(stop.address, max_len=max_len) or MISSING
         if stop.kind == "return":
@@ -1650,7 +1728,9 @@ def _voucher_confirmation_inline() -> list[Any]:
     return [Spacer(1, 0.45 * cm), Paragraph(line, st["body"])]
 
 
-def _voucher_signatures(options: VoucherLayoutOptions, *, minimal: bool = False) -> list[Any]:
+def _voucher_signatures(
+    options: VoucherLayoutOptions, *, minimal: bool = False
+) -> list[Any]:
     flow: list[Any] = []
     if options.signature_style == "confirmation_inline":
         flow.extend(_voucher_confirmation_inline())

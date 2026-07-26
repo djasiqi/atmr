@@ -32,7 +32,9 @@ def upgrade():
         ),
         sa.Column("comment", sa.Text(), nullable=True),
         sa.Column("created_from", sa.String(length=32), nullable=True),
-        sa.Column("client_meta", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column(
+            "client_meta", postgresql.JSONB(astext_type=sa.Text()), nullable=True
+        ),
         sa.Column("idempotency_key", sa.String(length=128), nullable=True),
         sa.Column(
             "decision_context_snapshot",

@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
     retry_backoff=True,
 )
 def send_institution_email_task(
-    self,
+    _self,
     *,
     email_type: str,
     to_email: str,

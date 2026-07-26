@@ -8,7 +8,9 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-_METRICS_ENABLED = os.getenv("DRIVER_PUSH_TELEMETRY_METRICS_ENABLED", "true").lower() not in (
+_METRICS_ENABLED = os.getenv(
+    "DRIVER_PUSH_TELEMETRY_METRICS_ENABLED", "true"
+).lower() not in (
     "0",
     "false",
     "no",
@@ -48,7 +50,9 @@ def _safe_str(value: Any, default: str = "unknown") -> str:
     return text if text else default
 
 
-def ingest_driver_push_telemetry(*, driver_id: int, body: dict[str, Any]) -> dict[str, Any]:
+def ingest_driver_push_telemetry(
+    *, driver_id: int, body: dict[str, Any]
+) -> dict[str, Any]:
     """Journalise un événement push mobile et incrémente Prometheus si disponible."""
     event = _safe_str(body.get("event"), default="")
     if event not in ALLOWED_PUSH_TELEMETRY_EVENTS:
@@ -87,6 +91,8 @@ def ingest_driver_push_telemetry(*, driver_id: int, body: dict[str, Any]) -> dic
         try:
             _PUSH_TELEMETRY_TOTAL.labels(event=event, platform=platform).inc()
         except Exception:
-            logger.debug("driver_push_telemetry prometheus increment failed", exc_info=True)
+            logger.debug(
+                "driver_push_telemetry prometheus increment failed", exc_info=True
+            )
 
     return {"ok": True, "event": event}

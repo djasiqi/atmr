@@ -19,7 +19,9 @@ from services.institutions.mission_schedule import (
 )
 
 
-def _tr(*, mission_day: date, dep: datetime | None = None, pickup_confirmed: bool = False):
+def _tr(
+    *, mission_day: date, dep: datetime | None = None, pickup_confirmed: bool = False
+):
     tr = TransportRequest()
     tr.mission_date = mission_day
     tr.scheduled_time = dep
@@ -41,7 +43,9 @@ def _leg(seq: int, st: datetime | None, confirmed: bool) -> TransportRequestLeg:
 
 class TestIsOperationalTime:
     def test_confirmed_with_time(self):
-        assert is_operational_time(scheduled_time=datetime(2026, 6, 12, 14, 0), time_confirmed=True)
+        assert is_operational_time(
+            scheduled_time=datetime(2026, 6, 12, 14, 0), time_confirmed=True
+        )
 
     def test_indicative_excluded(self):
         assert not is_operational_time(

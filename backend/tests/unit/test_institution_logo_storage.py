@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from infrastructure.files.institution_logo_storage import FileSystemInstitutionLogoStorage
+from infrastructure.files.institution_logo_storage import (
+    FileSystemInstitutionLogoStorage,
+)
 
 
 def test_institution_logo_storage_save_and_delete(tmp_path: Path):

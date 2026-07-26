@@ -85,16 +85,25 @@ def _is_gevent_infrastructure_noise(
             return True
     if "already used by another greenlet" in message:
         return True
-    if "Error handling request (no URI read)" in message:
-        return True
-    return False
+    return "Error handling request (no URI read)" in message
 
 
-def before_send(event: dict[str, Any], hint: dict[str, Any] | None) -> dict[str, Any] | None:
-    """Filtre le bruit Sentry (JWT expirés, déconnexions / concurrence gevent)."""
-    exc_info = hint.get("exc_info") if hint else None
+def _log_event_message(event: dict[str, Any]) -> str:
+    """Message logging complet (template + params) pour filtres Sentry."""
     logentry = event.get("logentry") or {}
     message = str(logentry.get("message") or event.get("message") or "")
+    params = logentry.get("params")
+    if isinstance(params, (list, tuple)):
+        message = f"{message} {' '.join(str(p) for p in params)}"
+    return message
+
+
+def before_send(
+    event: dict[str, Any], hint: dict[str, Any] | None
+) -> dict[str, Any] | None:
+    """Filtre le bruit Sentry (JWT expirés, déconnexions / concurrence gevent)."""
+    exc_info = hint.get("exc_info") if hint else None
+    message = _log_event_message(event)
     logger_name = str(event.get("logger") or "")
 
     if _is_kafka_bootstrap_log_noise(message, logger_name):
@@ -107,7 +116,10 @@ def before_send(event: dict[str, Any], hint: dict[str, Any] | None) -> dict[str,
             if exc_name in _DROP_EXCEPTION_TYPES:
                 return None
             # Race kafka-python au shutdown / rebalance (non bloquant)
-            if exc_name == "ValueError" and "invalid file descriptor" in message.lower():
+            if (
+                exc_name == "ValueError"
+                and "invalid file descriptor" in message.lower()
+            ):
                 return None
             if exc_name == "RuntimeError" and "task is already done" in message.lower():
                 return None
@@ -121,6 +133,8 @@ def before_send(event: dict[str, Any], hint: dict[str, Any] | None) -> dict[str,
         "InstitutionNotifications" in message
         or "CompanyNotifications" in message
         or "[Timeline]" in message
+        or "[InstitutionBilling]" in message
+        or "[Export]" in message
     ):
         return None
     if "RemoteDisconnected" in message and "Google Maps" in message:
@@ -144,7 +158,12 @@ def init_sentry(
 ) -> None:
     """Initialise Sentry une seule fois par processus."""
     dsn = os.getenv("SENTRY_DSN")
-    env = environment or os.getenv("FLASK_CONFIG") or os.getenv("FLASK_ENV") or "development"
+    env = (
+        environment
+        or os.getenv("FLASK_CONFIG")
+        or os.getenv("FLASK_ENV")
+        or "development"
+    )
     if not dsn or env == "testing":
         return
 
@@ -179,7 +198,10 @@ def capture_kafka_error(exc: BaseException) -> None:
         sentry_sdk.capture_exception(exc)
         return
     message = str(exc).lower()
-    if any(token in message for token in ("nobrokersavailable", "kafkatimeout", "kafkaconnection")):
+    if any(
+        token in message
+        for token in ("nobrokersavailable", "kafkatimeout", "kafkaconnection")
+    ):
         sentry_sdk.capture_exception(exc)
 
 
@@ -188,4 +210,7 @@ def is_kafka_connection_error(exc: BaseException) -> bool:
     if exc.__class__.__name__ in _KAFKA_ERROR_TYPES:
         return True
     message = str(exc).lower()
-    return any(token in message for token in ("nobrokersavailable", "kafkatimeout", "kafkaconnection"))
+    return any(
+        token in message
+        for token in ("nobrokersavailable", "kafkatimeout", "kafkaconnection")
+    )

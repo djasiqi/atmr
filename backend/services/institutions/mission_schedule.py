@@ -29,9 +29,7 @@ def is_operational_time(*, scheduled_time: Any, time_confirmed: bool) -> bool:
 def validate_time_pair(*, scheduled_time: Any, time_confirmed: bool) -> None:
     """time_confirmed=true implique scheduled_time != null."""
     if time_confirmed and scheduled_time is None:
-        raise ValueError(
-            "time_confirmed=true requiert scheduled_time renseigné."
-        )
+        raise ValueError("time_confirmed=true requiert scheduled_time renseigné.")
 
 
 def _to_date(value: Any) -> date | None:
@@ -210,7 +208,5 @@ def sync_request_departure_for_booking(booking: Any) -> bool:
         return False
     from models.transport_request import TransportRequest
 
-    transport_request = TransportRequest.query.filter_by(
-        booking_id=booking.id
-    ).first()
+    transport_request = TransportRequest.query.filter_by(booking_id=booking.id).first()
     return sync_transport_request_departure_from_booking(transport_request, booking)

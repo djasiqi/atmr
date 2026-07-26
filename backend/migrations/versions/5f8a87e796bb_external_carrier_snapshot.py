@@ -105,7 +105,9 @@ def downgrade():
         "transport_requests",
         type_="foreignkey",
     )
-    op.drop_index("ix_transport_requests_carrier_source", table_name="transport_requests")
+    op.drop_index(
+        "ix_transport_requests_carrier_source", table_name="transport_requests"
+    )
     op.alter_column(
         "transport_requests",
         "status",

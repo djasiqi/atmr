@@ -54,7 +54,9 @@ def resolve_outbound_route(request: Any) -> dict[str, Any]:
                 or getattr(request, "pickup_location", "")
                 or ""
             ).strip(),
-            "dropoff_address": str(getattr(first, "dropoff_location", None) or "").strip(),
+            "dropoff_address": str(
+                getattr(first, "dropoff_location", None) or ""
+            ).strip(),
         }
     return {
         "pickup_lat": _to_coord(getattr(request, "pickup_lat", None)),

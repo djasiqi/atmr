@@ -213,8 +213,8 @@ def _driver_display_name(driver: Any) -> str | None:
 def _record_driver_assigned_timeline(
     *,
     applied_pairs: List[Tuple[int, int]],
-    booking_map: Dict[int, "Booking"],
-    driver_map: Dict[int, "Driver"],
+    booking_map: Dict[int, Booking],  # noqa: ARG001 — API kwargs stables
+    driver_map: Dict[int, Driver],
     company_id: int,
 ) -> None:
     """Historise driver_assigned pour les bookings liés à une TransportRequest."""
@@ -253,9 +253,7 @@ def _record_driver_assigned_timeline(
                     "driver_id": d_id,
                     "driver_name": _driver_display_name(driver) if driver else None,
                     "company_id": company_id,
-                    "company_name": getattr(company, "name", None)
-                    if company
-                    else None,
+                    "company_name": getattr(company, "name", None) if company else None,
                 },
                 correlation_id=f"driver_assigned:{b_id}:{d_id}",
             )

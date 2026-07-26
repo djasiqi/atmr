@@ -59,10 +59,9 @@ class AuthenticateUserUseCase:
 
     def _resolve_user(self, user_repo, identifier: str):
         lowered = identifier.strip().lower()
-        return (
-            user_repo.find_model_by_email(lowered)
-            or user_repo.find_model_by_username(lowered)
-        )
+        return user_repo.find_model_by_email(
+            lowered
+        ) or user_repo.find_model_by_username(lowered)
 
     def _validate_input(
         self, input_data: AuthenticateUserInput

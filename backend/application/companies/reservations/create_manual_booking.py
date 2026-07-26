@@ -96,7 +96,9 @@ def _resolve_leg_amounts(
 
     outbound_amount, return_amount = _split_round_trip_total_amount(float(amount))
     if price_total is not None:
-        outbound_price, return_price = _split_round_trip_total_amount(float(price_total))
+        outbound_price, return_price = _split_round_trip_total_amount(
+            float(price_total)
+        )
     else:
         outbound_price, return_price = outbound_amount, return_amount
     return outbound_amount, return_amount, outbound_price, return_price
@@ -706,8 +708,8 @@ class CreateManualBookingUseCase:
                         price_amount = amount_to_use
                         price_breakdown_json = dict(computed_breakdown or {})
                         amount_source_used = "simulated"
-                        amount_is_round_trip_total = (
-                            _amount_encodes_round_trip_total(price_breakdown_json)
+                        amount_is_round_trip_total = _amount_encodes_round_trip_total(
+                            price_breakdown_json
                         )
                     except Exception:
                         logger.exception(
@@ -721,14 +723,17 @@ class CreateManualBookingUseCase:
                         "manual" if has_provided_amount else "fallback_zero"
                     )
 
-        outbound_amount, return_leg_amount, outbound_price_amount, return_price_amount = (
-            _resolve_leg_amounts(
-                amount_to_use,
-                is_round_trip=is_rt,
-                price_total=price_amount,
-                preferential_per_leg=preferential_per_leg_rate,
-                split_total=amount_is_round_trip_total,
-            )
+        (
+            outbound_amount,
+            return_leg_amount,
+            outbound_price_amount,
+            return_price_amount,
+        ) = _resolve_leg_amounts(
+            amount_to_use,
+            is_round_trip=is_rt,
+            price_total=price_amount,
+            preferential_per_leg=preferential_per_leg_rate,
+            split_total=amount_is_round_trip_total,
         )
         if is_rt:
             # Le total facturé est toujours la somme des deux trajets (50/50 du

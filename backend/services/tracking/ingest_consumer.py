@@ -250,7 +250,9 @@ class TrackingIngestConsumer:
 
                 capture_kafka_error(exc)
             except Exception:
-                logger.debug("[tracking_consumer] sentry capture skipped", exc_info=True)
+                logger.debug(
+                    "[tracking_consumer] sentry capture skipped", exc_info=True
+                )
 
     def _is_valid(self, message: dict[str, Any]) -> bool:
         payload = message.get("payload")
@@ -341,14 +343,13 @@ class TrackingIngestConsumer:
                         "[tracking_consumer] publish error metric unavailable",
                         exc_info=True,
                     )
-                logger.error(
+                logger.exception(
                     "[tracking_consumer] DLQ publish failed attempt=%s/%s topic=%s partition=%s offset=%s",
                     dlq_attempt,
                     TRACKING_DLQ_PUBLISH_MAX_ATTEMPTS,
                     record.topic,
                     record.partition,
                     record.offset,
-                    exc_info=True,
                 )
                 if dlq_attempt < TRACKING_DLQ_PUBLISH_MAX_ATTEMPTS:
                     time.sleep(TRACKING_DLQ_RETRY_BACKOFF_S * dlq_attempt)
@@ -376,6 +377,7 @@ class TrackingIngestConsumer:
                     record.offset,
                 )
                 return False
+        return None
 
     def _observe_e2e_latency(self, message: dict[str, Any]) -> None:
         received_at_ms = message.get("received_at_ms")
@@ -448,9 +450,7 @@ class TrackingIngestConsumer:
                             else "mission_live"
                         )
                         if not uc_result.dedup_skipped:
-                            inc_received(
-                                transport="kafka", location_mode=location_mode
-                            )
+                            inc_received(transport="kafka", location_mode=location_mode)
                         inc_tracking_kafka_persist(
                             accept_status=uc_result.accept_status,
                         )
@@ -544,7 +544,10 @@ class TrackingIngestConsumer:
                             logger.exception("[tracking_consumer] processing error")
                 self._maybe_publish_lag()
         except Exception as exc:
-            from shared.sentry_init import capture_kafka_error, is_kafka_connection_error
+            from shared.sentry_init import (
+                capture_kafka_error,
+                is_kafka_connection_error,
+            )
 
             if is_kafka_connection_error(exc):
                 capture_kafka_error(exc)

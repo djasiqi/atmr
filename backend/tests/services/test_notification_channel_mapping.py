@@ -35,7 +35,9 @@ def test_get_notification_channel_aligns_with_mobile(
     assert _get_notification_channel(notification_type) not in LEGACY_CHANNELS
 
 
-def test_get_notification_channel_production_no_legacy(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_get_notification_channel_production_no_legacy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("FLASK_ENV", "production")
     monkeypatch.delenv("PUSH_PROOF", raising=False)
     for notification_type in (

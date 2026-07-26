@@ -18,7 +18,7 @@ def upgrade() -> None:
     # Username indexes (replace partial scoped indexes with global lower())
     op.execute("DROP INDEX IF EXISTS ix_user_username_no_institution;")
     op.execute("DROP INDEX IF EXISTS ix_user_institution_username;")
-    op.execute('DROP INDEX IF EXISTS ix_user_username;')
+    op.execute("DROP INDEX IF EXISTS ix_user_username;")
 
     # Dédupliquer les username en conflit (insensible à la casse) avant index unique.
     # Conserve la ligne la plus récente (MAX id), suffixe les autres.
@@ -48,7 +48,7 @@ def upgrade() -> None:
 
     # Email: drop case-sensitive unique constraint/index if present, use lower()
     op.execute('ALTER TABLE public."user" DROP CONSTRAINT IF EXISTS user_email_key;')
-    op.execute('DROP INDEX IF EXISTS ix_user_email;')
+    op.execute("DROP INDEX IF EXISTS ix_user_email;")
 
     # Dédupliquer les email en conflit (insensible à la casse) avant index unique.
     op.execute("""
@@ -83,7 +83,9 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.execute("DROP INDEX IF EXISTS ix_user_email_lower;")
-    op.execute('CREATE UNIQUE INDEX IF NOT EXISTS ix_user_email ON public."user" (email);')
+    op.execute(
+        'CREATE UNIQUE INDEX IF NOT EXISTS ix_user_email ON public."user" (email);'
+    )
 
     op.execute("DROP INDEX IF EXISTS ix_user_username_lower;")
     op.execute("""

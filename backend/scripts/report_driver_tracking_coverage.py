@@ -115,9 +115,7 @@ def _count_stream_positions(driver_id: int, *, since: datetime) -> int:
             did_raw = fields.get(b"driver_id") or fields.get("driver_id")
             if did_raw is None:
                 continue
-            did = int(
-                did_raw.decode() if isinstance(did_raw, bytes) else did_raw
-            )
+            did = int(did_raw.decode() if isinstance(did_raw, bytes) else did_raw)
             if did != driver_id:
                 continue
             ts_raw = fields.get(b"ts") or fields.get("ts")
@@ -227,9 +225,7 @@ def build_coverage_rows(*, days: int) -> list[dict[str, Any]]:
             )
 
             push_token_present = (
-                DeviceToken.query.filter_by(
-                    driver_id=driver_id, is_active=True
-                ).count()
+                DeviceToken.query.filter_by(driver_id=driver_id, is_active=True).count()
                 > 0
             )
 
@@ -258,17 +254,13 @@ def build_coverage_rows(*, days: int) -> list[dict[str, Any]]:
                     "company_id": getattr(driver, "company_id", None),
                     "app_version": health.get("app_version") or "",
                     "os": health.get("platform") or health.get("os") or "",
-                    "last_gps_at": (
-                        last_gps_at.isoformat() if last_gps_at else ""
-                    ),
+                    "last_gps_at": (last_gps_at.isoformat() if last_gps_at else ""),
                     "last_gps_coords": coords,
                     "push_token_present": "oui" if push_token_present else "non",
                     "bg_permission": health.get("background_permission")
                     or health.get("bg_permission")
                     or "",
-                    "fgs_android_running": health.get(
-                        "foreground_service_running", ""
-                    ),
+                    "fgs_android_running": health.get("foreground_service_running", ""),
                     "positions_24h": pos_24h,
                     "positions_7d": pos_7d,
                     "in_tracking_pipeline": "oui" if in_pipeline else "non",
@@ -336,9 +328,7 @@ def build_stale_audit_rows(*, hours: int) -> list[dict[str, Any]]:
                     "last_recorded_at": (
                         recorded_at.isoformat() if recorded_at else ""
                     ),
-                    "last_gps_timestamp": (
-                        gps_ts.isoformat() if gps_ts else ""
-                    ),
+                    "last_gps_timestamp": (gps_ts.isoformat() if gps_ts else ""),
                     "last_heartbeat_timestamp": (
                         recorded_at.isoformat() if recorded_at else ""
                     ),
@@ -407,11 +397,7 @@ def main() -> int:
         return 0
 
     absent = [r for r in rows if r["in_tracking_pipeline"] == "non"]
-    unknown = [
-        r
-        for r in absent
-        if r["root_cause"] in {"", "investigation_required"}
-    ]
+    unknown = [r for r in absent if r["root_cause"] in {"", "investigation_required"}]
     print(
         f"# summary drivers={len(rows)} absent={len(absent)} unknown_cause={len(unknown)}",
         file=sys.stderr,

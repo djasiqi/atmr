@@ -10,12 +10,14 @@ export function useRevealFallback(args: {
   name: BootFallbackName;
   reveal: () => void;
   extra?: Record<string, unknown>;
+  /** Remonter à Sentry via reportBootFallback (réservé aux écrans boot critiques). */
+  report?: boolean;
 }): {
   arm: () => void;
   settled: (finished: boolean) => void;
   disarm: () => void;
 } {
-  const { enabled, timeoutMs, name, reveal, extra } = args;
+  const { enabled, timeoutMs, name, reveal, extra, report = true } = args;
   const revealRef = useRef(reveal);
   revealRef.current = reveal;
   const extraRef = useRef(extra);
@@ -49,9 +51,11 @@ export function useRevealFallback(args: {
       }
       fallbackTriggeredRef.current = true;
       revealRef.current();
-      reportBootFallback(name, extraRef.current);
+      if (report) {
+        reportBootFallback(name, extraRef.current);
+      }
     }, timeoutMs);
-  }, [disarm, enabled, name, timeoutMs]);
+  }, [disarm, enabled, name, report, timeoutMs]);
 
   const settled = useCallback(
     (finished: boolean) => {

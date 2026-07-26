@@ -38,7 +38,10 @@ def persist_driver_location_from_kafka(
 
     lat, lon = _payload_coords(payload)
     recorded_at = str(
-        payload.get("recorded_at") or payload.get("timestamp") or payload.get("ts") or ""
+        payload.get("recorded_at")
+        or payload.get("timestamp")
+        or payload.get("ts")
+        or ""
     )
     if not recorded_at:
         from datetime import UTC, datetime
@@ -46,7 +49,9 @@ def persist_driver_location_from_kafka(
         recorded_at = datetime.now(UTC).isoformat()
 
     top_level_event_id = message_obj.get("location_event_id")
-    payload_event_id = payload.get("location_event_id") or payload.get("tracking_event_id")
+    payload_event_id = payload.get("location_event_id") or payload.get(
+        "tracking_event_id"
+    )
     raw_event_id = (
         str(top_level_event_id).strip()
         if isinstance(top_level_event_id, str) and top_level_event_id.strip()
@@ -98,9 +103,7 @@ def persist_driver_location_from_kafka(
         )
 
         loc_svc = get_location_service()
-        norm_mode = loc_svc.resolve_normalized_location_mode(
-            company_id, location_mode
-        )
+        norm_mode = loc_svc.resolve_normalized_location_mode(company_id, location_mode)
         uc = UpdateDriverLocationUseCase(update_location_fn=create_location_update_fn())
         uc_result = uc.execute(
             UpdateDriverLocationCommand(
@@ -132,7 +135,10 @@ def persist_driver_location_from_kafka(
                 accept_reason=uc_result.accept_reason,
                 location_event_id=location_event_id,
             )
-            if uc_result.accept_status == "accepted_canonical" and recorded_at is not None:
+            if (
+                uc_result.accept_status == "accepted_canonical"
+                and recorded_at is not None
+            ):
                 try:
                     from datetime import UTC, datetime
 
@@ -175,7 +181,10 @@ def persist_driver_location_from_kafka(
         },
         "pipeline_stages": [
             {"stage": "ACK_INGESTED", "ok": True},
-            {"stage": "ACK_PROCESSED", "ok": uc_result.accept_status.startswith("accepted")},
+            {
+                "stage": "ACK_PROCESSED",
+                "ok": uc_result.accept_status.startswith("accepted"),
+            },
         ],
     }
     return enriched, uc_result

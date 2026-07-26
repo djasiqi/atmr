@@ -309,7 +309,10 @@ class KafkaConsumer:
         except KeyboardInterrupt:
             logger.info("[kafka_consumer] Received keyboard interrupt")
         except Exception as e:
-            from shared.sentry_init import capture_kafka_error, is_kafka_connection_error
+            from shared.sentry_init import (
+                capture_kafka_error,
+                is_kafka_connection_error,
+            )
 
             if is_kafka_connection_error(e):
                 capture_kafka_error(e)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
@@ -36,10 +37,7 @@ def relay_stats() -> dict[str, int]:
 
 
 def _circuit_allows_publish() -> bool:
-    global _circuit_open_until
-    if time.time() < _circuit_open_until:
-        return False
-    return True
+    return not time.time() < _circuit_open_until
 
 
 def _record_failure() -> None:
@@ -126,9 +124,7 @@ def publish_relay_event(
     # Exécution synchrone courte (timeout implicite via socket_timeout Redis ~5s).
     # Pour respecter <100ms en charge, on pourrait passer à un thread pool dédié.
     deadline = time.monotonic() + (_TIMEOUT_MS / 1000.0)
-    try:
+    with contextlib.suppress(Exception):
         _do_publish()
-    except Exception:
-        pass
     if time.monotonic() > deadline:
         logger.warning("ws relay publish exceeded budget event=%s", event_type)

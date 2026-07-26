@@ -8,6 +8,7 @@ CANCELLATION V1 : billing_outcome / commercial_terms / revalidation sous verrou.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -189,15 +190,16 @@ class RespondToChangeRequestUseCase:
                 TransportActionNextActor.COMPANY,
                 None,
                 "",
+            ) and (
+                change_request.next_actor_type == TransportActionNextActor.INSTITUTION
             ):
-                if change_request.next_actor_type == TransportActionNextActor.INSTITUTION:
-                    return RespondToChangeRequestResult(
-                        success=False,
-                        booking_id=booking.id,
-                        change_request_id=change_request.id,
-                        error="C'est au tour de l'institution de répondre.",
-                        status_code=409,
-                    )
+                return RespondToChangeRequestResult(
+                    success=False,
+                    booking_id=booking.id,
+                    change_request_id=change_request.id,
+                    error="C'est au tour de l'institution de répondre.",
+                    status_code=409,
+                )
 
             current_version = int(change_request.version or 1)
             if int(input_data.version) != current_version:
@@ -268,12 +270,7 @@ class RespondToChangeRequestUseCase:
         ids = sorted({int(b.id) for b in affected})
         if not ids:
             return
-        (
-            db.session.query(Booking)
-            .filter(Booking.id.in_(ids))
-            .with_for_update()
-            .all()
-        )
+        (db.session.query(Booking).filter(Booking.id.in_(ids)).with_for_update().all())
 
     def _accept_cancellation(
         self,
@@ -303,7 +300,9 @@ class RespondToChangeRequestUseCase:
             and input_data.policy_version != ctx.policy_version
         ):
             change_reason = "POLICY_CHANGED"
-        elif input_data.client_situation and input_data.client_situation != ctx.situation:
+        elif (
+            input_data.client_situation and input_data.client_situation != ctx.situation
+        ):
             change_reason = "TIME_WINDOW_CHANGED"
         elif (
             input_data.client_suggested_amount is not None
@@ -317,11 +316,9 @@ class RespondToChangeRequestUseCase:
             )
         ):
             change_reason = "AMOUNT_CHANGED"
-        elif (
-            input_data.client_cancelable_booking_ids is not None
-            and sorted(int(x) for x in input_data.client_cancelable_booking_ids)
-            != list(ctx.cancelable_booking_ids)
-        ):
+        elif input_data.client_cancelable_booking_ids is not None and sorted(
+            int(x) for x in input_data.client_cancelable_booking_ids
+        ) != list(ctx.cancelable_booking_ids):
             change_reason = "BOOKING_STATUS_CHANGED"
 
         if change_reason:
@@ -431,7 +428,9 @@ class RespondToChangeRequestUseCase:
         if change_request.action_type == TransportActionType.CANCELLATION:
             return self._accept_cancellation(booking, change_request, input_data)
 
-        exchange_id = input_data.accepted_exchange_id or change_request.active_exchange_id
+        exchange_id = (
+            input_data.accepted_exchange_id or change_request.active_exchange_id
+        )
         accepted_ex = None
         if exchange_id:
             from models.transport_action_exchange import TransportActionExchange
@@ -542,9 +541,8 @@ class RespondToChangeRequestUseCase:
         reason = (input_data.reason or "").strip() or "Signalé comme problématique"
         if change_request.action_type == TransportActionType.CANCELLATION:
             reason = (
-                (input_data.reason or "").strip()
-                or "Problème signalé par le transporteur"
-            )
+                input_data.reason or ""
+            ).strip() or "Problème signalé par le transporteur"
 
         _append_exchange(
             change_request,
@@ -748,7 +746,7 @@ class RespondToChangeRequestUseCase:
         *,
         accepted: bool,
     ) -> None:
-        try:
+        with contextlib.suppress(Exception):
             AuditLogger.log(
                 action=(
                     "transport_action_accepted"
@@ -762,5 +760,3 @@ class RespondToChangeRequestUseCase:
                     "action_type": change_request.action_type,
                 },
             )
-        except Exception:
-            pass

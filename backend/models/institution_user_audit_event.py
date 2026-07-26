@@ -17,7 +17,10 @@ class InstitutionUserAuditEvent(db.Model):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     institution_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("institutions.id", ondelete="CASCADE"), nullable=False, index=True
+        Integer,
+        ForeignKey("institutions.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     target_user_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("user.id", ondelete="CASCADE"), nullable=False, index=True

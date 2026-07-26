@@ -82,7 +82,9 @@ class CompleteExternalMissionUseCase:
             executed_at = input_data.executed_at or datetime.now(UTC)
             notes = (input_data.notes or "").strip() or None
             declared_by = self._user_display_name(input_data.user_id)
-            carrier_name = transport_request.external_carrier_name or "Transporteur externe"
+            carrier_name = (
+                transport_request.external_carrier_name or "Transporteur externe"
+            )
 
             transport_request.executed_externally_at = executed_at
             transport_request.executed_externally_by_user_id = input_data.user_id
@@ -115,7 +117,9 @@ class CompleteExternalMissionUseCase:
                     },
                 )
             except Exception as audit_err:
-                logger.warning("[CompleteExternalMission] Audit log error: %s", audit_err)
+                logger.warning(
+                    "[CompleteExternalMission] Audit log error: %s", audit_err
+                )
 
             return CompleteExternalMissionResult(
                 success=True,

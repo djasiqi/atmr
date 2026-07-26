@@ -117,8 +117,12 @@ def _slugify_filename_part(text: str, *, max_len: int = 48) -> str:
 def _patient_filename_slug(tr: TransportRequest) -> str:
     patient = getattr(tr, "patient", None)
     if patient is not None:
-        last = _slugify_filename_part(getattr(patient, "last_name", "") or "", max_len=28)
-        first = _slugify_filename_part(getattr(patient, "first_name", "") or "", max_len=18)
+        last = _slugify_filename_part(
+            getattr(patient, "last_name", "") or "", max_len=28
+        )
+        first = _slugify_filename_part(
+            getattr(patient, "first_name", "") or "", max_len=18
+        )
         if last and first:
             return f"{last}-{first}"
         if last or first:
@@ -265,7 +269,9 @@ def _carrier_block_defaults(
     }
 
 
-def build_carrier_block(tr: TransportRequest, booking: Booking | None) -> dict[str, Any]:
+def build_carrier_block(
+    tr: TransportRequest, booking: Booking | None
+) -> dict[str, Any]:
     from models.enums import CarrierSource
 
     carrier_source = _carrier_source_value(tr)
@@ -282,10 +288,13 @@ def build_carrier_block(tr: TransportRequest, booking: Booking | None) -> dict[s
             vehicle=MISSING,
             is_external=True,
             execution_mode_label=execution_mode_label,
-            externalization_reason=getattr(tr, "external_carrier_reason", None) or MISSING,
+            externalization_reason=getattr(tr, "external_carrier_reason", None)
+            or MISSING,
             reference=getattr(tr, "external_carrier_reference", None) or MISSING,
             assigned_externally_at=_fmt_dt(getattr(tr, "assigned_externally_at", None)),
-            externalized_by_name=_format_user_name(getattr(tr, "externalized_by", None)),
+            externalized_by_name=_format_user_name(
+                getattr(tr, "externalized_by", None)
+            ),
             declared_at=_fmt_dt(getattr(tr, "executed_externally_at", None)),
             declared_by=_format_user_name(getattr(tr, "executed_externally_by", None)),
             execution_notes=getattr(tr, "external_execution_notes", None) or MISSING,
@@ -336,7 +345,9 @@ def _fmt_iso(value: str | None, fmt: str = "%d.%m.%Y %H:%M") -> str:
         return MISSING
 
 
-def build_institution_snapshot(tr: TransportRequest, institution: Institution) -> dict[str, Any]:
+def build_institution_snapshot(
+    tr: TransportRequest, institution: Institution
+) -> dict[str, Any]:
     contact = getattr(tr, "contact_on_site", None) or {}
     if not isinstance(contact, dict):
         contact = {}
@@ -347,13 +358,17 @@ def build_institution_snapshot(tr: TransportRequest, institution: Institution) -
         "contact_email": getattr(institution, "contact_email", None) or MISSING,
         "service": contact.get("requester_service") or MISSING,
         "requester_name": requester or contact.get("requester_name") or MISSING,
-        "requester_phone": contact.get("requester_phone") or contact.get("phone") or MISSING,
+        "requester_phone": contact.get("requester_phone")
+        or contact.get("phone")
+        or MISSING,
         "logo_url": getattr(institution, "logo_url", None),
         "captured_at": datetime.now(UTC).isoformat(),
     }
 
 
-def resolve_institution_snapshot(tr: TransportRequest, institution: Institution) -> dict[str, Any]:
+def resolve_institution_snapshot(
+    tr: TransportRequest, institution: Institution
+) -> dict[str, Any]:
     """Snapshot figé : priorité au payload `request_converted` (V2), sinon construction live."""
     try:
         from services.institutions.transport_timeline_service import find_latest_event
@@ -374,13 +389,19 @@ def resolve_institution_snapshot(tr: TransportRequest, institution: Institution)
     return snap
 
 
-def build_client_identity_block(tr: TransportRequest, booking: Booking | None) -> dict[str, Any]:
+def build_client_identity_block(
+    tr: TransportRequest, _booking: Booking | None
+) -> dict[str, Any]:
     display = build_transport_request_display_blocks(tr)
     identity = display.get("identity") or {}
     category = identity.get("display_category") or "institution_patient"
     source = identity.get("source") or {}
     passenger = (identity.get("passenger") or {}).get("name") or MISSING
-    org_name = source.get("name") or (getattr(tr.institution, "name", None) if getattr(tr, "institution", None) else MISSING)
+    org_name = source.get("name") or (
+        getattr(tr.institution, "name", None)
+        if getattr(tr, "institution", None)
+        else MISSING
+    )
 
     if category == "institution_patient":
         headline = f"Patient : {passenger}"
@@ -488,7 +509,9 @@ def _resolve_billing_target(tr: TransportRequest, booking: Booking | None) -> st
     return str(intent).lower()
 
 
-def build_request_classification(tr: TransportRequest, booking: Booking | None) -> dict[str, Any]:
+def build_request_classification(
+    tr: TransportRequest, booking: Booking | None
+) -> dict[str, Any]:
     display = build_transport_request_display_blocks(tr)
     trip_flags = display.get("trip_flags") or {}
     mobility = tr.get_mobility() if hasattr(tr, "get_mobility") else {}
@@ -554,7 +577,11 @@ def build_billing_block(
         amt = getattr(booking, "amount", None)
         if amt is not None:
             amount_str = f"{float(amt):.2f} CHF"
-        summary = tr._serialize_booking_summary() if hasattr(tr, "_serialize_booking_summary") else None
+        summary = (
+            tr._serialize_booking_summary()
+            if hasattr(tr, "_serialize_booking_summary")
+            else None
+        )
         if summary:
             b_status = _status_str(booking.status)
             if b_status == "CANCELED":
@@ -583,7 +610,9 @@ def build_billing_block(
     }
 
 
-def build_mission_info(tr: TransportRequest, booking: Booking | None) -> dict[str, Any]:
+def build_mission_info(
+    tr: TransportRequest, _booking: Booking | None
+) -> dict[str, Any]:
     mtype = getattr(tr, "mission_type", None) or "patient_transport"
     return {
         "type_label": _MISSION_TYPE_LABELS.get(mtype, mtype),
@@ -639,7 +668,7 @@ def build_route_steps(
     steps: list[dict[str, Any]] = []
 
     legs = sorted(
-        list(getattr(tr, "legs", None) or []),
+        getattr(tr, "legs", None) or [],
         key=lambda lg: getattr(lg, "sequence_index", 0),
     )
     if len(legs) > MAX_ROUTE_LEGS:
@@ -652,7 +681,9 @@ def build_route_steps(
             {
                 "kind": "departure",
                 "title": "Départ",
-                "address": getattr(first, "pickup_location", None) or tr.pickup_location or MISSING,
+                "address": getattr(first, "pickup_location", None)
+                or tr.pickup_location
+                or MISSING,
                 "planned_time": departure.get("display_time") or MISSING,
                 "actual_time": boarded_at,
             }
@@ -746,7 +777,9 @@ def build_route_steps(
     return steps, truncated
 
 
-def resolve_timeline_actor(event: Any, institution: Institution, tr: TransportRequest) -> str:
+def resolve_timeline_actor(
+    event: Any, institution: Institution, _tr: TransportRequest
+) -> str:
     payload = getattr(event, "payload", None) or {}
     actor_type = getattr(event, "actor_type", "") or ""
 
@@ -836,7 +869,9 @@ def build_mission_milestones(
     if getattr(tr, "assigned_externally_at", None):
         _add(tr.assigned_externally_at, "Bascule transporteur externe", "demande")
     if getattr(tr, "executed_externally_at", None):
-        _add(tr.executed_externally_at, "Déclarée réalisée par l'institution", "demande")
+        _add(
+            tr.executed_externally_at, "Déclarée réalisée par l'institution", "demande"
+        )
     if booking is not None:
         if getattr(booking, "boarded_at", None):
             _add(booking.boarded_at, "Prise en charge", "réservation")
@@ -885,7 +920,9 @@ def build_synthetic_history(
     enriched: bool = False,
 ) -> list[dict[str, Any]]:
     """Historique institutionnel synthétique (4 lignes standard, 6 max enrichi)."""
-    max_rows = MAX_SYNTHETIC_HISTORY_ENRICHED if enriched else MAX_SYNTHETIC_HISTORY_STANDARD
+    max_rows = (
+        MAX_SYNTHETIC_HISTORY_ENRICHED if enriched else MAX_SYNTHETIC_HISTORY_STANDARD
+    )
     raw: list[tuple[datetime, str]] = []
 
     def _is_cancelled() -> bool:
@@ -946,27 +983,26 @@ def build_synthetic_history(
 
     from models.enums import CarrierSource, RequestStatus
 
-    if (
-        _carrier_source_value(tr) == CarrierSource.EXTERNAL.value
-        and not cancelled
-    ):
+    if _carrier_source_value(tr) == CarrierSource.EXTERNAL.value and not cancelled:
         if not any(
             label.startswith("Transporteur externe affecté")
             or label == "Mission basculée vers transporteur externe"
             for _, label in raw
-        ):
-            if getattr(tr, "assigned_externally_at", None):
-                name = getattr(tr, "external_carrier_name", None) or "Transporteur externe"
-                _add(tr.assigned_externally_at, f"Transporteur externe affecté : {name}")
+        ) and getattr(tr, "assigned_externally_at", None):
+            name = getattr(tr, "external_carrier_name", None) or "Transporteur externe"
+            _add(tr.assigned_externally_at, f"Transporteur externe affecté : {name}")
         if (
             _status_str(getattr(tr, "status", None))
             == RequestStatus.EXTERNAL_DECLARED_COMPLETED.value
             and not any(
-                label == "Déclarée réalisée par transporteur externe" for _, label in raw
+                label == "Déclarée réalisée par transporteur externe"
+                for _, label in raw
             )
             and getattr(tr, "executed_externally_at", None)
         ):
-            _add(tr.executed_externally_at, "Déclarée réalisée par transporteur externe")
+            _add(
+                tr.executed_externally_at, "Déclarée réalisée par transporteur externe"
+            )
 
     if cancelled and not any(label == "Annulée" for _, label in raw):
         fallback_dt = getattr(booking, "updated_at", None) if booking else None
@@ -1068,16 +1104,12 @@ def build_gps_proof(booking: Booking | None) -> dict[str, Any]:
 def collect_messages(booking_id: int | None) -> tuple[list[dict[str, Any]], bool]:
     if not booking_id:
         return [], False
-    q = (
-        BookingMessage.query.filter_by(booking_id=booking_id)
-        .order_by(BookingMessage.created_at.asc())
+    q = BookingMessage.query.filter_by(booking_id=booking_id).order_by(
+        BookingMessage.created_at.asc()
     )
     total = q.count()
     truncated = total > MAX_MESSAGES
-    if truncated:
-        messages = q.offset(max(0, total - MAX_MESSAGES)).all()
-    else:
-        messages = q.all()
+    messages = q.offset(max(0, total - MAX_MESSAGES)).all() if truncated else q.all()
     rows = [
         {
             "date": _fmt_dt(m.created_at, "%d.%m.%Y %H:%M"),

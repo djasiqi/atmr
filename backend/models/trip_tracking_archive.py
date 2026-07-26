@@ -7,6 +7,7 @@ Partitionnée par mois pour performance et archivage facilité.
 """
 
 import logging
+import re
 from typing import Any, Dict
 
 from sqlalchemy import Column, DateTime, Float, ForeignKey, Index, Integer, text
@@ -78,8 +79,24 @@ class TripTrackingArchive(db.Model):
         )
 
     @staticmethod
+    def is_parent_partitioned(db_session) -> bool:
+        """Indique si trip_tracking_archive est une table parent partitionnée (PG relkind=p)."""
+        check_sql = text("""
+            SELECT c.relkind = 'p'
+            FROM pg_class c
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE c.relname = 'trip_tracking_archive'
+              AND n.nspname = current_schema()
+        """)
+        result = db_session.execute(check_sql).scalar()
+        return bool(result)
+
+    @staticmethod
     def ensure_partition_for_month(year: int, month: int, db_session) -> bool:
         """Crée la partition pour un mois donné si elle n'existe pas.
+
+        No-op si la table archive n'est pas partitionnée (schéma migration historique
+        f6e0dfb9f5da : table classique, inserts directs possibles).
 
         Args:
             year: Année (ex: 2025)
@@ -87,9 +104,19 @@ class TripTrackingArchive(db.Model):
             db_session: Session SQLAlchemy
 
         Returns:
-            True si partition créée, False si existait déjà
+            True si partition créée, False si existait déjà ou partitioning inactif
         """
+        if not TripTrackingArchive.is_parent_partitioned(db_session):
+            logger.debug(
+                "trip_tracking_archive non partitionnée — pas de partition %d-%02d",
+                year,
+                month,
+            )
+            return False
+
         partition_name = f"trip_tracking_archive_{year}_{month:02d}"
+        if not re.fullmatch(r"trip_tracking_archive_\d{4}_\d{2}", partition_name):
+            raise ValueError(f"Invalid partition name: {partition_name}")
 
         # Calculer les bornes de la partition
         from datetime import date

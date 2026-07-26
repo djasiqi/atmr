@@ -232,8 +232,6 @@ class CompanyTestPushNotification(Resource):
     @jwt_required()
     @role_required(UserRole.company, UserRole.admin)
     def post(self):
-        from flask_jwt_extended import get_jwt
-
         from ext import redis_client
         from models import DeviceToken, User
         from services.notifications.push import send_push_message
@@ -1894,7 +1892,6 @@ class CompanyReservations(Resource):
 
         # Appliquer filtre date (jour unique avec retours liés) ou plage
         if day_str:
-            from sqlalchemy import or_
             from shared.time_utils import day_local_bounds
 
             start_local, end_local = day_local_bounds(day_str)
@@ -2596,9 +2593,7 @@ def _respond_to_change_request(reservation_id: int, change_id: int, action: str)
     if fee_amount_raw is not None:
         # Accepter uniquement une chaîne (contrat monétaire V1) — sinon laisser
         # la policy lever FEE_AMOUNT_NOT_ALLOWED / CUSTOM_FEE_AMOUNT_INVALID.
-        fee_amount_str = (
-            fee_amount_raw if isinstance(fee_amount_raw, str) else fee_amount_raw
-        )
+        fee_amount_str = fee_amount_raw
 
     uc = RespondToChangeRequestUseCase()
     result = uc.execute(
@@ -2611,9 +2606,9 @@ def _respond_to_change_request(reservation_id: int, change_id: int, action: str)
             version=version_int,
             reason=(data.get("reason") or data.get("billing_comment") or None),
             billing_outcome=(data.get("billing_outcome") or None),
-            fee_amount=fee_amount_str if isinstance(fee_amount_str, str) else (
-                None if fee_amount_raw is None else fee_amount_raw
-            ),
+            fee_amount=fee_amount_str
+            if isinstance(fee_amount_str, str)
+            else (None if fee_amount_raw is None else fee_amount_raw),
             billing_comment=(data.get("billing_comment") or None),
             policy_version=(data.get("policy_version") or None),
             respond_context_version=respond_context_version_int,
@@ -2702,7 +2697,7 @@ class CompanyTransportActionsRequired(Resource):
         company, error_response, status_code = _get_current_company_via_use_case()
         if error_response:
             return error_response, status_code
-        company_id = int(getattr(company, "id"))
+        company_id = int(company.id)
         return {
             "count": count_company_actions_required(company_id),
             "items": list_company_actions_required(company_id),
@@ -6851,73 +6846,7 @@ class CompanyBookingChangeEvents(Resource):
 class CompanyBookingChangeAck(Resource):
     @jwt_required()
     @role_required(UserRole.company)
-    def post(self, booking_id: int, event_id: int):
-        """Accusé de réception dispatch pour événement critique."""
-        company, err, code = _get_current_company_via_use_case()
-        if err:
-            return err, code
-        cid_obj = getattr(company, "id", None)
-        try:
-            cid = int(cid_obj) if cid_obj is not None else None
-        except Exception:
-            cid = None
-        if cid is None:
-            return {"error": "Entreprise introuvable"}, 404
-
-        from flask_jwt_extended import get_jwt_identity
-        from services.institutions.booking_change_service import (
-            acknowledge_critical_event,
-        )
-
-        body, status = acknowledge_critical_event(
-            event_id,
-            user_id=get_jwt_identity(),
-            actor_type="company_user",
-            ack_channel="company_dispatch",
-            company_id=cid,
-        )
-        return body, status
-
-
-# ======================================================
-# Booking change events (audit institution → company)
-# ======================================================
-@companies_ns.route("/me/reservations/<int:booking_id>/change-events")
-class CompanyBookingChangeEvents(Resource):
-    @jwt_required()
-    @role_required(UserRole.company)
-    def get(self, booking_id: int):
-        """Historique des modifications métier (dont institution)."""
-        company, err, code = _get_current_company_via_use_case()
-        if err:
-            return err, code
-        cid_obj = getattr(company, "id", None)
-        try:
-            cid = int(cid_obj) if cid_obj is not None else None
-        except Exception:
-            cid = None
-        if cid is None:
-            return {"error": "Entreprise introuvable"}, 404
-
-        from repositories.booking_repository import BookingRepository
-        from services.institutions.booking_change_service import list_change_events
-
-        booking_repo = BookingRepository()
-        booking = booking_repo.find_model_by_id_with_visibility(booking_id, cid)
-        if not booking:
-            return APIErrorHandler.handle_not_found("Réservation", booking_id, logger)
-
-        events = list_change_events(booking_id, limit=200)
-        return {"events": events, "booking_id": booking_id}, 200
-
-
-@companies_ns.route(
-    "/me/reservations/<int:booking_id>/change-events/<int:event_id>/ack"
-)
-class CompanyBookingChangeAck(Resource):
-    @jwt_required()
-    @role_required(UserRole.company)
-    def post(self, booking_id: int, event_id: int):
+    def post(self, _booking_id: int, event_id: int):
         """Accusé de réception dispatch pour événement critique."""
         company, err, code = _get_current_company_via_use_case()
         if err:

@@ -9,7 +9,7 @@ import pytest
 from werkzeug.exceptions import BadRequest
 
 
-@pytest.fixture()
+@pytest.fixture
 def app_client():
     os.environ["CSRF_ENABLED"] = "false"
     from app import create_app

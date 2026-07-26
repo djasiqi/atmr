@@ -9,7 +9,7 @@ import pytest
 from services.messaging.conversation_service import ConversationService
 
 
-@pytest.mark.parametrize("read_ids,expected", [(set(), 2), ({101}, 1)])
+@pytest.mark.parametrize(("read_ids", "expected"), [(set(), 2), ({101}, 1)])
 def test_unread_count_uses_read_ids_set(read_ids, expected):
     conv_id = 10
     user_id = 5

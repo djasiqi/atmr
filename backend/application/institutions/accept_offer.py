@@ -18,8 +18,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 
 from ext import db
 from models import (
@@ -52,8 +52,6 @@ def _load_transport_request_legs(
     """Charge les legs ordonnés (relation ORM ou requête directe)."""
     from sqlalchemy import inspect as sa_inspect
 
-    from models.transport_request_leg import TransportRequestLeg
-
     legs_attr = getattr(transport_request, "legs", None)
     if legs_attr is not None:
         return sorted(legs_attr, key=lambda leg: getattr(leg, "sequence_index", 0))
@@ -75,10 +73,7 @@ def _find_return_leg(
     for leg in reversed(legs):
         if getattr(leg, "is_return_stop", False):
             return leg
-    if (
-        getattr(transport_request, "return_to_institution", False)
-        and len(legs) >= 2
-    ):
+    if getattr(transport_request, "return_to_institution", False) and len(legs) >= 2:
         return legs[-1]
     return None
 
@@ -90,9 +85,7 @@ def _should_use_legs_conversion(transport_request: TransportRequest) -> bool:
     legs = _load_transport_request_legs(transport_request)
     if len(legs) >= 2:
         return True
-    if any(getattr(leg, "is_return_stop", False) for leg in legs):
-        return True
-    return False
+    return bool(any(getattr(leg, "is_return_stop", False) for leg in legs))
 
 
 def _normalize_institution_name(value: str | None) -> str:
@@ -330,8 +323,7 @@ class AcceptOfferUseCase:
                 )
                 booking_id = (
                     transport_request.booking_id
-                    if conflict_code == "OFFER_ALREADY_ACCEPTED"
-                    or conflict_code == "REQUEST_CONVERTED"
+                    if conflict_code in {"OFFER_ALREADY_ACCEPTED", "REQUEST_CONVERTED"}
                     else None
                 )
                 return AcceptOfferResult(
@@ -716,9 +708,7 @@ class AcceptOfferUseCase:
         price = resolve_institution_price(
             company_id=company_id,
             effective_billing_intent=billing_intent,
-            preferential_rate=getattr(
-                institution_client, "preferential_rate", None
-            ),
+            preferential_rate=getattr(institution_client, "preferential_rate", None),
             pickup_location=transport_request.pickup_location,
             dropoff_location=transport_request.dropoff_location,
             pickup_lat=float(transport_request.pickup_lat)
@@ -829,9 +819,7 @@ class AcceptOfferUseCase:
         # Gel tarifaire : conserver le profil/version/détail si calculé via profil
         if price.get("pricing_profile_id"):
             booking.pricing_profile_id = price["pricing_profile_id"]
-            booking.pricing_profile_version_id = price.get(
-                "pricing_profile_version_id"
-            )
+            booking.pricing_profile_version_id = price.get("pricing_profile_version_id")
             booking.price_amount = amount
             booking.price_breakdown_json = price.get("breakdown")
 
@@ -996,7 +984,9 @@ class AcceptOfferUseCase:
             )
             return None
 
-        leg_confirmed = bool(getattr(return_leg, "time_confirmed", False)) if return_leg else False
+        leg_confirmed = (
+            bool(getattr(return_leg, "time_confirmed", False)) if return_leg else False
+        )
         return_time_raw = (
             getattr(return_leg, "scheduled_time", None) if return_leg else None
         )
@@ -1018,12 +1008,8 @@ class AcceptOfferUseCase:
 
         if return_leg is not None:
             pickup_location = return_leg.pickup_location
-            pickup_lat = (
-                float(return_leg.pickup_lat) if return_leg.pickup_lat else None
-            )
-            pickup_lon = (
-                float(return_leg.pickup_lng) if return_leg.pickup_lng else None
-            )
+            pickup_lat = float(return_leg.pickup_lat) if return_leg.pickup_lat else None
+            pickup_lon = float(return_leg.pickup_lng) if return_leg.pickup_lng else None
             dropoff_location = return_leg.dropoff_location
             dropoff_lat = (
                 float(return_leg.dropoff_lat) if return_leg.dropoff_lat else None
@@ -1137,9 +1123,7 @@ class AcceptOfferUseCase:
         institution_client = self._get_or_create_institution_client(
             transport_request, company_id
         )
-        preferential_rate = getattr(
-            institution_client, "preferential_rate", None
-        )
+        preferential_rate = getattr(institution_client, "preferential_rate", None)
 
         from services.billing.destination_billing_resolver import (
             billed_to_type_from_intent,
@@ -1171,7 +1155,9 @@ class AcceptOfferUseCase:
                     if mission_depart_confirmed
                     else None
                 )
-                operational = mission_depart_confirmed or proposed_pickup_time is not None
+                operational = (
+                    mission_depart_confirmed or proposed_pickup_time is not None
+                )
             else:
                 raw_pickup = leg.scheduled_time if leg_confirmed else None
                 operational = leg_confirmed
@@ -1245,9 +1231,7 @@ class AcceptOfferUseCase:
                 wheelchair_client_has=self._get_mobility_flag(
                     transport_request, "wheelchair"
                 ),
-                wheelchair_need=self._get_mobility_flag(
-                    transport_request, "stretcher"
-                ),
+                wheelchair_need=self._get_mobility_flag(transport_request, "stretcher"),
                 notes_medical=transport_request.notes,
                 billed_to_type=billed_to_type,
                 billed_to_company_id=billed_to_company_id,
@@ -1322,7 +1306,9 @@ class AcceptOfferUseCase:
             institution=transport_request.institution,
             transport_company_id=company_id,
         )
-        if btype != "patient" and (clinic_company_id is None or int(clinic_company_id) <= 0):
+        if btype != "patient" and (
+            clinic_company_id is None or int(clinic_company_id) <= 0
+        ):
             inst_name = getattr(transport_request.institution, "name", None) or "?"
             msg = (
                 f"Impossible de résoudre billed_to_company_id pour billed_to_type={btype} "
@@ -1624,9 +1610,7 @@ class AcceptOfferUseCase:
                 "last_name": patient.last_name,
                 "phone": getattr(patient, "phone", None),
                 "date_of_birth": (
-                    patient.dob.isoformat()
-                    if getattr(patient, "dob", None)
-                    else None
+                    patient.dob.isoformat() if getattr(patient, "dob", None) else None
                 ),
             }
             # Adresse domicile (utile si facturé au patient)
@@ -1702,7 +1686,7 @@ class AcceptOfferUseCase:
         self, transport_request: TransportRequest
     ) -> tuple[str | None, str | None, str | None]:
         legs = sorted(
-            list(getattr(transport_request, "legs", None) or []),
+            getattr(transport_request, "legs", None) or [],
             key=lambda item: getattr(item, "sequence_index", 0),
         )
         if not legs:

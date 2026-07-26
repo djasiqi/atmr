@@ -22,7 +22,9 @@ def test_log_driver_push_skipped_emits_structured_payload(
     )
     assert any("[driver_push_pipeline]" in record.message for record in caplog.records)
     payload_line = next(
-        record.message for record in caplog.records if "[driver_push_pipeline]" in record.message
+        record.message
+        for record in caplog.records
+        if "[driver_push_pipeline]" in record.message
     )
     payload = json.loads(payload_line.split("[driver_push_pipeline] ", 1)[1])
     assert payload["stage"] == "driver_push.skipped"

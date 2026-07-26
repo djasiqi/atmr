@@ -383,7 +383,13 @@ class Invoice(db.Model):
             "patient_display_name": patient_display_name,
         }
 
-    def to_dict(self, *, include_reminder_rows: bool = True, list_view: bool = False, company_id: int | None = None):
+    def to_dict(
+        self,
+        *,
+        include_reminder_rows: bool = True,
+        list_view: bool = False,
+        company_id: int | None = None,
+    ):
         """Sérialise la facture en dictionnaire.
 
         Args:
@@ -446,9 +452,7 @@ class Invoice(db.Model):
 
         from shared.invoice_due_dates import resolve_effective_due_date
 
-        effective_due = resolve_effective_due_date(
-            self, company_id=resolved_company_id
-        )
+        effective_due = resolve_effective_due_date(self, company_id=resolved_company_id)
 
         return {
             "id": self.id,
@@ -787,7 +791,11 @@ def _enrich_invoice_line_payloads_single_round_trip(
             bid = int(b.id)
             for other in bookings_by_id.values():
                 opid = getattr(other, "parent_booking_id", None)
-                if opid is not None and int(opid) == bid and int(other.id) in invoice_rid_set:
+                if (
+                    opid is not None
+                    and int(opid) == bid
+                    and int(other.id) in invoice_rid_set
+                ):
                     is_rt = True
                     break
 
@@ -919,9 +927,7 @@ class InvoiceReminder(db.Model):
     def __repr__(self):
         return f"<InvoiceReminder Level {self.level} - {self.added_fee} CHF>"
 
-    def to_dict_list_view(
-        self, *, company_id: int | None = None
-    ) -> dict[str, Any]:
+    def to_dict_list_view(self, *, company_id: int | None = None) -> dict[str, Any]:
         """Sérialisation allégée pour la liste des factures (accès PDF rappel)."""
         from shared.invoice_due_dates import resolve_reminder_due_date
 

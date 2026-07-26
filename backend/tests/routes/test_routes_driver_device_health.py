@@ -50,7 +50,7 @@ def _driver_headers(client, sample_driver):
 def test_post_device_health_200_persist_and_redis_dual_write(
     client, sample_driver, db
 ) -> None:
-    mock_redis = MagicMock()
+    MagicMock()
     snapshot = {
         "driver_id": str(sample_driver.id),
         "manufacturer": "Samsung",

@@ -3,14 +3,14 @@
 
 from __future__ import annotations
 
-import os
 import sys
+from pathlib import Path
 
 # Permet `python scripts/verify_socketio_redis.py` depuis backend/
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from ext import REDIS_URL, _socketio_message_queue  # noqa: E402
-from services.infrastructure.socketio_runtime_check import (  # noqa: E402
+from ext import REDIS_URL, _socketio_message_queue
+from services.infrastructure.socketio_runtime_check import (
     collect_socketio_runtime_diagnostics,
 )
 

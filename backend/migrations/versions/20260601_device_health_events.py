@@ -15,7 +15,12 @@ def upgrade() -> None:
     op.create_table(
         "driver_device_health_events",
         sa.Column("id", sa.Integer(), primary_key=True),
-        sa.Column("driver_id", sa.Integer(), sa.ForeignKey("driver.id", ondelete="CASCADE"), nullable=False),
+        sa.Column(
+            "driver_id",
+            sa.Integer(),
+            sa.ForeignKey("driver.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
         sa.Column("recorded_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("manufacturer", sa.String(length=64), nullable=True),
         sa.Column("model", sa.String(length=128), nullable=True),
@@ -43,6 +48,12 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index("ix_driver_device_health_events_recorded_at", table_name="driver_device_health_events")
-    op.drop_index("ix_driver_device_health_events_driver_id", table_name="driver_device_health_events")
+    op.drop_index(
+        "ix_driver_device_health_events_recorded_at",
+        table_name="driver_device_health_events",
+    )
+    op.drop_index(
+        "ix_driver_device_health_events_driver_id",
+        table_name="driver_device_health_events",
+    )
     op.drop_table("driver_device_health_events")

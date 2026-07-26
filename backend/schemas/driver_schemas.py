@@ -28,18 +28,14 @@ class DeviceHealthStatusSchema(Schema):
         required=True,
         validate=validate.OneOf(
             ["granted", "denied", "undetermined"],
-            error=(
-                "fg_permission doit être: 'granted', 'denied' ou 'undetermined'"
-            ),
+            error=("fg_permission doit être: 'granted', 'denied' ou 'undetermined'"),
         ),
     )
     bg_permission = fields.Str(
         required=True,
         validate=validate.OneOf(
             ["granted", "denied", "undetermined"],
-            error=(
-                "bg_permission doit être: 'granted', 'denied' ou 'undetermined'"
-            ),
+            error=("bg_permission doit être: 'granted', 'denied' ou 'undetermined'"),
         ),
     )
     gps_provider_enabled = fields.Bool(required=True)
@@ -56,9 +52,7 @@ class DeviceHealthStatusSchema(Schema):
     last_fix_age_seconds = fields.Int(
         required=False,
         allow_none=True,
-        validate=validate.Range(
-            min=0, error="last_fix_age_seconds doit être >= 0"
-        ),
+        validate=validate.Range(min=0, error="last_fix_age_seconds doit être >= 0"),
     )
     fix_success_rate_last_5min = fields.Float(
         required=False,
@@ -72,9 +66,7 @@ class DeviceHealthStatusSchema(Schema):
     constraint_reason = fields.Str(
         required=False,
         allow_none=True,
-        validate=validate.Length(
-            max=64, error="constraint_reason max 64 caractères"
-        ),
+        validate=validate.Length(max=64, error="constraint_reason max 64 caractères"),
     )
 
 

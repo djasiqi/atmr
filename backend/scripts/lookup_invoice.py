@@ -32,13 +32,20 @@ def _client_name(client: Client | None) -> str | None:
     user = getattr(client, "user", None)
     if user is None:
         return None
-    parts = [getattr(user, "first_name", "") or "", getattr(user, "last_name", "") or ""]
+    parts = [
+        getattr(user, "first_name", "") or "",
+        getattr(user, "last_name", "") or "",
+    ]
     name = " ".join(p for p in parts if p).strip()
     return name or getattr(user, "username", None)
 
 
 def _serialize_payment(payment: InvoicePayment) -> dict:
-    method = payment.method.value if hasattr(payment.method, "value") else str(payment.method)
+    method = (
+        payment.method.value
+        if hasattr(payment.method, "value")
+        else str(payment.method)
+    )
     return {
         "id": payment.id,
         "invoice_id": payment.invoice_id,
@@ -85,7 +92,11 @@ def lookup_invoice(
     if invoice is None:
         return None
 
-    status = invoice.status.value if hasattr(invoice.status, "value") else str(invoice.status)
+    status = (
+        invoice.status.value
+        if hasattr(invoice.status, "value")
+        else str(invoice.status)
+    )
     payments = sorted(invoice.payments or [], key=lambda p: p.paid_at or "")
     reminders = sorted(invoice.reminders or [], key=lambda r: r.level or 0)
 
@@ -115,7 +126,9 @@ def lookup_invoice(
 def main() -> int:
     parser = argparse.ArgumentParser(description="Consulte une facture (ops)")
     parser.add_argument("invoice_number", nargs="?", help="Ex: EM-2026-02-0034")
-    parser.add_argument("--id", type=int, dest="invoice_id", help="ID facture (ex: 373)")
+    parser.add_argument(
+        "--id", type=int, dest="invoice_id", help="ID facture (ex: 373)"
+    )
     parser.add_argument("--json", action="store_true", help="Sortie JSON")
     args = parser.parse_args()
 
@@ -141,9 +154,13 @@ def main() -> int:
     print(f"Facture {row['invoice_number']} (id={row['id']})")
     print(f"  company_id     : {row['company_id']}")
     print(f"  client         : {row['client_name'] or '-'} (id={row['client_id']})")
-    print(f"  bill_to_client : {row['bill_to_client_name'] or '-'} (id={row['bill_to_client_id']})")
+    print(
+        f"  bill_to_client : {row['bill_to_client_name'] or '-'} (id={row['bill_to_client_id']})"
+    )
     print(f"  status         : {row['status']}")
-    print(f"  total / paid / due : {row['total_amount']} / {row['amount_paid']} / {row['balance_due']}")
+    print(
+        f"  total / paid / due : {row['total_amount']} / {row['amount_paid']} / {row['balance_due']}"
+    )
     print(f"  issued / due   : {row['issued_at']} / {row['due_date']}")
     print(f"  sent / paid    : {row['sent_at']} / {row['paid_at']}")
     print(f"  period         : {row['period_month']}/{row['period_year']}")

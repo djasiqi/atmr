@@ -109,9 +109,7 @@ def test_remove_exclude_return_keeps_primary(
         invoice_line_id=11, updated_at=None
     )
 
-    r = remove_draft_invoice_line(
-        1, 1, 10, exclude_round_trip_leg="return"
-    )
+    r = remove_draft_invoice_line(1, 1, 10, exclude_round_trip_leg="return")
 
     assert r.success is True
     mock_db.session.delete.assert_called_once_with(secondary)

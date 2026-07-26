@@ -16,8 +16,6 @@ Invariant horaire :
 
 """
 
-
-
 from __future__ import annotations
 
 from decimal import Decimal
@@ -47,58 +45,33 @@ def _iso_scheduled(dt):
     return mission_scheduled_to_api_iso(dt)
 
 
-
 if TYPE_CHECKING:
-
     from .transport_request import TransportRequest
 
 
-
-
-
 class TransportRequestLeg(db.Model):
-
     __tablename__ = "transport_request_legs"
 
     __table_args__ = (
-
         Index(
-
             "uq_transport_request_leg_sequence",
-
             "transport_request_id",
-
             "sequence_index",
-
             unique=True,
-
         ),
-
     )
-
-
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
 
-
-
     transport_request_id: Mapped[int] = mapped_column(
-
         ForeignKey("transport_requests.id", ondelete="CASCADE"),
-
         nullable=False,
-
         index=True,
-
     )
-
-
 
     sequence_index: Mapped[int] = mapped_column(Integer, nullable=False)
 
     route_sequence_number: Mapped[int] = mapped_column(Integer, nullable=False)
-
-
 
     pickup_location: Mapped[str] = mapped_column(String(255), nullable=False)
 
@@ -112,103 +85,57 @@ class TransportRequestLeg(db.Model):
 
     dropoff_lng: Mapped[Decimal | None] = mapped_column(Numeric(10, 7), nullable=True)
 
-
-
     dropoff_establishment: Mapped[str | None] = mapped_column(
-
         String(255), nullable=True
-
     )
 
     dropoff_service: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     dropoff_doctor: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
-
-
     scheduled_time = mapped_column(DateTime(timezone=False), nullable=True)
 
     time_confirmed: Mapped[bool] = mapped_column(
-
         Boolean,
-
         nullable=False,
-
         default=False,
-
         server_default="false",
-
     )
-
-
 
     destination_billing_override: Mapped[str | None] = mapped_column(
-
         String(50),
-
         nullable=True,
-
     )
-
-
 
     is_return_stop: Mapped[bool] = mapped_column(
-
         Boolean,
-
         nullable=False,
-
         default=False,
-
         server_default="false",
-
     )
-
-
 
     booking_id: Mapped[int | None] = mapped_column(
-
         ForeignKey("booking.id", ondelete="SET NULL"),
-
         nullable=True,
-
     )
-
-
 
     created_at = mapped_column(
-
         DateTime(timezone=True), server_default=func.now(), nullable=False
-
     )
-
-
 
     transport_request: Mapped[TransportRequest] = relationship(
-
         "TransportRequest",
-
         back_populates="legs",
-
     )
 
-
-
     @validates("time_confirmed")
-
     def validate_time_confirmed(self, _key: str, value: bool) -> bool:
-
         if value and self.scheduled_time is None:
-
             raise ValueError(
-
                 "time_confirmed=true requiert scheduled_time renseigné sur le leg."
-
             )
 
         return value
-
-
 
     def serialize(self) -> dict[str, Any]:
         from services.billing.destination_billing_resolver import (
@@ -243,5 +170,3 @@ class TransportRequestLeg(db.Model):
             "effective_billing_intent": effective_billing_intent,
             "booking_id": self.booking_id,
         }
-
-

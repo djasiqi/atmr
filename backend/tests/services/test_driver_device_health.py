@@ -59,13 +59,20 @@ def test_resolve_tracking_display_status_offline_unknown():
 def test_ingest_driver_device_health_persists_and_writes_redis(db, sample_driver):
     mock_redis = MagicMock()
     mock_event = MagicMock()
-    with patch("services.driver_device_health.redis_client", mock_redis), patch(
-        "services.geolocation.device_health.write_device_health", return_value=True
-    ), patch(
-        "services.monitoring.driver_device_health_metrics.record_device_health_report"
-    ), patch("services.driver_device_health.DriverDeviceHealthEvent", return_value=mock_event), patch(
-        "services.driver_device_health.db.session"
-    ) as mock_session:
+    with (
+        patch("services.driver_device_health.redis_client", mock_redis),
+        patch(
+            "services.geolocation.device_health.write_device_health", return_value=True
+        ),
+        patch(
+            "services.monitoring.driver_device_health_metrics.record_device_health_report"
+        ),
+        patch(
+            "services.driver_device_health.DriverDeviceHealthEvent",
+            return_value=mock_event,
+        ),
+        patch("services.driver_device_health.db.session") as mock_session,
+    ):
         from services.driver_device_health import ingest_driver_device_health
 
         snapshot = ingest_driver_device_health(
@@ -88,12 +95,19 @@ def test_ingest_driver_device_health_parses_diagnostic_lot1_fields(db, sample_dr
     """Lot 1 : versions + signaux iOS background remontés dans le snapshot."""
     mock_redis = MagicMock()
     mock_event = MagicMock()
-    with patch("services.driver_device_health.redis_client", mock_redis), patch(
-        "services.geolocation.device_health.write_device_health", return_value=True
-    ), patch(
-        "services.monitoring.driver_device_health_metrics.record_device_health_report"
-    ), patch("services.driver_device_health.DriverDeviceHealthEvent", return_value=mock_event), patch(
-        "services.driver_device_health.db.session"
+    with (
+        patch("services.driver_device_health.redis_client", mock_redis),
+        patch(
+            "services.geolocation.device_health.write_device_health", return_value=True
+        ),
+        patch(
+            "services.monitoring.driver_device_health_metrics.record_device_health_report"
+        ),
+        patch(
+            "services.driver_device_health.DriverDeviceHealthEvent",
+            return_value=mock_event,
+        ),
+        patch("services.driver_device_health.db.session"),
     ):
         snapshot = ingest_driver_device_health(
             sample_driver.id,
@@ -138,14 +152,16 @@ def test_read_driver_device_health_snapshot_present():
 
 
 def test_purge_old_device_health_events():
-    with patch("services.driver_device_health.db.session") as mock_session:
-        with patch(
+    with (
+        patch("services.driver_device_health.db.session") as mock_session,
+        patch(
             "services.driver_device_health.DriverDeviceHealthEvent.query"
-        ) as mock_query:
-            mock_query.filter.return_value.delete.return_value = 2
-            from services.driver_device_health import purge_old_device_health_events
+        ) as mock_query,
+    ):
+        mock_query.filter.return_value.delete.return_value = 2
+        from services.driver_device_health import purge_old_device_health_events
 
-            deleted = purge_old_device_health_events()
+        deleted = purge_old_device_health_events()
 
     assert deleted == 2
     mock_session.commit.assert_called_once()

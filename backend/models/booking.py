@@ -501,224 +501,243 @@ class Booking(db.Model):
         cli = self.client
         cli_user = getattr(cli, "user", None)
 
-        return as_serialize_result({
-            "id": self.id,
-            # ✅ P1-4 Phase 1.1: Supprimer customer_name, garder uniquement client_name
-            "client_name": self.customer_full_name,
-            "pickup_location": self.pickup_location,
-            "dropoff_location": self.dropoff_location,
-            # ✅ P1-4 Phase 1.3: Ajouter coordonnées GPS
-            "pickup_lat": _as_float(self.pickup_lat),
-            "pickup_lon": _as_float(self.pickup_lon),
-            "dropoff_lat": _as_float(self.dropoff_lat),
-            "dropoff_lon": _as_float(self.dropoff_lon),
-            "pickup_geo_unit_id": self.pickup_geo_unit_id,
-            "dropoff_geo_unit_id": self.dropoff_geo_unit_id,
-            "pickup_zip": self.pickup_zip,
-            "dropoff_zip": self.dropoff_zip,
-            "pickup_admin_token": self.pickup_admin_token,
-            "pickup_canton_code": self.pickup_canton_code,
-            "pickup_admin_source": self.pickup_admin_source,
-            "pickup_admin_confidence": self.pickup_admin_confidence,
-            "pickup_admin_label": self.pickup_admin_label,
-            "pickup_admin_resolved_at": (
-                pickup_admin_resolved_dt.isoformat()
-                if pickup_admin_resolved_dt
-                else None
-            ),
-            "dropoff_admin_token": self.dropoff_admin_token,
-            "dropoff_canton_code": self.dropoff_canton_code,
-            "dropoff_admin_source": self.dropoff_admin_source,
-            "dropoff_admin_confidence": self.dropoff_admin_confidence,
-            "dropoff_admin_label": self.dropoff_admin_label,
-            "dropoff_admin_resolved_at": (
-                dropoff_admin_resolved_dt.isoformat()
-                if dropoff_admin_resolved_dt
-                else None
-            ),
-            "amount": round(amt, 2),
-            "price_amount": _as_float(self.price_amount),
-            "price_breakdown_json": self.price_breakdown_json,
-            "pricing_profile_id": self.pricing_profile_id,
-            "pricing_profile_version_id": self.pricing_profile_version_id,
-            "scheduled_time": (
-                iso_utc_z(to_utc_from_db(scheduled_dt)) if scheduled_dt else None
-            ),
-            "date_formatted": date_local or "Non spécifié",
-            "time_formatted": time_local or "Non spécifié",
-            "status": getattr(status_val, "value", "unknown").lower(),
-            "created_via": _created_via_value(self),
-            "booking_type": _as_str(getattr(self, "booking_type", None)) or "standard",
-            "client": {
-                "id": getattr(cli, "id", None),
-                "first_name": getattr(cli_user, "first_name", "") if cli_user else "",
-                "last_name": getattr(cli_user, "last_name", "") if cli_user else "",
-                "email": getattr(cli_user, "email", "") if cli_user else "",
-                "full_name": self.customer_full_name,
-                "client_type": (
-                    cli.client_type.value
-                    if cli and getattr(cli, "client_type", None) is not None
+        return as_serialize_result(
+            {
+                "id": self.id,
+                # ✅ P1-4 Phase 1.1: Supprimer customer_name, garder uniquement client_name
+                "client_name": self.customer_full_name,
+                "pickup_location": self.pickup_location,
+                "dropoff_location": self.dropoff_location,
+                # ✅ P1-4 Phase 1.3: Ajouter coordonnées GPS
+                "pickup_lat": _as_float(self.pickup_lat),
+                "pickup_lon": _as_float(self.pickup_lon),
+                "dropoff_lat": _as_float(self.dropoff_lat),
+                "dropoff_lon": _as_float(self.dropoff_lon),
+                "pickup_geo_unit_id": self.pickup_geo_unit_id,
+                "dropoff_geo_unit_id": self.dropoff_geo_unit_id,
+                "pickup_zip": self.pickup_zip,
+                "dropoff_zip": self.dropoff_zip,
+                "pickup_admin_token": self.pickup_admin_token,
+                "pickup_canton_code": self.pickup_canton_code,
+                "pickup_admin_source": self.pickup_admin_source,
+                "pickup_admin_confidence": self.pickup_admin_confidence,
+                "pickup_admin_label": self.pickup_admin_label,
+                "pickup_admin_resolved_at": (
+                    pickup_admin_resolved_dt.isoformat()
+                    if pickup_admin_resolved_dt
                     else None
                 ),
-                "linked_institution_id": (
-                    getattr(cli, "linked_institution_id", None) if cli else None
-                ),
-                "birth_date": (
-                    cli_user.birth_date.strftime("%Y-%m-%d")
-                    if cli_user and cli_user.birth_date
+                "dropoff_admin_token": self.dropoff_admin_token,
+                "dropoff_canton_code": self.dropoff_canton_code,
+                "dropoff_admin_source": self.dropoff_admin_source,
+                "dropoff_admin_confidence": self.dropoff_admin_confidence,
+                "dropoff_admin_label": self.dropoff_admin_label,
+                "dropoff_admin_resolved_at": (
+                    dropoff_admin_resolved_dt.isoformat()
+                    if dropoff_admin_resolved_dt
                     else None
                 ),
-                "gender": (
-                    cli_user.gender.value
-                    if cli_user and getattr(cli_user, "gender", None)
+                "amount": round(amt, 2),
+                "price_amount": _as_float(self.price_amount),
+                "price_breakdown_json": self.price_breakdown_json,
+                "pricing_profile_id": self.pricing_profile_id,
+                "pricing_profile_version_id": self.pricing_profile_version_id,
+                "scheduled_time": (
+                    iso_utc_z(to_utc_from_db(scheduled_dt)) if scheduled_dt else None
+                ),
+                "date_formatted": date_local or "Non spécifié",
+                "time_formatted": time_local or "Non spécifié",
+                "status": getattr(status_val, "value", "unknown").lower(),
+                "created_via": _created_via_value(self),
+                "booking_type": _as_str(getattr(self, "booking_type", None))
+                or "standard",
+                "client": {
+                    "id": getattr(cli, "id", None),
+                    "first_name": getattr(cli_user, "first_name", "")
+                    if cli_user
+                    else "",
+                    "last_name": getattr(cli_user, "last_name", "") if cli_user else "",
+                    "email": getattr(cli_user, "email", "") if cli_user else "",
+                    "full_name": self.customer_full_name,
+                    "client_type": (
+                        cli.client_type.value
+                        if cli and getattr(cli, "client_type", None) is not None
+                        else None
+                    ),
+                    "linked_institution_id": (
+                        getattr(cli, "linked_institution_id", None) if cli else None
+                    ),
+                    "birth_date": (
+                        cli_user.birth_date.strftime("%Y-%m-%d")
+                        if cli_user and cli_user.birth_date
+                        else None
+                    ),
+                    "gender": (
+                        cli_user.gender.value
+                        if cli_user and getattr(cli_user, "gender", None)
+                        else None
+                    ),
+                    "contact_phone": getattr(cli, "contact_phone", None)
+                    if cli
+                    else None,
+                    "phone": getattr(cli_user, "phone", None) if cli_user else None,
+                    "gp_phone": getattr(cli, "gp_phone", None) if cli else None,
+                    "door_code": getattr(cli, "door_code", None) if cli else None,
+                    "floor": getattr(cli, "floor", None) if cli else None,
+                    "access_notes": getattr(cli, "access_notes", None) if cli else None,
+                    "is_institution": bool(getattr(cli, "is_institution", False))
+                    if cli
+                    else False,
+                    "institution_name": getattr(cli, "institution_name", None)
+                    if cli
+                    else None,
+                },
+                # ✅ P1-4 Phase 1.2: Remplacer company (string) par company_id + company_name
+                "company_id": self.company_id,
+                "company_name": self.company.name if self.company else None,
+                "company_contact_phone": (
+                    getattr(self.company, "contact_phone", None)
+                    if self.company
                     else None
                 ),
-                "contact_phone": getattr(cli, "contact_phone", None) if cli else None,
-                "phone": getattr(cli_user, "phone", None) if cli_user else None,
-                "gp_phone": getattr(cli, "gp_phone", None) if cli else None,
-                "door_code": getattr(cli, "door_code", None) if cli else None,
-                "floor": getattr(cli, "floor", None) if cli else None,
-                "access_notes": getattr(cli, "access_notes", None) if cli else None,
-                "is_institution": bool(getattr(cli, "is_institution", False))
-                if cli
-                else False,
-                "institution_name": getattr(cli, "institution_name", None)
-                if cli
+                # ✅ Informations de transfert partenaire
+                "executing_company_id": self.executing_company_id,
+                "executing_company_name": (
+                    self.executing_company.name if self.executing_company else None
+                ),
+                # ✅ FIX: is_transferred doit être True s'il y a un transfert ACCEPTED/COMPLETED
+                # car après acceptation, company_id est mis à jour mais on doit garder la trace
+                # que la course a été transférée (owner_company_id != company_id dans le transfert)
+                "is_transferred": self._is_transferred(),
+                "driver": {
+                    "id": self.driver.id,
+                    "username": self.driver.user.username if self.driver.user else None,
+                    "first_name": self.driver.user.first_name
+                    if self.driver.user
+                    else None,
+                    "last_name": self.driver.user.last_name
+                    if self.driver.user
+                    else None,
+                    "full_name": self.driver_display_name,
+                }
+                if self.driver
                 else None,
-            },
-            # ✅ P1-4 Phase 1.2: Remplacer company (string) par company_id + company_name
-            "company_id": self.company_id,
-            "company_name": self.company.name if self.company else None,
-            "company_contact_phone": (
-                getattr(self.company, "contact_phone", None) if self.company else None
-            ),
-            # ✅ Informations de transfert partenaire
-            "executing_company_id": self.executing_company_id,
-            "executing_company_name": (
-                self.executing_company.name if self.executing_company else None
-            ),
-            # ✅ FIX: is_transferred doit être True s'il y a un transfert ACCEPTED/COMPLETED
-            # car après acceptation, company_id est mis à jour mais on doit garder la trace
-            # que la course a été transférée (owner_company_id != company_id dans le transfert)
-            "is_transferred": self._is_transferred(),
-            "driver": {
-                "id": self.driver.id,
-                "username": self.driver.user.username if self.driver.user else None,
-                "first_name": self.driver.user.first_name if self.driver.user else None,
-                "last_name": self.driver.user.last_name if self.driver.user else None,
-                "full_name": self.driver_display_name,
-            }
-            if self.driver
-            else None,
-            "driver_id": self.driver_id,
-            "driver_name": self.driver_display_name,
-            "duration_seconds": self.duration_seconds,
-            "distance_meters": self.distance_meters,
-            "medical_facility": self.medical_facility or "Non spécifié",
-            "doctor_name": self.doctor_name or "Non spécifié",
-            "hospital_service": self.hospital_service or "Non spécifié",
-            "notes_medical": self.notes_medical or "Aucune note",
-            "pickup_access_notes": getattr(self, "pickup_access_notes", None) or None,
-            "dropoff_access_notes": getattr(self, "dropoff_access_notes", None) or None,
-            "pickup_floor": getattr(self, "pickup_floor", None) or None,
-            "pickup_door_code": getattr(self, "pickup_door_code", None) or None,
-            "dropoff_floor": getattr(self, "dropoff_floor", None) or None,
-            "dropoff_door_code": getattr(self, "dropoff_door_code", None) or None,
-            "wheelchair_client_has": _as_bool(self.wheelchair_client_has),
-            "wheelchair_need": _as_bool(self.wheelchair_need),
-            # ✅ P1-4 Phase 1.4: Standardiser timestamps en ISO 8601
-            "created_at": (
-                iso_utc_z(to_utc_from_db(created_dt))
-                if isinstance(created_dt, datetime)
-                else None
-            ),
-            "edit_version": int(self.edit_version or 1),
-            "updated_at": (
-                iso_utc_z(to_utc_from_db(updated_dt))
-                if isinstance(updated_dt, datetime)
-                else None
-            ),
-            # ✅ P1-4 Phase 1.4: Ajouter versions formatées pour compatibilité (optionnel)
-            "created_at_formatted": created_loc.strftime("%d/%m/%Y %H:%M")
-            if created_loc
-            else "Non spécifié",
-            "updated_at_formatted": updated_loc.strftime("%d/%m/%Y %H:%M")
-            if updated_loc
-            else "Non spécifié",
-            "rejected_by": self.rejected_by,
-            "is_round_trip": _as_bool(self.is_round_trip),
-            "is_return": _as_bool(self.is_return),
-            "parent_booking_id": self.parent_booking_id,
-            "time_confirmed": _as_bool(self.time_confirmed),
-            "has_return": self.return_trip is not None,
-            "boarded_at": iso_utc_z(to_utc_from_db(boarded_dt)) if boarded_dt else None,
-            "completed_at": iso_utc_z(to_utc_from_db(completed_dt))
-            if completed_dt
-            else None,
-            "duree_minutes": (
-                int((completed_dt - boarded_dt).total_seconds() // 60)
-                if (completed_dt and boarded_dt)
-                else None
-            ),
-            "duration_in_minutes": self.duration_in_minutes,
-            "billing": {
+                "driver_id": self.driver_id,
+                "driver_name": self.driver_display_name,
+                "duration_seconds": self.duration_seconds,
+                "distance_meters": self.distance_meters,
+                "medical_facility": self.medical_facility or "Non spécifié",
+                "doctor_name": self.doctor_name or "Non spécifié",
+                "hospital_service": self.hospital_service or "Non spécifié",
+                "notes_medical": self.notes_medical or "Aucune note",
+                "pickup_access_notes": getattr(self, "pickup_access_notes", None)
+                or None,
+                "dropoff_access_notes": getattr(self, "dropoff_access_notes", None)
+                or None,
+                "pickup_floor": getattr(self, "pickup_floor", None) or None,
+                "pickup_door_code": getattr(self, "pickup_door_code", None) or None,
+                "dropoff_floor": getattr(self, "dropoff_floor", None) or None,
+                "dropoff_door_code": getattr(self, "dropoff_door_code", None) or None,
+                "wheelchair_client_has": _as_bool(self.wheelchair_client_has),
+                "wheelchair_need": _as_bool(self.wheelchair_need),
+                # ✅ P1-4 Phase 1.4: Standardiser timestamps en ISO 8601
+                "created_at": (
+                    iso_utc_z(to_utc_from_db(created_dt))
+                    if isinstance(created_dt, datetime)
+                    else None
+                ),
+                "edit_version": int(self.edit_version or 1),
+                "updated_at": (
+                    iso_utc_z(to_utc_from_db(updated_dt))
+                    if isinstance(updated_dt, datetime)
+                    else None
+                ),
+                # ✅ P1-4 Phase 1.4: Ajouter versions formatées pour compatibilité (optionnel)
+                "created_at_formatted": created_loc.strftime("%d/%m/%Y %H:%M")
+                if created_loc
+                else "Non spécifié",
+                "updated_at_formatted": updated_loc.strftime("%d/%m/%Y %H:%M")
+                if updated_loc
+                else "Non spécifié",
+                "rejected_by": self.rejected_by,
+                "is_round_trip": _as_bool(self.is_round_trip),
+                "is_return": _as_bool(self.is_return),
+                "parent_booking_id": self.parent_booking_id,
+                "time_confirmed": _as_bool(self.time_confirmed),
+                "has_return": self.return_trip is not None,
+                "boarded_at": iso_utc_z(to_utc_from_db(boarded_dt))
+                if boarded_dt
+                else None,
+                "completed_at": iso_utc_z(to_utc_from_db(completed_dt))
+                if completed_dt
+                else None,
+                "duree_minutes": (
+                    int((completed_dt - boarded_dt).total_seconds() // 60)
+                    if (completed_dt and boarded_dt)
+                    else None
+                ),
+                "duration_in_minutes": self.duration_in_minutes,
+                "billing": {
+                    "billed_to_type": (_as_str(self.billed_to_type) or "patient"),
+                    "billed_to_company": self.billed_to_company.serialize
+                    if self.billed_to_company
+                    else None,
+                    "billed_to_contact": self.billed_to_contact,
+                },
                 "billed_to_type": (_as_str(self.billed_to_type) or "patient"),
-                "billed_to_company": self.billed_to_company.serialize
-                if self.billed_to_company
+                "billed_to_company_id": self.billed_to_company_id,
+                "billing_locked_at": (
+                    iso_utc_z(to_utc_from_db(billing_locked_at_dt))
+                    if billing_locked_at_dt
+                    else None
+                ),
+                "invoice_line_id": self.invoice_line_id,
+                # ✅ Traçabilité de la décision de facturation
+                "billing_source": (
+                    self.billing_source.value if self.billing_source else None
+                ),
+                "billing_source_ref": self.billing_source_ref,
+                # ✅ P1-4 Phase 1.1: patient_name reste pour compatibilité (utilise customer_name de la DB)
+                "patient_name": _as_str(self.customer_name),
+                # ✅ Informations du transfert actif (si existe)
+                "active_transfer": self._get_active_transfer_info(),
+                # ✅ Livraison matériel
+                "mission_type": getattr(self, "mission_type", None)
+                or "patient_transport",
+                "delivery_description": getattr(self, "delivery_description", None)
+                or None,
+                # ✅ Annulation
+                "cancelled_at": iso_utc_z(to_utc_from_db(cancelled_dt))
+                if cancelled_dt
                 else None,
-                "billed_to_contact": self.billed_to_contact,
-            },
-            "billed_to_type": (_as_str(self.billed_to_type) or "patient"),
-            "billed_to_company_id": self.billed_to_company_id,
-            "billing_locked_at": (
-                iso_utc_z(to_utc_from_db(billing_locked_at_dt))
-                if billing_locked_at_dt
-                else None
-            ),
-            "invoice_line_id": self.invoice_line_id,
-            # ✅ Traçabilité de la décision de facturation
-            "billing_source": (
-                self.billing_source.value if self.billing_source else None
-            ),
-            "billing_source_ref": self.billing_source_ref,
-            # ✅ P1-4 Phase 1.1: patient_name reste pour compatibilité (utilise customer_name de la DB)
-            "patient_name": _as_str(self.customer_name),
-            # ✅ Informations du transfert actif (si existe)
-            "active_transfer": self._get_active_transfer_info(),
-            # ✅ Livraison matériel
-            "mission_type": getattr(self, "mission_type", None) or "patient_transport",
-            "delivery_description": getattr(self, "delivery_description", None) or None,
-            # ✅ Annulation
-            "cancelled_at": iso_utc_z(to_utc_from_db(cancelled_dt))
-            if cancelled_dt
-            else None,
-            "cancelled_by_role": self.cancelled_by_role,
-            "cancellation_reason_code": self.cancellation_reason_code,
-            "cancellation_reason_text": self.cancellation_reason_text,
-            "is_cancellation_billable": self.is_cancellation_billable,
-            "cancellation_display_label": self.cancellation_display_label,
-            "cancellation_fee_amount": float(self.cancellation_fee_amount)
-            if getattr(self, "cancellation_fee_amount", None) is not None
-            else None,  # type: ignore[arg-type]
-            "cancellation_fee_percent": self.cancellation_fee_percent,
-            "cancellation_fee_tier_id": self.cancellation_fee_tier_id,
-            # ✅ Timeline institution (si booking issu d'une demande institution)
-            "institution_timeline": self._get_institution_timeline(),
-            # ✅ Historique opérationnel consolidé (tous les legs + retours)
-            "route_journey": self._get_route_journey(),
-            "online_payment": self._online_client_payment_brief(),
-            "active_change_request_id": self.active_change_request_id,
-            "active_change_request": (
-                self.active_change_request.serialize()
-                if getattr(self, "active_change_request", None)
-                else None
-            ),
-            "route_group_id": getattr(self, "route_group_id", None),
-            "route_sequence_number": getattr(self, "route_sequence_number", None),
-            "passenger": self._get_institution_passenger_brief(),
-            "institution_leg": self._get_institution_leg_clinical_brief(),
-            **self._canonical_display_payload(),
-        })
+                "cancelled_by_role": self.cancelled_by_role,
+                "cancellation_reason_code": self.cancellation_reason_code,
+                "cancellation_reason_text": self.cancellation_reason_text,
+                "is_cancellation_billable": self.is_cancellation_billable,
+                "cancellation_display_label": self.cancellation_display_label,
+                "cancellation_fee_amount": float(self.cancellation_fee_amount)
+                if getattr(self, "cancellation_fee_amount", None) is not None
+                else None,  # type: ignore[arg-type]
+                "cancellation_fee_percent": self.cancellation_fee_percent,
+                "cancellation_fee_tier_id": self.cancellation_fee_tier_id,
+                # ✅ Timeline institution (si booking issu d'une demande institution)
+                "institution_timeline": self._get_institution_timeline(),
+                # ✅ Historique opérationnel consolidé (tous les legs + retours)
+                "route_journey": self._get_route_journey(),
+                "online_payment": self._online_client_payment_brief(),
+                "active_change_request_id": self.active_change_request_id,
+                "active_change_request": (
+                    self.active_change_request.serialize()
+                    if getattr(self, "active_change_request", None)
+                    else None
+                ),
+                "route_group_id": getattr(self, "route_group_id", None),
+                "route_sequence_number": getattr(self, "route_sequence_number", None),
+                "passenger": self._get_institution_passenger_brief(),
+                "institution_leg": self._get_institution_leg_clinical_brief(),
+                **self._canonical_display_payload(),
+            }
+        )
 
     @property
     def serialize_dashboard(self):
@@ -741,79 +760,83 @@ class Booking(db.Model):
             split_date_time_local(scheduled_dt) if scheduled_dt else (None, None)
         )
 
-        return as_serialize_result({
-            "id": self.id,
-            "client_name": self.customer_full_name,
-            "pickup_location": self.pickup_location,
-            "dropoff_location": self.dropoff_location,
-            "pickup_lat": _as_float(self.pickup_lat),
-            "pickup_lon": _as_float(self.pickup_lon),
-            "dropoff_lat": _as_float(self.dropoff_lat),
-            "dropoff_lon": _as_float(self.dropoff_lon),
-            "scheduled_time": (
-                iso_utc_z(to_utc_from_db(scheduled_dt)) if scheduled_dt else None
-            ),
-            "date_formatted": date_local or "Non spécifié",
-            "time_formatted": time_local or "Non spécifié",
-            "status": getattr(status_val, "value", "unknown").lower(),
-            "company_id": self.company_id,
-            "company_name": self.company.name if self.company else None,
-            "executing_company_id": self.executing_company_id,
-            "executing_company_name": (
-                self.executing_company.name if self.executing_company else None
-            ),
-            "is_transferred": is_transferred,
-            "active_transfer": active_transfer,
-            "driver_id": self.driver_id,
-            "driver_name": self.driver_display_name,
-            "driver": {
-                "id": self.driver.id,
-                "full_name": self.driver_display_name,
-            }
-            if self.driver
-            else None,
-            "client": {
-                "id": getattr(cli, "id", None),
-                "full_name": self.customer_full_name,
-                "is_institution": bool(getattr(cli, "is_institution", False))
-                if cli
-                else False,
-                "institution_name": getattr(cli, "institution_name", None)
-                if cli
+        return as_serialize_result(
+            {
+                "id": self.id,
+                "client_name": self.customer_full_name,
+                "pickup_location": self.pickup_location,
+                "dropoff_location": self.dropoff_location,
+                "pickup_lat": _as_float(self.pickup_lat),
+                "pickup_lon": _as_float(self.pickup_lon),
+                "dropoff_lat": _as_float(self.dropoff_lat),
+                "dropoff_lon": _as_float(self.dropoff_lon),
+                "scheduled_time": (
+                    iso_utc_z(to_utc_from_db(scheduled_dt)) if scheduled_dt else None
+                ),
+                "date_formatted": date_local or "Non spécifié",
+                "time_formatted": time_local or "Non spécifié",
+                "status": getattr(status_val, "value", "unknown").lower(),
+                "company_id": self.company_id,
+                "company_name": self.company.name if self.company else None,
+                "executing_company_id": self.executing_company_id,
+                "executing_company_name": (
+                    self.executing_company.name if self.executing_company else None
+                ),
+                "is_transferred": is_transferred,
+                "active_transfer": active_transfer,
+                "driver_id": self.driver_id,
+                "driver_name": self.driver_display_name,
+                "driver": {
+                    "id": self.driver.id,
+                    "full_name": self.driver_display_name,
+                }
+                if self.driver
                 else None,
-                "client_type": (
-                    cli.client_type.value
-                    if cli and getattr(cli, "client_type", None) is not None
+                "client": {
+                    "id": getattr(cli, "id", None),
+                    "full_name": self.customer_full_name,
+                    "is_institution": bool(getattr(cli, "is_institution", False))
+                    if cli
+                    else False,
+                    "institution_name": getattr(cli, "institution_name", None)
+                    if cli
+                    else None,
+                    "client_type": (
+                        cli.client_type.value
+                        if cli and getattr(cli, "client_type", None) is not None
+                        else None
+                    ),
+                    "linked_institution_id": (
+                        getattr(cli, "linked_institution_id", None) if cli else None
+                    ),
+                },
+                "is_return": _as_bool(self.is_return),
+                "is_round_trip": _as_bool(self.is_round_trip),
+                "parent_booking_id": self.parent_booking_id,
+                "has_return": self.return_trip is not None,
+                "time_confirmed": _as_bool(self.time_confirmed),
+                "created_via": _created_via_value(self),
+                "booking_type": _as_str(getattr(self, "booking_type", None))
+                or "standard",
+                "mission_type": getattr(self, "mission_type", None)
+                or "patient_transport",
+                "wheelchair_need": _as_bool(self.wheelchair_need),
+                "amount": round(_as_float(self.amount), 2),
+                "billed_to_type": (_as_str(self.billed_to_type) or "patient"),
+                "billed_to_company_id": self.billed_to_company_id,
+                "route_group_id": getattr(self, "route_group_id", None),
+                "route_sequence_number": getattr(self, "route_sequence_number", None),
+                "institution_timeline": self._get_institution_timeline(),
+                "route_journey": self._get_route_journey(),
+                "active_change_request_id": self.active_change_request_id,
+                "active_change_request": (
+                    self.active_change_request.serialize()
+                    if getattr(self, "active_change_request", None)
                     else None
                 ),
-                "linked_institution_id": (
-                    getattr(cli, "linked_institution_id", None) if cli else None
-                ),
-            },
-            "is_return": _as_bool(self.is_return),
-            "is_round_trip": _as_bool(self.is_round_trip),
-            "parent_booking_id": self.parent_booking_id,
-            "has_return": self.return_trip is not None,
-            "time_confirmed": _as_bool(self.time_confirmed),
-            "created_via": _created_via_value(self),
-            "booking_type": _as_str(getattr(self, "booking_type", None)) or "standard",
-            "mission_type": getattr(self, "mission_type", None) or "patient_transport",
-            "wheelchair_need": _as_bool(self.wheelchair_need),
-            "amount": round(_as_float(self.amount), 2),
-            "billed_to_type": (_as_str(self.billed_to_type) or "patient"),
-            "billed_to_company_id": self.billed_to_company_id,
-            "route_group_id": getattr(self, "route_group_id", None),
-            "route_sequence_number": getattr(self, "route_sequence_number", None),
-            "institution_timeline": self._get_institution_timeline(),
-            "route_journey": self._get_route_journey(),
-            "active_change_request_id": self.active_change_request_id,
-            "active_change_request": (
-                self.active_change_request.serialize()
-                if getattr(self, "active_change_request", None)
-                else None
-            ),
-            **self._canonical_display_payload(),
-        })
+                **self._canonical_display_payload(),
+            }
+        )
 
     def _online_client_payment_brief(self):
         """Résumé du dernier paiement en ligne (Saferpay ou ancien Worldline) pour le portail client."""
@@ -920,7 +943,7 @@ class Booking(db.Model):
             if req is None:
                 return None
             legs = sorted(
-                list(getattr(req, "legs", None) or []),
+                getattr(req, "legs", None) or [],
                 key=lambda item: getattr(item, "sequence_index", 0),
             )
             if not legs:
@@ -1110,9 +1133,7 @@ class Booking(db.Model):
                 base_label = f"Trajet {seq}" if (multi and seq) else None
                 leg_index = int(seq) if (multi and seq) else None
                 is_final = (
-                    not is_return
-                    and leg_index is not None
-                    and leg_index == leg_count
+                    not is_return and leg_index is not None and leg_index == leg_count
                 )
                 _add_leg(
                     leg,

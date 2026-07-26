@@ -65,8 +65,20 @@ SAMPLE_POLICY = {
     "basis": "booking_amount",
     "apply_when_driver_assigned_only": False,
     "tiers": [
-        {"id": "t24", "type": "time", "hours_before": 24, "percent": 30, "label": "< 24h"},
-        {"id": "ten", "type": "status", "status": "EN_ROUTE", "percent": 70, "label": "EN_ROUTE"},
+        {
+            "id": "t24",
+            "type": "time",
+            "hours_before": 24,
+            "percent": 30,
+            "label": "< 24h",
+        },
+        {
+            "id": "ten",
+            "type": "status",
+            "status": "EN_ROUTE",
+            "percent": 70,
+            "label": "EN_ROUTE",
+        },
     ],
     "min_fee_chf": 0,
     "max_fee_chf": None,
@@ -76,7 +88,10 @@ SAMPLE_POLICY = {
 def test_resolve_trip_leg_outbound_and_return():
     assert resolve_trip_leg(_booking()) == TripLeg.OUTBOUND
     assert is_outbound_leg(_booking()) is True
-    assert resolve_trip_leg(_booking(is_return=True, parent_booking_id=1)) == TripLeg.RETURN
+    assert (
+        resolve_trip_leg(_booking(is_return=True, parent_booking_id=1))
+        == TripLeg.RETURN
+    )
     assert is_outbound_leg(_booking(parent_booking_id=5)) is False
 
 
@@ -117,12 +132,8 @@ def test_clear_cancellation_billing():
     assert b.cancellation_fee_tier_id is None
 
 
-@patch(
-    "application.institutions.cancellation_respond_policy.resolve_affected_bookings"
-)
-@patch(
-    "application.institutions.cancellation_respond_policy._load_cancellation_policy"
-)
+@patch("application.institutions.cancellation_respond_policy.resolve_affected_bookings")
+@patch("application.institutions.cancellation_respond_policy._load_cancellation_policy")
 def test_free_window_suggested_outcome(mock_policy, mock_affected):
     booking = _booking(scheduled_time=datetime.now(UTC) + timedelta(hours=48))
     action = _action()
@@ -132,18 +143,17 @@ def test_free_window_suggested_outcome(mock_policy, mock_affected):
     ctx = build_cancellation_respond_context(booking, action)
     assert ctx.situation == CancellationSituation.FREE_WINDOW
     assert ctx.primary_cta == "acknowledge_cancellation"
-    assert ctx.suggested_outcome["calculation_code"] == CalculationCode.FREE_CANCELLATION_WINDOW
+    assert (
+        ctx.suggested_outcome["calculation_code"]
+        == CalculationCode.FREE_CANCELLATION_WINDOW
+    )
     assert ctx.suggested_outcome["amount"] == "0.00"
     ui = serialize_respond_ui(ctx)
     assert ui["billing_scope"] == "OUTBOUND_ONLY"
 
 
-@patch(
-    "application.institutions.cancellation_respond_policy.resolve_affected_bookings"
-)
-@patch(
-    "application.institutions.cancellation_respond_policy._load_cancellation_policy"
-)
+@patch("application.institutions.cancellation_respond_policy.resolve_affected_bookings")
+@patch("application.institutions.cancellation_respond_policy._load_cancellation_policy")
 def test_non_billable_return(mock_policy, mock_affected):
     ret = _booking(id=2, is_return=True, parent_booking_id=1, status="ASSIGNED")
     # aller déjà terminé → non cancelable ; seul retour cancelable
@@ -163,15 +173,13 @@ def test_non_billable_return(mock_policy, mock_affected):
     assert ctx.billing_scope == "NONE"
     assert 1 in ctx.non_cancelable_booking_ids
     assert 2 in ctx.cancelable_booking_ids
-    assert ctx.suggested_outcome["calculation_code"] == CalculationCode.NON_BILLABLE_RETURN
+    assert (
+        ctx.suggested_outcome["calculation_code"] == CalculationCode.NON_BILLABLE_RETURN
+    )
 
 
-@patch(
-    "application.institutions.cancellation_respond_policy.resolve_affected_bookings"
-)
-@patch(
-    "application.institutions.cancellation_respond_policy._load_cancellation_policy"
-)
+@patch("application.institutions.cancellation_respond_policy.resolve_affected_bookings")
+@patch("application.institutions.cancellation_respond_policy._load_cancellation_policy")
 def test_fee_window_outcomes(mock_policy, mock_affected):
     booking = _booking(
         scheduled_time=datetime.now(UTC) + timedelta(hours=6),
@@ -188,12 +196,8 @@ def test_fee_window_outcomes(mock_policy, mock_affected):
     assert ctx.primary_cta == "confirm_with_billing"
 
 
-@patch(
-    "application.institutions.cancellation_respond_policy.resolve_affected_bookings"
-)
-@patch(
-    "application.institutions.cancellation_respond_policy._load_cancellation_policy"
-)
+@patch("application.institutions.cancellation_respond_policy.resolve_affected_bookings")
+@patch("application.institutions.cancellation_respond_policy._load_cancellation_policy")
 def test_en_route_outcomes(mock_policy, mock_affected):
     booking = _booking(status="EN_ROUTE", amount=Decimal("100.00"))
     action = _action()
@@ -206,13 +210,11 @@ def test_en_route_outcomes(mock_policy, mock_affected):
     assert codes == {"ZERO", "APPROACH_FEE", "FULL_FARE", "CUSTOM"}
 
 
-@patch(
-    "application.institutions.cancellation_respond_policy.resolve_affected_bookings"
-)
-@patch(
-    "application.institutions.cancellation_respond_policy._load_cancellation_policy"
-)
-def test_resolve_selected_fee_policy_fee_rejects_client_amount(mock_policy, mock_affected):
+@patch("application.institutions.cancellation_respond_policy.resolve_affected_bookings")
+@patch("application.institutions.cancellation_respond_policy._load_cancellation_policy")
+def test_resolve_selected_fee_policy_fee_rejects_client_amount(
+    mock_policy, mock_affected
+):
     booking = _booking(
         scheduled_time=datetime.now(UTC) + timedelta(hours=6),
         amount=Decimal("100.00"),
@@ -232,12 +234,8 @@ def test_resolve_selected_fee_policy_fee_rejects_client_amount(mock_policy, mock
     assert exc.value.code == CancellationRespondErrorCode.FEE_AMOUNT_NOT_ALLOWED
 
 
-@patch(
-    "application.institutions.cancellation_respond_policy.resolve_affected_bookings"
-)
-@patch(
-    "application.institutions.cancellation_respond_policy._load_cancellation_policy"
-)
+@patch("application.institutions.cancellation_respond_policy.resolve_affected_bookings")
+@patch("application.institutions.cancellation_respond_policy._load_cancellation_policy")
 def test_resolve_selected_fee_custom_requires_comment_and_amount(
     mock_policy, mock_affected
 ):
@@ -282,12 +280,8 @@ def test_resolve_selected_fee_custom_requires_comment_and_amount(
     assert comment == "Chauffeur mobilisé"
 
 
-@patch(
-    "application.institutions.cancellation_respond_policy.resolve_affected_bookings"
-)
-@patch(
-    "application.institutions.cancellation_respond_policy._load_cancellation_policy"
-)
+@patch("application.institutions.cancellation_respond_policy.resolve_affected_bookings")
+@patch("application.institutions.cancellation_respond_policy._load_cancellation_policy")
 def test_fee_window_requires_body(mock_policy, mock_affected):
     booking = _booking(scheduled_time=datetime.now(UTC) + timedelta(hours=6))
     action = _action()
@@ -300,12 +294,8 @@ def test_fee_window_requires_body(mock_policy, mock_affected):
     assert exc.value.code == CancellationRespondErrorCode.BILLING_OUTCOME_REQUIRED
 
 
-@patch(
-    "application.institutions.cancellation_respond_policy.resolve_affected_bookings"
-)
-@patch(
-    "application.institutions.cancellation_respond_policy._load_cancellation_policy"
-)
+@patch("application.institutions.cancellation_respond_policy.resolve_affected_bookings")
+@patch("application.institutions.cancellation_respond_policy._load_cancellation_policy")
 def test_free_window_implicit_zero(mock_policy, mock_affected):
     booking = _booking(scheduled_time=datetime.now(UTC) + timedelta(hours=48))
     action = _action()
@@ -329,10 +319,10 @@ def test_parse_fee_amount_string_only():
 
 def test_effects_skip_non_cancelable():
     """Aller terminé intact + retour cancelable cleared."""
+    from application.institutions.cancellation_respond_policy import FeeQuote
     from application.institutions.transport_action_workflow import (
         _apply_cancellation_effects,
     )
-    from application.institutions.cancellation_respond_policy import FeeQuote
 
     outbound = MagicMock()
     outbound.id = 1
@@ -356,11 +346,14 @@ def test_effects_skip_non_cancelable():
     action.reason = "Annulation retour"
     action.transport_request_id = None
 
-    with patch(
-        "application.institutions.cancellation_respond_policy.resolve_affected_bookings",
-        return_value=[outbound, ret],
-    ), patch(
-        "application.institutions.transport_action_workflow._clear_driver_and_assignments"
+    with (
+        patch(
+            "application.institutions.cancellation_respond_policy.resolve_affected_bookings",
+            return_value=[outbound, ret],
+        ),
+        patch(
+            "application.institutions.transport_action_workflow._clear_driver_and_assignments"
+        ),
     ):
         _apply_cancellation_effects(
             ret,
@@ -379,7 +372,11 @@ def test_effects_skip_non_cancelable():
     assert outbound.cancellation_fee_amount == Decimal("25.00")
     assert outbound.is_cancellation_billable is True
     # retour annulé à zéro
-    assert ret.status.value == "canceled" or str(ret.status).endswith("CANCELED") or ret.status == ret.status
+    assert (
+        ret.status.value == "canceled"
+        or str(ret.status).endswith("CANCELED")
+        or ret.status == ret.status
+    )
     # MagicMock assignment: status set to BookingStatus.CANCELED enum
     from models.enums import BookingStatus
 

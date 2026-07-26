@@ -20,26 +20,37 @@ def test_log_driver_push_stage_emits_json(caplog):
         )
 
     assert any("[driver_push_pipeline]" in r.message for r in caplog.records)
-    payload = json.loads(caplog.records[-1].message.split("[driver_push_pipeline] ", 1)[1])
+    payload = json.loads(
+        caplog.records[-1].message.split("[driver_push_pipeline] ", 1)[1]
+    )
     assert payload["stage"] == "driver_push.publish"
     assert payload["booking_id"] == 34071
     assert payload["driver_id"] == 6855
 
 
 def test_claim_driver_booking_push_fail_open_without_redis():
-    from services.notifications.push_driver_booking_dedup import claim_driver_booking_push
+    from services.notifications.push_driver_booking_dedup import (
+        claim_driver_booking_push,
+    )
 
-    with patch("services.notifications.push_driver_booking_dedup._redis", return_value=None):
+    with patch(
+        "services.notifications.push_driver_booking_dedup._redis", return_value=None
+    ):
         assert claim_driver_booking_push(6855, 34071) is True
 
 
 def test_claim_driver_booking_push_dedup_second_call():
-    from services.notifications.push_driver_booking_dedup import claim_driver_booking_push
+    from services.notifications.push_driver_booking_dedup import (
+        claim_driver_booking_push,
+    )
 
     mock_redis = MagicMock()
     mock_redis.set.side_effect = [True, None]
 
-    with patch("services.notifications.push_driver_booking_dedup._redis", return_value=mock_redis):
+    with patch(
+        "services.notifications.push_driver_booking_dedup._redis",
+        return_value=mock_redis,
+    ):
         assert claim_driver_booking_push(6855, 34071) is True
         assert claim_driver_booking_push(6855, 34071) is False
 

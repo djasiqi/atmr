@@ -12,12 +12,12 @@ from models import Booking, Institution, TransportRequest, User, UserRole
 from models.enums import BookingStatus, InstitutionRole, RequestStatus
 from services.institutions.booking_change_service import (
     BILLING_CHANGE_REASON_CODES,
-    classify_change,
-    mask_financial_fields,
-    check_version,
-    assert_not_boarded,
     INSTITUTION_OPERATIONAL_FIELDS,
     LEG_SCHEDULE_PATCH_FIELDS,
+    assert_not_boarded,
+    check_version,
+    classify_change,
+    mask_financial_fields,
 )
 
 
@@ -38,7 +38,7 @@ class TestBookingChangeClassification:
         assert ack is False
 
     def test_cancellation_en_route(self):
-        cc, sev, ack = classify_change(set(), is_en_route=True, is_cancellation=True)
+        cc, _sev, ack = classify_change(set(), is_en_route=True, is_cancellation=True)
         assert cc == "critical"
         assert ack is True
 

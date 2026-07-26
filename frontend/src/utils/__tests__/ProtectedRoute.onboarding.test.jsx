@@ -37,6 +37,10 @@ describe('ProtectedRoute onboarding', () => {
             }
           />
           <Route
+            path="/force-reset-password"
+            element={<div>Reset password page</div>}
+          />
+          <Route
             path="/force-reset-password/:publicId"
             element={<div>Reset password page</div>}
           />

@@ -35,7 +35,10 @@ from repositories.assignment_repository import AssignmentRepository
 from repositories.driver_repository import DriverRepository
 from services.geolocation.geofencing import get_geofencing_service
 from services.geolocation.presence import normalize_location_mode
-from services.monitoring.driver_location_metrics import inc_processed, observe_osrm_request
+from services.monitoring.driver_location_metrics import (
+    inc_processed,
+    observe_osrm_request,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -188,7 +191,9 @@ class LocationService:
     ) -> requests.Response | None:
         """GET OSRM avec timeout, métriques et circuit breaker."""
         if self._is_osrm_circuit_open():
-            observe_osrm_request(operation=operation, result="circuit_open", duration_sec=0.0)
+            observe_osrm_request(
+                operation=operation, result="circuit_open", duration_sec=0.0
+            )
             return None
         timeout_sec = self._osrm_request_timeout_sec(operation)
         started = datetime.now(UTC)
@@ -196,17 +201,27 @@ class LocationService:
             r = requests.get(url, params=params or {}, timeout=timeout_sec)
             duration = (datetime.now(UTC) - started).total_seconds()
             if r.ok:
-                observe_osrm_request(operation=operation, result="success", duration_sec=duration)
+                observe_osrm_request(
+                    operation=operation, result="success", duration_sec=duration
+                )
                 return r
-            observe_osrm_request(operation=operation, result="error", duration_sec=duration)
-            self._register_osrm_failure(operation, RequestException(f"HTTP {r.status_code}"))
+            observe_osrm_request(
+                operation=operation, result="error", duration_sec=duration
+            )
+            self._register_osrm_failure(
+                operation, RequestException(f"HTTP {r.status_code}")
+            )
         except Timeout as e:
             duration = (datetime.now(UTC) - started).total_seconds()
-            observe_osrm_request(operation=operation, result="timeout", duration_sec=duration)
+            observe_osrm_request(
+                operation=operation, result="timeout", duration_sec=duration
+            )
             self._register_osrm_failure(operation, e)
         except (RequestException, ConnectionError, OSError) as e:
             duration = (datetime.now(UTC) - started).total_seconds()
-            observe_osrm_request(operation=operation, result="error", duration_sec=duration)
+            observe_osrm_request(
+                operation=operation, result="error", duration_sec=duration
+            )
             self._register_osrm_failure(operation, e)
         return None
 
@@ -549,7 +564,9 @@ class LocationService:
 
             # Appel OSRM match
             url = f"{self.osrm_base_url}/match/v1/driving/{coords}"
-            r = self._osrm_http_get("match", url, params={"tidy": "true", "overview": "false"})
+            r = self._osrm_http_get(
+                "match", url, params={"tidy": "true", "overview": "false"}
+            )
 
             if r is not None and r.ok:
                 data = r.json()
@@ -660,7 +677,9 @@ class LocationService:
                         inc_canonical_overwrite,
                     )
 
-                    had_existing = bool(existing.get("recorded_at") or existing.get("ts"))
+                    had_existing = bool(
+                        existing.get("recorded_at") or existing.get("ts")
+                    )
                     if accept_status == "accepted_canonical" and had_existing:
                         inc_canonical_overwrite(
                             outcome="accepted", location_mode=location_mode

@@ -122,5 +122,7 @@ def downgrade() -> None:
         nullable=False,
     )
     op.drop_column("device_tokens", "last_seen_at")
-    op.drop_constraint("fk_device_tokens_company_id", "device_tokens", type_="foreignkey")
+    op.drop_constraint(
+        "fk_device_tokens_company_id", "device_tokens", type_="foreignkey"
+    )
     op.drop_column("device_tokens", "company_id")

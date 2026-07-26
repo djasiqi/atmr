@@ -8,8 +8,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from services.companies.booking_display import (
-    DISPLAY_MODEL_VERSION,
     DISPLAY_CATEGORY_INSTITUTION_PATIENT,
+    DISPLAY_MODEL_VERSION,
     build_identity_labels,
 )
 from services.institutions.mission_schedule import (
@@ -85,7 +85,7 @@ def _build_schedule_summary(transport_request: TransportRequest) -> str:
         parts.append(f"{dep['display_time']} Départ")
 
     legs = sorted(
-        list(getattr(transport_request, "legs", None) or []),
+        getattr(transport_request, "legs", None) or [],
         key=lambda leg: getattr(leg, "sequence_index", 0),
     )
     return_to_inst = bool(getattr(transport_request, "return_to_institution", False))
@@ -114,9 +114,10 @@ def _build_schedule_summary(transport_request: TransportRequest) -> str:
             parts.append(f"{_fmt_time_local(st) or _UNDEFINED_TIME} RDV")
 
     ret = _return_display(transport_request)
-    if ret.get("display_time") == _UNDEFINED_TIME:
-        if parts or bool(getattr(transport_request, "is_round_trip", False)):
-            parts.append("Retour à définir")
+    if ret.get("display_time") == _UNDEFINED_TIME and (
+        parts or bool(getattr(transport_request, "is_round_trip", False))
+    ):
+        parts.append("Retour à définir")
 
     return " · ".join(parts)
 
@@ -124,9 +125,7 @@ def _build_schedule_summary(transport_request: TransportRequest) -> str:
 def _build_tr_identity(transport_request: TransportRequest) -> dict[str, Any]:
     patient = getattr(transport_request, "patient", None)
     if patient is not None:
-        passenger = (
-            f"{getattr(patient, 'last_name', '')} {getattr(patient, 'first_name', '')}".strip()
-        )
+        passenger = f"{getattr(patient, 'last_name', '')} {getattr(patient, 'first_name', '')}".strip()
     else:
         passenger = (
             getattr(transport_request, "external_reference", None)
@@ -209,7 +208,7 @@ def build_transport_request_display_blocks(
 
     legs_out: list[dict[str, Any]] = []
     for leg in sorted(
-        list(getattr(transport_request, "legs", None) or []),
+        getattr(transport_request, "legs", None) or [],
         key=lambda item: getattr(item, "sequence_index", 0),
     ):
         st = getattr(leg, "scheduled_time", None)

@@ -106,7 +106,9 @@ def _tr(**kwargs):
         "id": 976,
         "public_id": "98ddbfc9-review-test",
         "institution_id": 1,
-        "booking_id": kwargs.get("booking", _booking()).id if kwargs.get("booking") else None,
+        "booking_id": kwargs.get("booking", _booking()).id
+        if kwargs.get("booking")
+        else None,
         "created_at": datetime(2026, 6, 12, 20, 48, tzinfo=UTC),
         "accepted_at": datetime(2026, 6, 12, 21, 18, tzinfo=UTC),
         "mission_date": date(2026, 6, 13),
@@ -128,7 +130,10 @@ def _tr(**kwargs):
         "return_date": None,
         "legs": [],
         "external_reference": None,
-        "contact_on_site": {"requester_service": "Admissions", "requester_name": "Marc Mouchet"},
+        "contact_on_site": {
+            "requester_service": "Admissions",
+            "requester_name": "Marc Mouchet",
+        },
         "notes": kwargs.pop("notes", "Note courte"),
         "floor_elevator_info": "3e étage, ascenseur",
         "mobility": {"wheelchair": True},
@@ -146,7 +151,9 @@ def _tr(**kwargs):
     defaults.update(kwargs)
     tr = SimpleNamespace(**defaults)
     tr.institution = _institution(long_name=long_inst)
-    tr.patient = kwargs.get("patient") if "patient" in kwargs else _patient(long_name=long_name)
+    tr.patient = (
+        kwargs.get("patient") if "patient" in kwargs else _patient(long_name=long_name)
+    )
     tr.get_mobility = lambda: defaults.get("mobility") or {}
     tr._get_creator_name = lambda: "Marc Mouchet"
     tr._serialize_booking_summary = lambda: {

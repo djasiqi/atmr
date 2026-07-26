@@ -127,7 +127,9 @@ def test_inc_received_accepts_kafka_transport() -> None:
         mock_r.labels.return_value = MagicMock(inc=inc)
         mock_i.labels.return_value = MagicMock(inc=MagicMock())
         m.inc_received(transport="kafka", location_mode="mission_live")
-    mock_r.labels.assert_called_once_with(transport="kafka", location_mode="mission_live")
+    mock_r.labels.assert_called_once_with(
+        transport="kafka", location_mode="mission_live"
+    )
 
 
 def test_inc_tracking_kafka_dlq_force_commit() -> None:
@@ -146,7 +148,10 @@ def test_observe_osrm_request_success() -> None:
         pytest.skip("prometheus_client metrics unavailable")
     inc = MagicMock()
     observe = MagicMock()
-    with patch.object(m, "_TRACKING_OSRM_REQUEST") as mock_c, patch.object(m, "_TRACKING_OSRM_LATENCY") as mock_h:
+    with (
+        patch.object(m, "_TRACKING_OSRM_REQUEST") as mock_c,
+        patch.object(m, "_TRACKING_OSRM_LATENCY") as mock_h,
+    ):
         mock_c.labels.return_value = MagicMock(inc=inc)
         mock_h.labels.return_value = MagicMock(observe=observe)
         m.observe_osrm_request(operation="nearest", result="success", duration_sec=0.42)
@@ -191,9 +196,7 @@ def test_set_tracking_kafka_consumer_lag_clamps_negative() -> None:
     setter = MagicMock()
     with patch.object(m, "_TRACKING_KAFKA_CONSUMER_LAG") as mock_g:
         mock_g.labels.return_value = MagicMock(set=setter)
-        m.set_tracking_kafka_consumer_lag(
-            group="g", topic="t", partition=0, lag=-5
-        )
+        m.set_tracking_kafka_consumer_lag(group="g", topic="t", partition=0, lag=-5)
     setter.assert_called_once_with(0.0)
 
 

@@ -4,6 +4,17 @@
 target-version = "py311"
 line-length = 88  # Aligné avec flake8 max-line-length
 
+extend-exclude = [
+    ".local",
+    ".cursor-server",
+    ".venv",
+    "venv",
+    "htmlcov",
+    ".mypy_cache",
+    ".ruff_cache",
+    ".pytest_cache",
+]
+
 [lint]
 # Configuration optimisée pour Docker - règles critiques uniquement
 # Règles de base recommandées : I, E, F, W, B, C4, UP
@@ -61,6 +72,7 @@ ignore = [
     "PLC0415", # Import not at top level (tests avec mocks)
     "PT009",  # unittest-style assertions (migration progressive)
     "RUF001", # Ambiguous unicode characters (emojis dans logs)
+    "PLR2004", # Magic values métier (round-trip=2, bornes geo, seuils monitoring, etc.)
 ]
 
 [lint.per-file-ignores]

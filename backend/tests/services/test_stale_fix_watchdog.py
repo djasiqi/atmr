@@ -7,7 +7,9 @@ from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 
-def _make_row(driver_id: int, status=None, scheduled_time=None, time_confirmed=None) -> MagicMock:
+def _make_row(
+    driver_id: int, status=None, scheduled_time=None, time_confirmed=None
+) -> MagicMock:
     row = MagicMock()
     row.driver_id = driver_id
     if status is not None:

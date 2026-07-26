@@ -88,7 +88,6 @@ class KafkaDlqConsumer:
     def _init_consumer(self) -> None:
         try:
             from kafka import KafkaConsumer as KC
-
             from services.kafka.bootstrap_retry import run_with_kafka_bootstrap_retry
 
             def _connect():
@@ -172,7 +171,9 @@ class KafkaDlqConsumer:
                     polled = self._consumer.poll(timeout_ms=1000)
                 except RuntimeError as exc:
                     if "task is already done" in str(exc).lower():
-                        logger.debug("[kafka_dlq] selector race ignorée (poll): %s", exc)
+                        logger.debug(
+                            "[kafka_dlq] selector race ignorée (poll): %s", exc
+                        )
                         continue
                     raise
                 if not polled:
@@ -195,14 +196,19 @@ class KafkaDlqConsumer:
                         self._consumer.commit()
                     except RuntimeError as exc:
                         if "task is already done" in str(exc).lower():
-                            logger.debug("[kafka_dlq] selector race ignorée (commit): %s", exc)
+                            logger.debug(
+                                "[kafka_dlq] selector race ignorée (commit): %s", exc
+                            )
                         else:
                             raise
                     for _tp, records in polled.items():
                         for record in records:
                             self._update_dlq_metric(record.topic)
         except Exception as exc:
-            from shared.sentry_init import capture_kafka_error, is_kafka_connection_error
+            from shared.sentry_init import (
+                capture_kafka_error,
+                is_kafka_connection_error,
+            )
 
             if is_kafka_connection_error(exc):
                 capture_kafka_error(exc)

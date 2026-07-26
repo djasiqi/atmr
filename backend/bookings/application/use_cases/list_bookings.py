@@ -26,9 +26,7 @@ class BookingLike(Protocol):
 class BookingQueryLike(Protocol):
     """Protocole pour une query SQLAlchemy paginable."""
 
-    def paginate(
-        self, *, page: int, per_page: int, error_out: bool = False
-    ) -> Any:  # Pagination object
+    def paginate(self, *, page: int, per_page: int, error_out: bool = False) -> Any:
         """Pagine les résultats."""
         ...
 

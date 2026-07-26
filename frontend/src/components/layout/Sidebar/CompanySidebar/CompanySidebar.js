@@ -84,9 +84,20 @@ const CompanySidebar = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [userMenuOpen]);
 
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
   const handleLogout = useCallback(async () => {
-    await logoutUser();
-  }, []);
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+    setUserMenuOpen(false);
+    try {
+      await logoutUser();
+    } catch (error) {
+      console.error('Échec de la déconnexion:', error);
+    } finally {
+      setIsLoggingOut(false);
+    }
+  }, [isLoggingOut]);
 
   const [userData, setUserData] = useState(() => getActiveUser());
 
@@ -253,9 +264,15 @@ const CompanySidebar = () => {
           <div className={styles.userDropdown}>
             {userEmail && <div className={styles.userDropdownEmail}>{userEmail}</div>}
             <div className={styles.userDropdownDivider} />
-            <button className={styles.userDropdownItem} onClick={handleLogout} type="button">
+            <button
+              className={styles.userDropdownItem}
+              onClick={handleLogout}
+              type="button"
+              disabled={isLoggingOut}
+              aria-busy={isLoggingOut}
+            >
               <FaSignOutAlt />
-              <span>Se déconnecter</span>
+              <span>{isLoggingOut ? 'Déconnexion…' : 'Se déconnecter'}</span>
             </button>
           </div>
         )}

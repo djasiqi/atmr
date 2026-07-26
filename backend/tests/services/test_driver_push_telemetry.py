@@ -17,7 +17,10 @@ def test_ingest_driver_push_telemetry_success(caplog):
         )
     assert result["ok"] is True
     assert result["event"] == "driver_push.disclosure_blocked"
-    assert any("driver_push_telemetry event=driver_push.disclosure_blocked" in rec.message for rec in caplog.records)
+    assert any(
+        "driver_push_telemetry event=driver_push.disclosure_blocked" in rec.message
+        for rec in caplog.records
+    )
 
 
 def test_ingest_driver_push_telemetry_token_acquired(caplog):

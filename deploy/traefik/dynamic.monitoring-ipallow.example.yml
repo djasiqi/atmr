@@ -1,0 +1,15 @@
+# Exemple — fragment à fusionner dans /srv/atmr/traefik/dynamic.yml sur le serveur
+# UNIQUEMENT (ne pas versionner d'IPv4 publiques).
+#
+# Middleware référencé par docker-compose.monitoring.yml :
+#   monitoring-ipallow@file
+#
+# Remplacer les CIDR par les IP ops autorisées (une ligne /32 par hôte).
+
+http:
+  middlewares:
+    monitoring-ipallow:
+      ipAllowList:
+        sourceRange:
+          - "127.0.0.1/32"
+          # - "A.B.C.D/32"

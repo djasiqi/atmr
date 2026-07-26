@@ -115,7 +115,8 @@ def test_arrived_milestone_syncs_arrived_pickup(db, sample_company) -> None:
     )
     booking = assignment.booking
     driver = assignment.driver
-    assert booking is not None and driver is not None
+    assert booking is not None
+    assert driver is not None
 
     booking.status = BookingStatus.EN_ROUTE
     booking.driver_id = driver.id
@@ -157,7 +158,8 @@ def test_release_with_trip_tracking_deletes_assignment(db, sample_company) -> No
     )
     booking = assignment.booking
     driver = assignment.driver
-    assert booking is not None and driver is not None
+    assert booking is not None
+    assert driver is not None
 
     booking.status = BookingStatus.EN_ROUTE
     booking.driver_id = driver.id

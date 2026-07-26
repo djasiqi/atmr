@@ -51,7 +51,9 @@ class AssignExternalCarrierResult:
 class AssignExternalCarrierUseCase:
     """Use case: basculer une demande vers un transporteur externe."""
 
-    def execute(self, input_data: AssignExternalCarrierInput) -> AssignExternalCarrierResult:
+    def execute(
+        self, input_data: AssignExternalCarrierInput
+    ) -> AssignExternalCarrierResult:
         try:
             name = (input_data.name or "").strip()
             if not name:
@@ -90,14 +92,17 @@ class AssignExternalCarrierUseCase:
                     status_code=409,
                 )
 
-            if transport_request.carrier_source == CarrierSource.EXTERNAL.value:
-                if transport_request.status == RequestStatus.EXTERNAL_DECLARED_COMPLETED.value:
-                    return AssignExternalCarrierResult(
-                        success=False,
-                        transport_request_id=transport_request.id,
-                        error="Mission externe déjà déclarée réalisée",
-                        status_code=409,
-                    )
+            if (
+                transport_request.carrier_source == CarrierSource.EXTERNAL.value
+                and transport_request.status
+                == RequestStatus.EXTERNAL_DECLARED_COMPLETED.value
+            ):
+                return AssignExternalCarrierResult(
+                    success=False,
+                    transport_request_id=transport_request.id,
+                    error="Mission externe déjà déclarée réalisée",
+                    status_code=409,
+                )
 
             pending_offers = (
                 RequestOffer.query.filter(

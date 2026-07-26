@@ -249,7 +249,10 @@ class AdminPushCoverageDrivers(Resource):
             if driver_id_raw is not None and str(driver_id_raw).strip():
                 driver_id = int(driver_id_raw)
         except ValueError:
-            return {"error": "invalid_filter", "message": "company_id ou driver_id invalide"}, 400
+            return {
+                "error": "invalid_filter",
+                "message": "company_id ou driver_id invalide",
+            }, 400
 
         rows = list_driver_push_coverage(
             company_id=company_id,

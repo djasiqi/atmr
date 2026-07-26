@@ -221,9 +221,9 @@ def resolve_affected_bookings(
     if action_id:
         from ext import db
 
-        for other in (
-            Booking.query.filter(Booking.active_change_request_id == int(action_id)).all()
-        ):
+        for other in Booking.query.filter(
+            Booking.active_change_request_id == int(action_id)
+        ).all():
             by_id[int(other.id)] = other
 
     return list(by_id.values())
@@ -236,6 +236,7 @@ def get_cancellation_billing_booking(
     outbounds = [b for b in cancelable_bookings if is_outbound_leg(b)]
     if not outbounds:
         return None
+
     # Préférer le plus bas route_sequence_number, sinon id croissant
     def _key(b: Booking) -> tuple:
         seq = getattr(b, "route_sequence_number", None)
@@ -282,7 +283,9 @@ def _free_threshold_seconds(policy: dict[str, Any] | None) -> int:
             ]
             if time_tiers:
                 try:
-                    hours = max(int(float(t.get("hours_before") or 0)) for t in time_tiers)
+                    hours = max(
+                        int(float(t.get("hours_before") or 0)) for t in time_tiers
+                    )
                 except (TypeError, ValueError):
                     hours = DEFAULT_FREE_THRESHOLD_HOURS
     return int(hours) * 3600
@@ -314,8 +317,7 @@ def compute_full_cancellation_charge(outbound: Booking) -> FeeQuote:
     if amount is None or float(amount) <= 0:
         amount = getattr(outbound, "price_amount", None)
     fare = Decimal(str(amount or 0)).quantize(_CENT)
-    if fare < _ZERO:
-        fare = _ZERO
+    fare = max(fare, _ZERO)
     return FeeQuote(
         amount=fare,
         calculation_code=CalculationCode.FULL_OUTBOUND_FARE,
@@ -323,9 +325,7 @@ def compute_full_cancellation_charge(outbound: Booking) -> FeeQuote:
     )
 
 
-def compute_approach_fee(
-    outbound: Booking, policy: dict[str, Any] | None
-) -> FeeQuote:
+def compute_approach_fee(outbound: Booking, policy: dict[str, Any] | None) -> FeeQuote:
     if not is_outbound_leg(outbound):
         raise CancellationRespondError(
             CancellationRespondErrorCode.BILLING_OUTCOME_NOT_ALLOWED,
@@ -463,11 +463,15 @@ def build_cancellation_respond_context(
     threshold_seconds = _free_threshold_seconds(policy)
 
     non_billable_ids = [
-        int(b.id) for b in cancelable if not is_outbound_leg(b) or (eligible and b.id != eligible.id)
+        int(b.id)
+        for b in cancelable
+        if not is_outbound_leg(b) or (eligible and b.id != eligible.id)
     ]
     # Tous les non-éligibles parmi cancelables (retours + allers secondaires)
     if eligible:
-        non_billable_ids = [int(b.id) for b in cancelable if int(b.id) != int(eligible.id)]
+        non_billable_ids = [
+            int(b.id) for b in cancelable if int(b.id) != int(eligible.id)
+        ]
     else:
         non_billable_ids = [int(b.id) for b in cancelable]
 
@@ -490,7 +494,10 @@ def build_cancellation_respond_context(
     else:
         ref_status = _status_value(eligible.status)
         seconds_before, departure_passed = _seconds_before_departure(eligible, now=now)
-        if ref_status == BookingStatus.EN_ROUTE.value.upper() or ref_status == "EN_ROUTE":
+        if (
+            ref_status == BookingStatus.EN_ROUTE.value.upper()
+            or ref_status == "EN_ROUTE"
+        ):
             situation = CancellationSituation.EN_ROUTE
             full_q = compute_full_cancellation_charge(eligible)
             approach_q = compute_approach_fee(eligible, policy)
@@ -509,7 +516,9 @@ def build_cancellation_respond_context(
                     FeeQuote(
                         amount=_ZERO,
                         calculation_code=CalculationCode.COMPANY_CUSTOM_FEE,
-                        calculation_basis={"maximum_allowed": _money_str(full_q.amount)},
+                        calculation_basis={
+                            "maximum_allowed": _money_str(full_q.amount)
+                        },
                     ),
                     requires_amount=True,
                     requires_comment=True,
@@ -554,7 +563,9 @@ def build_cancellation_respond_context(
                     FeeQuote(
                         amount=_ZERO,
                         calculation_code=CalculationCode.COMPANY_CUSTOM_FEE,
-                        calculation_basis={"maximum_allowed": _money_str(full_q.amount)},
+                        calculation_basis={
+                            "maximum_allowed": _money_str(full_q.amount)
+                        },
                     ),
                     requires_amount=True,
                     requires_comment=True,
@@ -581,7 +592,9 @@ def build_cancellation_respond_context(
         "threshold": str(threshold_seconds),
         "allowed": ",".join(o["code"] for o in allowed),
         "suggested_calc": str(suggested.get("calculation_code") or ""),
-        "suggested_pct": str(suggested.get("percent") if suggested.get("percent") is not None else ""),
+        "suggested_pct": str(
+            suggested.get("percent") if suggested.get("percent") is not None else ""
+        ),
     }
     respond_context_version = _compute_respond_context_version(version_parts)
 
@@ -671,7 +684,7 @@ def parse_fee_amount(raw: Any) -> Decimal:
     if not isinstance(raw, str):
         raise CancellationRespondError(
             CancellationRespondErrorCode.CUSTOM_FEE_AMOUNT_INVALID,
-            "fee_amount doit être une chaîne décimale (ex. \"50.00\").",
+            'fee_amount doit être une chaîne décimale (ex. "50.00").',
         )
     text = raw.strip()
     if not text:
@@ -800,7 +813,7 @@ def resolve_selected_fee(
         if amount > maximum:
             raise CancellationRespondError(
                 CancellationRespondErrorCode.CUSTOM_FEE_AMOUNT_OUT_OF_RANGE,
-                f"fee_amount hors bornes 0..{ _money_str(maximum) }.",
+                f"fee_amount hors bornes 0..{_money_str(maximum)}.",
                 extra={"maximum_allowed": _money_str(maximum)},
             )
         return (

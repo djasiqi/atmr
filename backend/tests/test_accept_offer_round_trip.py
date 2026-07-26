@@ -29,7 +29,9 @@ def _future_mission_date_str(*, days_ahead: int = 10) -> str:
     return (date.today() + timedelta(days=days_ahead)).isoformat()
 
 
-def _future_scheduled_iso(*, days_ahead: int = 10, hour: int = 10, minute: int = 0) -> str:
+def _future_scheduled_iso(
+    *, days_ahead: int = 10, hour: int = 10, minute: int = 0
+) -> str:
     """ISO8601 futur avec offset +01:00 pour tests schema."""
     mission = date.today() + timedelta(days=days_ahead)
     return f"{mission.isoformat()}T{hour:02d}:{minute:02d}:00+01:00"
@@ -173,7 +175,7 @@ class TestTransportRequestSchemaRoundTrip:
 
     def test_schema_rejects_round_trip_without_return_plan(self):
         schema = TransportRequestCreateSchema()
-        mission = _future_mission_date_str()
+        _future_mission_date_str()
         data = {
             "external_reference": "REF-001",
             "scheduled_time": _future_scheduled_iso(),
@@ -185,7 +187,9 @@ class TestTransportRequestSchemaRoundTrip:
 
         with pytest.raises(ValidationError) as exc_info:
             schema.load(data)
-        assert "return_date" in str(exc_info.value) or "return_time" in str(exc_info.value)
+        assert "return_date" in str(exc_info.value) or "return_time" in str(
+            exc_info.value
+        )
 
     def test_schema_accepts_round_trip_with_return_date_only(self):
         schema = TransportRequestCreateSchema()
@@ -205,7 +209,7 @@ class TestTransportRequestSchemaRoundTrip:
 
     def test_schema_accepts_round_trip_with_return_time(self):
         schema = TransportRequestCreateSchema()
-        mission = _future_mission_date_str()
+        _future_mission_date_str()
         data = {
             "external_reference": "REF-002",
             "scheduled_time": _future_scheduled_iso(),
@@ -509,7 +513,9 @@ class TestAcceptOfferRoundTrip:
         assert outbound.billed_to_company_id is None
 
     @patch("application.institutions.accept_offer.db")
-    def test_round_trip_return_date_only_null_time_not_confirmed(self, mock_db: MagicMock):
+    def test_round_trip_return_date_only_null_time_not_confirmed(
+        self, mock_db: MagicMock
+    ):
         """return_date seul → scheduled_time=null, time_confirmed=false."""
         uc = self._make_uc()
         uc._get_or_create_institution_client = MagicMock(return_value=_Client())  # type: ignore[assignment]
@@ -586,7 +592,9 @@ class TestMultiStopReturnConversion:
             multi_stop=False,
             return_to_institution=True,
             legs=[
-                _Leg(sequence_index=0, pickup_location="Clinique", dropoff_location="HUG"),
+                _Leg(
+                    sequence_index=0, pickup_location="Clinique", dropoff_location="HUG"
+                ),
                 _Leg(
                     sequence_index=1,
                     pickup_location="HUG",

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from services.notifications.firebase_push import fcm_data_value, _fcm_str_data
+from services.notifications.firebase_push import _fcm_str_data, fcm_data_value
 
 
 def test_fcm_data_value_serializes_dict_as_json():

@@ -64,9 +64,7 @@ def test_amount_encodes_round_trip_total_detects_zone_rule():
     assert _amount_encodes_round_trip_total(
         {"model": "zone", "base": {"amount": "70.00", "rule": "weekday_round_trip"}}
     )
-    assert _amount_encodes_round_trip_total(
-        {"base": {"rule": "weekend_round_trip"}}
-    )
+    assert _amount_encodes_round_trip_total({"base": {"rule": "weekend_round_trip"}})
 
 
 def test_amount_encodes_round_trip_total_false_for_other_models():

@@ -35,7 +35,6 @@ si le TTL est rallongé en config.
 """
 
 
-
 def _redis_key(driver_id: int) -> str:
     return f"driver:{int(driver_id)}:device_health"
 
@@ -97,9 +96,7 @@ def write_device_health(
         )
         return False
     except Exception:
-        logger.exception(
-            "[device_health] Redis HSET failed driver_id=%s", driver_id
-        )
+        logger.exception("[device_health] Redis HSET failed driver_id=%s", driver_id)
         return False
 
 
@@ -171,9 +168,7 @@ def parse_device_health(raw: dict[Any, Any] | None) -> dict[str, Any] | None:
     }
 
 
-def read_device_health(
-    redis_client: Any, driver_id: int
-) -> dict[str, Any] | None:
+def read_device_health(redis_client: Any, driver_id: int) -> dict[str, Any] | None:
     """Lit le hash device_health d'un seul driver (None si absent / erreur)."""
     if redis_client is None:
         return None

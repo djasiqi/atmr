@@ -6,6 +6,7 @@ Aucun publish legacy depuis ce module — uniquement LegacyCompatibilityAdapter.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 import uuid
@@ -69,11 +70,19 @@ def get_action_ttl_minutes() -> int:
     return default_response_policy().ttl_minutes_default
 
 
-def classify_action_type(changed_fields: set[str] | dict, *, is_cancellation: bool = False) -> str:
+def classify_action_type(
+    changed_fields: set[str] | dict, *, is_cancellation: bool = False
+) -> str:
     if is_cancellation:
         return TransportActionType.CANCELLATION
-    fields = set(changed_fields.keys()) if isinstance(changed_fields, dict) else set(changed_fields)
-    if fields & {"scheduled_time"} and not (fields & {"pickup_location", "dropoff_location"}):
+    fields = (
+        set(changed_fields.keys())
+        if isinstance(changed_fields, dict)
+        else set(changed_fields)
+    )
+    if fields & {"scheduled_time"} and not (
+        fields & {"pickup_location", "dropoff_location"}
+    ):
         # date vs time : scheduled_time porte souvent les deux
         return TransportActionType.CHANGE_TIME
     if fields & {"pickup_location", "pickup_lat", "pickup_lon"}:
@@ -172,7 +181,9 @@ def _append_exchange(
     return ex
 
 
-def close_open_actions_as_replaced(booking: Booking, *, excluding_id: int | None = None) -> list[int]:
+def close_open_actions_as_replaced(
+    booking: Booking, *, excluding_id: int | None = None
+) -> list[int]:
     """Ferme les actions ouvertes (CLOSED_REPLACED) — V1.1 sans confirmation UI avancée."""
     q = BookingChangeRequest.query.filter(
         BookingChangeRequest.booking_id == booking.id,
@@ -280,7 +291,7 @@ def build_effect_plan(
 ) -> EffectPlan:
     is_cancel = action.action_type == TransportActionType.CANCELLATION
     values = accepted_exchange.values or action.proposed_patch or {}
-    plan = EffectPlan(
+    return EffectPlan(
         accepted_values=dict(values),
         is_cancellation=is_cancel,
         transactional_steps=[
@@ -300,7 +311,6 @@ def build_effect_plan(
             }
         ],
     )
-    return plan
 
 
 def _clear_driver_and_assignments(booking: Booking) -> None:
@@ -312,10 +322,8 @@ def _clear_driver_and_assignments(booking: Booking) -> None:
             st = str(getattr(a.status, "value", a.status) or "").upper()
             if st in ("ACTIVE", "ASSIGNED", "PENDING", ""):
                 if hasattr(a, "status"):
-                    try:
+                    with contextlib.suppress(Exception):
                         a.status = "CANCELLED"
-                    except Exception:
-                        pass
                 if hasattr(a, "ended_at") and a.ended_at is None:
                     a.ended_at = datetime.now(UTC)
     except Exception as exc:
@@ -385,7 +393,11 @@ def _apply_cancellation_effects(
             target.cancelled_by_role = "company"
         _clear_driver_and_assignments(target)
 
-        if eligible_id is not None and int(target.id) == eligible_id and fee_quote is not None:
+        if (
+            eligible_id is not None
+            and int(target.id) == eligible_id
+            and fee_quote is not None
+        ):
             persist_selected_cancellation_fee(
                 target, quote=fee_quote, reason=reason_text
             )

@@ -57,13 +57,16 @@ def build_transfer_cache_for_bookings(
         is_transferred = False
         for t in transfers:
             status = getattr(t, "status", None)
-            if status in (
-                TransferStatus.PENDING,
-                TransferStatus.ACCEPTED,
-                TransferStatus.COMPLETED,
+            if (
+                status
+                in (
+                    TransferStatus.PENDING,
+                    TransferStatus.ACCEPTED,
+                    TransferStatus.COMPLETED,
+                )
+                and active is None
             ):
-                if active is None:
-                    active = _transfer_info_dict(t)
+                active = _transfer_info_dict(t)
             if status in (TransferStatus.ACCEPTED, TransferStatus.COMPLETED):
                 owner_id = getattr(t, "owner_company_id", None)
                 if (
@@ -87,7 +90,7 @@ def attach_transfer_cache_to_bookings(bookings: list[Booking]) -> None:
     cache = build_transfer_cache_for_bookings(bookings)
     for booking in bookings:
         bid = int(booking.id)
-        booking._transfer_cache = cache.get(  # noqa: SLF001
+        booking._transfer_cache = cache.get(
             bid,
             {"is_transferred": False, "active_transfer": None},
         )
@@ -98,9 +101,7 @@ def attach_route_group_leg_counts_to_bookings(bookings: list[Booking]) -> None:
     if not bookings:
         return
     group_ids = {
-        str(b.route_group_id)
-        for b in bookings
-        if getattr(b, "route_group_id", None)
+        str(b.route_group_id) for b in bookings if getattr(b, "route_group_id", None)
     }
     if not group_ids:
         return
@@ -118,7 +119,7 @@ def attach_route_group_leg_counts_to_bookings(bookings: list[Booking]) -> None:
     for booking in bookings:
         gid = getattr(booking, "route_group_id", None)
         if gid:
-            booking._route_group_leg_count = counts.get(str(gid), 1)  # noqa: SLF001
+            booking._route_group_leg_count = counts.get(str(gid), 1)
 
 
 def attach_serialize_context_to_bookings(
@@ -126,4 +127,4 @@ def attach_serialize_context_to_bookings(
     viewer_company_id: int | None,
 ) -> None:
     for booking in bookings:
-        booking._serialize_viewer_company_id = viewer_company_id  # noqa: SLF001
+        booking._serialize_viewer_company_id = viewer_company_id

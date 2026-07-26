@@ -51,10 +51,14 @@ logger = logging.getLogger(__name__)
 # parse_iso8601() interdit pour les écritures (aware) — validation/comparaison seulement.
 
 
-def _apply_return_fields(transport_req: TransportRequest, validated: dict[str, Any]) -> None:
+def _apply_return_fields(
+    transport_req: TransportRequest, validated: dict[str, Any]
+) -> None:
     """Persiste return_date, return_time et return_time_confirmed sur une demande."""
     if validated.get("return_time"):
-        transport_req.return_time = normalize_mission_wall_clock(validated["return_time"])
+        transport_req.return_time = normalize_mission_wall_clock(
+            validated["return_time"]
+        )
         explicit = validated.get("return_time_confirmed")
         transport_req.return_time_confirmed = (
             bool(explicit) if explicit is not None else True
@@ -63,7 +67,9 @@ def _apply_return_fields(transport_req: TransportRequest, validated: dict[str, A
             transport_req.return_date = transport_req.return_time.date()
     elif validated.get("return_date"):
         try:
-            transport_req.return_date = date.fromisoformat(str(validated["return_date"]))
+            transport_req.return_date = date.fromisoformat(
+                str(validated["return_date"])
+            )
         except ValueError:
             transport_req.return_date = None
         transport_req.return_time = None
@@ -366,6 +372,7 @@ def _persist_legs_from_validated(
             )
             if legs_data:
                 persist_legs(transport_req.id, legs_data)
+
 
 # Namespace
 institution_requests_ns = Namespace(
@@ -942,7 +949,7 @@ class TransportRequestDetail(Resource):
                 }, 400
 
             operational_fields = [
-                k for k in validated.keys() if k != "acknowledge_carrier_impact"
+                k for k in validated if k != "acknowledge_carrier_impact"
             ]
 
             # Résoudre patient si changé
@@ -1071,9 +1078,7 @@ class TransportRequestDetail(Resource):
                 stops = stops_from_validated(validated)
                 if not stops:
                     db.session.rollback()
-                    return {
-                        "error": "Au moins une étape intermédiaire requise."
-                    }, 400
+                    return {"error": "Au moins une étape intermédiaire requise."}, 400
 
                 return_raw, return_confirmed = _return_leg_schedule(validated)
                 reorganize_multi_stop_legs(
@@ -1265,7 +1270,9 @@ class TransportRequestExternalCarrier(Resource):
     @institution_requests_ns.doc(
         description="Bascule la demande vers un transporteur externe (snapshot).",
     )
-    @institution_requests_ns.response(200, "Transporteur externe affecté", transport_request_model)
+    @institution_requests_ns.response(
+        200, "Transporteur externe affecté", transport_request_model
+    )
     @institution_requests_ns.response(400, "Données invalides", validation_error_model)
     @institution_requests_ns.response(401, "Non authentifié", permission_error_model)
     @institution_requests_ns.response(403, "Accès refusé", permission_error_model)
@@ -1282,7 +1289,9 @@ class TransportRequestExternalCarrier(Resource):
             institution_id, user_id = get_institution_context()
             data = request.get_json() or {}
             try:
-                validated = cast(dict[str, Any], assign_external_carrier_schema.load(data))
+                validated = cast(
+                    dict[str, Any], assign_external_carrier_schema.load(data)
+                )
             except ValidationError as err:
                 return {"error": "Données invalides", "details": err.messages}, 400
 

@@ -30,7 +30,9 @@ def test_handle_booking_assigned_calls_notify_driver_when_push_target():
             return_value=targets,
         ),
         patch("services.notifications.core.notify_booking_assigned"),
-        patch("services.notifications.core.notify_driver_new_booking") as mock_notify_driver,
+        patch(
+            "services.notifications.core.notify_driver_new_booking"
+        ) as mock_notify_driver,
     ):
         handle_booking_assigned(
             {

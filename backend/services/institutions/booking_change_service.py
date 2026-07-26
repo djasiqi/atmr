@@ -6,7 +6,7 @@ import logging
 import os
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Any
 
 from application.bookings.cancellation_rules import (
@@ -21,7 +21,9 @@ from models import (
     BookingChangeRequest,
     TransportRequest,
 )
-from models.booking_change_request import BookingChangeRequestStatus, TransportActionStatus
+from models.booking_change_request import (
+    TransportActionStatus,
+)
 from models.enums import BookingStatus, InstitutionRole
 from shared.time_utils import normalize_mission_wall_clock
 
@@ -71,6 +73,7 @@ def get_change_request_ttl_minutes() -> int:
 # nécessite une révalidation (réutilise MAJOR_FIELDS, défini plus bas).
 def _revalidation_trigger_fields() -> frozenset[str]:
     return MAJOR_FIELDS
+
 
 LEG_SCHEDULE_PATCH_FIELDS = frozenset(
     {
@@ -435,16 +438,12 @@ def _record_change_timeline(
             institution_id=institution_id,
             transport_request_id=transport_request.id if transport_request else None,
             booking_id=booking.id,
-            actor=TimelineActor(
-                actor_type=actor_type, actor_user_id=actor_user_id
-            ),
+            actor=TimelineActor(actor_type=actor_type, actor_user_id=actor_user_id),
             payload=payload,
             correlation_id=f"{action_type}:{correlation_id}",
         )
     except Exception as timeline_err:
-        logger.warning(
-            "[BookingChange] Timeline recording failed: %s", timeline_err
-        )
+        logger.warning("[BookingChange] Timeline recording failed: %s", timeline_err)
 
 
 def bump_edit_version(booking: Booking) -> int:
@@ -506,9 +505,7 @@ def sync_transport_request_leg_schedule(
     from models.transport_request_leg import TransportRequestLeg
 
     legs = (
-        TransportRequestLeg.query.filter_by(
-            transport_request_id=transport_request.id
-        )
+        TransportRequestLeg.query.filter_by(transport_request_id=transport_request.id)
         .order_by(TransportRequestLeg.sequence_index.asc())
         .all()
     )
@@ -545,14 +542,16 @@ def sync_transport_request_leg_schedule(
                 continue
             _apply_leg_time(dest_legs[idx], iso, f"leg[{idx}].scheduled_time")
     elif appointment_time is not None:
-        leg = next((l for l in dest_legs if l.booking_id == booking.id), None)
+        leg = next((leg for leg in dest_legs if leg.booking_id == booking.id), None)
         if leg is None and dest_legs:
             leg = dest_legs[0]
         if leg is not None:
             _apply_leg_time(leg, appointment_time, "leg[0].scheduled_time")
 
     if return_appointment_time is not None and return_leg is not None:
-        _apply_leg_time(return_leg, return_appointment_time, "leg.return.scheduled_time")
+        _apply_leg_time(
+            return_leg, return_appointment_time, "leg.return.scheduled_time"
+        )
         if return_appointment_time:
             # Règle d'architecture : écriture mission institution → normalize_mission_wall_clock.
             parsed_return = normalize_mission_wall_clock(return_appointment_time)
@@ -574,9 +573,7 @@ def _company_is_committed(booking: Booking, status: str) -> bool:
     return has_company and status in COMMITTED_STATUSES
 
 
-def _simulate_after_snapshot(
-    booking: Booking, patch: dict[str, Any]
-) -> dict[str, Any]:
+def _simulate_after_snapshot(booking: Booking, patch: dict[str, Any]) -> dict[str, Any]:
     """Calcule un snapshot opérationnel « après patch » sans muter le booking."""
     after = _booking_operational_snapshot(booking)
     for key, value in patch.items():
@@ -619,11 +616,7 @@ def _notify_company_change_request(
         patient = booking.customer_name or "Patient"
         fields = list((change_request.changed_fields or {}).keys())
         is_cancel = (change_request.action_type or "") == "CANCELLATION"
-        title = (
-            "Annulation à confirmer"
-            if is_cancel
-            else "Modification à confirmer"
-        )
+        title = "Annulation à confirmer" if is_cancel else "Modification à confirmer"
         msg = (
             f"{'Demande d’annulation' if is_cancel else 'Modification demandée'} — "
             f"course #{booking.id} ({patient}). "
@@ -638,9 +631,8 @@ def _notify_company_change_request(
             metadata={
                 "booking_id": booking.id,
                 "change_request_id": change_request.id,
-                "action_type": change_request.action_type or (
-                    "CANCELLATION" if is_cancel else "CHANGE"
-                ),
+                "action_type": change_request.action_type
+                or ("CANCELLATION" if is_cancel else "CHANGE"),
                 "changed_fields": change_request.changed_fields,
                 "expires_at": change_request.expires_at.isoformat()
                 if change_request.expires_at
@@ -948,14 +940,20 @@ def cancel_institution_booking(
             transport_request=ctx.transport_request,
             institution_id=ctx.institution_id,
             action_type=classify_action_type(set(), is_cancellation=True),
-            proposed_patch={"_cancellation": True, "reason_code": reason_code or "CLIENT_REQUEST"},
+            proposed_patch={
+                "_cancellation": True,
+                "reason_code": reason_code or "CLIENT_REQUEST",
+            },
             before_snapshot=before,
             after_snapshot=after,
             changed_fields={"status": True},
             reason=reason,
             actor_user_id=actor_user_id,
             actor_role=actor_role,
-            action_scope="ROUND_TRIP" if getattr(booking, "parent_booking_id", None) or getattr(booking, "route_group_id", None) else "BOOKING",
+            action_scope="ROUND_TRIP"
+            if getattr(booking, "parent_booking_id", None)
+            or getattr(booking, "route_group_id", None)
+            else "BOOKING",
         )
         record_change_event(
             booking=booking,
@@ -974,7 +972,10 @@ def cancel_institution_booking(
             change_class="major",
             severity="CRITICAL" if is_en_route else "WARNING",
             ack_required=False,
-            operational_impact={"cancellation_requested": True, "mission_unchanged": True},
+            operational_impact={
+                "cancellation_requested": True,
+                "mission_unchanged": True,
+            },
         )
         _record_change_request_timeline(ctx=ctx, change_request=action)
         _notify_company_change_request(booking, action)

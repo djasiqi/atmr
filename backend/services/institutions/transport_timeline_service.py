@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
 
 from ext import db
@@ -132,7 +132,9 @@ _FIELD_CHANGE_GROUPS: tuple[tuple[str, frozenset[str]], ...] = (
     ),
     (
         "notes",
-        frozenset({"notes", "notes_medical", "pickup_access_notes", "dropoff_access_notes"}),
+        frozenset(
+            {"notes", "notes_medical", "pickup_access_notes", "dropoff_access_notes"}
+        ),
     ),
     (
         "patient",
@@ -404,7 +406,9 @@ def list_timeline_events(
         q = q.filter(TransportTimelineEvent.id < cursor_id)
 
     return (
-        q.order_by(TransportTimelineEvent.created_at.desc(), TransportTimelineEvent.id.desc())
+        q.order_by(
+            TransportTimelineEvent.created_at.desc(), TransportTimelineEvent.id.desc()
+        )
         .limit(min(limit, 500))
         .all()
     )

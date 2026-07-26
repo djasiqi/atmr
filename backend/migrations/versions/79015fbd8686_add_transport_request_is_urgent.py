@@ -1,4 +1,3 @@
-
 """add_transport_request_is_urgent
 
 Revision ID: 79015fbd8686
@@ -6,6 +5,7 @@ Revises: b878346bc2ce
 Create Date: 2026-06-22 19:56:48.718487
 
 """
+
 from alembic import op
 import sqlalchemy as sa
 

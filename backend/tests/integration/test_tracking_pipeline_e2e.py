@@ -6,7 +6,9 @@ from unittest.mock import MagicMock, patch
 
 
 def test_pipeline_enqueue_returns_trace_id() -> None:
-    with patch("services.tracking.ingest_producer.tracking_ingest_producer") as mock_prod:
+    with patch(
+        "services.tracking.ingest_producer.tracking_ingest_producer"
+    ) as mock_prod:
         mock_prod.enqueue.return_value = {
             "queued": True,
             "trace_id": "tr-test-1",
@@ -30,7 +32,9 @@ def test_pipeline_enqueue_returns_trace_id() -> None:
 
 
 def test_invariant_violation_metric_callable() -> None:
-    from services.monitoring.driver_location_metrics import inc_tracking_invariant_violation
+    from services.monitoring.driver_location_metrics import (
+        inc_tracking_invariant_violation,
+    )
 
     inc_tracking_invariant_violation(
         invariant_id="INV-1",

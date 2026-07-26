@@ -23,7 +23,13 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy import func
 
 from ext import db
-from models import BillingParty, BillingPartyType, ClinicBillingPartyMapping, Client, Company
+from models import (
+    BillingParty,
+    BillingPartyType,
+    Client,
+    ClinicBillingPartyMapping,
+    Company,
+)
 
 if TYPE_CHECKING:
     from models import Booking, Institution, TransportRequest
@@ -406,17 +412,19 @@ def resolve_clinic_company_id_for_institution_accept(
 ) -> int | None:
     """Résout la clinique payeuse avant persistance Booking (``billed_to_type=clinic``)."""
     if institution_client and getattr(institution_client, "is_institution", False):
-        client_default = getattr(institution_client, "default_billed_to_company_id", None)
+        client_default = getattr(
+            institution_client, "default_billed_to_company_id", None
+        )
         if client_default is not None:
             cid = int(client_default)
             if cid != int(transport_company_id):
                 return cid
-        inst_name = (getattr(institution_client, "institution_name", None) or "").strip()
+        inst_name = (
+            getattr(institution_client, "institution_name", None) or ""
+        ).strip()
         if inst_name:
             co = (
-                Company.query.filter(
-                    func.lower(Company.name) == func.lower(inst_name)
-                )
+                Company.query.filter(func.lower(Company.name) == func.lower(inst_name))
                 .order_by(Company.id.asc())
                 .first()
             )
@@ -427,9 +435,7 @@ def resolve_clinic_company_id_for_institution_accept(
         inst_name = (getattr(institution, "name", None) or "").strip()
         if inst_name:
             co = (
-                Company.query.filter(
-                    func.lower(Company.name) == func.lower(inst_name)
-                )
+                Company.query.filter(func.lower(Company.name) == func.lower(inst_name))
                 .order_by(Company.id.asc())
                 .first()
             )

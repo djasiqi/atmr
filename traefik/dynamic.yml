@@ -21,14 +21,14 @@ http:
           - "Pragma"
         accessControlAllowCredentials: true
         addVaryHeader: true
-    # IP allowlist monitoring (Prometheus / Alertmanager)
+    # IP allowlist monitoring (Prometheus / Alertmanager).
+    # Les CIDR d'accès ops ne doivent PAS être versionnés (voir docs/deployment-ssh.md
+    # et deploy/traefik/dynamic.monitoring-ipallow.example.yml). En prod, remplacer
+    # le placeholder ci-dessous uniquement sur le serveur.
     monitoring-ipallow:
       ipAllowList:
         sourceRange:
-          - "176.65.139.231/32"
-          - "176.65.139.233/32"
-          - "176.65.139.236/32"
-          - "176.65.139.237/32"
+          - "127.0.0.1/32"
 
   routers:
     atmr_api:

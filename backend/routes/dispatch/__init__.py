@@ -25,16 +25,16 @@ dispatch_ns = Namespace(
 # Les imports sont nécessaires pour déclencher l'enregistrement des endpoints Flask-RESTX
 # Les cycles d'imports sont intentionnels et gérés par Python (pattern Flask-RESTX standard)
 from routes.dispatch import (  # noqa: E402
-    dispatch_advanced,  # type: ignore[reportUnusedImport]
-    dispatch_assignments,  # type: ignore[reportUnusedImport]
-    dispatch_delays,  # type: ignore[reportUnusedImport]
-    dispatch_metrics,  # type: ignore[reportUnusedImport]
-    dispatch_optimizer,  # type: ignore[reportUnusedImport]
-    dispatch_rl,  # type: ignore[reportUnusedImport]
-    dispatch_run,  # type: ignore[reportUnusedImport]
-    dispatch_runs,  # type: ignore[reportUnusedImport]
-    dispatch_scoring,  # type: ignore[reportUnusedImport]
-    dispatch_settings,  # type: ignore[reportUnusedImport]
+    dispatch_advanced,
+    dispatch_assignments,
+    dispatch_delays,
+    dispatch_metrics,
+    dispatch_optimizer,
+    dispatch_rl,
+    dispatch_run,
+    dispatch_runs,
+    dispatch_scoring,
+    dispatch_settings,
 )
 
 # Exports publics

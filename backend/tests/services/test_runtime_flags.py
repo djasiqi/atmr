@@ -1,4 +1,8 @@
-from services.infrastructure.runtime_flags import env_truthy, is_skip_socketio, is_ios_startup_fatal_recovery_disabled
+from services.infrastructure.runtime_flags import (
+    env_truthy,
+    is_ios_startup_fatal_recovery_disabled,
+    is_skip_socketio,
+)
 
 
 def test_env_truthy(monkeypatch):

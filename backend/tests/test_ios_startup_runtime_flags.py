@@ -36,7 +36,9 @@ def test_get_runtime_flags_status_includes_mobile_startup(monkeypatch):
 
 
 def test_version_check_includes_startup_runtime(client, monkeypatch):
-    from services.infrastructure.runtime_flags import IOS_STARTUP_FATAL_RECOVERY_DISABLED_ENV
+    from services.infrastructure.runtime_flags import (
+        IOS_STARTUP_FATAL_RECOVERY_DISABLED_ENV,
+    )
 
     monkeypatch.setenv(IOS_STARTUP_FATAL_RECOVERY_DISABLED_ENV, "true")
     response = client.post(
@@ -50,7 +52,9 @@ def test_version_check_includes_startup_runtime(client, monkeypatch):
 
 
 def test_feature_flags_runtime_status_endpoint(client, monkeypatch):
-    from services.infrastructure.runtime_flags import IOS_STARTUP_FATAL_RECOVERY_DISABLED_ENV
+    from services.infrastructure.runtime_flags import (
+        IOS_STARTUP_FATAL_RECOVERY_DISABLED_ENV,
+    )
 
     monkeypatch.setenv(IOS_STARTUP_FATAL_RECOVERY_DISABLED_ENV, "1")
     response = client.get("/api/feature-flags/runtime-status")
@@ -60,7 +64,9 @@ def test_feature_flags_runtime_status_endpoint(client, monkeypatch):
 
 
 def test_bootstrap_feature_flags_include_ios_startup_kill_switch(client, monkeypatch):
-    from services.infrastructure.runtime_flags import IOS_STARTUP_FATAL_RECOVERY_DISABLED_ENV
+    from services.infrastructure.runtime_flags import (
+        IOS_STARTUP_FATAL_RECOVERY_DISABLED_ENV,
+    )
 
     monkeypatch.setenv(IOS_STARTUP_FATAL_RECOVERY_DISABLED_ENV, "yes")
     response = client.get("/api/v1/auth/bootstrap")

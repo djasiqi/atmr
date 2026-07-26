@@ -441,11 +441,12 @@ else
   fi
 fi
 
-# Démarrer les services de production
-echo "🚀 Démarrage des services de production..."
+# Phase 1 : infra + backend uniquement (Celery différé après migrations — évite
+# expire_pending_change_requests et autres tâches contre un schéma non migré).
+echo "🚀 Démarrage infra + backend (Celery différé jusqu'aux migrations)..."
 # Pas de --remove-orphans : avec le même répertoire projet, Compose traiterait Grafana /
 # Prometheus / Alertmanager comme « orphelins » (absents de ce fichier) et les supprimerait.
-docker compose -f docker-compose.production.yml up -d
+docker compose -f docker-compose.production.yml up -d postgres pgbouncer redis osrm backend
 
 # Laisser le temps aux conteneurs de se stabiliser
 echo "⏳ Stabilisation des conteneurs (5 secondes)..."
@@ -464,8 +465,7 @@ for i in $(seq 1 30); do
   sleep 1
 done
 
-# Migrations Alembic avant redémarrage backend : évite fenêtre où l'API tourne contre un schéma
-# non à jour alors que RUN_ENTRYPOINT_MIGRATIONS=0 (sans double-upgrade au boot).
+# Migrations Alembic avant Celery / API pleine charge : RUN_ENTRYPOINT_MIGRATIONS=0 en prod.
 echo "🔄 Migrations Alembic (cycle safe prod)..."
 echo "   Connexion Alembic: hôte postgres:5432 (direct), pas pgbouncer — voir migration_exec."
 echo "📋 État avant upgrade:"
@@ -505,11 +505,14 @@ else
 fi
 echo "✅ Migrations appliquées"
 
+echo "🚀 Démarrage de la stack complète (Celery, ws-service, consommateurs…)..."
+docker compose -f docker-compose.production.yml up -d
+
 echo "🔐 Correction des permissions ML..."
 docker compose -f docker-compose.production.yml exec -T --user root backend bash -c "mkdir -p /app/data /app/data/ml /app/data/ml/models && chmod -R 755 /app/data && chown -R 999:999 /app/data" || true
 
-echo "🔄 Redémarrage du backend..."
-docker compose -f docker-compose.production.yml restart backend || true
+echo "🔄 Redémarrage backend + Celery (post-migrations)..."
+docker compose -f docker-compose.production.yml restart backend celery-worker celery-beat || true
 sleep 5
 
 wait_postgres_ready "PostgreSQL (après redémarrage backend)" 60

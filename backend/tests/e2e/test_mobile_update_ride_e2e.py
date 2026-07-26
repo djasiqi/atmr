@@ -18,7 +18,10 @@ from tests.e2e.helpers.e2e_helpers import (
 def _company_headers(app, company):
     from flask_jwt_extended import create_access_token
 
-    user = getattr(company, "user", None) or User.query.filter_by(id=company.user_id).first()
+    user = (
+        getattr(company, "user", None)
+        or User.query.filter_by(id=company.user_id).first()
+    )
     claims = {
         "role": UserRole.company.value,
         "company_id": company.id,
@@ -48,7 +51,9 @@ class TestMobileUpdateRideE2E:
         company = create_test_company(db)
         customer = create_test_client(db, company=company)
         db.session.flush()
-        booking = create_test_booking(db, client=customer, status=BookingStatus.ACCEPTED)
+        booking = create_test_booking(
+            db, client=customer, status=BookingStatus.ACCEPTED
+        )
         booking.company_id = company.id
         db.session.commit()
 

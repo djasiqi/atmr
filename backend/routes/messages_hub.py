@@ -92,8 +92,6 @@ class MessageHubThreads(Resource):
             return err
 
         try:
-            from services.messaging.conversation_service import ConversationService
-
             with route_duration_span(
                 "messages_hub.threads",
                 company_id=company_id,
@@ -309,7 +307,7 @@ class MessageHubAck(Resource):
         user = _hub_user()
         if not user:
             return {"error": "Utilisateur introuvable"}, 404
-        actor, err = _resolve_hub_access(user, company_id)
+        _actor, err = _resolve_hub_access(user, company_id)
         if err:
             return err
         ok = ack_message(message_id, company_id)

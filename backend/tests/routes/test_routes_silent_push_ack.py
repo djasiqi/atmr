@@ -28,11 +28,14 @@ def _driver_headers(client, sample_driver):
 @pytest.mark.integration
 def test_post_silent_ack_records_metric(client, sample_driver) -> None:
     headers = _driver_headers(client, sample_driver)
-    with patch(
-        "services.monitoring.driver_device_health_metrics.record_silent_push_wake"
-    ) as mock_wake, patch(
-        "services.monitoring.notification_metrics.track_silent_sync_duration"
-    ) as mock_duration:
+    with (
+        patch(
+            "services.monitoring.driver_device_health_metrics.record_silent_push_wake"
+        ) as mock_wake,
+        patch(
+            "services.monitoring.notification_metrics.track_silent_sync_duration"
+        ) as mock_duration,
+    ):
         response = client.post(
             "/api/v1/driver/me/push-notifications/silent-ack",
             json={
@@ -78,7 +81,11 @@ def test_post_silent_ack_invalid_duration_does_not_crash(client, sample_driver) 
     ):
         response = client.post(
             "/api/v1/driver/me/push-notifications/silent-ack",
-            json={"sync_type": "tracking_wakeup", "result": "acked", "duration_ms": "bad"},
+            json={
+                "sync_type": "tracking_wakeup",
+                "result": "acked",
+                "duration_ms": "bad",
+            },
             headers=headers,
         )
 

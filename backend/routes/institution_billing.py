@@ -14,8 +14,10 @@ from typing import Any, cast
 
 import sentry_sdk
 from flask import request
-from flask_jwt_extended import get_jwt, get_jwt_identity, verify_jwt_in_request
+from flask_jwt_extended import get_jwt, get_jwt_identity, jwt_required
+from flask_jwt_extended.exceptions import JWTExtendedException
 from flask_restx import Namespace, Resource, fields
+from jwt.exceptions import PyJWTError
 from marshmallow import Schema, validate
 from marshmallow import fields as ma_fields
 
@@ -113,6 +115,17 @@ BILLING_ALLOWED_ROLES = {
 }
 
 
+def _reraise_auth_errors(exc: Exception) -> None:
+    """Ne pas transformer les erreurs JWT/auth en 500 ni les remonter à Sentry."""
+    if isinstance(exc, (JWTExtendedException, PyJWTError)):
+        raise exc
+    if hasattr(exc, "code"):
+        raise exc
+    lowered = str(exc).lower()
+    if "signature has expired" in lowered or "token has expired" in lowered:
+        raise exc
+
+
 def get_billing_context() -> tuple[int, int | None, str | None]:
     """Récupère le contexte institution avec vérification rôle billing.
 
@@ -123,8 +136,6 @@ def get_billing_context() -> tuple[int, int | None, str | None]:
         Werkzeug Abort si non authentifié, pas institution, ou pas billing/admin
     """
     from flask import abort
-
-    verify_jwt_in_request()
 
     claims = get_jwt()
     institution_id = claims.get("institution_id")
@@ -173,6 +184,7 @@ class RequestBillingUpdate(Resource):
     @institution_billing_ns.response(403, "Accès refusé", permission_error_model)
     @institution_billing_ns.response(404, "Demande non trouvée", not_found_error_model)
     @institution_billing_ns.response(409, "Demande convertie", api_error_model)
+    @jwt_required()
     def put(self, request_id: int):
         """Modifie les informations de facturation d'une demande.
 
@@ -223,10 +235,6 @@ class RequestBillingUpdate(Resource):
             # Garder anciennes valeurs pour audit
             old_intent = transport_req.billing_intent
             old_details = transport_req.billing_details
-            before = {
-                "billing_intent": old_intent,
-                "billing_details": old_details,
-            }
 
             # Mettre à jour
             if validated.get("billing_intent"):
@@ -234,11 +242,6 @@ class RequestBillingUpdate(Resource):
 
             if "billing_details" in validated:
                 transport_req.billing_details = validated["billing_details"]
-
-            after = {
-                "billing_intent": transport_req.billing_intent,
-                "billing_details": transport_req.billing_details,
-            }
 
             db.session.commit()
 
@@ -283,6 +286,7 @@ class RequestBillingUpdate(Resource):
 
         except Exception as e:
             db.session.rollback()
+            _reraise_auth_errors(e)
             sentry_sdk.capture_exception(e)
             logger.error("[InstitutionBilling] PUT request/%s error: %s", request_id, e)
             return {"error": f"Erreur serveur: {e!s}"}, 500
@@ -304,6 +308,7 @@ class BookingBillingUpdate(Resource):
     @institution_billing_ns.response(403, "Accès refusé", permission_error_model)
     @institution_billing_ns.response(404, "Booking non trouvé", not_found_error_model)
     @institution_billing_ns.response(409, "Booking déjà facturé", api_error_model)
+    @jwt_required()
     def put(self, booking_id: int):
         """Modifie les informations de facturation d'un booking.
 
@@ -364,10 +369,10 @@ class BookingBillingUpdate(Resource):
 
             from services.institutions.booking_change_service import (
                 BILLING_CHANGE_REASON_CODES,
+                _billing_snapshot,
                 bump_edit_version,
                 check_version,
                 record_change_event,
-                _billing_snapshot,
             )
 
             code = (validated.get("billing_change_reason_code") or "").upper()
@@ -474,6 +479,7 @@ class BookingBillingUpdate(Resource):
 
         except Exception as e:
             db.session.rollback()
+            _reraise_auth_errors(e)
             sentry_sdk.capture_exception(e)
             logger.error("[InstitutionBilling] PUT booking/%s error: %s", booking_id, e)
             return {"error": f"Erreur serveur: {e!s}"}, 500

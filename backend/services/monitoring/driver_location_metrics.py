@@ -106,6 +106,7 @@ def _norm_transport(transport: str) -> str:
     t = (transport or "http").strip()
     return t if t in _VALID_TRANSPORTS else "http"
 
+
 if Counter is not None:
     _DEDUP_SKIPPED = Counter(
         "driver_location_dedup_skipped_total",
@@ -192,10 +193,7 @@ if Counter is not None:
     )
     _DRIVER_DEVICE_HEALTH_RECEIVED = Counter(
         "driver_device_health_received_total",
-        (
-            "Heartbeats device-status reçus du mobile (canal santé app, séparé "
-            "du GPS)"
-        ),
+        ("Heartbeats device-status reçus du mobile (canal santé app, séparé du GPS)"),
         ["constraint_reason"],
     )
     _BATCH_RATE_LIMITED = Counter(
@@ -596,7 +594,11 @@ def observe_osrm_request(*, operation: str, result: str, duration_sec: float) ->
     if not _metrics_enabled():
         return
     op = operation if operation in ("nearest", "match") else "_unknown"
-    res = result if result in ("success", "timeout", "error", "circuit_open") else "_unknown"
+    res = (
+        result
+        if result in ("success", "timeout", "error", "circuit_open")
+        else "_unknown"
+    )
     if _TRACKING_OSRM_REQUEST is not None:
         _TRACKING_OSRM_REQUEST.labels(operation=op, result=res).inc()
     if _TRACKING_OSRM_LATENCY is not None and duration_sec >= 0 and res == "success":
@@ -722,8 +724,14 @@ def inc_batch_points_observability(*, location_mode: str) -> None:
 def inc_batch_points_skipped(*, reason: str, location_mode: str) -> None:
     if not _metrics_enabled() or _BATCH_POINTS_SKIPPED is None:
         return
-    r = reason if reason in ("dedup", "validation", "forbidden_mode", "location_service") else "_unknown"
-    _BATCH_POINTS_SKIPPED.labels(reason=r, location_mode=_norm_mode(location_mode)).inc()
+    r = (
+        reason
+        if reason in ("dedup", "validation", "forbidden_mode", "location_service")
+        else "_unknown"
+    )
+    _BATCH_POINTS_SKIPPED.labels(
+        reason=r, location_mode=_norm_mode(location_mode)
+    ).inc()
 
 
 def inc_tracking_id_propagated(*, transport: str, propagated: bool) -> None:
@@ -740,14 +748,22 @@ def inc_canonical_redis_write(*, location_mode: str, transport: str) -> None:
     if not _metrics_enabled() or _CANONICAL_REDIS_WRITE is None:
         return
     t = _norm_transport(transport)
-    _CANONICAL_REDIS_WRITE.labels(location_mode=_norm_mode(location_mode), transport=t).inc()
+    _CANONICAL_REDIS_WRITE.labels(
+        location_mode=_norm_mode(location_mode), transport=t
+    ).inc()
 
 
 def inc_canonical_overwrite(*, outcome: str, location_mode: str) -> None:
     if not _metrics_enabled() or _CANONICAL_OVERWRITE is None:
         return
-    oc = outcome if outcome in ("accepted", "rejected_older_than_canonical") else "_unknown"
-    _CANONICAL_OVERWRITE.labels(outcome=oc, location_mode=_norm_mode(location_mode)).inc()
+    oc = (
+        outcome
+        if outcome in ("accepted", "rejected_older_than_canonical")
+        else "_unknown"
+    )
+    _CANONICAL_OVERWRITE.labels(
+        outcome=oc, location_mode=_norm_mode(location_mode)
+    ).inc()
 
 
 def observe_batch_latency_seconds(*, seconds: float) -> None:
@@ -781,26 +797,29 @@ def observe_gps_quality(
         try:
             acc = float(accuracy)
             if 0 < acc <= 500:
-                _GPS_ACCURACY.labels(platform=plat, location_mode=lm, transport=t).observe(acc)
+                _GPS_ACCURACY.labels(
+                    platform=plat, location_mode=lm, transport=t
+                ).observe(acc)
         except (TypeError, ValueError):
             pass
     if speed is not None and _GPS_SPEED is not None:
         try:
             spd = float(speed)
             # Expo speed often m/s — convert if plausible m/s range
-            if 0 <= abs(spd) <= 60:
-                spd_kmh = abs(spd) * 3.6
-            else:
-                spd_kmh = abs(spd)
+            spd_kmh = abs(spd) * 3.6 if 0 <= abs(spd) <= 60 else abs(spd)
             if spd_kmh <= 200:
-                _GPS_SPEED.labels(platform=plat, location_mode=lm, transport=t).observe(spd_kmh)
+                _GPS_SPEED.labels(platform=plat, location_mode=lm, transport=t).observe(
+                    spd_kmh
+                )
         except (TypeError, ValueError):
             pass
     if heading is not None and _GPS_HEADING is not None:
         try:
             hdg = float(heading)
             if 0 <= hdg <= 360:
-                _GPS_HEADING.labels(platform=plat, location_mode=lm, transport=t).observe(hdg)
+                _GPS_HEADING.labels(
+                    platform=plat, location_mode=lm, transport=t
+                ).observe(hdg)
         except (TypeError, ValueError):
             pass
     if provider is not None and _GPS_PROVIDER is not None:
@@ -898,7 +917,11 @@ def inc_tracking_invalid_config(*, reason: str) -> None:
     """Compteur config invalide au démarrage ingest_consumer (labels finis)."""
     if not _metrics_enabled() or _TRACKING_INVALID_CONFIG is None:
         return
-    r = reason if reason in _TRACKING_INVALID_CONFIG_REASONS else "async_without_persist"
+    r = (
+        reason
+        if reason in _TRACKING_INVALID_CONFIG_REASONS
+        else "async_without_persist"
+    )
     _TRACKING_INVALID_CONFIG.labels(reason=r).inc()
 
 

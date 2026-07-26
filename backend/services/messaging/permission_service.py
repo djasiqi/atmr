@@ -2,17 +2,15 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from models import Conversation, ConversationParticipant, Driver, Message, User
 from models.messaging_enums import (
-    ConversationType,
     DEFAULT_MESSAGE_VISIBILITY_TAGS,
-    ParticipantRole,
 )
 
 if TYPE_CHECKING:
-    from models.enums import UserRole
+    pass
 
 
 def _normalized_user_role(user: User) -> str:
@@ -61,9 +59,7 @@ class MessagingPermissionService:
         role = _normalized_user_role(user)
         if role != "COMPANY":
             return False
-        if int(conversation.company_id) != _company_id_for_user(user):
-            return False
-        return True
+        return int(conversation.company_id) == _company_id_for_user(user)
 
     @staticmethod
     def can_create_group(user: User) -> bool:
@@ -103,9 +99,10 @@ class MessagingPermissionService:
     ) -> bool:
         if conversation is None:
             return False
-        if not participant or not participant.can_read:
-            if not MessagingPermissionService.can_read_conversation(user, conversation):
-                return False
+        if (
+            not participant or not participant.can_read
+        ) and not MessagingPermissionService.can_read_conversation(user, conversation):
+            return False
         # V1: visibility_scope is all_participants — no tag filtering yet
         _ = conversation.visibility_scope
         tags = message.visibility_tags or DEFAULT_MESSAGE_VISIBILITY_TAGS

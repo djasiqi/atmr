@@ -77,9 +77,7 @@ def _provider_mismatch(token: DeviceToken) -> bool:
     value = token.token or ""
     if provider == "expo" and looks_like_fcm_token(value):
         return True
-    if provider == "fcm" and looks_like_expo_token(value):
-        return True
-    return False
+    return bool(provider == "fcm" and looks_like_expo_token(value))
 
 
 def classify_token(token: DeviceToken, *, now: datetime | None = None) -> str:

@@ -191,9 +191,9 @@ class TestCas3RealMidnightConfirmed:
             pytest.skip("test_company and test_client required")
 
         outbound = _future_depart(14, 0)
-        midnight = outbound.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(
-            days=1
-        )
+        midnight = outbound.replace(
+            hour=0, minute=0, second=0, microsecond=0
+        ) + timedelta(days=1)
         tr = _base_transport_request(
             db,
             institution,
@@ -304,9 +304,11 @@ class TestCas4MultiStopNoInheritance:
             assert leg_booking.scheduled_time is None
             assert leg_booking.time_confirmed is False
             # Pas d'héritage : l'heure du leg 0 ne doit pas apparaître sur les suivants
-            assert leg_booking.scheduled_time != depart_at.replace(
-                hour=8, minute=0, second=0, microsecond=0
-            ) or leg_booking.scheduled_time is None
+            assert (
+                leg_booking.scheduled_time
+                != depart_at.replace(hour=8, minute=0, second=0, microsecond=0)
+                or leg_booking.scheduled_time is None
+            )
 
 
 class TestCas4bReturnLegPastTimeAccepted:
@@ -320,7 +322,9 @@ class TestCas4bReturnLegPastTimeAccepted:
 
         route_group_id = str(uuid.uuid4())
         depart_at = _future_depart(8, 0)
-        past_return = now_local().replace(second=0, microsecond=0) - timedelta(minutes=5)
+        past_return = now_local().replace(second=0, microsecond=0) - timedelta(
+            minutes=5
+        )
 
         tr = _base_transport_request(
             db,
@@ -411,9 +415,9 @@ class TestCas5AuditNoNewSentinel:
 
         # Minuit réel confirmé
         out_day = _future_depart(14, 0)
-        midnight = out_day.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(
-            days=1
-        )
+        midnight = out_day.replace(
+            hour=0, minute=0, second=0, microsecond=0
+        ) + timedelta(days=1)
         tr2 = _base_transport_request(
             db,
             institution,

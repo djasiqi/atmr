@@ -4,7 +4,7 @@ from logging.config import fileConfig
 
 from alembic import context
 from flask import current_app, has_app_context
-from sqlalchemy import MetaData, engine_from_config, pool
+from sqlalchemy import engine_from_config, pool
 from sqlalchemy.engine import URL
 
 # ✅ MIGRATION-SAFE: Pour éviter que eventlet.monkey_patch() casse les transactions,

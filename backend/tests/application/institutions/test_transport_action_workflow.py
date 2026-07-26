@@ -25,18 +25,22 @@ def test_status_effect_invalid_rejected():
         assert_status_effect_combo(
             TransportActionStatus.COMPLETED, TransportActionEffectStatus.FAILED
         )
-        assert False, "devrait lever"
+        raise AssertionError("devrait lever")
     except ValueError:
         pass
 
 
 def test_classify_cancellation():
-    assert classify_action_type(set(), is_cancellation=True) == TransportActionType.CANCELLATION
+    assert (
+        classify_action_type(set(), is_cancellation=True)
+        == TransportActionType.CANCELLATION
+    )
 
 
 def test_classify_time_change():
     assert (
-        classify_action_type({"scheduled_time": True}) == TransportActionType.CHANGE_TIME
+        classify_action_type({"scheduled_time": True})
+        == TransportActionType.CHANGE_TIME
     )
 
 

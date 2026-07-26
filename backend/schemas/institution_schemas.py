@@ -6,8 +6,8 @@ Inclut les schemas pour:
 - TransportRequest (CRUD demandes de transport)
 """
 
-from datetime import date, timedelta
 import re
+from datetime import date, timedelta
 
 import pytz
 from marshmallow import (
@@ -1377,12 +1377,18 @@ class AssignExternalCarrierSchema(Schema):
         unknown = EXCLUDE
 
     name = fields.Str(required=True, validate=validate.Length(min=1, max=255))
-    phone = fields.Str(allow_none=True, load_default=None, validate=validate.Length(max=50))
-    email = fields.Str(allow_none=True, load_default=None, validate=validate.Length(max=255))
+    phone = fields.Str(
+        allow_none=True, load_default=None, validate=validate.Length(max=50)
+    )
+    email = fields.Str(
+        allow_none=True, load_default=None, validate=validate.Length(max=255)
+    )
     reference = fields.Str(
         allow_none=True, load_default=None, validate=validate.Length(max=100)
     )
-    reason = fields.Str(allow_none=True, load_default=None, validate=validate.Length(max=120))
+    reason = fields.Str(
+        allow_none=True, load_default=None, validate=validate.Length(max=120)
+    )
 
     @pre_load
     def strip_strings(self, data, **_kwargs):
@@ -1470,7 +1476,9 @@ class InstitutionUserInviteSchema(Schema):
                 return {"email": ["L'email est requis en mode invitation par email"]}
         elif mode == "username" and (not username or not str(username).strip()):
             return {
-                "username": ["L'identifiant est requis en mode création par identifiant"]
+                "username": [
+                    "L'identifiant est requis en mode création par identifiant"
+                ]
             }
         return None
 
@@ -1538,7 +1546,9 @@ class InstitutionUserUpdateProfileSchema(Schema):
     @staticmethod
     def validate_forbidden_fields(data: dict) -> dict | None:
         """Rejette les champs d'authentification / permissions."""
-        forbidden = InstitutionUserUpdateProfileSchema.FORBIDDEN_FIELDS & set(data.keys())
+        forbidden = InstitutionUserUpdateProfileSchema.FORBIDDEN_FIELDS & set(
+            data.keys()
+        )
         if forbidden:
             return {
                 field: ["Champ non modifiable via cet endpoint"]

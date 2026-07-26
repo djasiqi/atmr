@@ -29,7 +29,9 @@ def _req(**kwargs):
 class TestOfferAcceptRules:
     def test_has_confirmed_departure(self):
         assert has_confirmed_departure(
-            _req(pickup_time_confirmed=True, scheduled_time=datetime(2026, 6, 22, 19, 15))
+            _req(
+                pickup_time_confirmed=True, scheduled_time=datetime(2026, 6, 22, 19, 15)
+            )
         )
         assert not has_confirmed_departure(
             _req(
@@ -83,6 +85,9 @@ class TestOfferAcceptRules:
         )
         err = validate_accept_pickup_rules(req, proposed_pickup_time=None)
         assert err is not None
-        assert validate_accept_pickup_rules(
-            req, proposed_pickup_time=datetime.now() + timedelta(minutes=15)
-        ) is None
+        assert (
+            validate_accept_pickup_rules(
+                req, proposed_pickup_time=datetime.now() + timedelta(minutes=15)
+            )
+            is None
+        )

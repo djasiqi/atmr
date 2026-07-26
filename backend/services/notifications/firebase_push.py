@@ -295,7 +295,9 @@ def send_fcm_ios(
             data=str_data,
             apns=messaging.APNSConfig(
                 headers={"apns-push-type": "background", "apns-priority": "5"},
-                payload=messaging.APNSPayload(aps=messaging.Aps(content_available=True)),
+                payload=messaging.APNSPayload(
+                    aps=messaging.Aps(content_available=True)
+                ),
             ),
         )
 

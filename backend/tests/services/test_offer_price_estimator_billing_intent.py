@@ -159,12 +159,17 @@ class TestEstimateOfferPriceMultiLeg:
             return_value=MagicMock(preferential_rate=Decimal("35.00")),
         ):
             patches = _patch_company_profile(45.0)
-            with patches[0], patches[1], patches[2], patches[3]:
-                with patch(
+            with (
+                patches[0],
+                patches[1],
+                patches[2],
+                patches[3],
+                patch(
                     "services.pricing.offer_price_estimator._build_pricing_context",
                     return_value={},
-                ):
-                    result = estimate_offer_price(offer)
+                ),
+            ):
+                result = estimate_offer_price(offer)
 
         assert result is not None
         assert result["amount"] == 80.0
@@ -271,31 +276,36 @@ class TestEstimateMatchesAcceptOfferAmount:
     def test_estimate_and_resolve_same_amount_for_patient_billing(self):
         """Estimation offre et résolveur unitaire produisent le même montant (patient)."""
         patches = _patch_company_profile(45.0)
-        with patches[0], patches[1], patches[2], patches[3]:
-            with patch(
+        with (
+            patches[0],
+            patches[1],
+            patches[2],
+            patches[3],
+            patch(
                 "services.pricing.offer_price_estimator._build_pricing_context",
                 return_value={},
-            ):
-                with patch(
-                    "services.pricing.offer_price_estimator._resolve_institution_client_readonly",
-                    return_value=MagicMock(preferential_rate=Decimal("35.00")),
-                ):
-                    tr = _AcceptTransportRequest(billing_intent="patient")
-                    offer = _Offer(company_id=5, transport_request=tr)  # type: ignore[arg-type]
-                    estimate = estimate_offer_price(offer)
-                    resolved = resolve_institution_price(
-                        company_id=5,
-                        effective_billing_intent="patient",
-                        preferential_rate=Decimal("35.00"),
-                        pickup_location=tr.pickup_location,
-                        dropoff_location=tr.dropoff_location,
-                    )
+            ),
+            patch(
+                "services.pricing.offer_price_estimator._resolve_institution_client_readonly",
+                return_value=MagicMock(preferential_rate=Decimal("35.00")),
+            ),
+        ):
+            tr = _AcceptTransportRequest(billing_intent="patient")
+            offer = _Offer(company_id=5, transport_request=tr)  # type: ignore[arg-type]
+            estimate = estimate_offer_price(offer)
+            resolved = resolve_institution_price(
+                company_id=5,
+                effective_billing_intent="patient",
+                preferential_rate=Decimal("35.00"),
+                pickup_location=tr.pickup_location,
+                dropoff_location=tr.dropoff_location,
+            )
 
-        assert estimate is not None
-        assert estimate["amount"] == 45.0
-        assert estimate["source"] == SOURCE_COMPANY_PROFILE
-        assert resolved["amount"] == estimate["amount"]
-        assert resolved["source"] == estimate["source"]
+            assert estimate is not None
+            assert estimate["amount"] == 45.0
+            assert estimate["source"] == SOURCE_COMPANY_PROFILE
+            assert resolved["amount"] == estimate["amount"]
+            assert resolved["source"] == estimate["source"]
 
     def test_estimate_and_resolve_same_amount_for_institution_billing(self):
         """Estimation offre et résolveur unitaire produisent le même montant (institution)."""

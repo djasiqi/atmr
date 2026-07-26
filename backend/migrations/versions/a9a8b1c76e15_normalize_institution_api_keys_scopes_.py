@@ -71,14 +71,10 @@ def upgrade():
     )
     # Supprime les colonnes parasites (drift) absentes du modèle/migrations.
     op.execute(
-        sa.text(
-            "ALTER TABLE institution_api_keys DROP COLUMN IF EXISTS public_id;"
-        )
+        sa.text("ALTER TABLE institution_api_keys DROP COLUMN IF EXISTS public_id;")
     )
     op.execute(
-        sa.text(
-            "ALTER TABLE institution_api_keys DROP COLUMN IF EXISTS is_active;"
-        )
+        sa.text("ALTER TABLE institution_api_keys DROP COLUMN IF EXISTS is_active;")
     )
 
 

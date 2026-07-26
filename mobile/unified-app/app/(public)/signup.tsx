@@ -428,7 +428,7 @@ export default function SignupScreen() {
         activation_session_id: string;
         masked_email: string;
         masked_phone: string;
-        email_sent: boolean;
+        email_sent: boolean | null;
         sms_sent: boolean;
       }>("/auth/register", {
         username: buildUsername(firstName, lastName, email),
@@ -453,9 +453,23 @@ export default function SignupScreen() {
         },
       } as any);
     } catch (e: any) {
+      const data = e?.response?.data || {};
+      const sessionId = data.activation_session_id;
+      if (e?.response?.status === 502 && sessionId) {
+        router.replace({
+          pathname: "/(public)/activate",
+          params: {
+            activation_session_id: sessionId,
+            masked_email: data.masked_email ?? "",
+            masked_phone: data.masked_phone ?? "",
+            ...(params.next ? { next: params.next } : {}),
+          },
+        } as any);
+        return;
+      }
       const msg =
-        e?.response?.data?.message ||
-        e?.response?.data?.error ||
+        data.message ||
+        data.error ||
         (e instanceof Error ? e.message : null) ||
         "Inscription impossible. Vérifiez vos informations.";
       setError(msg);

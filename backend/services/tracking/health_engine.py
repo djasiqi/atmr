@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import UTC, datetime
 from enum import StrEnum
 
 logger = logging.getLogger(__name__)
@@ -54,7 +53,12 @@ def compute_driver_health_state(
 
     if mission_active and gps_age is not None and gps_age > 300:
         return TrackingHealthState.BROKEN
-    if mission_active and constraint == "fix_stale" and gps_age is not None and gps_age > 120:
+    if (
+        mission_active
+        and constraint == "fix_stale"
+        and gps_age is not None
+        and gps_age > 120
+    ):
         return TrackingHealthState.DEGRADED
     if tracking_active and gps_age is not None and gps_age >= 60:
         fsm = str(health.get("fsm_state") or "").upper()

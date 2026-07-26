@@ -85,14 +85,14 @@ def validate_pdf(pdf_bytes: bytes) -> list[tuple[str, bool, str]]:
             )
             break
     if not orphan:
-        checks.append(
-            ("PDF-TOTAL-01 : dernier transport + totaux", True, "OK")
-        )
+        checks.append(("PDF-TOTAL-01 : dernier transport + totaux", True, "OK"))
 
     # Info seulement : l'extraction pypdf mélange Client/Date/Montant — contrôle visuel recommandé.
     over_two_count = 0
     for page_text in pages:
-        for m in re.finditer(r"Trajet\s*:\s*(.+?)(?=\n\s*\d+\.\d{2}\b)", page_text, re.DOTALL):
+        for m in re.finditer(
+            r"Trajet\s*:\s*(.+?)(?=\n\s*\d+\.\d{2}\b)", page_text, re.DOTALL
+        ):
             block = m.group(1).strip()
             if 1 + block.count("\n") > 2:
                 over_two_count += 1
@@ -121,7 +121,9 @@ def main() -> int:
     with app.app_context():
         invoice = Invoice.query.filter_by(invoice_number=args.invoice_number).first()
         if invoice is None:
-            print(f"ERREUR: facture introuvable — {args.invoice_number}", file=sys.stderr)
+            print(
+                f"ERREUR: facture introuvable — {args.invoice_number}", file=sys.stderr
+            )
             return 1
 
         pdf_service = PDFService()

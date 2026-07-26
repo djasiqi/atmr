@@ -9,13 +9,13 @@ from unittest.mock import patch
 
 from services.institutions.mission_report_context import collect_mission_report_context
 from services.institutions.mission_report_pdf import (
-    build_mission_audit_report_pdf,
-    build_operational_voucher_pdf,
+    _MAX_VOUCHER_NOTES,
     _resolve_logo,
     _step_time_line,
     _truncate_field,
     _truncate_medical_notes,
-    _MAX_VOUCHER_NOTES,
+    build_mission_audit_report_pdf,
+    build_operational_voucher_pdf,
 )
 
 
@@ -124,7 +124,8 @@ def _tr(**kwargs):
         "mission_type": "patient_transport",
         "billing_intent": "institution",
         "status": "CONVERTED",
-        "pickup_location": "Chemin des Courbes 9, 1247 Anières " + ("x" * 180 if kwargs.get("long_address") else ""),
+        "pickup_location": "Chemin des Courbes 9, 1247 Anières "
+        + ("x" * 180 if kwargs.get("long_address") else ""),
         "dropoff_location": "Clinique Beaulieu",
         "is_round_trip": False,
         "multi_stop": False,
@@ -136,7 +137,10 @@ def _tr(**kwargs):
         "return_date": None,
         "legs": [],
         "external_reference": None,
-        "contact_on_site": {"requester_service": "Admissions", "requester_name": "Marc Mouchet"},
+        "contact_on_site": {
+            "requester_service": "Admissions",
+            "requester_name": "Marc Mouchet",
+        },
         "notes": kwargs.get("notes", "Note courte"),
         "floor_elevator_info": "Étage 3",
         "mobility": {"wheelchair": True},
@@ -154,15 +158,24 @@ def _tr(**kwargs):
     defaults.update(kwargs)
     tr = SimpleNamespace(**defaults)
     tr.institution = _institution()
-    tr.patient = kwargs.get("patient") if "patient" in kwargs else _patient(long_name=kwargs.get("long_name", False))
+    tr.patient = (
+        kwargs.get("patient")
+        if "patient" in kwargs
+        else _patient(long_name=kwargs.get("long_name", False))
+    )
     tr.booking = kwargs.get("booking")
     tr.accepted_by_company = kwargs.get(
         "accepted_by_company",
-        SimpleNamespace(name="Emmenez Moi", contact_phone="079", contact_email="e@em.com"),
+        SimpleNamespace(
+            name="Emmenez Moi", contact_phone="079", contact_email="e@em.com"
+        ),
     )
     tr.get_mobility = lambda: defaults.get("mobility") or {}
     tr._get_creator_name = lambda: "Marc Mouchet"
-    tr._serialize_booking_summary = lambda: {"is_invoiced": False, "is_cancellation_billable": False}
+    tr._serialize_booking_summary = lambda: {
+        "is_invoiced": False,
+        "is_cancellation_billable": False,
+    }
     return tr
 
 
@@ -201,7 +214,8 @@ def _mock_timeline_and_messages(mock_timeline, mock_bmsg, *, events=0, messages=
                 if i == 3
                 else "offer_sent"
             ),
-            created_at=datetime(2026, 6, 12, 20, 48, tzinfo=UTC) + timedelta(minutes=i * 30),
+            created_at=datetime(2026, 6, 12, 20, 48, tzinfo=UTC)
+            + timedelta(minutes=i * 30),
             actor_type="system" if i % 2 == 0 else "driver",
             actor_user_id=None,
             payload={"driver_name": "Chauffeur", "company_name": "Emmenez Moi"},
@@ -217,10 +231,14 @@ def _mock_timeline_and_messages(mock_timeline, mock_bmsg, *, events=0, messages=
         )
         for i in range(messages)
     ]
-    mock_bmsg.query.filter_by.return_value.order_by.return_value.count.return_value = len(msgs)
+    mock_bmsg.query.filter_by.return_value.order_by.return_value.count.return_value = (
+        len(msgs)
+    )
     mock_bmsg.query.filter_by.return_value.order_by.return_value.all.return_value = msgs
     if len(msgs) > 200:
-        mock_bmsg.query.filter_by.return_value.order_by.return_value.offset.return_value.all.return_value = msgs[-200:]
+        mock_bmsg.query.filter_by.return_value.order_by.return_value.offset.return_value.all.return_value = msgs[
+            -200:
+        ]
 
 
 def _pdf_text(pdf_bytes: bytes) -> str:
@@ -315,7 +333,9 @@ class TestMissionReportPdf:
 
     def test_pdf01f_stress_render(self, mock_bmsg, mock_timeline):
         _mock_timeline_and_messages(mock_timeline, mock_bmsg, events=15, messages=20)
-        long_notes = "\n\n".join([f"Paragraphe médical {i} " + ("détail " * 40) for i in range(5)])
+        long_notes = "\n\n".join(
+            [f"Paragraphe médical {i} " + ("détail " * 40) for i in range(5)]
+        )
         tr = _tr(
             booking=_booking(),
             long_name=True,
@@ -344,7 +364,9 @@ class TestMissionReportPdf:
 
     def test_v11_milestones_and_v2_certificate_in_audit(self, mock_bmsg, mock_timeline):
         _mock_timeline_and_messages(mock_timeline, mock_bmsg, events=5, messages=1)
-        user = SimpleNamespace(first_name="Jean", last_name="Dupont", phone="079 111 22 33")
+        user = SimpleNamespace(
+            first_name="Jean", last_name="Dupont", phone="079 111 22 33"
+        )
         driver = SimpleNamespace(user=user, vehicle_assigned="Mercedes Vito")
         booking = _booking()
         booking.driver = driver
@@ -364,7 +386,10 @@ class TestMissionReportPdf:
         if text:
             assert "Jalons opérationnels" not in text
             assert "Certificat de réalisation" not in text
-            assert "INFORMATIONS ADMINISTRATIVES" in text.upper() or "Informations administratives" in text
+            assert (
+                "INFORMATIONS ADMINISTRATIVES" in text.upper()
+                or "Informations administratives" in text
+            )
 
     def test_pr1_visual_elements(self, mock_bmsg, mock_timeline):
         _mock_timeline_and_messages(mock_timeline, mock_bmsg, events=2, messages=1)
@@ -425,16 +450,22 @@ class TestMissionReportPdf:
             assert "Offre envoyée" not in text
             assert "Historique complet" not in text
 
-    def test_admin_block_replaces_billing_and_traceability(self, mock_bmsg, mock_timeline):
+    def test_admin_block_replaces_billing_and_traceability(
+        self, mock_bmsg, mock_timeline
+    ):
         _mock_timeline_and_messages(mock_timeline, mock_bmsg, events=2)
         tr = _tr(booking=_booking())
         ctx = collect_mission_report_context(tr, _institution(), variant="audit")
         pdf = build_mission_audit_report_pdf(ctx)
         text = _pdf_text(pdf)
         if text:
-            assert "INFORMATIONS ADMINISTRATIVES" in text.upper() or "Informations administratives" in text
+            assert (
+                "INFORMATIONS ADMINISTRATIVES" in text.upper()
+                or "Informations administratives" in text
+            )
             assert "■ FACTURATION" not in text.upper()
-            assert "■ TRAÇABILITÉ" not in text.upper() and "■ TRACABILITE" not in text.upper()
+            assert "■ TRAÇABILITÉ" not in text.upper()
+            assert "■ TRACABILITE" not in text.upper()
             # Émetteur retiré du bloc admin (porté par le footer uniquement)
             assert "Document généré par LIRIE" not in text
 
@@ -448,31 +479,45 @@ class TestMissionReportPdf:
         text = _pdf_text(pdf)
         if text:
             assert "Aucune pièce jointe" not in text
-            assert "PIÈCES JOINTES" not in text.upper() and "PIECES JOINTES" not in text.upper()
+            assert "PIÈCES JOINTES" not in text.upper()
+            assert "PIECES JOINTES" not in text.upper()
 
     def test_medical_section_conditional(self, mock_bmsg, mock_timeline):
         mock_timeline.return_value = []
         mock_bmsg.query.filter_by.return_value.order_by.return_value.count.return_value = 0
-        tr_empty = _tr(booking=_booking(), notes="", floor_elevator_info="", mobility={})
-        ctx_empty = collect_mission_report_context(tr_empty, _institution(), variant="audit")
+        tr_empty = _tr(
+            booking=_booking(), notes="", floor_elevator_info="", mobility={}
+        )
+        ctx_empty = collect_mission_report_context(
+            tr_empty, _institution(), variant="audit"
+        )
         pdf_empty = build_mission_audit_report_pdf(ctx_empty)
         text_empty = _pdf_text(pdf_empty)
         if text_empty:
-            assert "BESOINS MÉDICAUX" not in text_empty.upper() and "Besoins médicaux" not in text_empty
+            assert "BESOINS MÉDICAUX" not in text_empty.upper()
+            assert "Besoins médicaux" not in text_empty
 
         tr_med = _tr(booking=_booking(), mobility={"wheelchair": True})
-        ctx_med = collect_mission_report_context(tr_med, _institution(), variant="audit")
+        ctx_med = collect_mission_report_context(
+            tr_med, _institution(), variant="audit"
+        )
         pdf_med = build_mission_audit_report_pdf(ctx_med)
         text_med = _pdf_text(pdf_med)
         if text_med:
-            assert "Besoins médicaux" in text_med or "BESOINS MÉDICAUX" in text_med.upper()
+            assert (
+                "Besoins médicaux" in text_med or "BESOINS MÉDICAUX" in text_med.upper()
+            )
 
-        ctx_voucher_empty = collect_mission_report_context(tr_empty, _institution(), variant="operational")
+        ctx_voucher_empty = collect_mission_report_context(
+            tr_empty, _institution(), variant="operational"
+        )
         text_voucher_empty = _pdf_text(build_operational_voucher_pdf(ctx_voucher_empty))
         if text_voucher_empty:
             assert "BESOINS PARTICULIERS" not in text_voucher_empty.upper()
 
-        ctx_voucher_med = collect_mission_report_context(tr_med, _institution(), variant="operational")
+        ctx_voucher_med = collect_mission_report_context(
+            tr_med, _institution(), variant="operational"
+        )
         text_voucher_med = _pdf_text(build_operational_voucher_pdf(ctx_voucher_med))
         if text_voucher_med:
             assert "BESOINS PARTICULIERS" in text_voucher_med.upper()
@@ -623,7 +668,9 @@ class TestMissionReportPdf:
         }
         for mobility_key, expected in cases.items():
             tr = _tr(booking=_booking(), mobility={mobility_key: True})
-            ctx = collect_mission_report_context(tr, _institution(), variant="operational")
+            ctx = collect_mission_report_context(
+                tr, _institution(), variant="operational"
+            )
             text = _pdf_text(build_operational_voucher_pdf(ctx))
             if text:
                 assert "Type transport" in text
@@ -671,7 +718,9 @@ class TestMissionReportPdf:
     def test_voucher_driver_conditional(self, mock_bmsg, mock_timeline):
         _mock_timeline_and_messages(mock_timeline, mock_bmsg)
         tr_no_driver = _tr(booking=_booking())
-        ctx_no = collect_mission_report_context(tr_no_driver, _institution(), variant="operational")
+        ctx_no = collect_mission_report_context(
+            tr_no_driver, _institution(), variant="operational"
+        )
         text_no = _pdf_text(build_operational_voucher_pdf(ctx_no))
         if text_no:
             assert "Khalid" not in text_no
@@ -680,7 +729,9 @@ class TestMissionReportPdf:
         user = SimpleNamespace(first_name="Khalid", last_name="ALAOUI", phone="079")
         driver = SimpleNamespace(user=user, vehicle_assigned="Mercedes Vito")
         tr_with = _tr(booking=_booking(driver=driver, driver_id=1))
-        ctx_with = collect_mission_report_context(tr_with, _institution(), variant="operational")
+        ctx_with = collect_mission_report_context(
+            tr_with, _institution(), variant="operational"
+        )
         text_with = _pdf_text(build_operational_voucher_pdf(ctx_with))
         if text_with:
             assert "Khalid" in text_with
@@ -694,16 +745,23 @@ class TestMissionReportPdf:
             contact_on_site={},
         )
         tr_no_contact._get_creator_name = lambda: None
-        ctx_no = collect_mission_report_context(tr_no_contact, _institution(), variant="operational")
+        ctx_no = collect_mission_report_context(
+            tr_no_contact, _institution(), variant="operational"
+        )
         text_no = _pdf_text(build_operational_voucher_pdf(ctx_no))
         if text_no:
             assert "Contact" not in text_no
 
         tr_contact = _tr(
             booking=_booking(),
-            contact_on_site={"requester_name": "Marc Mouchet", "requester_phone": "022 000 00 00"},
+            contact_on_site={
+                "requester_name": "Marc Mouchet",
+                "requester_phone": "022 000 00 00",
+            },
         )
-        ctx_yes = collect_mission_report_context(tr_contact, _institution(), variant="operational")
+        ctx_yes = collect_mission_report_context(
+            tr_contact, _institution(), variant="operational"
+        )
         text_yes = _pdf_text(build_operational_voucher_pdf(ctx_yes))
         if text_yes:
             assert "Contact" in text_yes
@@ -712,8 +770,12 @@ class TestMissionReportPdf:
     def test_voucher_medical_conditional(self, mock_bmsg, mock_timeline):
         mock_timeline.return_value = []
         mock_bmsg.query.filter_by.return_value.order_by.return_value.count.return_value = 0
-        tr_empty = _tr(booking=_booking(), notes="", floor_elevator_info="", mobility={})
-        ctx_empty = collect_mission_report_context(tr_empty, _institution(), variant="operational")
+        tr_empty = _tr(
+            booking=_booking(), notes="", floor_elevator_info="", mobility={}
+        )
+        ctx_empty = collect_mission_report_context(
+            tr_empty, _institution(), variant="operational"
+        )
         text_empty = _pdf_text(build_operational_voucher_pdf(ctx_empty))
         if text_empty:
             assert "BESOINS PARTICULIERS" not in text_empty.upper()
@@ -725,7 +787,9 @@ class TestMissionReportPdf:
             notes=long_remark,
             mobility={"wheelchair": True},
         )
-        ctx_med = collect_mission_report_context(tr_med, _institution(), variant="operational")
+        ctx_med = collect_mission_report_context(
+            tr_med, _institution(), variant="operational"
+        )
         text_med = _pdf_text(build_operational_voucher_pdf(ctx_med))
         if text_med:
             assert "BESOINS PARTICULIERS" in text_med.upper()
@@ -739,7 +803,9 @@ class TestMissionReportPdf:
     def test_voucher_needs_alert_before_transport(self, mock_bmsg, mock_timeline):
         mock_timeline.return_value = []
         mock_bmsg.query.filter_by.return_value.order_by.return_value.count.return_value = 0
-        tr = _tr(booking=_booking(), notes="Transport couché", mobility={"wheelchair": True})
+        tr = _tr(
+            booking=_booking(), notes="Transport couché", mobility={"wheelchair": True}
+        )
         ctx = collect_mission_report_context(tr, _institution(), variant="operational")
         text = _pdf_text(build_operational_voucher_pdf(ctx))
         if text:
@@ -773,7 +839,9 @@ class TestMissionReportPdf:
 
     def test_voucher_patient_billing_shows_address(self, mock_bmsg, mock_timeline):
         """PDF-VOUCHER-04 : facturation patient → adresse patient + mention facturation."""
-        from services.institutions.mission_report_pdf import _build_voucher_identity_table
+        from services.institutions.mission_report_pdf import (
+            _build_voucher_identity_table,
+        )
 
         _mock_timeline_and_messages(mock_timeline, mock_bmsg)
         tr = _tr(
@@ -792,7 +860,9 @@ class TestMissionReportPdf:
 
     def test_voucher_institution_billing_hides_address(self, mock_bmsg, mock_timeline):
         """PDF-VOUCHER-04 : facturation institution → ni adresse ni facturation."""
-        from services.institutions.mission_report_pdf import _build_voucher_identity_table
+        from services.institutions.mission_report_pdf import (
+            _build_voucher_identity_table,
+        )
 
         _mock_timeline_and_messages(mock_timeline, mock_bmsg)
         tr = _tr(
@@ -808,7 +878,9 @@ class TestMissionReportPdf:
 
     def test_voucher_insurance_billing_hides_address(self, mock_bmsg, mock_timeline):
         """PDF-VOUCHER-04 : facturation assurance → ni adresse ni facturation."""
-        from services.institutions.mission_report_pdf import _build_voucher_identity_table
+        from services.institutions.mission_report_pdf import (
+            _build_voucher_identity_table,
+        )
 
         _mock_timeline_and_messages(mock_timeline, mock_bmsg)
         tr = _tr(
@@ -871,7 +943,9 @@ class TestMissionReportPdf:
         assert pdf[:4] == b"%PDF"
 
     def test_voucher_external_carrier_label(self, mock_bmsg, mock_timeline):
-        from services.institutions.mission_report_pdf import _build_voucher_identity_table
+        from services.institutions.mission_report_pdf import (
+            _build_voucher_identity_table,
+        )
 
         _mock_timeline_and_messages(mock_timeline, mock_bmsg)
         tr = _tr(
@@ -958,7 +1032,9 @@ class TestOperationalVoucherUxLayouts:
         texts = _flow_texts(_layout_voucher_operational(pres, VoucherLayoutOptions()))
         if texts:
             time_idx = next(i for i, t in enumerate(texts) if "11:30" in t)
-            addr_idx = next(i for i, t in enumerate(texts) if "Courbes" in t or "Anières" in t)
+            addr_idx = next(
+                i for i, t in enumerate(texts) if "Courbes" in t or "Anières" in t
+            )
             assert time_idx < addr_idx
 
     def test_operational_patient_billing(self, mock_bmsg, mock_timeline):

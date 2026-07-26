@@ -9,6 +9,7 @@ Revises: 20260611_institution_timeline
 Create Date: 2026-06-11 21:31:07.834463
 
 """
+
 from alembic import op
 import sqlalchemy as sa
 

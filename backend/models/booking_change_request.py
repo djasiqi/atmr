@@ -178,9 +178,7 @@ class BookingChangeRequest(db.Model):
         Integer, nullable=True
     )
     rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
-    billing_assessment_id: Mapped[int | None] = mapped_column(
-        BigInteger, nullable=True
-    )
+    billing_assessment_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
@@ -280,7 +278,9 @@ class BookingChangeRequest(db.Model):
             "requested_by_role": self.requested_by_role,
             "responded_by_user_id": self.responded_by_user_id,
             "responded_by_role": self.responded_by_role,
-            "responded_at": self.responded_at.isoformat() if self.responded_at else None,
+            "responded_at": self.responded_at.isoformat()
+            if self.responded_at
+            else None,
             "expires_at": self.expires_at.isoformat() if self.expires_at else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,

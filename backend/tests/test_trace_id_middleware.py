@@ -134,6 +134,7 @@ class TestTraceIdIntegration:
 
     def test_trace_id_in_response_header(self, trace_app):
         """Test que trace_id est ajouté dans les headers de réponse."""
+
         @trace_app.route("/test")
         def test_route():
             from flask import jsonify

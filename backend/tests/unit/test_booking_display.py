@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from types import SimpleNamespace
 from datetime import datetime
+from types import SimpleNamespace
 
 from models.enums import BookingCreatedVia, ClientType
 from services.companies.booking_display import (

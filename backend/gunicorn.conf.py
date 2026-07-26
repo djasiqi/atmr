@@ -9,7 +9,7 @@ import sys
 logger = logging.getLogger("gunicorn.error")
 
 
-def worker_int(worker):  # noqa: ARG001
+def worker_int(worker):
     """Signal WORKER TIMEOUT — log + dump stacks pour post-mortem."""
     logger.warning("WORKER TIMEOUT pid=%s", worker.pid)
     try:

@@ -99,11 +99,11 @@ const ProfessionnelPage = () => {
           <div className={styles.heroVisual}>
             <div className={styles.heroFrame} onContextMenu={blockImageSave}>
               <img
-                src="/images/brand/artwork/inst-org-hero.png"
-                alt="Équipes qui coordonnent des missions de transport médical entre plusieurs acteurs"
+                src="/images/lirie-coordination-institution-transporteur.webp"
+                alt="Coordination d’une mission entre une institution et un transporteur."
                 className={styles.heroImg}
-                width={960}
-                height={720}
+                width={1448}
+                height={1086}
                 decoding="async"
                 fetchPriority="high"
                 draggable={false}
@@ -197,11 +197,11 @@ const ProfessionnelPage = () => {
             <div className={styles.filVisual}>
               <div className={styles.filFrame} onContextMenu={blockImageSave}>
                 <img
-                  src="/images/brand/artwork/inst-fil-commun.png"
-                  alt="Fil commun d’une mission : institution, plateforme, transport, suivi et historique"
+                  src="/images/lirie-fil-commun-mission.webp"
+                  alt="Fil commun d’une mission partagée entre institution, plateforme et transporteur."
                   className={styles.filImg}
-                  width={1400}
-                  height={788}
+                  width={1448}
+                  height={1086}
                   decoding="async"
                   loading="lazy"
                   draggable={false}

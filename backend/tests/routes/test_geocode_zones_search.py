@@ -41,10 +41,7 @@ class TestDbZoneSearchTerms:
 
 class TestGeoadminZoneTypeExtraction:
     def test_kantone_layer_is_canton(self) -> None:
-        assert (
-            _extract_zone_type_from_geoadmin({"origin": "kantone.gg25"})
-            == "canton"
-        )
+        assert _extract_zone_type_from_geoadmin({"origin": "kantone.gg25"}) == "canton"
 
     def test_poi_with_canton_detail_is_not_canton(self) -> None:
         assert (

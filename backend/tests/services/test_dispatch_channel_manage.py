@@ -82,21 +82,23 @@ def test_remove_dispatch_participant_sets_left_at(
     assert mock_db.session.commit.call_count >= 1
 
 
-def test_list_dispatch_participants_rejects_driver_manage(_mock=None):
+def test_list_dispatch_participants_rejects_driver_manage():
     conv = _dispatch_conv()
     user = _driver_user()
-    with patch(
-        "services.messaging.conversation_service.ConversationService.is_company_managed_dispatch",
-        return_value=True,
-    ):
-        with patch(
+    with (
+        patch(
+            "services.messaging.conversation_service.ConversationService.is_company_managed_dispatch",
+            return_value=True,
+        ),
+        patch(
             "services.messaging.conversation_service.MessagingPermissionService.assert_can_read"
-        ):
-            with patch(
-                "services.messaging.conversation_service.ConversationParticipant"
-            ) as mock_part:
-                mock_part.query.filter_by.return_value.order_by.return_value.all.return_value = []
-                payload = ConversationService.list_dispatch_participants(conv, user)
+        ),
+        patch(
+            "services.messaging.conversation_service.ConversationParticipant"
+        ) as mock_part,
+    ):
+        mock_part.query.filter_by.return_value.order_by.return_value.all.return_value = []
+        payload = ConversationService.list_dispatch_participants(conv, user)
     assert payload["can_manage"] is False
     assert payload["available_drivers"] == []
 

@@ -215,9 +215,12 @@ class TestRotationSecretsCeleryTask:
     ):
         """Test exécution tâche Celery rotation."""
         # Mock toutes les rotations réussies
-        mock_rotate_flask.return_value = {"status": "success", "environment": "dev"}
-        mock_rotate_jwt.return_value = {"status": "success", "environment": "dev"}
-        mock_rotate_encryption.return_value = {
+        mock_rotate_flask.run.return_value = {
+            "status": "success",
+            "environment": "dev",
+        }
+        mock_rotate_jwt.run.return_value = {"status": "success", "environment": "dev"}
+        mock_rotate_encryption.run.return_value = {
             "status": "success",
             "environment": "dev",
         }
@@ -233,9 +236,9 @@ class TestRotationSecretsCeleryTask:
         # Vérifier que toutes les rotations ont été appelées
         assert result["status"] == "completed"
         assert result["success_count"] == 3
-        mock_rotate_flask.assert_called_once()
-        mock_rotate_jwt.assert_called_once()
-        mock_rotate_encryption.assert_called_once()
+        mock_rotate_flask.run.assert_called_once()
+        mock_rotate_jwt.run.assert_called_once()
+        mock_rotate_encryption.run.assert_called_once()
 
     @patch("tasks.vault_rotation_tasks._notify_rotation_failure")
     @patch("tasks.vault_rotation_tasks.rotate_encryption_key")
@@ -246,9 +249,12 @@ class TestRotationSecretsCeleryTask:
     ):
         """Test notification en cas d'échec de rotation."""
         # Mock rotations avec échec
-        mock_rotate_flask.return_value = {"status": "success"}
-        mock_rotate_jwt.return_value = {"status": "error", "error": "Vault unavailable"}
-        mock_rotate_encryption.return_value = {
+        mock_rotate_flask.run.return_value = {"status": "success"}
+        mock_rotate_jwt.run.return_value = {
+            "status": "error",
+            "error": "Vault unavailable",
+        }
+        mock_rotate_encryption.run.return_value = {
             "status": "error",
             "error": "Network error",
         }

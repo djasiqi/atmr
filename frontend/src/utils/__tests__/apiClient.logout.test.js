@@ -82,4 +82,19 @@ describe('logoutUser', () => {
 
     window.location = originalLocation;
   });
+
+  it('nettoie la session locale même si /auth/logout échoue', async () => {
+    postSpy.mockRejectedValue({ response: { status: 401 }, message: 'Unauthorized' });
+
+    const originalLocation = window.location;
+    delete window.location;
+    window.location = { pathname: '/dashboard/company/co-1', search: '', href: '' };
+
+    await logoutUser({ redirect: false });
+
+    expect(localStorage.getItem('app_user')).toBeNull();
+    expect(authChangedHandler).toHaveBeenCalledTimes(1);
+
+    window.location = originalLocation;
+  });
 });

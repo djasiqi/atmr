@@ -307,7 +307,7 @@ const AidePage = () => {
             <p className={`${styles.heroMicro} ${styles.heroAnim} ${styles.heroAnim3}`}>
               LIRIE est une plateforme de coordination — pas un transporteur ni un service d’urgence. Pour la vision du projet,{' '}
               <Link to="/a-propos" className={styles.inlineLink}>
-                voir À propos
+                voir Pourquoi Lirie
               </Link>
               .
             </p>

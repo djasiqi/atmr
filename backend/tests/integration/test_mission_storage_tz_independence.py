@@ -40,9 +40,9 @@ def _future_mission_day(*, days_ahead: int = 5) -> date:
 
 
 def _naive_iso(mission_day: date, hour: int, minute: int = 0) -> str:
-    return datetime(mission_day.year, mission_day.month, mission_day.day, hour, minute).strftime(
-        "%Y-%m-%dT%H:%M:%S"
-    )
+    return datetime(
+        mission_day.year, mission_day.month, mission_day.day, hour, minute
+    ).strftime("%Y-%m-%dT%H:%M:%S")
 
 
 def _hhmm_from_iso(iso: str | None) -> str:
@@ -58,7 +58,9 @@ def _read_db_scheduled_time(db, request_id: int) -> datetime:
     return row[0]
 
 
-def _create_offer(db, transport_request: TransportRequest, company_id: int) -> RequestOffer:
+def _create_offer(
+    db, transport_request: TransportRequest, company_id: int
+) -> RequestOffer:
     offer = RequestOffer(
         transport_request_id=transport_request.id,
         company_id=company_id,
@@ -106,13 +108,17 @@ class TestMissionStorageTzIndependence:
         db.session.expire(tr)
 
         db_value = _read_db_scheduled_time(db, tr.id)
-        assert db_value == datetime(mission_day.year, mission_day.month, mission_day.day, 12, 30)
+        assert db_value == datetime(
+            mission_day.year, mission_day.month, mission_day.day, 12, 30
+        )
         assert db_value.tzinfo is None
 
         db.session.refresh(tr)
         serialized = tr.serialize
         assert _hhmm_from_iso(serialized["scheduled_time"]) == "12:30"
-        assert serialized["scheduled_time"] == mission_scheduled_to_api_iso(tr.scheduled_time)
+        assert serialized["scheduled_time"] == mission_scheduled_to_api_iso(
+            tr.scheduled_time
+        )
 
         display = build_transport_request_display_blocks(tr)
         summary = (display.get("scheduling") or {}).get("summary") or ""
@@ -165,7 +171,9 @@ class TestMissionStorageTzIndependence:
         assert db_value.hour == 12
         assert db_value.minute == 30
 
-        proposed = datetime(mission_day.year, mission_day.month, mission_day.day, 12, 30)
+        proposed = datetime(
+            mission_day.year, mission_day.month, mission_day.day, 12, 30
+        )
         uc = AcceptOfferUseCase()
         result = uc.execute(
             AcceptOfferInput(
@@ -182,8 +190,13 @@ class TestMissionStorageTzIndependence:
         assert booking is not None
 
         db.session.refresh(tr)
-        assert _hhmm_from_iso(mission_scheduled_to_api_iso(tr.scheduled_time)) == "12:30"
-        assert _hhmm_from_iso(mission_scheduled_to_api_iso(booking.scheduled_time)) == "12:30"
+        assert (
+            _hhmm_from_iso(mission_scheduled_to_api_iso(tr.scheduled_time)) == "12:30"
+        )
+        assert (
+            _hhmm_from_iso(mission_scheduled_to_api_iso(booking.scheduled_time))
+            == "12:30"
+        )
 
         summary = tr.serialize.get("booking_summary") or {}
         assert _hhmm_from_iso(summary.get("scheduled_time")) == "12:30"

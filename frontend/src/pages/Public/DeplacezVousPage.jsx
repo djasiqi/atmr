@@ -379,18 +379,18 @@ const DeplacezVousPage = () => {
                 const headingId = `${faqBaseId}-h-${i}`;
                 const panelId = `${faqBaseId}-p-${i}`;
                 return (
-                  <div key={item.q} className={`${styles.faqItem}${open ? ` ${styles.faqItemOpen}` : ''}`}>
+                  <div key={item.q} className={styles.faqItem}>
                     <h3 className={styles.faqHeading}>
                       <button
                         type="button"
                         id={headingId}
-                        className={`${styles.faqTrigger}${open ? ` ${styles.faqTriggerOpen}` : ''}`}
+                        className={styles.faqTrigger}
                         aria-expanded={open}
                         aria-controls={panelId}
                         onClick={() => setOpenFaq(open ? null : i)}
                       >
                         <span>{item.q}</span>
-                        <span className={`${styles.faqIcon}${open ? ` ${styles.faqIconOpen}` : ''}`} aria-hidden>
+                        <span className={`${styles.faqIcon} ${open ? styles.faqIconOpen : ''}`} aria-hidden>
                           +
                         </span>
                       </button>

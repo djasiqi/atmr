@@ -47,21 +47,13 @@ def prioritize_android_fcm_devices(
     selected: list[PushDeviceDict] = []
 
     for device_id, group in by_device.items():
-        android = [
-            d
-            for d in group
-            if (d.get("platform") or "").lower() == "android"
-        ]
+        android = [d for d in group if (d.get("platform") or "").lower() == "android"]
         non_android = [
-            d
-            for d in group
-            if (d.get("platform") or "").lower() != "android"
+            d for d in group if (d.get("platform") or "").lower() != "android"
         ]
 
         if android:
-            fcm_android = [
-                d for d in android if (d.get("provider") or "expo") == "fcm"
-            ]
+            fcm_android = [d for d in android if (d.get("provider") or "expo") == "fcm"]
             expo_android = [
                 d for d in android if (d.get("provider") or "expo") == "expo"
             ]
@@ -113,7 +105,9 @@ def _drop_android_expo_when_driver_has_fcm(
     return filtered
 
 
-def _keep_latest_android_fcm_only(devices: list[PushDeviceDict]) -> list[PushDeviceDict]:
+def _keep_latest_android_fcm_only(
+    devices: list[PushDeviceDict],
+) -> list[PushDeviceDict]:
     """Un seul token FCM Android par chauffeur (device_id roté → plusieurs lignes actives)."""
     android_fcm = [
         d
@@ -126,7 +120,11 @@ def _keep_latest_android_fcm_only(devices: list[PushDeviceDict]) -> list[PushDev
 
     def sort_key(row: PushDeviceDict) -> tuple[int, int]:
         updated = row.get("updated_at")
-        ts = updated.timestamp() if updated is not None and hasattr(updated, "timestamp") else 0
+        ts = (
+            updated.timestamp()
+            if updated is not None and hasattr(updated, "timestamp")
+            else 0
+        )
         row_id = row.get("id")
         return (ts, int(row_id) if isinstance(row_id, int) else 0)
 
@@ -192,6 +190,10 @@ def android_has_expo_only(active_tokens: list[Any]) -> bool:
     ]
     if not android_tokens:
         return False
-    has_fcm = any((getattr(t, "provider", None) or "expo") == "fcm" for t in android_tokens)
-    has_expo = any((getattr(t, "provider", None) or "expo") == "expo" for t in android_tokens)
+    has_fcm = any(
+        (getattr(t, "provider", None) or "expo") == "fcm" for t in android_tokens
+    )
+    has_expo = any(
+        (getattr(t, "provider", None) or "expo") == "expo" for t in android_tokens
+    )
     return has_expo and not has_fcm

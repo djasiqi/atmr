@@ -428,7 +428,7 @@ def _booking_segment_amount(b: Booking) -> Decimal:
 
 
 def _split_single_merged_round_trip_line(
-    inv: Invoice,
+    _inv: Invoice,
     line: InvoiceLine,
     *,
     keep_leg: str,
@@ -495,7 +495,9 @@ def _split_single_merged_round_trip_line(
         description_builder=description_builder,
     )
     st = getattr(keep_booking, "scheduled_time", None)
-    service_iso = st.date().isoformat() if st is not None and hasattr(st, "date") else None
+    service_iso = (
+        st.date().isoformat() if st is not None and hasattr(st, "date") else None
+    )
 
     calc = InvoiceCalculator()
     line.description = (new_desc or line.description or "")[:500]
@@ -575,9 +577,7 @@ def remove_draft_invoice_line(
 
     if leg:
         keep_leg = "return" if leg == "outbound" else "outbound"
-        target = _resolve_round_trip_leg_line_to_delete(
-            inv, line, exclude_leg=leg
-        )
+        target = _resolve_round_trip_leg_line_to_delete(inv, line, exclude_leg=leg)
         if target is not None:
             if target.id != line.id:
                 _clear_round_trip_preview_meta_on_line(line)
@@ -723,27 +723,29 @@ def update_draft_invoice_line(
         meta["description_overridden"] = True
         line.line_meta = meta
 
-    if service_date_iso is not _SERVICE_DATE_ISO_ARG_UNSET:
-        if line.type == InvoiceLineType.CUSTOM:
-            meta_sd = dict(line.line_meta) if isinstance(line.line_meta, dict) else {}
-            if service_date_iso is None or (
-                isinstance(service_date_iso, str) and not str(service_date_iso).strip()
-            ):
-                meta_sd.pop("service_date_iso", None)
-                meta_sd.pop("service_date", None)
-            else:
-                norm_sd = _normalize_optional_service_date_iso(service_date_iso)
-                if norm_sd is None:
-                    return EditDraftResult(
-                        False,
-                        error={
-                            "error": "service_date_iso invalide (AAAA-MM-JJ ou JJ.MM.AAAA).",
-                        },
-                        status_code=400,
-                    )
-                meta_sd["service_date_iso"] = norm_sd
-                meta_sd["service_date"] = norm_sd
-            line.line_meta = meta_sd if meta_sd else None
+    if (
+        service_date_iso is not _SERVICE_DATE_ISO_ARG_UNSET
+        and line.type == InvoiceLineType.CUSTOM
+    ):
+        meta_sd = dict(line.line_meta) if isinstance(line.line_meta, dict) else {}
+        if service_date_iso is None or (
+            isinstance(service_date_iso, str) and not str(service_date_iso).strip()
+        ):
+            meta_sd.pop("service_date_iso", None)
+            meta_sd.pop("service_date", None)
+        else:
+            norm_sd = _normalize_optional_service_date_iso(service_date_iso)
+            if norm_sd is None:
+                return EditDraftResult(
+                    False,
+                    error={
+                        "error": "service_date_iso invalide (AAAA-MM-JJ ou JJ.MM.AAAA).",
+                    },
+                    status_code=400,
+                )
+            meta_sd["service_date_iso"] = norm_sd
+            meta_sd["service_date"] = norm_sd
+        line.line_meta = meta_sd if meta_sd else None
 
     if original_line_total is not _ORIGINAL_LINE_TOTAL_ARG_UNSET:
         meta_olt = dict(line.line_meta) if isinstance(line.line_meta, dict) else {}
@@ -764,27 +766,30 @@ def update_draft_invoice_line(
             meta_olt[_META_ORIGINAL_LINE_TOTAL] = v_olt
         line.line_meta = meta_olt if meta_olt else None
 
-    if line_meta_merge is not _LINE_META_MERGE_ARG_UNSET:
-        if line_meta_merge is not None and isinstance(line_meta_merge, dict):
-            meta_mm = dict(line.line_meta) if isinstance(line.line_meta, dict) else {}
-            for k, v in line_meta_merge.items():
-                if k not in _ALLOWED_INVOICE_LINE_META_MERGE_KEYS:
+    if (
+        line_meta_merge is not _LINE_META_MERGE_ARG_UNSET
+        and line_meta_merge is not None
+        and isinstance(line_meta_merge, dict)
+    ):
+        meta_mm = dict(line.line_meta) if isinstance(line.line_meta, dict) else {}
+        for k, v in line_meta_merge.items():
+            if k not in _ALLOWED_INVOICE_LINE_META_MERGE_KEYS:
+                continue
+            if v is None:
+                meta_mm.pop(k, None)
+                continue
+            if (k == "is_round_trip_leg" and isinstance(v, bool)) or (
+                k == "preview_hide_merged_round_trip" and isinstance(v, bool)
+            ):
+                meta_mm[k] = v
+            elif k == "transport_type" and isinstance(v, str):
+                meta_mm[k] = v.strip()[:32]
+            elif k == "round_trip_merge_partner_reservation_id":
+                try:
+                    meta_mm[k] = int(v)
+                except (TypeError, ValueError):
                     continue
-                if v is None:
-                    meta_mm.pop(k, None)
-                    continue
-                if k == "is_round_trip_leg" and isinstance(v, bool):
-                    meta_mm[k] = v
-                elif k == "preview_hide_merged_round_trip" and isinstance(v, bool):
-                    meta_mm[k] = v
-                elif k == "transport_type" and isinstance(v, str):
-                    meta_mm[k] = v.strip()[:32]
-                elif k == "round_trip_merge_partner_reservation_id":
-                    try:
-                        meta_mm[k] = int(v)
-                    except (TypeError, ValueError):
-                        continue
-            line.line_meta = meta_mm if meta_mm else None
+        line.line_meta = meta_mm if meta_mm else None
 
     _recompute_totals_from_lines(inv)
     _mark_pdf_stale(inv)

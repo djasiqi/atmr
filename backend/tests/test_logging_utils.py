@@ -79,7 +79,9 @@ def _make_kafka_record(name: str, msg: str) -> logging.LogRecord:
 def test_kafka_noise_filter_drops_task_already_done():
     """Le filtre supprime le bruit bénin « Task is already done! »."""
     flt = KafkaSelectorNoiseFilter()
-    noisy = _make_kafka_record("kafka.net.selector", "RuntimeError: Task is already done!")
+    noisy = _make_kafka_record(
+        "kafka.net.selector", "RuntimeError: Task is already done!"
+    )
     useful = _make_kafka_record("kafka.conn", "Broker connection lost")
     other = _make_kafka_record("app", "Task is already done!")
 

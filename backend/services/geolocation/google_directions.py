@@ -131,7 +131,7 @@ def _read_cache(key: str) -> dict[str, Any] | None:
         return None
     try:
         raw = redis_client.get(key)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.debug("[directions] redis get failed: %s", exc)
         return None
     if not raw:
@@ -159,7 +159,7 @@ def _write_cache(key: str, payload: dict[str, Any]) -> None:
             GOOGLE_DIRECTIONS_CACHE_TTL,
             json.dumps(payload, separators=(",", ":")),
         )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.debug("[directions] redis setex failed: %s", exc)
 
 
@@ -188,7 +188,9 @@ def _build_params(req: DirectionsRequest, api_key: str) -> dict[str, str]:
     return params
 
 
-def _parse_route_metrics(body: dict[str, Any]) -> tuple[int | None, int | None, int | None]:
+def _parse_route_metrics(
+    body: dict[str, Any],
+) -> tuple[int | None, int | None, int | None]:
     """Extrait durée, distance et durée trafic depuis la réponse Google Directions."""
     routes: Iterable[dict[str, Any]] = body.get("routes") or []
     route_list = list(routes)
@@ -284,8 +286,8 @@ def fetch_directions(req: DirectionsRequest) -> DirectionsResult:
             polyline = encoded
             break
 
-    duration_seconds, distance_meters, duration_in_traffic_seconds = _parse_route_metrics(
-        body
+    duration_seconds, distance_meters, duration_in_traffic_seconds = (
+        _parse_route_metrics(body)
     )
 
     payload = {

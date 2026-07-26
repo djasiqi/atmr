@@ -164,9 +164,7 @@ class SendTransportRequestUseCase:
                         transport_request_id=transport_request.id,
                         status=OfferStatus.PENDING.value,
                     ).all()
-                    actionable_pending = [
-                        o for o in pending_offers if not o.is_expired
-                    ]
+                    actionable_pending = [o for o in pending_offers if not o.is_expired]
 
                     if actionable_pending:
                         pending_count = len(actionable_pending)
@@ -575,7 +573,10 @@ class SendTransportRequestUseCase:
         expires_at: datetime,
     ) -> dict[str, int | str]:
         """Relance la diffusion : réactive les offres expirées et élargit à toutes les entreprises éligibles."""
-        del preferences, configured_mode  # Relance = broadcast élargi (nouveau délai pour tous)
+        del (
+            preferences,
+            configured_mode,
+        )  # Relance = broadcast élargi (nouveau délai pour tous)
         offers_created = self._relaunch_broadcast_offers(
             transport_request=transport_request,
             expires_at=expires_at,
@@ -717,9 +718,7 @@ class SendTransportRequestUseCase:
             )
 
             sched = get_effective_dispatch_time(transport_request)
-            time_str = (
-                sched.strftime("%d.%m.%Y %H:%M") if sched else "Date à confirmer"
-            )
+            time_str = sched.strftime("%d.%m.%Y %H:%M") if sched else "Date à confirmer"
             round_trip = " (A/R)" if transport_request.is_round_trip else ""
 
             title = (

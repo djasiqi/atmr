@@ -7,6 +7,11 @@ exclude =
     .venv,
     env,
     .env,
+    .local,
+    .cursor-server,
+    .mypy_cache,
+    .ruff_cache,
+    .semgrep,
     */site-packages/*
 
 # Aligner avec Ruff (line-length=88, valeur par défaut de ruff format)
@@ -15,19 +20,57 @@ max-line-length = 88
 # Ignorer certaines règles qui sont gérées par Ruff
 # E203: whitespace before ':' (conflit avec black/ruff)
 # W503: line break before binary operator (conflit avec black/ruff)
+# E501: line too long (géré par ruff format / ruff E501 ignore)
 extend-ignore =
     E203,
-    W503
+    W503,
+    E501
 
 # Ignorations par fichier
+# Chemins relatifs au CWD CI (`cd backend && flake8 .`) ET à la racine du dépôt.
+# Note: fnmatch ne traite pas `**` récursivement ; couvrir scripts/*.py et tests/*.py explicitement.
 per-file-ignores =
     # Fichier d'entrée avec monkey patching avant imports
+    manage.py:E402
     backend/manage.py:E402
     # Scripts avec setup avant imports (intentionnel)
-    backend/scripts/**/*.py:E402
+    scripts/*.py:E402,F401,F841
+    scripts/*/*.py:E402,F401,F841
+    scripts/*/*/*.py:E402,F401,F841
+    backend/scripts/*.py:E402,F401,F841
+    backend/scripts/*/*.py:E402,F401,F841
+    backend/scripts/*/*/*.py:E402,F401,F841
+    # Scripts one-shot à la racine backend
+    check_*.py:E402,F401
+    backend/check_*.py:E402,F401
+    test_*.py:F401
+    backend/test_*.py:F401
     # Tests avec setup avant imports (intentionnel)
+    tests/conftest.py:E402
+    tests/*.py:E402,F401,F841,F811,F824
+    tests/*/*.py:E402,F401,F841,F811,F824
+    tests/*/*/*.py:E402,F401,F841,F811,F824
     backend/tests/conftest.py:E402
-    backend/tests/**/*.py:E402
+    backend/tests/*.py:E402,F401,F841,F811,F824
+    backend/tests/*/*.py:E402,F401,F841,F811,F824
+    backend/tests/*/*/*.py:E402,F401,F841,F811,F824
+    # Scripts de test manuels dans services/
+    services/email/test_*.py:E402,F401
+    backend/services/email/test_*.py:E402,F401
     # Migrations Alembic autogénérées
-    backend/migrations/**/*.py:F401,E501
-    backend/migrations/versions/**/*.py:F401,E501
+    migrations/*.py:F401,E501
+    migrations/*/*.py:F401,E501
+    migrations/versions/*.py:F401,E501
+    backend/migrations/*.py:F401,E501
+    backend/migrations/*/*.py:F401,E501
+    backend/migrations/versions/*.py:F401,E501
+    # Modules compat / réexport (imports * intentionnels)
+    services/eta_service.py:F401
+    services/unified_dispatch/settings.py:F401
+    services/unified_dispatch/solver.py:F401
+    backend/services/eta_service.py:F401
+    backend/services/unified_dispatch/settings.py:F401
+    backend/services/unified_dispatch/solver.py:F401
+    # Side-effect imports Flask-RESTX (enregistrement des routes)
+    routes/dispatch/__init__.py:F401
+    backend/routes/dispatch/__init__.py:F401

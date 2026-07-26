@@ -28,13 +28,13 @@ from infrastructure.invoices.invoice_calculator import (
     round_to_5_cents,
 )
 from models import Booking, ClientStay, Company
-from services.billing.clinic_s2_eligibility import clinic_s2_billed_to_company_predicate
 from models.enums import BookingStatus
 from repositories.booking_repository import BookingRepository
 from repositories.client_repository import ClientRepository
 from repositories.company_billing_settings_repository import (
     CompanyBillingSettingsRepository,
 )
+from services.billing.clinic_s2_eligibility import clinic_s2_billed_to_company_predicate
 
 # Taille exacte d'un A/R : 2 segments (aller + retour). Les composantes de taille
 # > 2 sont des chaînes de trajets distincts qui doivent rester facturées en lignes
@@ -340,7 +340,11 @@ def build_period_invoice_preview(
                 description_builder=None,
             )
             locked = bool(getattr(b, "invoice_line_id", None))
-            b_client = crepo.find_model_by_id_with_user(int(b.client_id), company_id) if b.client_id else None
+            b_client = (
+                crepo.find_model_by_id_with_user(int(b.client_id), company_id)
+                if b.client_id
+                else None
+            )
             row_patient = resolve_patient_name_for_invoice(b_client, [b])
             if not row_patient:
                 row_patient = (getattr(b, "customer_name", None) or "").strip() or None
@@ -480,7 +484,11 @@ def build_period_invoice_preview(
         )
 
         locked = bool(getattr(b, "invoice_line_id", None))
-        b_client = crepo.find_model_by_id_with_user(int(b.client_id), company_id) if b.client_id else None
+        b_client = (
+            crepo.find_model_by_id_with_user(int(b.client_id), company_id)
+            if b.client_id
+            else None
+        )
         from application.invoices.invoice_line_description import (
             resolve_s2_clinic_line_patient_name,
         )

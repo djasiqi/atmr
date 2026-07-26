@@ -177,12 +177,13 @@ def test_fetch_directions_uses_cache_on_second_call():
         destination=google_directions.DirectionsLatLng(46.250, 6.18011),
     )
 
-    with patch.object(
-        google_directions,
-        "_http_get",
-        return_value=(200, payload_route),
-    ) as mocked, patch.object(
-        google_directions, "GOOGLE_DIRECTIONS_API_KEY", "fake-key"
+    with (
+        patch.object(
+            google_directions,
+            "_http_get",
+            return_value=(200, payload_route),
+        ) as mocked,
+        patch.object(google_directions, "GOOGLE_DIRECTIONS_API_KEY", "fake-key"),
     ):
         first = google_directions.fetch_directions(request_payload)
         second = google_directions.fetch_directions(request_payload)
@@ -210,12 +211,13 @@ def test_fetch_directions_does_not_cache_failures():
         destination=google_directions.DirectionsLatLng(47.0, 7.0),
     )
 
-    with patch.object(
-        google_directions,
-        "_http_get",
-        return_value=(200, payload_denied),
-    ) as mocked, patch.object(
-        google_directions, "GOOGLE_DIRECTIONS_API_KEY", "fake-key"
+    with (
+        patch.object(
+            google_directions,
+            "_http_get",
+            return_value=(200, payload_denied),
+        ) as mocked,
+        patch.object(google_directions, "GOOGLE_DIRECTIONS_API_KEY", "fake-key"),
     ):
         first = google_directions.fetch_directions(request_payload)
         second = google_directions.fetch_directions(request_payload)

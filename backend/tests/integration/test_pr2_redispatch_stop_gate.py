@@ -126,9 +126,7 @@ class TestCas1RevalidationCreatesChangeRequest:
         # Le patch n'est PAS appliqué immédiatement
         assert committed_booking.dropoff_location == "Hôpital B, 1205 Genève"
 
-        cr = BookingChangeRequest.query.get(
-            committed_booking.active_change_request_id
-        )
+        cr = BookingChangeRequest.query.get(committed_booking.active_change_request_id)
         assert cr is not None
         assert cr.status == BookingChangeRequestStatus.PENDING
         assert "dropoff_location" in (cr.changed_fields or {})
@@ -228,9 +226,7 @@ class TestCas3CompanyRefuses:
             ctx,
             payload={
                 "version": 1,
-                "scheduled_time": (
-                    datetime.now(UTC) + timedelta(hours=6)
-                ).isoformat(),
+                "scheduled_time": (datetime.now(UTC) + timedelta(hours=6)).isoformat(),
                 "reason": "Décalage horaire important",
             },
             actor_user_id=None,
@@ -400,8 +396,20 @@ class TestCas5ConcurrentModification:
 class TestCancelMultiStopCascade:
     """Annuler le booking principal annule aussi les legs liés du parcours."""
 
-    def _make_leg(self, db, test_company, test_client, *, route_group_id, seq,
-                  pickup, dropoff, parent_id=None, scheduled=None, confirmed=True):
+    def _make_leg(
+        self,
+        db,
+        test_company,
+        test_client,
+        *,
+        route_group_id,
+        seq,
+        pickup,
+        dropoff,
+        parent_id=None,
+        scheduled=None,
+        confirmed=True,
+    ):
         leg = Booking()
         leg.user_id = test_client.user_id
         leg.company_id = test_company.id
@@ -436,21 +444,34 @@ class TestCancelMultiStopCascade:
         base_time = datetime.now(UTC) + timedelta(hours=3)
 
         principal = self._make_leg(
-            db, test_company, test_client,
-            route_group_id=route_group_id, seq=1,
-            pickup="Clinique", dropoff="HUG", scheduled=base_time,
+            db,
+            test_company,
+            test_client,
+            route_group_id=route_group_id,
+            seq=1,
+            pickup="Clinique",
+            dropoff="HUG",
+            scheduled=base_time,
         )
         leg2 = self._make_leg(
-            db, test_company, test_client,
-            route_group_id=route_group_id, seq=2,
-            pickup="HUG", dropoff="Dr Lakki",
+            db,
+            test_company,
+            test_client,
+            route_group_id=route_group_id,
+            seq=2,
+            pickup="HUG",
+            dropoff="Dr Lakki",
             scheduled=base_time.replace(hour=0, minute=0),
             confirmed=False,
         )
         leg3 = self._make_leg(
-            db, test_company, test_client,
-            route_group_id=route_group_id, seq=3,
-            pickup="Dr Lakki", dropoff="Clinique",
+            db,
+            test_company,
+            test_client,
+            route_group_id=route_group_id,
+            seq=3,
+            pickup="Dr Lakki",
+            dropoff="Clinique",
             scheduled=base_time.replace(hour=0, minute=0),
             confirmed=False,
         )

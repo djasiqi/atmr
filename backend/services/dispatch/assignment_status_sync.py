@@ -31,7 +31,9 @@ class _AssignmentRepoLike(Protocol):
     def find_model_by_booking_id(self, booking_id: int) -> Any | None: ...
 
 
-def resolve_assignment_status_for_transition(transition: str) -> AssignmentStatus | None:
+def resolve_assignment_status_for_transition(
+    transition: str,
+) -> AssignmentStatus | None:
     """Retourne le statut assignment cible pour une transition chauffeur."""
     key = (transition or "").strip().lower()
     return _DRIVER_TRANSITION_TO_ASSIGNMENT.get(key)

@@ -75,11 +75,7 @@ class DirectionsProxy(Resource):
             }, 400
 
         mode_raw = body.get("mode")
-        mode = (
-            mode_raw
-            if isinstance(mode_raw, str) and mode_raw.strip()
-            else "driving"
-        )
+        mode = mode_raw if isinstance(mode_raw, str) and mode_raw.strip() else "driving"
         region_raw = body.get("region")
         departure_raw = body.get("departure_time")
         departure_time: int | None = None

@@ -5,10 +5,11 @@ from __future__ import annotations
 import time
 from datetime import UTC, datetime
 
+from sqlalchemy.exc import IntegrityError
+
 from ext import app_logger, db
 from models import DeviceToken
 from services.notifications.push_token_platform import infer_fcm_platform
-from sqlalchemy.exc import IntegrityError
 
 
 def _normalize_provider(token: str, provider: str | None) -> str:
@@ -230,7 +231,9 @@ def upsert_device_token(
     resolved_provider = _normalize_provider(token, provider)
     now = datetime.now(UTC)
 
-    inferred_platform = infer_fcm_platform(token, platform if isinstance(platform, str) else None)
+    inferred_platform = infer_fcm_platform(
+        token, platform if isinstance(platform, str) else None
+    )
     if (
         resolved_provider == "fcm"
         and platform == "ios"

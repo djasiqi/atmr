@@ -98,10 +98,16 @@ class TestDashboardDayFilterReturnDateOnly:
         db.session.commit()
 
         ids_outbound_day = {
-            b.id for b in _reservations_base_query_for_company_day(company.id, day_outbound).all()
+            b.id
+            for b in _reservations_base_query_for_company_day(
+                company.id, day_outbound
+            ).all()
         }
         ids_next_day = {
-            b.id for b in _reservations_base_query_for_company_day(company.id, day_next).all()
+            b.id
+            for b in _reservations_base_query_for_company_day(
+                company.id, day_next
+            ).all()
         }
 
         assert outbound.id in ids_outbound_day

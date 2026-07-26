@@ -62,7 +62,9 @@ def expire_pending_change_requests(_self: Any) -> dict[str, int]:
             BookingChangeRequest.expires_at < now,
         ).all()
 
-        logger.info("[ChangeRequestTask] Found %d expired change requests", len(expired))
+        logger.info(
+            "[ChangeRequestTask] Found %d expired change requests", len(expired)
+        )
 
         auto_refuse = _auto_refuse_enabled()
         escalated = 0

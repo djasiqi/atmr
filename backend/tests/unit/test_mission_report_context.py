@@ -31,13 +31,23 @@ from services.institutions.mission_report_context import (
 
 
 def _institution(**kwargs):
-    defaults = {"id": 1, "name": "Clinique LHA", "contact_phone": "+41 22 000 00 00", "contact_email": "a@clinique.ch"}
+    defaults = {
+        "id": 1,
+        "name": "Clinique LHA",
+        "contact_phone": "+41 22 000 00 00",
+        "contact_email": "a@clinique.ch",
+    }
     defaults.update(kwargs)
     return SimpleNamespace(**defaults)
 
 
 def _patient(**kwargs):
-    defaults = {"first_name": "Drin", "last_name": "JASIQI", "dob": date(1980, 5, 12), "external_reference": "DPI-99"}
+    defaults = {
+        "first_name": "Drin",
+        "last_name": "JASIQI",
+        "dob": date(1980, 5, 12),
+        "external_reference": "DPI-99",
+    }
     defaults.update(kwargs)
     return SimpleNamespace(**defaults)
 
@@ -66,7 +76,10 @@ def _tr(**kwargs):
         "return_date": None,
         "legs": [],
         "external_reference": None,
-        "contact_on_site": {"requester_service": "Admissions", "requester_name": "Marc Mouchet"},
+        "contact_on_site": {
+            "requester_service": "Admissions",
+            "requester_name": "Marc Mouchet",
+        },
         "notes": "Patient désorienté",
         "floor_elevator_info": "3e étage, ascenseur",
         "mobility": {"wheelchair": True, "needs_assistance": True},
@@ -119,7 +132,10 @@ class TestReferencesAndStatus:
 
     def test_build_mission_status_label_return_completed(self):
         tr = _tr(is_round_trip=True)
-        assert build_mission_status_label(tr, _booking(status="RETURN_COMPLETED")) == "Réalisé (aller-retour)"
+        assert (
+            build_mission_status_label(tr, _booking(status="RETURN_COMPLETED"))
+            == "Réalisé (aller-retour)"
+        )
 
     def test_build_mission_status_label_cancelled(self):
         tr = _tr(status="CANCELLED")
@@ -168,7 +184,9 @@ class TestCollectContextScenarios:
         mock_bmsg.query.filter_by.return_value.order_by.return_value.all.return_value = []
 
         tr = _tr(status="CONVERTED", booking_id=4567, booking=_booking())
-        tr.accepted_by_company = SimpleNamespace(name="Emmenez Moi", contact_phone="079", contact_email="e@em.com")
+        tr.accepted_by_company = SimpleNamespace(
+            name="Emmenez Moi", contact_phone="079", contact_email="e@em.com"
+        )
         ctx = collect_mission_report_context(tr, _institution(), variant="audit")
         assert ctx.reference == "TR-2026-001820"
         assert ctx.booking_number == "#4567"
@@ -245,7 +263,9 @@ class TestCollectContextScenarios:
         mock_bmsg.query.filter_by.return_value.order_by.return_value.count.return_value = 0
         mock_bmsg.query.filter_by.return_value.order_by.return_value.all.return_value = []
 
-        tr = _tr(status="CANCELLED", booking_id=4567, booking=_booking(status="CANCELED"))
+        tr = _tr(
+            status="CANCELLED", booking_id=4567, booking=_booking(status="CANCELED")
+        )
         ctx = collect_mission_report_context(tr, _institution())
         assert ctx.status_label == "Annulé"
 
@@ -272,11 +292,18 @@ class TestCollectContextScenarios:
 
     def test_compute_document_hash_deterministic(self):
         tr = _tr()
-        with patch("services.institutions.mission_report_context.list_timeline_events", return_value=[]):
-            with patch("services.institutions.mission_report_context.BookingMessage") as mock_bmsg:
-                mock_bmsg.query.filter_by.return_value.order_by.return_value.count.return_value = 0
-                mock_bmsg.query.filter_by.return_value.order_by.return_value.all.return_value = []
-                ctx = collect_mission_report_context(tr, _institution())
+        with (
+            patch(
+                "services.institutions.mission_report_context.list_timeline_events",
+                return_value=[],
+            ),
+            patch(
+                "services.institutions.mission_report_context.BookingMessage"
+            ) as mock_bmsg,
+        ):
+            mock_bmsg.query.filter_by.return_value.order_by.return_value.count.return_value = 0
+            mock_bmsg.query.filter_by.return_value.order_by.return_value.all.return_value = []
+            ctx = collect_mission_report_context(tr, _institution())
         h1 = compute_document_hash(ctx)
         h2 = compute_document_hash(ctx)
         assert h1 == h2
@@ -284,11 +311,18 @@ class TestCollectContextScenarios:
 
     def test_attachments_empty_v1(self):
         tr = _tr()
-        with patch("services.institutions.mission_report_context.list_timeline_events", return_value=[]):
-            with patch("services.institutions.mission_report_context.BookingMessage") as mock_bmsg:
-                mock_bmsg.query.filter_by.return_value.order_by.return_value.count.return_value = 0
-                mock_bmsg.query.filter_by.return_value.order_by.return_value.all.return_value = []
-                ctx = collect_mission_report_context(tr, _institution())
+        with (
+            patch(
+                "services.institutions.mission_report_context.list_timeline_events",
+                return_value=[],
+            ),
+            patch(
+                "services.institutions.mission_report_context.BookingMessage"
+            ) as mock_bmsg,
+        ):
+            mock_bmsg.query.filter_by.return_value.order_by.return_value.count.return_value = 0
+            mock_bmsg.query.filter_by.return_value.order_by.return_value.all.return_value = []
+            ctx = collect_mission_report_context(tr, _institution())
         assert ctx.attachments == []
 
 
@@ -300,11 +334,15 @@ class TestVolumeLimits:
 
 class TestV11DriverVehicleMilestones:
     def test_carrier_block_includes_driver_and_vehicle(self):
-        user = SimpleNamespace(first_name="Jean", last_name="Dupont", phone="079 111 22 33")
+        user = SimpleNamespace(
+            first_name="Jean", last_name="Dupont", phone="079 111 22 33"
+        )
         driver = SimpleNamespace(user=user, vehicle_assigned="Mercedes Vito AB-123-CD")
         booking = _booking(driver=driver, driver_id=42)
         tr = _tr(booking=booking, booking_id=4567)
-        tr.accepted_by_company = SimpleNamespace(name="Emmenez Moi", contact_phone="079", contact_email="e@em.com")
+        tr.accepted_by_company = SimpleNamespace(
+            name="Emmenez Moi", contact_phone="079", contact_email="e@em.com"
+        )
         block = build_carrier_block(tr, booking)
         assert block["driver_name"] == "Jean Dupont"
         assert block["driver_phone"] == "079 111 22 33"
@@ -445,7 +483,9 @@ class TestSyntheticHistory:
         mock_bmsg.query.filter_by.return_value.order_by.return_value.count.return_value = 0
         mock_bmsg.query.filter_by.return_value.order_by.return_value.all.return_value = []
         tr = _tr(status="CONVERTED", booking_id=4567, booking=_booking())
-        tr.accepted_by_company = SimpleNamespace(name="Emmenez Moi", contact_phone="079", contact_email="e@em.com")
+        tr.accepted_by_company = SimpleNamespace(
+            name="Emmenez Moi", contact_phone="079", contact_email="e@em.com"
+        )
         ctx = collect_mission_report_context(tr, _institution(), variant="audit")
         assert ctx.synthetic_history
         assert len(ctx.synthetic_history) <= 4
@@ -475,22 +515,27 @@ class TestV2PatientRoomAndCertificate:
         )
         assert cert is not None
         assert cert["title"] == "Certificat de réalisation"
-        assert build_completion_certificate(
-            reference="TR-2026-001820",
-            status_label="Envoyée",
-            patient_block={},
-            institution_snapshot={},
-            carrier_block={},
-            mission_info={},
-            document_hash="x",
-            public_id="y",
-            generated_at=datetime(2026, 6, 13, 15, 0, tzinfo=UTC),
-        ) is None
+        assert (
+            build_completion_certificate(
+                reference="TR-2026-001820",
+                status_label="Envoyée",
+                patient_block={},
+                institution_snapshot={},
+                carrier_block={},
+                mission_info={},
+                document_hash="x",
+                public_id="y",
+                generated_at=datetime(2026, 6, 13, 15, 0, tzinfo=UTC),
+            )
+            is None
+        )
 
     @patch("services.institutions.transport_timeline_service.find_latest_event")
     def test_resolve_institution_snapshot_persisted(self, mock_find):
         mock_find.return_value = SimpleNamespace(
-            payload={"institution_snapshot": {"name": "Snapshot figé", "service": "Urgences"}}
+            payload={
+                "institution_snapshot": {"name": "Snapshot figé", "service": "Urgences"}
+            }
         )
         tr = _tr()
         snap = resolve_institution_snapshot(tr, _institution())

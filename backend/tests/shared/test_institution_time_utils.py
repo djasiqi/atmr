@@ -48,7 +48,7 @@ class TestValidateProposedPickupTime:
         dt, err = validate_proposed_pickup_time(iso_utc)
         assert err is None
         assert dt is not None
-        assert dt.hour == 8 or dt.hour == 9  # naive Geneva (DST)
+        assert dt.hour in {8, 9}  # naive Geneva (DST)
 
     def test_rejects_invalid_format(self):
         dt, err = validate_proposed_pickup_time("not-a-date")

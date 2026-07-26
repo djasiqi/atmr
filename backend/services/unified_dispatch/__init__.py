@@ -53,7 +53,7 @@ from services.unified_dispatch.optimization import solver
 # sont nécessaires pour maintenir l'API publique du module. Les cycles seront
 # résolus en Semaine 3.
 from . import data  # noqa: I001
-from . import locking  # noqa: I001
+from . import locking
 from . import orchestration
 from .optimization import heuristics
 

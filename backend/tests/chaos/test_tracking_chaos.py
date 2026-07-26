@@ -13,5 +13,5 @@ def test_chaos_flags_documented() -> None:
         "KAFKA_PARTITION_BY_DRIVER_ID_ENABLED",
         "TRACKING_HEALTH_ENGINE_ENABLED",
     )
-    for key in keys:
-        assert key in os.environ or True
+    for _key in keys:
+        assert True

@@ -44,14 +44,13 @@ def _tr(**kwargs):
 
 
 def _leg(seq: int, st: datetime | None, confirmed: bool, **kwargs):
-    leg = SimpleNamespace(
+    return SimpleNamespace(
         sequence_index=seq,
         scheduled_time=st,
         time_confirmed=confirmed,
         dropoff_establishment=kwargs.get("dropoff_establishment"),
         dropoff_service=kwargs.get("dropoff_service"),
     )
-    return leg
 
 
 def test_tr01a_departure_confirmed():
@@ -95,7 +94,9 @@ def test_tr01d_multi_stop_legs():
         pickup_time_confirmed=True,
         multi_stop=True,
         legs=[
-            _leg(0, datetime(2026, 6, 12, 14, 0), True, dropoff_establishment="Imagerie"),
+            _leg(
+                0, datetime(2026, 6, 12, 14, 0), True, dropoff_establishment="Imagerie"
+            ),
             _leg(1, datetime(2026, 6, 12, 16, 0), True, dropoff_establishment="Labo"),
         ],
     )

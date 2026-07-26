@@ -16,8 +16,6 @@ from __future__ import annotations
 import pytest
 from sqlalchemy import text
 
-from ext import db
-
 
 class TestClientTypeInvariants:
     """Invariants metier sur la table client apres migration Phase A."""

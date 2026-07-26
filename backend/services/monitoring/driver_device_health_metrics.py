@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import os
 
-_METRICS_ENABLED = os.getenv("DRIVER_DEVICE_HEALTH_METRICS_ENABLED", "true").lower() not in (
+_METRICS_ENABLED = os.getenv(
+    "DRIVER_DEVICE_HEALTH_METRICS_ENABLED", "true"
+).lower() not in (
     "0",
     "false",
     "no",
@@ -222,4 +224,3 @@ def record_device_health_dual_write_mismatch(*, field: str) -> None:
 def record_fcm_background_handler_no_callback(*, platform: str) -> None:
     if _FCM_NO_CALLBACK is not None:
         _FCM_NO_CALLBACK.labels(platform=(platform or "unknown")[:16]).inc()
-

@@ -53,7 +53,7 @@ def _ping_redis(redis_url: str) -> tuple[bool | None, str | None]:
         )
         client.ping()
         return True, None
-    except Exception as exc:  # noqa: BLE001 — diagnostic only
+    except Exception as exc:
         return False, str(exc)
 
 

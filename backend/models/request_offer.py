@@ -254,9 +254,7 @@ class RequestOffer(db.Model):
                 if request.institution
                 else None,
                 "patient_name": (
-                    f"{patient.first_name} {patient.last_name}"
-                    if patient
-                    else None
+                    f"{patient.first_name} {patient.last_name}" if patient else None
                 ),
                 "patient": (
                     {

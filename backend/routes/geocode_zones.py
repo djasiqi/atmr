@@ -241,9 +241,7 @@ class GeocodeZones(Resource):
                 },
             }, 200
 
-        intent_items = G._search_canton_intent_zones(
-            q, types=zone_types, limit=limit
-        )
+        intent_items = G._search_canton_intent_zones(q, types=zone_types, limit=limit)
         if intent_items:
             sources_used.append("db")
 
@@ -287,11 +285,7 @@ class GeocodeZones(Resource):
         if db_items:
             sources_used.append("db")
 
-        fallback_items = (
-            []
-            if intent_items
-            else G._fallback_geocode_zones(q, limit)
-        )
+        fallback_items = [] if intent_items else G._fallback_geocode_zones(q, limit)
         if fallback_items:
             sources_used.append("photon")
 

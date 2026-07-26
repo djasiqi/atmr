@@ -47,7 +47,9 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Liste les chauffeurs Android actifs avec Expo seul (pas de FCM natif)",
     )
-    parser.add_argument("--driver-id", type=int, help="Rapport détaillé pour un chauffeur")
+    parser.add_argument(
+        "--driver-id", type=int, help="Rapport détaillé pour un chauffeur"
+    )
     parser.add_argument(
         "--expect-fcm",
         action="store_true",
@@ -177,7 +179,9 @@ def build_fleet_report(*, operational_only: bool) -> dict[str, Any]:
     }
 
     for driver in drivers:
-        active_tokens = DeviceToken.query.filter_by(driver_id=driver.id, is_active=True).all()
+        active_tokens = DeviceToken.query.filter_by(
+            driver_id=driver.id, is_active=True
+        ).all()
         coverage = resolve_fcm_coverage(active_tokens)
         by_coverage[coverage].append(int(driver.id))
 
@@ -249,7 +253,11 @@ def main() -> int:
         if args.driver_id is not None:
             driver = Driver.query.get(args.driver_id)
             if driver is None:
-                print(json.dumps({"error": "driver_not_found", "driver_id": args.driver_id}))
+                print(
+                    json.dumps(
+                        {"error": "driver_not_found", "driver_id": args.driver_id}
+                    )
+                )
                 return 1
             row = build_driver_report(driver)
             if args.gate_json:

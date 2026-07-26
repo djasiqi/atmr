@@ -11,6 +11,7 @@ Toutes nullables, aucun changement de comportement.
 Migration nettoyée manuellement pour ne contenir QUE ces colonnes :
 l'autogenerate captait un drift de schéma non lié (dev DB divergente).
 """
+
 from alembic import op
 import sqlalchemy as sa
 

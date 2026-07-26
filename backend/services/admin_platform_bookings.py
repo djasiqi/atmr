@@ -394,9 +394,7 @@ def admin_booking_list_item(
     from services.companies.booking_display import build_booking_display_blocks
 
     viewer_id = current_company.id if current_company else None
-    display_blocks = build_booking_display_blocks(
-        booking, viewer_company_id=viewer_id
-    )
+    display_blocks = build_booking_display_blocks(booking, viewer_company_id=viewer_id)
     scheduling = display_blocks.get("scheduling") or {}
     identity = display_blocks.get("identity") or {}
 

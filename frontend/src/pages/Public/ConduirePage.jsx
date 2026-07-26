@@ -115,11 +115,11 @@ const ConduirePage = () => {
             <div className={styles.heroVisual}>
               <div className={styles.heroFrame} onContextMenu={blockImageSave}>
                 <img
-                  src="/images/brand/artwork/drive-mission-start.png"
-                  alt="Chauffeur consultant une mission sur smartphone près d’un véhicule de transport médical"
+                  src="/images/lirie-chauffeur-consulte-mission-transport.webp"
+                  alt="Chauffeur consultant une mission de transport sur smartphone près du véhicule."
                   className={styles.heroImg}
-                  width={960}
-                  height={720}
+                  width={1448}
+                  height={1086}
                   decoding="async"
                   fetchPriority="high"
                   draggable={false}
@@ -182,11 +182,11 @@ const ConduirePage = () => {
             <div className={styles.missionVisual}>
               <div className={styles.missionFrame} onContextMenu={blockImageSave}>
                 <img
-                  src="/images/brand/artwork/drive-mission-flow.png"
-                  alt="Chauffeur en mission : parcours continu de la prise en charge à la destination"
+                  src="/images/lirie-chauffeur-mission-transport-pmr.webp"
+                  alt="Chauffeur en mission de transport PMR, de la prise en charge à la destination."
                   className={styles.missionImg}
-                  width={1400}
-                  height={788}
+                  width={1448}
+                  height={1086}
                   decoding="async"
                   loading="lazy"
                   draggable={false}

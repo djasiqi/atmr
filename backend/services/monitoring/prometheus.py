@@ -175,7 +175,7 @@ if PROMETHEUS_AVAILABLE and Counter and Gauge and Histogram:
     GEOFENCING_ARRIVALS_TOTAL = Counter(
         "geofencing_arrivals_total",
         "Total arrivées détectées",
-        ["type"],  # type: "pickup", "dropoff"
+        ["type"],  # valeurs: "pickup", "dropoff"
     )
 else:
     LOCATION_POSITIONS_TOTAL = None
@@ -399,7 +399,7 @@ if PROMETHEUS_AVAILABLE and Counter and Histogram and Gauge:
     RESYNC_TOTAL = Counter(
         "resync_total",
         "Total resync déclenchés",
-        ["type", "platform"],  # type: "bookings", "messages", platform: "mobile", "web"
+        ["type", "platform"],  # type=bookings|messages, platform=mobile|web
     )
 
     # Durée resync
@@ -808,9 +808,7 @@ def refresh_push_active_owners_gauges() -> None:
         if PUSH_OPERATIONAL_DRIVERS_WITHOUT_ACTIVE_TOKEN_TOTAL:
             PUSH_OPERATIONAL_DRIVERS_WITHOUT_ACTIVE_TOKEN_TOTAL.set(op_without)
     except Exception as e:
-        logger.debug(
-            "[PrometheusMetrics] Error refreshing push active owners: %s", e
-        )
+        logger.debug("[PrometheusMetrics] Error refreshing push active owners: %s", e)
 
 
 def _normalize_push_registration_labels(

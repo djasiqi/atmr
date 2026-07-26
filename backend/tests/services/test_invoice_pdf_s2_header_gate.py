@@ -8,7 +8,15 @@ from decimal import Decimal
 
 import pytest
 
-from models import Booking, Client, Company, CompanyBillingSettings, Invoice, InvoiceLine, User
+from models import (
+    Booking,
+    Client,
+    Company,
+    CompanyBillingSettings,
+    Invoice,
+    InvoiceLine,
+    User,
+)
 from models.enums import (
     BookingStatus,
     InvoiceBillingStrategy,

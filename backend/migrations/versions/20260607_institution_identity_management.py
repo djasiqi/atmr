@@ -22,7 +22,7 @@ def _slugify(name: str) -> str:
     text = text.replace("'", "-").replace("'", "-")
     text = re.sub(r"[^a-z0-9]+", "-", text)
     text = re.sub(r"-+", "-", text).strip("-")
-    return (text[:50] or "institution")
+    return text[:50] or "institution"
 
 
 def upgrade() -> None:
@@ -146,13 +146,23 @@ def downgrade() -> None:
     op.execute("DROP TABLE IF EXISTS institution_user_audit_events;")
     op.execute("DROP INDEX IF EXISTS ix_user_institution_username;")
     op.execute("DROP INDEX IF EXISTS ix_user_username_no_institution;")
-    op.execute('CREATE UNIQUE INDEX IF NOT EXISTS ix_user_username ON public."user" (username);')
+    op.execute(
+        'CREATE UNIQUE INDEX IF NOT EXISTS ix_user_username ON public."user" (username);'
+    )
     op.execute('ALTER TABLE public."user" DROP COLUMN IF EXISTS archived_at;')
     op.execute('ALTER TABLE public."user" DROP COLUMN IF EXISTS disabled_at;')
-    op.execute('ALTER TABLE public."user" DROP COLUMN IF EXISTS first_login_completed_at;')
-    op.execute('ALTER TABLE public."user" DROP COLUMN IF EXISTS temp_password_generation_count;')
-    op.execute('ALTER TABLE public."user" DROP COLUMN IF EXISTS last_password_reset_at;')
-    op.execute('ALTER TABLE public."user" DROP COLUMN IF EXISTS temporary_password_created_at;')
+    op.execute(
+        'ALTER TABLE public."user" DROP COLUMN IF EXISTS first_login_completed_at;'
+    )
+    op.execute(
+        'ALTER TABLE public."user" DROP COLUMN IF EXISTS temp_password_generation_count;'
+    )
+    op.execute(
+        'ALTER TABLE public."user" DROP COLUMN IF EXISTS last_password_reset_at;'
+    )
+    op.execute(
+        'ALTER TABLE public."user" DROP COLUMN IF EXISTS temporary_password_created_at;'
+    )
     op.execute('ALTER TABLE public."user" DROP COLUMN IF EXISTS authentication_method;')
     op.execute("DROP INDEX IF EXISTS ix_institutions_slug;")
     op.execute("ALTER TABLE institutions DROP COLUMN IF EXISTS slug_locked;")

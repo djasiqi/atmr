@@ -36,9 +36,7 @@ def page_has_prestation_lines(page_text: str) -> bool:
         return True
     if _TRAJET_RE.search(page_text):
         return True
-    if "Client :" in page_text and "CHF" in page_text:
-        return True
-    return False
+    return bool("Client :" in page_text and "CHF" in page_text)
 
 
 def count_prestation_table_headers(page_text: str) -> int:

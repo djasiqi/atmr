@@ -37,14 +37,14 @@ def _reset_sql_counters() -> None:
 
 
 @event.listens_for(Engine, "before_cursor_execute")
-def _before_cursor_execute(conn, cursor, statement, parameters, context, executemany):  # noqa: ARG001
+def _before_cursor_execute(conn, cursor, statement, parameters, context, _executemany):  # noqa: ARG001
     if not getattr(g, "_dash_sql_trace", False):
         return
     g._dash_sql_pending_start = time.perf_counter()
 
 
 @event.listens_for(Engine, "after_cursor_execute")
-def _after_cursor_execute(conn, cursor, statement, parameters, context, executemany):  # noqa: ARG001
+def _after_cursor_execute(conn, cursor, statement, parameters, context, _executemany):  # noqa: ARG001
     if not getattr(g, "_dash_sql_trace", False):
         return
     started = getattr(g, "_dash_sql_pending_start", None)
@@ -72,13 +72,13 @@ def init_company_dashboard_sql_perf(app: Flask) -> None:
     @app.before_request
     def _start_dashboard_sql_trace():  # pyright: ignore
         if not _sql_perf_enabled():
-            return None
+            return
         path = request.path or ""
         if not _is_dashboard_route(path):
-            return None
+            return
         g._dash_sql_trace = True
         _reset_sql_counters()
-        return None
+        return
 
     @app.after_request
     def _attach_dashboard_sql_headers(response):  # pyright: ignore

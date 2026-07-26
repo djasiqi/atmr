@@ -17,6 +17,7 @@ Trois pathologies couvertes :
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 from datetime import UTC, datetime
@@ -116,17 +117,17 @@ def _parse_dt(value) -> datetime | None:
     return dt
 
 
-def _assigned_in_tracking_window(
-    scheduled_at, time_confirmed, now: datetime
-) -> bool:
+def _assigned_in_tracking_window(scheduled_at, time_confirmed, now: datetime) -> bool:
     """ASSIGNED confirmé dont l'heure prévue est dans la fenêtre [T‑30, T+60]."""
     if not time_confirmed:
         return False
     dt = _parse_dt(scheduled_at)
     if dt is None:
         return False
-    return (dt.timestamp() - ASSIGNED_LEAD_BEFORE_SEC) <= now.timestamp() <= (
-        dt.timestamp() + ASSIGNED_GRACE_AFTER_SEC
+    return (
+        (dt.timestamp() - ASSIGNED_LEAD_BEFORE_SEC)
+        <= now.timestamp()
+        <= (dt.timestamp() + ASSIGNED_GRACE_AFTER_SEC)
     )
 
 
@@ -169,7 +170,9 @@ def _resolve_kick_reason(
     return "mobile_tracking_down"
 
 
-def _canonical_freshness_sec(redis_client, driver_id: int, now: datetime) -> float | None:
+def _canonical_freshness_sec(
+    redis_client, driver_id: int, now: datetime
+) -> float | None:
     """Âge (s) de la dernière position **canonical acceptée**, ou None si absente.
 
     Lit ``driver:{id}:loc:canonical`` (rempli uniquement sur ``accepted_canonical``).
@@ -299,11 +302,7 @@ def run_stale_fix_watchdog_tick() -> dict:
         )
         # Correctif A : si le self-report ne déclenche rien mais qu'une mission
         # exige le tracking, on vérifie la fraîcheur RÉELLE du pipeline.
-        if (
-            reason is None
-            and FRESHNESS_ENABLED
-            and driver_id in freshness_required
-        ):
+        if reason is None and FRESHNESS_ENABLED and driver_id in freshness_required:
             reason = _resolve_freshness_kick(redis_client, health, driver_id, now)
 
         if reason is None:
@@ -315,15 +314,11 @@ def run_stale_fix_watchdog_tick() -> dict:
                 driver_id,
                 reason=f"server_watchdog_{reason}",
             )
-            try:
+            with contextlib.suppress(Exception):
                 redis_client.setex(_kick_throttle_key(driver_id), KICK_TTL_SEC, "1")
-            except Exception:
-                pass
             if inc_stale_fix_watchdog_kick is not None:
-                try:
+                with contextlib.suppress(Exception):
                     inc_stale_fix_watchdog_kick(reason=reason)
-                except Exception:
-                    pass
             sent += 1
 
     logger.info(

@@ -29,6 +29,8 @@ export function SessionBootstrapProvider({ children }) {
 
   const refreshBootstrap = useCallback(async () => {
     if (isExplicitLogoutInProgress()) {
+      setUser(null);
+      setStatus('anonymous');
       return false;
     }
 

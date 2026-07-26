@@ -39,7 +39,7 @@ services:
       - "traefik.http.routers.prometheus.tls.certresolver=letsencrypt"
       - "traefik.http.services.prometheus.loadbalancer.server.port=9090"
       # BasicAuth (hash dans .env.production MONITORING_BASIC_AUTH_USERS)
-      # IP allowlist : middleware monitoring-ipallow dans traefik/dynamic.yml (virgules interdites dans labels Docker)
+      # IP allowlist : monitoring-ipallow@file (CIDR ops sur le serveur uniquement ; virgules interdites dans labels)
       - "traefik.http.middlewares.prometheus-auth.basicauth.users=${MONITORING_BASIC_AUTH_USERS:?MONITORING_BASIC_AUTH_USERS is required}"
       - "traefik.http.routers.prometheus.middlewares=prometheus-auth,monitoring-ipallow@file"
     healthcheck:
@@ -178,7 +178,7 @@ services:
       - "traefik.http.routers.alertmanager.entrypoints=websecure"
       - "traefik.http.routers.alertmanager.tls.certresolver=letsencrypt"
       - "traefik.http.services.alertmanager.loadbalancer.server.port=9093"
-      # BasicAuth + IP allowlist (fichier traefik/dynamic.yml : monitoring-ipallow)
+      # BasicAuth + IP allowlist (monitoring-ipallow@file ; CIDR ops sur le serveur uniquement)
       - "traefik.http.middlewares.alertmanager-auth.basicauth.users=${MONITORING_BASIC_AUTH_USERS:?MONITORING_BASIC_AUTH_USERS is required}"
       - "traefik.http.routers.alertmanager.middlewares=alertmanager-auth,monitoring-ipallow@file"
     healthcheck:

@@ -63,23 +63,21 @@ def upgrade() -> None:
         "device_tokens",
         ["driver_id", "device_id", "provider"],
         unique=True,
-        postgresql_where=sa.text(
-            "device_id IS NOT NULL AND driver_id IS NOT NULL"
-        ),
+        postgresql_where=sa.text("device_id IS NOT NULL AND driver_id IS NOT NULL"),
     )
     op.create_index(
         "uq_device_tokens_company_device_provider",
         "device_tokens",
         ["company_id", "device_id", "provider"],
         unique=True,
-        postgresql_where=sa.text(
-            "device_id IS NOT NULL AND company_id IS NOT NULL"
-        ),
+        postgresql_where=sa.text("device_id IS NOT NULL AND company_id IS NOT NULL"),
     )
 
 
 def downgrade() -> None:
-    op.drop_index("uq_device_tokens_company_device_provider", table_name="device_tokens")
+    op.drop_index(
+        "uq_device_tokens_company_device_provider", table_name="device_tokens"
+    )
     op.drop_index("uq_device_tokens_driver_device_provider", table_name="device_tokens")
     op.create_index(
         "uq_device_tokens_driver_device_id",

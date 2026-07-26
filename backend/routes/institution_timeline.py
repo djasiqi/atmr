@@ -4,12 +4,12 @@
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
 
 import sentry_sdk
 from flask import request
-from flask_jwt_extended import verify_jwt_in_request
+from flask_jwt_extended import jwt_required
 from flask_jwt_extended.exceptions import JWTExtendedException
 from flask_restx import Namespace, Resource, fields
 from jwt.exceptions import PyJWTError
@@ -53,6 +53,9 @@ def _reraise_auth_errors(exc: Exception) -> None:
         raise exc
     if hasattr(exc, "code"):
         raise exc
+    lowered = str(exc).lower()
+    if "signature has expired" in lowered or "token has expired" in lowered:
+        raise exc
 
 
 def _parse_date(name: str) -> datetime | None:
@@ -77,9 +80,10 @@ def _timeline_response(events: list[Any]) -> dict[str, Any]:
 
 @institution_timeline_ns.route("/requests/<int:request_id>/timeline")
 class RequestTimeline(Resource):
+    @institution_timeline_ns.doc(security="BearerAuth")
+    @jwt_required()
     def get(self, request_id: int):
         try:
-            verify_jwt_in_request()
             institution_id, _user_id, _role = get_institution_read_context()
             from models import TransportRequest
 
@@ -111,9 +115,10 @@ class RequestTimeline(Resource):
 
 @institution_timeline_ns.route("/bookings/<int:booking_id>/timeline")
 class BookingTimeline(Resource):
+    @institution_timeline_ns.doc(security="BearerAuth")
+    @jwt_required()
     def get(self, booking_id: int):
         try:
-            verify_jwt_in_request()
             institution_id, _user_id, _role = get_institution_read_context()
             from services.institutions.booking_change_service import (
                 resolve_institution_booking,
@@ -145,9 +150,10 @@ class BookingTimeline(Resource):
 
 @institution_timeline_ns.route("/patients/<int:patient_id>/transport-history")
 class PatientTransportHistory(Resource):
+    @institution_timeline_ns.doc(security="BearerAuth")
+    @jwt_required()
     def get(self, patient_id: int):
         try:
-            verify_jwt_in_request()
             institution_id, _user_id, _role = get_institution_read_context()
             from models import InstitutionPatient
 

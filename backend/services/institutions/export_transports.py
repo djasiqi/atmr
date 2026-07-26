@@ -76,16 +76,15 @@ def _billing_label_for_request(req: TransportRequest, booking: Any | None) -> st
         return f"Multi-payeurs ({summary.get('payer_count', 2)})"
     if booking is not None and getattr(req, "multi_stop", False):
         legs = sorted(
-            list(getattr(req, "legs", None) or []),
+            getattr(req, "legs", None) or [],
             key=lambda leg: leg.sequence_index,
         )
         for leg in legs:
             if getattr(leg, "booking_id", None) == getattr(booking, "id", None):
                 effective = effective_billing_for_leg(leg, req)
                 return billing_intent_label(effective)
-    return _BILLING_INTENT_LABELS.get(
-        req.billing_intent, req.billing_intent or "—"
-    )
+    return _BILLING_INTENT_LABELS.get(req.billing_intent, req.billing_intent or "—")
+
 
 # Statuts considérés comme "transport effectué"
 _COMPLETED_BOOKING_STATUSES = frozenset({"COMPLETED", "RETURN_COMPLETED"})
@@ -221,7 +220,7 @@ def build_transport_row(req: TransportRequest) -> dict[str, Any]:
     scheduling = display.get("scheduling") or {}
     identity = display.get("identity") or {}
     booking = getattr(req, "booking", None)
-    company = getattr(req, "accepted_by_company", None)
+    getattr(req, "accepted_by_company", None)
     scheduled = getattr(req, "scheduled_time", None)
     display_time = (scheduling.get("departure") or {}).get("display_time") or _fmt_dt(
         scheduled, "%H:%M"
@@ -239,7 +238,8 @@ def build_transport_row(req: TransportRequest) -> dict[str, Any]:
         "is_round_trip": bool(req.is_round_trip),
         "execution_mode_label": _carrier_source_label(req),
         "company_name": carrier_name,
-        "external_carrier_reference": getattr(req, "external_carrier_reference", None) or "",
+        "external_carrier_reference": getattr(req, "external_carrier_reference", None)
+        or "",
         "status_label": _status_label(req, booking),
         "billing_label": _billing_label_for_request(req, booking),
         "billing_primary_label": _BILLING_INTENT_LABELS.get(
@@ -278,7 +278,10 @@ def compute_daily_stats(requests: list[TransportRequest]) -> dict[str, Any]:
     completed_external = 0
     round_trips = 0
     by_company: dict[str, int] = {}
-    by_execution_mode: dict[str, int] = {"Transporteur LIRIE": 0, "Transporteur externe": 0}
+    by_execution_mode: dict[str, int] = {
+        "Transporteur LIRIE": 0,
+        "Transporteur externe": 0,
+    }
 
     for req in requests:
         if req.patient_id is not None:
@@ -288,7 +291,9 @@ def compute_daily_stats(requests: list[TransportRequest]) -> dict[str, Any]:
 
         booking = getattr(req, "booking", None)
         execution_label = _carrier_source_label(req)
-        by_execution_mode[execution_label] = by_execution_mode.get(execution_label, 0) + 1
+        by_execution_mode[execution_label] = (
+            by_execution_mode.get(execution_label, 0) + 1
+        )
 
         if booking is not None:
             status = _booking_status_str(booking)
@@ -304,7 +309,8 @@ def compute_daily_stats(requests: list[TransportRequest]) -> dict[str, Any]:
             cancelled += 1
         elif (
             req_status == RequestStatus.EXTERNAL_DECLARED_COMPLETED.value
-            and execution_label == CarrierSource.display_label(CarrierSource.EXTERNAL.value)
+            and execution_label
+            == CarrierSource.display_label(CarrierSource.EXTERNAL.value)
         ):
             completed += 1
             completed_external += 1

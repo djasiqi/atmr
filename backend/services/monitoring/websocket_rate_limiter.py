@@ -42,6 +42,7 @@ redis.call("EXPIRE", key, window + 1)
 return {1, 0, count + 1}
 """
 
+
 def _env_int(name: str, default: int) -> int:
     raw = os.getenv(name)
     if raw is None or not str(raw).strip().isdigit():

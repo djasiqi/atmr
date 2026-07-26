@@ -92,7 +92,9 @@ def _base_transport_request(
     return tr
 
 
-def _create_offer(db, transport_request: TransportRequest, company_id: int) -> RequestOffer:
+def _create_offer(
+    db, transport_request: TransportRequest, company_id: int
+) -> RequestOffer:
     offer = RequestOffer(
         transport_request_id=transport_request.id,
         company_id=company_id,
@@ -269,9 +271,10 @@ class TestCas3AcceptOfferProposedPickupTime:
         assert _hhmm_from_iso(summary.get("scheduled_time")) == "12:30"
 
         company_payload = booking.serialize
-        assert _hhmm_from_iso(
-            mission_scheduled_to_api_iso(booking.scheduled_time)
-        ) == "12:30"
+        assert (
+            _hhmm_from_iso(mission_scheduled_to_api_iso(booking.scheduled_time))
+            == "12:30"
+        )
         assert company_payload.get("time_formatted", "").startswith("12:30")
 
 
@@ -345,9 +348,11 @@ class TestCas4RoundTripDepartureAndReturn:
         assert outbound is not None
         assert return_booking is not None
 
-        assert _hhmm_from_iso(
-            mission_scheduled_to_api_iso(outbound.scheduled_time)
-        ) == "12:30"
-        assert _hhmm_from_iso(
-            mission_scheduled_to_api_iso(return_booking.scheduled_time)
-        ) == "16:00"
+        assert (
+            _hhmm_from_iso(mission_scheduled_to_api_iso(outbound.scheduled_time))
+            == "12:30"
+        )
+        assert (
+            _hhmm_from_iso(mission_scheduled_to_api_iso(return_booking.scheduled_time))
+            == "16:00"
+        )

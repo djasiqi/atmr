@@ -67,7 +67,9 @@ def backfill(
                 stats["updated"] += 1
                 continue
 
-            if sync_transport_request_departure_from_booking(transport_request, booking):
+            if sync_transport_request_departure_from_booking(
+                transport_request, booking
+            ):
                 stats["updated"] += 1
             else:
                 stats["skipped"] += 1

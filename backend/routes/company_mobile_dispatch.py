@@ -323,7 +323,7 @@ def _resolve_booking_map_coordinates(
         coords = geocode_address(addr, country="CH")
         if coords and "lat" in coords and "lon" in coords:
             return float(coords["lat"]), float(coords["lon"])
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.warning(
             "[MobileDispatch] Geocode %s booking=%s: %s",
             point_label,
@@ -431,7 +431,7 @@ def _build_ride_summary(
                     and computed_distance_m > 0
                 ):
                     distance_meters = computed_distance_m
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 logger.warning(
                     "[MobileDispatch] Impossible de calculer durée/distance booking=%s: %s",
                     getattr(booking, "id", None),
@@ -635,9 +635,7 @@ def _build_ride_summary(
     )
     summary.update(display_blocks)
     summary["time_confirmed"] = bool(getattr(booking, "time_confirmed", False))
-    passenger_name = (
-        display_blocks.get("identity", {}).get("passenger", {}).get("name")
-    )
+    passenger_name = display_blocks.get("identity", {}).get("passenger", {}).get("name")
     if passenger_name:
         summary["client_name"] = passenger_name
         client_info["name"] = passenger_name
@@ -2958,18 +2956,14 @@ def _create_mobile_dispatch_ride_response(
             "booking_id": first_outbound.id if first_outbound else None,
             "client_id": client_id,
             "is_return": bool(created_returns),
-            "return_booking_id": (
-                created_returns[0].id if created_returns else None
-            ),
+            "return_booking_id": (created_returns[0].id if created_returns else None),
             "source": "mobile_enterprise_unified",
         },
         reasoning=f"Création course mobile via use-case {first_outbound.id if first_outbound else 'N/A'}",
     )
 
     if not first_outbound:
-        company_mobile_dispatch_ns.abort(
-            500, "Erreur lors de la création de la course"
-        )
+        company_mobile_dispatch_ns.abort(500, "Erreur lors de la création de la course")
         raise AssertionError("No outbound created") from None
     summary = _build_ride_summary(first_outbound, current_company_id=company_id)
     result_dict: dict[str, Any] = {"summary": summary}
@@ -3191,10 +3185,9 @@ class MobileUpdateRide(Resource):
                     "from": str(old_dropoff or "") or None,
                     "to": str(new_dropoff or "") or None,
                 }
-            if (
-                ("notes" in payload or "notes_medical" in payload)
-                and str(old_notes or "") != str(new_notes or "")
-            ):
+            if ("notes" in payload or "notes_medical" in payload) and str(
+                old_notes or ""
+            ) != str(new_notes or ""):
                 # éviter d'envoyer des notes trop longues en notification
                 changes["notes"] = {
                     "from": (str(old_notes or "")[:200] or None),

@@ -345,8 +345,12 @@ def estimate_offer_price(offer: Any) -> dict[str, Any] | None:
                         "dropoff_location": leg.dropoff_location,
                         "pickup_lat": float(leg.pickup_lat) if leg.pickup_lat else None,
                         "pickup_lon": float(leg.pickup_lng) if leg.pickup_lng else None,
-                        "dropoff_lat": float(leg.dropoff_lat) if leg.dropoff_lat else None,
-                        "dropoff_lon": float(leg.dropoff_lng) if leg.dropoff_lng else None,
+                        "dropoff_lat": float(leg.dropoff_lat)
+                        if leg.dropoff_lat
+                        else None,
+                        "dropoff_lon": float(leg.dropoff_lng)
+                        if leg.dropoff_lng
+                        else None,
                     },
                 )
                 for leg in legs

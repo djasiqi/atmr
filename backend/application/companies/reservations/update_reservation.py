@@ -131,10 +131,12 @@ class UpdateCompanyReservationUseCase:
                         booking.time_confirmed = not is_sentinel_midnight
                     updated_fields.append("time_confirmed")
 
-        if "time_confirmed" in validated_data and "scheduled_time" not in validated_data:
-            if hasattr(booking, "time_confirmed"):
-                booking.time_confirmed = bool(validated_data["time_confirmed"])
-                updated_fields.append("time_confirmed")
+        if (
+            "time_confirmed" in validated_data
+            and "scheduled_time" not in validated_data
+        ) and hasattr(booking, "time_confirmed"):
+            booking.time_confirmed = bool(validated_data["time_confirmed"])
+            updated_fields.append("time_confirmed")
 
         if "medical_facility" in validated_data:
             booking.medical_facility = validated_data["medical_facility"]

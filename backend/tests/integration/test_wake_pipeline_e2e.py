@@ -98,11 +98,17 @@ def test_wake_pipeline_contract_services(client, sample_driver, db):
 
     mock_redis, _redis_store = _build_redis_store(stale_ts)
 
-    with patch("ext.redis_client", mock_redis), patch("models.Booking") as mock_booking, patch(
-        "services.events.fanout._should_throttle_silent_update", return_value=False
-    ), patch("services.events.fanout.send_silent_data_update", return_value=True), patch(
-        "services.monitoring.driver_device_health_metrics.record_silent_push_wake",
-        side_effect=_record_wake,
+    with (
+        patch("ext.redis_client", mock_redis),
+        patch("models.Booking") as mock_booking,
+        patch(
+            "services.events.fanout._should_throttle_silent_update", return_value=False
+        ),
+        patch("services.events.fanout.send_silent_data_update", return_value=True),
+        patch(
+            "services.monitoring.driver_device_health_metrics.record_silent_push_wake",
+            side_effect=_record_wake,
+        ),
     ):
         mock_booking.query.filter.return_value.with_entities.return_value.all.return_value = [
             row
@@ -115,10 +121,13 @@ def test_wake_pipeline_contract_services(client, sample_driver, db):
         assert (tht.STALE_WAKE_SYNC_TYPE, "sent") in recorded_metrics
 
     headers = _driver_headers(client, sample_driver)
-    with patch(
-        "services.monitoring.driver_device_health_metrics.record_silent_push_wake",
-        side_effect=_record_wake,
-    ), patch("services.monitoring.notification_metrics.track_silent_sync_duration"):
+    with (
+        patch(
+            "services.monitoring.driver_device_health_metrics.record_silent_push_wake",
+            side_effect=_record_wake,
+        ),
+        patch("services.monitoring.notification_metrics.track_silent_sync_duration"),
+    ):
         ack_response = client.post(
             "/api/v1/driver/me/push-notifications/silent-ack",
             json={
@@ -136,12 +145,20 @@ def test_wake_pipeline_contract_services(client, sample_driver, db):
 
     mock_redis, redis_store = _build_redis_store(stale_ts)
     mock_event = MagicMock()
-    with patch("ext.redis_client", mock_redis), patch(
-        "services.driver_device_health.redis_client", mock_redis
-    ), patch("services.geolocation.device_health.write_device_health", return_value=True), patch(
-        "services.monitoring.driver_device_health_metrics.record_device_health_report"
-    ), patch("services.driver_device_health.DriverDeviceHealthEvent", return_value=mock_event), patch(
-        "services.driver_device_health.db.session"
+    with (
+        patch("ext.redis_client", mock_redis),
+        patch("services.driver_device_health.redis_client", mock_redis),
+        patch(
+            "services.geolocation.device_health.write_device_health", return_value=True
+        ),
+        patch(
+            "services.monitoring.driver_device_health_metrics.record_device_health_report"
+        ),
+        patch(
+            "services.driver_device_health.DriverDeviceHealthEvent",
+            return_value=mock_event,
+        ),
+        patch("services.driver_device_health.db.session"),
     ):
         ingest_driver_device_health(driver_id, _heartbeat_payload())
 
@@ -151,7 +168,7 @@ def test_wake_pipeline_contract_services(client, sample_driver, db):
 
         snapshot = read_driver_device_health_snapshot(driver_id)
         assert snapshot is not None
-        assert snapshot.get("tracking_active") in {True, "1", 1}
+        assert snapshot.get("tracking_active") in {True, "1"}
 
         tracking_display_status = resolve_tracking_display_status(
             location_status="live",

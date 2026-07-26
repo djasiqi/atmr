@@ -92,7 +92,9 @@ class TestAuthOnboardingBootstrap:
         assert "force_password_change" in data["onboarding_status"]["reasons"]
         assert data["onboarding_status"]["required"] is True
 
-    def test_bootstrap_invited_without_force_password_change(self, client, db, institution):
+    def test_bootstrap_invited_without_force_password_change(
+        self, client, db, institution
+    ):
         """Verrou semantique: invited -> must_complete_onboarding sans force_password_change."""
         uid = str(uuid.uuid4())[:8]
         user = User()

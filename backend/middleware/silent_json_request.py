@@ -26,12 +26,12 @@ def register_json_body_precache(app: Flask) -> None:
     @app.before_request
     def _precache_json_request_body():  # pyright: ignore[reportUnusedFunction]
         if request.method not in {"POST", "PUT", "PATCH", "DELETE"}:
-            return None
+            return
         content_type = (request.content_type or "").lower()
         if "json" not in content_type:
-            return None
+            return
         request.get_data(cache=True)
-        return None
+        return
 
 
 def redact_json_body_preview(raw: str | None, limit: int = 400) -> str:
@@ -45,7 +45,10 @@ def redact_json_body_preview(raw: str | None, limit: int = 400) -> str:
             redacted = {
                 key: (
                     "***"
-                    if any(token in str(key).lower() for token in ("password", "secret", "token"))
+                    if any(
+                        token in str(key).lower()
+                        for token in ("password", "secret", "token")
+                    )
                     else value
                 )
                 for key, value in parsed.items()

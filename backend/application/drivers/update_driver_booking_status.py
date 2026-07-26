@@ -54,7 +54,9 @@ class _BookingRepo(Protocol):
 class _AssignmentRepo(Protocol):
     def find_model_by_booking_id(self, booking_id: int) -> Any | None: ...
 
-    def delete_dependent_records_for_assignment_id(self, assignment_id: int) -> None: ...
+    def delete_dependent_records_for_assignment_id(
+        self, assignment_id: int
+    ) -> None: ...
 
 
 class _DbSession(Protocol):

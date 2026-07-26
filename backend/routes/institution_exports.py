@@ -22,17 +22,18 @@ from io import BytesIO
 
 import sentry_sdk
 from flask import request, send_file
-from flask_jwt_extended import verify_jwt_in_request
+from flask_jwt_extended import jwt_required
+from flask_jwt_extended.exceptions import JWTExtendedException
 from flask_restx import Namespace, Resource
+from jwt.exceptions import PyJWTError
 
-from models import Institution, InstitutionPatient
+from models import Institution, InstitutionPatient, TransportRequest
 from models.enums import InstitutionRole
 from routes.api_error_models import (
     create_not_found_error_model,
     create_permission_error_model,
 )
 from routes.institution_requests import get_institution_read_context
-from models import TransportRequest
 from services.institutions.export_transports import (
     build_daily_csv,
     build_daily_mission_reports_zip,
@@ -73,6 +74,17 @@ EXPORT_ALLOWED_ROLES = frozenset(
 
 class _ExportForbidden(Exception):
     """Levée quand le rôle courant n'a pas le droit d'export."""
+
+
+def _reraise_auth_errors(exc: Exception) -> None:
+    """Ne pas transformer les erreurs JWT/auth en 500 ni les remonter à Sentry."""
+    if isinstance(exc, (JWTExtendedException, PyJWTError)):
+        raise exc
+    if hasattr(exc, "code"):
+        raise exc
+    lowered = str(exc).lower()
+    if "signature has expired" in lowered or "token has expired" in lowered:
+        raise exc
 
 
 def _require_export_context() -> int:
@@ -143,9 +155,9 @@ class PatientTransportExportPdf(Resource):
     @institution_exports_ns.response(200, "PDF généré")
     @institution_exports_ns.response(403, "Accès refusé", permission_error_model)
     @institution_exports_ns.response(404, "Patient non trouvé", not_found_error_model)
+    @jwt_required()
     def get(self, patient_id: int):
         try:
-            verify_jwt_in_request()
             institution_id = _require_export_context()
 
             patient = InstitutionPatient.query.filter_by(
@@ -166,17 +178,13 @@ class PatientTransportExportPdf(Resource):
             )
 
             if date_from or date_to:
-                start_label = (
-                    date_from.strftime("%d.%m.%Y") if date_from else "origine"
-                )
+                start_label = date_from.strftime("%d.%m.%Y") if date_from else "origine"
                 end_label = date_to.strftime("%d.%m.%Y") if date_to else "à ce jour"
                 period_label = f"{start_label} → {end_label}"
             else:
                 period_label = "Tout l'historique"
 
-            pdf_bytes = build_patient_pdf(
-                institution, patient, requests, period_label
-            )
+            pdf_bytes = build_patient_pdf(institution, patient, requests, period_label)
             filename = f"transports_patient_{patient_id}.pdf"
             response = _pdf_response(pdf_bytes, filename)
             response.headers["X-Rows-Count"] = str(len(requests))
@@ -184,6 +192,7 @@ class PatientTransportExportPdf(Resource):
         except _ExportForbidden:
             return {"error": "Accès refusé : export non autorisé pour ce rôle"}, 403
         except Exception as e:
+            _reraise_auth_errors(e)
             sentry_sdk.capture_exception(e)
             logger.error("[Export] PDF patient %s: %s", patient_id, e)
             return {"error": "Erreur serveur"}, 500
@@ -220,6 +229,7 @@ class DailyTransportExportPdf(Resource):
         except _ExportForbidden:
             return {"error": "Accès refusé : export non autorisé pour ce rôle"}, 403
         except Exception as e:
+            _reraise_auth_errors(e)
             sentry_sdk.capture_exception(e)
             logger.error("[Export] PDF journalier: %s", e)
             return {"error": "Erreur serveur"}, 500
@@ -270,6 +280,7 @@ class DailyMissionReportsExportZip(Resource):
         except _ExportForbidden:
             return {"error": "Accès refusé : export non autorisé pour ce rôle"}, 403
         except Exception as e:
+            _reraise_auth_errors(e)
             sentry_sdk.capture_exception(e)
             logger.error("[Export] ZIP rapports journaliers: %s", e)
             return {"error": "Erreur serveur"}, 500
@@ -286,9 +297,9 @@ class DailyTransportExportCsv(Resource):
     )
     @institution_exports_ns.response(200, "CSV généré")
     @institution_exports_ns.response(403, "Accès refusé", permission_error_model)
+    @jwt_required()
     def get(self):
         try:
-            verify_jwt_in_request()
             institution_id = _require_export_context()
 
             target_day = _parse_date_param("date") or datetime.now(UTC).date()
@@ -306,6 +317,7 @@ class DailyTransportExportCsv(Resource):
         except _ExportForbidden:
             return {"error": "Accès refusé : export non autorisé pour ce rôle"}, 403
         except Exception as e:
+            _reraise_auth_errors(e)
             sentry_sdk.capture_exception(e)
             logger.error("[Export] CSV journalier: %s", e)
             return {"error": "Erreur serveur"}, 500
@@ -359,6 +371,7 @@ class RequestMissionExportPdf(Resource):
         except _ExportForbidden:
             return {"error": "Accès refusé : export non autorisé pour ce rôle"}, 403
         except Exception as e:
+            _reraise_auth_errors(e)
             sentry_sdk.capture_exception(e)
             logger.error("[Export] PDF demande %s: %s", request_id, e)
             return {"error": "Erreur serveur"}, 500

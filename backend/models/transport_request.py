@@ -298,13 +298,21 @@ class TransportRequest(db.Model):
     )
 
     # Snapshot transporteur externe (historique figé, jamais remplacé par une FK)
-    external_carrier_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    external_carrier_phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    external_carrier_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    external_carrier_name: Mapped[str | None] = mapped_column(
+        String(255), nullable=True
+    )
+    external_carrier_phone: Mapped[str | None] = mapped_column(
+        String(50), nullable=True
+    )
+    external_carrier_email: Mapped[str | None] = mapped_column(
+        String(255), nullable=True
+    )
     external_carrier_reference: Mapped[str | None] = mapped_column(
         String(100), nullable=True
     )
-    external_carrier_reason: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    external_carrier_reason: Mapped[str | None] = mapped_column(
+        String(120), nullable=True
+    )
     assigned_externally_at = Column(DateTime(timezone=True), nullable=True)
     externalized_by_user_id: Mapped[int | None] = mapped_column(
         Integer,
@@ -446,7 +454,9 @@ class TransportRequest(db.Model):
         """Valide le mode d'exécution."""
         valid_sources = CarrierSource.choices()
         if value not in valid_sources:
-            raise ValueError(f"carrier_source must be one of: {', '.join(valid_sources)}")
+            raise ValueError(
+                f"carrier_source must be one of: {', '.join(valid_sources)}"
+            )
         return value
 
     @validates("status")
@@ -609,13 +619,9 @@ class TransportRequest(db.Model):
             transport_request_id=self.id,
             status=OfferStatus.PENDING.value,
         ).all()
-        actionable_pending = [
-            offer for offer in pending_offers if not offer.is_expired
-        ]
+        actionable_pending = [offer for offer in pending_offers if not offer.is_expired]
         pending_count = len(actionable_pending)
-        has_only_expired_pending = (
-            len(pending_offers) > 0 and pending_count == 0
-        )
+        has_only_expired_pending = len(pending_offers) > 0 and pending_count == 0
         can_relaunch = (
             self.status in (RequestStatus.SENT.value, RequestStatus.EXPIRED.value)
             and pending_count == 0
@@ -691,11 +697,14 @@ class TransportRequest(db.Model):
             summary["route_journey"] = None
 
         # A/R : agréger le retour (query explicite — return_trip pointe vers le parent)
-        from services.booking.return_booking_resolver import resolve_return_child_booking
+        from services.booking.return_booking_resolver import (
+            resolve_return_child_booking,
+        )
 
         ret = resolve_return_child_booking(booking) if self.is_round_trip else None
         if self.is_round_trip and ret is not None:
             from shared.time_utils import mission_scheduled_to_api_iso
+
             ret_status = _status_value(ret.status)
             summary["return_booking"] = {
                 "id": ret.id,

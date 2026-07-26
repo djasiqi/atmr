@@ -104,9 +104,7 @@ def evaluate_drift_row(
             if assignment_status is not None
             else ""
         ),
-        "expected_assignment_statuses": "|".join(
-            sorted(s.value for s in expected)
-        ),
+        "expected_assignment_statuses": "|".join(sorted(s.value for s in expected)),
         "status_drift": drift,
     }
 

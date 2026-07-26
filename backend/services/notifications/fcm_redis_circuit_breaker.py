@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 import time
@@ -64,9 +65,7 @@ def allow_fcm_request() -> bool:
 
         # Autre worker sonde déjà — refuser le surplus en half-open
         failures = _safe_int(redis_client.get(FCM_CB_FAILURES_KEY))
-        if failures >= FCM_CIRCUIT_BREAKER_FAILURE_THRESHOLD:
-            return False
-        return True
+        return not failures >= FCM_CIRCUIT_BREAKER_FAILURE_THRESHOLD
     except Exception as exc:
         logger.warning("[fcm_cb] allow check failed (%s), fail-open", exc)
         return True
@@ -76,10 +75,8 @@ def record_fcm_success() -> None:
     redis_client = _get_redis()
     if not redis_client:
         return
-    try:
+    with contextlib.suppress(Exception):
         redis_client.delete(FCM_CB_FAILURES_KEY, FCM_CB_PROBE_KEY)
-    except Exception:
-        pass
 
 
 def record_fcm_retryable_failure() -> None:
@@ -117,7 +114,5 @@ def record_fcm_non_retryable_failure() -> None:
     redis_client = _get_redis()
     if not redis_client:
         return
-    try:
+    with contextlib.suppress(Exception):
         redis_client.delete(FCM_CB_PROBE_KEY)
-    except Exception:
-        pass

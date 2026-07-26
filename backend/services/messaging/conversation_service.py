@@ -7,8 +7,9 @@ import os
 from datetime import UTC, datetime
 from typing import Any
 
-from ext import db
 from sqlalchemy import and_, or_
+
+from ext import db
 from models import (
     Booking,
     Company,
@@ -20,9 +21,9 @@ from models import (
     User,
 )
 from models.messaging_enums import (
+    DEFAULT_MESSAGE_VISIBILITY_TAGS,
     ConversationContext,
     ConversationType,
-    DEFAULT_MESSAGE_VISIBILITY_TAGS,
     ParticipantRole,
 )
 from services.messaging.legacy_thread import (
@@ -210,7 +211,7 @@ class ConversationService:
             ConversationService._sync_dispatch_driver_participants(existing, company_id)
             return existing
 
-        company = Company.query.get(company_id)
+        Company.query.get(company_id)
         conv = Conversation(
             company_id=company_id,
             conversation_type=ConversationType.COMPANY.value,
@@ -1054,7 +1055,7 @@ class ConversationService:
             "participant_added": lambda d: f"{d} ajouté",
             "participant_removed": lambda d: f"{d} retiré",
             "channel_renamed": lambda d: f"Nom modifié · {d}",
-            "description_updated": lambda d: "Description modifiée",
+            "description_updated": lambda _d: "Description modifiée",
             "history_cleared": lambda d: f"Historique vidé · {d} message(s)",
         }
         for entry in log:
@@ -1509,10 +1510,9 @@ def _dedupe_thread_rows_by_id(
                 continue
         prev_ts = prev.get("last_message_at") or ""
         row_ts = row.get("last_message_at") or ""
-        if row_ts > prev_ts:
-            by_tid[tid] = row
-        elif row_ts == prev_ts and int(row.get("unread_count") or 0) > int(
-            prev.get("unread_count") or 0
+        if row_ts > prev_ts or (
+            row_ts == prev_ts
+            and int(row.get("unread_count") or 0) > int(prev.get("unread_count") or 0)
         ):
             by_tid[tid] = row
     return list(by_tid.values())

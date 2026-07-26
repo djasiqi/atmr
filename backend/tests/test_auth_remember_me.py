@@ -43,15 +43,11 @@ def _is_session_cookie(cookie_header: str) -> bool:
     """Cookie de session : ni Max-Age positif, ni Expires futur."""
     if re.search(r"Max-Age=\d+", cookie_header):
         return False
-    if "expires=" in cookie_header.lower():
-        return False
-    return True
+    return "expires=" not in cookie_header.lower()
 
 
 class TestLoginRememberMe:
-    def test_login_remember_me_true_uses_long_refresh_cookie(
-        self, client, sample_user
-    ):
+    def test_login_remember_me_true_uses_long_refresh_cookie(self, client, sample_user):
         response = _post_login(client, sample_user, remember_me=True)
         assert response.status_code == 200, response.get_data(as_text=True)
 
@@ -90,11 +86,11 @@ class TestLoginRememberMe:
             decoded = decode_token(refresh_token)
         ttl = decoded["exp"] - decoded["iat"]
         # Court : <= 24h. Par défaut 1h.
-        assert ttl <= 24 * 3600, f"Refresh token devrait être court (<=24h), reçu {ttl}s"
+        assert ttl <= 24 * 3600, (
+            f"Refresh token devrait être court (<=24h), reçu {ttl}s"
+        )
 
-    def test_login_default_behaviour_when_remember_me_absent(
-        self, client, sample_user
-    ):
+    def test_login_default_behaviour_when_remember_me_absent(self, client, sample_user):
         # Pas de champ remember_me => équivalent à False (cookie de session, TTL court)
         response = _post_login(client, sample_user, remember_me=None)
         assert response.status_code == 200
@@ -114,13 +110,9 @@ class TestLoginRememberMe:
         )
         assert response.status_code in (400, 422), response.get_data(as_text=True)
 
-    def test_login_mobile_not_impacted_by_remember_me_false(
-        self, client, sample_user
-    ):
+    def test_login_mobile_not_impacted_by_remember_me_false(self, client, sample_user):
         """Les clients mobiles conservent le TTL par défaut (compat ascendante)."""
-        response = _post_login(
-            client, sample_user, remember_me=False, mobile=True
-        )
+        response = _post_login(client, sample_user, remember_me=False, mobile=True)
         assert response.status_code == 200
 
         # Les cookies ne sont pas posés pour mobile, mais le JSON contient le
@@ -142,9 +134,7 @@ class TestLoginRememberMe:
 
 
 @pytest.mark.parametrize("remember_me", [True, False])
-def test_login_response_still_returns_user_payload(
-    client, sample_user, remember_me
-):
+def test_login_response_still_returns_user_payload(client, sample_user, remember_me):
     response = _post_login(client, sample_user, remember_me=remember_me)
     assert response.status_code == 200
     data = response.get_json()
@@ -185,7 +175,9 @@ class TestRefreshRotationRememberMe:
         assert _is_session_cookie(login_cookie)
 
         refresh_response = _post_refresh(client)
-        assert refresh_response.status_code == 200, refresh_response.get_data(as_text=True)
+        assert refresh_response.status_code == 200, refresh_response.get_data(
+            as_text=True
+        )
 
         rotated_cookie = _refresh_cookie_header(refresh_response)
         assert rotated_cookie is not None
@@ -214,15 +206,19 @@ class TestRefreshRotationRememberMe:
         login_cookie = _refresh_cookie_header(login_response)
         assert login_cookie is not None
         login_max_age = _refresh_max_age(login_cookie)
-        assert login_max_age is not None and login_max_age >= 7 * 24 * 3600
+        assert login_max_age is not None
+        assert login_max_age >= 7 * 24 * 3600
 
         refresh_response = _post_refresh(client)
-        assert refresh_response.status_code == 200, refresh_response.get_data(as_text=True)
+        assert refresh_response.status_code == 200, refresh_response.get_data(
+            as_text=True
+        )
 
         rotated_cookie = _refresh_cookie_header(refresh_response)
         assert rotated_cookie is not None
         rotated_max_age = _refresh_max_age(rotated_cookie)
-        assert rotated_max_age is not None and rotated_max_age >= 7 * 24 * 3600, (
+        assert rotated_max_age is not None
+        assert rotated_max_age >= 7 * 24 * 3600, (
             "Après rotation remember_me=true, Max-Age long attendu"
         )
 
@@ -270,7 +266,11 @@ class TestRefreshRotationRememberMe:
 
             if remember_me:
                 assert rotated_ttl >= login_ttl // 2
-                assert not _is_session_cookie(_refresh_cookie_header(refresh_response) or "")
+                assert not _is_session_cookie(
+                    _refresh_cookie_header(refresh_response) or ""
+                )
             else:
                 assert rotated_ttl <= login_ttl * 2
-                assert _is_session_cookie(_refresh_cookie_header(refresh_response) or "")
+                assert _is_session_cookie(
+                    _refresh_cookie_header(refresh_response) or ""
+                )

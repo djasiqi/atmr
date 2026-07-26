@@ -1,15 +1,15 @@
 """Tests messaging V1 — enums, legacy threads, permissions surface."""
 
 from models.messaging_enums import (
+    DEFAULT_VISIBILITY_SCOPE,
     ConversationContext,
     ConversationType,
-    DEFAULT_VISIBILITY_SCOPE,
     ParticipantRole,
 )
 from services.messaging.legacy_thread import (
+    company_dispatch_legacy_thread_id,
     mission_thread_id,
     parse_mission_thread,
-    company_dispatch_legacy_thread_id,
 )
 from services.messaging.permission_service import MessagingPermissionService
 from services.messaging.system_message_emitter import SYSTEM_LABELS

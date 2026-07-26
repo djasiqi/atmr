@@ -101,19 +101,32 @@ def archive_positions_older_than(
             if pos.timestamp:
                 months_to_archive.add((pos.timestamp.year, pos.timestamp.month))
 
+        # Créer partitions pour les mois concernés (no-op si table non partitionnée)
+        months_to_archive = set()
+        sample_positions = count_query.limit(100).all()
+        for pos in sample_positions:
+            if pos.timestamp:
+                months_to_archive.add((pos.timestamp.year, pos.timestamp.month))
+
         for year, month in months_to_archive:
             TripTrackingArchive.ensure_partition_for_month(year, month, db.session)
 
     except Exception as e:
-        logger.error("Error setting up archive partitions: %s", e)
+        # Échec partitionnement uniquement : continuer si table classique utilisable
+        if TripTrackingArchive.is_parent_partitioned(db.session):
+            logger.error("Error setting up archive partitions: %s", e)
+            db.session.rollback()
+            return {
+                "total": total_count,
+                "archived": 0,
+                "errors": total_count,
+                "dry_run": False,
+                "error": str(e),
+            }
+        logger.warning(
+            "Partition setup skipped (non-partitioned archive table): %s", e
+        )
         db.session.rollback()
-        return {
-            "total": total_count,
-            "archived": 0,
-            "errors": total_count,
-            "dry_run": False,
-            "error": str(e),
-        }
 
     archived = 0
     errors = 0

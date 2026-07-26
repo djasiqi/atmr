@@ -871,7 +871,7 @@ def update_celery_queue_length_metric():
         )
 
 
-from celery.signals import worker_process_init
+from celery.signals import worker_process_init  # noqa: E402
 
 
 @worker_process_init.connect

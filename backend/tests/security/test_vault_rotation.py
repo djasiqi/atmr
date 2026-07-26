@@ -228,9 +228,9 @@ class TestRotateAllSecrets:
     ):
         """Test rotation globale réussie."""
         # Mock toutes les rotations réussies
-        mock_rotate_flask.return_value = {"status": "success"}
-        mock_rotate_jwt.return_value = {"status": "success"}
-        mock_rotate_encryption.return_value = {"status": "success"}
+        mock_rotate_flask.run.return_value = {"status": "success"}
+        mock_rotate_jwt.run.return_value = {"status": "success"}
+        mock_rotate_encryption.run.return_value = {"status": "success"}
 
         # Les fonctions sont des tâches Celery avec bind=True, donc self est automatique
         # On appelle directement sans argument
@@ -241,6 +241,9 @@ class TestRotateAllSecrets:
         assert result["total_count"] == 3
         assert "rotated_at" in result
         assert "results" in result
+        mock_rotate_flask.run.assert_called_once()
+        mock_rotate_jwt.run.assert_called_once()
+        mock_rotate_encryption.run.assert_called_once()
 
     @patch("tasks.vault_rotation_tasks.rotate_encryption_key")
     @patch("tasks.vault_rotation_tasks.rotate_jwt_secret")
@@ -250,9 +253,12 @@ class TestRotateAllSecrets:
     ):
         """Test rotation globale avec échec partiel."""
         # Mock rotations avec un échec
-        mock_rotate_flask.return_value = {"status": "success"}
-        mock_rotate_jwt.return_value = {"status": "error", "error": "Vault unavailable"}
-        mock_rotate_encryption.return_value = {"status": "success"}
+        mock_rotate_flask.run.return_value = {"status": "success"}
+        mock_rotate_jwt.run.return_value = {
+            "status": "error",
+            "error": "Vault unavailable",
+        }
+        mock_rotate_encryption.run.return_value = {"status": "success"}
 
         # Les fonctions sont des tâches Celery avec bind=True, donc self est automatique
         # On appelle directement sans argument
@@ -271,9 +277,12 @@ class TestRotateAllSecrets:
     ):
         """Test notification en cas d'échec."""
         # Mock rotations avec échec
-        mock_rotate_flask.return_value = {"status": "success"}
-        mock_rotate_jwt.return_value = {"status": "error", "error": "Vault unavailable"}
-        mock_rotate_encryption.return_value = {
+        mock_rotate_flask.run.return_value = {"status": "success"}
+        mock_rotate_jwt.run.return_value = {
+            "status": "error",
+            "error": "Vault unavailable",
+        }
+        mock_rotate_encryption.run.return_value = {
             "status": "error",
             "error": "Network error",
         }
@@ -295,7 +304,9 @@ class TestRotateAllSecrets:
     ):
         """Test gestion exception lors de rotation globale."""
         # Mock exception
-        mock_rotate_flask.side_effect = Exception("Unexpected error")
+        mock_rotate_flask.run.side_effect = Exception("Unexpected error")
+        mock_rotate_jwt.run.return_value = {"status": "success"}
+        mock_rotate_encryption.run.return_value = {"status": "success"}
 
         # rotate_all_secrets capture toutes les exceptions et les met dans results
         # Elle ne lève jamais d'exception, elle retourne un dict avec les erreurs

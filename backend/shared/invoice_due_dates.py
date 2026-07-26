@@ -72,9 +72,7 @@ def resolve_reminder_due_date(
         return None
     days = payment_days_override
     if days is None:
-        days = get_reminder_payment_days_for_level(
-            company_id, int(reminder.level or 1)
-        )
+        days = get_reminder_payment_days_for_level(company_id, int(reminder.level or 1))
     return compute_reminder_due_date(reminder.generated_at, days)
 
 

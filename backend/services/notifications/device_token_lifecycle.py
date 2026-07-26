@@ -99,12 +99,11 @@ def apply_push_result_to_device_token(
 
 def deactivate_stale_device_tokens(
     *,
-    session: Session | None = None,
+    session: Session | None = None,  # noqa: ARG001 — réservé API (session injectée)
     stale_days: int | None = None,
     min_failures: int | None = None,
 ) -> int:
     """Désactive les tokens zombies (anciens + échecs répétés). Retourne le nombre désactivés."""
-    sess = session or db.session
     days = stale_days if stale_days is not None else STALE_TOKEN_DAYS
     failures = min_failures if min_failures is not None else STALE_TOKEN_MIN_FAILURES
     cutoff = datetime.now(UTC) - timedelta(days=days)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 from datetime import UTC, datetime
@@ -72,10 +73,8 @@ def _send_stale_wake(
         priority="high",
     )
     if ok:
-        try:
+        with contextlib.suppress(Exception):
             redis_client.setex(throttle_key, STALE_WAKE_THROTTLE_SEC, "1")
-        except Exception:
-            pass
         record_silent_push_wake(sync_type=STALE_WAKE_SYNC_TYPE, result="sent")
         return "sent"
 
@@ -116,7 +115,9 @@ def stale_tracking_wake_tick() -> dict:
         if driver_id not in driver_missions:
             driver_missions[int(driver_id)] = {
                 "mission_id": getattr(row, "id", None),
-                "mission_status": getattr(getattr(row, "status", None), "value", row.status),
+                "mission_status": getattr(
+                    getattr(row, "status", None), "value", row.status
+                ),
             }
 
     sent = 0
@@ -132,7 +133,9 @@ def stale_tracking_wake_tick() -> dict:
             ts_raw = loc.get(b"ts") or loc.get("ts")
             if ts_raw:
                 try:
-                    ts_text = ts_raw.decode() if isinstance(ts_raw, bytes) else str(ts_raw)
+                    ts_text = (
+                        ts_raw.decode() if isinstance(ts_raw, bytes) else str(ts_raw)
+                    )
                     ts = datetime.fromisoformat(ts_text.replace("Z", "+00:00"))
                     if ts.tzinfo is None:
                         ts = ts.replace(tzinfo=UTC)

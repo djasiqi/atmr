@@ -176,7 +176,9 @@ def persist_legs(
         leg.dropoff_doctor = ld.get("dropoff_doctor") or None
         leg.scheduled_time = parse_leg_scheduled_time(ld.get("scheduled_time"))
         leg.time_confirmed = bool(ld.get("time_confirmed", False))
-        leg.destination_billing_override = ld.get("destination_billing_override") or None
+        leg.destination_billing_override = (
+            ld.get("destination_billing_override") or None
+        )
         leg.is_return_stop = bool(ld.get("is_return_stop", False))
         db.session.add(leg)
         result.append(leg)
@@ -219,9 +221,7 @@ def return_stop_from_validated(
 def stops_from_validated(validated: dict[str, Any]) -> list[LegStop]:
     """Parse intermediate_stops depuis le payload API."""
     raw = validated.get("intermediate_stops") or []
-    items: list[dict[str, Any]] = [
-        item for item in raw if isinstance(item, dict)
-    ]
+    items: list[dict[str, Any]] = [item for item in raw if isinstance(item, dict)]
     if any(item.get("sequence") is not None for item in items):
         items = sorted(items, key=lambda item: item.get("sequence") or 0)
     stops: list[LegStop] = []
@@ -297,7 +297,7 @@ def sync_return_fields_from_legs(transport_request: Any) -> None:
     if not getattr(transport_request, "return_to_institution", False):
         return
     legs = sorted(
-        list(getattr(transport_request, "legs", None) or []),
+        getattr(transport_request, "legs", None) or [],
         key=lambda leg: leg.sequence_index,
     )
     if not legs:
@@ -419,8 +419,7 @@ def _record_legs_reorganized_timeline(
                 "route_group_id": getattr(transport_request, "route_group_id", None),
             },
             correlation_id=(
-                f"route_legs_reorganized:{transport_request.id}:"
-                f"{len(after)}"
+                f"route_legs_reorganized:{transport_request.id}:{len(after)}"
             ),
         )
     except Exception as timeline_err:

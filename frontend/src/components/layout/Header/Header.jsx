@@ -44,7 +44,7 @@ const Header = ({ hideAuthEntry = false }) => {
           </li>
           <li>
             <Link to="/a-propos" className={styles.navLink}>
-              À propos
+              Pourquoi Lirie
             </Link>
           </li>
           <li>

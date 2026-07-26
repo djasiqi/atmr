@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from shared.serialize_compat import SerializeResult, as_serialize_result
 
 
@@ -28,9 +30,5 @@ def test_serialize_result_json_serializable():
 
 def test_serialize_result_rejects_arguments():
     payload = SerializeResult({"id": 1})
-    try:
+    with pytest.raises(TypeError, match="argument"):
         payload("unexpected")
-    except TypeError as exc:
-        assert "argument" in str(exc).lower()
-    else:
-        raise AssertionError("TypeError attendue")

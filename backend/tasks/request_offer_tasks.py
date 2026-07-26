@@ -78,11 +78,7 @@ def _notify_company_new_offer(
                 "public_id": str(transport_request.public_id),
                 "offer_id": offer_id,
                 "institution_name": inst_name,
-                **(
-                    {"mission_date": mission_date_iso}
-                    if mission_date_iso
-                    else {}
-                ),
+                **({"mission_date": mission_date_iso} if mission_date_iso else {}),
             },
             dedupe_key=dedupe_key,
         )

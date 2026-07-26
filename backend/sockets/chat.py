@@ -13,9 +13,10 @@ import logging
 import os
 import time
 import traceback
+from collections.abc import Mapping
 from contextlib import suppress
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, Any, Dict, Mapping, cast
+from typing import Any, Dict, cast
 from typing import cast as tcast
 
 import jwt.exceptions as jwt_exceptions
@@ -84,9 +85,6 @@ MESSAGE_PREVIEW_LENGTH = 50
 MAX_PUSH_PREVIEW_LEN = 90  # longueur max preview pour push notification
 # ✅ errno pour "Bad file descriptor" - survient lors de déconnexions brutales
 ERRNO_BAD_FILE_DESCRIPTOR = 9
-
-if TYPE_CHECKING:
-    from collections.abc import Mapping
 
 logger = logging.getLogger("socketio")
 
@@ -2650,9 +2648,7 @@ def init_chat_socket(socketio: SocketIO):
                 )
                 if active_value and active_value != tracking_session_id:
                     active_ts = _parse_tracking_session_timestamp(active_value)
-                    incoming_ts = _parse_tracking_session_timestamp(
-                        tracking_session_id
-                    )
+                    incoming_ts = _parse_tracking_session_timestamp(tracking_session_id)
                     if (
                         incoming_ts is not None
                         and active_ts is not None
@@ -2816,8 +2812,9 @@ def init_chat_socket(socketio: SocketIO):
             processed_count = 0  # ✅ P2: Compter positions traitées avec succès
             acked_tracking_event_ids: list[str] = []
             ack_last_sequence_id: int | None = None
-            for idx, pos in enumerate(positions):
+            for idx, raw_pos in enumerate(positions):
                 try:
+                    pos = raw_pos
                     latitude = float(pos.get("latitude", 0))
                     longitude = float(pos.get("longitude", 0))
 
@@ -2872,8 +2869,10 @@ def init_chat_socket(socketio: SocketIO):
                         )
                         continue
                     if pos.get("recorded_at") is None:
-                        pos = dict(pos)
-                        pos["recorded_at"] = recorded_at_value
+                        pos_with_ts = dict(pos)
+                        pos_with_ts["recorded_at"] = recorded_at_value
+                    else:
+                        pos_with_ts = pos
                     if location_mode == "availability_presence":
                         inc_tracking_delivery_result(
                             mode="availability_presence",
@@ -2884,7 +2883,7 @@ def init_chat_socket(socketio: SocketIO):
                             {
                                 "index": idx,
                                 "reason": "availability_presence_socket_forbidden",
-                                "position": pos,
+                                "position": pos_with_ts,
                             }
                         )
                         inc_batch_points_skipped(
@@ -2893,12 +2892,14 @@ def init_chat_socket(socketio: SocketIO):
                         )
                         continue
 
-                    raw_mode_batch = str(pos.get("location_mode") or "mission_live")
+                    raw_mode_batch = str(
+                        pos_with_ts.get("location_mode") or "mission_live"
+                    )
                     loc_svc_batch = get_location_service()
                     norm_mode_batch = loc_svc_batch.resolve_normalized_location_mode(
                         company_id_val, raw_mode_batch
                     )
-                    leid_b = pos.get("location_event_id")
+                    leid_b = pos_with_ts.get("location_event_id")
                     from services.geolocation.driver_location_dedup import (
                         should_skip_location_ingest,
                     )
@@ -2915,10 +2916,10 @@ def init_chat_socket(socketio: SocketIO):
                         str(leid_b) if leid_b else None,
                     )
                     if skip_ingest and skip_r:
-                        tracking_event_id_val = pos.get("tracking_event_id")
+                        tracking_event_id_val = pos_with_ts.get("tracking_event_id")
                         if isinstance(tracking_event_id_val, str):
                             acked_tracking_event_ids.append(tracking_event_id_val)
-                        seq_obj = pos.get("sequence_id")
+                        seq_obj = pos_with_ts.get("sequence_id")
                         if isinstance(seq_obj, (int, str)):
                             with suppress(Exception):
                                 seq = int(seq_obj)
@@ -2975,7 +2976,9 @@ def init_chat_socket(socketio: SocketIO):
                         if accept_status == "accepted_canonical":
                             inc_batch_points_canonical(location_mode=norm_mode_batch)
                         elif accept_status == "accepted_observability_only":
-                            inc_batch_points_observability(location_mode=norm_mode_batch)
+                            inc_batch_points_observability(
+                                location_mode=norm_mode_batch
+                            )
 
                         log_driver_location_processed(
                             driver_id=driver.id,
@@ -2993,7 +2996,7 @@ def init_chat_socket(socketio: SocketIO):
                         )
 
                         # Émettre events geofencing si détectés (seulement pour dernière position)
-                        if pos == positions[-1]:
+                        if idx == len(positions) - 1:
                             for event in result.geofence_events:
                                 if event == "arrived_at_pickup":
                                     emit(
@@ -3045,7 +3048,7 @@ def init_chat_socket(socketio: SocketIO):
                     )
                     from services.realtime.socketio import fanout_driver_location_update
 
-                    tracking_event_id_fanout = pos.get("tracking_event_id")
+                    tracking_event_id_fanout = pos_with_ts.get("tracking_event_id")
                     tracking_event_id_str = (
                         str(tracking_event_id_fanout).strip()
                         if isinstance(tracking_event_id_fanout, str)
@@ -3133,10 +3136,10 @@ def init_chat_socket(socketio: SocketIO):
 
                     # ✅ P2: Incrémenter compteur de positions traitées avec succès
                     processed_count += 1
-                    tracking_event_id_val = pos.get("tracking_event_id")
+                    tracking_event_id_val = pos_with_ts.get("tracking_event_id")
                     if isinstance(tracking_event_id_val, str):
                         acked_tracking_event_ids.append(tracking_event_id_val)
-                    seq_obj = pos.get("sequence_id")
+                    seq_obj = pos_with_ts.get("sequence_id")
                     if isinstance(seq_obj, (int, str)):
                         with suppress(Exception):
                             seq = int(seq_obj)

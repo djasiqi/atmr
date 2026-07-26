@@ -60,17 +60,21 @@ def test_claim_idempotency_key_second_call_false():
 
 
 def test_log_notification_mobile_received_records_delivered_metric(caplog):
-    with patch(
-        "services.notifications.notification_pipeline_observability._record_business_metric"
-    ) as mock_metric:
-        with caplog.at_level("INFO"):
-            log_notification_pipeline_event(
-                "notification_mobile_received",
-                notification_id="n-99",
-                booking_id=12,
-                driver_id=3,
-                notification_type="booking",
-                correlation_id="corr-mobile",
-            )
+    with (
+        patch(
+            "services.notifications.notification_pipeline_observability._record_business_metric"
+        ) as mock_metric,
+        caplog.at_level("INFO"),
+    ):
+        log_notification_pipeline_event(
+            "notification_mobile_received",
+            notification_id="n-99",
+            booking_id=12,
+            driver_id=3,
+            notification_type="booking",
+            correlation_id="corr-mobile",
+        )
 
-    mock_metric.assert_called_once_with("notification_mobile_received", notification_type="booking")
+    mock_metric.assert_called_once_with(
+        "notification_mobile_received", notification_type="booking"
+    )

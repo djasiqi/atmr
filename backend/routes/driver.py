@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import contextlib
 import logging
+import math
 import os
 import time
 import traceback
@@ -127,7 +129,7 @@ def _as_float_or_none(value: Any) -> float | None:
         if value is None:
             return None
         num = float(value)
-        return num if num == num else None  # NaN guard
+        return num if not math.isnan(num) else None  # NaN guard
     except (TypeError, ValueError):
         return None
 
@@ -191,7 +193,7 @@ def _enrich_driver_booking_list_payload(payload: dict[str, Any]) -> dict[str, An
     if distance_meters is None:
         distance_km_existing = _as_float_or_none(out.get("distance_km"))
         if distance_km_existing and distance_km_existing > 0:
-            distance_meters = int(round(distance_km_existing * 1000.0))
+            distance_meters = round(distance_km_existing * 1000.0)
     if duration_seconds is None:
         duration_minutes_existing = _as_int_or_none(
             out.get("duration_minutes") or out.get("duration_in_minutes")
@@ -215,14 +217,11 @@ def _enrich_driver_booking_list_payload(payload: dict[str, Any]) -> dict[str, An
                 )
                 if km and km > 0:
                     if distance_meters is None:
-                        distance_meters = int(round(km * 1000.0))
+                        distance_meters = round(km * 1000.0)
                         estimated = True
                     if duration_seconds is None:
-                        duration_seconds = int(
-                            round(
-                                (km / max(DRIVER_LIST_FALLBACK_SPEED_KMH, 1e-3))
-                                * 3600.0
-                            )
+                        duration_seconds = round(
+                            (km / max(DRIVER_LIST_FALLBACK_SPEED_KMH, 1e-3)) * 3600.0
                         )
                         estimated = True
             except Exception:
@@ -234,7 +233,7 @@ def _enrich_driver_booking_list_payload(payload: dict[str, Any]) -> dict[str, An
         out["distance_km"] = round(distance_meters / 1000.0, 1)
     if duration_seconds is not None and duration_seconds > 0:
         out["duration_seconds"] = duration_seconds
-        out["duration_minutes"] = max(1, int(round(duration_seconds / 60.0)))
+        out["duration_minutes"] = max(1, round(duration_seconds / 60.0))
         out["duration_in_minutes"] = (
             out.get("duration_in_minutes") or out["duration_minutes"]
         )
@@ -654,8 +653,12 @@ class DriverProfile(Resource):
                             # Construire la configuration de l'app
                             app_config = {
                                 "night_mode": {
-                                    "is_night": night_mode_status.get("is_night", False),
-                                    "current_time": night_mode_status.get("current_time"),
+                                    "is_night": night_mode_status.get(
+                                        "is_night", False
+                                    ),
+                                    "current_time": night_mode_status.get(
+                                        "current_time"
+                                    ),
                                     "night_start": night_mode_status.get(
                                         "night_start", "22:00"
                                     ),
@@ -1857,9 +1860,7 @@ class DriverLocation(Resource):
                                         location_mode=norm_mode_http,
                                         accept_status=accept_status,
                                         accept_reason=accept_reason,
-                                        location_event_id=(
-                                            location_event_id
-                                        ),
+                                        location_event_id=(location_event_id),
                                     )
 
                             except Exception as e_loc:
@@ -3253,12 +3254,13 @@ class SavePushToken(Resource):
 
             from http import HTTPStatus
 
+            from sqlalchemy.orm.exc import PendingRollbackError
+
             from application.drivers.save_driver_push_token import (
                 SaveDriverPushTokenUseCase,
             )
             from repositories.driver_repository import DriverRepository
             from repositories.user_repository import UserRepository
-            from sqlalchemy.orm.exc import PendingRollbackError
 
             uc = SaveDriverPushTokenUseCase(
                 user_repo=UserRepository(),
@@ -3267,7 +3269,9 @@ class SavePushToken(Resource):
 
             for attempt in range(2):
                 try:
-                    uc_res = uc.execute(payload=payload, jwt_identity=get_jwt_identity())
+                    uc_res = uc.execute(
+                        payload=payload, jwt_identity=get_jwt_identity()
+                    )
                     result = uc_res.response
                     status_code = uc_res.status_code
 
@@ -4020,9 +4024,10 @@ class PushNotificationAck(Resource):
 class DriverBookingChangeAck(Resource):
     @jwt_required()
     @role_required(UserRole.driver)
-    def post(self, booking_id: int, event_id: int):
+    def post(self, _booking_id: int, event_id: int):
         """Accusé de réception chauffeur pour modification institution critique."""
         from flask_jwt_extended import get_jwt_identity
+
         from services.institutions.booking_change_service import (
             acknowledge_critical_event,
         )
@@ -4134,7 +4139,7 @@ class DriverTrackingTelemetry(Resource):
     @jwt_required()
     @role_required(UserRole.driver)
     def post(self):
-        driver, error_response, status_code = get_driver_from_token()
+        _driver, error_response, status_code = get_driver_from_token()
         if error_response:
             return error_response, status_code
 
@@ -4162,7 +4167,7 @@ class SilentPushWakeAck(Resource):
     @jwt_required()
     @role_required(UserRole.driver)
     def post(self):
-        driver, error_response, status_code = get_driver_from_token()
+        _driver, error_response, status_code = get_driver_from_token()
         if error_response:
             return error_response, status_code
 
@@ -4190,10 +4195,8 @@ class SilentPushWakeAck(Resource):
 
             record_silent_push_wake(sync_type=sync_type, result=result)
             if duration_ms is not None:
-                try:
+                with contextlib.suppress(Exception):
                     track_silent_sync_duration(sync_type, float(duration_ms) / 1000.0)
-                except Exception:
-                    pass
         except Exception:
             pass
 

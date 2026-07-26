@@ -272,7 +272,6 @@ class PipelineExecutor:
                         settings=settings,
                     )
                     clustering_final_assignments = clustering_result["assignments"]
-                    _clustering_unassigned_ids = clustering_result["unassigned"]
 
                     final_assignments = clustering_final_assignments
                     assigned_set = {
@@ -379,9 +378,6 @@ class PipelineExecutor:
                     logger.exception(
                         "[PipelineExecutor] assign_urgent failed (unexpected error)"
                     )
-
-        # Pour méta/debug (non utilisé pour l'instant mais conservé pour compatibilité)
-        _phase = "regular_only" if regular_first else "direct"
 
         # Variables pour le pipeline
         h_res = None
@@ -730,7 +726,6 @@ class PipelineExecutor:
 
         # 6.d Pas de regular_first → pipeline direct
         if not regular_first and company and not clustering_used:
-            _phase = "direct"
             rem = self._remaining_ids_from(problem, assigned_set)
             if (
                 rem
@@ -774,7 +769,7 @@ class PipelineExecutor:
             )
         )
 
-        _shadow_suggestions_stored = shadow_mode_manager.generate_and_store_suggestions(
+        shadow_mode_manager.generate_and_store_suggestions(
             dispatch_run_id=dispatch_run.id if dispatch_run else None,
             problem=problem,
             final_assignments=final_assignments,

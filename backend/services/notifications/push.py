@@ -242,7 +242,9 @@ def _log_fcm_pipeline_result(
         ntype = notification_type or payload.get("type") or "unknown"
         booking_id = payload.get("booking_id") or payload.get("mission_id")
         notification_id = payload.get("event_id") or payload.get("trace_id")
-        event = "notification_fcm_sent" if result.get("ok") else "notification_fcm_failed"
+        event = (
+            "notification_fcm_sent" if result.get("ok") else "notification_fcm_failed"
+        )
         log_notification_pipeline_event(
             event,
             notification_id=notification_id,

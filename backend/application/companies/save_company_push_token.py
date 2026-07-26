@@ -41,12 +41,14 @@ class SaveCompanyPushTokenUseCase:
         self,
         *,
         payload: dict[str, Any],
-        jwt_identity: str | None,
+        _jwt_identity: str | None,
         role_claim: str,
         company_from_user: Any | None,
     ) -> SaveCompanyPushTokenResult:
         token_any: Any = (
-            payload.get("token") or payload.get("push_token") or payload.get("expo_token")
+            payload.get("token")
+            or payload.get("push_token")
+            or payload.get("expo_token")
         )
         if not isinstance(token_any, str) or len(token_any.strip()) < MIN_TOKEN_LENGTH:
             return SaveCompanyPushTokenResult(
@@ -58,7 +60,9 @@ class SaveCompanyPushTokenUseCase:
         device_id_raw = payload.get("device_id") or payload.get("deviceId")
         if not device_id_raw or not str(device_id_raw).strip():
             return SaveCompanyPushTokenResult(
-                {"error": "device_id obligatoire pour l'enregistrement push entreprise."},
+                {
+                    "error": "device_id obligatoire pour l'enregistrement push entreprise."
+                },
                 400,
             )
         device_id = str(device_id_raw).strip()

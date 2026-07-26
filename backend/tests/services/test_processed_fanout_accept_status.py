@@ -49,7 +49,7 @@ def test_fanout_uses_persist_result_accept_status():
         ),
         patch(
             "services.geolocation.presence.apply_device_health_override",
-            side_effect=lambda p, l, _d: (p, l),
+            side_effect=lambda p, loc, _d: (p, loc),
         ),
         patch(
             "services.realtime.live_driver_status.resolve_mission_status_for_driver",

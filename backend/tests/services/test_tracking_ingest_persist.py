@@ -185,6 +185,8 @@ def _patch_run_consumer_flags(monkeypatch, **flags):
 
 
 def test_run_tracking_ingest_consumer_exits_on_invalid_config(monkeypatch):
+    from services.tracking.ingest_consumer import run_tracking_ingest_consumer
+
     _patch_run_consumer_flags(
         monkeypatch,
         TRACKING_INGEST_PERSIST_ENABLED=False,
@@ -201,8 +203,6 @@ def test_run_tracking_ingest_consumer_exits_on_invalid_config(monkeypatch):
         ) as mock_metric,
         pytest.raises(SystemExit) as exc,
     ):
-        from services.tracking.ingest_consumer import run_tracking_ingest_consumer
-
         run_tracking_ingest_consumer()
 
     assert exc.value.code == 1

@@ -6,7 +6,10 @@ from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 from tasks import tracking_health_tasks as tht
-from tasks.tracking_health_tasks import purge_device_health_events_task, stale_tracking_wake_tick
+from tasks.tracking_health_tasks import (
+    purge_device_health_events_task,
+    stale_tracking_wake_tick,
+)
 
 
 def test_stale_tracking_wake_tick_disabled():
@@ -32,11 +35,15 @@ def test_stale_tracking_wake_tick_sends_and_records_sent(mock_booking, mock_redi
         row
     ]
 
-    with patch(
-        "services.events.fanout._should_throttle_silent_update", return_value=False
-    ), patch("services.events.fanout.send_silent_data_update", return_value=True), patch(
-        "services.monitoring.driver_device_health_metrics.record_silent_push_wake"
-    ) as mock_metric:
+    with (
+        patch(
+            "services.events.fanout._should_throttle_silent_update", return_value=False
+        ),
+        patch("services.events.fanout.send_silent_data_update", return_value=True),
+        patch(
+            "services.monitoring.driver_device_health_metrics.record_silent_push_wake"
+        ) as mock_metric,
+    ):
         result = stale_tracking_wake_tick()
 
     assert result["ok"] is True
@@ -66,7 +73,9 @@ def test_stale_tracking_wake_tick_throttled(mock_booking, mock_redis):
         result = stale_tracking_wake_tick()
 
     assert result["throttled"] == 1
-    mock_metric.assert_called_with(sync_type=tht.STALE_WAKE_SYNC_TYPE, result="throttled")
+    mock_metric.assert_called_with(
+        sync_type=tht.STALE_WAKE_SYNC_TYPE, result="throttled"
+    )
 
 
 @patch("services.driver_device_health.purge_old_device_health_events", return_value=3)

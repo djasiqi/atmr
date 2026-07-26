@@ -35,7 +35,7 @@ def test_purge_all_old_data_calls_subtasks_without_self(
     ):
         mock_fn.return_value = {"status": "success", "deleted_count": 1, "errors": []}
 
-    task_self = MagicMock()
+    MagicMock()
     result = purge_all_old_data.run()
 
     for mock_fn in (

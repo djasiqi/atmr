@@ -3,6 +3,7 @@ import {
   Animated,
   Easing,
   Image,
+  InteractionManager,
   Linking,
   Platform,
   Pressable,
@@ -41,6 +42,7 @@ import {
   Screen,
   useResponsiveTokens,
 } from "../../../design/responsive";
+import { useReduceMotion } from "../../../design/navigation/useReduceMotion";
 import { DRIVER_FLOATING_TAB_SCROLL_PADDING } from "../navigation/DriverFloatingTabBar";
 import {
   buildDriverProfileViewModel,
@@ -56,6 +58,11 @@ const PRIVACY_URL = "https://www.lirie.ch/privacy";
 const SUPPORT_URL = "https://www.lirie.ch/contact";
 
 const SECTION_COUNT = 6;
+const SECTION_STAGGER_MS = 60;
+const SECTION_ANIM_MS = 340;
+/** Durée théorique + marge pour boot JS chargé (FCM, API) sans alerter Sentry. */
+const SECTION_REVEAL_FALLBACK_MS =
+  (SECTION_COUNT - 1) * SECTION_STAGGER_MS + SECTION_ANIM_MS + 800;
 
 const SECTION_ICONS: Record<
   DriverProfileSection["icon"],
@@ -74,6 +81,7 @@ export function DriverSettingsScreenContent() {
   const { bootstrap, activeContext, error: sessionError, logout } = useSession();
   const user = bootstrap?.user ?? null;
   const t = useResponsiveTokens();
+  const reduceMotion = useReduceMotion();
   const {
     gps,
     notifications,
@@ -133,11 +141,46 @@ export function DriverSettingsScreenContent() {
   }, [sectionEntrance]);
 
   const { arm, settled, disarm } = useRevealFallback({
-    enabled: true,
-    timeoutMs: 1200,
-    name: "DriverSettingsRevealFallback",
+    enabled: !reduceMotion,
+    timeoutMs: SECTION_REVEAL_FALLBACK_MS,
+    name: "ProfileRevealFallbackTriggered",
     reveal: revealSections,
+    report: false,
   });
+
+  useEffect(() => {
+    if (reduceMotion) {
+      revealSections();
+      return;
+    }
+
+    let cancelled = false;
+    let runningAnimation: Animated.CompositeAnimation | null = null;
+    const interactionTask = InteractionManager.runAfterInteractions(() => {
+      if (cancelled) return;
+
+      runningAnimation = Animated.stagger(
+        SECTION_STAGGER_MS,
+        sectionEntrance.map((value) =>
+          Animated.timing(value, {
+            toValue: 1,
+            duration: SECTION_ANIM_MS,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          })
+        )
+      );
+      arm();
+      runningAnimation.start(({ finished }) => settled(finished ?? false));
+    });
+
+    return () => {
+      cancelled = true;
+      interactionTask.cancel();
+      runningAnimation?.stop();
+      disarm();
+    };
+  }, [arm, disarm, reduceMotion, revealSections, sectionEntrance, settled]);
 
   useEffect(() => {
     let cancelled = false;
@@ -162,26 +205,6 @@ export function DriverSettingsScreenContent() {
     void readAuthBiometricEnabled().then(setBiometricEnabled);
     void isDriverBiometricAvailable().then(setBiometricAvailable);
   }, []);
-
-  useEffect(() => {
-    const animation = Animated.stagger(
-      60,
-      sectionEntrance.map((value) =>
-        Animated.timing(value, {
-          toValue: 1,
-          duration: 340,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        })
-      )
-    );
-    arm();
-    animation.start(({ finished }) => settled(finished ?? false));
-    return () => {
-      disarm();
-      animation.stop();
-    };
-  }, [arm, disarm, sectionEntrance, settled]);
 
   useEffect(() => {
     if (!feedback && !sessionError) return;

@@ -331,8 +331,8 @@ def _send_push_to_driver(
             from services.notifications.notification_pipeline_observability import (
                 log_notification_pipeline_event,
             )
-            from tasks.notification_tasks import send_push_notification_task
             from services.notifications.push_pipeline_log import log_driver_push_stage
+            from tasks.notification_tasks import send_push_notification_task
 
             log_notification_pipeline_event(
                 "notification_created",
@@ -357,7 +357,9 @@ def _send_push_to_driver(
             )
             if kafka_first:
                 try:
-                    from services.notifications.kafka_producer import send_push_via_kafka
+                    from services.notifications.kafka_producer import (
+                        send_push_via_kafka,
+                    )
 
                     if send_push_via_kafka(
                         driver_id,
@@ -817,9 +819,7 @@ def fanout_booking_updated(
                     "wheelchair_need": "Chaise roulante",
                 }
                 labels = [
-                    label
-                    for key, label in details_fields_map.items()
-                    if key in changes
+                    label for key, label in details_fields_map.items() if key in changes
                 ]
                 if labels:
                     # Dedup des labels en conservant l'ordre
@@ -1518,9 +1518,7 @@ def _should_throttle_silent_update(driver_id: int, sync_type: str) -> bool:
         if not redis_client:
             return False
         key = f"silent_update:{driver_id}:{sync_type}"
-        was_set = redis_client.set(
-            key, "1", nx=True, ex=SILENT_UPDATE_THROTTLE_SECONDS
-        )
+        was_set = redis_client.set(key, "1", nx=True, ex=SILENT_UPDATE_THROTTLE_SECONDS)
         return not bool(was_set)
     except Exception:
         return False

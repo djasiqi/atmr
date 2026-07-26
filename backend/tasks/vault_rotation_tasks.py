@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 import os
 from datetime import UTC, datetime
-from typing import Any, Dict, cast
+from typing import Any, Dict
 
 try:
     import hvac  # type: ignore[import-untyped]  # noqa: F401
@@ -657,17 +657,13 @@ def rotate_all_secrets(self: Task) -> dict[str, Any]:  # noqa: ARG001
     try:
         logger.info("[4.1 Vault Rotation] Début rotation globale des secrets...")
 
-        # Créer une instance Task factice pour appeler les fonctions bind=True
-        class FakeTask:
-            pass
-
-        fake_task = cast(Task, FakeTask())
-
         results = {}
 
         # Rotation SECRET_KEY Flask
         try:
-            flask_secret_result = rotate_flask_secret_key(fake_task)
+            # .run() exécute inline (bind=True injecte self) — pas d'appel direct avec un
+            # argument supplémentaire qui provoque TypeError.
+            flask_secret_result = rotate_flask_secret_key.run()
             results["flask_secret_key"] = flask_secret_result
         except Exception as e:
             logger.exception(
@@ -677,7 +673,7 @@ def rotate_all_secrets(self: Task) -> dict[str, Any]:  # noqa: ARG001
 
         # Rotation JWT
         try:
-            jwt_result = rotate_jwt_secret(fake_task)
+            jwt_result = rotate_jwt_secret.run()
             results["jwt"] = jwt_result
         except Exception as e:
             logger.exception("[4.1 Vault Rotation] Erreur rotation JWT: %s", e)
@@ -685,7 +681,7 @@ def rotate_all_secrets(self: Task) -> dict[str, Any]:  # noqa: ARG001
 
         # Rotation Encryption
         try:
-            encryption_result = rotate_encryption_key(fake_task)
+            encryption_result = rotate_encryption_key.run()
             results["encryption"] = encryption_result
         except Exception as e:
             logger.exception("[4.1 Vault Rotation] Erreur rotation encryption: %s", e)

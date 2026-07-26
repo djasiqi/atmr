@@ -456,9 +456,7 @@ def test_scope_reservation_parent_completed_child_accepted_cancels_only_child() 
 
 
 def test_en_route_syncs_assignment_to_en_route_pickup() -> None:
-    booking = _Booking(
-        id=1, company_id=1, driver_id=10, status=BookingStatus.ASSIGNED
-    )
+    booking = _Booking(id=1, company_id=1, driver_id=10, status=BookingStatus.ASSIGNED)
     assignment = _Assignment(id=5, booking_id=1, driver_id=10)
     db = _Db()
     uc = UpdateDriverBookingStatusUseCase(

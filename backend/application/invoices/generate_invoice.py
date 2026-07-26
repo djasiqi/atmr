@@ -293,8 +293,6 @@ class GenerateInvoiceUseCase:
                 )
                 if bp is None:
                     # Mapping manquant : refuser la génération et mettre les bookings en NEEDS_REVIEW
-                    from models.enums import BillingReviewStatus
-
                     payer_needs_review_reason = (
                         "Destinataire de facturation clinique non configuré "
                         "(mapping clinique → billing_party manquant). "

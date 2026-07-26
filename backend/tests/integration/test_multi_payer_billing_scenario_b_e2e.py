@@ -13,7 +13,14 @@ from datetime import datetime, timedelta
 import pytest
 
 from application.institutions.accept_offer import AcceptOfferUseCase
-from models import Booking, Company, Institution, InstitutionPatient, TransportRequest, TransportRequestLeg
+from models import (
+    Booking,
+    Company,
+    Institution,
+    InstitutionPatient,
+    TransportRequest,
+    TransportRequestLeg,
+)
 from models.enums import RequestStatus
 from services.billing.destination_billing_resolver import build_billing_summary
 from shared.time_utils import now_local

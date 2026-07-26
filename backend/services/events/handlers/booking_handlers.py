@@ -286,7 +286,9 @@ def handle_booking_updated(event: dict[str, Any]) -> None:
                     should_send_driver_push_on_booking_updated,
                 )
                 from services.monitoring.prometheus import inc_driver_push_skipped
-                from services.notifications.push_pipeline_log import log_driver_push_skipped
+                from services.notifications.push_pipeline_log import (
+                    log_driver_push_skipped,
+                )
 
                 driver_push = should_send_driver_push_on_booking_updated(
                     notify_driver_push=targets.notify_driver_push,

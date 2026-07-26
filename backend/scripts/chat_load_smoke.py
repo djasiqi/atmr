@@ -15,9 +15,10 @@ import argparse
 import os
 import sys
 import time
+from pathlib import Path
 
 # Ajouter backend au path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 
 def main() -> int:
@@ -25,11 +26,12 @@ def main() -> int:
     parser.add_argument("--messages", type=int, default=100)
     args = parser.parse_args()
 
+    from datetime import UTC, datetime
+
     from app import create_app
     from ext import db
     from models import Message, SenderRole
     from services.messaging.message_idempotence import find_idempotent_message
-    from datetime import UTC, datetime
 
     app = create_app()
     duplicates = 0

@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Any, Protocol, cast
 
-from sqlalchemy.orm import defer, joinedload
+from sqlalchemy.orm import joinedload
 
 from domain.invoice_dto import InvoiceDTO, InvoiceLineDTO
 from models import Invoice, InvoiceLine, InvoiceStatus

@@ -1,6 +1,7 @@
 """Tests hub messages chauffeur."""
 
 from services.messages.hub_service import (
+    EMERGENCY_LABELS,
     THREAD_DISPATCH,
     THREAD_TEAM,
     count_company_team_members,
@@ -9,7 +10,6 @@ from services.messages.hub_service import (
     mission_thread_id,
     parse_direct_thread,
     parse_mission_thread,
-    EMERGENCY_LABELS,
 )
 
 

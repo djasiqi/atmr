@@ -8,7 +8,7 @@ Couvre :
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from unittest.mock import MagicMock, patch
 
 from services.events.fanout import (
@@ -25,9 +25,9 @@ def _mk_token(token: str, updated_at: datetime | None = None) -> MagicMock:
 
 
 def test_dedup_keeps_most_recent_per_token():
-    older = _mk_token("tok-a", datetime(2026, 1, 1, tzinfo=timezone.utc))
-    newer = _mk_token("tok-a", datetime(2026, 6, 1, tzinfo=timezone.utc))
-    other = _mk_token("tok-b", datetime(2026, 5, 1, tzinfo=timezone.utc))
+    older = _mk_token("tok-a", datetime(2026, 1, 1, tzinfo=UTC))
+    newer = _mk_token("tok-a", datetime(2026, 6, 1, tzinfo=UTC))
+    other = _mk_token("tok-b", datetime(2026, 5, 1, tzinfo=UTC))
 
     deduped = _dedup_device_tokens_by_token([older, newer, other])
     tokens = sorted(dt.token for dt in deduped)
@@ -38,8 +38,8 @@ def test_dedup_keeps_most_recent_per_token():
 
 
 def test_dedup_drops_empty_tokens():
-    empty = _mk_token("", datetime(2026, 1, 1, tzinfo=timezone.utc))
-    keep = _mk_token("tok-a", datetime(2026, 1, 1, tzinfo=timezone.utc))
+    empty = _mk_token("", datetime(2026, 1, 1, tzinfo=UTC))
+    keep = _mk_token("tok-a", datetime(2026, 1, 1, tzinfo=UTC))
     deduped = _dedup_device_tokens_by_token([empty, keep])
     assert [dt.token for dt in deduped] == ["tok-a"]
 

@@ -89,7 +89,9 @@ def send_push_to_company_sync(
             from models import User
 
             company_user = User.query.get(company.user_id)
-            legacy_token = getattr(company_user, "push_token", None) if company_user else None
+            legacy_token = (
+                getattr(company_user, "push_token", None) if company_user else None
+            )
             if legacy_token:
                 result = send_push_message(
                     token=legacy_token,
@@ -192,9 +194,7 @@ def send_push_to_company_sync(
                 len(device_tokens),
             )
         else:
-            _track_new_request_delivery_failed(
-                company_id, "provider_rejected", data
-            )
+            _track_new_request_delivery_failed(company_id, "provider_rejected", data)
     except (ValueError, TypeError, AttributeError) as e:
         app_logger.error(
             "[company_push] Push failed (validation error: %s): %s",

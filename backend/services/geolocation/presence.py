@@ -163,9 +163,7 @@ def apply_device_health_override(
         return presence_status, location_status
     if not device_health:
         return presence_status, location_status
-    if not _is_device_health_fresh(
-        device_health, now_ms=now_ms, fresh_sec=fresh_sec
-    ):
+    if not _is_device_health_fresh(device_health, now_ms=now_ms, fresh_sec=fresh_sec):
         return presence_status, location_status
     if not _has_device_constraint(device_health):
         return presence_status, location_status

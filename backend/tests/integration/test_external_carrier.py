@@ -100,7 +100,9 @@ def _transport_request(
 
 
 class TestAssignExternalCarrierUseCase:
-    def test_assign_from_sent_closes_pending_offers(self, db, institution, institution_user, company):
+    def test_assign_from_sent_closes_pending_offers(
+        self, db, institution, institution_user, company
+    ):
         tr = _transport_request(db, institution, status=RequestStatus.SENT.value)
         offer = RequestOffer()
         offer.transport_request_id = tr.id

@@ -83,10 +83,7 @@ def _created_via_value(booking: Any) -> str:
 
 def _passenger_name(booking: Any) -> str:
     fn = getattr(booking, "customer_full_name", None)
-    if callable(fn):
-        name = fn()
-    else:
-        name = getattr(booking, "customer_name", None)
+    name = fn() if callable(fn) else getattr(booking, "customer_name", None)
     text = str(name or "").strip()
     return text or "Non spécifié"
 
@@ -117,9 +114,7 @@ def _has_institution_origin(booking: Any) -> bool:
     if reqs:
         return True
     cli = getattr(booking, "client", None)
-    if cli and getattr(cli, "linked_institution_id", None):
-        return True
-    return False
+    return bool(cli and getattr(cli, "linked_institution_id", None))
 
 
 def _resolve_institution_ref(booking: Any) -> dict[str, Any] | None:
@@ -167,9 +162,7 @@ def _is_company_account_client(cli: Any, passenger: str) -> bool:
     if bool(getattr(cli, "is_institution", False)):
         return True
     inst_name = (getattr(cli, "institution_name", None) or "").strip()
-    if inst_name and inst_name.lower() != passenger.lower():
-        return True
-    return False
+    return bool(inst_name and inst_name.lower() != passenger.lower())
 
 
 def _resolve_crm_source(booking: Any, passenger: str) -> dict[str, Any]:
@@ -177,7 +170,9 @@ def _resolve_crm_source(booking: Any, passenger: str) -> dict[str, Any]:
     client_id = int(cli.id) if cli is not None and getattr(cli, "id", None) else None
 
     if _is_company_account_client(cli, passenger):
-        name = (getattr(cli, "institution_name", None) or "").strip() or "Compte entreprise"
+        name = (
+            getattr(cli, "institution_name", None) or ""
+        ).strip() or "Compte entreprise"
         return {
             "type": SOURCE_TYPE_COMPANY_ACCOUNT,
             "id": client_id,
@@ -349,12 +344,13 @@ def build_booking_identity(
     exec_id = getattr(booking, "executing_company_id", None) or owner_id
     exec_name: str | None = None
     if exec_id is not None:
-        if (
-            getattr(booking, "executing_company", None) is not None
-            and int(getattr(booking.executing_company, "id", -1)) == int(exec_id)
-        ):
+        if getattr(booking, "executing_company", None) is not None and int(
+            getattr(booking.executing_company, "id", -1)
+        ) == int(exec_id):
             exec_name = getattr(booking.executing_company, "name", None)
-        elif owner is not None and owner_id is not None and int(exec_id) == int(owner_id):
+        elif (
+            owner is not None and owner_id is not None and int(exec_id) == int(owner_id)
+        ):
             exec_name = owner_name
         transfer = _get_active_transfer(booking)
         if not exec_name and transfer:
@@ -449,9 +445,7 @@ def is_legacy_midnight_pickup_sentinel(
     )
     if not (st.hour == 0 and st.minute == 0 and st.second == 0):
         return False
-    if time_confirmed is True:
-        return False
-    return True
+    return time_confirmed is not True
 
 
 def booking_has_scheduled_pickup_time(booking: Any) -> bool:
@@ -481,9 +475,7 @@ def build_booking_scheduling(booking: Any) -> dict[str, Any]:
     scheduled_dt = getattr(booking, "scheduled_time", None)
     raw_time_confirmed = getattr(booking, "time_confirmed", None)
     time_confirmed = (
-        bool(raw_time_confirmed)
-        if isinstance(raw_time_confirmed, bool)
-        else True
+        bool(raw_time_confirmed) if isinstance(raw_time_confirmed, bool) else True
     )
     time_scheduled = booking_has_scheduled_pickup_time(booking)
     time_defined = booking_has_confirmed_pickup_time(booking)
@@ -536,9 +528,7 @@ def _route_group_leg_count(booking: Any) -> int:
     try:
         from models.booking import Booking
 
-        count = (
-            Booking.query.filter(Booking.route_group_id == group_id).count()
-        )
+        count = Booking.query.filter(Booking.route_group_id == group_id).count()
         return max(1, int(count))
     except Exception:
         return 1
@@ -546,7 +536,7 @@ def _route_group_leg_count(booking: Any) -> int:
 
 def build_booking_trip_flags(
     booking: Any,
-    viewer_company_id: int | None = None,
+    _viewer_company_id: int | None = None,
 ) -> dict[str, Any]:
     is_return = bool(getattr(booking, "is_return", False))
     is_round_trip = bool(getattr(booking, "is_round_trip", False))

@@ -350,7 +350,7 @@ def _make_legal_footer_page_callback(
             "FooterTaglineMuted",
             parent=centered_style,
             fontSize=FONT_SECONDARY,
-            leading=int(round(FONT_SECONDARY * 1.28)),
+            leading=round(FONT_SECONDARY * 1.28),
             textColor=colors.HexColor(COLOR_MUTED_PDF),
             spaceBefore=0,
             spaceAfter=0,
@@ -430,7 +430,7 @@ def _muted_footer_paragraph_style(centered_style: Any) -> Any:
         "FooterTaglineMutedMeasure",
         parent=centered_style,
         fontSize=FONT_SECONDARY,
-        leading=int(round(FONT_SECONDARY * 1.28)),
+        leading=round(FONT_SECONDARY * 1.28),
         textColor=colors.HexColor(COLOR_MUTED_PDF),
         spaceBefore=0,
         spaceAfter=0,
@@ -453,9 +453,7 @@ def _measure_legal_footer_height_pt(
     y_pos = float(PDF_FOOTER_DRAW_BASE_CM * cm)
     muted_style = _muted_footer_paragraph_style(centered_style)
 
-    tag_src = (
-        FOOTER_PLATFORM_TAGLINE if platform_tagline is None else platform_tagline
-    )
+    tag_src = FOOTER_PLATFORM_TAGLINE if platform_tagline is None else platform_tagline
     tag = (tag_src or "").strip()
     fm = (footer_message or "").strip()
     bar = (contact_bar or "").strip()
@@ -472,9 +470,7 @@ def _measure_legal_footer_height_pt(
     combined_legal_identity = ""
     if fm and bar:
         combined_legal_identity = (
-            _reportlab_safe_footer_html(fm)
-            + "<br/>"
-            + _xml_escape_for_paragraph(bar)
+            _reportlab_safe_footer_html(fm) + "<br/>" + _xml_escape_for_paragraph(bar)
         )
     elif fm:
         combined_legal_identity = _reportlab_safe_footer_html(fm)
@@ -488,8 +484,7 @@ def _measure_legal_footer_height_pt(
 
     if mention:
         p2 = Paragraph(
-            f'<font size="8" color="grey">'
-            f"{_xml_escape_for_paragraph(mention)}</font>",
+            f'<font size="8" color="grey">{_xml_escape_for_paragraph(mention)}</font>',
             centered_style,
         )
         _, h2 = p2.wrap(avail_width_pt, 50)
@@ -643,7 +638,7 @@ def _simulate_table_body_last_page_remaining_pt(
     current: list[Any] = []
     for row in body_rows:
         avail = first_page_avail_pt if page_idx == 0 else later_pages_avail_pt
-        trial = current + [row]
+        trial = [*current, row]
         trial_h = _measure_table_chunk_pt(source_table, trial, avail_width_pt)
         if trial_h <= avail or not current:
             current.append(row)
@@ -661,7 +656,7 @@ def _paginate_table_no_orphan_totals(
     source_table: Any,
     *,
     avail_width_pt: float,
-    first_page_avail_pt: float,
+    first_page_avail_pt: float,  # noqa: ARG001 — signature publique pagination
     later_pages_avail_pt: float,
     trailer_reserve_pt: float,
     post_table_flowables: list[Any] | None = None,
@@ -700,9 +695,7 @@ def _paginate_table_no_orphan_totals(
     ):
         prefix_rows.append(tail_rows.pop(0))
 
-    body_table = (
-        _clone_table_chunk(source_table, prefix_rows) if prefix_rows else None
-    )
+    body_table = _clone_table_chunk(source_table, prefix_rows) if prefix_rows else None
     tail_table = (
         _clone_table_chunk(source_table, tail_rows, include_header=False)
         if tail_rows
@@ -2509,10 +2502,7 @@ def _build_recipient_block_flowable(
     # (c/o …) comme l’adresse (addr_fs, sans gras).
     visual_rows: list[tuple[str, str]] = []
     for i, line in enumerate(lines):
-        if i < name_count:
-            role = "name_primary" if i == 0 else "name_co"
-        else:
-            role = "addr"
+        role = ("name_primary" if i == 0 else "name_co") if i < name_count else "addr"
         fs = name_fs if role == "name_primary" else addr_fs
         if line == "":
             visual_rows.append(("", role))
@@ -2721,7 +2711,7 @@ def _detail_lines_heading_paragraph(styles: Any, font_name_bold: str) -> Any:
         parent=styles["Normal"],
         fontName=font_name_bold,
         fontSize=FONT_BODY,
-        leading=int(round(FONT_BODY * 1.3)),
+        leading=round(FONT_BODY * 1.3),
         spaceAfter=10,
         textColor=colors.HexColor("#334155"),
     )
@@ -2843,9 +2833,10 @@ def _pdf_show_ar_legend(
             return True
         if lm.get("billing_unit") == "round_trip":
             return True
-        if lm.get("is_round_trip_leg") is True and (
-            lm.get("merged_segment_count") or 0
-        ) >= 2:
+        if (
+            lm.get("is_round_trip_leg") is True
+            and (lm.get("merged_segment_count") or 0) >= 2
+        ):
             return True
     return False
 
@@ -2883,9 +2874,10 @@ def _consolidated_item_shows_ar_tag_pdf(
             return True
         if lm.get("billing_unit") == "round_trip":
             return True
-        if lm.get("is_round_trip_leg") is True and (
-            lm.get("merged_segment_count") or 0
-        ) >= 2:
+        if (
+            lm.get("is_round_trip_leg") is True
+            and (lm.get("merged_segment_count") or 0) >= 2
+        ):
             return True
     return False
 
@@ -3047,12 +3039,14 @@ def _pdf_format_transport_detail_inner_wrapped(
     # « Trajet : Trajet Chemin… » lors du re-préfixage plus bas. Idempotent.
     if is_ride_line:
         import re as _re_trajet
+
         s = _re_trajet.sub(
             r"^Trajet\s*[:：\uff1a]?\s+", "", s, count=1, flags=_re_trajet.IGNORECASE
         )
     fs = float(FONT_BODY)
     if is_material_delivery and s:
         import re as _re_livr
+
         s_md = _re_livr.sub(
             r"^Livraison\s*[-–—:：\uff1a]\s+",
             "",
@@ -3060,9 +3054,7 @@ def _pdf_format_transport_detail_inner_wrapped(
             count=1,
             flags=_re_livr.IGNORECASE,
         )
-        lines = _wrap_line_by_width(
-            f"Livraison : {s_md}", font_name, fs, desc_inner_pt
-        )
+        lines = _wrap_line_by_width(f"Livraison : {s_md}", font_name, fs, desc_inner_pt)
         return "<br/>".join(_xml_escape_for_paragraph(x) for x in lines)
     if not is_ride_line:
         if not s:
@@ -3076,6 +3068,7 @@ def _pdf_format_transport_detail_inner_wrapped(
             a, b = s.split(sep, 1)
             a_clean = a.strip()
             import re as _re_trajet_a
+
             a_clean = _re_trajet_a.sub(
                 r"^Trajet\s*[:：\uff1a]?\s+",
                 "",
@@ -3193,7 +3186,7 @@ def _pdf_s2_orphan_line_transport_text(
     is_ar: bool,
     is_ride_line: bool,
     is_material_delivery: bool,
-    enriched_by_line_id: dict[int, dict[str, Any]],
+    enriched_by_line_id: dict[int, dict[str, Any]],  # noqa: ARG001 — API kwargs
 ) -> str:
     """Rendu PDF S2 pour ligne orpheline (sans booking résolu)."""
     raw_desc = (getattr(line, "description", None) or "")[:500].strip()
@@ -3257,10 +3250,7 @@ def _build_enriched_line_meta_by_line_id(
     is_s2 = bs_val == "s2_clinic_monthly"
     for ln, d in zip(lines, line_dicts, strict=True):
         meta = d.get("line_meta")
-        if isinstance(meta, dict):
-            merged_meta = dict(meta)
-        else:
-            merged_meta = {}
+        merged_meta = dict(meta) if isinstance(meta, dict) else {}
         if is_s2 and ln.reservation_id and bookings_by_id:
             from repositories.invoice_repository import (
                 _merge_s2_clinic_line_meta_from_booking,
@@ -3335,9 +3325,7 @@ def _pdf_build_preconsolidated_ar_items(
 
             pickup_aller = getattr(booking, "pickup_location", "") or ""
             dropoff_aller = getattr(booking, "dropoff_location", "") or ""
-            amount_rounded = _pdf_merged_ht_for_ar_primary(
-                invoice, line, partner_rid_i
-            )
+            amount_rounded = _pdf_merged_ht_for_ar_primary(invoice, line, partner_rid_i)
             short_a = _short_label_for_transport(pickup_aller)
             short_b = _short_label_for_transport(dropoff_aller)
             detail_a = _short_detail_label(pickup_aller)
@@ -3455,6 +3443,10 @@ def _build_s2_table(
     from reportlab.lib.styles import ParagraphStyle
     from reportlab.lib.units import cm
     from reportlab.platypus import Paragraph, Table, TableStyle
+    from application.invoices.invoice_line_description import (
+        format_patient_display_name_nom_prenom,
+        resolve_s2_clinic_line_patient_name,
+    )
 
     # ✅ Déterminer si c'est une facture client directe (non tierce partie)
     strategy_value = None
@@ -3479,9 +3471,7 @@ def _build_s2_table(
     # (l'encadré et le bloc totaux restent la synthèse).
     suppress_line_discount_breakdown = False
 
-    enriched_by_line_id = _build_enriched_line_meta_by_line_id(
-        invoice, bookings_by_id
-    )
+    enriched_by_line_id = _build_enriched_line_meta_by_line_id(invoice, bookings_by_id)
     pre_consolidated, used_ar_reservation_ids = _pdf_build_preconsolidated_ar_items(
         invoice, bookings_by_id, enriched_by_line_id
     )
@@ -3512,11 +3502,6 @@ def _build_s2_table(
         patient_id = None
 
         if is_third_party_invoice or is_s2_invoice:
-            from application.invoices.invoice_line_description import (
-                format_patient_display_name_nom_prenom,
-                resolve_s2_clinic_line_patient_name,
-            )
-
             if is_s2_invoice:
                 _line_client = getattr(booking, "client", None)
                 patient_name = resolve_s2_clinic_line_patient_name(
@@ -3566,13 +3551,11 @@ def _build_s2_table(
                 patient_name = "Client"
             patient_id = invoice.client_id if invoice.client_id else None
         if (is_third_party_invoice or is_s2_invoice) and patient_name:
-            from application.invoices.invoice_line_description import (
-                format_patient_display_name_nom_prenom,
-            )
-
             _pn = str(patient_name).strip()
-            if _pn and _pn not in ("Patient", "Client") and not _pn.startswith(
-                "Client #"
+            if (
+                _pn
+                and _pn not in ("Patient", "Client")
+                and not _pn.startswith("Client #")
             ):
                 patient_name = format_patient_display_name_nom_prenom(_pn)
         lines_with_bookings.append(
@@ -3595,7 +3578,7 @@ def _build_s2_table(
 
     # Client privé direct : pas tierce / pas S2 (comportement remise globale dans le détail).
     is_compact_private = not is_third_party_invoice and not is_s2_invoice
-    _thead_lead = int(round(FONT_TABLE_HEADER * 1.3))
+    _thead_lead = round(FONT_TABLE_HEADER * 1.3)
     _thead_ps = ParagraphStyle(
         "InvoiceCompactThead",
         fontName=font_name_bold,
@@ -3647,7 +3630,9 @@ def _build_s2_table(
     else:
         _desc_w_for_wrap = float(12 * cm if show_date_column else 13 * cm)
     desc_inner_pt = max(_desc_w_for_wrap - _s2_desc_hpad_pt, 60.0)
-    _max_desc_lines = max_simple_description_lines if max_simple_description_lines else 2
+    _max_desc_lines = (
+        max_simple_description_lines if max_simple_description_lines else 2
+    )
 
     table_data = [_header_row]
     s2_patient_separator_after_rows: list[int] = []
@@ -3666,13 +3651,12 @@ def _build_s2_table(
             if _ln_item is not None:
                 date_str = _pdf_line_detail_date_str(_ln_item, invoice)
         pn_raw = item.get("patient_name", "Patient")
-        from application.invoices.invoice_line_description import (
-            format_patient_display_name_nom_prenom,
-        )
 
-        if pn_raw and str(pn_raw).strip() not in ("Patient", "Client") and not str(
+        if (
             pn_raw
-        ).strip().startswith("Client #"):
+            and str(pn_raw).strip() not in ("Patient", "Client")
+            and not str(pn_raw).strip().startswith("Client #")
+        ):
             pn_raw = format_patient_display_name_nom_prenom(str(pn_raw))
         cat_disp, net_disp = _consolidated_row_catalog_net(item)
         if suppress_line_discount_breakdown:
@@ -3717,8 +3701,7 @@ def _build_s2_table(
         elif is_ar:
             ar_suffix_html = _pdf_s2_ar_tag_markup()
             _ar_desc_is_ride = is_ride_td or bool(
-                line_desc_opt
-                and (" → " in line_desc_opt or " ↔ " in line_desc_opt)
+                line_desc_opt and (" → " in line_desc_opt or " ↔ " in line_desc_opt)
             )
             if line_desc_opt:
                 if max_simple_description_lines == 2 and (
@@ -3734,17 +3717,13 @@ def _build_s2_table(
                         inline_suffix_text="[A/R]",
                         inline_suffix_html=ar_suffix_html,
                     )
-                    esc_desc = _pdf_limit_html_br_lines(
-                        esc_desc, _max_desc_lines
-                    )
+                    esc_desc = _pdf_limit_html_br_lines(esc_desc, _max_desc_lines)
                     inner_html = f"{esc_desc}{disc_suffix}{note_suffix}"
                 else:
                     esc_desc = _pdf_escape_wrapped_plain(
                         line_desc_opt, font_name, desc_inner_pt
                     )
-                    esc_desc = _pdf_limit_html_br_lines(
-                        esc_desc, _max_desc_lines
-                    )
+                    esc_desc = _pdf_limit_html_br_lines(esc_desc, _max_desc_lines)
                     inner_html = (
                         f"{esc_desc}&nbsp;{ar_suffix_html}{disc_suffix}{note_suffix}"
                     )
@@ -3756,16 +3735,10 @@ def _build_s2_table(
                     is_ride_line=_ar_desc_is_ride,
                     is_material_delivery=is_material_td,
                     force_balanced_two_lines=_max_desc_lines == 2,
-                    inline_suffix_text="[A/R]"
-                    if _max_desc_lines == 2
-                    else None,
-                    inline_suffix_html=ar_suffix_html
-                    if _max_desc_lines == 2
-                    else None,
+                    inline_suffix_text="[A/R]" if _max_desc_lines == 2 else None,
+                    inline_suffix_html=ar_suffix_html if _max_desc_lines == 2 else None,
                 )
-                body_tr = _pdf_limit_html_br_lines(
-                    body_tr, _max_desc_lines
-                )
+                body_tr = _pdf_limit_html_br_lines(body_tr, _max_desc_lines)
                 if _max_desc_lines == 2:
                     inner_html = f"{body_tr}{disc_suffix}{note_suffix}"
                 else:
@@ -3920,7 +3893,10 @@ def _build_s2_table(
             cat_or, net_or = _line_catalog_vs_net_ht(line)
             lm_or = _resolve_invoice_line_meta(line, enriched_by_line_id)
             partner_rid_or = lm_or.get("round_trip_merge_partner_reservation_id")
-            if partner_rid_or is not None and lm_or.get("preview_hide_merged_round_trip") is not True:
+            if (
+                partner_rid_or is not None
+                and lm_or.get("preview_hide_merged_round_trip") is not True
+            ):
                 merged_ht = _pdf_merged_ht_for_ar_primary(
                     invoice, line, int(partner_rid_or)
                 )
@@ -3993,7 +3969,9 @@ def _build_s2_table(
                         format_patient_display_name_nom_prenom,
                     )
 
-                    pn_disp = format_patient_display_name_nom_prenom(str(raw_pn).strip())
+                    pn_disp = format_patient_display_name_nom_prenom(
+                        str(raw_pn).strip()
+                    )
                     orphan_pn_prefix = (
                         f'<font size="{int(FONT_SECONDARY)}" color="#475569">Client : '
                         f"{_xml_escape_for_paragraph(pn_disp)}</font><br/>"
@@ -4025,13 +4003,12 @@ def _build_s2_table(
         else:
             desc_w = max(available_width_pt - amount_w, 1 * cm)
             col_widths = [desc_w, amount_w]
+    elif show_date_column:
+        desc_w = 12 * cm
+        col_widths = [date_w, desc_w, amount_w]
     else:
-        if show_date_column:
-            desc_w = 12 * cm
-            col_widths = [date_w, desc_w, amount_w]
-        else:
-            desc_w = 13 * cm
-            col_widths = [desc_w, amount_w]
+        desc_w = 13 * cm
+        col_widths = [desc_w, amount_w]
 
     tbl = Table(table_data, colWidths=col_widths, repeatRows=1, splitInRow=0)
     _hdr_bg = colors.HexColor("#f8fafc")
@@ -4509,7 +4486,7 @@ def _compact_private_date_paragraph(date_str: str, font_name: str) -> Any:
             # Insécable avant l’année : évite « 22.04. » / « 2026 » sur deux lignes.
             display = f"{parts[0]}.{parts[1]}.\u00a0{parts[2]}"
     esc = _xml_escape_for_paragraph(display)
-    _lead_d = int(round(FONT_BODY * 1.3))
+    _lead_d = round(FONT_BODY * 1.3)
     ps = ParagraphStyle(
         "CompactPrivateDateCell",
         fontName=font_name,
@@ -5694,7 +5671,7 @@ class PDFService:
         # Styles basés sur le design de référence
         styles = getSampleStyleSheet()
 
-        _body_leading = int(round(FONT_BODY * 1.3))
+        _body_leading = round(FONT_BODY * 1.3)
         # Style pour le texte normal (leftIndent=0 pour alignement marge gauche)
         normal_style = ParagraphStyle(
             "Normal",
@@ -6009,8 +5986,8 @@ class PDFService:
                 f'<font size="{FONT_META_DATES}">{_per_lbl}</font><br/>'
                 f'<font size="{FONT_META_DATES}"><b>Facture initiale :</b></font> '
                 f'<font size="{FONT_META_DATES}">émise le '
-                f'{invoice.issued_at.strftime("%d.%m.%Y")}, échéance le '
-                f'{invoice.due_date.strftime("%d.%m.%Y")}</font><br/>'
+                f"{invoice.issued_at.strftime('%d.%m.%Y')}, échéance le "
+                f"{invoice.due_date.strftime('%d.%m.%Y')}</font><br/>"
                 f'<font size="{FONT_META_DATES}"><b>Date du rappel :</b></font> '
                 f'<font size="{FONT_META_DATES}">'
                 f"{reminder_gen.strftime('%d.%m.%Y')}</font><br/>"
@@ -6377,7 +6354,7 @@ class PDFService:
         buffer = BytesIO()
 
         styles = getSampleStyleSheet()
-        _min_lead = int(round(FONT_BODY * 1.3))
+        _min_lead = round(FONT_BODY * 1.3)
         normal_style = ParagraphStyle(
             "Normal",
             parent=styles["Normal"],
@@ -6482,7 +6459,9 @@ class PDFService:
             15.0  # déplace destinataire à droite (pas d'espace volé à l'expéditeur)
         )
         dest_width_pt_min = DEST_ADDR_MAX_WIDTH_MM * mm
-        usable_width_pt_min = doc.pagesize[0] - doc.leftMargin - doc.rightMargin
+        usable_width_pt_min = (
+            A4[0] - INVOICE_PAGE_LEFT_MARGIN_CM * cm - INVOICE_PAGE_RIGHT_MARGIN_CM * cm
+        )
         company_width_pt_min = usable_width_pt_min - dest_width_pt_min
 
         if recipient_para_min is not None:
@@ -7131,7 +7110,7 @@ class PDFService:
         buffer = BytesIO()
 
         styles = getSampleStyleSheet()
-        _det_lead = int(round(FONT_BODY * 1.3))
+        _det_lead = round(FONT_BODY * 1.3)
         normal_style = ParagraphStyle(
             "Normal",
             parent=styles["Normal"],
@@ -7818,7 +7797,12 @@ class PDFService:
         invoice_info = [
             ["Numéro de facture:", invoice.invoice_number],
             ["Date d'émission initiale:", invoice.issued_at.strftime("%d.%m.%Y")],
-            ["Date du rappel:", (reminder.generated_at if reminder else datetime.now(UTC)).strftime("%d.%m.%Y")],
+            [
+                "Date du rappel:",
+                (reminder.generated_at if reminder else datetime.now(UTC)).strftime(
+                    "%d.%m.%Y"
+                ),
+            ],
             ["Nouvelle échéance:", reminder_due.strftime("%d.%m.%Y")],
         ]
 

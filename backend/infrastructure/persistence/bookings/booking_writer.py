@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Any, Protocol, cast
 
 from ext import db
+from models.booking import Booking
 from models.enums import BookingCreatedVia, BookingStatus
 
 
