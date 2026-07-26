@@ -437,6 +437,7 @@ if [ -f "scripts/lib/kafka_checks.sh" ]; then
     echo "🔍 Kafka activé — preflight brokers/DNS avant déploiement..."
     KAFKA_PREFLIGHT_OK=1
     kafka_check_compose_files || KAFKA_PREFLIGHT_OK=0
+    kafka_check_compose_resolution || KAFKA_PREFLIGHT_OK=0
     kafka_check_replication_factors || KAFKA_PREFLIGHT_OK=0
     kafka_check_dns_from_atmr_network || KAFKA_PREFLIGHT_OK=0
     if [ "${KAFKA_PREFLIGHT_OK}" != "1" ]; then

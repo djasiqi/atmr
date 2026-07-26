@@ -431,7 +431,7 @@ jobs:
           username: ${{ env.SSH_USER }}
           key: ${{ env.SSH_KEY }}
           port: ${{ env.SSH_PORT }}
-          source: "docker-compose.production.yml,docker-compose.monitoring.yml"
+          source: "docker-compose.production.yml,docker-compose.monitoring.yml,docker-compose.kafka.yml,docker-compose.kafka.atmr-network.yml"
           target: "/srv/atmr"
 
       - name: Copy monitoring directory to server

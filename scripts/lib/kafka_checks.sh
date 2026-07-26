@@ -269,14 +269,21 @@ kafka_read_replication_factor() {
 }
 
 kafka_count_broker_services() {
-  kafka_docker_compose config --services 2>/dev/null | grep -c '^kafka-broker-' || echo 0
+  local count
+  # grep -c imprime « 0 » puis exit 1 si aucune correspondance — ne pas « || echo 0 » (double « 0 »).
+  count="$(kafka_docker_compose config --services 2>/dev/null | grep -c '^kafka-broker-' 2>/dev/null || true)"
+  printf '%s\n' "${count:-0}"
 }
 
 kafka_check_replication_factors() {
   local broker_count topic_rf broker_rf
-  broker_count="$(kafka_count_broker_services)"
+  broker_count="$(kafka_count_broker_services | tr -d '[:space:]')"
   topic_rf="$(kafka_read_replication_factor KAFKA_TOPIC_REPLICATION_FACTOR 2)"
   broker_rf="$(kafka_read_replication_factor KAFKA_BROKER_REPLICATION_FACTOR 2)"
+  if [[ ! "${broker_count}" =~ ^[0-9]+$ ]]; then
+    log_fail "comptage brokers Kafka invalide (merge Compose ?) : « ${broker_count} »"
+    return 1
+  fi
   if [[ "${broker_count}" -lt 1 ]]; then
     log_fail "aucun service kafka-broker-* dans le merge Compose"
     return 1
