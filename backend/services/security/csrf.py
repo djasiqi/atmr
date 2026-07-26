@@ -315,6 +315,15 @@ def require_csrf_token(f: Any) -> Any:
     return decorated_function
 
 
+def _csrf_strict_enabled() -> bool:
+    flag = (os.getenv("CSRF_STRICT") or "").strip().lower()
+    if flag in {"1", "true", "yes", "on"}:
+        return True
+    if flag in {"0", "false", "no", "off"}:
+        return False
+    return _is_production()
+
+
 def setup_csrf_protection(app: Any) -> None:
     """Configure la protection CSRF globale pour l'application.
 
@@ -324,13 +333,18 @@ def setup_csrf_protection(app: Any) -> None:
     Args:
         app: Instance Flask
     """
-    # Liste des endpoints exemptés de CSRF (ex: endpoints publics, webhooks)
+    # Prod : CSRF_ENABLED forcé + secret obligatoire
+    if _is_production():
+        os.environ.setdefault("CSRF_ENABLED", "true")
+        app.config["CSRF_ENABLED"] = True
+        _get_csrf_secret()  # fail-closed si secret absent
+
+    # Exemptions fines (CSRF_STRICT) — login web exempt jeton ; refresh web NON exempt
     csrf_exempt_paths = {
         "/health",
         "/api/v1/prometheus/metrics",
         "/api/v1/auth/login",
         "/api/v1/auth/register",
-        "/api/v1/auth/refresh-token",
         "/api/v1/auth/login-test",
         "/api/auth/login-test",
         "/api/v1/csrf-token",
@@ -354,6 +368,9 @@ def setup_csrf_protection(app: Any) -> None:
         "/api/v1/app/version-check",
         "/api/v1/company_mobile/auth/login",
     }
+    # Hors CSRF_STRICT : refresh encore exempt (compat progressive)
+    if not _csrf_strict_enabled():
+        csrf_exempt_paths.add("/api/v1/auth/refresh-token")
 
     @app.before_request
     def validate_csrf_for_mutating_requests():  # pyright: ignore[reportUnusedFunction]
@@ -382,8 +399,9 @@ def setup_csrf_protection(app: Any) -> None:
         if request.path in csrf_exempt_paths:
             should_check = False
 
+        # CSRF_STRICT : plus de catch-all /api/v1/auth/ ni /companies/
+        # Préfixes auth publics (activation, password reset request) restent exempts
         csrf_exempt_prefixes = (
-            "/api/v1/auth/",
             "/api/gateway/auth/",
             "/api/v1/webhooks/",
             "/api/v1/company_mobile/",
@@ -392,7 +410,6 @@ def setup_csrf_protection(app: Any) -> None:
             "/api/messages/",
             "/api/v1/conversations/",
             "/api/conversations/",
-            "/api/v1/companies/",
             "/api/v1/company_dispatch/",
             "/api/v1/dispatch/",
             "/api/dispatch/",
@@ -405,6 +422,20 @@ def setup_csrf_protection(app: Any) -> None:
             "/api/app/demo_access/",
             "/api/demo/demo_access/",
         )
+        if _csrf_strict_enabled():
+            csrf_exempt_prefixes = (
+                "/api/v1/auth/activation/",
+                "/api/v1/auth/passwordless/",
+                "/api/v1/auth/forgot-password",
+                "/api/v1/auth/reset-password",
+                *csrf_exempt_prefixes,
+            )
+        else:
+            csrf_exempt_prefixes = (
+                "/api/v1/auth/",
+                "/api/v1/companies/",
+                *csrf_exempt_prefixes,
+            )
         if request.path.startswith(csrf_exempt_prefixes):
             should_check = False
 

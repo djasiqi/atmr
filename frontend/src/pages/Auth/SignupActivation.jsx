@@ -41,6 +41,7 @@ const SignupActivation = () => {
     phone_verified: false,
     is_complete: false,
     is_finalized: false,
+    email_delivery_status: null,
   });
   const [loading, setLoading] = useState(false);
   const [infoMessage, setInfoMessage] = useState('');
@@ -66,6 +67,7 @@ const SignupActivation = () => {
       phone_verified: Boolean(newStatus.phone_verified),
       is_complete: Boolean(newStatus.is_complete),
       is_finalized: Boolean(newStatus.is_finalized),
+      email_delivery_status: newStatus.email_delivery_status || null,
     });
   };
 
@@ -102,6 +104,11 @@ const SignupActivation = () => {
         }
         if (sessionId) {
           setActivationSessionId(sessionId);
+          // Retirer le jeton de l'URL (historique / Referer)
+          navigate(
+            `/activate-account?activation_session_id=${encodeURIComponent(sessionId)}`,
+            { replace: true, state: location.state }
+          );
           await fetchStatus(sessionId);
           setInfoMessage('Email confirmé avec succès.');
         } else {
@@ -166,6 +173,8 @@ const SignupActivation = () => {
           "Service email indisponible en local. Utilisez le lien d'activation ci-dessous."
         );
         setDebugActivationLink(fallbackLink);
+      } else if (response?.data?.activation_email_queued || response?.data?.email_sent === null) {
+        setInfoMessage("Email en cours d'envoi. Vérifiez votre boîte de réception.");
       } else {
         setInfoMessage('Email renvoyé. Vérifiez votre boîte de réception.');
       }
@@ -371,6 +380,11 @@ const SignupActivation = () => {
           <p className={styles.sectionHint}>
             Un lien a été envoyé à {maskedEmail || prefillEmail || 'votre adresse email'}.
           </p>
+          {!status.email_verified &&
+          (status.email_delivery_status === 'queued' ||
+            status.email_delivery_status === 'sending') ? (
+            <p className={styles.sectionHint}>Email en cours d&apos;envoi…</p>
+          ) : null}
           <span className={`${styles.badge} ${status.email_verified ? styles.badgeDone : styles.badgePending}`}>
             {status.email_verified ? 'Email confirmé' : 'En attente de confirmation'}
           </span>

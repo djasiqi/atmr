@@ -105,14 +105,30 @@ const Signup = () => {
         }
       );
     } catch (error) {
+      const data = error?.response?.data || {};
+      const sessionId = data.activation_session_id;
+      if (error?.response?.status === 502 && sessionId) {
+        navigate(
+          `/activate-account?activation_session_id=${encodeURIComponent(sessionId)}`,
+          {
+            replace: true,
+            state: {
+              maskedEmail: data.masked_email ?? '',
+              maskedPhone: data.masked_phone ?? '',
+              prefillEmail: formData.email.trim(),
+            },
+          }
+        );
+        return;
+      }
       const msg =
-        error?.response?.data?.message ||
-        error?.response?.data?.error ||
-        (error?.message === ‘Network Error’
-          ? ‘Impossible de communiquer avec le serveur.’
-          : "Une erreur s’est produite.");
+        data.message ||
+        data.error ||
+        (error?.message === 'Network Error'
+          ? 'Impossible de communiquer avec le serveur.'
+          : "Une erreur s'est produite.");
       setErrorMessage(msg);
-      setSuccessMessage(‘’);
+      setSuccessMessage('');
     }
   };
 

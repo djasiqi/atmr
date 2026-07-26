@@ -41,6 +41,8 @@ class TestAuthActivationFlow:
         register_data = register_response.get_json() or {}
         activation_session_id = register_data.get("activation_session_id")
         assert activation_session_id, "activation_session_id manquant apres register"
+        assert register_data.get("email_sent") is None
+        assert "activation_email_queued" in register_data
 
         # 2) Login bloqué avant activation complète
         login_before_response = e2e_client.post(
@@ -572,7 +574,15 @@ class TestAuthActivationFlow:
         db.session.commit()
 
         with patch(
-            "routes.auth._send_activation_email", side_effect=RuntimeError("smtp down")
+            "services.notifications.activation_email_delivery.try_enqueue_activation_email",
+            return_value={
+                "ok": False,
+                "queued": False,
+                "email_sent": None,
+                "debug_activation_link": None,
+                "error": "Brevo not configured",
+                "require_502": True,
+            },
         ):
             resend_response = e2e_client.post(
                 "/api/v1/auth/activation/resend-email",
@@ -586,3 +596,4 @@ class TestAuthActivationFlow:
         )
         resend_data = resend_response.get_json() or {}
         assert resend_data.get("error") == "email_send_failed"
+        assert resend_data.get("activation_session_id") == activation_session_id

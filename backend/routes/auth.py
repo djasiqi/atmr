@@ -78,10 +78,12 @@ from schemas.auth_schemas import (
 from schemas.validation_utils import handle_validation_error, validate_request
 from security.audit_log import AuditLogger
 from security.refresh_token_service import (
+    RefreshStoreUnavailableError,
     _hash_refresh_token,
     get_user_active_sessions,
     is_token_revoked,
     mark_token_rotated,
+    refresh_fail_closed_enabled,
     revoke_active_tokens_for_device,
     revoke_all_user_tokens,
     revoke_refresh_token,
@@ -99,6 +101,7 @@ from services.notifications.email import send_email_notification
 from services.public_guest_booking_pricing import compute_public_guest_booking_price
 from services.security.authentication import RefreshTokenService
 from services.security.csrf import generate_csrf_token
+from services.security.login_origin import validate_login_origin_for_web
 from shared.client_surface_contracts import (
     CANONICAL_ADDRESS_CONTRACT_VERSION,
     PREVIEW_CONTRACT_VERSION,
@@ -1098,9 +1101,8 @@ def _login_post_body():
         expires_delta=refresh_expires_delta,
     )
 
-    # ✅ PHASE 2: Stocker le refresh token dans Redis et DB
+    # ✅ PHASE 2: Stocker le refresh token dans Redis et DB (fail-closed Lot 1)
     try:
-        # Stocker dans Redis pour rotation et limitation (TTL aligné avec le JWT)
         token_service = RefreshTokenService()
         token_service.store_token(
             user.id,
@@ -1108,7 +1110,6 @@ def _login_post_body():
             ttl_seconds=int(refresh_expires_delta.total_seconds()),
         )
 
-        # Stocker aussi dans la DB pour compatibilité et audit
         refresh_expires_at = datetime.now(UTC) + refresh_expires_delta
         device_id = request.headers.get("X-Device-ID")
         device_name = request.headers.get("X-Device-Name")
@@ -1129,12 +1130,16 @@ def _login_post_body():
         max_active_tokens = _resolve_max_active_refresh_tokens(user)
         token_service.limit_active_tokens(user.id, max_active_tokens)
     except Exception as store_error:
-        logger.warning(
+        logger.error(
             "Échec stockage refresh token: %s - %s",
             type(store_error).__name__,
             str(store_error),
         )
-        # Le token sera toujours retourné au client, mais ne sera pas révocable
+        if refresh_fail_closed_enabled() and not current_app.config.get("TESTING"):
+            return {
+                "error": "service_unavailable",
+                "message": "Stockage session indisponible. Réessayez.",
+            }, 503
 
     # ✅ Priorité 7: Audit logging pour login réussi
     try:
@@ -1189,12 +1194,11 @@ def _login_post_body():
         "trace_id": trace_id,
     }
 
-    # ✅ Compatibilité mobile : retourner tokens en JSON (même modèle que company_mobile)
-    # Toujours retourner les tokens dans le JSON pour les applications mobiles
-    # Le header X-Requested-With: Expo est optionnel mais recommandé pour identifier les requêtes mobiles
-    # ✅ Même modèle que company_mobile : toujours retourner les tokens dans le JSON
-    response_data["token"] = access_token
-    response_data["refresh_token"] = refresh_token
+    # Lot 1-E : web = cookies only (pas de tokens JSON) ; mobile = Bearer/JSON
+    if is_mobile_request:
+        response_data["token"] = access_token
+        response_data["access_token"] = access_token
+        response_data["refresh_token"] = refresh_token
 
     # Créer la réponse avec make_response pour pouvoir définir les cookies
     response = make_response(response_data, 200)
@@ -1248,6 +1252,13 @@ class Login(Resource):
     def post(self):
         """Authentifie un utilisateur et renvoie un token d'accès."""
         try:
+            # Lot 1-D : login web exempt CSRF mais Origin/Referer whitelist
+            origin_ok, origin_err = validate_login_origin_for_web()
+            if not origin_ok:
+                return {
+                    "error": origin_err or "origin_not_allowed",
+                    "message": "Origine non autorisée.",
+                }, 403
             return _login_post_body()
         except Exception as e:
             sentry_sdk.capture_exception(e)
@@ -1851,10 +1862,25 @@ def _validate_refresh_token(
                             "error": "Refresh token invalide (mot de passe modifié)"
                         }
 
+        # Lot 1-C : validation Redis (fail-closed si indisponible)
+        if refresh_fail_closed_enabled() and user_dto:
+            try:
+                user_model = user_repo.find_model_by_public_id(user_public_id)
+                if user_model:
+                    redis_svc = RefreshTokenService()
+                    if not redis_svc.is_token_valid(refresh_token, user_id=user_model.id):
+                        return None, {
+                            "error": "Refresh token révoqué ou absent du store"
+                        }
+            except RefreshStoreUnavailableError:
+                return None, {
+                    "error": "service_unavailable",
+                    "message": "Store refresh indisponible",
+                    "_http_status": 503,
+                }
+
         # ✅ SECURITY: Vérifier si le token est révoqué dans la DB (Phase 2)
-        # Cette vérification permet la déconnexion forcée par l'admin.
         # grace_window=True : rotation soft (5 min) + réutilisation legacy acceptée
-        # en cas de race mobile (ancien refresh réutilisé avant persistance SecureStore).
         try:
             request_device_id = request.headers.get("X-Device-ID") if request else None
             if is_token_revoked(
@@ -1871,9 +1897,23 @@ def _validate_refresh_token(
                     logger_instance=logger,
                 )
                 return None, error_response
+        except RefreshStoreUnavailableError:
+            return None, {
+                "error": "service_unavailable",
+                "message": "Store refresh indisponible",
+                "_http_status": 503,
+            }
         except Exception as revoke_check_error:
-            # Si la vérification DB échoue, on continue quand même
-            # (pour rétrocompatibilité avec les tokens non stockés)
+            if refresh_fail_closed_enabled():
+                logger.error(
+                    "Erreur vérification révocation token (fail-closed): %s",
+                    str(revoke_check_error),
+                )
+                return None, {
+                    "error": "service_unavailable",
+                    "message": "Store refresh indisponible",
+                    "_http_status": 503,
+                }
             logger.debug(
                 "Erreur vérification révocation token (ignorée): %s",
                 str(revoke_check_error),
@@ -2072,33 +2112,23 @@ class RefreshToken(Resource):
         minimales de l'utilisateur.
         """
         try:
-            # ✅ Migration localStorage → cookies httpOnly
-            # 1. Récupérer le refresh_token depuis cookie (priorité), body ou header
+            # Lot 1-E : web = cookie only ; mobile = JSON body only (cookies ignorés)
             refresh_token = None
             is_mobile_request = _is_mobile_request()
             refresh_token_from_cookie = False
 
-            # Priorité 1 : Cookie (pour web)
-            if not is_mobile_request:
-                refresh_token = request.cookies.get(
-                    current_app.config["COOKIE_REFRESH_TOKEN_NAME"]
-                )
-                refresh_token_from_cookie = bool(refresh_token)
-
-            # Priorité 2 : Body JSON (pour mobile ou fallback)
-            if not refresh_token:
+            if is_mobile_request:
                 data = request.get_json(silent=True) or {}
                 refresh_token = (
                     data.get("refresh_token")
                     or data.get("refreshToken")
                     or data.get("token")
                 )
-
-            # Priorité 3 : Header Authorization (rétrocompatibilité)
-            if not refresh_token:
-                auth_header = request.headers.get("Authorization", "")
-                if auth_header and auth_header.startswith("Bearer "):
-                    refresh_token = auth_header.split(" ", 1)[1].strip()
+            else:
+                refresh_token = request.cookies.get(
+                    current_app.config["COOKIE_REFRESH_TOKEN_NAME"]
+                )
+                refresh_token_from_cookie = bool(refresh_token)
 
             # 3. Validation : refresh_token requis
             if not refresh_token:
@@ -2107,7 +2137,6 @@ class RefreshToken(Resource):
                     "Refresh token missing - trace_id: %s",
                     trace_id,
                 )
-                # ✅ P0.1: Log structuré refresh failure (corrélation driver_id / device_id / session_diag)
                 logger.info(
                     "auth_refresh_failure",
                     extra={
@@ -2118,27 +2147,33 @@ class RefreshToken(Resource):
                         "trace_id": trace_id,
                     },
                 )
-                error_response, _ = APIErrorHandler.handle_validation_error(
-                    "refresh_token requis (cookie, body ou Authorization header)",
-                    logger_instance=logger,
-                )
-                error_response["trace_id"] = trace_id
-                return error_response, 400
+                # Mobile sans body / web sans cookie → 401 (fail-closed), pas 400
+                return {
+                    "error": "refresh_token_required",
+                    "trace_id": trace_id,
+                }, 401
 
             # 4. Valider le refresh token (inclut vérification révocation, pwd_hash, etc.)
             user_public_id, error_response = _validate_refresh_token(refresh_token)
             if error_response or not user_public_id:
                 trace_id = get_trace_id()
+                http_status = 401
+                if error_response and error_response.pop("_http_status", None) == 503:
+                    http_status = 503
                 logger.warning(
-                    "Refresh token invalid - trace_id: %s",
+                    "Refresh token invalid - trace_id: %s status=%s",
                     trace_id,
+                    http_status,
                 )
-                # ✅ P0.1: Log structuré refresh failure avec cause (corrélation device_id / session_diag)
                 logger.info(
                     "auth_refresh_failure",
                     extra={
                         "event": "auth_refresh_failure",
-                        "cause": "invalid_or_expired",
+                        "cause": (
+                            "store_unavailable"
+                            if http_status == 503
+                            else "invalid_or_expired"
+                        ),
                         "device_id": request.headers.get("X-Device-ID"),
                         "session_diag": request.headers.get("X-Session-Diag"),
                         "trace_id": trace_id,
@@ -2146,12 +2181,11 @@ class RefreshToken(Resource):
                 )
                 if error_response:
                     error_response["trace_id"] = trace_id
-                    return error_response, 401
-                error_response = {
+                    return error_response, http_status
+                return {
                     "error": "Refresh token invalide",
                     "trace_id": trace_id,
-                }
-                return error_response, 401
+                }, 401
 
             # 5. Vérifier que l'utilisateur existe
             user_dto = user_repo.find_by_public_id(user_public_id)
@@ -2264,16 +2298,14 @@ class RefreshToken(Resource):
                     str(rotate_error),
                 )
 
-            # ✅ SECURITY: Stocker le nouveau token dans Redis et DB
+            # ✅ SECURITY: Stocker le nouveau token dans Redis et DB (fail-closed)
             try:
-                # Stocker dans Redis pour rotation et limitation
                 token_service.store_token(
                     user.id,
                     new_refresh_token,
                     ttl_seconds=int(refresh_expires_delta.total_seconds()),
                 )
 
-                # Stocker aussi dans la DB pour compatibilité et audit
                 refresh_expires_at = datetime.now(UTC) + refresh_expires_delta
                 device_id = request.headers.get("X-Device-ID")
                 device_name = request.headers.get("X-Device-Name")
@@ -2294,10 +2326,17 @@ class RefreshToken(Resource):
                 max_active_tokens = _resolve_max_active_refresh_tokens(user)
                 token_service.limit_active_tokens(user.id, max_active_tokens)
             except Exception as store_error:
-                logger.warning(
-                    "Soft rotation storage failed (non-blocking): %s",
+                logger.error(
+                    "Soft rotation storage failed: %s",
                     str(store_error),
                 )
+                if refresh_fail_closed_enabled() and not current_app.config.get(
+                    "TESTING"
+                ):
+                    return {
+                        "error": "service_unavailable",
+                        "message": "Stockage session indisponible. Réessayez.",
+                    }, 503
 
             # 8. ✅ Priorité 7: Audit logging pour token refresh
             try:
@@ -2348,12 +2387,8 @@ class RefreshToken(Resource):
                 "trace_id": trace_id,
             }
 
-            # ✅ Compatibilité mobile (robuste):
-            # - Sur mobile, on renvoie toujours les tokens en JSON.
-            # - Même si `X-Requested-With: Expo` manque, un refresh token fourni par body/header
-            #   implique un client "type mobile/API" → renvoyer les tokens.
-            # - En revanche, si on est en mode cookie (web), on évite d'exposer les tokens en JSON.
-            if is_mobile_request or not refresh_token_from_cookie:
+            # Lot 1-E : tokens JSON uniquement pour mobile ; web = cookies only
+            if is_mobile_request:
                 response_data["access_token"] = new_access_token
                 response_data["refresh_token"] = new_refresh_token
                 response_data["token_type"] = "Bearer"
@@ -2363,7 +2398,7 @@ class RefreshToken(Resource):
             response = make_response(response_data, 200)
 
             # ✅ Définir cookies httpOnly pour web (pas pour mobile)
-            if not is_mobile_request:
+            if not is_mobile_request and refresh_token_from_cookie:
                 # Cookie access_token
                 response.set_cookie(
                     current_app.config["COOKIE_ACCESS_TOKEN_NAME"],
@@ -3882,15 +3917,7 @@ class Register(Resource):
             activation_session.resend_count_email = 0
             activation_session.resend_count_sms = 0
 
-            email_token = _activation_serializer().dumps(
-                {
-                    "sid": activation_session.activation_session_id,
-                    "kind": "signup_activation",
-                },
-                salt="activation-email-salt",
-            )
             sms_code = _generate_sms_otp()
-            activation_session.email_token_hash = _hash_plain_value(email_token)
             activation_session.sms_code_hash = _hash_plain_value(sms_code)
             db.session.add(activation_session)
             db.session.commit()
@@ -3901,11 +3928,10 @@ class Register(Resource):
             )
 
             environment = str(current_app.config.get("ENVIRONMENT", "")).strip().lower()
+            # Lot 1 : jeton HMAC dérivé de email_delivery_id (pas itsdangerous)
             enqueue_result = try_enqueue_activation_email(
                 activation_session,
                 kind=EMAIL_DELIVERY_KIND_INITIAL,
-                email_token=email_token,
-                email_token_hash=_hash_plain_value(email_token),
                 environment=environment,
                 is_testing=bool(current_app.config.get("TESTING")),
             )
@@ -3978,47 +4004,74 @@ class VerifyActivationEmail(Resource):
             validated_data = validate_request(VerifyEmailActivationSchema(), data)
             token = cast("str", validated_data.get("token", ""))
 
-            try:
-                payload = _activation_serializer().loads(
-                    token,
-                    salt="activation-email-salt",
-                    max_age=ACTIVATION_EMAIL_TTL_MINUTES * 60,
-                )
-            except SignatureExpired:
-                return auth_error(
-                    AuthErrorCodes.TOKEN_EXPIRED,
-                    "Le lien email a expiré. Demandez un nouvel envoi.",
-                    400,
-                )
-            except BadSignature:
-                return auth_error(
-                    AuthErrorCodes.TOKEN_INVALID,
-                    "Lien d'activation invalide.",
-                    400,
-                )
+            from models.activation_email_delivery import ActivationEmailDelivery
+            from services.notifications.activation_token import (
+                hash_activation_token,
+                verify_activation_token,
+            )
 
-            session_id = payload.get("sid")
-            if not session_id:
-                return auth_error(
-                    AuthErrorCodes.TOKEN_INVALID,
-                    "Lien d'activation invalide.",
-                    400,
-                )
+            token_hash = hash_activation_token(token)
+            activation_session: ActivationSession | None = None
 
-            activation_session = ActivationSession.query.filter_by(
-                activation_session_id=session_id
+            # Lot 1 : jeton HMAC — lookup par hash sur livraison / session
+            delivery = ActivationEmailDelivery.query.filter_by(
+                email_token_hash=token_hash
             ).first()
-            if not activation_session:
-                return auth_error(
-                    AuthErrorCodes.TOKEN_INVALID,
-                    "Lien d'activation invalide.",
-                    400,
+            if delivery is not None:
+                if not verify_activation_token(
+                    token,
+                    delivery.email_delivery_id,
+                    key_version=int(delivery.token_key_version or 1),
+                ):
+                    return auth_error(
+                        AuthErrorCodes.TOKEN_INVALID,
+                        "Lien d'activation invalide.",
+                        400,
+                    )
+                activation_session = ActivationSession.query.get(
+                    delivery.activation_session_pk
                 )
+            else:
+                # Compat jetons itsdangerous pré-Lot 1
+                try:
+                    payload = _activation_serializer().loads(
+                        token,
+                        salt="activation-email-salt",
+                        max_age=ACTIVATION_EMAIL_TTL_MINUTES * 60,
+                    )
+                except SignatureExpired:
+                    return auth_error(
+                        AuthErrorCodes.TOKEN_EXPIRED,
+                        "Le lien email a expiré. Demandez un nouvel envoi.",
+                        400,
+                    )
+                except BadSignature:
+                    return auth_error(
+                        AuthErrorCodes.TOKEN_INVALID,
+                        "Lien d'activation invalide.",
+                        400,
+                    )
+                session_id = payload.get("sid")
+                if not session_id:
+                    return auth_error(
+                        AuthErrorCodes.TOKEN_INVALID,
+                        "Lien d'activation invalide.",
+                        400,
+                    )
+                activation_session = ActivationSession.query.filter_by(
+                    activation_session_id=session_id
+                ).first()
+                if activation_session and not hmac.compare_digest(
+                    _hash_plain_value(token),
+                    activation_session.email_token_hash or "",
+                ):
+                    return auth_error(
+                        AuthErrorCodes.TOKEN_INVALID,
+                        "Lien d'activation invalide.",
+                        400,
+                    )
 
-            token_hash = _hash_plain_value(token)
-            if not hmac.compare_digest(
-                token_hash, activation_session.email_token_hash or ""
-            ):
+            if not activation_session:
                 return auth_error(
                     AuthErrorCodes.TOKEN_INVALID,
                     "Lien d'activation invalide.",
@@ -4233,18 +4286,23 @@ class ResendActivationEmail(Resource):
             if activation_session.email_verified_at:
                 return {"message": "Email déjà confirmé."}, 200
 
-            from models.activation_session import (
-                EMAIL_DELIVERY_KIND_RESEND,
-                EMAIL_DELIVERY_SENDING,
+            from models.activation_session import EMAIL_DELIVERY_KIND_RESEND
+            from services.notifications.activation_email_delivery import (
+                can_start_new_delivery,
+                try_enqueue_activation_email,
             )
 
-            # Envoi déjà en cours pour un delivery actif
-            if activation_session.email_delivery_status == EMAIL_DELIVERY_SENDING:
+            # Lot 1 : bloquer si queued/sending (sauf lease expirée)
+            can_send, block_reason = can_start_new_delivery(activation_session)
+            if not can_send:
                 return auth_error(
                     AuthErrorCodes.RATE_LIMITED,
                     "Envoi déjà en cours. Veuillez patienter.",
                     429,
-                    details={"retry_after_seconds": ACTIVATION_RESEND_COOLDOWN_SECONDS},
+                    details={
+                        "retry_after_seconds": ACTIVATION_RESEND_COOLDOWN_SECONDS,
+                        "reason": block_reason,
+                    },
                 )
 
             now = datetime.now(UTC)
@@ -4276,24 +4334,10 @@ class ResendActivationEmail(Resource):
             if not user:
                 return {"error": "Utilisateur introuvable."}, 404
 
-            token = _activation_serializer().dumps(
-                {
-                    "sid": activation_session.activation_session_id,
-                    "kind": "signup_activation",
-                },
-                salt="activation-email-salt",
-            )
-
-            from services.notifications.activation_email_delivery import (
-                try_enqueue_activation_email,
-            )
-
             environment = str(current_app.config.get("ENVIRONMENT", "")).strip().lower()
             enqueue_result = try_enqueue_activation_email(
                 activation_session,
                 kind=EMAIL_DELIVERY_KIND_RESEND,
-                email_token=token,
-                email_token_hash=_hash_plain_value(token),
                 environment=environment,
                 is_testing=bool(current_app.config.get("TESTING")),
             )

@@ -633,10 +633,9 @@ def send_activation_email_task(
         from models import ActivationSession, User
         from services.notifications.activation_email_delivery import (
             cas_claim_sending,
-            get_activation_email_token,
             mark_delivery_failed,
             mark_delivery_sent,
-            purge_activation_email_token,
+            resolve_activation_token_for_delivery,
             sanitize_email_error,
         )
         from services.notifications.email import send_email_notification
@@ -681,11 +680,11 @@ def send_activation_email_task(
             )
             return {"ok": True, "ignored": True}
 
-        token = get_activation_email_token(email_delivery_id)
+        token = resolve_activation_token_for_delivery(email_delivery_id)
         if not token:
             mark_delivery_failed(
                 session,
-                "activation_token_missing_in_redis",
+                "activation_token_derive_failed",
                 email_delivery_id=email_delivery_id,
             )
             db.session.commit()
@@ -696,7 +695,6 @@ def send_activation_email_task(
             mark_delivery_failed(
                 session, "user_or_email_missing", email_delivery_id=email_delivery_id
             )
-            purge_activation_email_token(email_delivery_id)
             db.session.commit()
             return {"ok": False, "error": "user_missing"}
 
@@ -738,6 +736,8 @@ def send_activation_email_task(
                 from_name=from_name,
                 reply_to=reply_to,
                 raise_on_error=True,
+                # Lot 1 : corrélation webhook Brevo (X-Mailin-custom)
+                headers={"X-Mailin-custom": email_delivery_id},
             )
         except EmailRetryableError as e:
             logger.warning(
@@ -745,12 +745,11 @@ def send_activation_email_task(
                 email_delivery_id,
                 sanitize_email_error(str(e)),
             )
-            # Backoff exponentiel + jitter ; ne pas régénérer le jeton.
+            # Backoff exponentiel + jitter ; même jeton HMAC / delivery_id.
             if self.request.retries >= self.max_retries:
                 mark_delivery_failed(
                     session, str(e), email_delivery_id=email_delivery_id
                 )
-                purge_activation_email_token(email_delivery_id)
                 db.session.commit()
                 return {
                     "ok": False,
@@ -766,7 +765,6 @@ def send_activation_email_task(
                 sanitize_email_error(str(e)),
             )
             mark_delivery_failed(session, str(e), email_delivery_id=email_delivery_id)
-            purge_activation_email_token(email_delivery_id)
             db.session.commit()
             return {"ok": False, "error": "permanent", "delivery_id": email_delivery_id}
 

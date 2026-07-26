@@ -189,13 +189,25 @@ class RefreshTokenService:
                         user_id,
                     )
                     return False
-                except Exception:
-                    # Redis indisponible → fallback gracieux
+                except Exception as redis_ping_err:
+                    from security.refresh_token_service import (
+                        RefreshStoreUnavailableError,
+                        refresh_fail_closed_enabled,
+                    )
+
+                    if refresh_fail_closed_enabled():
+                        logger.error(
+                            "Redis indisponible lors validation refresh (fail-closed): user_id=%s",
+                            user_id,
+                        )
+                        raise RefreshStoreUnavailableError(
+                            "redis_unavailable"
+                        ) from redis_ping_err
                     logger.warning(
                         "Redis indisponible lors validation token. Fallback gracieux activé (validation JWT uniquement): user_id=%s",
                         user_id,
                     )
-                    return True  # Permettre validation JWT standard
+                    return True
 
             # 3. Si user_id fourni, vérifier si le token appartient à l'utilisateur
             if user_id is not None and int(stored_user_id) != user_id:
@@ -211,14 +223,28 @@ class RefreshTokenService:
 
             return True
         except Exception as redis_error:
-            # ✅ FALLBACK GRACIEUX: Si Redis échoue, permettre validation JWT standard
-            # Cela évite de déconnecter tous les utilisateurs lors de problèmes Redis
+            from security.refresh_token_service import (
+                RefreshStoreUnavailableError,
+                refresh_fail_closed_enabled,
+            )
+
+            if isinstance(redis_error, RefreshStoreUnavailableError):
+                raise
+            if refresh_fail_closed_enabled():
+                logger.error(
+                    "Erreur Redis refresh (fail-closed): %s, user_id=%s",
+                    str(redis_error),
+                    user_id,
+                )
+                raise RefreshStoreUnavailableError(
+                    "redis_unavailable"
+                ) from redis_error
             logger.warning(
                 "Erreur Redis lors validation token. Fallback gracieux activé (validation JWT uniquement): %s, user_id=%s",
                 str(redis_error),
                 user_id,
             )
-            return True  # Permettre validation JWT standard
+            return True
 
     def revoke_token(self, token: str) -> None:
         """Révoque un token (le marque comme invalide).

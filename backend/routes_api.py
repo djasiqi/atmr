@@ -20,7 +20,7 @@ def _patch_flask_restx_safe_json_parsing() -> None:
     if getattr(Resource, "_atmr_safe_json_patched", False):
         return
 
-    def _safe_validate_payload(self, expect, collection=False):  # noqa: ANN001
+    def _safe_validate_payload(self, expect, collection=False):
         data = request.get_json(silent=True)
         if data is None:
             data = {}
@@ -279,6 +279,7 @@ def init_namespaces(app):
     )  # ✅ S3: Monitoring sécurité
     from routes.shadow_mode_routes import shadow_mode_bp  # Shadow Mode RL
     from routes.saferpay_notify import saferpay_notify_bp
+    from routes.webhooks_brevo import webhooks_brevo_bp, webhooks_brevo_ns
     from routes.transport_vouchers import (  # ✅ P3: Bons de transport
         transport_vouchers_ns,
     )
@@ -296,6 +297,7 @@ def init_namespaces(app):
     app.register_blueprint(shadow_mode_bp)
     app.register_blueprint(gateway_auth_bp)
     app.register_blueprint(saferpay_notify_bp, url_prefix=f"{API_PREFIX}/v1")
+    app.register_blueprint(webhooks_brevo_bp, url_prefix=f"{API_PREFIX}/v1")
 
     # ❌ TEMPORAIREMENT DÉSACTIVÉ POUR TEST
     # ✅ Enregistrer les handlers Socket.IO pour alertes proactives
@@ -316,6 +318,7 @@ def init_namespaces(app):
     # ✅ 3.2: Ajouter tous les namespaces à API v1 (déplacé ici pour éviter cycles d'imports)
     # Routes d'authentification
     api_v1.add_namespace(auth_ns, path="/auth")
+    api_v1.add_namespace(webhooks_brevo_ns, path="/webhooks")
 
     # Routes clients
     api_v1.add_namespace(clients_ns, path="/clients")

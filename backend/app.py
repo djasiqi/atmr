@@ -403,7 +403,10 @@ def create_app(config_name: str | None = None):
     validate_required_env_vars(config_name)
 
     app = Flask(__name__)
-    from middleware.silent_json_request import SilentJSONRequest, register_json_body_precache
+    from middleware.silent_json_request import (
+        SilentJSONRequest,
+        register_json_body_precache,
+    )
 
     app.request_class = SilentJSONRequest
     register_json_body_precache(app)
@@ -517,9 +520,18 @@ def create_app(config_name: str | None = None):
     try:
         from services.security.csrf import setup_csrf_protection
 
-        # Activer CSRF seulement si explicitement activé
-        # (par défaut activé en production)
-        csrf_enabled = os.getenv("CSRF_ENABLED", "true").lower() in ("true", "1", "yes")
+        # Prod Lot 1-D : CSRF forcé
+        env_name = (os.getenv("ENVIRONMENT") or config_name or "").strip().lower()
+        if env_name == "production":
+            os.environ["CSRF_ENABLED"] = "true"
+            app.config["CSRF_ENABLED"] = True
+            csrf_enabled = True
+        else:
+            csrf_enabled = os.getenv("CSRF_ENABLED", "true").lower() in (
+                "true",
+                "1",
+                "yes",
+            )
         if csrf_enabled:
             setup_csrf_protection(app)
             app.logger.info("[CSRF] ✅ Protection CSRF activée")
@@ -527,6 +539,27 @@ def create_app(config_name: str | None = None):
             app.logger.info("[CSRF] ⚠️ Protection CSRF désactivée (CSRF_ENABLED=false)")
     except Exception as e:
         app.logger.warning("[CSRF] ⚠️ Échec activation protection CSRF: %s", e)
+
+    # Lot 1-E : web = cookies ; mobile / endpoints dédiés = Bearer headers only
+    # (cookies web présents ignorés pour l'auth)
+    @app.before_request
+    def _lot1_jwt_locations_web_mobile_split():  # pyright: ignore[reportUnusedFunction]
+        path = request.path or ""
+        mobile_path = path.startswith(
+            (
+                "/api/v1/company_mobile/",
+                "/api/v1/driver/",
+            )
+        )
+        is_expo = request.headers.get("X-Requested-With") == "Expo"
+        ua = (request.headers.get("User-Agent") or "").lower()
+        mobile_ua = any(
+            m in ua for m in ("expo", "okhttp", "darwin", "cfnetwork", "dalvik")
+        )
+        if mobile_path or is_expo or mobile_ua:
+            app.config["JWT_TOKEN_LOCATION"] = ["headers"]
+        else:
+            app.config["JWT_TOKEN_LOCATION"] = ["cookies", "headers"]
 
     # ✅ 2.9: Setup OpenTelemetry avec instrumentation complète
     try:
@@ -2061,9 +2094,7 @@ def create_app(config_name: str | None = None):
                         elif first_val is not None:
                             first_field_error = str(first_val)
                     error_message = (
-                        first_field_error
-                        or restx_message
-                        or "Données invalides"
+                        first_field_error or restx_message or "Données invalides"
                     )
                     response_body: dict[str, object] = {
                         "error": "validation_error",
@@ -2098,9 +2129,7 @@ def create_app(config_name: str | None = None):
 
                     if body_parses:
                         error_code = "bad_request"
-                        error_message = (
-                            "Requête invalide. Vérifiez le format et les types des champs."
-                        )
+                        error_message = "Requête invalide. Vérifiez le format et les types des champs."
                     else:
                         app.logger.warning(
                             "[BadRequest] JSON non parseable path=%s body_len=%s preview=%s",

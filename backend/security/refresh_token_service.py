@@ -6,15 +6,41 @@ pour permettre la déconnexion forcée par l'admin.
 
 import hashlib
 import logging
+import os
 from datetime import UTC, datetime
 
 from flask import request
 from sqlalchemy import and_
+from sqlalchemy.exc import OperationalError, SQLAlchemyError
 
 from ext import db
 from models import RefreshToken
 
 logger = logging.getLogger(__name__)
+
+
+class RefreshStoreUnavailableError(RuntimeError):
+    """Redis ou DB indisponible pour le cycle refresh (fail-closed)."""
+
+
+def refresh_fail_closed_enabled() -> bool:
+    """True si REFRESH_FAIL_CLOSED ou ENVIRONMENT=production (hors TESTING)."""
+    try:
+        from flask import current_app
+
+        if current_app and bool(current_app.config.get("TESTING", False)):
+            # Suites pytest : fail-closed uniquement si flag explicite
+            flag = (os.getenv("REFRESH_FAIL_CLOSED") or "").strip().lower()
+            return flag in {"1", "true", "yes", "on"}
+    except Exception:
+        pass
+    flag = (os.getenv("REFRESH_FAIL_CLOSED") or "").strip().lower()
+    if flag in {"1", "true", "yes", "on"}:
+        return True
+    if flag in {"0", "false", "no", "off"}:
+        return False
+    env = (os.getenv("ENVIRONMENT") or "").strip().lower()
+    return env == "production"
 
 
 def _hash_refresh_token(token: str) -> str:
@@ -151,14 +177,25 @@ def is_token_revoked(
     """
     token_hash = _hash_refresh_token(token)
 
-    token_record = RefreshToken.query.filter_by(token_hash=token_hash).first()
+    try:
+        token_record = RefreshToken.query.filter_by(token_hash=token_hash).first()
+    except (OperationalError, SQLAlchemyError) as db_err:
+        logger.error(
+            "DB indisponible lors vérification refresh token: %s",
+            type(db_err).__name__,
+        )
+        if refresh_fail_closed_enabled():
+            raise RefreshStoreUnavailableError("db_unavailable") from db_err
+        raise
 
     if not token_record:
-        # Fallback gracieux : si le token n'est pas dans la DB (store_refresh_token
-        # a pu echouer silencieusement lors du login/refresh), on ne le traite PAS
-        # comme revoque. La validation JWT (signature + expiration) est suffisante.
-        # Traiter "absent" comme "revoque" provoquait des deconnexions sur iOS
-        # quand le stockage DB echouait de maniere transitoire.
+        # Lot 1 : absent → révoqué si fail-closed (zéro JWT-only)
+        if refresh_fail_closed_enabled():
+            logger.warning(
+                "Token non trouvé dans la DB (hash: %s) — fail-closed: revoked",
+                token_hash[:8],
+            )
+            return True
         logger.warning(
             "Token non trouvé dans la DB (hash: %s) — fallback: accepted (JWT-only validation)",
             token_hash[:8],

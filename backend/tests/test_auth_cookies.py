@@ -244,9 +244,8 @@ class TestRefreshTokenCookies:
         # Devrait fonctionner car le refresh_token est dans les cookies
         assert refresh_response.status_code == 200
 
-    def test_refresh_token_fallback_to_body(self, client, sample_user):
-        """Test que refresh token utilise le body si pas de cookie."""
-        # 1. Login mobile pour obtenir refresh_token
+    def test_refresh_token_web_ignores_body_without_cookie(self, client, sample_user):
+        """Lot 1-E : web = cookie only — body JSON ignoré sans cookie → 401."""
         login_response = client.post(
             "/api/v1/auth/login",
             json={"email": sample_user.email, "password": "password123"},
@@ -254,24 +253,25 @@ class TestRefreshTokenCookies:
         )
 
         assert login_response.status_code == 200
-        login_data = login_response.get_json()
-        refresh_token = login_data["refresh_token"]
+        refresh_token = login_response.get_json()["refresh_token"]
 
-        # 2. Refresh token avec refresh_token dans le body (pas de cookies)
-        # Utiliser un nouveau client sans cookies
-        from flask import Flask
-        from flask.testing import FlaskClient
-
-        # Créer un nouveau client sans cookies
         app = current_app._get_current_object()  # type: ignore[attr-defined]
         new_client = app.test_client()
 
+        # Client web (pas Expo) + body sans cookie → 401
         refresh_response = new_client.post(
             "/api/v1/auth/refresh-token",
             json={"refresh_token": refresh_token},
         )
+        assert refresh_response.status_code == 401
 
-        assert refresh_response.status_code == 200
+        # Mobile + body → 200
+        mobile_refresh = new_client.post(
+            "/api/v1/auth/refresh-token",
+            json={"refresh_token": refresh_token},
+            headers={"X-Requested-With": "Expo"},
+        )
+        assert mobile_refresh.status_code == 200
 
     def test_refresh_token_rotation_updates_both_cookies(self, client, sample_user):
         """Test que la rotation du refresh token met à jour les deux cookies."""

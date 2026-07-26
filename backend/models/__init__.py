@@ -10,6 +10,10 @@ from ext import db
 # ========== ML & Autonomous Systems (après les autres modèles) ==========
 from .ab_test_result import ABTestResult
 from .app_version_config import AppVersionConfig
+from .activation_email_delivery import (
+    ActivationEmailDelivery,
+    BrevoWebhookEvent,
+)
 from .activation_session import ActivationSession
 from .autonomous_action import AutonomousAction
 
@@ -215,8 +219,10 @@ from .vehicle import Vehicle
 # ========== EXPORTS ==========
 __all__ = [
     "ABTestResult",
+    "ActivationEmailDelivery",
     "ActivationSession",
     "AppVersionConfig",
+    "BrevoWebhookEvent",
     "Assignment",
     "AssignmentStatus",
     "AutonomousAction",

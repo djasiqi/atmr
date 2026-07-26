@@ -92,15 +92,17 @@ def _module_available(name: str) -> bool:
     return importlib.util.find_spec(name) is not None
 
 
-def pytest_ignore_collect(path: object, config: object) -> bool:
+def pytest_ignore_collect(collection_path: object, config: object) -> bool:
     """Skip optional heavy test suites when optional deps are not installed.
 
     Docker dev image used in local dev does not necessarily include RL/ML deps
     (torch/gymnasium/optuna). Without this guard, collection fails and blocks
     running coverage on the rest of the suite.
+
+    Note: ``collection_path`` (pathlib) remplace ``path`` (py.path) depuis pytest 8.1.
     """
     _ = config
-    p = str(path).replace("\\", "/")
+    p = str(collection_path).replace("\\", "/")
 
     run_e2e = os.getenv("RUN_E2E_TESTS", "0") in {"1", "true", "True"}
     has_torch = _module_available("torch")
@@ -874,19 +876,81 @@ def mock_external_services(monkeypatch):
     monkeypatch.setattr(osrm_client, "eta_seconds", mock_eta_seconds)
 
     # Mock Redis - créer un mock Redis centralisé
+    # Redis mock stateful (refresh tokens Lot 1 / fail-closed)
+    _redis_kv: dict[str, object] = {}
+    _redis_zsets: dict[str, dict[str, float]] = {}
+
     mock_redis = MagicMock()
-    # Configurer les méthodes Redis courantes
-    mock_redis.get.return_value = None
-    mock_redis.set.return_value = True
-    mock_redis.setex.return_value = True
-    mock_redis.delete.return_value = 1
-    mock_redis.exists.return_value = False
+
+    def _redis_get(key, *args, **kwargs):
+        return _redis_kv.get(key)
+
+    def _redis_setex(key, _ttl, value):
+        _redis_kv[key] = value
+        return True
+
+    def _redis_set(key, value, *args, **kwargs):
+        _redis_kv[key] = value
+        return True
+
+    def _redis_delete(*keys):
+        n = 0
+        for key in keys:
+            if key in _redis_kv:
+                del _redis_kv[key]
+                n += 1
+            if key in _redis_zsets:
+                del _redis_zsets[key]
+                n += 1
+        return n
+
+    def _redis_exists(key, *args, **kwargs):
+        return 1 if key in _redis_kv else 0
+
+    def _redis_zadd(key, mapping):
+        z = _redis_zsets.setdefault(key, {})
+        z.update({str(k): float(v) for k, v in mapping.items()})
+        return len(mapping)
+
+    def _redis_zcard(key):
+        return len(_redis_zsets.get(key, {}))
+
+    def _redis_zrange(key, start, end):
+        items = sorted(
+            _redis_zsets.get(key, {}).items(), key=lambda kv: kv[1]
+        )
+        if end == -1:
+            end = len(items) - 1
+        return [k for k, _ in items[start : end + 1]]
+
+    def _redis_zscore(key, member):
+        return _redis_zsets.get(key, {}).get(str(member))
+
+    def _redis_zrem(key, *members):
+        z = _redis_zsets.get(key, {})
+        n = 0
+        for m in members:
+            if str(m) in z:
+                del z[str(m)]
+                n += 1
+        return n
+
+    mock_redis.get.side_effect = _redis_get
+    mock_redis.set.side_effect = _redis_set
+    mock_redis.setex.side_effect = _redis_setex
+    mock_redis.delete.side_effect = _redis_delete
+    mock_redis.exists.side_effect = _redis_exists
     mock_redis.lpush.return_value = 1
     mock_redis.lrange.return_value = []
     mock_redis.ltrim.return_value = True
     mock_redis.expire.return_value = True
     mock_redis.keys.return_value = []
     mock_redis.ping.return_value = True
+    mock_redis.zcard.side_effect = _redis_zcard
+    mock_redis.zadd.side_effect = _redis_zadd
+    mock_redis.zrange.side_effect = _redis_zrange
+    mock_redis.zscore.side_effect = _redis_zscore
+    mock_redis.zrem.side_effect = _redis_zrem
 
     # Patcher Redis dans les modules qui l'utilisent
     # Note: On patch seulement si le module existe pour éviter les erreurs

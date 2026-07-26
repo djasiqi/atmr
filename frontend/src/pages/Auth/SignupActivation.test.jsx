@@ -77,6 +77,12 @@ describe('SignupActivation', () => {
     });
     expect(screen.getByText(/email confirm[eé] avec succ[eè]s/i)).toBeInTheDocument();
     await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith(
+        '/activate-account?activation_session_id=sess-123',
+        expect.objectContaining({ replace: true })
+      );
+    });
+    await waitFor(() => {
       expect(setPendingActivationSession).toHaveBeenCalled();
     });
   });

@@ -111,8 +111,12 @@ class BrevoEmailProvider:
         from_name: str,
         reply_to: str | None = None,
         notification_type: str = "transactional",
+        headers: dict[str, str] | None = None,
     ) -> EmailResult:
         """Envoie un email transactionnel simple via l'API Brevo.
+
+        Args:
+            headers: En-têtes SMTP Brevo (ex. X-Mailin-custom pour corrélation webhook).
 
         Returns:
             EmailResult avec status_code et retryable renseignés.
@@ -127,6 +131,9 @@ class BrevoEmailProvider:
         }
         if reply_to:
             payload["replyTo"] = {"email": reply_to.strip()}
+        if headers:
+            # API Brevo SMTP : champ "headers" du body (pas les headers HTTP)
+            payload["headers"] = {str(k): str(v) for k, v in headers.items()}
         if html_content:
             payload["htmlContent"] = html_content
             payload["textContent"] = text_content or re.sub(

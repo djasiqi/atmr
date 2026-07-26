@@ -10,7 +10,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ext import db
 
-# Statuts de livraison email d'activation
+# Statuts miroir session (source étendue : models.activation_email_delivery)
 EMAIL_DELIVERY_QUEUED = "queued"
 EMAIL_DELIVERY_SENDING = "sending"
 EMAIL_DELIVERY_SENT = "sent"
@@ -107,3 +107,9 @@ class ActivationSession(db.Model):
     )
 
     user = relationship("User", backref="activation_sessions")
+    email_deliveries = relationship(
+        "ActivationEmailDelivery",
+        back_populates="session",
+        cascade="all, delete-orphan",
+        foreign_keys="ActivationEmailDelivery.activation_session_pk",
+    )

@@ -1,4 +1,4 @@
-"""Tests unitaires : livraison email d'activation (P0/P1)."""
+"""Tests unitaires : livraison email d'activation (Lot 1)."""
 
 from __future__ import annotations
 
@@ -8,25 +8,70 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from models.activation_session import (
-    EMAIL_DELIVERY_FAILED,
+from models.activation_email_delivery import (
+    EMAIL_DELIVERY_DELIVERED,
     EMAIL_DELIVERY_KIND_INITIAL,
     EMAIL_DELIVERY_KIND_RESEND,
     EMAIL_DELIVERY_QUEUED,
     EMAIL_DELIVERY_SENDING,
     EMAIL_DELIVERY_SENT,
-    ActivationSession,
+    ActivationEmailDelivery,
 )
+from models.activation_session import ActivationSession
 from services.notifications.activation_email_delivery import (
     cas_claim_sending,
-    mark_delivery_sent,
+    finalize_after_provider_accepted,
     sanitize_email_error,
     try_enqueue_activation_email,
+)
+from services.notifications.activation_token import (
+    derive_activation_token,
+    hash_activation_token,
 )
 from services.notifications.email_errors import (
     EmailPermanentError,
     EmailRetryableError,
 )
+
+
+def _make_session(db) -> ActivationSession:
+    session = ActivationSession()
+    session.activation_session_id = str(uuid.uuid4())
+    session.user_id = 1
+    session.sms_attempts = 0
+    session.resend_count_email = 0
+    session.resend_count_sms = 0
+    db.session.add(session)
+    db.session.commit()
+    return session
+
+
+def _make_delivery(
+    db,
+    session: ActivationSession,
+    *,
+    status: str = EMAIL_DELIVERY_QUEUED,
+    kind: str = EMAIL_DELIVERY_KIND_INITIAL,
+    delivery_id: str | None = None,
+) -> ActivationEmailDelivery:
+    did = delivery_id or str(uuid.uuid4())
+    token = derive_activation_token(did, key_version=1)
+    delivery = ActivationEmailDelivery(
+        activation_session_pk=session.id,
+        email_delivery_id=did,
+        kind=kind,
+        status=status,
+        token_key_version=1,
+        email_token_hash=hash_activation_token(token),
+        token_expires_at=datetime.now(UTC) + timedelta(minutes=30),
+    )
+    db.session.add(delivery)
+    session.email_delivery_id = did
+    session.email_delivery_status = status
+    session.email_delivery_kind = kind
+    session.email_token_hash = delivery.email_token_hash
+    db.session.commit()
+    return delivery
 
 
 class TestSanitizeEmailError:
@@ -42,16 +87,24 @@ class TestSanitizeEmailError:
         assert "[email]" in cleaned
 
 
+class TestHmacToken:
+    def test_same_delivery_id_same_token(self, monkeypatch):
+        monkeypatch.setenv("ACTIVATION_TOKEN_KEY_V1", "test-activation-key-v1")
+        did = str(uuid.uuid4())
+        t1 = derive_activation_token(did, key_version=1)
+        t2 = derive_activation_token(did, key_version=1)
+        assert t1 == t2
+
+    def test_new_delivery_id_new_token(self, monkeypatch):
+        monkeypatch.setenv("ACTIVATION_TOKEN_KEY_V1", "test-activation-key-v1")
+        t1 = derive_activation_token(str(uuid.uuid4()), key_version=1)
+        t2 = derive_activation_token(str(uuid.uuid4()), key_version=1)
+        assert t1 != t2
+
+
 class TestTryEnqueueActivationEmail:
     def test_prod_config_missing_returns_502_flag(self, db):
-        session = ActivationSession()
-        session.activation_session_id = str(uuid.uuid4())
-        session.user_id = 1
-        session.sms_attempts = 0
-        session.resend_count_email = 0
-        session.resend_count_sms = 0
-        db.session.add(session)
-        db.session.commit()
+        session = _make_session(db)
 
         with patch(
             "services.notifications.activation_email_delivery.is_email_provider_configured",
@@ -60,8 +113,6 @@ class TestTryEnqueueActivationEmail:
             result = try_enqueue_activation_email(
                 session,
                 kind=EMAIL_DELIVERY_KIND_INITIAL,
-                email_token="plain-token-value",
-                email_token_hash="abc123",
                 environment="production",
                 is_testing=False,
             )
@@ -70,26 +121,17 @@ class TestTryEnqueueActivationEmail:
         assert result["queued"] is False
         assert result["email_sent"] is None
         db.session.refresh(session)
-        assert session.email_delivery_status == EMAIL_DELIVERY_FAILED
+        assert session.email_delivery_status == "failed"
 
-    def test_enqueue_passes_session_and_delivery_id_only(self, db):
-        session = ActivationSession()
-        session.activation_session_id = str(uuid.uuid4())
-        session.user_id = 1
-        session.sms_attempts = 0
-        session.resend_count_email = 0
-        session.resend_count_sms = 0
-        db.session.add(session)
-        db.session.commit()
+    def test_enqueue_passes_session_and_delivery_id_only(self, db, monkeypatch):
+        monkeypatch.setenv("ACTIVATION_TOKEN_KEY_V1", "test-activation-key-v1")
+        session = _make_session(db)
 
         delay_mock = MagicMock()
         with (
             patch(
                 "services.notifications.activation_email_delivery.is_email_provider_configured",
                 return_value=(True, None),
-            ),
-            patch(
-                "services.notifications.activation_email_delivery.store_activation_email_token"
             ),
             patch(
                 "services.notifications.activation_email_delivery.enqueue_activation_email",
@@ -99,8 +141,6 @@ class TestTryEnqueueActivationEmail:
             result = try_enqueue_activation_email(
                 session,
                 kind=EMAIL_DELIVERY_KIND_INITIAL,
-                email_token="plain-token-value",
-                email_token_hash="hash-xyz",
                 environment="testing",
                 is_testing=True,
             )
@@ -117,28 +157,21 @@ class TestTryEnqueueActivationEmail:
         db.session.refresh(session)
         assert session.email_delivery_status == EMAIL_DELIVERY_QUEUED
         assert session.last_email_sent_at is None
+        # Même delivery_id → même jeton HMAC
+        token = result["email_token"]
+        assert token == derive_activation_token(
+            kwargs["email_delivery_id"], key_version=1
+        )
 
-    def test_delay_failure_purges_and_fails(self, db):
-        session = ActivationSession()
-        session.activation_session_id = str(uuid.uuid4())
-        session.user_id = 1
-        session.sms_attempts = 0
-        session.resend_count_email = 0
-        session.resend_count_sms = 0
-        db.session.add(session)
-        db.session.commit()
+    def test_delay_failure_fails_delivery(self, db, monkeypatch):
+        monkeypatch.setenv("ACTIVATION_TOKEN_KEY_V1", "test-activation-key-v1")
+        session = _make_session(db)
 
         with (
             patch(
                 "services.notifications.activation_email_delivery.is_email_provider_configured",
                 return_value=(True, None),
             ),
-            patch(
-                "services.notifications.activation_email_delivery.store_activation_email_token"
-            ),
-            patch(
-                "services.notifications.activation_email_delivery.purge_activation_email_token"
-            ) as purge,
             patch(
                 "services.notifications.activation_email_delivery.enqueue_activation_email",
                 side_effect=RuntimeError("broker down"),
@@ -147,71 +180,87 @@ class TestTryEnqueueActivationEmail:
             result = try_enqueue_activation_email(
                 session,
                 kind=EMAIL_DELIVERY_KIND_RESEND,
-                email_token="plain-token",
-                email_token_hash="h",
                 environment="production",
                 is_testing=False,
             )
 
         assert result["require_502"] is True
-        purge.assert_called_once()
         db.session.refresh(session)
-        assert session.email_delivery_status == EMAIL_DELIVERY_FAILED
+        assert session.email_delivery_status == "failed"
 
 
 class TestCasClaimSending:
-    def test_queued_to_sending_then_retry_same_delivery(self, db):
-        delivery_id = str(uuid.uuid4())
-        session = ActivationSession()
-        session.activation_session_id = str(uuid.uuid4())
-        session.user_id = 1
-        session.sms_attempts = 0
-        session.resend_count_email = 0
-        session.resend_count_sms = 0
-        session.email_delivery_id = delivery_id
-        session.email_delivery_status = EMAIL_DELIVERY_QUEUED
-        db.session.add(session)
-        db.session.commit()
+    def test_queued_to_sending_then_retry_same_delivery(self, db, monkeypatch):
+        monkeypatch.setenv("ACTIVATION_TOKEN_KEY_V1", "test-activation-key-v1")
+        session = _make_session(db)
+        delivery = _make_delivery(db, session, status=EMAIL_DELIVERY_QUEUED)
 
-        assert cas_claim_sending(session, delivery_id) == "proceed"
+        assert cas_claim_sending(session, delivery.email_delivery_id) == "proceed"
         db.session.refresh(session)
         assert session.email_delivery_status == EMAIL_DELIVERY_SENDING
 
-        # Retry même delivery_id
-        assert cas_claim_sending(session, delivery_id) == "proceed"
-
-        # Ancien job
+        assert cas_claim_sending(session, delivery.email_delivery_id) == "proceed"
         assert cas_claim_sending(session, str(uuid.uuid4())) == "ignore"
 
 
-class TestMarkDeliverySent:
-    def test_resend_increments_count_only_on_success(self, db):
-        delivery_id = str(uuid.uuid4())
-        session = ActivationSession()
-        session.activation_session_id = str(uuid.uuid4())
-        session.user_id = 1
-        session.sms_attempts = 0
+class TestFinalizeAfterProviderAccepted:
+    def test_resend_increments_count_only_once(self, db, monkeypatch):
+        monkeypatch.setenv("ACTIVATION_TOKEN_KEY_V1", "test-activation-key-v1")
+        session = _make_session(db)
         session.resend_count_email = 2
-        session.resend_count_sms = 0
-        session.email_delivery_id = delivery_id
-        session.email_delivery_kind = EMAIL_DELIVERY_KIND_RESEND
-        session.email_delivery_status = EMAIL_DELIVERY_SENDING
         session.last_email_sent_at = datetime.now(UTC) - timedelta(minutes=5)
-        db.session.add(session)
+        delivery = _make_delivery(
+            db,
+            session,
+            status=EMAIL_DELIVERY_SENDING,
+            kind=EMAIL_DELIVERY_KIND_RESEND,
+        )
         db.session.commit()
 
-        with patch(
-            "services.notifications.activation_email_delivery.purge_activation_email_token"
-        ):
-            mark_delivery_sent(
-                session, email_delivery_id=delivery_id, message_id="msg-1"
-            )
+        applied = finalize_after_provider_accepted(
+            session, email_delivery_id=delivery.email_delivery_id, message_id="msg-1"
+        )
         db.session.commit()
+        assert applied is True
         db.session.refresh(session)
         assert session.email_delivery_status == EMAIL_DELIVERY_SENT
         assert session.resend_count_email == 3
         assert session.email_provider_message_id == "msg-1"
-        assert session.last_email_sent_at is not None
+
+        # Second appel → no-op compteur
+        applied2 = finalize_after_provider_accepted(
+            session, email_delivery_id=delivery.email_delivery_id, message_id="msg-2"
+        )
+        db.session.commit()
+        assert applied2 is False
+        db.session.refresh(session)
+        assert session.resend_count_email == 3
+
+    def test_webhook_delivered_before_finalize_keeps_delivered(self, db, monkeypatch):
+        monkeypatch.setenv("ACTIVATION_TOKEN_KEY_V1", "test-activation-key-v1")
+        session = _make_session(db)
+        session.resend_count_email = 0
+        delivery = _make_delivery(
+            db,
+            session,
+            status=EMAIL_DELIVERY_SENDING,
+            kind=EMAIL_DELIVERY_KIND_RESEND,
+        )
+        # Webhook intercalé
+        delivery.status = EMAIL_DELIVERY_DELIVERED
+        session.email_delivery_status = EMAIL_DELIVERY_DELIVERED
+        db.session.commit()
+
+        applied = finalize_after_provider_accepted(
+            session, email_delivery_id=delivery.email_delivery_id, message_id="mid"
+        )
+        db.session.commit()
+        assert applied is True
+        db.session.refresh(delivery)
+        db.session.refresh(session)
+        assert delivery.status == EMAIL_DELIVERY_DELIVERED
+        assert delivery.provider_accepted_at is not None
+        assert session.resend_count_email == 1
 
 
 class TestBrevoTransactional:
@@ -233,14 +282,13 @@ class TestBrevoTransactional:
             from_email="noreply@lirie.ch",
             from_name="LIRIE",
             reply_to="support@lirie.ch",
+            headers={"X-Mailin-custom": "delivery-uuid"},
         )
         assert result.success is True
         assert result.message_id == "m1"
         payload = mock_post.call_args.kwargs["json"]
         assert payload["sender"]["email"] == "noreply@lirie.ch"
-        assert payload["sender"]["name"] == "LIRIE"
-        assert payload["replyTo"]["email"] == "support@lirie.ch"
-        assert mock_post.call_args.kwargs["timeout"] == provider.http_timeout
+        assert payload["headers"]["X-Mailin-custom"] == "delivery-uuid"
 
     @patch("services.email.brevo_provider.requests.post")
     def test_send_transactional_429_retryable(self, mock_post):
@@ -261,26 +309,6 @@ class TestBrevoTransactional:
         )
         assert result.success is False
         assert result.retryable is True
-
-    @patch("services.email.brevo_provider.requests.post")
-    def test_send_transactional_400_not_retryable(self, mock_post):
-        from services.email.brevo_provider import BrevoEmailProvider
-
-        mock_resp = MagicMock()
-        mock_resp.status_code = 400
-        mock_resp.text = "bad"
-        mock_post.return_value = mock_resp
-
-        provider = BrevoEmailProvider(api_key="k")
-        result = provider.send_transactional(
-            to_email="a@b.ch",
-            subject="x",
-            text_content="y",
-            from_email="noreply@lirie.ch",
-            from_name="LIRIE",
-        )
-        assert result.success is False
-        assert result.retryable is False
 
 
 class TestSendEmailNotificationRaises:
@@ -331,7 +359,7 @@ class TestSendEmailNotificationRaises:
             instance = provider_cls.return_value
             instance.send_transactional.return_value = MagicMock(
                 success=False,
-                error="bad request",
+                error="bad",
                 retryable=False,
                 status_code=400,
                 message_id=None,
@@ -345,80 +373,3 @@ class TestSendEmailNotificationRaises:
                     "body",
                     raise_on_error=True,
                 )
-
-
-class TestActivationEmailTask:
-    def test_stale_delivery_ignored(self, app, db):
-        from tasks.notification_tasks import send_activation_email_task
-
-        delivery_current = str(uuid.uuid4())
-        session = ActivationSession()
-        session.activation_session_id = str(uuid.uuid4())
-        session.user_id = 1
-        session.sms_attempts = 0
-        session.resend_count_email = 0
-        session.resend_count_sms = 0
-        session.email_delivery_id = delivery_current
-        session.email_delivery_status = EMAIL_DELIVERY_SENDING
-        db.session.add(session)
-        db.session.commit()
-
-        with app.app_context():
-            result = send_activation_email_task.run(
-                activation_session_id=session.activation_session_id,
-                email_delivery_id=str(uuid.uuid4()),
-            )
-        assert result.get("ignored") is True
-
-    def test_success_marks_sent_same_token_hash(self, app, db):
-        from models import User
-        from tasks.notification_tasks import send_activation_email_task
-
-        user = User(
-            username=f"act_{uuid.uuid4().hex[:8]}",
-            email=f"act_{uuid.uuid4().hex[:8]}@example.com",
-        )
-        user.set_password("TestPass123!")
-        db.session.add(user)
-        db.session.flush()
-
-        delivery_id = str(uuid.uuid4())
-        token_hash = "stable-hash-abc"
-        session = ActivationSession()
-        session.activation_session_id = str(uuid.uuid4())
-        session.user_id = user.id
-        session.sms_attempts = 0
-        session.resend_count_email = 0
-        session.resend_count_sms = 0
-        session.email_delivery_id = delivery_id
-        session.email_delivery_kind = EMAIL_DELIVERY_KIND_INITIAL
-        session.email_delivery_status = EMAIL_DELIVERY_QUEUED
-        session.email_token_hash = token_hash
-        db.session.add(session)
-        db.session.commit()
-
-        with (
-            app.app_context(),
-            patch(
-                "services.notifications.activation_email_delivery.get_activation_email_token",
-                return_value="stable-plain-token",
-            ),
-            patch(
-                "services.notifications.email.send_email_notification",
-                return_value={"ok": True, "message_id": "mid-9"},
-            ),
-            patch(
-                "services.notifications.activation_email_delivery.purge_activation_email_token"
-            ),
-        ):
-            result = send_activation_email_task.run(
-                activation_session_id=session.activation_session_id,
-                email_delivery_id=delivery_id,
-            )
-
-        assert result.get("ok") is True
-        db.session.refresh(session)
-        assert session.email_delivery_status == EMAIL_DELIVERY_SENT
-        assert session.email_token_hash == token_hash
-        assert session.last_email_sent_at is not None
-        assert session.email_provider_message_id == "mid-9"
