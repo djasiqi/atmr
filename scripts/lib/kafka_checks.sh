@@ -91,6 +91,42 @@ kafka_refresh_broker_containers() {
   done < <(kafka_docker_compose config --services 2>/dev/null | grep '^kafka-broker-' || true)
 }
 
+kafka_count_running_brokers() {
+  kafka_refresh_broker_containers
+  local c running=0
+  for c in "${KAFKA_BROKER_CONTAINERS[@]}"; do
+    if docker ps --format '{{.Names}}' | grep -qx "${c}"; then
+      running=$((running + 1))
+    fi
+  done
+  printf '%s\n' "${running}"
+}
+
+kafka_check_brokers_running() {
+  local expected running
+  kafka_refresh_broker_containers
+  expected="${#KAFKA_BROKER_CONTAINERS[@]}"
+  running="$(kafka_count_running_brokers | tr -d '[:space:]')"
+  if [[ ! "${running}" =~ ^[0-9]+$ ]] || [[ "${running}" -lt 1 ]]; then
+    log_fail "aucun broker Kafka actif (0/${expected}) — lancer scripts/deploy-kafka-production.sh"
+    return 1
+  fi
+  log_info "brokers Kafka actifs (${running}/${expected})"
+  return 0
+}
+
+kafka_dns_probe_ok() {
+  local probe="$1"
+  docker exec "${probe}" getent hosts kafka-broker-1 >/dev/null 2>&1 \
+    && docker exec "${probe}" getent hosts kafka-broker-2 >/dev/null 2>&1
+}
+
+kafka_dns_ephemeral_probe_ok() {
+  docker network inspect atmr-network >/dev/null 2>&1 || return 1
+  docker run --rm --network atmr-network alpine:3.20 getent hosts kafka-broker-1 >/dev/null 2>&1 \
+    && docker run --rm --network atmr-network alpine:3.20 getent hosts kafka-broker-2 >/dev/null 2>&1
+}
+
 # Commande docker compose « Kafka ON » (production + kafka + réseau + profile kafka)
 kafka_docker_compose() {
   local net
@@ -395,21 +431,46 @@ kafka_wait_brokers_healthy() {
 
 kafka_check_dns_from_atmr_network() {
   local probe=""
-  for probe in backend atmr-backend-1 kafka-dlq-consumer atmr-kafka-dlq-consumer tracking-kafka-consumer atmr-tracking-kafka-consumer-1; do
+  local probes=(
+    backend atmr-backend-1
+    atmr-kafka-broker-1 atmr-kafka-broker-2
+    kafka-dlq-consumer atmr-kafka-dlq-consumer
+    tracking-kafka-consumer atmr-tracking-kafka-consumer-1
+  )
+  for probe in "${probes[@]}"; do
     if docker ps --format '{{.Names}}' | grep -qx "${probe}"; then
-      if docker exec "${probe}" getent hosts kafka-broker-1 >/dev/null 2>&1 \
-        && docker exec "${probe}" getent hosts kafka-broker-2 >/dev/null 2>&1; then
+      if kafka_dns_probe_ok "${probe}"; then
         log_info "DNS kafka-broker-1/2 depuis ${probe} (atmr-network)"
         return 0
       fi
     fi
   done
-  if docker compose -f docker-compose.production.yml exec -T backend getent hosts kafka-broker-1 >/dev/null 2>&1 \
+  if docker compose -f docker-compose.production.yml ps backend --status running -q 2>/dev/null | grep -q . \
+    && docker compose -f docker-compose.production.yml exec -T backend getent hosts kafka-broker-1 >/dev/null 2>&1 \
     && docker compose -f docker-compose.production.yml exec -T backend getent hosts kafka-broker-2 >/dev/null 2>&1; then
     log_info "DNS kafka-broker-1/2 depuis backend (atmr-network)"
     return 0
   fi
-  log_fail "DNS kafka-broker-* introuvable depuis atmr-network — relancer avec docker-compose.kafka.atmr-network.yml"
+  # Stack prod arrêtée (ex. après rollback) : sonde éphémère sur atmr-network
+  if kafka_dns_ephemeral_probe_ok; then
+    log_info "DNS kafka-broker-1/2 via sonde éphémère alpine (atmr-network)"
+    return 0
+  fi
+  kafka_refresh_broker_containers
+  local on_network=0 c net_containers
+  if docker network inspect atmr-network >/dev/null 2>&1; then
+    net_containers="$(docker network inspect atmr-network --format '{{range .Containers}}{{.Name}} {{end}}' 2>/dev/null || true)"
+    for c in "${KAFKA_BROKER_CONTAINERS[@]}"; do
+      if grep -qw "${c}" <<<"${net_containers}"; then
+        on_network=$((on_network + 1))
+      fi
+    done
+  fi
+  if ((${#KAFKA_BROKER_CONTAINERS[@]} > 0)) && ((on_network == 0)); then
+    log_fail "brokers Kafka actifs mais absents de atmr-network — relancer deploy-kafka-production.sh (merge docker-compose.kafka.atmr-network.yml)"
+    return 1
+  fi
+  log_fail "DNS kafka-broker-* introuvable depuis atmr-network — déployer Kafka (scripts/deploy-kafka-production.sh) ou vérifier le réseau"
   return 1
 }
 
