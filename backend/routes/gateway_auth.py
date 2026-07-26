@@ -62,9 +62,18 @@ def _delegate(
     auth_header = request.headers.get("Authorization")
     if auth_header:
         headers["Authorization"] = auth_header
-    requested_with = request.headers.get("X-Requested-With")
-    if requested_with:
-        headers["X-Requested-With"] = requested_with
+    # Relayer Origin/Referer : le login web unifié passe par ce gateway ; sans cela
+    # le backend Lot 1-D répond missing_origin (l'upstream ne voit plus l'origine navigateur).
+    for header_name in (
+        "Origin",
+        "Referer",
+        "User-Agent",
+        "X-Requested-With",
+        "X-Client-Platform",
+    ):
+        value = request.headers.get(header_name)
+        if value:
+            headers[header_name] = value
     # Marquer les appels internes pour que le bypass Talisman s'applique (évite 302→HTTPS→SSLError)
     # Talisman vérifie X-Forwarded-Proto=='https' pour ne pas rediriger
     if "127.0.0.1" in url or "backend:" in url:

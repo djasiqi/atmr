@@ -171,6 +171,10 @@ def _is_mobile_request() -> bool:
     """Détecte une requête mobile (app native iOS/Android)."""
     if request.headers.get("X-Requested-With") == "Expo":
         return True
+    # Header envoyé par l'app unifiée (Expo) — fiable même sans UA « mobile ».
+    client_platform = (request.headers.get("X-Client-Platform") or "").strip().lower()
+    if client_platform in {"ios", "android"}:
+        return True
     user_agent = (request.headers.get("User-Agent") or "").lower()
     return any(marker in user_agent for marker in _MOBILE_UA_MARKERS)
 
@@ -1252,13 +1256,16 @@ class Login(Resource):
     def post(self):
         """Authentifie un utilisateur et renvoie un token d'accès."""
         try:
-            # Lot 1-D : login web exempt CSRF mais Origin/Referer whitelist
-            origin_ok, origin_err = validate_login_origin_for_web()
-            if not origin_ok:
-                return {
-                    "error": origin_err or "origin_not_allowed",
-                    "message": "Origine non autorisée.",
-                }, 403
+            # Lot 1-D : login web (cookies) → Origin/Referer obligatoire.
+            # Lot 1-E : login mobile (Bearer/JSON) → pas de contrôle Origin
+            # (les clients natifs n'envoient souvent ni Origin ni Referer).
+            if not _is_mobile_request():
+                origin_ok, origin_err = validate_login_origin_for_web()
+                if not origin_ok:
+                    return {
+                        "error": origin_err or "origin_not_allowed",
+                        "message": "Origine non autorisée.",
+                    }, 403
             return _login_post_body()
         except Exception as e:
             sentry_sdk.capture_exception(e)
@@ -1868,7 +1875,9 @@ def _validate_refresh_token(
                 user_model = user_repo.find_model_by_public_id(user_public_id)
                 if user_model:
                     redis_svc = RefreshTokenService()
-                    if not redis_svc.is_token_valid(refresh_token, user_id=user_model.id):
+                    if not redis_svc.is_token_valid(
+                        refresh_token, user_id=user_model.id
+                    ):
                         return None, {
                             "error": "Refresh token révoqué ou absent du store"
                         }
@@ -3953,7 +3962,9 @@ class Register(Resource):
                     user=user,
                 )
                 if enqueue_result.get("debug_activation_link"):
-                    body["debug_activation_link"] = enqueue_result["debug_activation_link"]
+                    body["debug_activation_link"] = enqueue_result[
+                        "debug_activation_link"
+                    ]
                 return body, code
 
             response_body: dict[str, object] = {

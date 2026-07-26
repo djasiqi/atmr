@@ -10,11 +10,15 @@ from flask import request
 
 def _is_production() -> bool:
     env = (
-        os.getenv("ENVIRONMENT")
-        or os.getenv("FLASK_CONFIG")
-        or os.getenv("FLASK_ENV")
-        or ""
-    ).strip().lower()
+        (
+            os.getenv("ENVIRONMENT")
+            or os.getenv("FLASK_CONFIG")
+            or os.getenv("FLASK_ENV")
+            or ""
+        )
+        .strip()
+        .lower()
+    )
     return env == "production"
 
 
@@ -32,8 +36,10 @@ def _allowed_origins() -> set[str]:
             if o:
                 origins.add(o)
     frontend = (
-        os.getenv("FRONTEND_URL") or os.getenv("PUBLIC_FRONTEND_URL") or ""
-    ).strip().rstrip("/")
+        (os.getenv("FRONTEND_URL") or os.getenv("PUBLIC_FRONTEND_URL") or "")
+        .strip()
+        .rstrip("/")
+    )
     if frontend:
         origins.add(frontend)
     return origins
@@ -74,7 +80,8 @@ def validate_login_origin_for_web() -> tuple[bool, str | None]:
     except Exception:
         pass
 
-    # Plan : Expo ne contourne PAS le contrôle Origin sur /auth/login web.
+    # Contrôle web uniquement. Le bypass mobile (Bearer) se fait à l'appelant
+    # (routes.auth.Login) via _is_mobile_request — pas ici.
     origin = extract_request_origin()
     allowed = _allowed_origins()
 

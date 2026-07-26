@@ -109,6 +109,12 @@ Contrôles manuels prod :
 - [x] `CSRF_ENABLED=true`, `CSRF_STRICT=true`, `REFRESH_FAIL_CLOSED=true` injectés en prod (2026-07-26)
 - [x] Origines exactes incluent `https://www.lirie.ch` (`LOGIN_ALLOWED_ORIGINS` ajouté dans `.env.production` le 2026-07-26)
 - [x] `FRONTEND_URL=https://www.lirie.ch/` (URL canonique d’activation)
+- [x] ✅ **Implémenté** : correction `missing_origin` sur login unifié (`target_env=app`) —
+  le gateway `/api/gateway/auth/login` relaie désormais `Origin` / `Referer` / `User-Agent`
+  vers `/api/v1/auth/login` (`backend/routes/gateway_auth.py`). Sans ce relais, le navigateur
+  envoie bien l’origine au gateway mais l’upstream Lot 1-D voyait une requête sans Origin.
+  Pas besoin d’ajouter d’origines Expo/Capacitor dans `LOGIN_ALLOWED_ORIGINS` pour ce flux web.
+  Le login mobile Bearer (`_is_mobile_request`) saute le contrôle Origin (Lot 1-E).
 - [ ] Identité d’envoi LIRIE (Brevo sender / reply-to)
 - [x] URL publique webhook : `https://api.lirie.ch/api/v1/webhooks/brevo`
 

@@ -80,3 +80,39 @@ class TestWebMobileAuthSplit:
         data = resp.get_json()
         assert data.get("token") or data.get("access_token")
         assert data.get("refresh_token")
+
+    def test_mobile_login_skips_origin_check_in_prod(
+        self, client, sample_user, monkeypatch
+    ):
+        """Lot 1-E : Bearer mobile ne doit pas échouer en missing_origin."""
+        monkeypatch.setenv("ENVIRONMENT", "production")
+        monkeypatch.setenv("LOGIN_ALLOWED_ORIGINS", "https://www.lirie.ch")
+        monkeypatch.setitem(client.application.config, "TESTING", False)
+        resp = client.post(
+            "/api/v1/auth/login",
+            json={
+                "email": sample_user.email,
+                "password": "password123",
+            },
+            headers={"X-Requested-With": "Expo"},
+        )
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data.get("token") or data.get("access_token")
+        assert data.get("refresh_token")
+
+    def test_web_login_missing_origin_forbidden_in_prod(
+        self, client, sample_user, monkeypatch
+    ):
+        monkeypatch.setenv("ENVIRONMENT", "production")
+        monkeypatch.setenv("LOGIN_ALLOWED_ORIGINS", "https://www.lirie.ch")
+        monkeypatch.setitem(client.application.config, "TESTING", False)
+        resp = client.post(
+            "/api/v1/auth/login",
+            json={
+                "email": sample_user.email,
+                "password": "password123",
+            },
+        )
+        assert resp.status_code == 403
+        assert resp.get_json().get("error") == "missing_origin"

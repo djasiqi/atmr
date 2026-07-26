@@ -62,6 +62,48 @@ def test_gateway_login_routes_demo_success(client, monkeypatch):
     assert "Set-Cookie" in response.headers
 
 
+def test_gateway_delegate_forwards_origin_referer(app):
+    """Régression missing_origin : le gateway doit relayer Origin/Referer upstream."""
+    from routes.gateway_auth import _delegate
+
+    captured: dict = {}
+
+    def _fake_request(**kwargs):
+        captured.update(kwargs)
+        return _FakeResponse(status_code=200, payload={"ok": True})
+
+    with app.test_request_context(
+        "/api/gateway/auth/login",
+        method="POST",
+        json={"email": "a@b.ch", "password": "x"},
+        headers={
+            "Origin": "https://www.lirie.ch",
+            "Referer": "https://www.lirie.ch/login",
+            "User-Agent": "Mozilla/5.0 Test",
+            "X-Requested-With": "XMLHttpRequest",
+        },
+    ):
+        import routes.gateway_auth as gateway_mod
+
+        original = gateway_mod.requests.request
+        gateway_mod.requests.request = _fake_request
+        try:
+            _delegate(
+                method="POST",
+                url="http://backend:5000/api/v1/auth/login",
+                payload={"email": "a@b.ch", "password": "x"},
+            )
+        finally:
+            gateway_mod.requests.request = original
+
+    headers = captured.get("headers") or {}
+    assert headers.get("Origin") == "https://www.lirie.ch"
+    assert headers.get("Referer") == "https://www.lirie.ch/login"
+    assert headers.get("User-Agent") == "Mozilla/5.0 Test"
+    assert headers.get("X-Requested-With") == "XMLHttpRequest"
+    assert headers.get("X-Internal-Gateway-Auth") == "1"
+
+
 def test_gateway_login_demo_invalid_password_no_fallback(client, monkeypatch):
     monkeypatch.setattr(
         "routes.gateway_auth._resolve_target_env", lambda _email: "demo"
