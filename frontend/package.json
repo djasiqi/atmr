@@ -36,7 +36,7 @@
     "react-hot-toast": "^2.6.0",
     "react-icons": "^5.4.0",
     "react-redux": "^9.2.0",
-    "react-router-dom": "^6.30.4",
+    "react-router-dom": "^7.18.1",
     "react-select": "^5.10.1",
     "react-slick": "^0.30.3",
     "react-toastify": "^11.0.5",
@@ -134,10 +134,10 @@
     "serialize-javascript": "7.0.5",
     "underscore": ">=1.13.8",
     "qs": "6.15.2",
-    "brace-expansion": "5.0.7",
+    "brace-expansion": "5.0.8",
     "ws": "8.21.0",
     "nth-check": "^2.1.1",
-    "postcss": "8.5.10",
+    "postcss": "8.5.23",
     "js-yaml": "^4.3.0",
     "webpack-dev-server": {
       ".": "^5.2.6",
@@ -176,6 +176,6 @@
     "socket-io-parser-override": "Force 4.2.6+ for GHSA-677m-j7p3-52f9 (CVE-2026-33151) via socket.io-client transitive dep.",
     "flatted-override": "Force >=3.4.2 for GHSA-rf6f-7fwh-wjgh (prototype pollution in parse).",
     "tmp-override": "Force >=0.2.6 for GHSA-ph9p-34f9-6g65 (path traversal via unsanitized prefix/postfix). Transitive via source-map-explorer/external-editor.",
-    "security-audit-2026-07": "shell-quote >=1.9.0, js-yaml ^4.3.0, fast-uri >=3.1.4, brace-expansion 5.0.7, websocket-driver >=0.7.5, svgo 2.8.3, webpack-dev-server ^5.2.6, axios ^1.18.1, body-parser >=1.20.6."
+    "security-audit-2026-07": "shell-quote >=1.9.0, js-yaml ^4.3.0, fast-uri >=3.1.4, brace-expansion 5.0.8, postcss 8.5.23, react-router-dom 7.18.1, websocket-driver >=0.7.5, svgo 2.8.3, webpack-dev-server ^5.2.6, axios ^1.18.1, body-parser >=1.20.6."
   }
 }
