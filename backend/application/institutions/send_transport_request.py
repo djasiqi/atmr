@@ -157,9 +157,12 @@ class SendTransportRequestUseCase:
             ).first()
 
             if existing_pending:
-                # ÉTAPE GO-LIVE: Idempotent si déjà SENT avec offres PENDING actives
+                # ÉTAPE GO-LIVE: Idempotent si déjà SENT/EXPIRED avec offres PENDING actives
                 # → Retourne 200 au lieu de 409 (évite les erreurs UI sur retry)
-                if transport_request.status == RequestStatus.SENT.value:
+                if transport_request.status in (
+                    RequestStatus.SENT.value,
+                    RequestStatus.EXPIRED.value,
+                ):
                     pending_offers = RequestOffer.query.filter_by(
                         transport_request_id=transport_request.id,
                         status=OfferStatus.PENDING.value,

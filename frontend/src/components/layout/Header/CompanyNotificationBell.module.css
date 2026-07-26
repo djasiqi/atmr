@@ -104,9 +104,34 @@
 }
 
 .dropdownTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   font-size: 15px;
   font-weight: 600;
   color: var(--text-primary, #1e293b);
+}
+
+.refreshHint {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--brand-primary, #00796b);
+  opacity: 0.55;
+  animation: refreshPulse 1s ease-in-out infinite;
+}
+
+@keyframes refreshPulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1);
+  }
 }
 
 .markAllBtn {

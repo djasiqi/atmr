@@ -15,9 +15,42 @@ NC='\033[0m' # No Color
 #   - le healthcheck Docker du conteneur backend (docker-compose.production.yml)
 #   - le healthcheck Traefik (label loadbalancer.healthcheck.path=/api/v1/ready)
 # /healthz et /api/v1/health n'existent pas côté backend (404).
+# F-01 prod : le port 5000 n'est pas publié sur l'hôte — USE_DOCKER_HEALTHCHECK=1 sonde via exec.
 BACKEND_URL="${BACKEND_URL:-http://localhost:5000}"
 HEALTH_ENDPOINT="${HEALTH_ENDPOINT:-/api/v1/ready}"
+COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.production.yml}"
+USE_DOCKER_HEALTHCHECK="${USE_DOCKER_HEALTHCHECK:-0}"
 TIMEOUT="${TIMEOUT:-10}"
+
+probe_backend_http() {
+  if [ "$USE_DOCKER_HEALTHCHECK" = "1" ]; then
+    docker compose -f "$COMPOSE_FILE" exec -T backend python -c "
+import urllib.request
+import sys
+try:
+    r = urllib.request.urlopen('http://127.0.0.1:5000${HEALTH_ENDPOINT}', timeout=${TIMEOUT})
+    sys.exit(0 if r.status == 200 else 1)
+except Exception:
+    sys.exit(1)
+" 2>/dev/null
+    return $?
+  fi
+  curl -f -s --max-time "${TIMEOUT}" "${BACKEND_URL}${HEALTH_ENDPOINT}" > /dev/null 2>&1
+}
+
+fetch_backend_health_json() {
+  if [ "$USE_DOCKER_HEALTHCHECK" = "1" ]; then
+    docker compose -f "$COMPOSE_FILE" exec -T backend python -c "
+import urllib.request
+try:
+    print(urllib.request.urlopen('http://127.0.0.1:5000${HEALTH_ENDPOINT}', timeout=${TIMEOUT}).read().decode())
+except Exception:
+    pass
+" 2>/dev/null || echo ""
+    return 0
+  fi
+  curl -f -s --max-time "${TIMEOUT}" "${BACKEND_URL}${HEALTH_ENDPOINT}" || echo ""
+}
 
 # Compteur d'erreurs
 ERRORS=0
@@ -46,7 +79,7 @@ RETRY_COUNT=0
 BACKEND_READY=false
 
 while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-    if curl -f -s --max-time "${TIMEOUT}" "${BACKEND_URL}${HEALTH_ENDPOINT}" > /dev/null 2>&1; then
+    if probe_backend_http; then
         BACKEND_READY=true
         break
     fi
@@ -66,7 +99,7 @@ info "✅ Backend disponible, démarrage des tests"
 
 # Test 1: Vérifier que l'endpoint de readiness répond avec status 200
 info "Test 1: Vérification de l'endpoint ${HEALTH_ENDPOINT}"
-if curl -f -s --max-time "${TIMEOUT}" "${BACKEND_URL}${HEALTH_ENDPOINT}" > /dev/null; then
+if probe_backend_http; then
     info "✅ L'endpoint ${HEALTH_ENDPOINT} répond correctement"
 else
     error "❌ L'endpoint ${HEALTH_ENDPOINT} ne répond pas ou retourne une erreur"
@@ -75,7 +108,7 @@ fi
 # Test 2: Vérifier que la réponse JSON contient un statut sain
 # /api/v1/ready -> {"status":"ready", ...} ; /health -> {"status":"healthy", ...}
 info "Test 2: Vérification du contenu de la réponse ${HEALTH_ENDPOINT}"
-HEALTH_RESPONSE=$(curl -f -s --max-time "${TIMEOUT}" "${BACKEND_URL}${HEALTH_ENDPOINT}" || echo "")
+HEALTH_RESPONSE=$(fetch_backend_health_json)
 if echo "${HEALTH_RESPONSE}" | grep -qE '"status"[[:space:]]*:[[:space:]]*"(ready|healthy|ok)"'; then
     info "✅ La réponse contient un statut sain (ready/healthy/ok)"
 else

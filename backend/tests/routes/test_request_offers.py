@@ -296,6 +296,66 @@ class TestSendWithOffers:
         assert refreshed_expires > datetime.now(UTC)
         assert offer.expires_at != old_expires_at
 
+    def test_send_relaunch_persists_company_notification(
+        self,
+        client,
+        db,
+        sample_institution,
+        auth_headers,
+        sample_request,
+        sample_company,
+    ):
+        """Relance : notification in-app entreprise persistée (cloche)."""
+        from models import CompanyNotification
+
+        pref = InstitutionTransportPreference()
+        pref.institution_id = sample_institution.id
+        pref.company_id = sample_company.id
+        pref.order = 1
+        db.session.add(pref)
+        db.session.commit()
+
+        client.post(
+            f"/api/v1/institutions/requests/{sample_request.id}/send",
+            headers=auth_headers,
+        )
+
+        offer = RequestOffer.query.filter_by(
+            transport_request_id=sample_request.id,
+            company_id=sample_company.id,
+        ).first()
+        offer.status = OfferStatus.EXPIRED.value
+        db.session.commit()
+
+        before = CompanyNotification.query.filter_by(
+            company_id=sample_company.id,
+            event_type="new_request",
+        ).count()
+
+        response = client.post(
+            f"/api/v1/institutions/requests/{sample_request.id}/send",
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+
+        after = CompanyNotification.query.filter_by(
+            company_id=sample_company.id,
+            event_type="new_request",
+        ).count()
+        assert after == before + 1
+
+        latest = (
+            CompanyNotification.query.filter_by(
+                company_id=sample_company.id,
+                event_type="new_request",
+            )
+            .order_by(CompanyNotification.created_at.desc())
+            .first()
+        )
+        assert latest is not None
+        assert latest.title == "Demande de transport relancée"
+        assert ":relaunch:" in (latest.dedupe_key or "")
+
     def test_dispatch_can_relaunch_when_only_time_expired_pending(
         self,
         client,

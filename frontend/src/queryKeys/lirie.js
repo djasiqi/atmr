@@ -79,6 +79,13 @@ export const lirieKeys = {
 
   institutionOffers: () => [LIRIE_QK_PREFIX, 'institution-offers'],
 
+  /** Cloche header entreprise — inbox in-app (24 h + non lues). */
+  companyNotifications: (companyId) => [
+    LIRIE_QK_PREFIX,
+    'company-notifications',
+    String(companyId ?? 'me'),
+  ],
+
   dispatchMode: () => [LIRIE_QK_PREFIX, 'dispatch-mode'],
 
   /** @deprecated Utiliser companyInvoices — conservé si des imports legacy pointent ici. */

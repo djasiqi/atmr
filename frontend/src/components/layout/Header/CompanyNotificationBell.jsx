@@ -3,14 +3,15 @@
  * Cloche de notifications in-app pour le header entreprise.
  *
  * - Badge compteur non-lues
- * - Dropdown avec liste scrollable
- * - Clic = marquer comme lue + navigation vers la réservation
+ * - Dropdown avec liste scrollable (cache TanStack Query, affichage instantané)
+ * - Clic = navigation immédiate + marquage lu en arrière-plan
  * - "Tout marquer comme lu"
  * - Écoute socket new_company_notification pour temps réel
  */
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   FaBell,
   FaCommentDots,
@@ -25,13 +26,24 @@ import {
   markAllCompanyNotificationsRead,
 } from '../../../services/companyService';
 import useCompanySocket from '../../../hooks/useCompanySocket';
+import { getAccessToken } from '../../../hooks/useAuthToken';
+import { useLirieCompany } from '../../../hooks/useLirieCompany';
 import { getCurrentAuthEnv } from '../../../utils/apiClient';
-import { hasCompanyScopedAccessToken } from '../../../utils/webAuthSession';
+import { getActiveUser, hasCompanyScopedAccessToken } from '../../../utils/webAuthSession';
 import { recordDashboardApiCall } from '../../../utils/companyDashboardDuplicationReport';
 import { isCompanyDashboardPerfEnabled } from '../../../utils/companyDashboardPerfInstrumentation';
+import { LIRIE_QK_PREFIX, lirieKeys } from '../../../queryKeys/lirie';
 import styles from './CompanyNotificationBell.module.css';
 
-const hasCompanyToken = () => hasCompanyScopedAccessToken(getCurrentAuthEnv());
+/** Aligné sur useLirieCompany : cookies httpOnly ou token legacy authToken suffisent. */
+const canLoadCompanyNotifications = () => {
+  const env = getCurrentAuthEnv();
+  return (
+    hasCompanyScopedAccessToken(env) ||
+    Boolean(getAccessToken()) ||
+    Boolean(getActiveUser())
+  );
+};
 
 const EVENT_ICONS = {
   booking_message: FaCommentDots,
@@ -47,6 +59,11 @@ const EVENT_COLORS = {
 
 const CANCEL_COLOR = '#ef4444';
 const CHANGE_REQUEST_COLOR = '#0d9488';
+
+/** Cache local : la cloche reste réactive entre ouvertures. */
+const NOTIFICATIONS_STALE_MS = 60_000;
+/** Resync HTTP périodique long (pas de GET sur chaque event socket). */
+const NOTIFICATIONS_RESYNC_INTERVAL_MS = 10 * 60 * 1000;
 
 function resolveNotificationVisual(notif) {
   const meta = notif?.metadata && typeof notif.metadata === 'object' ? notif.metadata : {};
@@ -69,9 +86,6 @@ function resolveNotificationVisual(notif) {
   };
 }
 
-/** Resync HTTP périodique long (pas de GET sur chaque event socket). */
-const NOTIFICATIONS_RESYNC_INTERVAL_MS = 10 * 60 * 1000;
-
 function timeAgo(dateString) {
   if (!dateString) return '';
   const now = new Date();
@@ -91,32 +105,31 @@ function timeAgo(dateString) {
 const CompanyNotificationBell = () => {
   const { public_id } = useParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const isDemoEnv = (getCurrentAuthEnv() || '').toLowerCase() === 'demo';
   const dashboardRoot = isDemoEnv ? '/demo/dashboard' : '/dashboard';
   const socket = useCompanySocket();
+  const { company } = useLirieCompany();
 
   const [isOpen, setIsOpen] = useState(false);
-  const [notifications, setNotifications] = useState([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [isLoading, setIsLoading] = useState(false);
   const [markingAllRead, setMarkingAllRead] = useState(false);
   const dropdownRef = useRef(null);
   const bellRef = useRef(null);
-  /** IDs déjà présents (GET + socket) — dédup stricte. */
-  const seenNotificationIdsRef = useRef(new Set());
-  /** Max created_at (ms) des entrées fusionnées (stats / cohérence). */
-  const lastSeenNotificationTsRef = useRef(0);
 
-  const loadNotifications = useCallback(async () => {
-    if (!hasCompanyToken()) {
-      setNotifications([]);
-      setUnreadCount(0);
-      seenNotificationIdsRef.current = new Set();
-      lastSeenNotificationTsRef.current = 0;
-      return;
-    }
-    try {
-      setIsLoading(true);
+  const notificationsQueryKey = useMemo(
+    () => (company?.id ? lirieKeys.companyNotifications(company.id) : null),
+    [company?.id]
+  );
+
+  const canLoad = canLoadCompanyNotifications();
+
+  const {
+    data: inboxData,
+    isLoading,
+    isFetching,
+  } = useQuery({
+    queryKey: notificationsQueryKey ?? [LIRIE_QK_PREFIX, 'company-notifications', 'disabled'],
+    queryFn: async () => {
       if (isCompanyDashboardPerfEnabled()) {
         recordDashboardApiCall({
           key: 'alerts',
@@ -125,90 +138,80 @@ const CompanyNotificationBell = () => {
           callerStack: new Error().stack,
         });
       }
-      const data = await fetchCompanyNotifications({ limit: 30 });
-      const list = data.notifications || [];
-      setNotifications(list);
-      setUnreadCount(data.unread_count || 0);
-      const seen = new Set();
-      let maxTs = 0;
-      for (const n of list) {
-        if (n.id != null) seen.add(n.id);
-        if (n.created_at) {
-          const t = new Date(n.created_at).getTime();
-          if (Number.isFinite(t)) maxTs = Math.max(maxTs, t);
-        }
-      }
-      seenNotificationIdsRef.current = seen;
-      lastSeenNotificationTsRef.current = maxTs;
-    } catch (err) {
-      console.error('[CompanyNotificationBell] Load error:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+      return fetchCompanyNotifications({ limit: 30 });
+    },
+    enabled: Boolean(notificationsQueryKey && canLoad),
+    staleTime: NOTIFICATIONS_STALE_MS,
+    refetchInterval: NOTIFICATIONS_RESYNC_INTERVAL_MS,
+    refetchIntervalInBackground: false,
+  });
 
-  const mergeIncomingNotification = useCallback((raw) => {
-    if (!raw || raw.id == null) return;
-    const id = raw.id;
-    if (seenNotificationIdsRef.current.has(id)) return;
+  const notifications = inboxData?.notifications ?? [];
+  const unreadCount = inboxData?.unread_count ?? 0;
+  const showInitialLoader = isLoading && notifications.length === 0;
+  const isBackgroundRefresh = isFetching && notifications.length > 0;
 
-    const createdMs = raw.created_at ? new Date(raw.created_at).getTime() : Date.now();
-    if (!Number.isFinite(createdMs)) return;
-
-    seenNotificationIdsRef.current.add(id);
-    lastSeenNotificationTsRef.current = Math.max(lastSeenNotificationTsRef.current, createdMs);
-
-    const incoming = {
-      ...raw,
-      metadata: raw.metadata != null ? raw.metadata : {},
-    };
-
-    setNotifications((prev) => {
-      if (prev.some((n) => n.id === id)) return prev;
-      return [incoming, ...prev].slice(0, 30);
+  const prefetchNotifications = useCallback(() => {
+    if (!notificationsQueryKey || !canLoad) return;
+    void queryClient.prefetchQuery({
+      queryKey: notificationsQueryKey,
+      queryFn: () => fetchCompanyNotifications({ limit: 30 }),
+      staleTime: NOTIFICATIONS_STALE_MS,
     });
-    if (!incoming.is_read) {
-      setUnreadCount((c) => c + 1);
-    }
-  }, []);
+  }, [canLoad, notificationsQueryKey, queryClient]);
 
-  // Chargement initial + resync après changement de compte (logout/login sans reload)
-  useEffect(() => {
-    loadNotifications();
-  }, [loadNotifications]);
+  const mergeIncomingNotification = useCallback(
+    (raw) => {
+      if (!raw?.id || !notificationsQueryKey) return;
+      queryClient.setQueryData(notificationsQueryKey, (prev) => {
+        if (!prev) return prev;
+        if ((prev.notifications || []).some((n) => n.id === raw.id)) return prev;
+        const incoming = {
+          ...raw,
+          metadata: raw.metadata != null ? raw.metadata : {},
+        };
+        return {
+          ...prev,
+          notifications: [incoming, ...(prev.notifications || [])].slice(0, 30),
+          unread_count: (prev.unread_count || 0) + (incoming.is_read ? 0 : 1),
+        };
+      });
+    },
+    [notificationsQueryKey, queryClient]
+  );
 
   useEffect(() => {
     const onAuthChanged = () => {
       setIsOpen(false);
-      seenNotificationIdsRef.current = new Set();
-      lastSeenNotificationTsRef.current = 0;
-      void loadNotifications();
+      void queryClient.invalidateQueries({
+        queryKey: [LIRIE_QK_PREFIX, 'company-notifications'],
+      });
     };
     window.addEventListener('auth-changed', onAuthChanged);
     return () => window.removeEventListener('auth-changed', onAuthChanged);
-  }, [loadNotifications]);
+  }, [queryClient]);
 
-  // Resync long (pas de refetch à chaque event socket)
   useEffect(() => {
-    const interval = setInterval(loadNotifications, NOTIFICATIONS_RESYNC_INTERVAL_MS);
-    return () => clearInterval(interval);
-  }, [loadNotifications]);
+    if (!socket || !notificationsQueryKey) return;
 
-  // Socket temps réel — merge local sans GET
-  useEffect(() => {
-    if (!socket) return;
-
-    const handler = (payload) => {
+    const onNewNotification = (payload) => {
       mergeIncomingNotification(payload);
     };
 
-    socket.on('new_company_notification', handler);
-    return () => {
-      socket.off('new_company_notification', handler);
+    const onOfferUpdated = (payload) => {
+      if (payload?.is_relaunch) {
+        void queryClient.invalidateQueries({ queryKey: notificationsQueryKey });
+      }
     };
-  }, [socket, mergeIncomingNotification]);
 
-  // Close on click outside
+    socket.on('new_company_notification', onNewNotification);
+    socket.on('institution_offer_updated', onOfferUpdated);
+    return () => {
+      socket.off('new_company_notification', onNewNotification);
+      socket.off('institution_offer_updated', onOfferUpdated);
+    };
+  }, [socket, notificationsQueryKey, mergeIncomingNotification, queryClient]);
+
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (
@@ -227,19 +230,7 @@ const CompanyNotificationBell = () => {
   }, [isOpen]);
 
   const handleNotificationClick = useCallback(
-    async (notif) => {
-      if (!notif.is_read) {
-        try {
-          await markCompanyNotificationRead(notif.id);
-          setNotifications((prev) =>
-            prev.map((n) => (n.id === notif.id ? { ...n, is_read: true } : n))
-          );
-          setUnreadCount((c) => Math.max(0, c - 1));
-        } catch (err) {
-          console.error('[CompanyNotificationBell] Mark read error:', err);
-        }
-      }
-
+    (notif) => {
       const link = resolveCompanyNotificationLink({
         notif,
         dashboardRoot,
@@ -248,21 +239,50 @@ const CompanyNotificationBell = () => {
 
       setIsOpen(false);
       navigate(link);
+
+      if (!notif.is_read && notificationsQueryKey) {
+        queryClient.setQueryData(notificationsQueryKey, (prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            notifications: (prev.notifications || []).map((n) =>
+              n.id === notif.id ? { ...n, is_read: true } : n
+            ),
+            unread_count: Math.max(0, (prev.unread_count || 0) - 1),
+          };
+        });
+        void markCompanyNotificationRead(notif.id).catch((err) => {
+          console.error('[CompanyNotificationBell] Mark read error:', err);
+          void queryClient.invalidateQueries({ queryKey: notificationsQueryKey });
+        });
+      }
     },
-    [public_id, navigate, dashboardRoot]
+    [public_id, navigate, dashboardRoot, notificationsQueryKey, queryClient]
   );
 
   const handleMarkAllRead = useCallback(async () => {
+    if (!notificationsQueryKey) return;
     try {
       setMarkingAllRead(true);
+      queryClient.setQueryData(notificationsQueryKey, (prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          notifications: (prev.notifications || []).map((n) => ({ ...n, is_read: true })),
+          unread_count: 0,
+        };
+      });
       await markAllCompanyNotificationsRead();
-      setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
-      setUnreadCount(0);
     } catch (err) {
       console.error('[CompanyNotificationBell] Mark all read error:', err);
+      void queryClient.invalidateQueries({ queryKey: notificationsQueryKey });
     } finally {
       setMarkingAllRead(false);
     }
+  }, [notificationsQueryKey, queryClient]);
+
+  const handleBellClick = useCallback(() => {
+    setIsOpen((prev) => !prev);
   }, []);
 
   return (
@@ -270,7 +290,9 @@ const CompanyNotificationBell = () => {
       <button
         ref={bellRef}
         className={`${styles.bellBtn} ${unreadCount > 0 ? styles.hasUnread : ''}`}
-        onClick={() => setIsOpen((prev) => !prev)}
+        onClick={handleBellClick}
+        onMouseEnter={prefetchNotifications}
+        onFocus={prefetchNotifications}
         aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} non lues)` : ''}`}
         title="Notifications"
       >
@@ -283,7 +305,12 @@ const CompanyNotificationBell = () => {
       {isOpen && (
         <div ref={dropdownRef} className={styles.dropdown}>
           <div className={styles.dropdownHeader}>
-            <span className={styles.dropdownTitle}>Notifications</span>
+            <span className={styles.dropdownTitle}>
+              Notifications
+              {isBackgroundRefresh && (
+                <span className={styles.refreshHint} aria-hidden="true" />
+              )}
+            </span>
             {unreadCount > 0 && (
               <button
                 className={styles.markAllBtn}
@@ -296,42 +323,41 @@ const CompanyNotificationBell = () => {
           </div>
 
           <div className={styles.notifList}>
-            {isLoading && (
+            {showInitialLoader && (
               <div className={styles.emptyState}>Chargement...</div>
             )}
 
-            {!isLoading && notifications.length === 0 && (
+            {!showInitialLoader && notifications.length === 0 && (
               <div className={styles.emptyState}>
                 <FaBell className={styles.emptyIcon} />
                 <p>Aucune notification</p>
               </div>
             )}
 
-            {!isLoading &&
-              notifications.map((notif) => {
-                const { Icon, color } = resolveNotificationVisual(notif);
+            {notifications.map((notif) => {
+              const { Icon, color } = resolveNotificationVisual(notif);
 
-                return (
-                  <button
-                    key={notif.id}
-                    className={`${styles.notifItem} ${!notif.is_read ? styles.unread : ''}`}
-                    onClick={() => handleNotificationClick(notif)}
+              return (
+                <button
+                  key={notif.id}
+                  className={`${styles.notifItem} ${!notif.is_read ? styles.unread : ''}`}
+                  onClick={() => handleNotificationClick(notif)}
+                >
+                  <div
+                    className={styles.notifIcon}
+                    style={{ backgroundColor: `${color}15`, color }}
                   >
-                    <div
-                      className={styles.notifIcon}
-                      style={{ backgroundColor: `${color}15`, color }}
-                    >
-                      <Icon />
-                    </div>
-                    <div className={styles.notifContent}>
-                      <div className={styles.notifTitle}>{notif.title}</div>
-                      <div className={styles.notifMessage}>{notif.message}</div>
-                      <div className={styles.notifTime}>{timeAgo(notif.created_at)}</div>
-                    </div>
-                    {!notif.is_read && <div className={styles.unreadDot} />}
-                  </button>
-                );
-              })}
+                    <Icon />
+                  </div>
+                  <div className={styles.notifContent}>
+                    <div className={styles.notifTitle}>{notif.title}</div>
+                    <div className={styles.notifMessage}>{notif.message}</div>
+                    <div className={styles.notifTime}>{timeAgo(notif.created_at)}</div>
+                  </div>
+                  {!notif.is_read && <div className={styles.unreadDot} />}
+                </button>
+              );
+            })}
           </div>
         </div>
       )}

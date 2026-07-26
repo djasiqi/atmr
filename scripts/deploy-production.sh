@@ -150,6 +150,20 @@ wait_pgbouncer_ready() {
   return 1
 }
 
+# F-01 : le port 5000 n'est pas publié sur l'hôte — sonde HTTP depuis le conteneur backend.
+backend_ready_probe() {
+  local path="${1:-/api/v1/ready}"
+  docker compose -f docker-compose.production.yml exec -T backend python -c "
+import urllib.request
+import sys
+try:
+    r = urllib.request.urlopen('http://127.0.0.1:5000${path}', timeout=5)
+    sys.exit(0 if r.status == 200 else 1)
+except Exception:
+    sys.exit(1)
+" 2>/dev/null
+}
+
 # Fonction de rollback
 rollback() {
   echo "🔄 Rollback en cours..."
@@ -463,16 +477,29 @@ if [ ! -f "docker-compose.monitoring.yml" ]; then
 elif [ ! -d "monitoring" ]; then
   echo "⚠️  Dossier monitoring/ non trouvé, monitoring ignoré"
 else
+  if [ -z "${MONITORING_BASIC_AUTH_USERS:-}" ]; then
+    MONITORING_BASIC_AUTH_USERS=$(grep -E '^MONITORING_BASIC_AUTH_USERS=' .env.production 2>/dev/null | tail -1 | cut -d= -f2- || true)
+  fi
+  if [ -z "${MONITORING_BASIC_AUTH_USERS:-}" ]; then
+    MONITORING_BASIC_AUTH_USERS=$(read_env_fragment_key "$LOCAL_ENV_FRAGMENT" "MONITORING_BASIC_AUTH_USERS" 2>/dev/null || true)
+  fi
+  if [ -z "${MONITORING_BASIC_AUTH_USERS:-}" ]; then
+    MONITORING_BASIC_AUTH_USERS=$(read_env_fragment_key ".env.production.local" "MONITORING_BASIC_AUTH_USERS" 2>/dev/null || true)
+  fi
+  if [ -z "${MONITORING_BASIC_AUTH_USERS:-}" ]; then
+    echo "⚠️  MONITORING_BASIC_AUTH_USERS absent — monitoring ignoré (définir dans .env.production.local ou scripts/env.production.local.fragment)"
+  else
+  export MONITORING_BASIC_AUTH_USERS
   # Préparer les fichiers nécessaires
   [ -f "monitoring/alertmanager/docker-entrypoint.sh" ] && chmod +x monitoring/alertmanager/docker-entrypoint.sh || true
   if [ -f "monitoring/alertmanager/Dockerfile" ]; then
     echo "🔨 Construction de l'image Alertmanager si nécessaire..."
-    docker compose -f docker-compose.monitoring.yml build alertmanager || echo "⚠️  Build Alertmanager échoué (peut être ignoré si l'image existe déjà)"
+    docker compose --env-file .env.production -f docker-compose.monitoring.yml build alertmanager || echo "⚠️  Build Alertmanager échoué (peut être ignoré si l'image existe déjà)"
   fi
   
   echo "🔄 Démarrage des services de monitoring (Grafana, Prometheus, Alertmanager)..."
   # Pas de --remove-orphans (même risque de croisement avec d'autres stacks / projet par défaut)
-  if ! docker compose -f docker-compose.monitoring.yml up -d; then
+  if ! docker compose --env-file .env.production -f docker-compose.monitoring.yml up -d; then
     echo "❌ Échec du démarrage du monitoring"
     echo "📋 Logs du monitoring:"
     docker compose -f docker-compose.monitoring.yml logs --tail=50 || true
@@ -503,6 +530,7 @@ else
     echo "⚠️  Poursuite du déploiement malgré les problèmes de monitoring..."
   else
     echo "✅ Tous les services de monitoring sont démarrés"
+  fi
   fi
 fi
 
@@ -612,12 +640,12 @@ if [ "$BACKEND_HEALTHY" = "false" ]; then
   exit 1
 fi
 
-# Attente supplémentaire pour s'assurer que l'endpoint /health est disponible
-echo "⏳ Vérification de l'endpoint /health..."
+# F-01 : pas de port 5000 sur l'hôte — sonde depuis le conteneur (alignée healthcheck Docker + Traefik).
+echo "⏳ Vérification de l'endpoint /api/v1/ready (conteneur backend)..."
 HEALTH_OK=false
-for i in $(seq 1 30); do
-  if curl -f -s --max-time 5 "http://localhost:5000/health" > /dev/null 2>&1; then
-    echo "✅ Endpoint /health répond"
+for i in $(seq 1 15); do
+  if backend_ready_probe "/api/v1/ready"; then
+    echo "✅ Endpoint /api/v1/ready répond"
     HEALTH_OK=true
     break
   fi
@@ -625,7 +653,7 @@ for i in $(seq 1 30); do
 done
 
 if [ "$HEALTH_OK" = "false" ]; then
-  echo "❌ Endpoint /health ne répond pas après 30 secondes"
+  echo "❌ Endpoint /api/v1/ready ne répond pas après 15 secondes (conteneur backend)"
   echo "📋 Logs du backend (dernières 50 lignes):"
   docker compose -f docker-compose.production.yml logs backend --tail=50
   exit 1
@@ -633,7 +661,8 @@ fi
 
 # Smoke tests
 if [ -f "/srv/atmr/scripts/smoke_tests.sh" ]; then
-  export BACKEND_URL="http://localhost:5000"
+  export USE_DOCKER_HEALTHCHECK=1
+  export COMPOSE_FILE=docker-compose.production.yml
   bash /srv/atmr/scripts/smoke_tests.sh || rollback
 fi
 
