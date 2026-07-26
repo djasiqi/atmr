@@ -301,6 +301,39 @@ class TestRefreshTokenCookies:
 class TestLogoutCookies:
     """Tests pour l'endpoint /auth/logout avec suppression de cookies."""
 
+    def test_logout_clears_domain_and_host_only_cookies(self, client, sample_user, app):
+        """Logout doit expirer Domain configuré ET host-only (pas de session fantôme)."""
+        app.config["COOKIE_DOMAIN"] = ".lirie.ch"
+
+        login_response = client.post(
+            "/api/v1/auth/login",
+            json={"email": sample_user.email, "password": "password123"},
+        )
+        assert login_response.status_code == 200
+
+        logout_response = client.post("/api/v1/auth/logout")
+        assert logout_response.status_code == 200
+
+        set_cookie_headers = logout_response.headers.getlist("Set-Cookie")
+        combined = " || ".join(set_cookie_headers).lower()
+        assert "access_token=" in combined
+        assert "refresh_token=" in combined
+        # Au moins une directive Domain=.lirie.ch (cookie partagé)
+        assert "domain=.lirie.ch" in combined or "domain=lirie.ch" in combined
+        # Et des Set-Cookie sans Domain (host-only) : plusieurs en-têtes access_token
+        access_headers = [h for h in set_cookie_headers if h.lower().startswith("access_token=")]
+        assert len(access_headers) >= 2
+
+    def test_logout_clears_cookies_without_jwt(self, client, app):
+        """Sans JWT, logout reste 200 et efface quand même les cookies web."""
+        app.config["COOKIE_DOMAIN"] = ".lirie.ch"
+        logout_response = client.post("/api/v1/auth/logout")
+        assert logout_response.status_code == 200
+        set_cookie_headers = logout_response.headers.getlist("Set-Cookie")
+        combined = ", ".join(set_cookie_headers)
+        assert "access_token=" in combined
+        assert "refresh_token=" in combined
+
     def test_logout_removes_cookies_for_web(self, client, sample_user):
         """Test que logout supprime les cookies pour web."""
         # 1. Login pour obtenir les cookies

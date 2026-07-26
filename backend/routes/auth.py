@@ -179,6 +179,56 @@ def _is_mobile_request() -> bool:
     return any(marker in user_agent for marker in _MOBILE_UA_MARKERS)
 
 
+def _clear_web_auth_cookies(response) -> None:
+    """Supprime les cookies auth web (Domain configuré + host-only legacy).
+
+    Après passage à ``COOKIE_DOMAIN=.lirie.ch``, d'anciens cookies host-only
+    (www ou api, sans Domain) peuvent rester : le navigateur les traite comme
+    des cookies distincts. Un logout qui n'efface que ``Domain=.lirie.ch``
+    laisse donc une session fantôme — d'où l'obligation de vider manuellement.
+    """
+    access_name = current_app.config["COOKIE_ACCESS_TOKEN_NAME"]
+    refresh_name = current_app.config["COOKIE_REFRESH_TOKEN_NAME"]
+    path = current_app.config.get("COOKIE_PATH") or "/"
+    secure = bool(current_app.config.get("COOKIE_SECURE"))
+    httponly = bool(current_app.config.get("COOKIE_HTTP_ONLY"))
+    samesite = current_app.config.get("COOKIE_SAME_SITE") or "Lax"
+
+    domains: list[str | None] = [None]
+    configured = (current_app.config.get("COOKIE_DOMAIN") or "").strip() or None
+    if configured:
+        domains.append(configured)
+        stripped = configured.lstrip(".")
+        if stripped and stripped not in domains:
+            domains.append(stripped)
+
+    for domain in domains:
+        for name in (access_name, refresh_name):
+            try:
+                response.delete_cookie(
+                    name,
+                    path=path,
+                    domain=domain,
+                    secure=secure,
+                    httponly=httponly,
+                    samesite=samesite,
+                )
+            except TypeError:
+                response.delete_cookie(name, path=path, domain=domain)
+            # Ceinture : certains clients n'honorent que Set-Cookie expires=0
+            response.set_cookie(
+                name,
+                "",
+                expires=0,
+                max_age=0,
+                path=path,
+                domain=domain,
+                secure=secure,
+                httponly=httponly,
+                samesite=samesite,
+            )
+
+
 def _resolve_access_token_expires(is_mobile_request: bool) -> timedelta:
     """Résout la durée d'expiration de l'access token selon le client."""
     if is_mobile_request:
@@ -1209,6 +1259,8 @@ def _login_post_body():
 
     # ✅ Définir cookies httpOnly pour web (pas pour mobile)
     if not is_mobile_request:
+        # Effacer d'éventuels cookies host-only hérités avant de poser Domain=.lirie.ch
+        _clear_web_auth_cookies(response)
         # Cookie access_token
         response.set_cookie(
             current_app.config["COOKIE_ACCESS_TOKEN_NAME"],
@@ -2582,9 +2634,10 @@ class Logout(Resource):
     @auth_ns.response(200, "Déconnexion réussie", logout_response_model)
     @auth_ns.response(401, "Token manquant ou invalide")
     @auth_ns.response(500, "Erreur lors de la révocation du token", logout_error_model)
-    @jwt_required()
+    @jwt_required(optional=True)
     def post(self):
-        """Révoque le token JWT actuel (logout)."""
+        """Révoque le token JWT actuel (logout) et efface toujours les cookies web."""
+        is_mobile_request = _is_mobile_request()
         try:
             from security.token_blacklist import revoke_token
 
@@ -2598,7 +2651,6 @@ class Logout(Resource):
             # ✅ Migration localStorage → cookies httpOnly
             # Récupérer le refresh token depuis cookie (priorité), body ou header
             refresh_token = None
-            is_mobile_request = _is_mobile_request()
 
             # Priorité 1 : Cookie (pour web)
             if not is_mobile_request:
@@ -2742,7 +2794,7 @@ class Logout(Resource):
                     str(access_revoke_error),
                 )
 
-            if revoke_token():
+            if current_user_id and revoke_token():
                 # ✅ S3: Métrique Prometheus pour invalidation de token
                 try:
                     from security.security_metrics import (
@@ -2784,45 +2836,32 @@ class Logout(Resource):
                         "trace_id": get_trace_id(),
                     },
                 )
+            elif current_user_id:
+                logger.warning(
+                    "Logout: revoke_token a échoué pour user %s — cookies web effacés quand même",
+                    current_user_id,
+                )
 
-                # ✅ Migration localStorage → cookies httpOnly
-                # Créer la réponse avec make_response pour pouvoir supprimer les cookies
-                response = make_response({"message": "Déconnexion réussie"}, 200)
-
-                # Supprimer les cookies (web uniquement)
-                if not is_mobile_request:
-                    _ck_secure = bool(current_app.config.get("COOKIE_SECURE"))
-                    _ck_http = bool(current_app.config.get("COOKIE_HTTP_ONLY"))
-                    _ck_same = current_app.config.get("COOKIE_SAME_SITE") or "Lax"
-                    response.set_cookie(
-                        current_app.config["COOKIE_ACCESS_TOKEN_NAME"],
-                        "",
-                        expires=0,
-                        path=current_app.config["COOKIE_PATH"],
-                        domain=current_app.config["COOKIE_DOMAIN"],
-                        secure=_ck_secure,
-                        httponly=_ck_http,
-                        samesite=_ck_same,
-                    )
-                    response.set_cookie(
-                        current_app.config["COOKIE_REFRESH_TOKEN_NAME"],
-                        "",
-                        expires=0,
-                        path=current_app.config["COOKIE_PATH"],
-                        domain=current_app.config["COOKIE_DOMAIN"],
-                        secure=_ck_secure,
-                        httponly=_ck_http,
-                        samesite=_ck_same,
-                    )
-
-                return response
-            return APIErrorHandler.handle_exception(
-                Exception("Impossible de révoquer le token"),
-                logger,
-            )
+            # Toujours 200 + clear cookies web : sans JWT valide, il faut quand même
+            # supprimer Domain=.lirie.ch et les host-only hérités (sinon session fantôme).
+            response = make_response({"message": "Déconnexion réussie"}, 200)
+            if not is_mobile_request:
+                _clear_web_auth_cookies(response)
+            return response
 
         except Exception as e:
             sentry_sdk.capture_exception(e)
+            # Même en erreur : tenter d'effacer les cookies web (pas de session fantôme).
+            if not is_mobile_request:
+                err_response = make_response(
+                    {"message": "Déconnexion réussie", "warning": "partial"},
+                    200,
+                )
+                try:
+                    _clear_web_auth_cookies(err_response)
+                    return err_response
+                except Exception:
+                    pass
             return APIErrorHandler.handle_exception(e, logger)
 
 

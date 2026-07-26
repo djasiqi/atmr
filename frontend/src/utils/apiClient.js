@@ -573,10 +573,13 @@ export const logoutUser = async (options = {}) => {
           skipAuthRedirect: true,
         });
       } catch (error) {
-        console.warn(
-          '⚠️ Impossible de désactiver le Shadow Mode lors de la déconnexion:',
-          error?.response?.data || error?.message || error
-        );
+        // Route absente en prod (404) : silencieux — ne pas polluer la console au logout.
+        if (error?.response?.status !== 404) {
+          console.warn(
+            '⚠️ Impossible de désactiver le Shadow Mode lors de la déconnexion:',
+            error?.response?.data || error?.message || error
+          );
+        }
       }
 
       try {

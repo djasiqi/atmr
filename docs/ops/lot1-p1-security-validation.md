@@ -115,6 +115,13 @@ Contrôles manuels prod :
   envoie bien l’origine au gateway mais l’upstream Lot 1-D voyait une requête sans Origin.
   Pas besoin d’ajouter d’origines Expo/Capacitor dans `LOGIN_ALLOWED_ORIGINS` pour ce flux web.
   Le login mobile Bearer (`_is_mobile_request`) saute le contrôle Origin (Lot 1-E).
+- [x] ✅ **Implémenté** : `COOKIE_DOMAIN=.lirie.ch` en prod (2026-07-26) — sans domaine partagé,
+  le login via `www.lirie.ch` (proxy Vercel) pose des cookies host-only `www` alors que
+  Socket.IO cible `api.lirie.ch` → `AUTH_REQUIRED` / toast « Session expirée ou accès refusé »
+  + badge Déconnecté. Lot 1-E web cookies-only nécessite ce domaine pour REST+WS.
+- [x] ✅ **Implémenté** : logout efface cookies `Domain=.lirie.ch` **et** host-only legacy
+  (`_clear_web_auth_cookies`) ; `@jwt_required(optional=True)` pour ne pas bloquer le clear
+  si le JWT est déjà absent/invalide (`backend/routes/auth.py`).
 - [ ] Identité d’envoi LIRIE (Brevo sender / reply-to)
 - [x] URL publique webhook : `https://api.lirie.ch/api/v1/webhooks/brevo`
 
