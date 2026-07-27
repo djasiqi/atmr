@@ -1,3 +1,4 @@
+# pyright: reportImportCycles=false
 """Adaptateur anti-corruption : TransportActionCompleted → événements legacy.
 
 Règle : aucun composant du cœur TransportActionWorkflow ne publie
@@ -7,7 +8,7 @@ BookingCancelledEvent directement — uniquement via cet adaptateur.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
     from models.booking_change_request import BookingChangeRequest
@@ -38,7 +39,9 @@ def publish_legacy_after_transport_action_completed(
         )
         return
 
-    company_id = booking.company_id or booking.executing_company_id
+    company_id = cast(
+        int | None, booking.company_id or booking.executing_company_id
+    )
     publish_event(
         BookingCancelledEvent(
             booking_id=booking.id,

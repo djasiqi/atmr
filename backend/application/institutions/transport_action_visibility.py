@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from models import Booking, BookingChangeRequest
 from models.booking_change_request import (
     TransportActionNextActor,
@@ -25,7 +27,9 @@ def count_company_actions_required(company_id: int) -> int:
     )
 
 
-def list_company_actions_required(company_id: int, *, limit: int = 50) -> list[dict]:
+def list_company_actions_required(
+    company_id: int, *, limit: int = 50
+) -> list[dict[str, Any]]:
     rows = (
         BookingChangeRequest.query.join(
             Booking, Booking.id == BookingChangeRequest.booking_id

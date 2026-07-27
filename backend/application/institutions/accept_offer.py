@@ -1,5 +1,5 @@
 # application/institutions/accept_offer.py
-# pyright: reportCallIssue=false, reportOptionalMemberAccess=false
+# pyright: reportCallIssue=false, reportOptionalMemberAccess=false, reportImportCycles=false
 """Use case: Accepter une offre de transport.
 
 Gère l'acceptation atomique avec:
@@ -16,7 +16,7 @@ import unicodedata
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
@@ -310,6 +310,13 @@ class AcceptOfferUseCase:
                 .with_for_update()
                 .first()
             )
+            if offer is None:
+                return AcceptOfferResult(
+                    success=False,
+                    offer_id=input_data.offer_id,
+                    error="Offre introuvable",
+                    status_code=404,
+                )
 
             if offer.status != OfferStatus.PENDING.value:
                 _track_accept_conflict(
@@ -422,10 +429,11 @@ class AcceptOfferUseCase:
                 return_booking_id = return_booking.id if return_booking else None
 
             # Synchroniser le départ confirmé depuis le booking principal
-            if booking is not None and booking.scheduled_time is not None:
+            booking_scheduled = cast(datetime | None, booking.scheduled_time)
+            if booking_scheduled is not None:
                 from models.enums import ScheduledTimeType
 
-                transport_request.scheduled_time = booking.scheduled_time
+                transport_request.scheduled_time = booking_scheduled
                 transport_request.scheduled_time_type = (
                     ScheduledTimeType.DEPARTURE.value
                 )
@@ -723,7 +731,7 @@ class AcceptOfferUseCase:
             dropoff_lon=float(transport_request.dropoff_lng)
             if transport_request.dropoff_lng
             else None,
-            scheduled_time=transport_request.scheduled_time,
+            scheduled_time=cast(datetime | None, transport_request.scheduled_time),
             is_round_trip=transport_request.is_round_trip,
         )
         amount = price["amount"]
@@ -756,11 +764,13 @@ class AcceptOfferUseCase:
         # Horaire: proposed_pickup_time ou départ institutionnel confirmé uniquement
         from services.institutions.offer_accept_rules import has_confirmed_departure
 
-        raw_pickup = proposed_pickup_time
+        raw_pickup: datetime | None = proposed_pickup_time
         if raw_pickup is None and has_confirmed_departure(transport_request):
-            raw_pickup = transport_request.scheduled_time
+            raw_pickup = cast(datetime | None, transport_request.scheduled_time)
         effective_pickup_time = (
-            normalize_mission_wall_clock(raw_pickup) if raw_pickup else None
+            normalize_mission_wall_clock(raw_pickup)
+            if raw_pickup is not None
+            else None
         )
 
         booking = Booking(
@@ -978,8 +988,7 @@ class AcceptOfferUseCase:
 
         if return_leg is None and return_date_raw is None:
             logger.warning(
-                "[AcceptOffer] return_to_institution sans leg retour ni return_date, "
-                "skip retour request_id=%s",
+                "[AcceptOffer] return_to_institution sans leg retour ni return_date, skip retour request_id=%s",
                 transport_request.id,
             )
             return None
@@ -1087,8 +1096,7 @@ class AcceptOfferUseCase:
                 return_leg.booking_id = return_booking.id
 
         logger.info(
-            "[AcceptOffer] Institution return booking %s created (parent=%s, "
-            "time_confirmed=%s, from_leg=%s) for request %s",
+            "[AcceptOffer] Institution return booking %s created (parent=%s, time_confirmed=%s, from_leg=%s) for request %s",
             return_booking.id,
             outbound_booking.id,
             ret_time_confirmed,
@@ -1148,21 +1156,26 @@ class AcceptOfferUseCase:
             is_first_leg = leg.sequence_index == 0
             leg_confirmed = bool(getattr(leg, "time_confirmed", False))
             mission_depart_confirmed = has_confirmed_departure(transport_request)
+            raw_pickup: datetime | None
             if is_first_leg:
                 # Ne jamais utiliser leg.scheduled_time (RDV) comme pickup sans départ confirmé.
-                raw_pickup = proposed_pickup_time or (
-                    transport_request.scheduled_time
-                    if mission_depart_confirmed
-                    else None
-                )
+                raw_pickup = proposed_pickup_time
+                if raw_pickup is None and mission_depart_confirmed:
+                    raw_pickup = cast(
+                        datetime | None, transport_request.scheduled_time
+                    )
                 operational = (
                     mission_depart_confirmed or proposed_pickup_time is not None
                 )
             else:
-                raw_pickup = leg.scheduled_time if leg_confirmed else None
+                raw_pickup = (
+                    cast(datetime | None, leg.scheduled_time) if leg_confirmed else None
+                )
                 operational = leg_confirmed
             effective_pickup_time = (
-                normalize_mission_wall_clock(raw_pickup) if raw_pickup else None
+                normalize_mission_wall_clock(raw_pickup)
+                if raw_pickup is not None
+                else None
             )
 
             time_to_define = effective_pickup_time is None or not operational
@@ -1200,7 +1213,9 @@ class AcceptOfferUseCase:
                 pickup_lon=float(leg.pickup_lng) if leg.pickup_lng else None,
                 dropoff_lat=float(leg.dropoff_lat) if leg.dropoff_lat else None,
                 dropoff_lon=float(leg.dropoff_lng) if leg.dropoff_lng else None,
-                scheduled_time=transport_request.scheduled_time,
+                scheduled_time=cast(
+                    datetime | None, transport_request.scheduled_time
+                ),
                 is_round_trip=False,
             )
             amount = leg_price["amount"]
@@ -1466,7 +1481,10 @@ class AcceptOfferUseCase:
     ) -> Client | None:
         """Crée un client institution dédié pour une entreprise de transport."""
         inst_id = getattr(institution, "id", None)
-        inst_name = getattr(institution, "name", None) or f"Institution {inst_id}"
+        if inst_id is None:
+            return None
+        inst_id_int = int(inst_id)
+        inst_name = getattr(institution, "name", None) or f"Institution {inst_id_int}"
 
         # Important: création sous savepoint pour ne pas invalider la transaction
         # d'acceptation globale en cas de collision (email/user déjà existant).
@@ -1533,7 +1551,7 @@ class AcceptOfferUseCase:
                 )
 
                 track_institution_client_auto_created(
-                    institution_id=int(inst_id),
+                    institution_id=inst_id_int,
                     client_id=new_client.id,
                     company_id=company_id,
                 )

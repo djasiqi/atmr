@@ -177,6 +177,8 @@ class UpdateDriverBookingStatusUseCase:
         response: dict[str, Any] = {}
         status_code = 200
         should_commit = False
+        status_before: str | None = None
+        new_status_str: str | None = None
 
         booking = self._booking_repo.find_model_by_id(cmd.booking_id)
         if booking is None:
@@ -320,8 +322,7 @@ class UpdateDriverBookingStatusUseCase:
                                 self._db.commit()
                         except Exception:
                             logger.exception(
-                                "[UpdateDriverBookingStatus] assignment_status_sync "
-                                "arrived failed booking_id=%s",
+                                "[UpdateDriverBookingStatus] assignment_status_sync arrived failed booking_id=%s",
                                 booking.id,
                             )
                     else:
@@ -787,12 +788,12 @@ class UpdateDriverBookingStatusUseCase:
             self._record_timeline_events(
                 booking=booking,
                 driver_id=cmd.driver_id,
-                status_before=locals().get("status_before"),
+                status_before=status_before,
                 status_after=status_val_after,
-                new_status_str=locals().get("new_status_str"),
+                new_status_str=new_status_str,
             )
 
-            transition_for_sync = locals().get("new_status_str")
+            transition_for_sync = new_status_str
             if transition_for_sync:
                 try:
                     from services.dispatch.assignment_status_sync import (
@@ -808,8 +809,7 @@ class UpdateDriverBookingStatusUseCase:
                     )
                 except Exception:
                     logger.exception(
-                        "[UpdateDriverBookingStatus] assignment_status_sync failed "
-                        "booking_id=%s transition=%s",
+                        "[UpdateDriverBookingStatus] assignment_status_sync failed booking_id=%s transition=%s",
                         booking.id,
                         transition_for_sync,
                     )
@@ -822,7 +822,7 @@ class UpdateDriverBookingStatusUseCase:
 
                 SystemMessageEmitter.on_booking_status_change(
                     booking,
-                    locals().get("status_before"),
+                    status_before,
                     _status_value(booking),
                 )
             except Exception:

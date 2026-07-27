@@ -26,7 +26,11 @@ class ListCompanyInvoicesUseCase:
         for inv in invoices:
             to_dict = getattr(inv, "to_dict", None)
             if callable(to_dict):
-                serialized.append(to_dict(list_view=True))
+                payload = to_dict(list_view=True)
+                if isinstance(payload, dict):
+                    serialized.append(payload)
+                else:
+                    serialized.append({"id": getattr(inv, "id", None)})
             elif hasattr(inv, "serialize"):
                 ser = inv.serialize
                 if isinstance(ser, dict):

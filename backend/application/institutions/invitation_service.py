@@ -1,3 +1,4 @@
+# pyright: reportImportCycles=false
 """Service d'invitation et gestion des identités institutionnelles.
 
 Gère:
@@ -17,7 +18,7 @@ import secrets
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from flask import current_app, render_template
 
@@ -45,6 +46,8 @@ ROLE_LABELS = {
 InvitePath = Literal[
     "conflict_same_institution",
     "conflict_other_institution",
+    "conflict_username",
+    "conflict_email",
     "existing_user",
     "new_user",
     "new_username",
@@ -203,7 +206,7 @@ def send_invitation_email(
     invite_url = build_invite_url(raw_token)
     return _send_html_email(
         to_email=to_email,
-        to_name=first_name or to_email.split("@")[0],
+        to_name=first_name or to_email.split("@", maxsplit=1)[0],
         subject=f"Invitation - {institution_name}",
         template_name="emails/invitation_email.html",
         template_context={
@@ -228,7 +231,7 @@ def send_institution_access_email(
 ) -> InviteResult:
     return _send_html_email(
         to_email=to_email,
-        to_name=first_name or to_email.split("@")[0],
+        to_name=first_name or to_email.split("@", maxsplit=1)[0],
         subject=f"Accès institution - {institution_name}",
         template_name="emails/institution_access_email.html",
         template_context={
@@ -587,8 +590,9 @@ def _inc_institution_metric(*, path: str, email_type: str, result: str) -> None:
     try:
         from security.institution_metrics import institution_invitations_total
 
-        if institution_invitations_total is not None:
-            institution_invitations_total.labels(
+        metric = cast(Any | None, institution_invitations_total)
+        if metric is not None:
+            metric.labels(
                 path=path, email_type=email_type or "none", result=result
             ).inc()
     except Exception:
@@ -611,7 +615,7 @@ def dispatch_institution_email(
     try:
         from tasks.institution_invitation_tasks import send_institution_email_task
 
-        send_institution_email_task.delay(
+        cast(Any, send_institution_email_task).delay(
             email_type=email_type,
             to_email=to_email,
             first_name=first_name,

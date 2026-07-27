@@ -44,13 +44,13 @@ class EnsureCompanyOperatorDriverUseCase:
         if existing is not None:
             return EnsureCompanyOperatorDriverResult(driver=existing, created=False)
 
-        driver = Driver(
-            user_id=int(user.id),
-            company_id=int(company.id),
-            is_active=True,
-            is_available=True,
-            driver_type=DriverType.REGULAR,
-        )
+        # Attribution par attributs : les Column SQLAlchemy ne sont pas dans __init__ typé
+        driver = Driver()
+        driver.user_id = int(user.id)
+        driver.company_id = int(company.id)
+        driver.is_active = True
+        driver.is_available = True
+        driver.driver_type = DriverType.REGULAR
         try:
             with db.session.begin_nested():
                 db.session.add(driver)

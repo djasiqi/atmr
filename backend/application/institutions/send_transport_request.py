@@ -1,5 +1,5 @@
 # application/institutions/send_transport_request.py
-# pyright: reportCallIssue=false
+# pyright: reportCallIssue=false, reportImportCycles=false
 """Use case: Envoyer une demande de transport aux entreprises.
 
 Gère la création des RequestOffers selon les préférences de l'institution:
@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import TypedDict
 
 from application.institutions.institution_settings_service import (
     calculate_timeout,
@@ -51,6 +52,11 @@ class SendTransportRequestResult:
     mode: str | None = None  # "sequential" ou "broadcast"
     error: str | None = None
     status_code: int = 200
+
+
+class _RelaunchOffersResult(TypedDict):
+    offers_created: int
+    mode: str
 
 
 class SendTransportRequestUseCase:
@@ -574,7 +580,7 @@ class SendTransportRequestUseCase:
         preferences: list[InstitutionTransportPreference],
         configured_mode: str,
         expires_at: datetime,
-    ) -> dict[str, int | str]:
+    ) -> _RelaunchOffersResult:
         """Relance la diffusion : réactive les offres expirées et élargit à toutes les entreprises éligibles."""
         del (
             preferences,
@@ -586,7 +592,7 @@ class SendTransportRequestUseCase:
         )
         return {
             "offers_created": offers_created,
-            "mode": OfferMode.BROADCAST.value,
+            "mode": str(OfferMode.BROADCAST.value),
         }
 
     def _relaunch_sequential_offers(
@@ -768,8 +774,7 @@ class SendTransportRequestUseCase:
                     )
                     if notif is None:
                         logger.info(
-                            "[SendTransportRequest] Push skipped (inbox dedupe) "
-                            "company=%s request=%s dedupe_key=%s",
+                            "[SendTransportRequest] Push skipped (inbox dedupe) company=%s request=%s dedupe_key=%s",
                             offer.company_id,
                             transport_request.id,
                             dedupe_key,

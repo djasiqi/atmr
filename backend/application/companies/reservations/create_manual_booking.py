@@ -136,7 +136,7 @@ def _validate_round_trip_leg_amounts(
     if abs(out_r + ret_r - total_r) > tol:
         raise CreateManualBookingError(
             "Répartition tarifaire A/R incohérente : la somme aller + retour "
-            f"({out_r + ret_r:.2f} CHF) diffère du total ({total_r:.2f} CHF).",
+            + f"({out_r + ret_r:.2f} CHF) diffère du total ({total_r:.2f} CHF).",
             status_code=500,
             error_code="round_trip_amount_split_invalid",
         )
@@ -145,21 +145,21 @@ def _validate_round_trip_leg_amounts(
         if ret_r <= 0 or out_r <= 0:
             raise CreateManualBookingError(
                 "Répartition tarifaire A/R invalide : aller et retour doivent "
-                "chacun porter une part du tarif (ex. 35 CHF + 35 CHF).",
+                + "chacun porter une part du tarif (ex. 35 CHF + 35 CHF).",
                 status_code=500,
                 error_code="round_trip_leg_zero",
             )
         if abs(out_r - total_r) <= tol or abs(ret_r - total_r) <= tol:
             raise CreateManualBookingError(
                 "Répartition tarifaire A/R invalide : le montant total ne doit "
-                "pas être entièrement sur un seul trajet.",
+                + "pas être entièrement sur un seul trajet.",
                 status_code=500,
                 error_code="round_trip_single_leg_total",
             )
         if abs(out_r - total_r) <= tol and abs(ret_r - total_r) <= tol:
             raise CreateManualBookingError(
                 "Répartition tarifaire A/R invalide : aller et retour ne peuvent "
-                "pas porter chacun le montant total.",
+                + "pas porter chacun le montant total.",
                 status_code=500,
                 error_code="round_trip_duplicate_total",
             )

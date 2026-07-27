@@ -45,7 +45,8 @@ except ImportError:  # pragma: no cover
 
 
 # --- Imports de libs tiers (tous en haut pour Ruff E402) ---
-import sentry_sdk  # noqa: F401 — réexport pour routes.* (from app import sentry_sdk)
+# Réexport pour routes.* (`from app import sentry_sdk`)
+import sentry_sdk  # noqa: F401  # pyright: ignore[reportUnusedImport]
 from dotenv import load_dotenv
 from flask import (
     Flask,
@@ -1944,7 +1945,8 @@ def create_app(config_name: str | None = None):
 
                 app.logger.info("✅ Import init_chat_socket réussi")
 
-                init_chat_socket(socketio)
+                # Hors SKIP_SOCKETIO : instance réelle (ext peut typer NoOp | SocketIO)
+                init_chat_socket(cast(Any, socketio))
                 app.logger.info("✅ init_chat_socket(socketio) exécuté")
             except Exception as e:
                 app.logger.exception(

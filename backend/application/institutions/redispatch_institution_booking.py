@@ -81,8 +81,7 @@ class RedispatchInstitutionBookingUseCase:
 
         if offers_created == 0:
             logger.warning(
-                "[RedispatchInstitutionBooking] Aucune entreprise éligible "
-                "pour redispatch booking=%s request=%s",
+                "[RedispatchInstitutionBooking] Aucune entreprise éligible pour redispatch booking=%s request=%s",
                 input_data.booking_id,
                 transport_request.id,
             )

@@ -1,5 +1,10 @@
 """Métriques Prometheus pour invitations institution."""
 
+from __future__ import annotations
+
+from typing import Any
+
+institution_invitations_total: Any | None
 try:
     from prometheus_client import Counter
 
@@ -9,4 +14,4 @@ try:
         ["path", "email_type", "result"],
     )
 except ImportError:
-    institution_invitations_total = None  # type: ignore[misc, assignment]
+    institution_invitations_total = None

@@ -12,7 +12,7 @@ import contextlib
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 from application.institutions.cancellation_respond_policy import (
     CancellationRespondError,
@@ -139,7 +139,9 @@ class RespondToChangeRequestUseCase:
                     status_code=404,
                 )
 
-            owner_id = booking.company_id or booking.executing_company_id
+            owner_id = cast(
+                int | None, booking.company_id or booking.executing_company_id
+            )
             if int(owner_id or 0) != int(input_data.company_id):
                 return RespondToChangeRequestResult(
                     success=False,
@@ -473,17 +475,17 @@ class RespondToChangeRequestUseCase:
             raise
         except Exception:
             db.session.rollback()
-            change_request = (
+            failed_request = (
                 db.session.query(BookingChangeRequest)
                 .filter_by(id=input_data.change_request_id)
                 .with_for_update()
                 .first()
             )
-            if change_request:
-                change_request.status = TransportActionStatus.ACCEPTED
-                change_request.effect_status = TransportActionEffectStatus.FAILED
+            if failed_request is not None:
+                failed_request.status = TransportActionStatus.ACCEPTED
+                failed_request.effect_status = TransportActionEffectStatus.FAILED
                 assert_status_effect_combo(
-                    change_request.status, change_request.effect_status
+                    failed_request.status, failed_request.effect_status
                 )
                 db.session.commit()
             raise

@@ -1,3 +1,4 @@
+# pyright: reportImportCycles=false
 """CancellationRespondPolicy — applicabilité + éligibilité commerciale (OUTBOUND_ONLY).
 
 Référence : docs/domain/transport-decision-workflow.md §13
@@ -11,7 +12,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from enum import StrEnum
-from typing import Any
+from typing import Any, cast
 
 from models import Booking
 from models.booking_change_request import BookingChangeRequest, TransportActionType
@@ -238,7 +239,7 @@ def get_cancellation_billing_booking(
         return None
 
     # Préférer le plus bas route_sequence_number, sinon id croissant
-    def _key(b: Booking) -> tuple:
+    def _key(b: Booking) -> tuple[bool, int, int]:
         seq = getattr(b, "route_sequence_number", None)
         return (seq is None, int(seq or 0), int(b.id))
 
@@ -341,7 +342,7 @@ def compute_approach_fee(outbound: Booking, policy: dict[str, Any] | None) -> Fe
         policy=policy,
         ignore_assignment_gate=True,
     )
-    amount = fee.fee_amount if fee.fee_amount is not None else _ZERO
+    amount = fee.fee_amount
     if amount <= _ZERO:
         full = compute_full_cancellation_charge(outbound).amount
         amount = (full * Decimal("0.5")).quantize(_CENT)
@@ -388,7 +389,7 @@ def compute_policy_fee(
         policy=policy,
         ignore_assignment_gate=True,
     )
-    amount = (fee.fee_amount if fee.fee_amount is not None else _ZERO).quantize(_CENT)
+    amount = fee.fee_amount.quantize(_CENT)
     basis: dict[str, Any] = {
         "booking_id": int(outbound.id),
         "tier_id": fee.tier_id,
@@ -871,7 +872,8 @@ def persist_selected_cancellation_fee(
     booking.cancellation_reason_code = "CLIENT_REQUEST"
     booking.cancellation_reason_text = reason or "Annulation confirmée"
     booking.cancellation_display_label = get_cancellation_display_label(
-        "CLIENT_REQUEST", booking.cancellation_reason_text
+        "CLIENT_REQUEST",
+        cast(str | None, booking.cancellation_reason_text),
     )
 
 

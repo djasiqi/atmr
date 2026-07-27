@@ -1,3 +1,4 @@
+# pyright: reportImportCycles=false
 """Moteur TransportActionWorkflow — intention → décision → EffectPlan → Completed.
 
 Référence : docs/domain/transport-decision-workflow.md
@@ -12,7 +13,7 @@ import os
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, cast
 
 from ext import db
 from models import Booking, BookingChangeRequest, TransportRequest
@@ -71,7 +72,7 @@ def get_action_ttl_minutes() -> int:
 
 
 def classify_action_type(
-    changed_fields: set[str] | dict, *, is_cancellation: bool = False
+    changed_fields: set[str] | dict[str, Any], *, is_cancellation: bool = False
 ) -> str:
     if is_cancellation:
         return TransportActionType.CANCELLATION
@@ -529,11 +530,13 @@ def dispatch_post_commit(plan: EffectPlan, *, action: BookingChangeRequest) -> N
     try:
         from services.events.institution_events import persist_company_notification
 
-        company_id = None
+        company_id: int | None = None
         booking = db.session.get(Booking, action.booking_id)
-        if booking:
-            company_id = booking.company_id or booking.executing_company_id
-        if company_id and not plan.is_cancellation:
+        if booking is not None:
+            company_id = cast(
+                int | None, booking.company_id or booking.executing_company_id
+            )
+        if company_id is not None and not plan.is_cancellation:
             persist_company_notification(
                 company_id=int(company_id),
                 event_type="transport_action_completed",

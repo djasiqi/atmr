@@ -287,7 +287,10 @@ def compute_cancellation_fee(
             tier_label = str(selected_tier.get("status") or "EN_ROUTE")
         else:
             try:
-                hours = int(float(selected_tier.get("hours_before")))
+                hours_raw = selected_tier.get("hours_before")
+                if hours_raw is None:
+                    raise TypeError("hours_before manquant")
+                hours = int(float(hours_raw))
                 tier_label = f"< {hours}h"
             except (TypeError, ValueError):
                 tier_label = f"< {selected_tier.get('hours_before', '?')}h"
