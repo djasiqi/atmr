@@ -96,6 +96,8 @@ _TRACKING_POSITION_FRESHNESS = None
 _TRACKING_DELIVERY_RESULT = None
 _TRACKING_HTTP_ACCEPTED_ASYNC = None
 _TRACKING_KAFKA_PERSIST = None
+_TRACKING_SHADOW_DIVERGENCE = None
+_TRACKING_SHADOW_PUBLISH_FAILED = None
 _TRACKING_INVALID_CONFIG = None
 _STALE_FIX_WATCHDOG_KICK = None
 
@@ -278,6 +280,16 @@ if Counter is not None:
         "tracking_kafka_persist_total",
         "Traitements persist terminés dans ingest_consumer (labels finis)",
         ["accept_status"],
+    )
+    _TRACKING_SHADOW_DIVERGENCE = Counter(
+        "tracking_shadow_divergence_total",
+        "Divergences / états du comparateur shadow Phase 2",
+        ["reason"],
+    )
+    _TRACKING_SHADOW_PUBLISH_FAILED = Counter(
+        "tracking_shadow_publish_failed_total",
+        "Échecs de publication Kafka du chemin shadow (direct ou shadow)",
+        ["side"],
     )
     _TRACKING_INVALID_CONFIG = Counter(
         "tracking_invalid_config_total",
@@ -908,6 +920,41 @@ def inc_tracking_kafka_persist(*, accept_status: str) -> None:
         return
     st = accept_status if accept_status in _KAFKA_PERSIST_STATUSES else "failed"
     _TRACKING_KAFKA_PERSIST.labels(accept_status=st).inc()
+
+
+_SHADOW_DIVERGENCE_REASONS = frozenset(
+    {
+        "shadow_missing_in_kafka",
+        "shadow_missing_in_direct",
+        "shadow_both_missing",
+        "shadow_payload_mismatch",
+        "shadow_acceptance_mismatch",
+        "shadow_match",
+        "comparison_unavailable",
+        "expired",
+        "waiting_direct",
+        "waiting_shadow",
+        "matched",
+        "payload_mismatch",
+        "acceptance_mismatch",
+    }
+)
+
+
+def inc_tracking_shadow_divergence(*, reason: str) -> None:
+    """Compteur divergences / états du comparateur shadow."""
+    if not _metrics_enabled() or _TRACKING_SHADOW_DIVERGENCE is None:
+        return
+    r = reason if reason in _SHADOW_DIVERGENCE_REASONS else "comparison_unavailable"
+    _TRACKING_SHADOW_DIVERGENCE.labels(reason=r).inc()
+
+
+def inc_tracking_shadow_publish_failed(*, side: str) -> None:
+    """Échec publication direct.observed ou raw.shadow."""
+    if not _metrics_enabled() or _TRACKING_SHADOW_PUBLISH_FAILED is None:
+        return
+    s = side if side in ("direct", "shadow") else "direct"
+    _TRACKING_SHADOW_PUBLISH_FAILED.labels(side=s).inc()
 
 
 _TRACKING_INVALID_CONFIG_REASONS = frozenset({"async_without_persist"})

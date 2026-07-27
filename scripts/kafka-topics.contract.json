@@ -124,6 +124,21 @@
       ]
     },
     {
+      "name": "driver.location.direct.observed.v3",
+      "env_override": "KAFKA_TOPIC_DRIVER_LOCATION_DIRECT_OBSERVED_V3",
+      "partitions": 6,
+      "partitions_env": "KAFKA_DEFAULT_PARTITIONS",
+      "replication_factor": 3,
+      "min_insync_replicas": 2,
+      "retention_ms": 259200000,
+      "cleanup_policy": "delete",
+      "active_prod": true,
+      "acl_expected": [
+        "tracking-ingest-producer:Write",
+        "tracking-shadow-compare:Read"
+      ]
+    },
+    {
       "name": "driver.location.dlq.v3",
       "env_override": "KAFKA_TOPIC_DRIVER_LOCATION_DLQ_V3",
       "partitions": 3,

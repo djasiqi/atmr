@@ -104,3 +104,32 @@ Voir [f02-internal-tracking-durability.md](./f02-internal-tracking-durability.md
 - ✅ **Implémenté** : `persist_kafka_outbox` + outbox `pg_try_advisory_lock(hashtext(...))`
 - ✅ **Implémenté** : shadow consumer + enrichment consumer + archive task
 - ✅ **Implémenté** : ws-service enriched + fail-closed kafka_primary
+
+## Implémenté (lot fermeture P0)
+
+- ✅ **Implémenté** : P0-1 comparateur shadow durable — observation `direct.observed.v3` **après** résultat UC (`ingest_persist.py`), évaluateur pur (`shadow_evaluator.py`), table PG `tracking_shadow_observations` PK `(driver_id, location_event_id)`, publish symétrique acks=all + upsert `comparison_unavailable` (`shadow_publish.py` / `shadow_store.py` / `shadow_ingest.py`), topic contrat + métriques divergence
+- ✅ **Implémenté** : P0-2 fanout Kafka primary via `_emit_tracking_to_room` (bypass deduper GPS) ; relay artisanal hors chemin primary
+- ✅ **Implémenté** : P0-3 commits `TopicPartition` exacts + DLQ poison/JSON strict (plus de `ast.literal_eval`) + fail-stop `FatalRealtimeConsumerError` → kill switch + health 503
+- ✅ **Implémenté** : P0-4 Lua `processed_apply.py` (gen/seq/event_id/hash + conflits DLQ) et Lua `enriched_apply.py` (versions séparées + re-fanout duplicate)
+- ✅ **Implémenté** : P0-5 advisory lock outbox `pg_try_advisory_lock(namespace, driver_id)` sur **une seule** connexion (`outbox_publisher.py`) ; DSN direct postgres (contourne PgBouncer transaction) pour les locks session
+- ✅ **Implémenté** : P0-6 SQLite source de vérité native — `importLegacyOnce`, enqueue = INSERT SQLite avant conservation, fail-closed sans DELETE DB (`trackingQueueStore.ts` / `driverTrackingQueue.ts`)
+
+### Décisions figées P0
+
+| Sujet | Décision |
+|-------|----------|
+| Observation directe | Après `UpdateDriverLocationUseCase`, pas depuis le producer RAW |
+| Deduper GPS | Bypass serveur ; clients dédupliquent par `location_event_id` |
+| Erreur non commitée | Fail-stop task + kill switch (pas poursuite partition) |
+| Advisory lock | Namespace entier fixe `42001` (env `TRACKING_OUTBOX_LOCK_NAMESPACE`) |
+| SQLite KO natif | `durable_unavailable` ; mémoire best-effort non garantie seulement Jest/web |
+
+### Activation (inchangé)
+
+| Activation | Verdict |
+|------------|---------|
+| Phase 1 outbox / `TRACKING_PERSIST_WITH_OUTBOX` | **HOLD** jusqu'à validation ops des gates |
+| Phase 2 `shadow_kafka` | **HOLD** |
+| Phase 3 `kafka_primary` | **HOLD** |
+| Production | **NO-GO** |
+| Archivage réel (`dry_run=False`) | **NO-GO P1** (FK journal + detach coordonné) |

@@ -8,6 +8,7 @@ TOPICS=(
   "driver.location.processed.v3"
   "driver.location.enriched.v3"
   "driver.location.raw.shadow.v3"
+  "driver.location.direct.observed.v3"
   "driver.location.dlq.v3"
 )
 

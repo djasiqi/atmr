@@ -1,7 +1,7 @@
-"""Publisher outbox GPS — Annexe A.6 (pg_try_advisory_lock).
+"""Publisher outbox GPS — Annexe A.6 (pg_try_advisory_lock 2-int).
 
 Publication ordonnée par (session_generation, sequence_id) par chauffeur.
-Ne garde PAS de transaction SQL ouverte pendant l'appel Kafka.
+Lock session tenu sur UNE seule connexion pendant Kafka (TX SQL fermée).
 """
 
 from __future__ import annotations
@@ -22,7 +22,6 @@ TOPIC_PROCESSED = os.getenv(
     "KAFKA_TOPIC_DRIVER_LOCATION_PROCESSED",
     "driver.location.processed",
 )
-# Phase 2/3 : bascule possible vers driver.location.processed.v3
 TOPIC_PROCESSED_V3 = os.getenv(
     "KAFKA_TOPIC_DRIVER_LOCATION_PROCESSED_V3",
     "driver.location.processed.v3",
@@ -36,12 +35,31 @@ KAFKA_BOOTSTRAP_SERVERS = os.getenv(
 )
 KAFKA_PUBLISH_ACK_TIMEOUT_S = float(os.getenv("KAFKA_PUBLISH_ACK_TIMEOUT_S", "2.0"))
 
+# Namespace advisory lock 2-int (évite hashtext collisions)
+OUTBOX_LOCK_NAMESPACE = int(os.getenv("TRACKING_OUTBOX_LOCK_NAMESPACE", "42001"))
+
 
 def _database_url() -> str:
-    url = os.getenv("DATABASE_URL") or os.getenv("SQLALCHEMY_DATABASE_URI")
+    # Advisory locks session-level : éviter PgBouncer en mode transaction.
+    for key in (
+        "DATABASE_URL_DIRECT",
+        "SQLALCHEMY_DATABASE_URI_DIRECT",
+        "POSTGRES_URL",
+    ):
+        url = os.getenv(key)
+        if url:
+            break
+    else:
+        url = os.getenv("DATABASE_URL") or os.getenv("SQLALCHEMY_DATABASE_URI")
     if not url:
         raise RuntimeError("DATABASE_URL manquant pour outbox_publisher")
-    return url.replace("postgres://", "postgresql://", 1)
+    url = url.replace("postgres://", "postgresql://", 1)
+    if "@pgbouncer:" in url or "@atmr-pgbouncer" in url:
+        url = url.replace("@pgbouncer:", "@postgres:").replace(
+            "@atmr-pgbouncer:", "@postgres:"
+        )
+        url = url.replace(":6432/", ":5432/")
+    return url
 
 
 class TrackingOutboxPublisher:
@@ -88,21 +106,21 @@ class TrackingOutboxPublisher:
         return published
 
     def _publish_for_driver(self, driver_id: int) -> int:
-        # Annexe A.6 : pg_try_advisory_lock(hashtext(...)) sur connexion dédiée
-        # — jamais xact_lock pendant l'appel réseau Kafka.
-        with self._engine.connect() as conn:
-            got = conn.execute(
+        # Même lock_conn pour acquire → SELECT → Kafka → UPDATE → unlock.
+        # Commit après lock : TX SQL fermée pendant l'appel réseau Kafka.
+        with self._engine.connect() as lock_conn:
+            got = lock_conn.execute(
                 text(
-                    "SELECT pg_try_advisory_lock("
-                    "hashtext('tracking_outbox:' || CAST(:driver_id AS text)))"
+                    "SELECT pg_try_advisory_lock(:ns, :driver_id)"
                 ),
-                {"driver_id": driver_id},
+                {"ns": OUTBOX_LOCK_NAMESPACE, "driver_id": driver_id},
             ).scalar()
             if not got:
                 return 0
+            lock_conn.commit()
 
             try:
-                rows = conn.execute(
+                rows = lock_conn.execute(
                     text(
                         """
                         SELECT id, event_id, location_event_id, payload,
@@ -115,90 +133,65 @@ class TrackingOutboxPublisher:
                     ),
                     {"driver_id": driver_id, "lim": OUTBOX_BATCH_PER_DRIVER},
                 ).mappings().all()
-                conn.commit()
-            except Exception:
-                conn.execute(
-                    text(
-                        "SELECT pg_advisory_unlock("
-                        "hashtext('tracking_outbox:' || CAST(:driver_id AS text)))"
-                    ),
-                    {"driver_id": driver_id},
-                )
-                conn.commit()
-                raise
+                lock_conn.commit()
 
-        if not rows:
-            with self._engine.connect() as conn:
-                conn.execute(
-                    text(
-                        "SELECT pg_advisory_unlock("
-                        "hashtext('tracking_outbox:' || CAST(:driver_id AS text)))"
-                    ),
-                    {"driver_id": driver_id},
-                )
-                conn.commit()
-            return 0
+                if not rows:
+                    return 0
 
-        producer = self._ensure_producer()
-        topic = self._target_topic()
-        count = 0
-        try:
-            for row in rows:
-                payload = row["payload"]
-                if isinstance(payload, str):
-                    payload = json.loads(payload)
-                future = producer.send(
-                    topic,
-                    key=f"driver_{driver_id}",
-                    value=payload,
-                )
-                future.get(timeout=KAFKA_PUBLISH_ACK_TIMEOUT_S)
-                with self._engine.connect() as conn:
-                    conn.execute(
+                producer = self._ensure_producer()
+                topic = self._target_topic()
+                count = 0
+                try:
+                    for row in rows:
+                        payload = row["payload"]
+                        if isinstance(payload, str):
+                            payload = json.loads(payload)
+                        future = producer.send(
+                            topic,
+                            key=f"driver_{driver_id}",
+                            value=payload,
+                        )
+                        future.get(timeout=KAFKA_PUBLISH_ACK_TIMEOUT_S)
+                        lock_conn.execute(
+                            text(
+                                """
+                                UPDATE tracking_event_outbox
+                                SET published_at = :ts, attempts = attempts + 1
+                                WHERE id = :id
+                                """
+                            ),
+                            {"ts": datetime.now(UTC), "id": int(row["id"])},
+                        )
+                        lock_conn.commit()
+                        count += 1
+                except Exception:
+                    logger.exception(
+                        "[outbox] publish failed driver_id=%s — republication at-least-once",
+                        driver_id,
+                    )
+                    err_id = (
+                        int(rows[count]["id"])
+                        if count < len(rows)
+                        else int(rows[-1]["id"])
+                    )
+                    lock_conn.execute(
                         text(
                             """
                             UPDATE tracking_event_outbox
-                            SET published_at = :ts, attempts = attempts + 1
+                            SET attempts = attempts + 1, last_error = :err
                             WHERE id = :id
                             """
                         ),
-                        {"ts": datetime.now(UTC), "id": int(row["id"])},
+                        {"err": "kafka_publish_failed", "id": err_id},
                     )
-                    conn.commit()
-                count += 1
-        except Exception:
-            logger.exception(
-                "[outbox] publish failed driver_id=%s — republication at-least-once",
-                driver_id,
-            )
-            with self._engine.connect() as conn:
-                conn.execute(
-                    text(
-                        """
-                        UPDATE tracking_event_outbox
-                        SET attempts = attempts + 1, last_error = :err
-                        WHERE id = :id
-                        """
-                    ),
-                    {
-                        "err": "kafka_publish_failed",
-                        "id": int(rows[count]["id"])
-                        if count < len(rows)
-                        else int(rows[-1]["id"]),
-                    },
+                    lock_conn.commit()
+                return count
+            finally:
+                lock_conn.execute(
+                    text("SELECT pg_advisory_unlock(:ns, :driver_id)"),
+                    {"ns": OUTBOX_LOCK_NAMESPACE, "driver_id": driver_id},
                 )
-                conn.commit()
-        finally:
-            with self._engine.connect() as conn:
-                conn.execute(
-                    text(
-                        "SELECT pg_advisory_unlock("
-                        "hashtext('tracking_outbox:' || CAST(:driver_id AS text)))"
-                    ),
-                    {"driver_id": driver_id},
-                )
-                conn.commit()
-        return count
+                lock_conn.commit()
 
     def run_loop(self) -> None:
         self._running = True

@@ -29,7 +29,7 @@ from services.region_router import (
     kafka_partition_key_for_driver_location,
 )
 
-from .kafka_topics import TOPIC_DRIVER_LOCATION_RAW, TOPIC_DRIVER_LOCATION_RAW_SHADOW_V3
+from .kafka_topics import TOPIC_DRIVER_LOCATION_RAW
 
 logger = logging.getLogger(__name__)
 
@@ -234,17 +234,13 @@ class TrackingIngestProducer:
             )
             future.get(timeout=KAFKA_PRODUCE_TIMEOUT_S)
             if TRACKING_INGEST_MODE == "shadow_kafka":
-                try:
-                    self._producer.send(
-                        TOPIC_DRIVER_LOCATION_RAW_SHADOW_V3,
-                        value=message,
-                        key=key,
-                    )
-                except Exception:
-                    logger.warning(
-                        "[tracking_ingest] shadow.v3 copy failed (non blocking)",
-                        exc_info=True,
-                    )
+                from services.tracking.shadow_publish import publish_raw_shadow_copy
+
+                publish_raw_shadow_copy(
+                    message=message,
+                    key=key,
+                    producer=self._producer,
+                )
             try:
                 from services.monitoring.driver_location_metrics import (
                     inc_tracking_kafka_messages_produced,

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import ast
 import hashlib
 import json
 import logging
@@ -336,6 +335,19 @@ async def _emit_to_room(
     return True
 
 
+async def _emit_tracking_to_room(
+    event_type: str,
+    payload: dict[str, Any],
+    room: str,
+    *,
+    user_id: str = "",
+) -> bool:
+    """Fanout GPS Kafka-primary : bypass deduper serveur (clients dédupliquent)."""
+    del user_id  # conservé pour signature compatible emit_fn
+    await sio.emit(event_type, payload, to=room)
+    return True
+
+
 async def _relay_event_if_needed(
     event: dict[str, Any],
     room: str,
@@ -358,6 +370,70 @@ async def _relay_event_if_needed(
     }
     await redis_client.publish(WS_RELAY_CHANNEL, json.dumps(payload))
     return "redis"
+
+
+class FatalRealtimeConsumerError(RuntimeError):
+    """Erreur non acquittée : arrête la task consumer (health 503)."""
+
+
+async def _commit_message(consumer: Any, msg: Any) -> None:
+    """Commit exact topic/partition/offset+1 (aiokafka)."""
+    from aiokafka.structs import OffsetAndMetadata, TopicPartition
+
+    tp = TopicPartition(msg.topic, msg.partition)
+    await consumer.commit({tp: OffsetAndMetadata(msg.offset + 1, "")})
+
+
+async def _publish_ws_dlq(
+    *,
+    msg: Any,
+    reason: str,
+    raw_value: bytes | bytearray | None = None,
+    value: dict[str, Any] | None = None,
+) -> None:
+    """Publie vers driver.location.dlq.v3 (ACK broker requis avant commit)."""
+    try:
+        from aiokafka import AIOKafkaProducer
+    except ImportError as exc:  # pragma: no cover
+        raise FatalRealtimeConsumerError("aiokafka_producer_unavailable") from exc
+
+    dlq_topic = os.getenv(
+        "KAFKA_TOPIC_DRIVER_LOCATION_DLQ_V3",
+        "driver.location.dlq.v3",
+    )
+    payload = {
+        "reason": reason,
+        "source_topic": getattr(msg, "topic", None),
+        "source_partition": getattr(msg, "partition", None),
+        "source_offset": getattr(msg, "offset", None),
+        "value": value,
+        "raw_b64": None,
+    }
+    if raw_value is not None and value is None:
+        import base64
+
+        payload["raw_b64"] = base64.b64encode(bytes(raw_value)).decode("ascii")
+
+    producer = AIOKafkaProducer(
+        bootstrap_servers=[
+            s.strip() for s in KAFKA_BOOTSTRAP_SERVERS.split(",") if s.strip()
+        ],
+        acks="all",
+    )
+    await producer.start()
+    try:
+        await producer.send_and_wait(
+            dlq_topic,
+            json.dumps(payload, default=str).encode("utf-8"),
+        )
+    finally:
+        await producer.stop()
+
+
+def _fail_stop_consumer(reason: str) -> None:
+    """Engagement kill switch + exception fatale (task done → health 503)."""
+    engage_kill_switch()
+    raise FatalRealtimeConsumerError(reason)
 
 
 def _kafka_bootstrap_env_int(name: str, default: int) -> int:
@@ -392,7 +468,7 @@ async def _apply_enriched_canonical(
     driver_id: int,
     payload: dict[str, Any],
     location_event_id: str,
-) -> bool:
+) -> str:
     """Annexe A.5 : applique canonical OSRM seulement si event_id = point Redis courant."""
     from enriched_apply import apply_enriched_canonical
 
@@ -401,7 +477,7 @@ async def _apply_enriched_canonical(
         driver_id=driver_id,
         payload=payload,
         location_event_id=location_event_id,
-        emit_fn=_emit_to_room,
+        emit_fn=_emit_tracking_to_room if _IS_KAFKA_PRIMARY else _emit_to_room,
         company_room_fn=company_room,
         driver_room_fn=driver_room,
     )
@@ -512,53 +588,111 @@ async def _consume_kafka_events() -> None:
         async for msg in consumer:
             raw_value = msg.value
             if not isinstance(raw_value, (bytes, bytearray)):
+                if _IS_KAFKA_PRIMARY:
+                    try:
+                        await _publish_ws_dlq(msg=msg, reason="invalid_encoding_type")
+                        await _commit_message(consumer, msg)
+                    except Exception as exc:
+                        logger.exception("dlq/commit failed for invalid encoding type")
+                        _fail_stop_consumer(f"dlq_failed:{exc}")
                 continue
             try:
                 decoded_value = raw_value.decode("utf-8")
             except UnicodeDecodeError:
                 logger.warning(
-                    "kafka event skipped topic=%s partition=%s offset=%s reason=invalid_encoding",
+                    "kafka event invalid_encoding topic=%s partition=%s offset=%s",
                     msg.topic,
                     msg.partition,
                     msg.offset,
                 )
+                if _IS_KAFKA_PRIMARY:
+                    try:
+                        await _publish_ws_dlq(
+                            msg=msg, reason="invalid_encoding", raw_value=raw_value
+                        )
+                        await _commit_message(consumer, msg)
+                    except Exception as exc:
+                        logger.exception("dlq/commit failed for invalid_encoding")
+                        _fail_stop_consumer(f"dlq_failed:{exc}")
                 continue
             try:
                 value = json.loads(decoded_value)
             except json.JSONDecodeError:
-                try:
-                    value = ast.literal_eval(decoded_value)
-                except (ValueError, SyntaxError):
-                    logger.warning(
-                        "kafka event skipped topic=%s partition=%s offset=%s reason=invalid_json",
-                        msg.topic,
-                        msg.partition,
-                        msg.offset,
-                    )
-                    continue
+                logger.warning(
+                    "kafka event invalid_json topic=%s partition=%s offset=%s",
+                    msg.topic,
+                    msg.partition,
+                    msg.offset,
+                )
+                if _IS_KAFKA_PRIMARY:
+                    try:
+                        await _publish_ws_dlq(
+                            msg=msg, reason="invalid_json", raw_value=raw_value
+                        )
+                        await _commit_message(consumer, msg)
+                    except Exception as exc:
+                        logger.exception("dlq/commit failed for invalid_json")
+                        _fail_stop_consumer(f"dlq_failed:{exc}")
+                continue
             if not isinstance(value, dict):
+                if _IS_KAFKA_PRIMARY:
+                    try:
+                        await _publish_ws_dlq(
+                            msg=msg, reason="value_not_dict", raw_value=raw_value
+                        )
+                        await _commit_message(consumer, msg)
+                    except Exception as exc:
+                        _fail_stop_consumer(f"dlq_failed:{exc}")
                 continue
 
             driver_id_obj = value.get("driver_id")
             company_id_obj = value.get("company_id")
             if not isinstance(driver_id_obj, int):
+                if _IS_KAFKA_PRIMARY:
+                    try:
+                        await _publish_ws_dlq(
+                            msg=msg, reason="invalid_driver_id", value=value
+                        )
+                        await _commit_message(consumer, msg)
+                    except Exception as exc:
+                        _fail_stop_consumer(f"dlq_failed:{exc}")
                 continue
 
             event_type_obj = value.get("type") or value.get("event_type") or msg.topic
             is_enriched = (
                 msg.topic == KAFKA_TOPIC_DRIVER_LOCATION_ENRICHED
-                or event_type_obj in ("driver.location.enriched", "driver.location.enriched.v3")
+                or event_type_obj
+                in ("driver.location.enriched", "driver.location.enriched.v3")
+            )
+            is_processed = (
+                msg.topic == KAFKA_TOPIC_DRIVER_LOCATION_PROCESSED
+                or event_type_obj
+                in ("driver.location.processed", "driver_location_update")
             )
             if event_type_obj == "driver.location.processed":
                 event_type_obj = "driver_location_update"
             if is_enriched:
                 event_type_obj = "driver_location_enriched"
             event_payload_obj = value.get("payload", value)
-            if not isinstance(event_type_obj, str) or not isinstance(event_payload_obj, dict):
+            if not isinstance(event_type_obj, str) or not isinstance(
+                event_payload_obj, dict
+            ):
+                if _IS_KAFKA_PRIMARY:
+                    try:
+                        await _publish_ws_dlq(
+                            msg=msg, reason="invalid_type_or_payload", value=value
+                        )
+                        await _commit_message(consumer, msg)
+                    except Exception as exc:
+                        _fail_stop_consumer(f"dlq_failed:{exc}")
                 continue
-            event_id_obj = event_payload_obj.get("event_id") if isinstance(event_payload_obj.get("event_id"), str) else "n/a"
+            event_id_obj = (
+                event_payload_obj.get("event_id")
+                if isinstance(event_payload_obj.get("event_id"), str)
+                else "n/a"
+            )
 
-            # Annexe A.5 : enriched ne modifie Redis que si location_event_id == point courant
+            # --- enriched.v3 ---
             if is_enriched:
                 try:
                     applied = await _apply_enriched_canonical(
@@ -570,8 +704,15 @@ async def _consume_kafka_events() -> None:
                             or ""
                         ),
                     )
+                    if isinstance(applied, str) and applied.startswith("invalid:"):
+                        if _IS_KAFKA_PRIMARY:
+                            await _publish_ws_dlq(
+                                msg=msg, reason=applied, value=value
+                            )
+                            await _commit_message(consumer, msg)
+                        continue
                     if _IS_KAFKA_PRIMARY:
-                        await consumer.commit()
+                        await _commit_message(consumer, msg)
                     logger.info(
                         "enriched.v3 applied=%s topic=%s offset=%s driver_id=%s event_id=%s",
                         applied,
@@ -580,35 +721,149 @@ async def _consume_kafka_events() -> None:
                         driver_id_obj,
                         event_id_obj,
                     )
-                except Exception:
-                    # Erreur Redis → pas de commit (Annexe A.5 / A.8)
+                except FatalRealtimeConsumerError:
+                    raise
+                except Exception as exc:
                     logger.exception(
                         "enriched.v3 redis apply failed — offset not committed"
                     )
                     if _IS_KAFKA_PRIMARY:
-                        continue
+                        _fail_stop_consumer(f"enriched_redis_failed:{exc}")
                 continue
 
+            # --- processed.v3 : Redis canonical puis fanout ---
+            if _IS_KAFKA_PRIMARY and is_processed:
+                from processed_apply import (
+                    EVENT_ID_PAYLOAD_CONFLICT,
+                    SEQUENCE_EVENT_CONFLICT,
+                    apply_processed_canonical,
+                )
+
+                try:
+                    loc_eid = str(
+                        value.get("location_event_id")
+                        or event_payload_obj.get("location_event_id")
+                        or ""
+                    )
+                    payload_hash = str(
+                        value.get("event_payload_hash")
+                        or event_payload_obj.get("event_payload_hash")
+                        or ""
+                    )
+                    gen = int(
+                        value.get("session_generation")
+                        or event_payload_obj.get("session_generation")
+                        or 0
+                    )
+                    seq = int(
+                        value.get("sequence_id")
+                        or event_payload_obj.get("sequence_id")
+                        or 0
+                    )
+                    lat = float(
+                        event_payload_obj.get("latitude")
+                        or event_payload_obj.get("lat")
+                    )
+                    lon = float(
+                        event_payload_obj.get("longitude")
+                        or event_payload_obj.get("lon")
+                    )
+                    recorded_at = str(
+                        event_payload_obj.get("recorded_at")
+                        or value.get("recorded_at")
+                        or ""
+                    )
+                    cid = (
+                        company_id_obj
+                        if isinstance(company_id_obj, int)
+                        else (
+                            event_payload_obj.get("company_id")
+                            if isinstance(event_payload_obj.get("company_id"), int)
+                            else None
+                        )
+                    )
+                    code = await apply_processed_canonical(
+                        redis_client,
+                        driver_id=driver_id_obj,
+                        location_event_id=loc_eid,
+                        event_payload_hash=payload_hash,
+                        session_generation=gen,
+                        sequence_id=seq,
+                        latitude=lat,
+                        longitude=lon,
+                        recorded_at=recorded_at,
+                        company_id=cid,
+                        emit_fn=_emit_tracking_to_room,
+                        event_type="driver_location_update",
+                        payload=event_payload_obj,
+                        company_room_fn=company_room,
+                        driver_room_fn=driver_room,
+                    )
+                    if code in (SEQUENCE_EVENT_CONFLICT, EVENT_ID_PAYLOAD_CONFLICT):
+                        await _publish_ws_dlq(msg=msg, reason=code, value=value)
+                        await _commit_message(consumer, msg)
+                    else:
+                        await _commit_message(consumer, msg)
+                        from kafka_lag_metrics import record_fanout_emit
+
+                        if code in ("applied_new", "duplicate_current"):
+                            record_fanout_emit()
+                    logger.info(
+                        "processed.v3 code=%s topic=%s offset=%s driver_id=%s",
+                        code,
+                        msg.topic,
+                        msg.offset,
+                        driver_id_obj,
+                    )
+                except FatalRealtimeConsumerError:
+                    raise
+                except Exception as exc:
+                    logger.exception("processed.v3 apply failed — fail-stop")
+                    _fail_stop_consumer(f"processed_apply_failed:{exc}")
+                continue
+
+            # Hors kafka_primary : relay artisanal legacy
             if isinstance(company_id_obj, int):
                 room = company_room(company_id_obj)
             else:
                 cid = event_payload_obj.get("company_id")
-                room = company_room(cid) if isinstance(cid, int) else driver_room(driver_id_obj)
+                room = (
+                    company_room(cid)
+                    if isinstance(cid, int)
+                    else driver_room(driver_id_obj)
+                )
 
-            relay_mode = await _relay_event_if_needed(
-                {
-                    "type": event_type_obj,
-                    "payload": event_payload_obj,
-                },
-                room,
-                user_id=str(driver_id_obj),
-            )
-            if event_type_obj == "driver_location_update":
-                from kafka_lag_metrics import record_fanout_emit
-
-                record_fanout_emit()
             if _IS_KAFKA_PRIMARY:
-                await consumer.commit()
+                try:
+                    await _emit_tracking_to_room(
+                        event_type_obj,
+                        event_payload_obj,
+                        room,
+                        user_id=str(driver_id_obj),
+                    )
+                    relay_mode = "async_redis_manager"
+                    if event_type_obj == "driver_location_update":
+                        from kafka_lag_metrics import record_fanout_emit
+
+                        record_fanout_emit()
+                    await _commit_message(consumer, msg)
+                except Exception as exc:
+                    logger.exception("fanout failed — fail-stop")
+                    _fail_stop_consumer(f"fanout_failed:{exc}")
+                    continue
+            else:
+                relay_mode = await _relay_event_if_needed(
+                    {
+                        "type": event_type_obj,
+                        "payload": event_payload_obj,
+                    },
+                    room,
+                    user_id=str(driver_id_obj),
+                )
+                if event_type_obj == "driver_location_update":
+                    from kafka_lag_metrics import record_fanout_emit
+
+                    record_fanout_emit()
             logger.info(
                 "kafka event processed topic=%s partition=%s offset=%s driver_id=%s event_type=%s event_id=%s relay_mode=%s room=%s",
                 msg.topic,
@@ -620,11 +875,17 @@ async def _consume_kafka_events() -> None:
                 relay_mode,
                 room,
             )
+    except FatalRealtimeConsumerError:
+        logger.error("kafka consumer fail-stop engaged")
+        engage_kill_switch()
+        raise
     except asyncio.CancelledError:
         raise
     except Exception as exc:
         capture_kafka_error(exc)
         logger.exception("kafka consumer loop failed")
+        if _IS_KAFKA_PRIMARY:
+            engage_kill_switch()
     finally:
         from kafka_lag_metrics import register_consumer
 

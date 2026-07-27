@@ -187,4 +187,25 @@ def persist_driver_location_from_kafka(
             },
         ],
     }
+
+    # Phase 2 : observation directe APRÈS résultat autoritaire (pas avant).
+    try:
+        from services.tracking.shadow_evaluator import payload_fingerprint
+        from services.tracking.shadow_publish import publish_direct_observation
+
+        publish_direct_observation(
+            driver_id=driver_id,
+            company_id=company_id,
+            location_event_id=location_event_id,
+            payload_fingerprint=payload_fingerprint(enriched),
+            accept_status=uc_result.accept_status,
+            accept_reason=uc_result.accept_reason or "",
+            persisted=uc_result.accept_status.startswith("accepted"),
+        )
+    except Exception:
+        logger.warning(
+            "[tracking_persist] direct.observed publish skipped",
+            exc_info=True,
+        )
+
     return enriched, uc_result

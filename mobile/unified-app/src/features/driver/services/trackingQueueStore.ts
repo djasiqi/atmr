@@ -1,6 +1,6 @@
 /**
  * Stockage transactionnel de la file GPS (Annexe A.4).
- * SQLite en runtime natif ; backend mémoire pour Jest / web.
+ * SQLite = source de vérité native ; mémoire uniquement Jest/web (explicite).
  */
 
 export type TrackingQueueRowState =
@@ -49,6 +49,7 @@ type MemoryDb = {
   gaps: LocalGapRecord[];
   cursors: Map<string, ContiguousCursor>;
   quarantineIdentity: string | null;
+  migrationCompleted: boolean;
 };
 
 const memory: MemoryDb = {
@@ -56,9 +57,11 @@ const memory: MemoryDb = {
   gaps: [],
   cursors: new Map(),
   quarantineIdentity: null,
+  migrationCompleted: false,
 };
 
 let useMemory = true;
+let durableUnavailable = false;
 let sqliteDb: {
   execAsync: (sql: string) => Promise<void>;
   runAsync: (sql: string, ...params: unknown[]) => Promise<unknown>;
@@ -67,17 +70,39 @@ let sqliteDb: {
   withTransactionAsync: (fn: () => Promise<void>) => Promise<void>;
 } | null = null;
 
-async function ensureSqlite(): Promise<boolean> {
-  if (sqliteDb) return true;
-  if (typeof jest !== "undefined") {
-    useMemory = true;
+function isNativePlatform(): boolean {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const Platform = require("react-native").Platform as { OS?: string };
+    return Platform.OS === "ios" || Platform.OS === "android";
+  } catch {
     return false;
   }
+}
+
+function allowMemoryBackend(): boolean {
+  if (typeof jest !== "undefined") return true;
   try {
-    // Chargement dynamique — évite le crash Jest sans native module.
-    const ExpoSqlite = await import("expo-sqlite");
-    const db = await ExpoSqlite.openDatabaseAsync("driver_tracking_queue_v5.db");
-    await db.execAsync(`
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const Platform = require("react-native").Platform as { OS?: string };
+    return Platform.OS === "web";
+  } catch {
+    return true;
+  }
+}
+
+function emitCriticalTelemetry(event: string, detail?: Record<string, unknown>): void {
+  try {
+    console.error(`[trackingQueueStore] CRITICAL ${event}`, detail ?? {});
+  } catch {
+    // ignore
+  }
+}
+
+async function openAndInitSchema(): Promise<typeof sqliteDb> {
+  const ExpoSqlite = await import("expo-sqlite");
+  const db = await ExpoSqlite.openDatabaseAsync("driver_tracking_queue_v5.db");
+  await db.execAsync(`
       PRAGMA journal_mode = WAL;
       CREATE TABLE IF NOT EXISTS tracking_queue (
         location_event_id TEXT PRIMARY KEY NOT NULL,
@@ -119,13 +144,49 @@ async function ensureSqlite(): Promise<boolean> {
         value TEXT NOT NULL
       );
     `);
-    sqliteDb = db as typeof sqliteDb;
-    useMemory = false;
-    return true;
-  } catch {
+  try {
+    const integrity = await db.getFirstAsync<{ integrity_check: string }>(
+      "PRAGMA integrity_check"
+    );
+    const ok = String(integrity?.integrity_check ?? "").toLowerCase() === "ok";
+    if (!ok) {
+      throw new Error(`sqlite_integrity_failed:${integrity?.integrity_check}`);
+    }
+  } catch (err) {
+    if (String(err).includes("sqlite_integrity_failed")) throw err;
+    // PRAGMA non supporté selon runtime — ignorer
+  }
+  return db as typeof sqliteDb;
+}
+
+async function ensureSqlite(): Promise<boolean> {
+  if (sqliteDb) return true;
+  if (durableUnavailable && isNativePlatform()) return false;
+  if (allowMemoryBackend()) {
     useMemory = true;
     return false;
   }
+  // Natif : fail-closed, retry simple, jamais DELETE DB, jamais mémoire silencieuse.
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const db = await openAndInitSchema();
+      sqliteDb = db;
+      useMemory = false;
+      durableUnavailable = false;
+      return true;
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  durableUnavailable = true;
+  useMemory = false;
+  sqliteDb = null;
+  emitCriticalTelemetry("sqlite_open_failed", {
+    error: String(lastError),
+    platform: "native",
+  });
+  return false;
 }
 
 function rowFromSqlite(r: Record<string, unknown>): TrackingQueueRow {
@@ -157,29 +218,98 @@ export const trackingQueueStore = {
   },
 
   isMemoryBackend(): boolean {
-    return useMemory;
+    return useMemory && !durableUnavailable;
   },
 
-  /** Remplace toute la file (migration AsyncStorage → store). */
+  isDurableBackendAvailable(): boolean {
+    return !durableUnavailable && !!sqliteDb && !useMemory;
+  },
+
+  isDurableUnavailable(): boolean {
+    return durableUnavailable;
+  },
+
+  /**
+   * Migration AsyncStorage → SQLite one-shot.
+   * Ne wipe jamais une SQLite déjà peuplée avec une copie AsyncStorage obsolète.
+   */
+  async importLegacyOnce(rows: TrackingQueueRow[]): Promise<boolean> {
+    await ensureSqlite();
+    if (useMemory || !sqliteDb) {
+      if (allowMemoryBackend()) {
+        for (const row of rows) memory.rows.set(row.locationEventId, row);
+        memory.migrationCompleted = true;
+        return true;
+      }
+      return false;
+    }
+    const marker = await sqliteDb.getFirstAsync<{ value: string }>(
+      "SELECT value FROM tracking_quarantine_meta WHERE key = 'migration_completed'"
+    );
+    if (marker?.value === "1") {
+      return true;
+    }
+    const countRow = await sqliteDb.getFirstAsync<{ c: number }>(
+      "SELECT COUNT(*) AS c FROM tracking_queue"
+    );
+    const existingCount = Number(countRow?.c ?? 0);
+    if (existingCount > 0 && rows.length === 0) {
+      await sqliteDb.runAsync(
+        `INSERT INTO tracking_quarantine_meta (key, value) VALUES ('migration_completed', '1')
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value`
+      );
+      return true;
+    }
+    await sqliteDb.withTransactionAsync(async () => {
+      for (const row of rows) {
+        await trackingQueueStore.upsert(row);
+      }
+      const after = await sqliteDb!.getFirstAsync<{ c: number }>(
+        "SELECT COUNT(*) AS c FROM tracking_queue"
+      );
+      const afterCount = Number(after?.c ?? 0);
+      if (afterCount < rows.length) {
+        throw new Error("migration_count_mismatch");
+      }
+      await sqliteDb!.runAsync(
+        `INSERT INTO tracking_quarantine_meta (key, value) VALUES ('migration_completed', '1')
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value`
+      );
+    });
+    return true;
+  },
+
+  /** @deprecated Prefer importLegacyOnce — replaceAll wipe SQLite. */
   async replaceAll(rows: TrackingQueueRow[]): Promise<void> {
     await ensureSqlite();
     if (useMemory || !sqliteDb) {
+      if (durableUnavailable && isNativePlatform()) {
+        throw new Error("durable_unavailable");
+      }
       memory.rows.clear();
       for (const row of rows) {
         memory.rows.set(row.locationEventId, row);
       }
       return;
     }
-    await sqliteDb.withTransactionAsync(async () => {
-      await sqliteDb!.runAsync("DELETE FROM tracking_queue");
-      for (const row of rows) {
-        await trackingQueueStore.upsert(row);
-      }
-    });
+    // Natif : ne pas DELETE+réinsert si migration déjà faite
+    const marker = await sqliteDb.getFirstAsync<{ value: string }>(
+      "SELECT value FROM tracking_quarantine_meta WHERE key = 'migration_completed'"
+    );
+    if (marker?.value === "1") {
+      return;
+    }
+    await trackingQueueStore.importLegacyOnce(rows);
   },
 
   async upsert(row: TrackingQueueRow): Promise<void> {
     await ensureSqlite();
+    if (durableUnavailable && isNativePlatform()) {
+      emitCriticalTelemetry("upsert_rejected_durable_unavailable", {
+        locationEventId: row.locationEventId,
+      });
+      throw new Error("durable_unavailable");
+    }
     if (useMemory || !sqliteDb) {
       memory.rows.set(row.locationEventId, { ...row });
       return;
@@ -472,7 +602,16 @@ export const trackingQueueStore = {
     memory.gaps = [];
     memory.cursors.clear();
     memory.quarantineIdentity = null;
+    memory.migrationCompleted = false;
     useMemory = true;
+    durableUnavailable = false;
+    sqliteDb = null;
+  },
+
+  /** Tests : simule ouverture SQLite KO sur natif. */
+  _forceDurableUnavailableForTests(): void {
+    durableUnavailable = true;
+    useMemory = false;
     sqliteDb = null;
   },
 };

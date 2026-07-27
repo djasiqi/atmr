@@ -51,7 +51,9 @@ def test_publish_for_driver_orders_by_generation_then_sequence(monkeypatch):
         def commit(self):
             return None
 
-    publisher._engine.connect = lambda: _Conn()  # type: ignore[method-assign]
+    # Même connexion pour lock/unlock (P0-5)
+    shared = _Conn()
+    publisher._engine.connect = lambda: shared  # type: ignore[method-assign]
 
     class _Future:
         def get(self, timeout=None):

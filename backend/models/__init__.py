@@ -216,6 +216,7 @@ from .tracking_ingest_event import (
     TrackingDerivedRepairPending,
     TrackingIngestEvent,
 )
+from .tracking_shadow_observation import TrackingShadowObservation
 from .tracking_session import (
     DriverLocationEnrichment,
     DriverLocationEvent,
@@ -400,6 +401,7 @@ __all__ = [
     "TransportVoucherType",
     "TrackingDerivedRepairPending",
     "TrackingIngestEvent",
+    "TrackingShadowObservation",
     "TrackingSession",
     "TrackingSessionState",
     "TrackingSequenceGap",

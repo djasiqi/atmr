@@ -36,6 +36,10 @@ TOPIC_DRIVER_LOCATION_DLQ_V3 = os.getenv(
 TOPIC_DRIVER_LOCATION_RAW_SHADOW_V3 = os.getenv(
     "KAFKA_TOPIC_DRIVER_LOCATION_RAW_SHADOW_V3", "driver.location.raw.shadow.v3"
 )
+TOPIC_DRIVER_LOCATION_DIRECT_OBSERVED_V3 = os.getenv(
+    "KAFKA_TOPIC_DRIVER_LOCATION_DIRECT_OBSERVED_V3",
+    "driver.location.direct.observed.v3",
+)
 
 TOPIC_MISSION_EVENTS = os.getenv("KAFKA_TOPIC_MISSION_EVENTS", "mission.events")
 TOPIC_NOTIFICATION_EVENTS = os.getenv(

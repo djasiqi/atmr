@@ -21,6 +21,10 @@ import {
 import { trackingQueueStore } from "./trackingQueueStore";
 import { registerTrackingSession } from "./trackingSessionsApi";
 
+function allowMemoryFallback(): boolean {
+  return Platform.OS === "web" || typeof jest !== "undefined";
+}
+
 export type TrackingDeliveryState =
   | "queued"
   | "socket_emitted"
@@ -332,12 +336,16 @@ class DriverTrackingQueue {
   private async ensureLoaded() {
     if (this.loaded) return;
     await trackingQueueStore.init();
-    const parsed = safeJsonParse<DriverTrackingQueueItem[]>(await this.readStorage(STORAGE_KEY));
-    this.items = Array.isArray(parsed) ? parsed : [];
-    // Migration AsyncStorage → store SQLite/mémoire (idempotent)
-    if (this.items.length > 0) {
-      await trackingQueueStore.replaceAll(
-        this.items.map((item) => ({
+
+    // Source de vérité : SQLite (natif) ; AsyncStorage = legacy one-shot uniquement.
+    const legacyParsed = safeJsonParse<DriverTrackingQueueItem[]>(
+      await this.readStorage(STORAGE_KEY)
+    );
+    const legacyItems = Array.isArray(legacyParsed) ? legacyParsed : [];
+
+    if (legacyItems.length > 0) {
+      const imported = await trackingQueueStore.importLegacyOnce(
+        legacyItems.map((item) => ({
           locationEventId: item.id,
           trackingSessionId: item.trackingSessionId,
           sessionGeneration: item.sessionGeneration ?? null,
@@ -357,7 +365,40 @@ class DriverTrackingQueue {
           ackedAt: item.ackedAt,
         }))
       );
+      if (imported) {
+        await this.writeStorage(STORAGE_KEY, "");
+      }
+    } else {
+      await trackingQueueStore.importLegacyOnce([]);
     }
+
+    const activeRows = await trackingQueueStore.listActive();
+    if (activeRows.length > 0 || trackingQueueStore.isDurableBackendAvailable()) {
+      this.items = activeRows.map((row) => ({
+        id: row.locationEventId,
+        sequenceId: row.sequenceId,
+        trackingSessionId: row.trackingSessionId,
+        sessionGeneration: row.sessionGeneration,
+        batchId: row.batchId,
+        positionId: row.positionId,
+        missionId: row.missionId,
+        appState: row.appState as AppStateStatus,
+        locationMode: row.locationMode as DriverTrackingMode,
+        payload: safeJsonParse<DriverLocationPayload>(row.payloadJson) ?? ({} as DriverLocationPayload),
+        queuedAt: row.queuedAt,
+        retryCount: row.retryCount,
+        deliveryState: row.deliveryState as TrackingDeliveryState,
+        lastAttemptAt: row.lastAttemptAt,
+        ackedAt: row.ackedAt,
+        lastError: row.lastError,
+        persistState: row.state,
+      }));
+    } else if (allowMemoryFallback()) {
+      this.items = legacyItems;
+    } else {
+      this.items = [];
+    }
+
     this.items.sort((a, b) => {
       const ga = a.sessionGeneration ?? 0;
       const gb = b.sessionGeneration ?? 0;
@@ -396,6 +437,16 @@ class DriverTrackingQueue {
   }
 
   private async persist() {
+    // Natif : SQLite autoritaire — chaque item actif déjà upserté à l'enqueue.
+    // AsyncStorage n'est plus la source durable ; écriture legacy désactivée
+    // dès que SQLite est disponible.
+    if (trackingQueueStore.isDurableBackendAvailable()) {
+      return;
+    }
+    if (trackingQueueStore.isDurableUnavailable() && Platform.OS !== "web") {
+      // Ne pas prétendre conserver via AsyncStorage comme durable.
+      return;
+    }
     await this.writeStorage(STORAGE_KEY, JSON.stringify(this.items));
   }
 
@@ -555,15 +606,26 @@ class DriverTrackingQueue {
   async applyIngestedEventIds(eventIds: string[]): Promise<number> {
     await this.ensureLoaded();
     let marked = 0;
+    const toMark: string[] = [];
     for (const id of eventIds) {
       this.ingestedEventIds.add(id);
       const item = this.items.find((i) => i.id === id);
       if (item && (item.persistState ?? "non_ingested") === "non_ingested") {
         item.persistState = "ingested_non_persisted";
+        toMark.push(id);
         marked += 1;
       }
     }
     if (marked > 0) {
+      try {
+        await trackingQueueStore.markState(toMark, "ingested_non_persisted");
+      } catch {
+        emitDriverTelemetry("tracking.queue.mark_state_failed", {
+          source: "driver.tracking.queue",
+          state: "ingested_non_persisted",
+          count: toMark.length,
+        });
+      }
       await this.persist();
       const sessionItems = this.items
         .filter(
@@ -728,6 +790,39 @@ class DriverTrackingQueue {
       persistState: "non_ingested",
     };
     item.payload.trackingEventId = item.id;
+
+    // SQLite INSERT avant de considérer la capture conservée (natif).
+    try {
+      await trackingQueueStore.upsert({
+        locationEventId: item.id,
+        trackingSessionId: item.trackingSessionId,
+        sessionGeneration: item.sessionGeneration ?? null,
+        sequenceId: item.sequenceId,
+        payloadJson: JSON.stringify(item.payload),
+        state: "non_ingested",
+        queuedAt: item.queuedAt,
+        lastAttemptAt: item.lastAttemptAt,
+        retryCount: item.retryCount,
+        deliveryState: item.deliveryState,
+        missionId: item.missionId,
+        locationMode: item.locationMode,
+        batchId: item.batchId,
+        positionId: item.positionId,
+        appState: String(item.appState),
+        lastError: item.lastError,
+        ackedAt: item.ackedAt,
+      });
+    } catch (err) {
+      // Rollback séquence : capture non conservée
+      this.sequenceCounter = Math.max(0, sequenceId - 1);
+      emitDriverTelemetry("tracking.queue.durable_unavailable", {
+        source: "driver.tracking.queue",
+        error: String(err),
+        location_event_id: item.id,
+      });
+      throw err;
+    }
+
     this.items.push(item);
     this.compactQueueIfNeeded();
     this.trimIfNeeded();
@@ -1007,6 +1102,18 @@ class DriverTrackingQueue {
             }
             if (ack.ack_status === "persisted") {
               item.persistState = "persisted";
+              try {
+                await trackingQueueStore.markState([item.id], "persisted", {
+                  ackedAt: nowMs(),
+                  deliveryState: "backend_acked",
+                });
+              } catch {
+                emitDriverTelemetry("tracking.queue.mark_state_failed", {
+                  source: "driver.tracking.queue",
+                  state: "persisted",
+                  location_event_id: item.id,
+                });
+              }
             }
             item.deliveryState = "backend_acked";
             item.ackedAt = nowMs();

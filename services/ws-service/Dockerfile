@@ -14,9 +14,15 @@ COPY dedup.py /app/dedup.py
 COPY delivery_metrics.py /app/delivery_metrics.py
 COPY kafka_lag_metrics.py /app/kafka_lag_metrics.py
 COPY event_contract.py /app/event_contract.py
+COPY event_payload_hash.py /app/event_payload_hash.py
 COPY gps_ingest.py /app/gps_ingest.py
+COPY gps_spool.py /app/gps_spool.py
+COPY enriched_apply.py /app/enriched_apply.py
+COPY processed_apply.py /app/processed_apply.py
 COPY kill_switch.py /app/kill_switch.py
 COPY rooms.py /app/rooms.py
+COPY sentry_init.py /app/sentry_init.py
+COPY tracking_contract /app/tracking_contract
 
 EXPOSE 8001
 
