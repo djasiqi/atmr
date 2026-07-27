@@ -260,29 +260,28 @@ def test_compose_config_json_fused_with_p0_hold_override(tmp_path):
         data = json.loads(proc.stdout)
 
     services = data.get("services") or {}
-    consumer = services.get("tracking-kafka-consumer")
-    assert consumer is not None, "tracking-kafka-consumer absent du config fusionné"
-    env = consumer.get("environment") or {}
 
-    for key in _EMPTY_DSN_KEYS:
-        assert key in env, f"manque {key}"
-        assert env[key] in ("", None), f"{key} doit être vide, got {env[key]!r}"
+    for svc_name in _TRACKING_SERVICES:
+        svc = services.get(svc_name)
+        assert svc is not None, f"{svc_name} absent du config fusionné"
+        env = svc.get("environment") or {}
+        for key in _EMPTY_DSN_KEYS:
+            assert key in env, f"{svc_name} manque {key}"
+            assert env[key] in ("", None), f"{svc_name}.{key} doit être vide, got {env[key]!r}"
+        assert env.get("POSTGRES_HOST") == "pgbouncer", svc_name
+        assert str(env.get("POSTGRES_PORT")) == "6432", svc_name
+        for val in env.values():
+            if isinstance(val, str) and "postgresql+psycopg://" in val:
+                assert "${POSTGRES_USER" not in val
+                assert "${POSTGRES_PASSWORD" not in val
+                assert "fixture-not-a-real-secret" not in val
 
-    assert env.get("POSTGRES_HOST") == "pgbouncer"
-    assert str(env.get("POSTGRES_PORT")) == "6432"
-    assert env.get("TRACKING_PERSIST_WITH_OUTBOX") in ("false", False)
-    assert env.get("TRACKING_INGEST_PERSIST_ENABLED") in ("true", True)
-    assert env.get("TRACKING_INGEST_ALLOW_REPUBLISH_ONLY") in ("false", False)
-    assert env.get("TRACKING_INGEST_SEEK_TO_END_ON_START") in ("false", False)
-    assert env.get("TRACKING_DLQ_FORCE_COMMIT_ON_FAILURE") in ("false", False)
+    consumer_env = (services["tracking-kafka-consumer"].get("environment") or {})
+    assert consumer_env.get("TRACKING_PERSIST_WITH_OUTBOX") in ("false", False)
+    assert consumer_env.get("TRACKING_INGEST_PERSIST_ENABLED") in ("true", True)
+    assert consumer_env.get("TRACKING_INGEST_ALLOW_REPUBLISH_ONLY") in ("false", False)
+    assert consumer_env.get("TRACKING_INGEST_SEEK_TO_END_ON_START") in ("false", False)
+    assert consumer_env.get("TRACKING_DLQ_FORCE_COMMIT_ON_FAILURE") in ("false", False)
 
-    fanout = services.get("tracking-processed-fanout")
-    assert fanout is not None
-    fanout_env = fanout.get("environment") or {}
+    fanout_env = (services["tracking-processed-fanout"].get("environment") or {})
     assert fanout_env.get("TRACKING_PROCESSED_FANOUT_ENABLED") in ("false", False)
-
-    for val in env.values():
-        if isinstance(val, str) and "postgresql+psycopg://" in val:
-            assert "${POSTGRES_USER" not in val
-            assert "${POSTGRES_PASSWORD" not in val
-            assert "fixture-not-a-real-secret" not in val

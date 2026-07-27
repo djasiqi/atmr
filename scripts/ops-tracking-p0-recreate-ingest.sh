@@ -86,18 +86,12 @@ assert_env_flag tracking-kafka-consumer TRACKING_INGEST_SEEK_TO_END_ON_START fal
 assert_env_flag tracking-kafka-consumer TRACKING_DLQ_FORCE_COMMIT_ON_FAILURE false
 assert_env_flag tracking-processed-fanout TRACKING_PROCESSED_FANOUT_ENABLED false
 
-# Topics *.v2 attendus (noms effectifs après interpolation)
-if ! grep -E 'driver\.location\.(raw|processed|dlq)\.v2|KAFKA_TOPIC_DRIVER_LOCATION_.*:.*\.v2' "${CFG_TMP}" >/dev/null 2>&1; then
-  # Accepte aussi les variables déjà résolues en .v2 dans environment
-  if ! awk '
-    /KAFKA_TOPIC_DRIVER_LOCATION_(RAW|PROCESSED|DLQ):/ {
-      if ($0 ~ /\.v2/) found=1
-    }
-    END { exit found ? 0 : 1 }
-  ' "${CFG_TMP}"; then
-    echo "WARN: topics *.v2 non détectés dans le config (vérifier ENV / overrides topics)" >&2
-  fi
-fi
+# Topics *.v2 obligatoires (noms effectifs après interpolation) — fail-hard
+assert_env_flag tracking-kafka-consumer KAFKA_TOPIC_DRIVER_LOCATION_RAW driver.location.raw.v2
+assert_env_flag tracking-kafka-consumer KAFKA_TOPIC_DRIVER_LOCATION_PROCESSED driver.location.processed.v2
+assert_env_flag tracking-kafka-consumer KAFKA_TOPIC_DRIVER_LOCATION_DLQ driver.location.dlq.v2
+assert_env_flag tracking-processed-fanout KAFKA_TOPIC_DRIVER_LOCATION_PROCESSED driver.location.processed.v2
+assert_env_flag kafka-dlq-consumer KAFKA_TOPIC_DRIVER_LOCATION_DLQ driver.location.dlq.v2
 
 if [[ "${DRY_RUN}" == "1" ]]; then
   echo "DRY_RUN=1 — aucun stop / up / recreate. Config OK."

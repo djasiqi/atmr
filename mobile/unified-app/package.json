@@ -19,7 +19,7 @@
     "build:prod": "eas build -p android --profile production",
     "build:prod:ios": "eas build -p ios --profile production",
     "build:prod:all": "eas build -p all --profile production",
-    "build:prod:preflight": "npm run check-build-ready && npm test -- --watchAll=false --testPathPattern=otaAutoReloadPolicy",
+    "build:prod:preflight": "npm run typecheck && npm run check-build-ready && npm test -- --watchAll=false --testPathPattern=otaAutoReloadPolicy",
     "submit:prod:android": "eas submit -p android --profile production --latest",
     "submit:prod:ios": "eas submit -p ios --profile production --latest",
     "check-build-ready": "node ./scripts/check-build-ready.js",
