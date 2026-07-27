@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
+// Import après les jest.mock ci-dessous (hoistés par Jest/Babel avant l'exécution du module).
+import { trackingQueueStore } from "./trackingQueueStore";
 
 // --- Mocks pour les scénarios SQLite natifs (chemin réel, pas mémoire Jest) ---
 
@@ -19,9 +21,6 @@ jest.mock("expo-sqlite", () => ({
   openDatabaseAsync: (name: string) => mockOpenDatabaseAsync(name),
   deleteDatabaseAsync: (name: string) => mockDeleteDatabaseAsync(name),
 }));
-
-// Import après les jest.mock ci-dessus (hoistés par Jest de toute façon).
-import { trackingQueueStore } from "./trackingQueueStore";
 
 type FakeRow = Record<string, unknown>;
 
@@ -71,7 +70,7 @@ function createFakeDb(overrides: Partial<{
     });
   }
 
-  return db;
+  return { db, getFirstAsync, runAsync, execAsync, withTransactionAsync };
 }
 
 describe("trackingQueueStore (Annexe A.4)", () => {
@@ -207,7 +206,7 @@ describe("trackingQueueStore — backend SQLite natif mocké", () => {
   }
 
   it("20 init() concurrents ne déclenchent qu'un seul openDatabaseAsync", async () => {
-    const db = createFakeDb();
+    const { db } = createFakeDb();
     mockOpenDatabaseAsync.mockResolvedValue(db);
 
     await Promise.all(Array.from({ length: 20 }, () => trackingQueueStore.init()));
@@ -217,12 +216,12 @@ describe("trackingQueueStore — backend SQLite natif mocké", () => {
   });
 
   it("importLegacyOnce ne fait pas de deadlock (transaction exclusive mockée)", async () => {
-    const db = createFakeDb();
+    const { db, getFirstAsync } = createFakeDb();
     mockOpenDatabaseAsync.mockResolvedValue(db);
 
     const rows = [sampleRow("l1"), sampleRow("l2")];
     // On force un COUNT après insertion cohérent avec le nombre de lignes importées.
-    (db.getFirstAsync as jest.Mock).mockImplementation(async (sql: string) => {
+    getFirstAsync.mockImplementation(async (sql: string) => {
       if (sql.includes("quick_check")) return { quick_check: "ok" };
       if (sql.includes("migration_completed")) return null;
       if (sql.includes("COUNT(*)")) return { c: rows.length };
@@ -246,7 +245,7 @@ describe("trackingQueueStore — backend SQLite natif mocké", () => {
     mockOpenDatabaseAsync.mockImplementation(async () => {
       openCount += 1;
       if (openCount === 1) {
-        const db1 = createFakeDb({
+        const { db: db1 } = createFakeDb({
           runAsyncImpl: async () => {
             firstDbUsed = true;
             throw npeError;
@@ -254,7 +253,7 @@ describe("trackingQueueStore — backend SQLite natif mocké", () => {
         });
         return db1;
       }
-      return createFakeDb();
+      return createFakeDb().db;
     });
 
     await trackingQueueStore.upsert(sampleRow("npe1"));
@@ -269,12 +268,13 @@ describe("trackingQueueStore — backend SQLite natif mocké", () => {
     const npeError = new Error(
       "Call to function 'NativeDatabase.prepareAsync' has been rejected -> Caused by: java.lang.NullPointerException"
     );
-    mockOpenDatabaseAsync.mockImplementation(async () =>
-      createFakeDb({
-        runAsyncImpl: async () => {
-          throw npeError;
-        },
-      })
+    mockOpenDatabaseAsync.mockImplementation(
+      async () =>
+        createFakeDb({
+          runAsyncImpl: async () => {
+            throw npeError;
+          },
+        }).db
     );
 
     await expect(trackingQueueStore.upsert(sampleRow("npe2"))).rejects.toThrow(
@@ -297,34 +297,57 @@ describe("trackingQueueStore — backend SQLite natif mocké", () => {
   });
 
   it("quick_check ne tourne qu'à l'ouverture à froid, pas sur un healthcheck à chaud", async () => {
-    const db = createFakeDb();
+    const { db, getFirstAsync } = createFakeDb();
     mockOpenDatabaseAsync.mockResolvedValue(db);
 
     const first = await trackingQueueStore.initAndHealthcheckHeadless();
     const second = await trackingQueueStore.initAndHealthcheckHeadless();
 
-    expect(first).toEqual({ durable: true, schemaReady: true, recovered: true });
+    expect(first).toEqual({ durable: true, schemaReady: true, recovered: false });
     expect(second).toEqual({ durable: true, schemaReady: true, recovered: false });
 
-    const quickCheckCalls = (db.getFirstAsync as jest.Mock).mock.calls.filter(([sql]) =>
+    const quickCheckCalls = getFirstAsync.mock.calls.filter(([sql]) =>
       String(sql).includes("quick_check")
     );
     expect(quickCheckCalls).toHaveLength(1);
 
-    const selectOneCalls = (db.getFirstAsync as jest.Mock).mock.calls.filter(
-      ([sql]) => sql === "SELECT 1"
-    );
+    const selectOneCalls = getFirstAsync.mock.calls.filter(([sql]) => sql === "SELECT 1");
     expect(selectOneCalls.length).toBeGreaterThanOrEqual(2);
   });
 
   it("initAndHealthcheckHeadless retourne durable/schemaReady cohérents", async () => {
-    const db = createFakeDb();
+    const { db } = createFakeDb();
     mockOpenDatabaseAsync.mockResolvedValue(db);
 
     const health = await trackingQueueStore.initAndHealthcheckHeadless();
 
     expect(health.durable).toBe(true);
     expect(health.schemaReady).toBe(true);
-    expect(health.recovered).toBe(true);
+    expect(health.recovered).toBe(false);
+  });
+
+  it("recovered=true uniquement après récupération NPE réussie", async () => {
+    const npeError = new Error(
+      "Call to function 'NativeDatabase.prepareAsync' has been rejected -> Caused by: java.lang.NullPointerException"
+    );
+    let openCount = 0;
+    mockOpenDatabaseAsync.mockImplementation(async () => {
+      openCount += 1;
+      if (openCount === 1) {
+        return createFakeDb({
+          runAsyncImpl: async () => {
+            throw npeError;
+          },
+        }).db;
+      }
+      return createFakeDb().db;
+    });
+
+    await trackingQueueStore.upsert(sampleRow("npe-rec"));
+    const health = await trackingQueueStore.initAndHealthcheckHeadless();
+    expect(health).toEqual({ durable: true, schemaReady: true, recovered: true });
+
+    const next = await trackingQueueStore.initAndHealthcheckHeadless();
+    expect(next.recovered).toBe(false);
   });
 });

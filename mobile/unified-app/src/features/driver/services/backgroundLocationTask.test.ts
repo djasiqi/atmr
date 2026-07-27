@@ -64,8 +64,22 @@ jest.mock("./driverTrackingQueue", () => ({
   },
 }));
 
+const mockInitAndHealthcheckHeadless = jest.fn<() => Promise<{
+  durable: boolean;
+  schemaReady: boolean;
+  recovered: boolean;
+}>>();
+
+jest.mock("./trackingQueueStore", () => ({
+  trackingQueueStore: {
+    initAndHealthcheckHeadless: (...args: unknown[]) => mockInitAndHealthcheckHeadless(...args),
+  },
+}));
+
+const mockDefineTask = jest.fn();
+
 jest.mock("expo-task-manager", () => ({
-  defineTask: jest.fn(),
+  defineTask: (...args: unknown[]) => mockDefineTask(...args),
   isTaskRegisteredAsync: () => mockIsTaskRegistered(),
 }));
 
@@ -73,6 +87,61 @@ jest.mock("expo-task-manager", () => ({
 const bgTask = require("./backgroundLocationTask") as typeof import("./backgroundLocationTask");
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const trackingRuntime = require("./trackingRuntime") as typeof import("./trackingRuntime");
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { driverTrackingQueue } = require("./driverTrackingQueue") as {
+  driverTrackingQueue: {
+    enqueue: jest.Mock;
+    getSnapshot: jest.Mock;
+    flush: jest.Mock;
+  };
+};
+
+type TaskHandler = (args: {
+  data?: { locations?: Array<{ timestamp?: number; coords: Record<string, number | null> }> };
+  error?: Error;
+}) => Promise<void>;
+
+function getDefinedTaskHandler(): TaskHandler {
+  bgTask.initializeBackgroundLocationTask();
+  const call = mockDefineTask.mock.calls.find(
+    (c) => c[0] === bgTask.BACKGROUND_LOCATION_TASK_NAME
+  );
+  if (!call || typeof call[1] !== "function") {
+    throw new Error("defineTask handler introuvable");
+  }
+  return call[1] as TaskHandler;
+}
+
+async function seedEligibleMissionContext(): Promise<void> {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const asyncStorage = require("@react-native-async-storage/async-storage") as {
+    getItem: jest.Mock;
+  };
+  asyncStorage.getItem.mockImplementation(async (key: string) => {
+    if (key === "@driver:bg_tracking_context_v1") {
+      return JSON.stringify({
+        missionId: 42,
+        missionStatus: "EN_ROUTE",
+        taskMode: "mission",
+        updatedAt: new Date().toISOString(),
+      });
+    }
+    return null;
+  });
+}
+
+function sampleLocation(i: number) {
+  return {
+    timestamp: Date.now() + i,
+    coords: {
+      latitude: 48.85 + i * 0.001,
+      longitude: 2.35 + i * 0.001,
+      accuracy: 10,
+      heading: null,
+      speed: null,
+    },
+  };
+}
 
 describe("backgroundLocationTask", () => {
   beforeEach(() => {
@@ -82,6 +151,25 @@ describe("backgroundLocationTask", () => {
     mockStop.mockReset();
     mockIsTaskRegistered.mockReset();
     mockEmit.mockReset();
+    mockDefineTask.mockClear();
+    mockInitAndHealthcheckHeadless.mockReset();
+    mockInitAndHealthcheckHeadless.mockResolvedValue({
+      durable: true,
+      schemaReady: true,
+      recovered: false,
+    });
+    driverTrackingQueue.enqueue.mockReset();
+    driverTrackingQueue.enqueue.mockResolvedValue(undefined);
+    driverTrackingQueue.getSnapshot.mockReset();
+    driverTrackingQueue.getSnapshot.mockResolvedValue({ queueDepth: 0 });
+    driverTrackingQueue.flush.mockReset();
+    driverTrackingQueue.flush.mockResolvedValue({
+      queueDepth: 0,
+      sent: 0,
+      backendAcked: 0,
+      socketEmitted: 0,
+      dropped: 0,
+    });
     mockGetFg.mockResolvedValue({ status: "granted", granted: true });
     mockGetBg.mockResolvedValue({ status: "granted", granted: true });
     mockRequestFg.mockResolvedValue({ granted: true });
@@ -90,6 +178,18 @@ describe("backgroundLocationTask", () => {
     mockIsTaskRegistered.mockResolvedValue(false);
     mockStart.mockResolvedValue(undefined);
     mockStop.mockResolvedValue(undefined);
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const asyncStorage = require("@react-native-async-storage/async-storage") as {
+      getItem: jest.Mock;
+      setItem: jest.Mock;
+      removeItem: jest.Mock;
+    };
+    asyncStorage.getItem.mockReset();
+    asyncStorage.getItem.mockResolvedValue(null);
+    asyncStorage.setItem.mockReset();
+    asyncStorage.setItem.mockResolvedValue(undefined);
+    asyncStorage.removeItem.mockReset();
+    asyncStorage.removeItem.mockResolvedValue(undefined);
     bgTask.__resetBackgroundLocationTaskStateForTests();
   });
 
@@ -219,5 +319,56 @@ describe("backgroundLocationTask", () => {
       "tracking.background.start_failed",
       expect.objectContaining({ failure_reason: "startup_timeout" })
     );
+  });
+
+  it("appelle le healthcheck exactement une fois avant enqueue/flush", async () => {
+    await seedEligibleMissionContext();
+    const handler = getDefinedTaskHandler();
+    await handler({ data: { locations: [sampleLocation(0), sampleLocation(1), sampleLocation(2)] } });
+
+    expect(mockInitAndHealthcheckHeadless).toHaveBeenCalledTimes(1);
+    expect(driverTrackingQueue.enqueue).toHaveBeenCalledTimes(3);
+    expect(driverTrackingQueue.flush).toHaveBeenCalled();
+  });
+
+  it("health KO → zéro enqueue, zéro flush", async () => {
+    await seedEligibleMissionContext();
+    mockInitAndHealthcheckHeadless.mockResolvedValueOnce({
+      durable: false,
+      schemaReady: false,
+      recovered: false,
+    });
+    const handler = getDefinedTaskHandler();
+    await handler({ data: { locations: [sampleLocation(0), sampleLocation(1)] } });
+
+    expect(mockInitAndHealthcheckHeadless).toHaveBeenCalledTimes(1);
+    expect(driverTrackingQueue.enqueue).not.toHaveBeenCalled();
+    expect(driverTrackingQueue.flush).not.toHaveBeenCalled();
+    expect(mockEmit).toHaveBeenCalledWith(
+      "sqlite_headless_init_failed",
+      expect.objectContaining({
+        durable: false,
+        schema_ready: false,
+        recovered: false,
+        task_name: bgTask.BACKGROUND_LOCATION_TASK_NAME,
+      })
+    );
+  });
+
+  it("health OK + 3 locations → 3 enqueue, un flush", async () => {
+    await seedEligibleMissionContext();
+    driverTrackingQueue.flush.mockResolvedValue({
+      queueDepth: 0,
+      sent: 3,
+      backendAcked: 3,
+      socketEmitted: 0,
+      dropped: 0,
+    });
+    const handler = getDefinedTaskHandler();
+    await handler({ data: { locations: [sampleLocation(0), sampleLocation(1), sampleLocation(2)] } });
+
+    expect(mockInitAndHealthcheckHeadless).toHaveBeenCalledTimes(1);
+    expect(driverTrackingQueue.enqueue).toHaveBeenCalledTimes(3);
+    expect(driverTrackingQueue.flush).toHaveBeenCalledTimes(1);
   });
 });

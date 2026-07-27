@@ -1,12 +1,11 @@
 """Classification des erreurs SQLAlchemy pour le consumer tracking ingest.
 
-Matrice P0 :
+Matrice P0 (fail-stop durcie) :
 - OperationalError / InterfaceError / DisconnectionError / Timeout → infra (retry puis fail-stop)
 - ProgrammingError → fail-stop immédiat (schéma / SQL cassé)
-- DataError attribuable au message → DLQ
-- IntegrityError unique location_event_id → duplicate idempotent
-- IntegrityError connue (données invalides) → DLQ
-- IntegrityError inconnue → fail-stop
+- DataError exacte connue attribuable au payload → DLQ
+- Toute IntegrityError → fail-stop (zéro DLQ ; duplicate nominal via ON CONFLICT seulement)
+- Erreur inconnue (hors SQLAlchemy classifiée) → None → fail-stop côté consumer
 """
 
 from __future__ import annotations
@@ -30,7 +29,6 @@ class DbErrorAction(str, Enum):
     INFRASTRUCTURE_RETRY = "infrastructure_retry"
     FAIL_STOP = "fail_stop"
     DLQ = "dlq"
-    IDEMPOTENT_DUPLICATE = "idempotent_duplicate"
 
 
 _INFRASTRUCTURE_DB_ERRORS = (
@@ -38,23 +36,6 @@ _INFRASTRUCTURE_DB_ERRORS = (
     InterfaceError,
     DisconnectionError,
     SQLAlchemyTimeoutError,
-)
-
-# Contraintes / messages IntegrityError considérés comme données message invalides.
-_KNOWN_INVALID_DATA_INTEGRITY_TOKENS = (
-    "check constraint",
-    "not-null constraint",
-    "foreign key constraint",
-    "violates check constraint",
-    "violates not-null constraint",
-    "violates foreign key constraint",
-)
-
-_LOCATION_EVENT_ID_UNIQUE_TOKENS = (
-    "location_event_id",
-    "uq_dle",
-    "driver_location_events",
-    "ix_dle_driver_event",
 )
 
 
@@ -69,18 +50,6 @@ def _iter_exception_chain(exc: BaseException):
 
 def _message_of(exc: BaseException) -> str:
     return str(exc).lower()
-
-
-def _is_location_event_id_unique_violation(exc: IntegrityError) -> bool:
-    msg = _message_of(exc)
-    if "unique" not in msg and "duplicate" not in msg:
-        return False
-    return any(token in msg for token in _LOCATION_EVENT_ID_UNIQUE_TOKENS)
-
-
-def _is_known_invalid_data_integrity(exc: IntegrityError) -> bool:
-    msg = _message_of(exc)
-    return any(token in msg for token in _KNOWN_INVALID_DATA_INTEGRITY_TOKENS)
 
 
 def _is_message_attributable_data_error(exc: DataError) -> bool:
@@ -103,17 +72,11 @@ def classify_db_error(exc: BaseException) -> DbErrorAction | None:
 
     Retourne None si ce n'est pas une erreur SQLAlchemy classifiée.
     """
-    # Priorité : parcourir la chaîne ; les types « plus spécifiques » d'abord
-    # via l'ordre des isinstance dans chaque nœud.
     for current in _iter_exception_chain(exc):
         if isinstance(current, ProgrammingError):
             return DbErrorAction.FAIL_STOP
 
         if isinstance(current, IntegrityError):
-            if _is_location_event_id_unique_violation(current):
-                return DbErrorAction.IDEMPOTENT_DUPLICATE
-            if _is_known_invalid_data_integrity(current):
-                return DbErrorAction.DLQ
             return DbErrorAction.FAIL_STOP
 
         if isinstance(current, DataError):

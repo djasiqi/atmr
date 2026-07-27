@@ -108,6 +108,8 @@ let schemaReady = false;
 /** true tant qu'un `PRAGMA quick_check` n'a pas encore été fait pour le handle courant
  * (ouverture à froid ou juste après une réouverture suite à NPE). */
 let needsDeepCheck = true;
+/** true uniquement après une récupération NPE réussie (consommé au prochain healthcheck). */
+let lastNpeRecovered = false;
 /** Uniquement pour les tests : force le chemin natif même sous Jest (bypass `allowMemoryBackend`). */
 let forceNativeForTests = false;
 
@@ -362,6 +364,7 @@ async function runSqliteOperation<T>(op: (db: SqliteDatabaseHandle) => Promise<T
     try {
       reopened = await getOrOpenDatabase();
       await reopened.getFirstAsync("SELECT 1");
+      lastNpeRecovered = true;
     } catch (reopenErr) {
       durableUnavailable = true;
       sqliteDb = null;
@@ -626,7 +629,8 @@ export const trackingQueueStore = {
    */
   async initAndHealthcheckHeadless(): Promise<TrackingQueueHealth> {
     return runSerialized(async () => {
-      const wasCold = needsDeepCheck || !sqliteDb;
+      const recovered = lastNpeRecovered;
+      lastNpeRecovered = false;
       const mode = await ensureBackendMode();
       if (mode !== "sqlite") {
         return { durable: false, schemaReady: false, recovered: false };
@@ -635,9 +639,9 @@ export const trackingQueueStore = {
         await runSqliteOperation((db) => db.getFirstAsync("SELECT 1"));
       } catch (err) {
         emitCriticalTelemetry("sqlite_headless_healthcheck_failed", { error: String(err) });
-        return { durable: false, schemaReady: false, recovered: wasCold };
+        return { durable: false, schemaReady: false, recovered };
       }
-      return { durable: true, schemaReady, recovered: wasCold };
+      return { durable: true, schemaReady, recovered };
     });
   },
 
@@ -716,18 +720,6 @@ export const trackingQueueStore = {
           if (ga !== gb) return ga - gb;
           return a.sequenceId - b.sequenceId;
         });
-    });
-  },
-
-  /** Transaction générique — conservée pour compat API externe (mutex + txn exclusive). */
-  async withTransaction(fn: () => Promise<void>): Promise<void> {
-    return runSerialized(async () => {
-      const mode = await ensureBackendMode();
-      if (mode !== "sqlite") {
-        await fn();
-        return;
-      }
-      await runSqliteOperation((db) => withExclusiveOrFallbackTransaction(db, () => fn()));
     });
   },
 
@@ -941,6 +933,7 @@ export const trackingQueueStore = {
     sqliteOpenPromise = null;
     schemaReady = false;
     needsDeepCheck = true;
+    lastNpeRecovered = false;
     mutexChain = Promise.resolve();
   },
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 from hmac import compare_digest
 from pathlib import Path
@@ -12,8 +13,19 @@ from sqlalchemy.engine import make_url
 
 def _repo_root() -> Path:
     """Racine monorepo (compose) — /app en conteneur backend, ou parents[2] en checkout."""
+    env_root = os.getenv("ATMR_REPO_ROOT")
+    if env_root:
+        candidate = Path(env_root)
+        if (candidate / "docker-compose.production.yml").is_file():
+            return candidate
     here = Path(__file__).resolve()
-    for candidate in (here.parents[2], here.parents[1], Path("/app"), Path.cwd()):
+    for candidate in (
+        here.parents[2],
+        here.parents[1],
+        Path("/repo"),
+        Path("/app"),
+        Path.cwd(),
+    ):
         if (candidate / "docker-compose.production.yml").is_file():
             return candidate
         if (candidate.parent / "docker-compose.production.yml").is_file():
@@ -127,8 +139,10 @@ def test_tracking_kafka_services_neutralize_inherited_dsn(compose_rel: str):
             val = _env_value(block, key)
             assert val is not None, f"{compose_rel}:{name} manque {key}"
             assert val in ("", '""'), f"{compose_rel}:{name}.{key} doit être vide"
-        assert "${POSTGRES_PASSWORD" not in block
-        assert "postgresql+psycopg://" not in block
+        # Pas d'URL interpolée avec user/password Compose
+        assert "postgresql+psycopg://${POSTGRES_USER" not in block
+        assert "postgresql+psycopg://${POSTGRES_PASSWORD" not in block
+        assert re.search(r"postgresql\+psycopg://\$\{POSTGRES_(USER|PASSWORD)", block) is None
 
 
 def test_compose_dsn_fixture_documents_neutralized_urls():
@@ -159,3 +173,116 @@ def test_kraft_ingest_consumer_neutralizes_dsn():
     assert _env_value(block, "DATABASE_URL") in ("", '""')
     assert _env_value(block, "POSTGRES_HOST") == "pgbouncer"
     assert _env_value(block, "SQLALCHEMY_DATABASE_URI") in ("", '""')
+
+
+def test_compose_config_json_fused_with_p0_hold_override(tmp_path):
+    """Compose config --format json fusionné (prod + kafka + network + p0-hold)."""
+    import json
+    import shutil
+    import subprocess
+
+    required = (
+        "docker-compose.production.yml",
+        "docker-compose.kafka.yml",
+        "docker-compose.kafka.atmr-network.yml",
+        "docker-compose.kafka.p0-hold.yml",
+    )
+    for rel in required:
+        if not (REPO_ROOT / rel).is_file():
+            pytest.skip(f"{rel} absent")
+
+    precomputed = os.getenv("ATMR_COMPOSE_CONFIG_JSON")
+    if precomputed:
+        data = json.loads(Path(precomputed).read_text(encoding="utf-8-sig"))
+    else:
+        if shutil.which("docker") is None:
+            pytest.skip(
+                "docker CLI indisponible "
+                "(définir ATMR_COMPOSE_CONFIG_JSON pour un config pré-généré)"
+            )
+
+        env_file = tmp_path / "compose-p0-test.env"
+        env_file.write_text(
+            "\n".join(
+                [
+                    "POSTGRES_USER=atmr_test",
+                    "POSTGRES_PASSWORD=fixture-not-a-real-secret",
+                    "POSTGRES_DB=atmr_test",
+                    "POSTGRES_SSLMODE=disable",
+                    "REDIS_PASSWORD=fixture-redis",
+                    "SECRET_KEY=fixture-secret-key-not-real",
+                    "JWT_SECRET_KEY=fixture-jwt-secret-not-real",
+                    "APP_ENCRYPTION_KEY_B64=Zml4dHVyZS1lbmNyeXB0aW9uLWtleS0zMg==",
+                    "INTERNAL_SERVICE_TOKEN=fixture-internal-token",
+                    "COMPOSE_PROJECT_NAME=atmr-p0-dsn-test",
+                    "KAFKA_TOPIC_DRIVER_LOCATION_RAW=driver.location.raw.v2",
+                    "KAFKA_TOPIC_DRIVER_LOCATION_PROCESSED=driver.location.processed.v2",
+                    "KAFKA_TOPIC_DRIVER_LOCATION_DLQ=driver.location.dlq.v2",
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        cmd = [
+            "docker",
+            "compose",
+            "--env-file",
+            str(env_file),
+            "--profile",
+            "kafka",
+            "-f",
+            "docker-compose.production.yml",
+            "-f",
+            "docker-compose.kafka.yml",
+            "-f",
+            "docker-compose.kafka.atmr-network.yml",
+            "-f",
+            "docker-compose.kafka.p0-hold.yml",
+            "config",
+            "--format",
+            "json",
+        ]
+        proc = subprocess.run(
+            cmd,
+            cwd=str(REPO_ROOT),
+            capture_output=True,
+            text=True,
+            timeout=120,
+            env={**os.environ, "COMPOSE_PROJECT_NAME": "atmr-p0-dsn-test"},
+            check=False,
+        )
+        if proc.returncode != 0:
+            pytest.fail(
+                "docker compose config a échoué "
+                f"(code={proc.returncode}): {proc.stderr[-2000:]}"
+            )
+        data = json.loads(proc.stdout)
+
+    services = data.get("services") or {}
+    consumer = services.get("tracking-kafka-consumer")
+    assert consumer is not None, "tracking-kafka-consumer absent du config fusionné"
+    env = consumer.get("environment") or {}
+
+    for key in _EMPTY_DSN_KEYS:
+        assert key in env, f"manque {key}"
+        assert env[key] in ("", None), f"{key} doit être vide, got {env[key]!r}"
+
+    assert env.get("POSTGRES_HOST") == "pgbouncer"
+    assert str(env.get("POSTGRES_PORT")) == "6432"
+    assert env.get("TRACKING_PERSIST_WITH_OUTBOX") in ("false", False)
+    assert env.get("TRACKING_INGEST_PERSIST_ENABLED") in ("true", True)
+    assert env.get("TRACKING_INGEST_ALLOW_REPUBLISH_ONLY") in ("false", False)
+    assert env.get("TRACKING_INGEST_SEEK_TO_END_ON_START") in ("false", False)
+    assert env.get("TRACKING_DLQ_FORCE_COMMIT_ON_FAILURE") in ("false", False)
+
+    fanout = services.get("tracking-processed-fanout")
+    assert fanout is not None
+    fanout_env = fanout.get("environment") or {}
+    assert fanout_env.get("TRACKING_PROCESSED_FANOUT_ENABLED") in ("false", False)
+
+    for val in env.values():
+        if isinstance(val, str) and "postgresql+psycopg://" in val:
+            assert "${POSTGRES_USER" not in val
+            assert "${POSTGRES_PASSWORD" not in val
+            assert "fixture-not-a-real-secret" not in val

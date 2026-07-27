@@ -609,14 +609,6 @@ class TrackingIngestConsumer:
                         exc_info=True,
                     )
 
-                if db_action == DbErrorAction.IDEMPOTENT_DUPLICATE:
-                    logger.info(
-                        "[tracking_consumer] unique location_event_id → duplicate idempotent"
-                    )
-                    self._commit_record(record)
-                    self._observe_e2e_latency(message_obj)
-                    return True
-
                 if db_action == DbErrorAction.FAIL_STOP:
                     _raise_fail_stop(
                         record,
@@ -651,6 +643,8 @@ class TrackingIngestConsumer:
                         error=exc,
                     )
 
+                # Hors allowlist (payload / DataError connue / PersistKafkaOutboxError) :
+                # transient Kafka ou erreur inconnue → retry puis fail-stop (jamais DLQ+commit).
                 transient = _is_transient_error(exc)
                 if transient and attempt < KAFKA_MAX_RETRIES:
                     sleep_s = (KAFKA_RETRY_BACKOFF_MS * attempt) / 1000.0
@@ -662,16 +656,14 @@ class TrackingIngestConsumer:
                     )
                     time.sleep(sleep_s)
                     continue
-                error_type = (
-                    "transient_exhausted" if transient else "definitive_failure"
-                )
-                return self._send_to_dlq_and_commit(
-                    record=record,
-                    key=key,
-                    source_message=message_obj,
+                _raise_fail_stop(
+                    record,
+                    reason=(
+                        "processed_publish_exhausted"
+                        if transient
+                        else "unclassified_error_fail_stop"
+                    ),
                     error=exc,
-                    retry_count=attempt,
-                    error_type=error_type,
                 )
         return False
 

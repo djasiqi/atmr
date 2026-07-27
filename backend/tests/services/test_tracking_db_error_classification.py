@@ -42,30 +42,31 @@ def test_programming_error_is_fail_stop():
     assert is_infrastructure_db_error(exc) is False
 
 
-def test_integrity_unknown_is_fail_stop():
+def test_integrity_any_is_fail_stop():
     exc = IntegrityError("stmt", {}, Exception("some obscure constraint xyz"))
     assert classify_db_error(exc) == DbErrorAction.FAIL_STOP
 
 
-def test_integrity_location_event_id_unique_is_duplicate():
+def test_integrity_location_event_id_unique_is_fail_stop():
+    """Duplicate nominal = ON CONFLICT uniquement ; IntegrityError remontée → fail-stop."""
     exc = IntegrityError(
         "stmt",
         {},
         Exception(
-            'duplicate key value violates unique constraint '
-            'on (driver_id, location_event_id)'
+            "duplicate key value violates unique constraint "
+            "on (driver_id, location_event_id)"
         ),
     )
-    assert classify_db_error(exc) == DbErrorAction.IDEMPOTENT_DUPLICATE
+    assert classify_db_error(exc) == DbErrorAction.FAIL_STOP
 
 
-def test_integrity_check_constraint_is_dlq():
+def test_integrity_check_constraint_is_fail_stop():
     exc = IntegrityError(
         "stmt",
         {},
         Exception("new row violates check constraint ck_lat_range"),
     )
-    assert classify_db_error(exc) == DbErrorAction.DLQ
+    assert classify_db_error(exc) == DbErrorAction.FAIL_STOP
 
 
 def test_data_error_message_attributable_is_dlq():
@@ -114,6 +115,23 @@ def _consumer_for_persist(monkeypatch):
     return consumer
 
 
+def _consumer_for_legacy_processed(monkeypatch):
+    monkeypatch.setattr(
+        "services.tracking.ingest_consumer.TRACKING_PERSIST_WITH_OUTBOX", False
+    )
+    monkeypatch.setattr(
+        "services.tracking.ingest_consumer.TRACKING_INGEST_PERSIST_ENABLED", True
+    )
+    monkeypatch.setattr("services.tracking.ingest_consumer.KAFKA_MAX_RETRIES", 2)
+    monkeypatch.setattr("services.tracking.ingest_consumer.KAFKA_RETRY_BACKOFF_MS", 1)
+    consumer = TrackingIngestConsumer()
+    consumer._commit_record = MagicMock()
+    consumer._send_to_dlq_and_commit = MagicMock(return_value=True)
+    consumer._observe_e2e_latency = MagicMock()
+    consumer._publish_with_ack = MagicMock()
+    return consumer
+
+
 def test_process_operational_exhausted_fail_stop_no_dlq_no_commit(monkeypatch):
     consumer = _consumer_for_persist(monkeypatch)
     calls = {"n": 0}
@@ -153,23 +171,7 @@ def test_process_programming_error_fail_stop_immediate(monkeypatch):
     consumer._send_to_dlq_and_commit.assert_not_called()
 
 
-def test_process_unknown_integrity_fail_stop_no_commit(monkeypatch):
-    consumer = _consumer_for_persist(monkeypatch)
-
-    def _boom(*_a, **_k):
-        raise IntegrityError("stmt", {}, Exception("obscure constraint abc"))
-
-    monkeypatch.setattr(
-        "services.tracking.persist_kafka_outbox.persist_driver_location_with_outbox_from_kafka",
-        _boom,
-    )
-    with pytest.raises(FatalTrackingConsumerError):
-        consumer._process_record(_valid_record())
-    consumer._commit_record.assert_not_called()
-    consumer._send_to_dlq_and_commit.assert_not_called()
-
-
-def test_process_location_event_id_unique_commits_without_dlq(monkeypatch):
+def test_process_any_integrity_fail_stop_no_commit(monkeypatch):
     consumer = _consumer_for_persist(monkeypatch)
 
     def _boom(*_a, **_k):
@@ -186,7 +188,66 @@ def test_process_location_event_id_unique_commits_without_dlq(monkeypatch):
         "services.tracking.persist_kafka_outbox.persist_driver_location_with_outbox_from_kafka",
         _boom,
     )
-    ok = consumer._process_record(_valid_record())
-    assert ok is True
-    consumer._commit_record.assert_called_once()
+    with pytest.raises(FatalTrackingConsumerError):
+        consumer._process_record(_valid_record())
+    consumer._commit_record.assert_not_called()
     consumer._send_to_dlq_and_commit.assert_not_called()
+
+
+def test_process_unknown_error_fail_stop_no_dlq_no_commit(monkeypatch):
+    consumer = _consumer_for_persist(monkeypatch)
+
+    def _boom(*_a, **_k):
+        raise RuntimeError("unexpected python bug")
+
+    monkeypatch.setattr(
+        "services.tracking.persist_kafka_outbox.persist_driver_location_with_outbox_from_kafka",
+        _boom,
+    )
+    with pytest.raises(FatalTrackingConsumerError) as ei:
+        consumer._process_record(_valid_record())
+    assert "unclassified_error_fail_stop" in str(ei.value)
+    consumer._commit_record.assert_not_called()
+    consumer._send_to_dlq_and_commit.assert_not_called()
+
+
+def test_process_processed_publish_exhausted_fail_stop_zero_commit(monkeypatch):
+    consumer = _consumer_for_legacy_processed(monkeypatch)
+    monkeypatch.setattr(
+        "services.tracking.ingest_persist.persist_driver_location_from_kafka",
+        lambda *_a, **_k: (
+            {
+                "driver_id": 7,
+                "payload": {"latitude": 46.2, "longitude": 6.1},
+                "source": "mobile",
+            },
+            SimpleNamespace(dedup_skipped=False, accept_status="persisted"),
+        ),
+    )
+    calls = {"n": 0}
+
+    def _boom(*_a, **_k):
+        calls["n"] += 1
+        raise TimeoutError("kafka broker timeout")
+
+    consumer._publish_with_ack = _boom
+    with pytest.raises(FatalTrackingConsumerError) as ei:
+        consumer._process_record(_valid_record())
+    assert "processed_publish_exhausted" in str(ei.value)
+    assert calls["n"] == 2
+    consumer._commit_record.assert_not_called()
+    consumer._send_to_dlq_and_commit.assert_not_called()
+
+
+def test_process_invalid_payload_dlq_and_commit(monkeypatch):
+    consumer = _consumer_for_persist(monkeypatch)
+    record = _valid_record()
+    record.value = {"driver_id": 7, "payload": {}, "source": "mobile"}
+    monkeypatch.setattr(
+        "services.tracking.ingest_consumer.TrackingIngestConsumer._is_valid",
+        lambda self, _msg: False,
+    )
+    ok = consumer._process_record(record)
+    assert ok is True
+    consumer._send_to_dlq_and_commit.assert_called_once()
+    consumer._commit_record.assert_not_called()

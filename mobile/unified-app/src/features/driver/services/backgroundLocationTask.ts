@@ -444,6 +444,9 @@ function defineTaskIfNeeded() {
         emitDriverTelemetry("sqlite_headless_init_failed", {
           source: "driver.services.backgroundLocationTask",
           task_name: BACKGROUND_LOCATION_TASK_NAME,
+          durable: health.durable,
+          schema_ready: health.schemaReady,
+          recovered: health.recovered,
         });
         return;
       }
@@ -458,17 +461,6 @@ function defineTaskIfNeeded() {
         mission_id: context.missionId,
         task_mode: context.taskMode,
       });
-
-      const health = await trackingQueueStore.initAndHealthcheckHeadless();
-      if (!health.durable || !health.schemaReady) {
-        emitDriverTelemetry("sqlite_headless_init_failed", {
-          task_name: BACKGROUND_LOCATION_TASK_NAME,
-          durable: health.durable,
-          schema_ready: health.schemaReady,
-          recovered: health.recovered,
-        });
-        return;
-      }
 
       const mode = resolveBackgroundTrackingMode(
         context.missionStatus,

@@ -145,7 +145,12 @@ export type DriverTelemetryEventName =
   | "driver.mission_bar.ios.live_activity_unavailable"
   | "company.fleet.directions.failed"
   | "company.fleet.directions.exception"
-  | "sqlite_headless_init_failed";
+  | "sqlite_headless_init_failed"
+  | "tracking.background.task.stop_skipped"
+  | "tracking.background.task.stop_failed"
+  | "tracking.background.fgs_recover"
+  | "tracking.background.wake_restart"
+  | "tracking.background.wake_restart_failed";
 
 export type DriverTelemetryPayload = {
   source: string;

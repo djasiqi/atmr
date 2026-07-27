@@ -1,0 +1,19 @@
+# Override P0 HOLD — prioritaire sur .env.production / interpolations kafka.
+# Usage (après production + kafka + network) :
+#   docker compose --env-file .env.production \
+#     -f docker-compose.production.yml \
+#     -f docker-compose.kafka.yml \
+#     -f docker-compose.kafka.atmr-network.yml \
+#     -f docker-compose.kafka.p0-hold.yml \
+#     ...
+services:
+  tracking-kafka-consumer:
+    environment:
+      TRACKING_PERSIST_WITH_OUTBOX: "false"
+      TRACKING_INGEST_PERSIST_ENABLED: "true"
+      TRACKING_INGEST_ALLOW_REPUBLISH_ONLY: "false"
+      TRACKING_INGEST_SEEK_TO_END_ON_START: "false"
+      TRACKING_DLQ_FORCE_COMMIT_ON_FAILURE: "false"
+  tracking-processed-fanout:
+    environment:
+      TRACKING_PROCESSED_FANOUT_ENABLED: "false"
