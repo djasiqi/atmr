@@ -4,16 +4,40 @@
 
 Le correctif PR1/PR2 est **JS** mais requiert un **build store** pour :
 - embarquer le bundle tracking dès le premier lancement ;
-- activer `EXPO_PUBLIC_OTA_AUTO_RELOAD_ENABLED=1` (flag compile-time, non activable par OTA seul).
+- activer `EXPO_PUBLIC_OTA_AUTO_RELOAD_ENABLED=1` (flag compile-time, non activable par OTA seul) ;
+- embarquer réellement le module natif **ExpoSQLite** (plugin déjà dans `app.json` — OTA seule insuffisante).
 
 | Étape | Commande (depuis `mobile/unified-app`) |
 |-------|----------------------------------------|
 | Préflight | `npm run build:prod:preflight` |
 | Build store | `npm run build:prod:all` (ou `-p android` / `-p ios`) |
 | Submit | `npm run submit:prod:android` puis `npm run submit:prod:ios` |
-| OTA post-store | `npm run update:prod:all` (runtime `1.0.6` requis sur le device) |
+| OTA post-store | `npm run update:prod:all` (runtime aligné sur la version store) |
 
-**Version cible** : `1.0.6` (`runtimeVersion` = `1.0.6`). Les devices restés en `1.0.5` ne reçoivent pas les OTA de cette lignée.
+**Version cible** : > `1.0.8` (`runtimeVersion` aligné). Le binaire 1.0.8 conserve un mode dégradé mémoire/AsyncStorage si ExpoSQLite est absent.
+
+### ✅ **Implémenté** : sémantique ACK UI (bridge)
+
+- Helper `applyBridgeAckStatus` / `bridgeAckSemantics` : Confirmé seulement si `attemptSeq` **et** `eventId` matchent + statut ∈ {accepted, duplicate, ingested, persisted}.
+- Labels : Envoyé / Mis en file / Confirmé / Partiellement reçu / Non confirmé.
+- Parseur HTTP conserve `ingested_event_ids` / `retry_event_ids` ; `partially_ingested` fail-closed sans listes.
+- Flush result expose `lastBackendAckRequestEventId` / `lastBackendAckServerEventId` (pas d’invention d’ID serveur).
+
+### Critères PASS ExpoSQLite (release native)
+
+```text
+requireOptionalNativeModule("ExpoSQLite") retourne un module
+aucun sqlite_native_module_missing dans logcat
+driver_tracking_queue_v5.db s’ouvre
+une position survit au force-stop
+la position est toujours présente après redémarrage
+```
+
+Ne pas utiliser `libexpo-sqlite.so` comme seul critère (packaging Expo variable).
+
+### P1 — Qualité GPS (hors scope P0 restauration carte)
+
+Présence flotte (`availability_presence`) utilise volontairement `Location.Accuracy.Balanced` ; mission live utilise `High`. Ne passer la présence en High qu’après restauration du flux carte + arbitrage batterie vs précision flotte.
 
 ## Cause racine incident ASSIGNED (juin 2026)
 
@@ -134,11 +158,101 @@ Si les positions ne persistent pas malgré des HTTP 202 :
 
 ### Activation Kafka avec persistance (post-patch)
 
-Activer **simultanément** : `KAFKA_ENABLED=true`, `TRACKING_INGEST_ASYNC_ENABLED=true`, `TRACKING_PROCESSED_FANOUT_ENABLED=true`, `TRACKING_INGEST_PERSIST_ENABLED=true`.
+Activer **simultanément** : `KAFKA_ENABLED=true`, `TRACKING_INGEST_ASYNC_ENABLED=true`, `TRACKING_INGEST_PERSIST_ENABLED=true`, `WS_KAFKA_CONSUMER_ENABLED=true`.
 
-**Replay au démarrage (R7)** : `TRACKING_INGEST_SEEK_TO_END_ON_START=true` au premier deploy prod pour ignorer le backlog `driver.location.raw` (rétention ~2 h). Staging : garder `earliest` pour rattrapage.
+> **P0 restauration carte (mismatch topics `.v2`)** : ne pas activer / recreate `tracking-processed-fanout` pendant la validation — autorité unique `processed.v2 → ws-service`. Voir section suivante.
+
+**Replay au démarrage (R7 — hors récupération backlog)** : `TRACKING_INGEST_SEEK_TO_END_ON_START=true` uniquement pour un bootstrap volontaire qui **ignore** un backlog. Staging / rattrapage : garder `earliest`.
 
 **Dégradation acceptée (R3)** : persist OK mais fanout KO (double échec DLQ) → carte gelée jusqu'au watchdog frontend (~60 s).
+
+### ✅ **Implémenté** : Runbook P0 — mismatch topics `raw` vs `raw.v2` (récupération contrôlée)
+
+Cause : littéraux `driver.location.raw` (etc.) dans `docker-compose.kafka.yml` écrasaient `${KAFKA_TOPIC_*}=*.v2` après merge avec `docker-compose.production.yml`. Correctif code : interpolation `${VAR}` + tests `scripts/test_kafka_compose_topic_interpolation.py`.
+
+**Statuts** : GO code / GO runbook / **HOLD ops** jusqu’à déploiement contrôlé / **NO-GO prod** jusqu’à gate E2E ×3 verte.
+
+#### Préflight topics (par service)
+
+```bash
+eval "$(./scripts/kafka-env-effective.sh)"
+docker compose --env-file .env.production \
+  -f docker-compose.production.yml \
+  -f docker-compose.kafka.yml \
+  -f docker-compose.kafka.atmr-network.yml \
+  --profile kafka config > /tmp/atmr-compose-effective.yml
+
+grep -A35 "tracking-kafka-consumer:" /tmp/atmr-compose-effective.yml \
+  | grep "KAFKA_TOPIC_DRIVER_LOCATION"
+# Attendu RAW/PROCESSED/VALIDATED/DLQ = *.v2
+```
+
+#### Mode de persistance effectif (obligatoire)
+
+Dans le compose résolu **et** `printenv` du conteneur `tracking-kafka-consumer` :
+
+| Variable | Legacy `.v2` attendu |
+|----------|----------------------|
+| `TRACKING_PERSIST_WITH_OUTBOX` | `false` |
+| `TRACKING_INGEST_PERSIST_ENABLED` | `true` |
+| `TRACKING_INGEST_ALLOW_REPUBLISH_ONLY` | `false` |
+| `TRACKING_INGEST_SEEK_TO_END_ON_START` | `false` |
+| `TRACKING_DLQ_FORCE_COMMIT_ON_FAILURE` | `false` |
+
+Décision : **carte visible + PostgreSQL vide = FAIL P0**. `processed.v2` seul ne ferme pas le P0.
+
+#### Snapshot préalable (avant toute modif ops)
+
+Enregistrer : SHA Git, hash compose fusionné, image ID ingest, topics effectifs, offsets earliest/latest + groupés, compteurs PG, dernière position PG/Redis chauffeur de validation, état/replicas fanout.
+
+#### Stop fanout legacy (avant recreate ingest)
+
+```bash
+docker compose --env-file .env.production \
+  -f docker-compose.production.yml \
+  -f docker-compose.kafka.yml \
+  -f docker-compose.kafka.atmr-network.yml \
+  --profile kafka stop tracking-processed-fanout
+# Vérifier stopped/exited — interdire tout `up` global pendant le P0
+```
+
+Autorité P0 : `processed.v2 → ws-service → Redis/Socket.IO`.
+
+#### Fenêtre récupérable (rétention 72 h)
+
+```bash
+# earliest (-2) / latest (-1)
+kafka-run-class kafka.tools.GetOffsetShell \
+  --broker-list kafka-broker-1:29092 \
+  --topic driver.location.raw.v2 --time -2
+kafka-run-class kafka.tools.GetOffsetShell \
+  --broker-list kafka-broker-1:29092 \
+  --topic driver.location.raw.v2 --time -1
+```
+
+Rapport : début incident estimé ; plus ancien événement encore disponible ; fenêtre récupérable ; fenêtre éventuellement perdue par expiration ; volume approximatif.
+
+Formulation : *Aucune position encore présente dans `raw.v2` ne sera volontairement abandonnée.*  
+`TRACKING_INGEST_SEEK_TO_END_ON_START=false` **toute** la récupération. Si backlog élevé : un seul replica ingest + surveillance CPU/PG/DLQ/lag.
+
+#### Recreate ciblé + rollback
+
+1. Recréer **uniquement** `tracking-kafka-consumer` (`--force-recreate`).
+2. Replay `earliest` ; arrêter si restart loop, `FatalTrackingConsumerError`, DLQ impossible, PG en panne, offsets figés, saturation.
+3. Gate E2E (ci-dessous) ; puis recreate `kafka-dlq-consumer`.
+4. Fanout legacy reste **stopped**.
+
+**Rollback autorisé** : stop ingest ; backend continue sur `raw.v2` ; fanout stopped ; conserver offsets/preuves ; corriger puis relancer le même groupe.  
+**Rollback interdit** : revenir à `driver.location.raw`, reset offsets, `seek_to_end`, purge `raw.v2`/Redis/PG, réactiver fanout pour masquer.
+
+#### Gate E2E ×3 (fermeture P0 serveur)
+
+≥ 3 positions **nouvelles** post-déploiement (`driver_id` / `company_id` de validation) :
+
+- obligatoires : `location_event_id` distinct, `recorded_at` croissant, lat/lon valides, même driver/company, même chemin, Redis **et** PG sur le 3ᵉ `location_event_id` ;
+- pour chacune : HTTP 202 → `raw.v2` → offset committé → PG → `processed.v2` → Redis (même id) → un seul `driver_location_update` → marker ;
+- `sequence_id` : si présent (Socket.IO) → strictement croissant + session cohérente ; si absent (HTTP présence) → absence documentée, **non bloquant** P0 ;
+- fanout stopped ; lag ↓ ; pas de reset/seek ; pas d’écrasement du récent ; DLQ vide ou expliquée.
 
 ### Métriques Kafka persist
 

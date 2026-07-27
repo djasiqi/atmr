@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import type { DriverLocationAckStatus } from "../types";
 import { getTrackingSnapshot, subscribeTrackingSnapshot } from "../tracking";
 
 export type TrackingRuntimeMode =
@@ -12,6 +13,12 @@ export type TrackingState = {
   lastUpdate?: number;
   lastAckAt?: number;
   lastAckIsQueued?: boolean;
+  lastAckStatus?: DriverLocationAckStatus | null;
+  lastAckError?: string | null;
+  currentAttemptSeq: number;
+  lastAckAttemptSeq?: number | null;
+  currentAttemptEventId?: string | null;
+  lastAckEventId?: string | null;
   queueDepth: number;
   accuracy?: number;
 };
@@ -38,6 +45,12 @@ function mapSnapshotToTrackingState(
         : undefined
       : undefined,
     lastAckIsQueued: snapshot.lastAckIsQueued === true,
+    lastAckStatus: snapshot.lastAckStatus,
+    lastAckError: snapshot.lastAckError,
+    currentAttemptSeq: snapshot.currentAttemptSeq,
+    lastAckAttemptSeq: snapshot.lastAckAttemptSeq,
+    currentAttemptEventId: snapshot.currentAttemptEventId,
+    lastAckEventId: snapshot.lastAckEventId,
     queueDepth: snapshot.queueDepth,
     accuracy: undefined,
   };
@@ -53,6 +66,12 @@ function trackingSnapshotsEqual(
     a.lastSentAt === b.lastSentAt &&
     a.lastAckAt === b.lastAckAt &&
     a.lastAckIsQueued === b.lastAckIsQueued &&
+    a.lastAckStatus === b.lastAckStatus &&
+    a.lastAckError === b.lastAckError &&
+    a.currentAttemptSeq === b.currentAttemptSeq &&
+    a.lastAckAttemptSeq === b.lastAckAttemptSeq &&
+    a.currentAttemptEventId === b.currentAttemptEventId &&
+    a.lastAckEventId === b.lastAckEventId &&
     a.queueDepth === b.queueDepth &&
     a.missionId === b.missionId
   );
@@ -69,4 +88,3 @@ export function useTrackingState(): TrackingState {
 
   return useMemo(() => mapSnapshotToTrackingState(snapshot), [snapshot]);
 }
-

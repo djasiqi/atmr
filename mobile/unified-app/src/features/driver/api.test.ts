@@ -6,6 +6,7 @@ import {
   getDriverCompletedTrips,
   getDriverProfile,
   getDriverRoute,
+  sendDriverLocation,
   triggerDriverTestPush,
   updateDriverMissionStatus,
   updateDriverPhoto,
@@ -132,6 +133,39 @@ describe("driver secondary api contracts", () => {
         headers: expect.objectContaining({ "X-Idempotency-Key": "k3" }),
       })
     );
+  });
+
+  it("parses ingested_event_ids and retry_event_ids from location ACK", async () => {
+    mockPut.mockResolvedValueOnce({
+      data: {
+        ack_status: "partially_ingested",
+        tracking_event_id: "evt-1",
+        ingested_event_ids: ["a"],
+        retry_event_ids: ["b"],
+      },
+    });
+    const ack = await sendDriverLocation({
+      latitude: 46.2,
+      longitude: 6.1,
+      trackingEventId: "evt-1",
+    });
+    expect(ack.ack_status).toBe("partially_ingested");
+    expect(ack.ingested_event_ids).toEqual(["a"]);
+    expect(ack.retry_event_ids).toEqual(["b"]);
+  });
+
+  it("fail-closes on invalid ack event id lists", async () => {
+    mockPut.mockResolvedValueOnce({
+      data: {
+        ack_status: "partially_ingested",
+        ingested_event_ids: [1, "ok"],
+      },
+    });
+    await expect(
+      sendDriverLocation({ latitude: 46.2, longitude: 6.1 })
+    ).rejects.toMatchObject({
+      message: expect.stringMatching(/ack_event_ids_invalid/),
+    });
   });
 });
 

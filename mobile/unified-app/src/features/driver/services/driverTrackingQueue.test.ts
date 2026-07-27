@@ -2,7 +2,12 @@ import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { isFeatureEnabled } from "../../../core/featureFlags/registry";
 
 const mockSendDriverLocation = jest.fn<
-  (payload: unknown) => Promise<{ ack_status: "accepted" | "duplicate" | "stale" | "ignored" | "rejected" }>
+  (payload: unknown) => Promise<{
+    ack_status: string;
+    tracking_event_id?: string | null;
+    ingested_event_ids?: string[] | null;
+    retry_event_ids?: string[] | null;
+  }>
 >();
 const mockSendDriverLocationBatch = jest.fn<(payload: unknown[]) => boolean>();
 const mockIsDriverSocketReady = jest.fn<() => boolean>().mockReturnValue(true);
@@ -53,7 +58,7 @@ const { driverTrackingQueue } = require("./driverTrackingQueue") as typeof impor
 describe("driverTrackingQueue", () => {
   const mockFF = isFeatureEnabled as jest.MockedFunction<typeof isFeatureEnabled>;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     mockAsyncStorageGetItem.mockReset();
     mockAsyncStorageSetItem.mockReset();
     mockSendDriverLocation.mockReset();
@@ -71,6 +76,7 @@ describe("driverTrackingQueue", () => {
     mockAsyncStorageSetItem.mockResolvedValue(undefined);
     mockSendDriverLocation.mockResolvedValue({ ack_status: "accepted" });
     mockSendDriverLocationBatch.mockReturnValue(false);
+    await driverTrackingQueue.resetForTests();
   });
 
   it("keeps socket emitted item until backend ack", async () => {
@@ -227,5 +233,85 @@ describe("driverTrackingQueue", () => {
         (call) => call[0] === "tracking.queue.transport_unblock"
       )
     ).toBe(true);
+  });
+
+  it("preserves exact ack_status and request/server event ids", async () => {
+    const item = await driverTrackingQueue.enqueue({
+      missionId: 7,
+      appState: "active",
+      locationMode: "availability_presence",
+      payload: {
+        latitude: 46.1,
+        longitude: 6.1,
+        missionId: 7,
+        locationMode: "availability_presence",
+      },
+    });
+    mockSendDriverLocation.mockResolvedValueOnce({
+      ack_status: "ingested",
+      tracking_event_id: item.id,
+    });
+    mockSendDriverLocationBatch.mockReturnValue(false);
+    const flush = await driverTrackingQueue.flush({
+      ackStaleMs: 60_000,
+      networkProfile: "normal",
+      forceHttpFallback: true,
+    });
+    expect(flush.lastBackendAckStatus).toBe("ingested");
+    expect(flush.lastBackendAckRequestEventId).toBe(item.id);
+    expect(flush.lastBackendAckServerEventId).toBe(item.id);
+  });
+
+  it("fail-closes when server tracking_event_id mismatches item id", async () => {
+    await driverTrackingQueue.enqueue({
+      missionId: 8,
+      appState: "active",
+      locationMode: "availability_presence",
+      payload: {
+        latitude: 46.1,
+        longitude: 6.1,
+        missionId: 8,
+        locationMode: "availability_presence",
+      },
+    });
+    mockSendDriverLocation.mockResolvedValueOnce({
+      ack_status: "accepted",
+      tracking_event_id: "other-id",
+    });
+    mockSendDriverLocationBatch.mockReturnValue(false);
+    const flush = await driverTrackingQueue.flush({
+      ackStaleMs: 60_000,
+      networkProfile: "normal",
+      forceHttpFallback: true,
+    });
+    expect(flush.backendAcked).toBe(0);
+    expect(flush.queueDepth).toBe(1);
+    expect(flush.lastBackendAckServerEventId).toBe("other-id");
+  });
+
+  it("keeps item on partially_ingested without lists", async () => {
+    await driverTrackingQueue.enqueue({
+      missionId: 9,
+      appState: "active",
+      locationMode: "availability_presence",
+      payload: {
+        latitude: 46.1,
+        longitude: 6.1,
+        missionId: 9,
+        locationMode: "availability_presence",
+      },
+    });
+    mockSendDriverLocation.mockResolvedValueOnce({
+      ack_status: "partially_ingested",
+    });
+    mockSendDriverLocationBatch.mockReturnValue(false);
+    const flush = await driverTrackingQueue.flush({
+      ackStaleMs: 60_000,
+      networkProfile: "normal",
+      forceHttpFallback: true,
+    });
+    expect(flush.backendAcked).toBe(0);
+    expect(flush.queueDepth).toBe(1);
+    expect(flush.lastBackendAckStatus).toBe("partially_ingested");
   });
 });

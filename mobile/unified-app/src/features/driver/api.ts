@@ -219,6 +219,21 @@ export async function updateDriverMissionStatus(
   });
 }
 
+/** Valide ingested_event_ids / retry_event_ids (fail-closed si mal formés). */
+export function asAckStringArray(value: unknown): string[] | null {
+  if (value == null) return null;
+  if (!Array.isArray(value)) {
+    throw new Error("ack_event_ids_invalid");
+  }
+  const values = value.filter(
+    (item): item is string => typeof item === "string" && item.trim().length > 0
+  );
+  if (values.length !== value.length) {
+    throw new Error("ack_event_ids_invalid");
+  }
+  return values;
+}
+
 export async function sendDriverLocation(payload: DriverLocationPayload): Promise<DriverLocationAck> {
   return runWithCircuitBreaker("tracking_http", async () => {
     const { data } = await apiClient.put("/driver/me/location", {
@@ -247,7 +262,11 @@ export async function sendDriverLocation(payload: DriverLocationPayload): Promis
       queued?: unknown;
       tracking_event_id?: unknown;
       trace_id?: unknown;
+      ingested_event_ids?: unknown;
+      retry_event_ids?: unknown;
     };
+    const ingestedEventIds = asAckStringArray(ackBody.ingested_event_ids);
+    const retryEventIds = asAckStringArray(ackBody.retry_event_ids);
     const acceptStatus =
       typeof ackBody.accept_status === "string" ? ackBody.accept_status : null;
     if (acceptStatus === "accepted_async" || ackBody.queued === true) {
@@ -260,6 +279,8 @@ export async function sendDriverLocation(payload: DriverLocationPayload): Promis
             ? String(ackBody.tracking_event_id)
             : null,
         trace_id: typeof ackBody.trace_id === "string" ? String(ackBody.trace_id) : null,
+        ingested_event_ids: ingestedEventIds,
+        retry_event_ids: retryEventIds,
       };
     }
     // Phase 0A : absence / valeur inconnue → erreur (retry), jamais « accepted » artificiel
@@ -292,6 +313,8 @@ export async function sendDriverLocation(payload: DriverLocationPayload): Promis
           ? String(ackBody.tracking_event_id)
           : null,
       trace_id: typeof ackBody.trace_id === "string" ? String(ackBody.trace_id) : null,
+      ingested_event_ids: ingestedEventIds,
+      retry_event_ids: retryEventIds,
     };
   });
 }

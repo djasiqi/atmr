@@ -2,7 +2,7 @@ import * as Sentry from "@sentry/react-native";
 import { AppState, AppStateStatus, Platform } from "react-native";
 import * as Location from "expo-location";
 import { sendDriverLocation } from "../api/driverHttp";
-import { DriverMissionStatus, type DriverMission } from "../types";
+import { DriverMissionStatus, type DriverMission, type DriverLocationAckStatus } from "../types";
 import { isTrackingActiveStatus } from "../domain/status";
 import { resolveMissionTrackingMode } from "../domain/resolveMissionTrackingMode";
 import { emitDriverTelemetry } from "../../../core/observability/driverTelemetry";
@@ -13,6 +13,7 @@ import { realtimeManager } from "../../../core/realtime/realtimeManager";
 import { TrackingManager } from "../../../core/tracking/trackingManager";
 import { resolveTrackingCadence, TrackingNetworkProfile } from "../../../core/tracking/cadenceResolver";
 import { driverTrackingQueue, DriverTrackingMode } from "./driverTrackingQueue";
+import { resolveBridgeAckFields } from "./bridgeAckSemantics";
 import { hideMissionBarAndroid } from "../missionBarAndroid";
 import { stopMissionLiveActivity } from "../missionBarIOS";
 import {
@@ -132,6 +133,13 @@ type TrackingBridgeState = {
   lastSentAt: string | null;
   lastAckAt: string | null;
   lastAckIsQueued: boolean;
+  lastAckStatus: DriverLocationAckStatus | null;
+  lastAckError: string | null;
+  bridgeLastAttemptAt: string | null;
+  currentAttemptSeq: number;
+  lastAckAttemptSeq: number | null;
+  currentAttemptEventId: string | null;
+  lastAckEventId: string | null;
   lastBackendAckLatencyMs: number | null;
   queueDepth: number;
   flushPathUsed: "http_fallback" | "socket_batch" | null;
@@ -167,6 +175,12 @@ export type DriverTrackingBridgeSnapshot = {
   lastSentAt: string | null;
   lastAckAt: string | null;
   lastAckIsQueued: boolean;
+  lastAckStatus: DriverLocationAckStatus | null;
+  lastAckError: string | null;
+  currentAttemptSeq: number;
+  lastAckAttemptSeq: number | null;
+  currentAttemptEventId: string | null;
+  lastAckEventId: string | null;
   queueDepth: number;
   flushPathUsed: "http_fallback" | "socket_batch" | null;
   networkProfile: TrackingNetworkProfile;
@@ -187,6 +201,13 @@ const state: TrackingBridgeState = {
   lastSentAt: null,
   lastAckAt: null,
   lastAckIsQueued: false,
+  lastAckStatus: null,
+  lastAckError: null,
+  bridgeLastAttemptAt: null,
+  currentAttemptSeq: 0,
+  lastAckAttemptSeq: null,
+  currentAttemptEventId: null,
+  lastAckEventId: null,
   lastBackendAckLatencyMs: null,
   queueDepth: 0,
   flushPathUsed: null,
@@ -229,12 +250,18 @@ function buildTrackingBridgeSnapshot(): DriverTrackingBridgeSnapshot {
     lastSentAt: state.lastSentAt,
     lastAckAt: state.lastAckAt,
     lastAckIsQueued: state.lastAckIsQueued,
+    lastAckStatus: state.lastAckStatus,
+    lastAckError: state.lastAckError,
+    currentAttemptSeq: state.currentAttemptSeq,
+    lastAckAttemptSeq: state.lastAckAttemptSeq,
+    currentAttemptEventId: state.currentAttemptEventId,
+    lastAckEventId: state.lastAckEventId,
     queueDepth: state.queueDepth,
     flushPathUsed: state.flushPathUsed,
     networkProfile: state.networkProfile,
     lastWatchAt: state.lastWatchAtMs ? new Date(state.lastWatchAtMs).toISOString() : null,
     lastPosition: readDriverLastKnownPosition(),
-    lastAttemptAt: managerSnapshot.lastAttemptAt,
+    lastAttemptAt: state.bridgeLastAttemptAt ?? managerSnapshot.lastAttemptAt,
     consecutiveFailures: managerSnapshot.consecutiveFailures,
     backoffUntilMs: managerSnapshot.backoffUntilMs,
   };
@@ -245,6 +272,40 @@ function notifyTrackingBridgeListeners() {
   trackingBridgeListeners.forEach((listener) => {
     listener(snapshot);
   });
+}
+
+function beginBridgeAttempt(eventId: string): number {
+  const attemptSeq = state.currentAttemptSeq + 1;
+  state.currentAttemptSeq = attemptSeq;
+  state.currentAttemptEventId = eventId;
+  state.bridgeLastAttemptAt = new Date().toISOString();
+  state.lastAckError = null;
+  return attemptSeq;
+}
+
+function applyBridgeAckStatus(
+  ackStatus: DriverLocationAckStatus | null,
+  ackAt: string | number | null,
+  attemptSeq: number,
+  eventId: string
+): boolean {
+  if (ackStatus == null) return false;
+  if (attemptSeq !== state.currentAttemptSeq) return false;
+  if (eventId !== state.currentAttemptEventId) return false;
+  const ackAtIso =
+    typeof ackAt === "number"
+      ? new Date(ackAt).toISOString()
+      : ackAt ?? new Date().toISOString();
+  const fields = resolveBridgeAckFields(ackStatus, ackAtIso);
+  state.lastAckAttemptSeq = attemptSeq;
+  state.lastAckEventId = eventId;
+  state.lastAckStatus = fields.lastAckStatus;
+  state.lastAckError = fields.lastAckError;
+  state.lastAckIsQueued = fields.lastAckIsQueued;
+  if (fields.lastAckAt != null) {
+    state.lastAckAt = fields.lastAckAt;
+  }
+  return true;
 }
 
 function getSelfHealSlice(): SelfHealBridgeSlice {
@@ -597,7 +658,7 @@ async function flushPoint(appState: AppStateStatus) {
   state.lastFixProducedAtMs = Date.now();
   recordTrackingCircuitSuccess();
   const cadence = getCadenceForTick(appState, mode);
-  await driverTrackingQueue.enqueue({
+  const enqueuedItem = await driverTrackingQueue.enqueue({
     missionId: state.missionId,
     appState,
     locationMode: payloadMode,
@@ -613,6 +674,7 @@ async function flushPoint(appState: AppStateStatus) {
       locationMode: payloadMode,
     },
   });
+  const attemptSeq = beginBridgeAttempt(enqueuedItem.id);
   const flushResult = await driverTrackingQueue.flush({
     ackStaleMs: cadence.ackStaleMs,
     networkProfile: cadence.networkProfile,
@@ -620,11 +682,23 @@ async function flushPoint(appState: AppStateStatus) {
   });
   state.queueDepth = flushResult.queueDepth;
   state.flushPathUsed = flushResult.flushPathUsed;
-  if (flushResult.backendAcked > 0 && flushResult.lastBackendAckAt) {
-    state.lastAckAt = new Date(flushResult.lastBackendAckAt).toISOString();
-    state.lastAckIsQueued = flushResult.lastBackendAckStatus === "queued";
-    state.lastBackendAckLatencyMs =
-      flushResult.lastBackendAckAt - Date.parse(nowIso);
+  const ackMatchesCurrentPoint =
+    flushResult.lastBackendAckRequestEventId === enqueuedItem.id;
+  if (
+    ackMatchesCurrentPoint &&
+    flushResult.lastBackendAckStatus != null &&
+    flushResult.lastBackendAckAt != null
+  ) {
+    applyBridgeAckStatus(
+      flushResult.lastBackendAckStatus,
+      flushResult.lastBackendAckAt,
+      attemptSeq,
+      enqueuedItem.id
+    );
+    if (state.lastAckAt) {
+      state.lastBackendAckLatencyMs =
+        flushResult.lastBackendAckAt - Date.parse(nowIso);
+    }
   }
 
   const lastAckMs = state.lastAckAt ? Date.parse(state.lastAckAt) : null;
@@ -665,19 +739,39 @@ async function flushPoint(appState: AppStateStatus) {
   const shouldSkipDuplicateFallback =
     state.lastHttpFallbackTrackingEventId === fallbackTrackingEventId;
   if (shouldFallback && !shouldSkipDuplicateFallback) {
-    await sendDriverLocation({
-      latitude: position.coords.latitude,
-      longitude: position.coords.longitude,
-      accuracy: position.coords.accuracy ?? undefined,
-      heading: position.coords.heading ?? undefined,
-      speed: position.coords.speed ?? undefined,
-      missionId: state.missionId,
-      isBackground: appState !== "active",
-      timestamp: nowIso,
-      locationMode: payloadMode,
-      trackingEventId: fallbackTrackingEventId,
-    });
-    state.lastAckAt = nowIso;
+    const fallbackAttemptSeq = beginBridgeAttempt(fallbackTrackingEventId);
+    try {
+      const response = await sendDriverLocation({
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+        accuracy: position.coords.accuracy ?? undefined,
+        heading: position.coords.heading ?? undefined,
+        speed: position.coords.speed ?? undefined,
+        missionId: state.missionId,
+        isBackground: appState !== "active",
+        timestamp: nowIso,
+        locationMode: payloadMode,
+        trackingEventId: fallbackTrackingEventId,
+      });
+      if (
+        response.tracking_event_id != null &&
+        response.tracking_event_id !== fallbackTrackingEventId
+      ) {
+        state.lastAckStatus = response.ack_status;
+        state.lastAckError = "ack_event_id_mismatch";
+      } else {
+        applyBridgeAckStatus(
+          response.ack_status,
+          nowIso,
+          fallbackAttemptSeq,
+          fallbackTrackingEventId
+        );
+      }
+    } catch (error) {
+      state.lastAckError = formatTrackingSendError(error).error_message ?? "network_error";
+      state.lastAckStatus = null;
+      throw error;
+    }
     state.lastHttpFallbackTrackingEventId = fallbackTrackingEventId;
     state.flushPathUsed = "http_fallback";
   }
@@ -805,8 +899,18 @@ export async function flushDriverTrackingQueueNow() {
     forceHttpFallback: managerSnapshot.appState !== "active",
   });
   state.queueDepth = result.queueDepth;
-  if (result.backendAcked > 0 && result.lastBackendAckAt) {
-    state.lastAckAt = new Date(result.lastBackendAckAt).toISOString();
+  if (
+    result.lastBackendAckRequestEventId != null &&
+    result.lastBackendAckStatus != null &&
+    result.lastBackendAckAt != null
+  ) {
+    const attemptSeq = beginBridgeAttempt(result.lastBackendAckRequestEventId);
+    applyBridgeAckStatus(
+      result.lastBackendAckStatus,
+      result.lastBackendAckAt,
+      attemptSeq,
+      result.lastBackendAckRequestEventId
+    );
   }
   if (result.flushPathUsed) {
     state.flushPathUsed = result.flushPathUsed;
@@ -832,18 +936,45 @@ async function sendLegacyPoint(appState: AppStateStatus, nowIso: string) {
   state.lastWatchedPosition = position;
   state.lastWatchAtMs = Date.now();
   if (state.missionId === null && !state.presenceWindowActive) return;
-  await sendDriverLocation({
-    latitude: position.coords.latitude,
-    longitude: position.coords.longitude,
-    accuracy: position.coords.accuracy ?? undefined,
-    heading: position.coords.heading ?? undefined,
-    speed: position.coords.speed ?? undefined,
-    missionId: state.missionId,
-    isBackground: appState !== "active",
-    timestamp: nowIso,
-    locationMode: resolveTrackingMode(appState),
-  });
-  state.lastAckAt = nowIso;
+  const legacyEventId = `bridge_legacy_${state.missionId ?? "presence"}_${Date.now()}`;
+  const attemptSeq = beginBridgeAttempt(legacyEventId);
+  try {
+    const response = await sendDriverLocation({
+      latitude: position.coords.latitude,
+      longitude: position.coords.longitude,
+      accuracy: position.coords.accuracy ?? undefined,
+      heading: position.coords.heading ?? undefined,
+      speed: position.coords.speed ?? undefined,
+      missionId: state.missionId,
+      isBackground: appState !== "active",
+      timestamp: nowIso,
+      locationMode: resolveTrackingMode(appState),
+      trackingEventId: legacyEventId,
+    });
+    if (
+      response.tracking_event_id != null &&
+      response.tracking_event_id !== legacyEventId
+    ) {
+      state.lastAckStatus = response.ack_status;
+      state.lastAckError = "ack_event_id_mismatch";
+      throw new Error("ack_event_id_mismatch");
+    }
+    const applied = applyBridgeAckStatus(
+      response.ack_status,
+      nowIso,
+      attemptSeq,
+      legacyEventId
+    );
+    if (!applied || state.lastAckError) {
+      throw new Error(state.lastAckError ?? `ack_${response.ack_status}`);
+    }
+  } catch (error) {
+    if (!state.lastAckError) {
+      state.lastAckError =
+        formatTrackingSendError(error).error_message ?? "network_error";
+    }
+    throw error;
+  }
 }
 
 const trackingManager = new TrackingManager({
@@ -946,6 +1077,11 @@ async function stopMissionTrackingBridge(): Promise<void> {
   state.lastSentAt = null;
   state.lastAckAt = null;
   state.lastAckIsQueued = false;
+  state.lastAckStatus = null;
+  state.lastAckError = null;
+  state.lastAckAttemptSeq = null;
+  state.lastAckEventId = null;
+  state.currentAttemptEventId = null;
   notifyTrackingBridgeListeners();
 }
 

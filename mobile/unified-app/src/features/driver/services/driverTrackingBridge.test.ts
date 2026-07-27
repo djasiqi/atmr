@@ -48,7 +48,7 @@ jest.mock("expo-location", () => ({
   requestForegroundPermissionsAsync: () => mockRequestForegroundPermissionsAsync(),
   requestBackgroundPermissionsAsync: () => mockRequestBackgroundPermissionsAsync(),
   getCurrentPositionAsync: (options?: unknown) => mockGetCurrentPositionAsync(options as any),
-  Accuracy: { Balanced: "balanced" },
+  Accuracy: { Balanced: "balanced", High: "high" },
 }));
 
 jest.mock("react-native", () => ({
@@ -64,6 +64,13 @@ jest.mock("react-native", () => ({
 
 jest.mock("../api/driverHttp", () => ({
   sendDriverLocation: (payload: DriverLocationPayload) => mockSendDriverLocation(payload),
+}));
+
+jest.mock("./trackingSessionsApi", () => ({
+  registerTrackingSession: jest.fn(async () => ({
+    tracking_session_id: "test-session",
+    session_generation: 1,
+  })),
 }));
 
 jest.mock("../../../core/observability/driverTelemetry", () => ({
@@ -178,12 +185,10 @@ describe("driver tracking bridge", () => {
     startDriverTrackingBridge(8, "IN_PROGRESS");
     await jest.advanceTimersByTimeAsync(0);
 
-    const snapshot = getDriverTrackingBridgeSnapshot();
-    expect(snapshot.consecutiveFailures).toBe(1);
-    expect(snapshot.backoffUntilMs).toBeGreaterThan(Date.now());
+    // File persistante : l’échec HTTP est géré dans la queue (retry), pas via TrackingManager.
     expect(mockEmitDriverTelemetry).toHaveBeenCalledWith(
-      "tracking.send.backoff",
-      expect.objectContaining({ source: "driver.tracking.bridge", mission_id: 8, retry_count: 1 })
+      "tracking.queue.http_send_failure",
+      expect.objectContaining({ source: "driver.tracking.queue", mission_id: 8 })
     );
 
     const callsAfterFirstFailure = mockSendDriverLocation.mock.calls.length;

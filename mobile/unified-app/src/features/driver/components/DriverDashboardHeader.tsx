@@ -7,6 +7,7 @@ import { useSession } from "../../../core/sessionProvider";
 import { getDriverProfile } from "../api";
 import { readDriverProfileCache } from "../services/driverProfileCache";
 import { useNotifications, useTrackingState } from "../hooks";
+import { formatBridgeSyncLabel } from "../services/bridgeAckSemantics";
 import { D } from "../theme/driverDashboardTheme";
 import { FONT_SIZE } from "../../../design/responsive/typographyTokens";
 
@@ -115,23 +116,36 @@ export function DriverDashboardHeader({
     };
   }, [tracking.isTracking, tracking.lastUpdate]);
 
-  const syncLabel = useMemo(() => {
-    if (!gpsEnabled) return "GPS indisponible";
-    if (!tracking.isTracking) return "GPS prêt";
-    // Label stable : queueDepth oscille entre enqueue/flush — ne pas basculer le texte.
-    if (tracking.lastAckAt != null) {
-      return `GPS connecté • Confirmé ${formatSyncTime(tracking.lastAckAt)}`;
-    }
-    if (tracking.lastUpdate != null) {
-      return `GPS connecté • Envoyé ${formatSyncTime(tracking.lastUpdate)}`;
-    }
-    return "GPS connecté";
-  }, [
-    gpsEnabled,
-    tracking.isTracking,
-    tracking.lastUpdate,
-    tracking.lastAckAt,
-  ]);
+  const syncLabel = useMemo(
+    () =>
+      formatBridgeSyncLabel({
+        gpsEnabled,
+        isTracking: tracking.isTracking,
+        lastUpdate: tracking.lastUpdate,
+        lastAckAt: tracking.lastAckAt,
+        lastAckIsQueued: tracking.lastAckIsQueued === true,
+        lastAckStatus: tracking.lastAckStatus,
+        lastAckError: tracking.lastAckError,
+        currentAttemptSeq: tracking.currentAttemptSeq,
+        lastAckAttemptSeq: tracking.lastAckAttemptSeq,
+        currentAttemptEventId: tracking.currentAttemptEventId,
+        lastAckEventId: tracking.lastAckEventId,
+        formatSyncTime,
+      }),
+    [
+      gpsEnabled,
+      tracking.isTracking,
+      tracking.lastUpdate,
+      tracking.lastAckAt,
+      tracking.lastAckIsQueued,
+      tracking.lastAckStatus,
+      tracking.lastAckError,
+      tracking.currentAttemptSeq,
+      tracking.lastAckAttemptSeq,
+      tracking.currentAttemptEventId,
+      tracking.lastAckEventId,
+    ]
+  );
 
   const initials = useMemo(() => {
     const parts = displayName.split(/\s+/).filter(Boolean);

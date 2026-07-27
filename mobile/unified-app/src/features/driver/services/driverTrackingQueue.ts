@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { AppStateStatus, Platform } from "react-native";
 import { DriverLocationPayload } from "../types";
+import type { DriverLocationAckStatus } from "../types";
 import { sendDriverLocation } from "../api/driverHttp";
 import { formatTrackingSendError } from "./driverTrackingSendErrorFormat";
 import {
@@ -77,7 +78,11 @@ export type DriverTrackingFlushResult = {
   queueDepth: number;
   flushPathUsed: "http_fallback" | "socket_batch";
   lastBackendAckAt: number | null;
-  lastBackendAckStatus: "accepted" | "queued" | "duplicate" | null;
+  lastBackendAckStatus: DriverLocationAckStatus | null;
+  /** ID local de l’élément effectivement envoyé (jamais inventé côté serveur). */
+  lastBackendAckRequestEventId: string | null;
+  /** ID renvoyé par le serveur — null si absent, sans fallback sur item.id. */
+  lastBackendAckServerEventId: string | null;
   oldestItemAgeMs: number | null;
   networkProfile: "offline" | "poor" | "normal";
 };
@@ -873,6 +878,8 @@ class DriverTrackingQueue {
         flushPathUsed: "http_fallback",
         lastBackendAckAt: null,
         lastBackendAckStatus: null,
+        lastBackendAckRequestEventId: null,
+        lastBackendAckServerEventId: null,
         oldestItemAgeMs: this.items[0] ? Math.max(0, nowMs() - this.items[0].queuedAt) : null,
         networkProfile,
       };
@@ -885,6 +892,8 @@ class DriverTrackingQueue {
     let retried = 0;
     let lastBackendAckAt: number | null = null;
     let lastBackendAckStatus: DriverTrackingFlushResult["lastBackendAckStatus"] = null;
+    let lastBackendAckRequestEventId: string | null = null;
+    let lastBackendAckServerEventId: string | null = null;
     let flushPathUsed: DriverTrackingFlushResult["flushPathUsed"] = "http_fallback";
     try {
       await this.loadSuspendState();
@@ -916,6 +925,8 @@ class DriverTrackingQueue {
           flushPathUsed,
           lastBackendAckAt: null,
           lastBackendAckStatus: null,
+          lastBackendAckRequestEventId: null,
+          lastBackendAckServerEventId: null,
           oldestItemAgeMs: this.items[0]
             ? Math.max(0, nowMs() - this.items[0].queuedAt)
             : null,
@@ -1082,12 +1093,94 @@ class DriverTrackingQueue {
             trackingEventId: item.id,
           });
           sent += 1;
+          lastBackendAckRequestEventId = item.id;
+          lastBackendAckServerEventId = ack.tracking_event_id ?? null;
+          lastBackendAckStatus = ack.ack_status;
+          lastBackendAckAt = nowMs();
+
+          if (
+            ack.tracking_event_id != null &&
+            ack.tracking_event_id !== item.id
+          ) {
+            item.deliveryState = "retry_pending";
+            item.lastError = "ack_event_id_mismatch";
+            retried += 1;
+            remaining.push(item);
+            emitDriverTelemetry("tracking.queue.ack_event_id_mismatch", {
+              source: "driver.tracking.queue",
+              mission_id: item.missionId,
+              queue_item_id: item.id,
+              server_event_id: ack.tracking_event_id,
+            });
+            continue;
+          }
+
+          if (ack.ack_status === "partially_ingested") {
+            const ingestedIds = ack.ingested_event_ids ?? null;
+            const retryIds = ack.retry_event_ids ?? null;
+            if (ingestedIds == null && retryIds == null) {
+              item.deliveryState = "retry_pending";
+              item.lastError = "partially_ingested_lists_missing";
+              retried += 1;
+              remaining.push(item);
+              continue;
+            }
+            const ingestedSet = new Set(ingestedIds ?? []);
+            const retrySet = new Set(retryIds ?? []);
+            let conflict = false;
+            for (const id of ingestedSet) {
+              if (retrySet.has(id)) {
+                conflict = true;
+                break;
+              }
+            }
+            if (conflict) {
+              item.deliveryState = "retry_pending";
+              item.lastError = "partially_ingested_list_conflict";
+              retried += 1;
+              remaining.push(item);
+              emitDriverTelemetry("tracking.queue.partial_ack_conflict", {
+                source: "driver.tracking.queue",
+                queue_item_id: item.id,
+              });
+              continue;
+            }
+            if (ingestedSet.size > 0) {
+              await this.applyIngestedEventIds([...ingestedSet]);
+            }
+            const currentIngested = ingestedSet.has(item.id);
+            const currentRetry = retrySet.has(item.id);
+            if (currentIngested) {
+              item.persistState = "ingested_non_persisted";
+              item.deliveryState = "backend_acked";
+              item.ackedAt = nowMs();
+              item.lastError = null;
+              backendAcked += 1;
+              emitDriverTelemetry("tracking.ingest.ack", {
+                source: "driver.tracking.queue",
+                mission_id: item.missionId,
+                flush_path: "http_fallback",
+                queue_item_id: item.id,
+                ack_status: ack.ack_status,
+                accept_reason: ack.accept_reason ?? null,
+                trace_id: ack.trace_id ?? null,
+              });
+              continue;
+            }
+            item.deliveryState = "retry_pending";
+            item.lastError = currentRetry
+              ? "partially_ingested_retry"
+              : "partially_ingested_current_missing";
+            retried += 1;
+            remaining.push(item);
+            continue;
+          }
+
           if (
             ack.ack_status === "accepted" ||
             ack.ack_status === "duplicate" ||
             ack.ack_status === "queued" ||
             ack.ack_status === "ingested" ||
-            ack.ack_status === "partially_ingested" ||
             ack.ack_status === "persisted"
           ) {
             if (ack.ingested_event_ids?.length) {
@@ -1114,18 +1207,13 @@ class DriverTrackingQueue {
                   location_event_id: item.id,
                 });
               }
+            } else if (ack.ack_status === "queued" || ack.ack_status === "ingested") {
+              item.persistState = "ingested_non_persisted";
             }
             item.deliveryState = "backend_acked";
             item.ackedAt = nowMs();
             item.lastError = null;
             backendAcked += 1;
-            lastBackendAckAt = item.ackedAt;
-            lastBackendAckStatus =
-              ack.ack_status === "queued" || ack.ack_status === "ingested"
-                ? "queued"
-                : ack.ack_status === "duplicate"
-                  ? "duplicate"
-                  : "accepted";
             emitDriverTelemetry("tracking.ingest.ack", {
               source: "driver.tracking.queue",
               mission_id: item.missionId,
@@ -1138,6 +1226,9 @@ class DriverTrackingQueue {
             continue;
           }
           item.deliveryState = ack.ack_status === "stale" ? "expired" : "dropped";
+          if (ack.ack_status === "rejected" || ack.ack_status === "ignored") {
+            item.persistState = ack.ack_status === "rejected" ? "rejected" : "tombstone";
+          }
           dropped += 1;
           emitDriverTelemetry("tracking.queue.dropped", {
             source: "driver.tracking.queue",
@@ -1229,6 +1320,8 @@ class DriverTrackingQueue {
         flushPathUsed,
         lastBackendAckAt,
         lastBackendAckStatus,
+        lastBackendAckRequestEventId,
+        lastBackendAckServerEventId,
         oldestItemAgeMs: oldestQueuedAt ? Math.max(0, nowMs() - oldestQueuedAt) : null,
         networkProfile,
       };
@@ -1350,6 +1443,15 @@ class DriverTrackingQueue {
       });
     }
     return ackedCount;
+  }
+
+  /** Réservé aux tests unitaires — vide la file en mémoire. */
+  async resetForTests(): Promise<void> {
+    this.items = [];
+    this.isFlushing = false;
+    this.pendingFlushOptions = null;
+    this.ingestedEventIds.clear();
+    await this.persist();
   }
 }
 

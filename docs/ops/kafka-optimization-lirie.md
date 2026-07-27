@@ -70,6 +70,8 @@ KAFKA_TOPIC_DRIVER_LOCATION_DLQ=driver.location.dlq.v2
 
 Référence complète : `env.kafka.production.example`.
 
+✅ **Implémenté** (2026-07-27) : les services `tracking-kafka-consumer` / `tracking-processed-fanout` / `kafka-dlq-consumer` dans `docker-compose.kafka.yml` (et kraft/dev) utilisent `${KAFKA_TOPIC_DRIVER_LOCATION_*}` — plus de littéraux `driver.location.raw` qui écrasaient les `.v2` au merge Compose. Test CI : `scripts/test_kafka_compose_topic_interpolation.py`. Runbook récupération P0 (stop fanout, earliest sans seek_to_end, gate ×3) : [gps-tracking-pipeline.md](./gps-tracking-pipeline.md#implémenté--runbook-p0--mismatch-topics-raw-vs-rawv2-récupération-contrôlée).
+
 ### Déploiement migration v2 (SSH manuel)
 
 Après mise à jour du fragment (CI `deploy.yml`) **ou** copie du bloc dans `.env.production.local` :

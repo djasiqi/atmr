@@ -29,3 +29,5 @@ jobs:
         run: python3 scripts/check_no_production_leaks.py
       - name: Stop-gate sentinelle 00:00 (Phase 2 lectures)
         run: python3 scripts/check_no_sentinel_heuristics.py
+      - name: Kafka Compose topic interpolation (anti-littéraux + sentinelles)
+        run: python3 scripts/test_kafka_compose_topic_interpolation.py

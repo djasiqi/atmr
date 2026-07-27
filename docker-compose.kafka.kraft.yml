@@ -87,9 +87,9 @@ services:
       KAFKA_ENABLED: "true"
       TRACKING_INGEST_ASYNC_ENABLED: "true"
       KAFKA_BOOTSTRAP_SERVERS: kafka-broker-1:29092
-      KAFKA_TOPIC_DRIVER_LOCATION_RAW: driver.location.raw
-      KAFKA_TOPIC_DRIVER_LOCATION_PROCESSED: driver.location.processed
-      KAFKA_TOPIC_DRIVER_LOCATION_DLQ: driver.location.dlq
+      KAFKA_TOPIC_DRIVER_LOCATION_RAW: ${KAFKA_TOPIC_DRIVER_LOCATION_RAW:-driver.location.raw}
+      KAFKA_TOPIC_DRIVER_LOCATION_PROCESSED: ${KAFKA_TOPIC_DRIVER_LOCATION_PROCESSED:-driver.location.processed}
+      KAFKA_TOPIC_DRIVER_LOCATION_DLQ: ${KAFKA_TOPIC_DRIVER_LOCATION_DLQ:-driver.location.dlq}
     networks:
       - default
     restart: unless-stopped
