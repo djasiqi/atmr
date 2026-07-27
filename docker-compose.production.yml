@@ -620,6 +620,18 @@ services:
     environment:
       FLASK_ENV: production
       FLASK_CONFIG: production
+      # DSN construit côté Python (quote_plus) — neutralise les URL héritées de .env.production
+      POSTGRES_USER: ${POSTGRES_USER:-atmr}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_HOST: pgbouncer
+      POSTGRES_PORT: "6432"
+      POSTGRES_DB: ${POSTGRES_DB:-atmr}
+      POSTGRES_SSLMODE: ${POSTGRES_SSLMODE:-disable}
+      DATABASE_URL: ""
+      SQLALCHEMY_DATABASE_URI: ""
+      PRIMARY_DATABASE_URL: ""
+      REPLICA_DATABASE_URL: ""
+      REPLICA_DATABASE_URLS: ""
       KAFKA_ENABLED: ${KAFKA_ENABLED:-false}
       TRACKING_INGEST_ASYNC_ENABLED: ${TRACKING_INGEST_ASYNC_ENABLED:-false}
       TRACKING_INGEST_PERSIST_ENABLED: ${TRACKING_INGEST_PERSIST_ENABLED:-false}
@@ -692,6 +704,18 @@ services:
     environment:
       FLASK_ENV: production
       FLASK_CONFIG: production
+      # DSN construit côté Python (quote_plus) — neutralise les URL héritées de .env.production
+      POSTGRES_USER: ${POSTGRES_USER:-atmr}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_HOST: pgbouncer
+      POSTGRES_PORT: "6432"
+      POSTGRES_DB: ${POSTGRES_DB:-atmr}
+      POSTGRES_SSLMODE: ${POSTGRES_SSLMODE:-disable}
+      DATABASE_URL: ""
+      SQLALCHEMY_DATABASE_URI: ""
+      PRIMARY_DATABASE_URL: ""
+      REPLICA_DATABASE_URL: ""
+      REPLICA_DATABASE_URLS: ""
       KAFKA_ENABLED: ${KAFKA_ENABLED:-false}
       TRACKING_INGEST_ASYNC_ENABLED: ${TRACKING_INGEST_ASYNC_ENABLED:-false}
       TRACKING_PROCESSED_FANOUT_ENABLED: ${TRACKING_PROCESSED_FANOUT_ENABLED:-false}
@@ -749,6 +773,18 @@ services:
     environment:
       FLASK_ENV: production
       FLASK_CONFIG: production
+      # DSN construit côté Python (quote_plus) — neutralise les URL héritées de .env.production
+      POSTGRES_USER: ${POSTGRES_USER:-atmr}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_HOST: pgbouncer
+      POSTGRES_PORT: "6432"
+      POSTGRES_DB: ${POSTGRES_DB:-atmr}
+      POSTGRES_SSLMODE: ${POSTGRES_SSLMODE:-disable}
+      DATABASE_URL: ""
+      SQLALCHEMY_DATABASE_URI: ""
+      PRIMARY_DATABASE_URL: ""
+      REPLICA_DATABASE_URL: ""
+      REPLICA_DATABASE_URLS: ""
       KAFKA_ENABLED: ${KAFKA_ENABLED:-false}
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka-broker-1:29092,kafka-broker-2:29092,kafka-broker-3:29092}
       KAFKA_DLQ_CONSUMER_GROUP: ${KAFKA_DLQ_CONSUMER_GROUP:-kafka-dlq-consumer-group}

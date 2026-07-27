@@ -6,6 +6,7 @@ import { DriverMissionStatus, type DriverMission } from "../types";
 import { isTrackingActiveStatus } from "../domain/status";
 import { resolveMissionTrackingMode } from "../domain/resolveMissionTrackingMode";
 import { driverTrackingQueue } from "./driverTrackingQueue";
+import { trackingQueueStore } from "./trackingQueueStore";
 import { emitDriverTelemetry } from "../../../core/observability/driverTelemetry";
 import { PRODUCTION_LOCALE } from "../../../i18n/productionLocale";
 import { isFeatureEnabled } from "../../../core/featureFlags/registry";
@@ -436,6 +437,17 @@ function defineTaskIfNeeded() {
         return;
       }
 
+      // Sondage headless AVANT tout enfilage/flush : un handle SQLite non durable ou un schéma
+      // pas prêt doit bloquer net (jamais de fallback HTTP silencieux depuis le background task).
+      const health = await trackingQueueStore.initAndHealthcheckHeadless();
+      if (!health.durable || !health.schemaReady) {
+        emitDriverTelemetry("sqlite_headless_init_failed", {
+          source: "driver.services.backgroundLocationTask",
+          task_name: BACKGROUND_LOCATION_TASK_NAME,
+        });
+        return;
+      }
+
       const locations = Array.isArray(data?.locations) ? data.locations : [];
       setLastTaskInvokedAt(Date.now());
       emitDriverTelemetry("tracking.background.task_invoked", {
@@ -446,6 +458,17 @@ function defineTaskIfNeeded() {
         mission_id: context.missionId,
         task_mode: context.taskMode,
       });
+
+      const health = await trackingQueueStore.initAndHealthcheckHeadless();
+      if (!health.durable || !health.schemaReady) {
+        emitDriverTelemetry("sqlite_headless_init_failed", {
+          task_name: BACKGROUND_LOCATION_TASK_NAME,
+          durable: health.durable,
+          schema_ready: health.schemaReady,
+          recovered: health.recovered,
+        });
+        return;
+      }
 
       const mode = resolveBackgroundTrackingMode(
         context.missionStatus,

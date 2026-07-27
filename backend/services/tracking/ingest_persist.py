@@ -97,68 +97,77 @@ def persist_driver_location_from_kafka(
 
     app = get_flask_app()
     with app.app_context():
+        from sqlalchemy.exc import SQLAlchemyError
+
+        from ext import db
         from services.geolocation.location import get_location_service
         from services.monitoring.location_correlation_log import (
             log_driver_location_processed,
         )
 
-        loc_svc = get_location_service()
-        norm_mode = loc_svc.resolve_normalized_location_mode(company_id, location_mode)
-        uc = UpdateDriverLocationUseCase(update_location_fn=create_location_update_fn())
-        uc_result = uc.execute(
-            UpdateDriverLocationCommand(
-                driver_id=driver_id,
-                latitude=lat,
-                longitude=lon,
-                speed=speed if speed is not None and speed > 0 else None,
-                heading=heading if heading is not None and heading >= 0 else None,
-                accuracy=accuracy if accuracy is not None and accuracy > 0 else None,
-                ts=recorded_at,
-                recorded_at=recorded_at,
-                sent_at=str(sent_at) if sent_at else None,
-                location_mode=location_mode,
-                is_background=bool(payload.get("is_background", False)),
-                mission_id=mission_id,
-                metrics_transport="kafka",
-                location_event_id=location_event_id,
-                emit_geofence=True,
-                company_id=company_id,
+        try:
+            loc_svc = get_location_service()
+            norm_mode = loc_svc.resolve_normalized_location_mode(company_id, location_mode)
+            uc = UpdateDriverLocationUseCase(update_location_fn=create_location_update_fn())
+            uc_result = uc.execute(
+                UpdateDriverLocationCommand(
+                    driver_id=driver_id,
+                    latitude=lat,
+                    longitude=lon,
+                    speed=speed if speed is not None and speed > 0 else None,
+                    heading=heading if heading is not None and heading >= 0 else None,
+                    accuracy=accuracy if accuracy is not None and accuracy > 0 else None,
+                    ts=recorded_at,
+                    recorded_at=recorded_at,
+                    sent_at=str(sent_at) if sent_at else None,
+                    location_mode=location_mode,
+                    is_background=bool(payload.get("is_background", False)),
+                    mission_id=mission_id,
+                    metrics_transport="kafka",
+                    location_event_id=location_event_id,
+                    emit_geofence=True,
+                    company_id=company_id,
+                )
             )
-        )
-        if not uc_result.dedup_skipped:
-            log_driver_location_processed(
-                driver_id=driver_id,
-                company_id=company_id,
-                transport="kafka",
-                location_mode=norm_mode,
-                accept_status=uc_result.accept_status,
-                accept_reason=uc_result.accept_reason,
-                location_event_id=location_event_id,
-            )
-            if (
-                uc_result.accept_status == "accepted_canonical"
-                and recorded_at is not None
-            ):
-                try:
-                    from datetime import UTC, datetime
+            if not uc_result.dedup_skipped:
+                log_driver_location_processed(
+                    driver_id=driver_id,
+                    company_id=company_id,
+                    transport="kafka",
+                    location_mode=norm_mode,
+                    accept_status=uc_result.accept_status,
+                    accept_reason=uc_result.accept_reason,
+                    location_event_id=location_event_id,
+                )
+                if (
+                    uc_result.accept_status == "accepted_canonical"
+                    and recorded_at is not None
+                ):
+                    try:
+                        from datetime import UTC, datetime
 
-                    from services.monitoring.driver_location_metrics import (
-                        observe_tracking_position_freshness_seconds,
-                    )
+                        from services.monitoring.driver_location_metrics import (
+                            observe_tracking_position_freshness_seconds,
+                        )
 
-                    rec_dt = datetime.fromisoformat(
-                        str(recorded_at).replace("Z", "+00:00")
-                    )
-                    if rec_dt.tzinfo is None:
-                        rec_dt = rec_dt.replace(tzinfo=UTC)
-                    age = (datetime.now(UTC) - rec_dt).total_seconds()
-                    observe_tracking_position_freshness_seconds(
-                        freshness_seconds=age,
-                        company_id=company_id,
-                        location_mode=norm_mode,
-                    )
-                except Exception:
-                    pass
+                        rec_dt = datetime.fromisoformat(
+                            str(recorded_at).replace("Z", "+00:00")
+                        )
+                        if rec_dt.tzinfo is None:
+                            rec_dt = rec_dt.replace(tzinfo=UTC)
+                        age = (datetime.now(UTC) - rec_dt).total_seconds()
+                        observe_tracking_position_freshness_seconds(
+                            freshness_seconds=age,
+                            company_id=company_id,
+                            location_mode=norm_mode,
+                        )
+                    except Exception:
+                        pass
+        except SQLAlchemyError:
+            db.session.rollback()
+            raise
+        finally:
+            db.session.remove()
 
     enriched_payload = {
         **payload,

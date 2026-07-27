@@ -132,51 +132,56 @@ def persist_driver_location_with_outbox_from_kafka(
 
     app = get_flask_app()
     with app.app_context():
+        from sqlalchemy.exc import SQLAlchemyError
+
         from ext import db
 
         try:
-            auth = resolve_authoritative_session(
-                db.session,
-                driver_id=driver_id,
-                company_id=company_id,
-                tracking_session_id=tracking_session_id,
-                claimed_generation=claimed_generation,
-                sequence_id=sequence_id,
-            )
-        except SessionRegistryError as exc:
-            raise PersistKafkaOutboxError(exc.code, exc.message) from exc
+            try:
+                auth = resolve_authoritative_session(
+                    db.session,
+                    driver_id=driver_id,
+                    company_id=company_id,
+                    tracking_session_id=tracking_session_id,
+                    claimed_generation=claimed_generation,
+                    sequence_id=sequence_id,
+                )
+            except SessionRegistryError as exc:
+                raise PersistKafkaOutboxError(exc.code, exc.message) from exc
 
-        session_generation = int(auth["session_generation"])
-        # Annexe A.3 : superseded → persisté + watermark, jamais Redis/fanout
-        publish_realtime = str(auth.get("status") or "") != "superseded"
+            session_generation = int(auth["session_generation"])
+            # Annexe A.3 : superseded → persisté + watermark, jamais Redis/fanout
+            publish_realtime = str(auth.get("status") or "") != "superseded"
 
-        try:
-            result = persist_location_event_with_outbox(
-                db.session,
-                driver_id=driver_id,
-                company_id=company_id,
-                location_event_id=location_event_id,
-                tracking_session_id=tracking_session_id,
-                session_generation=session_generation,
-                sequence_id=sequence_id,
-                latitude=lat,
-                longitude=lon,
-                recorded_at=recorded_at,
-                source=source,
-                location_mode=location_mode,
-                accuracy_m=accuracy,
-                speed_mps=speed,
-                heading=heading,
-                mission_id=mission_id,
-                publish_realtime=publish_realtime,
-            )
-            db.session.commit()
-        except PersistConflictError as exc:
-            db.session.rollback()
-            raise PersistKafkaOutboxError(exc.code, str(exc)) from exc
-        except Exception:
-            db.session.rollback()
-            raise
+            try:
+                result = persist_location_event_with_outbox(
+                    db.session,
+                    driver_id=driver_id,
+                    company_id=company_id,
+                    location_event_id=location_event_id,
+                    tracking_session_id=tracking_session_id,
+                    session_generation=session_generation,
+                    sequence_id=sequence_id,
+                    latitude=lat,
+                    longitude=lon,
+                    recorded_at=recorded_at,
+                    source=source,
+                    location_mode=location_mode,
+                    accuracy_m=accuracy,
+                    speed_mps=speed,
+                    heading=heading,
+                    mission_id=mission_id,
+                    publish_realtime=publish_realtime,
+                )
+                db.session.commit()
+            except PersistConflictError as exc:
+                db.session.rollback()
+                raise PersistKafkaOutboxError(exc.code, str(exc)) from exc
+            except SQLAlchemyError:
+                db.session.rollback()
+                raise
+        finally:
+            db.session.remove()
 
     enriched_payload = {
         **payload,

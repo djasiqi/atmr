@@ -1,0 +1,29 @@
+# Fragments attendus pour les services Kafka tracking (DSN neutralisé).
+# Maintenu en sync avec docker-compose.production.yml / docker-compose.kafka.yml.
+
+tracking-kafka-consumer:
+  POSTGRES_HOST: pgbouncer
+  POSTGRES_PORT: "6432"
+  DATABASE_URL: ""
+  SQLALCHEMY_DATABASE_URI: ""
+  PRIMARY_DATABASE_URL: ""
+  REPLICA_DATABASE_URL: ""
+  REPLICA_DATABASE_URLS: ""
+
+tracking-processed-fanout:
+  POSTGRES_HOST: pgbouncer
+  POSTGRES_PORT: "6432"
+  DATABASE_URL: ""
+  SQLALCHEMY_DATABASE_URI: ""
+  PRIMARY_DATABASE_URL: ""
+  REPLICA_DATABASE_URL: ""
+  REPLICA_DATABASE_URLS: ""
+
+kafka-dlq-consumer:
+  POSTGRES_HOST: pgbouncer
+  POSTGRES_PORT: "6432"
+  DATABASE_URL: ""
+  SQLALCHEMY_DATABASE_URI: ""
+  PRIMARY_DATABASE_URL: ""
+  REPLICA_DATABASE_URL: ""
+  REPLICA_DATABASE_URLS: ""

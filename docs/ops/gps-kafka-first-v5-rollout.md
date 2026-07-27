@@ -124,6 +124,14 @@ Voir [f02-internal-tracking-durability.md](./f02-internal-tracking-durability.md
 | Advisory lock | Namespace entier fixe `42001` (env `TRACKING_OUTBOX_LOCK_NAMESPACE`) |
 | SQLite KO natif | `durable_unavailable` ; mémoire best-effort non garantie seulement Jest/web |
 
+### P0 DSN + erreurs DB + fanout (code livré, gates E2E en cours)
+
+- ✅ **Implémenté (code)** : DSN Kafka via `POSTGRES_*` + URL héritées neutralisées (`DATABASE_URL` / `SQLALCHEMY_DATABASE_URI` / `PRIMARY_*` / `REPLICA_*` vides) dans les compose Kafka + production ; `pgbouncer` hôte interne ; tests caractères spéciaux.
+- ✅ **Implémenté (code)** : matrice erreurs PG (`OperationalError` retry→fail-stop ; `ProgrammingError` fail-stop immédiat ; unique `location_event_id` idempotent ; `IntegrityError` inconnue fail-stop) ; cleanup session dans `app_context` persist.
+- ✅ **Implémenté (ops local)** : fanout legacy stoppé (`docker compose stop tracking-processed-fanout`) ; ingest recréé seul ; préflight `host=pgbouncer` + `SELECT 1` OK. Script : [`scripts/ops-tracking-p0-recreate-ingest.sh`](../../scripts/ops-tracking-p0-recreate-ingest.sh).
+- ✅ **Implémenté (code mobile)** : singleton SQLite + `runSerialized` + primitives internes + `withExclusiveTransactionAsync` ; `initAndHealthcheckHeadless` (`quick_check` cold-open seulement) ; gate tâche BG sans fallback HTTP ; bump app **1.0.10** / versionCode **123**.
+- ⏳ **Reste à faire** : gate E2E serveur ×3 (nouvelles positions, pas de reset offsets 1387–1391) ; recreate `kafka-dlq-consumer` après gate ingest ; build natif 1.0.10 + gate ADB force-stop. **Ne pas** cocher GO production avant les deux gates vertes.
+
 ### Activation (inchangé)
 
 | Activation | Verdict |

@@ -144,7 +144,8 @@ export type DriverTelemetryEventName =
   | "driver.mission_bar.ios.unavailable"
   | "driver.mission_bar.ios.live_activity_unavailable"
   | "company.fleet.directions.failed"
-  | "company.fleet.directions.exception";
+  | "company.fleet.directions.exception"
+  | "sqlite_headless_init_failed";
 
 export type DriverTelemetryPayload = {
   source: string;

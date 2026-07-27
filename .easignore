@@ -7,3 +7,20 @@
 !/mobile/unified-app
 !/mobile/unified-app/**
 
+# Dossiers natifs / caches locaux : EAS doit régénérer via prebuild (évite archive ~Go).
+/mobile/unified-app/android
+/mobile/unified-app/android/**
+/mobile/unified-app/ios
+/mobile/unified-app/ios/**
+/mobile/unified-app/node_modules
+/mobile/unified-app/node_modules/**
+/mobile/unified-app/.expo
+/mobile/unified-app/.expo/**
+/mobile/unified-app/dist
+/mobile/unified-app/dist/**
+/mobile/unified-app/web-build
+/mobile/unified-app/web-build/**
+/mobile/unified-app/ops-readiness/evidence
+/mobile/unified-app/ops-readiness/evidence/**
+/mobile/unified-app/tools
+/mobile/unified-app/tools/**

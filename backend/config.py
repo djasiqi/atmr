@@ -98,7 +98,13 @@ def _is_internal_database_host(host: str) -> bool:
         True si l'hôte est sur le réseau Docker interne (pas besoin de SSL)
     """
     # Hôtes Docker internes (noms de service)
-    internal_hosts = ["postgres", "localhost", "127.0.0.1", "0.0.0.0"]
+    internal_hosts = [
+        "postgres",
+        "pgbouncer",
+        "localhost",
+        "127.0.0.1",
+        "0.0.0.0",
+    ]
     if host in internal_hosts:
         return True
 

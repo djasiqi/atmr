@@ -193,6 +193,26 @@ def _is_transient_error(exc: Exception) -> bool:
     return any(token in name or token in message for token in transient_tokens)
 
 
+def _raise_fail_stop(
+    record,
+    *,
+    reason: str,
+    error: BaseException,
+) -> None:
+    logger.error(
+        "[tracking_consumer] fail-stop reason=%s err_type=%s",
+        reason,
+        type(error).__name__,
+        exc_info=True,
+    )
+    raise FatalTrackingConsumerError(
+        reason,
+        topic=getattr(record, "topic", None),
+        partition=getattr(record, "partition", None),
+        offset=getattr(record, "offset", None),
+    ) from error
+
+
 class TrackingIngestConsumer:
     def __init__(self) -> None:
         super().__init__()
@@ -568,7 +588,12 @@ class TrackingIngestConsumer:
                 self._observe_e2e_latency(message_obj)
                 return True
             except Exception as exc:
-                transient = _is_transient_error(exc)
+                from services.tracking.db_error_classification import (
+                    DbErrorAction,
+                    classify_db_error,
+                )
+
+                db_action = classify_db_error(exc)
                 try:
                     inc_tracking_kafka_publish_errors(
                         topic=TOPIC_DRIVER_LOCATION_PROCESSED,
@@ -584,6 +609,49 @@ class TrackingIngestConsumer:
                         exc_info=True,
                     )
 
+                if db_action == DbErrorAction.IDEMPOTENT_DUPLICATE:
+                    logger.info(
+                        "[tracking_consumer] unique location_event_id → duplicate idempotent"
+                    )
+                    self._commit_record(record)
+                    self._observe_e2e_latency(message_obj)
+                    return True
+
+                if db_action == DbErrorAction.FAIL_STOP:
+                    _raise_fail_stop(
+                        record,
+                        reason="db_fail_stop",
+                        error=exc,
+                    )
+
+                if db_action == DbErrorAction.DLQ:
+                    return self._send_to_dlq_and_commit(
+                        record=record,
+                        key=key,
+                        source_message=message_obj,
+                        error=exc,
+                        retry_count=attempt,
+                        error_type="db_data_error",
+                    )
+
+                if db_action == DbErrorAction.INFRASTRUCTURE_RETRY:
+                    if attempt < KAFKA_MAX_RETRIES:
+                        sleep_s = (KAFKA_RETRY_BACKOFF_MS * attempt) / 1000.0
+                        logger.warning(
+                            "[tracking_consumer] infra DB error attempt=%s/%s sleep=%.3fs",
+                            attempt,
+                            KAFKA_MAX_RETRIES,
+                            sleep_s,
+                        )
+                        time.sleep(sleep_s)
+                        continue
+                    _raise_fail_stop(
+                        record,
+                        reason="db_infrastructure_exhausted",
+                        error=exc,
+                    )
+
+                transient = _is_transient_error(exc)
                 if transient and attempt < KAFKA_MAX_RETRIES:
                     sleep_s = (KAFKA_RETRY_BACKOFF_MS * attempt) / 1000.0
                     logger.warning(

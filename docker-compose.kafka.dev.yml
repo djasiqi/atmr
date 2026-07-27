@@ -135,7 +135,18 @@ services:
     env_file:
       - backend/.env
     environment:
-      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-atmr}:${POSTGRES_PASSWORD:-atmr}@pgbouncer:6432/${POSTGRES_DB:-atmr}
+      # DSN construit côté Python (quote_plus) — ne pas interpoler le mot de passe ici
+      POSTGRES_USER: ${POSTGRES_USER:-atmr}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_HOST: pgbouncer
+      POSTGRES_PORT: "6432"
+      POSTGRES_DB: ${POSTGRES_DB:-atmr}
+      POSTGRES_SSLMODE: ${POSTGRES_SSLMODE:-disable}
+      DATABASE_URL: ""
+      SQLALCHEMY_DATABASE_URI: ""
+      PRIMARY_DATABASE_URL: ""
+      REPLICA_DATABASE_URL: ""
+      REPLICA_DATABASE_URLS: ""
       REDIS_URL: redis://redis:6379/0
       UD_OSRM_URL: ${UD_OSRM_URL:-http://osrm:5000}
       APP_ENCRYPTION_KEY_B64: ${APP_ENCRYPTION_KEY_B64}
@@ -206,7 +217,18 @@ services:
     env_file:
       - backend/.env
     environment:
-      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-atmr}:${POSTGRES_PASSWORD:-atmr}@pgbouncer:6432/${POSTGRES_DB:-atmr}
+      # DSN construit côté Python (quote_plus) — ne pas interpoler le mot de passe ici
+      POSTGRES_USER: ${POSTGRES_USER:-atmr}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_HOST: pgbouncer
+      POSTGRES_PORT: "6432"
+      POSTGRES_DB: ${POSTGRES_DB:-atmr}
+      POSTGRES_SSLMODE: ${POSTGRES_SSLMODE:-disable}
+      DATABASE_URL: ""
+      SQLALCHEMY_DATABASE_URI: ""
+      PRIMARY_DATABASE_URL: ""
+      REPLICA_DATABASE_URL: ""
+      REPLICA_DATABASE_URLS: ""
       REDIS_URL: redis://redis:6379/0
       APP_ENCRYPTION_KEY_B64: ${APP_ENCRYPTION_KEY_B64}
       MASTER_ENCRYPTION_KEY: ${MASTER_ENCRYPTION_KEY}
@@ -256,7 +278,18 @@ services:
         condition: service_completed_successfully
     command: python -m services.kafka.dlq_consumer
     environment:
-      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-atmr}:${POSTGRES_PASSWORD:-atmr}@pgbouncer:6432/${POSTGRES_DB:-atmr}
+      # DSN construit côté Python (quote_plus) — ne pas interpoler le mot de passe ici
+      POSTGRES_USER: ${POSTGRES_USER:-atmr}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_HOST: pgbouncer
+      POSTGRES_PORT: "6432"
+      POSTGRES_DB: ${POSTGRES_DB:-atmr}
+      POSTGRES_SSLMODE: ${POSTGRES_SSLMODE:-disable}
+      DATABASE_URL: ""
+      SQLALCHEMY_DATABASE_URI: ""
+      PRIMARY_DATABASE_URL: ""
+      REPLICA_DATABASE_URL: ""
+      REPLICA_DATABASE_URLS: ""
       KAFKA_ENABLED: "true"
       KAFKA_BOOTSTRAP_SERVERS: kafka-broker-1:29092
       KAFKA_DLQ_CONSUMER_GROUP: kafka-dlq-consumer-group
