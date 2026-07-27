@@ -41,10 +41,12 @@ class SaveCompanyPushTokenUseCase:
         self,
         *,
         payload: dict[str, Any],
-        _jwt_identity: str | None,
+        jwt_identity: str | None,
         role_claim: str,
         company_from_user: Any | None,
     ) -> SaveCompanyPushTokenResult:
+        # jwt_identity réservé pour audit / alignement route ; résolution company via role_claim.
+        _ = jwt_identity
         token_any: Any = (
             payload.get("token")
             or payload.get("push_token")

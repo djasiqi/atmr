@@ -91,6 +91,23 @@ function allowMemoryBackend(): boolean {
   }
 }
 
+/**
+ * Binaire store sans ExpoSQLite (OTA JS seul) : ne jamais `import("expo-sqlite")`
+ * sinon crash fatal « Cannot find native module 'ExpoSQLite' » au switch chauffeur.
+ */
+function isExpoSqliteNativeAvailable(): boolean {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { requireOptionalNativeModule } = require("expo-modules-core") as {
+      requireOptionalNativeModule?: (name: string) => unknown;
+    };
+    if (typeof requireOptionalNativeModule !== "function") return false;
+    return requireOptionalNativeModule("ExpoSQLite") != null;
+  } catch {
+    return false;
+  }
+}
+
 function emitCriticalTelemetry(event: string, detail?: Record<string, unknown>): void {
   try {
     console.error(`[trackingQueueStore] CRITICAL ${event}`, detail ?? {});
@@ -100,6 +117,9 @@ function emitCriticalTelemetry(event: string, detail?: Record<string, unknown>):
 }
 
 async function openAndInitSchema(): Promise<typeof sqliteDb> {
+  if (!isExpoSqliteNativeAvailable()) {
+    throw new Error("expo_sqlite_native_module_missing");
+  }
   const ExpoSqlite = await import("expo-sqlite");
   const db = await ExpoSqlite.openDatabaseAsync("driver_tracking_queue_v5.db");
   await db.execAsync(`
@@ -166,7 +186,18 @@ async function ensureSqlite(): Promise<boolean> {
     useMemory = true;
     return false;
   }
-  // Natif : fail-closed, retry simple, jamais DELETE DB, jamais mémoire silencieuse.
+  // OTA sur binaire sans ExpoSQLite : dégradé mémoire + AsyncStorage (pas de crash).
+  if (isNativePlatform() && !isExpoSqliteNativeAvailable()) {
+    useMemory = true;
+    durableUnavailable = false;
+    sqliteDb = null;
+    emitCriticalTelemetry("sqlite_native_module_missing", {
+      platform: "native",
+      degraded: "memory_async_storage",
+    });
+    return false;
+  }
+  // Natif avec module : fail-closed si ouverture KO, jamais DELETE DB.
   let lastError: unknown;
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
@@ -177,7 +208,22 @@ async function ensureSqlite(): Promise<boolean> {
       return true;
     } catch (err) {
       lastError = err;
+      if (String(err).includes("expo_sqlite_native_module_missing")) {
+        break;
+      }
     }
+  }
+  // Module présent mais open KO → fail-closed.
+  // Module manquant (course) → déjà géré ci-dessus ; filet de sécurité mémoire.
+  if (String(lastError).includes("expo_sqlite_native_module_missing")) {
+    useMemory = true;
+    durableUnavailable = false;
+    sqliteDb = null;
+    emitCriticalTelemetry("sqlite_native_module_missing", {
+      platform: "native",
+      degraded: "memory_async_storage",
+    });
+    return false;
   }
   durableUnavailable = true;
   useMemory = false;

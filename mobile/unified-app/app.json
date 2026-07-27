@@ -140,6 +140,7 @@
       "expo-task-manager",
       "expo-background-fetch",
       "expo-secure-store",
+      "expo-sqlite",
       "expo-local-authentication",
       "expo-web-browser",
       "expo-notifications",

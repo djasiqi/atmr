@@ -71,4 +71,29 @@ describe("trackingQueueStore (Annexe A.4)", () => {
     const active = await trackingQueueStore.listActive();
     expect(active.some((r) => r.locationEventId === "m1")).toBe(true);
   });
+
+  it("reste utilisable en mémoire si le backend durable est forcé KO puis réinit tests", async () => {
+    trackingQueueStore._resetMemoryForTests();
+    await trackingQueueStore.upsert({
+      locationEventId: "e2",
+      trackingSessionId: "s1",
+      sessionGeneration: 1,
+      sequenceId: 2,
+      payloadJson: "{}",
+      state: "non_ingested",
+      queuedAt: Date.now(),
+      lastAttemptAt: null,
+      retryCount: 0,
+      deliveryState: "queued",
+      missionId: null,
+      locationMode: "mission_live",
+      batchId: "b",
+      positionId: "p",
+      appState: "active",
+      lastError: null,
+      ackedAt: null,
+    });
+    const active = await trackingQueueStore.listActive();
+    expect(active.some((r) => r.locationEventId === "e2")).toBe(true);
+  });
 });
