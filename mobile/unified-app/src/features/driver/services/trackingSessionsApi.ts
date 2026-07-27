@@ -3,7 +3,7 @@
  * POST /driver/me/tracking/sessions — idempotent, offline-first.
  */
 
-import { apiClient } from "../../../core/api/apiClient";
+import { apiClient } from "../../../core/api/client";
 
 export type TrackingSessionRegisterRequest = {
   tracking_session_id: string;
