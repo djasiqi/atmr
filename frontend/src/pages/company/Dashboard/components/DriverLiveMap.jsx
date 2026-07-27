@@ -856,6 +856,16 @@ function DriverLiveMap({ drivers: propDrivers }) {
     setMapReady(true);
     perfMark('gmaps_map_loaded');
     if (MAP_DEBUG) console.log('[DriverLiveMap] Google Map chargée');
+    // Double rAF : attendre que le conteneur ait sa largeur finale (layout dashboard)
+    // avant de forcer un resize Google Maps, sinon la carte reste « à moitié ».
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (mapRef.current !== map || !window.google?.maps?.event) return;
+        const center = typeof map.getCenter === 'function' ? map.getCenter() : null;
+        window.google.maps.event.trigger(map, 'resize');
+        if (center) map.setCenter(center);
+      });
+    });
   }, []);
 
   useEffect(() => {
@@ -1074,7 +1084,10 @@ function DriverLiveMap({ drivers: propDrivers }) {
       if (width <= 0 || height <= 0) return;
       if (rafId != null) cancelAnimationFrame(rafId);
       rafId = requestAnimationFrame(() => {
+        const center = typeof map.getCenter === 'function' ? map.getCenter() : null;
         window.google.maps.event.trigger(map, 'resize');
+        // Sans recentrage, les tuiles restent décalées après un changement de largeur.
+        if (center) map.setCenter(center);
       });
     });
 

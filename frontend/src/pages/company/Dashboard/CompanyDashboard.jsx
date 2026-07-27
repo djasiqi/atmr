@@ -1390,8 +1390,12 @@ const CompanyDashboard = () => {
             />
           )}
 
-          <div className={isManualMode ? styles.singleColumnLayout : styles.twoColumnLayout}>
-            <div className={isManualMode ? styles.fullColumn : styles.leftColumn}>
+          {/* Pleine largeur sauf semi-auto (colonne IA à droite).
+              Important : tant que dispatchMode est null (chargement), ne pas
+              utiliser twoColumnLayout — sinon la carte s'affiche à ~55 % puis
+              « saute » en pleine largeur quand le mode arrive. */}
+          <div className={isSemiAutoMode ? styles.twoColumnLayout : styles.singleColumnLayout}>
+            <div className={isSemiAutoMode ? styles.leftColumn : styles.fullColumn}>
               <section className={styles.mapSection} data-tour-id="dispatch-assign">
                 {liveMapEnabled ? (
                   <Suspense

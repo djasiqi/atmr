@@ -326,6 +326,7 @@
 
 /* Google Maps : s'assurer que la carte prend tout l'espace */
 .mapSection > div:first-child {
+  width: 100% !important;
   height: 100% !important;
   border-radius: var(--radius-lg);
   overflow: hidden;

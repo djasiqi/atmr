@@ -98,12 +98,10 @@ const InvoiceRowActions = ({
       : 'Voir rappel (PDF)';
 
   const openProtectedPdf = async (apiUrl, fallbackUrl) => {
-    const target = apiUrl || (fallbackUrl ? ensurePdfUrlWorksInDev(fallbackUrl) : null);
-    if (!target) return;
-    // Routes API protégées : télécharger via apiClient (JWT/cookie) puis blob URL
-    if (target.startsWith('/api/')) {
+    // Routes API protégées : chemin relatif à apiClient.baseURL (/api/v1)
+    if (apiUrl) {
       try {
-        const response = await apiClient.get(target, { responseType: 'blob' });
+        const response = await apiClient.get(apiUrl, { responseType: 'blob' });
         const blobUrl = URL.createObjectURL(response.data);
         window.open(blobUrl, '_blank');
         return;
@@ -112,6 +110,8 @@ const InvoiceRowActions = ({
         return;
       }
     }
+    const target = fallbackUrl ? ensurePdfUrlWorksInDev(fallbackUrl) : null;
+    if (!target) return;
     if (typeof onViewPdf === 'function') {
       onViewPdf(target);
     } else {

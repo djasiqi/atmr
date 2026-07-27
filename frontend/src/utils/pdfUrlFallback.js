@@ -50,19 +50,24 @@ export function ensurePdfUrlWorksInDev(url) {
 }
 
 /**
- * Construit l'URL API protégée pour le PDF d'une facture (Lot 0 SEC-06).
- * Les anciens liens /uploads/invoices/... ne sont plus publics.
+ * Construit le chemin API (relatif à apiClient.baseURL `/api/v1`) pour le PDF
+ * d'une facture (Lot 0 SEC-06). Les anciens liens /uploads/invoices/... ne sont
+ * plus publics.
+ *
+ * Ne pas préfixer `/api/v1` ici : apiClient le ajoute déjà (sinon double préfixe
+ * → `/api/v1/api/v1/...` → 404).
  *
  * @param {{ id: number, company_id?: number }} invoice
  * @returns {string|null}
  */
 export function buildInvoicePdfApiUrl(invoice) {
   if (!invoice?.id || !invoice?.company_id) return null;
-  return `/api/v1/invoices/companies/${invoice.company_id}/invoices/${invoice.id}/pdf`;
+  return `/invoices/companies/${invoice.company_id}/invoices/${invoice.id}/pdf`;
 }
 
 /**
- * Construit l'URL API protégée pour le PDF d'un rappel.
+ * Construit le chemin API (relatif à apiClient.baseURL `/api/v1`) pour le PDF
+ * d'un rappel.
  *
  * @param {{ id: number, company_id?: number }} invoice
  * @param {{ id: number }} reminder
@@ -70,7 +75,7 @@ export function buildInvoicePdfApiUrl(invoice) {
  */
 export function buildReminderPdfApiUrl(invoice, reminder) {
   if (!invoice?.id || !invoice?.company_id || !reminder?.id) return null;
-  return `/api/v1/invoices/companies/${invoice.company_id}/invoices/${invoice.id}/reminders/${reminder.id}/pdf`;
+  return `/invoices/companies/${invoice.company_id}/invoices/${invoice.id}/reminders/${reminder.id}/pdf`;
 }
 
 /**
