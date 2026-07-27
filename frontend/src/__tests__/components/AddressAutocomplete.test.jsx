@@ -4,7 +4,16 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import AddressAutocomplete from 'components/common/AddressAutocomplete';
 
-// Mock fetch
+jest.mock('../../utils/apiClient', () => ({
+  __esModule: true,
+  default: {
+    get: jest.fn(),
+  },
+}));
+
+import apiClient from '../../utils/apiClient';
+
+// Mock fetch (fallback Photon)
 global.fetch = jest.fn();
 
 describe('AddressAutocomplete', () => {
@@ -14,6 +23,7 @@ describe('AddressAutocomplete', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     global.fetch.mockClear();
+    apiClient.get.mockReset();
   });
 
   it('devrait afficher un champ de saisie', () => {
@@ -33,40 +43,28 @@ describe('AddressAutocomplete', () => {
   });
 
   it('devrait afficher les suggestions après saisie', async () => {
-    const mockSuggestions = {
-      features: [
-        {
-          properties: {
-            name: 'HUG',
-            street: 'Rue Gabrielle-Perret-Gentil',
-            housenumber: '4',
-            postcode: '1205',
-            city: 'Genève',
-            country: 'Suisse',
-          },
-          geometry: {
-            coordinates: [6.14262, 46.19226],
-          },
-        },
-        {
-          properties: {
-            street: 'Avenue de la Gare',
-            housenumber: '10',
-            postcode: '1003',
-            city: 'Lausanne',
-            country: 'Suisse',
-          },
-          geometry: {
-            coordinates: [6.6294, 46.5197],
-          },
-        },
-      ],
-    };
+    const mockSuggestions = [
+      {
+        source: 'photon',
+        label: 'HUG, Rue Gabrielle-Perret-Gentil 4, 1205 Genève',
+        address: 'Rue Gabrielle-Perret-Gentil 4',
+        postcode: '1205',
+        city: 'Genève',
+        lat: 46.19226,
+        lon: 6.14262,
+      },
+      {
+        source: 'photon',
+        label: 'Avenue de la Gare 10, 1003 Lausanne',
+        address: 'Avenue de la Gare 10',
+        postcode: '1003',
+        city: 'Lausanne',
+        lat: 46.5197,
+        lon: 6.6294,
+      },
+    ];
 
-    global.fetch.mockResolvedValue({
-      ok: true,
-      json: async () => mockSuggestions,
-    });
+    apiClient.get.mockResolvedValue({ status: 200, data: mockSuggestions });
 
     const user = userEvent.setup();
     render(
@@ -82,13 +80,12 @@ describe('AddressAutocomplete', () => {
     await user.type(input, 'Genève');
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalled();
+      expect(apiClient.get).toHaveBeenCalled();
     });
 
-    // Attendre que les suggestions apparaissent
     await waitFor(
       () => {
-        expect(screen.getByText('HUG')).toBeInTheDocument();
+        expect(screen.getByText('HUG, Rue Gabrielle-Perret-Gentil 4, 1205 Genève')).toBeInTheDocument();
       },
       { timeout: 3000 }
     );
@@ -108,10 +105,7 @@ describe('AddressAutocomplete', () => {
     ];
 
     // Mock API backend qui retourne directement les suggestions
-    global.fetch.mockResolvedValue({
-      ok: true,
-      json: async () => mockSuggestions,
-    });
+    apiClient.get.mockResolvedValue({ status: 200, data: mockSuggestions });
 
     const user = userEvent.setup();
     render(
@@ -162,10 +156,7 @@ describe('AddressAutocomplete', () => {
       },
     ];
 
-    global.fetch.mockResolvedValue({
-      ok: true,
-      json: async () => mockSuggestions,
-    });
+    apiClient.get.mockResolvedValue({ status: 200, data: mockSuggestions });
 
     const user = userEvent.setup();
     render(
@@ -201,10 +192,7 @@ describe('AddressAutocomplete', () => {
   it('devrait fermer les suggestions avec Escape', async () => {
     const mockSuggestions = [{ source: 'photon', label: 'Test', lat: 46.2, lon: 6.1 }];
 
-    global.fetch.mockResolvedValue({
-      ok: true,
-      json: async () => mockSuggestions,
-    });
+    apiClient.get.mockResolvedValue({ status: 200, data: mockSuggestions });
 
     const user = userEvent.setup();
     render(
@@ -228,6 +216,55 @@ describe('AddressAutocomplete', () => {
     });
   });
 
+  it('devrait prioriser l\'alias canonique HUG avant Google Places', async () => {
+    const mockSuggestions = [
+      {
+        source: 'alias',
+        label: 'Hôpitaux Universitaires de Genève (HUG), Rue Gabrielle-Perret-Gentil 4, 1205 Genève',
+        address: 'Rue Gabrielle-Perret-Gentil 4, 1205 Genève',
+        main_text: 'Hôpitaux Universitaires de Genève (HUG)',
+        secondary_text: 'Rue Gabrielle-Perret-Gentil 4, 1205 Genève',
+        name: 'Hôpitaux Universitaires de Genève (HUG)',
+        lat: 46.19226,
+        lon: 6.14262,
+      },
+      {
+        source: 'google_places',
+        label: 'HUG - Bâtiment Gustave Julliard, Rue Alcide-Jentzer 17, 1205 Genève',
+        main_text: 'HUG - Bâtiment Gustave Julliard',
+        secondary_text: 'Rue Alcide-Jentzer 17, 1205 Genève, Suisse',
+        place_id: 'google-julliard',
+      },
+    ];
+
+    apiClient.get.mockResolvedValue({ status: 200, data: mockSuggestions });
+
+    const user = userEvent.setup();
+    render(
+      <AddressAutocomplete name="dropoff" value="" onChange={mockOnChange} onSelect={mockOnSelect} />
+    );
+
+    await user.type(screen.getByRole('combobox'), 'HUG');
+
+    await waitFor(() => {
+      expect(screen.getByText('Hôpitaux Universitaires de Genève (HUG)')).toBeInTheDocument();
+    });
+
+    fireEvent.mouseDown(screen.getByText('Hôpitaux Universitaires de Genève (HUG)'));
+
+    await waitFor(() => {
+      expect(mockOnSelect).toHaveBeenCalledWith(
+        expect.objectContaining({
+          source: 'alias',
+          label: expect.stringContaining('Rue Gabrielle-Perret-Gentil 4'),
+          lat: 46.19226,
+          lon: 6.14262,
+          name: 'Hôpitaux Universitaires de Genève (HUG)',
+        })
+      );
+    });
+  });
+
   it('ne devrait pas afficher de suggestions si moins de 2 caractères', async () => {
     render(
       <AddressAutocomplete
@@ -243,18 +280,17 @@ describe('AddressAutocomplete', () => {
     fireEvent.change(input, { target: { value: 'G' } });
 
     await waitFor(() => {
-      expect(global.fetch).not.toHaveBeenCalled();
+      expect(apiClient.get).not.toHaveBeenCalled();
     });
   });
 
   it('devrait afficher un indicateur de chargement', async () => {
-    // Retarder la réponse pour voir le loading
     let resolvePromise;
     const fetchPromise = new Promise((resolve) => {
       resolvePromise = resolve;
     });
 
-    global.fetch.mockImplementation(() => fetchPromise);
+    apiClient.get.mockImplementation(() => fetchPromise);
 
     const user = userEvent.setup();
     render(
@@ -270,21 +306,15 @@ describe('AddressAutocomplete', () => {
     const input = screen.getByRole('combobox');
     await user.type(input, 'Genève');
 
-    // Attendre le debounce puis résoudre
     await new Promise((r) => setTimeout(r, 150));
 
-    // Vérifier que le loading apparaît ou que le fetch est appelé
-    expect(global.fetch).toHaveBeenCalled();
+    expect(apiClient.get).toHaveBeenCalled();
 
-    // Résoudre le fetch
-    resolvePromise({ ok: true, json: async () => [] });
+    resolvePromise({ status: 200, data: [] });
   });
 
   it('devrait afficher "Aucun résultat" si pas de suggestions', async () => {
-    global.fetch.mockResolvedValue({
-      ok: true,
-      json: async () => ({ features: [] }),
-    });
+    apiClient.get.mockResolvedValue({ status: 200, data: [] });
 
     const user = userEvent.setup();
     render(

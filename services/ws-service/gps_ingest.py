@@ -174,6 +174,17 @@ def _extract_company_id(point: dict[str, Any]) -> int | None:
     return None
 
 
+def _normalize_event_id(point: dict[str, Any]) -> dict[str, Any]:
+    """Canonique ``location_event_id`` ; alias mobile ``tracking_event_id`` (Phase 0A)."""
+    out = dict(point)
+    leid = out.get("location_event_id")
+    if not (isinstance(leid, str) and leid.strip()):
+        alias = out.get("tracking_event_id")
+        if isinstance(alias, str) and alias.strip():
+            out["location_event_id"] = alias.strip()
+    return out
+
+
 def enqueue_point(driver_id: int, point: dict[str, Any]) -> bool:
     """Ajoute un point. ``driver_id`` session socket uniquement. False si spool plein."""
     global _spooled_total, _rejected_total, _dropped_points, _queue_depth
@@ -182,6 +193,7 @@ def enqueue_point(driver_id: int, point: dict[str, Any]) -> bool:
         return False
     # Ne jamais faire confiance à un driver_id fourni par le mobile.
     safe_point = {k: v for k, v in point.items() if k != "driver_id"}
+    safe_point = _normalize_event_id(safe_point)
     company_id = _extract_company_id(safe_point)
 
     if _is_redis_backend():

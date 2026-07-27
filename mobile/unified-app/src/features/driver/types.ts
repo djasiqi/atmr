@@ -74,13 +74,18 @@ export type DriverLocationAckStatus =
   | "duplicate"
   | "stale"
   | "ignored"
-  | "rejected";
+  | "rejected"
+  | "ingested"
+  | "partially_ingested"
+  | "persisted";
 
 export type DriverLocationAck = {
   ack_status: DriverLocationAckStatus;
   accept_reason?: string | null;
   tracking_event_id?: string | null;
   trace_id?: string | null;
+  ingested_event_ids?: string[] | null;
+  retry_event_ids?: string[] | null;
 };
 
 export type DriverSocketEvent = {

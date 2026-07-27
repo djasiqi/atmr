@@ -31,10 +31,11 @@ for f in docker-compose.production.yml "${KAFKA_COMPOSE_FILE}" "${KAFKA_NETWORK_
 done
 
 BOOTSTRAP_SERVERS="${BOOTSTRAP_SERVERS:-kafka-broker-1:29092}"
-REPLICATION_FACTOR="${KAFKA_TOPIC_REPLICATION_FACTOR:-${REPLICATION_FACTOR:-2}}"
+# Prod 3 brokers : RF=3 / minISR=2 (plan Phase 0B). Dev mono-broker : surcharger RF=1.
+REPLICATION_FACTOR="${KAFKA_TOPIC_REPLICATION_FACTOR:-${REPLICATION_FACTOR:-3}}"
 
 if [[ -n "${KAFKA_MIN_INSYNC_REPLICAS:-}" ]] || [[ -n "${MIN_INSYNC_REPLICAS:-}" ]]; then
-  MIN_INSYNC_REPLICAS="${KAFKA_MIN_INSYNC_REPLICAS:-${MIN_INSYNC_REPLICAS:-1}}"
+  MIN_INSYNC_REPLICAS="${KAFKA_MIN_INSYNC_REPLICAS:-${MIN_INSYNC_REPLICAS:-2}}"
 else
   if [[ "${REPLICATION_FACTOR}" -ge 3 ]]; then
     MIN_INSYNC_REPLICAS=2
@@ -42,6 +43,13 @@ else
     MIN_INSYNC_REPLICAS=1
   fi
 fi
+
+if [[ "${REPLICATION_FACTOR}" -ge 3 ]] && [[ "${MIN_INSYNC_REPLICAS}" -lt 2 ]]; then
+  echo "ERREUR : RF=${REPLICATION_FACTOR} exige min.insync.replicas>=2 (reçu ${MIN_INSYNC_REPLICAS})" >&2
+  exit 1
+fi
+
+echo "Kafka topics init : RF=${REPLICATION_FACTOR} minISR=${MIN_INSYNC_REPLICAS}"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=lib/kafka_topics_init.sh

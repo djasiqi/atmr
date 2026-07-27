@@ -274,9 +274,10 @@ type RawDriversResponse = {
   }[];
 };
 
+/** Ne synthétise jamais « maintenant » — absence → chaîne vide (Phase 0A fraîcheur). */
 function toIso(input: unknown): string {
   if (typeof input === "string" && input.length > 0) return input;
-  return new Date().toISOString();
+  return "";
 }
 
 function toFiniteNumber(input: unknown): number | null {
@@ -469,6 +470,20 @@ function normalizeLocation(
     typeof raw.driver_name === "string" && raw.driver_name.trim()
       ? raw.driver_name.trim()
       : fullName;
+  const timestamp = toIso(raw.timestamp);
+  const recordedAt = toIso(raw.recorded_at ?? raw.timestamp);
+  const receivedAt = toIso(raw.received_at);
+  const lastSeenSeconds = toFiniteNumber(
+    (raw as { last_seen_seconds?: unknown }).last_seen_seconds
+  );
+  const locationStatus =
+    typeof (raw as { location_status?: unknown }).location_status === "string"
+      ? String((raw as { location_status: string }).location_status)
+      : null;
+  const isStale =
+    typeof (raw as { is_stale?: unknown }).is_stale === "boolean"
+      ? Boolean((raw as { is_stale: boolean }).is_stale)
+      : locationStatus === "stale" || locationStatus === "offline";
   return {
     driver_id: driverId,
     driver_name: driverName,
@@ -479,9 +494,16 @@ function normalizeLocation(
       toFiniteNumber(raw.mission_id ?? raw.current_booking_id) ?? null,
     latitude,
     longitude,
-    timestamp: toIso(raw.timestamp),
-    recorded_at: toIso(raw.recorded_at ?? raw.timestamp),
-    received_at: toIso(raw.received_at),
+    timestamp,
+    recorded_at: recordedAt || timestamp,
+    received_at: receivedAt,
+    last_seen_seconds: lastSeenSeconds,
+    location_status: locationStatus,
+    is_stale: isStale,
+    accept_status:
+      typeof (raw as { accept_status?: unknown }).accept_status === "string"
+        ? String((raw as { accept_status: string }).accept_status)
+        : null,
   };
 }
 

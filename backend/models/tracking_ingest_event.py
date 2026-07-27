@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Index, UniqueConstraint
+from sqlalchemy import ForeignKeyConstraint, Index, UniqueConstraint
 from sqlalchemy.sql import func
 
 from ext import db
@@ -21,6 +21,11 @@ class TrackingIngestEvent(db.Model):
             name="uq_tracking_ingest_driver_event",
         ),
         Index("ix_tracking_ingest_received_at", "received_at"),
+        ForeignKeyConstraint(
+            ["driver_id", "tracking_session_id"],
+            ["tracking_sessions.driver_id", "tracking_sessions.tracking_session_id"],
+            name="fk_tracking_ingest_session",
+        ),
     )
 
     id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
@@ -42,6 +47,9 @@ class TrackingIngestEvent(db.Model):
         nullable=False,
         server_default=func.now(),
     )
+    tracking_session_id = db.Column(db.String(128), nullable=True)
+    sequence_id = db.Column(db.BigInteger, nullable=True)
+    session_generation = db.Column(db.BigInteger, nullable=True)
 
 
 class TrackingDerivedRepairPending(db.Model):

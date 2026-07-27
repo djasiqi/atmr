@@ -29,7 +29,7 @@ from services.region_router import (
     kafka_partition_key_for_driver_location,
 )
 
-from .kafka_topics import TOPIC_DRIVER_LOCATION_RAW
+from .kafka_topics import TOPIC_DRIVER_LOCATION_RAW, TOPIC_DRIVER_LOCATION_RAW_SHADOW_V3
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +37,7 @@ KAFKA_ENABLED = os.getenv("KAFKA_ENABLED", "false").lower() == "true"
 TRACKING_INGEST_ASYNC_ENABLED = (
     os.getenv("TRACKING_INGEST_ASYNC_ENABLED", "false").lower() == "true"
 )
+TRACKING_INGEST_MODE = os.getenv("TRACKING_INGEST_MODE", "legacy").lower()
 KAFKA_BOOTSTRAP_SERVERS = os.getenv(
     "KAFKA_BOOTSTRAP_SERVERS",
     "kafka-broker-1:29092,kafka-broker-2:29092,kafka-broker-3:29092",
@@ -227,10 +228,23 @@ class TrackingIngestProducer:
             )
 
         try:
+            # Chemin autoritaire inchangé (RAW). Phase 2 : copie isolée shadow.v3.
             future = self._producer.send(
                 TOPIC_DRIVER_LOCATION_RAW, value=message, key=key
             )
             future.get(timeout=KAFKA_PRODUCE_TIMEOUT_S)
+            if TRACKING_INGEST_MODE == "shadow_kafka":
+                try:
+                    self._producer.send(
+                        TOPIC_DRIVER_LOCATION_RAW_SHADOW_V3,
+                        value=message,
+                        key=key,
+                    )
+                except Exception:
+                    logger.warning(
+                        "[tracking_ingest] shadow.v3 copy failed (non blocking)",
+                        exc_info=True,
+                    )
             try:
                 from services.monitoring.driver_location_metrics import (
                     inc_tracking_kafka_messages_produced,

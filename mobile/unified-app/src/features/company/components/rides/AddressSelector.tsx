@@ -30,6 +30,10 @@ function splitAddressLabel(label: string) {
   return { primary, secondary: rest.join(", ") };
 }
 
+function isAliasSuggestion(item: RideAddressOption): boolean {
+  return item.source === "alias";
+}
+
 function isGoogleLikeSuggestion(item: RideAddressOption): boolean {
   return item.source === "google_places" || item.source === "google";
 }
@@ -94,6 +98,7 @@ export function AddressSelector({
   const sortedSuggestions = useMemo(() => {
     const rows = Array.isArray(addressesQuery.data) ? [...addressesQuery.data] : [];
     const score = (item: RideAddressOption): number => {
+      if (isAliasSuggestion(item)) return 500;
       const label = (item.label || "").toLowerCase();
       const mainText = (item.mainText || "").toLowerCase();
       const startsWithQuery = label.startsWith(normalizedQuery) || mainText.startsWith(normalizedQuery);
@@ -109,7 +114,9 @@ export function AddressSelector({
   }, [addressesQuery.data, normalizedQuery]);
   const groupedSuggestions = useMemo(() => {
     const limited = sortedSuggestions.slice(0, SUGGESTIONS_MAX_VISIBLE);
-    const primary = limited.filter((item) => looksLikePoi(item) || isGoogleLikeSuggestion(item));
+    const primary = limited.filter(
+      (item) => isAliasSuggestion(item) || looksLikePoi(item) || isGoogleLikeSuggestion(item)
+    );
     const secondary = limited.filter((item) => !primary.includes(item));
     return { primary, secondary };
   }, [sortedSuggestions]);

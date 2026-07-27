@@ -100,6 +100,8 @@ export type CompanyDriverLiveLocation = {
   received_at?: string | null;
   last_seen_seconds?: number | null;
   location_status?: "live" | "recent" | "stale" | "offline" | "last_known" | null;
+  is_stale?: boolean | null;
+  accept_status?: string | null;
   tracking_display_status?: string | null;
   presence_status?: string | null;
   status?: string | null;

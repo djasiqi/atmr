@@ -185,7 +185,13 @@ def build_company_driver_locations_items(
         if lat is None and getattr(driver, "latitude", None) is not None:
             lat = float(driver.latitude)
             lon = float(driver.longitude)
-            ts = None
+            # Phase 0A : exposer last_position_update (jamais timestamp synthétique « now »)
+            lpu = getattr(driver, "last_position_update", None)
+            if lpu is not None:
+                ts = lpu.isoformat() if hasattr(lpu, "isoformat") else str(lpu)
+                loc_data["recorded_at"] = ts
+            else:
+                ts = None
             used_db_fallback = True
 
         if lat is None or lon is None:

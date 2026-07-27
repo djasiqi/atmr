@@ -1,9 +1,29 @@
-import { getApiErrorMessage } from './apiErrorMessage';
+import { getApiErrorMessage, isServiceUnavailableError } from './apiErrorMessage';
 
 describe('getApiErrorMessage', () => {
   it('utilise le fallback si pas de réponse', () => {
     expect(getApiErrorMessage(new Error('x'), 'Défaut')).toBe('x');
     expect(getApiErrorMessage({}, 'Défaut')).toBe('Défaut');
+  });
+
+  it('remplace les erreurs de panne/maintenance par le message support', () => {
+    const err = {
+      message: 'Request failed with status code 404',
+      response: {
+        status: 404,
+        data: '404 page not found',
+      },
+    };
+    expect(isServiceUnavailableError(err)).toBe(true);
+    expect(getApiErrorMessage(err, 'Défaut')).toMatch(/momentanément indisponible/i);
+    expect(getApiErrorMessage(err, 'Défaut')).toMatch(/022 512 02 03/);
+    expect(getApiErrorMessage(err, 'Défaut')).toMatch(/info@lirie\.ch/);
+  });
+
+  it('détecte une panne réseau sans réponse HTTP', () => {
+    const err = { code: 'ERR_NETWORK', message: 'Network Error' };
+    expect(isServiceUnavailableError(err)).toBe(true);
+    expect(getApiErrorMessage(err, 'Défaut')).toMatch(/contacter le support/i);
   });
 
   it('ignore le message Axios générique de statut HTTP', () => {

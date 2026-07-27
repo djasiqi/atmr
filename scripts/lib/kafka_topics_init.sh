@@ -33,6 +33,13 @@ kafka_topics_read_env() {
   KAFKA_TOPIC_DRIVER_LOCATION_RAW="$(_kt_env KAFKA_TOPIC_DRIVER_LOCATION_RAW driver.location.raw)"
   KAFKA_TOPIC_DRIVER_LOCATION_PROCESSED="$(_kt_env KAFKA_TOPIC_DRIVER_LOCATION_PROCESSED driver.location.processed)"
   KAFKA_TOPIC_DRIVER_LOCATION_DLQ="$(_kt_env KAFKA_TOPIC_DRIVER_LOCATION_DLQ driver.location.dlq)"
+  # Contrat Kafka v3 (RF=3 / minISR=2) — suffixe = version contrat, pas version plan
+  KAFKA_TOPIC_DRIVER_LOCATION_RAW_V3="$(_kt_env KAFKA_TOPIC_DRIVER_LOCATION_RAW_V3 driver.location.raw.v3)"
+  KAFKA_TOPIC_DRIVER_LOCATION_PROCESSED_V3="$(_kt_env KAFKA_TOPIC_DRIVER_LOCATION_PROCESSED_V3 driver.location.processed.v3)"
+  KAFKA_TOPIC_DRIVER_LOCATION_DLQ_V3="$(_kt_env KAFKA_TOPIC_DRIVER_LOCATION_DLQ_V3 driver.location.dlq.v3)"
+  KAFKA_TOPIC_DRIVER_LOCATION_RAW_SHADOW_V3="$(_kt_env KAFKA_TOPIC_DRIVER_LOCATION_RAW_SHADOW_V3 driver.location.raw.shadow.v3)"
+  KAFKA_TOPIC_DRIVER_LOCATION_ENRICHED_V3="$(_kt_env KAFKA_TOPIC_DRIVER_LOCATION_ENRICHED_V3 driver.location.enriched.v3)"
+  KAFKA_CREATE_V3_TOPICS="$(_kt_env KAFKA_CREATE_V3_TOPICS true)"
   KAFKA_TOPIC_NOTIFICATIONS_DLQ="$(_kt_env KAFKA_TOPIC_NOTIFICATIONS_DLQ notifications.dlq)"
   KAFKA_OPS_SMOKE_TOPIC="$(_kt_env KAFKA_OPS_SMOKE_TOPIC atmr.ops.smoke)"
 }
@@ -51,6 +58,16 @@ kafka_topics_create_all() {
   create_topic "${KAFKA_TOPIC_DRIVER_LOCATION_DLQ}" "${KAFKA_DLQ_PARTITIONS}" "259200000" "delete"
   create_topic "${KAFKA_TOPIC_NOTIFICATIONS_DLQ}" "${KAFKA_DLQ_PARTITIONS}" "259200000" "delete"
   create_topic "${KAFKA_OPS_SMOKE_TOPIC}" "${KAFKA_SMOKE_PARTITIONS}" "259200000" "delete"
+
+  # Topics contrat v3 — création nouvelle (ne pas compter sur --if-not-exists pour changer RF)
+  if [[ "${KAFKA_CREATE_V3_TOPICS}" == "true" ]]; then
+    # RAW rétention dimensionnée : défaut 72 h (259200000 ms) — gate capacité ops avant prod
+    create_topic "${KAFKA_TOPIC_DRIVER_LOCATION_RAW_V3}" "${KAFKA_DEFAULT_PARTITIONS}" "259200000" "delete"
+    create_topic "${KAFKA_TOPIC_DRIVER_LOCATION_PROCESSED_V3}" "${KAFKA_DEFAULT_PARTITIONS}" "259200000" "delete"
+    create_topic "${KAFKA_TOPIC_DRIVER_LOCATION_DLQ_V3}" "${KAFKA_DLQ_PARTITIONS}" "259200000" "delete"
+    create_topic "${KAFKA_TOPIC_DRIVER_LOCATION_RAW_SHADOW_V3}" "${KAFKA_DEFAULT_PARTITIONS}" "259200000" "delete"
+    create_topic "${KAFKA_TOPIC_DRIVER_LOCATION_ENRICHED_V3}" "${KAFKA_DEFAULT_PARTITIONS}" "259200000" "delete"
+  fi
 
   if [[ "${KAFKA_CREATE_INACTIVE_TOPICS}" == "true" ]]; then
     create_topic "notifications.push" "${KAFKA_DEFAULT_PARTITIONS}" "259200000" "delete"

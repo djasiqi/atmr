@@ -154,6 +154,8 @@ def parse_pilotage_list_args(args) -> dict[str, Any]:
 
 def parse_pilotage_detail_args(args) -> dict[str, Any]:
     base = parse_pilotage_request_args(args)
+    # company_id provient du path /companies/<id> — éviter le doublon kwargs.
+    base.pop("company_id", None)
     base["page"] = max(1, args.get("page", default=1, type=int) or 1)
     base["per_page"] = args.get("per_page", default=50, type=int) or 50
     return base

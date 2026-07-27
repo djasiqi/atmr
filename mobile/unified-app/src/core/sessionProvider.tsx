@@ -503,6 +503,21 @@ export function SessionProvider({ children }: PropsWithChildren) {
     (next: { status: SessionStatus; error: string | null; journalEvent: string }) => {
       void logoutSession().catch(() => undefined);
       void purgeDriverProfileCache().catch(() => undefined);
+      // Phase 0A : quarantaine file GPS — jamais de purge silencieuse
+      const ctx = activeContextRef.current;
+      if (ctx?.context_type === "driver") {
+        const driverId = getDriverIdFromContext(ctx) ?? ctx.context_id;
+        const companyId = getCompanyIdFromContext(ctx) ?? "unknown";
+        void import("../features/driver/services/driverTrackingQueue")
+          .then(({ driverTrackingQueue }) =>
+            driverTrackingQueue.quarantineOnLogout({
+              userId: ctx.context_id,
+              driverId,
+              companyId,
+            })
+          )
+          .catch(() => undefined);
+      }
       setBootstrap(null);
       setActiveContext(null);
       activeContextRef.current = null;

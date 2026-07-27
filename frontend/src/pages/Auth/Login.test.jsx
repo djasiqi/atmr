@@ -227,6 +227,32 @@ describe('Login Page', () => {
     }, { timeout: 3000 });
   });
 
+  it('affiche le message support si le serveur est indisponible (404 proxy)', async () => {
+    apiClient.post.mockRejectedValue({
+      message: 'Request failed with status code 404',
+      response: {
+        status: 404,
+        data: '404 page not found',
+      },
+    });
+
+    renderLogin();
+
+    fireEvent.change(screen.getByLabelText(/email/i), {
+      target: { value: 'user@example.com' },
+    });
+    fireEvent.change(screen.getByPlaceholderText(/entrez votre mot de passe/i), {
+      target: { value: 'password123' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /se connecter/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent(/momentanément indisponible/i);
+      expect(screen.getByRole('alert')).toHaveTextContent(/022 512 02 03/);
+    });
+    expect(screen.queryByText(/404 page not found/i)).not.toBeInTheDocument();
+  });
+
   it('envoie remember_me=true et ne stocke que l\'email quand la case est cochée', async () => {
     apiClient.post.mockResolvedValue({
       data: {

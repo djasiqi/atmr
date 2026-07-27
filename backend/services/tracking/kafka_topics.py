@@ -20,6 +20,23 @@ TOPIC_DRIVER_LOCATION_DLQ = os.getenv(
     "KAFKA_TOPIC_DRIVER_LOCATION_DLQ", "driver.location.dlq"
 )
 
+# Contrat Kafka v3 (RF=3 / minISR=2) — suffixe = version contrat
+TOPIC_DRIVER_LOCATION_RAW_V3 = os.getenv(
+    "KAFKA_TOPIC_DRIVER_LOCATION_RAW_V3", "driver.location.raw.v3"
+)
+TOPIC_DRIVER_LOCATION_PROCESSED_V3 = os.getenv(
+    "KAFKA_TOPIC_DRIVER_LOCATION_PROCESSED_V3", "driver.location.processed.v3"
+)
+TOPIC_DRIVER_LOCATION_ENRICHED_V3 = os.getenv(
+    "KAFKA_TOPIC_DRIVER_LOCATION_ENRICHED_V3", "driver.location.enriched.v3"
+)
+TOPIC_DRIVER_LOCATION_DLQ_V3 = os.getenv(
+    "KAFKA_TOPIC_DRIVER_LOCATION_DLQ_V3", "driver.location.dlq.v3"
+)
+TOPIC_DRIVER_LOCATION_RAW_SHADOW_V3 = os.getenv(
+    "KAFKA_TOPIC_DRIVER_LOCATION_RAW_SHADOW_V3", "driver.location.raw.shadow.v3"
+)
+
 TOPIC_MISSION_EVENTS = os.getenv("KAFKA_TOPIC_MISSION_EVENTS", "mission.events")
 TOPIC_NOTIFICATION_EVENTS = os.getenv(
     "KAFKA_TOPIC_NOTIFICATION_EVENTS", "notification.events"

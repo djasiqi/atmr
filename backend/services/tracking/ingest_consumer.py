@@ -1,11 +1,12 @@
 """Consumer Kafka tracking ingest robuste.
 
-Contrat:
+Contrat (plan v5 / Annexe A.1 — Phase 0B) :
 - consume topic raw
-- publish processed avec ACK court avant commit
-- retry local borné sur erreurs transitoires
-- échec définitif => DLQ puis commit uniquement si DLQ ACK confirmé
-- aucun auto-replay métier dans ce worker
+- échec définitif => DLQ puis commit offset uniquement si DLQ ACK confirmé
+- force-commit interdit par défaut (TRACKING_DLQ_FORCE_COMMIT_ON_FAILURE=false)
+- commits explicites par partition (offset+1)
+- DLQ épuisée => FatalTrackingConsumerError (fail-stop)
+- Phase 1 : publication processed déplacée vers outbox_publisher
 """
 
 from __future__ import annotations
@@ -23,6 +24,23 @@ from .kafka_topics import (
     TOPIC_DRIVER_LOCATION_PROCESSED,
     TOPIC_DRIVER_LOCATION_RAW,
 )
+
+
+class FatalTrackingConsumerError(RuntimeError):
+    """Échec non récupérable : arrêt du consumer (pas de commit silencieux)."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        topic: str | None = None,
+        partition: int | None = None,
+        offset: int | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.topic = topic
+        self.partition = partition
+        self.offset = offset
 
 try:
     from services.monitoring.driver_location_metrics import (
@@ -94,6 +112,19 @@ KAFKA_PUBLISH_ACK_TIMEOUT_S = float(os.getenv("KAFKA_PUBLISH_ACK_TIMEOUT_S", "2.
 TRACKING_INGEST_PERSIST_ENABLED = (
     os.getenv("TRACKING_INGEST_PERSIST_ENABLED", "false").lower() == "true"
 )
+TRACKING_INGEST_MODE = os.getenv("TRACKING_INGEST_MODE", "legacy").lower()
+# Phase 1 : TX PG+outbox puis commit RAW — plus de publish processed dans ce consumer.
+_TRACKING_PERSIST_WITH_OUTBOX_DEFAULT = (
+    "true"
+    if TRACKING_INGEST_MODE in ("kafka_primary", "kafka_primary_canary")
+    else "false"
+)
+TRACKING_PERSIST_WITH_OUTBOX = (
+    os.getenv(
+        "TRACKING_PERSIST_WITH_OUTBOX", _TRACKING_PERSIST_WITH_OUTBOX_DEFAULT
+    ).lower()
+    == "true"
+)
 TRACKING_INGEST_ALLOW_REPUBLISH_ONLY = (
     os.getenv("TRACKING_INGEST_ALLOW_REPUBLISH_ONLY", "false").lower() == "true"
 )
@@ -114,7 +145,7 @@ TRACKING_DLQ_PUBLISH_MAX_ATTEMPTS = int(
     os.getenv("TRACKING_DLQ_PUBLISH_MAX_ATTEMPTS", "3")
 )
 TRACKING_DLQ_FORCE_COMMIT_ON_FAILURE = (
-    os.getenv("TRACKING_DLQ_FORCE_COMMIT_ON_FAILURE", "true").lower() == "true"
+    os.getenv("TRACKING_DLQ_FORCE_COMMIT_ON_FAILURE", "false").lower() == "true"
 )
 KAFKA_SECURITY_PROTOCOL = os.getenv("KAFKA_SECURITY_PROTOCOL", "PLAINTEXT")
 KAFKA_SASL_MECHANISM = os.getenv("KAFKA_SASL_MECHANISM", "")
@@ -285,7 +316,18 @@ class TrackingIngestConsumer:
                 "[tracking_consumer] produced metric unavailable", exc_info=True
             )
 
+    def _commit_record(self, record) -> None:
+        """Commit explicite offset+1 pour la partition du record uniquement."""
+        assert self._consumer is not None
+        from kafka.structs import OffsetAndMetadata, TopicPartition
+
+        tp = TopicPartition(record.topic, record.partition)
+        self._consumer.commit(
+            {tp: OffsetAndMetadata(record.offset + 1, "", -1)}
+        )
+
     def _commit_current(self) -> None:
+        """Compat tests legacy — préférer ``_commit_record``."""
         assert self._consumer is not None
         self._consumer.commit()
 
@@ -318,7 +360,7 @@ class TrackingIngestConsumer:
                     message=dlq_payload,
                     retry_count=retry_count,
                 )
-                self._commit_current()
+                self._commit_record(record)
                 try:
                     inc_tracking_kafka_dlq_messages(reason=error_type)
                 except Exception:
@@ -355,8 +397,9 @@ class TrackingIngestConsumer:
                     time.sleep(TRACKING_DLQ_RETRY_BACKOFF_S * dlq_attempt)
                     continue
                 if TRACKING_DLQ_FORCE_COMMIT_ON_FAILURE:
+                    # Legacy chaos uniquement — interdit en prod (défaut false).
                     logger.critical(
-                        "[tracking_consumer] DLQ exhausted -> force commit to avoid offset stall topic=%s partition=%s offset=%s",
+                        "[tracking_consumer] DLQ exhausted -> force commit (LEGACY FLAG) topic=%s partition=%s offset=%s",
                         record.topic,
                         record.partition,
                         record.offset,
@@ -368,16 +411,21 @@ class TrackingIngestConsumer:
                             "[tracking_consumer] dlq force_commit metric unavailable",
                             exc_info=True,
                         )
-                    self._commit_current()
+                    self._commit_record(record)
                     return True
                 logger.critical(
-                    "[tracking_consumer] DLQ exhausted and force-commit disabled topic=%s partition=%s offset=%s",
+                    "[tracking_consumer] DLQ exhausted — fail-stop topic=%s partition=%s offset=%s",
                     record.topic,
                     record.partition,
                     record.offset,
                 )
-                return False
-        return None
+                raise FatalTrackingConsumerError(
+                    "dlq_exhausted_no_commit",
+                    topic=record.topic,
+                    partition=record.partition,
+                    offset=record.offset,
+                ) from error
+        return False
 
     def _observe_e2e_latency(self, message: dict[str, Any]) -> None:
         received_at_ms = message.get("received_at_ms")
@@ -420,12 +468,63 @@ class TrackingIngestConsumer:
         for attempt in range(1, KAFKA_MAX_RETRIES + 1):
             try:
                 validated = {**message_obj, "validated_at_ms": record.timestamp}
-                # Option A (voie socket → Kafka) : les points `source="socket_batch"`
-                # ont DÉJÀ été persistés (canonical + Postgres) et fannés en direct
-                # par le handler socket. On NE re-persiste PAS ici (évite la
-                # double-écriture) ; on les republie quand même vers `processed`
-                # pour l'analytics/replay (le fanout consumer les ignorera).
                 _msg_source = str(message_obj.get("source") or "")
+
+                if TRACKING_PERSIST_WITH_OUTBOX and _msg_source != "socket_batch":
+                    # Annexe A.1 : TX PG+outbox → COMMIT offset RAW (pas de publish processed)
+                    from services.tracking.persist_kafka_outbox import (
+                        PersistKafkaOutboxError,
+                        persist_driver_location_with_outbox_from_kafka,
+                    )
+
+                    try:
+                        validated, persist_result = (
+                            persist_driver_location_with_outbox_from_kafka(
+                                message_obj,
+                                driver_id=driver_id,
+                            )
+                        )
+                    except PersistKafkaOutboxError as persist_exc:
+                        # Erreurs de contrat session → DLQ (payload / session invalide)
+                        return self._send_to_dlq_and_commit(
+                            record=record,
+                            key=key,
+                            source_message=message_obj,
+                            error=persist_exc,
+                            retry_count=0,
+                            error_type=persist_exc.code,
+                        )
+                    validated["validated_at_ms"] = record.timestamp
+                    try:
+                        from services.monitoring.driver_location_metrics import (
+                            inc_received,
+                            inc_tracking_kafka_persist,
+                        )
+
+                        payload_for_mode = validated.get("payload")
+                        location_mode = (
+                            str(payload_for_mode.get("location_mode"))
+                            if isinstance(payload_for_mode, dict)
+                            and payload_for_mode.get("location_mode")
+                            else "mission_live"
+                        )
+                        if persist_result.get("status") != "duplicate":
+                            inc_received(transport="kafka", location_mode=location_mode)
+                        inc_tracking_kafka_persist(
+                            accept_status=str(
+                                persist_result.get("status") or "persisted"
+                            ),
+                        )
+                    except Exception:
+                        logger.debug(
+                            "[tracking_consumer] persist metrics unavailable",
+                            exc_info=True,
+                        )
+                    self._commit_record(record)
+                    self._observe_e2e_latency(message_obj)
+                    return True
+
+                # Legacy : persist use-case + publish processed (avant bascule Phase 1)
                 if TRACKING_INGEST_PERSIST_ENABLED and _msg_source != "socket_batch":
                     from services.tracking.ingest_persist import (
                         persist_driver_location_from_kafka,
@@ -465,7 +564,7 @@ class TrackingIngestConsumer:
                     message=validated,
                     retry_count=attempt - 1,
                 )
-                self._commit_current()
+                self._commit_record(record)
                 self._observe_e2e_latency(message_obj)
                 return True
             except Exception as exc:
@@ -473,7 +572,11 @@ class TrackingIngestConsumer:
                 try:
                     inc_tracking_kafka_publish_errors(
                         topic=TOPIC_DRIVER_LOCATION_PROCESSED,
-                        stage="processed_publish_failed",
+                        stage=(
+                            "outbox_persist_failed"
+                            if TRACKING_PERSIST_WITH_OUTBOX
+                            else "processed_publish_failed"
+                        ),
                     )
                 except Exception:
                     logger.debug(
@@ -539,10 +642,32 @@ class TrackingIngestConsumer:
                 for _tp, records in polled.items():
                     for record in records:
                         try:
-                            self._process_record(record)
+                            ok = self._process_record(record)
+                            if ok is False:
+                                raise FatalTrackingConsumerError(
+                                    "process_record_returned_false",
+                                    topic=record.topic,
+                                    partition=record.partition,
+                                    offset=record.offset,
+                                )
+                        except FatalTrackingConsumerError:
+                            logger.critical(
+                                "[tracking_consumer] fatal error — stopping consumer",
+                                exc_info=True,
+                            )
+                            self._running = False
+                            raise
                         except Exception:
                             logger.exception("[tracking_consumer] processing error")
+                            raise FatalTrackingConsumerError(
+                                "unexpected_processing_error",
+                                topic=getattr(record, "topic", None),
+                                partition=getattr(record, "partition", None),
+                                offset=getattr(record, "offset", None),
+                            )
                 self._maybe_publish_lag()
+        except FatalTrackingConsumerError:
+            raise
         except Exception as exc:
             from shared.sentry_init import (
                 capture_kafka_error,

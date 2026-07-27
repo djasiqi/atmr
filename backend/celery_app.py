@@ -119,6 +119,8 @@ celery: Celery = Celery(
         "tasks.health_tasks",  # Smoke test Celery broker/worker (runbook incident)
         "tasks.tracking_health_tasks",  # Tracking BG: silent wake stale + purge device health
         "tasks.tracking_repair_tasks",  # F-02: repair Redis canonical pending
+        "tasks.tracking_partition_tasks",  # GPS v5: partitions driver_location_events
+        "tasks.tracking_archive_tasks",  # GPS v5 Phase 4: archivage ledger + partitions
     ],
 )
 

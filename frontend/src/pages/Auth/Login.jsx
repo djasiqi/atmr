@@ -22,6 +22,7 @@ import useAuthToken from '../../hooks/useAuthToken';
 import AddressAutocomplete from '../../components/common/AddressAutocomplete';
 import styles from './Login.module.css';
 import institutionStyles from '../institution/Requests/InstitutionRequestForm.module.css';
+import { getApiErrorMessage } from '../../utils/apiErrorMessage';
 
 const REMEMBER_KEY = 'lirie_remember_me';
 const SIGNUP_DISABLED =
@@ -454,15 +455,7 @@ const Login = () => {
         code: error?.code,
       });
 
-      const backendMessage =
-        responseData?.message ??
-        responseData?.detail ??
-        responseData?.error ??
-        (typeof responseData === 'string' ? responseData : null);
-      const reason = responseData?.reason ? ` (${responseData.reason})` : '';
-      const targetEnv = responseData?.target_env ? ` [env=${responseData.target_env}]` : '';
-      const msg = `${backendMessage ?? error.message}${reason}${targetEnv}`;
-      setErrorMessage(msg);
+      setErrorMessage(getApiErrorMessage(error, 'Impossible de se connecter pour le moment.'));
     } finally {
       setIsLoading(false);
       if (!loginSucceeded) {
@@ -539,13 +532,7 @@ const Login = () => {
         },
       });
     } catch (error) {
-      const responseData = error?.response?.data;
-      const backendMessage =
-        responseData?.message ??
-        responseData?.detail ??
-        responseData?.error ??
-        (typeof responseData === 'string' ? responseData : null);
-      setErrorMessage(backendMessage || "Impossible de créer le compte pour le moment.");
+      setErrorMessage(getApiErrorMessage(error, "Impossible de créer le compte pour le moment."));
     } finally {
       setIsLoading(false);
     }

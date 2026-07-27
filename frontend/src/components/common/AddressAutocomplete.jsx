@@ -407,9 +407,9 @@ export default function AddressAutocomplete({
         const queryStr = String(queryToUse || '');
         log('FETCH_START', { query: queryStr, requestSeq });
         const next = await fetchSuggestions(queryStr, ctl.signal);
-        // Exclure favoris/alias de la saisie automatique
+        // Exclure favoris de la saisie automatique (alias conservés en tête de liste)
         let enriched = (Array.isArray(next) ? next : []).filter(
-          (it) => it?.source !== 'favorite' && it?.source !== 'alias'
+          (it) => it?.source !== 'favorite'
         );
         if (requestSeq !== requestSeqRef.current) {
           log('FETCH_IGNORED_STALE', { query: queryStr, requestSeq });
@@ -490,15 +490,16 @@ export default function AddressAutocomplete({
     }
   }
 
-  // Groupes : Google Places en tête, puis autres résultats
+  // Groupes : alias canoniques, Google Places, puis autres résultats
+  const aliases = useMemo(() => items.filter((i) => i.source === 'alias'), [items]);
   const googlePlaces = useMemo(() => items.filter((i) => i.source === 'google_places'), [items]);
   const others = useMemo(
-    () => items.filter((i) => i.source !== 'google_places'),
+    () => items.filter((i) => i.source !== 'google_places' && i.source !== 'alias'),
     [items]
   );
   const visibleItems = useMemo(
-    () => [...quickSuggestions, ...googlePlaces, ...others],
-    [quickSuggestions, googlePlaces, others]
+    () => [...quickSuggestions, ...aliases, ...googlePlaces, ...others],
+    [quickSuggestions, aliases, googlePlaces, others]
   );
 
   useEffect(() => {
@@ -508,11 +509,12 @@ export default function AddressAutocomplete({
   useEffect(() => {
     log('SUGGESTIONS', {
       quick: quickSuggestions.length,
+      aliases: aliases.length,
       google: googlePlaces.length,
       others: others.length,
       total: visibleItems.length,
     });
-  }, [quickSuggestions.length, googlePlaces.length, others.length, visibleItems.length, log]);
+  }, [quickSuggestions.length, aliases.length, googlePlaces.length, others.length, visibleItems.length, log]);
 
   async function chooseItem(it) {
     log('SELECT', { label: it?.label || it?.address || '' });
@@ -818,11 +820,31 @@ export default function AddressAutocomplete({
                 </>
               )}
 
-              {googlePlaces.length > 0 && (
+              {(aliases.length > 0 || googlePlaces.length > 0) && (
                 <>
                   <div className={acStyles.sectionHeaderGoogle}>Suggestions</div>
-                  {googlePlaces.map((it, idx) => {
+                  {aliases.map((it, idx) => {
                     const globalIndex = quickSuggestions.length + idx;
+                    const active = globalIndex === highlight;
+                    return (
+                      <div
+                        id={`${name || 'address'}-ac-option-${globalIndex}`}
+                        key={it.place_id || `alias-${it.label || idx}`}
+                        role="option"
+                        aria-selected={active}
+                        onMouseDown={(e) => { e.preventDefault(); chooseItem(it); }}
+                        onMouseEnter={() => setHighlight(globalIndex)}
+                        className={`${acStyles.optionItem} ${acStyles.optionItemGoogle} ${active ? acStyles.optionItemActive : ''}`}
+                      >
+                        <div className={acStyles.optionLabel}>{it.main_text || it.label}</div>
+                        {(it.secondary_text || it.address) && (
+                          <div className={acStyles.optionSecondary}>{it.secondary_text || it.address}</div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {googlePlaces.map((it, idx) => {
+                    const globalIndex = quickSuggestions.length + aliases.length + idx;
                     const active = globalIndex === highlight;
                     return (
                       <div
@@ -846,7 +868,7 @@ export default function AddressAutocomplete({
                 <>
                   <div className={acStyles.sectionHeader}>Autres résultats</div>
                   {others.map((it, idx) => {
-                    const globalIndex = quickSuggestions.length + googlePlaces.length + idx;
+                    const globalIndex = quickSuggestions.length + aliases.length + googlePlaces.length + idx;
                     const active = globalIndex === highlight;
                     const line =
                       [it.address, it.postcode, it.city, it.country].filter(Boolean).join(' · ') ||

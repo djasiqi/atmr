@@ -480,6 +480,7 @@ class AdminBillingPilotageCompanyDetail(Resource):
             raw = parse_pilotage_detail_args(request.args)
             page = raw.pop("page", 1)
             per_page = raw.pop("per_page", 50)
+            raw.pop("company_id", None)
             payload = get_pilotage_company_detail(
                 company_id, page=page, per_page=per_page, **raw
             )

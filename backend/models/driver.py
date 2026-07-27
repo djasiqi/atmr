@@ -8,6 +8,7 @@ from typing import Any
 
 from sqlalchemy import (
     JSON,
+    BigInteger,
     Boolean,
     CheckConstraint,
     Column,
@@ -101,11 +102,20 @@ class Driver(db.Model):
         SAEnum(DriverType, name="driver_type"), nullable=False, server_default="REGULAR"
     )
 
-    # Localisation
+    # Localisation (projection brute — Annexe A.9)
     latitude: Mapped[float] = mapped_column(Float, nullable=True)
     longitude: Mapped[float] = mapped_column(Float, nullable=True)
     last_position_update: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
+    )
+    last_location_event_id: Mapped[str | None] = mapped_column(
+        String(64), nullable=True
+    )
+    last_tracking_session_generation: Mapped[int | None] = mapped_column(
+        BigInteger, nullable=True
+    )
+    last_tracking_sequence_id: Mapped[int | None] = mapped_column(
+        BigInteger, nullable=True
     )
 
     # Média & notifications

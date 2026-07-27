@@ -1,9 +1,9 @@
 {
-  "version": "2026-06-18",
-  "notes": "Contrat topics Kafka ATMR/LIRIE — pipeline tracking GPS (Phase 1 optimisée)",
+  "version": "2026-07-27",
+  "notes": "Contrat topics Kafka ATMR — tracking GPS Kafka-first v5 (.v3 = contrat RF=3/minISR=2)",
   "defaults": {
-    "replication_factor": 2,
-    "min_insync_replicas": 1,
+    "replication_factor": 3,
+    "min_insync_replicas": 2,
     "inactive_topics_enabled": false
   },
   "topics": [
@@ -17,6 +17,7 @@
       "retention_ms": 7200000,
       "cleanup_policy": "delete",
       "active_prod": true,
+      "legacy": true,
       "acl_expected": [
         "tracking-ingest-producer:Write",
         "tracking-ingest-consumer:Read",
@@ -33,6 +34,7 @@
       "retention_ms": 259200000,
       "cleanup_policy": "delete",
       "active_prod": true,
+      "legacy": true,
       "acl_expected": [
         "tracking-ingest-consumer:Write",
         "ws-service:Read",
@@ -50,10 +52,90 @@
       "retention_ms": 259200000,
       "cleanup_policy": "delete",
       "active_prod": true,
+      "legacy": true,
       "acl_expected": [
         "tracking-ingest-consumer:Write",
         "kafka-dlq-consumer:Read",
         "kafka-dlq-consumer:Describe"
+      ]
+    },
+    {
+      "name": "driver.location.raw.v3",
+      "env_override": "KAFKA_TOPIC_DRIVER_LOCATION_RAW_V3",
+      "partitions": 6,
+      "partitions_env": "KAFKA_DEFAULT_PARTITIONS",
+      "replication_factor": 3,
+      "min_insync_replicas": 2,
+      "retention_ms": 259200000,
+      "cleanup_policy": "delete",
+      "active_prod": true,
+      "acl_expected": [
+        "tracking-ingest-producer:Write",
+        "tracking-ingest-consumer:Read",
+        "tracking-ingest-consumer:Describe"
+      ]
+    },
+    {
+      "name": "driver.location.processed.v3",
+      "env_override": "KAFKA_TOPIC_DRIVER_LOCATION_PROCESSED_V3",
+      "partitions": 6,
+      "partitions_env": "KAFKA_DEFAULT_PARTITIONS",
+      "replication_factor": 3,
+      "min_insync_replicas": 2,
+      "retention_ms": 259200000,
+      "cleanup_policy": "delete",
+      "active_prod": true,
+      "acl_expected": [
+        "tracking-outbox-publisher:Write",
+        "ws-service:Read",
+        "ws-service:Describe",
+        "gps-enrichment:Read"
+      ]
+    },
+    {
+      "name": "driver.location.enriched.v3",
+      "env_override": "KAFKA_TOPIC_DRIVER_LOCATION_ENRICHED_V3",
+      "partitions": 6,
+      "partitions_env": "KAFKA_DEFAULT_PARTITIONS",
+      "replication_factor": 3,
+      "min_insync_replicas": 2,
+      "retention_ms": 259200000,
+      "cleanup_policy": "delete",
+      "active_prod": true,
+      "acl_expected": [
+        "gps-enrichment:Write",
+        "ws-service:Read",
+        "ws-service:Describe"
+      ]
+    },
+    {
+      "name": "driver.location.raw.shadow.v3",
+      "env_override": "KAFKA_TOPIC_DRIVER_LOCATION_RAW_SHADOW_V3",
+      "partitions": 6,
+      "partitions_env": "KAFKA_DEFAULT_PARTITIONS",
+      "replication_factor": 3,
+      "min_insync_replicas": 2,
+      "retention_ms": 259200000,
+      "cleanup_policy": "delete",
+      "active_prod": true,
+      "acl_expected": [
+        "tracking-ingest-producer:Write",
+        "tracking-shadow-compare:Read"
+      ]
+    },
+    {
+      "name": "driver.location.dlq.v3",
+      "env_override": "KAFKA_TOPIC_DRIVER_LOCATION_DLQ_V3",
+      "partitions": 3,
+      "partitions_env": "KAFKA_DLQ_PARTITIONS",
+      "replication_factor": 3,
+      "min_insync_replicas": 2,
+      "retention_ms": 259200000,
+      "cleanup_policy": "delete",
+      "active_prod": true,
+      "acl_expected": [
+        "tracking-ingest-consumer:Write",
+        "kafka-dlq-consumer:Read"
       ]
     },
     {

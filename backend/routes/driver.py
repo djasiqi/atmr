@@ -2236,7 +2236,47 @@ class DriverLocationBatch(Resource):
         accepted = 0
         rejected = 0
         trace_ids: list[str] = []
+        ingested_event_ids: list[str] = []
         reject_reasons: dict[str, int] = {}
+
+        # Annexe A.2 : session_generation autorité serveur (si fournie ou enforcement)
+        claimed_generation = body.get("session_generation") if isinstance(body, dict) else None
+        registry_enforced = (
+            os.getenv("TRACKING_SESSION_REGISTRY_ENFORCED", "false").lower() == "true"
+        )
+        if claimed_generation is not None or registry_enforced:
+            try:
+                from services.tracking.session_registry import (
+                    SessionRegistryError,
+                    resolve_authoritative_session,
+                )
+
+                first_seq = None
+                for p in raw_positions:
+                    if isinstance(p, dict) and p.get("sequence_id") is not None:
+                        first_seq = int(p["sequence_id"])
+                        break
+                auth = resolve_authoritative_session(
+                    db.session,
+                    driver_id=int(driver.id),
+                    company_id=int(driver.company_id),
+                    tracking_session_id=tracking_session_id,
+                    claimed_generation=(
+                        int(claimed_generation)
+                        if claimed_generation is not None
+                        else None
+                    ),
+                    sequence_id=first_seq,
+                )
+                # Réinjecte la génération authoritative pour le pipeline Kafka
+                body["session_generation"] = auth["session_generation"]
+            except SessionRegistryError as exc:
+                return {
+                    "error": exc.code,
+                    "message": exc.message,
+                    "ok": False,
+                }, exc.http_status
+
         ordered_positions = sorted(
             [p for p in raw_positions if isinstance(p, dict)],
             key=lambda p: (
@@ -2293,13 +2333,16 @@ class DriverLocationBatch(Resource):
             raw_batch_event = point.get("tracking_event_id") or point.get(
                 "location_event_id"
             )
-            payload["location_event_id"] = resolve_location_event_id(
+            location_event_id = resolve_location_event_id(
                 driver_id=driver.id,
                 latitude=batch_lat,
                 longitude=batch_lon,
                 recorded_at=batch_recorded_at or datetime.now(UTC).isoformat(),
                 raw_id=str(raw_batch_event).strip() if raw_batch_event else None,
             )
+            payload["location_event_id"] = location_event_id
+            if isinstance(body, dict) and body.get("session_generation") is not None:
+                payload["session_generation"] = int(body["session_generation"])
             company_id_raw = getattr(driver, "company_id", None)
             company_id_value = (
                 int(company_id_raw) if isinstance(company_id_raw, (int, str)) else None
@@ -2312,6 +2355,7 @@ class DriverLocationBatch(Resource):
             )
             if ingest_result.get("queued"):
                 accepted += 1
+                ingested_event_ids.append(location_event_id)
                 trace_id = ingest_result.get("trace_id")
                 if isinstance(trace_id, str):
                     trace_ids.append(trace_id)
@@ -2321,12 +2365,20 @@ class DriverLocationBatch(Resource):
                 reason = str(reason_obj) if reason_obj else "kafka_error"
                 reject_reasons[reason] = reject_reasons.get(reason, 0) + 1
 
+        ack_status = "ingested"
+        if accepted > 0 and rejected > 0:
+            ack_status = "partially_ingested"
+        elif accepted == 0:
+            ack_status = "fallback_required"
+
         response = {
             "ok": True,
             "queued": accepted > 0,
             "accept_status": "accepted_async",
+            "ack_status": ack_status,
             "accepted_count": accepted,
             "rejected_count": rejected,
+            "ingested_event_ids": ingested_event_ids,
             "trace_ids": trace_ids[:20],
             "reject_reasons": reject_reasons,
             "fallback_required": rejected > 0,
@@ -2337,6 +2389,7 @@ class DriverLocationBatch(Resource):
                 **response,
                 "ok": False,
                 "accept_status": "fallback_required",
+                "ack_status": "fallback_required",
                 "accept_reason": "kafka_unavailable_batch",
                 "message": "Aucun point batch n'a pu etre queue en Kafka. Reessayez.",
             }, 503

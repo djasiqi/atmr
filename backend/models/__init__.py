@@ -216,6 +216,14 @@ from .tracking_ingest_event import (
     TrackingDerivedRepairPending,
     TrackingIngestEvent,
 )
+from .tracking_session import (
+    DriverLocationEnrichment,
+    DriverLocationEvent,
+    TrackingEventOutbox,
+    TrackingSequenceGap,
+    TrackingSession,
+    TrackingSessionState,
+)
 from .trip_tracking import TripTracking
 from .trip_tracking_archive import TripTrackingArchive
 from .user import User
@@ -392,6 +400,12 @@ __all__ = [
     "TransportVoucherType",
     "TrackingDerivedRepairPending",
     "TrackingIngestEvent",
+    "TrackingSession",
+    "TrackingSessionState",
+    "TrackingSequenceGap",
+    "TrackingEventOutbox",
+    "DriverLocationEvent",
+    "DriverLocationEnrichment",
     "TripTracking",  # ✅ 3.3.3: Historique trajets
     "TripTrackingArchive",  # ✅ 3.5.2: Archive positions (partitionnée)
     "UnavailabilityReason",

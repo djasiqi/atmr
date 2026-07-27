@@ -18,6 +18,8 @@ import {
   recordSocketBatchRateLimited,
   recordSocketBatchSent,
 } from "./socketBatchPacing";
+import { trackingQueueStore } from "./trackingQueueStore";
+import { registerTrackingSession } from "./trackingSessionsApi";
 
 export type TrackingDeliveryState =
   | "queued"
@@ -39,6 +41,8 @@ export type DriverTrackingQueueItem = {
   id: string;
   sequenceId: number;
   trackingSessionId: string;
+  /** Génération autoritaire backend (nullable jusqu'à POST /sessions). */
+  sessionGeneration: number | null;
   batchId: string;
   positionId: string;
   missionId: number | null;
@@ -51,6 +55,13 @@ export type DriverTrackingQueueItem = {
   lastAttemptAt: number | null;
   ackedAt: number | null;
   lastError: string | null;
+  /** État de conservation jusqu'au watermark PG (Annexe A.4). */
+  persistState?:
+    | "non_ingested"
+    | "ingested_non_persisted"
+    | "persisted"
+    | "rejected"
+    | "tombstone";
 };
 
 export type DriverTrackingFlushResult = {
@@ -142,10 +153,14 @@ class DriverTrackingQueue {
   private items: DriverTrackingQueueItem[] = [];
   private sequenceCounter = 0;
   private trackingSessionId = "";
+  private sessionGeneration: number | null = null;
   private sessionCreatedAt = 0;
+  private identityKey: string | null = null;
   private drainedInCurrentMinute = 0;
   private drainMinuteBucket = 0;
   private drainTimer: ReturnType<typeof setTimeout> | null = null;
+  /** IDs explicitement ingérés (calcul contigu local — pas d'état serveur). */
+  private ingestedEventIds = new Set<string>();
 
   private clearDrainTimer(): void {
     if (this.drainTimer) {
@@ -258,11 +273,19 @@ class DriverTrackingQueue {
     if (!canEmitSocketBatchNow()) {
       return false;
     }
+    // Un batch = une seule tracking_session_id (Phase 0A multi-session)
+    const sessionId = chunk[0]?.trackingSessionId;
+    if (!sessionId || chunk.some((i) => i.trackingSessionId !== sessionId)) {
+      return false;
+    }
     const sentViaSocket = realtimeManager.sendDriverLocationBatch(
       chunk.map((item) => ({
+        // Canonique + alias rétrocompat (plan v5)
+        location_event_id: item.id,
         tracking_event_id: item.id,
         sequence_id: item.sequenceId,
         tracking_session_id: item.trackingSessionId,
+        session_generation: item.sessionGeneration,
         position_id: item.positionId,
         batch_id: item.batchId,
         mission_id: item.missionId,
@@ -308,13 +331,47 @@ class DriverTrackingQueue {
 
   private async ensureLoaded() {
     if (this.loaded) return;
+    await trackingQueueStore.init();
     const parsed = safeJsonParse<DriverTrackingQueueItem[]>(await this.readStorage(STORAGE_KEY));
     this.items = Array.isArray(parsed) ? parsed : [];
-    this.items.sort((a, b) => (a.sequenceId ?? 0) - (b.sequenceId ?? 0));
-    this.sequenceCounter = this.items.reduce((max, item) => Math.max(max, item.sequenceId ?? 0), 0);
-    const sessionRaw = safeJsonParse<{ trackingSessionId: string; createdAt: number }>(
-      await this.readStorage(SESSION_STORAGE_KEY)
-    );
+    // Migration AsyncStorage → store SQLite/mémoire (idempotent)
+    if (this.items.length > 0) {
+      await trackingQueueStore.replaceAll(
+        this.items.map((item) => ({
+          locationEventId: item.id,
+          trackingSessionId: item.trackingSessionId,
+          sessionGeneration: item.sessionGeneration ?? null,
+          sequenceId: item.sequenceId,
+          payloadJson: JSON.stringify(item.payload),
+          state: item.persistState ?? "non_ingested",
+          queuedAt: item.queuedAt,
+          lastAttemptAt: item.lastAttemptAt,
+          retryCount: item.retryCount,
+          deliveryState: item.deliveryState,
+          missionId: item.missionId,
+          locationMode: item.locationMode,
+          batchId: item.batchId,
+          positionId: item.positionId,
+          appState: String(item.appState),
+          lastError: item.lastError,
+          ackedAt: item.ackedAt,
+        }))
+      );
+    }
+    this.items.sort((a, b) => {
+      const ga = a.sessionGeneration ?? 0;
+      const gb = b.sessionGeneration ?? 0;
+      if (ga !== gb) return ga - gb;
+      if (a.trackingSessionId !== b.trackingSessionId) {
+        return a.trackingSessionId.localeCompare(b.trackingSessionId);
+      }
+      return (a.sequenceId ?? 0) - (b.sequenceId ?? 0);
+    });
+    const sessionRaw = safeJsonParse<{
+      trackingSessionId: string;
+      createdAt: number;
+      sessionGeneration?: number | null;
+    }>(await this.readStorage(SESSION_STORAGE_KEY));
     if (
       sessionRaw?.trackingSessionId &&
       typeof sessionRaw.createdAt === "number" &&
@@ -322,6 +379,14 @@ class DriverTrackingQueue {
     ) {
       this.trackingSessionId = sessionRaw.trackingSessionId;
       this.sessionCreatedAt = sessionRaw.createdAt;
+      this.sessionGeneration = sessionRaw.sessionGeneration ?? null;
+      const sameSession = this.items.filter(
+        (i) => i.trackingSessionId === this.trackingSessionId
+      );
+      this.sequenceCounter = sameSession.reduce(
+        (max, item) => Math.max(max, item.sequenceId ?? 0),
+        0
+      );
     } else {
       this.rotateTrackingSession();
     }
@@ -340,6 +405,7 @@ class DriverTrackingQueue {
       JSON.stringify({
         trackingSessionId: this.trackingSessionId,
         createdAt: this.sessionCreatedAt,
+        sessionGeneration: this.sessionGeneration,
       })
     );
   }
@@ -408,6 +474,34 @@ class DriverTrackingQueue {
   private rotateTrackingSession() {
     this.trackingSessionId = `trk_sess_${nowMs()}_${Math.random().toString(36).slice(2, 10)}`;
     this.sessionCreatedAt = nowMs();
+    // Phase 0A : nouvelle session → sequenceCounter = 0 ; génération via POST /sessions
+    this.sequenceCounter = 0;
+    this.sessionGeneration = null;
+    void this.registerSessionWithBackend();
+  }
+
+  private async registerSessionWithBackend(): Promise<void> {
+    if (!this.trackingSessionId) return;
+    try {
+      const res = await registerTrackingSession({
+        tracking_session_id: this.trackingSessionId,
+        tracking_session_started_at: new Date(this.sessionCreatedAt).toISOString(),
+      });
+      this.sessionGeneration = res.session_generation;
+      for (const item of this.items) {
+        if (item.trackingSessionId === this.trackingSessionId) {
+          item.sessionGeneration = res.session_generation;
+        }
+      }
+      await this.persistSession();
+      await this.persist();
+    } catch {
+      // Offline : capture locale continue ; génération injectée au retour réseau
+      emitDriverTelemetry("tracking.session.register_deferred", {
+        source: "driver.tracking.queue",
+        tracking_session_id: this.trackingSessionId,
+      });
+    }
   }
 
   private ensureSessionFresh() {
@@ -417,7 +511,90 @@ class DriverTrackingQueue {
     }
   }
 
+  /**
+   * Quarantaine logout — ne purge jamais les points non ACKés.
+   * Réconciliation uniquement si la même identité se reconnecte.
+   */
+  async quarantineOnLogout(identity: {
+    userId: number | string;
+    driverId: number | string;
+    companyId: number | string;
+  }): Promise<void> {
+    await this.ensureLoaded();
+    const key = `${identity.userId}:${identity.driverId}:${identity.companyId}`;
+    this.identityKey = key;
+    await trackingQueueStore.quarantineForIdentity(key);
+    emitDriverTelemetry("tracking.queue.quarantined", {
+      source: "driver.tracking.queue",
+      queue_depth: this.items.length,
+    });
+  }
+
+  async resumeAfterLogin(identity: {
+    userId: number | string;
+    driverId: number | string;
+    companyId: number | string;
+  }): Promise<boolean> {
+    await this.ensureLoaded();
+    const key = `${identity.userId}:${identity.driverId}:${identity.companyId}`;
+    const ok = await trackingQueueStore.clearQuarantineIfMatch(key);
+    if (!ok) {
+      emitDriverTelemetry("tracking.queue.quarantine_identity_mismatch", {
+        source: "driver.tracking.queue",
+      });
+      return false;
+    }
+    this.identityKey = key;
+    if (this.sessionGeneration == null && this.trackingSessionId) {
+      await this.registerSessionWithBackend();
+    }
+    return true;
+  }
+
+  /** Contigu ingested local (serveur ne maintient pas cet état). */
+  async applyIngestedEventIds(eventIds: string[]): Promise<number> {
+    await this.ensureLoaded();
+    let marked = 0;
+    for (const id of eventIds) {
+      this.ingestedEventIds.add(id);
+      const item = this.items.find((i) => i.id === id);
+      if (item && (item.persistState ?? "non_ingested") === "non_ingested") {
+        item.persistState = "ingested_non_persisted";
+        marked += 1;
+      }
+    }
+    if (marked > 0) {
+      await this.persist();
+      const sessionItems = this.items
+        .filter(
+          (i) =>
+            i.trackingSessionId === this.trackingSessionId &&
+            (i.persistState === "ingested_non_persisted" ||
+              i.persistState === "persisted" ||
+              this.ingestedEventIds.has(i.id))
+        )
+        .map((i) => i.sequenceId)
+        .sort((a, b) => a - b);
+      let contiguous = 0;
+      for (const seq of sessionItems) {
+        if (seq === contiguous + 1) contiguous = seq;
+        else break;
+      }
+      if (contiguous > 0) {
+        await trackingQueueStore.setContiguousIngested(
+          this.trackingSessionId,
+          contiguous
+        );
+      }
+    }
+    return marked;
+  }
+
   private isExpired(item: DriverTrackingQueueItem): boolean {
+    // ingested_non_persisted : jamais expiré automatiquement (Annexe A.4)
+    if (item.persistState === "ingested_non_persisted") {
+      return false;
+    }
     const maxAge = Math.min(REPLAY_WINDOW_MS, MAX_QUEUE_AGE_MS);
     return nowMs() - item.queuedAt > maxAge;
   }
@@ -479,18 +656,36 @@ class DriverTrackingQueue {
   private trimIfNeeded() {
     if (this.items.length <= MAX_QUEUE_ITEMS) return;
     const overflow = this.items.length - MAX_QUEUE_ITEMS;
-    const firstAnchor = this.items[0];
-    const mutable = firstAnchor ? this.items.slice(1) : [...this.items];
-    const dropped = mutable.splice(0, overflow);
-    this.items = firstAnchor ? [firstAnchor, ...mutable] : mutable;
+    // Ne jamais évincer ingested_non_persisted ; tombstone audité pour non_ingested
+    const evictable = this.items.filter(
+      (i) => (i.persistState ?? "non_ingested") === "non_ingested"
+    );
+    const dropped = evictable.slice(0, overflow);
+    const dropIds = new Set(dropped.map((d) => d.id));
+    this.items = this.items.filter((i) => !dropIds.has(i.id));
     dropped.forEach((item) => {
+      void trackingQueueStore.recordGap({
+        trackingSessionId: item.trackingSessionId,
+        sequenceFrom: item.sequenceId,
+        sequenceTo: item.sequenceId,
+        reason: "capacity_tombstone",
+        createdAt: nowMs(),
+      });
       emitDriverTelemetry("tracking.queue.dropped", {
         source: "driver.tracking.queue",
         mission_id: item.missionId,
-        reason: "max_queue_size",
+        reason: "max_queue_size_tombstone",
         queue_replay_window_ms: REPLAY_WINDOW_MS,
+        alert_visible: true,
       });
     });
+    if (this.items.length > MAX_QUEUE_ITEMS) {
+      emitDriverTelemetry("tracking.queue.saturation_alert", {
+        source: "driver.tracking.queue",
+        queue_depth: this.items.length,
+        max_items: MAX_QUEUE_ITEMS,
+      });
+    }
   }
 
   async enqueue(entry: {
@@ -513,6 +708,7 @@ class DriverTrackingQueue {
       id: buildQueueId(),
       sequenceId,
       trackingSessionId: this.trackingSessionId,
+      sessionGeneration: this.sessionGeneration,
       batchId,
       positionId,
       missionId: entry.missionId,
@@ -529,6 +725,7 @@ class DriverTrackingQueue {
       lastAttemptAt: null,
       ackedAt: null,
       lastError: null,
+      persistState: "non_ingested",
     };
     item.payload.trackingEventId = item.id;
     this.items.push(item);
@@ -633,7 +830,15 @@ class DriverTrackingQueue {
 
       const enableRealAck = isFeatureEnabled("tracking_real_ack_semantics_enabled");
       const remaining: DriverTrackingQueueItem[] = [];
-      this.items.sort((a, b) => (a.sequenceId ?? 0) - (b.sequenceId ?? 0));
+      this.items.sort((a, b) => {
+        const ga = a.sessionGeneration ?? 0;
+        const gb = b.sessionGeneration ?? 0;
+        if (ga !== gb) return ga - gb;
+        if (a.trackingSessionId !== b.trackingSessionId) {
+          return a.trackingSessionId.localeCompare(b.trackingSessionId);
+        }
+        return (a.sequenceId ?? 0) - (b.sequenceId ?? 0);
+      });
       const oldestQueuedAt = this.items[0]?.queuedAt ?? null;
       const minuteBucket = Math.floor(nowMs() / 60_000);
       if (this.drainMinuteBucket !== minuteBucket) {
@@ -665,12 +870,20 @@ class DriverTrackingQueue {
         };
       }
 
-      // Envoi batch socket reel (cadence alignée rate limiter backend)
+      // Envoi batch socket réel — un batch = une seule session (Phase 0A)
       if (!effectiveForceHttp && transport.socketReady) {
+        const primarySession =
+          this.items.find(
+            (item) =>
+              !this.isExpired(item) &&
+              item.deliveryState !== "socket_emitted" &&
+              isSocketEligibleLocationMode(item.locationMode)
+          )?.trackingSessionId ?? this.trackingSessionId;
         const socketCandidates = this.items.filter(
           (item) =>
             !this.isExpired(item) &&
             item.deliveryState !== "socket_emitted" &&
+            item.trackingSessionId === primarySession &&
             isSocketEligibleLocationMode(item.locationMode)
         );
         let sentThisFlush = 0;
@@ -777,15 +990,35 @@ class DriverTrackingQueue {
           if (
             ack.ack_status === "accepted" ||
             ack.ack_status === "duplicate" ||
-            ack.ack_status === "queued"
+            ack.ack_status === "queued" ||
+            ack.ack_status === "ingested" ||
+            ack.ack_status === "partially_ingested" ||
+            ack.ack_status === "persisted"
           ) {
+            if (ack.ingested_event_ids?.length) {
+              await this.applyIngestedEventIds(ack.ingested_event_ids);
+            } else if (
+              ack.ack_status === "ingested" ||
+              ack.ack_status === "accepted" ||
+              ack.ack_status === "queued" ||
+              ack.ack_status === "duplicate"
+            ) {
+              await this.applyIngestedEventIds([item.id]);
+            }
+            if (ack.ack_status === "persisted") {
+              item.persistState = "persisted";
+            }
             item.deliveryState = "backend_acked";
             item.ackedAt = nowMs();
             item.lastError = null;
             backendAcked += 1;
             lastBackendAckAt = item.ackedAt;
             lastBackendAckStatus =
-              ack.ack_status === "queued" ? "queued" : ack.ack_status;
+              ack.ack_status === "queued" || ack.ack_status === "ingested"
+                ? "queued"
+                : ack.ack_status === "duplicate"
+                  ? "duplicate"
+                  : "accepted";
             emitDriverTelemetry("tracking.ingest.ack", {
               source: "driver.tracking.queue",
               mission_id: item.missionId,
@@ -941,29 +1174,34 @@ class DriverTrackingQueue {
     return ackedCount;
   }
 
-  /** Reprendre après ACK `session_conflict` : nouvelle session + rebinder la file restante. */
+  /**
+   * Reprendre après ACK `session_conflict` : nouvelle session active.
+   * Ne rebind PAS les points de l'ancienne session (multi-session / superseded).
+   */
   async reconcileAfterSessionConflict(): Promise<string> {
     await this.ensureLoaded();
     const previousSessionId = this.trackingSessionId;
     this.rotateTrackingSession();
-    let rebound = 0;
+    let released = 0;
     for (const item of this.items) {
-      item.trackingSessionId = this.trackingSessionId;
-      if (item.deliveryState === "socket_emitted") {
-        item.deliveryState = "retry_pending";
-        item.lastAttemptAt = null;
+      if (item.trackingSessionId === previousSessionId) {
+        if (item.deliveryState === "socket_emitted") {
+          item.deliveryState = "retry_pending";
+          item.lastAttemptAt = null;
+          released += 1;
+        }
       }
-      rebound += 1;
     }
     await this.persistSession();
-    if (rebound > 0) {
+    if (released > 0) {
       await this.persist();
     }
     emitDriverTelemetry("tracking.session.reconciled", {
       source: "driver.tracking.queue",
       previous_session_id: previousSessionId,
       tracking_session_id: this.trackingSessionId,
-      rebound_count: rebound,
+      rebound_count: 0,
+      released_socket_count: released,
     });
     return this.trackingSessionId;
   }

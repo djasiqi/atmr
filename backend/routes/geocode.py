@@ -98,9 +98,13 @@ ALIASES: List[Dict[str, Any]] = [
             re.compile(r"h[ôo]pit(?:al|aux).+gen[eè]ve", re.I),
             re.compile(r"\bh[ôo]pital\s+cantonal\b", re.I),
         ],
-        "label": "HUG - Hôpitaux Universitaires de Genève",
+        "name": "Hôpitaux Universitaires de Genève (HUG)",
         "short_name": "HUG",
         "address": "Rue Gabrielle-Perret-Gentil 4, 1205 Genève",
+        "full_label": (
+            "Hôpitaux Universitaires de Genève (HUG), "
+            "Rue Gabrielle-Perret-Gentil 4, 1205 Genève"
+        ),
         "lat": 46.19226,
         "lon": 6.14262,
         "category": "hospital",
@@ -282,6 +286,30 @@ def match_alias(q: str) -> Dict[str, Any] | None:
             if pat.search(q_norm):
                 return a
     return None
+
+
+def serialize_alias_hit(alias: Dict[str, Any]) -> Dict[str, Any]:
+    """Formate un alias canonique pour l'autocomplete (prioritaire sur Google Places)."""
+    name = (alias.get("name") or alias.get("short_name") or "").strip()
+    address = (alias.get("address") or "").strip()
+    full_label = (alias.get("full_label") or "").strip()
+    if not full_label:
+        if name and address and name not in address:
+            full_label = f"{name}, {address}"
+        else:
+            full_label = address or name
+    return {
+        "source": "alias",
+        "label": full_label,
+        "address": address or full_label,
+        "main_text": name or full_label,
+        "secondary_text": address if name and address else "",
+        "name": name or None,
+        "short_name": alias.get("short_name"),
+        "lat": alias["lat"],
+        "lon": alias["lon"],
+        "category": alias.get("category"),
+    }
 
 
 def looks_like_hospital(q: str) -> bool:
@@ -1372,17 +1400,7 @@ class GeocodeAliases(Resource):
         hit = match_alias(q)
         if not hit:
             return [], 200
-        # IMPORTANT : label = address pour écriture directe dans le champ
-        return [
-            {
-                "source": "alias",
-                "label": hit["address"],
-                "address": hit["address"],
-                "lat": hit["lat"],
-                "lon": hit["lon"],
-                "category": hit.get("category"),
-            }
-        ], 200
+        return [serialize_alias_hit(hit)], 200
 
 
 @geocode_ns.route("/reverse")
@@ -1472,16 +1490,7 @@ class GeocodeAutocomplete(Resource):
         # 1) Alias rapides (HUG…)
         alias = match_alias(q)
         if alias:
-            results.append(
-                {
-                    "source": "alias",
-                    "label": alias["address"],  # label = adresse pour l'UI
-                    "address": alias["address"],
-                    "lat": alias["lat"],
-                    "lon": alias["lon"],
-                    "category": alias.get("category"),
-                }
-            )
+            results.append(serialize_alias_hit(alias))
 
         # 2) Favoris (optionnel)
         company_id = request.args.get("company_id")
@@ -1897,12 +1906,14 @@ class GeocodeAddress(Resource):
         try:
             alias = match_alias(address)
             if alias and alias.get("lat") is not None and alias.get("lon") is not None:
+                serialized = serialize_alias_hit(alias)
                 return {
-                    "source": "alias",
-                    "address": alias.get("address") or address,
-                    "lat": alias["lat"],
-                    "lon": alias["lon"],
-                    "category": alias.get("category"),
+                    "source": serialized["source"],
+                    "address": serialized.get("label") or serialized.get("address") or address,
+                    "lat": serialized["lat"],
+                    "lon": serialized["lon"],
+                    "category": serialized.get("category"),
+                    "name": serialized.get("name"),
                 }, 200
 
             if USE_GOOGLE_PLACES:

@@ -218,6 +218,7 @@ def init_namespaces(app):
     from routes.gateway_auth import gateway_auth_bp
     from routes.dispatch_health import dispatch_health_ns  # /company_dispatch_health
     from routes.driver import driver_ns
+    from routes.driver_tracking_sessions import tracking_sessions_ns
     from routes.email import email_ns  # Configuration emails transactionnels (Brevo)
     from routes.geocode import geocode_ns
 
@@ -339,6 +340,8 @@ def init_namespaces(app):
 
     # Routes driver
     api_v1.add_namespace(driver_ns, path="/driver")
+    # Registre sessions tracking + watermark persisted (plan Kafka-first v5)
+    api_v1.add_namespace(tracking_sessions_ns, path="/driver")
 
     # Routes bookings
     api_v1.add_namespace(bookings_ns, path="/bookings")

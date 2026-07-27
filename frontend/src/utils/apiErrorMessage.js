@@ -1,3 +1,79 @@
+import { getServiceUnavailableMessage } from '../constants/platformSupport';
+
+const SERVICE_UNAVAILABLE_HTTP_STATUSES = new Set([404, 502, 503, 504]);
+const SERVICE_UNAVAILABLE_NETWORK_CODES = new Set([
+  'ERR_NETWORK',
+  'ECONNABORTED',
+  'ETIMEDOUT',
+  'ECONNREFUSED',
+]);
+const SERVICE_UNAVAILABLE_MESSAGE_PATTERNS = [
+  /404\s+page\s+not\s+found/i,
+  /\bpage\s+not\s+found\b/i,
+  /gateway\s+timeout/i,
+  /service\s+temporairement\s+indisponible/i,
+  /backend\s+.*non\s+accessible/i,
+  /network\s+error/i,
+  /proxy\s+error/i,
+];
+
+const _extractBackendMessage = (error) => {
+  const d = error?.response?.data;
+  if (typeof d === 'string' && d.trim()) {
+    return d.trim();
+  }
+  if (!d || typeof d !== 'object') {
+    return null;
+  }
+  const candidates = [d.message, d.detail, d.error];
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.trim()) {
+      return candidate.trim();
+    }
+  }
+  return null;
+};
+
+const _matchesServiceUnavailableMessage = (value) => {
+  const text = String(value || '').trim();
+  if (!text) return false;
+  return SERVICE_UNAVAILABLE_MESSAGE_PATTERNS.some((pattern) => pattern.test(text));
+};
+
+/**
+ * Indique si l'erreur correspond à une indisponibilité serveur (maintenance, panne, proxy).
+ * @param {unknown} error
+ * @returns {boolean}
+ */
+export function isServiceUnavailableError(error) {
+  const status = error?.response?.status;
+  if (SERVICE_UNAVAILABLE_HTTP_STATUSES.has(status)) {
+    return true;
+  }
+
+  const code = String(error?.code || '').trim();
+  if (code && SERVICE_UNAVAILABLE_NETWORK_CODES.has(code)) {
+    return true;
+  }
+
+  const backendMessage = _extractBackendMessage(error);
+  if (_matchesServiceUnavailableMessage(backendMessage)) {
+    return true;
+  }
+
+  const axiosMessage = typeof error?.message === 'string' ? error.message.trim() : '';
+  if (!error?.response) {
+    if (_matchesServiceUnavailableMessage(axiosMessage)) {
+      return true;
+    }
+    if (/^Request failed with status code (404|502|503|504)$/i.test(axiosMessage)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 /**
  * Extrait un message utilisateur lisible depuis une erreur Axios / API LIRIE.
  * @param {unknown} error
@@ -5,6 +81,9 @@
  * @returns {string}
  */
 export function getApiErrorMessage(error, fallback = 'Une erreur est survenue.') {
+  if (isServiceUnavailableError(error)) {
+    return getServiceUnavailableMessage();
+  }
   if (error && typeof error === 'object' && 'message' in error) {
     const m = error.message;
     if (typeof m === 'string' && m.trim() && !/^Request failed with status code \d+$/i.test(m)) {

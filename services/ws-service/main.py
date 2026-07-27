@@ -83,13 +83,37 @@ KAFKA_TOPIC_MISSION_EVENTS = os.getenv("KAFKA_TOPIC_MISSION_EVENTS", "mission.ev
 WS_KAFKA_ENABLE_MISSION_EVENTS = (
     os.getenv("WS_KAFKA_ENABLE_MISSION_EVENTS", "false").lower() == "true"
 )
-WS_KAFKA_GROUP_ID = os.getenv("WS_KAFKA_GROUP_ID", "ws-service-shared")
-WS_KAFKA_AUTO_OFFSET_RESET = os.getenv("WS_KAFKA_AUTO_OFFSET_RESET", "latest")
+TRACKING_INGEST_MODE = os.getenv("TRACKING_INGEST_MODE", "legacy").lower()
+# Groupe v3 : earliest + pas de seek-to-end (Annexe A.8)
+_IS_KAFKA_PRIMARY = TRACKING_INGEST_MODE in (
+    "kafka_primary",
+    "kafka_primary_canary",
+)
+WS_KAFKA_GROUP_ID = os.getenv(
+    "WS_KAFKA_GROUP_ID",
+    "ws-service-v3" if _IS_KAFKA_PRIMARY else "ws-service-shared",
+)
+WS_KAFKA_AUTO_OFFSET_RESET = os.getenv(
+    "WS_KAFKA_AUTO_OFFSET_RESET",
+    "earliest" if _IS_KAFKA_PRIMARY else "latest",
+)
 WS_KAFKA_SESSION_TIMEOUT_MS = int(os.getenv("WS_KAFKA_SESSION_TIMEOUT_MS", "30000"))
 WS_KAFKA_HEARTBEAT_INTERVAL_MS = int(os.getenv("WS_KAFKA_HEARTBEAT_INTERVAL_MS", "10000"))
 WS_KAFKA_REBALANCE_TIMEOUT_MS = int(os.getenv("WS_KAFKA_REBALANCE_TIMEOUT_MS", "60000"))
 WS_KAFKA_SEEK_TO_END_ON_START = (
-    os.getenv("WS_KAFKA_SEEK_TO_END_ON_START", "true").lower() == "true"
+    os.getenv(
+        "WS_KAFKA_SEEK_TO_END_ON_START",
+        "false" if _IS_KAFKA_PRIMARY else "true",
+    ).lower()
+    == "true"
+)
+KAFKA_TOPIC_DRIVER_LOCATION_ENRICHED = os.getenv(
+    "KAFKA_TOPIC_DRIVER_LOCATION_ENRICHED_V3",
+    "driver.location.enriched.v3",
+)
+WS_KAFKA_ENABLE_ENRICHED = (
+    os.getenv("WS_KAFKA_ENABLE_ENRICHED", "true" if _IS_KAFKA_PRIMARY else "false").lower()
+    == "true"
 )
 WS_KAFKA_SECURITY_PROTOCOL = os.getenv("WS_KAFKA_SECURITY_PROTOCOL", "PLAINTEXT")
 WS_KAFKA_SASL_MECHANISM = os.getenv("WS_KAFKA_SASL_MECHANISM", "")
@@ -363,6 +387,26 @@ async def _aiokafka_safe_stop(consumer: Any) -> None:
         await consumer.stop()
 
 
+async def _apply_enriched_canonical(
+    *,
+    driver_id: int,
+    payload: dict[str, Any],
+    location_event_id: str,
+) -> bool:
+    """Annexe A.5 : applique canonical OSRM seulement si event_id = point Redis courant."""
+    from enriched_apply import apply_enriched_canonical
+
+    return await apply_enriched_canonical(
+        redis_client,
+        driver_id=driver_id,
+        payload=payload,
+        location_event_id=location_event_id,
+        emit_fn=_emit_to_room,
+        company_room_fn=company_room,
+        driver_room_fn=driver_room,
+    )
+
+
 async def _consume_kafka_events() -> None:
     global _kafka_degraded
     if not KAFKA_CONSUMER_ENABLED:
@@ -381,13 +425,17 @@ async def _consume_kafka_events() -> None:
         topics.append(KAFKA_TOPIC_MISSION_EVENTS)
     else:
         logger.info("mission.events consumer disabled by env")
+    if WS_KAFKA_ENABLE_ENRICHED:
+        topics.append(KAFKA_TOPIC_DRIVER_LOCATION_ENRICHED)
+        logger.info("enriched.v3 consumer enabled topic=%s", KAFKA_TOPIC_DRIVER_LOCATION_ENRICHED)
 
     consumer_kwargs: dict[str, Any] = {
         "bootstrap_servers": [
             server.strip() for server in KAFKA_BOOTSTRAP_SERVERS.split(",") if server.strip()
         ],
         "group_id": WS_KAFKA_GROUP_ID,
-        "enable_auto_commit": True,
+        # Phase 3 kafka_primary : commit manuel après Redis+fanout (Annexe A.8)
+        "enable_auto_commit": not _IS_KAFKA_PRIMARY,
         "auto_offset_reset": WS_KAFKA_AUTO_OFFSET_RESET,
         "session_timeout_ms": WS_KAFKA_SESSION_TIMEOUT_MS,
         "heartbeat_interval_ms": WS_KAFKA_HEARTBEAT_INTERVAL_MS,
@@ -497,12 +545,49 @@ async def _consume_kafka_events() -> None:
                 continue
 
             event_type_obj = value.get("type") or value.get("event_type") or msg.topic
+            is_enriched = (
+                msg.topic == KAFKA_TOPIC_DRIVER_LOCATION_ENRICHED
+                or event_type_obj in ("driver.location.enriched", "driver.location.enriched.v3")
+            )
             if event_type_obj == "driver.location.processed":
                 event_type_obj = "driver_location_update"
+            if is_enriched:
+                event_type_obj = "driver_location_enriched"
             event_payload_obj = value.get("payload", value)
             if not isinstance(event_type_obj, str) or not isinstance(event_payload_obj, dict):
                 continue
             event_id_obj = event_payload_obj.get("event_id") if isinstance(event_payload_obj.get("event_id"), str) else "n/a"
+
+            # Annexe A.5 : enriched ne modifie Redis que si location_event_id == point courant
+            if is_enriched:
+                try:
+                    applied = await _apply_enriched_canonical(
+                        driver_id=driver_id_obj,
+                        payload=event_payload_obj,
+                        location_event_id=str(
+                            value.get("location_event_id")
+                            or event_payload_obj.get("location_event_id")
+                            or ""
+                        ),
+                    )
+                    if _IS_KAFKA_PRIMARY:
+                        await consumer.commit()
+                    logger.info(
+                        "enriched.v3 applied=%s topic=%s offset=%s driver_id=%s event_id=%s",
+                        applied,
+                        msg.topic,
+                        msg.offset,
+                        driver_id_obj,
+                        event_id_obj,
+                    )
+                except Exception:
+                    # Erreur Redis → pas de commit (Annexe A.5 / A.8)
+                    logger.exception(
+                        "enriched.v3 redis apply failed — offset not committed"
+                    )
+                    if _IS_KAFKA_PRIMARY:
+                        continue
+                continue
 
             if isinstance(company_id_obj, int):
                 room = company_room(company_id_obj)
@@ -522,6 +607,8 @@ async def _consume_kafka_events() -> None:
                 from kafka_lag_metrics import record_fanout_emit
 
                 record_fanout_emit()
+            if _IS_KAFKA_PRIMARY:
+                await consumer.commit()
             logger.info(
                 "kafka event processed topic=%s partition=%s offset=%s driver_id=%s event_type=%s event_id=%s relay_mode=%s room=%s",
                 msg.topic,
@@ -1026,8 +1113,18 @@ async def startup() -> None:
         sio.manager_initialized = True
     except Exception:
         logger.exception("socket io redis manager unavailable")
+        # Annexe A.8 : kafka_primary → fail-closed (pas de consumer, readiness KO)
+        if _IS_KAFKA_PRIMARY:
+            logger.critical(
+                "TRACKING_INGEST_MODE=%s — AsyncRedisManager KO : arrêt (fail-closed)",
+                TRACKING_INGEST_MODE,
+            )
+            raise
 
-    relay_listener_task = asyncio.create_task(_listen_relay_events())
+    # Relay artisanel uniquement hors kafka_primary (AsyncRedisManager = autorité cross-pod)
+    relay_listener_task = None
+    if not _IS_KAFKA_PRIMARY:
+        relay_listener_task = asyncio.create_task(_listen_relay_events())
     kafka_consumer_task = asyncio.create_task(_consume_kafka_events())
     from gps_ingest import flush_loop
     from kafka_lag_metrics import lag_publish_loop

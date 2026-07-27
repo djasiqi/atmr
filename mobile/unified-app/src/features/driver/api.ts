@@ -262,16 +262,26 @@ export async function sendDriverLocation(payload: DriverLocationPayload): Promis
         trace_id: typeof ackBody.trace_id === "string" ? String(ackBody.trace_id) : null,
       };
     }
-    const status = String(ackBody.ack_status ?? "accepted");
+    // Phase 0A : absence / valeur inconnue → erreur (retry), jamais « accepted » artificiel
+    const rawStatus = ackBody.ack_status;
+    if (rawStatus == null || rawStatus === "") {
+      throw new Error("ack_status_missing");
+    }
+    const status = String(rawStatus);
     const ackStatus: DriverLocationAck["ack_status"] =
       status === "accepted" ||
       status === "queued" ||
       status === "duplicate" ||
       status === "stale" ||
       status === "ignored" ||
-      status === "rejected"
-        ? status
-        : "accepted";
+      status === "rejected" ||
+      status === "ingested" ||
+      status === "partially_ingested" ||
+      status === "persisted"
+        ? (status as DriverLocationAck["ack_status"])
+        : (() => {
+            throw new Error(`ack_status_unknown:${status}`);
+          })();
     return {
       ack_status: ackStatus,
       accept_reason: typeof ackBody.accept_reason === "string"
