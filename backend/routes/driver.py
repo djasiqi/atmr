@@ -3307,7 +3307,9 @@ class SavePushToken(Resource):
 
             from http import HTTPStatus
 
-            from sqlalchemy.orm.exc import PendingRollbackError
+            # SQLAlchemy 2.x : PendingRollbackError vit dans sqlalchemy.exc
+            # (pas sqlalchemy.orm.exc — ImportError → banner « Enregistrement en attente »)
+            from sqlalchemy.exc import PendingRollbackError
 
             from application.drivers.save_driver_push_token import (
                 SaveDriverPushTokenUseCase,
