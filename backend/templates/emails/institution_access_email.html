@@ -27,12 +27,14 @@
 </p>
 
 <div style="text-align: center;">
-    <a href="{{ login_url }}" class="button">Accéder au portail</a>
+    <!-- nosemgrep generic.html-templates.security.var-in-href.var-in-href : URL https absolue emise serveur (FRONTEND_URL validée http/https); pas une saisie utilisateur. -->
+<a href="{{ login_url }}" class="button">Accéder au portail</a>
 </div>
 
 <p class="text-muted" style="text-align: center; font-size: 12px; word-break: break-all;">
     Si le bouton ne fonctionne pas, copiez ce lien dans votre navigateur :<br>
-    <a href="{{ login_url }}" style="color: #667eea;">{{ login_url }}</a>
+    <!-- nosemgrep generic.html-templates.security.var-in-href.var-in-href : URL https absolue emise serveur (FRONTEND_URL validée http/https); pas une saisie utilisateur. -->
+<a href="{{ login_url }}" style="color: #667eea;">{{ login_url }}</a>
 </p>
 
 <div class="divider"></div>

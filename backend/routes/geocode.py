@@ -1909,7 +1909,9 @@ class GeocodeAddress(Resource):
                 serialized = serialize_alias_hit(alias)
                 return {
                     "source": serialized["source"],
-                    "address": serialized.get("label") or serialized.get("address") or address,
+                    "address": serialized.get("label")
+                    or serialized.get("address")
+                    or address,
                     "lat": serialized["lat"],
                     "lon": serialized["lon"],
                     "category": serialized.get("category"),

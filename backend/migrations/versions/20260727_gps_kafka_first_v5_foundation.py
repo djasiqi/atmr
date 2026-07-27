@@ -321,7 +321,9 @@ def downgrade() -> None:
     op.drop_index(
         op.f("ix_tracking_sessions_company_id"), table_name="tracking_sessions"
     )
-    op.drop_index(op.f("ix_tracking_sessions_driver_id"), table_name="tracking_sessions")
+    op.drop_index(
+        op.f("ix_tracking_sessions_driver_id"), table_name="tracking_sessions"
+    )
     op.drop_index("ix_tracking_sessions_status", table_name="tracking_sessions")
     op.drop_table("tracking_sessions")
 

@@ -84,8 +84,18 @@ def test_compare_shadow_codes():
     assert (
         compare_shadow_vs_direct(
             location_event_id="e1",
-            shadow_payload={"latitude": 1, "longitude": 2, "recorded_at": "t", "company_id": 1},
-            direct_payload={"latitude": 1, "longitude": 2, "recorded_at": "t", "company_id": 1},
+            shadow_payload={
+                "latitude": 1,
+                "longitude": 2,
+                "recorded_at": "t",
+                "company_id": 1,
+            },
+            direct_payload={
+                "latitude": 1,
+                "longitude": 2,
+                "recorded_at": "t",
+                "company_id": 1,
+            },
         )
         == "shadow_match"
     )

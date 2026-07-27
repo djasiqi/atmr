@@ -25,6 +25,7 @@ from flask import current_app, render_template
 from ext import db
 from models import Institution, User, UserRole
 from services.email.brevo_provider import BrevoEmailProvider
+from shared.input_sanitizer import sanitize_url
 
 if TYPE_CHECKING:
     pass
@@ -140,15 +141,36 @@ def get_invite_expiry() -> datetime:
 
 
 def _frontend_url() -> str:
-    return os.getenv("FRONTEND_URL", "http://localhost:3000").rstrip("/")
+    """Retourne FRONTEND_URL après validation http(s) (anti javascript: URI)."""
+    default = "http://localhost:3000"
+    raw = (os.getenv("FRONTEND_URL") or default).strip().rstrip("/")
+    safe = sanitize_url(raw)
+    if safe is None:
+        logger.warning(
+            "FRONTEND_URL invalide ou schéma non http(s) (%r) ; fallback %s",
+            raw,
+            default,
+        )
+        return default
+    return safe.rstrip("/")
 
 
 def build_invite_url(raw_token: str) -> str:
-    return f"{_frontend_url()}/invite/{raw_token}"
+    """URL d'invitation absolue http(s), construite côté serveur uniquement."""
+    url = f"{_frontend_url()}/invite/{raw_token}"
+    safe = sanitize_url(url)
+    if safe is None:
+        raise ValueError("URL d'invitation générée invalide")
+    return safe
 
 
 def build_login_url() -> str:
-    return f"{_frontend_url()}/login"
+    """URL de login absolue http(s), construite côté serveur uniquement."""
+    url = f"{_frontend_url()}/login"
+    safe = sanitize_url(url)
+    if safe is None:
+        raise ValueError("URL de login générée invalide")
+    return safe
 
 
 def get_role_label(role: str) -> str:

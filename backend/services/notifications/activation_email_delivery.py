@@ -501,9 +501,7 @@ def cas_claim_sending(
     Returns:
         'proceed' | 'ignore'
     """
-    session_pk = (
-        int(session) if isinstance(session, int) else int(session.id)
-    )
+    session_pk = int(session) if isinstance(session, int) else int(session.id)
     locked = get_activation_session_for_update(session_pk)
     if locked.email_verified_at is not None:
         db.session.commit()
@@ -520,24 +518,21 @@ def cas_claim_sending(
         return "ignore"
     if delivery.activation_session_pk != locked.id:
         logger.info(
-            "activation_email_delivery_ignored reason=not_current "
-            "email_delivery_id=%s",
+            "activation_email_delivery_ignored reason=not_current email_delivery_id=%s",
             email_delivery_id,
         )
         db.session.commit()
         return "ignore"
     if locked.email_delivery_id != email_delivery_id:
         logger.info(
-            "activation_email_delivery_ignored reason=not_current "
-            "email_delivery_id=%s",
+            "activation_email_delivery_ignored reason=not_current email_delivery_id=%s",
             email_delivery_id,
         )
         db.session.commit()
         return "ignore"
     if delivery.superseded_at is not None:
         logger.info(
-            "activation_email_delivery_ignored reason=not_current "
-            "email_delivery_id=%s",
+            "activation_email_delivery_ignored reason=not_current email_delivery_id=%s",
             email_delivery_id,
         )
         db.session.commit()
@@ -649,9 +644,7 @@ def finalize_after_provider_accepted(
     message_id: str | None,
 ) -> bool:
     """Historique provider même si superseded ; miroir seulement si encore courant."""
-    session_pk = (
-        int(session) if isinstance(session, int) else int(session.id)
-    )
+    session_pk = int(session) if isinstance(session, int) else int(session.id)
     locked = get_activation_session_for_update(session_pk)
     delivery = (
         ActivationEmailDelivery.query.filter_by(email_delivery_id=email_delivery_id)
@@ -697,10 +690,7 @@ def finalize_after_provider_accepted(
     db.session.refresh(delivery)
 
     # Effets session uniquement si encore courant et non superseded
-    if (
-        locked.email_delivery_id == email_delivery_id
-        and delivery.superseded_at is None
-    ):
+    if locked.email_delivery_id == email_delivery_id and delivery.superseded_at is None:
         previous_sent_at = locked.last_email_sent_at
         if delivery.kind == EMAIL_DELIVERY_KIND_RESEND:
             if previous_sent_at and not is_same_utc_day(previous_sent_at, now):
@@ -712,8 +702,7 @@ def finalize_after_provider_accepted(
         sync_current_delivery_mirror(locked, delivery)
     else:
         logger.info(
-            "activation_email_delivery_ignored reason=not_current "
-            "email_delivery_id=%s",
+            "activation_email_delivery_ignored reason=not_current email_delivery_id=%s",
             email_delivery_id,
         )
 

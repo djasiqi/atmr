@@ -149,10 +149,22 @@ def get_metadata():
     return FALLBACK_METADATA
 
 
+def _is_driver_location_events_partition(name: str | None) -> bool:
+    """Partitions Postgres de driver_location_events (YYYY_MM ou DEFAULT), pas des modèles."""
+    if not name or name == "driver_location_events":
+        return False
+    # ex. driver_location_events_2026_07, driver_location_events_default
+    return name.startswith("driver_location_events_")
+
+
 def include_object(object, name, type_, reflected, compare_to):
-    """Filtre autogenerate : extensions PostGIS, dérive cosmétique index/contraintes."""
+    """Filtre autogenerate : PostGIS, partitions GPS, dérive index/contraintes."""
     del compare_to
+    del object
     if type_ == "table" and name in {"spatial_ref_sys"}:
+        return False
+    # Partitions créées en SQL / Celery — absentes du metadata SQLAlchemy
+    if type_ == "table" and reflected and _is_driver_location_events_partition(name):
         return False
     if type_ == "column" and name == "geom":
         return False

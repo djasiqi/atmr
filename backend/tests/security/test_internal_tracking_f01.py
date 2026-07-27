@@ -44,7 +44,9 @@ def _mock_persist_success():
             "routes.internal_tracking.persist_tracking_batch",
             side_effect=_persist,
         ),
-        patch("routes.internal_tracking.attempt_redis_canonical_repair", return_value=True),
+        patch(
+            "routes.internal_tracking.attempt_redis_canonical_repair", return_value=True
+        ),
         patch("routes.internal_tracking.mark_repair_done_if_current"),
         patch("routes.internal_tracking.db", mock_db),
     ]
@@ -156,7 +158,9 @@ class TestAuthAudience:
         redis, _ = fake_redis
         with (
             patch("routes.internal_tracking.redis_client", redis),
-            patch("services.tracking.ingest_idempotency._get_redis", return_value=redis),
+            patch(
+                "services.tracking.ingest_idempotency._get_redis", return_value=redis
+            ),
         ):
             resp = client.post(
                 INGEST_PATH,
@@ -216,14 +220,24 @@ class TestAuthAudience:
         redis, _ = fake_redis
         patches = [
             patch("routes.internal_tracking.redis_client", redis),
-            patch("services.tracking.ingest_idempotency._get_redis", return_value=redis),
+            patch(
+                "services.tracking.ingest_idempotency._get_redis", return_value=redis
+            ),
             patch(
                 "routes.internal_tracking._resolve_driver_tenant",
                 return_value=(10, None),
             ),
             *_mock_persist_success(),
         ]
-        with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5], patches[6]:
+        with (
+            patches[0],
+            patches[1],
+            patches[2],
+            patches[3],
+            patches[4],
+            patches[5],
+            patches[6],
+        ):
             resp = client.post(
                 INGEST_PATH,
                 data=json.dumps({"driver_id": 1, "points": [_point()]}),
@@ -236,14 +250,24 @@ class TestValidation:
     def _post(self, client, redis, body, headers=None):
         patches = [
             patch("routes.internal_tracking.redis_client", redis),
-            patch("services.tracking.ingest_idempotency._get_redis", return_value=redis),
+            patch(
+                "services.tracking.ingest_idempotency._get_redis", return_value=redis
+            ),
             patch(
                 "routes.internal_tracking._resolve_driver_tenant",
                 return_value=(10, None),
             ),
             *_mock_persist_success(),
         ]
-        with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5], patches[6]:
+        with (
+            patches[0],
+            patches[1],
+            patches[2],
+            patches[3],
+            patches[4],
+            patches[5],
+            patches[6],
+        ):
             from unittest.mock import MagicMock
 
             enq = MagicMock()
@@ -398,7 +422,9 @@ class TestValidation:
 
         with (
             patch("routes.internal_tracking.redis_client", redis),
-            patch("services.tracking.ingest_idempotency._get_redis", return_value=redis),
+            patch(
+                "services.tracking.ingest_idempotency._get_redis", return_value=redis
+            ),
             patch(
                 "routes.internal_tracking._resolve_driver_tenant",
                 return_value=(10, None),
@@ -407,7 +433,10 @@ class TestValidation:
                 "routes.internal_tracking.persist_tracking_batch",
                 side_effect=_persist,
             ),
-            patch("routes.internal_tracking.attempt_redis_canonical_repair", return_value=True),
+            patch(
+                "routes.internal_tracking.attempt_redis_canonical_repair",
+                return_value=True,
+            ),
             patch("routes.internal_tracking.mark_repair_done_if_current"),
             patch("routes.internal_tracking.db") as mock_db,
         ):
@@ -430,7 +459,9 @@ class TestValidation:
         redis, store = fake_redis
         with (
             patch("routes.internal_tracking.redis_client", redis),
-            patch("services.tracking.ingest_idempotency._get_redis", return_value=redis),
+            patch(
+                "services.tracking.ingest_idempotency._get_redis", return_value=redis
+            ),
             patch(
                 "routes.internal_tracking._resolve_driver_tenant",
                 return_value=(10, None),
@@ -443,6 +474,7 @@ class TestValidation:
         ):
             mock_db.session.begin.return_value.__enter__ = lambda s: s
             mock_db.session.begin.return_value.__exit__ = lambda *a: True
+
             # begin context raising
             class _CM:
                 def __enter__(self):
@@ -505,9 +537,7 @@ class TestValidation:
             _point(location_event_id=f"e{i}", latitude=46.0 + i * 0.001)
             for i in range(51)
         ]
-        resp, enq = self._post(
-            client, redis, {"driver_id": 1, "points": points}
-        )
+        resp, enq = self._post(client, redis, {"driver_id": 1, "points": points})
         assert resp.status_code == 400
         enq.assert_not_called()
 

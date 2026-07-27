@@ -321,7 +321,9 @@ class TestLogoutCookies:
         # Au moins une directive Domain=.lirie.ch (cookie partagé)
         assert "domain=.lirie.ch" in combined or "domain=lirie.ch" in combined
         # Et des Set-Cookie sans Domain (host-only) : plusieurs en-têtes access_token
-        access_headers = [h for h in set_cookie_headers if h.lower().startswith("access_token=")]
+        access_headers = [
+            h for h in set_cookie_headers if h.lower().startswith("access_token=")
+        ]
         assert len(access_headers) >= 2
 
     def test_logout_clears_cookies_without_jwt(self, client, app):

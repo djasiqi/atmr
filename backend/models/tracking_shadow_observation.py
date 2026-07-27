@@ -37,7 +37,10 @@ class TrackingShadowObservation(db.Model):
 
     comparison_deadline_at = db.Column(db.DateTime(timezone=True), nullable=True)
     comparison_state = db.Column(
-        db.String(32), nullable=False, default="waiting_shadow", server_default="waiting_shadow"
+        db.String(32),
+        nullable=False,
+        default="waiting_shadow",
+        server_default="waiting_shadow",
     )
     result = db.Column(db.String(64), nullable=True)
     compared_at = db.Column(db.DateTime(timezone=True), nullable=True)

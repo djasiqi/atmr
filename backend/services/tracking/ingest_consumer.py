@@ -42,6 +42,7 @@ class FatalTrackingConsumerError(RuntimeError):
         self.partition = partition
         self.offset = offset
 
+
 try:
     from services.monitoring.driver_location_metrics import (
         inc_tracking_invalid_config,
@@ -342,9 +343,7 @@ class TrackingIngestConsumer:
         from kafka.structs import OffsetAndMetadata, TopicPartition
 
         tp = TopicPartition(record.topic, record.partition)
-        self._consumer.commit(
-            {tp: OffsetAndMetadata(record.offset + 1, "", -1)}
-        )
+        self._consumer.commit({tp: OffsetAndMetadata(record.offset + 1, "", -1)})
 
     def _commit_current(self) -> None:
         """Compat tests legacy — préférer ``_commit_record``."""

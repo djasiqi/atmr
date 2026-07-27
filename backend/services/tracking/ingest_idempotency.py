@@ -124,9 +124,7 @@ def try_reserve(
         )
         return "pending_hint", None
     except Exception as exc:
-        logger.warning(
-            "[ingest_idempotency] reserve failed: %s", type(exc).__name__
-        )
+        logger.warning("[ingest_idempotency] reserve failed: %s", type(exc).__name__)
         return "unavailable", None
 
 
@@ -149,9 +147,7 @@ def mark_done(*, driver_id: int, location_event_id: str, nonce: str | None) -> b
         client.set(key, "done", ex=done_ttl)
         return True
     except Exception as exc:
-        logger.warning(
-            "[ingest_idempotency] mark_done failed: %s", type(exc).__name__
-        )
+        logger.warning("[ingest_idempotency] mark_done failed: %s", type(exc).__name__)
         return False
 
 

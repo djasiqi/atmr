@@ -79,8 +79,7 @@ def _delivery(
         status=status,
         token_key_version=1,
         email_token_hash=hash_activation_token(token),
-        token_expires_at=expires
-        or (datetime.now(UTC) + timedelta(minutes=30)),
+        token_expires_at=expires or (datetime.now(UTC) + timedelta(minutes=30)),
         superseded_at=datetime.now(UTC) if superseded else None,
     )
     db.session.add(delivery)
@@ -215,7 +214,9 @@ class TestCeleryAndFinalize:
         delivery, _ = _delivery(db, session, status=EMAIL_DELIVERY_SENT)
         delivery.provider_accepted_at = datetime.now(UTC)
         db.session.commit()
-        ok = mark_delivery_failed(session, "late error", email_delivery_id=delivery.email_delivery_id)
+        ok = mark_delivery_failed(
+            session, "late error", email_delivery_id=delivery.email_delivery_id
+        )
         assert ok is False
         db.session.refresh(delivery)
         assert delivery.status == EMAIL_DELIVERY_SENT
@@ -223,7 +224,9 @@ class TestCeleryAndFinalize:
     def test_sync_mirror_never_changes_pointer(self, db):
         session = _session(db)
         a, _ = _delivery(db, session)
-        b, _ = _delivery(db, session, kind=EMAIL_DELIVERY_KIND_RESEND, make_current=False)
+        b, _ = _delivery(
+            db, session, kind=EMAIL_DELIVERY_KIND_RESEND, make_current=False
+        )
         pointer = session.email_delivery_id
         assert sync_current_delivery_mirror(session, b) is False
         assert session.email_delivery_id == pointer
@@ -243,8 +246,12 @@ class TestSnapshotNonMutative:
 
 class TestLegacyBoot:
     def test_empty_window_disabled(self, monkeypatch):
-        monkeypatch.delenv("ACTIVATION_LEGACY_EMAIL_TOKEN_ACCEPT_FROM_UTC", raising=False)
-        monkeypatch.delenv("ACTIVATION_LEGACY_EMAIL_TOKEN_ACCEPT_UNTIL_UTC", raising=False)
+        monkeypatch.delenv(
+            "ACTIVATION_LEGACY_EMAIL_TOKEN_ACCEPT_FROM_UTC", raising=False
+        )
+        monkeypatch.delenv(
+            "ACTIVATION_LEGACY_EMAIL_TOKEN_ACCEPT_UNTIL_UTC", raising=False
+        )
         assert get_legacy_acceptance_window() is None
         assert is_legacy_acceptance_active() is False
 
@@ -253,7 +260,9 @@ class TestLegacyBoot:
             "ACTIVATION_LEGACY_EMAIL_TOKEN_ACCEPT_FROM_UTC",
             "2026-07-26T18:00:00+00:00",
         )
-        monkeypatch.delenv("ACTIVATION_LEGACY_EMAIL_TOKEN_ACCEPT_UNTIL_UTC", raising=False)
+        monkeypatch.delenv(
+            "ACTIVATION_LEGACY_EMAIL_TOKEN_ACCEPT_UNTIL_UTC", raising=False
+        )
         with pytest.raises(ActivationLegacyConfigError):
             get_legacy_acceptance_window()
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from sqlalchemy import ForeignKeyConstraint, Index, UniqueConstraint
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.sql import func
 
 from ext import db
@@ -127,7 +128,8 @@ class TrackingEventOutbox(db.Model):
     location_event_id = db.Column(db.String(64), nullable=False)
     session_generation = db.Column(db.BigInteger, nullable=False, default=0)
     sequence_id = db.Column(db.BigInteger, nullable=False, default=0)
-    payload = db.Column(db.JSON, nullable=False)
+    # Aligné sur la migration GPS v5 (JSONB) — évite un faux positif autogenerate JSON↔JSONB
+    payload = db.Column(JSONB, nullable=False)
     created_at = db.Column(
         db.DateTime(timezone=True),
         nullable=False,

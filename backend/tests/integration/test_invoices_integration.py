@@ -268,10 +268,10 @@ class TestInvoicesIntegration:
         from models import Client, ClientStay, User
         from models.enums import UserRole
 
-        now = datetime.now(UTC)
-        year, month = now.year, now.month
+        # Date future (même mois) : validate_scheduled_time refuse le passé
+        mid = datetime.now(UTC) + timedelta(hours=3)
+        year, month = mid.year, mid.month
         start = datetime(year, month, 1, tzinfo=UTC)
-        mid = start + timedelta(days=15)
 
         def make_user_client(prefix: str, company_id: int):
             u = User(
@@ -377,8 +377,9 @@ class TestInvoicesIntegration:
 
         from models.enums import InvoiceBillingStrategy, InvoiceLineType
 
-        now = datetime.now(UTC)
-        year, month = now.year, now.month
+        # Date future (même mois) : validate_scheduled_time refuse le passé
+        st = datetime.now(UTC) + timedelta(hours=2)
+        year, month = st.year, st.month
 
         test_invoice.billing_strategy = InvoiceBillingStrategy.S1_PATIENT
         test_invoice.billed_to_company_id = None
@@ -388,10 +389,8 @@ class TestInvoicesIntegration:
         test_completed_booking.billed_to_type = "patient"
         test_completed_booking.billed_to_company_id = None
         test_completed_booking.billing_party_id = None
-        test_completed_booking.scheduled_time = datetime(year, month, 15, tzinfo=UTC)
-        test_completed_booking.completed_at = datetime(
-            year, month, 15, 12, 0, tzinfo=UTC
-        )
+        test_completed_booking.scheduled_time = st
+        test_completed_booking.completed_at = st
         test_completed_booking.invoice_line_id = None
 
         invoice_line = InvoiceLine()

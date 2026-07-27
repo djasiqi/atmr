@@ -166,7 +166,9 @@ def compute_batch_id(
     return hashlib.sha256(canonical_json(batch_obj).encode("utf-8")).hexdigest()
 
 
-def compute_event_payload_hash_from_point(point: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+def compute_event_payload_hash_from_point(
+    point: dict[str, Any],
+) -> tuple[str, dict[str, Any]]:
     """Hash depuis un point normalisé (clés latitude/longitude/…)."""
     return compute_event_payload_hash(
         location_event_id=str(point["location_event_id"]),

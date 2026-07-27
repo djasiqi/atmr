@@ -49,17 +49,21 @@ def register_tracking_session(
             "tracking_session_id_missing", "tracking_session_id requis"
         )
 
-    existing = session.execute(
-        text(
-            """
+    existing = (
+        session.execute(
+            text(
+                """
             SELECT tracking_session_id, session_generation, status, final_sequence_id
             FROM tracking_sessions
             WHERE driver_id = :driver_id AND tracking_session_id = :sid
             FOR UPDATE
             """
-        ),
-        {"driver_id": driver_id, "sid": sid},
-    ).mappings().first()
+            ),
+            {"driver_id": driver_id, "sid": sid},
+        )
+        .mappings()
+        .first()
+    )
 
     if existing is not None:
         return {
@@ -146,16 +150,20 @@ def close_tracking_session(
     final_sequence_id: int | None,
 ) -> dict[str, Any]:
     sid = (tracking_session_id or "").strip()
-    row = session.execute(
-        text(
-            """
+    row = (
+        session.execute(
+            text(
+                """
             SELECT status FROM tracking_sessions
             WHERE driver_id = :driver_id AND tracking_session_id = :sid
             FOR UPDATE
             """
-        ),
-        {"driver_id": driver_id, "sid": sid},
-    ).mappings().first()
+            ),
+            {"driver_id": driver_id, "sid": sid},
+        )
+        .mappings()
+        .first()
+    )
     if row is None:
         raise SessionRegistryError(
             "tracking_session_not_registered",
@@ -211,16 +219,20 @@ def resolve_authoritative_session(
 ) -> dict[str, Any]:
     """Vérifie session + génération (ne jamais faire confiance au mobile)."""
     sid = (tracking_session_id or "").strip()
-    row = session.execute(
-        text(
-            """
+    row = (
+        session.execute(
+            text(
+                """
             SELECT driver_id, company_id, session_generation, status, final_sequence_id
             FROM tracking_sessions
             WHERE driver_id = :driver_id AND tracking_session_id = :sid
             """
-        ),
-        {"driver_id": driver_id, "sid": sid},
-    ).mappings().first()
+            ),
+            {"driver_id": driver_id, "sid": sid},
+        )
+        .mappings()
+        .first()
+    )
 
     if row is None:
         raise SessionRegistryError(

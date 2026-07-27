@@ -68,9 +68,7 @@ class TrackingDerivedRepairPending(db.Model):
     id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
     driver_id = db.Column(db.Integer, nullable=False, index=True)
     location_event_id = db.Column(db.String(64), nullable=False)
-    repair_kind = db.Column(
-        db.String(32), nullable=False, default="redis_canonical"
-    )
+    repair_kind = db.Column(db.String(32), nullable=False, default="redis_canonical")
     target_recorded_at = db.Column(db.DateTime(timezone=True), nullable=False)
     target_sequence_id = db.Column(db.BigInteger, nullable=True)
     status = db.Column(db.String(16), nullable=False, default="pending")

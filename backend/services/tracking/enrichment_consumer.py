@@ -132,9 +132,7 @@ class TrackingEnrichmentConsumer:
 
         assert self._consumer is not None
         tp = TopicPartition(record.topic, record.partition)
-        self._consumer.commit(
-            {tp: OffsetAndMetadata(record.offset + 1, "", -1)}
-        )
+        self._consumer.commit({tp: OffsetAndMetadata(record.offset + 1, "", -1)})
 
     def _process(self, message: dict[str, Any]) -> None:
         payload = message.get("payload")
@@ -142,9 +140,7 @@ class TrackingEnrichmentConsumer:
             payload = message
         driver_id = int(message.get("driver_id") or payload.get("driver_id"))
         eid = str(
-            message.get("location_event_id")
-            or payload.get("location_event_id")
-            or ""
+            message.get("location_event_id") or payload.get("location_event_id") or ""
         )
         if not eid:
             return

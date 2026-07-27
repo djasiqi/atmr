@@ -107,8 +107,12 @@ def persist_driver_location_from_kafka(
 
         try:
             loc_svc = get_location_service()
-            norm_mode = loc_svc.resolve_normalized_location_mode(company_id, location_mode)
-            uc = UpdateDriverLocationUseCase(update_location_fn=create_location_update_fn())
+            norm_mode = loc_svc.resolve_normalized_location_mode(
+                company_id, location_mode
+            )
+            uc = UpdateDriverLocationUseCase(
+                update_location_fn=create_location_update_fn()
+            )
             uc_result = uc.execute(
                 UpdateDriverLocationCommand(
                     driver_id=driver_id,
@@ -116,7 +120,9 @@ def persist_driver_location_from_kafka(
                     longitude=lon,
                     speed=speed if speed is not None and speed > 0 else None,
                     heading=heading if heading is not None and heading >= 0 else None,
-                    accuracy=accuracy if accuracy is not None and accuracy > 0 else None,
+                    accuracy=accuracy
+                    if accuracy is not None and accuracy > 0
+                    else None,
                     ts=recorded_at,
                     recorded_at=recorded_at,
                     sent_at=str(sent_at) if sent_at else None,

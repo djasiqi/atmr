@@ -147,7 +147,9 @@ def authorize_internal_request(
         return False, "missing_token"
 
     hdrs = headers or {}
-    provided = (hdrs.get("X-Internal-Token") or hdrs.get("x-internal-token") or "").strip()
+    provided = (
+        hdrs.get("X-Internal-Token") or hdrs.get("x-internal-token") or ""
+    ).strip()
     if not provided:
         return False, "invalid_token"
 

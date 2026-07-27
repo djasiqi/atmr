@@ -34,5 +34,7 @@ class TestSerializeAliasHit:
         assert "Hôpitaux Universitaires de Genève (HUG)" in serialized["label"]
         assert "Rue Gabrielle-Perret-Gentil 4" in serialized["label"]
         assert serialized["main_text"] == "Hôpitaux Universitaires de Genève (HUG)"
-        assert serialized["secondary_text"] == "Rue Gabrielle-Perret-Gentil 4, 1205 Genève"
+        assert (
+            serialized["secondary_text"] == "Rue Gabrielle-Perret-Gentil 4, 1205 Genève"
+        )
         assert serialized["name"] == "Hôpitaux Universitaires de Genève (HUG)"

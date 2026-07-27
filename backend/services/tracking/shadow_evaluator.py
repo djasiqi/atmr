@@ -12,7 +12,9 @@ FINGERPRINT_SCHEMA_VERSION = 1
 
 def payload_fingerprint(message: dict[str, Any]) -> str:
     """Empreinte stable du payload GPS (hors champs volatils)."""
-    payload = message.get("payload") if isinstance(message.get("payload"), dict) else message
+    payload = (
+        message.get("payload") if isinstance(message.get("payload"), dict) else message
+    )
     keys = (
         "latitude",
         "longitude",
@@ -40,7 +42,9 @@ def evaluate_shadow_acceptance(message: dict[str, Any]) -> dict[str, str]:
 
     Miroir minimal des gardes UC : coords valides, event_id présent.
     """
-    payload = message.get("payload") if isinstance(message.get("payload"), dict) else message
+    payload = (
+        message.get("payload") if isinstance(message.get("payload"), dict) else message
+    )
     lat = payload.get("latitude", payload.get("lat"))
     lon = payload.get("longitude", payload.get("lon"))
     eid = (

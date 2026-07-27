@@ -123,9 +123,7 @@ def _metric_for_state(state: str) -> None:
         _inc_divergence("shadow_match")
 
 
-def handle_direct_observed(
-    message: dict[str, Any], *, consumer_lag: int = 0
-) -> str:
+def handle_direct_observed(message: dict[str, Any], *, consumer_lag: int = 0) -> str:
     """Traite un message direct.observed.v3 (résultat autoritaire)."""
     driver_id = int(message.get("driver_id") or 0)
     eid = str(message.get("location_event_id") or "")
@@ -163,7 +161,11 @@ def handle_shadow_raw(message: dict[str, Any], *, consumer_lag: int = 0) -> str:
         return "comparison_unavailable"
     company_id = message.get("company_id")
     if not isinstance(company_id, int):
-        company_id = payload.get("company_id") if isinstance(payload.get("company_id"), int) else None
+        company_id = (
+            payload.get("company_id")
+            if isinstance(payload.get("company_id"), int)
+            else None
+        )
     state = upsert_shadow_observation(
         driver_id=driver_id,
         location_event_id=eid,
@@ -236,9 +238,7 @@ class TrackingShadowConsumer:
 
         assert self._consumer is not None
         tp = TopicPartition(record.topic, record.partition)
-        self._consumer.commit(
-            {tp: OffsetAndMetadata(record.offset + 1, "", -1)}
-        )
+        self._consumer.commit({tp: OffsetAndMetadata(record.offset + 1, "", -1)})
 
     def _sweep_expired(self, lag: int) -> None:
         was_high = self._lag_high

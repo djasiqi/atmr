@@ -175,9 +175,10 @@ def _upsert_side(
     waiting_state = "waiting_shadow" if side == "direct" else "waiting_direct"
 
     with eng.connect() as conn:
-        row = conn.execute(
-            text(
-                """
+        row = (
+            conn.execute(
+                text(
+                    """
                 SELECT direct_fingerprint, direct_accept_status, direct_accept_reason,
                        shadow_fingerprint, shadow_accept_status, shadow_accept_reason,
                        comparison_state
@@ -185,9 +186,12 @@ def _upsert_side(
                 WHERE driver_id = :driver_id AND location_event_id = :eid
                 FOR UPDATE
                 """
-            ),
-            {"driver_id": driver_id, "eid": location_event_id},
-        ).mappings().first()
+                ),
+                {"driver_id": driver_id, "eid": location_event_id},
+            )
+            .mappings()
+            .first()
+        )
 
         if row is None:
             if side == "direct":
@@ -411,9 +415,10 @@ def expire_waiting_observations(
     now = datetime.now(UTC)
     expired: list[dict[str, Any]] = []
     with eng.connect() as conn:
-        rows = conn.execute(
-            text(
-                """
+        rows = (
+            conn.execute(
+                text(
+                    """
                 SELECT driver_id, location_event_id, comparison_state,
                        direct_fingerprint, shadow_fingerprint
                 FROM tracking_shadow_observations
@@ -423,9 +428,12 @@ def expire_waiting_observations(
                 FOR UPDATE SKIP LOCKED
                 LIMIT 200
                 """
-            ),
-            {"now": now},
-        ).mappings().all()
+                ),
+                {"now": now},
+            )
+            .mappings()
+            .all()
+        )
         for row in rows:
             result = (
                 "shadow_missing_in_direct"

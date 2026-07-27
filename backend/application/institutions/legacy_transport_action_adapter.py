@@ -39,9 +39,7 @@ def publish_legacy_after_transport_action_completed(
         )
         return
 
-    company_id = cast(
-        int | None, booking.company_id or booking.executing_company_id
-    )
+    company_id = cast(int | None, booking.company_id or booking.executing_company_id)
     publish_event(
         BookingCancelledEvent(
             booking_id=booking.id,

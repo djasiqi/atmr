@@ -2240,7 +2240,9 @@ class DriverLocationBatch(Resource):
         reject_reasons: dict[str, int] = {}
 
         # Annexe A.2 : session_generation autorité serveur (si fournie ou enforcement)
-        claimed_generation = body.get("session_generation") if isinstance(body, dict) else None
+        claimed_generation = (
+            body.get("session_generation") if isinstance(body, dict) else None
+        )
         registry_enforced = (
             os.getenv("TRACKING_SESSION_REGISTRY_ENFORCED", "false").lower() == "true"
         )

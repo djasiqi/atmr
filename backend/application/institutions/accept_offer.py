@@ -768,9 +768,7 @@ class AcceptOfferUseCase:
         if raw_pickup is None and has_confirmed_departure(transport_request):
             raw_pickup = cast(datetime | None, transport_request.scheduled_time)
         effective_pickup_time = (
-            normalize_mission_wall_clock(raw_pickup)
-            if raw_pickup is not None
-            else None
+            normalize_mission_wall_clock(raw_pickup) if raw_pickup is not None else None
         )
 
         booking = Booking(
@@ -1161,9 +1159,7 @@ class AcceptOfferUseCase:
                 # Ne jamais utiliser leg.scheduled_time (RDV) comme pickup sans départ confirmé.
                 raw_pickup = proposed_pickup_time
                 if raw_pickup is None and mission_depart_confirmed:
-                    raw_pickup = cast(
-                        datetime | None, transport_request.scheduled_time
-                    )
+                    raw_pickup = cast(datetime | None, transport_request.scheduled_time)
                 operational = (
                     mission_depart_confirmed or proposed_pickup_time is not None
                 )
@@ -1213,9 +1209,7 @@ class AcceptOfferUseCase:
                 pickup_lon=float(leg.pickup_lng) if leg.pickup_lng else None,
                 dropoff_lat=float(leg.dropoff_lat) if leg.dropoff_lat else None,
                 dropoff_lon=float(leg.dropoff_lng) if leg.dropoff_lng else None,
-                scheduled_time=cast(
-                    datetime | None, transport_request.scheduled_time
-                ),
+                scheduled_time=cast(datetime | None, transport_request.scheduled_time),
                 is_round_trip=False,
             )
             amount = leg_price["amount"]

@@ -80,6 +80,7 @@ def test_build_database_url_safe_escapes_reserved_password_chars(monkeypatch):
     assert encoded_password == quote_plus(fake_password)
     assert compare_digest(unquote_plus(encoded_password), fake_password)
 
+
 def test_pgbouncer_is_internal_host():
     from config import _is_internal_database_host
 
@@ -107,7 +108,9 @@ def _env_value(block: str, key: str) -> str | None:
     match = re.search(rf'(?m)^      {re.escape(key)}:\s*(?:"([^"]*)"|([^\n#]*))', block)
     if not match:
         return None
-    return (match.group(1) if match.group(1) is not None else match.group(2) or "").rstrip()
+    return (
+        match.group(1) if match.group(1) is not None else match.group(2) or ""
+    ).rstrip()
 
 
 @pytest.mark.parametrize(
@@ -142,7 +145,10 @@ def test_tracking_kafka_services_neutralize_inherited_dsn(compose_rel: str):
         # Pas d'URL interpolée avec user/password Compose
         assert "postgresql+psycopg://${POSTGRES_USER" not in block
         assert "postgresql+psycopg://${POSTGRES_PASSWORD" not in block
-        assert re.search(r"postgresql\+psycopg://\$\{POSTGRES_(USER|PASSWORD)", block) is None
+        assert (
+            re.search(r"postgresql\+psycopg://\$\{POSTGRES_(USER|PASSWORD)", block)
+            is None
+        )
 
 
 def test_compose_dsn_fixture_documents_neutralized_urls():
@@ -267,7 +273,9 @@ def test_compose_config_json_fused_with_p0_hold_override(tmp_path):
         env = svc.get("environment") or {}
         for key in _EMPTY_DSN_KEYS:
             assert key in env, f"{svc_name} manque {key}"
-            assert env[key] in ("", None), f"{svc_name}.{key} doit être vide, got {env[key]!r}"
+            assert env[key] in ("", None), (
+                f"{svc_name}.{key} doit être vide, got {env[key]!r}"
+            )
         assert env.get("POSTGRES_HOST") == "pgbouncer", svc_name
         assert str(env.get("POSTGRES_PORT")) == "6432", svc_name
         for val in env.values():
@@ -276,12 +284,12 @@ def test_compose_config_json_fused_with_p0_hold_override(tmp_path):
                 assert "${POSTGRES_PASSWORD" not in val
                 assert "fixture-not-a-real-secret" not in val
 
-    consumer_env = (services["tracking-kafka-consumer"].get("environment") or {})
+    consumer_env = services["tracking-kafka-consumer"].get("environment") or {}
     assert consumer_env.get("TRACKING_PERSIST_WITH_OUTBOX") in ("false", False)
     assert consumer_env.get("TRACKING_INGEST_PERSIST_ENABLED") in ("true", True)
     assert consumer_env.get("TRACKING_INGEST_ALLOW_REPUBLISH_ONLY") in ("false", False)
     assert consumer_env.get("TRACKING_INGEST_SEEK_TO_END_ON_START") in ("false", False)
     assert consumer_env.get("TRACKING_DLQ_FORCE_COMMIT_ON_FAILURE") in ("false", False)
 
-    fanout_env = (services["tracking-processed-fanout"].get("environment") or {})
+    fanout_env = services["tracking-processed-fanout"].get("environment") or {}
     assert fanout_env.get("TRACKING_PROCESSED_FANOUT_ENABLED") in ("false", False)

@@ -68,8 +68,7 @@ def require_durability_mode() -> None:
     mode = _durability_mode()
     if mode != "sync_db":
         raise RuntimeError(
-            f"INTERNAL_TRACKING_DURABILITY_MODE invalide: {mode!r} "
-            "(requis: sync_db)"
+            f"INTERNAL_TRACKING_DURABILITY_MODE invalide: {mode!r} (requis: sync_db)"
         )
 
 
@@ -137,18 +136,22 @@ def persist_tracking_batch(
     require_durability_mode()
 
     # Re-vérifier chauffeur/tenant dans la TX
-    row = session.execute(
-        text(
-            """
+    row = (
+        session.execute(
+            text(
+                """
             SELECT d.id, d.company_id, d.is_active, c.is_approved
             FROM driver d
             JOIN company c ON c.id = d.company_id
             WHERE d.id = :driver_id
             FOR UPDATE OF d
             """
-        ),
-        {"driver_id": prepared.driver_id},
-    ).mappings().first()
+            ),
+            {"driver_id": prepared.driver_id},
+        )
+        .mappings()
+        .first()
+    )
     if row is None:
         raise ValueError("driver_not_found")
     if not row["is_active"]:
@@ -195,21 +198,28 @@ def persist_tracking_batch(
 
         if inserted is not None:
             persisted_ids.append(eid)
-            if latest_for_driver is None or pt.recorded_at > latest_for_driver.recorded_at:
+            if (
+                latest_for_driver is None
+                or pt.recorded_at > latest_for_driver.recorded_at
+            ):
                 latest_for_driver = pt
             _upsert_repair_pending(session, prepared.driver_id, eid, pt.recorded_at)
             continue
 
-        existing = session.execute(
-            text(
-                """
+        existing = (
+            session.execute(
+                text(
+                    """
                 SELECT company_id, event_payload_hash, payload_schema_version
                 FROM tracking_ingest_events
                 WHERE driver_id = :driver_id AND location_event_id = :eid
                 """
-            ),
-            {"driver_id": prepared.driver_id, "eid": eid},
-        ).mappings().first()
+                ),
+                {"driver_id": prepared.driver_id, "eid": eid},
+            )
+            .mappings()
+            .first()
+        )
         if existing is None:
             # Course rare — traiter comme erreur
             raise RuntimeError("ledger_conflict_race")
@@ -374,9 +384,10 @@ def process_pending_repairs(*, limit: int = 50) -> dict[str, int]:
     """Worker : reprend les repair_pending (Redis down au post-commit)."""
     from ext import db
 
-    rows = db.session.execute(
-        text(
-            """
+    rows = (
+        db.session.execute(
+            text(
+                """
             SELECT r.id, r.driver_id, r.location_event_id, r.target_recorded_at,
                    e.company_id, e.recorded_at,
                    d.latitude, d.longitude
@@ -390,16 +401,21 @@ def process_pending_repairs(*, limit: int = 50) -> dict[str, int]:
             ORDER BY r.target_recorded_at ASC
             LIMIT :lim
             """
-        ),
-        {"lim": limit},
-    ).mappings().all()
+            ),
+            {"lim": limit},
+        )
+        .mappings()
+        .all()
+    )
 
     done = 0
     failed = 0
     for row in rows:
         ok = attempt_redis_canonical_repair(
             driver_id=int(row["driver_id"]),
-            company_id=int(row["company_id"]) if row["company_id"] is not None else None,
+            company_id=int(row["company_id"])
+            if row["company_id"] is not None
+            else None,
             latitude=float(row["latitude"] or 0.0),
             longitude=float(row["longitude"] or 0.0),
             recorded_at=row["target_recorded_at"],

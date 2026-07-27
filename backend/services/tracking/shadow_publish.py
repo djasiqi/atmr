@@ -74,9 +74,7 @@ def _mark_unavailable(
                 location_event_id,
             )
     except Exception:
-        logger.exception(
-            "[shadow] CRITICAL mark unavailable exception side=%s", side
-        )
+        logger.exception("[shadow] CRITICAL mark unavailable exception side=%s", side)
 
 
 def publish_direct_observation(
@@ -153,7 +151,11 @@ def publish_raw_shadow_copy(
     )
     company_id = message.get("company_id")
     if not isinstance(company_id, int):
-        company_id = payload.get("company_id") if isinstance(payload.get("company_id"), int) else None
+        company_id = (
+            payload.get("company_id")
+            if isinstance(payload.get("company_id"), int)
+            else None
+        )
 
     try:
         prod = producer or _get_producer()

@@ -272,7 +272,11 @@ def tracking_ingest():
         ), 400
 
     header_event_raw = request.headers.get(_HEADER_EVENT_ID)
-    if len(points) > 1 and header_event_raw is not None and str(header_event_raw).strip():
+    if (
+        len(points) > 1
+        and header_event_raw is not None
+        and str(header_event_raw).strip()
+    ):
         return jsonify({"error": "header_event_id_not_allowed_for_batch"}), 400
 
     tenant_company_id, tenant_error = _resolve_driver_tenant(driver_id)
@@ -377,7 +381,9 @@ def tracking_ingest():
                 longitude=latest.longitude,
                 recorded_at=latest.recorded_at,
                 location_event_id=eid,
-                location_mode=str(latest.payload.get("location_mode") or "mission_live"),
+                location_mode=str(
+                    latest.payload.get("location_mode") or "mission_live"
+                ),
             )
             if ok_redis:
                 mark_repair_done_if_current(

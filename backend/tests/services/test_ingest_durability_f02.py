@@ -166,7 +166,10 @@ def test_persist_driver_update_strict_recorded_at():
     persist_tracking_batch(prepared=_prepared(_pt("e1")), session=session)
     # 4e execute = UPDATE driver
     update_sql = str(session.execute.call_args_list[3][0][0])
-    assert "last_position_update <" in update_sql or "last_position_update IS NULL" in update_sql
+    assert (
+        "last_position_update <" in update_sql
+        or "last_position_update IS NULL" in update_sql
+    )
 
 
 def test_repair_refuses_older_redis_overwrite():

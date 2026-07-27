@@ -53,32 +53,40 @@ def get_persisted_watermark(
     cursor: str | None = None,
 ) -> dict[str, Any]:
     sid = (tracking_session_id or "").strip()
-    sess = session.execute(
-        text(
-            """
+    sess = (
+        session.execute(
+            text(
+                """
             SELECT session_generation, status
             FROM tracking_sessions
             WHERE driver_id = :driver_id
               AND company_id = :company_id
               AND tracking_session_id = :sid
             """
-        ),
-        {"driver_id": driver_id, "company_id": company_id, "sid": sid},
-    ).mappings().first()
+            ),
+            {"driver_id": driver_id, "company_id": company_id, "sid": sid},
+        )
+        .mappings()
+        .first()
+    )
     if sess is None:
         raise PermissionError("tracking_session_forbidden")
 
-    state = session.execute(
-        text(
-            """
+    state = (
+        session.execute(
+            text(
+                """
             SELECT contiguous_persisted_through, max_seen_sequence, session_generation
             FROM tracking_session_state
             WHERE driver_id = :driver_id AND tracking_session_id = :sid
             FOR UPDATE
             """
-        ),
-        {"driver_id": driver_id, "sid": sid},
-    ).mappings().first()
+            ),
+            {"driver_id": driver_id, "sid": sid},
+        )
+        .mappings()
+        .first()
+    )
 
     contiguous = int(state["contiguous_persisted_through"]) if state else 0
     generation = int(
@@ -88,9 +96,10 @@ def get_persisted_watermark(
     cursor_data = _verify_cursor(cursor) or {"after_sequence": contiguous}
     after_seq = int(cursor_data.get("after_sequence") or contiguous)
 
-    ooo_rows = session.execute(
-        text(
-            """
+    ooo_rows = (
+        session.execute(
+            text(
+                """
             SELECT sequence_id, location_event_id
             FROM driver_location_events
             WHERE driver_id = :driver_id
@@ -100,15 +109,18 @@ def get_persisted_watermark(
             ORDER BY sequence_id ASC
             LIMIT :lim
             """
-        ),
-        {
-            "driver_id": driver_id,
-            "sid": sid,
-            "contiguous": contiguous,
-            "after_seq": after_seq,
-            "lim": WATERMARK_PAGE_SIZE + 1,
-        },
-    ).mappings().all()
+            ),
+            {
+                "driver_id": driver_id,
+                "sid": sid,
+                "contiguous": contiguous,
+                "after_seq": after_seq,
+                "lim": WATERMARK_PAGE_SIZE + 1,
+            },
+        )
+        .mappings()
+        .all()
+    )
 
     has_more = len(ooo_rows) > WATERMARK_PAGE_SIZE
     page = list(ooo_rows[:WATERMARK_PAGE_SIZE])
@@ -120,9 +132,10 @@ def get_persisted_watermark(
         for r in page
     ]
 
-    gaps = session.execute(
-        text(
-            """
+    gaps = (
+        session.execute(
+            text(
+                """
             SELECT sequence_from, sequence_to
             FROM tracking_sequence_gaps
             WHERE driver_id = :driver_id
@@ -131,12 +144,13 @@ def get_persisted_watermark(
             ORDER BY sequence_from ASC
             LIMIT 100
             """
-        ),
-        {"driver_id": driver_id, "sid": sid},
-    ).mappings().all()
-    missing_ranges = [
-        [int(g["sequence_from"]), int(g["sequence_to"])] for g in gaps
-    ]
+            ),
+            {"driver_id": driver_id, "sid": sid},
+        )
+        .mappings()
+        .all()
+    )
+    missing_ranges = [[int(g["sequence_from"]), int(g["sequence_to"])] for g in gaps]
 
     next_cursor = None
     if has_more and page:

@@ -129,15 +129,19 @@ def persist_location_event_with_outbox(
     ).first()
 
     if inserted is None:
-        existing = session.execute(
-            text(
-                """
+        existing = (
+            session.execute(
+                text(
+                    """
                 SELECT event_payload_hash FROM tracking_ingest_events
                 WHERE driver_id = :driver_id AND location_event_id = :eid
                 """
-            ),
-            {"driver_id": driver_id, "eid": location_event_id},
-        ).mappings().first()
+                ),
+                {"driver_id": driver_id, "eid": location_event_id},
+            )
+            .mappings()
+            .first()
+        )
         if existing and str(existing["event_payload_hash"]) != phash:
             raise PersistConflictError("event_id_payload_conflict")
         return {"status": "duplicate", "location_event_id": location_event_id}
@@ -181,16 +185,20 @@ def persist_location_event_with_outbox(
     )
 
     # Watermark contigu
-    state = session.execute(
-        text(
-            """
+    state = (
+        session.execute(
+            text(
+                """
             SELECT contiguous_persisted_through, max_seen_sequence
             FROM tracking_session_state
             WHERE driver_id = :driver_id AND tracking_session_id = :sid
             """
-        ),
-        {"driver_id": driver_id, "sid": tracking_session_id},
-    ).mappings().first()
+            ),
+            {"driver_id": driver_id, "sid": tracking_session_id},
+        )
+        .mappings()
+        .first()
+    )
 
     contiguous = int(state["contiguous_persisted_through"]) if state else 0
     max_seen = int(state["max_seen_sequence"]) if state else 0

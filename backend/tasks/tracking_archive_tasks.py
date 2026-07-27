@@ -26,9 +26,10 @@ def archive_old_location_partitions(*, dry_run: bool = True) -> dict[str, object
 
     cutoff = datetime.now(UTC) - timedelta(days=EVENTS_RETENTION_DAYS)
     ledger_cutoff = cutoff - timedelta(days=LEDGER_EXTRA_MARGIN_DAYS)
-    rows = db.session.execute(
-        text(
-            """
+    rows = (
+        db.session.execute(
+            text(
+                """
             SELECT c.relname AS partition_name
             FROM pg_inherits i
             JOIN pg_class c ON c.oid = i.inhrelid
@@ -37,8 +38,11 @@ def archive_old_location_partitions(*, dry_run: bool = True) -> dict[str, object
               AND c.relname ~ '^driver_location_events_[0-9]{4}_[0-9]{2}$'
             ORDER BY c.relname
             """
+            )
         )
-    ).mappings().all()
+        .mappings()
+        .all()
+    )
 
     detachable: list[str] = []
     for row in rows:

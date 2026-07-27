@@ -89,17 +89,21 @@ class TrackingOutboxPublisher:
         """Traite un round : drivers distincts avec pending, lock advisory, publish."""
         published = 0
         with self._engine.connect() as conn:
-            drivers = conn.execute(
-                text(
-                    """
+            drivers = (
+                conn.execute(
+                    text(
+                        """
                     SELECT DISTINCT driver_id
                     FROM tracking_event_outbox
                     WHERE published_at IS NULL
                     ORDER BY driver_id
                     LIMIT 50
                     """
+                    )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
 
         for driver_id in drivers:
             published += self._publish_for_driver(int(driver_id))
@@ -110,9 +114,7 @@ class TrackingOutboxPublisher:
         # Commit après lock : TX SQL fermée pendant l'appel réseau Kafka.
         with self._engine.connect() as lock_conn:
             got = lock_conn.execute(
-                text(
-                    "SELECT pg_try_advisory_lock(:ns, :driver_id)"
-                ),
+                text("SELECT pg_try_advisory_lock(:ns, :driver_id)"),
                 {"ns": OUTBOX_LOCK_NAMESPACE, "driver_id": driver_id},
             ).scalar()
             if not got:
@@ -120,9 +122,10 @@ class TrackingOutboxPublisher:
             lock_conn.commit()
 
             try:
-                rows = lock_conn.execute(
-                    text(
-                        """
+                rows = (
+                    lock_conn.execute(
+                        text(
+                            """
                         SELECT id, event_id, location_event_id, payload,
                                session_generation, sequence_id
                         FROM tracking_event_outbox
@@ -130,9 +133,12 @@ class TrackingOutboxPublisher:
                         ORDER BY session_generation ASC, sequence_id ASC
                         LIMIT :lim
                         """
-                    ),
-                    {"driver_id": driver_id, "lim": OUTBOX_BATCH_PER_DRIVER},
-                ).mappings().all()
+                        ),
+                        {"driver_id": driver_id, "lim": OUTBOX_BATCH_PER_DRIVER},
+                    )
+                    .mappings()
+                    .all()
+                )
                 lock_conn.commit()
 
                 if not rows:

@@ -4476,9 +4476,7 @@ class ResendActivationEmail(Resource):
             )
 
             # Précontrôles indicatifs (non mutatifs) — autorité = service sous verrou
-            can_send, block_reason = can_start_new_delivery_snapshot(
-                activation_session
-            )
+            can_send, block_reason = can_start_new_delivery_snapshot(activation_session)
             if not can_send:
                 return auth_error(
                     AuthErrorCodes.RATE_LIMITED,

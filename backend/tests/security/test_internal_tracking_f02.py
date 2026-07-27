@@ -8,7 +8,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from services.tracking.event_payload_hash import compute_batch_id, compute_event_payload_hash
+from services.tracking.event_payload_hash import (
+    compute_batch_id,
+    compute_event_payload_hash,
+)
 from services.tracking.ingest_durability import (
     BatchPersistResult,
     PayloadConflictError,
@@ -105,7 +108,9 @@ def _persist_patches(side_effect=None):
             "routes.internal_tracking.persist_tracking_batch",
             side_effect=side_effect or _default,
         ),
-        patch("routes.internal_tracking.attempt_redis_canonical_repair", return_value=True),
+        patch(
+            "routes.internal_tracking.attempt_redis_canonical_repair", return_value=True
+        ),
         patch("routes.internal_tracking.mark_repair_done_if_current"),
         patch("routes.internal_tracking.db", mock_db),
     )
@@ -188,9 +193,7 @@ def test_200_response_shape(client, f02_env, fake_redis):
         p3,
     ):
         pt = _point()
-        prepared = prepare_tracking_batch(
-            driver_id=1, company_id=10, points=[pt]
-        )
+        prepared = prepare_tracking_batch(driver_id=1, company_id=10, points=[pt])
         resp = client.post(
             INGEST_PATH,
             data=json.dumps(

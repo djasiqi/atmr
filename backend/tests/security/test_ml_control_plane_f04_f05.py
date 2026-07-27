@@ -118,9 +118,7 @@ class TestMlControlPlaneKillSwitch:
 
     def test_disabled_handler_not_called(self, client, monkeypatch):
         monkeypatch.setenv("ML_CONTROL_PLANE_API_ENABLED", "false")
-        with patch(
-            "routes.feature_flags_routes.get_feature_flags_status"
-        ) as spy:
+        with patch("routes.feature_flags_routes.get_feature_flags_status") as spy:
             resp = client.get("/api/feature-flags/status")
             assert resp.status_code == 503
             spy.assert_not_called()
@@ -141,9 +139,7 @@ class TestMlControlPlaneRoles:
         resp = client.get("/api/ml-monitoring/predictions", headers=auth_headers)
         assert resp.status_code == 403
 
-    def test_company_cross_tenant_shadow_reads(
-        self, client, company_pair, monkeypatch
-    ):
+    def test_company_cross_tenant_shadow_reads(self, client, company_pair, monkeypatch):
         monkeypatch.delenv("ML_CONTROL_PLANE_API_ENABLED", raising=False)
         (company_a, user_a), (company_b, _user_b) = company_pair
         headers = _jwt_headers(client, user_a)
@@ -323,12 +319,13 @@ class TestUrlMapInventory:
                 continue
             assert "swagger" not in path.lower()
             assert not path.rstrip("/").endswith("/docs")
-            methods = {m for m in (rule.methods or set()) if m not in ("HEAD", "OPTIONS")}
+            methods = {
+                m for m in (rule.methods or set()) if m not in ("HEAD", "OPTIONS")
+            }
             if not methods:
                 continue
             matched = any(
-                path == base or path.startswith(base)
-                for base in structural_bases
+                path == base or path.startswith(base) for base in structural_bases
             )
             assert matched, f"Route inconnue sous plan ML: {sorted(methods)} {path}"
 
