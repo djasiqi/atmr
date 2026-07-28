@@ -38,10 +38,12 @@ Source de vérité : artefacts dans `frontend/build/`, puis HTML réellement ser
 ```bash
 cd frontend
 npm test -- --watchAll=false --testPathPattern=publicSeo.test.js
-npm run build                 # build:react + prerender
+npm run build                 # build:react + install Chromium Playwright + prerender
 npm run test:seo-build        # valide build/<route>/index.html
 npm run test:seo-smoke -- https://<preview>.vercel.app
 ```
+
+Sur Vercel, `npm run prerender` exécute `npx playwright install chromium` avant le script (les binaires ne sont pas dans le cache npm).
 
 ## SEO-01C — checklist preview (obligatoire avant prod)
 

@@ -56,7 +56,7 @@
   "scripts": {
     "start": "react-app-rewired start",
     "build:react": "react-app-rewired build",
-    "prerender": "node scripts/prerender-public-pages.mjs",
+    "prerender": "npx playwright install chromium && node scripts/prerender-public-pages.mjs",
     "test:seo-build": "node scripts/validate-prerendered-html.mjs",
     "test:seo-smoke": "node scripts/seo-preview-smoke.mjs",
     "build": "npm run build:react && npm run prerender",
