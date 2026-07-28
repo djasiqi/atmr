@@ -274,28 +274,6 @@ async function prerenderRoute(page, origin, route) {
   console.log(`[prerender] OK ${route} → ${path.relative(FRONTEND_ROOT, outFile)}`);
 }
 
-async function ensureChromiumInstalled() {
-  // Sur Vercel / CI, les binaires Playwright ne sont pas dans le cache npm.
-  console.log('[prerender] Vérification / installation de Chromium Playwright…');
-  const result = spawnSync(
-    process.platform === 'win32' ? 'npx.cmd' : 'npx',
-    ['playwright', 'install', 'chromium'],
-    {
-      cwd: FRONTEND_ROOT,
-      stdio: 'inherit',
-      env: {
-        ...process.env,
-        PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: undefined,
-      },
-    }
-  );
-  if (result.status !== 0) {
-    throw new Error(
-      `Échec npx playwright install chromium (code ${result.status}).`
-    );
-  }
-}
-
 async function main() {
   if (!fs.existsSync(path.join(BUILD_DIR, 'index.html'))) {
     throw new Error('build/index.html introuvable. Exécutez d’abord npm run build:react.');
