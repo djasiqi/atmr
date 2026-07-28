@@ -75,8 +75,15 @@ const AProposPage = () => {
           </h2>
 
           <p className={styles.actLead}>
-            Lirie donne à cette mission une forme commune, lisible et opérationnelle, sans remplacer les organisations
+            LIRIE donne à cette mission une forme commune, lisible et opérationnelle, sans remplacer les organisations
             qui la portent.
+          </p>
+
+          <p className={styles.actLead}>
+            LIRIE est une plateforme suisse de coordination des transports. Elle permet aux patients, aux établissements
+            de santé et aux entreprises de transport de partager une même demande, de suivre son avancement et de
+            conserver un historique des échanges. LIRIE fournit l&apos;outil de coordination, mais n&apos;exécute pas
+            elle-même les prestations de transport. Le déploiement principal concerne Genève et la Suisse romande.
           </p>
 
           <p className={styles.actSecondary}>

@@ -280,6 +280,17 @@ export default function Home() {
   const [routeInfo, setRouteInfo] = useState(null);
   const [routePath, setRoutePath] = useState([]);
   const [platformStats, setPlatformStats] = useState(null);
+  const hasMeaningfulPlatformStats = useMemo(() => {
+    if (!platformStats) return false;
+    const bookings = Number(platformStats.completedBookings);
+    const companies = Number(platformStats.activeCompanies);
+    const institutions = Number(platformStats.activeInstitutions);
+    return (
+      (Number.isFinite(bookings) && bookings > 0) ||
+      (Number.isFinite(companies) && companies > 0) ||
+      (Number.isFinite(institutions) && institutions > 0)
+    );
+  }, [platformStats]);
   const [mobilityProfile, setMobilityProfile] = useState(() =>
     getMobilityProfileForUser({
       publicId: getActivePublicId(),
@@ -468,7 +479,7 @@ export default function Home() {
     if (!routeInfo) return null;
     return {
       status: 'Trajet visualisé',
-      partner: 'Partenaire agréé',
+      partner: 'Entreprise de transport partenaire',
       durationMin: routeInfo.durationMin,
     };
   }, [routeInfo]);
@@ -611,7 +622,7 @@ export default function Home() {
               <div className={styles.heroIntro}>
                 <div className={styles.heroBadge}>
                   <IcoMapPinHero />
-                  <span className={styles.heroBadgeLabel}>Transport médical &amp; accompagné · Suisse</span>
+                  <span className={styles.heroBadgeLabel}>Transport médical non urgent &amp; accompagné · Suisse romande</span>
                 </div>
                 <h1 className={styles.heroTitle}>
                   <span className={styles.heroTitleLine}>Déplacez-vous</span>
@@ -981,12 +992,13 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── Preuves chiffrées ── */}
+      {/* ── Preuves chiffrées (uniquement si stats réelles ; jamais de 0 trompeurs en HTML) ── */}
+      {hasMeaningfulPlatformStats ? (
       <section id="platform-stats" className={styles.stats} aria-labelledby="home-stats-title">
         <div className={styles.statsContent}>
           <div className={styles.statsHeader}>
             <h2 id="home-stats-title" className={styles.statsTitle}>
-              Lirie aujourd&apos;hui
+              LIRIE aujourd&apos;hui
             </h2>
           </div>
           <div className={styles.statsInner}>
@@ -1005,6 +1017,7 @@ export default function Home() {
           </div>
         </div>
       </section>
+      ) : null}
 
       {/* ── Phrase-pont ── */}
       <section className={styles.valueBridge} aria-label="Proposition de valeur">
@@ -1092,6 +1105,19 @@ export default function Home() {
             ))}
           </div>
         </div>
+      </section>
+
+      {/* ── Définition LIRIE (moteurs / IA) ── */}
+      <section className={styles.valueBridge} aria-labelledby="home-definition-title">
+        <h2 id="home-definition-title" className={styles.sectionTag}>
+          Qu&apos;est-ce que LIRIE ?
+        </h2>
+        <p className={styles.valueBridgeText}>
+          LIRIE est une plateforme suisse de coordination des transports. Elle permet aux patients, aux établissements
+          de santé et aux entreprises de transport de partager une même demande, de suivre son avancement et de conserver
+          un historique des échanges. LIRIE fournit l&apos;outil de coordination, mais n&apos;exécute pas elle-même les
+          prestations de transport.
+        </p>
       </section>
 
       {/* ── Pour qui ── */}

@@ -1,0 +1,34 @@
+# LIRIE
+
+> LIRIE est une plateforme suisse de coordination des transports entre patients, établissements de santé et entreprises de transport.
+
+LIRIE centralise les demandes de transport, facilite leur attribution, permet le suivi des missions et conserve un historique des échanges.
+
+LIRIE n'est pas une entreprise de transport et n'exécute pas elle-même les prestations sur la voie publique.
+
+## Publics
+
+- Patients et proches
+- Personnes à mobilité réduite
+- EMS, cliniques et établissements de santé
+- Entreprises de transport partenaires
+
+## Pages principales
+
+- Accueil: https://www.lirie.ch/
+- Patients et proches: https://www.lirie.ch/deplacez-vous
+- Entreprises de transport: https://www.lirie.ch/conduire
+- Institutions: https://www.lirie.ch/professionnel
+- À propos: https://www.lirie.ch/a-propos
+- Questions fréquentes: https://www.lirie.ch/aide
+- Contact: https://www.lirie.ch/contact
+
+## Zone principale
+
+Genève et Suisse romande.
+
+## Contact
+
+- Site: https://www.lirie.ch/
+- Email: info@lirie.ch
+- Téléphone: +41 22 552 03 02

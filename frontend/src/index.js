@@ -1,5 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import { HelmetProvider } from 'react-helmet-async';
 import { startUserActivityTracking } from './utils/userActivityTracker';
 import { initDeferredSessionLogout } from './utils/deferredSessionLogout';
 import { startSessionKeepAlive } from './utils/sessionKeepAlive';
@@ -198,48 +199,50 @@ startSessionKeepAlive();
 
 root.render(
   <React.StrictMode>
-    <SentryErrorBoundary
-      fallback={({ error, resetError }) => {
-        const isChunkError =
-          error?.name === 'ChunkLoadError' ||
-          /Loading chunk .+ failed/i.test(error?.message || '');
-        return (
-        <div style={{ padding: '2rem', textAlign: 'center' }}>
-          <h1>⚠️ Une erreur est survenue</h1>
-          <p style={{ color: '#666' }}>
-            {isChunkError
-              ? "Une nouvelle version de l'application est disponible. Veuillez recharger la page."
-              : "L'équipe technique a été notifiée."}
-          </p>
-          <button
-            onClick={() => (isChunkError ? window.location.reload() : resetError())}
-            style={{
-              marginTop: '1rem',
-              padding: '0.5rem 1rem',
-              background: '#007bff',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-            }}
-          >
-            {isChunkError ? 'Recharger la page' : 'Réessayer'}
-          </button>
-          {process.env.NODE_ENV === 'development' && (
-            <details style={{ marginTop: '1rem', textAlign: 'left' }}>
-              <summary>Détails de l'erreur (dev only)</summary>
-              <pre style={{ background: '#f5f5f5', padding: '1rem', overflow: 'auto' }}>
-                {error.toString()}
-              </pre>
-            </details>
-          )}
-        </div>
-        );
-      }}
-    >
-      <App />
-      {!isDev && <SpeedInsights />}
-    </SentryErrorBoundary>
+    <HelmetProvider>
+      <SentryErrorBoundary
+        fallback={({ error, resetError }) => {
+          const isChunkError =
+            error?.name === 'ChunkLoadError' ||
+            /Loading chunk .+ failed/i.test(error?.message || '');
+          return (
+          <div style={{ padding: '2rem', textAlign: 'center' }}>
+            <h1>⚠️ Une erreur est survenue</h1>
+            <p style={{ color: '#666' }}>
+              {isChunkError
+                ? "Une nouvelle version de l'application est disponible. Veuillez recharger la page."
+                : "L'équipe technique a été notifiée."}
+            </p>
+            <button
+              onClick={() => (isChunkError ? window.location.reload() : resetError())}
+              style={{
+                marginTop: '1rem',
+                padding: '0.5rem 1rem',
+                background: '#007bff',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+              }}
+            >
+              {isChunkError ? 'Recharger la page' : 'Réessayer'}
+            </button>
+            {process.env.NODE_ENV === 'development' && (
+              <details style={{ marginTop: '1rem', textAlign: 'left' }}>
+                <summary>Détails de l'erreur (dev only)</summary>
+                <pre style={{ background: '#f5f5f5', padding: '1rem', overflow: 'auto' }}>
+                  {error.toString()}
+                </pre>
+              </details>
+            )}
+          </div>
+          );
+        }}
+      >
+        <App />
+        {!isDev && <SpeedInsights />}
+      </SentryErrorBoundary>
+    </HelmetProvider>
   </React.StrictMode>
 );
 
