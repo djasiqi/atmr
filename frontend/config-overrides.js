@@ -122,7 +122,14 @@ module.exports = {
         skipWaiting: true,
         maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
         navigateFallback: '/index.html',
-        navigateFallbackDenylist: [/^\/api/, /^\/socket\.io/],
+        // Ne pas détourner les fichiers statiques (robots.txt, sitemap.xml, assets…)
+        // sinon le navigateur reçoit index.html → React affiche « 404 Page introuvable ».
+        navigateFallbackDenylist: [
+          /^\/api/,
+          /^\/socket\.io/,
+          /^\/uploads/,
+          /\/[^/?]+\.[^/]+$/,
+        ],
         additionalManifestEntries: [
           { url: '/offline.html', revision: '20260408-offline-v1' },
         ],

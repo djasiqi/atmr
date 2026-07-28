@@ -47,6 +47,8 @@ Sur **Vercel**, le pré-rendu utilise `@sparticuz/chromium` + `playwright-core` 
 
 Le build produit aussi `build/spa-shell.html` (**noindex**) : fallback pour `/login`, dashboards et routes inconnues. Sans cela, Vercel servirait l’accueil pré-rendu (`index,follow`) sur toutes les routes SPA — fail-open accidentel.
 
+**Service worker PWA :** `navigateFallbackDenylist` exclut les URLs avec extension de fichier (`robots.txt`, `sitemap.xml`, etc.). Sans cela, le SW sert `index.html` au navigateur et React affiche un faux 404.
+
 ## SEO-01C — checklist preview (obligatoire avant prod)
 
 ```bash
