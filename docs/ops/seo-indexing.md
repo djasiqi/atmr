@@ -38,12 +38,12 @@ Source de vérité : artefacts dans `frontend/build/`, puis HTML réellement ser
 ```bash
 cd frontend
 npm test -- --watchAll=false --testPathPattern=publicSeo.test.js
-npm run build                 # build:react + install Chromium Playwright + prerender
+npm run build                 # build:react + prerender
 npm run test:seo-build        # valide build/<route>/index.html
 npm run test:seo-smoke -- https://<preview>.vercel.app
 ```
 
-Sur Vercel, `npm run prerender` exécute `npx playwright install chromium` avant le script (les binaires ne sont pas dans le cache npm).
+Sur **Vercel**, le pré-rendu utilise `@sparticuz/chromium` + `playwright-core` (libs système Playwright classiques absentes). En local, Playwright Chromium standard est installé automatiquement si besoin.
 
 ## SEO-01C — checklist preview (obligatoire avant prod)
 

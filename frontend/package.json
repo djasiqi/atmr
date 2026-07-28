@@ -56,7 +56,7 @@
   "scripts": {
     "start": "react-app-rewired start",
     "build:react": "react-app-rewired build",
-    "prerender": "npx playwright install chromium && node scripts/prerender-public-pages.mjs",
+    "prerender": "node scripts/prerender-public-pages.mjs",
     "test:seo-build": "node scripts/validate-prerendered-html.mjs",
     "test:seo-smoke": "node scripts/seo-preview-smoke.mjs",
     "build": "npm run build:react && npm run prerender",
@@ -120,6 +120,7 @@
   "devDependencies": {
     "@babel/plugin-proposal-private-property-in-object": "^7.21.11",
     "@playwright/test": "^1.58.2",
+    "@sparticuz/chromium": "^147.0.0",
     "@testing-library/jest-dom": "^6.6.4",
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^14.6.1",
@@ -127,6 +128,7 @@
     "baseline-browser-mapping": "^2.9.11",
     "http-proxy-middleware": "3.0.7",
     "msw": "^2.11.5",
+    "playwright-core": "^1.62.0",
     "react-scripts": "^5.0.1",
     "redux-mock-store": "^1.5.5",
     "source-map-explorer": "^2.5.3",

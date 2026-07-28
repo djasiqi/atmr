@@ -1,17 +1,26 @@
 /**
  * Pré-rendu déterministe des pages publiques LIRIE (SEO-01B).
  * Serveur local sur build/ ; aucune dépendance à l’API prod / Maps / Nominatim.
+ *
+ * Sur Vercel : Chromium serverless (@sparticuz/chromium) — les libs système
+ * Playwright classiques (libnspr4, etc.) ne sont pas disponibles.
+ * En local / CI classique : Playwright Chromium standard.
  */
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { chromium } from 'playwright';
 import { validatePrerenderedHtml } from './validate-prerendered-html.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FRONTEND_ROOT = path.resolve(__dirname, '..');
 const BUILD_DIR = path.join(FRONTEND_ROOT, 'build');
+
+const IS_VERCEL =
+  process.env.VERCEL === '1' ||
+  process.env.VERCEL === 'true' ||
+  Boolean(process.env.VERCEL_ENV);
 
 const PUBLIC_ROUTES = [
   '/',
@@ -274,6 +283,43 @@ async function prerenderRoute(page, origin, route) {
   console.log(`[prerender] OK ${route} → ${path.relative(FRONTEND_ROOT, outFile)}`);
 }
 
+function ensureLocalPlaywrightChromium() {
+  console.log('[prerender] Installation locale Chromium Playwright (si besoin)…');
+  const result = spawnSync(
+    process.platform === 'win32' ? 'npx.cmd' : 'npx',
+    ['playwright', 'install', 'chromium'],
+    {
+      cwd: FRONTEND_ROOT,
+      stdio: 'inherit',
+      env: { ...process.env, PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: undefined },
+    }
+  );
+  if (result.status !== 0) {
+    throw new Error(`Échec npx playwright install chromium (code ${result.status}).`);
+  }
+}
+
+async function launchBrowser() {
+  if (IS_VERCEL) {
+    console.log('[prerender] Lancement Chromium serverless (@sparticuz/chromium)…');
+    const sparticuz = (await import('@sparticuz/chromium')).default;
+    const { chromium } = await import('playwright-core');
+    // Mode graphique désactivé : plus stable en environnement serverless.
+    if (typeof sparticuz.setGraphicsMode === 'function') {
+      sparticuz.setGraphicsMode(false);
+    }
+    return chromium.launch({
+      args: sparticuz.args,
+      executablePath: await sparticuz.executablePath(),
+      headless: true,
+    });
+  }
+
+  ensureLocalPlaywrightChromium();
+  const { chromium } = await import('playwright');
+  return chromium.launch({ headless: true });
+}
+
 async function main() {
   if (!fs.existsSync(path.join(BUILD_DIR, 'index.html'))) {
     throw new Error('build/index.html introuvable. Exécutez d’abord npm run build:react.');
@@ -284,13 +330,13 @@ async function main() {
   try {
     server = await startStaticServer();
     try {
-      browser = await chromium.launch({
-        headless: true,
-      });
+      browser = await launchBrowser();
     } catch (launchErr) {
       throw new Error(
-        `Échec lancement Chromium Playwright: ${launchErr.message}. ` +
-          'Exécutez « npx playwright install chromium » (déjà inclus dans npm run prerender).'
+        `Échec lancement Chromium: ${launchErr.message}` +
+          (IS_VERCEL
+            ? ' (environnement Vercel — vérifier @sparticuz/chromium).'
+            : ' Exécutez « npx playwright install chromium ».')
       );
     }
     const context = await browser.newContext({
