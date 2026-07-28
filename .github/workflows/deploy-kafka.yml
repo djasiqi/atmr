@@ -1,6 +1,6 @@
 # yaml-language-server: disable
-# Déploiement Kafka production — manuel uniquement, séparé de Build & Deploy.
-# Ne modifie pas .github/workflows/deploy.yml.
+# Déploiement Kafka INFRA production — manuel uniquement, séparé de Build & Deploy.
+# Pendant le HOLD GPS : ne recrée pas les consumers (voir deploy-kafka-p0.yml).
 # Runbook : docs/ops/kafka-optimization-lirie.md (section CI deploy-kafka)
 name: Deploy Kafka (production)
 
@@ -13,25 +13,24 @@ on:
         type: string
         default: ""
       dry_run:
-        description: "Si true : copie fichiers + preflight uniquement (pas de redeploy)"
+        description: "Si true : SCP artefacts versionnés + preflight-infra uniquement (pas de mutation runtime / config non versionnée)"
         type: boolean
         required: false
         default: true
       apply_topics_v2_env:
-        description: "Ajouter le bloc topics v2 dans /srv/atmr/.env.production.local (idempotent)"
+        description: "Ajouter le bloc topics v2 dans /srv/atmr/.env.production.local (interdit si dry_run)"
         type: boolean
         required: false
         default: false
       init_topics:
-        description: "INIT_TOPICS=1 — créer topics (nécessite apply_topics_v2_env ou vars déjà dans .env.local)"
+        description: "INIT_TOPICS=1 — créer topics (interdit si dry_run)"
         type: boolean
         required: false
         default: false
-      restart_app_after_topics_v2:
-        description: "Après init topics v2 : restart backend + ws-service"
-        type: boolean
-        required: false
-        default: true
+
+concurrency:
+  group: atmr-production-deployment
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -41,8 +40,9 @@ env:
 
 jobs:
   deploy-kafka:
-    name: Kafka production
+    name: Kafka production infra
     runs-on: ubuntu-latest
+    environment: production
     env:
       SSH_HOST: ${{ secrets.SSH_HOST }}
       SSH_USER: ${{ secrets.SSH_USER }}
@@ -61,6 +61,22 @@ jobs:
           fi
           echo "Confirmation OK"
 
+      - name: Refuse dry_run + mutations
+        run: |
+          set -euo pipefail
+          DRY_RUN="${{ github.event.inputs.dry_run }}"
+          APPLY="${{ github.event.inputs.apply_topics_v2_env }}"
+          INIT="${{ github.event.inputs.init_topics }}"
+          if [ "${DRY_RUN}" = "true" ]; then
+            if [ "${APPLY}" = "true" ] || [ "${INIT}" = "true" ]; then
+              echo "dry_run=true interdit toute mutation de configuration ou runtime"
+              echo "(apply_topics_v2_env / init_topics doivent rester false)"
+              exit 1
+            fi
+            echo "## Deploy Kafka — DRY RUN" >> "${GITHUB_STEP_SUMMARY}"
+            echo "Succès = SCP artefacts versionnés + preflight-infra uniquement. Aucune mutation runtime." >> "${GITHUB_STEP_SUMMARY}"
+          fi
+
       - name: Validate SSH secrets
         run: |
           MISSING=()
@@ -74,7 +90,7 @@ jobs:
           echo "Secrets SSH présents"
 
       - name: Ensure scripts directories on server
-        uses: appleboy/ssh-action@master
+        uses: appleboy/ssh-action@v1.2.2
         with:
           host: ${{ env.SSH_HOST }}
           username: ${{ env.SSH_USER }}
@@ -84,7 +100,7 @@ jobs:
             mkdir -p /srv/atmr/scripts/lib
 
       - name: Copy Kafka compose files
-        uses: appleboy/scp-action@master
+        uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ env.SSH_HOST }}
           username: ${{ env.SSH_USER }}
@@ -94,17 +110,17 @@ jobs:
           target: "/srv/atmr"
 
       - name: Copy Kafka scripts
-        uses: appleboy/scp-action@master
+        uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ env.SSH_HOST }}
           username: ${{ env.SSH_USER }}
           key: ${{ env.SSH_KEY }}
           port: ${{ env.SSH_PORT }}
-          source: "scripts/deploy-kafka-production.sh,scripts/check-kafka-production.sh,scripts/check-kafka-tracking-pipeline.sh,scripts/kafka-init-topics.sh,scripts/kafka-init-topics-compose.sh,scripts/kafka-env-effective.sh,scripts/apply-kafka-topics-v2-local.sh,scripts/kafka-topics.contract.json,scripts/env.production.local.kafka-v2.example"
+          source: "scripts/deploy-kafka-production.sh,scripts/check-kafka-production.sh,scripts/kafka-init-topics.sh,scripts/kafka-init-topics-compose.sh,scripts/kafka-env-effective.sh,scripts/apply-kafka-topics-v2-local.sh,scripts/kafka-topics.contract.json,scripts/env.production.local.kafka-v2.example"
           target: "/srv/atmr/"
 
       - name: Copy Kafka lib scripts
-        uses: appleboy/scp-action@master
+        uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ env.SSH_HOST }}
           username: ${{ env.SSH_USER }}
@@ -114,7 +130,7 @@ jobs:
           target: "/srv/atmr/"
 
       - name: Verify Kafka files on server
-        uses: appleboy/ssh-action@master
+        uses: appleboy/ssh-action@v1.2.2
         with:
           host: ${{ env.SSH_HOST }}
           username: ${{ env.SSH_USER }}
@@ -125,7 +141,6 @@ jobs:
             test -f /srv/atmr/docker-compose.kafka.yml
             test -f /srv/atmr/scripts/deploy-kafka-production.sh
             test -f /srv/atmr/scripts/check-kafka-production.sh
-            test -f /srv/atmr/scripts/check-kafka-tracking-pipeline.sh
             test -f /srv/atmr/scripts/kafka-init-topics.sh
             test -f /srv/atmr/scripts/kafka-init-topics-compose.sh
             test -f /srv/atmr/scripts/kafka-env-effective.sh
@@ -134,10 +149,10 @@ jobs:
             test -f /srv/atmr/scripts/lib/kafka_checks.sh
             test -f /srv/atmr/scripts/lib/kafka_topics_init.sh
             test -f /srv/atmr/scripts/env.production.local.kafka-v2.example
-            echo "Tous les fichiers Kafka requis sont présents"
+            echo "Tous les fichiers Kafka infra requis sont présents"
 
       - name: chmod +x Kafka scripts
-        uses: appleboy/ssh-action@master
+        uses: appleboy/ssh-action@v1.2.2
         with:
           host: ${{ env.SSH_HOST }}
           username: ${{ env.SSH_USER }}
@@ -149,7 +164,6 @@ jobs:
             for s in \
               scripts/deploy-kafka-production.sh \
               scripts/check-kafka-production.sh \
-              scripts/check-kafka-tracking-pipeline.sh \
               scripts/kafka-init-topics.sh \
               scripts/kafka-init-topics-compose.sh \
               scripts/kafka-env-effective.sh \
@@ -158,9 +172,9 @@ jobs:
               sed -i 's/\r$//' "${s}" 2>/dev/null || true
             done
 
-      - name: Apply topics v2 env (optional)
-        if: ${{ github.event.inputs.apply_topics_v2_env == 'true' }}
-        uses: appleboy/ssh-action@master
+      - name: Apply topics v2 env (optional, dry_run=false only)
+        if: ${{ github.event.inputs.dry_run != 'true' && github.event.inputs.apply_topics_v2_env == 'true' }}
+        uses: appleboy/ssh-action@v1.2.2
         with:
           host: ${{ env.SSH_HOST }}
           username: ${{ env.SSH_USER }}
@@ -172,9 +186,9 @@ jobs:
             export ATMR_DEPLOY_ROOT=/srv/atmr
             ./scripts/apply-kafka-topics-v2-local.sh
 
-      - name: Dry run (preflight-on only)
+      - name: Dry run (preflight-infra only)
         if: ${{ github.event.inputs.dry_run == 'true' }}
-        uses: appleboy/ssh-action@master
+        uses: appleboy/ssh-action@v1.2.2
         with:
           host: ${{ env.SSH_HOST }}
           username: ${{ env.SSH_USER }}
@@ -185,11 +199,11 @@ jobs:
             cd /srv/atmr
             export ATMR_DEPLOY_ROOT=/srv/atmr
             eval "$(./scripts/kafka-env-effective.sh)"
-            ./scripts/check-kafka-production.sh preflight-on
+            ./scripts/check-kafka-production.sh preflight-infra
 
-      - name: Deploy Kafka + validate (no FORCE)
+      - name: Deploy Kafka infra + validate
         if: ${{ github.event.inputs.dry_run != 'true' }}
-        uses: appleboy/ssh-action@master
+        uses: appleboy/ssh-action@v1.2.2
         with:
           host: ${{ env.SSH_HOST }}
           username: ${{ env.SSH_USER }}
@@ -204,9 +218,6 @@ jobs:
               test -f /srv/atmr/scripts/lib/kafka_topics_init.sh
               export INIT_TOPICS=1
             fi
+            ./scripts/check-kafka-production.sh preflight-infra
             ./scripts/deploy-kafka-production.sh
-            ./scripts/check-kafka-production.sh on
-            if [ "${{ github.event.inputs.init_topics }}" = "true" ] && [ "${{ github.event.inputs.restart_app_after_topics_v2 }}" = "true" ]; then
-              docker compose -f docker-compose.production.yml restart backend ws-service
-            fi
-            ./scripts/check-kafka-tracking-pipeline.sh || true
+            ./scripts/check-kafka-production.sh infra

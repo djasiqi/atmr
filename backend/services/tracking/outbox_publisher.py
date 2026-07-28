@@ -52,7 +52,18 @@ def _database_url() -> str:
     else:
         url = os.getenv("DATABASE_URL") or os.getenv("SQLALCHEMY_DATABASE_URI")
     if not url:
-        raise RuntimeError("DATABASE_URL manquant pour outbox_publisher")
+        # Fallback compose Kafka : POSTGRES_* (souvent via pgbouncer) → forcer postgres:5432
+        from urllib.parse import quote_plus
+
+        user = os.getenv("POSTGRES_USER", "atmr")
+        password = os.getenv("POSTGRES_PASSWORD", "")
+        db = os.getenv("POSTGRES_DB", "atmr")
+        if not password:
+            raise RuntimeError("DATABASE_URL/POSTGRES_* manquant pour outbox_publisher")
+        url = (
+            f"postgresql://{quote_plus(user)}:{quote_plus(password)}"
+            f"@postgres:5432/{db}?sslmode=disable"
+        )
     url = url.replace("postgres://", "postgresql://", 1)
     if "@pgbouncer:" in url or "@atmr-pgbouncer" in url:
         url = url.replace("@pgbouncer:", "@postgres:").replace(

@@ -66,7 +66,25 @@ def get_uploads_base() -> Path:
     ).resolve()
 
 
-def build_file_response(candidate: Path, *, as_attachment: bool = False) -> Response:
+def _safe_content_disposition_filename(filename: str | None, fallback: str) -> str:
+    """Nom ASCII sûr pour l'en-tête Content-Disposition (filename=)."""
+    import re
+    import unicodedata
+
+    raw = (filename or "").strip() or fallback
+    normalized = unicodedata.normalize("NFKD", raw)
+    ascii_name = normalized.encode("ascii", "ignore").decode("ascii")
+    ascii_name = ascii_name.replace('"', "").replace("\\", "").replace("/", "_")
+    ascii_name = re.sub(r"[\r\n\t]+", " ", ascii_name).strip() or fallback
+    return ascii_name[:180]
+
+
+def build_file_response(
+    candidate: Path,
+    *,
+    as_attachment: bool = False,
+    download_filename: str | None = None,
+) -> Response:
     """Construit une Response Flask depuis un fichier déjà validé."""
     import mimetypes as _mt
 
@@ -101,17 +119,27 @@ def build_file_response(candidate: Path, *, as_attachment: bool = False) -> Resp
     disposition = (
         "attachment" if as_attachment or ext not in inline_extensions else "inline"
     )
+    safe_name = _safe_content_disposition_filename(download_filename, candidate.name)
     data = candidate.read_bytes()
     headers = {
         "Content-Length": str(len(data)),
-        "Content-Disposition": f'{disposition}; filename="{candidate.name}"',
+        "Content-Disposition": f'{disposition}; filename="{safe_name}"',
         "X-Content-Type-Options": "nosniff",
         "Cache-Control": "private, max-age=300",
     }
     return Response(data, mimetype=mimetype, headers=headers)
 
 
-def serve_stored_upload(stored_url: str, *, as_attachment: bool = False) -> Response:
+def serve_stored_upload(
+    stored_url: str,
+    *,
+    as_attachment: bool = False,
+    download_filename: str | None = None,
+) -> Response:
     """Résout et sert un fichier privé à partir de l'URL stockée en base."""
     candidate = resolve_safe_upload_path(stored_url, uploads_base=get_uploads_base())
-    return build_file_response(candidate, as_attachment=as_attachment)
+    return build_file_response(
+        candidate,
+        as_attachment=as_attachment,
+        download_filename=download_filename,
+    )

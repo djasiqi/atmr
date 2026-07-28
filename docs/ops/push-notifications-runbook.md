@@ -1,5 +1,17 @@
 # Runbook — Couverture push chauffeur
 
+> **iOS — aucune notification** : voir le diagnostic Phase A
+> [`docs/ops/push-ios-no-notifications-audit.md`](push-ios-no-notifications-audit.md)
+> (statuts canoniques, test-push forcé `provider=fcm|expo`, gate de sortie).
+
+## Gate iOS / contexte chauffeur
+
+Mêmes prérequis que Android : contexte **chauffeur** `ready`, disclosure acceptée,
+permission OS accordée. Sur iOS, vérifier aussi `aps-environment`, Bundle ID et clé APNs Firebase.
+
+`provider_accepted` (FCM `message_id` ou ticket Expo) ≠ livraison device.
+`mobile_received` / `mobile_opened` / `business_acknowledged` sont des étapes distinctes.
+
 ## Quand le token push devient actif
 
 Le token n'est **pas** activé à la création du compte. Conditions cumulatives :

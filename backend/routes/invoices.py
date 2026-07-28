@@ -2914,7 +2914,12 @@ class InvoicePdfDownload(Resource):
         if not invoice.pdf_url:
             return APIErrorHandler.handle_not_found("Invoice PDF", invoice_id, logger)
         try:
-            return serve_stored_upload(invoice.pdf_url)
+            from shared.invoice_pdf_filename import build_invoice_pdf_download_filename
+
+            return serve_stored_upload(
+                invoice.pdf_url,
+                download_filename=build_invoice_pdf_download_filename(invoice),
+            )
         except WzNotFound:
             return APIErrorHandler.handle_not_found("Invoice PDF", invoice_id, logger)
 

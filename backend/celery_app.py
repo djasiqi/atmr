@@ -338,6 +338,15 @@ celery.conf.beat_schedule = {
             "jitter": 300,
         },
     },
+    # Push: receipts Expo (toutes les 15 min) — Phase A observabilité iOS
+    "fetch-expo-push-receipts": {
+        "task": "notifications.fetch_expo_push_receipts",
+        "schedule": 900.0,
+        "options": {
+            "expires": 600,
+            "jitter": 60,
+        },
+    },
     # Push: refresh gauges couverture (horaire)
     "refresh-push-coverage-gauges": {
         "task": "notifications.refresh_push_coverage_gauges",

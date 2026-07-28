@@ -9,11 +9,15 @@
 services:
   tracking-kafka-consumer:
     environment:
-      TRACKING_PERSIST_WITH_OUTBOX: "false"
+      # Phase 1 canary : TX PG+outbox (ledger) — publisher dédié publie processed.v2
+      TRACKING_PERSIST_WITH_OUTBOX: "true"
       TRACKING_INGEST_PERSIST_ENABLED: "true"
       TRACKING_INGEST_ALLOW_REPUBLISH_ONLY: "false"
       TRACKING_INGEST_SEEK_TO_END_ON_START: "false"
       TRACKING_DLQ_FORCE_COMMIT_ON_FAILURE: "false"
+  tracking-outbox-publisher:
+    environment:
+      TRACKING_OUTBOX_USE_V3_TOPIC: "false"
   tracking-processed-fanout:
     environment:
       TRACKING_PROCESSED_FANOUT_ENABLED: "false"

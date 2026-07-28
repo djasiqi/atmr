@@ -97,7 +97,7 @@ const { driverTrackingQueue } = require("./driverTrackingQueue") as {
 };
 
 type TaskHandler = (args: {
-  data?: { locations?: Array<{ timestamp?: number; coords: Record<string, number | null> }> };
+  data?: { locations?: { timestamp?: number; coords: Record<string, number | null> }[] };
   error?: Error;
 }) => Promise<void>;
 

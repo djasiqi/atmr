@@ -155,7 +155,7 @@ def prepare_driver_push_targets(
     *,
     driver_id: int | None = None,
 ) -> list[PushDeviceDict]:
-    """Extrait, déduplique par token, priorise FCM sur Android."""
+    """Extrait, déduplique par token, priorise FCM sur Android (et iOS si flag Phase B)."""
     extracted = [
         device_token_row_to_push_dict(row)
         for row in device_tokens_raw
@@ -170,7 +170,56 @@ def prepare_driver_push_targets(
             len(deduped),
         )
     prioritized = prioritize_android_fcm_devices(deduped, driver_id=driver_id)
-    return _keep_latest_android_fcm_only(prioritized)
+    result = _keep_latest_android_fcm_only(prioritized)
+
+    # Phase B (off par défaut) : préférer FCM iOS, garder Expo en fallback sélection
+    try:
+        from services.notifications.ios_push_flags import ios_native_fcm_preferred
+
+        if ios_native_fcm_preferred():
+            result = _prefer_ios_fcm_when_available(result, driver_id=driver_id)
+    except Exception:
+        pass
+    return result
+
+
+def _prefer_ios_fcm_when_available(
+    devices: list[PushDeviceDict],
+    *,
+    driver_id: int | None = None,
+) -> list[PushDeviceDict]:
+    """Si un FCM iOS existe pour une installation, ne pas aussi pousser Expo iOS.
+
+    Ne désactive pas les tokens en base — sélection uniquement (Phase B).
+    """
+    by_device: dict[str, list[PushDeviceDict]] = defaultdict(list)
+    without: list[PushDeviceDict] = []
+    for d in devices:
+        did = d.get("device_id")
+        if did:
+            by_device[str(did)].append(d)
+        else:
+            without.append(d)
+
+    selected: list[PushDeviceDict] = []
+    for device_id, group in by_device.items():
+        ios = [d for d in group if (d.get("platform") or "").lower() == "ios"]
+        other = [d for d in group if (d.get("platform") or "").lower() != "ios"]
+        ios_fcm = [d for d in ios if (d.get("provider") or "expo") == "fcm"]
+        ios_expo = [d for d in ios if (d.get("provider") or "expo") == "expo"]
+        if ios_fcm:
+            selected.extend(ios_fcm)
+            if ios_expo:
+                app_logger.info(
+                    "[push] ios_expo_skipped_prefer_fcm driver=%s device_id=%s",
+                    driver_id,
+                    device_id,
+                )
+        else:
+            selected.extend(ios)
+        selected.extend(other)
+    selected.extend(without)
+    return selected
 
 
 def android_has_fcm_token(active_tokens: list[Any]) -> bool:

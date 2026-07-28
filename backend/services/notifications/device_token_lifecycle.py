@@ -38,13 +38,26 @@ def apply_push_result_to_device_token(
 ) -> None:
     """Applique le résultat FCM sur la ligne DeviceToken (ne commit pas).
 
-    Politique : désactivation immédiate si result["token_invalid"] is True.
-    Autres erreurs : last_push_failure_at, consecutive_push_failures, last_push_error_code.
+    Politique :
+    - désactivation immédiate si token_invalid confirmé (pas configuration_error) ;
+    - ``SENDER_ID_MISMATCH`` / configuration_error → jamais de désactivation auto.
     """
     sess = session or db.session
 
+    is_config_error = bool(
+        result.get("configuration_error")
+        or result.get("error") == "sender_id_mismatch"
+        or result.get("delivery_status") == "configuration_error"
+    )
+    # token_invalid uniquement si confirmé et pas une erreur de configuration
+    should_deactivate = bool(result.get("token_invalid")) and not is_config_error
+    if result.get("deactivate_token") is False:
+        should_deactivate = False
+    elif result.get("deactivate_token") is True and not is_config_error:
+        should_deactivate = True
+
     if not _lifecycle_enabled():
-        if result.get("token_invalid"):
+        if should_deactivate:
             row = sess.get(DeviceToken, device_token_id)
             if row is not None:
                 row.is_active = False
@@ -67,11 +80,20 @@ def apply_push_result_to_device_token(
         return
 
     code = result.get("error_class") or result.get("error") or "unknown"
+    if is_config_error:
+        code = f"configuration_error:{code}"
+        app_logger.error(
+            "[device_token_lifecycle] configuration_error id=%s code=%s "
+            "(token conservé actif)",
+            device_token_id,
+            code,
+        )
+
     row.last_push_failure_at = now
     row.last_push_error_code = str(code)[:64]
     row.consecutive_push_failures = int(row.consecutive_push_failures or 0) + 1
 
-    if result.get("token_invalid"):
+    if should_deactivate:
         row.is_active = False
         app_logger.info(
             "[device_token_lifecycle] token deactivated id=%s reason=%s failures=%s",
@@ -79,6 +101,9 @@ def apply_push_result_to_device_token(
             row.last_push_error_code,
             row.consecutive_push_failures,
         )
+    elif is_config_error:
+        # Ne pas compter comme stale pour désactivation
+        pass
     elif row.consecutive_push_failures >= STALE_TOKEN_MIN_FAILURES:
         cutoff = now - timedelta(days=STALE_TOKEN_DAYS)
         last_ok = row.last_push_success_at

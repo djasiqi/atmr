@@ -1,0 +1,215 @@
+# yaml-language-server: disable
+# Recreate ingest GPS P0 — unique autorité sur tracking consumers pendant le HOLD.
+# Ne pas appeler deploy-kafka-production.sh.
+name: Deploy Kafka P0 (ingest)
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: "SHA Git complet (40 hex) produit par Build & Deploy"
+        required: true
+        type: string
+      image_digest:
+        description: "Digest backend exact (sha256:...) produit par Build & Deploy"
+        required: true
+        type: string
+      confirm:
+        description: "Tapez exactement tracking-p0-recreate pour confirmer"
+        required: true
+        type: string
+        default: ""
+      dry_run:
+        description: "Si true : SCP artefacts + compose config uniquement (pas de pull/stop/up serveur)"
+        type: boolean
+        required: false
+        default: true
+
+concurrency:
+  group: atmr-production-deployment
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  deploy-kafka-p0:
+    name: Kafka P0 ingest recreate
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      SSH_HOST: ${{ secrets.SSH_HOST }}
+      SSH_USER: ${{ secrets.SSH_USER }}
+      SSH_PORT: ${{ secrets.SSH_PORT }}
+      SSH_KEY: ${{ secrets.SSH_KEY }}
+      DOCKER_IMAGE: ${{ secrets.DOCKER_IMAGE }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      SOURCE_SHA: ${{ github.event.inputs.source_sha }}
+      IMAGE_DIGEST: ${{ github.event.inputs.image_digest }}
+
+    steps:
+      - name: Validate inputs
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event.inputs.confirm }}" != "tracking-p0-recreate" ]; then
+            echo "Refus : confirm doit être exactement tracking-p0-recreate"
+            exit 1
+          fi
+          [[ "${SOURCE_SHA}" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "source_sha doit être un SHA Git complet de 40 caractères"
+            exit 1
+          }
+          [[ "${IMAGE_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+            echo "image_digest invalide (attendu sha256: + 64 hex)"
+            exit 1
+          }
+          DOCKER_TAG="sha-${SOURCE_SHA:0:12}"
+          echo "DOCKER_TAG=${DOCKER_TAG}" >> "${GITHUB_ENV}"
+          echo "OK source_sha=${SOURCE_SHA}"
+          echo "OK docker_tag=${DOCKER_TAG}"
+          echo "OK image_digest=${IMAGE_DIGEST}"
+
+      - name: Checkout exact source_sha
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.inputs.source_sha }}
+
+      - name: Verify checkout matches source_sha
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          [[ "${actual}" == "${SOURCE_SHA}" ]] || {
+            echo "Checkout incohérent: HEAD=${actual} attendu=${SOURCE_SHA}"
+            exit 1
+          }
+
+      - name: Validate secrets
+        run: |
+          MISSING=()
+          [ -z "${DOCKER_IMAGE}" ] && MISSING+=("DOCKER_IMAGE")
+          [ -z "${SSH_HOST}" ] && MISSING+=("SSH_HOST")
+          [ -z "${SSH_USER}" ] && MISSING+=("SSH_USER")
+          [ -z "${SSH_KEY}" ] && MISSING+=("SSH_KEY")
+          [ -z "${DOCKERHUB_USERNAME}" ] && MISSING+=("DOCKERHUB_USERNAME")
+          [ -z "${DOCKERHUB_TOKEN}" ] && MISSING+=("DOCKERHUB_TOKEN")
+          if [ ${#MISSING[@]} -ne 0 ]; then
+            echo "Secrets manquants : ${MISSING[*]}"
+            exit 1
+          fi
+
+      - name: Dry-run — verify remote image digest on runner
+        if: ${{ github.event.inputs.dry_run == 'true' }}
+        run: |
+          set -euo pipefail
+          echo "${DOCKERHUB_TOKEN}" | docker login -u "${DOCKERHUB_USERNAME}" --password-stdin
+          docker manifest inspect "${DOCKER_IMAGE}@${IMAGE_DIGEST}" >/dev/null
+          echo "OK manifest ${DOCKER_IMAGE}@${IMAGE_DIGEST}"
+          {
+            echo "## Deploy Kafka P0 — DRY RUN"
+            echo
+            echo "Aucune mutation runtime. Manifest digest OK sur le runner."
+            echo "- source_sha: \`${SOURCE_SHA}\`"
+            echo "- docker_tag: \`${DOCKER_TAG}\`"
+            echo "- image_digest: \`${IMAGE_DIGEST}\`"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Ensure scripts directories on server
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ env.SSH_HOST }}
+          username: ${{ env.SSH_USER }}
+          key: ${{ env.SSH_KEY }}
+          port: ${{ env.SSH_PORT }}
+          script: |
+            mkdir -p /srv/atmr/scripts/lib
+
+      - name: Copy P0 compose files
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ env.SSH_HOST }}
+          username: ${{ env.SSH_USER }}
+          key: ${{ env.SSH_KEY }}
+          port: ${{ env.SSH_PORT }}
+          source: "docker-compose.production.yml,docker-compose.kafka.yml,docker-compose.kafka.atmr-network.yml,docker-compose.kafka.p0-hold.yml"
+          target: "/srv/atmr"
+
+      - name: Copy P0 scripts
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ env.SSH_HOST }}
+          username: ${{ env.SSH_USER }}
+          key: ${{ env.SSH_KEY }}
+          port: ${{ env.SSH_PORT }}
+          source: "scripts/ops-tracking-p0-recreate-ingest.sh,scripts/kafka-env-effective.sh"
+          target: "/srv/atmr/"
+
+      - name: chmod + verify files
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ env.SSH_HOST }}
+          username: ${{ env.SSH_USER }}
+          key: ${{ env.SSH_KEY }}
+          port: ${{ env.SSH_PORT }}
+          script: |
+            set -euo pipefail
+            cd /srv/atmr
+            for f in \
+              docker-compose.production.yml \
+              docker-compose.kafka.yml \
+              docker-compose.kafka.atmr-network.yml \
+              docker-compose.kafka.p0-hold.yml \
+              scripts/ops-tracking-p0-recreate-ingest.sh \
+              scripts/kafka-env-effective.sh; do
+              test -f "${f}"
+            done
+            chmod +x scripts/ops-tracking-p0-recreate-ingest.sh scripts/kafka-env-effective.sh
+            sed -i 's/\r$//' scripts/ops-tracking-p0-recreate-ingest.sh scripts/kafka-env-effective.sh 2>/dev/null || true
+
+      - name: Dry-run P0 on server (compose config only)
+        if: ${{ github.event.inputs.dry_run == 'true' }}
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ env.SSH_HOST }}
+          username: ${{ env.SSH_USER }}
+          key: ${{ env.SSH_KEY }}
+          port: ${{ env.SSH_PORT }}
+          envs: DOCKER_IMAGE,DOCKER_TAG,SOURCE_SHA,IMAGE_DIGEST
+          script: |
+            set -euo pipefail
+            cd /srv/atmr
+            export ATMR_DEPLOY_ROOT=/srv/atmr
+            eval "$(./scripts/kafka-env-effective.sh)"
+            export DOCKER_IMAGE DOCKER_TAG SOURCE_SHA IMAGE_DIGEST
+            export COMPOSE_PROJECT_NAME=atmr
+            export COMPOSE_FILES="-f docker-compose.production.yml -f docker-compose.kafka.yml -f docker-compose.kafka.atmr-network.yml -f docker-compose.kafka.p0-hold.yml"
+            export ENV_FILE="--env-file ${ATMR_ENV_FILE}"
+            export EXPECTED_INGEST_REPLICAS=1
+            export DRY_RUN=1
+            ./scripts/ops-tracking-p0-recreate-ingest.sh
+
+      - name: Execute P0 recreate (pull by digest + recreate)
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ env.SSH_HOST }}
+          username: ${{ env.SSH_USER }}
+          key: ${{ env.SSH_KEY }}
+          port: ${{ env.SSH_PORT }}
+          envs: DOCKER_IMAGE,DOCKER_TAG,SOURCE_SHA,IMAGE_DIGEST,DOCKERHUB_USERNAME,DOCKERHUB_TOKEN
+          script: |
+            set -euo pipefail
+            cd /srv/atmr
+            export ATMR_DEPLOY_ROOT=/srv/atmr
+            eval "$(./scripts/kafka-env-effective.sh)"
+            echo "${DOCKERHUB_TOKEN}" | docker login -u "${DOCKERHUB_USERNAME}" --password-stdin
+            export DOCKER_IMAGE DOCKER_TAG SOURCE_SHA IMAGE_DIGEST
+            export COMPOSE_PROJECT_NAME=atmr
+            export COMPOSE_FILES="-f docker-compose.production.yml -f docker-compose.kafka.yml -f docker-compose.kafka.atmr-network.yml -f docker-compose.kafka.p0-hold.yml"
+            export ENV_FILE="--env-file ${ATMR_ENV_FILE}"
+            export EXPECTED_INGEST_REPLICAS=1
+            export EXECUTE_P0_RECREATE=YES
+            ./scripts/ops-tracking-p0-recreate-ingest.sh

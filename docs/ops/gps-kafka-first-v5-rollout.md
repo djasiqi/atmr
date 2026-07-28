@@ -128,15 +128,33 @@ Voir [f02-internal-tracking-durability.md](./f02-internal-tracking-durability.md
 
 - ✅ **Implémenté (code)** : DSN Kafka via `POSTGRES_*` + URL héritées neutralisées (`DATABASE_URL` / `SQLALCHEMY_DATABASE_URI` / `PRIMARY_*` / `REPLICA_*` vides) ; `pgbouncer` hôte interne ; tests caractères spéciaux + `docker compose config --format json` fusionné avec override P0.
 - ✅ **Implémenté (code)** : matrice fail-stop P0 — toute `IntegrityError` → fail-stop ; erreur inconnue / publish `processed.v2` épuisé / infra épuisée → fail-stop **sans** DLQ+commit ; DLQ uniquement allowlist payload / `PersistKafkaOutboxError` métier / `DataError` connue. Duplicate nominal uniquement via `ON CONFLICT` → `dedup_skipped` → publish processed → commit RAW.
-- ✅ **Implémenté (ops)** : override dur [`docker-compose.kafka.p0-hold.yml`](../../docker-compose.kafka.p0-hold.yml) ; script [`scripts/ops-tracking-p0-recreate-ingest.sh`](../../scripts/ops-tracking-p0-recreate-ingest.sh) (`COMPOSE_FILES` / `ENV_FILE` / `COMPOSE_PROJECT_NAME` obligatoires, `DRY_RUN=1` ou `EXECUTE_P0_RECREATE=YES`, mktemp, fanout vérifié exited, topics `*.v2` **fail-hard**). Defaults kafka / kafka.dev / kafka.single : `TRACKING_PERSIST_WITH_OUTBOX` / `TRACKING_PROCESSED_FANOUT_ENABLED` → `false`.
+- ✅ **Implémenté (ops)** : override dur [`docker-compose.kafka.p0-hold.yml`](../../docker-compose.kafka.p0-hold.yml) ; script [`scripts/ops-tracking-p0-recreate-ingest.sh`](../../scripts/ops-tracking-p0-recreate-ingest.sh) (`COMPOSE_FILES` / `ENV_FILE` / `COMPOSE_PROJECT_NAME` / `DOCKER_IMAGE` / `DOCKER_TAG` / `SOURCE_SHA` / `IMAGE_DIGEST` / `EXPECTED_INGEST_REPLICAS` obligatoires, pull par digest, fail-hard consumers étrangers, ensemble Compose exact 4 fichiers, asserts runtime **sur chaque** replica).
+- ✅ **Implémenté (CI)** : Build & Deploy pousse `sha-<12>` + labels OCI + expose `backend_image_digest` ; workflow [`deploy-kafka-p0.yml`](../../.github/workflows/deploy-kafka-p0.yml) (`source_sha` + `image_digest`) ; Deploy Kafka générique **infra-only** (`preflight-infra` / `infra`) ; concurrency `atmr-production-deployment` ; production Kafka image-only + [`docker-compose.kafka.build.yml`](../../docker-compose.kafka.build.yml) pour le local.
 - ✅ **Implémenté (code mobile)** : un seul `initAndHealthcheckHeadless` avant enqueue/flush ; télémétrie `durable` / `schema_ready` / `recovered` ; `recovered=true` uniquement après NPE ; `typecheck` (`tsc --noEmit`) branché dans `build:prod:preflight` ; API publique `withTransaction` retirée ; bump app **1.0.10** / versionCode **123**.
 - ⏳ **Reste à faire (gates HOLD)** : gate E2E serveur ×3 (nouvelles positions, pas de reset offsets 1387–1391) ; recreate `kafka-dlq-consumer` après gate ingest ; build natif 1.0.10 + gate ADB force-stop. **Ne pas** cocher GO production avant les deux gates vertes.
+
+### Chaîne CI déploiement GPS (HOLD)
+
+```text
+1. Build & Deploy
+   → tag canonique sha-<12> + backend_image_digest
+   → Step Summary : SOURCE_SHA / DOCKER_TAG / BACKEND_IMAGE_DIGEST
+
+2. Deploy Kafka P0 (ingest)
+   → source_sha + image_digest + confirm=tracking-p0-recreate
+   → dry_run=true : SCP + compose config (pas de mutation runtime)
+   → dry_run=false : pull DOCKER_IMAGE@digest → tag local → recreate ingest
+
+3. Gate E2E ×3 manuelle (hors workflow)
+```
+
+**NO-GO production GPS global** jusqu’à la gate E2E ×3 et aux gates F-02 documentées.
 
 ### Activation (inchangé)
 
 | Activation | Verdict |
 |------------|---------|
-| Phase 1 outbox / `TRACKING_PERSIST_WITH_OUTBOX` | **HOLD** jusqu'à validation ops des gates |
+| Phase 1 outbox / `TRACKING_PERSIST_WITH_OUTBOX` | ✅ **Implémenté (ops canary)** : `p0-hold` → `true` + service `tracking-outbox-publisher` + bridge HTTP `tracking_session_id`/`sequence_id` ; gate PG ×3 à revalider |
 | Phase 2 `shadow_kafka` | **HOLD** |
 | Phase 3 `kafka_primary` | **HOLD** |
 | Production | **NO-GO** |

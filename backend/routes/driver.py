@@ -1741,12 +1741,36 @@ class DriverLocation(Resource):
                                     "mission_id": mission_id,
                                     "location_event_id": location_event_id,
                                 }
+                                # Pass-through session/seq si l'app les fournit (1.0.10+)
+                                if isinstance(p, dict):
+                                    if p.get("tracking_session_id"):
+                                        ingest_payload["tracking_session_id"] = p.get(
+                                            "tracking_session_id"
+                                        )
+                                    if p.get("sequence_id") is not None:
+                                        ingest_payload["sequence_id"] = p.get(
+                                            "sequence_id"
+                                        )
+                                    if p.get("session_generation") is not None:
+                                        ingest_payload["session_generation"] = p.get(
+                                            "session_generation"
+                                        )
                                 company_id_raw = getattr(driver, "company_id", None)
                                 company_id_value = (
                                     int(company_id_raw)
                                     if isinstance(company_id_raw, (int, str))
                                     else None
                                 )
+                                if company_id_value is not None:
+                                    from services.tracking.http_session_bridge import (
+                                        ensure_http_tracking_session_fields,
+                                    )
+
+                                    ingest_payload = ensure_http_tracking_session_fields(
+                                        driver_id=int(driver.id),
+                                        company_id=company_id_value,
+                                        payload=ingest_payload,
+                                    )
                                 ingest_result = enqueue_tracking_event(
                                     driver_id=driver.id,
                                     payload=ingest_payload,
@@ -3948,8 +3972,20 @@ class TestPushNotification(Resource):
 
             from ext import redis_client
             from models.device_token import DeviceToken
+            import uuid as _uuid
 
             MAX_TEST_PUSH_PER_MIN = 3
+            body = request.get_json(silent=True) or {}
+            provider_filter = (body.get("provider") or "").strip().lower() or None
+            if provider_filter and provider_filter not in ("fcm", "expo"):
+                return {
+                    "ok": False,
+                    "error": "provider doit être 'fcm' ou 'expo'",
+                }, 400
+
+            # device_token_id : uniquement tokens du chauffeur courant (ACL stricte)
+            requested_token_id = body.get("device_token_id")
+            correlation_id = str(_uuid.uuid4())
 
             if redis_client:
                 rl_key = f"test_push_rl:{driver.id}"
@@ -3962,16 +3998,33 @@ class TestPushNotification(Resource):
                 redis_client.incr(rl_key)
                 redis_client.expire(rl_key, 60)
 
-            all_tokens = (
-                DeviceToken.query.filter_by(driver_id=driver.id, is_active=True)
-                .order_by(DeviceToken.updated_at.desc())
-                .all()
+            query = DeviceToken.query.filter_by(
+                driver_id=driver.id, is_active=True
             )
+            if provider_filter:
+                query = query.filter_by(provider=provider_filter)
+            if requested_token_id is not None:
+                try:
+                    tid = int(requested_token_id)
+                except (TypeError, ValueError):
+                    return {"ok": False, "error": "device_token_id invalide"}, 400
+                query = query.filter_by(id=tid)
+
+            all_tokens = query.order_by(DeviceToken.updated_at.desc()).all()
+
+            if requested_token_id is not None and not all_tokens:
+                return {
+                    "ok": False,
+                    "error": "device_token_id introuvable ou non autorisé pour ce chauffeur",
+                }, 404
 
             if not all_tokens:
                 return {
                     "ok": False,
-                    "error": "Aucun token push enregistré pour ce chauffeur",
+                    "error": (
+                        "Aucun token push enregistré pour ce chauffeur"
+                        + (f" (provider={provider_filter})" if provider_filter else "")
+                    ),
                 }, 404
 
             seen_tokens: set[str] = set()
@@ -3985,25 +4038,55 @@ class TestPushNotification(Resource):
                     active_tokens.append(dt)
 
             from services.notifications.push import send_push_message
+            from services.notifications.push_delivery_status import (
+                QUEUED,
+                log_push_attempt_event,
+            )
+
+            log_push_attempt_event(
+                delivery_status=QUEUED,
+                provider=provider_filter,
+                driver_id=driver.id,
+                correlation_id=correlation_id,
+                notification_type="test_push",
+                extra={"event": "test_push_queued"},
+            )
 
             results = []
             for dt in active_tokens:
+                notification_id = str(_uuid.uuid4())
+                dedupe = f"test_push:{driver.id}:{correlation_id}:{dt.id}"
                 res = send_push_message(
                     token=dt.token,
                     title="Test notification Liri",
                     body="Si vous voyez ceci, les notifications fonctionnent !",
-                    data={"type": "test_push", "driver_id": driver.id},
+                    data={
+                        "type": "test_push",
+                        "driver_id": driver.id,
+                        "notification_id": notification_id,
+                        "deduplication_key": dedupe,
+                        "dedupe_key": dedupe,
+                        "correlation_id": correlation_id,
+                    },
                     driver_id=driver.id,
                     bypass_rate_limit=True,
+                    correlation_id=correlation_id,
                     provider=getattr(dt, "provider", None),
                     platform=getattr(dt, "platform", None),
                     device_token_id=dt.id,
                 )
                 results.append(
                     {
-                        "token_preview": dt.token[:20] + "...",
+                        "device_token_id": dt.id,
                         "platform": dt.platform,
+                        "provider": getattr(dt, "provider", None),
                         "ok": res.get("ok", False),
+                        "delivery_status": res.get("delivery_status"),
+                        "provider_receipt_status": res.get("provider_receipt_status"),
+                        "provider_message_id": res.get("provider_message_id")
+                        or res.get("message_id"),
+                        "provider_ticket_id": res.get("provider_ticket_id"),
+                        "failure_reason": res.get("failure_reason") or res.get("error"),
                         "error": res.get("error"),
                     }
                 )
@@ -4011,16 +4094,21 @@ class TestPushNotification(Resource):
             all_ok = all(r["ok"] for r in results)
             errors_count = sum(1 for r in results if not r["ok"])
             logger.info(
-                "test_push driver_id=%s tokens=%d ok=%s errors=%d",
+                "test_push driver_id=%s tokens=%d ok=%s errors=%d correlation_id=%s provider=%s",
                 driver.id,
                 len(active_tokens),
                 all_ok,
                 errors_count,
+                correlation_id,
+                provider_filter,
             )
             return {
                 "ok": all_ok,
+                "correlation_id": correlation_id,
+                "provider_filter": provider_filter,
                 "results": results,
                 "tokens_count": len(active_tokens),
+                "retention_hint_days": 90,
             }, 200
 
         except Exception as e:
@@ -4073,6 +4161,26 @@ class PushNotificationAck(Resource):
             )
         except Exception:
             logger.exception("[push_ack] failed to log mobile received")
+
+        try:
+            from services.notifications.push_delivery_status import (
+                MOBILE_OPENED,
+                MOBILE_RECEIVED,
+                log_push_attempt_event,
+            )
+
+            ack_kind = str(body.get("ack_kind") or "received").lower()
+            status = MOBILE_OPENED if ack_kind in ("opened", "open", "tap") else MOBILE_RECEIVED
+            log_push_attempt_event(
+                delivery_status=status,
+                driver_id=getattr(driver, "id", None),
+                notification_type=notification_type,
+                correlation_id=correlation_id,
+                notification_id=str(notification_id) if notification_id else None,
+                deduplication_key=body.get("deduplication_key") or body.get("dedupe_key"),
+            )
+        except Exception:
+            logger.exception("[push_ack] failed to log delivery_status")
 
         return {"ok": True}, 200
 

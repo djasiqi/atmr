@@ -139,6 +139,19 @@ try:
         ["notification_type"],
     )
 
+    # Cardinalité maîtrisée — pas de correlation_id / device_token_id / failure_reason
+    PUSH_ATTEMPT_STATUS = Counter(
+        "push_attempt_status_total",
+        "Tentatives push par statut de livraison canonique",
+        [
+            "platform",
+            "provider",
+            "delivery_status",
+            "notification_type",
+            "error_category",
+        ],
+    )
+
 except ImportError:
     logger.warning("[metrics] prometheus_client not installed, metrics disabled")
     PROMETHEUS_AVAILABLE = False
@@ -218,6 +231,25 @@ def record_push_token_invalidated(
         PUSH_TOKENS_INVALIDATED.labels(
             reason=reason,
             region=region,
+        ).inc()
+
+
+def record_push_attempt_status(
+    *,
+    platform: str,
+    provider: str,
+    delivery_status: str,
+    notification_type: str,
+    error_category: str,
+) -> None:
+    """Compteur tentative push (labels à cardinalité contrôlée uniquement)."""
+    if PROMETHEUS_AVAILABLE:
+        PUSH_ATTEMPT_STATUS.labels(
+            platform=platform[:32],
+            provider=provider[:16],
+            delivery_status=delivery_status[:48],
+            notification_type=notification_type[:64],
+            error_category=error_category[:48],
         ).inc()
 
 

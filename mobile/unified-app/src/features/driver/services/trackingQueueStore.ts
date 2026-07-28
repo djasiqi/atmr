@@ -105,9 +105,6 @@ let sqliteDb: SqliteDatabaseHandle | null = null;
 let sqliteOpenPromise: Promise<SqliteDatabaseHandle> | null = null;
 /** Schéma créé + vérifié pour le handle courant. */
 let schemaReady = false;
-/** true tant qu'un `PRAGMA quick_check` n'a pas encore été fait pour le handle courant
- * (ouverture à froid ou juste après une réouverture suite à NPE). */
-let needsDeepCheck = true;
 /** true uniquement après une récupération NPE réussie (consommé au prochain healthcheck). */
 let lastNpeRecovered = false;
 /** Uniquement pour les tests : force le chemin natif même sous Jest (bypass `allowMemoryBackend`). */
@@ -263,7 +260,6 @@ function getOrOpenDatabase(): Promise<SqliteDatabaseHandle> {
       (db) => {
         sqliteDb = db;
         schemaReady = true;
-        needsDeepCheck = false;
         return db;
       },
       (err) => {
@@ -330,7 +326,6 @@ async function ensureBackendMode(): Promise<BackendMode> {
   useMemory = false;
   sqliteDb = null;
   schemaReady = false;
-  needsDeepCheck = true;
   emitCriticalTelemetry("sqlite_open_failed", {
     error: String(lastError),
     platform: "native",
@@ -358,7 +353,6 @@ async function runSqliteOperation<T>(op: (db: SqliteDatabaseHandle) => Promise<T
     sqliteDb = null;
     sqliteOpenPromise = null;
     schemaReady = false;
-    needsDeepCheck = true;
     durableUnavailable = false;
     let reopened: SqliteDatabaseHandle;
     try {
@@ -378,7 +372,6 @@ async function runSqliteOperation<T>(op: (db: SqliteDatabaseHandle) => Promise<T
         durableUnavailable = true;
         sqliteDb = null;
         schemaReady = false;
-        needsDeepCheck = true;
         emitCriticalTelemetry("sqlite_npe_recovery_exhausted", { error: String(retryErr) });
         throw new Error("durable_unavailable");
       }
@@ -932,7 +925,6 @@ export const trackingQueueStore = {
     sqliteDb = null;
     sqliteOpenPromise = null;
     schemaReady = false;
-    needsDeepCheck = true;
     lastNpeRecovered = false;
     mutexChain = Promise.resolve();
   },

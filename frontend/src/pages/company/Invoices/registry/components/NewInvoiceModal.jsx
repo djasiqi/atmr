@@ -18,6 +18,31 @@ import {
   parseGlobalDiscountPercentField,
   roundTo005,
 } from '../../../../../utils/directInvoicePricing';
+import {
+  buildInvoicePdfApiUrl,
+  buildPartnerInvoicePdfApiUrl,
+} from '../../../../../utils/pdfUrlFallback';
+import { openProtectedPdfInNewTab } from '../../../../../utils/protectedPdf';
+import { buildInvoicePdfDownloadFilename } from '../../../../../utils/invoicePdfFilename';
+
+/** Ouvre le PDF via l’API JWT (SEC-06) — les URLs `/uploads/invoices/...` ne sont plus publiques. */
+async function openGeneratedInvoicePdf(companyId, invoiceLike, { partner = false } = {}) {
+  const inv =
+    invoiceLike?.data && (invoiceLike.data.id != null || invoiceLike.data.pdf_url)
+      ? invoiceLike.data
+      : invoiceLike;
+  if (!inv) return;
+  const cid = companyId || inv.company_id;
+  const apiPath = partner
+    ? buildPartnerInvoicePdfApiUrl({ id: inv.id, company_id: cid })
+    : buildInvoicePdfApiUrl({ id: inv.id, company_id: cid });
+  if (!apiPath) return;
+  await openProtectedPdfInNewTab(apiPath, null, {
+    filename: partner
+      ? `Facture_partenaire_${String(inv.invoice_number || inv.id || 'pdf').replace(/[/\\?%*:|"<>]/g, '-')}.pdf`
+      : buildInvoicePdfDownloadFilename({ ...inv, company_id: cid }),
+  });
+}
 
 /** Pied de page facturation directe : remise lisible, alignement type facture CH. */
 function DirectInvoiceTotalsBreakdown({ breakdown, totalsTotal, vatApplicable }) {
@@ -1814,12 +1839,9 @@ const NewInvoiceModal = ({
 
         result = await generateInvoice(companyId, payload);
 
-        // Ouvrir le PDF dans un nouvel onglet
-        if (result?.pdf_url) {
-          window.open(result.pdf_url, '_blank');
-        } else if (result?.data?.pdf_url) {
-          // Si la structure est {data: {pdf_url: ...}}
-          window.open(result.data.pdf_url, '_blank');
+        // Ouvrir le PDF dans un nouvel onglet (API JWT SEC-06)
+        if (result?.pdf_url || result?.data?.pdf_url) {
+          await openGeneratedInvoicePdf(companyId, result);
         }
 
         // Vérifier la structure de la réponse avant de notifier le parent
@@ -1883,8 +1905,8 @@ const NewInvoiceModal = ({
                     try {
                       const res = await invoiceService.getInvoice(companyId, existingInvoiceId);
                       const inv = res?.data ?? res;
-                      if (inv?.pdf_url) {
-                        window.open(inv.pdf_url, '_blank');
+                      if (inv?.pdf_url || inv?.id) {
+                        await openGeneratedInvoicePdf(companyId, inv);
                       }
                     } catch (e) {
                       // Ignorer si la récupération échoue
@@ -1917,10 +1939,8 @@ const NewInvoiceModal = ({
               return;
             }
 
-            if (result?.pdf_url) {
-              window.open(result.pdf_url, '_blank');
-            } else if (result?.data?.pdf_url) {
-              window.open(result.data.pdf_url, '_blank');
+            if (result?.pdf_url || result?.data?.pdf_url) {
+              await openGeneratedInvoicePdf(companyId, result);
             }
 
             if (result?.data) {
@@ -1968,9 +1988,13 @@ const NewInvoiceModal = ({
                   // ✅ Ouvrir le PDF directement si disponible, puis naviguer vers le registre
                   const openPdfAndNavigate = async () => {
                     try {
-                      const invoiceDetail = await invoiceService.getInvoice(companyId, existingInvoiceId);
-                      if (invoiceDetail?.pdf_url) {
-                        window.open(invoiceDetail.pdf_url, '_blank');
+                      const invoiceDetail = await invoiceService.getInvoice(
+                        companyId,
+                        existingInvoiceId
+                      );
+                      const inv = invoiceDetail?.data ?? invoiceDetail;
+                      if (inv?.pdf_url || inv?.id) {
+                        await openGeneratedInvoicePdf(companyId, inv);
                       }
                     } catch (e) {
                       // Ignorer si la récupération échoue, on navigue quand même
@@ -2105,12 +2129,14 @@ const NewInvoiceModal = ({
               );
             }
 
-            // Ouvrir les PDFs dans de nouveaux onglets
-            result.invoices.forEach((inv) => {
-              if (inv.pdf_url) {
-                window.open(inv.pdf_url, '_blank');
-              }
-            });
+            // Ouvrir les PDFs dans de nouveaux onglets (API JWT SEC-06)
+            await Promise.all(
+              result.invoices.map(async (inv) => {
+                if (inv?.pdf_url || inv?.id) {
+                  await openGeneratedInvoicePdf(companyId, inv);
+                }
+              })
+            );
 
             // Notifier le parent pour chaque facture
             result.invoices.forEach((inv) => onInvoiceGenerated(inv));
@@ -2171,14 +2197,14 @@ const NewInvoiceModal = ({
               }`
             );
 
-            // Ouvrir les PDFs dans de nouveaux onglets
-            successfulInvoices.forEach((inv) => {
-              if (inv?.pdf_url) {
-                window.open(inv.pdf_url, '_blank');
-              } else if (inv?.data?.pdf_url) {
-                window.open(inv.data.pdf_url, '_blank');
-              }
-            });
+            // Ouvrir les PDFs dans de nouveaux onglets (API JWT SEC-06)
+            await Promise.all(
+              successfulInvoices.map(async (inv) => {
+                if (inv?.pdf_url || inv?.data?.pdf_url || inv?.id || inv?.data?.id) {
+                  await openGeneratedInvoicePdf(companyId, inv);
+                }
+              })
+            );
 
             // Notifier le parent pour chaque facture
             successfulInvoices.forEach((inv) => {
@@ -2209,9 +2235,9 @@ const NewInvoiceModal = ({
 
         result = await invoiceService.generatePartnerInvoice(companyId, payload);
 
-        // Ouvrir le PDF dans un nouvel onglet
-        if (result?.data?.pdf_url) {
-          window.open(result.data.pdf_url, '_blank');
+        // Ouvrir le PDF dans un nouvel onglet (API JWT SEC-06)
+        if (result?.data?.pdf_url || result?.pdf_url) {
+          await openGeneratedInvoicePdf(companyId, result, { partner: true });
         }
 
         // Vérifier que result.data existe avant de notifier le parent

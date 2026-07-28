@@ -2,6 +2,7 @@ import contextlib
 import json
 import logging
 import math
+import os
 import uuid
 from collections import defaultdict
 from datetime import UTC, date, datetime
@@ -5265,8 +5266,23 @@ class PDFService:
             filepath = Path(self.invoices_dir, filename)
 
             pdf_bytes: bytes = pdf_content
-            with filepath.open("wb") as f:
-                f.write(pdf_bytes)
+            try:
+                self.invoices_dir.mkdir(parents=True, exist_ok=True)
+                with filepath.open("wb") as f:
+                    f.write(pdf_bytes)
+            except PermissionError as perm_err:
+                app_logger.error(
+                    "[PDF] Permission denied writing invoice PDF: path=%s, dir_exists=%s, "
+                    "dir_writable=%s — vérifier chown/chmod sur /app/uploads/invoices "
+                    "(uid appuser=999)",
+                    filepath,
+                    self.invoices_dir.is_dir(),
+                    os.access(self.invoices_dir, os.W_OK),
+                )
+                raise PermissionError(
+                    "Impossible d'écrire le PDF facture (permissions "
+                    f"sur {self.invoices_dir}). Contactez l'administrateur."
+                ) from perm_err
 
             # ✅ URL dynamique depuis config (127.0.0.1 en dev évite IPv6 localhost + ERR_CONNECTION_RESET)
             pdf_base_url = current_app.config.get(
@@ -5487,8 +5503,20 @@ class PDFService:
             filepath = Path(self.invoices_dir, filename)
 
             pdf_bytes: bytes = pdf_content
-            with filepath.open("wb") as f:
-                f.write(pdf_bytes)
+            try:
+                self.invoices_dir.mkdir(parents=True, exist_ok=True)
+                with filepath.open("wb") as f:
+                    f.write(pdf_bytes)
+            except PermissionError as perm_err:
+                app_logger.error(
+                    "[PDF] Permission denied writing reminder PDF: path=%s, dir_writable=%s",
+                    filepath,
+                    os.access(self.invoices_dir, os.W_OK),
+                )
+                raise PermissionError(
+                    "Impossible d'écrire le PDF rappel (permissions "
+                    f"sur {self.invoices_dir}). Contactez l'administrateur."
+                ) from perm_err
 
             # ✅ URL dynamique (127.0.0.1 en dev évite IPv6 localhost + ERR_CONNECTION_RESET)
             pdf_base_url = current_app.config.get(

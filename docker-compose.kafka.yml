@@ -370,9 +370,8 @@ services:
       retries: 5
 
   tracking-kafka-consumer:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    # Production : image via docker-compose.production.yml.
+    # Build local : fusionner docker-compose.kafka.build.yml.
     depends_on:
       kafka-topics-init:
         condition: service_completed_successfully
@@ -418,7 +417,8 @@ services:
     # Note: `deploy.replicas` s’applique en mode Swarm uniquement.
     # Avec le compose principal + ce fichier, utiliser p.ex. le script
     #   scripts/run-tracking-consumers.sh
-    # ou: docker compose -f docker-compose.yml -f docker-compose.kafka.yml up -d --scale tracking-kafka-consumer=3 tracking-kafka-consumer
+    # ou: docker compose -f docker-compose.yml -f docker-compose.kafka.yml \
+    #        -f docker-compose.kafka.build.yml up -d --scale tracking-kafka-consumer=3 tracking-kafka-consumer
     deploy:
       replicas: 1
       resources:
@@ -439,11 +439,69 @@ services:
       retries: 5
       start_period: 20s
 
-  # Fanout Socket.IO entreprise (Flask) depuis Kafka processed — même contrat que HTTP sync (PR-4).
-  tracking-processed-fanout:
+  # Phase 1 : publie processed.v2 depuis tracking_event_outbox (après TX PG du consumer).
+  tracking-outbox-publisher:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    depends_on:
+      kafka-topics-init:
+        condition: service_completed_successfully
+      tracking-kafka-consumer:
+        condition: service_started
+    command: python -m services.tracking.outbox_publisher
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-atmr}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: ${POSTGRES_DB:-atmr}
+      POSTGRES_SSLMODE: ${POSTGRES_SSLMODE:-disable}
+      DATABASE_URL: ""
+      SQLALCHEMY_DATABASE_URI: ""
+      PRIMARY_DATABASE_URL: ""
+      REPLICA_DATABASE_URL: ""
+      REPLICA_DATABASE_URLS: ""
+      KAFKA_ENABLED: "true"
+      KAFKA_BOOTSTRAP_SERVERS: kafka-broker-1:29092,kafka-broker-2:29092,kafka-broker-3:29092
+      KAFKA_TOPIC_DRIVER_LOCATION_PROCESSED: ${KAFKA_TOPIC_DRIVER_LOCATION_PROCESSED:-driver.location.processed}
+      TRACKING_OUTBOX_USE_V3_TOPIC: ${TRACKING_OUTBOX_USE_V3_TOPIC:-false}
+      KAFKA_SECURITY_PROTOCOL: ${KAFKA_SECURITY_PROTOCOL:-PLAINTEXT}
+      KAFKA_SASL_MECHANISM: ${KAFKA_SASL_MECHANISM:-}
+      KAFKA_SASL_USERNAME: ${KAFKA_SASL_USERNAME:-}
+      KAFKA_SASL_PASSWORD: ${KAFKA_SASL_PASSWORD:-}
+      KAFKA_SSL_CAFILE: ${KAFKA_SSL_CAFILE:-}
+      KAFKA_SSL_CERTFILE: ${KAFKA_SSL_CERTFILE:-}
+      KAFKA_SSL_KEYFILE: ${KAFKA_SSL_KEYFILE:-}
+    networks:
+      - default
+    restart: unless-stopped
+    profiles:
+      - kafka
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import pathlib,sys; cmd=pathlib.Path('/proc/1/cmdline').read_text(); sys.exit(0 if 'outbox_publisher' in cmd else 1)\"",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # Fanout Socket.IO entreprise (Flask) depuis Kafka processed — même contrat que HTTP sync (PR-4).
+  tracking-processed-fanout:
+    # Production : image via docker-compose.production.yml.
+    # Build local : fusionner docker-compose.kafka.build.yml.
     depends_on:
       kafka-topics-init:
         condition: service_completed_successfully
@@ -493,9 +551,8 @@ services:
       start_period: 20s
 
   kafka-dlq-consumer:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    # Production : image via docker-compose.production.yml.
+    # Build local : fusionner docker-compose.kafka.build.yml.
     depends_on:
       kafka-topics-init:
         condition: service_completed_successfully

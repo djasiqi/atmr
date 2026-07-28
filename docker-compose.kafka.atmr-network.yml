@@ -33,6 +33,14 @@ services:
       kafka-broker-1:
         condition: service_healthy
 
+  tracking-outbox-publisher:
+    depends_on:
+      kafka-broker-1:
+        condition: service_healthy
+    networks:
+      - default
+      - atmr-network
+
   tracking-processed-fanout:
     depends_on:
       kafka-broker-1:

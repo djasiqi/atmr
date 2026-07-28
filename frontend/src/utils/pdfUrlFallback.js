@@ -79,6 +79,18 @@ export function buildReminderPdfApiUrl(invoice, reminder) {
 }
 
 /**
+ * Construit le chemin API (relatif à apiClient.baseURL `/api/v1`) pour le PDF
+ * d'une facture partenaire (Lot 0 SEC-06).
+ *
+ * @param {{ id: number, company_id?: number }} partnerInvoice
+ * @returns {string|null}
+ */
+export function buildPartnerInvoicePdfApiUrl(partnerInvoice) {
+  if (!partnerInvoice?.id || !partnerInvoice?.company_id) return null;
+  return `/invoices/companies/${partnerInvoice.company_id}/partner-invoices/${partnerInvoice.id}/pdf`;
+}
+
+/**
  * Ajoute un fragment « PDF Open » (#toolbar=0&navpanes=0) pour masquer la barre d’outils
  * du lecteur PDF **intégré à Chromium** (Chrome, Edge, etc.) dans un `<iframe>`.
  *

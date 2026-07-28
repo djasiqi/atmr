@@ -462,7 +462,7 @@ export function DriverSettingsScreenContent() {
 
               {profileView.sections.length === 0 && !profileLoading ? (
                 <AppText variant="bodyMuted" style={styles.helperText}>
-                  Votre entreprise n'a pas encore renseigné votre fiche. Contactez votre responsable
+                  Votre entreprise n’a pas encore renseigné votre fiche. Contactez votre responsable
                   si des informations manquent.
                 </AppText>
               ) : null}

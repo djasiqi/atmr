@@ -104,6 +104,8 @@ function shouldDedupSkip(data: unknown, notificationId?: string | null): boolean
   const missionIdRaw = record.mission_id ?? record.missionId ?? record.booking_id;
   const missionId = Number(missionIdRaw);
   const dedupeKeyRaw =
+    (typeof record.deduplication_key === "string" && record.deduplication_key) ||
+    (typeof record.deduplicationKey === "string" && record.deduplicationKey) ||
     (typeof record.dedupe_key === "string" && record.dedupe_key) ||
     (typeof record.dedupeKey === "string" && record.dedupeKey) ||
     null;

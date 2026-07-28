@@ -90,44 +90,48 @@ docker compose -f docker-compose.production.yml restart backend ws-service
 
 Ne pas éditer `.env.production` à la main — il est régénéré par `deploy-production.sh` (CI + fragment + `.env.production.local`).
 
-### Déploiement CI — workflow `deploy-kafka.yml`
+### Déploiement CI — workflow `deploy-kafka.yml` (infra-only HOLD)
 
-Workflow manuel GitHub Actions, **séparé** de Build & Deploy (`deploy.yml`).
+Workflow manuel GitHub Actions, **séparé** de Build & Deploy (`deploy.yml`) et de **Deploy Kafka P0** (`deploy-kafka-p0.yml`).
 
-**Fichiers copiés sur le serveur** : compose Kafka, scripts deploy/check/init, `lib/kafka_checks.sh`, `lib/kafka_topics_init.sh`, `kafka-topics.contract.json`, `check-kafka-tracking-pipeline.sh`, helpers env v2.
+Pendant le HOLD GPS, ce workflow ne gère **que** l’infra (brokers / ZK / redis-failover / topics). Il ne recrée **pas** `tracking-kafka-consumer`, `tracking-processed-fanout`, `kafka-dlq-consumer`.
 
+**Fichiers copiés sur le serveur** : compose Kafka, scripts deploy/check/init, `lib/kafka_checks.sh`, `lib/kafka_topics_init.sh`, `kafka-topics.contract.json`, helpers env v2.
 
-| Input                         | Défaut  | Description                                                           |
-| ----------------------------- | ------- | --------------------------------------------------------------------- |
-| `confirm`                     | —       | Doit être exactement `kafka-on-production`                            |
-| `dry_run`                     | `true`  | `true` = copie + preflight uniquement ; `false` = deploy réel         |
-| `apply_topics_v2_env`         | `false` | Ajoute le bloc v2 dans `/srv/atmr/.env.production.local` (idempotent) |
-| `init_topics`                 | `false` | `INIT_TOPICS=1` — crée les topics `.v2` (6 partitions)                |
-| `restart_app_after_topics_v2` | `true`  | Restart `backend` + `ws-service` après init topics                    |
+| Input | Défaut | Description |
+| --- | --- | --- |
+| `confirm` | — | Doit être exactement `kafka-on-production` |
+| `dry_run` | `true` | SCP artefacts versionnés + `preflight-infra` ; interdit `apply_topics_v2_env` / `init_topics` |
+| `apply_topics_v2_env` | `false` | Ajoute le bloc v2 dans `.env.production.local` (**interdit** si dry_run) |
+| `init_topics` | `false` | `INIT_TOPICS=1` (**interdit** si dry_run) |
 
+**dry_run=true** : peut synchroniser les YAML/scripts versionnés ; ne modifie pas `.env.production` / `.env.production.local` / secrets / topics ; aucun pull/stop/up/restart.
 
-**Run typique — sync compose uniquement (sans toucher aux topics)** :
+**Run typique — preflight infra** :
 
 ```text
 confirm = kafka-on-production
 dry_run = true
 ```
 
-**Run typique — migration topics v2 complète** :
+**Run typique — deploy infra + topics v2** :
 
 ```text
 confirm = kafka-on-production
 dry_run = false
 apply_topics_v2_env = true
 init_topics = true
-restart_app_after_topics_v2 = true
 ```
+
+Contrôles : `check-kafka-production.sh preflight-infra` puis `infra` (sans flags consumers GPS).
+
+**Consumers GPS** : workflow [`deploy-kafka-p0.yml`](../../.github/workflows/deploy-kafka-p0.yml) — inputs `source_sha` + `image_digest` (digest backend du Build & Deploy), confirm `tracking-p0-recreate`, pull par digest, recreate ingest avec `p0-hold.yml`.
 
 Le workflow utilise `scripts/kafka-env-effective.sh` pour lire les surcharges `KAFKA_*` depuis `.env.production.local` sans modifier `.env.production`.
 
 **Important réseau** : le deploy doit toujours merger `docker-compose.kafka.atmr-network.yml` (fait par `deploy-kafka-production.sh`). Sans ce fichier, les brokers restent sur `atmr-stack` uniquement → erreurs Sentry `DNS Resolution failure` depuis backend/consumers sur `atmr-network`.
 
-✅ **Implémenté** : workflow corrigé — dépendances `kafka_topics_init.sh` + contract + helpers env v2 inclus.
+✅ **Implémenté** : workflow infra-only + modes `preflight-infra` / `infra` ; plus de `|| true` sur le check tracking ; plus de `restart` backend/ws.
 
 ### Rollback Phase 1
 

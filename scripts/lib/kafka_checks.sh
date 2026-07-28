@@ -127,11 +127,19 @@ kafka_dns_ephemeral_probe_ok() {
     && docker run --rm --network atmr-network alpine:3.20 getent hosts kafka-broker-2 >/dev/null 2>&1
 }
 
-# Commande docker compose « Kafka ON » (production + kafka + réseau + profile kafka)
+# Commande docker compose « Kafka ON » (production + kafka + réseau + profile kafka).
+# Sans p0-hold.yml (chemin infra) — le HOLD GPS utilise ops-tracking-p0-recreate-ingest.sh.
 kafka_docker_compose() {
   local net
+  local envf="${ATMR_ENV_FILE:-}"
+  if [[ -z "${envf}" ]] || [[ ! -f "${envf}" ]]; then
+    echo "FAIL kafka_docker_compose : ATMR_ENV_FILE absent ou illisible (${envf:-<vide>})" >&2
+    return 1
+  fi
   net="$(kafka_resolve_network_file)"
   docker compose \
+    -p "${COMPOSE_PROJECT_NAME:-atmr}" \
+    --env-file "${envf}" \
     -f docker-compose.production.yml \
     -f "${KAFKA_COMPOSE_FILE}" \
     -f "${net}" \

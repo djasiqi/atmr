@@ -1091,6 +1091,9 @@ class DriverTrackingQueue {
             ...item.payload,
             locationMode: item.locationMode,
             trackingEventId: item.id,
+            trackingSessionId: item.trackingSessionId,
+            sessionGeneration: item.sessionGeneration,
+            sequenceId: item.sequenceId,
           });
           sent += 1;
           lastBackendAckRequestEventId = item.id;

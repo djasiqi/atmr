@@ -33,16 +33,20 @@ import {
 } from '../../../../../services/invoiceService';
 import {
   INVOICE_PRINT_SIDES,
-  downloadPdfAsFile,
   openPdfUrlWithPrintDialog,
   printPdfFromUrlInHiddenFrame,
   printPdfInEmbeddedIframe,
-  triggerPdfDownloadAnchorFallback,
 } from '../../../../../utils/invoicePdfPrint';
 import {
   appendPdfEmbedChromiumViewerFragment,
-  ensurePdfUrlWorksInDev,
+  buildInvoicePdfApiUrl,
 } from '../../../../../utils/pdfUrlFallback';
+import {
+  downloadProtectedPdfAsFile,
+  fetchProtectedPdfObjectUrl,
+  openProtectedPdfInNewTab,
+} from '../../../../../utils/protectedPdf';
+import { buildInvoicePdfDownloadFilename } from '../../../../../utils/invoicePdfFilename';
 import { getApiErrorMessage } from '../../../../../utils/apiErrorMessage';
 import { normalizeServiceDateToIsoForApi } from '../../../../../utils/invoiceServiceDate';
 import { filterInvoiceLines } from '../../../../../utils/invoiceLineFilter';
@@ -252,10 +256,13 @@ const DraftInvoiceEditorPanel = ({
   const [showLinesSheet, setShowLinesSheet] = useState(false);
   const [pdfZoneExpanded, setPdfZoneExpanded] = useState(false);
   const [isPdfFullscreen, setIsPdfFullscreen] = useState(false);
+  /** Blob URL (API JWT SEC-06) pour l’iframe PDF quand l’aperçu HTML n’est pas utilisé. */
+  const [protectedPdfBlobUrl, setProtectedPdfBlobUrl] = useState('');
   /** Aligné sur CompanyBillingSettings.vat_applicable — contrôle colonnes TVA/TTC dans l’aperçu HTML. */
   const [companyVatApplicable, setCompanyVatApplicable] = useState(true);
   const pdfWrapRef = useRef(null);
   const pdfIframeRef = useRef(null);
+  const protectedPdfBlobUrlRef = useRef('');
   const mountedRef = useRef(true);
   /** Dernière date « ligne suppl. » connue (évite perte si blur/changement d’état pas encore rejoué). */
   const customLineServiceDateRef = useRef('');
@@ -638,42 +645,102 @@ const DraftInvoiceEditorPanel = ({
     return null;
   }, [allowsLineEditing, inv?.meta]);
 
-  const pdfEmbedSrc = useMemo(() => {
-    const raw = inv?.pdf_url?.trim();
-    if (!raw) return '';
-    const fixed = ensurePdfUrlWorksInDev(raw);
-    const sep = fixed.includes('?') ? '&' : '?';
-    /** `u` = horodatage facture : force rechargement iframe si même `pdf_url` (cache intermédiaire). */
-    const u = encodeURIComponent(String(inv?.updated_at ?? ''));
-    const withNonce = `${fixed}${sep}_pv=${pdfNonce}&u=${u}`;
-    /** Réduit la barre native Chromium (`viewer-toolbar`) dans l’iframe ; pas les overlays d’extensions. */
-    return appendPdfEmbedChromiumViewerFragment(withNonce);
-  }, [inv?.pdf_url, inv?.updated_at, pdfNonce]);
+  /** Chemin API JWT pour le PDF (Lot 0 SEC-06) — ne plus utiliser `/uploads/invoices/...`. */
+  const invoicePdfApiPath = useMemo(() => {
+    const id = inv?.id;
+    const cid = companyId || inv?.company_id;
+    if (!id || !cid || !String(inv?.pdf_url || '').trim()) return null;
+    return buildInvoicePdfApiUrl({ id, company_id: cid });
+  }, [inv?.id, inv?.company_id, inv?.pdf_url, companyId]);
 
-  /** Édition autorisée : aperçu HTML ; sinon iframe si `pdf_url` présent. */
+  const hasStoredPdf = Boolean(String(inv?.pdf_url || '').trim());
+
+  const pdfDownloadName = useMemo(
+    () => buildInvoicePdfDownloadFilename(inv),
+    [
+      inv?.id,
+      inv?.invoice_number,
+      inv?.period_month,
+      inv?.period_year,
+      inv?.total_amount,
+      inv?.client,
+      inv?.bill_to_client,
+      inv?.billing_party,
+      inv?.billed_to_company,
+    ]
+  );
+
+  const revokeProtectedPdfBlobUrl = useCallback(() => {
+    const prev = protectedPdfBlobUrlRef.current;
+    if (prev) {
+      URL.revokeObjectURL(prev);
+      protectedPdfBlobUrlRef.current = '';
+    }
+    setProtectedPdfBlobUrl('');
+  }, []);
+
+  /** Charge le PDF via API authentifiée pour l’iframe (aperçu HTML désactivé). */
+  useEffect(() => {
+    if (!open || showHtmlInvoicePreview || !invoicePdfApiPath) {
+      revokeProtectedPdfBlobUrl();
+      return undefined;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const url = await fetchProtectedPdfObjectUrl(invoicePdfApiPath, {
+          filename: pdfDownloadName,
+        });
+        if (cancelled) {
+          if (url) URL.revokeObjectURL(url);
+          return;
+        }
+        const prev = protectedPdfBlobUrlRef.current;
+        if (prev) URL.revokeObjectURL(prev);
+        protectedPdfBlobUrlRef.current = url || '';
+        setProtectedPdfBlobUrl(url || '');
+      } catch (err) {
+        console.error('Chargement aperçu PDF protégé échoué:', err);
+        if (!cancelled) revokeProtectedPdfBlobUrl();
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // pdfNonce / updated_at : forcer un rechargement après régénération
+  }, [
+    open,
+    showHtmlInvoicePreview,
+    invoicePdfApiPath,
+    pdfNonce,
+    inv?.updated_at,
+    pdfDownloadName,
+    revokeProtectedPdfBlobUrl,
+  ]);
+
+  /** Révoque le blob PDF à la fermeture / démontage. */
+  useEffect(() => {
+    if (!open) revokeProtectedPdfBlobUrl();
+    return () => {
+      revokeProtectedPdfBlobUrl();
+    };
+  }, [open, revokeProtectedPdfBlobUrl]);
+
+  const pdfEmbedSrc = useMemo(() => {
+    if (!protectedPdfBlobUrl) return '';
+    /** Réduit la barre native Chromium (`viewer-toolbar`) dans l’iframe ; pas les overlays d’extensions. */
+    return appendPdfEmbedChromiumViewerFragment(protectedPdfBlobUrl);
+  }, [protectedPdfBlobUrl]);
+
+  /** Édition autorisée : aperçu HTML ; sinon iframe si PDF chargé via API. */
   const showDocumentViewer = useMemo(
     () =>
       Boolean(
         inv &&
-          (showHtmlInvoicePreview || String(pdfEmbedSrc || '').trim())
+          (showHtmlInvoicePreview || hasStoredPdf || String(pdfEmbedSrc || '').trim())
       ),
-    [inv, showHtmlInvoicePreview, pdfEmbedSrc]
+    [inv, showHtmlInvoicePreview, hasStoredPdf, pdfEmbedSrc]
   );
-
-  /** URL « propre » pour nouvel onglet (sans cache-bust iframe). */
-  const pdfOpenHref = useMemo(() => {
-    const raw = inv?.pdf_url?.trim();
-    if (!raw) return '';
-    return ensurePdfUrlWorksInDev(raw);
-  }, [inv?.pdf_url]);
-
-  const pdfDownloadName = useMemo(() => {
-    const n = inv?.invoice_number;
-    if (n && typeof n === 'string') {
-      return `Facture_${n.replace(/[/\\?%*:|"<>]/g, '-')}.pdf`;
-    }
-    return inv?.id != null ? `facture-${inv.id}.pdf` : 'facture.pdf';
-  }, [inv?.invoice_number, inv?.id]);
 
   /** Masque les calques injectés par l’extension Adobe Acrobat (Chrome) à côté des iframes PDF. */
   useEffect(() => {
@@ -752,6 +819,7 @@ const DraftInvoiceEditorPanel = ({
   /**
    * Imprimer le PDF : d’abord l’iframe d’aperçu si affichée ; sinon iframe cachée (pas d’onglet).
    * Brouillon : régénère le PDF puis impression silencieuse ; repli seulement si l’iframe échoue.
+   * PDF servi via API JWT (SEC-06), pas via `/uploads/invoices/...`.
    */
   const handlePdfPreviewPrint = useCallback(async () => {
     if (!companyId || !inv?.id) return;
@@ -760,23 +828,33 @@ const DraftInvoiceEditorPanel = ({
     }
     setSaving(true);
     setError('');
+    let blobUrl = null;
     try {
-      let raw = typeof inv.pdf_url === 'string' ? inv.pdf_url.trim() : '';
       if (allowsLineEditing) {
         await invoiceService.regenerateInvoicePdf(companyId, inv.id);
-        const data = await reloadPdfPreviewFromServer();
-        raw = typeof data?.pdf_url === 'string' ? data.pdf_url.trim() : '';
+        await reloadPdfPreviewFromServer();
       }
-      if (!raw) {
+      const apiPath = buildInvoicePdfApiUrl({
+        id: inv.id,
+        company_id: companyId || inv.company_id,
+      });
+      if (!apiPath) {
         if (mountedRef.current) setError('Aucun PDF disponible.');
         return;
       }
-      const started = await printPdfFromUrlInHiddenFrame(raw, {
+      blobUrl = await fetchProtectedPdfObjectUrl(apiPath, {
+        filename: pdfDownloadName,
+      });
+      if (!blobUrl) {
+        if (mountedRef.current) setError('Aucun PDF disponible.');
+        return;
+      }
+      const started = await printPdfFromUrlInHiddenFrame(blobUrl, {
         printSides: INVOICE_PRINT_SIDES.SIMPLEX,
       });
       if (!started) {
         /** Repli : ouvrir le PDF dans un onglet avec dialogue d’impression. */
-        const openedInTab = openPdfUrlWithPrintDialog(raw, {
+        const openedInTab = openPdfUrlWithPrintDialog(blobUrl, {
           printSides: INVOICE_PRINT_SIDES.SIMPLEX,
         });
         if (!openedInTab && mountedRef.current) {
@@ -790,49 +868,75 @@ const DraftInvoiceEditorPanel = ({
         setError(getApiErrorMessage(e, 'Impossible de préparer le PDF pour impression.'));
       }
     } finally {
+      if (blobUrl) {
+        window.setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);
+      }
       if (mountedRef.current) setSaving(false);
     }
-  }, [companyId, inv?.id, inv?.pdf_url, allowsLineEditing, reloadPdfPreviewFromServer]);
+  }, [
+    companyId,
+    inv?.id,
+    inv?.company_id,
+    pdfDownloadName,
+    allowsLineEditing,
+    reloadPdfPreviewFromServer,
+  ]);
 
   const handlePdfDownload = useCallback(async () => {
     if (!companyId || !inv?.id) return;
-    let raw = inv?.pdf_url?.trim();
     setError('');
-    if (allowsLineEditing) {
-      setSaving(true);
-      try {
+    setSaving(true);
+    try {
+      if (allowsLineEditing) {
         await invoiceService.regenerateInvoicePdf(companyId, inv.id);
-        const data = await reloadPdfPreviewFromServer();
-        raw = typeof data?.pdf_url === 'string' ? data.pdf_url.trim() : '';
-      } catch (e) {
-        if (mountedRef.current) {
-          setError(getApiErrorMessage(e, 'Génération du PDF impossible.'));
-        }
-        setSaving(false);
-        return;
-      } finally {
-        setSaving(false);
+        await reloadPdfPreviewFromServer();
       }
+      const apiPath = buildInvoicePdfApiUrl({
+        id: inv.id,
+        company_id: companyId || inv.company_id,
+      });
+      if (!apiPath) {
+        if (mountedRef.current) setError('Aucun PDF disponible.');
+        return;
+      }
+      const ok = await downloadProtectedPdfAsFile(apiPath, pdfDownloadName);
+      if (!mountedRef.current) return;
+      if (!ok) {
+        setError('Téléchargement du PDF impossible.');
+      }
+    } catch (e) {
+      if (mountedRef.current) {
+        setError(getApiErrorMessage(e, 'Téléchargement du PDF impossible.'));
+      }
+    } finally {
+      if (mountedRef.current) setSaving(false);
     }
-    if (!raw) {
+  }, [
+    companyId,
+    inv?.id,
+    inv?.company_id,
+    allowsLineEditing,
+    pdfDownloadName,
+    reloadPdfPreviewFromServer,
+  ]);
+
+  const handleOpenPdfInNewTab = useCallback(async () => {
+    const apiPath = buildInvoicePdfApiUrl({
+      id: inv?.id,
+      company_id: companyId || inv?.company_id,
+    });
+    if (!apiPath) {
       if (mountedRef.current) setError('Aucun PDF disponible.');
       return;
     }
-    try {
-      const ok = await downloadPdfAsFile(raw, pdfDownloadName);
-      if (!mountedRef.current) return;
-      if (!ok) {
-        const fallback = triggerPdfDownloadAnchorFallback(raw, pdfDownloadName);
-        if (!fallback) {
-          setError('Téléchargement du PDF impossible.');
-        }
-      }
-    } catch {
-      if (mountedRef.current) {
-        setError('Téléchargement du PDF impossible.');
-      }
+    setError('');
+    const ok = await openProtectedPdfInNewTab(apiPath, null, {
+      filename: pdfDownloadName,
+    });
+    if (!ok && mountedRef.current) {
+      setError('Impossible d’ouvrir le PDF.');
     }
-  }, [companyId, inv?.id, inv?.pdf_url, allowsLineEditing, pdfDownloadName, reloadPdfPreviewFromServer]);
+  }, [inv?.id, inv?.company_id, companyId, pdfDownloadName]);
 
   /** Barre PDF : si édition lignes possible, régénère le fichier puis recharge ; sinon GET détail seulement. */
   const handleToolbarPdfRefresh = useCallback(async () => {
@@ -2092,7 +2196,7 @@ const DraftInvoiceEditorPanel = ({
                         role="group"
                         aria-label="Fichier PDF"
                       >
-                        {allowsLineEditing || pdfOpenHref ? (
+                        {allowsLineEditing || hasStoredPdf ? (
                           <button
                             type="button"
                             className={`${styles.draftPdfToolBtn} ${styles.draftPdfToolBtnIconOnly} ${styles.draftPdfToolLink}`}
@@ -2128,17 +2232,16 @@ const DraftInvoiceEditorPanel = ({
                         >
                           <FiPrinter size={18} aria-hidden />
                         </button>
-                        {pdfOpenHref ? (
-                          <a
-                            href={pdfOpenHref}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                        {hasStoredPdf ? (
+                          <button
+                            type="button"
                             className={`${styles.draftPdfToolBtn} ${styles.draftPdfToolBtnIconOnly} ${styles.draftPdfToolLink}`}
                             title="Ouvrir dans un nouvel onglet"
                             aria-label="Ouvrir le PDF dans un nouvel onglet"
+                            onClick={() => void handleOpenPdfInNewTab()}
                           >
                             <FiExternalLink size={18} aria-hidden />
-                          </a>
+                          </button>
                         ) : null}
                       </div>
                     </div>

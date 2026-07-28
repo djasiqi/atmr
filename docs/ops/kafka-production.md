@@ -3,7 +3,8 @@
 Contrat déploiement :
 
 - **`scripts/deploy-production.sh`** : stack applicative **uniquement** — ne doit **jamais** activer `--profile kafka` ni fusionner `docker-compose.kafka*.yml`.
-- **`INIT_TOPICS=1 scripts/deploy-kafka-production.sh`** : **seul chemin officiel** pour déployer brokers + raccord `atmr-network` + consumers profile `kafka`, avec preflight et validations post-deploy.
+- **`INIT_TOPICS=1 scripts/deploy-kafka-production.sh`** : chemin officiel pour déployer **l’infra** brokers + raccord `atmr-network` + topics, avec preflight `preflight-infra` et validations `infra`.
+- Pendant le HOLD GPS, les consumers (`tracking-kafka-consumer` / fanout / DLQ) sont gérés uniquement par [`scripts/ops-tracking-p0-recreate-ingest.sh`](../scripts/ops-tracking-p0-recreate-ingest.sh) / workflow `deploy-kafka-p0.yml`.
 - **Kafka OFF** : les 4 flags à `false` (ou absents) dans `.env.production`, **aucun** consumer Kafka actif.
 - **Kafka ON** : brokers healthy, DNS `kafka-broker-*` depuis `atmr-network`, topics créés, consumers du profile `kafka` en `running`, **`TRACKING_INGEST_PERSIST_ENABLED=true`** si l'ingest async doit écrire en DB.
 

@@ -590,6 +590,8 @@ services:
       - backend_logs:/app/logs
       - backend_data:/app/data
       - backend_cache:/app/cache
+      # Même volume uploads que l'API : PDF factures / rappels générés via Celery
+      - backend_uploads:/app/uploads
       - ./firebase-service-account.json:/app/firebase-service-account.json:ro
       # Les modèles ML/RL sont inclus dans l'image Docker
     networks:
@@ -691,6 +693,65 @@ services:
       timeout: 5s
       retries: 5
       start_period: 20s
+
+  tracking-outbox-publisher:
+    profiles:
+      - kafka
+    image: ${DOCKER_IMAGE:-docker.io/djasiqi/atmr-backend}:${DOCKER_TAG:-latest}
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    command: python -m services.tracking.outbox_publisher
+    environment:
+      FLASK_ENV: production
+      FLASK_CONFIG: production
+      # Advisory locks session : Postgres direct (pas PgBouncer transaction)
+      POSTGRES_USER: ${POSTGRES_USER:-atmr}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: ${POSTGRES_DB:-atmr}
+      POSTGRES_SSLMODE: ${POSTGRES_SSLMODE:-disable}
+      DATABASE_URL: ""
+      SQLALCHEMY_DATABASE_URI: ""
+      PRIMARY_DATABASE_URL: ""
+      REPLICA_DATABASE_URL: ""
+      REPLICA_DATABASE_URLS: ""
+      KAFKA_ENABLED: ${KAFKA_ENABLED:-true}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka-broker-1:29092,kafka-broker-2:29092,kafka-broker-3:29092}
+      KAFKA_TOPIC_DRIVER_LOCATION_PROCESSED: ${KAFKA_TOPIC_DRIVER_LOCATION_PROCESSED:-driver.location.processed}
+      TRACKING_OUTBOX_USE_V3_TOPIC: ${TRACKING_OUTBOX_USE_V3_TOPIC:-false}
+      KAFKA_SECURITY_PROTOCOL: ${KAFKA_SECURITY_PROTOCOL:-PLAINTEXT}
+      KAFKA_SASL_MECHANISM: ${KAFKA_SASL_MECHANISM:-}
+      KAFKA_SASL_USERNAME: ${KAFKA_SASL_USERNAME:-}
+      KAFKA_SASL_PASSWORD: ${KAFKA_SASL_PASSWORD:-}
+      KAFKA_SSL_CAFILE: ${KAFKA_SSL_CAFILE:-}
+      KAFKA_SSL_CERTFILE: ${KAFKA_SSL_CERTFILE:-}
+      KAFKA_SSL_KEYFILE: ${KAFKA_SSL_KEYFILE:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - atmr-network
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.5"
+        reservations:
+          memory: 128M
+          cpus: "0.1"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import pathlib,sys; cmd=pathlib.Path('/proc/1/cmdline').read_text(); sys.exit(0 if 'outbox_publisher' in cmd else 1)\"",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
   tracking-processed-fanout:
     profiles:

@@ -5,8 +5,8 @@ name: Build & Deploy
 on:
   workflow_dispatch: # Déclenchement manuel uniquement
     inputs:
-      tag:
-        description: "Tag de l'image (ex: latest, v1.0.0). Laissez vide pour utiliser DOCKER_TAG du secret"
+      additional_tag:
+        description: "Alias Docker optionnel (ex: latest, v1.2.0). Jamais la source de vérité — le tag canonique est toujours sha-<12>"
         required: false
         default: ""
       skip_deploy:
@@ -19,21 +19,10 @@ on:
         type: boolean
         required: false
         default: false
-  # DÉPLOIEMENT AUTOMATIQUE DÉSACTIVÉ - Décommenter pour réactiver
-  # push:
-  #   branches: [main]
-  #   paths:
-  #     - "backend/**"
-  #     - "docker-compose.yml"
-  #     - "docker-compose.production.yml"
-  #     - "docker-compose.monitoring.yml"
-  #     - "monitoring/**"
-  #     - "pyrightconfig.json"
-  #     - "package.json"
-  #     - "package-lock.json"
-  #     - "vault/**"
-  #     - "scripts/deploy-production.sh"
-  #     - ".github/workflows/deploy.yml"
+
+concurrency:
+  group: atmr-production-deployment
+  cancel-in-progress: false
 
 permissions:
   actions: write
@@ -48,48 +37,60 @@ jobs:
     name: Build & Push Production Image
     runs-on: ubuntu-latest
     env:
-      # Opt-in explicite Node 24 pour les actions JS (docker/*, cache GHA) — évite l’avertissement dépréciation Node 20
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
       DOCKER_IMAGE: ${{ secrets.DOCKER_IMAGE }}
-      # TEMPORARY: Force tag v5 with Flask-Limiter 3.x correct API (pass URI directly)
-      DOCKER_TAG: ${{ github.event.inputs.tag != '' && github.event.inputs.tag || 'v5' }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
     outputs:
       push_success: ${{ steps.verify_push.outputs.success }}
+      docker_tag: ${{ steps.meta.outputs.docker_tag }}
+      source_sha: ${{ steps.meta.outputs.source_sha }}
+      backend_image_digest: ${{ steps.build_backend.outputs.digest }}
+      ws_service_image_digest: ${{ steps.build_ws.outputs.digest }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+
+      - name: Compute canonical tag + validate additional_tag
+        id: meta
+        run: |
+          set -euo pipefail
+          SOURCE_SHA="${GITHUB_SHA}"
+          DOCKER_TAG="sha-${SOURCE_SHA:0:12}"
+          ADDITIONAL_TAG="${{ github.event.inputs.additional_tag }}"
+          if [ -n "${ADDITIONAL_TAG}" ] && \
+             [[ ! "${ADDITIONAL_TAG}" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]]; then
+            echo "additional_tag Docker invalide: ${ADDITIONAL_TAG}"
+            exit 1
+          fi
+          echo "docker_tag=${DOCKER_TAG}" >> "${GITHUB_OUTPUT}"
+          echo "source_sha=${SOURCE_SHA}" >> "${GITHUB_OUTPUT}"
+          echo "additional_tag=${ADDITIONAL_TAG}" >> "${GITHUB_OUTPUT}"
+          echo "DOCKER_TAG=${DOCKER_TAG}" >> "${GITHUB_ENV}"
+          echo "SOURCE_SHA=${SOURCE_SHA}" >> "${GITHUB_ENV}"
+          echo "Tag canonique: ${DOCKER_TAG}"
+          echo "SOURCE_SHA=${SOURCE_SHA}"
 
       - name: Validate required secrets
         run: |
           echo "🔍 Validation des secrets requis..."
           MISSING_SECRETS=()
 
-          # Vérifier DOCKER_IMAGE
           if [ -z "${{ secrets.DOCKER_IMAGE }}" ]; then
             MISSING_SECRETS+=("DOCKER_IMAGE")
           else
             echo "✅ DOCKER_IMAGE: ${{ secrets.DOCKER_IMAGE }}"
           fi
 
-          # Vérifier DOCKER_TAG (peut être remplacé par l'input tag)
-          DOCKER_TAG_VALUE="${{ github.event.inputs.tag != '' && github.event.inputs.tag || secrets.DOCKER_TAG }}"
-          if [ -z "${DOCKER_TAG_VALUE}" ]; then
-            MISSING_SECRETS+=("DOCKER_TAG")
-          else
-            echo "✅ DOCKER_TAG: ${DOCKER_TAG_VALUE}"
-          fi
+          echo "✅ DOCKER_TAG (canonique): ${DOCKER_TAG}"
 
-          # Vérifier DOCKERHUB_USERNAME
           if [ -z "${{ secrets.DOCKERHUB_USERNAME }}" ]; then
             MISSING_SECRETS+=("DOCKERHUB_USERNAME")
           else
             echo "✅ DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}"
           fi
 
-          # Vérifier DOCKERHUB_TOKEN
           if [ -z "${{ secrets.DOCKERHUB_TOKEN }}" ]; then
             MISSING_SECRETS+=("DOCKERHUB_TOKEN")
           else
@@ -99,19 +100,6 @@ jobs:
           if [ ${#MISSING_SECRETS[@]} -ne 0 ]; then
             echo ""
             echo "❌ Secrets manquants ou vides: ${MISSING_SECRETS[*]}"
-            echo ""
-            echo "💡 Pour résoudre ce problème:"
-            echo "   1. Allez dans Settings > Secrets and variables > Actions"
-            echo "   2. Ajoutez ou vérifiez les secrets suivants:"
-            for secret in "${MISSING_SECRETS[@]}"; do
-              echo "      - ${secret}"
-            done
-            echo ""
-            echo "   Exemple de valeurs:"
-            echo "   - DOCKER_IMAGE: djasiqi/atmr-backend"
-            echo "   - DOCKER_TAG: latest"
-            echo "   - DOCKERHUB_USERNAME: votre-username"
-            echo "   - DOCKERHUB_TOKEN: votre-token-docker-hub"
             exit 1
           fi
 
@@ -128,11 +116,8 @@ jobs:
       - name: Clean up disk space
         run: |
           echo "🧹 Nettoyage de l'espace disque avant le build..."
-          # Nettoyer les images Docker inutilisées
           docker system prune -af --volumes || true
-          # Nettoyer les caches pip
           rm -rf ~/.cache/pip || true
-          # Afficher l'espace disque disponible
           df -h
 
       - name: Generate SBOM with Trivy
@@ -154,14 +139,11 @@ jobs:
       - name: Calculate requirements hash
         id: requirements_hash
         run: |
-          # Calculer un hash des fichiers requirements pour invalider le cache si nécessaire
-          # Utiliser requirements.prod.txt (qui inclut requirements.base.txt)
           if [ -f backend/requirements.prod.txt ]; then
             REQUIREMENTS_HASH=$(sha256sum backend/requirements.prod.txt backend/requirements.base.txt 2>/dev/null | sha256sum | cut -d' ' -f1)
             echo "requirements_hash=${REQUIREMENTS_HASH}" >> $GITHUB_OUTPUT
             echo "📋 Hash de requirements.prod.txt + requirements.base.txt: ${REQUIREMENTS_HASH:0:12}..."
           elif [ -f backend/requirements.txt ]; then
-            # Fallback pour compatibilité
             REQUIREMENTS_HASH=$(sha256sum backend/requirements.txt | cut -d' ' -f1)
             echo "requirements_hash=${REQUIREMENTS_HASH}" >> $GITHUB_OUTPUT
             echo "📋 Hash de requirements.txt (fallback): ${REQUIREMENTS_HASH:0:12}..."
@@ -170,7 +152,23 @@ jobs:
             echo "requirements_hash=missing" >> $GITHUB_OUTPUT
           fi
 
+      - name: Prepare backend image tags
+        id: backend_tags
+        run: |
+          set -euo pipefail
+          TAGS="${DOCKER_IMAGE}:${DOCKER_TAG}"
+          if [ -n "${{ steps.meta.outputs.additional_tag }}" ]; then
+            TAGS="${TAGS}
+          ${DOCKER_IMAGE}:${{ steps.meta.outputs.additional_tag }}"
+          fi
+          {
+            echo "tags<<EOF"
+            echo "${TAGS}"
+            echo "EOF"
+          } >> "${GITHUB_OUTPUT}"
+
       - name: Build & push backend image
+        id: build_backend
         uses: docker/build-push-action@v7
         with:
           context: ./backend
@@ -181,7 +179,10 @@ jobs:
             RL_ENABLED=false
             REQUIREMENTS_HASH=${{ steps.requirements_hash.outputs.requirements_hash }}
           push: true
-          tags: ${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }}
+          tags: ${{ steps.backend_tags.outputs.tags }}
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           no-cache: ${{ github.event.inputs.no_cache == 'true' }}
@@ -199,13 +200,33 @@ jobs:
           echo "name=${WS}" >> "$GITHUB_OUTPUT"
           echo "📦 WS_SERVICE_IMAGE dérivé pour push CI"
 
+      - name: Prepare ws-service image tags
+        id: ws_tags
+        run: |
+          set -euo pipefail
+          WS="${{ steps.ws_service_image.outputs.name }}"
+          TAGS="${WS}:${DOCKER_TAG}"
+          if [ -n "${{ steps.meta.outputs.additional_tag }}" ]; then
+            TAGS="${TAGS}
+          ${WS}:${{ steps.meta.outputs.additional_tag }}"
+          fi
+          {
+            echo "tags<<EOF"
+            echo "${TAGS}"
+            echo "EOF"
+          } >> "${GITHUB_OUTPUT}"
+
       - name: Build & push ws-service image
+        id: build_ws
         uses: docker/build-push-action@v7
         with:
           context: ./services/ws-service
           file: ./services/ws-service/Dockerfile
           push: true
-          tags: ${{ steps.ws_service_image.outputs.name }}:${{ env.DOCKER_TAG }}
+          tags: ${{ steps.ws_tags.outputs.tags }}
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           no-cache: ${{ github.event.inputs.no_cache == 'true' }}
@@ -231,7 +252,6 @@ jobs:
           IMAGE_TAG="${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }}"
           echo "Image attendue: ${IMAGE_TAG}"
 
-          # Vérifier que l'image existe sur Docker Hub (avec retry)
           for i in {1..5}; do
             if docker manifest inspect "${IMAGE_TAG}" > /dev/null 2>&1; then
               echo "✅ Image ${IMAGE_TAG} trouvée sur Docker Hub"
@@ -251,9 +271,28 @@ jobs:
             echo "ℹ️  Déploiement ignoré (skip_deploy=true), mais l'image n'a pas été trouvée"
           fi
 
+      - name: Publish Kafka P0 handoff summary
+        run: |
+          set -euo pipefail
+          BACKEND_DIGEST="${{ steps.build_backend.outputs.digest }}"
+          {
+            echo "## Déploiement Kafka P0"
+            echo
+            echo "- Source SHA: \`${GITHUB_SHA}\`"
+            echo "- Backend tag: \`${DOCKER_TAG}\`"
+            echo "- Backend digest: \`${BACKEND_DIGEST}\`"
+            echo
+            echo "Inputs workflow Deploy Kafka P0 :"
+            echo "- \`source_sha\` = \`${GITHUB_SHA}\`"
+            echo "- \`image_digest\` = \`${BACKEND_DIGEST}\`"
+          } >> "${GITHUB_STEP_SUMMARY}"
+          echo "SOURCE_SHA=${GITHUB_SHA}"
+          echo "BACKEND_IMAGE_DIGEST=${BACKEND_DIGEST}"
+          echo "DOCKER_TAG=${DOCKER_TAG}"
+
       - name: Scan image with Trivy
         uses: aquasecurity/trivy-action@0.35.0
-        continue-on-error: true  # INTERNAL_ERROR intermittent sur certaines couches Docker
+        continue-on-error: true
         with:
           image-ref: ${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }}
           format: sarif
@@ -261,7 +300,7 @@ jobs:
           ignore-unfixed: true
           vuln-type: os,library
           severity: CRITICAL,HIGH
-          scanners: vuln  # Désactiver secret scan (évite INTERNAL_ERROR sur extraction couches)
+          scanners: vuln
 
       - name: Upload Trivy results to GitHub Security
         if: false
@@ -272,16 +311,14 @@ jobs:
   deploy:
     name: Deploy Production Environment
     needs: build-and-push
-    # Déployer SEULEMENT si skip_deploy=false ET que le push a RÉUSSI
-    # ⚠️ IMPORTANT: Ne pas déployer si le push a échoué (l'image n'est pas sur Docker Hub)
     if: |
       github.event.inputs.skip_deploy != 'true' &&
       needs.build-and-push.outputs.push_success == 'true'
     runs-on: ubuntu-latest
+    environment: production
     env:
       DOCKER_IMAGE: ${{ secrets.DOCKER_IMAGE }}
-      # TEMPORARY: Force tag v5 to match build job
-      DOCKER_TAG: ${{ github.event.inputs.tag != '' && github.event.inputs.tag || 'v5' }}
+      DOCKER_TAG: ${{ needs.build-and-push.outputs.docker_tag }}
       SSH_HOST: ${{ secrets.SSH_HOST }}
       SSH_USER: ${{ secrets.SSH_USER }}
       SSH_PORT: ${{ secrets.SSH_PORT }}
@@ -297,41 +334,27 @@ jobs:
       SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
       PDF_BASE_URL: ${{ secrets.PDF_BASE_URL }}
       GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
-      # ✅ D2: Clé d'encryption maître pour chiffrement IBAN et données sensibles
       MASTER_ENCRYPTION_KEY: ${{ secrets.MASTER_ENCRYPTION_KEY }}
-      # ✅ Secrets Monitoring (Grafana + Alertmanager)
       GRAFANA_ADMIN_USER: ${{ secrets.GRAFANA_ADMIN_USER }}
       GRAFANA_ADMIN_PASSWORD: ${{ secrets.GRAFANA_ADMIN_PASSWORD }}
       GRAFANA_ROOT_URL: ${{ secrets.GRAFANA_ROOT_URL }}
-      # ✅ OAuth Google - DÉSACTIVÉ pour le moment (utilisateur unique)
-      # Pour activer plus tard, décommenter et ajouter les secrets GitHub :
-      # GRAFANA_OAUTH_GOOGLE_ENABLED: ${{ secrets.GRAFANA_OAUTH_GOOGLE_ENABLED }}
-      # GRAFANA_OAUTH_GOOGLE_CLIENT_ID: ${{ secrets.GRAFANA_OAUTH_GOOGLE_CLIENT_ID }}
-      # GRAFANA_OAUTH_GOOGLE_CLIENT_SECRET: ${{ secrets.GRAFANA_OAUTH_GOOGLE_CLIENT_SECRET }}
-      # GRAFANA_OAUTH_GOOGLE_ALLOWED_DOMAINS: ${{ secrets.GRAFANA_OAUTH_GOOGLE_ALLOWED_DOMAINS }}
       SMTP_HOST: ${{ secrets.SMTP_HOST }}
       SMTP_PORT: ${{ secrets.SMTP_PORT }}
       SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
       SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
       ALERTMANAGER_FROM_EMAIL: ${{ secrets.ALERTMANAGER_FROM_EMAIL }}
       ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
-      # ✅ S1: CORS - Origines autorisées pour production (requis)
       SOCKETIO_CORS_ORIGINS: ${{ secrets.SOCKETIO_CORS_ORIGINS }}
-      # ✅ Email Brevo - Clé API pour envoi d'emails transactionnels
       BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
-      # SMS activation (Twilio) — optionnel ; surcharge possible via .env.production.local sur le serveur
       SMS_NOTIFICATIONS_ENABLED: ${{ secrets.SMS_NOTIFICATIONS_ENABLED }}
       TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
       TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
       TWILIO_PHONE_NUMBER: ${{ secrets.TWILIO_PHONE_NUMBER }}
-      # ✅ Configuration environnement
       POSTGRES_HOST: ${{ secrets.POSTGRES_HOST }}
       FLASK_ENV: ${{ secrets.FLASK_ENV }}
       FLASK_CONFIG: ${{ secrets.FLASK_CONFIG }}
       ENVIRONMENT: ${{ secrets.ENVIRONMENT }}
-      # Firebase Cloud Messaging
       FIREBASE_SERVICE_ACCOUNT_B64: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_B64 }}
-      # F-01 : token interne ws-service → backend (ingestion GPS)
       INTERNAL_SERVICE_TOKEN: ${{ secrets.INTERNAL_SERVICE_TOKEN }}
       INTERNAL_SERVICE_TOKEN_NEXT: ${{ secrets.INTERNAL_SERVICE_TOKEN_NEXT }}
 
@@ -382,36 +405,12 @@ jobs:
       - name: Verify image exists on Docker Hub
         run: |
           echo "🔍 Vérification que l'image existe sur Docker Hub..."
-
-          # Construire IMAGE_TAG à partir des variables d'environnement
-          # (évite le warning GitHub Actions sur les outputs contenant des secrets)
           IMAGE_TAG="${DOCKER_IMAGE}:${DOCKER_TAG}"
-
-          # Valider que DOCKER_IMAGE et DOCKER_TAG ne sont pas vides
-          if [ -z "${DOCKER_IMAGE}" ]; then
-            echo "❌ Erreur: DOCKER_IMAGE est vide"
-            echo "💡 Vérifiez que le secret DOCKER_IMAGE est défini dans GitHub Secrets"
+          if [ -z "${DOCKER_IMAGE}" ] || [ -z "${DOCKER_TAG}" ]; then
+            echo "❌ DOCKER_IMAGE ou DOCKER_TAG vide"
             exit 1
           fi
-
-          if [ -z "${DOCKER_TAG}" ]; then
-            echo "❌ Erreur: DOCKER_TAG est vide"
-            echo "💡 Vérifiez que le secret DOCKER_TAG est défini dans GitHub Secrets"
-            echo "💡 Ou fournissez un tag via l'input 'tag' lors du déclenchement manuel"
-            exit 1
-          fi
-
-          # Valider que image_tag n'est pas vide ou invalide
-          if [ -z "${IMAGE_TAG}" ] || [ "${IMAGE_TAG}" = ":" ]; then
-            echo "❌ Erreur: image_tag est vide ou invalide (${IMAGE_TAG})"
-            echo "💡 DOCKER_IMAGE: ${DOCKER_IMAGE}"
-            echo "💡 DOCKER_TAG: ${DOCKER_TAG}"
-            exit 1
-          fi
-
           echo "Image attendue: ${IMAGE_TAG}"
-
-          # Vérifier que l'image existe sur Docker Hub (avec retry)
           for i in {1..5}; do
             if docker manifest inspect "${IMAGE_TAG}" > /dev/null 2>&1; then
               echo "✅ Image ${IMAGE_TAG} trouvée sur Docker Hub"
@@ -420,22 +419,21 @@ jobs:
             echo "  Tentative $i/5: Image non trouvée, attente 5 secondes..."
             sleep 5
           done
-
           echo "❌ L'image ${IMAGE_TAG} n'a pas été trouvée sur Docker Hub"
           exit 1
 
       - name: Copy compose files to server
-        uses: appleboy/scp-action@master
+        uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ env.SSH_HOST }}
           username: ${{ env.SSH_USER }}
           key: ${{ env.SSH_KEY }}
           port: ${{ env.SSH_PORT }}
-          source: "docker-compose.production.yml,docker-compose.monitoring.yml,docker-compose.kafka.yml,docker-compose.kafka.atmr-network.yml"
+          source: "docker-compose.production.yml,docker-compose.monitoring.yml,docker-compose.kafka.yml,docker-compose.kafka.atmr-network.yml,docker-compose.kafka.p0-hold.yml"
           target: "/srv/atmr"
 
       - name: Copy monitoring directory to server
-        uses: appleboy/scp-action@master
+        uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ env.SSH_HOST }}
           username: ${{ env.SSH_USER }}
@@ -446,13 +444,13 @@ jobs:
           strip_components: 0
 
       - name: Copy deployment scripts to server
-        uses: appleboy/scp-action@master
+        uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ env.SSH_HOST }}
           username: ${{ env.SSH_USER }}
           key: ${{ env.SSH_KEY }}
           port: ${{ env.SSH_PORT }}
-          source: "scripts/smoke_tests.sh,scripts/deploy-production.sh,scripts/env.production.defaults.fragment,scripts/lib/kafka_checks.sh,scripts/lib/kafka_topics_init.sh,scripts/deploy-kafka-production.sh,scripts/kafka-init-topics.sh,scripts/ops/validate-prod-correction.sh,scripts/ops/apply-redis-sysctl.sh"
+          source: "scripts/smoke_tests.sh,scripts/deploy-production.sh,scripts/env.production.defaults.fragment,scripts/lib/kafka_checks.sh,scripts/lib/kafka_topics_init.sh,scripts/deploy-kafka-production.sh,scripts/kafka-init-topics.sh,scripts/ops/validate-prod-correction.sh,scripts/ops/apply-redis-sysctl.sh,scripts/ops-tracking-p0-recreate-ingest.sh,scripts/kafka-env-effective.sh,scripts/check-kafka-production.sh"
           target: "/srv/atmr/"
 
       - name: Decode Firebase service account locally
@@ -469,7 +467,7 @@ jobs:
 
       - name: Copy Firebase service account to server
         if: env.FIREBASE_SERVICE_ACCOUNT_B64 != ''
-        uses: appleboy/scp-action@master
+        uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ env.SSH_HOST }}
           username: ${{ env.SSH_USER }}
@@ -480,20 +478,18 @@ jobs:
 
       - name: Set Firebase file permissions
         if: env.FIREBASE_SERVICE_ACCOUNT_B64 != ''
-        uses: appleboy/ssh-action@master
+        uses: appleboy/ssh-action@v1.2.2
         with:
           host: ${{ env.SSH_HOST }}
           username: ${{ env.SSH_USER }}
           key: ${{ env.SSH_KEY }}
           port: ${{ env.SSH_PORT }}
           script: |
-            # Le backend tourne avec un user non-root dans le conteneur:
-            # le fichier doit être lisible via bind mount.
             chmod 644 /srv/atmr/firebase-service-account.json
             echo "✅ Firebase service account permissions set"
 
       - name: Deploy via SSH
-        uses: appleboy/ssh-action@master
+        uses: appleboy/ssh-action@v1.2.2
         with:
           host: ${{ env.SSH_HOST }}
           username: ${{ env.SSH_USER }}
@@ -502,6 +498,8 @@ jobs:
           script: |
             chmod +x /srv/atmr/scripts/deploy-production.sh
             chmod +x /srv/atmr/scripts/smoke_tests.sh
+            chmod +x /srv/atmr/scripts/ops-tracking-p0-recreate-ingest.sh || true
+            chmod +x /srv/atmr/scripts/kafka-env-effective.sh || true
             /srv/atmr/scripts/deploy-production.sh \
               "${{ secrets.APP_ENCRYPTION_KEY_B64 }}" \
               "${{ secrets.SECRET_KEY }}" \

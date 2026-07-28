@@ -21,9 +21,11 @@ usage() {
 Usage: $(basename "$0") <mode>
 
 Modes :
-  off            Vérifie Kafka OFF : 4 flags≠true + aucun consumer actif + backend healthy.
-  on             Vérifie Kafka ON  : 4 flags=true + preflight + brokers + DNS + API + topics + consumers.
-  preflight-on   Uniquement pré-requis avant deploy-kafka-production.sh (flags + fichiers + réseau + compose).
+  off              Vérifie Kafka OFF : 4 flags≠true + aucun consumer actif + backend healthy.
+  on               Vérifie Kafka ON  : 4 flags=true + preflight + brokers + DNS + API + topics + consumers.
+  preflight-on     Pré-requis complets avant un deploy consumers (flags + fichiers + réseau + compose).
+  preflight-infra  Pré-requis infra HOLD (fichiers + réseau + compose + RF) — sans flags consumers GPS.
+  infra            Post-deploy infra HOLD (brokers + DNS + API + topics) — sans consumers GPS.
 
 Variables :
   ATMR_DEPLOY_ROOT, ATMR_ENV_FILE (défaut : .env.production à la racine du déploiement)
@@ -67,6 +69,22 @@ case "${MODE}" in
     kafka_check_compose_files || GLOBAL_OK=0
     kafka_check_atmr_network || GLOBAL_OK=0
     kafka_check_compose_resolution || GLOBAL_OK=0
+    ;;
+  preflight-infra)
+    echo "=== check-kafka-production.sh : mode preflight-infra ==="
+    kafka_check_compose_files || GLOBAL_OK=0
+    kafka_check_atmr_network || GLOBAL_OK=0
+    kafka_check_compose_resolution || GLOBAL_OK=0
+    kafka_check_replication_factors || GLOBAL_OK=0
+    ;;
+  infra)
+    echo "=== check-kafka-production.sh : mode infra ==="
+    kafka_check_compose_files || GLOBAL_OK=0
+    kafka_check_atmr_network || GLOBAL_OK=0
+    kafka_wait_brokers_healthy 30 || GLOBAL_OK=0
+    kafka_check_dns_from_atmr_network || GLOBAL_OK=0
+    kafka_check_broker_api || GLOBAL_OK=0
+    kafka_check_topics_exist || GLOBAL_OK=0
     ;;
   *)
     echo "Mode inconnu : ${MODE}" >&2

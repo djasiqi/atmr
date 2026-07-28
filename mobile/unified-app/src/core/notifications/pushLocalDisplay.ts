@@ -57,6 +57,8 @@ function parseMissionId(payload: Record<string, unknown>): number | null {
 
 export function buildStableDedupeKey(payload: Record<string, unknown>): string {
   const explicit =
+    (typeof payload.deduplication_key === "string" && payload.deduplication_key) ||
+    (typeof payload.deduplicationKey === "string" && payload.deduplicationKey) ||
     (typeof payload.dedupe_key === "string" && payload.dedupe_key) ||
     (typeof payload.dedupeKey === "string" && payload.dedupeKey) ||
     null;

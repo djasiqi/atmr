@@ -247,6 +247,9 @@ export async function sendDriverLocation(payload: DriverLocationPayload): Promis
       timestamp: payload.timestamp ?? new Date().toISOString(),
       location_mode: payload.locationMode ?? "availability_presence",
       tracking_event_id: payload.trackingEventId ?? null,
+      tracking_session_id: payload.trackingSessionId ?? null,
+      session_generation: payload.sessionGeneration ?? null,
+      sequence_id: payload.sequenceId ?? null,
     }, {
       headers: {
         "X-Allow-Offline-Attempt": "1",

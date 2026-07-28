@@ -12,8 +12,13 @@ import {
   FiSend,
 } from 'react-icons/fi';
 import styles from './InvoiceRowActions.module.css';
-import { ensurePdfUrlWorksInDev, buildInvoicePdfApiUrl, buildReminderPdfApiUrl } from '../../../../../utils/pdfUrlFallback';
-import apiClient from '../../../../../utils/apiClient';
+import {
+  buildInvoicePdfApiUrl,
+  buildReminderPdfApiUrl,
+  ensurePdfUrlWorksInDev,
+} from '../../../../../utils/pdfUrlFallback';
+import { openProtectedPdfInNewTab } from '../../../../../utils/protectedPdf';
+import { buildInvoicePdfDownloadFilename } from '../../../../../utils/invoicePdfFilename';
 import {
   canSendInvoice,
   canAddPayment,
@@ -97,25 +102,17 @@ const InvoiceRowActions = ({
       ? `Voir ${getReminderLabel(invoice.reminder_level)} (PDF)`
       : 'Voir rappel (PDF)';
 
-  const openProtectedPdf = async (apiUrl, fallbackUrl) => {
-    // Routes API protégées : chemin relatif à apiClient.baseURL (/api/v1)
+  const openProtectedPdf = async (apiUrl, fallbackUrl, filename) => {
+    // Routes API protégées (Lot 0 SEC-06) : blob via JWT — plus de /uploads/invoices publics
     if (apiUrl) {
-      try {
-        const response = await apiClient.get(apiUrl, { responseType: 'blob' });
-        const blobUrl = URL.createObjectURL(response.data);
-        window.open(blobUrl, '_blank');
-        return;
-      } catch (err) {
-        console.error('Ouverture PDF protégé échouée:', err);
-        return;
-      }
+      await openProtectedPdfInNewTab(apiUrl, null, { filename });
+      return;
     }
-    const target = fallbackUrl ? ensurePdfUrlWorksInDev(fallbackUrl) : null;
-    if (!target) return;
+    if (!fallbackUrl) return;
     if (typeof onViewPdf === 'function') {
-      onViewPdf(target);
+      onViewPdf(ensurePdfUrlWorksInDev(fallbackUrl));
     } else {
-      window.open(target, '_blank');
+      await openProtectedPdfInNewTab(null, fallbackUrl, { filename });
     }
   };
 
@@ -136,7 +133,11 @@ const InvoiceRowActions = ({
       label: 'Voir facture initiale',
       icon: <FiFileText size={14} />,
       onClick: () =>
-        openProtectedPdf(buildInvoicePdfApiUrl(invoice), invoice.pdf_url),
+        openProtectedPdf(
+          buildInvoicePdfApiUrl(invoice),
+          invoice.pdf_url,
+          buildInvoicePdfDownloadFilename(invoice)
+        ),
       className: styles.actionBtnSecondary,
       show: !!invoice.pdf_url,
     },

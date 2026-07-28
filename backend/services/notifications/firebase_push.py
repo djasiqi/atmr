@@ -114,8 +114,19 @@ def _send_with_retry(msg: Any, *, platform: str) -> dict[str, Any]:
             record_fcm_non_retryable_failure()
             return {"ok": False, "error": "token_unregistered", "token_invalid": True}
         except messaging.SenderIdMismatchError:
+            # configuration_error : ne PAS marquer token_invalid (évite désactivation)
             record_fcm_non_retryable_failure()
-            return {"ok": False, "error": "sender_id_mismatch", "token_invalid": True}
+            app_logger.error(
+                "[fcm] %s configuration_error=sender_id_mismatch "
+                "(token non désactivé — vérifier projet Firebase / credentials)",
+                platform,
+            )
+            return {
+                "ok": False,
+                "error": "sender_id_mismatch",
+                "configuration_error": True,
+                "token_invalid": False,
+            }
         except Exception as e:
             last_exception = e
             retryable = _is_retryable_fcm_exception(e)
@@ -133,7 +144,10 @@ def _send_with_retry(msg: Any, *, platform: str) -> dict[str, Any]:
                     FCM_RETRY_MAX_ATTEMPTS,
                     type(e).__name__,
                 )
-                break
+                exhausted = _fcm_generic_error_result(e)
+                exhausted["retry_exhausted"] = True
+                exhausted["retryable"] = True
+                return exhausted
 
             delay_seconds = (FCM_RETRY_BASE_DELAY_MS / 1000.0) * (2**attempt)
             jitter = random.uniform(0.0, delay_seconds * 0.2)
@@ -149,9 +163,11 @@ def _send_with_retry(msg: Any, *, platform: str) -> dict[str, Any]:
             time.sleep(sleep_seconds)
 
     if last_exception is not None:
-        return _fcm_generic_error_result(last_exception)
-    return {"ok": False, "error": "fcm_send_error"}
-
+        exhausted = _fcm_generic_error_result(last_exception)
+        exhausted["retry_exhausted"] = True
+        exhausted["retryable"] = True
+        return exhausted
+    return {"ok": False, "error": "fcm_send_error", "retry_exhausted": True}
 
 def _init_firebase() -> bool:
     """Lazy-init Firebase Admin SDK.

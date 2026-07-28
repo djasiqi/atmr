@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Démarre la stack Kafka et les consumers ATMR profile « kafka » sur atmr-network.
-# Voir docs/ops/kafka-optimization-lirie.md pour Phase 1 / Phase 2.
+# Déploie l’infra Kafka (brokers / ZK / redis-failover / topics) sur atmr-network.
+# Pendant le HOLD GPS : ne recrée PAS les consumers tracking / fanout / DLQ
+# (autorité exclusive : scripts/ops-tracking-p0-recreate-ingest.sh + workflow deploy-kafka-p0).
+# Voir docs/ops/kafka-optimization-lirie.md.
 #
 # Usage :
 #   INIT_TOPICS=1 scripts/deploy-kafka-production.sh
@@ -45,22 +47,11 @@ done < <(kafka_discover_zookeeper_services)
 
 KAFKA_INFRA_SERVICES=("${KAFKA_ZK_SERVICES[@]}" "${KAFKA_BROKER_SERVICES[@]}" redis-failover)
 
-KAFKA_CONSUMER_AND_UI_SERVICES=(
-  tracking-kafka-consumer
-  tracking-processed-fanout
-  kafka-dlq-consumer
-)
+echo "=== Kafka deploy INFRA : ${ROOT} (env=${ENV_FILE}, compose=${KAFKA_COMPOSE_FILE}) ==="
+echo "NOTE : consumers GPS non gérés ici (HOLD → deploy-kafka-p0 / ops-tracking-p0-recreate-ingest.sh)."
 
-if [[ "${KAFKA_UI_ENABLED:-0}" == "1" ]]; then
-  KAFKA_CONSUMER_AND_UI_SERVICES+=(kafka-ui)
-fi
-
-echo "=== Kafka deploy : ${ROOT} (env=${ENV_FILE}, compose=${KAFKA_COMPOSE_FILE}) ==="
-
-echo "--- Phase 1/5 : preflight Kafka ON ---"
+echo "--- Phase 1/5 : preflight infra ---"
 PREFLIGHT_OK=1
-kafka_check_flags_all_true || PREFLIGHT_OK=0
-kafka_check_tracking_persist_coherence || PREFLIGHT_OK=0
 kafka_check_compose_files || PREFLIGHT_OK=0
 kafka_check_atmr_network || PREFLIGHT_OK=0
 kafka_check_compose_resolution || PREFLIGHT_OK=0
@@ -69,9 +60,9 @@ kafka_check_replication_factors || PREFLIGHT_OK=0
 if ((PREFLIGHT_OK == 0)); then
   if [[ "${FORCE:-0}" == "1" ]]; then
     log_force_override
-    echo "[WARN] preflight KO mais FORCE=1 — poursuite (bootstrap initial uniquement)." >&2
+    echo "[WARN] preflight infra KO mais FORCE=1 — poursuite (bootstrap initial uniquement)." >&2
   else
-    echo "Refus : preflight Kafka ON KO. Corriger ${ENV_FILE} ou FORCE=1 (exceptionnel)." >&2
+    echo "Refus : preflight Kafka infra KO. Corriger ${ENV_FILE} ou FORCE=1 (exceptionnel)." >&2
     exit 2
   fi
 fi
@@ -89,7 +80,7 @@ fi
 if [[ "${INIT_TOPICS:-0}" == "1" ]]; then
   echo "--- Phase 4/5 : init topics ---"
   if ! ATMR_DEPLOY_ROOT="${ROOT}" KAFKA_COMPOSE_FILE="${KAFKA_COMPOSE_FILE}" "${SCRIPT_DIR}/kafka-init-topics-compose.sh"; then
-    echo "FAIL : init topics — abandon avant up consumers." >&2
+    echo "FAIL : init topics — abandon." >&2
     kafka_summary
     exit 3
   fi
@@ -97,27 +88,27 @@ else
   echo "--- Phase 4/5 : init topics (skip — INIT_TOPICS!=1) ---"
 fi
 
-echo "--- Phase 5a/5 : up consumers (profile kafka, force-recreate env) ---"
+echo "--- Phase 5a/5 : kafka-ui (optionnel) — pas de recreate consumers GPS ---"
 if [[ "${KAFKA_UI_ENABLED:-0}" == "1" ]]; then
-  kafka_docker_compose --profile kafka-ui up -d --force-recreate "${KAFKA_CONSUMER_AND_UI_SERVICES[@]}"
+  kafka_docker_compose --profile kafka-ui up -d --force-recreate kafka-ui
 else
-  kafka_docker_compose up -d --force-recreate "${KAFKA_CONSUMER_AND_UI_SERVICES[@]}"
+  echo "kafka-ui skip (KAFKA_UI_ENABLED!=1)"
 fi
 
-echo "--- Phase 5b/5 : validations post-deploy ---"
+echo "--- Phase 5b/5 : validations post-deploy infra ---"
 POST_OK=1
 kafka_check_dns_from_atmr_network || POST_OK=0
 kafka_check_broker_api || POST_OK=0
 kafka_check_topics_exist || POST_OK=0
-kafka_check_consumers_running || POST_OK=0
 kafka_check_functional_smoke || POST_OK=0
 
 kafka_summary
 
 if ((POST_OK == 0)); then
-  echo "FAIL post-deploy : au moins un check a échoué (voir résumé)." >&2
+  echo "FAIL post-deploy infra : au moins un check a échoué (voir résumé)." >&2
   exit 3
 fi
 
-echo "OK Kafka déployé et validé de bout en bout."
-echo "Vérifier avec : scripts/check-kafka-production.sh on"
+echo "OK Kafka infra déployée et validée."
+echo "Vérifier avec : scripts/check-kafka-production.sh infra"
+echo "Consumers GPS : workflow Deploy Kafka P0 / scripts/ops-tracking-p0-recreate-ingest.sh"

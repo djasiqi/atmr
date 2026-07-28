@@ -1352,7 +1352,57 @@ def list_change_events(
             | (BookingChangeEvent.institution_id.is_(None))
         )
     rows = q.order_by(BookingChangeEvent.created_at.desc()).limit(limit).all()
-    return [r.serialize() for r in rows]
+    return _serialize_change_events_with_actor_names(rows)
+
+
+def _serialize_change_events_with_actor_names(
+    rows: list[BookingChangeEvent],
+) -> list[dict[str, Any]]:
+    """Sérialise les change-events en enrichissant les libellés « User #id »."""
+    from shared.user_display import (
+        format_user_actor_display_name,
+        is_placeholder_actor_display_name,
+    )
+
+    need_ids = sorted(
+        {
+            int(ev.actor_user_id)
+            for ev in rows
+            if ev.actor_user_id
+            and is_placeholder_actor_display_name(ev.actor_display_name)
+        }
+    )
+    users_by_id: dict[int, Any] = {}
+    if need_ids:
+        try:
+            from models.user import User
+
+            users_by_id = {
+                int(u.id): u for u in User.query.filter(User.id.in_(need_ids)).all()
+            }
+        except Exception as enrich_err:
+            logger.warning(
+                "[BookingChange] Enrichissement noms acteurs échoué: %s",
+                enrich_err,
+            )
+
+    result: list[dict[str, Any]] = []
+    for ev in rows:
+        data = ev.serialize()
+        if ev.actor_user_id and is_placeholder_actor_display_name(
+            data.get("actor_display_name")
+        ):
+            uid = int(ev.actor_user_id)
+            resolved = format_user_actor_display_name(
+                user_id=uid,
+                user=users_by_id.get(uid),
+                fallback=data.get("actor_display_name"),
+                allow_db_lookup=False,
+            )
+            if resolved:
+                data["actor_display_name"] = resolved
+        result.append(data)
+    return result
 
 
 def get_pending_change_request_view(booking: Any) -> dict[str, Any] | None:

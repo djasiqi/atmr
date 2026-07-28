@@ -1002,6 +1002,19 @@ def deactivate_stale_device_tokens_task() -> dict[str, int]:
         return {"deactivated": deactivated}
 
 
+@celery.task(name="notifications.fetch_expo_push_receipts")
+def fetch_expo_push_receipts_task() -> dict:
+    """Récupère les receipts Expo et met à jour delivery_status / invalidation."""
+    from celery_app import get_flask_app
+    from services.notifications.expo_receipts import apply_expo_receipts
+
+    app = get_flask_app()
+    with app.app_context():
+        result = apply_expo_receipts()
+        logger.info("[notification_task] fetch_expo_push_receipts %s", result)
+        return result
+
+
 @celery.task(name="notifications.refresh_push_coverage_gauges")
 def refresh_push_coverage_gauges_task() -> dict[str, str]:
     """Rafraîchit les gauges couverture push (filet horaire)."""

@@ -112,6 +112,16 @@ def _apply_token_update_to_row(
             driver_id=driver_id,
             keep_row_id=row.id,
         )
+    if (
+        driver_id is not None
+        and provider == "fcm"
+        and (platform or "").lower() == "ios"
+    ):
+        _deactivate_ios_expo_same_installation(
+            driver_id=driver_id,
+            device_id=device_id or getattr(row, "device_id", None),
+            keep_row_id=row.id,
+        )
     return row
 
 
@@ -204,6 +214,42 @@ def _deactivate_android_expo_legacy_for_driver(
             "[push-token] Désactivation %s token(s) Expo Android legacy driver_id=%s (FCM actif)",
             count,
             driver_id,
+        )
+    return count
+
+
+def _deactivate_ios_expo_same_installation(
+    *,
+    driver_id: int,
+    device_id: str | None,
+    keep_row_id: int | None,
+) -> int:
+    """Phase C (flag) : désactive Expo iOS pour la même installation uniquement."""
+    from services.notifications.ios_push_flags import ios_disable_expo_on_fcm_upsert
+
+    if not ios_disable_expo_on_fcm_upsert():
+        return 0
+    device_id_str = str(device_id).strip() if device_id else None
+    if not device_id_str:
+        return 0
+    q = DeviceToken.query.filter(
+        DeviceToken.driver_id == driver_id,
+        DeviceToken.provider == "expo",
+        DeviceToken.platform == "ios",
+        DeviceToken.device_id == device_id_str,
+        DeviceToken.is_active.is_(True),
+    )
+    if keep_row_id is not None:
+        q = q.filter(DeviceToken.id != keep_row_id)
+    count = q.update({"is_active": False}, synchronize_session=False)
+    count = int(count or 0)
+    if count > 0:
+        app_logger.info(
+            "[push-token] Phase C: désactivation %s Expo iOS même installation "
+            "driver_id=%s device_id=%s",
+            count,
+            driver_id,
+            device_id_str,
         )
     return count
 
@@ -370,6 +416,16 @@ def upsert_device_token(
         )
         _deactivate_android_expo_legacy_for_driver(
             driver_id=driver_id,
+            keep_row_id=row.id,
+        )
+    if (
+        driver_id is not None
+        and resolved_provider == "fcm"
+        and (platform or "").lower() == "ios"
+    ):
+        _deactivate_ios_expo_same_installation(
+            driver_id=driver_id,
+            device_id=row.device_id,
             keep_row_id=row.id,
         )
     return row

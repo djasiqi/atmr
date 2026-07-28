@@ -203,23 +203,18 @@ class TimelineActor:
 
 
 def resolve_actor_name(user_id: int | None) -> str | None:
-    """Résout le nom affichable (prénom nom) d'un utilisateur acteur.
+    """Résout le nom affichable d'un utilisateur acteur.
 
-    Utilisé pour rendre l'historique traçable (« Parcours modifié — Drin Jasiqi »).
-    Retourne ``None`` si l'utilisateur est introuvable ou sans nom.
+    Utilisé pour rendre l'historique traçable
+    (« Parcours modifié — Drin Jasiqi », ou username + User #id en repli).
+    Retourne ``None`` si l'utilisateur est introuvable.
     """
     if not user_id:
         return None
     try:
-        from models.user import User
+        from shared.user_display import format_user_actor_display_name
 
-        user = User.query.get(user_id)
-        if not user:
-            return None
-        name = getattr(user, "full_name", None)
-        if name:
-            name = name.strip()
-        return name or None
+        return format_user_actor_display_name(user_id=user_id)
     except Exception as resolve_err:  # pragma: no cover - défensif
         logger.warning("[TransportTimeline] resolve_actor_name échec: %s", resolve_err)
         return None

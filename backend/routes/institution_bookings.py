@@ -179,19 +179,10 @@ def get_institution_booking_context() -> tuple[int, int | None, str | None, str 
 
 
 def _actor_display_name(user_id: int | None, fallback: str | None) -> str | None:
-    if fallback:
-        return str(fallback)
-    if not user_id:
-        return None
-    try:
-        from models import User
+    """Nom acteur pour l'audit : prénom/nom, sinon username (User #id)."""
+    from shared.user_display import format_user_actor_display_name
 
-        user = User.query.get(user_id)
-        if user:
-            return user.full_name or user.email or f"User #{user_id}"
-    except Exception:
-        pass
-    return f"User #{user_id}"
+    return format_user_actor_display_name(user_id=user_id, fallback=fallback)
 
 
 @institution_bookings_ns.route("/<int:booking_id>")

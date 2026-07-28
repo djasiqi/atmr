@@ -7,6 +7,7 @@ Module séparé pour éviter les cycles d'import avec notification_service et so
 from __future__ import annotations
 
 import hashlib
+import os
 import time
 import uuid
 from typing import Any, Dict, cast
@@ -36,10 +37,31 @@ except ImportError:
         """No-op si Prometheus non disponible."""
 
 
-# Configuration retry
-MAX_RETRY_ATTEMPTS = 5
-INITIAL_RETRY_DELAY = 1  # secondes
-MAX_RETRY_DELAY = 8  # secondes
+# Configuration retry (politique Phase A — délais configurables)
+# Défaut plan : tentative 1 immédiate, puis +30s, +2min, +10min (max 4)
+# Override: PUSH_RETRY_DELAYS_SEC=0,30,120,600
+_DEFAULT_RETRY_DELAYS = (0.0, 30.0, 120.0, 600.0)
+
+
+def _parse_retry_delays() -> tuple[float, ...]:
+    raw = os.getenv("PUSH_RETRY_DELAYS_SEC", "").strip()
+    if not raw:
+        return _DEFAULT_RETRY_DELAYS
+    parts: list[float] = []
+    for p in raw.split(","):
+        p = p.strip()
+        if not p:
+            continue
+        parts.append(float(p))
+    return tuple(parts) if parts else _DEFAULT_RETRY_DELAYS
+
+
+PUSH_RETRY_DELAYS_SEC = _parse_retry_delays()
+MAX_RETRY_ATTEMPTS = len(PUSH_RETRY_DELAYS_SEC)
+INITIAL_RETRY_DELAY = PUSH_RETRY_DELAYS_SEC[1] if len(PUSH_RETRY_DELAYS_SEC) > 1 else 30.0
+MAX_RETRY_DELAY = PUSH_RETRY_DELAYS_SEC[-1] if PUSH_RETRY_DELAYS_SEC else 600.0
+PUSH_RETRY_MAX_WALL_CLOCK_SEC = float(os.getenv("PUSH_RETRY_MAX_WALL_CLOCK_SEC", "900"))
+PUSH_RETRY_JITTER_RATIO = float(os.getenv("PUSH_RETRY_JITTER_RATIO", "0.2"))
 TOKEN_DISPLAY_LENGTH = 20  # Longueur du token à afficher dans les logs
 TOKEN_MASK_LENGTH = 10  # Longueur du token à garder pour masquage
 BODY_PREVIEW_LENGTH = 100  # Longueur du body à afficher dans les logs
@@ -254,9 +276,75 @@ def _log_fcm_pipeline_result(
             correlation_id=correlation_id or payload.get("correlation_id"),
             error=result.get("error"),
             token_invalid=bool(result.get("token_invalid")),
+            # Clarifie : fcm_sent = provider_accepted, pas livraison device
+            delivery_status=(
+                "provider_accepted" if result.get("ok") else result.get("delivery_status")
+            ),
         )
     except Exception:
         pass
+
+
+def _enrich_and_log_push_result(
+    result: Dict[str, Any],
+    *,
+    provider: str | None,
+    platform: str | None,
+    device_token_id: int | None,
+    driver_id: int | None,
+    correlation_id: str | None,
+    data: Dict[str, Any] | None,
+) -> Dict[str, Any]:
+    """Ajoute les champs canoniques + journalise la tentative (sans token brut)."""
+    from services.notifications.push_delivery_status import (
+        classify_push_result,
+        log_push_attempt_event,
+    )
+
+    data = data or {}
+    classified = classify_push_result(result, provider=provider)
+    enriched = dict(result)
+    enriched.update(
+        {
+            "delivery_status": classified["delivery_status"],
+            "provider_receipt_status": classified["provider_receipt_status"],
+            "failure_reason": classified.get("failure_reason"),
+            "provider_message_id": classified.get("provider_message_id"),
+            "provider_ticket_id": classified.get("provider_ticket_id"),
+            "provider_error_code": classified.get("provider_error_code"),
+            "provider_error_category": classified.get("provider_error_category"),
+            "provider_response_sanitized": classified.get(
+                "provider_response_sanitized"
+            ),
+            "token_invalid": classified.get("token_invalid", False),
+            "deactivate_token": classified.get("deactivate_token", False),
+            "configuration_error": classified["delivery_status"]
+            == "configuration_error",
+        }
+    )
+    if classified.get("provider_message_id") and not enriched.get("message_id"):
+        enriched["message_id"] = classified["provider_message_id"]
+
+    log_push_attempt_event(
+        delivery_status=classified["delivery_status"],
+        platform=platform,
+        provider=provider,
+        device_token_id=device_token_id,
+        notification_type=str(data.get("type") or "unknown"),
+        correlation_id=correlation_id,
+        driver_id=driver_id,
+        provider_receipt_status=classified.get("provider_receipt_status"),
+        failure_reason=classified.get("failure_reason"),
+        provider_message_id=classified.get("provider_message_id"),
+        provider_ticket_id=classified.get("provider_ticket_id"),
+        provider_error_code=classified.get("provider_error_code"),
+        provider_error_category=classified.get("provider_error_category"),
+        provider_http_status=classified.get("provider_http_status"),
+        provider_response_sanitized=classified.get("provider_response_sanitized"),
+        deduplication_key=data.get("deduplication_key") or data.get("dedupe_key"),
+        notification_id=str(data.get("notification_id") or "") or None,
+    )
+    return enriched
 
 
 def send_push_message(
@@ -283,6 +371,14 @@ def send_push_message(
     """
     if correlation_id is None:
         correlation_id = str(uuid.uuid4())
+
+    from services.notifications.push_delivery_status import ensure_deduplication_fields
+
+    data = ensure_deduplication_fields(
+        data,
+        notification_type=(data or {}).get("type") if data else None,
+        driver_id=driver_id,
+    )
 
     # Auto-detect provider from token format
     if provider is None:
@@ -316,6 +412,17 @@ def send_push_message(
                 payload_data.get("push_dispatch_id"),
             )
             result = send_fcm_android(token, title, body, data)
+
+        result = _enrich_and_log_push_result(
+            result,
+            provider="fcm",
+            platform=platform,
+            device_token_id=device_token_id,
+            driver_id=driver_id,
+            correlation_id=correlation_id,
+            data=data,
+        )
+
         if device_token_id is not None:
             try:
                 from services.notifications.device_token_lifecycle import (
@@ -449,6 +556,28 @@ def send_push_message(
                 # ✅ P2: PUSH_PROOF ticket — pour diagnostic app killed (corrélation receipts)
                 for ticket in response_data["data"]:
                     tid = ticket.get("id")
+                    if tid:
+                        result["provider_ticket_id"] = tid
+                        result["expo_ticket_id"] = tid
+                        try:
+                            from services.notifications.expo_receipts import (
+                                store_expo_ticket,
+                            )
+
+                            store_expo_ticket(
+                                ticket_id=str(tid),
+                                correlation_id=correlation_id,
+                                device_token_id=device_token_id,
+                                driver_id=driver_id,
+                                platform=platform,
+                                notification_type=notification_type,
+                                deduplication_key=(data or {}).get("deduplication_key")
+                                or (data or {}).get("dedupe_key"),
+                            )
+                        except Exception as e:
+                            app_logger.warning(
+                                "[push] store expo ticket failed: %s", str(e)[:200]
+                            )
                     app_logger.info(
                         "[push] PUSH_PROOF ticket status=ok id=%s correlation_id=%s → fetch receipt: python -m scripts.fetch_expo_receipts %s",
                         tid,
@@ -460,6 +589,7 @@ def send_push_message(
                 # Au moins un ticket a échoué
                 errors = []
                 token_is_invalid = False
+                result_configuration_error = False
                 for ticket in response_data["data"]:
                     tid = ticket.get("id")
                     tstatus = ticket.get("status")
@@ -488,9 +618,14 @@ def send_push_message(
                             "MessageTooBig",
                             "MessageRateExceeded",
                         ]:
-                            token_is_invalid = True
+                            # DeviceNotRegistered seul → invalid_token / désactivation
+                            # InvalidCredentials → configuration_error (pas de désactivation)
+                            if error_type == "DeviceNotRegistered":
+                                token_is_invalid = True
+                            elif error_type == "InvalidCredentials":
+                                result_configuration_error = True
                             app_logger.warning(
-                                "[push] Token invalide détecté: %s (error: %s)",
+                                "[push] Token/provider issue: %s (error: %s)",
                                 token[:TOKEN_DISPLAY_LENGTH]
                                 if len(token) > TOKEN_DISPLAY_LENGTH
                                 else token,
@@ -504,14 +639,16 @@ def send_push_message(
                                 "MessageTooBig": "message_too_big",
                                 "MessageRateExceeded": "rate_exceeded",
                             }
-                            track_push_token_invalidated(
-                                reason=reason_map.get(error_type, "unknown")
-                            )
+                            if error_type == "DeviceNotRegistered":
+                                track_push_token_invalidated(
+                                    reason=reason_map.get(error_type, "unknown")
+                                )
 
                 result = {
                     "ok": False,
-                    "error": "; ".join(errors),
-                    "token_invalid": token_is_invalid,  # Flag pour invalidation
+                    "error": "; ".join(errors) if errors else "expo_ticket_error",
+                    "token_invalid": token_is_invalid,
+                    "configuration_error": result_configuration_error,
                 }
                 # ✅ CORRECTIF #5: Enregistrer séparément selon le type d'erreur
                 _record_push_failure(token_invalid=token_is_invalid)
@@ -556,6 +693,16 @@ def send_push_message(
         },
     )
 
+    result = _enrich_and_log_push_result(
+        result,
+        provider="expo",
+        platform=platform,
+        device_token_id=device_token_id,
+        driver_id=driver_id,
+        correlation_id=correlation_id,
+        data=data,
+    )
+
     if device_token_id is not None:
         try:
             from services.notifications.device_token_lifecycle import (
@@ -573,16 +720,21 @@ def send_push_message(
 
 
 def _calculate_retry_delay(attempt: int) -> float:
-    """Calcule le délai de retry avec exponential backoff.
+    """Délai avant la tentative suivante (attempt 1-indexed = tentative qui vient d'échouer).
 
-    Args:
-        attempt: Numéro de la tentative (1-indexed)
-
-    Returns:
-        Délai en secondes (1, 2, 4, 8, max 8)
+    Politique Phase A : PUSH_RETRY_DELAYS_SEC[attempt] avec jitter ±20 %.
+    ``attempt`` = numéro de la tentative échouée ; on attend avant attempt+1.
     """
-    delay = min(INITIAL_RETRY_DELAY * (2 ** (attempt - 1)), MAX_RETRY_DELAY)
-    return float(delay)
+    import random
+
+    delays = PUSH_RETRY_DELAYS_SEC
+    # Index du prochain délai d'attente (après tentative `attempt`)
+    idx = min(attempt, len(delays) - 1)
+    base = float(delays[idx]) if idx < len(delays) else float(delays[-1])
+    if base <= 0:
+        return 0.0
+    jitter = random.uniform(-PUSH_RETRY_JITTER_RATIO, PUSH_RETRY_JITTER_RATIO) * base
+    return max(0.0, base + jitter)
 
 
 def send_push_message_with_retry(
@@ -732,7 +884,16 @@ def send_push_message_with_retry(
         if attempt >= max_retries:
             break
 
-        # Calculer délai avec exponential backoff
+        # Wall-clock max
+        if (time.time() - start_time) >= PUSH_RETRY_MAX_WALL_CLOCK_SEC:
+            app_logger.warning(
+                "[push] retry wall-clock exceeded (%.0fs) after attempt %d",
+                PUSH_RETRY_MAX_WALL_CLOCK_SEC,
+                attempt,
+            )
+            break
+
+        # Calculer délai avec politique Phase A + jitter
         delay = _calculate_retry_delay(attempt)
         app_logger.warning(
             "[push] Push failed (attempt %d/%d): %s. Retrying in %.1fs...",
@@ -742,7 +903,8 @@ def send_push_message_with_retry(
             delay,
         )
 
-        time.sleep(delay)
+        if delay > 0:
+            time.sleep(delay)
 
     # Toutes les tentatives ont échoué
     app_logger.error(
@@ -760,6 +922,24 @@ def send_push_message_with_retry(
     )
     final_result["attempts"] = max_retries
     final_result["final_error"] = last_error
+
+    # Épuisement réseau → failed / retry_exhausted (pas provider_rejected)
+    err_l = str(last_error or "").lower()
+    was_retryable = any(
+        keyword in err_l
+        for keyword in [
+            "timeout",
+            "connection",
+            "network",
+            "requestexception",
+            "connectionerror",
+        ]
+    )
+    if was_retryable or final_result.get("retryable"):
+        final_result["retry_exhausted"] = True
+        final_result["error"] = "retry_exhausted"
+        final_result["delivery_status"] = "failed"
+        final_result["failure_reason"] = "retry_exhausted"
 
     # ✅ Tracking métriques Prometheus (échec)
     latency = time.time() - start_time

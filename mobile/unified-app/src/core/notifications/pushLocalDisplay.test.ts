@@ -50,6 +50,7 @@ describe("pushLocalDisplay", () => {
 
   it("priorise dedupe_key explicite puis clé mission stable puis event_id", () => {
     expect(buildStableDedupeKey({ dedupe_key: "custom:key" })).toBe("custom:key");
+    expect(buildStableDedupeKey({ deduplication_key: "canon:key" })).toBe("canon:key");
     expect(
       buildStableDedupeKey({
         type: "booking_assigned",

@@ -1,26 +1,47 @@
 #!/usr/bin/env bash
-# P0 ops — stop fanout legacy + recreate ingest seul (pas de up global).
-# Aucun défaut pour COMPOSE_FILES / ENV_FILE / COMPOSE_PROJECT_NAME.
+# P0 ops — stop fanout + DLQ legacy + recreate ingest seul (pas de up global).
+# Aucun défaut pour COMPOSE_FILES / ENV_FILE / COMPOSE_PROJECT_NAME /
+# DOCKER_IMAGE / DOCKER_TAG / SOURCE_SHA / IMAGE_DIGEST / EXPECTED_INGEST_REPLICAS.
 #
-# Dry-run (aucun stop / up) :
+# Dry-run (aucun stop / up / pull serveur) :
 #   DRY_RUN=1 COMPOSE_PROJECT_NAME=atmr \
 #     COMPOSE_FILES="-f docker-compose.production.yml -f docker-compose.kafka.yml -f docker-compose.kafka.atmr-network.yml -f docker-compose.kafka.p0-hold.yml" \
 #     ENV_FILE="--env-file .env.production" \
+#     DOCKER_IMAGE=... DOCKER_TAG=... SOURCE_SHA=... IMAGE_DIGEST=sha256:... \
+#     EXPECTED_INGEST_REPLICAS=1 \
 #     ./scripts/ops-tracking-p0-recreate-ingest.sh
 #
 # Exécution réelle :
-#   EXECUTE_P0_RECREATE=YES COMPOSE_PROJECT_NAME=… COMPOSE_FILES=… ENV_FILE=… \
-#     ./scripts/ops-tracking-p0-recreate-ingest.sh
+#   EXECUTE_P0_RECREATE=YES ... (mêmes vars) ./scripts/ops-tracking-p0-recreate-ingest.sh
 #
 set -euo pipefail
 
-: "${COMPOSE_FILES:?COMPOSE_FILES obligatoire (ex: -f docker-compose.production.yml -f docker-compose.kafka.yml -f docker-compose.kafka.atmr-network.yml -f docker-compose.kafka.p0-hold.yml)}"
+: "${COMPOSE_FILES:?COMPOSE_FILES obligatoire}"
 : "${ENV_FILE:?ENV_FILE obligatoire (ex: --env-file .env.production)}"
 : "${COMPOSE_PROJECT_NAME:?COMPOSE_PROJECT_NAME obligatoire}"
+: "${DOCKER_IMAGE:?DOCKER_IMAGE obligatoire}"
+: "${DOCKER_TAG:?DOCKER_TAG obligatoire}"
+: "${SOURCE_SHA:?SOURCE_SHA obligatoire (40 hex)}"
+: "${IMAGE_DIGEST:?IMAGE_DIGEST obligatoire (sha256:...)}"
+: "${EXPECTED_INGEST_REPLICAS:?EXPECTED_INGEST_REPLICAS obligatoire}"
 
 PROFILE="${PROFILE:---profile kafka}"
 DRY_RUN="${DRY_RUN:-0}"
 EXECUTE_P0_RECREATE="${EXECUTE_P0_RECREATE:-}"
+HEALTH_TIMEOUT_S="${HEALTH_TIMEOUT_S:-120}"
+
+[[ "${SOURCE_SHA}" =~ ^[0-9a-f]{40}$ ]] || {
+  echo "SOURCE_SHA doit être un SHA Git complet de 40 caractères" >&2
+  exit 1
+}
+[[ "${IMAGE_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+  echo "IMAGE_DIGEST invalide (attendu sha256: + 64 hex)" >&2
+  exit 1
+}
+[[ "${EXPECTED_INGEST_REPLICAS}" =~ ^[1-9][0-9]*$ ]] || {
+  echo "EXPECTED_INGEST_REPLICAS invalide" >&2
+  exit 1
+}
 
 compose() {
   # shellcheck disable=SC2086
@@ -33,6 +54,14 @@ cleanup_cfg() {
   rm -f "${CFG_TMP}"
 }
 trap cleanup_cfg EXIT
+
+GPS_SERVICES=(tracking-kafka-consumer tracking-processed-fanout kafka-dlq-consumer)
+EXPECTED_COMPOSE_BASENAMES=(
+  docker-compose.production.yml
+  docker-compose.kafka.yml
+  docker-compose.kafka.atmr-network.yml
+  docker-compose.kafka.p0-hold.yml
+)
 
 echo "== Préflight config fusionné (mktemp) =="
 compose config > "${CFG_TMP}"
@@ -61,8 +90,8 @@ assert_env_flag() {
   echo "OK ${svc}.${key}=${got}"
 }
 
-echo "== Vérif DSN / flags / topics =="
-for svc in tracking-kafka-consumer tracking-processed-fanout kafka-dlq-consumer; do
+echo "== Vérif DSN / flags / topics (config) =="
+for svc in "${GPS_SERVICES[@]}"; do
   echo "--- ${svc} ---"
   awk -v svc="$svc" '
     $0 ~ "^  "svc":" {in_svc=1; next}
@@ -73,28 +102,64 @@ for svc in tracking-kafka-consumer tracking-processed-fanout kafka-dlq-consumer;
   ' "${CFG_TMP}"
 done
 
-# Pas d'URL interpolée user/password
 if grep -E 'postgresql\+psycopg://\$\{POSTGRES_(USER|PASSWORD)' "${CFG_TMP}" >/dev/null 2>&1; then
   echo "FAIL: URL postgresql+psycopg interpolée détectée dans le config fusionné" >&2
   exit 1
 fi
 
-assert_env_flag tracking-kafka-consumer TRACKING_PERSIST_WITH_OUTBOX false
+assert_env_flag tracking-kafka-consumer TRACKING_PERSIST_WITH_OUTBOX true
 assert_env_flag tracking-kafka-consumer TRACKING_INGEST_PERSIST_ENABLED true
 assert_env_flag tracking-kafka-consumer TRACKING_INGEST_ALLOW_REPUBLISH_ONLY false
 assert_env_flag tracking-kafka-consumer TRACKING_INGEST_SEEK_TO_END_ON_START false
 assert_env_flag tracking-kafka-consumer TRACKING_DLQ_FORCE_COMMIT_ON_FAILURE false
 assert_env_flag tracking-processed-fanout TRACKING_PROCESSED_FANOUT_ENABLED false
-
-# Topics *.v2 obligatoires (noms effectifs après interpolation) — fail-hard
 assert_env_flag tracking-kafka-consumer KAFKA_TOPIC_DRIVER_LOCATION_RAW driver.location.raw.v2
 assert_env_flag tracking-kafka-consumer KAFKA_TOPIC_DRIVER_LOCATION_PROCESSED driver.location.processed.v2
 assert_env_flag tracking-kafka-consumer KAFKA_TOPIC_DRIVER_LOCATION_DLQ driver.location.dlq.v2
 assert_env_flag tracking-processed-fanout KAFKA_TOPIC_DRIVER_LOCATION_PROCESSED driver.location.processed.v2
 assert_env_flag kafka-dlq-consumer KAFKA_TOPIC_DRIVER_LOCATION_DLQ driver.location.dlq.v2
 
+# Fail-hard si consumer GPS hors projet atmr (avant toute mutation)
+fail_hard_foreign_gps_consumers() {
+  local cid name short_id svc project image
+  local found=0
+  while IFS= read -r cid; do
+    [[ -z "${cid}" ]] && continue
+    project="$(docker inspect "${cid}" --format '{{index .Config.Labels "com.docker.compose.project"}}' 2>/dev/null || true)"
+    svc="$(docker inspect "${cid}" --format '{{index .Config.Labels "com.docker.compose.service"}}' 2>/dev/null || true)"
+    if [[ "${project}" != "${COMPOSE_PROJECT_NAME}" ]]; then
+      found=1
+      name="$(docker inspect "${cid}" --format '{{.Name}}' | sed 's#^/##')"
+      short_id="${cid:0:12}"
+      image="$(docker inspect "${cid}" --format '{{.Config.Image}}')"
+      echo "FAIL consumer GPS étranger :" >&2
+      echo "  name=${name} id=${short_id} service=${svc} project=${project:-<none>} image=${image}" >&2
+    fi
+  done < <(
+    for svc in "${GPS_SERVICES[@]}"; do
+      docker ps -q --filter "label=com.docker.compose.service=${svc}" --filter "status=running" 2>/dev/null || true
+    done
+  )
+  if ((found != 0)); then
+    echo "Intervention ops manuelle requise — aucun stop automatique hors projet ${COMPOSE_PROJECT_NAME}." >&2
+    exit 1
+  fi
+  echo "OK aucun consumer GPS étranger au projet ${COMPOSE_PROJECT_NAME}"
+}
+
+fail_hard_foreign_gps_consumers
+
+# Inventaire informatif (pré-stop) — ne pas exiger EXPECTED_INGEST_REPLICAS
+mapfile -t pre_ingest_cids < <(
+  docker ps -q \
+    --filter "label=com.docker.compose.project=${COMPOSE_PROJECT_NAME}" \
+    --filter "label=com.docker.compose.service=tracking-kafka-consumer" \
+    --filter "status=running" 2>/dev/null || true
+)
+echo "INFO replicas ingest projet ${COMPOSE_PROJECT_NAME} avant stop : ${#pre_ingest_cids[@]}"
+
 if [[ "${DRY_RUN}" == "1" ]]; then
-  echo "DRY_RUN=1 — aucun stop / up / recreate. Config OK."
+  echo "DRY_RUN=1 — aucun pull / stop / up / recreate. Config OK."
   exit 0
 fi
 
@@ -103,29 +168,152 @@ if [[ "${EXECUTE_P0_RECREATE}" != "YES" ]]; then
   exit 1
 fi
 
-echo "== Stop fanout legacy (tous replicas) =="
-compose stop tracking-processed-fanout
-# Échec si un replica tourne encore
-fanout_state="$(compose ps --status running --services 2>/dev/null | grep -E '^tracking-processed-fanout$' || true)"
-if [[ -n "${fanout_state}" ]]; then
-  echo "FAIL: tracking-processed-fanout encore running après stop" >&2
-  compose ps tracking-processed-fanout >&2 || true
+expected_ref="${DOCKER_IMAGE}@${IMAGE_DIGEST}"
+expected_tag_ref="${DOCKER_IMAGE}:${DOCKER_TAG}"
+
+echo "== Pull image exacte par digest =="
+docker pull "${expected_ref}"
+expected_id="$(docker image inspect "${expected_ref}" --format '{{.Id}}')"
+repo_digests="$(docker image inspect "${expected_ref}" --format '{{join .RepoDigests "\n"}}')"
+if ! grep -Fx "${DOCKER_IMAGE}@${IMAGE_DIGEST}" <<<"${repo_digests}" >/dev/null; then
+  echo "FAIL RepoDigest manquant : attendu ${DOCKER_IMAGE}@${IMAGE_DIGEST}" >&2
+  echo "${repo_digests}" >&2
   exit 1
 fi
-compose ps tracking-processed-fanout || true
+echo "OK RepoDigest ${DOCKER_IMAGE}@${IMAGE_DIGEST}"
+echo "OK expected_image_id=${expected_id}"
 
-echo "== Stop ingest pendant patch =="
-compose stop tracking-kafka-consumer
+echo "== Tag local ${expected_tag_ref} (après validation digest) =="
+docker tag "${expected_ref}" "${expected_tag_ref}"
 
-echo "== Recreate ingest uniquement =="
-compose up -d --no-deps --force-recreate tracking-kafka-consumer
+echo "== Stop fanout + DLQ (projet ${COMPOSE_PROJECT_NAME} uniquement) =="
+compose stop tracking-processed-fanout kafka-dlq-consumer || true
 
-echo "== Préflight SELECT 1 + assert flags (sans imprimer le DSN) =="
-compose exec -T tracking-kafka-consumer python - <<'PY'
+echo "== Stop ingest =="
+compose stop tracking-kafka-consumer || true
+
+echo "== Recreate ingest (--pull never, scale=${EXPECTED_INGEST_REPLICAS}) =="
+compose up -d --no-deps --pull never --force-recreate \
+  --scale "tracking-kafka-consumer=${EXPECTED_INGEST_REPLICAS}" \
+  tracking-kafka-consumer
+
+wait_ingest_healthy() {
+  local deadline=$((SECONDS + HEALTH_TIMEOUT_S))
+  local cid hs restart_count
+  while ((SECONDS < deadline)); do
+    mapfile -t ingest_cids < <(
+      docker ps -q \
+        --filter "label=com.docker.compose.project=${COMPOSE_PROJECT_NAME}" \
+        --filter "label=com.docker.compose.service=tracking-kafka-consumer" \
+        --filter "status=running" 2>/dev/null || true
+    )
+    if [[ "${#ingest_cids[@]}" -eq "${EXPECTED_INGEST_REPLICAS}" ]]; then
+      local all_ok=1
+      for cid in "${ingest_cids[@]}"; do
+        restart_count="$(docker inspect "${cid}" --format '{{.RestartCount}}')"
+        if [[ "${restart_count}" -gt 3 ]]; then
+          echo "FAIL restart loop détectée (RestartCount=${restart_count}) cid=${cid:0:12}" >&2
+          exit 1
+        fi
+        hs="$(docker inspect "${cid}" --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}')"
+        if [[ "${hs}" == "unhealthy" ]]; then
+          all_ok=0
+          break
+        fi
+        if [[ "${hs}" != "none" && "${hs}" != "healthy" ]]; then
+          all_ok=0
+          break
+        fi
+      done
+      if ((all_ok == 1)); then
+        echo "OK ${#ingest_cids[@]} replica(s) ingest running/healthy"
+        return 0
+      fi
+    fi
+    sleep 3
+  done
+  echo "FAIL timeout ${HEALTH_TIMEOUT_S}s : replicas healthy attendus=${EXPECTED_INGEST_REPLICAS}" >&2
+  docker ps --filter "label=com.docker.compose.service=tracking-kafka-consumer" >&2 || true
+  exit 1
+}
+
+wait_ingest_healthy
+
+mapfile -t ingest_cids < <(
+  docker ps -q \
+    --filter "label=com.docker.compose.project=${COMPOSE_PROJECT_NAME}" \
+    --filter "label=com.docker.compose.service=tracking-kafka-consumer" \
+    --filter "status=running"
+)
+if [[ "${#ingest_cids[@]}" -ne "${EXPECTED_INGEST_REPLICAS}" ]]; then
+  echo "FAIL replicas running=${#ingest_cids[@]} attendu=${EXPECTED_INGEST_REPLICAS}" >&2
+  exit 1
+fi
+
+assert_compose_basenames() {
+  local cid="$1"
+  local config_files
+  local -a basenames=()
+  local file expected_files actual_files
+  config_files="$(
+    docker inspect "${cid}" \
+      --format '{{index .Config.Labels "com.docker.compose.project.config_files"}}'
+  )"
+  IFS=',' read -ra files <<<"${config_files}"
+  for file in "${files[@]}"; do
+    file="${file#"${file%%[![:space:]]*}"}"
+    file="${file%"${file##*[![:space:]]}"}"
+    [[ -z "${file}" ]] && continue
+    basenames+=("$(basename "${file}")")
+  done
+  expected_files="$(printf '%s\n' "${EXPECTED_COMPOSE_BASENAMES[@]}" | sort)"
+  actual_files="$(printf '%s\n' "${basenames[@]}" | sed '/^$/d' | sort -u)"
+  if [[ "${actual_files}" != "${expected_files}" ]]; then
+    echo "FAIL ensemble Compose runtime incohérent (cid=${cid:0:12})" >&2
+    diff -u <(printf '%s\n' "${expected_files}") <(printf '%s\n' "${actual_files}") >&2 || true
+    exit 1
+  fi
+  echo "OK config_files ensemble exact (cid=${cid:0:12})"
+}
+
+assert_runtime_cid() {
+  local cid="$1"
+  local actual_ref actual_id revision
+  actual_ref="$(docker inspect "${cid}" --format '{{.Config.Image}}')"
+  actual_id="$(docker inspect "${cid}" --format '{{.Image}}')"
+  if [[ "${actual_ref}" != "${expected_tag_ref}" ]]; then
+    echo "FAIL Config.Image=${actual_ref} attendu=${expected_tag_ref}" >&2
+    exit 1
+  fi
+  if [[ "${actual_id}" != "${expected_id}" ]]; then
+    echo "FAIL Image ID runtime=${actual_id} attendu=${expected_id}" >&2
+    exit 1
+  fi
+  revision="$(docker inspect "${cid}" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')"
+  if [[ "${revision}" != "${SOURCE_SHA}" ]]; then
+    echo "FAIL OCI revision=${revision:-<absent>} attendu=${SOURCE_SHA}" >&2
+    exit 1
+  fi
+  assert_compose_basenames "${cid}"
+
+  docker exec -i "${cid}" python - <<'PY'
 import os
+import pathlib
+import sys
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 from config import _build_database_url_safe
+
+url_keys = (
+    "DATABASE_URL",
+    "SQLALCHEMY_DATABASE_URI",
+    "PRIMARY_DATABASE_URL",
+    "REPLICA_DATABASE_URL",
+    "REPLICA_DATABASE_URLS",
+)
+for key in url_keys:
+    value = os.getenv(key)
+    assert value == "", f"{key} is not empty (got {value!r})"
 
 raw = _build_database_url_safe()
 url = make_url(raw)
@@ -146,20 +334,44 @@ print("SELECT 1 OK")
 def flag(name: str) -> str:
     return (os.getenv(name) or "").strip().lower()
 
-assert flag("TRACKING_PERSIST_WITH_OUTBOX") == "false"
+assert flag("TRACKING_PERSIST_WITH_OUTBOX") == "true"
 assert flag("TRACKING_INGEST_PERSIST_ENABLED") == "true"
 assert flag("TRACKING_INGEST_ALLOW_REPUBLISH_ONLY") == "false"
 assert flag("TRACKING_INGEST_SEEK_TO_END_ON_START") == "false"
 assert flag("TRACKING_DLQ_FORCE_COMMIT_ON_FAILURE") == "false"
-print("flags OK")
-PY
+assert os.getenv("KAFKA_TOPIC_DRIVER_LOCATION_RAW") == "driver.location.raw.v2"
+assert os.getenv("KAFKA_TOPIC_DRIVER_LOCATION_PROCESSED") == "driver.location.processed.v2"
+assert os.getenv("KAFKA_TOPIC_DRIVER_LOCATION_DLQ") == "driver.location.dlq.v2"
+print("flags/topics OK")
 
-echo "== Fanout doit rester exited =="
-fanout_running="$(compose ps --status running --services 2>/dev/null | grep -E '^tracking-processed-fanout$' || true)"
-if [[ -n "${fanout_running}" ]]; then
-  echo "FAIL: tracking-processed-fanout running après recreate ingest" >&2
-  exit 1
-fi
-compose ps tracking-processed-fanout || true
+cmd = pathlib.Path("/proc/1/cmdline").read_text()
+assert "ingest_consumer" in cmd, cmd
+print("PID1 ingest_consumer OK")
+PY
+  echo "OK runtime asserts cid=${cid:0:12}"
+}
+
+echo "== Assertions runtime sur chaque replica =="
+for cid in "${ingest_cids[@]}"; do
+  assert_runtime_cid "${cid}"
+done
+
+echo "== Fanout + DLQ projet atmr doivent rester stopped =="
+for svc in tracking-processed-fanout kafka-dlq-consumer; do
+  running="$(
+    docker ps -q \
+      --filter "label=com.docker.compose.project=${COMPOSE_PROJECT_NAME}" \
+      --filter "label=com.docker.compose.service=${svc}" \
+      --filter "status=running" 2>/dev/null || true
+  )"
+  if [[ -n "${running}" ]]; then
+    echo "FAIL ${svc} encore running après recreate ingest" >&2
+    exit 1
+  fi
+  echo "OK ${svc} stopped"
+done
+
+fail_hard_foreign_gps_consumers
+
 echo "DONE — lancer ensuite la gate E2E ×3 (nouvelles positions, pas de reset offsets)."
 echo "Recréer kafka-dlq-consumer seulement après gate ingest OK."

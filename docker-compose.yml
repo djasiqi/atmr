@@ -280,6 +280,8 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-DEBUG}
     volumes:
       - ./backend:/app
+      # Aligné sur atmr_api : écriture PDF factures / rappels (évite Errno 13 hors bind ./backend)
+      - ./backend/uploads:/app/uploads
     depends_on:
       pgbouncer:
         condition: service_healthy
