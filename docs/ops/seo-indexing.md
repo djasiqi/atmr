@@ -45,6 +45,8 @@ npm run test:seo-smoke -- https://<preview>.vercel.app
 
 Sur **Vercel**, le pré-rendu utilise `@sparticuz/chromium` + `playwright-core` (libs système Playwright classiques absentes). En local, Playwright Chromium standard est installé automatiquement si besoin.
 
+Le build produit aussi `build/spa-shell.html` (**noindex**) : fallback pour `/login`, dashboards et routes inconnues. Sans cela, Vercel servirait l’accueil pré-rendu (`index,follow`) sur toutes les routes SPA — fail-open accidentel.
+
 ## SEO-01C — checklist preview (obligatoire avant prod)
 
 ```bash

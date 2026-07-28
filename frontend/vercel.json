@@ -54,6 +54,10 @@
     {
       "source": "/uploads/institution_logos/:path*",
       "destination": "https://api.lirie.ch/uploads/institution_logos/:path*"
+    },
+    {
+      "source": "/((?!api(?:/|$)|socket\\.io(?:/|$)|uploads(?:/|$)|static(?:/|$)|spa-shell\\.html$).*)",
+      "destination": "/spa-shell.html"
     }
   ]
 }

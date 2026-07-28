@@ -157,6 +157,19 @@ function fileForRoute(route) {
 }
 
 export function validateAllPrerenderedFiles() {
+  const spaShell = path.join(BUILD_DIR, 'spa-shell.html');
+  if (!fs.existsSync(spaShell)) {
+    throw new Error('[seo-validate] spa-shell.html manquant (fallback noindex)');
+  }
+  const spaHtml = fs.readFileSync(spaShell, 'utf8');
+  if (!/noindex/i.test(spaHtml)) {
+    throw new Error('[seo-validate] spa-shell.html doit contenir noindex');
+  }
+  if (/content=["']index,\s*follow/i.test(spaHtml)) {
+    throw new Error('[seo-validate] spa-shell.html ne doit pas être index,follow');
+  }
+  console.log('[seo-validate] OK spa-shell.html (noindex)');
+
   for (const route of ROUTES) {
     const file = fileForRoute(route);
     if (!fs.existsSync(file)) {

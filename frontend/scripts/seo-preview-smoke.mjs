@@ -56,13 +56,29 @@ async function main() {
     assert(unknown.status === 200, `route inconnue status ${unknown.status}`);
     assert(pro.text !== unknown.text, 'HTML professionnel identique au shell (pré-rendu non servi)');
     assert(/noindex/i.test(unknown.text), 'noindex absent sur route inconnue');
+    assert(
+      !/content=["']index,\s*follow/i.test(unknown.text),
+      'index,follow indésirable sur route inconnue (fallback doit être spa-shell)'
+    );
 
     for (const privatePath of ['/login', '/activate-account', '/dashboard/company/test']) {
       const page = await fetchText(privatePath);
       assert(page.status === 200 || page.status === 401 || page.status === 403, `${privatePath} status ${page.status}`);
       if (page.status === 200) {
         assert(/noindex/i.test(page.text), `noindex absent sur ${privatePath}`);
-        assert(!/content=["']index,\s*follow/i.test(page.text), `index,follow indésirable sur ${privatePath}`);
+        assert(
+          !/content=["']index,\s*follow/i.test(page.text),
+          `index,follow indésirable sur ${privatePath}`
+        );
+        assert(
+          !/Gestion des transports pour EMS/i.test(page.text) || privatePath.includes('professionnel'),
+          `${privatePath} ne doit pas servir le HTML de /professionnel`
+        );
+        // Le fallback ne doit plus être l’accueil indexable.
+        assert(
+          !/data-seo-ready="true"/i.test(page.text) || /noindex/i.test(page.text),
+          `${privatePath}: shell applicatif attendu`
+        );
       }
     }
 

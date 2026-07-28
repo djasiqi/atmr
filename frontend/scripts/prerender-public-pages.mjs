@@ -283,6 +283,38 @@ async function prerenderRoute(page, origin, route) {
   console.log(`[prerender] OK ${route} → ${path.relative(FRONTEND_ROOT, outFile)}`);
 }
 
+/**
+ * Conserve le shell CRA (noindex) pour les routes non pré-rendues.
+ * Sans cela, Vercel sert build/index.html (accueil indexable) pour /login, etc.
+ */
+function preserveSpaShell() {
+  const shellPath = path.join(BUILD_DIR, 'index.html');
+  const spaShellPath = path.join(BUILD_DIR, 'spa-shell.html');
+  if (!fs.existsSync(shellPath)) {
+    throw new Error('build/index.html introuvable pour spa-shell.');
+  }
+  let html = fs.readFileSync(shellPath, 'utf8');
+  // Forcer noindex fail-closed sur le shell applicatif.
+  if (/name=["']robots["']/i.test(html)) {
+    html = html.replace(
+      /<meta[^>]*name=["']robots["'][^>]*>/gi,
+      '<meta name="robots" content="noindex, nofollow" />'
+    );
+  } else {
+    html = html.replace(
+      /<\/head>/i,
+      '    <meta name="robots" content="noindex, nofollow" />\n  </head>'
+    );
+  }
+  // Éviter une canonical d’accueil sur les routes privées.
+  html = html.replace(/<link[^>]*rel=["']canonical["'][^>]*>\s*/gi, '');
+  fs.writeFileSync(spaShellPath, html, 'utf8');
+  if (!/noindex/i.test(html)) {
+    throw new Error('spa-shell.html doit contenir noindex,nofollow.');
+  }
+  console.log('[prerender] spa-shell.html conservé (noindex) pour fallback SPA');
+}
+
 function ensureLocalPlaywrightChromium() {
   console.log('[prerender] Installation locale Chromium Playwright (si besoin)…');
   const result = spawnSync(
@@ -324,6 +356,9 @@ async function main() {
   if (!fs.existsSync(path.join(BUILD_DIR, 'index.html'))) {
     throw new Error('build/index.html introuvable. Exécutez d’abord npm run build:react.');
   }
+
+  // Avant d’écraser index.html avec l’accueil pré-rendu.
+  preserveSpaShell();
 
   let server;
   let browser;
