@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Iterator
+from unittest.mock import patch
 
 from application.drivers.update_driver_booking_status import (
     UpdateDriverBookingStatusCommand,
@@ -10,6 +12,20 @@ from application.drivers.update_driver_booking_status import (
 )
 from models import BookingStatus
 from models.enums import AssignmentStatus, CancelReason
+
+
+@contextmanager
+def _patch_db_session_no_autoflush() -> Iterator[None]:
+    """Évite RuntimeError hors app_context (db.session / Model.query)."""
+    with (
+        patch("ext.db.session") as mock_session,
+        patch("models.invoice.CompanyBillingSettings") as mock_cbs,
+    ):
+        mock_session.no_autoflush = nullcontext()
+        mock_session.query.return_value.filter_by.return_value.delete.return_value = 0
+        # Pas de policy DB → compute_cancellation_fields utilise le legacy billable
+        mock_cbs.query.filter_by.return_value.first.return_value = None
+        yield
 
 
 @dataclass
@@ -113,9 +129,6 @@ def test_en_route_requires_assigned() -> None:
 
 
 def test_release_cancels_assignment_and_triggers_dispatch() -> None:
-    from contextlib import nullcontext
-    from unittest.mock import patch
-
     booking = _Booking(id=1, company_id=7, driver_id=10, status=BookingStatus.ASSIGNED)
     assignment = _Assignment(id=123, booking_id=1, driver_id=10)
     assignment_repo = _AssignmentRepo(assignment)
@@ -138,15 +151,13 @@ def test_release_cancels_assignment_and_triggers_dispatch() -> None:
     )
 
     # Mock publish_event pour qu'il échoue, forçant l'appel à emit_assignment_cancelled
-    # Mock ext.db.session.no_autoflush (évite app context dans test unitaire)
     with (
         patch(
             "application.events.event_bus.publish_event",
             side_effect=Exception("Event publish failed"),
         ),
-        patch("ext.db.session") as mock_session,
+        _patch_db_session_no_autoflush(),
     ):
-        mock_session.no_autoflush = nullcontext()
         res = uc.execute(
             UpdateDriverBookingStatusCommand(
                 booking_id=1,
@@ -171,9 +182,6 @@ def test_release_cancels_assignment_and_triggers_dispatch() -> None:
 
 
 def test_release_accepts_legacy_reason_alias() -> None:
-    from contextlib import nullcontext
-    from unittest.mock import patch
-
     booking = _Booking(id=1, company_id=7, driver_id=10, status=BookingStatus.ASSIGNED)
     assignment = _Assignment(id=123, booking_id=1, driver_id=10)
     db = _Db()
@@ -191,9 +199,8 @@ def test_release_accepts_legacy_reason_alias() -> None:
 
     with (
         patch("application.events.event_bus.publish_event"),
-        patch("ext.db.session") as mock_session,
+        _patch_db_session_no_autoflush(),
     ):
-        mock_session.no_autoflush = nullcontext()
         res = uc.execute(
             UpdateDriverBookingStatusCommand(
                 booking_id=1,
@@ -213,8 +220,6 @@ def test_release_accepts_legacy_reason_alias() -> None:
 
 def test_driver_cancel_no_show_billable_and_label() -> None:
     """Driver CANCEL + NO_SHOW ⇒ billable True + label 'Client ne s'est pas présenté'."""
-    from unittest.mock import patch
-
     booking = _Booking(
         id=1,
         company_id=7,
@@ -233,7 +238,10 @@ def test_driver_cancel_no_show_billable_and_label() -> None:
         now_utc_fn=lambda: datetime(2025, 12, 12, 10, 0, 0, tzinfo=UTC),
     )
 
-    with patch("application.events.event_bus.publish_event"):
+    with (
+        patch("application.events.event_bus.publish_event"),
+        _patch_db_session_no_autoflush(),
+    ):
         res = uc.execute(
             UpdateDriverBookingStatusCommand(
                 booking_id=1,
@@ -258,8 +266,6 @@ def test_driver_cancel_no_show_billable_and_label() -> None:
 
 def test_driver_cancel_vehicle_issue_non_billable_and_label() -> None:
     """Driver CANCEL + VEHICLE_ISSUE ⇒ billable False + label 'Problème véhicule'."""
-    from unittest.mock import patch
-
     booking = _Booking(
         id=1,
         company_id=7,
@@ -278,7 +284,10 @@ def test_driver_cancel_vehicle_issue_non_billable_and_label() -> None:
         now_utc_fn=lambda: datetime(2025, 12, 12, 10, 0, 0, tzinfo=UTC),
     )
 
-    with patch("application.events.event_bus.publish_event"):
+    with (
+        patch("application.events.event_bus.publish_event"),
+        _patch_db_session_no_autoflush(),
+    ):
         res = uc.execute(
             UpdateDriverBookingStatusCommand(
                 booking_id=1,
@@ -303,8 +312,6 @@ def test_driver_cancel_vehicle_issue_non_billable_and_label() -> None:
 
 def test_driver_cancel_does_not_overwrite_existing_cancellation_fields() -> None:
     """Si cancellation_reason_code déjà set, ne pas écraser (idempotence)."""
-    from unittest.mock import patch
-
     booking = _Booking(
         id=1,
         company_id=7,
@@ -327,7 +334,10 @@ def test_driver_cancel_does_not_overwrite_existing_cancellation_fields() -> None
         now_utc_fn=lambda: datetime(2025, 12, 12, 10, 0, 0, tzinfo=UTC),
     )
 
-    with patch("application.events.event_bus.publish_event"):
+    with (
+        patch("application.events.event_bus.publish_event"),
+        _patch_db_session_no_autoflush(),
+    ):
         res = uc.execute(
             UpdateDriverBookingStatusCommand(
                 booking_id=1,
@@ -383,18 +393,19 @@ def test_scope_reservation_parent_canceled_child_accepted_cancels_child() -> Non
         maybe_trigger_dispatch_fn=None,
         now_utc_fn=lambda: datetime(2025, 12, 12, 10, 0, 0, tzinfo=UTC),
     )
-    res = uc.execute(
-        UpdateDriverBookingStatusCommand(
-            booking_id=52,
-            driver_id=10,
-            payload={
-                "status": "canceled",
-                "cancel_reason": "CANCEL",
-                "reason_code": "NO_SHOW",
-                "scope": "reservation",
-            },
+    with _patch_db_session_no_autoflush():
+        res = uc.execute(
+            UpdateDriverBookingStatusCommand(
+                booking_id=52,
+                driver_id=10,
+                payload={
+                    "status": "canceled",
+                    "cancel_reason": "CANCEL",
+                    "reason_code": "NO_SHOW",
+                    "scope": "reservation",
+                },
+            )
         )
-    )
     assert res.status_code == 200
     assert res.response.get("updated_booking_ids") == [52]
     assert 51 in res.response.get("skipped_booking_ids", [])
@@ -436,18 +447,19 @@ def test_scope_reservation_parent_completed_child_accepted_cancels_only_child() 
         maybe_trigger_dispatch_fn=None,
         now_utc_fn=lambda: datetime(2025, 12, 12, 10, 0, 0, tzinfo=UTC),
     )
-    res = uc.execute(
-        UpdateDriverBookingStatusCommand(
-            booking_id=52,
-            driver_id=10,
-            payload={
-                "status": "canceled",
-                "cancel_reason": "CANCEL",
-                "reason_code": "NO_SHOW",
-                "scope": "reservation",
-            },
+    with _patch_db_session_no_autoflush():
+        res = uc.execute(
+            UpdateDriverBookingStatusCommand(
+                booking_id=52,
+                driver_id=10,
+                payload={
+                    "status": "canceled",
+                    "cancel_reason": "CANCEL",
+                    "reason_code": "NO_SHOW",
+                    "scope": "reservation",
+                },
+            )
         )
-    )
     assert res.status_code == 200
     assert res.response.get("updated_booking_ids") == [52]
     assert 51 in res.response.get("skipped_booking_ids", [])

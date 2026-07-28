@@ -153,11 +153,9 @@ def authorize_internal_request(
     if not provided:
         return False, "invalid_token"
 
-    token_ok = False
-    if current and hmac.compare_digest(provided, current):
-        token_ok = True
-    elif next_token and hmac.compare_digest(provided, next_token):
-        token_ok = True
+    token_ok = (current and hmac.compare_digest(provided, current)) or (
+        bool(next_token) and hmac.compare_digest(provided, next_token)
+    )
     if not token_ok:
         return False, "invalid_token"
 

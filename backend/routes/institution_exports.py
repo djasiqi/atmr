@@ -22,7 +22,7 @@ from io import BytesIO
 
 import sentry_sdk
 from flask import request, send_file
-from flask_jwt_extended import jwt_required
+from flask_jwt_extended import jwt_required, verify_jwt_in_request
 from flask_jwt_extended.exceptions import JWTExtendedException
 from flask_restx import Namespace, Resource
 from jwt.exceptions import PyJWTError

@@ -157,10 +157,10 @@ def _is_driver_location_events_partition(name: str | None) -> bool:
     return name.startswith("driver_location_events_")
 
 
-def include_object(object, name, type_, reflected, compare_to):
+def include_object(obj, name, type_, reflected, compare_to):
     """Filtre autogenerate : PostGIS, partitions GPS, dérive index/contraintes."""
     del compare_to
-    del object
+    del obj
     if type_ == "table" and name in {"spatial_ref_sys"}:
         return False
     # Partitions créées en SQL / Celery — absentes du metadata SQLAlchemy
@@ -168,12 +168,10 @@ def include_object(object, name, type_, reflected, compare_to):
         return False
     if type_ == "column" and name == "geom":
         return False
-    if os.getenv("AUTOGENERATE_SKIP_INDEXES") == "1" and type_ in {
-        "index",
-        "unique_constraint",
-    }:
-        return False
-    return True
+    return not (
+        os.getenv("AUTOGENERATE_SKIP_INDEXES") == "1"
+        and type_ in {"index", "unique_constraint"}
+    )
 
 
 def run_migrations_offline():

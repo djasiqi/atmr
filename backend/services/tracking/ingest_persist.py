@@ -173,7 +173,12 @@ def persist_driver_location_from_kafka(
             db.session.rollback()
             raise
         finally:
-            db.session.remove()
+            # Toujours nettoyer si un vrai contexte Flask est actif (tests avec
+            # MagicMock app_context ne poussent pas de contexte → no-op).
+            from flask import has_app_context
+
+            if has_app_context():
+                db.session.remove()
 
     enriched_payload = {
         **payload,

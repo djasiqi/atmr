@@ -284,9 +284,12 @@ def tracking_ingest():
         return jsonify({"error": tenant_error or "driver_without_tenant"}), 403
 
     claimed_company = data.get("company_id")
-    if isinstance(claimed_company, int) and not isinstance(claimed_company, bool):
-        if claimed_company != tenant_company_id:
-            return jsonify({"error": "company_mismatch"}), 403
+    if (
+        isinstance(claimed_company, int)
+        and not isinstance(claimed_company, bool)
+        and claimed_company != tenant_company_id
+    ):
+        return jsonify({"error": "company_mismatch"}), 403
 
     normalized: list[dict[str, Any]] = []
     seen_ids: set[str] = set()
@@ -369,9 +372,10 @@ def tracking_ingest():
         latest = None
         for pt in prepared.points:
             eid = str(pt.payload["location_event_id"])
-            if eid in result.event_ids_persisted or eid in result.event_ids_duplicate:
-                if latest is None or pt.recorded_at > latest.recorded_at:
-                    latest = pt
+            if (
+                eid in result.event_ids_persisted or eid in result.event_ids_duplicate
+            ) and (latest is None or pt.recorded_at > latest.recorded_at):
+                latest = pt
         if latest is not None:
             eid = str(latest.payload["location_event_id"])
             ok_redis = attempt_redis_canonical_repair(

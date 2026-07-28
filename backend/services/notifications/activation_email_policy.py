@@ -5,7 +5,6 @@ from __future__ import annotations
 import os
 from datetime import UTC, datetime
 
-
 ACTIVATION_RESEND_COOLDOWN_SECONDS = int(
     os.getenv("ACTIVATION_RESEND_COOLDOWN_SECONDS", "60")
 )

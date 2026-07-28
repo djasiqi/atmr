@@ -48,9 +48,13 @@ def test_update_driver_location_disables_canonical_outputs_when_non_canonical(
     service = LocationService(redis_client_instance=None)
     driver_query_get_calls = {"count": 0}
 
+    class _Repo:
+        def find_by_id(self, _driver_id):  # type: ignore[no-untyped-def]
+            return _DriverDto(id=99, company_id=1)
+
     monkeypatch.setattr(
-        "services.geolocation.location.DriverRepository.find_by_id",
-        lambda _self, _driver_id: _DriverDto(id=99, company_id=1),
+        "services.geolocation.location.DriverRepository",
+        _Repo,
     )
     monkeypatch.setattr(
         "services.geolocation.location.Driver",
@@ -62,7 +66,7 @@ def test_update_driver_location_disables_canonical_outputs_when_non_canonical(
                     "Q",
                     (),
                     {
-                        "get": lambda _id: driver_query_get_calls.__setitem__(
+                        "get": lambda _cls, _id: driver_query_get_calls.__setitem__(
                             "count", driver_query_get_calls["count"] + 1
                         )
                     },

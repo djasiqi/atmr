@@ -118,13 +118,17 @@ class LocationUpdateResult:
     degraded_context: bool = False
 
 
+# Sentinel : None explicite = pas de Redis (observability-only) ; défaut = client global.
+_REDIS_CLIENT_UNSET: Any = object()
+
+
 class LocationService:
     """Service centralisé pour localisation avec snap, map-matching, geofencing et historique."""
 
     def __init__(  # pyright: ignore[reportMissingSuperCall]
         self,
         osrm_base_url: str = DEFAULT_OSRM_BASE_URL,
-        redis_client_instance: Any | None = None,
+        redis_client_instance: Any = _REDIS_CLIENT_UNSET,
         match_window: int = DEFAULT_MATCH_WINDOW,
         geofence_radius_m: float = DEFAULT_GEOFENCE_RADIUS_M,
     ):
@@ -132,12 +136,17 @@ class LocationService:
 
         Args:
             osrm_base_url: URL du serveur OSRM
-            redis_client_instance: Client Redis (optionnel)
+            redis_client_instance: Client Redis ; ``None`` désactive Redis
+                (accepted_observability_only). Omit pour le client global.
             match_window: Nombre de points pour map-matching
             geofence_radius_m: Rayon geofence pour détection arrivée (mètres)
         """
         self.osrm_base_url = osrm_base_url
-        self.redis_client = redis_client_instance or redis_client
+        self.redis_client = (
+            redis_client
+            if redis_client_instance is _REDIS_CLIENT_UNSET
+            else redis_client_instance
+        )
         self.match_window = match_window
         self.geofence_radius_m = geofence_radius_m
         self._osrm_failures = 0
@@ -860,23 +869,26 @@ class LocationService:
                 company_id,
             )
 
-        # DB
+        # DB — accéder à db.session uniquement si persistance canonique
+        # (évite RuntimeError hors app_context pour accepted_observability_only).
+        if accept_status != "accepted_canonical":
+            return accept_status, accept_reason, received_iso
+
         session = db_session or db.session
         try:
-            if accept_status == "accepted_canonical":
-                # ✅ Utilisation du repository pour découpler de SQLAlchemy
-                driver_repo = DriverRepository()
-                driver_dto = driver_repo.find_by_id(driver_id)
-                if driver_dto:
-                    # Récupérer le modèle SQLAlchemy depuis le DTO pour la compatibilité
-                    driver = Driver.query.get(driver_dto.id)
-                    if driver:
-                        driver.latitude = latitude
-                        driver.longitude = longitude
-                        driver.last_position_update = timestamp
-                        session.add(driver)
-                    if not db_session:
-                        session.commit()
+            # ✅ Utilisation du repository pour découpler de SQLAlchemy
+            driver_repo = DriverRepository()
+            driver_dto = driver_repo.find_by_id(driver_id)
+            if driver_dto:
+                # Récupérer le modèle SQLAlchemy depuis le DTO pour la compatibilité
+                driver = Driver.query.get(driver_dto.id)
+                if driver:
+                    driver.latitude = latitude
+                    driver.longitude = longitude
+                    driver.last_position_update = timestamp
+                    session.add(driver)
+                if not db_session:
+                    session.commit()
         except (OperationalError, DBAPIError) as e:
             # Erreurs DB attendues : connexion, timeout
             if not db_session:

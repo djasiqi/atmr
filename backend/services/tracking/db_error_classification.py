@@ -19,8 +19,8 @@ from sqlalchemy.exc import (
     InterfaceError,
     OperationalError,
     ProgrammingError,
-    TimeoutError as SQLAlchemyTimeoutError,
 )
+from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 
 
 class DbErrorAction(str, Enum):

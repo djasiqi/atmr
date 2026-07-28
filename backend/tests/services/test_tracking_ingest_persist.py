@@ -61,8 +61,11 @@ def test_process_record_persists_when_flag_enabled(monkeypatch):
     monkeypatch.setattr(
         "services.tracking.ingest_consumer.TRACKING_INGEST_PERSIST_ENABLED", True
     )
+    monkeypatch.setattr(
+        "services.tracking.ingest_consumer.TRACKING_PERSIST_WITH_OUTBOX", False
+    )
     monkeypatch.setattr(consumer, "_publish_with_ack", MagicMock())
-    monkeypatch.setattr(consumer, "_commit_current", MagicMock())
+    monkeypatch.setattr(consumer, "_commit_record", MagicMock())
     monkeypatch.setattr(consumer, "_observe_e2e_latency", MagicMock())
 
     with patch(
@@ -92,8 +95,11 @@ def test_process_record_skips_persist_when_flag_disabled(monkeypatch):
     monkeypatch.setattr(
         "services.tracking.ingest_consumer.TRACKING_INGEST_PERSIST_ENABLED", False
     )
+    monkeypatch.setattr(
+        "services.tracking.ingest_consumer.TRACKING_PERSIST_WITH_OUTBOX", False
+    )
     monkeypatch.setattr(consumer, "_publish_with_ack", MagicMock())
-    monkeypatch.setattr(consumer, "_commit_current", MagicMock())
+    monkeypatch.setattr(consumer, "_commit_record", MagicMock())
     monkeypatch.setattr(consumer, "_observe_e2e_latency", MagicMock())
 
     with patch(

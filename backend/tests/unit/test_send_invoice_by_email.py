@@ -18,23 +18,45 @@ from application.invoices.send_invoice_by_email import (
     SendInvoiceByEmailResult,
     SendInvoiceByEmailUseCase,
 )
-from models import Client, Company, CompanyBillingSettings, Invoice
 from models.enums import InvoiceStatus
 from services.email.base import EmailResult
 
 
+@pytest.fixture(autouse=True)
+def _invoice_email_app_context(app):
+    """Model.query / Mock(spec=Model) exigent un contexte Flask."""
+    with (
+        app.app_context(),
+        patch(
+            "application.invoices.send_invoice_by_email.inject_signature_into_html",
+            side_effect=lambda html, **_kwargs: (html, None),
+        ),
+        patch(
+            "application.invoices.send_invoice_by_email.ensure_draft_pdf_ready_for_send",
+            return_value=(True, None),
+        ),
+    ):
+        yield
+
+
 @pytest.fixture
 def mock_invoice():
-    """Mock d'une facture."""
-    invoice = Mock(spec=Invoice)
+    """Mock d'une facture (sans spec= : évite les attributs hybrides Mock)."""
+    invoice = Mock()
     invoice.id = 1
     invoice.invoice_number = "INV-2026-001"
     invoice.company_id = 1
     invoice.client_id = 1
     invoice.amount_with_vat = Decimal("107.70")
+    invoice.total_amount = Decimal("107.70")
     invoice.due_date = datetime(2026, 2, 15)
     invoice.pdf_url = "/uploads/invoices/INV-2026-001.pdf"
     invoice.status = InvoiceStatus.DRAFT
+    invoice.meta = {}
+    invoice.billing_party = None
+    invoice.billed_to_company = None
+    invoice.billed_to_type = None
+    invoice.bill_to_client = None
     invoice.mark_as_sent = Mock()
     return invoice
 
@@ -42,26 +64,33 @@ def mock_invoice():
 @pytest.fixture
 def mock_client():
     """Mock d'un client."""
-    client = Mock(spec=Client)
+    user = Mock()
+    user.first_name = "Test"
+    user.last_name = "Client"
+    user.username = "testclient"
+    client = Mock()
     client.id = 1
     client.name = "Test Client"
     client.contact_email = "client@test.ch"
+    client.user = user
     return client
 
 
 @pytest.fixture
 def mock_company():
     """Mock d'une entreprise."""
-    company = Mock(spec=Company)
+    company = Mock()
     company.id = 1
     company.name = "Test Company"
+    company.meta = None
+    company.user = None
     return company
 
 
 @pytest.fixture
 def mock_billing_settings():
     """Mock des paramètres de facturation."""
-    settings = Mock(spec=CompanyBillingSettings)
+    settings = Mock()
     settings.smtp_username = "noreply@testcompany.ch"
     settings.from_name = "Test Company"
     settings.domain_verified = True
