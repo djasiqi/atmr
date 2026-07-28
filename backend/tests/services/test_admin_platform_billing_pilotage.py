@@ -9,7 +9,7 @@ from services.admin_platform_billing_pilotage import parse_pilotage_detail_args
 
 def test_parse_pilotage_detail_args_excludes_company_id():
     args = MagicMock()
-    args.get.side_effect = lambda key, default=None, type=None: {
+    args.get.side_effect = lambda key, default=None, type_=None: {
         "page": 2,
         "per_page": 40,
         "company_id": None,

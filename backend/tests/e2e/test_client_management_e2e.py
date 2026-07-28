@@ -8,26 +8,79 @@ Ces tests vérifient le flux complet de gestion client :
 - Create → Update (phone, access_notes, etc.) → assert persisted (company clients)
 """
 
+import hashlib
 import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from models import BookingStatus, UserRole
-from repositories.client_repository import ClientRepository
+from models import ActivationSession, BookingStatus, Client, UserRole
 from repositories.user_repository import UserRepository
 from tests.e2e.helpers.e2e_helpers import (
     create_test_booking,
     create_test_client,
     create_test_company,
 )
+from tests.e2e.test_auth_activation_e2e import _ensure_hmac_activation_token
+
+
+def _complete_activation_for_e2e(e2e_client, db, activation_session_id: str) -> None:
+    """Parcourt verify-email → verify-sms → finalize (contrat activation actuel)."""
+    session = ActivationSession.query.filter_by(
+        activation_session_id=activation_session_id
+    ).first()
+    assert session is not None, "Session d'activation introuvable en base"
+    email_token = _ensure_hmac_activation_token(db, session)
+
+    verify_email_response = e2e_client.post(
+        "/api/v1/auth/activation/verify-email",
+        json={"token": email_token},
+        headers={"Content-Type": "application/json"},
+    )
+    assert verify_email_response.status_code == 200, (
+        f"verify-email doit réussir, reçu {verify_email_response.status_code}: "
+        f"{verify_email_response.get_json()}"
+    )
+
+    known_sms_code = "123456"
+    session = ActivationSession.query.filter_by(
+        activation_session_id=activation_session_id
+    ).first()
+    assert session is not None
+    session.sms_code_hash = hashlib.sha256(known_sms_code.encode("utf-8")).hexdigest()
+    session.sms_attempts = 0
+    session.sms_locked_until = None
+    db.session.commit()
+
+    verify_sms_response = e2e_client.post(
+        "/api/v1/auth/activation/verify-sms",
+        json={
+            "activation_session_id": activation_session_id,
+            "code": known_sms_code,
+        },
+        headers={"Content-Type": "application/json"},
+    )
+    assert verify_sms_response.status_code == 200, (
+        f"verify-sms doit réussir, reçu {verify_sms_response.status_code}: "
+        f"{verify_sms_response.get_json()}"
+    )
+
+    finalize_response = e2e_client.post(
+        "/api/v1/auth/activation/finalize",
+        json={"activation_session_id": activation_session_id},
+        headers={"Content-Type": "application/json"},
+    )
+    assert finalize_response.status_code == 200, (
+        f"finalize doit réussir, reçu {finalize_response.status_code}: "
+        f"{finalize_response.get_json()}"
+    )
 
 
 class TestClientRegistrationToBookingFlow:
     """Tests : Flux complet d'enregistrement à la création de booking."""
 
     def test_e2e_client_registration_to_booking_flow(self, e2e_client, db):
-        """Test : Register → Login → Créer booking → Vérifier historique."""
+        """Test : Register → Activation → Login → Créer booking → Historique."""
         # 1. Enregistrement d'un nouveau client
         unique_suffix = str(uuid.uuid4())[:8]
         # Utiliser un mot de passe unique pour éviter HIBP (Have I Been Pwned)
@@ -39,6 +92,7 @@ class TestClientRegistrationToBookingFlow:
             "first_name": "Jean",
             "last_name": "Dupont",
             "phone": "+41791234567",
+            "address": "Rue de Test 1, 1200 Geneve",
         }
 
         register_response = e2e_client.post(
@@ -52,13 +106,13 @@ class TestClientRegistrationToBookingFlow:
             f"{register_response.get_json()}"
         )
         register_result = register_response.get_json()
-        assert "user_id" in register_result or "user" in register_result
-
-        # Récupérer le public_id du client créé
-        user_id = register_result.get("user_id") or register_result.get("user", {}).get(
-            "public_id"
+        activation_session_id = register_result.get("activation_session_id")
+        assert activation_session_id, (
+            f"activation_session_id manquant après register (réponse={register_result})"
         )
-        assert user_id is not None
+
+        # 1b. Activation obligatoire avant login (account_pending_activation)
+        _complete_activation_for_e2e(e2e_client, db, activation_session_id)
 
         # 2. Login avec les credentials créés
         login_response = e2e_client.post(
@@ -78,13 +132,16 @@ class TestClientRegistrationToBookingFlow:
         assert "user" in login_data
         assert login_data["user"]["email"] == register_data["email"]
 
+        # Récupérer le public_id du client activé
+        user_id = login_data["user"].get("public_id") or login_data["user"].get("id")
+        assert user_id is not None
+
         # 3. Récupérer le client créé pour créer un booking directement en DB
         # (le géocodage nécessite un service externe qui peut échouer en tests)
         user_repo = UserRepository()
-        client_repo = ClientRepository()
         user_obj = user_repo.find_by_public_id(user_id)
         assert user_obj is not None
-        client_obj = client_repo.find_by_user_id(user_obj.id)
+        client_obj = Client.query.filter_by(user_id=user_obj.id).first()
         assert client_obj is not None
 
         # Créer un booking directement via le helper (sans géocodage)

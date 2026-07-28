@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import pytest
 from types import SimpleNamespace
+
+import pytest
 
 from services.tracking.ingest_consumer import (
     FatalTrackingConsumerError,

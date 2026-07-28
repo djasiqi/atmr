@@ -502,10 +502,11 @@ class TestDispatchE2E:
         )
 
         # Vérifier que les bookings sont assignés en DB
-        # ✅ FIX: Utiliser query au lieu de refresh
-        # pour éviter "Instance is not persistent"
-        booking0 = db.session.query(Booking).get(bookings[0].id)
-        booking1 = db.session.query(Booking).get(bookings[1].id)
+        # bulk_update_mappings ne synchronise pas automatiquement l'identity map.
+        # Expirer la session avant la relecture pour observer les valeurs en base.
+        db.session.expire_all()
+        booking0 = db.session.get(Booking, bookings[0].id)
+        booking1 = db.session.get(Booking, bookings[1].id)
 
         assert booking0.driver_id == drivers[0].id
         assert booking1.driver_id == drivers[1].id

@@ -6,7 +6,6 @@ import hashlib
 import json
 from typing import Any
 
-
 FINGERPRINT_SCHEMA_VERSION = 1
 
 

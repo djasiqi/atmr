@@ -284,8 +284,11 @@ class TestBookingUpdate:
         # S'assurer que la company est visible avant engine.run()
         db.session.refresh(company)
 
-        # Créer un booking pour demain à 10h
-        original_time = datetime.now(UTC) + timedelta(days=1, hours=2)
+        # Heure murale Genève naïve (convention DB) — éviter UTC aware + strip tzinfo
+        # qui décale de +1/+2h vs api_scheduled_iso_to_naive_geneva.
+        from shared.time_utils import now_local
+
+        original_time = (now_local() + timedelta(days=1, hours=2)).replace(tzinfo=None)
         booking = create_test_booking(
             db,
             client=client,
@@ -309,19 +312,7 @@ class TestBookingUpdate:
 
         # Vérifier que le booking a été mis à jour
         db.session.refresh(booking)
-        # Comparer les temps sans timezone (le modèle stocke sans timezone)
-        booking_time = booking.scheduled_time
-        if booking_time and new_time:
-            # Normaliser pour comparaison (enlever timezone si présent)
-            if booking_time.tzinfo is not None:
-                booking_time_naive = booking_time.replace(tzinfo=None)
-            else:
-                booking_time_naive = booking_time
-            if new_time.tzinfo is not None:
-                new_time_naive = new_time.replace(tzinfo=None)
-            else:
-                new_time_naive = new_time
-            assert booking_time_naive == new_time_naive
+        assert booking.scheduled_time == new_time
 
         # Redispatch (peut être sur la même date ou une date différente selon le changement)
         new_dispatch_date = new_time.date()
@@ -337,18 +328,5 @@ class TestBookingUpdate:
         # Recharger le booking depuis la DB
         db.session.refresh(booking)
 
-        # Vérifier que le booking est toujours assigné (ou réassigné si nécessaire)
-        # Le booking devrait toujours être dans un état cohérent après redispatch
-        # Comparer les temps sans timezone (le modèle stocke sans timezone)
-        booking_time = booking.scheduled_time
-        if booking_time and new_time:
-            # Normaliser pour comparaison (enlever timezone si présent)
-            if booking_time.tzinfo is not None:
-                booking_time_naive = booking_time.replace(tzinfo=None)
-            else:
-                booking_time_naive = booking_time
-            if new_time.tzinfo is not None:
-                new_time_naive = new_time.replace(tzinfo=None)
-            else:
-                new_time_naive = new_time
-            assert booking_time_naive == new_time_naive
+        # Vérifier que l'horaire modifié est toujours persisté après redispatch
+        assert booking.scheduled_time == new_time

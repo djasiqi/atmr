@@ -39,12 +39,12 @@ def _reject_non_finite(value: float, *, code: str) -> float:
 
 def _scale_e6(value: float) -> int:
     v = _reject_non_finite(value, code="non_finite_coordinate")
-    return int(round(v * 1_000_000))
+    return round(v * 1_000_000)
 
 
 def _scale_dm(value: float) -> int:
     v = _reject_non_finite(value, code="non_finite_metric")
-    return int(round(v * 10))
+    return round(v * 10)
 
 
 def _nfc(text: str) -> str:
@@ -90,7 +90,7 @@ def build_event_payload_object(
         h = h % 360.0
         if h == 0.0:
             h = 0.0
-        obj["heading_ddeg"] = int(round(h * 10))
+        obj["heading_ddeg"] = round(h * 10)
     if speed is not None:
         obj["speed_dms"] = _scale_dm(float(speed))
     if sequence_id is not None:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from calendar import monthrange
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 from celery import shared_task
 from sqlalchemy import text

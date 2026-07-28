@@ -72,7 +72,7 @@ class TestE2EInstitutionFlow:
         """Crée un utilisateur institution_admin."""
         user = User()
         user.email = f"admin_{uuid.uuid4().hex[:8]}@e2e-institution.ch"
-        user.password_hash = "test_hash"
+        user.set_password("password123", force_change=False)
         user.role = UserRole.INSTITUTION.value
         user.institution_id = e2e_institution.id
         user.institution_role = "institution_admin"
@@ -104,7 +104,7 @@ class TestE2EInstitutionFlow:
         # Créer d'abord un user pour la company
         company_user = User()
         company_user.email = f"company_{uuid.uuid4().hex[:8]}@e2e-transport.ch"
-        company_user.password_hash = "test_hash"
+        company_user.set_password("password123", force_change=False)
         company_user.role = UserRole.COMPANY.value
         company_user.first_name = "Company"
         company_user.last_name = "E2E"
@@ -440,7 +440,7 @@ class TestE2EInstitutionFlowEdgeCases:
         """Crée un utilisateur institution_admin."""
         user = User()
         user.email = f"edge_{uuid.uuid4().hex[:8]}@test.ch"
-        user.password_hash = "test_hash"
+        user.set_password("password123", force_change=False)
         user.role = UserRole.INSTITUTION.value
         user.institution_id = e2e_institution.id
         user.institution_role = "institution_admin"

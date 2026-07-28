@@ -14,7 +14,6 @@ from sqlalchemy.orm import Session
 
 from services.tracking.event_payload_hash import (
     PAYLOAD_SCHEMA_VERSION,
-    PayloadHashError,
     compute_batch_id,
     compute_event_payload_hash_from_point,
 )
@@ -114,9 +113,12 @@ def prepare_tracking_batch(
         company_id=company_id,
         events=events_for_batch,
     )
-    if client_batch_id is not None and str(client_batch_id).strip():
-        if str(client_batch_id).strip().lower() != batch_id:
-            raise ValueError("batch_id_mismatch")
+    if (
+        client_batch_id is not None
+        and str(client_batch_id).strip()
+        and str(client_batch_id).strip().lower() != batch_id
+    ):
+        raise ValueError("batch_id_mismatch")
 
     return PreparedTrackingBatch(
         driver_id=driver_id,

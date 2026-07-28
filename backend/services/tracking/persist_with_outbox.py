@@ -202,8 +202,7 @@ def persist_location_event_with_outbox(
 
     contiguous = int(state["contiguous_persisted_through"]) if state else 0
     max_seen = int(state["max_seen_sequence"]) if state else 0
-    if sequence_id > max_seen:
-        max_seen = sequence_id
+    max_seen = max(max_seen, sequence_id)
     if sequence_id == contiguous + 1:
         contiguous = sequence_id
         # Avancer tant que les suivants existent

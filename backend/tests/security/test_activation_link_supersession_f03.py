@@ -37,7 +37,6 @@ from services.security.activation_legacy import (
     validate_activation_legacy_for_boot,
 )
 
-
 VERIFY_PATH = "/api/v1/auth/activation/verify-email"
 
 
@@ -92,7 +91,7 @@ def _delivery(
 class TestVerifySupersession:
     def test_expired_delivery_future_session_mirror_rejected(self, client, db):
         session = _session(db)
-        delivery, token = _delivery(
+        _delivery_row, token = _delivery(
             db,
             session,
             expires=datetime.now(UTC) - timedelta(minutes=1),
@@ -107,7 +106,7 @@ class TestVerifySupersession:
 
     def test_future_delivery_expired_session_mirror_ok(self, client, db):
         session = _session(db)
-        delivery, token = _delivery(db, session)
+        _delivery_row, token = _delivery(db, session)
         session.email_token_expires_at = datetime.now(UTC) - timedelta(hours=1)
         db.session.commit()
 
@@ -223,7 +222,7 @@ class TestCeleryAndFinalize:
 
     def test_sync_mirror_never_changes_pointer(self, db):
         session = _session(db)
-        a, _ = _delivery(db, session)
+        _a, _ = _delivery(db, session)
         b, _ = _delivery(
             db, session, kind=EMAIL_DELIVERY_KIND_RESEND, make_current=False
         )

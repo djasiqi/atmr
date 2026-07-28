@@ -212,7 +212,11 @@ class TestDisasterScenarios:
 
         # Test GET (lecture) - doit fonctionner même en read-only
         # ✅ FIX: Utiliser la route correcte /api/v1/bookings/ (pas /api/bookings/)
-        response_get = authenticated_client.get("/api/v1/bookings/")
+        from tests.e2e.helpers.e2e_helpers import create_authenticated_client
+
+        client_auth = create_authenticated_client(app_context, sample_client.user)
+        bookings_path = f"/api/v1/clients/{sample_client.user.public_id}/bookings"
+        response_get = client_auth.get(bookings_path)
         assert response_get.status_code in [200, 404], (
             f"GET devrait fonctionner même en read-only, "
             f"reçu: {response_get.status_code}"
@@ -228,7 +232,7 @@ class TestDisasterScenarios:
         assert users_read is not None, "Lectures doivent fonctionner en read-only"
 
         # ✅ FIX: Utiliser la route correcte /api/v1/bookings/ (pas /api/bookings/)
-        response_get_readonly = authenticated_client.get("/api/v1/bookings/")
+        response_get_readonly = client_auth.get(bookings_path)
         assert response_get_readonly.status_code in [200, 404], (
             f"GET devrait fonctionner en read-only, "
             f"reçu: {response_get_readonly.status_code}"

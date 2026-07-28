@@ -136,7 +136,7 @@ class TestCancelConvertedRequest:
         """Crée un utilisateur institution admin."""
         user = User()
         user.email = f"admin_{uuid.uuid4().hex[:8]}@test.com"
-        user.password_hash = "test"
+        user.set_password("password123", force_change=False)
         user.role = UserRole.INSTITUTION.value
         user.institution_id = sample_institution.id
         user.institution_role = "institution_admin"
@@ -236,7 +236,7 @@ class TestBillingPermissions:
         """Crée un utilisateur institution avec rôle BILLING."""
         user = User()
         user.email = f"billing_{uuid.uuid4().hex[:8]}@test.com"
-        user.password_hash = "test"
+        user.set_password("password123", force_change=False)
         user.role = UserRole.INSTITUTION.value
         user.institution_id = sample_institution.id
         user.institution_role = "institution_billing"
@@ -249,7 +249,7 @@ class TestBillingPermissions:
         """Crée un utilisateur institution avec rôle READER (non autorisé)."""
         user = User()
         user.email = f"reader_{uuid.uuid4().hex[:8]}@test.com"
-        user.password_hash = "test"
+        user.set_password("password123", force_change=False)
         user.role = UserRole.INSTITUTION.value
         user.institution_id = sample_institution.id
         user.institution_role = "institution_reader"

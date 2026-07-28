@@ -24,6 +24,7 @@ from models import (
     DispatchStatus,
     Driver,
     User,
+    UserRole,
 )
 from tests.conftest import persisted_fixture
 from tests.factories import BookingFactory, ClientFactory, CompanyFactory, DriverFactory
@@ -192,6 +193,11 @@ def create_test_company(db_session: Any) -> Company:
         ```
     """
     company = CompanyFactory()
+    # CompanyFactory lie un User ADMIN par défaut ; les routes /companies/me/*
+    # exigent le rôle company — aligner le rôle pour les fixtures E2E.
+    if company.user is not None:
+        company.user.role = UserRole.company
+        db_session.session.flush()
     return persisted_fixture(db_session, company, Company)
 
 

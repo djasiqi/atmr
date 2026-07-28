@@ -24,8 +24,7 @@ def _sign_cursor(payload: dict[str, Any]) -> str:
     sig = hmac.new(
         WATERMARK_HMAC_SECRET.encode("utf-8"), raw, hashlib.sha256
     ).hexdigest()[:16]
-    token = base64.urlsafe_b64encode(raw + b"|" + sig.encode("utf-8")).decode("ascii")
-    return token
+    return base64.urlsafe_b64encode(raw + b"|" + sig.encode("utf-8")).decode("ascii")
 
 
 def _verify_cursor(token: str | None) -> dict[str, Any] | None:

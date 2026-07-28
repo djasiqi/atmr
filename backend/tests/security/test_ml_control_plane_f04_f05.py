@@ -141,7 +141,7 @@ class TestMlControlPlaneRoles:
 
     def test_company_cross_tenant_shadow_reads(self, client, company_pair, monkeypatch):
         monkeypatch.delenv("ML_CONTROL_PLANE_API_ENABLED", raising=False)
-        (company_a, user_a), (company_b, _user_b) = company_pair
+        (_company_a, user_a), (company_b, _user_b) = company_pair
         headers = _jwt_headers(client, user_a)
         for path in (
             f"/api/shadow-mode/reports/daily/{company_b.id}",

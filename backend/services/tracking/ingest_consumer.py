@@ -716,14 +716,14 @@ class TrackingIngestConsumer:
                             )
                             self._running = False
                             raise
-                        except Exception:
+                        except Exception as exc:
                             logger.exception("[tracking_consumer] processing error")
                             raise FatalTrackingConsumerError(
                                 "unexpected_processing_error",
                                 topic=getattr(record, "topic", None),
                                 partition=getattr(record, "partition", None),
                                 offset=getattr(record, "offset", None),
-                            )
+                            ) from exc
                 self._maybe_publish_lag()
         except FatalTrackingConsumerError:
             raise

@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import cProfile
-
 import pstats
+
 from flask import Flask
 
 from tasks.profiling_tasks import _extract_profiler_total_stats, _profile_endpoints

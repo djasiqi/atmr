@@ -67,7 +67,8 @@ def compare_shadow_vs_direct(
         return "shadow_missing_in_direct"
     if shadow_payload is None and direct_payload is None:
         return "shadow_both_missing"
-    assert shadow_payload is not None and direct_payload is not None
+    assert shadow_payload is not None
+    assert direct_payload is not None
 
     s_fp = shadow_payload.get("payload_fingerprint") or shadow_payload.get(
         "shadow_fingerprint"

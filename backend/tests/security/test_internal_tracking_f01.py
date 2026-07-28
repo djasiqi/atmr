@@ -10,7 +10,6 @@ from unittest.mock import patch
 
 import pytest
 
-
 TOKEN = "a" * 32
 TOKEN_NEXT = "b" * 32
 INGEST_PATH = "/api/internal/tracking/ingest"
@@ -18,8 +17,9 @@ INGEST_PATH = "/api/internal/tracking/ingest"
 
 def _mock_persist_success():
     """Patches pour un ingest 200 sans DB réelle (F-02 sync_db)."""
-    from services.tracking.ingest_durability import BatchPersistResult
     from unittest.mock import MagicMock
+
+    from services.tracking.ingest_durability import BatchPersistResult
 
     def _persist(**kwargs):
         prep = kwargs["prepared"]
@@ -392,7 +392,7 @@ class TestValidation:
         assert resp.status_code == 403
 
     def test_happy_path_and_duplicate(self, client, f01_env, fake_redis):
-        redis, store = fake_redis
+        redis, _store = fake_redis
         from services.tracking.ingest_durability import BatchPersistResult
 
         calls = {"n": 0}
@@ -456,7 +456,7 @@ class TestValidation:
         assert r2.get_json()["duplicates"] == 1
 
     def test_persist_fail_503(self, client, f01_env, fake_redis):
-        redis, store = fake_redis
+        redis, _store = fake_redis
         with (
             patch("routes.internal_tracking.redis_client", redis),
             patch(

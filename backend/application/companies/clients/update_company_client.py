@@ -211,7 +211,9 @@ class UpdateCompanyClientUseCase:
             if "last_name" in data:
                 user.last_name = (data["last_name"] or "").strip() or None
             if "phone" in data:
-                user.phone = (data["phone"] or "").strip() or None
+                phone = (data["phone"] or "").strip() or None
+                user.phone = phone
+                client.contact_phone = phone
 
         # Champ User.birth_date (format YYYY-MM-DD)
         if "birth_date" in data and getattr(client, "user", None):

@@ -53,7 +53,7 @@ def test_advisory_lock_two_connections_same_driver():
         except ImportError:
             pytest.skip("psycopg unavailable")
 
-    connect = getattr(psycopg, "connect")
+    connect = psycopg.connect
     # Nettoyage préventif d'un lock orphelin (crash test précédent).
     cleanup = connect(dsn)
     try:
