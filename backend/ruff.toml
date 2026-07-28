@@ -13,6 +13,7 @@ extend-exclude = [
     ".mypy_cache",
     ".ruff_cache",
     ".pytest_cache",
+    "*.md",  # Ne pas reformater la doc Markdown (Ruff ≥0.16)
 ]
 
 [lint]
