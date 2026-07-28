@@ -657,17 +657,7 @@ const DraftInvoiceEditorPanel = ({
 
   const pdfDownloadName = useMemo(
     () => buildInvoicePdfDownloadFilename(inv),
-    [
-      inv?.id,
-      inv?.invoice_number,
-      inv?.period_month,
-      inv?.period_year,
-      inv?.total_amount,
-      inv?.client,
-      inv?.bill_to_client,
-      inv?.billing_party,
-      inv?.billed_to_company,
-    ]
+    [inv]
   );
 
   const revokeProtectedPdfBlobUrl = useCallback(() => {
