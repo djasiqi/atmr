@@ -719,13 +719,20 @@ def send_driver_hub_message(
     pdf_url = body.get("pdf_url") or body.get("pdf")
     pdf_filename = body.get("pdf_filename")
     pdf_size = body.get("pdf_size")
+    audio_url = body.get("audio_url") or body.get("audio")
     has_image = bool(image_url)
     has_pdf = bool(pdf_url)
+    has_audio = bool(audio_url)
     if has_image and has_pdf:
         return None, ({"error": "Limite : une image ou un PDF par message."}, 400)
-    if not (content or has_image or has_pdf):
+    if not (content or has_image or has_pdf or has_audio):
         return None, (
-            {"error": "Le message doit contenir du texte, une image ou un PDF."},
+            {
+                "error": (
+                    "Le message doit contenir du texte, une image, un PDF "
+                    "ou un message vocal."
+                )
+            },
             400,
         )
     if content and len(content) > MAX_HUB_MESSAGE_LENGTH:
@@ -812,9 +819,14 @@ def send_driver_hub_message(
             pdf_url=pdf_url if has_pdf else None,
             pdf_filename=pdf_filename if has_pdf else None,
             pdf_size=int(pdf_size) if has_pdf and pdf_size else None,
+            audio_url=audio_url if has_audio else None,
             thread_id=tid,
             booking_id=booking_id,
-            message_type=message_type,
+            message_type=(
+                "audio"
+                if has_audio and not (content or has_image or has_pdf)
+                else message_type
+            ),
             priority=priority,
             client_message_id=str(client_message_id) if client_message_id else None,
             conversation_id=int(conversation_id_val) if conversation_id_val else None,
@@ -870,13 +882,20 @@ def send_company_hub_message(
     pdf_url = body.get("pdf_url") or body.get("pdf")
     pdf_filename = body.get("pdf_filename")
     pdf_size = body.get("pdf_size")
+    audio_url = body.get("audio_url") or body.get("audio")
     has_image = bool(image_url)
     has_pdf = bool(pdf_url)
+    has_audio = bool(audio_url)
     if has_image and has_pdf:
         return None, ({"error": "Limite : une image ou un PDF par message."}, 400)
-    if not (content or has_image or has_pdf):
+    if not (content or has_image or has_pdf or has_audio):
         return None, (
-            {"error": "Le message doit contenir du texte, une image ou un PDF."},
+            {
+                "error": (
+                    "Le message doit contenir du texte, une image, un PDF "
+                    "ou un message vocal."
+                )
+            },
             400,
         )
     if content and len(content) > MAX_HUB_MESSAGE_LENGTH:
@@ -947,9 +966,14 @@ def send_company_hub_message(
             pdf_url=pdf_url if has_pdf else None,
             pdf_filename=pdf_filename if has_pdf else None,
             pdf_size=int(pdf_size) if has_pdf and pdf_size else None,
+            audio_url=audio_url if has_audio else None,
             thread_id=tid,
             booking_id=booking_id,
-            message_type=message_type,
+            message_type=(
+                "audio"
+                if has_audio and not (content or has_image or has_pdf)
+                else message_type
+            ),
             priority=priority,
             client_message_id=str(client_message_id) if client_message_id else None,
             conversation_id=int(conversation_id_val) if conversation_id_val else None,

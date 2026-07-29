@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { Animated, Easing, StyleSheet, View, type DimensionValue } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { AppText } from "../../../design/ui/AppText";
+import { useAccessibilityScale } from "../../../design/responsive/useAccessibilityScale";
 import type { DriverEtaSnapshot } from "../api";
 import {
   isMissionStepperSegmentComplete,
@@ -75,6 +76,7 @@ function ApproachSegmentBar({
 }
 
 export function MissionProgressStepper({ mission, etaSnapshot, remainingDistanceKm }: Props) {
+  const { isVeryLargeText } = useAccessibilityScale();
   const progress = resolveMissionStepperProgress(mission);
   const approach = useMissionStepperApproachProgress(mission, {
     etaSnapshot,
@@ -143,7 +145,7 @@ export function MissionProgressStepper({ mission, etaSnapshot, remainingDistance
                   (isComplete || isActive || isApproachTarget) && styles.stepLabelActive,
                   !isComplete && !isActive && !isApproachTarget && styles.stepLabelMuted,
                 ]}
-                numberOfLines={2}
+                numberOfLines={isVeryLargeText ? undefined : 2}
               >
                 {label}
               </AppText>
@@ -247,10 +249,10 @@ const styles = StyleSheet.create({
   stepLabel: {
     width: "100%",
     fontSize: FONT_SIZE.px8,
-    lineHeight: 10,
     textAlign: "center",
     fontWeight: "600",
     paddingHorizontal: 1,
+    flexShrink: 1,
   },
   stepLabelActive: {
     color: D.brand,

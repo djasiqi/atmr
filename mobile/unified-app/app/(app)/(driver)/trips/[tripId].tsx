@@ -5,7 +5,7 @@ import { DriverContextGuard, PermissionGuard } from "../../../../src/core/guards
 import { useDriverMissionDetailQuery } from "../../../../src/features/driver/hooks";
 import { AppCard, AppSpinner, AppText, brandSurfaceSoft, Screen } from "../../../../src/design/responsive";
 import { getDriverStatusUx } from "../../../../src/features/driver/statusDictionary";
-import { DRIVER_FLOATING_TAB_SCROLL_PADDING } from "../../../../src/features/driver/navigation/DriverFloatingTabBar";
+import { useDriverFloatingTabScrollPadding } from "../../../../src/features/driver/navigation/DriverFloatingTabBar";
 
 export default function DriverTripDetailScreen() {
   const params = useLocalSearchParams<{
@@ -18,6 +18,7 @@ export default function DriverTripDetailScreen() {
     client?: string;
     driver?: string;
   }>();
+  const scrollPad = useDriverFloatingTabScrollPadding();
 
   const tripId = useMemo(() => {
     const parsed = Number.parseInt(String(params.tripId ?? ""), 10);
@@ -35,7 +36,7 @@ export default function DriverTripDetailScreen() {
           scroll
           backgroundColor={brandSurfaceSoft}
           withHorizontalPadding={false}
-          extraScrollBottomPadding={DRIVER_FLOATING_TAB_SCROLL_PADDING}
+          extraScrollBottomPadding={scrollPad}
           contentContainerStyle={styles.page}
         >
           <AppText variant="sectionTitle" style={styles.title}>

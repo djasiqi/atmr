@@ -342,8 +342,16 @@ export function useCancelInstitutionBooking() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ bookingId, data }) => institutionService.cancelInstitutionBooking(bookingId, data),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: institutionQueryKeys.requests() });
+      if (variables?.requestId) {
+        queryClient.invalidateQueries({
+          queryKey: institutionQueryKeys.requestDetail(variables.requestId),
+        });
+        queryClient.invalidateQueries({
+          queryKey: institutionQueryKeys.requestTimeline(variables.requestId),
+        });
+      }
     },
   });
 }

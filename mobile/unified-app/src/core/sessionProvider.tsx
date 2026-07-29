@@ -54,6 +54,8 @@ type SessionContextValue = {
   login: (email: string, password: string) => Promise<void>;
   bootstrapSession: () => Promise<void>;
   changeContext: (targetContextId: string) => Promise<void>;
+  /** True pendant POST /auth/switch-context (évite les redirects guards en rebond). */
+  contextSwitchInFlight: boolean;
   logout: () => void;
   can: (permission: string) => boolean;
 };
@@ -121,7 +123,15 @@ function toUiErrorMessage(error: unknown, fallback: string): string {
   if (effectiveStatus === 401 || effectiveStatus === 403) {
     return "Session expirée ou invalide. Reconnectez-vous pour continuer.";
   }
-  if (error instanceof Error) return error.message;
+  if (effectiveStatus === 503 || effectiveStatus === 502 || effectiveStatus === 504) {
+    return "Serveur indisponible temporairement. Vérifiez que l’API est démarrée, puis réessayez.";
+  }
+  if (error instanceof Error) {
+    if (/status code 503/i.test(error.message)) {
+      return "Serveur indisponible temporairement. Vérifiez que l’API est démarrée, puis réessayez.";
+    }
+    return error.message;
+  }
   if (error && typeof error === "object") {
     const candidate = error as { message?: unknown; code?: unknown; status?: unknown };
     const message = typeof candidate.message === "string" ? candidate.message : null;
@@ -149,6 +159,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
     null as AuthContext | null
   );
   const [error, setError] = ReactRuntime.useState(null as string | null);
+  const [contextSwitchInFlight, setContextSwitchInFlight] = ReactRuntime.useState(false);
   const bootstrapInFlightRef = ReactRuntime.useRef(null as Promise<void> | null);
   const activeContextRef = ReactRuntime.useRef(activeContext);
   ReactRuntime.useLayoutEffect(() => {
@@ -396,11 +407,16 @@ export function SessionProvider({ children }: PropsWithChildren) {
     };
 
     const switchStartedAt = Date.now();
-    if (toCtx) {
+    // Bascule entreprise ↔ chauffeur : pas d'optimistic UI.
+    // Sinon DriverContextGuard / CompanyLayout redirigent tout de suite, puis un
+    // échec API rollback → rebond automatique vers l'écran d'origine.
+    const usedOptimistic = Boolean(toCtx) && !crossWorkspaceSwitch;
+    if (usedOptimistic && toCtx) {
       applyOptimisticContext(toCtx);
       prefetchContextTarget(queryClient, toCtx);
     }
 
+    setContextSwitchInFlight(true);
     try {
       const response = await switchContext(targetContextId);
       const nextAvailableContexts: AuthContext[] =
@@ -425,6 +441,9 @@ export function SessionProvider({ children }: PropsWithChildren) {
         setActiveContext(nextContext);
         setActiveContextIdForApi(nextContext.context_id);
         contextRealtimeRouter.setActiveContext(nextContext.context_type);
+        if (crossWorkspaceSwitch) {
+          prefetchContextTarget(queryClient, nextContext);
+        }
       }
       void appendSessionJournalEvent("session.context.switch", {
         previous_context_id: previousContextId,
@@ -492,10 +511,14 @@ export function SessionProvider({ children }: PropsWithChildren) {
         runPostSwitchSideEffects();
       }
     } catch (e) {
-      rollbackOptimistic();
-      const message = toUiErrorMessage(e, "Context switch failed");
+      if (usedOptimistic) {
+        rollbackOptimistic();
+      }
+      const message = toUiErrorMessage(e, "Impossible de basculer d'espace.");
       setError(message);
       throw new Error(message);
+    } finally {
+      setContextSwitchInFlight(false);
     }
   }, [activeContext, queryClient, bootstrap]);
 
@@ -581,6 +604,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
       login: loginAndBootstrap,
       bootstrapSession,
       changeContext,
+      contextSwitchInFlight,
       logout,
       can: (permission: string) => hasPermission(activeContext, permission),
     }),
@@ -592,6 +616,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
       loginAndBootstrap,
       bootstrapSession,
       changeContext,
+      contextSwitchInFlight,
       logout,
     ]
   ) as SessionContextValue;

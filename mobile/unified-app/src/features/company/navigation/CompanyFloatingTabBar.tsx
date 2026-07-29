@@ -106,7 +106,6 @@ export function CompanyFloatingTabBar({ state, navigation }: BottomTabBarProps) 
   const focusedFromSheet =
     HIDDEN_SHEET_ROUTES.some((x) => x.name === current) || onOffersRoute;
   const bottomPad = computeCompanyFloatingBottomPad(bottomInset);
-  const totalBarAreaHeight = 64 + bottomInset;
   const primaryDriverContext = useMemo(() => {
     const contexts = bootstrap?.available_contexts ?? [];
     return (
@@ -197,7 +196,6 @@ export function CompanyFloatingTabBar({ state, navigation }: BottomTabBarProps) 
   return (
     <>
     <BaseFloatingBar
-      containerHeight={totalBarAreaHeight}
       paddingBottom={bottomPad}
       maxBarWidth={maxBarWidth}
       horizontalPadding={horizontalPadding}

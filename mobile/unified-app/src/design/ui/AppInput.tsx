@@ -1,6 +1,7 @@
 import { forwardRef, useCallback, useState, type ReactNode } from "react";
 import { TextInput, type TextInputProps, View, type ViewStyle } from "react-native";
 import { brandPrimary, brandText, brandTextMuted } from "../responsive/brand";
+import { CONTENT_FONT_CAP } from "../responsive/fontScaleCaps";
 import { useResponsiveTokens } from "../responsive/useResponsiveTokens";
 import { AppText } from "./AppText";
 import { appTextErrorColor } from "./typography";
@@ -31,6 +32,7 @@ export const AppInput = forwardRef<TextInput, AppInputProps>(function AppInput(
     editable = true,
     onFocus,
     onBlur,
+    maxFontSizeMultiplier,
     ...rest
   },
   ref
@@ -94,9 +96,14 @@ export const AppInput = forwardRef<TextInput, AppInputProps>(function AppInput(
           placeholderTextColor={brandTextMuted}
           onFocus={onF}
           onBlur={onB}
+          maxFontSizeMultiplier={
+            maxFontSizeMultiplier !== undefined ? maxFontSizeMultiplier : CONTENT_FONT_CAP
+          }
           style={[
             {
               flex: 1,
+              minWidth: 0,
+              flexShrink: 1,
               minHeight: inputMinH,
               paddingVertical: inputPadV,
               fontSize: t.bodyFontSize,

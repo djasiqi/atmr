@@ -1,13 +1,14 @@
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, View, type TextStyle, type ViewStyle } from "react-native";
-import { useResponsiveTokens } from "../../../../design/responsive";
+import { useAccessibilityScale, useResponsiveTokens } from "../../../../design/responsive";
 import { AppInput } from "../../../../design/ui/AppInput";
 import { AppText } from "../../../../design/ui/AppText";
 import { RideAddressOption, useCompanyAddressSearch } from "../../useRideForms";
 import { FONT_SIZE } from "../../../../design/responsive/typographyTokens";
 import {
   suggestionDropdownAnchorStyle,
+  suggestionDropdownHitAreaStyle,
   suggestionDropdownPanelStyle,
   suggestionFieldOpenStyle,
 } from "./suggestionOverlayStyles";
@@ -76,6 +77,8 @@ export function AddressSelector({
   onSuggestionsVisibilityChange,
 }: AddressSelectorProps) {
   const t = useResponsiveTokens();
+  const { isVeryLargeText } = useAccessibilityScale();
+  const suggestionLines = isVeryLargeText ? undefined : 1;
   const [query, setQuery] = useState(value);
   const [isSuggestionsOpen, setIsSuggestionsOpen] = useState(false);
   const [lastSelectedNormalized, setLastSelectedNormalized] = useState("");
@@ -190,10 +193,11 @@ export function AddressSelector({
               </View>
             ) : null
           }
-          shellStyle={[
-            { borderRadius: ROW_RADIUS, minHeight: Math.max(t.fieldShellMinHeight, 34) },
-            shellStyle,
-          ]}
+          shellStyle={{
+            borderRadius: ROW_RADIUS,
+            minHeight: Math.max(t.fieldShellMinHeight, 34),
+            ...shellStyle,
+          }}
           style={inputStyle}
         />
         {shouldShowDropdown ? (
@@ -204,11 +208,12 @@ export function AddressSelector({
               borderColor: UI_BORDER_SOFT,
               borderRadius: ROW_RADIUS,
               ...suggestionDropdownPanelStyle,
+              ...suggestionDropdownHitAreaStyle,
             }}
           >
             <ScrollView
               nestedScrollEnabled
-              keyboardShouldPersistTaps="handled"
+              keyboardShouldPersistTaps="always"
               style={{ maxHeight: SUGGESTIONS_MAX_VISIBLE * 46 }}
             >
               {addressesQuery.isLoading ? (
@@ -237,6 +242,7 @@ export function AddressSelector({
                   {section.rows.length > 0 && section.title ? (
                     <AppText
                       variant="caption"
+                      scaleRole="chrome"
                       style={{
                         color: "rgba(30, 41, 59, 0.72)",
                         fontWeight: "700",
@@ -259,10 +265,9 @@ export function AddressSelector({
                         key={`${section.title}-${address.id}-${index}`}
                         accessibilityRole="button"
                         accessibilityLabel={`Suggestion adresse ${address.label}`}
+                        // Sélection dès pressIn : évite la course blur/focus web qui annule onPress.
                         onPressIn={(event) => {
                           event.preventDefault?.();
-                        }}
-                        onPress={() => {
                           setQuery(address.label);
                           onChange(address.label);
                           onSelectAddress?.(address);
@@ -270,28 +275,32 @@ export function AddressSelector({
                           setIsSuggestionsOpen(false);
                           setJustSelected(true);
                         }}
-                        style={({ hovered, focused, pressed }) => ({
+                        style={({ hovered, pressed }) => ({
                           minHeight: 36,
                           justifyContent: "center",
                           paddingVertical: 5,
                           paddingHorizontal: 9,
                           backgroundColor: pressed
                             ? "rgba(15, 23, 42, 0.06)"
-                            : hovered || focused
+                            : hovered
                               ? "rgba(15, 23, 42, 0.03)"
                               : "#FFFFFF",
                           borderBottomWidth: isLast ? 0 : 1,
                           borderBottomColor: "rgba(148, 163, 184, 0.22)",
+                          cursor: "pointer",
+                          minWidth: 0,
                         })}
                       >
                         <AppText
                           variant="body"
-                          numberOfLines={1}
+                          numberOfLines={suggestionLines}
                           style={{
                             color: "rgba(15, 23, 42, 0.9)",
                             fontSize: FONT_SIZE.px14,
                             lineHeight: 17,
                             fontWeight: "600",
+                            flexShrink: 1,
+                            minWidth: 0,
                           }}
                         >
                           {displayPrimary}
@@ -299,8 +308,15 @@ export function AddressSelector({
                         {displaySecondary ? (
                           <AppText
                             variant="caption"
-                            numberOfLines={1}
-                            style={{ color: "rgba(71, 85, 105, 0.82)", marginTop: 1, fontSize: FONT_SIZE.px12, lineHeight: 14 }}
+                            numberOfLines={suggestionLines}
+                            style={{
+                              color: "rgba(71, 85, 105, 0.82)",
+                              marginTop: 1,
+                              fontSize: FONT_SIZE.px12,
+                              lineHeight: 14,
+                              flexShrink: 1,
+                              minWidth: 0,
+                            }}
                           >
                             {displaySecondary}
                           </AppText>

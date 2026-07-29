@@ -20,4 +20,5 @@ export {
 export { AppSwitch, type AppSwitchProps } from "./AppSwitch";
 export { AppText, type AppTextProps } from "./AppText";
 export { Modal, type LegacyModalProps } from "./LegacyModal";
+export { ModalFooterActions, type ModalFooterActionsProps } from "./ModalFooterActions";
 export { appTextErrorColor, getAppTextStyle, type AppTextVariant } from "./typography";

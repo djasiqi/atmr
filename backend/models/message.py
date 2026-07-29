@@ -64,11 +64,12 @@ class Message(db.Model):
     )
     content: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    # Support pour images et PDF
+    # Support pour images, PDF et messages vocaux
     image_url = Column(sa.String(500), nullable=True)
     pdf_url = Column(sa.String(500), nullable=True)
     pdf_filename = Column(sa.String(255), nullable=True)
     pdf_size = Column(Integer, nullable=True)
+    audio_url = Column(sa.String(500), nullable=True)
 
     timestamp = Column(
         DateTime(timezone=True), nullable=False, server_default=func.now(), index=True
@@ -145,11 +146,12 @@ class Message(db.Model):
             "content": self.content,
             "timestamp": _iso(self.timestamp),
             "is_read": _as_bool(self.is_read),
-            # Support pour images et PDF
+            # Support pour images, PDF et messages vocaux
             "image_url": getattr(self, "image_url", None),
             "pdf_url": getattr(self, "pdf_url", None),
             "pdf_filename": getattr(self, "pdf_filename", None),
             "pdf_size": getattr(self, "pdf_size", None),
+            "audio_url": getattr(self, "audio_url", None),
             "thread_id": getattr(self, "thread_id", None),
             "booking_id": getattr(self, "booking_id", None),
             "message_type": getattr(self, "message_type", None) or "text",
@@ -186,15 +188,10 @@ class Message(db.Model):
 
     @validates("content")
     def _v_content(self, _k, text):
-        # ✅ Permettre None temporairement (sera validé côté handler)
+        # None / vide autorisés : un message peut être image / PDF / vocal seul.
         if text is None:
             return None
-        # ✅ Convertir en string et strip
         text_str = (
             text.strip() if isinstance(text, str) else str(text).strip() if text else ""
         )
-        # ✅ Validation stricte : rejeter uniquement les chaînes vides (pas None)
-        if text_str == "":
-            msg = "Le contenu du message ne peut pas être vide."
-            raise ValueError(msg)
-        return text_str
+        return text_str or None

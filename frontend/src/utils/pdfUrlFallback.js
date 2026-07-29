@@ -19,6 +19,11 @@ export function ensurePdfUrlWorksInDev(url) {
   const trimmed = url.trim();
   if (typeof window === 'undefined') return trimmed;
 
+  // Ne jamais réécrire les blob:/data: (sinon blob:http://localhost → 127.0.0.1 = PDF inaccessible).
+  if (trimmed.startsWith('blob:') || trimmed.startsWith('data:')) {
+    return trimmed;
+  }
+
   /** Déjà relatif : laisser tel quel (déjà servi par le même origine / proxy). */
   if (trimmed.startsWith('/')) {
     return trimmed;

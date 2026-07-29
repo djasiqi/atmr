@@ -8,6 +8,8 @@ import {
   BaseFloatingBar,
   brandPrimary,
   computeClientFloatingBottomPad,
+  FLOATING_BAR_FALLBACK_INNER,
+  useFloatingBarClearance,
 } from "../../../design/responsive";
 import { useAccessibilityScale } from "../../../design/responsive/useAccessibilityScale";
 import { useAppViewport } from "../../../design/responsive/useAppViewport";
@@ -27,8 +29,10 @@ const HREF = {
   account: "/(app)/(client)/account" as Href,
 } as const;
 
-/** Espace réservé sous le contenu quand la barre est visible (hors safe area). */
-export const CLIENT_FLOATING_BAR_BASE_HEIGHT = 68;
+/**
+ * @deprecated Fallback hors provider — préférer {@link useClientBottomContentPadding}.
+ */
+export const CLIENT_FLOATING_BAR_BASE_HEIGHT = FLOATING_BAR_FALLBACK_INNER.client;
 
 export function useClientFloatingBarVisible(): boolean {
   const segments = useSegments();
@@ -39,8 +43,10 @@ export function useClientBottomContentPadding(): number {
   const { bottomInset } = useAppViewport();
   const segments = useSegments();
   const visible = !shouldHideClientFloatingBar(segments);
+  const bottomPad = computeClientFloatingBottomPad(bottomInset);
+  const barClearance = useFloatingBarClearance("client", bottomPad);
   if (!visible) return Math.max(24, bottomInset + 8);
-  return CLIENT_FLOATING_BAR_BASE_HEIGHT + Math.max(12, bottomInset + 4);
+  return barClearance;
 }
 
 /** Masquer la barre sur les écrans « plein flux » (paiement, fiche course). La création garde le menu. */
@@ -118,7 +124,6 @@ export function ClientFloatingAppBar() {
 
   return (
     <BaseFloatingBar
-      containerHeight={CLIENT_FLOATING_BAR_BASE_HEIGHT + bottomPad}
       paddingBottom={bottomPad}
       maxBarWidth={maxBarWidth}
       horizontalPadding={horizontalPadding}

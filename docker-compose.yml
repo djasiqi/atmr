@@ -104,13 +104,21 @@ services:
       timeout: 10s
       retries: 10
       start_period: 90s
-    # En développement, on peut surcharger la commande par défaut
+    # Démarrer en root le temps de corriger /app/uploads (bind mount Windows),
+    # puis gunicorn sous appuser — évite [Errno 13] sur PDF factures.
+    user: "0:0"
     # Commande shell : $${VAR} laisse l’expansion à sh dans le conteneur (évite l’interp. Compose côté hôte).
     command:
       - /bin/sh
       - -c
       - |
-        exec gunicorn wsgi:app \
+        mkdir -p /app/uploads/invoices /app/uploads/statements \
+          /app/uploads/company_logos /app/uploads/institution_logos /app/uploads/chat
+        APP_UID="$$(id -u appuser 2>/dev/null || echo 999)"
+        APP_GID="$$(id -g appuser 2>/dev/null || echo 999)"
+        chown -R "$${APP_UID}:$${APP_GID}" /app/uploads 2>/dev/null || true
+        chmod -R a+rwX /app/uploads 2>/dev/null || true
+        exec gosu appuser gunicorn wsgi:app \
           --bind 0.0.0.0:5000 \
           --worker-class $${GUNICORN_WORKER_CLASS:-gevent} \
           --workers $${GUNICORN_WORKERS:-1} \
@@ -235,11 +243,19 @@ services:
       timeout: 60s
       retries: 3
       start_period: 90s
+    # Même garde-fou uploads que atmr_api (PDF générés via Celery billing).
+    user: "0:0"
     command:
       - /bin/sh
       - -c
       - |
-        exec celery -A celery_app:celery worker -l info \
+        mkdir -p /app/uploads/invoices /app/uploads/statements \
+          /app/uploads/company_logos /app/uploads/institution_logos /app/uploads/chat
+        APP_UID="$$(id -u appuser 2>/dev/null || echo 999)"
+        APP_GID="$$(id -g appuser 2>/dev/null || echo 999)"
+        chown -R "$${APP_UID}:$${APP_GID}" /app/uploads 2>/dev/null || true
+        chmod -R a+rwX /app/uploads 2>/dev/null || true
+        exec gosu appuser celery -A celery_app:celery worker -l info \
           --concurrency $${CELERY_CONCURRENCY:-2} \
           --max-tasks-per-child 100 \
           -Q default,dispatch,realtime,notifications,billing,rl,geocoding,dlq

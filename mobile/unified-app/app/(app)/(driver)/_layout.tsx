@@ -28,6 +28,7 @@ import {
   FLOATING_TAB_PAGE_BG,
 } from "../../../src/navigation/floatingTabScreenOptions";
 import { useAppViewport } from "../../../src/design/responsive";
+import { AppFloatingBarMetricsProvider } from "../../../src/design/navigation/AppFloatingBarMetricsProvider";
 import { useReduceMotion } from "../../../src/design/navigation/useReduceMotion";
 import { usePerfRouteTracking } from "../../../src/core/observability/usePerfRouteTracking";
 import { DriverPresenceDisclosureHost } from "../../../src/features/driver/components/DriverPresenceDisclosureHost";
@@ -125,33 +126,35 @@ export default function DriverLayout() {
 
   return (
     <DriverUnifiedGateGuard>
-      <View style={{ flex: 1, backgroundColor: FLOATING_TAB_PAGE_BG.driver }}>
-        <DriverTrackingHost />
-        <DriverRealtimeSyncHost />
-        <DriverPresenceDisclosureHost />
-        <DriverNotificationDisclosureHost />
-        <DriverTrackingBannerHost />
-        <DriverMissionLiveTrackingDisclosureHost />
-        <Tabs
-          implementation={FLOATING_TAB_IMPLEMENTATION}
-          screenOptions={{
-            ...tabScreenOptions,
-            tabBarActiveTintColor: "#0A8F7A",
-            tabBarInactiveTintColor: "#7A808A",
-          }}
-          tabBar={(props) => <DriverFloatingTabBar {...props} />}
-        >
-          <Tabs.Screen name="index" options={{ title: "Accueil" }} />
-          <Tabs.Screen name="trips" options={{ title: "Courses du jour" }} />
-          <Tabs.Screen name="missions" options={{ title: "Missions", href: null }} />
-          <Tabs.Screen name="messages" options={{ title: "Messages" }} />
-          <Tabs.Screen name="chat" options={{ title: "Chat", href: null }} />
-          <Tabs.Screen name="schedule" options={{ title: "Planning", href: null }} />
-          <Tabs.Screen name="profile" options={{ title: "Profil", href: null }} />
-          <Tabs.Screen name="missions/[missionId]" options={{ href: null }} />
-          <Tabs.Screen name="trips/[tripId]" options={{ href: null }} />
-        </Tabs>
-      </View>
+      <AppFloatingBarMetricsProvider preset="driver">
+        <View style={{ flex: 1, backgroundColor: FLOATING_TAB_PAGE_BG.driver }}>
+          <DriverTrackingHost />
+          <DriverRealtimeSyncHost />
+          <DriverPresenceDisclosureHost />
+          <DriverNotificationDisclosureHost />
+          <DriverTrackingBannerHost />
+          <DriverMissionLiveTrackingDisclosureHost />
+          <Tabs
+            implementation={FLOATING_TAB_IMPLEMENTATION}
+            screenOptions={{
+              ...tabScreenOptions,
+              tabBarActiveTintColor: "#0A8F7A",
+              tabBarInactiveTintColor: "#7A808A",
+            }}
+            tabBar={(props) => <DriverFloatingTabBar {...props} />}
+          >
+            <Tabs.Screen name="index" options={{ title: "Accueil" }} />
+            <Tabs.Screen name="trips" options={{ title: "Courses du jour" }} />
+            <Tabs.Screen name="missions" options={{ title: "Missions", href: null }} />
+            <Tabs.Screen name="messages" options={{ title: "Messages" }} />
+            <Tabs.Screen name="chat" options={{ title: "Chat", href: null }} />
+            <Tabs.Screen name="schedule" options={{ title: "Planning", href: null }} />
+            <Tabs.Screen name="profile" options={{ title: "Profil", href: null }} />
+            <Tabs.Screen name="missions/[missionId]" options={{ href: null }} />
+            <Tabs.Screen name="trips/[tripId]" options={{ href: null }} />
+          </Tabs>
+        </View>
+      </AppFloatingBarMetricsProvider>
     </DriverUnifiedGateGuard>
   );
 }

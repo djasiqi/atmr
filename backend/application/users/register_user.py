@@ -18,11 +18,11 @@ class RegisterUserInput:
 
     Attributes:
         username: Nom d'utilisateur
-        email: Email de l'utilisateur
+        email: Email de l'utilisateur (optionnel si téléphone fourni)
         password: Mot de passe de l'utilisateur
         first_name: Prénom (optionnel)
         last_name: Nom (optionnel)
-        phone: Téléphone (optionnel)
+        phone: Téléphone (optionnel si email fourni)
         address: Adresse (optionnel)
         birth_date: Date de naissance (optionnel)
         gender: Genre (optionnel)
@@ -30,8 +30,8 @@ class RegisterUserInput:
     """
 
     username: str
-    email: str
-    password: str
+    password: str | None = None
+    email: str | None = None
     first_name: str | None = None
     last_name: str | None = None
     phone: str | None = None
@@ -95,17 +95,33 @@ class RegisterUserUseCase:
                 status_code=400,
             )
 
-        # Vérifier que l'email n'existe pas déjà
         from repositories.user_repository import UserRepository
 
         user_repo = UserRepository()
-        existing_user = user_repo.find_by_email(input_data.email)
-        if existing_user:
-            return RegisterUserOutput(
-                success=False,
-                error={"error": "Un utilisateur avec cet email existe déjà"},
-                status_code=400,
+        email = (input_data.email or "").strip() or None
+        phone = (input_data.phone or "").strip() or None
+
+        if email:
+            existing_user = user_repo.find_by_email(email)
+            if existing_user:
+                return RegisterUserOutput(
+                    success=False,
+                    error={"error": "Un utilisateur avec cet email existe déjà"},
+                    status_code=400,
+                )
+
+        if phone:
+            existing_by_phone = (
+                User.query.filter(User.phone == phone).limit(1).first()
             )
+            if existing_by_phone:
+                return RegisterUserOutput(
+                    success=False,
+                    error={
+                        "error": "Un utilisateur avec ce numéro de téléphone existe déjà"
+                    },
+                    status_code=400,
+                )
 
         # Vérifier que le username n'existe pas déjà
         existing_user_by_username = user_repo.find_by_username(input_data.username)
@@ -118,27 +134,42 @@ class RegisterUserUseCase:
 
         try:
             # Créer l'utilisateur
+            import secrets
+
             from security.password_policy import (
                 PasswordPolicyError,
                 PasswordPolicyService,
             )
 
-            try:
-                PasswordPolicyService.validate_password(
-                    input_data.password, user_id=None, check_history=False
-                )
-            except PasswordPolicyError as e:
-                return RegisterUserOutput(
-                    success=False,
-                    error={"error": str(e)},
-                    status_code=400,
-                )
+            # Inscription téléphone seule : mot de passe aléatoire (connexion via OTP)
+            password = (input_data.password or "").strip() or None
+            if not password:
+                if not phone:
+                    return RegisterUserOutput(
+                        success=False,
+                        error={
+                            "error": "Le mot de passe est obligatoire lorsque vous indiquez un email."
+                        },
+                        status_code=400,
+                    )
+                password = secrets.token_urlsafe(32)
+            else:
+                try:
+                    PasswordPolicyService.validate_password(
+                        password, user_id=None, check_history=False
+                    )
+                except PasswordPolicyError as e:
+                    return RegisterUserOutput(
+                        success=False,
+                        error={"error": str(e)},
+                        status_code=400,
+                    )
 
             user = User()
             user.username = input_data.username
-            user.email = input_data.email
+            user.email = email
             user.set_password(  # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
-                input_data.password
+                password
             )
             user.role = UserRole.CLIENT  # Par défaut, rôle client
             user.account_status = "pending_activation"
@@ -147,8 +178,8 @@ class RegisterUserUseCase:
                 user.first_name = input_data.first_name
             if input_data.last_name:
                 user.last_name = input_data.last_name
-            if input_data.phone:
-                user.phone = input_data.phone
+            if phone:
+                user.phone = phone
             if input_data.address:
                 user.address = input_data.address
             if input_data.birth_date:
@@ -192,10 +223,15 @@ class RegisterUserUseCase:
         if not input_data.username or len(input_data.username.strip()) == 0:
             errors["username"] = "Le nom d'utilisateur est requis"
 
-        if not input_data.email or len(input_data.email.strip()) == 0:
-            errors["email"] = "L'email est requis"
+        email = (input_data.email or "").strip()
+        phone = (input_data.phone or "").strip()
+        if not email and not phone:
+            errors["email"] = "Indiquez une adresse email ou un numéro de téléphone"
 
-        if not input_data.password or len(input_data.password.strip()) == 0:
-            errors["password"] = "Le mot de passe est requis"
+        password = (input_data.password or "").strip()
+        if email and not password:
+            errors["password"] = (
+                "Le mot de passe est obligatoire lorsque vous indiquez un email"
+            )
 
         return errors if errors else None

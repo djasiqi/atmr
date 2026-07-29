@@ -9,12 +9,10 @@ import { realtimeStatusA11yLabel } from "../utils/companyRealtimeFluxStatus";
 import { CompanyInboxButton } from "./CompanyInboxButton";
 import { createShadow } from "../../../styles/shadowStyles";
 import { useAppViewport } from "../../../design/responsive/useAppViewport";
+import { useAccessibilityScale } from "../../../design/responsive/useAccessibilityScale";
 import { FONT_SIZE } from "../../../design/responsive/typographyTokens";
 
 dayjs.locale("fr");
-
-/** Même plafond que `AppText` — évite écarts dashboard vs Courses si zoom accessibilité. */
-const HEADER_MAX_FONT_MULTIPLIER = 1.35;
 
 /**
  * Ardoise unique pour date, libellé mode et ligne méta (réf. `color-121wj93` / `1s7ct43`).
@@ -57,7 +55,7 @@ const headerKpiTileShadow: ViewStyle =
 
 /** Hauteur de ligne unique pour la rangée (titre, pilule date, chip mode) — évite le décalage baseline. */
 const HEADER_ROW_LINE_HEIGHT = 20;
-/** Rangée : pilule date + chip mode = 39px (aligné tuiles « En cours »). */
+/** Rangée : pilule date + chip mode — minHeight (grandit avec Larger Text). */
 const HEADER_ROW_MIN_HEIGHT = 39;
 
 export type EnterpriseHeaderProps = {
@@ -123,6 +121,7 @@ export function EnterpriseHeader({
   variant = "sticky",
 }: EnterpriseHeaderProps) {
   const { horizontalPadding, safeLeft, safeRight, topInset } = useAppViewport();
+  const { chromeMaxFontMultiplier } = useAccessibilityScale();
   const topSafe = topSafeAreaPxProp !== undefined ? topSafeAreaPxProp : topInset;
   const stripContentPadLeft = Math.max(horizontalPadding, safeLeft);
   const stripContentPadRight = Math.max(horizontalPadding, safeRight);
@@ -161,7 +160,7 @@ export function EnterpriseHeader({
         <Ionicons name="calendar-outline" size={headerIconSize} color={E.TEXT_SEC} accessible={false} />
       </View>
       <Text
-        maxFontSizeMultiplier={HEADER_MAX_FONT_MULTIPLIER}
+        maxFontSizeMultiplier={chromeMaxFontMultiplier}
         style={[s.datePillText, s.datePillTextSheet, s.datePillTextEmphasis]}
         numberOfLines={1}
         ellipsizeMode="tail"
@@ -194,7 +193,7 @@ export function EnterpriseHeader({
         <Ionicons name="caret-back" size={chevronLeftSize} color={iconColor} />
       </Pressable>
       <Text
-        maxFontSizeMultiplier={HEADER_MAX_FONT_MULTIPLIER}
+        maxFontSizeMultiplier={chromeMaxFontMultiplier}
         style={[s.datePillText, s.datePillTextEmphasis]}
         numberOfLines={1}
       >
@@ -229,7 +228,7 @@ export function EnterpriseHeader({
         accessibilityLabel={`Mode de dispatch. Actuel : ${formatMode(mode)}. ${socketA11y}. Appuyer pour choisir Manuel, Semi-auto ou Auto.`}
       >
         <Text
-          maxFontSizeMultiplier={HEADER_MAX_FONT_MULTIPLIER}
+          maxFontSizeMultiplier={chromeMaxFontMultiplier}
           style={[s.modeChipText, s.modeChipTextEmphasis]}
           numberOfLines={1}
           ellipsizeMode="tail"
@@ -243,7 +242,7 @@ export function EnterpriseHeader({
         accessibilityLabel={`Mode ${formatMode(mode)}. ${socketA11y}`}
       >
         <Text
-          maxFontSizeMultiplier={HEADER_MAX_FONT_MULTIPLIER}
+          maxFontSizeMultiplier={chromeMaxFontMultiplier}
           style={[s.modeChipText, s.modeChipTextEmphasis]}
           numberOfLines={1}
           ellipsizeMode="tail"
@@ -296,7 +295,7 @@ export function EnterpriseHeader({
               {title ? (
                 <View style={s.titleColumn}>
                   <Text
-                    maxFontSizeMultiplier={HEADER_MAX_FONT_MULTIPLIER}
+                    maxFontSizeMultiplier={chromeMaxFontMultiplier}
                     style={s.inlineTitle}
                     numberOfLines={1}
                     accessibilityRole="header"
@@ -328,7 +327,7 @@ export function EnterpriseHeader({
           </View>
         )}
         {metaDetail === "full" ? (
-          <Text maxFontSizeMultiplier={HEADER_MAX_FONT_MULTIPLIER} style={s.metaLine} numberOfLines={2}>
+          <Text maxFontSizeMultiplier={chromeMaxFontMultiplier} style={s.metaLine} numberOfLines={2}>
             {fullMetaLine}
           </Text>
         ) : null}
@@ -376,11 +375,12 @@ const s = StyleSheet.create({
   },
   row: {
     flexDirection: "row",
-    flexWrap: "nowrap",
+    flexWrap: "wrap",
     alignItems: "center",
     justifyContent: "space-between",
     width: "100%",
     minHeight: HEADER_ROW_MIN_HEIGHT,
+    rowGap: 8,
   },
   rowFloating: {
     justifyContent: "flex-start",
@@ -390,6 +390,7 @@ const s = StyleSheet.create({
   /** Bloc gauche : titre optionnel + pilule date (réf. Courses / justify-between). */
   leftCluster: {
     flexDirection: "row",
+    flexWrap: "wrap",
     alignItems: "center",
     gap: 10,
     flex: 1,
@@ -398,25 +399,28 @@ const s = StyleSheet.create({
   /** Bloc droit : chip mode + cloche + trailing. */
   rightCluster: {
     flexDirection: "row",
-    flexWrap: "nowrap",
+    flexWrap: "wrap",
     alignItems: "center",
     gap: 0,
-    flexShrink: 0,
+    flexShrink: 1,
+    minWidth: 0,
   },
   rightClusterFloating: {
     marginLeft: 0,
     paddingLeft: 0,
     flex: 1,
     minWidth: 0,
-    flexWrap: "nowrap",
+    flexWrap: "wrap",
   },
   floatingUnifiedControls: {
     flex: 1,
     minWidth: 0,
     flexDirection: "row",
+    flexWrap: "wrap",
     alignItems: "center",
     justifyContent: "flex-start",
     overflow: "visible",
+    rowGap: 8,
   },
   rightLeadGap: { marginLeft: 6 },
   rightItemGap: { marginLeft: 6 },
@@ -446,10 +450,9 @@ const s = StyleSheet.create({
     flexGrow: 0,
     marginLeft: 12,
   },
-  /** Aligne la cloche sur la hauteur du chip mode (39px). */
+  /** Aligne la cloche sur la hauteur du chip mode (minHeight 39). */
   inboxWell: {
     flexDirection: "row",
-    height: 39,
     minHeight: 39,
     minWidth: 44,
     borderRadius: 16,
@@ -457,6 +460,7 @@ const s = StyleSheet.create({
     borderColor: E.BORDER,
     backgroundColor: E.CARD,
     paddingHorizontal: 10,
+    paddingVertical: 6,
     justifyContent: "center",
     alignItems: "center",
     overflow: "visible",
@@ -497,30 +501,30 @@ const s = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
-  /** Variante feuille date : hauteur fixe 39px comme le chip mode. */
+  /** Variante feuille date : minHeight 39px comme le chip mode (grandit avec Larger Text). */
   datePillWrapSheet: {
-    minWidth: 162,
-    height: 39,
+    minWidth: 0,
     minHeight: 39,
-    maxHeight: 39,
-    flexShrink: 0,
+    flexShrink: 1,
     paddingHorizontal: 10,
-    paddingVertical: 0,
+    paddingVertical: 6,
     gap: 8,
     justifyContent: "center",
     overflow: "hidden",
   },
   datePillWrapFloating: {
-    minWidth: 136,
+    minWidth: 0,
     maxWidth: 158,
     paddingHorizontal: 9,
     gap: 6,
   },
-  /** Texte sur une ligne dans la pilule 39px. */
+  /** Texte dense dans la pilule date (cap chrome). */
   datePillTextSheet: {
     fontSize: FONT_SIZE.px14,
     lineHeight: 18,
     letterSpacing: 0.08,
+    flexShrink: 1,
+    minWidth: 0,
   },
   /** Texte principal : lisible sans extrabold. */
   datePillTextEmphasis: {
@@ -571,16 +575,15 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    height: 39,
     minHeight: 39,
-    maxHeight: 39,
-    paddingVertical: 0,
+    paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: E.BORDER,
     backgroundColor: E.CARD,
-    flexShrink: 0,
+    flexShrink: 1,
+    minWidth: 0,
     maxWidth: 220,
     overflow: "hidden",
   },

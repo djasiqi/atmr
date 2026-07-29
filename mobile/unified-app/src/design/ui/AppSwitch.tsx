@@ -46,6 +46,7 @@ export function AppSwitch({
         }}
         accessibilityRole="none"
         importantForAccessibility="no-hide-descendants"
+        style={{ flex: 1, minWidth: 0, flexShrink: 1 }}
       >
         {label}
       </Pressable>

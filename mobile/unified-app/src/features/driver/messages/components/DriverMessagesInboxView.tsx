@@ -9,7 +9,7 @@ import {
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen, AppText, useAppViewport } from "../../../../design/responsive";
-import { DRIVER_FLOATING_TAB_SCROLL_PADDING } from "../../navigation/DriverFloatingTabBar";
+import { useDriverFloatingTabScrollPadding } from "../../navigation/DriverFloatingTabBar";
 import {
   useDriverCompanyId,
   useEnsureDriverSocketForHub,
@@ -49,6 +49,7 @@ const EMPTY_THREADS: MessageHubThread[] = [];
 export function DriverMessagesInboxView() {
   const router = useRouter();
   const { horizontalPadding, topInset } = useAppViewport();
+  const scrollPad = useDriverFloatingTabScrollPadding();
   const companyId = useDriverCompanyId();
   const threadsQuery = useMessageHubThreads(companyId);
   useEffect(() => {
@@ -257,8 +258,8 @@ export function DriverMessagesInboxView() {
             }
             contentContainerStyle={
               filteredThreads.length === 0
-                ? { flexGrow: 1, paddingBottom: DRIVER_FLOATING_TAB_SCROLL_PADDING }
-                : { paddingBottom: DRIVER_FLOATING_TAB_SCROLL_PADDING }
+                ? { flexGrow: 1, paddingBottom: scrollPad }
+                : { paddingBottom: scrollPad }
             }
             style={styles.list}
             refreshControl={

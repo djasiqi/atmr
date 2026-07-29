@@ -60,8 +60,14 @@ import {
   canCompleteExternalMission,
   EXTERNAL_STATUSES,
 } from '../../../utils/requestStatus';
+import {
+  isCancellationTransportAction,
+  isTransportActionPending,
+} from '../../../utils/transportActionPending';
 import { BOOKING_STATUS_LABELS } from './statusColors';
 import s from './RequestDetailPanel.module.css';
+
+const CANCEL_ALREADY_PENDING_MSG = 'Demande d’annulation déjà transmise au transporteur';
 
 const MISSION_LABELS = {
   patient_transport: 'Transport patient',
@@ -818,6 +824,14 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
   }, []);
 
   const handleCancel = async () => {
+    const pendingCr = request?.booking_summary?.pending_change_request;
+    if (
+      isTransportActionPending(pendingCr)
+      && isCancellationTransportAction(pendingCr)
+    ) {
+      toast.info(CANCEL_ALREADY_PENDING_MSG);
+      return;
+    }
     try {
       await cancelMutation.mutateAsync({ requestId: request.id, reason: '' });
       toast.success('Demande annulée');
@@ -832,20 +846,26 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
   };
 
   const handleConfirmCancelBooking = async (reason) => {
+    if (cancelBookingMutation.isPending) return;
     try {
       const res = await cancelBookingMutation.mutateAsync({
         bookingId: cancelBookingModal.bookingId,
+        requestId: request.id,
         data: {
           version: request.booking_summary?.edit_version || 1,
           reason,
           reason_code: 'CLIENT_REQUEST',
         },
       });
-      toast.success(
-        res?.status === 'pending_action' || res?.pending_revalidation
-          ? 'Demande d’annulation envoyée au transporteur'
-          : 'Transport annulé'
-      );
+      if (res?.already_pending || res?.code === 'CANCELLATION_ALREADY_PENDING') {
+        toast.info(res?.message || CANCEL_ALREADY_PENDING_MSG);
+      } else {
+        toast.success(
+          res?.status === 'pending_action' || res?.pending_revalidation
+            ? 'Demande d’annulation transmise au transporteur'
+            : 'Transport annulé'
+        );
+      }
       setCancelBookingModal({ open: false, bookingId: null });
     } catch (e2) {
       toast.error(e2?.response?.data?.error || 'Erreur annulation transport');
@@ -989,6 +1009,10 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
     && !isBoarded
     && !['COMPLETED', 'RETURN_COMPLETED', 'CANCELED'].includes(bookingStatusKey)
   );
+  const pendingCancelRequest = (
+    isTransportActionPending(bs?.pending_change_request)
+    && isCancellationTransportAction(bs?.pending_change_request)
+  );
   const isBookingEnRoute = bookingStatusKey === 'EN_ROUTE';
   const canEditRequestNow = Boolean(
     canManage
@@ -1068,6 +1092,15 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
           </div>
         )}
 
+        {pendingCancelRequest && (
+          <div className={s.actions} style={{ marginBottom: 12 }}>
+            <p style={{ margin: 0, fontSize: 13, color: '#b45309' }}>
+              Demande d’annulation déjà transmise au transporteur.
+              La course reste active jusqu’à sa confirmation.
+            </p>
+          </div>
+        )}
+
         {/* Actions */}
         {canEditBookingOperational && !isEditingBooking && (
           <div className={s.actions}>
@@ -1075,16 +1108,18 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
               className={`${s.actionBtn} ${s.btnSecondary}`}
               onClick={() => setIsEditingBooking(true)}
               title="Modifier le transport"
+              disabled={pendingCancelRequest}
             >
               <FaEdit size={11} /> Modifier
             </button>
             <button
               className={`${s.actionBtn} ${s.btnDanger}`}
               onClick={handleCancel}
-              disabled={cancelBookingMutation.isPending}
-              title="Annuler le transport"
+              disabled={cancelBookingMutation.isPending || cancelMutation.isPending}
+              title={pendingCancelRequest ? CANCEL_ALREADY_PENDING_MSG : 'Annuler le transport'}
             >
-              <FaTimes size={11} /> Annuler
+              <FaTimes size={11} />
+              {pendingCancelRequest ? 'Demande transmise' : 'Annuler'}
             </button>
           </div>
         )}

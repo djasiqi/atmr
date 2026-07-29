@@ -26,6 +26,30 @@ function toPdfBlob(raw, filename) {
 }
 
 /**
+ * Télécharge un PDF via une route API JWT et retourne les octets bruts.
+ * Plus rapide pour l’impression (évite blob URL + re-fetch).
+ *
+ * @param {string} apiPath
+ * @returns {Promise<Uint8Array|null>}
+ */
+export async function fetchProtectedPdfBytes(apiPath) {
+  if (!apiPath || typeof apiPath !== 'string') return null;
+  const response = await apiClient.get(apiPath, { responseType: 'blob' });
+  const raw = response?.data;
+  if (!raw) return null;
+  const blob = toPdfBlob(raw);
+  const type = String(blob.type || '').toLowerCase();
+  if (type.includes('json') || type.includes('html') || type.includes('text/')) {
+    return null;
+  }
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  if (bytes.length < 5) return null;
+  const magic = String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3], bytes[4]);
+  if (!magic.startsWith('%PDF')) return null;
+  return bytes;
+}
+
+/**
  * Télécharge un PDF via une route API JWT (Lot 0 SEC-06) et retourne une object URL.
  * Les anciens liens publics `/uploads/invoices/...` renvoient 404 : utiliser ce helper.
  *
@@ -38,10 +62,9 @@ function toPdfBlob(raw, filename) {
  */
 export async function fetchProtectedPdfObjectUrl(apiPath, options = {}) {
   if (!apiPath || typeof apiPath !== 'string') return null;
-  const response = await apiClient.get(apiPath, { responseType: 'blob' });
-  const raw = response?.data;
-  if (!raw) return null;
-  const blob = toPdfBlob(raw, options.filename);
+  const bytes = await fetchProtectedPdfBytes(apiPath);
+  if (!bytes) return null;
+  const blob = toPdfBlob(new Blob([bytes], { type: 'application/pdf' }), options.filename);
   return URL.createObjectURL(blob);
 }
 

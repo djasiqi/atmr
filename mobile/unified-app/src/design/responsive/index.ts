@@ -28,7 +28,21 @@ export {
   type BottomSheetLayoutOptions,
   type BottomSheetLayoutProps,
 } from "./BottomSheetLayout";
-export { useAccessibilityScale, type AccessibilityScale } from "./useAccessibilityScale";
+export {
+  computeAccessibilityScale,
+  useAccessibilityScale,
+  type AccessibilityScale,
+} from "./useAccessibilityScale";
+export {
+  CHROME_FONT_CAP,
+  CONTENT_FONT_CAP,
+  DENSITY_SCALE_CAP,
+  RADIUS_SCALE_CAP,
+  VERTICAL_LAYOUT_SCALE_CAP,
+  clampScale,
+  fontCapForScaleRole,
+  type AppTextScaleRole,
+} from "./fontScaleCaps";
 export { computeAppViewport, useAppViewport, type AppViewport } from "./useAppViewport";
 export {
   computePublicLanding,
@@ -37,5 +51,17 @@ export {
   type ResponsiveTokens,
 } from "./useResponsiveTokens";
 export { FONT_SIZE } from "./typographyTokens";
+export {
+  computeFloatingBarFallbackClearance,
+  computeFloatingBarMetrics,
+  FLOATING_BAR_FALLBACK_INNER,
+  FloatingBarMetricsProvider,
+  useFloatingBarClearance,
+  useFloatingBarMetrics,
+  useFloatingBarMetricsReporter,
+  type FloatingBarMetrics,
+  type FloatingBarPresetKind,
+} from "../navigation/floatingBarMetrics";
+export { AppFloatingBarMetricsProvider } from "../navigation/AppFloatingBarMetricsProvider";
 export * from "../navigation/BaseFloatingBar";
 export * from "../ui";

@@ -23,6 +23,7 @@ from models import (
 )
 from models.booking_change_request import (
     TransportActionStatus,
+    TransportActionType,
 )
 from models.enums import BookingStatus, InstitutionRole
 from shared.time_utils import normalize_mission_wall_clock
@@ -573,6 +574,21 @@ def _company_is_committed(booking: Booking, status: str) -> bool:
     return has_company and status in COMMITTED_STATUSES
 
 
+def _get_open_cancellation_action(booking: Booking) -> BookingChangeRequest | None:
+    """Retourne l'action CANCELLATION ouverte active, si elle existe."""
+    active_id = getattr(booking, "active_change_request_id", None)
+    if not active_id:
+        return None
+    action = BookingChangeRequest.query.get(active_id)
+    if not action:
+        return None
+    if action.status not in TransportActionStatus.OPEN:
+        return None
+    if (action.action_type or "") != TransportActionType.CANCELLATION:
+        return None
+    return action
+
+
 def _simulate_after_snapshot(booking: Booking, patch: dict[str, Any]) -> dict[str, Any]:
     """Calcule un snapshot opérationnel « après patch » sans muter le booking."""
     after = _booking_operational_snapshot(booking)
@@ -932,6 +948,25 @@ def cancel_institution_booking(
             classify_action_type,
             create_transport_action_from_intention,
         )
+
+        # Idempotence : ne pas recréer une demande ni réécrire l'historique
+        # si une annulation est déjà en attente de confirmation transporteur.
+        existing_cancel = _get_open_cancellation_action(booking)
+        if existing_cancel is not None:
+            return {
+                "success": True,
+                "status": "pending_action",
+                "already_pending": True,
+                "pending_revalidation": True,
+                "booking_id": booking.id,
+                "edit_version": int(booking.edit_version or 1),
+                "change_request": existing_cancel.serialize(),
+                "code": "CANCELLATION_ALREADY_PENDING",
+                "message": (
+                    "Demande d'annulation déjà transmise au transporteur. "
+                    "La course reste active jusqu'à sa confirmation."
+                ),
+            }, 202
 
         before = _booking_operational_snapshot(booking)
         after = {**before, "status": "CANCELED"}

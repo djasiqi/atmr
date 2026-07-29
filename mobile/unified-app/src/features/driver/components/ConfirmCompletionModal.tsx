@@ -1,6 +1,6 @@
 import { StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { AppButton, Modal } from "../../../design/responsive";
+import { AppButton, Modal, ModalFooterActions } from "../../../design/responsive";
 import { AppText } from "../../../design/ui/AppText";
 import { E } from "../../company/theme/enterpriseOpsTheme";
 
@@ -34,11 +34,13 @@ export function ConfirmCompletionModal({
       presentation="bottomSheet"
       sheetBodyMaxHeightRatio={0.56}
       footer={
-        <View style={styles.footerWrap}>
-          <AppText variant="caption" style={styles.footerHint}>
-            Patient déposé à destination
-          </AppText>
-          <View style={styles.footerRow}>
+        <ModalFooterActions
+          hint={
+            <AppText variant="caption" style={styles.footerHint}>
+              Patient déposé à destination
+            </AppText>
+          }
+          secondary={
             <AppButton
               title="Annuler"
               variant="secondary"
@@ -46,6 +48,8 @@ export function ConfirmCompletionModal({
               disabled={pending}
               style={styles.footerButtonSecondary}
             />
+          }
+          primary={
             <AppButton
               title={pending ? "Clôture..." : "Confirmer la fin"}
               variant="primary"
@@ -53,8 +57,8 @@ export function ConfirmCompletionModal({
               disabled={pending}
               style={styles.footerButtonPrimary}
             />
-          </View>
-        </View>
+          }
+        />
       }
     >
       <View style={styles.body}>
@@ -112,10 +116,11 @@ const styles = StyleSheet.create({
   },
   heroContent: {
     flex: 1,
+    minWidth: 0,
     gap: 2,
   },
   heroTitle: {
-    color: E.TEXT_MAIN,
+    color: E.TEXT,
     fontWeight: "700",
   },
   heroSubtitle: {
@@ -135,7 +140,8 @@ const styles = StyleSheet.create({
   },
   warningText: {
     flex: 1,
-    color: E.TEXT_MAIN,
+    minWidth: 0,
+    color: E.TEXT,
     lineHeight: 20,
   },
   infoCard: {
@@ -152,27 +158,19 @@ const styles = StyleSheet.create({
   infoText: {
     color: E.TEXT_SEC,
     flex: 1,
+    minWidth: 0,
     lineHeight: 17,
-  },
-  footerRow: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  footerWrap: {
-    gap: 10,
   },
   footerHint: {
     color: E.TEXT_SEC,
   },
   footerButtonSecondary: {
-    flex: 1,
-    minHeight: 46,
+    minHeight: 48,
     borderRadius: 11,
     borderColor: "rgba(0, 121, 107, 0.32)",
   },
   footerButtonPrimary: {
-    flex: 1,
-    minHeight: 46,
+    minHeight: 48,
     borderRadius: 11,
   },
 });

@@ -1,14 +1,6 @@
-import { realtimeManager } from "../../../core/realtime/realtimeManager";
 import { uploadChatAttachment } from "../../chat/services/chatMediaUpload";
 import { sendHubMessage } from "./api";
 import { sendDriverHubVoiceMessage } from "./sendDriverHubVoiceMessage";
-
-jest.mock("../../../core/realtime/realtimeManager", () => ({
-  realtimeManager: {
-    isDriverSocketReady: jest.fn(),
-    emitTeamChatMessage: jest.fn(),
-  },
-}));
 
 jest.mock("../../chat/services/chatMediaUpload", () => ({
   uploadChatAttachment: jest.fn(),
@@ -23,29 +15,32 @@ describe("sendDriverHubVoiceMessage", () => {
     jest.clearAllMocks();
   });
 
-  it("émet via socket quand le socket chauffeur est prêt", async () => {
+  it("upload puis envoie via REST avec audio_url (canal équipe)", async () => {
     jest.mocked(uploadChatAttachment).mockResolvedValue("https://cdn.example/audio.m4a");
-    jest.mocked(realtimeManager.isDriverSocketReady).mockReturnValue(true);
-    jest.mocked(realtimeManager.emitTeamChatMessage).mockReturnValue(true);
+    jest.mocked(sendHubMessage).mockResolvedValue({ id: 1 } as never);
 
     await sendDriverHubVoiceMessage("file:///voice.m4a", { companyId: 42 });
 
-    expect(realtimeManager.emitTeamChatMessage).toHaveBeenCalledWith(
+    expect(uploadChatAttachment).toHaveBeenCalledWith({ uri: "file:///voice.m4a" });
+    expect(sendHubMessage).toHaveBeenCalledWith(
+      42,
+      "team",
       expect.objectContaining({
-        thread_id: "team",
         audio_url: "https://cdn.example/audio.m4a",
         content: "Message vocal",
+        message_type: "audio",
       })
     );
-    expect(sendHubMessage).not.toHaveBeenCalled();
   });
 
-  it("retombe sur REST si le socket n'est pas prêt", async () => {
+  it("respecte le threadId demandé", async () => {
     jest.mocked(uploadChatAttachment).mockResolvedValue("https://cdn.example/audio.m4a");
-    jest.mocked(realtimeManager.isDriverSocketReady).mockReturnValue(false);
     jest.mocked(sendHubMessage).mockResolvedValue({ id: 1 } as never);
 
-    await sendDriverHubVoiceMessage("file:///voice.m4a", { companyId: 42, threadId: "dispatch" });
+    await sendDriverHubVoiceMessage("file:///voice.m4a", {
+      companyId: 42,
+      threadId: "dispatch",
+    });
 
     expect(sendHubMessage).toHaveBeenCalledWith(
       42,

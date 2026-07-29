@@ -1,7 +1,11 @@
 import type { ReactNode } from "react";
-import { Platform, View } from "react-native";
+import { Platform, View, type LayoutChangeEvent } from "react-native";
 import { borderMuted } from "../responsive/colors";
 import { useResponsiveTokens } from "../responsive/useResponsiveTokens";
+import {
+  computeFloatingBarFallbackClearance,
+  useFloatingBarMetricsReporter,
+} from "./floatingBarMetrics";
 
 export type FloatingBarPreset = "client" | "company";
 
@@ -48,8 +52,11 @@ const PRESETS: Record<
 
 export type BaseFloatingBarProps = {
   children: ReactNode;
-  /** Hauteur totale de la zone réservée (pilule + padding bas). */
-  containerHeight: number;
+  /**
+   * @deprecated La hauteur est désormais dérivée du flux (pilule + paddingBottom).
+   * Conservé pour compatibilité d’appel ; ignoré si fourni.
+   */
+  containerHeight?: number;
   /** `paddingBottom` du conteneur aligné en bas (safe area / confort). */
   paddingBottom: number;
   /** Largeur max de la pilule (`Math.min(cap, usableWidth - 2 * horizontalPadding)`). */
@@ -64,11 +71,11 @@ export type BaseFloatingBarProps = {
 };
 
 /**
- * Coque commune des barres d’onglets flottantes (pilule + ombre + bordure).
+ * Coque commune des barres d’onglets flottantes (pilule en flux + ombre + bordure).
+ * La pilule n’est plus en `position: absolute` afin de contribuer à la hauteur du parent.
  */
 export function BaseFloatingBar({
   children,
-  containerHeight,
   paddingBottom,
   maxBarWidth,
   horizontalPadding,
@@ -78,53 +85,55 @@ export function BaseFloatingBar({
   isLargeText,
 }: BaseFloatingBarProps) {
   const p = PRESETS[preset];
-  const innerMin = isLargeText && minInnerHeightLargeText != null ? minInnerHeightLargeText : minInnerHeight;
+  const innerMin =
+    isLargeText && minInnerHeightLargeText != null ? minInnerHeightLargeText : minInnerHeight;
   const t = useResponsiveTokens();
+  const reporter = useFloatingBarMetricsReporter();
   /** Pilule client : ~6px à l’échelle 1 (entre spacingXs et spacingSm). */
   const FLOATING_BAR_CLIENT_PAD_X = t.spacingSm - 2;
   const FLOATING_BAR_CLIENT_PAD_Y = t.spacingSm - 2;
   const FLOATING_BAR_COMPANY_PAD_X = t.spacingXs;
   const FLOATING_BAR_COMPANY_PAD_Y = t.spacingXs;
 
+  const onPillLayout = (e: LayoutChangeEvent) => {
+    reporter?.reportInnerHeight(e.nativeEvent.layout.height);
+  };
+
   return (
     <View
-      style={{ height: containerHeight, backgroundColor: "transparent", pointerEvents: "box-none" }}
+      style={{
+        backgroundColor: "transparent",
+        pointerEvents: "box-none",
+        paddingBottom,
+        alignItems: "center",
+        width: "100%",
+      }}
+      pointerEvents="box-none"
     >
       <View
-        style={{
-          position: "absolute",
-          left: 0,
-          right: 0,
-          bottom: 0,
-          alignItems: "center",
-          paddingBottom,
-          pointerEvents: "box-none",
-        }}
+        onLayout={onPillLayout}
+        style={[
+          {
+            maxWidth: maxBarWidth,
+            width: "100%",
+            marginHorizontal: horizontalPadding,
+            minHeight: innerMin,
+            flexDirection: "row",
+            alignItems: "center",
+            paddingHorizontal: preset === "client" ? FLOATING_BAR_CLIENT_PAD_X : FLOATING_BAR_COMPANY_PAD_X,
+            paddingVertical: preset === "client" ? FLOATING_BAR_CLIENT_PAD_Y : FLOATING_BAR_COMPANY_PAD_Y,
+            backgroundColor: p.barBg,
+            borderWidth: 1,
+            borderColor: p.border,
+            borderRadius: 9999,
+          },
+          Platform.select({
+            web: { boxShadow: p.webShadow } as object,
+            default: p.nativeShadow,
+          }) as object,
+        ]}
       >
-        <View
-          style={[
-            {
-              maxWidth: maxBarWidth,
-              width: "100%",
-              marginHorizontal: horizontalPadding,
-              minHeight: innerMin,
-              flexDirection: "row",
-              alignItems: "center",
-              paddingHorizontal: preset === "client" ? FLOATING_BAR_CLIENT_PAD_X : FLOATING_BAR_COMPANY_PAD_X,
-              paddingVertical: preset === "client" ? FLOATING_BAR_CLIENT_PAD_Y : FLOATING_BAR_COMPANY_PAD_Y,
-              backgroundColor: p.barBg,
-              borderWidth: 1,
-              borderColor: p.border,
-              borderRadius: 9999,
-            },
-            Platform.select({
-              web: { boxShadow: p.webShadow },
-              default: p.nativeShadow,
-            }),
-          ]}
-        >
-          {children}
-        </View>
+        {children}
       </View>
     </View>
   );
@@ -135,22 +144,23 @@ export function computeClientFloatingBottomPad(bottomInset: number): number {
   return Math.max(16, bottomInset + 8);
 }
 
-/** Padding bas sous la pilule — barre entreprise. */
+/** Padding bas sous la pilule — barre entreprise / chauffeur. */
 export function computeCompanyFloatingBottomPad(bottomInset: number): number {
   return Math.max(12, bottomInset + 4);
 }
 
 /**
- * Réserve verticale pour un pied de page fixe (ex. composeur de fil) afin qu’il
- * reste au-dessus de la pilule d’onglets flottante (contenu pleine hauteur + tab bar overlay).
+ * Clearance de repli (avant onLayout) pour un pied de page fixe au-dessus de la pilule.
+ * @deprecated Préférer `useFloatingBarClearance` / métriques mesurées.
  */
 export function computeFloatingTabBarClearance(bottomInset: number): number {
-  return 64 + computeCompanyFloatingBottomPad(bottomInset);
+  return computeFloatingBarFallbackClearance(56, computeCompanyFloatingBottomPad(bottomInset));
 }
 
-/** Hauteur pilule + padding bas du slot — juste au-dessus du menu visible. */
-const FLOATING_TAB_PILL_HEIGHT = 56;
-
+/**
+ * Clearance composeur chat — fallback déterministe.
+ * @deprecated Préférer `useFloatingBarClearance`.
+ */
 export function computeFloatingTabComposerClearance(bottomInset: number): number {
-  return FLOATING_TAB_PILL_HEIGHT + computeCompanyFloatingBottomPad(bottomInset);
+  return computeFloatingBarFallbackClearance(56, computeCompanyFloatingBottomPad(bottomInset));
 }

@@ -14,7 +14,7 @@ import {
   useAppViewport,
 } from "../../../src/design/responsive";
 import { groupMissionsByPickupWindow } from "../../../src/features/driver/domain/missionGrouping";
-import { DRIVER_FLOATING_TAB_SCROLL_PADDING } from "../../../src/features/driver/navigation/DriverFloatingTabBar";
+import { useDriverFloatingTabScrollPadding } from "../../../src/features/driver/navigation/DriverFloatingTabBar";
 import { FONT_SIZE } from "../../../src/design/responsive/typographyTokens";
 import { DriverTrackingQaPanel } from "../../../src/features/driver/components/DriverTrackingQaPanel";
 import { useDriverMissionsQuery } from "../../../src/features/driver/hooks";
@@ -26,6 +26,7 @@ import {
 export default function DriverMissionsScreen() {
   const router = useRouter();
   const { width } = useAppViewport();
+  const scrollPad = useDriverFloatingTabScrollPadding();
   const isCompactMobile = width < 380;
   const missionsQuery = useDriverMissionsQuery();
   const trackingUi = useDriverBackgroundTrackingUi();
@@ -42,7 +43,7 @@ export default function DriverMissionsScreen() {
           scroll
           backgroundColor={brandSurfaceSoft}
           withHorizontalPadding={false}
-          extraScrollBottomPadding={DRIVER_FLOATING_TAB_SCROLL_PADDING}
+          extraScrollBottomPadding={scrollPad}
           contentContainerStyle={[styles.page, isCompactMobile && styles.pageCompact]}
         >
           <AppText variant="sectionTitle" style={[styles.title, isCompactMobile && styles.titleCompact]}>

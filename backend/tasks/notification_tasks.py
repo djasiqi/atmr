@@ -699,11 +699,18 @@ def send_activation_email_task(
             return {"ok": False, "error": "user_missing"}
 
         verification_link = _build_link(token)
+        from services.notifications.lirie_email_brand import (
+            build_lirie_logo_email_assets,
+        )
+
+        logo_src, logo_attachments = build_lirie_logo_email_assets()
         html_body = ""
         try:
             html_body = render_template(
                 "emails/activation_email.html",
                 activation_link=verification_link,
+                logo_src=logo_src,
+                first_name=(user.first_name or "").strip() or None,
                 product_name="LIRIE",
                 company_name="LIRIE",
                 current_year=datetime.now(UTC).year,
@@ -728,7 +735,7 @@ def send_activation_email_task(
         try:
             send_result = send_email_notification(
                 email=str(user.email).strip(),
-                subject="Activation de votre compte",
+                subject="Activation de votre compte LIRIE",
                 body=html_body or text_body,
                 html=bool(html_body),
                 notification_type="activation_signup",
@@ -738,6 +745,7 @@ def send_activation_email_task(
                 raise_on_error=True,
                 # Lot 1 : corrélation webhook Brevo (X-Mailin-custom)
                 headers={"X-Mailin-custom": email_delivery_id},
+                attachments=logo_attachments or None,
             )
         except EmailRetryableError as e:
             logger.warning(

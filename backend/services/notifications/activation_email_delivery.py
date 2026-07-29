@@ -481,11 +481,22 @@ def try_enqueue_activation_email(
             "email_token": None,
         }
 
+    # En local : exposer le lien direct (Brevo réécrit les clics via sendibt*.com,
+    # ce qui casse souvent localhost:3000 côté navigateur / anciens emails).
+    debug_link = None
+    if is_local_dev and token:
+        frontend = (
+            os.getenv("FRONTEND_URL")
+            or os.getenv("PUBLIC_FRONTEND_URL")
+            or "http://localhost:3000"
+        ).rstrip("/")
+        debug_link = f"{frontend}/activate-account?token={token}"
+
     return {
         "ok": True,
         "queued": True,
         "email_sent": None,
-        "debug_activation_link": None,
+        "debug_activation_link": debug_link,
         "error": None,
         "require_502": False,
         "email_token": token,

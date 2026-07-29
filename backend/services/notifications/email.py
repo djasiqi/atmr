@@ -74,6 +74,7 @@ def send_email_notification(
     from_name: str | None = None,
     raise_on_error: bool = False,
     headers: dict[str, str] | None = None,
+    attachments: list[dict[str, Any]] | None = None,
 ) -> Dict[str, Any]:
     """Envoie un email via SMTP ou Brevo.
 
@@ -81,6 +82,7 @@ def send_email_notification(
         raise_on_error: Si True, lève EmailRetryableError / EmailPermanentError
             au lieu de retourner {"ok": False}.
         headers: En-têtes SMTP Brevo (ex. X-Mailin-custom). Ignorés en SMTP.
+        attachments: PJ / images inline (cid) — supporté surtout via Brevo.
 
     Returns:
         Dict avec "ok" (bool) et "error" (str) ou "message_id"
@@ -110,6 +112,7 @@ def send_email_notification(
             from_name=from_name,
             raise_on_error=raise_on_error,
             headers=headers,
+            attachments=attachments,
         )
 
     return _send_via_smtp(
@@ -211,6 +214,7 @@ def _send_via_brevo(
     from_name: str | None = None,
     raise_on_error: bool = False,
     headers: dict[str, str] | None = None,
+    attachments: list[dict[str, Any]] | None = None,
 ) -> Dict[str, Any]:
     """Envoie un email via BrevoEmailProvider (chemin unique)."""
     api_key = BREVO_API_KEY or os.getenv("BREVO_API_KEY")
@@ -234,6 +238,7 @@ def _send_via_brevo(
             reply_to=reply_to,
             notification_type=notification_type,
             headers=headers,
+            attachments=attachments,
         )
     except ValueError as e:
         if raise_on_error:

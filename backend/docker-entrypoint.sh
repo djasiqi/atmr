@@ -95,25 +95,34 @@ fi
 echo "📁 Création des répertoires de données..."
 
 # Sous-dossiers uploads métier (PDF factures, logos, etc.) — doivent rester
-# inscriptibles par appuser (uid 999). Ne jamais appliquer chmod 755 récursif
-# sur /app/uploads : si le chown échoue (volume bind Windows/NFS), 755 bloque
+# inscriptibles par appuser. Ne jamais appliquer chmod 755 récursif sur
+# /app/uploads : si le chown échoue (volume bind Windows/NFS), 755 bloque
 # l'écriture → [Errno 13] Permission denied à la génération PDF.
 UPLOAD_SUBDIRS="company_logos invoices statements institution_logos chat"
+APP_UID="$(id -u appuser 2>/dev/null || echo 999)"
+APP_GID="$(id -g appuser 2>/dev/null || echo 999)"
 
 # Si on est root, corriger les permissions avant de passer à appuser
 if [ "$(id -u)" = "0" ]; then
-    echo "🔐 Correction des permissions en tant que root..."
+    echo "🔐 Correction des permissions en tant que root (appuser=${APP_UID}:${APP_GID})..."
     mkdir -p /app/data /app/data/ml /app/data/ml/models /app/data/rl /app/data/rl/shadow_mode
     mkdir -p /app/logs /app/cache
     for sub in $UPLOAD_SUBDIRS; do
         mkdir -p "/app/uploads/$sub"
     done
     chmod -R 755 /app/data /app/logs /app/cache 2>/dev/null || true
-    chown -R 999:999 /app/data /app/logs /app/cache /app/uploads 2>/dev/null || true
-    # uploads : owner/group RWX (775 dirs / 664 files) — pas 755 qui retire le write groupe
+    chown -R "${APP_UID}:${APP_GID}" /app/data /app/logs /app/cache /app/uploads 2>/dev/null || true
+    # uploads : owner/group RWX — pas 755 qui retire le write groupe
     chmod -R u+rwX,g+rwX,o+rX /app/uploads 2>/dev/null || true
+    # Bind mounts Windows/NFS : si toujours non inscriptible après chown, ouvrir en a+rwX
+    for sub in $UPLOAD_SUBDIRS; do
+        if [ -d "/app/uploads/$sub" ] && [ ! -w "/app/uploads/$sub" ]; then
+            echo "⚠️  /app/uploads/$sub non inscriptible après chown — chmod a+rwX"
+            chmod -R a+rwX "/app/uploads/$sub" 2>/dev/null || true
+        fi
+    done
     # Corriger les permissions de tous les fichiers .pkl existants
-    find /app/data/ml/models -name "*.pkl" -type f -exec chmod 644 {} \; -exec chown 999:999 {} \; 2>/dev/null || true
+    find /app/data/ml/models -name "*.pkl" -type f -exec chmod 644 {} \; -exec chown "${APP_UID}:${APP_GID}" {} \; 2>/dev/null || true
     echo "✅ Permissions corrigées"
     echo "📋 Vérification des permissions de /app/data/ml/models:"
     ls -la /app/data/ml/models/ 2>/dev/null || echo "  Répertoire non accessible"
@@ -157,7 +166,7 @@ fi
 # Alerte précoce si la génération PDF échouera (Errno 13)
 if [ -d /app/uploads/invoices ] && [ ! -w /app/uploads/invoices ]; then
     echo "❌ /app/uploads/invoices non inscriptible par $(whoami) — génération PDF factures en échec"
-    echo "   Corriger: chown -R 999:999 /app/uploads && chmod -R u+rwX,g+rwX /app/uploads"
+    echo "   Corriger: chown -R ${APP_UID}:${APP_GID} /app/uploads && chmod -R a+rwX /app/uploads"
 fi
 
 # Vérifier que les répertoires critiques existent (créés par le script de déploiement ou volumes)

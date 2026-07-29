@@ -1,27 +1,51 @@
-import { PixelRatio } from "react-native";
+import { useWindowDimensions } from "react-native";
+import { useAppViewport } from "./useAppViewport";
+import { CHROME_FONT_CAP, CONTENT_FONT_CAP } from "./fontScaleCaps";
 
 export type AccessibilityScale = {
   fontScale: number;
   isLargeText: boolean;
   isVeryLargeText: boolean;
+  /** Empiler les rangées horizontales (très grande police ou écran ≤ 360 px utiles). */
+  shouldStackRows: boolean;
+  contentMaxFontMultiplier: number;
+  chromeMaxFontMultiplier: number;
 };
 
 /**
- * Zoom police système / accessibilité (V1).
+ * Calcule les flags a11y à partir de fontScale + largeur utile (pur, testable).
  *
- * - Source : `PixelRatio.getFontScale()` à **chaque rendu** (pas de polling).
+ * `shouldStackRows` utilise `usableWidth` (pas `contentWidth`) : contentWidth retire
+ * déjà les gutters et stackerait trop tôt sur la plupart des téléphones.
+ */
+export function computeAccessibilityScale(
+  fontScale: number,
+  usableWidth: number
+): AccessibilityScale {
+  const safeScale = Number.isFinite(fontScale) && fontScale > 0 ? fontScale : 1;
+  const isLargeText = safeScale >= 1.15;
+  const isVeryLargeText = safeScale >= 1.3;
+  const shouldStackRows = isVeryLargeText || usableWidth <= 360;
+
+  return {
+    fontScale: safeScale,
+    isLargeText,
+    isVeryLargeText,
+    shouldStackRows,
+    contentMaxFontMultiplier: CONTENT_FONT_CAP,
+    chromeMaxFontMultiplier: CHROME_FONT_CAP,
+  };
+}
+
+/**
+ * Zoom police système / accessibilité.
+ *
+ * - Source : `useWindowDimensions().fontScale` (réactif aux changements système).
  * - Ne pas utiliser `allowFontScaling={false}` globalement.
- * - UI courte (tabs, CTA, badges) : `maxFontSizeMultiplier` ~1.2–1.3 + truncate si besoin.
- * - Contenu long : multiplicateur plus élevé (~1.5) ou défaut RN.
- *
- * V2 (hors périmètre V1) : si « Larger Text » à chaud reste obsolète sur device,
- * brancher `AccessibilityInfo` / `AppState` ou équivalent.
+ * - Contenu : `CONTENT_FONT_CAP` (2.0) ; chrome : `CHROME_FONT_CAP` (1.3).
  */
 export function useAccessibilityScale(): AccessibilityScale {
-  const fontScale = PixelRatio.getFontScale();
-  return {
-    fontScale,
-    isLargeText: fontScale >= 1.15,
-    isVeryLargeText: fontScale >= 1.3,
-  };
+  const { fontScale } = useWindowDimensions();
+  const { usableWidth } = useAppViewport();
+  return computeAccessibilityScale(fontScale, usableWidth);
 }

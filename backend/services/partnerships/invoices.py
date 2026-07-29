@@ -399,13 +399,12 @@ class PartnerInvoiceService:
             f"{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}.pdf"
         )
         # ✅ Chemin correct: /app/uploads (pas /app/services/uploads)
+        from shared.upload_write import write_upload_bytes
+
         uploads_dir = Path(current_app.config.get("UPLOAD_FOLDER", "/app/uploads"))
         invoices_dir = Path(uploads_dir, "invoices")
-        invoices_dir.mkdir(parents=True, exist_ok=True)
         filepath = Path(invoices_dir, filename)
-
-        with filepath.open("wb") as f:
-            f.write(pdf_content)
+        write_upload_bytes(filepath, pdf_content)
 
         # URL dynamique depuis config (127.0.0.1 en dev évite IPv6 localhost + ERR_CONNECTION_RESET)
         pdf_base_url = current_app.config.get("PDF_BASE_URL", "http://127.0.0.1:5000")

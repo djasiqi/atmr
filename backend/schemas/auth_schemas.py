@@ -2,8 +2,11 @@
 
 from marshmallow import (
     Schema,
+    ValidationError,
     fields,
+    pre_load,
     validate,
+    validates_schema,
 )
 
 from schemas.validation_utils import (
@@ -27,22 +30,62 @@ class LoginSchema(Schema):
 
 
 class RegisterSchema(Schema):
-    """Schema pour validation inscription (POST /api/auth/register)."""
+    """Schema pour validation inscription (POST /api/auth/register).
+
+    Email et téléphone sont optionnels individuellement, mais au moins l'un
+    des deux doit être fourni.
+    """
 
     username = fields.Str(required=True, validate=USERNAME_VALIDATOR)
-    email = fields.Email(required=True, validate=EMAIL_VALIDATOR)
-    password = fields.Str(required=True, validate=PASSWORD_VALIDATOR)
+    email = fields.Email(
+        required=False, allow_none=True, load_default=None, validate=EMAIL_VALIDATOR
+    )
+    # Requis uniquement si email fourni (inscription téléphone seule → OTP)
+    password = fields.Str(
+        required=False, allow_none=True, load_default=None, validate=PASSWORD_VALIDATOR
+    )
 
     # Champs optionnels
     first_name = fields.Str(load_default=None, validate=validate.Length(max=100))
     last_name = fields.Str(load_default=None, validate=validate.Length(max=100))
-    phone = fields.Str(required=True, validate=validate.Length(min=7, max=20))
+    phone = fields.Str(
+        required=False,
+        allow_none=True,
+        load_default=None,
+        validate=validate.Length(min=7, max=20),
+    )
     address = fields.Str(load_default=None, validate=validate.Length(max=500))
     birth_date = fields.Date(load_default=None)
     gender = fields.Str(
         load_default=None, validate=validate.OneOf(["male", "female", "other"])
     )
     profile_image = fields.Str(load_default=None)
+
+    @pre_load
+    def _normalize_optional_contact(self, data, **kwargs):
+        if not isinstance(data, dict):
+            return data
+        out = dict(data)
+        for key in ("email", "phone", "address", "password"):
+            if key in out and isinstance(out[key], str) and not out[key].strip():
+                out[key] = None
+        return out
+
+    @validates_schema
+    def _require_email_or_phone(self, data, **kwargs):
+        email = (data.get("email") or "").strip() if data.get("email") else ""
+        phone = (data.get("phone") or "").strip() if data.get("phone") else ""
+        password = (data.get("password") or "").strip() if data.get("password") else ""
+        if not email and not phone:
+            raise ValidationError(
+                "Indiquez une adresse email ou un numéro de téléphone.",
+                field_name="email",
+            )
+        if email and not password:
+            raise ValidationError(
+                "Le mot de passe est obligatoire lorsque vous indiquez un email.",
+                field_name="password",
+            )
 
 
 class RefreshTokenSchema(Schema):

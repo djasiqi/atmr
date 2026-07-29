@@ -16,7 +16,7 @@ const ConfirmCancelModal = ({
   const tooShort = requireReason && trimmed.length < minLength;
 
   const handleConfirm = () => {
-    if (tooShort) return;
+    if (tooShort || loading) return;
     onConfirm(trimmed);
   };
 
@@ -32,8 +32,9 @@ const ConfirmCancelModal = ({
 
         <div className={styles.body}>
           <p className={styles.message}>
-            Une demande sera envoyée au transporteur. La course reste active
-            jusqu&apos;à sa confirmation.
+            Une seule demande sera transmise au transporteur. La course reste
+            active jusqu&apos;à sa confirmation. Si une demande est déjà en
+            cours, elle ne sera pas renvoyée.
           </p>
           <label className={styles.label} htmlFor="cancel-reason">
             Motif d&apos;annulation

@@ -31,7 +31,6 @@ export function AppCard({
   const base = {
     borderRadius: t.radiusMd,
     padding,
-    overflow: "hidden" as const,
   };
 
   const elevated = variant === "elevated";

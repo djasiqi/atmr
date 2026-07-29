@@ -116,6 +116,29 @@ const formatChangeEventLabel = (ev) => {
   return `Modification institution${critical}${actor}`;
 };
 
+/** Garde la dernière demande d'annulation institution (évite les doublons d'envoi). */
+const dedupeInstitutionCancelRequestEvents = (events) => {
+  if (!Array.isArray(events) || events.length <= 1) return events || [];
+  let keptLatestCancelRequest = false;
+  const result = [];
+  // Parcourir du plus récent au plus ancien pour ne garder qu'une demande.
+  const ordered = [...events].sort(
+    (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0),
+  );
+  for (const ev of ordered) {
+    const isCancelRequest = (
+      ev.action_type === 'change_request_created'
+      && ev.change_scope === 'cancellation'
+    );
+    if (isCancelRequest) {
+      if (keptLatestCancelRequest) continue;
+      keptLatestCancelRequest = true;
+    }
+    result.push(ev);
+  }
+  return result;
+};
+
 const buildTimeline = (r) => {
   if (!r) return [];
   const events = [];
@@ -1905,23 +1928,24 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onRese
             {/* Historique */}
             {(() => {
               const timeline = buildTimeline(reservation);
-              const instEvents = institutionChangeEvents.map((ev) => {
-                const isCancel = ev.change_scope === 'cancellation'
-                  || ev.action_type === 'cancelled';
-                const isCompanyConfirm = isCancel
-                  && (ev.source === 'company_portal' || ev.actor_type === 'company')
-                  && ev.action_type !== 'change_request_created';
-                return {
-                  event: formatChangeEventLabel(ev),
-                  date: ev.created_at,
-                  type: isCompanyConfirm || isCancel ? 'cancel' : (
-                    ev.severity === 'CRITICAL' ? 'institution_critical' : 'institution'
-                  ),
-                  eventId: ev.id,
-                  ackRequired: ev.ack_required && ev.source === 'institution_portal',
-                  ackCount: ev.ack_received_count,
-                };
-              });
+              const instEvents = dedupeInstitutionCancelRequestEvents(institutionChangeEvents)
+                .map((ev) => {
+                  const isCancel = ev.change_scope === 'cancellation'
+                    || ev.action_type === 'cancelled';
+                  const isCompanyConfirm = isCancel
+                    && (ev.source === 'company_portal' || ev.actor_type === 'company')
+                    && ev.action_type !== 'change_request_created';
+                  return {
+                    event: formatChangeEventLabel(ev),
+                    date: ev.created_at,
+                    type: isCompanyConfirm || isCancel ? 'cancel' : (
+                      ev.severity === 'CRITICAL' ? 'institution_critical' : 'institution'
+                    ),
+                    eventId: ev.id,
+                    ackRequired: ev.ack_required && ev.source === 'institution_portal',
+                    ackCount: ev.ack_received_count,
+                  };
+                });
               const merged = [...timeline, ...instEvents].sort(
                 (a, b) => new Date(b.date) - new Date(a.date),
               );

@@ -1,6 +1,6 @@
 import { StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { AppButton, Modal } from "../../../design/responsive";
+import { AppButton, Modal, ModalFooterActions } from "../../../design/responsive";
 import { AppText } from "../../../design/ui/AppText";
 import { E } from "../../company/theme/enterpriseOpsTheme";
 
@@ -32,11 +32,13 @@ export function ReleaseConfirmationModal(props: ReleaseConfirmationModalProps) {
       presentation="bottomSheet"
       sheetBodyMaxHeightRatio={0.56}
       footer={
-        <View style={styles.footerWrap}>
-          <AppText variant="caption" style={styles.footerHint}>
-            Action sans facturation client
-          </AppText>
-          <View style={styles.footerRow}>
+        <ModalFooterActions
+          hint={
+            <AppText variant="caption" style={styles.footerHint}>
+              Action sans facturation client
+            </AppText>
+          }
+          secondary={
             <AppButton
               title="Annuler"
               variant="secondary"
@@ -44,6 +46,8 @@ export function ReleaseConfirmationModal(props: ReleaseConfirmationModalProps) {
               disabled={props.pending}
               style={styles.footerButtonSecondary}
             />
+          }
+          primary={
             <AppButton
               title={props.pending ? "Libération..." : "Confirmer la libération"}
               variant="primary"
@@ -51,8 +55,8 @@ export function ReleaseConfirmationModal(props: ReleaseConfirmationModalProps) {
               disabled={props.pending}
               style={styles.footerButtonPrimary}
             />
-          </View>
-        </View>
+          }
+        />
       }
     >
       <View style={styles.body}>
@@ -110,15 +114,15 @@ const styles = StyleSheet.create({
   },
   heroContent: {
     flex: 1,
+    minWidth: 0,
     gap: 2,
   },
   heroTitle: {
-    color: E.TEXT_MAIN,
+    color: E.TEXT,
     fontWeight: "700",
   },
   heroSubtitle: {
     color: E.TEXT_SEC,
-    lineHeight: 17,
   },
   warningCard: {
     flexDirection: "row",
@@ -133,8 +137,8 @@ const styles = StyleSheet.create({
   },
   warningText: {
     flex: 1,
-    color: E.TEXT_MAIN,
-    lineHeight: 20,
+    minWidth: 0,
+    color: E.TEXT,
   },
   infoCard: {
     flexDirection: "row",
@@ -150,27 +154,18 @@ const styles = StyleSheet.create({
   infoText: {
     color: E.TEXT_SEC,
     flex: 1,
-    lineHeight: 17,
-  },
-  footerRow: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  footerWrap: {
-    gap: 10,
+    minWidth: 0,
   },
   footerHint: {
     color: E.TEXT_SEC,
   },
   footerButtonSecondary: {
-    flex: 1,
-    minHeight: 46,
+    minHeight: 48,
     borderRadius: 11,
     borderColor: "rgba(0, 121, 107, 0.32)",
   },
   footerButtonPrimary: {
-    flex: 1,
-    minHeight: 46,
+    minHeight: 48,
     borderRadius: 11,
   },
 });

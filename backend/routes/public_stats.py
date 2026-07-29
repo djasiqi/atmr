@@ -6,6 +6,7 @@ import json
 import re
 import time
 import unicodedata
+from datetime import datetime, time as dt_time
 from threading import Lock
 from urllib.parse import unquote
 
@@ -21,6 +22,7 @@ from models.geo_unit import GeoUnit
 from models.institution import Institution
 from models.service_area_pricing import ServiceArea
 from services.geo.geo_resolver import resolve_legacy_service_area_to_canton_codes
+from shared.time_utils import now_local
 
 # Aligné sur routes.geocode — évite un import lourd au chargement du module
 _SWISS_CANTON_CODES = frozenset(
@@ -56,6 +58,46 @@ _SWISS_CANTON_CODES = frozenset(
 
 _CANTON_TOKEN_RE = re.compile(r"^canton:([A-Za-z0-9]+)$", re.IGNORECASE)
 _CANTON_NAME_TOKEN_RE = re.compile(r"^canton_name:(.+)$", re.IGNORECASE)
+
+# Libellés FR pour tooltip / affichage public (codes ISO cantonaux)
+_CANTON_CODE_TO_LABEL: dict[str, str] = {
+    "AG": "Argovie",
+    "AI": "Appenzell Rhodes-Intérieures",
+    "AR": "Appenzell Rhodes-Extérieures",
+    "BE": "Berne",
+    "BL": "Bâle-Campagne",
+    "BS": "Bâle-Ville",
+    "FR": "Fribourg",
+    "GE": "Genève",
+    "GL": "Glaris",
+    "GR": "Grisons",
+    "JU": "Jura",
+    "LU": "Lucerne",
+    "NE": "Neuchâtel",
+    "NW": "Nidwald",
+    "OW": "Obwald",
+    "SG": "Saint-Gall",
+    "SH": "Schaffhouse",
+    "SO": "Soleure",
+    "SZ": "Schwyz",
+    "TG": "Thurgovie",
+    "TI": "Tessin",
+    "UR": "Uri",
+    "VD": "Vaud",
+    "VS": "Valais",
+    "ZG": "Zoug",
+    "ZH": "Zurich",
+}
+
+_TODAY_MISSION_STATUSES = (
+    BookingStatus.PENDING,
+    BookingStatus.ACCEPTED,
+    BookingStatus.ASSIGNED,
+    BookingStatus.EN_ROUTE,
+    BookingStatus.IN_PROGRESS,
+    BookingStatus.COMPLETED,
+    BookingStatus.RETURN_COMPLETED,
+)
 
 
 def _norm_canton_name_lookup(value: str) -> str:
@@ -211,6 +253,24 @@ def _fetch_stats() -> dict:
     ):
         cantons_served.update(_cantons_from_service_area(service_area, name_to_code))
     cantons_served.update(_cantons_from_service_areas_table())
+    canton_labels = sorted(
+        _CANTON_CODE_TO_LABEL.get(code, code) for code in cantons_served
+    )
+
+    today = now_local().date()
+    day_start = datetime.combine(today, dt_time.min)
+    day_end = datetime.combine(today, dt_time.max)
+    today_missions = (
+        db.session.query(func.count(Booking.id))
+        .filter(
+            Booking.scheduled_time.isnot(None),
+            Booking.scheduled_time >= day_start,
+            Booking.scheduled_time <= day_end,
+            Booking.status.in_(_TODAY_MISSION_STATUSES),
+        )
+        .scalar()
+        or 0
+    )
 
     return {
         "completedBookings": completed,
@@ -218,6 +278,8 @@ def _fetch_stats() -> dict:
         "activeInstitutions": active_institutions,
         "activeDrivers": active_drivers,
         "cantonsServed": len(cantons_served),
+        "cantonLabels": canton_labels,
+        "todayMissions": today_missions,
     }
 
 

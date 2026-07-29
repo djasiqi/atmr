@@ -521,11 +521,23 @@ export function buildOperationalTimeline({ apiEvents = [], request = null, booki
   }
 
   const seen = new Set();
-  const visible = merged.filter((entry) => {
+  let keptLatestCancelRequest = false;
+  const sortedForDedupe = [...merged].sort(
+    (a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0),
+  );
+  const visible = sortedForDedupe.filter((entry) => {
     if (!entry.timestamp || !entry.label) return false;
     const key = dedupeKey(entry);
     if (seen.has(key)) return false;
     seen.add(key);
+    // Une seule « Demande d'annulation institution » visible (anti double-envoi).
+    const isCancelRequestLabel = String(entry.label || '').startsWith(
+      'Demande d’annulation institution',
+    );
+    if (isCancelRequestLabel) {
+      if (keptLatestCancelRequest) return false;
+      keptLatestCancelRequest = true;
+    }
     return true;
   });
 

@@ -112,11 +112,14 @@ class BrevoEmailProvider:
         reply_to: str | None = None,
         notification_type: str = "transactional",
         headers: dict[str, str] | None = None,
+        attachments: list[dict[str, Any]] | None = None,
     ) -> EmailResult:
         """Envoie un email transactionnel simple via l'API Brevo.
 
         Args:
             headers: En-têtes SMTP Brevo (ex. X-Mailin-custom pour corrélation webhook).
+            attachments: PJ ou images inline
+                ``{"filename", "content", "cid"?, "mime_type"?}``.
 
         Returns:
             EmailResult avec status_code et retryable renseignés.
@@ -148,6 +151,40 @@ class BrevoEmailProvider:
                 status_code=400,
                 retryable=False,
             )
+
+        if attachments:
+            attachment_items: list[dict[str, str]] = []
+            inline_items: list[dict[str, str]] = []
+            for attachment in attachments:
+                filename = str(attachment.get("filename") or "attachment.bin")
+                content = attachment.get("content")
+                cid = attachment.get("cid")
+                if isinstance(content, bytes):
+                    content_b64 = base64.b64encode(content).decode("utf-8")
+                elif isinstance(content, str) and content.strip():
+                    content_b64 = content
+                else:
+                    continue
+                if cid:
+                    inline_items.append(
+                        {
+                            "name": filename,
+                            "content": content_b64,
+                            "contentId": str(cid).strip("<>"),
+                            "contentType": str(
+                                attachment.get("mime_type") or "image/png"
+                            ),
+                        }
+                    )
+                else:
+                    attachment_items.append(
+                        {"name": filename, "content": content_b64}
+                    )
+            if attachment_items:
+                payload["attachment"] = attachment_items
+            if inline_items:
+                # Champ Brevo pour images embarquées (src="cid:...")
+                payload["inlineImage"] = inline_items
 
         try:
             logger.info(

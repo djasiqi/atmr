@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { AppText } from "../../../design/ui/AppText";
+import { useAccessibilityScale } from "../../../design/responsive/useAccessibilityScale";
 import { createShadow } from "../../../styles/shadowStyles";
 import { D, dashboardCardShadow } from "../theme/driverDashboardTheme";
 import type { DriverMission } from "../types";
@@ -43,6 +44,7 @@ type Props = {
 
 export function DriverUpcomingMissions({ missions, onOpenMission, onOpenAll }: Props) {
   const [expanded, setExpanded] = useState(false);
+  const { isVeryLargeText } = useAccessibilityScale();
 
   if (missions.length === 0) return null;
 
@@ -93,14 +95,14 @@ export function DriverUpcomingMissions({ missions, onOpenMission, onOpenAll }: P
                   pressed && styles.pressed,
                 ]}
               >
-                <AppText variant="label" style={styles.when} numberOfLines={1}>
+                <AppText variant="label" style={styles.when} numberOfLines={isVeryLargeText ? undefined : 1}>
                   {formatWhen(scheduledRaw)}
                 </AppText>
-                <AppText variant="label" style={styles.client} numberOfLines={1}>
+                <AppText variant="label" style={styles.client} numberOfLines={isVeryLargeText ? undefined : 1}>
                   {clientName}
                 </AppText>
-                <AppText variant="caption" style={styles.address} numberOfLines={1}>
-                  {conciseAddress(m.pickup_location as string | null | undefined)}
+                <AppText variant="caption" style={styles.address} numberOfLines={isVeryLargeText ? undefined : 2}>
+                  {conciseAddress(m.pickup_location as string | null | undefined, isVeryLargeText ? 120 : 42)}
                 </AppText>
               </Pressable>
             );
@@ -128,7 +130,7 @@ const styles = StyleSheet.create({
     borderRadius: D.controlRadius,
     borderWidth: 1,
     borderColor: D.cardBorder,
-    overflow: "hidden",
+    overflow: "visible",
     ...cardShadow,
   },
   headerRow: {
@@ -192,17 +194,23 @@ const styles = StyleSheet.create({
     color: D.brand,
     fontWeight: "800",
     fontSize: FONT_SIZE.px12,
+    flexShrink: 1,
+    minWidth: 0,
   },
   client: {
     color: D.text,
     fontWeight: "700",
     fontSize: FONT_SIZE.px14,
+    flexShrink: 1,
+    minWidth: 0,
   },
   address: {
     color: D.textSub,
     fontWeight: "500",
     fontSize: FONT_SIZE.px12,
     lineHeight: 16,
+    flexShrink: 1,
+    minWidth: 0,
   },
   linkRow: {
     flexDirection: "row",

@@ -9,9 +9,10 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { DriverContextGuard, PermissionGuard } from "../../../src/core/guards";
-import { AppText, Screen, useAppViewport } from "../../../src/design/responsive";
+import { AppText, Screen, useAppViewport, useAccessibilityScale } from "../../../src/design/responsive";
 import { Motion, MotionEasing } from "../../../src/design/navigation/navigationMotion";
-import { DRIVER_FLOATING_TAB_SCROLL_PADDING } from "../../../src/features/driver/navigation/DriverFloatingTabBar";
+import { useDriverFloatingTabScrollPadding } from "../../../src/features/driver/navigation/DriverFloatingTabBar";
+import { tripsExpandMaxHeightFromContent } from "../../../src/features/driver/utils/tripsExpandHeight";
 import {
   useActiveDriverContextId,
   useDriverCompanyBookingsTodayQuery,
@@ -37,6 +38,7 @@ import {
   driverHasScheduledPickupTime,
   formatDriverScheduleTimeLabel,
 } from "../../../src/features/driver/utils/pickupScheduling";
+import { buildDriverDayMissionSections } from "../../../src/features/driver/utils/driverDayMissionSections";
 import { MISSION_ROUTE_ARROW } from "../../../src/features/driver/domain/missionDisplay";
 
 const softCardShadow = createShadow(missionActiveCardShadow);
@@ -147,6 +149,9 @@ function missionIsToday(mission: DriverMission, now: Date): boolean {
   const key = normalizeDriverMissionStatus(mission.status);
   if (key === "EN_ROUTE" || key === "ARRIVED" || key === "IN_PROGRESS") return true;
   if (key === "CANCELLED" || key === "FAILED" || key === "NO_SHOW" || key === "REASSIGNED") return false;
+  // Heure à définir (sentinel 00:00 / scheduling) : ne pas exclure via fuseau horaire.
+  // L’onglet Entreprise s’appuie déjà sur /company-bookings/today (jour serveur).
+  if (!driverHasScheduledPickupTime(mission)) return true;
   const raw = mission.scheduled_time;
   if (!raw || !String(raw).trim()) return true;
   const ts = Date.parse(String(raw));
@@ -400,6 +405,7 @@ function MissionAccordionCard({
   late: boolean;
   theme: DispatchTheme;
 }) {
+  const { isVeryLargeText } = useAccessibilityScale();
   const status = String(mission.status ?? "");
   const done = missionStatusBucket(status) === "done";
   const ux = getDriverStatusUx(String(mission.status ?? ""));
@@ -420,6 +426,7 @@ function MissionAccordionCard({
   const distanceText =
     routeMetrics.distanceLabel !== "â€”" ? routeMetrics.distanceLabel : compactDistance(mission);
   const expandAnim = useRef(new Animated.Value(expanded ? 1 : 0)).current;
+  const [expandContentHeight, setExpandContentHeight] = useState(1);
 
   useEffect(() => {
     Animated.timing(expandAnim, {
@@ -453,13 +460,13 @@ function MissionAccordionCard({
           </View>
         </View>
 
-        <AppText variant="label" style={[styles.client, { color: theme.sectionText }, done && styles.clientDone, done && { color: theme.mutedText }]} numberOfLines={1}>
+        <AppText variant="label" style={[styles.client, { color: theme.sectionText }, done && styles.clientDone, done && { color: theme.mutedText }]} numberOfLines={isVeryLargeText ? undefined : 1}>
           {missionClientName(mission)}
         </AppText>
 
         <View style={styles.routeRow}>
           <Ionicons name="ellipse" size={8} color={done ? "#94A3B8" : statusColor} />
-          <AppText variant="body" style={[styles.route, { color: theme.bodyText }, done && styles.routeDone, done && { color: theme.mutedText }]} numberOfLines={1}>
+          <AppText variant="body" style={[styles.route, { color: theme.bodyText }, done && styles.routeDone, done && { color: theme.mutedText }]} numberOfLines={isVeryLargeText ? undefined : 2}>
             {pickupCompact}{MISSION_ROUTE_ARROW}{destinationCompact}
           </AppText>
         </View>
@@ -505,7 +512,7 @@ function MissionAccordionCard({
                 opacity: expandAnim,
                 maxHeight: expandAnim.interpolate({
                   inputRange: [0, 1],
-                  outputRange: [0, 520],
+                  outputRange: [0, tripsExpandMaxHeightFromContent(expandContentHeight)],
                 }),
                 transform: [
                   {
@@ -518,7 +525,15 @@ function MissionAccordionCard({
               },
             ]}
           >
-            <View style={[styles.expandArea, { borderTopColor: theme.divider }]}>
+            <View
+              style={[styles.expandArea, { borderTopColor: theme.divider }]}
+              onLayout={(e) => {
+                const h = e.nativeEvent.layout.height;
+                if (h > 0 && Math.abs(h - expandContentHeight) > 1) {
+                  setExpandContentHeight(h);
+                }
+              }}
+            >
             <AppText variant="label" style={[styles.sectionLabel, { color: theme.mutedText }]}>
               {personLabelForMission(mission)}
             </AppText>
@@ -613,6 +628,7 @@ function MissionAccordionCard({
 
 export default function DriverTripsScreen() {
   const { width } = useAppViewport();
+  const scrollPad = useDriverFloatingTabScrollPadding();
   const compact = width < 380;
   const isDark = useColorScheme() === "dark";
   const theme = useMemo(() => buildDispatchTheme(isDark), [isDark]);
@@ -672,16 +688,7 @@ export default function DriverTripsScreen() {
     }
     return { total: list.length, done, progress, todo };
   }, [list]);
-  const missionSections = useMemo(() => {
-    const todo = list.filter((m) => missionStatusBucket(String(m.status ?? "")) === "todo");
-    const progress = list.filter((m) => missionStatusBucket(String(m.status ?? "")) === "progress");
-    const done = list.filter((m) => missionStatusBucket(String(m.status ?? "")) === "done");
-    return [
-      { key: "todo", label: "A effectuer", items: todo },
-      { key: "progress", label: "En cours", items: progress },
-      { key: "done", label: "Terminees", items: done },
-    ] as const;
-  }, [list]);
+  const missionSections = useMemo(() => buildDriverDayMissionSections(list), [list]);
 
   const loading = tab === "mine" ? mineQuery.isLoading : companyQuery.isLoading;
   const error = tab === "mine" ? mineQuery.isError : companyQuery.isError;
@@ -720,7 +727,7 @@ export default function DriverTripsScreen() {
           scroll
           withHorizontalPadding={false}
           pageTransition={false}
-          extraScrollBottomPadding={DRIVER_FLOATING_TAB_SCROLL_PADDING}
+          extraScrollBottomPadding={scrollPad}
           contentContainerStyle={[styles.page, compact && styles.pageCompact]}
           backgroundColor={theme.bg}
         >
@@ -916,7 +923,7 @@ const styles = StyleSheet.create({
   metricCard: {
     flex: 1,
     minWidth: 0,
-    height: 56,
+    minHeight: 56,
     borderRadius: 18,
     backgroundColor: "#FFFFFF",
     borderWidth: 0,

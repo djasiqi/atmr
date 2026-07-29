@@ -1,12 +1,13 @@
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
-import { brandPrimary, brandText, useResponsiveTokens } from "../../../../design/responsive";
+import { brandPrimary, brandText, useAccessibilityScale, useResponsiveTokens } from "../../../../design/responsive";
 import { AppInput } from "../../../../design/ui/AppInput";
 import { AppText } from "../../../../design/ui/AppText";
 import { type RideClientOption, useCompanyClientSearch } from "../../useRideForms";
 import {
   suggestionDropdownAnchorStyle,
+  suggestionDropdownHitAreaStyle,
   suggestionDropdownPanelStyle,
   suggestionFieldOpenStyle,
 } from "./suggestionOverlayStyles";
@@ -50,6 +51,8 @@ export function ClientSelector({
   onSuggestionsVisibilityChange,
 }: ClientSelectorProps) {
   const t = useResponsiveTokens();
+  const { isVeryLargeText } = useAccessibilityScale();
+  const suggestionLines = isVeryLargeText ? undefined : 1;
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [isListOpen, setIsListOpen] = useState(false);
@@ -134,6 +137,7 @@ export function ClientSelector({
               borderColor: UI_BORDER_SOFT,
               borderRadius: ROW_RADIUS,
               ...suggestionDropdownPanelStyle,
+              ...suggestionDropdownHitAreaStyle,
             }}
           >
       {shouldShowResults ? (
@@ -143,23 +147,21 @@ export function ClientSelector({
           }}
           nestedScrollEnabled
           showsVerticalScrollIndicator
-          keyboardShouldPersistTaps="handled"
+          keyboardShouldPersistTaps="always"
         >
           {clientsQuery.data?.map((client, index) => (
             <Pressable
               key={client.id}
-              onPress={() => {
-                onChange(client.id);
-                onSelectClient?.(client);
-                setQuery(client.label);
-                setDebouncedQuery(client.label);
-                setIsListOpen(false);
-              }}
               accessibilityRole="button"
               accessibilityLabel={`Sélectionner le client ${client.label}`}
               accessibilityState={{ selected: value === client.id }}
               onPressIn={(event) => {
                 event.preventDefault?.();
+                onChange(client.id);
+                onSelectClient?.(client);
+                setQuery(client.label);
+                setDebouncedQuery(client.label);
+                setIsListOpen(false);
               }}
               style={({ hovered, pressed }) => {
                 const isSelected = value === client.id;
@@ -175,15 +177,18 @@ export function ClientSelector({
                   borderBottomWidth: index < resultsCount - 1 ? 1 : 0,
                   borderBottomColor: index < resultsCount - 1 ? UI_SEPARATOR : "transparent",
                   cursor: "pointer",
+                  minWidth: 0,
                 };
               }}
             >
               <AppText
                 variant="body"
-                numberOfLines={1}
+                numberOfLines={suggestionLines}
                 style={{
                   color: value === client.id ? brandPrimary : brandText,
                   fontWeight: value === client.id ? "600" : "500",
+                  flexShrink: 1,
+                  minWidth: 0,
                 }}
               >
                 {client.label}
@@ -193,8 +198,8 @@ export function ClientSelector({
               client.pickupAddressCandidate.label !== client.label ? (
                 <AppText
                   variant="caption"
-                  numberOfLines={1}
-                  style={{ color: "rgba(71, 85, 105, 0.85)" }}
+                  numberOfLines={suggestionLines}
+                  style={{ color: "rgba(71, 85, 105, 0.85)", flexShrink: 1, minWidth: 0 }}
                 >
                   {client.pickupAddressCandidate.label}
                 </AppText>
@@ -216,12 +221,12 @@ export function ClientSelector({
           }}
           accessibilityRole="button"
           accessibilityLabel="Créer un nouveau client"
-          style={{ paddingHorizontal: 14, paddingVertical: 10 }}
+          style={{ paddingHorizontal: 14, paddingVertical: 10, minHeight: Math.max(t.minTouchHeight, 48) }}
           onPressIn={(event) => {
             event.preventDefault?.();
           }}
         >
-          <AppText variant="body" style={{ color: brandPrimary, fontWeight: "600" }}>
+          <AppText variant="body" style={{ color: brandPrimary, fontWeight: "600", flexShrink: 1, minWidth: 0 }}>
             + Nouveau client
           </AppText>
         </Pressable>

@@ -31,18 +31,14 @@ import {
   invoiceService,
   formatCurrencyCHF,
 } from '../../../../../services/invoiceService';
-import {
-  INVOICE_PRINT_SIDES,
-  openPdfUrlWithPrintDialog,
-  printPdfFromUrlInHiddenFrame,
-  printPdfInEmbeddedIframe,
-} from '../../../../../utils/invoicePdfPrint';
+import { printPdfBytes, preloadInvoicePdfPrint } from '../../../../../utils/invoicePdfPrint';
 import {
   appendPdfEmbedChromiumViewerFragment,
   buildInvoicePdfApiUrl,
 } from '../../../../../utils/pdfUrlFallback';
 import {
   downloadProtectedPdfAsFile,
+  fetchProtectedPdfBytes,
   fetchProtectedPdfObjectUrl,
   openProtectedPdfInNewTab,
 } from '../../../../../utils/protectedPdf';
@@ -104,6 +100,16 @@ function parseInvoiceMeta(raw) {
   }
   if (typeof raw === 'object') return raw;
   return null;
+}
+
+/**
+ * True si le PDF brouillon doit être régénéré avant impression / téléchargement.
+ * Évite un POST regenerate-pdf coûteux quand meta.pdf est déjà « ready ».
+ */
+function invoiceDraftPdfNeedsRefresh(inv) {
+  if (!String(inv?.pdf_url || '').trim()) return true;
+  const st = parseInvoiceMeta(inv?.meta)?.pdf?.status;
+  return st === 'stale' || st === 'failed';
 }
 
 /** Extrait la facture depuis les réponses API ({ data: { invoice } }, { data: facture }, etc.). */
@@ -263,6 +269,8 @@ const DraftInvoiceEditorPanel = ({
   const pdfWrapRef = useRef(null);
   const pdfIframeRef = useRef(null);
   const protectedPdfBlobUrlRef = useRef('');
+  /** Cache octets PDF pour réimpression / prefetch (évite un 2e GET API). */
+  const printPdfBytesCacheRef = useRef({ key: '', bytes: null });
   const mountedRef = useRef(true);
   /** Dernière date « ligne suppl. » connue (évite perte si blur/changement d’état pas encore rejoué). */
   const customLineServiceDateRef = useRef('');
@@ -669,6 +677,56 @@ const DraftInvoiceEditorPanel = ({
     setProtectedPdfBlobUrl('');
   }, []);
 
+  /** Précharge pdf.js + octets PDF dès l’ouverture (hors clic Imprimer). */
+  useEffect(() => {
+    if (!open) return undefined;
+    void preloadInvoicePdfPrint().catch(() => {});
+
+    if (!companyId || !inv?.id) return undefined;
+    if (allowsLineEditing && invoiceDraftPdfNeedsRefresh(inv)) {
+      printPdfBytesCacheRef.current = { key: '', bytes: null };
+      return undefined;
+    }
+    const apiPath = buildInvoicePdfApiUrl({
+      id: inv.id,
+      company_id: companyId || inv.company_id,
+    });
+    if (!apiPath) return undefined;
+
+    const pdfStatus = parseInvoiceMeta(inv?.meta)?.pdf?.status || '';
+    const cacheKey = `${inv.id}:${String(inv?.updated_at || '')}:${pdfStatus}`;
+    if (
+      printPdfBytesCacheRef.current.key === cacheKey &&
+      printPdfBytesCacheRef.current.bytes &&
+      printPdfBytesCacheRef.current.bytes.byteLength >= 5
+    ) {
+      return undefined;
+    }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const bytes = await fetchProtectedPdfBytes(apiPath);
+        if (cancelled || !bytes || bytes.byteLength < 5) return;
+        printPdfBytesCacheRef.current = { key: cacheKey, bytes: bytes.slice() };
+      } catch {
+        /* prefetch best-effort */
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    open,
+    companyId,
+    inv?.id,
+    inv?.company_id,
+    inv?.updated_at,
+    inv?.meta,
+    allowsLineEditing,
+  ]);
+
   /** Charge le PDF via API authentifiée pour l’iframe (aperçu HTML désactivé). */
   useEffect(() => {
     if (!open || showHtmlInvoicePreview || !invoicePdfApiPath) {
@@ -807,67 +865,95 @@ const DraftInvoiceEditorPanel = ({
   }, []);
 
   /**
-   * Imprimer le PDF : d’abord l’iframe d’aperçu si affichée ; sinon iframe cachée (pas d’onglet).
-   * Brouillon : régénère le PDF puis impression silencieuse ; repli seulement si l’iframe échoue.
-   * PDF servi via API JWT (SEC-06), pas via `/uploads/invoices/...`.
+   * Même page (aperçu HTML inchangé) → dialogue Chrome uniquement,
+   * avec le PDF backend réel (jamais l’HTML live, jamais un nouvel onglet).
    */
   const handlePdfPreviewPrint = useCallback(async () => {
     if (!companyId || !inv?.id) return;
-    if (!allowsLineEditing && printPdfInEmbeddedIframe(pdfIframeRef.current)) {
-      return;
-    }
+
     setSaving(true);
     setError('');
-    let blobUrl = null;
+
     try {
-      if (allowsLineEditing) {
-        await invoiceService.regenerateInvoicePdf(companyId, inv.id);
-        await reloadPdfPreviewFromServer();
-      }
       const apiPath = buildInvoicePdfApiUrl({
         id: inv.id,
         company_id: companyId || inv.company_id,
       });
+
       if (!apiPath) {
-        if (mountedRef.current) setError('Aucun PDF disponible.');
-        return;
+        throw new Error('Aucun PDF disponible.');
       }
-      blobUrl = await fetchProtectedPdfObjectUrl(apiPath, {
-        filename: pdfDownloadName,
-      });
-      if (!blobUrl) {
-        if (mountedRef.current) setError('Aucun PDF disponible.');
-        return;
+
+      const pdfStatus = parseInvoiceMeta(inv?.meta)?.pdf?.status || '';
+      const cacheKey = `${inv.id}:${String(inv?.updated_at || '')}:${pdfStatus}`;
+
+      const cached = printPdfBytesCacheRef.current;
+      let bytes =
+        cached.key === cacheKey &&
+        cached.bytes &&
+        cached.bytes.byteLength >= 5
+          ? cached.bytes.slice()
+          : null;
+
+      if (!bytes) {
+        bytes = await fetchProtectedPdfBytes(apiPath);
       }
-      const started = await printPdfFromUrlInHiddenFrame(blobUrl, {
-        printSides: INVOICE_PRINT_SIDES.SIMPLEX,
-      });
-      if (!started) {
-        /** Repli : ouvrir le PDF dans un onglet avec dialogue d’impression. */
-        const openedInTab = openPdfUrlWithPrintDialog(blobUrl, {
-          printSides: INVOICE_PRINT_SIDES.SIMPLEX,
-        });
-        if (!openedInTab && mountedRef.current) {
-          setError(
-            "Impossible de lancer l'impression. Utilisez « Télécharger » puis imprimez le fichier."
-          );
+
+      // PDF absent / périmé / vide → régénérer puis re-télécharger (avec courts retries).
+      const needsRegen =
+        allowsLineEditing &&
+        (invoiceDraftPdfNeedsRefresh(inv) || !bytes || bytes.byteLength < 5);
+
+      if (needsRegen) {
+        await invoiceService.regenerateInvoicePdf(companyId, inv.id);
+        printPdfBytesCacheRef.current = { key: '', bytes: null };
+        void reloadPdfPreviewFromServer().catch(() => {});
+
+        bytes = null;
+        for (let attempt = 0; attempt < 6; attempt += 1) {
+          bytes = await fetchProtectedPdfBytes(apiPath);
+          if (bytes && bytes.byteLength >= 5) break;
+          await new Promise((r) => {
+            window.setTimeout(r, 350);
+          });
         }
       }
-    } catch (e) {
+
+      if (!bytes || bytes.byteLength < 5) {
+        throw new Error(
+          'Le PDF de la facture est indisponible. Utilisez « Télécharger » puis réessayez.'
+        );
+      }
+
+      // Conserver une copie indépendante (pdf.js détache le buffer à l’impression).
+      printPdfBytesCacheRef.current = {
+        key: cacheKey,
+        bytes: bytes.slice(),
+      };
+
+      const started = await printPdfBytes(bytes.slice());
+      if (!started) {
+        throw new Error(
+          "Impossible d'ouvrir le dialogue d'impression. Utilisez « Télécharger » puis imprimez le fichier."
+        );
+      }
+    } catch (error) {
       if (mountedRef.current) {
-        setError(getApiErrorMessage(e, 'Impossible de préparer le PDF pour impression.'));
+        setError(
+          getApiErrorMessage(
+            error,
+            "Impossible de préparer le PDF pour l'impression."
+          )
+        );
       }
     } finally {
-      if (blobUrl) {
-        window.setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);
+      if (mountedRef.current) {
+        setSaving(false);
       }
-      if (mountedRef.current) setSaving(false);
     }
   }, [
     companyId,
-    inv?.id,
-    inv?.company_id,
-    pdfDownloadName,
+    inv,
     allowsLineEditing,
     reloadPdfPreviewFromServer,
   ]);
@@ -875,11 +961,13 @@ const DraftInvoiceEditorPanel = ({
   const handlePdfDownload = useCallback(async () => {
     if (!companyId || !inv?.id) return;
     setError('');
+    const needsRegen = allowsLineEditing && invoiceDraftPdfNeedsRefresh(inv);
     setSaving(true);
     try {
-      if (allowsLineEditing) {
+      if (needsRegen) {
         await invoiceService.regenerateInvoicePdf(companyId, inv.id);
-        await reloadPdfPreviewFromServer();
+        // Recharge l’aperçu en arrière-plan : le téléchargement n’attend pas le GET détail.
+        void reloadPdfPreviewFromServer().catch(() => {});
       }
       const apiPath = buildInvoicePdfApiUrl({
         id: inv.id,
@@ -903,8 +991,7 @@ const DraftInvoiceEditorPanel = ({
     }
   }, [
     companyId,
-    inv?.id,
-    inv?.company_id,
+    inv,
     allowsLineEditing,
     pdfDownloadName,
     reloadPdfPreviewFromServer,
@@ -2210,13 +2297,13 @@ const DraftInvoiceEditorPanel = ({
                           className={`${styles.draftPdfToolBtn} ${styles.draftPdfToolBtnIconOnly}`}
                           title={
                             allowsLineEditing
-                              ? 'Imprimer (le PDF est mis à jour en arrière-plan si besoin)'
-                              : 'Imprimer le PDF sans ouvrir un nouvel onglet'
+                              ? 'Imprimer la facture PDF (reste sur cette page)'
+                              : 'Imprimer la facture PDF'
                           }
                           aria-label={
                             allowsLineEditing
-                              ? 'Imprimer la facture, PDF régénéré en arrière-plan si nécessaire'
-                              : 'Imprimer la facture PDF'
+                              ? 'Imprimer le PDF de la facture sans quitter l’aperçu'
+                              : 'Imprimer le PDF de la facture'
                           }
                           onClick={() => void handlePdfPreviewPrint()}
                         >

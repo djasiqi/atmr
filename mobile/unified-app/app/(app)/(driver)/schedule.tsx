@@ -14,7 +14,7 @@ import {
 import { useDriverMissionsQuery } from "../../../src/features/driver/hooks";
 import { MISSION_ROUTE_ARROW } from "../../../src/features/driver/domain/missionDisplay";
 import type { DriverMission } from "../../../src/features/driver/types";
-import { DRIVER_FLOATING_TAB_SCROLL_PADDING } from "../../../src/features/driver/navigation/DriverFloatingTabBar";
+import { useDriverFloatingTabScrollPadding } from "../../../src/features/driver/navigation/DriverFloatingTabBar";
 
 function byDate(missions: DriverMission[], selectedDate: string) {
   return missions.filter((mission) => {
@@ -27,6 +27,7 @@ function byDate(missions: DriverMission[], selectedDate: string) {
 export default function DriverScheduleScreen() {
   const router = useRouter();
   const { horizontalPadding } = useAppViewport();
+  const scrollPad = useDriverFloatingTabScrollPadding();
   const t = useResponsiveTokens();
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
   const [selectedDate, setSelectedDate] = useState(today);
@@ -40,7 +41,7 @@ export default function DriverScheduleScreen() {
           scroll
           backgroundColor={brandSurfaceSoft}
           withHorizontalPadding={false}
-          extraScrollBottomPadding={DRIVER_FLOATING_TAB_SCROLL_PADDING}
+          extraScrollBottomPadding={scrollPad}
           contentContainerStyle={[
             styles.page,
             { paddingHorizontal: horizontalPadding, gap: t.spacingSm, paddingBottom: t.spacingMd },

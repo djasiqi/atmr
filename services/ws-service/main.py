@@ -1281,7 +1281,13 @@ async def metrics() -> JSONResponse:
     kafka_consumer_running = (
         kafka_consumer_task is not None and not kafka_consumer_task.done()
     )
-    from kafka_lag_metrics import render_prometheus_lines
+    lag_lines: list[str] = []
+    try:
+        from kafka_lag_metrics import render_prometheus_lines
+
+        lag_lines = list(render_prometheus_lines())
+    except ImportError:
+        lag_lines = []
 
     lines = [
         "# HELP ws_kafka_consumer_enabled Kafka consumer activé par configuration",
@@ -1290,7 +1296,7 @@ async def metrics() -> JSONResponse:
         "# HELP ws_kafka_consumer_running Consumer Kafka actif (task vivante)",
         "# TYPE ws_kafka_consumer_running gauge",
         f"ws_kafka_consumer_running {1 if kafka_consumer_running else 0}",
-        *render_prometheus_lines(),
+        *lag_lines,
     ]
     from fastapi.responses import PlainTextResponse
 
@@ -1388,7 +1394,6 @@ async def startup() -> None:
         relay_listener_task = asyncio.create_task(_listen_relay_events())
     kafka_consumer_task = asyncio.create_task(_consume_kafka_events())
     from gps_ingest import flush_loop
-    from kafka_lag_metrics import lag_publish_loop
 
     # F-02 : spool Redis Streams (client sync dédié aux scripts Lua)
     try:
@@ -1405,8 +1410,19 @@ async def startup() -> None:
     except Exception:
         logger.exception("gps_spool redis unavailable — memory spool / NACK on redis_stream")
 
-    kafka_lag_stop_event = asyncio.Event()
-    kafka_lag_loop_task = asyncio.create_task(lag_publish_loop(kafka_lag_stop_event))
+    # Métriques lag Kafka : optionnelles (image déployée peut être antérieure au module)
+    try:
+        from kafka_lag_metrics import lag_publish_loop
+
+        kafka_lag_stop_event = asyncio.Event()
+        kafka_lag_loop_task = asyncio.create_task(lag_publish_loop(kafka_lag_stop_event))
+    except ImportError:
+        logger.warning(
+            "kafka_lag_metrics indisponible — boucle lag désactivée "
+            "(rebuild/redeploy de l'image ws-service requis)"
+        )
+        kafka_lag_loop_task = None
+        kafka_lag_stop_event = None
     asyncio.create_task(flush_loop())
 
 

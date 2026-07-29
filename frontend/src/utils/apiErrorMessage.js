@@ -98,7 +98,28 @@ export function getApiErrorMessage(error, fallback = 'Une erreur est survenue.')
   }
 
   if (typeof d.message === 'string' && d.message.trim()) {
-    return d.message.trim();
+    const msg = d.message.trim();
+    // Marshmallow brut : préciser le champ si disponible
+    if (/^Missing data for required field\.?$/i.test(msg)) {
+      const fields = d.details?.fields || d.details?.errors || d.errors;
+      if (fields && typeof fields === 'object') {
+        const fieldName = Object.keys(fields)[0];
+        if (fieldName) {
+          const labels = {
+            email: 'email',
+            phone: 'téléphone',
+            password: 'mot de passe',
+            username: "nom d'utilisateur",
+            first_name: 'prénom',
+            last_name: 'nom',
+          };
+          const label = labels[fieldName] || fieldName;
+          return `Champ obligatoire manquant : ${label}.`;
+        }
+      }
+      return 'Un champ obligatoire est manquant.';
+    }
+    return msg;
   }
 
   // Réponses legacy : message utilisateur dans `error` + `error_code` (ex. validation 400)

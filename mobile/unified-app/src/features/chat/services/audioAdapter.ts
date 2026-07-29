@@ -47,6 +47,10 @@ export function useChatVoiceRecorder() {
   const abortRecording = useCallback(async (): Promise<void> => {
     const owner = ownerRef.current;
     const ownsSession = activeRecordingOwner === owner;
+    // Ne pas couper la session d'un autre recorder (FAB canal équipe vs ChatComposer).
+    if (!ownsSession && !recorder.isRecording) {
+      return;
+    }
     try {
       if (ownsSession || recorder.isRecording) {
         try {
@@ -61,7 +65,9 @@ export function useChatVoiceRecorder() {
       if (activeRecordingOwner === owner) {
         activeRecordingOwner = null;
       }
-      await setRecordingSessionMode(false).catch(() => undefined);
+      if (ownsSession) {
+        await setRecordingSessionMode(false).catch(() => undefined);
+      }
     }
   }, [recorder]);
 

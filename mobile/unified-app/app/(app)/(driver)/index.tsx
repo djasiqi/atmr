@@ -13,7 +13,7 @@ import {
 import { getDriverStatusUx } from "../../../src/features/driver/statusDictionary";
 import { useSession } from "../../../src/core/sessionProvider";
 import type { DriverMission, DriverTransitionStatus } from "../../../src/features/driver/types";
-import { DRIVER_FLOATING_TAB_SCROLL_PADDING } from "../../../src/features/driver/navigation/DriverFloatingTabBar";
+import { useDriverFloatingTabScrollPadding } from "../../../src/features/driver/navigation/DriverFloatingTabBar";
 import { DashboardMissionListSkeleton } from "../../../src/features/driver/components/DashboardMissionListSkeleton";
 import { ConfirmCompletionModal } from "../../../src/features/driver/components/ConfirmCompletionModal";
 import { CancelJustificationModal } from "../../../src/features/driver/components/CancelJustificationModal";
@@ -70,6 +70,7 @@ function getScheduledEpoch(mission: DriverMission): number {
 export default function DriverHomeScreen() {
   const router = useRouter();
   const { horizontalPadding } = useAppViewport();
+  const scrollPad = useDriverFloatingTabScrollPadding();
   const missionLayout = useMissionLayout();
   const { status: sessionStatus } = useSession();
   const missionsQuery = useDriverMissionsQuery();
@@ -215,7 +216,7 @@ export default function DriverHomeScreen() {
                 paddingRight: horizontalPadding,
               },
             ]}
-            extraScrollBottomPadding={DRIVER_FLOATING_TAB_SCROLL_PADDING}
+            extraScrollBottomPadding={scrollPad}
             refreshControl={
               <RefreshControl
                 refreshing={pullRefreshing}

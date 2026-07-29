@@ -511,3 +511,69 @@ class TestCancelMultiStopCascade:
         # Les legs liés ne sont pas refacturés (facturation portée par le principal)
         assert leg2.is_cancellation_billable is False
         assert leg3.is_cancellation_billable is False
+
+
+# ---------------------------------------------------------------------------
+# Idempotence — demande d'annulation déjà transmise
+# ---------------------------------------------------------------------------
+
+
+class TestCancelInstitutionBookingIdempotent:
+    def test_second_cancel_does_not_create_duplicate_action(
+        self, db, requires_postgresql, committed_booking, transport_request, institution
+    ):
+        from models import BookingChangeEvent
+        from services.institutions.booking_change_service import (
+            cancel_institution_booking,
+        )
+
+        ctx = _make_ctx(committed_booking, transport_request, institution.id)
+        body1, code1 = cancel_institution_booking(
+            ctx,
+            reason="Patient ne vient plus",
+            reason_code="CLIENT_REQUEST",
+            actor_user_id=None,
+            actor_role=InstitutionRole.ADMIN.value,
+            actor_display_name="Admin Test",
+            client_version=1,
+        )
+        assert code1 == 202, body1
+        assert body1["status"] == "pending_action"
+        assert body1.get("already_pending") is not True
+        first_action_id = body1["change_request"]["id"]
+
+        events_after_first = BookingChangeEvent.query.filter_by(
+            booking_id=committed_booking.id,
+            action_type="change_request_created",
+            change_scope="cancellation",
+        ).count()
+        assert events_after_first == 1
+
+        db.session.refresh(committed_booking)
+        ctx2 = _make_ctx(committed_booking, transport_request, institution.id)
+        body2, code2 = cancel_institution_booking(
+            ctx2,
+            reason="Patient ne vient plus (renvoi)",
+            reason_code="CLIENT_REQUEST",
+            actor_user_id=None,
+            actor_role=InstitutionRole.ADMIN.value,
+            actor_display_name="Admin Test",
+            client_version=1,
+        )
+        assert code2 == 202, body2
+        assert body2.get("already_pending") is True
+        assert body2.get("code") == "CANCELLATION_ALREADY_PENDING"
+        assert body2["change_request"]["id"] == first_action_id
+
+        events_after_second = BookingChangeEvent.query.filter_by(
+            booking_id=committed_booking.id,
+            action_type="change_request_created",
+            change_scope="cancellation",
+        ).count()
+        assert events_after_second == 1
+
+        open_cancels = BookingChangeRequest.query.filter(
+            BookingChangeRequest.booking_id == committed_booking.id,
+            BookingChangeRequest.action_type == "CANCELLATION",
+        ).count()
+        assert open_cancels == 1

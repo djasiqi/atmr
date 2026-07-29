@@ -10,7 +10,6 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import * as ExpoLinking from "expo-linking";
 import { useRouter, type Href } from "expo-router";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { getResolvedApiBaseUrl } from "../../../core/api/client";
 import {
   readAuthBiometricEnabled,
@@ -30,13 +29,15 @@ import { requestNotificationDisclosure } from "../../../core/notifications/pushR
 import { useSession } from "../../../core/sessionProvider";
 import type { AuthContext } from "../../../core/contracts/auth";
 import { AppSwitch } from "../../../design/ui/AppSwitch";
-import { computeFloatingTabBarClearance } from "../../../design/navigation/BaseFloatingBar";
 import {
   AppButton,
   AppText,
   brandPrimary,
+  computeCompanyFloatingBottomPad,
   ResponsiveContainer,
   Screen,
+  useAppViewport,
+  useFloatingBarClearance,
   useResponsiveTokens,
 } from "../../../design/responsive";
 import { createShadow } from "../../../styles/shadowStyles";
@@ -112,8 +113,12 @@ function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promi
 
 export function CompanySettingsScreenContent() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
+  const { bottomInset } = useAppViewport();
   const t = useResponsiveTokens();
+  const scrollBottomPadding = useFloatingBarClearance(
+    "company",
+    computeCompanyFloatingBottomPad(bottomInset)
+  );
   const {
     activeContext,
     bootstrap,
@@ -200,7 +205,6 @@ export function CompanySettingsScreenContent() {
   const userEmail = bootstrap?.user?.email?.trim() || "—";
   const realtimeLabel = resolveCompanyRealtimeLabel(companyRealtime.status);
   const realtimeHealthy = companyRealtime.status.toLowerCase() === "healthy";
-  const scrollBottomPadding = computeFloatingTabBarClearance(insets.bottom);
 
   const refreshNotificationState = useCallback(async () => {
     const Notifications = getExpoNotificationsModule();

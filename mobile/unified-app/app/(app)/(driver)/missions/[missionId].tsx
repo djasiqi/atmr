@@ -26,13 +26,14 @@ import { getMissionClientDisplayName } from "../../../../src/features/driver/dom
 import { StatusSwitch } from "../../../../src/features/driver/components/StatusSwitch";
 import { DriverStateBanners } from "../../../../src/features/driver/components/DriverStateBanners";
 import { useMissionLayout } from "../../../../src/features/driver/hooks/useMissionLayout";
-import { DRIVER_FLOATING_TAB_SCROLL_PADDING } from "../../../../src/features/driver/navigation/DriverFloatingTabBar";
+import { useDriverFloatingTabScrollPadding } from "../../../../src/features/driver/navigation/DriverFloatingTabBar";
 import { FONT_SIZE } from "../../../../src/design/responsive/typographyTokens";
 import { useMissionLiveTrackingGuard } from "../../../../src/features/driver/hooks/useMissionLiveTrackingGuard";
 import { requiresLiveTrackingPermission } from "../../../../src/features/driver/services/missionLiveTrackingEligibility";
 export default function DriverMissionDetailScreen() {
   const router = useRouter();
   const { width } = useAppViewport();
+  const scrollPad = useDriverFloatingTabScrollPadding();
   const isCompactMobile = width < 380;
   const { missionId } = useLocalSearchParams<{ missionId: string }>();
   const missionIdNumber = Number(missionId);
@@ -91,7 +92,7 @@ export default function DriverMissionDetailScreen() {
           scroll
           backgroundColor={brandSurfaceSoft}
           withHorizontalPadding={false}
-          extraScrollBottomPadding={DRIVER_FLOATING_TAB_SCROLL_PADDING}
+          extraScrollBottomPadding={scrollPad}
           contentContainerStyle={[
             styles.page,
             {

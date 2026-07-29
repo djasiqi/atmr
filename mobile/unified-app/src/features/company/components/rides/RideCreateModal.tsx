@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Animated, Easing, Keyboard, Platform, Pressable, StyleSheet, View } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { AxiosError } from "axios";
-import { AppButton, Modal } from "../../../../design/responsive";
+import { AppButton, Modal, ModalFooterActions, useAccessibilityScale } from "../../../../design/responsive";
 import { AppInput } from "../../../../design/ui/AppInput";
 import { AppSelect } from "../../../../design/ui/AppSelect";
 import { AppText } from "../../../../design/ui/AppText";
@@ -23,7 +23,7 @@ import { searchCompanyAddresses } from "../../api/companyApi";
 import { AddressSelector } from "./AddressSelector";
 import { ClientSelector } from "./ClientSelector";
 import {
-  sectionsHiddenDuringSuggestionStyle,
+  suggestionContentBelowOverlayStyle,
   suggestionOverlayFieldStyle,
   suggestionOverlayFieldWithBgStyle,
   suggestionOverlaySectionStyle,
@@ -682,11 +682,17 @@ const s = StyleSheet.create({
     alignItems: "baseline" as const,
     gap: 10,
   },
+  summaryRowStacked: {
+    flexDirection: "column" as const,
+    alignItems: "stretch" as const,
+  },
   summaryCell: {
     flex: 1,
     minWidth: 0,
+    flexShrink: 1,
     flexDirection: "row" as const,
     alignItems: "baseline" as const,
+    flexWrap: "wrap" as const,
     gap: 6,
   },
   summaryCellLabel: {
@@ -694,10 +700,12 @@ const s = StyleSheet.create({
     fontWeight: "600" as const,
     color: E.TEXT_MUTED,
     letterSpacing: 0.2,
+    flexShrink: 0,
   },
   summaryCellValue: {
     flex: 1,
     minWidth: 0,
+    flexShrink: 1,
     fontSize: FONT_SIZE.px12,
     fontWeight: "700" as const,
     color: E.TEXT,
@@ -733,18 +741,11 @@ const s = StyleSheet.create({
     color: E.TEXT_MUTED,
     textAlign: "left" as const,
   },
-  footerButtons: {
-    flexDirection: "row" as const,
-    gap: 10,
-    alignItems: "stretch" as const,
-  },
   footerBtnSecondary: {
-    flex: 1,
     minHeight: 48,
     borderRadius: 13,
   },
   footerBtnPrimary: {
-    flex: 2.1,
     minHeight: 52,
     borderRadius: 14,
     ...createShadow({
@@ -1002,6 +1003,7 @@ function toSubmitErrorMessage(error: unknown): string {
 }
 
 export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModalProps) {
+  const { isVeryLargeText, shouldStackRows } = useAccessibilityScale();
   const activeContextId = useActiveCompanyContextId();
   const createRide = useRideCreate();
   const form = useRideFormState();
@@ -2096,7 +2098,9 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
         <Ionicons name="chevron-back" size={20} color={E.BRAND} />
       </Pressable>
       <View style={s.headerCenter}>
-        <AppText style={s.headerTitle}>Créer une réservation</AppText>
+        <AppText variant="sectionTitle" style={s.headerTitle}>
+          Créer une réservation
+        </AppText>
       </View>
       <Pressable
         onPress={() => setExtraInfoOpen((v) => !v)}
@@ -2111,91 +2115,103 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
     </View>
   );
 
+  const summaryCriticalLines = isVeryLargeText ? undefined : 1;
+  const summaryRowStyle = shouldStackRows ? [s.summaryRow, s.summaryRowStacked] : s.summaryRow;
+
   const footer = (
     <View style={s.footerCol}>
       {keyboardVisible ? null : (
       <View style={s.summaryPanel}>
         <View style={s.summaryPanelHeader}>
           <Ionicons name="receipt-outline" size={14} color={E.BRAND_DARK} />
-          <AppText variant="label" style={s.summaryPanelTitle}>Résumé</AppText>
+          <AppText variant="label" style={s.summaryPanelTitle} scaleRole="chrome">Résumé</AppText>
           <View style={s.summaryPanelDivider} />
         </View>
-        <View style={s.summaryRow}>
+        <View style={summaryRowStyle}>
           <View style={s.summaryCell}>
-            <AppText variant="label" style={s.summaryCellLabel}>Client</AppText>
+            <AppText variant="label" style={s.summaryCellLabel} scaleRole="chrome">Client</AppText>
             <AppText
               variant="body"
               style={[s.summaryCellValue, !summaryData.client ? s.summaryCellValueMuted : null]}
-              numberOfLines={1}
+              numberOfLines={summaryCriticalLines}
             >
               {summaryData.client || "—"}
             </AppText>
           </View>
           <View style={s.summaryCell}>
-            <AppText variant="label" style={s.summaryCellLabel}>Date</AppText>
+            <AppText variant="label" style={s.summaryCellLabel} scaleRole="chrome">Date</AppText>
             <AppText
               variant="body"
               style={[s.summaryCellValue, !summaryData.date ? s.summaryCellValueMuted : null]}
-              numberOfLines={1}
+              numberOfLines={summaryCriticalLines}
             >
               {summaryData.date || "—"}
             </AppText>
           </View>
         </View>
-        <View style={s.summaryRow}>
+        <View style={summaryRowStyle}>
           <View style={s.summaryCell}>
-            <AppText variant="label" style={s.summaryCellLabel}>Départ</AppText>
+            <AppText variant="label" style={s.summaryCellLabel} scaleRole="chrome">Départ</AppText>
             <AppText
               variant="body"
               style={[s.summaryCellValue, !summaryData.pickup ? s.summaryCellValueMuted : null]}
-              numberOfLines={1}
+              numberOfLines={summaryCriticalLines}
             >
               {summaryData.pickup || "—"}
             </AppText>
           </View>
           <View style={s.summaryCell}>
-            <AppText variant="label" style={s.summaryCellLabel}>Destination</AppText>
+            <AppText variant="label" style={s.summaryCellLabel} scaleRole="chrome">Destination</AppText>
             <AppText
               variant="body"
               style={[s.summaryCellValue, !summaryData.dropoff ? s.summaryCellValueMuted : null]}
-              numberOfLines={1}
+              numberOfLines={summaryCriticalLines}
             >
               {summaryData.dropoff || "—"}
             </AppText>
           </View>
         </View>
         <View style={s.summaryPriceRow}>
-          <AppText variant="label" style={s.summaryPriceLabel}>Prix</AppText>
+          <AppText variant="label" style={s.summaryPriceLabel} scaleRole="chrome">Prix</AppText>
           <AppText variant="sectionTitle" style={s.summaryPriceValue}>{summaryData.amount || "—"}</AppText>
         </View>
       </View>
       )}
-      {!canSubmit && !createRide.isPending && !keyboardVisible ? (
-        <AppText style={s.footerHint}>{footerSummaryText}</AppText>
-      ) : null}
-      <View style={s.footerButtons}>
-        <AppButton
-          title="Annuler"
-          variant="secondary"
-          onPress={onClose}
-          style={{ ...s.footerBtnSecondary, ...OUTLINE_SECONDARY }}
-        />
-        <AppButton
-          title={createRide.isPending ? "Création…" : "Confirmer la réservation"}
-          variant="primary"
-          disabled={!canSubmit || createRide.isPending}
-          loading={createRide.isPending}
-          onPress={() => void submit()}
-          style={s.footerBtnPrimary}
-          leftIcon={
-            <Ionicons
-              name="checkmark-circle-outline"
-              size={20}
-              color={!canSubmit || createRide.isPending ? "rgba(255,255,255,0.85)" : "#fff"}
-            />
-          }
-        />
-      </View>
+      <ModalFooterActions
+        stacked={shouldStackRows}
+        hint={
+          !canSubmit && !createRide.isPending && !keyboardVisible ? (
+            <AppText variant="caption" style={s.footerHint}>
+              {footerSummaryText}
+            </AppText>
+          ) : null
+        }
+        secondary={
+          <AppButton
+            title="Annuler"
+            variant="secondary"
+            onPress={onClose}
+            style={{ ...s.footerBtnSecondary, ...OUTLINE_SECONDARY }}
+          />
+        }
+        primary={
+          <AppButton
+            title={createRide.isPending ? "Création…" : "Confirmer la réservation"}
+            variant="primary"
+            disabled={!canSubmit || createRide.isPending}
+            loading={createRide.isPending}
+            onPress={() => void submit()}
+            style={s.footerBtnPrimary}
+            leftIcon={
+              <Ionicons
+                name="checkmark-circle-outline"
+                size={20}
+                color={!canSubmit || createRide.isPending ? "rgba(255,255,255,0.85)" : "#fff"}
+              />
+            }
+          />
+        }
+      />
     </View>
   );
 
@@ -2221,13 +2237,14 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
             gap={0}
             complete={section1Complete}
           >
-            <View style={s.formGroup}>
-              <View
-                style={[
-                  s.inlineActionRow,
-                  clientSuggestionOverlayOpen ? suggestionOverlayFieldWithBgStyle : null,
-                ]}
-              >
+            <View
+              style={[
+                s.formGroup,
+                // z-index sur le frère du bloc adresses (pas seulement la rangée interne)
+                clientSuggestionOverlayOpen ? suggestionOverlayFieldWithBgStyle : null,
+              ]}
+            >
+              <View style={s.inlineActionRow}>
                 <View style={s.inlineActionGrow}>
                   <ClientSelector
                     showFieldLabel={false}
@@ -2261,7 +2278,7 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
               </View>
             </View>
 
-            <View style={clientSuggestionOverlayOpen ? sectionsHiddenDuringSuggestionStyle : undefined}>
+            <View style={clientSuggestionOverlayOpen ? suggestionContentBelowOverlayStyle : undefined}>
               {form.isMaterialDelivery ? (
                 <View style={s.formGroup}>
                 <View style={s.inlineActionRow}>
@@ -2315,19 +2332,24 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
                 <View style={[s.subCard, s.subCardBordered]}>
                   <View style={s.subCardTitleRow}>
                     <Ionicons name="medkit-outline" size={16} color={E.BRAND} />
-                    <AppText style={s.subCardTitle} numberOfLines={2}>
+                    <AppText variant="label" style={s.subCardTitle} numberOfLines={2}>
                       Client hospitalisé
                       {clientDetailQuery.data.clinicName ? ` · ${clientDetailQuery.data.clinicName}` : ""}
                     </AppText>
                   </View>
-                  <AppText style={s.subCardHint}>Départ établissement prioritaire.</AppText>
+                  <AppText variant="caption" style={s.subCardHint}>
+                    Départ établissement prioritaire.
+                  </AppText>
                   <Pressable
                     onPress={() => setBillToPatient((v) => !v)}
                     style={[s.chip, billToPatient ? s.chipOn : s.chipOff]}
                     accessibilityRole="button"
                     accessibilityState={{ selected: billToPatient }}
                   >
-                    <AppText style={billToPatient ? s.chipLabelOn : s.chipLabelOff}>
+                    <AppText
+                      variant="label"
+                      style={billToPatient ? s.chipLabelOn : s.chipLabelOff}
+                    >
                       {billToPatient ? "Facturation patient (override)" : "Facturation clinique"}
                     </AppText>
                   </Pressable>
@@ -2366,12 +2388,11 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
                 </View>
                 <View
                   style={
-                    pickupSuggestionOverlayOpen ? sectionsHiddenDuringSuggestionStyle : undefined
-                  }
-                >
-                <View
-                  style={
-                    dropoffSuggestionOverlayOpen ? suggestionOverlayFieldWithBgStyle : undefined
+                    pickupSuggestionOverlayOpen
+                      ? suggestionContentBelowOverlayStyle
+                      : dropoffSuggestionOverlayOpen
+                        ? suggestionOverlayFieldWithBgStyle
+                        : undefined
                   }
                 >
                 <AddressSelector
@@ -2406,13 +2427,10 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
                   required
                 />
                 </View>
-                </View>
               </View>
               <View
                 style={
-                  pickupSuggestionOverlayOpen || dropoffSuggestionOverlayOpen
-                    ? sectionsHiddenDuringSuggestionStyle
-                    : undefined
+                  addressSuggestionOverlayOpen ? suggestionContentBelowOverlayStyle : undefined
                 }
               >
               <View style={s.addressActionsColumn}>
@@ -2466,7 +2484,7 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
 
             <View
               style={
-                dropoffSuggestionOverlayOpen ? sectionsHiddenDuringSuggestionStyle : undefined
+                addressSuggestionOverlayOpen ? suggestionContentBelowOverlayStyle : undefined
               }
             >
             <View style={{ marginTop: 10 }}>
@@ -2621,7 +2639,7 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
 
                 {form.recurrence === "custom" || form.recurrence === "weekly" ? (
                   <View style={{ gap: 8 }}>
-                    <AppText style={s.recurrenceSubLabel}>
+                    <AppText variant="label" style={s.recurrenceSubLabel}>
                       {form.recurrence === "custom" ? "Jours concernés" : "Sélectionnez les jours"}
                       {" ("}
                       {recurrenceSelectedDaysCount} sélectionné
@@ -2643,6 +2661,7 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
                             accessibilityLabel={`${label}${on ? ", sélectionné" : ""}`}
                           >
                             <AppText
+                              variant="label"
                               style={
                                 on
                                   ? s.recurrenceWeekdayChipTextOn
@@ -2657,6 +2676,7 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
                     </View>
                     {recurrenceSelectedDaysCount === 0 ? (
                       <AppText
+                        variant="caption"
                         style={{ color: "#B91C1C", fontSize: FONT_SIZE.px12, fontWeight: "600" }}
                       >
                         ⚠️ Veuillez sélectionner au moins un jour
@@ -2686,6 +2706,7 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
                 </View>
                 {recurrenceEndDate.trim().length > 0 && !recurrenceEndValid ? (
                   <AppText
+                    variant="caption"
                     style={{ color: "#B91C1C", fontSize: FONT_SIZE.px12, fontWeight: "600" }}
                   >
                     ⚠️ Format attendu: JJ-MM-AAAA
@@ -2798,7 +2819,7 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
 
                 <View style={s.recurrenceHint}>
                   <Ionicons name="information-circle-outline" size={18} color={E.BRAND} />
-                  <AppText style={s.recurrenceHintText}>
+                  <AppText variant="caption" style={s.recurrenceHintText}>
                     {recurrencePreview.total > 0
                       ? `Une réservation sera créée ${
                           recurrenceLongLabel
@@ -2817,7 +2838,7 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
           </RideCreateSection>
           </View>
 
-          <View style={anySuggestionOverlayOpen ? sectionsHiddenDuringSuggestionStyle : undefined}>
+          <View style={anySuggestionOverlayOpen ? suggestionContentBelowOverlayStyle : undefined}>
           <View style={s.sectionDivider} />
 
           {/* ============================================== */}
@@ -2922,7 +2943,7 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
                       accessibilityRole="button"
                       accessibilityLabel="Réactiver le calcul automatique du montant"
                     >
-                      <AppText style={{ color: E.BRAND, fontWeight: "600" }}>
+                      <AppText variant="label" style={{ color: E.BRAND, fontWeight: "600" }}>
                         Recalculer automatiquement
                       </AppText>
                     </Pressable>
@@ -2940,21 +2961,24 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
                       },
                     ]}
                   >
-                    <AppText style={[s.amountBadgeText, { color: amountBadgeMeta.textColor }]}>
+                    <AppText
+                      variant="caption"
+                      style={[s.amountBadgeText, { color: amountBadgeMeta.textColor }]}
+                    >
                       {amountBadgeMeta.label}
                     </AppText>
                   </View>
                 </View>
               ) : null}
               {pricingSimulation.isPending && !amountLocked ? (
-                <AppText style={s.sectionHelper}>
+                <AppText variant="caption" style={s.sectionHelper}>
                   {amountSource === "simulated" && form.amountInput.trim().length > 0
                     ? "Mise à jour du montant exact en cours…"
                     : "Calcul du montant en cours…"}
                 </AppText>
               ) : null}
               {pricingWarning && amountSource != null ? (
-                <AppText style={s.sectionHelper}>{pricingWarning}</AppText>
+                <AppText variant="caption" style={s.sectionHelper}>{pricingWarning}</AppText>
               ) : null}
             </RideCreateSection>
           ) : null}
@@ -3043,6 +3067,7 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
                       color={form.wheelchairClient ? E.TRANSFER : E.TEXT_SEC}
                     />
                     <AppText
+                      variant="label"
                       style={
                         form.wheelchairClient ? s.chipBlueLabelOn : s.chipLabelOff
                       }
@@ -3066,6 +3091,7 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
                       color={form.wheelchairProvide ? E.URGENT : E.TEXT_SEC}
                     />
                     <AppText
+                      variant="label"
                       style={
                         form.wheelchairProvide
                           ? s.chipOrangeLabelOn

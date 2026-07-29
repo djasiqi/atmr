@@ -39,6 +39,8 @@ const SignupActivation = () => {
   const [status, setStatus] = useState({
     email_verified: false,
     phone_verified: false,
+    requires_email: true,
+    requires_phone: true,
     is_complete: false,
     is_finalized: false,
     email_delivery_status: null,
@@ -65,6 +67,10 @@ const SignupActivation = () => {
     setStatus({
       email_verified: Boolean(newStatus.email_verified),
       phone_verified: Boolean(newStatus.phone_verified),
+      requires_email:
+        newStatus.requires_email == null ? true : Boolean(newStatus.requires_email),
+      requires_phone:
+        newStatus.requires_phone == null ? true : Boolean(newStatus.requires_phone),
       is_complete: Boolean(newStatus.is_complete),
       is_finalized: Boolean(newStatus.is_finalized),
       email_delivery_status: newStatus.email_delivery_status || null,
@@ -115,7 +121,39 @@ const SignupActivation = () => {
           setErrorMessage("Email confirmé, mais session d'activation introuvable.");
         }
       } catch (error) {
-        setErrorMessage(parseApiMessage(error, "Impossible de charger la session d'activation."));
+        const details = error?.response?.data?.details;
+        const recoveredSessionId = String(details?.activation_session_id || '').trim();
+        const notice = parseApiMessage(
+          error,
+          "Ce lien n'est plus valide. Utilisez le dernier email reçu ou renvoyez-en un."
+        );
+        setErrorMessage(notice);
+        // Lien remplacé / expiré : on récupère quand même la session pour afficher
+        // le bon canal (email seul) et permettre un nouvel envoi.
+        if (recoveredSessionId) {
+          if (details?.masked_email) {
+            setMaskedEmail(details.masked_email);
+          }
+          if (details?.masked_phone) {
+            setMaskedPhone(details.masked_phone);
+          }
+          if (details?.activation_status) {
+            updateStatus(details.activation_status);
+          }
+          setActivationSessionId(recoveredSessionId);
+          navigate(
+            `/activate-account?activation_session_id=${encodeURIComponent(recoveredSessionId)}`,
+            {
+              replace: true,
+              state: {
+                ...(location.state || {}),
+                activationNotice: notice,
+                maskedEmail: details?.masked_email || location.state?.maskedEmail,
+                maskedPhone: details?.masked_phone || location.state?.maskedPhone,
+              },
+            }
+          );
+        }
       } finally {
         setLoading(false);
       }
@@ -127,7 +165,8 @@ const SignupActivation = () => {
   useEffect(() => {
     const bootWithSessionId = async () => {
       if (token) return;
-      setErrorMessage('');
+      const noticeFromState = String(location.state?.activationNotice || '').trim();
+      setErrorMessage(noticeFromState);
       setInfoMessage('');
       setDebugActivationLink('');
       setDebugSmsCode('');
@@ -138,6 +177,9 @@ const SignupActivation = () => {
       setLoading(true);
       try {
         await fetchStatus(activationSessionId);
+        if (noticeFromState) {
+          setErrorMessage(noticeFromState);
+        }
       } catch (error) {
         setErrorMessage(parseApiMessage(error, "Impossible de charger la session d'activation."));
       } finally {
@@ -315,9 +357,22 @@ const SignupActivation = () => {
   }, [activationSessionId, maskedEmail, maskedPhone, prefillEmail]);
 
   const finalizeEnabled = useMemo(
-    () => Boolean(status.email_verified && status.phone_verified && !status.is_finalized),
+    () => Boolean(status.is_complete && !status.is_finalized),
     [status]
   );
+
+  const activationSubtitle = useMemo(() => {
+    if (status.requires_email && status.requires_phone) {
+      return 'Validez votre email et votre téléphone pour activer le compte.';
+    }
+    if (status.requires_email) {
+      return 'Validez votre email pour activer le compte.';
+    }
+    if (status.requires_phone) {
+      return 'Validez votre téléphone pour activer le compte.';
+    }
+    return 'Validez vos informations pour activer le compte.';
+  }, [status.requires_email, status.requires_phone]);
 
   const handleLoginRedirect = () => {
     navigate('/login', {
@@ -356,9 +411,7 @@ const SignupActivation = () => {
     <div className={styles.pageWrapper}>
       <div className={styles.card}>
         <h1 className={styles.title}>Activation du compte</h1>
-        <p className={styles.subtitle}>
-          Validez votre email et votre téléphone pour activer le compte.
-        </p>
+        <p className={styles.subtitle}>{activationSubtitle}</p>
 
         {infoMessage ? <p className={`${styles.statusBox} ${styles.statusInfo}`}>{infoMessage}</p> : null}
         {debugActivationLink ? (
@@ -375,6 +428,7 @@ const SignupActivation = () => {
           </p>
         ) : null}
         {errorMessage ? <p className={`${styles.statusBox} ${styles.statusError}`}>{errorMessage}</p> : null}
+        {status.requires_email ? (
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>Email</h2>
           <p className={styles.sectionHint}>
@@ -399,7 +453,9 @@ const SignupActivation = () => {
             </button>
           </div>
         </section>
+        ) : null}
 
+        {status.requires_phone ? (
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>SMS</h2>
           <p className={styles.sectionHint}>
@@ -472,6 +528,7 @@ const SignupActivation = () => {
             </button>
           </div>
         </section>
+        ) : null}
 
         <div className={styles.footerActions}>
           <button

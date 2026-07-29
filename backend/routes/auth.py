@@ -344,11 +344,34 @@ def _mask_phone(phone: str | None) -> str:
     return f"+** *** *** {digits[-2:]}"
 
 
+def _activation_channel_requirements(
+    session: ActivationSession,
+) -> tuple[bool, bool]:
+    """Retourne (requires_email, requires_phone) selon les canaux fournis à l'inscription."""
+    user = User.query.get(session.user_id) if session.user_id else None
+    requires_email = bool(user and (user.email or "").strip())
+    requires_phone = bool(user and (user.phone or "").strip())
+    # Filet de sécurité : si aucun canal n'est détecté, exiger les deux (comportement historique)
+    if not requires_email and not requires_phone:
+        return True, True
+    return requires_email, requires_phone
+
+
+def _activation_is_complete(session: ActivationSession) -> bool:
+    requires_email, requires_phone = _activation_channel_requirements(session)
+    email_ok = (not requires_email) or bool(session.email_verified_at)
+    phone_ok = (not requires_phone) or bool(session.phone_verified_at)
+    return email_ok and phone_ok
+
+
 def _build_activation_status(session: ActivationSession) -> dict[str, object]:
+    requires_email, requires_phone = _activation_channel_requirements(session)
     return {
         "email_verified": bool(session.email_verified_at),
         "phone_verified": bool(session.phone_verified_at),
-        "is_complete": bool(session.email_verified_at and session.phone_verified_at),
+        "requires_email": requires_email,
+        "requires_phone": requires_phone,
+        "is_complete": _activation_is_complete(session),
         "is_finalized": bool(session.consumed_at),
         # Statut livraison (pas email_last_error — interne uniquement)
         "email_delivery_status": session.email_delivery_status,
@@ -708,11 +731,16 @@ def _send_activation_email(user: User, token: str) -> None:
         "Ce lien expire rapidement. Si vous n'etes pas a l'origine de cette action, ignorez cet email."
     )
 
+    from services.notifications.lirie_email_brand import build_lirie_logo_email_assets
+
+    logo_src, logo_attachments = build_lirie_logo_email_assets()
     html_body = ""
     with suppress(Exception):
         html_body = render_template(
             "emails/activation_email.html",
             activation_link=verification_link,
+            logo_src=logo_src,
+            first_name=(getattr(user, "first_name", None) or "").strip() or None,
             product_name="LIRIE",
             company_name="LIRIE",
             current_year=datetime.now(UTC).year,
@@ -720,7 +748,7 @@ def _send_activation_email(user: User, token: str) -> None:
 
     send_result = send_email_notification(
         email=user_email,
-        subject="Activation de votre compte",
+        subject="Activation de votre compte LIRIE",
         body=html_body or text_body,
         html=bool(html_body),
         notification_type="activation_signup",
@@ -728,6 +756,7 @@ def _send_activation_email(user: User, token: str) -> None:
         from_email=os.getenv("ACTIVATION_EMAIL_FROM", "noreply@lirie.ch"),
         reply_to=os.getenv("ACTIVATION_EMAIL_REPLY_TO", "support@lirie.ch"),
         raise_on_error=True,
+        attachments=logo_attachments or None,
     )
     if not bool(send_result.get("ok")):
         error_msg = str(send_result.get("error", "Email provider error"))
@@ -863,16 +892,21 @@ register_model = auth_ns.model(
             max_length=50,
         ),
         "email": fields.String(
-            required=True,
-            description="L'adresse email de l'utilisateur (format email valide)",
+            required=False,
+            description="Email (requis si téléphone absent)",
         ),
         "password": fields.String(
-            required=True, description="Le mot de passe de l'utilisateur", min_length=6
+            required=False,
+            description="Mot de passe (requis si email fourni)",
+            min_length=6,
         ),
         "first_name": fields.String(description="Prénom", default=None, max_length=100),
         "last_name": fields.String(description="Nom", default=None, max_length=100),
         "phone": fields.String(
-            description="Numéro de téléphone", default=None, max_length=20
+            required=False,
+            description="Téléphone (requis si email absent)",
+            default=None,
+            max_length=20,
         ),
         "address": fields.String(description="Adresse", default=None, max_length=500),
         "birth_date": fields.String(
@@ -3863,35 +3897,52 @@ class Register(Resource):
 
             # ✅ DDD: Utiliser le use case pour enregistrer l'utilisateur
             username: str = cast("str", validated_data.get("username"))
-            password: str = cast("str", validated_data.get("password"))
-            email: str = cast("str", validated_data.get("email"))
-            phone: str | None = cast("str | None", validated_data.get("phone"))
+            password_raw = validated_data.get("password")
+            password: str | None = (
+                str(password_raw).strip() if password_raw else None
+            ) or None
+            email_raw = validated_data.get("email")
+            phone_raw = validated_data.get("phone")
+            email: str | None = (
+                str(email_raw).strip() if email_raw else None
+            ) or None
+            phone: str | None = (
+                str(phone_raw).strip() if phone_raw else None
+            ) or None
 
-            if not phone:
+            if not email and not phone:
                 return auth_error(
                     AuthErrorCodes.REGISTRATION_ERROR,
-                    "Le numéro de téléphone est requis pour activer le compte.",
+                    "Indiquez une adresse email ou un numéro de téléphone.",
                     400,
                 )
 
-            # ✅ S3: Validation explicite du mot de passe avec politique renforcée
-            from security.password_policy import (
-                PasswordPolicyError,
-                PasswordPolicyService,
-            )
-
-            try:
-                # Valider avec la politique stricte (complexité + HIBP)
-                PasswordPolicyService.validate_password(
-                    password, user_id=None, check_history=False
-                )
-            except PasswordPolicyError as e:
-                # ✅ FIX: Retourner un message d'erreur clair via helper standard
+            if email and not password:
                 return auth_error(
-                    AuthErrorCodes.PASSWORD_POLICY_ERROR,
-                    e.message,
+                    AuthErrorCodes.REGISTRATION_ERROR,
+                    "Le mot de passe est obligatoire lorsque vous indiquez un email.",
                     400,
                 )
+
+            # ✅ S3: Validation explicite du mot de passe (inscription email uniquement)
+            if password:
+                from security.password_policy import (
+                    PasswordPolicyError,
+                    PasswordPolicyService,
+                )
+
+                try:
+                    # Valider avec la politique stricte (complexité + HIBP)
+                    PasswordPolicyService.validate_password(
+                        password, user_id=None, check_history=False
+                    )
+                except PasswordPolicyError as e:
+                    # ✅ FIX: Retourner un message d'erreur clair via helper standard
+                    return auth_error(
+                        AuthErrorCodes.PASSWORD_POLICY_ERROR,
+                        e.message,
+                        400,
+                    )
 
             uc = RegisterUserUseCase()
             input_data = RegisterUserInput(
@@ -3965,37 +4016,46 @@ class Register(Resource):
             activation_session.resend_count_email = 0
             activation_session.resend_count_sms = 0
 
-            sms_code = _generate_sms_otp()
-            activation_session.sms_code_hash = _hash_plain_value(sms_code)
+            sms_code = None
+            if phone:
+                sms_code = _generate_sms_otp()
+                activation_session.sms_code_hash = _hash_plain_value(sms_code)
             db.session.add(activation_session)
             db.session.commit()
 
-            from models.activation_session import EMAIL_DELIVERY_KIND_INITIAL
-            from services.notifications.activation_email_delivery import (
-                try_enqueue_activation_email,
-            )
+            enqueue_result: dict[str, object] = {}
+            if email:
+                from models.activation_session import EMAIL_DELIVERY_KIND_INITIAL
+                from services.notifications.activation_email_delivery import (
+                    try_enqueue_activation_email,
+                )
 
-            environment = str(current_app.config.get("ENVIRONMENT", "")).strip().lower()
-            # Lot 1 : jeton HMAC dérivé de email_delivery_id (pas itsdangerous)
-            enqueue_result = try_enqueue_activation_email(
-                activation_session,
-                kind=EMAIL_DELIVERY_KIND_INITIAL,
-                environment=environment,
-                is_testing=bool(current_app.config.get("TESTING")),
-            )
+                environment = str(
+                    current_app.config.get("ENVIRONMENT", "")
+                ).strip().lower()
+                # Lot 1 : jeton HMAC dérivé de email_delivery_id (pas itsdangerous)
+                enqueue_result = try_enqueue_activation_email(
+                    activation_session,
+                    kind=EMAIL_DELIVERY_KIND_INITIAL,
+                    environment=environment,
+                    is_testing=bool(current_app.config.get("TESTING")),
+                )
 
             sms_sent = False
-            try:
-                sms_sent = _send_activation_sms(user, sms_code)
-                if sms_sent:
-                    activation_session.last_sms_sent_at = datetime.now(UTC)
-                    db.session.commit()
-            except Exception as sms_err:
-                logger.warning("[Activation] Echec envoi SMS activation: %s", sms_err)
+            if phone and sms_code:
+                try:
+                    sms_sent = _send_activation_sms(user, sms_code)
+                    if sms_sent:
+                        activation_session.last_sms_sent_at = datetime.now(UTC)
+                        db.session.commit()
+                except Exception as sms_err:
+                    logger.warning(
+                        "[Activation] Echec envoi SMS activation: %s", sms_err
+                    )
 
             logger.info("Client créé : user_id=%s, client_id=%s", user.id, client.id)
 
-            if enqueue_result.get("require_502"):
+            if email and enqueue_result.get("require_502"):
                 body, code = _activation_email_send_failed_body(
                     activation_session_id=activation_session.activation_session_id,
                     user=user,
@@ -4006,16 +4066,24 @@ class Register(Resource):
                     ]
                 return body, code
 
+            channels: list[str] = []
+            if email:
+                channels.append("email")
+            if phone:
+                channels.append("SMS")
+            channel_msg = " et ".join(channels) if channels else "vos canaux"
             response_body: dict[str, object] = {
-                "message": "Inscription créée. Activez votre compte via email et SMS.",
+                "message": f"Inscription créée. Activez votre compte via {channel_msg}.",
                 "user_id": user.public_id,
                 "username": user.username,
                 "activation_session_id": activation_session.activation_session_id,
-                "masked_email": mask_email(user.email or ""),
-                "masked_phone": _mask_phone(user.phone),
+                "masked_email": mask_email(user.email or "") if email else None,
+                "masked_phone": _mask_phone(user.phone) if phone else None,
                 "email_sent": None,
                 "activation_email_queued": bool(enqueue_result.get("queued")),
                 "sms_sent": sms_sent,
+                "requires_email": bool(email),
+                "requires_phone": bool(phone),
             }
             if enqueue_result.get("debug_activation_link"):
                 response_body["debug_activation_link"] = enqueue_result[
@@ -4124,10 +4192,35 @@ class VerifyActivationEmail(Resource):
                     )
 
                 now = datetime.now(UTC)
+
+                def _activation_recovery_details(
+                    session: ActivationSession, *, reason: str
+                ) -> dict[str, object]:
+                    """Permet au front de récupérer la session après un lien obsolète."""
+                    recovery_user = User.query.get(session.user_id)
+                    return {
+                        "reason": reason,
+                        "activation_session_id": session.activation_session_id,
+                        "masked_email": (
+                            mask_email(recovery_user.email or "")
+                            if recovery_user and recovery_user.email
+                            else None
+                        ),
+                        "masked_phone": (
+                            _mask_phone(recovery_user.phone)
+                            if recovery_user and recovery_user.phone
+                            else None
+                        ),
+                        "activation_status": _build_activation_status(session),
+                    }
+
                 if (
                     locked.email_delivery_id != delivery.email_delivery_id
                     or delivery.superseded_at is not None
                 ):
+                    recovery = _activation_recovery_details(
+                        locked, reason="superseded"
+                    )
                     db.session.rollback()
                     logger.warning(
                         "activation_email_verify_rejected reason=superseded "
@@ -4136,8 +4229,10 @@ class VerifyActivationEmail(Resource):
                     )
                     return auth_error(
                         AuthErrorCodes.TOKEN_EXPIRED,
-                        "Ce lien a été remplacé. Utilisez le dernier email reçu.",
+                        "Ce lien a été remplacé. Ouvrez le dernier email reçu "
+                        "(celui du renvoi le plus récent).",
                         400,
+                        details=recovery,
                     )
                 if delivery.token_expires_at is None:
                     db.session.rollback()
@@ -4155,6 +4250,7 @@ class VerifyActivationEmail(Resource):
                 if expires.tzinfo is None:
                     expires = expires.replace(tzinfo=UTC)
                 if now >= expires:
+                    recovery = _activation_recovery_details(locked, reason="expired")
                     db.session.rollback()
                     logger.warning(
                         "activation_email_verify_rejected reason=expired "
@@ -4165,6 +4261,7 @@ class VerifyActivationEmail(Resource):
                         AuthErrorCodes.TOKEN_EXPIRED,
                         "Le lien email a expiré. Demandez un nouvel envoi.",
                         400,
+                        details=recovery,
                     )
 
                 if locked.email_verified_at:
@@ -4394,7 +4491,7 @@ class VerifyActivationSms(Resource):
 class FinalizeActivation(Resource):
     @limiter.limit("20 per hour")
     def post(self):
-        """Active définitivement le compte après validation email + SMS."""
+        """Active définitivement le compte après validation des canaux fournis."""
         try:
             data = request.get_json() or {}
             validated_data = validate_request(FinalizeActivationSchema(), data)
@@ -4412,13 +4509,19 @@ class FinalizeActivation(Resource):
                     "activation_status": _build_activation_status(activation_session),
                 }, 200
 
-            if (
-                not activation_session.email_verified_at
-                or not activation_session.phone_verified_at
-            ):
+            if not _activation_is_complete(activation_session):
+                requires_email, requires_phone = _activation_channel_requirements(
+                    activation_session
+                )
+                missing: list[str] = []
+                if requires_email and not activation_session.email_verified_at:
+                    missing.append("email")
+                if requires_phone and not activation_session.phone_verified_at:
+                    missing.append("SMS")
+                missing_txt = " et ".join(missing) if missing else "vos canaux"
                 return auth_error(
                     AuthErrorCodes.EMAIL_NOT_VERIFIED,
-                    "Validation incomplète: confirmez l'email et le SMS avant d'activer le compte.",
+                    f"Validation incomplète: confirmez {missing_txt} avant d'activer le compte.",
                     400,
                     details=_build_activation_status(activation_session),
                 )

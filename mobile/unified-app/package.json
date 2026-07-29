@@ -34,6 +34,7 @@
     "update:prod:all": "node ./scripts/easUpdateProd.cjs --platform all",
     "update:prod:unsafe": "eas update --branch production",
     "no-legacy-imports": "node ./scripts/noLegacyImports.cjs",
+    "no-allow-font-scaling-false": "node ./scripts/noAllowFontScalingFalse.cjs",
     "audit:layout-magic-numbers": "node ./scripts/auditMagicLayoutNumbers.cjs",
     "audit:layout-font-sizes": "node ./scripts/auditLayoutFontSizes.cjs",
     "check-instrumentation-events": "node ./scripts/checkInstrumentationEvents.cjs",
@@ -50,6 +51,7 @@
   },
   "dependencies": {
     "@expo-google-fonts/philosopher": "^0.4.1",
+    "@expo/metro-runtime": "~6.1.2",
     "@expo/vector-icons": "^15.0.2",
     "@lottiefiles/dotlottie-react": "^0.13.5",
     "@notifee/react-native": "^9.1.8",

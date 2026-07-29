@@ -386,4 +386,35 @@ describe('institutionTimelineDisplay', () => {
       'Demande d’annulation institution — Drin Jasiqi',
     ]);
   });
+
+  it('ne garde qu’une seule demande d’annulation institution en cas de doublons', () => {
+    const events = [
+      {
+        id: 1,
+        event_type: 'change_confirmation_requested',
+        created_at: '2026-07-29T10:11:00+02:00',
+        payload: {
+          actor_name: 'User #91596',
+          proposed_patch: { _cancellation: true },
+        },
+      },
+      {
+        id: 2,
+        event_type: 'change_confirmation_requested',
+        created_at: '2026-07-29T10:12:00+02:00',
+        payload: {
+          actor_name: 'User #91596',
+          proposed_patch: { _cancellation: true },
+        },
+      },
+    ];
+    const out = buildOperationalTimeline({ apiEvents: events });
+    const cancelRequests = out.filter((e) => (
+      String(e.event || '').startsWith('Demande d’annulation institution')
+    ));
+    expect(cancelRequests).toHaveLength(1);
+    expect(cancelRequests[0].event).toBe(
+      'Demande d’annulation institution — User #91596',
+    );
+  });
 });

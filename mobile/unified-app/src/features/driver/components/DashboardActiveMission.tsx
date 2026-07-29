@@ -1,6 +1,8 @@
 import { Pressable, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { AppText } from "../../../design/ui/AppText";
+import { useAccessibilityScale } from "../../../design/responsive";
+import { FONT_SIZE } from "../../../design/responsive/typographyTokens";
 import { createShadow } from "../../../styles/shadowStyles";
 import { resolveDriverStatusForUx, getDriverStatusUx } from "../statusDictionary";
 import type { DriverMission, DriverMissionStatus, DriverTransitionStatus } from "../types";
@@ -30,7 +32,6 @@ import {
   safeCall,
 } from "../utils/missionContact";
 import { D, dashboardSoftShadow, missionActiveCardShadow } from "../theme/driverDashboardTheme";
-import { FONT_SIZE } from "../../../design/responsive/typographyTokens";
 
 type FocusSide = "pickup" | "dropoff" | null;
 
@@ -97,20 +98,26 @@ type MetricTileProps = {
   value: string;
   icon: keyof typeof Ionicons.glyphMap;
   showDivider?: boolean;
+  stacked?: boolean;
 };
 
-function MetricTile({ label, value, icon, showDivider }: MetricTileProps) {
+function MetricTile({ label, value, icon, showDivider, stacked }: MetricTileProps) {
   return (
     <>
-      {showDivider ? <View style={styles.metricDivider} accessibilityElementsHidden /> : null}
-      <View style={styles.metricTile}>
+      {showDivider ? (
+        <View
+          style={[styles.metricDivider, stacked && styles.metricDividerStacked]}
+          accessibilityElementsHidden
+        />
+      ) : null}
+      <View style={[styles.metricTile, stacked && styles.metricTileStacked]}>
         <View style={styles.metricHead}>
           <Ionicons name={icon} size={11} color={D.brand} accessibilityElementsHidden />
           <AppText variant="caption" style={styles.metricLabel} numberOfLines={2}>
             {label}
           </AppText>
         </View>
-        <AppText variant="label" style={styles.metricValue} numberOfLines={1} adjustsFontSizeToFit>
+        <AppText variant="label" style={styles.metricValue} numberOfLines={1}>
           {value}
         </AppText>
       </View>
@@ -123,9 +130,10 @@ type QuickActionProps = {
   icon: keyof typeof Ionicons.glyphMap;
   onPress?: () => void;
   disabled?: boolean;
+  stacked?: boolean;
 };
 
-function QuickAction({ label, icon, onPress, disabled }: QuickActionProps) {
+function QuickAction({ label, icon, onPress, disabled, stacked }: QuickActionProps) {
   if (!onPress) return null;
   return (
     <Pressable
@@ -135,18 +143,13 @@ function QuickAction({ label, icon, onPress, disabled }: QuickActionProps) {
       accessibilityLabel={label}
       style={({ pressed }) => [
         styles.quickAction,
+        stacked && styles.quickActionStacked,
         disabled && styles.quickActionDisabled,
         pressed && styles.pressed,
       ]}
     >
       <Ionicons name={icon} size={13} color={D.brand} />
-      <AppText
-        variant="caption"
-        style={styles.quickActionLabel}
-        numberOfLines={1}
-        adjustsFontSizeToFit
-        minimumFontScale={0.72}
-      >
+      <AppText variant="caption" style={styles.quickActionLabel} numberOfLines={1}>
         {label}
       </AppText>
     </Pressable>
@@ -160,6 +163,7 @@ export function DashboardActiveMission({
   onMissionRelease,
 }: Props) {
   const { can } = useSession();
+  const { isVeryLargeText, shouldStackRows } = useAccessibilityScale();
   const statusUx = getDriverStatusUx(mission.status);
   const statusKey = resolveDriverStatusForUx(mission.status);
   const locationStale = useMissionLocationStale(mission.id, statusKey);
@@ -280,7 +284,7 @@ export function DashboardActiveMission({
               <AppText
                 variant="body"
                 style={[styles.routeAddress, pickupActive && styles.routeAddressActive]}
-                numberOfLines={3}
+                numberOfLines={isVeryLargeText ? undefined : 3}
               >
                 {conciseAddressLine(pickup)}
               </AppText>
@@ -315,7 +319,7 @@ export function DashboardActiveMission({
               <AppText
                 variant="body"
                 style={[styles.routeAddress, dropoffActive && styles.routeAddressActive]}
-                numberOfLines={3}
+                numberOfLines={isVeryLargeText ? undefined : 3}
               >
                 {conciseAddressLine(dropoff)}
               </AppText>
@@ -365,23 +369,26 @@ export function DashboardActiveMission({
         ) : null}
 
         <View style={styles.metricsDivider} accessibilityElementsHidden />
-        <View style={styles.metricsRow}>
+        <View style={[styles.metricsRow, shouldStackRows && styles.metricsRowStacked]}>
           <MetricTile
             label={routeMetrics.distanceMetricLabel}
             value={routeMetrics.distanceLabel}
             icon="trail-sign-outline"
+            stacked={shouldStackRows}
           />
           <MetricTile
             label={routeMetrics.durationMetricLabel}
             value={routeMetrics.durationLabel}
             icon="timer-outline"
             showDivider
+            stacked={shouldStackRows}
           />
           <MetricTile
             label="HEURE PRISE EN CHARGE"
             value={formatMissionPickupTime(mission)}
             icon="calendar-outline"
             showDivider
+            stacked={shouldStackRows}
           />
         </View>
       </View>
@@ -413,13 +420,14 @@ export function DashboardActiveMission({
         ) : null}
 
         {showQuickActions ? (
-          <View style={styles.quickActionsRow}>
+          <View style={[styles.quickActionsRow, shouldStackRows && styles.quickActionsRowStacked]}>
             {showNavigation ? (
               <QuickAction
                 label="NAVIGATION"
                 icon="navigate-outline"
                 onPress={() => void openNavigation(dest)}
                 disabled={pending}
+                stacked={shouldStackRows}
               />
             ) : null}
             {showCallAction ? (
@@ -428,6 +436,7 @@ export function DashboardActiveMission({
                 icon="call-outline"
                 onPress={() => void safeCall(phone!)}
                 disabled={pending}
+                stacked={shouldStackRows}
               />
             ) : null}
             {canRelease ? (
@@ -436,6 +445,7 @@ export function DashboardActiveMission({
                 icon="refresh-outline"
                 onPress={() => onMissionRelease?.()}
                 disabled={pending}
+                stacked={shouldStackRows}
               />
             ) : null}
           </View>
@@ -473,6 +483,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 7,
+    flexShrink: 1,
+    minWidth: 0,
   },
   cardEyebrow: {
     color: D.brand,
@@ -480,12 +492,15 @@ const styles = StyleSheet.create({
     letterSpacing: 0.55,
     fontSize: FONT_SIZE.px11,
     lineHeight: 14,
+    flexShrink: 1,
+    minWidth: 0,
   },
   headerBadges: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
     flexShrink: 1,
+    minWidth: 0,
   },
   staleBadge: {
     backgroundColor: "rgba(220, 38, 38, 0.1)",
@@ -518,6 +533,8 @@ const styles = StyleSheet.create({
   clientBlock: {
     gap: 3,
     marginTop: 2,
+    minWidth: 0,
+    flexShrink: 1,
   },
   clientName: {
     color: D.text,
@@ -525,6 +542,8 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     lineHeight: 29,
     letterSpacing: -0.2,
+    flexShrink: 1,
+    minWidth: 0,
   },
   clientBirthDate: {
     color: D.textMuted,
@@ -544,6 +563,8 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.px12,
     lineHeight: 17,
     flex: 1,
+    flexShrink: 1,
+    minWidth: 0,
   },
   whenPrefix: {
     color: D.textMuted,
@@ -599,6 +620,7 @@ const styles = StyleSheet.create({
   },
   routeTextCol: {
     flex: 1,
+    flexShrink: 1,
     minWidth: 0,
     paddingBottom: 12,
     gap: 3,
@@ -638,6 +660,8 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     fontSize: FONT_SIZE.px14,
     lineHeight: 20,
+    flexShrink: 1,
+    minWidth: 0,
   },
   routeAddressActive: {
     color: D.text,
@@ -663,6 +687,7 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.px10,
     lineHeight: 13,
     flex: 1,
+    flexShrink: 1,
     minWidth: 0,
   },
   directionPill: {
@@ -701,6 +726,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     fontWeight: "500",
     flex: 1,
+    flexShrink: 1,
     minWidth: 0,
   },
   hintKey: {
@@ -720,18 +746,35 @@ const styles = StyleSheet.create({
     paddingTop: 5,
     paddingBottom: 1,
   },
+  metricsRowStacked: {
+    flexDirection: "column",
+    alignItems: "stretch",
+    gap: 8,
+  },
   metricDivider: {
     width: StyleSheet.hairlineWidth,
     backgroundColor: D.metricDivider,
     alignSelf: "stretch",
   },
+  metricDividerStacked: {
+    width: "100%",
+    height: StyleSheet.hairlineWidth,
+    alignSelf: "stretch",
+  },
   metricTile: {
     flex: 1,
+    flexShrink: 1,
     minWidth: 0,
     alignItems: "center",
     justifyContent: "flex-start",
     gap: 2,
     paddingHorizontal: 2,
+  },
+  metricTileStacked: {
+    flexGrow: 0,
+    width: "100%",
+    alignItems: "flex-start",
+    paddingVertical: 2,
   },
   metricHead: {
     flexDirection: "row",
@@ -740,9 +783,12 @@ const styles = StyleSheet.create({
     gap: 2,
     flexWrap: "wrap",
     width: "100%",
+    minWidth: 0,
+    flexShrink: 1,
   },
   metricLabel: {
     flexShrink: 1,
+    minWidth: 0,
     color: D.textMuted,
     fontWeight: "700",
     fontSize: FONT_SIZE.px7,
@@ -757,6 +803,8 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.px13,
     lineHeight: 15,
     textAlign: "center",
+    flexShrink: 1,
+    minWidth: 0,
   },
   primaryCta: {
     flexDirection: "row",
@@ -775,13 +823,20 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     fontSize: FONT_SIZE.px13,
     letterSpacing: 0.7,
+    flexShrink: 1,
+    minWidth: 0,
   },
   quickActionsRow: {
     flexDirection: "row",
     gap: 4,
   },
+  quickActionsRowStacked: {
+    flexDirection: "column",
+    alignItems: "stretch",
+  },
   quickAction: {
     flex: 1,
+    flexShrink: 1,
     minWidth: 0,
     flexDirection: "row",
     alignItems: "center",
@@ -795,11 +850,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 3,
     ...softSurfaceShadow,
   },
+  quickActionStacked: {
+    flexGrow: 0,
+    width: "100%",
+  },
   quickActionDisabled: {
     opacity: 0.38,
   },
   quickActionLabel: {
     flexShrink: 1,
+    minWidth: 0,
     color: D.textSub,
     fontWeight: "700",
     fontSize: FONT_SIZE.px7,

@@ -2,15 +2,17 @@ import { useMemo } from "react";
 import {
   computeClientFloatingBottomPad,
   computeCompanyFloatingBottomPad,
-  computeFloatingTabBarClearance,
-  computeFloatingTabComposerClearance,
 } from "./BaseFloatingBar";
+import {
+  computeFloatingBarFallbackClearance,
+  FLOATING_BAR_FALLBACK_INNER,
+  useFloatingBarClearance,
+  useFloatingBarMetrics,
+} from "./floatingBarMetrics";
 import { useAppViewport } from "../responsive/useAppViewport";
 
 /**
- * Métriques navigation centralisées — Sprint 2 finalisera l'adoption.
- *
- * Sprint 1 : source unique pour LayoutDebugOverlay + base API stable.
+ * Métriques navigation centralisées — source unique LayoutDebugOverlay + API stable.
  */
 export type NavigationMetrics = {
   /** Hauteur indicative en-tête sticky (EnterpriseHeader). Précis Sprint 2. */
@@ -28,21 +30,27 @@ export type NavigationMetrics = {
 };
 
 const ENTERPRISE_HEADER_HEIGHT = 56;
-const FLOATING_TAB_PILL_HEIGHT = 56;
 
 export function useNavigationMetrics(): NavigationMetrics {
   const { bottomInset } = useAppViewport();
+  const companyPad = computeCompanyFloatingBottomPad(bottomInset);
+  const clientPad = computeClientFloatingBottomPad(bottomInset);
+  const metrics = useFloatingBarMetrics("company", companyPad);
+  const clearance = useFloatingBarClearance("company", companyPad);
 
   return useMemo(() => {
-    const companyPad = computeCompanyFloatingBottomPad(bottomInset);
-    const clientPad = computeClientFloatingBottomPad(bottomInset);
+    const fallbackClearance = computeFloatingBarFallbackClearance(
+      FLOATING_BAR_FALLBACK_INNER.company,
+      companyPad
+    );
+    const height = metrics.clearance || fallbackClearance;
     return {
       topBarHeight: ENTERPRISE_HEADER_HEIGHT,
-      bottomBarHeight: FLOATING_TAB_PILL_HEIGHT + companyPad,
-      floatingBarHeight: FLOATING_TAB_PILL_HEIGHT + companyPad,
+      bottomBarHeight: height,
+      floatingBarHeight: height,
       floatingBarBottomPad: Math.max(companyPad, clientPad),
-      tabBarClearance: computeFloatingTabBarClearance(bottomInset),
-      composerClearance: computeFloatingTabComposerClearance(bottomInset),
+      tabBarClearance: clearance,
+      composerClearance: clearance,
     };
-  }, [bottomInset]);
+  }, [companyPad, clientPad, metrics.clearance, clearance]);
 }

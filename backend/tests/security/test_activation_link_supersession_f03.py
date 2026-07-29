@@ -144,6 +144,9 @@ class TestVerifySupersession:
         body_a = resp_a.get_json() or {}
         assert body_a.get("error") == "token_expired"
         assert "remplacé" in (body_a.get("message") or "").lower()
+        details_a = body_a.get("details") or {}
+        assert details_a.get("reason") == "superseded"
+        assert details_a.get("activation_session_id") == session.activation_session_id
 
         resp_b = client.post(VERIFY_PATH, json={"token": token_b})
         assert resp_b.status_code == 200

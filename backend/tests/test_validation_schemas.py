@@ -101,6 +101,37 @@ class TestRegisterSchema:
         assert result["last_name"] == "Doe"
         assert result["phone"] == "+33612345678"
 
+    def test_register_phone_only(self):
+        """Test inscription valide avec téléphone seul (sans mot de passe)."""
+        data = {
+            "username": "testuser",
+            "phone": "+41791234567",
+        }
+        result = validate_request(RegisterSchema(), data)
+        assert result["phone"] == "+41791234567"
+        assert result.get("email") in (None, "")
+        assert result.get("password") in (None, "")
+
+    def test_register_email_requires_password(self):
+        """Test erreur si email sans mot de passe."""
+        data = {
+            "username": "testuser",
+            "email": "test@example.com",
+        }
+        with pytest.raises(ValidationError) as exc_info:
+            validate_request(RegisterSchema(), data)
+        assert "errors" in exc_info.value.messages
+
+    def test_register_requires_email_or_phone(self):
+        """Test erreur si ni email ni téléphone."""
+        data = {
+            "username": "testuser",
+            "password": "password123",
+        }
+        with pytest.raises(ValidationError) as exc_info:
+            validate_request(RegisterSchema(), data)
+        assert "errors" in exc_info.value.messages
+
     def test_invalid_gender(self):
         """Test erreur si gender invalide."""
         data = {

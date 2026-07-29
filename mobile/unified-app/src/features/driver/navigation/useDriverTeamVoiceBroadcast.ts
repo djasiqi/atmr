@@ -63,8 +63,25 @@ export function useDriverTeamVoiceBroadcast(options?: {
         includeMessages: true,
       });
       clearFeedback();
-    } catch {
-      reportError("Impossible d'envoyer le message vocal au canal équipe.");
+    } catch (err) {
+      const apiMessage =
+        err && typeof err === "object" && "response" in err
+          ? (err as { response?: { data?: { error?: string; message?: string } } })
+              .response?.data?.error
+            || (err as { response?: { data?: { error?: string; message?: string } } })
+              .response?.data?.message
+          : null;
+      const detail =
+        typeof apiMessage === "string" && apiMessage.trim()
+          ? apiMessage.trim()
+          : err instanceof Error && err.message
+            ? err.message
+            : null;
+      reportError(
+        detail
+          ? `Impossible d'envoyer le message vocal au canal équipe. ${detail}`
+          : "Impossible d'envoyer le message vocal au canal équipe.",
+      );
     } finally {
       setVoiceBusy(false);
     }

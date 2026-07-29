@@ -1,6 +1,5 @@
 import type { PropsWithChildren, ReactNode } from "react";
 import {
-  Dimensions,
   Modal as NativeModal,
   Platform,
   Pressable,
@@ -8,7 +7,9 @@ import {
   StyleSheet,
   View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { computeBottomSheetLayout } from "../responsive/BottomSheetLayout";
+import { useAppViewport } from "../responsive/useAppViewport";
+import { useResponsiveTokens } from "../responsive/useResponsiveTokens";
 import { AppText } from "./AppText";
 import { AppButton } from "./AppButton";
 import { FONT_SIZE } from "../responsive/typographyTokens";
@@ -36,8 +37,13 @@ export type LegacyModalProps = PropsWithChildren<{
   footer?: ReactNode | null;
   /** Affiche la poignée (presentation bottomSheet). */
   showDragHandle?: boolean;
-  /** Hauteur max du corps en mode bottomSheet (ratio de la hauteur écran). */
+  /** Hauteur max du corps en mode bottomSheet (ratio de usableHeight). */
   sheetBodyMaxHeightRatio?: number;
+  /**
+   * Chrome hors scroll (header + footer estimés).
+   * Ne pas inclure les safe areas — gérées par BottomSheetLayout / paddingBottom.
+   */
+  reservedChromeHeight?: number;
 }>;
 
 /** Aligné sur les cartes dispatch (teinte marque légère). */
@@ -46,7 +52,11 @@ const TITLE_COLOR = "#163A34";
 const CTA_H = 44;
 const CTA_R = 10;
 const SECONDARY_CTA_BORDER = "rgba(148, 163, 184, 0.35)";
-const MAX_BODY_H_CENTERED = Math.min(Dimensions.get("window").height * 0.62, 540);
+
+/** Estimation header + poignée + paddings (hors safe area). */
+const DEFAULT_SHEET_HEADER_CHROME = 88;
+/** Estimation footer actions. */
+const DEFAULT_SHEET_FOOTER_CHROME = 64;
 
 const s = StyleSheet.create({
   backdrop: {
@@ -99,8 +109,6 @@ const s = StyleSheet.create({
     width: "100%",
     paddingHorizontal: 18,
     paddingTop: 8,
-    paddingBottom: 12,
-    maxHeight: "88%",
     ...Platform.select({
       web: {
         boxShadow: "0 -8px 32px rgba(15, 23, 42, 0.14)",
@@ -149,15 +157,6 @@ const s = StyleSheet.create({
     fontSize: FONT_SIZE.px13,
     fontWeight: "500" as const,
     marginTop: 6,
-    lineHeight: 18,
-  },
-  body: {
-    maxHeight: MAX_BODY_H_CENTERED,
-  },
-  bodySheet: {
-    flexGrow: 0,
-    flexShrink: 1,
-    maxHeight: Dimensions.get("window").height * 0.62,
   },
   bodyContent: {
     paddingTop: 12,
@@ -186,10 +185,29 @@ export function Modal({
   renderHeader,
   footer,
   showDragHandle = true,
-  sheetBodyMaxHeightRatio = 0.62,
+  sheetBodyMaxHeightRatio,
+  reservedChromeHeight,
 }: LegacyModalProps) {
-  const insets = useSafeAreaInsets();
+  const viewport = useAppViewport();
+  const tokens = useResponsiveTokens();
   const isSheet = presentation === "bottomSheet";
+  const hasFooter = footer !== null;
+
+  const chrome =
+    reservedChromeHeight ??
+    DEFAULT_SHEET_HEADER_CHROME + (hasFooter ? DEFAULT_SHEET_FOOTER_CHROME : 0);
+
+  const sheetLayout = computeBottomSheetLayout(
+    viewport.usableHeight,
+    viewport.bottomInset,
+    tokens,
+    {
+      reservedChromeHeight: chrome,
+      maxHeightRatio: sheetBodyMaxHeightRatio ?? tokens.modalSheetMaxHeightRatio,
+    }
+  );
+
+  const centeredBodyMax = Math.min(viewport.usableHeight * 0.62, 540);
 
   const defaultFooter = (
     <AppButton
@@ -225,7 +243,11 @@ export function Modal({
 
   const scrollBody = (
     <ScrollView
-      style={isSheet ? [s.bodySheet, { maxHeight: Dimensions.get("window").height * sheetBodyMaxHeightRatio }] : s.body}
+      style={
+        isSheet
+          ? { flexGrow: 0, flexShrink: 1, maxHeight: sheetLayout.scrollMaxHeight }
+          : { maxHeight: centeredBodyMax }
+      }
       contentContainerStyle={isSheet ? s.bodyContentSheet : s.bodyContent}
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
@@ -243,7 +265,15 @@ export function Modal({
       <NativeModal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
         <View style={s.backdropSheet}>
           <Pressable style={s.backdropDim} onPress={onClose} accessibilityLabel="Fermer" />
-          <View style={[s.sheetCard, { paddingBottom: Math.max(12, insets.bottom + 8) }]}>
+          <View
+            style={[
+              s.sheetCard,
+              {
+                maxHeight: sheetLayout.cardMaxHeight,
+                paddingBottom: sheetLayout.paddingBottom,
+              },
+            ]}
+          >
             {showDragHandle ? <View style={s.dragHandle} /> : null}
             {headerNode}
             {scrollBody}

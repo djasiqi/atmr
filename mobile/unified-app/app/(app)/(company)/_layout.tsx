@@ -17,6 +17,7 @@ import { useCompanyRecoveryListener } from "../../../src/features/company/realti
 import { useInstitutionOffersRealtimeListener } from "../../../src/features/company/realtime/useInstitutionOffersRealtimeListener";
 import { useCompanyRuntimeResume } from "../../../src/features/company/runtimeResume";
 import { useAppViewport } from "../../../src/design/responsive";
+import { AppFloatingBarMetricsProvider } from "../../../src/design/navigation/AppFloatingBarMetricsProvider";
 import { useReduceMotion } from "../../../src/design/navigation/useReduceMotion";
 import { usePerfRouteTracking } from "../../../src/core/observability/usePerfRouteTracking";
 
@@ -28,7 +29,7 @@ export default function CompanyLayout() {
     () => buildFloatingTabScreenOptions(E.BG, width, reduceMotion),
     [width, reduceMotion]
   );
-  const { activeContext, status } = useSession();
+  const { activeContext, status, contextSwitchInFlight } = useSession();
   const dispatchEnabled = isFeatureEnabled("company_dispatch_enabled");
   const realtimeEnabled = isCompanyRealtimeSocketExpected();
   const companyRuntimeResumeEnabled = isFeatureEnabled("company_runtime_resume_enabled");
@@ -72,16 +73,20 @@ export default function CompanyLayout() {
     return <Redirect href="/(app)/context-selector" />;
   }
 
-  if (activeContext.context_type === "driver") {
-    return <Redirect href="/(app)/(driver)" />;
-  }
-  if (activeContext.context_type !== "company") {
-    return <Redirect href="/(app)/unauthorized" />;
+  // Pendant la bascule, ne pas éjecter vers chauffeur (évite le rebond).
+  if (!contextSwitchInFlight) {
+    if (activeContext.context_type === "driver") {
+      return <Redirect href="/(app)/(driver)" />;
+    }
+    if (activeContext.context_type !== "company") {
+      return <Redirect href="/(app)/unauthorized" />;
+    }
   }
 
   /** Fond onglets aligné sur `operations-app` `(enterprise)/_layout` (#F5F7F6). */
   return (
     <CompanyContextGuard>
+      <AppFloatingBarMetricsProvider preset="company">
       <View style={{ flex: 1, backgroundColor: E.BG }}>
       <Tabs
         implementation={FLOATING_TAB_IMPLEMENTATION}
@@ -161,6 +166,7 @@ export default function CompanyLayout() {
         <Tabs.Screen name="dispatch" options={{ href: null }} />
       </Tabs>
       </View>
+      </AppFloatingBarMetricsProvider>
     </CompanyContextGuard>
   );
 }

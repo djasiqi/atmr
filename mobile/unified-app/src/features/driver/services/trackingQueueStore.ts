@@ -13,6 +13,11 @@
  *   puis un seul essai de ré-exécution avant fail-closed. On ne supprime/ne wipe jamais la base.
  */
 
+import {
+  isExpoSqliteNativeAvailable,
+  openExpoSqliteDatabase,
+} from "./trackingQueueSqlite";
+
 export type TrackingQueueRowState =
   | "non_ingested"
   | "ingested_non_persisted"
@@ -144,23 +149,6 @@ function allowMemoryBackend(): boolean {
   }
 }
 
-/**
- * Binaire store sans ExpoSQLite (OTA JS seul) : ne jamais `import("expo-sqlite")`
- * sinon crash fatal « Cannot find native module 'ExpoSQLite' » au switch chauffeur.
- */
-function isExpoSqliteNativeAvailable(): boolean {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { requireOptionalNativeModule } = require("expo-modules-core") as {
-      requireOptionalNativeModule?: (name: string) => unknown;
-    };
-    if (typeof requireOptionalNativeModule !== "function") return false;
-    return requireOptionalNativeModule("ExpoSQLite") != null;
-  } catch {
-    return false;
-  }
-}
-
 function emitCriticalTelemetry(event: string, detail?: Record<string, unknown>): void {
   try {
     console.error(`[trackingQueueStore] CRITICAL ${event}`, detail ?? {});
@@ -188,11 +176,8 @@ async function openAndInitSchema(): Promise<SqliteDatabaseHandle> {
   if (!isExpoSqliteNativeAvailable()) {
     throw new Error("expo_sqlite_native_module_missing");
   }
-  // `require` paresseux (jamais d'import statique en tête de fichier) : le module natif n'est
-  // touché qu'ici, après le garde `isExpoSqliteNativeAvailable()` ci-dessus.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const ExpoSqlite = require("expo-sqlite") as typeof import("expo-sqlite");
-  const db = (await ExpoSqlite.openDatabaseAsync(
+  // Platform-split : `trackingQueueSqlite.web.ts` ne charge jamais expo-sqlite (SSR Metro).
+  const db = (await openExpoSqliteDatabase(
     "driver_tracking_queue_v5.db"
   )) as unknown as SqliteDatabaseHandle;
   await db.execAsync(`

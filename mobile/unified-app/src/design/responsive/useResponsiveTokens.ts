@@ -1,5 +1,11 @@
 import { useMemo } from "react";
 import { Platform } from "react-native";
+import {
+  clampScale,
+  DENSITY_SCALE_CAP,
+  RADIUS_SCALE_CAP,
+  VERTICAL_LAYOUT_SCALE_CAP,
+} from "./fontScaleCaps";
 import { useAccessibilityScale } from "./useAccessibilityScale";
 import type { AppViewport } from "./useAppViewport";
 import { useAppViewport } from "./useAppViewport";
@@ -12,9 +18,6 @@ const SUGGESTION_ROW_HEIGHT = 46;
 const FIELD_SHELL_MIN_WEB = 32;
 /** Web : boutons formulaires alignés visuellement sur les champs (≥30, confort clic). */
 const FORM_BUTTON_MIN_WEB = 36;
-
-/** Borne l’amplification des mesures en px (espacements, rayons) tout en laissant les Text scaler via maxFontSizeMultiplier. */
-const EFFECTIVE_FONT_SCALE_CAP = 1.25;
 
 type FieldMetrics = {
   fieldShellMinHeight: number;
@@ -30,10 +33,13 @@ export function computeFieldMetrics(
   isLargeText: boolean,
   fontScale: number
 ): FieldMetrics {
+  const verticalScale = clampScale(fontScale, VERTICAL_LAYOUT_SCALE_CAP);
+  const densityScale = clampScale(fontScale, DENSITY_SCALE_CAP);
+
   const fieldShellMinHeight =
     os === "web"
       ? isLargeText
-        ? Math.max(40, Math.round(FIELD_SHELL_MIN_WEB * Math.min(fontScale, 1.25)))
+        ? Math.max(40, Math.round(FIELD_SHELL_MIN_WEB * verticalScale))
         : FIELD_SHELL_MIN_WEB
       : os === "ios"
         ? Math.max(minTouchHeight - 10, 40)
@@ -47,7 +53,7 @@ export function computeFieldMetrics(
   const formButtonMinHeight =
     os === "web"
       ? isLargeText
-        ? Math.max(40, Math.round(FORM_BUTTON_MIN_WEB * Math.min(fontScale, 1.2)))
+        ? Math.max(40, Math.round(FORM_BUTTON_MIN_WEB * densityScale))
         : FORM_BUTTON_MIN_WEB
       : minTouchHeight;
 
@@ -98,9 +104,16 @@ export type PublicLandingTokens = {
 };
 
 export type ResponsiveTokens = {
-  /** Échelle police système brute (PixelRatio.getFontScale). */
+  /** Échelle police système brute (`useWindowDimensions().fontScale`). */
   fontScale: number;
+  /** Alias densité (gaps / padding H) — plafonné par `DENSITY_SCALE_CAP`. */
   effectiveFontScale: number;
+  /** Échelle verticale (minHeight / padding V) — plafonnée par `VERTICAL_LAYOUT_SCALE_CAP`. */
+  verticalLayoutScale: number;
+  /** Échelle densités horizontales — plafonnée par `DENSITY_SCALE_CAP`. */
+  densityScale: number;
+  /** Échelle rayons — plafonnée par `RADIUS_SCALE_CAP`. */
+  radiusScale: number;
   /** Padding additionnel bas pour ScrollView quand la police système est grande. */
   scrollExtraBottomPadding: number;
   /** minHeight touches — boutons / rangées sensibles. */
@@ -256,7 +269,11 @@ export function useResponsiveTokens(): ResponsiveTokens {
   const { fontScale, isLargeText, isVeryLargeText } = useAccessibilityScale();
 
   return useMemo(() => {
-    const effectiveFontScale = Math.min(fontScale, EFFECTIVE_FONT_SCALE_CAP);
+    const densityScale = clampScale(fontScale, DENSITY_SCALE_CAP);
+    const verticalLayoutScale = clampScale(fontScale, VERTICAL_LAYOUT_SCALE_CAP);
+    const radiusScale = clampScale(fontScale, RADIUS_SCALE_CAP);
+    /** Rétrocompat : effectiveFontScale = densité (anciennement cap unique 1.25). */
+    const effectiveFontScale = densityScale;
     const scrollExtraBottomPadding =
       viewport.bottomInset + 12 + (fontScale > 1 ? 8 * (fontScale - 1) : 0);
 
@@ -269,7 +286,9 @@ export function useResponsiveTokens(): ResponsiveTokens {
     );
 
     const baseTouch = 44;
-    const minTouchHeight = Math.round(baseTouch * (isLargeText ? Math.min(fontScale, 1.35) : 1));
+    const minTouchHeight = Math.round(
+      baseTouch * (isLargeText ? Math.min(verticalLayoutScale, VERTICAL_LAYOUT_SCALE_CAP) : 1)
+    );
 
     const {
       fieldShellMinHeight,
@@ -278,13 +297,13 @@ export function useResponsiveTokens(): ResponsiveTokens {
       formButtonMinHeight,
     } = computeFieldMetrics(Platform.OS, minTouchHeight, isLargeText, fontScale);
 
-    const spacingXs = Math.round(4 * effectiveFontScale);
-    const spacingSm = Math.round(8 * effectiveFontScale);
-    const spacingMd = Math.round(16 * effectiveFontScale);
-    const spacingLg = Math.round(24 * effectiveFontScale);
-    const radiusSm = Math.round(8 * effectiveFontScale);
-    const radiusMd = Math.round(12 * effectiveFontScale);
-    const radiusLg = Math.round(16 * effectiveFontScale);
+    const spacingXs = Math.round(4 * densityScale);
+    const spacingSm = Math.round(8 * densityScale);
+    const spacingMd = Math.round(16 * densityScale);
+    const spacingLg = Math.round(24 * densityScale);
+    const radiusSm = Math.round(8 * radiusScale);
+    const radiusMd = Math.round(12 * radiusScale);
+    const radiusLg = Math.round(16 * radiusScale);
 
     const { isTiny, isCompact, isTablet } = viewport;
     const bodyFontSize = isTablet ? 17 : isTiny ? 14 : isCompact ? 15 : 16;
@@ -310,6 +329,9 @@ export function useResponsiveTokens(): ResponsiveTokens {
     return {
       fontScale,
       effectiveFontScale,
+      verticalLayoutScale,
+      densityScale,
+      radiusScale,
       scrollExtraBottomPadding,
       minTouchHeight,
       fieldShellMinHeight,

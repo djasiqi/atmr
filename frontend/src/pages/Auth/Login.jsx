@@ -234,7 +234,16 @@ const Login = () => {
 
   const handleSignupInputChange = (e) => {
     const { name, value } = e.target;
-    setSignupFormData({ ...signupFormData, [name]: value });
+    const nextValue = name === 'lastName' ? value.toLocaleUpperCase('fr-CH') : value;
+    setSignupFormData((prev) => {
+      const next = { ...prev, [name]: nextValue };
+      // Mot de passe uniquement avec email : on efface si l'email est vidé
+      if (name === 'email' && !String(nextValue || '').trim()) {
+        next.password = '';
+        next.confirmPassword = '';
+      }
+      return next;
+    });
     setErrorMessage('');
   };
 
@@ -292,30 +301,42 @@ const Login = () => {
   };
 
   const validateSignupForm = () => {
-    const { firstName, lastName, email, password, confirmPassword, phone, address } = signupFormData;
+    const { firstName, lastName, email, password, confirmPassword, phone } = signupFormData;
+    const trimmedEmail = email.trim();
+    const trimmedPhone = phone.trim();
+    const hasEmail = Boolean(trimmedEmail);
 
-    if (!firstName.trim() || !lastName.trim() || !email.trim() || !password || !confirmPassword || !phone.trim() || !address.trim()) {
-      setErrorMessage('Tous les champs obligatoires doivent être remplis.');
+    if (!firstName.trim() || !lastName.trim()) {
+      setErrorMessage('Prénom et nom sont obligatoires.');
       return false;
     }
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      setErrorMessage('Veuillez entrer une adresse email valide.');
+    if (!trimmedEmail && !trimmedPhone) {
+      setErrorMessage('Indiquez une adresse email ou un numéro de téléphone.');
       return false;
     }
 
-    if (password.length < 8) {
-      setErrorMessage('Le mot de passe doit contenir au moins 8 caractères.');
-      return false;
+    if (hasEmail) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(trimmedEmail)) {
+        setErrorMessage('Veuillez entrer une adresse email valide.');
+        return false;
+      }
+      if (!password || !confirmPassword) {
+        setErrorMessage('Le mot de passe est obligatoire lorsque vous indiquez un email.');
+        return false;
+      }
+      if (password.length < 8) {
+        setErrorMessage('Le mot de passe doit contenir au moins 8 caractères.');
+        return false;
+      }
+      if (password !== confirmPassword) {
+        setErrorMessage('Les mots de passe ne correspondent pas.');
+        return false;
+      }
     }
 
-    if (password !== confirmPassword) {
-      setErrorMessage('Les mots de passe ne correspondent pas.');
-      return false;
-    }
-
-    if (phone.trim().length < 6) {
+    if (trimmedPhone && trimmedPhone.length < 6) {
       setErrorMessage('Veuillez entrer un numéro de téléphone valide.');
       return false;
     }
@@ -477,13 +498,19 @@ const Login = () => {
     setIsLoading(true);
     try {
       const normalizedFirstName = signupFormData.firstName.trim();
-      const normalizedLastName = signupFormData.lastName.trim();
+      const normalizedLastName = signupFormData.lastName.trim().toLocaleUpperCase('fr-CH');
+      const trimmedEmail = signupFormData.email.trim();
+      const trimmedPhone = signupFormData.phone.trim();
+      const trimmedAddress = signupFormData.address.trim();
       const payload = {
         username: `${normalizedFirstName} ${normalizedLastName}`.trim(),
-        email: signupFormData.email,
-        password: signupFormData.password,
-        phone: signupFormData.phone,
-        address: signupFormData.address,
+        first_name: normalizedFirstName,
+        last_name: normalizedLastName,
+        ...(trimmedEmail
+          ? { email: trimmedEmail, password: signupFormData.password }
+          : {}),
+        ...(trimmedPhone ? { phone: trimmedPhone } : {}),
+        ...(trimmedAddress ? { address: trimmedAddress } : {}),
       };
       const registerResponse = await apiClient.post('/auth/register', payload);
       const activationSessionId = registerResponse?.data?.activation_session_id;
@@ -502,21 +529,23 @@ const Login = () => {
       }
       if (activationSessionId) {
         setPendingActivationSession({
-          email: signupFormData.email,
+          email: trimmedEmail || null,
           activation_session_id: activationSessionId,
           masked_email: maskedEmail,
           masked_phone: maskedPhone,
         });
       }
-      saveMobilityProfileForEmail(signupFormData.email, {
-        needsWheelchair: signupFormData.needsWheelchair,
-        needsElectricWheelchair: signupFormData.needsElectricWheelchair,
-        needsWalkingAid: signupFormData.needsWalkingAid,
-        needsDoorToDoorAssistance: signupFormData.needsDoorToDoorAssistance,
-        assistanceLevel: signupFormData.assistanceLevel,
-        emergencyContact: signupFormData.emergencyContact,
-        notes: signupFormData.mobilityNotes,
-      });
+      if (trimmedEmail) {
+        saveMobilityProfileForEmail(trimmedEmail, {
+          needsWheelchair: signupFormData.needsWheelchair,
+          needsElectricWheelchair: signupFormData.needsElectricWheelchair,
+          needsWalkingAid: signupFormData.needsWalkingAid,
+          needsDoorToDoorAssistance: signupFormData.needsDoorToDoorAssistance,
+          assistanceLevel: signupFormData.assistanceLevel,
+          emergencyContact: signupFormData.emergencyContact,
+          notes: signupFormData.mobilityNotes,
+        });
+      }
       const params = new URLSearchParams();
       if (activationSessionId) {
         params.set('activation_session_id', activationSessionId);
@@ -526,7 +555,7 @@ const Login = () => {
         replace: true,
         state: {
           signupSuccess: true,
-          prefillEmail: signupFormData.email,
+          prefillEmail: trimmedEmail || null,
           maskedEmail: maskedEmail || null,
           maskedPhone: maskedPhone || null,
         },
@@ -666,7 +695,9 @@ const Login = () => {
             <>
               {isSignupMode ? (
                 <fieldset className={`${styles.inputGroup} ${styles.identityFieldset}`}>
-                  <legend className={styles.label}>Identité</legend>
+                  <legend className={styles.label}>
+                    Identité <span className={styles.requiredMark} aria-hidden="true">*</span>
+                  </legend>
                   <div className={styles.identityRow}>
                     <div
                       ref={civilityDropdownRef}
@@ -743,10 +774,11 @@ const Login = () => {
                         name="firstName"
                         id="firstName"
                         className={styles.input}
-                        placeholder="Prénom"
+                        placeholder="Prénom *"
                         value={signupFormData.firstName}
                         onChange={handleSignupInputChange}
                         required
+                        aria-required="true"
                         autoComplete="given-name"
                         autoFocus
                       />
@@ -757,11 +789,14 @@ const Login = () => {
                         name="lastName"
                         id="lastName"
                         className={styles.input}
-                        placeholder="Nom"
+                        placeholder="NOM *"
                         value={signupFormData.lastName}
                         onChange={handleSignupInputChange}
                         required
+                        aria-required="true"
                         autoComplete="family-name"
+                        autoCapitalize="characters"
+                        spellCheck={false}
                       />
                     </div>
                   </div>
@@ -770,7 +805,14 @@ const Login = () => {
 
               <div className={styles.inputGroup}>
                 <label htmlFor="email" className={styles.label}>
-                  {isSignupMode ? 'Adresse email' : 'Email ou identifiant'}
+                  {isSignupMode ? (
+                    <>
+                      Adresse email{' '}
+                      <span className={styles.optionalMark}>(ou téléphone)</span>
+                    </>
+                  ) : (
+                    'Email ou identifiant'
+                  )}
                 </label>
                 <div className={`${styles.inputWrapper} ${styles.inputWrapperPlain} ${styles.inputWrapper30}`}>
                   <input
@@ -781,18 +823,26 @@ const Login = () => {
                     placeholder={isSignupMode ? 'nom@entreprise.ch' : 'nom@entreprise.ch ou j.drin'}
                     value={isSignupMode ? signupFormData.email : loginFormData.email}
                     onChange={isSignupMode ? handleSignupInputChange : handleLoginInputChange}
-                    required
+                    required={!isSignupMode}
+                    aria-required={!isSignupMode}
                     autoComplete={isSignupMode ? 'email' : 'username'}
                     autoFocus={!isSignupMode}
                   />
                 </div>
+                {isSignupMode ? (
+                  <p className={styles.fieldHint}>
+                    Email ou téléphone : au moins l&apos;un des deux est obligatoire.
+                  </p>
+                ) : null}
               </div>
 
-              {isSignupMode ? (
+              {isSignupMode && signupFormData.email.trim() ? (
                 <div className={styles.inputGroup}>
                   <div className={styles.passwordRow}>
                     <div className={styles.passwordColumn}>
-                      <label htmlFor="password" className={styles.label}>Mot de passe</label>
+                      <label htmlFor="password" className={styles.label}>
+                        Mot de passe <span className={styles.requiredMark} aria-hidden="true">*</span>
+                      </label>
                       <div className={`${styles.inputWrapper} ${styles.inputWrapperPlain} ${styles.inputWrapper30}`}>
                         <input
                           type={showSignupPassword ? 'text' : 'password'}
@@ -803,6 +853,7 @@ const Login = () => {
                           value={signupFormData.password}
                           onChange={handleSignupInputChange}
                           required
+                          aria-required="true"
                           autoComplete="new-password"
                         />
                         <button
@@ -816,7 +867,9 @@ const Login = () => {
                       </div>
                     </div>
                     <div className={styles.passwordColumn}>
-                      <label htmlFor="confirmPassword" className={styles.label}>Confirmer le mot de passe</label>
+                      <label htmlFor="confirmPassword" className={styles.label}>
+                        Confirmer le mot de passe <span className={styles.requiredMark} aria-hidden="true">*</span>
+                      </label>
                       <div className={`${styles.inputWrapper} ${styles.inputWrapperPlain} ${styles.inputWrapper30}`}>
                         <input
                           type={showSignupPassword ? 'text' : 'password'}
@@ -827,6 +880,7 @@ const Login = () => {
                           value={signupFormData.confirmPassword}
                           onChange={handleSignupInputChange}
                           required
+                          aria-required="true"
                           autoComplete="new-password"
                         />
                       </div>
@@ -844,7 +898,7 @@ const Login = () => {
                     </p>
                   </div>
                 </div>
-              ) : (
+              ) : !isSignupMode ? (
                 <div className={styles.inputGroup}>
                   <label htmlFor="password" className={styles.label}>Mot de passe</label>
                   <div className={`${styles.inputWrapper} ${styles.inputWrapperPlain} ${styles.inputWrapper30}`}>
@@ -869,12 +923,14 @@ const Login = () => {
                     </button>
                   </div>
                 </div>
-              )}
+              ) : null}
 
               {isSignupMode ? (
                 <>
                   <div className={styles.inputGroup}>
-                    <label htmlFor="phone" className={styles.label}>Téléphone</label>
+                    <label htmlFor="phone" className={styles.label}>
+                      Téléphone <span className={styles.optionalMark}>(ou email)</span>
+                    </label>
                     <div className={`${styles.inputWrapper} ${styles.inputWrapperPlain} ${styles.inputWrapper30}`}>
                       <input
                         type="text"
@@ -885,12 +941,13 @@ const Login = () => {
                         value={signupFormData.phone}
                         onChange={handleSignupInputChange}
                         autoComplete="tel"
-                        required
                       />
                     </div>
                   </div>
                   <div className={styles.inputGroup}>
-                    <label htmlFor="address" className={styles.label}>Adresse</label>
+                    <label htmlFor="address" className={styles.label}>
+                      Adresse <span className={styles.optionalMark}>(optionnel)</span>
+                    </label>
                     <div className={`${styles.inputWrapper} ${styles.inputWrapperPlain} ${styles.inputWrapper30}`}>
                       <AddressAutocomplete
                         inputId="address"
@@ -908,7 +965,6 @@ const Login = () => {
                         autoComplete="street-address"
                         autoCapitalize="words"
                         minChars={2}
-                        required
                       />
                     </div>
                   </div>

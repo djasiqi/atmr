@@ -4981,11 +4981,17 @@ class PDFService:
 
         self.qrbill_service = QRBillService()
         # ✅ Chemin correct: /app/uploads (pas /app/services/uploads)
+        from shared.upload_write import ensure_writable_dir
+
         self.uploads_dir = Path(current_app.config.get("UPLOAD_FOLDER", "/app/uploads"))
         self.invoices_dir = Path(self.uploads_dir, "invoices")
 
-        # Créer les dossiers s'ils n'existent pas
-        self.invoices_dir.mkdir(parents=True, exist_ok=True)
+        # Créer les dossiers s'ils n'existent pas (best-effort sur volumes Docker)
+        try:
+            ensure_writable_dir(self.invoices_dir)
+        except OSError:
+            # L'écriture réelle tentera à nouveau et remontera une erreur claire.
+            pass
 
         # Builder pour templates HTML
         self.template_builder = InvoiceTemplateBuilder()
@@ -5266,15 +5272,14 @@ class PDFService:
             filepath = Path(self.invoices_dir, filename)
 
             pdf_bytes: bytes = pdf_content
+            from shared.upload_write import write_upload_bytes
+
             try:
-                self.invoices_dir.mkdir(parents=True, exist_ok=True)
-                with filepath.open("wb") as f:
-                    f.write(pdf_bytes)
+                write_upload_bytes(filepath, pdf_bytes)
             except PermissionError as perm_err:
                 app_logger.error(
                     "[PDF] Permission denied writing invoice PDF: path=%s, dir_exists=%s, "
-                    "dir_writable=%s — vérifier chown/chmod sur /app/uploads/invoices "
-                    "(uid appuser=999)",
+                    "dir_writable=%s — vérifier chown/chmod sur /app/uploads/invoices",
                     filepath,
                     self.invoices_dir.is_dir(),
                     os.access(self.invoices_dir, os.W_OK),
@@ -5503,10 +5508,10 @@ class PDFService:
             filepath = Path(self.invoices_dir, filename)
 
             pdf_bytes: bytes = pdf_content
+            from shared.upload_write import write_upload_bytes
+
             try:
-                self.invoices_dir.mkdir(parents=True, exist_ok=True)
-                with filepath.open("wb") as f:
-                    f.write(pdf_bytes)
+                write_upload_bytes(filepath, pdf_bytes)
             except PermissionError as perm_err:
                 app_logger.error(
                     "[PDF] Permission denied writing reminder PDF: path=%s, dir_writable=%s",

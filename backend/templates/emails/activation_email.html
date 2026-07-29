@@ -1,54 +1,105 @@
-{% extends "emails/base_email.html" %}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>Activation de votre compte</title>
+</head>
+<body style="margin:0;padding:0;width:100%;background-color:#F1F5F4;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:#1E293B;-webkit-text-size-adjust:100%;">
+    <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">
+        Confirmez votre adresse email pour activer votre compte LIRIE.
+    </div>
+    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color:#F1F5F4;">
+        <tr>
+            <td style="padding:32px 16px;">
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width:560px;margin:0 auto;background-color:#FFFFFF;border-radius:16px;overflow:hidden;border:1px solid #E2E8F0;">
+                    {# ── Header marque ── #}
+                    <tr>
+                        <td style="padding:28px 32px 20px;text-align:center;background-color:#FFFFFF;border-bottom:1px solid #E8EEEC;">
+                            {% if logo_src %}
+                            <img
+                                src="{{ logo_src }}"
+                                alt="LIRIE"
+                                width="56"
+                                height="56"
+                                style="display:block;margin:0 auto 12px;border:0;outline:none;width:56px;height:56px;"
+                            >
+                            {% endif %}
+                            <p style="margin:0;font-size:22px;font-weight:700;letter-spacing:0.04em;color:#00796B;">
+                                LIRIE
+                            </p>
+                            <p style="margin:6px 0 0;font-size:13px;color:#64748B;">
+                                Plateforme de transport sanitaire
+                            </p>
+                        </td>
+                    </tr>
 
-{% block title %}Activation de votre compte{% endblock %}
+                    {# ── Contenu ── #}
+                    <tr>
+                        <td style="padding:32px;">
+                            <h1 style="margin:0 0 8px;font-size:22px;font-weight:700;line-height:1.3;color:#0F172A;">
+                                Activez votre compte
+                            </h1>
+                            <p style="margin:0 0 20px;font-size:15px;line-height:1.55;color:#475569;">
+                                Bienvenue{% if first_name %} {{ first_name }}{% endif %}.
+                                Une dernière étape pour sécuriser votre accès&nbsp;: confirmez votre adresse email.
+                            </p>
 
-{% block header_title %}Activation de votre compte{% endblock %}
+                            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                                <tr>
+                                    <td align="center" style="padding:8px 0 20px;">
+                                        <!-- nosemgrep generic.html-templates.security.var-in-href.var-in-href : URL absolue émise serveur (jeton signé). -->
+                                        <a
+                                            href="{{ activation_link }}"
+                                            style="display:inline-block;padding:14px 28px;font-size:16px;font-weight:700;color:#FFFFFF;background-color:#00796B;text-decoration:none;border-radius:999px;"
+                                        >
+                                            Confirmer mon email
+                                        </a>
+                                    </td>
+                                </tr>
+                            </table>
 
-{% block content %}
-<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">
-    Confirmez votre adresse email pour activer votre compte en toute sécurité.
-</div>
+                            <p style="margin:0 0 8px;font-size:12px;line-height:1.5;color:#94A3B8;text-align:center;">
+                                Si le bouton ne fonctionne pas, copiez-collez ce lien&nbsp;:
+                            </p>
+                            <p style="margin:0 0 24px;font-size:12px;line-height:1.5;word-break:break-all;text-align:center;color:#00796B;font-weight:600;">
+                                {{ activation_link }}
+                            </p>
 
-<h2>Bienvenue sur {{ product_name|default('LIRIE') }}</h2>
+                            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color:#F0FDFA;border-left:4px solid #00796B;border-radius:8px;">
+                                <tr>
+                                    <td style="padding:14px 16px;">
+                                        <p style="margin:0;font-size:13px;line-height:1.5;color:#334155;">
+                                            <strong style="color:#00796B;">Important&nbsp;:</strong>
+                                            ce lien est à usage unique et expire rapidement.
+                                            Si vous avez demandé un nouvel envoi, utilisez uniquement le dernier email reçu.
+                                        </p>
+                                    </td>
+                                </tr>
+                            </table>
 
-<p>Bonjour,</p>
+                            <p style="margin:20px 0 0;font-size:13px;line-height:1.5;color:#64748B;">
+                                Si vous n’êtes pas à l’origine de cette inscription, ignorez cet email.
+                            </p>
+                        </td>
+                    </tr>
 
-<p>
-    Merci pour votre inscription. Pour sécuriser votre accès, merci de confirmer votre adresse email.
-</p>
-
-<div style="text-align: center;">
-    <!-- nosemgrep generic.html-templates.security.var-in-href.var-in-href : URL https absolue emise serveur (token signe); pas une saisie utilisateur. -->
-<a href="{{ activation_link }}" class="button">Confirmer mon email</a>
-</div>
-
-<p class="text-muted" style="text-align: center; font-size: 12px; word-break: break-all;">
-    Si le bouton ne fonctionne pas, copiez ce lien dans votre navigateur :<br>
-    <!-- nosemgrep generic.html-templates.security.var-in-href.var-in-href : URL https absolue emise serveur (token signe); pas une saisie utilisateur. -->
-<a href="{{ activation_link }}" style="color: #667eea;">{{ activation_link }}</a>
-</p>
-
-<div class="divider"></div>
-
-<div class="info-box">
-    <p style="margin: 0;">
-        <strong>Important :</strong> ce lien est à usage unique et expire rapidement.
-    </p>
-</div>
-
-<div class="alert-box">
-    <p style="margin: 0; font-size: 13px;">
-        Si vous n'êtes pas à l'origine de cette action, vous pouvez ignorer cet email en toute sécurité.
-    </p>
-</div>
-{% endblock %}
-
-{% block footer %}
-<p style="margin: 0;">
-    Cet email a été envoyé automatiquement par {{ company_name|default('LIRIE') }}.<br>
-    Pour toute question, contactez le support.
-</p>
-<p style="margin: 10px 0 0 0;">
-    &copy; {{ current_year|default('2026') }} {{ company_name|default('LIRIE') }}. Tous droits réservés.
-</p>
-{% endblock %}
+                    {# ── Pied ── #}
+                    <tr>
+                        <td style="padding:20px 32px;background-color:#F8FAFC;border-top:1px solid #E2E8F0;text-align:center;">
+                            <p style="margin:0;font-size:12px;line-height:1.5;color:#94A3B8;">
+                                Cet email a été envoyé automatiquement par LIRIE.<br>
+                                Pour toute question&nbsp;: support@lirie.ch
+                            </p>
+                            <p style="margin:10px 0 0;font-size:12px;color:#94A3B8;">
+                                © {{ current_year|default('2026') }} LIRIE. Tous droits réservés.
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

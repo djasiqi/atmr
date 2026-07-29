@@ -2,6 +2,7 @@ import { Pressable, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { AppText } from "../../../../design/ui/AppText";
 import { FONT_SIZE } from "../../../../design/responsive/typographyTokens";
+import { useAccessibilityScale } from "../../../../design/responsive/useAccessibilityScale";
 import type { InstitutionOfferListPreview } from "../../utils/institutionOfferDisplay";
 import type { InstitutionOfferSegment } from "../../utils/institutionOfferResponse";
 import { E } from "../../theme/enterpriseOpsTheme";
@@ -26,6 +27,9 @@ export function InstitutionOfferListCard({
   segment,
   onPress,
 }: InstitutionOfferListCardProps) {
+  const { isVeryLargeText } = useAccessibilityScale();
+  const criticalLines = isVeryLargeText ? undefined : 1;
+  const extrasLines = isVeryLargeText ? undefined : 2;
   const urgent = segment === "urgent";
 
   return (
@@ -42,32 +46,39 @@ export function InstitutionOfferListCard({
       <View style={s.summaryRow}>
         <View style={s.timeCol}>
           {preview.primaryTime ? (
-            <AppText style={s.timeMain}>{preview.primaryTime}</AppText>
+            <AppText variant="label" style={s.timeMain}>
+              {preview.primaryTime}
+            </AppText>
           ) : (
             <Ionicons name="time-outline" size={18} color={E.TEXT_MUTED} />
           )}
           {preview.scheduleDate ? (
-            <AppText style={s.timeDate} numberOfLines={1}>
+            <AppText
+              variant="caption"
+              style={s.timeDate}
+              numberOfLines={criticalLines}
+              scaleRole="chrome"
+            >
               {preview.scheduleDate}
             </AppText>
           ) : null}
         </View>
 
         <View style={s.mainCol}>
-          <AppText style={s.patient} numberOfLines={1}>
+          <AppText variant="body" style={s.patient} numberOfLines={criticalLines}>
             {preview.title}
           </AppText>
           {preview.institutionLabel ? (
-            <AppText style={s.institution} numberOfLines={1}>
+            <AppText variant="caption" style={s.institution} numberOfLines={criticalLines}>
               {preview.institutionLabel}
             </AppText>
           ) : null}
           {preview.scheduleExtras ? (
-            <AppText style={s.scheduleExtras} numberOfLines={2}>
+            <AppText variant="caption" style={s.scheduleExtras} numberOfLines={extrasLines}>
               {preview.scheduleExtras}
             </AppText>
           ) : !preview.primaryTime && preview.scheduleDetail ? (
-            <AppText style={s.scheduleExtras} numberOfLines={2}>
+            <AppText variant="caption" style={s.scheduleExtras} numberOfLines={extrasLines}>
               {preview.scheduleDetail}
             </AppText>
           ) : null}
@@ -80,14 +91,19 @@ export function InstitutionOfferListCard({
 
       <View style={s.routeRow}>
         <Ionicons name="navigate-outline" size={14} color={E.BRAND} style={s.routeIcon} />
-        <AppText style={s.routeText} numberOfLines={2}>
+        <AppText variant="caption" style={s.routeText} numberOfLines={extrasLines}>
           {preview.route}
         </AppText>
       </View>
 
       {preview.tripBadge ? (
         <View style={s.tripBadge}>
-          <AppText style={s.tripBadgeText} numberOfLines={1}>
+          <AppText
+            variant="caption"
+            style={s.tripBadgeText}
+            numberOfLines={1}
+            scaleRole="chrome"
+          >
             {preview.tripBadge}
           </AppText>
         </View>
@@ -116,9 +132,12 @@ const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-start",
     gap: 10,
+    minWidth: 0,
   },
   timeCol: {
     width: 54,
+    minWidth: 0,
+    flexShrink: 1,
     minHeight: 36,
     justifyContent: "center",
     gap: 2,
@@ -129,16 +148,21 @@ const s = StyleSheet.create({
     fontSize: FONT_SIZE.px15,
     letterSpacing: 0.2,
     lineHeight: 18,
+    flexShrink: 1,
+    minWidth: 0,
   },
   timeDate: {
     color: E.TEXT_SEC,
     fontSize: FONT_SIZE.px11,
     lineHeight: 14,
     fontWeight: "600",
+    flexShrink: 1,
+    minWidth: 0,
   },
   mainCol: {
     flex: 1,
     minWidth: 0,
+    flexShrink: 1,
     gap: 1,
     paddingTop: 1,
   },
@@ -147,11 +171,15 @@ const s = StyleSheet.create({
     fontWeight: "600",
     fontSize: FONT_SIZE.px14,
     lineHeight: 18,
+    flexShrink: 1,
+    minWidth: 0,
   },
   institution: {
     color: E.TEXT_SEC,
     fontSize: FONT_SIZE.px11,
     lineHeight: 15,
+    flexShrink: 1,
+    minWidth: 0,
   },
   scheduleExtras: {
     color: E.TEXT,
@@ -159,6 +187,8 @@ const s = StyleSheet.create({
     lineHeight: 16,
     fontWeight: "600",
     marginTop: 2,
+    flexShrink: 1,
+    minWidth: 0,
   },
   chevronWrap: {
     width: 20,
@@ -174,12 +204,15 @@ const s = StyleSheet.create({
     paddingTop: 10,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: "rgba(148, 163, 184, 0.2)",
+    minWidth: 0,
   },
   routeIcon: {
     marginTop: 2,
   },
   routeText: {
     flex: 1,
+    minWidth: 0,
+    flexShrink: 1,
     color: E.TEXT_SEC,
     fontSize: FONT_SIZE.px13,
     lineHeight: 18,
@@ -187,6 +220,7 @@ const s = StyleSheet.create({
   tripBadge: {
     alignSelf: "flex-start",
     marginTop: 8,
+    minHeight: 22,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,

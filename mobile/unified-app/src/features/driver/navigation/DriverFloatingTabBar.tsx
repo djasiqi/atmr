@@ -3,6 +3,9 @@ import { Linking, Platform, Pressable, StyleSheet, View } from "react-native";
 import {
   BaseFloatingBar,
   computeCompanyFloatingBottomPad,
+  computeFloatingBarFallbackClearance,
+  FLOATING_BAR_FALLBACK_INNER,
+  useFloatingBarClearance,
 } from "../../../design/responsive";
 import { AppText } from "../../../design/ui/AppText";
 import { useAccessibilityScale } from "../../../design/responsive/useAccessibilityScale";
@@ -41,18 +44,36 @@ function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promi
   });
 }
 
-/** Padding scroll pour que le dernier contenu ne passe pas sous la pilule (company dashboard ≈ 80). */
-export const DRIVER_FLOATING_TAB_SCROLL_PADDING = 96;
+/** Padding scroll pour que le dernier contenu ne passe pas sous la pilule. */
+export function useDriverFloatingTabScrollPadding(): number {
+  const { bottomInset } = useAppViewport();
+  const bottomPad = computeCompanyFloatingBottomPad(bottomInset);
+  return useFloatingBarClearance("driver", bottomPad);
+}
+
+/**
+ * Fallback déterministe (hors arbre React / tests).
+ * Préférer {@link useDriverFloatingTabScrollPadding} dans l’UI.
+ */
+export function getDriverFloatingTabScrollPaddingFallback(bottomInset = 0): number {
+  return computeFloatingBarFallbackClearance(
+    FLOATING_BAR_FALLBACK_INNER.driver,
+    computeCompanyFloatingBottomPad(bottomInset)
+  );
+}
+
+/** @deprecated Utiliser `useDriverFloatingTabScrollPadding`. */
+export const DRIVER_FLOATING_TAB_SCROLL_PADDING = getDriverFloatingTabScrollPaddingFallback(16);
 
 /** Web / mobile web : pas de contour rectangulaire au focus. */
 const PRESSABLE_WEB_SUPPRESS_SQUARE_HALO = Platform.select({
   web: {
-    cursor: "pointer",
+    cursor: "pointer" as const,
     outlineWidth: 0,
-    outlineStyle: "none",
-    // @ts-expect-error RN web
+    outlineStyle: "none" as const,
+    // @ts-ignore propriété web non typée RN
     WebkitTapHighlightColor: "transparent",
-  } as const,
+  },
   default: undefined,
 });
 
@@ -64,8 +85,8 @@ function useDriverTabHighlight(): {
 } {
   const segments = useSegments();
   return useMemo(() => {
-    const last = segments.at(-1) ?? "";
-    const prev = segments.at(-2) ?? "";
+    const last = String(segments.at(-1) ?? "");
+    const prev = String(segments.at(-2) ?? "");
 
     const home =
       (segments.length === 2 && segments[0] === "(app)" && segments[1] === "(driver)") ||
@@ -105,13 +126,12 @@ export function DriverFloatingTabBar({ navigation }: BottomTabBarProps) {
   const tab = useDriverTabHighlight();
   const maxBarWidth = Math.min(480, usableWidth - 2 * horizontalPadding);
   const bottomPad = computeCompanyFloatingBottomPad(bottomInset);
-  const totalBarAreaHeight = 64 + bottomInset;
   const focusedFromSheet = tab.moreRoute != null;
   const targetCompanyContext = useMemo(() => {
     const contexts = bootstrap?.available_contexts ?? [];
     return (
       contexts.find(
-        (ctx) =>
+        (ctx: { context_type?: string; allow_mobile_context_switch?: boolean; context_id?: string }) =>
           ctx.context_type === "company" && ctx.allow_mobile_context_switch === true
       ) ?? null
     );
@@ -171,10 +191,18 @@ export function DriverFloatingTabBar({ navigation }: BottomTabBarProps) {
               router.replace("/(app)/(company)/dashboard");
               setSwitchMessage(null);
             } catch (error) {
-              setSwitchMessage(
+              const raw =
                 error instanceof Error
                   ? error.message
-                  : "Impossible de revenir à l’espace entreprise."
+                  : "Impossible de basculer vers l’espace entreprise.";
+              const isUnavailable =
+                /503|unavailable|indisponible|ECONNREFUSED|Network Error|timeout/i.test(
+                  raw
+                );
+              setSwitchMessage(
+                isUnavailable
+                  ? "Serveur indisponible (503). Vérifiez que l’API est démarrée, puis réessayez la bascule."
+                  : raw
               );
             } finally {
               setSwitchPending(false);
@@ -203,7 +231,6 @@ export function DriverFloatingTabBar({ navigation }: BottomTabBarProps) {
   return (
     <>
       <BaseFloatingBar
-        containerHeight={totalBarAreaHeight}
         paddingBottom={bottomPad}
         maxBarWidth={maxBarWidth}
         horizontalPadding={horizontalPadding}
@@ -323,12 +350,14 @@ function BarTabButton({
             ? { color: "rgba(10, 58, 52, 0.14)", borderless: false, foreground: true }
             : undefined
         }
-        style={({ pressed }) => [
-          styles.tabPressable,
-          active && styles.tabIconShellActive,
-          pressed && styles.tabHitPressed,
-          Platform.OS === "web" ? PRESSABLE_WEB_SUPPRESS_SQUARE_HALO : null,
-        ]}
+        style={({ pressed }) =>
+          [
+            styles.tabPressable,
+            active && styles.tabIconShellActive,
+            pressed && styles.tabHitPressed,
+            Platform.OS === "web" ? PRESSABLE_WEB_SUPPRESS_SQUARE_HALO : null,
+          ] as import("react-native").StyleProp<import("react-native").ViewStyle>
+        }
       >
         <View style={styles.iconBadgeWrap}>
           <Ionicons name={icon} size={22} color={active ? activeColor : C.textMuted} />

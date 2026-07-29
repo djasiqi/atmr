@@ -1553,9 +1553,14 @@ def init_chat_socket(socketio: SocketIO):
                         pdf_url=pdf_url if has_pdf else None,
                         pdf_filename=pdf_filename if has_pdf else None,
                         pdf_size=int(pdf_size) if has_pdf and pdf_size else None,
+                        audio_url=audio_url if has_audio else None,
                         thread_id=str(thread_id) if thread_id else None,
                         booking_id=booking_id,
-                        message_type=message_type,
+                        message_type=(
+                            "audio"
+                            if has_audio and not (has_content or has_image or has_pdf)
+                            else message_type
+                        ),
                         priority=priority,
                         client_message_id=str(client_message_id)
                         if client_message_id

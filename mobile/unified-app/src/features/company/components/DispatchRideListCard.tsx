@@ -12,6 +12,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { FONT_SIZE } from "../../../design/responsive/typographyTokens";
+import { useAccessibilityScale } from "../../../design/responsive/useAccessibilityScale";
 
 import { AppText } from "../../../design/ui/AppText";
 import type { CompanyDispatchMission } from "../api/contracts";
@@ -96,10 +97,10 @@ function MarqueeBadgeRowInner({
       {isCritical ? (
         <Ionicons name="warning-outline" size={10} color={accent} accessibilityElementsHidden />
       ) : null}
-      <AppText variant="caption" style={[styles.badgeDelayMinutes, { color: accent }]} numberOfLines={1}>
+      <AppText variant="caption" style={[styles.badgeDelayMinutes, { color: accent }]} numberOfLines={1} scaleRole="chrome">
         {`+${delayMinutes}min`}
       </AppText>
-      <AppText variant="caption" style={[styles.badgeLabelInline, { color: accent }]} numberOfLines={1}>
+      <AppText variant="caption" style={[styles.badgeLabelInline, { color: accent }]} numberOfLines={1} scaleRole="chrome">
         {driverLabel}
       </AppText>
     </View>
@@ -251,6 +252,9 @@ export function DispatchRideListCard({
   unassignedPressDisabled,
   footer,
 }: DispatchRideListCardProps) {
+  const { isVeryLargeText } = useAccessibilityScale();
+  const criticalLines = isVeryLargeText ? undefined : 1;
+  const routeLines = isVeryLargeText ? undefined : 2;
   const hasSchedule = hasScheduledPickupTime(mission);
   const pickupTime = hasSchedule ? formatDispatchScheduledTime(mission.scheduled_at) : "";
   const showTimeUndefined = !hasSchedule;
@@ -317,7 +321,8 @@ export function DispatchRideListCard({
                 <AppText
                   variant="caption"
                   style={styles.etaHint}
-                  numberOfLines={1}
+                  numberOfLines={criticalLines}
+                  scaleRole="chrome"
                   accessibilityLabel={pickupEtaUi.accessibility}
                 >
                   {pickupEtaUi.text}
@@ -335,11 +340,11 @@ export function DispatchRideListCard({
               accessibilityRole="button"
               accessibilityLabel="Afficher ou masquer le détail de la course"
             >
-              <AppText variant="body" style={styles.client} numberOfLines={1} ellipsizeMode="tail">
+              <AppText variant="body" style={styles.client} numberOfLines={criticalLines} ellipsizeMode="tail">
                 {client}
               </AppText>
               {sourceLine ? (
-                <AppText variant="caption" style={styles.sourceLine} numberOfLines={1} ellipsizeMode="tail">
+                <AppText variant="caption" style={styles.sourceLine} numberOfLines={criticalLines} ellipsizeMode="tail">
                   {sourceLine}
                 </AppText>
               ) : null}
@@ -363,6 +368,7 @@ export function DispatchRideListCard({
                   style={styles.badgeUnassignedCtaLabel}
                   numberOfLines={1}
                   ellipsizeMode="tail"
+                  scaleRole="chrome"
                 >
                   Non assigné
                 </AppText>
@@ -378,11 +384,11 @@ export function DispatchRideListCard({
               accessibilityRole="button"
               accessibilityLabel="Afficher ou masquer le détail de la course"
             >
-              <AppText variant="body" style={styles.client} numberOfLines={1} ellipsizeMode="tail">
+              <AppText variant="body" style={styles.client} numberOfLines={criticalLines} ellipsizeMode="tail">
                 {client}
               </AppText>
               {sourceLine ? (
-                <AppText variant="caption" style={styles.sourceLine} numberOfLines={1} ellipsizeMode="tail">
+                <AppText variant="caption" style={styles.sourceLine} numberOfLines={criticalLines} ellipsizeMode="tail">
                   {sourceLine}
                 </AppText>
               ) : null}
@@ -400,6 +406,7 @@ export function DispatchRideListCard({
                     style={[styles.badgeLabel, { color: statusColors.text }]}
                     numberOfLines={1}
                     ellipsizeMode="tail"
+                    scaleRole="chrome"
                   >
                     {assignedTo ? formatBadge(assignedTo) : "Terminée"}
                   </AppText>
@@ -445,6 +452,7 @@ export function DispatchRideListCard({
                         style={[styles.badgeLabel, { color: accent }]}
                         numberOfLines={1}
                         ellipsizeMode="tail"
+                        scaleRole="chrome"
                       >
                         {driverLabelShort}
                       </AppText>
@@ -463,6 +471,7 @@ export function DispatchRideListCard({
                     style={[styles.badgeLabel, { color: statusColors.text }]}
                     numberOfLines={1}
                     ellipsizeMode="tail"
+                    scaleRole="chrome"
                   >
                     {isCancelled ? "Annulée" : "Non assigné"}
                   </AppText>
@@ -495,7 +504,7 @@ export function DispatchRideListCard({
                 <View style={styles.routeIcon}>
                   <Ionicons name="location-outline" size={16} color={palette.pickupIcon} />
                 </View>
-                <AppText variant="caption" style={styles.route} numberOfLines={2} ellipsizeMode="tail">
+                <AppText variant="caption" style={styles.route} numberOfLines={routeLines} ellipsizeMode="tail">
                   {mission.pickup_label ?? "—"}
                 </AppText>
               </View>
@@ -504,7 +513,7 @@ export function DispatchRideListCard({
                 <View style={styles.routeIcon}>
                   <Ionicons name="flag-outline" size={16} color={palette.dropoffIcon} />
                 </View>
-                <AppText variant="caption" style={styles.route} numberOfLines={2} ellipsizeMode="tail">
+                <AppText variant="caption" style={styles.route} numberOfLines={routeLines} ellipsizeMode="tail">
                   {mission.dropoff_label ?? "—"}
                 </AppText>
               </View>
@@ -532,6 +541,8 @@ const styles = StyleSheet.create({
   summaryTapSolo: { flex: 1, minWidth: 0, marginRight: 0, flexDirection: "column", justifyContent: "center" },
   timeContainer: {
     width: 54,
+    minWidth: 0,
+    flexShrink: 1,
     minHeight: 32,
     marginRight: 10,
     alignItems: "flex-start",
@@ -544,9 +555,11 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: E.TEXT_MUTED,
     maxWidth: 54,
+    flexShrink: 1,
+    minWidth: 0,
   },
-  client: { color: palette.client, fontWeight: "600", fontSize: FONT_SIZE.px14, flexShrink: 1 },
-  sourceLine: { color: palette.routeText, fontSize: FONT_SIZE.px11, marginTop: 1, flexShrink: 1 },
+  client: { color: palette.client, fontWeight: "600", fontSize: FONT_SIZE.px14, flexShrink: 1, minWidth: 0 },
+  sourceLine: { color: palette.routeText, fontSize: FONT_SIZE.px11, marginTop: 1, flexShrink: 1, minWidth: 0 },
   chevronContainer: {
     width: 24,
     alignItems: "center",
@@ -554,11 +567,11 @@ const styles = StyleSheet.create({
     marginLeft: 2,
     marginRight: 0,
   },
-  badgeContainer: { flex: 1, minWidth: 0, alignItems: "flex-end" },
-  /** Toutes les pastilles résumé : même gabarit web (≈ padding inline ~6px, 10px / lh 16, 80×28). */
+  badgeContainer: { flex: 1, minWidth: 0, flexShrink: 1, alignItems: "flex-end" },
+  /** Toutes les pastilles résumé : même gabarit web (≈ padding inline ~6px, 10px / lh 16, 80×min 28). */
   badgeShell: {
     width: BADGE_MARQUEE_W,
-    height: BADGE_MARQUEE_H,
+    minHeight: BADGE_MARQUEE_H,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: E.BORDER,
@@ -566,6 +579,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "stretch",
     paddingHorizontal: 6,
+    paddingVertical: 2,
   },
   badgeDelayMinutes: {
     fontSize: FONT_SIZE.px10,
@@ -602,10 +616,10 @@ const styles = StyleSheet.create({
   },
   badgeShortDelay: {},
   badgeLongDelay: {},
-  /** Même cible 80×28 que `badgeShell` ; pas de padding sur la coque (géré dans la ligne marquee). */
+  /** Même cible 80×minHeight 28 que `badgeShell` ; pas de padding sur la coque (géré dans la ligne marquee). */
   badgeShellMarqueeOuter: {
     width: BADGE_MARQUEE_W,
-    height: BADGE_MARQUEE_H,
+    minHeight: BADGE_MARQUEE_H,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: E.BORDER,
@@ -660,7 +674,7 @@ const styles = StyleSheet.create({
     marginVertical: 6,
     marginLeft: 24,
   },
-  route: { color: palette.routeText, fontSize: FONT_SIZE.px13, lineHeight: 18, flex: 1, flexShrink: 1 },
+  route: { color: palette.routeText, fontSize: FONT_SIZE.px13, lineHeight: 18, flex: 1, flexShrink: 1, minWidth: 0 },
   expandedContent: { marginTop: 10 },
   routeColumn: { width: "100%" },
   /** Aligné `RideSnippetCard` `footerActions`. */

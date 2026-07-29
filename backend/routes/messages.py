@@ -32,21 +32,75 @@ messages_ns = Namespace("messages", description="Messagerie entreprise")
 # Constantes pour l'upload de fichiers
 ALLOWED_IMAGE_EXT = {"png", "jpg", "jpeg", "gif", "webp"}
 ALLOWED_PDF_EXT = {"pdf"}
-ALLOWED_AUDIO_EXT = {"m4a", "mp3", "wav", "aac", "caf", "3gp", "webm"}
+ALLOWED_AUDIO_EXT = {"m4a", "mp3", "wav", "aac", "caf", "3gp", "webm", "ogg"}
 ALLOWED_EXT = ALLOWED_IMAGE_EXT | ALLOWED_PDF_EXT | ALLOWED_AUDIO_EXT
 ALLOWED_IMAGE_MIME = {"image/jpeg", "image/png", "image/jpg", "image/webp", "image/gif"}
 ALLOWED_PDF_MIME = {"application/pdf"}
 ALLOWED_AUDIO_MIME = {
     "audio/m4a",
     "audio/mp4",
+    "audio/x-m4a",
+    "audio/mp4a-latm",
     "audio/aac",
     "audio/mpeg",
     "audio/wav",
+    "audio/x-wav",
+    "audio/wave",
     "audio/x-caf",
     "audio/3gpp",
+    "audio/3gpp2",
     "audio/webm",
+    "audio/ogg",
 }
 ALLOWED_MIME = ALLOWED_IMAGE_MIME | ALLOWED_PDF_MIME | ALLOWED_AUDIO_MIME
+
+_AUDIO_MIME_BY_EXT = {
+    "m4a": "audio/mp4",
+    "mp3": "audio/mpeg",
+    "wav": "audio/wav",
+    "aac": "audio/aac",
+    "caf": "audio/x-caf",
+    "3gp": "audio/3gpp",
+    "webm": "audio/webm",
+    "ogg": "audio/ogg",
+}
+_IMAGE_MIME_BY_EXT = {
+    "png": "image/png",
+    "jpg": "image/jpeg",
+    "jpeg": "image/jpeg",
+    "gif": "image/gif",
+    "webp": "image/webp",
+}
+_PDF_MIME_BY_EXT = {"pdf": "application/pdf"}
+
+
+def _infer_mime_from_filename(filename: str) -> str | None:
+    """Déduit un MIME autorisé depuis l'extension (React Native envoie souvent un MIME vide)."""
+    if not filename or "." not in filename:
+        return None
+    ext = filename.rsplit(".", 1)[-1].lower()
+    if ext in _AUDIO_MIME_BY_EXT:
+        return _AUDIO_MIME_BY_EXT[ext]
+    if ext in _IMAGE_MIME_BY_EXT:
+        return _IMAGE_MIME_BY_EXT[ext]
+    if ext in _PDF_MIME_BY_EXT:
+        return _PDF_MIME_BY_EXT[ext]
+    return None
+
+
+def _resolve_upload_mime(file, filename: str) -> str:
+    raw = (getattr(file, "content_type", None) or "").strip().lower()
+    if raw in ALLOWED_MIME:
+        return raw
+    # Clients mobiles : content-type vide / octet-stream / generic
+    if raw in ("", "application/octet-stream", "binary/octet-stream"):
+        inferred = _infer_mime_from_filename(filename)
+        if inferred:
+            return inferred
+    inferred = _infer_mime_from_filename(filename)
+    if inferred and (not raw or raw.startswith("audio/") or raw.startswith("image/")):
+        return inferred
+    return raw
 MAX_FILE_SIZE_MB = 10  # 10 Mo max par fichier
 MAX_FILES_PER_MESSAGE = 1  # Limite: 1 fichier par message
 
@@ -111,13 +165,13 @@ def _validate_file_upload(
         )
         return (error_response, status_code)
 
-    # Validation MIME type
-    mime_type = file.content_type or ""
+    # Validation MIME type (inférence extension si le client n'envoie pas de Content-Type)
+    mime_type = _resolve_upload_mime(file, filename)
     if mime_type not in ALLOWED_MIME:
         return (
             {
                 "error": (
-                    f"Type MIME non autorisé: {mime_type}. "
+                    f"Type MIME non autorisé: {mime_type or '(vide)'}. "
                     f"Autorisés: {', '.join(sorted(ALLOWED_MIME))}."
                 )
             },
@@ -395,17 +449,22 @@ class MessageUpload(Resource):
             return error_response, status_code
 
         # Déterminer le type de fichier
-        mime_type = file.content_type or ""
+        mime_type = _resolve_upload_mime(file, filename)
         is_image_file = _is_image(filename) and mime_type in ALLOWED_IMAGE_MIME
         is_pdf_file = _is_pdf(filename) and mime_type in ALLOWED_PDF_MIME
         is_audio_file = _is_audio(filename) and mime_type in ALLOWED_AUDIO_MIME
 
         # Créer le dossier de stockage
+        from shared.upload_write import ensure_writable_dir, write_upload_bytes
+
         upload_root = current_app.config.get(
             "UPLOADS_DIR", str(Path(current_app.root_path) / "uploads")
         )
         chat_dir = Path(upload_root) / "chat"
-        chat_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            ensure_writable_dir(chat_dir)
+        except OSError:
+            chat_dir.mkdir(parents=True, exist_ok=True)
 
         # Générer un nom de fichier unique (timestamp + nom original sécurisé)
         timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S_%f")
@@ -415,8 +474,17 @@ class MessageUpload(Resource):
         fname = f"{timestamp}_{base_name}.{ext}"
         fpath = chat_dir / fname
 
-        # Sauvegarder le fichier
-        file.save(fpath)
+        # Sauvegarder le fichier (best-effort permissions volumes Docker)
+        try:
+            write_upload_bytes(fpath, file_bytes)
+        except PermissionError:
+            logger.exception("Upload chat: permission denied path=%s", fpath)
+            return {
+                "error": (
+                    "Impossible d'enregistrer le fichier (permissions uploads). "
+                    "Contactez l'administrateur."
+                )
+            }, 500
 
         # Construire l'URL publique
         public_base = current_app.config.get("UPLOADS_PUBLIC_BASE", "/uploads")

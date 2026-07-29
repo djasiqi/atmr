@@ -143,10 +143,32 @@ function IcoMapPinHero({ s = 12 }) {
 }
 
 const PLATFORM_STATS_ITEMS = [
-  { id: 'bookings', kind: 'number', valueKey: 'completedBookings', label: 'transports coordonnés' },
-  { id: 'companies', kind: 'number', valueKey: 'activeCompanies', label: 'entreprises partenaires' },
-  { id: 'institutions', kind: 'number', valueKey: 'activeInstitutions', label: 'institutions' },
-  { id: 'availability', kind: 'text', displayValue: '24/7', label: 'plateforme disponible' },
+  {
+    id: 'bookings',
+    kind: 'number',
+    valueKey: 'completedBookings',
+    label: 'transports coordonnés depuis le lancement',
+  },
+  {
+    id: 'canton',
+    kind: 'number',
+    valueKey: 'cantonsServed',
+    labelSingular: 'canton actuellement desservi',
+    labelPlural: 'cantons actuellement desservis',
+    hoverLabelsKey: 'cantonLabels',
+  },
+  {
+    id: 'today',
+    kind: 'number',
+    valueKey: 'todayMissions',
+    label: 'missions planifiées & suivies aujourd’hui',
+  },
+  {
+    id: 'availability',
+    kind: 'static',
+    displayValue: '24/7',
+    label: 'plateforme disponible',
+  },
 ];
 
 const WHY_LIRIE_ITEMS = [
@@ -283,13 +305,7 @@ export default function Home() {
   const hasMeaningfulPlatformStats = useMemo(() => {
     if (!platformStats) return false;
     const bookings = Number(platformStats.completedBookings);
-    const companies = Number(platformStats.activeCompanies);
-    const institutions = Number(platformStats.activeInstitutions);
-    return (
-      (Number.isFinite(bookings) && bookings > 0) ||
-      (Number.isFinite(companies) && companies > 0) ||
-      (Number.isFinite(institutions) && institutions > 0)
-    );
+    return Number.isFinite(bookings) && bookings > 0;
   }, [platformStats]);
   const [mobilityProfile, setMobilityProfile] = useState(() =>
     getMobilityProfileForUser({
@@ -992,7 +1008,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── Preuves chiffrées (uniquement si stats réelles ; jamais de 0 trompeurs en HTML) ── */}
+      {/* ── Preuves concrètes (transports réels + indicateurs service ; jamais de 0 trompeurs) ── */}
       {hasMeaningfulPlatformStats ? (
       <section id="platform-stats" className={styles.stats} aria-labelledby="home-stats-title">
         <div className={styles.statsContent}>
@@ -1002,18 +1018,42 @@ export default function Home() {
             </h2>
           </div>
           <div className={styles.statsInner}>
-            {PLATFORM_STATS_ITEMS.map((item) => (
-              <div key={item.id} className={styles.statItem}>
-                <span className={styles.statNumber}>
-                  {item.kind === 'text'
-                    ? item.displayValue
-                    : platformStats?.[item.valueKey] != null
-                      ? Number(platformStats[item.valueKey]).toLocaleString('fr-CH')
-                      : '—'}
-                </span>
-                <span className={styles.statLabel}>{item.label}</span>
-              </div>
-            ))}
+            {PLATFORM_STATS_ITEMS.map((item) => {
+              const numericValue =
+                item.kind === 'number' && platformStats?.[item.valueKey] != null
+                  ? Number(platformStats[item.valueKey])
+                  : null;
+              const displayValue =
+                item.kind === 'static'
+                  ? item.displayValue
+                  : Number.isFinite(numericValue)
+                    ? numericValue.toLocaleString('fr-CH')
+                    : '—';
+              const label =
+                item.labelSingular && item.labelPlural && Number.isFinite(numericValue)
+                  ? numericValue <= 1
+                    ? item.labelSingular
+                    : item.labelPlural
+                  : item.label;
+              const hoverLabels = item.hoverLabelsKey
+                ? platformStats?.[item.hoverLabelsKey]
+                : null;
+              const hoverTitle = Array.isArray(hoverLabels) && hoverLabels.length > 0
+                ? hoverLabels.join(', ')
+                : undefined;
+
+              return (
+                <div
+                  key={item.id}
+                  className={styles.statItem}
+                  title={hoverTitle}
+                  aria-label={hoverTitle ? `${displayValue} — ${hoverTitle}` : undefined}
+                >
+                  <span className={styles.statNumber}>{displayValue}</span>
+                  <span className={styles.statLabel}>{label}</span>
+                </div>
+              );
+            })}
           </div>
         </div>
       </section>

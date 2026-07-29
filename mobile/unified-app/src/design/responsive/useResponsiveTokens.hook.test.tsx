@@ -37,6 +37,9 @@ describe("useResponsiveTokens (hook)", () => {
       fontScale: 1.2,
       isLargeText: true,
       isVeryLargeText: false,
+      shouldStackRows: false,
+      contentMaxFontMultiplier: 2,
+      chromeMaxFontMultiplier: 1.3,
     });
     act(() => {
       TestRenderer.create(
@@ -47,7 +50,9 @@ describe("useResponsiveTokens (hook)", () => {
         })
       );
     });
-    expect(captured!.minTouchHeight).toBe(Math.round(44 * Math.min(1.2, 1.35)));
+    expect(captured!.minTouchHeight).toBe(Math.round(44 * Math.min(1.2, 1.5)));
+    expect(captured!.verticalLayoutScale).toBe(1.2);
+    expect(captured!.densityScale).toBe(1.2);
   });
 
   it("bodyLineHeightRatio est 1.3 avec isLargeText", () => {
@@ -56,6 +61,9 @@ describe("useResponsiveTokens (hook)", () => {
       fontScale: 1,
       isLargeText: true,
       isVeryLargeText: false,
+      shouldStackRows: false,
+      contentMaxFontMultiplier: 2,
+      chromeMaxFontMultiplier: 1.3,
     });
     act(() => {
       TestRenderer.create(
@@ -76,6 +84,9 @@ describe("useResponsiveTokens (hook)", () => {
       fontScale: 1,
       isLargeText: false,
       isVeryLargeText: false,
+      shouldStackRows: false,
+      contentMaxFontMultiplier: 2,
+      chromeMaxFontMultiplier: 1.3,
     });
     act(() => {
       TestRenderer.create(
@@ -96,6 +107,9 @@ describe("useResponsiveTokens (hook)", () => {
       fontScale: 1,
       isLargeText: false,
       isVeryLargeText: false,
+      shouldStackRows: false,
+      contentMaxFontMultiplier: 2,
+      chromeMaxFontMultiplier: 1.3,
     });
     act(() => {
       TestRenderer.create(
@@ -113,5 +127,30 @@ describe("useResponsiveTokens (hook)", () => {
     expect(captured!.bodyFontSize).toBeGreaterThan(0);
     expect(captured!.buttonFontSize).toBeGreaterThan(0);
     expect(captured!.radiusLg).toBeGreaterThanOrEqual(captured!.radiusMd);
+  });
+
+  it("densityScale et radiusScale restent plafonnés indépendamment de verticalLayoutScale", () => {
+    let captured: ReturnType<typeof useResponsiveTokens> | undefined;
+    mockUseAccessibilityScale.mockReturnValue({
+      fontScale: 2,
+      isLargeText: true,
+      isVeryLargeText: true,
+      shouldStackRows: true,
+      contentMaxFontMultiplier: 2,
+      chromeMaxFontMultiplier: 1.3,
+    });
+    act(() => {
+      TestRenderer.create(
+        createElement(HookCapture, {
+          onValue: (x) => {
+            captured = x;
+          },
+        })
+      );
+    });
+    expect(captured!.verticalLayoutScale).toBe(1.5);
+    expect(captured!.densityScale).toBe(1.2);
+    expect(captured!.radiusScale).toBe(1.1);
+    expect(captured!.effectiveFontScale).toBe(1.2);
   });
 });

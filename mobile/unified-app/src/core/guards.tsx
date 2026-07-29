@@ -40,9 +40,13 @@ export function PermissionGuard({
 }
 
 export function DriverContextGuard({ children }: PropsWithChildren) {
-  const { activeContext } = useSession();
+  const { activeContext, contextSwitchInFlight } = useSession();
   if (!activeContext) {
     return <Redirect href={"/(app)/context-selector" as any} />;
+  }
+  // Pendant la bascule, ne pas rediriger (évite le rebond chauffeur ↔ entreprise).
+  if (contextSwitchInFlight) {
+    return <>{children}</>;
   }
   if (activeContext.context_type === "company") {
     return <Redirect href={"/(app)/(company)/dashboard" as any} />;
@@ -54,7 +58,10 @@ export function DriverContextGuard({ children }: PropsWithChildren) {
 }
 
 export function CompanyContextGuard({ children }: PropsWithChildren) {
-  const { activeContext } = useSession();
+  const { activeContext, contextSwitchInFlight } = useSession();
+  if (contextSwitchInFlight) {
+    return <>{children}</>;
+  }
   const redirectTo = resolveCompanyContextGuardRedirect(activeContext);
   if (redirectTo) return <Redirect href={redirectTo as any} />;
   return <>{children}</>;

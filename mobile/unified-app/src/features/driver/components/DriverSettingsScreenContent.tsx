@@ -43,7 +43,7 @@ import {
   useResponsiveTokens,
 } from "../../../design/responsive";
 import { useReduceMotion } from "../../../design/navigation/useReduceMotion";
-import { DRIVER_FLOATING_TAB_SCROLL_PADDING } from "../navigation/DriverFloatingTabBar";
+import { useDriverFloatingTabScrollPadding } from "../navigation/DriverFloatingTabBar";
 import {
   buildDriverProfileViewModel,
   DRIVER_LOCATION_PRIVACY_TEXT,
@@ -81,6 +81,7 @@ export function DriverSettingsScreenContent() {
   const { bootstrap, activeContext, error: sessionError, logout } = useSession();
   const user = bootstrap?.user ?? null;
   const t = useResponsiveTokens();
+  const scrollPad = useDriverFloatingTabScrollPadding();
   const reduceMotion = useReduceMotion();
   const {
     gps,
@@ -414,7 +415,7 @@ export function DriverSettingsScreenContent() {
       <Screen
         scroll
         backgroundColor={brandSurfaceSoft}
-        extraScrollBottomPadding={DRIVER_FLOATING_TAB_SCROLL_PADDING}
+        extraScrollBottomPadding={scrollPad}
         contentContainerStyle={{
           paddingTop: t.spacingSm,
           paddingBottom: t.spacingLg,
