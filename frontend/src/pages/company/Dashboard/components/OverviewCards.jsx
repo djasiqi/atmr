@@ -1,5 +1,5 @@
 // src/pages/company/Dashboard/components/OverviewCards.jsx
-// NIVEAU 1 — Situation temps réel : 4 KPI opérationnels uniquement
+// NIVEAU 1 — Situation temps réel : KPI opérationnels (préfère stats bootstrap exactes)
 import React, { useMemo } from 'react';
 import { FiClock, FiUsers, FiNavigation, FiAlertTriangle } from 'react-icons/fi';
 import styles from './OverviewCards.module.css';
@@ -32,6 +32,12 @@ const OverviewCards = ({
   day,
   delayCount = 0,
   hasCriticalDelays = false,
+  /** Stats exactes bootstrap (kpi) — priorité sur le recalcul liste. */
+  kpiStats = null,
+  delaysError = false,
+  driversError = false,
+  bookingsTruncated = false,
+  bookingsLimit = null,
 }) => {
   const dayList = useMemo(() => {
     const all = Array.isArray(reservations) ? reservations : [];
@@ -39,24 +45,44 @@ const OverviewCards = ({
     return all.filter((r) => toYMD(whenOf(r)) === day);
   }, [reservations, day]);
 
-  const inProgressCount = useMemo(
-    () => dayList.filter((r) => isActive(r.status) && (r.driver_id || r.driver?.id)).length,
-    [dayList]
-  );
+  const inProgressCount = useMemo(() => {
+    if (kpiStats && typeof kpiStats.in_service === 'number') return kpiStats.in_service;
+    if (kpiStats && typeof kpiStats.inProgress === 'number') return kpiStats.inProgress;
+    return dayList.filter((r) => isActive(r.status) && (r.driver_id || r.driver?.id)).length;
+  }, [dayList, kpiStats]);
 
-  const waitingCount = useMemo(() => {
-    if (Array.isArray(pendingReservations) || Array.isArray(assignedReservations)) {
-      const p = Array.isArray(pendingReservations) ? pendingReservations : [];
-      const a = Array.isArray(assignedReservations) ? assignedReservations : [];
+  const pendingDecision = useMemo(() => {
+    if (kpiStats && typeof kpiStats.pending_decision === 'number') return kpiStats.pending_decision;
+    if (Array.isArray(pendingReservations)) {
       const inDay = (r) => (!day ? true : toYMD(whenOf(r)) === day);
-      return p.filter(inDay).length + a.filter(inDay).length;
+      return pendingReservations.filter(inDay).length;
+    }
+    return dayList.filter((r) => norm(r.status) === 'pending').length;
+  }, [kpiStats, pendingReservations, dayList, day]);
+
+  const unassignedCount = useMemo(() => {
+    if (kpiStats && typeof kpiStats.unassigned === 'number') return kpiStats.unassigned;
+    if (Array.isArray(assignedReservations)) {
+      const inDay = (r) => (!day ? true : toYMD(whenOf(r)) === day);
+      return assignedReservations.filter(inDay).length;
     }
     return dayList.filter((r) => {
       const s = norm(r.status);
       const unassigned = !r?.driver_id && !r?.driver?.id;
-      return (s === 'pending' || s === 'accepted') && unassigned;
+      return (s === 'accepted' || s === 'assigned') && unassigned;
     }).length;
-  }, [dayList, pendingReservations, assignedReservations, day]);
+  }, [kpiStats, assignedReservations, dayList, day]);
+
+  const resolvedDelayCount = useMemo(() => {
+    if (delaysError) return null;
+    if (kpiStats && typeof kpiStats.delay_count === 'number') return kpiStats.delay_count;
+    return delayCount;
+  }, [delaysError, kpiStats, delayCount]);
+
+  const criticalFromKpi =
+    kpiStats && typeof kpiStats.critical_delay_count === 'number'
+      ? kpiStats.critical_delay_count > 0
+      : hasCriticalDelays;
 
   const availableDrivers = useMemo(
     () =>
@@ -82,28 +108,59 @@ const OverviewCards = ({
     {
       id: 'delays',
       Icon: FiAlertTriangle,
-      label: 'Retards',
-      value: delayCount,
-      accent: delayCount === 0 ? 'success' : hasCriticalDelays ? 'danger' : 'warning',
+      label: 'Urgences',
+      value: delaysError ? '—' : resolvedDelayCount,
+      accent: delaysError
+        ? 'danger'
+        : resolvedDelayCount === 0
+          ? 'success'
+          : criticalFromKpi
+            ? 'danger'
+            : 'warning',
+      hint: delaysError ? 'Indisponible' : undefined,
     },
     {
-      id: 'waiting',
+      id: 'decide',
       Icon: FiClock,
-      label: 'À assigner',
-      value: waitingCount,
-      accent: waitingCount > 0 ? 'warning' : 'success',
+      label: 'À décider',
+      value: pendingDecision,
+      accent: pendingDecision > 0 ? 'warning' : 'success',
+    },
+    {
+      id: 'unassigned',
+      Icon: FiClock,
+      label: 'Sans chauffeur',
+      value: unassignedCount,
+      accent: unassignedCount > 0 ? 'warning' : 'success',
     },
     {
       id: 'drivers',
       Icon: FiUsers,
       label: 'Chauffeurs',
-      value: `${availableDrivers}/${totalDrivers}`,
-      accent: availableDrivers === 0 && totalDrivers > 0 ? 'danger' : 'default',
+      value: driversError ? '—' : `${availableDrivers}/${totalDrivers}`,
+      accent: driversError
+        ? 'danger'
+        : availableDrivers === 0 && totalDrivers > 0
+          ? 'danger'
+          : 'default',
+      hint: driversError ? 'Indisponible' : undefined,
     },
   ];
 
   return (
     <div className={styles.kpiGrid} data-tour-id="kpi-grid">
+      {bookingsTruncated ? (
+        <div
+          className={styles.truncationBanner}
+          role="status"
+          data-tour-id="bookings-truncated-banner"
+        >
+          Affichage limité
+          {bookingsLimit != null ? ` à ${bookingsLimit} courses` : ''}
+          {' — '}
+          les KPI ci-dessus restent exacts.
+        </div>
+      ) : null}
       {cards.map((card) => {
         const accentClass = styles[`accent_${card.accent}`] || '';
         return (
@@ -111,6 +168,7 @@ const OverviewCards = ({
             key={card.id}
             className={`${styles.kpiCard} ${accentClass}`}
             data-tour-id={`kpi-${card.id}`}
+            title={card.hint}
           >
             <div className={styles.kpiIconContainer}>
               <card.Icon className={styles.kpiIcon} />
@@ -118,6 +176,7 @@ const OverviewCards = ({
             <div className={styles.kpiContent}>
               <span className={styles.kpiLabel}>{card.label}</span>
               <span className={styles.kpiValue}>{card.value}</span>
+              {card.hint ? <span className={styles.kpiHint}>{card.hint}</span> : null}
             </div>
           </div>
         );
@@ -147,6 +206,11 @@ function areOverviewCardsPropsEqual(prev, next) {
     || prev.hasCriticalDelays !== next.hasCriticalDelays
     || prev.pendingReservations !== next.pendingReservations
     || prev.assignedReservations !== next.assignedReservations
+    || prev.kpiStats !== next.kpiStats
+    || prev.delaysError !== next.delaysError
+    || prev.driversError !== next.driversError
+    || prev.bookingsTruncated !== next.bookingsTruncated
+    || prev.bookingsLimit !== next.bookingsLimit
   ) {
     return false;
   }

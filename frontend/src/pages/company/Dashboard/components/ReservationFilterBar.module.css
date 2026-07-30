@@ -214,6 +214,13 @@
   flex-shrink: 0;
 }
 
+.alertDotTouch {
+  min-width: 44px;
+  min-height: 44px;
+  height: auto;
+  box-sizing: border-box;
+}
+
 .alertDot {
   display: inline-flex;
   align-items: center;
@@ -277,8 +284,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
   border: 1px solid var(--border-primary);
   border-radius: 8px;
   background: var(--bg-primary);

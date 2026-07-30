@@ -111,6 +111,9 @@ export interface JoinedDriverRoomPayload {
 export interface JoinedCompanyPayload {
   company_id: number;
   room: string;
+  /** Curseur temps réel au moment du join (PR1 dashboard reliability) — `null` si Redis dégradé. */
+  subscribed_cursor?: number | null;
+  realtime_sequence_health?: 'ok' | 'degraded';
 }
 
 /** P3 — invalide le snapshot GET /company_dispatch/delays/live (debounce côté client). */

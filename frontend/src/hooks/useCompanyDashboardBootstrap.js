@@ -55,8 +55,15 @@ export function useCompanyDashboardBootstrap(day, { companyId = null, enabled = 
     if (appliedStampRef.current === stamp) return;
     appliedStampRef.current = stamp;
 
-    // Curseur temps réel — gate d'application des événements Socket.IO (Lot 3).
-    setSnapshotCursor(companyId, data.snapshot_cursor);
+    // Curseur temps réel — null = Redis dégradé (jamais 0 faux-sain).
+    const rtHealth = data.health?.realtime_sequence;
+    setSnapshotCursor(companyId, data.snapshot_cursor, {
+      degraded: rtHealth === 'degraded' || data.snapshot_cursor == null,
+    });
+    if (rtHealth !== 'degraded' && data.snapshot_cursor != null) {
+      const { clearResyncAfterBootstrapSuccess } = require('../utils/companyRealtimeSequenceGate');
+      clearResyncAfterBootstrapSuccess(companyId);
+    }
 
     // Réservations du jour : même clé/scope que useCompanyData (day ?? '__all__') → pas de second GET.
     if (Array.isArray(data.bookings)) {

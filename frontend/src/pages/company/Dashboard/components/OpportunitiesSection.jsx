@@ -29,13 +29,24 @@ const getActionConfig = (opp) => {
   return { label: 'Optimiser', Icon: FiZap, variant: 'default' };
 };
 
-const OpportunitiesSection = ({ opportunities, companyPublicId, loading, onAction }) => {
+const OpportunitiesSection = ({ opportunities, companyPublicId, loading, error, onAction }) => {
   if (loading) {
     return (
       <section className={styles.container}>
         <div className={styles.compactStatus}>
           <FiActivity className={styles.compactIcon} size={14} />
           <span className={styles.compactText}>Analyse en cours...</span>
+        </div>
+      </section>
+    );
+  }
+
+  if (error) {
+    return (
+      <section className={styles.container}>
+        <div className={styles.compactStatus} role="alert">
+          <FiAlertTriangle className={styles.compactIcon} size={14} />
+          <span className={styles.compactText}>Analyse indisponible</span>
         </div>
       </section>
     );

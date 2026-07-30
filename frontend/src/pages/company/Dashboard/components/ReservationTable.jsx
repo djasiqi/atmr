@@ -1,6 +1,6 @@
 // src/pages/company/Dashboard/components/ReservationTable.jsx
 import React, { useState } from 'react';
-import { FiCheckCircle, FiXCircle, FiInbox, FiChevronDown, FiClock, FiZap } from 'react-icons/fi';
+import { FiCheckCircle, FiXCircle, FiInbox, FiChevronDown } from 'react-icons/fi';
 import styles from './ReservationTable.module.css';
 import { formatDelay } from '../../../../utils/formatDelay';
 import { pickupArrivalHint } from '../../../../utils/formatPickupEta';
@@ -9,8 +9,8 @@ import ReservationActions from '../../../../components/reservations/ReservationA
 import BookingIdentityCell from '../../../../components/booking/BookingIdentityCell';
 import BookingTripBadges from '../../../../components/booking/BookingTripBadges';
 import BookingStatusBadge from '../../../../components/booking/BookingStatusBadge';
+import InstitutionOfferActions from './InstitutionOfferActions';
 import { canRespondToInstitutionOffer, isInstitutionOfferExpired } from '../../../../utils/institutionOfferResponse';
-import { resolveInstitutionOfferActions } from '../../../../utils/institutionOfferActions';
 import { institutionOfferEstimateLabel } from '../../../../utils/institutionOfferEstimateLabel';
 import {
   getPendingActionBadge,
@@ -20,52 +20,16 @@ import {
 } from '../../../../utils/transportActionPending';
 import { useSearchParams } from 'react-router-dom';
 
-const renderInstitutionOfferActionButtons = (r, styles, handlers) => {
-  const actions = resolveInstitutionOfferActions(r.__offer || r);
-  if (!actions.canRespond) return null;
-  return (
-    <>
-      {actions.canValidate ? (
-        <button
-          onClick={() => handlers.onValidate?.(r)}
-          title="Valider l'horaire de départ confirmé"
-          className={`${styles.actionButton} ${styles.acceptButton}`}
-        >
-          <FiCheckCircle size={16} />
-        </button>
-      ) : null}
-      {actions.canAcceptNow ? (
-        <button
-          onClick={() => handlers.onAcceptNow?.(r)}
-          title={actions.acceptNowLabel}
-          className={styles.actionButton}
-          style={{ color: 'var(--warning-primary, #ea580c)' }}
-        >
-          <FiZap size={16} />
-        </button>
-      ) : null}
-      {actions.canPlan ? (
-        <button
-          onClick={() => handlers.onPlan?.(r)}
-          title="Définir l'heure de prise en charge"
-          className={styles.actionButton}
-          style={{ color: 'var(--brand-primary)' }}
-        >
-          <FiClock size={16} />
-        </button>
-      ) : null}
-      {actions.canReject ? (
-        <button
-          onClick={() => handlers.onReject?.(r.__offerId, r.__offer)}
-          title="Refuser la demande"
-          className={`${styles.actionButton} ${styles.rejectButton}`}
-        >
-          <FiXCircle size={16} />
-        </button>
-      ) : null}
-    </>
-  );
-};
+/** Boutons Valider/Départ immédiat/Planifier/Refuser pour une offre institution (branche `__institutionOffer`). */
+const renderInstitutionOfferActionButtons = (r, handlers) => (
+  <InstitutionOfferActions
+    offer={r.__offer || r}
+    onValidate={() => handlers.onValidate?.(r)}
+    onAcceptNow={() => handlers.onAcceptNow?.(r)}
+    onPlan={() => handlers.onPlan?.(r)}
+    onReject={() => handlers.onReject?.(r.__offerId, r.__offer)}
+  />
+);
 
 const DISPLAY_INCREMENT = 50;
 
@@ -476,7 +440,7 @@ const ReservationTable = ({
                       </button>
                     ) : r.__institutionOffer ? (
                       offerCanRespond ? (
-                        renderInstitutionOfferActionButtons(r, styles, {
+                        renderInstitutionOfferActionButtons(r, {
                           onValidate: onValidateInstitutionOffer || onAcceptInstitutionOffer,
                           onPlan: onPlanInstitutionOffer || onProposeInstitutionOffer,
                           onAcceptNow: onAcceptNowInstitutionOffer,
@@ -498,15 +462,23 @@ const ReservationTable = ({
                         {status === 'pending' && (
                           <>
                             <button
+                              type="button"
                               data-tour-id="pending-accept-action"
                               onClick={() => onAccept?.(r.id)}
                               title={r.is_transferred ? "Accepter (prendre en charge)" : "Accepter"}
-                              className={`${styles.actionButton} ${styles.acceptButton}`}
+                              aria-label={r.is_transferred ? "Accepter (prendre en charge)" : "Accepter"}
+                              className={`${styles.actionButton} ${styles.acceptButton} ${styles.touchTarget}`}
                             >
-                              <FiCheckCircle size={16} />
+                              <FiCheckCircle size={16} aria-hidden />
                             </button>
-                            <button onClick={() => onReject?.(r.id)} title="Rejeter" className={`${styles.actionButton} ${styles.rejectButton}`}>
-                              <FiXCircle size={16} />
+                            <button
+                              type="button"
+                              onClick={() => onReject?.(r.id)}
+                              title="Refuser"
+                              aria-label="Refuser"
+                              className={`${styles.actionButton} ${styles.rejectButton} ${styles.touchTarget}`}
+                            >
+                              <FiXCircle size={16} aria-hidden />
                             </button>
                           </>
                         )}
@@ -572,13 +544,14 @@ const ReservationTable = ({
                 )}
               </div>
               <div className={styles.mobileCardBody}>
-                {pendingBadge && (
+                {pendingBadge && canManageReservation && (
                   <button
                     type="button"
                     className={`${styles.actionPendingBadge} ${
                       pendingBadge.isCancellation ? styles.actionPendingBadgeCancel : ''
-                    } ${styles.actionPendingBadgeBtn}`}
+                    } ${styles.actionPendingBadgeBtn} ${styles.touchTarget}`}
                     title={pendingBadge.title}
+                    aria-label={pendingBadge.title || 'Répondre'}
                     onClick={(e) => {
                       e.stopPropagation();
                       openRespondPanel(r);
@@ -644,7 +617,7 @@ const ReservationTable = ({
               {r.__institutionOffer ? (
                 <div className={styles.mobileCardActions} onClick={(e) => e.stopPropagation()}>
                   {offerCanRespond ? (
-                    renderInstitutionOfferActionButtons(r, styles, {
+                    renderInstitutionOfferActionButtons(r, {
                       onValidate: onValidateInstitutionOffer || onAcceptInstitutionOffer,
                       onPlan: onPlanInstitutionOffer || onProposeInstitutionOffer,
                       onAcceptNow: onAcceptNowInstitutionOffer,
@@ -658,25 +631,50 @@ const ReservationTable = ({
                     </span>
                   )}
                 </div>
-              ) : hasActions && canManageReservation && !pendingBadge && (
+              ) : hasActions && canManageReservation ? (
                 <div className={styles.mobileCardActions} onClick={(e) => e.stopPropagation()}>
-                  <ReservationActions
-                    reservation={r}
-                    onSchedule={onSchedule}
-                    onDispatchNow={onDispatchNow}
-                    onAssign={onAssign}
-                    onEdit={onEdit}
-                    onTransfer={onTransfer}
-                    onDelete={onDelete}
-                    hideAssign={hideAssign}
-                    hideSchedule={status === 'pending' ? true : hideSchedule}
-                    hideUrgent={status === 'pending' ? true : hideUrgent}
-                    hideEdit={status === 'pending' ? true : hideEdit}
-                    hideTransfer={hideTransfer}
-                    hideDelete={status === 'pending' ? true : hideDelete}
-                  />
+                  {status === 'pending' && !pendingBadge ? (
+                    <>
+                      <button
+                        type="button"
+                        data-tour-id="pending-accept-action-mobile"
+                        onClick={() => onAccept?.(r.id)}
+                        title={r.is_transferred ? 'Accepter (prendre en charge)' : 'Accepter'}
+                        aria-label={r.is_transferred ? 'Accepter (prendre en charge)' : 'Accepter'}
+                        className={`${styles.actionButton} ${styles.acceptButton} ${styles.touchTarget}`}
+                      >
+                        <FiCheckCircle size={16} aria-hidden />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onReject?.(r.id)}
+                        title="Refuser"
+                        aria-label="Refuser"
+                        className={`${styles.actionButton} ${styles.rejectButton} ${styles.touchTarget}`}
+                      >
+                        <FiXCircle size={16} aria-hidden />
+                      </button>
+                    </>
+                  ) : null}
+                  {!pendingBadge ? (
+                    <ReservationActions
+                      reservation={r}
+                      onSchedule={onSchedule}
+                      onDispatchNow={onDispatchNow}
+                      onAssign={onAssign}
+                      onEdit={onEdit}
+                      onTransfer={onTransfer}
+                      onDelete={onDelete}
+                      hideAssign={hideAssign}
+                      hideSchedule={status === 'pending' ? true : hideSchedule}
+                      hideUrgent={status === 'pending' ? true : hideUrgent}
+                      hideEdit={status === 'pending' ? true : hideEdit}
+                      hideTransfer={hideTransfer}
+                      hideDelete={status === 'pending' ? true : hideDelete}
+                    />
+                  ) : null}
                 </div>
-              )}
+              ) : null}
             </div>
           );
         })}

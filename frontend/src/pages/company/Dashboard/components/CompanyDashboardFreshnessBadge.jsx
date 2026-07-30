@@ -11,6 +11,7 @@ export function CompanyDashboardFreshnessBadge({
   lastHttpSyncAt = null,
   isSyncing = false,
   realtimeConnected = true,
+  realtimeDegraded = false,
   className = '',
 }) {
   const queryClient = useQueryClient();
@@ -62,7 +63,8 @@ export function CompanyDashboardFreshnessBadge({
       lastSyncAt={lastSyncAt}
       isSyncing={isSyncing}
       realtimeEnabled
-      realtimeConnected={realtimeConnected}
+      realtimeConnected={realtimeConnected && !realtimeDegraded}
+      realtimeDegraded={realtimeDegraded}
       sourceLabel="Dispatch"
       className={className}
     />

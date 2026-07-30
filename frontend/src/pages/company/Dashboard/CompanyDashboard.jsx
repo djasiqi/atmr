@@ -16,6 +16,7 @@ import useCompanySocket, { useSocketConnected } from '../../../hooks/useCompanyS
 import useDispatchStatus from '../../../hooks/useDispatchStatus';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import OverviewCards from './components/OverviewCards';
+import ActionQueueNow from './components/ActionQueueNow';
 import ReservationTable from './components/ReservationTable';
 import DriverTable from '../../driver/components/Dashboard/DriverTable';
 import OpportunitiesSection from './components/OpportunitiesSection';
@@ -75,7 +76,16 @@ import {
   canonicalRealtimeTimeMs,
   shouldAcceptRealtimeEvent,
 } from '../../../utils/realtimeEventGuard';
-import { evaluateRealtimeSequence } from '../../../utils/companyRealtimeSequenceGate';
+import {
+  inspectSequence,
+  commitAppliedSequence,
+  bufferRealtimeEvent,
+  drainContiguousBuffer,
+  setSubscribedCursor,
+  isRealtimeDegraded,
+  clearResyncAfterBootstrapSuccess,
+  isResyncRequired,
+} from '../../../utils/companyRealtimeSequenceGate';
 import { getAuthEnv } from '../../../utils/webAuthSession';
 import {
   countConstrainedAssignedImminentDrivers,
@@ -180,19 +190,45 @@ const CompanyDashboard = () => {
     driver,
     loadingReservations,
     loadingDriver,
+    loadingCompany,
     reloadReservations,
     reloadDriver,
     upsertReservation,
+    bootstrap,
+    isBootstrapError,
+    driversError,
+    reservationsError,
   } = useCompanyData({ day: dispatchDay });
 
   const { driversForMap } = useCompanyDriversForMap(company?.id);
   const socketConnected = useSocketConnected();
 
+  /** Succès réel profil + bootstrap + chauffeurs — jamais si erreur. */
   const criticalDataReady =
     Boolean(company?.id) &&
+    !loadingCompany &&
     !loadingReservations &&
     !loadingDriver &&
+    !isBootstrapError &&
+    !driversError &&
+    !reservationsError &&
     Array.isArray(reservations);
+
+  /** Secondaires uniquement après le marqueur (évite de les compter critiques). */
+  const [deferredQueriesEnabled, setDeferredQueriesEnabled] = useState(false);
+  useEffect(() => {
+    if (criticalDataReady) {
+      setDeferredQueriesEnabled(true);
+    } else {
+      setDeferredQueriesEnabled(false);
+    }
+  }, [criticalDataReady]);
+
+  const realtimeDegraded =
+    Boolean(company?.id) &&
+    (isRealtimeDegraded(company.id) ||
+      bootstrap?.health?.realtime_sequence === 'degraded' ||
+      bootstrap?.snapshot_cursor == null);
 
   /** Demandes PENDING visibles pour l'entreprise sur une fenêtre de dates (repère les courses hors jour sélectionné). */
   const pendingWindowStart = useMemo(() => offsetCalendarYmd(-2), []);
@@ -216,7 +252,7 @@ const CompanyDashboard = () => {
       }),
     staleTime: 20_000,
     refetchInterval: socketConnected ? false : 30_000,
-    enabled: Boolean(company?.id) && reservationTab === 'pending' && criticalDataReady,
+    enabled: Boolean(company?.id) && reservationTab === 'pending' && deferredQueriesEnabled,
   });
   const pendingWindowReservations = useMemo(
     () => (Array.isArray(pendingWindowPayload?.reservations) ? pendingWindowPayload.reservations : []),
@@ -262,8 +298,9 @@ const CompanyDashboard = () => {
     loading: loadingRealtimeDashboard,
     qualityMetrics,
     opportunities,
+    error: realtimeDashboardError,
   } = useRealtimeDashboard(dispatchDay, socketConnected ? 0 : 120000, {
-    enabled: criticalDataReady,
+    enabled: deferredQueriesEnabled,
   });
 
   const queryClient = useQueryClient();
@@ -560,19 +597,20 @@ const CompanyDashboard = () => {
       });
     },
     staleTime: 30_000,
-    enabled: !!company?.id && criticalDataReady,
+    enabled: !!company?.id && deferredQueriesEnabled,
   });
 
   const {
     data: delays = [],
     refetch: refetchDelays,
     isFetching: fetchingDelays,
+    isError: delaysError,
   } = useQuery({
     queryKey: lirieKeys.dispatchDelays(dispatchDay),
     queryFn: () => fetchDispatchDelays(dispatchDay),
     initialData: [],
     staleTime: 20_000,
-    enabled: !!company?.id && criticalDataReady,
+    enabled: !!company?.id && deferredQueriesEnabled,
   });
 
   const {
@@ -584,7 +622,7 @@ const CompanyDashboard = () => {
     queryFn: () => fetchRequestOffers('PENDING'),
     staleTime: 15_000,
     refetchInterval: socketConnected ? false : 30_000,
-    enabled: !!company?.id && criticalDataReady,
+    enabled: !!company?.id && deferredQueriesEnabled,
   });
   const institutionOffers = useMemo(
     () => institutionOffersData?.offers || [],
@@ -667,33 +705,54 @@ const CompanyDashboard = () => {
   }, [socket, handleNewCompanyNotification]);
 
   const dashboardMountAtRef = React.useRef(Date.now());
+  const graceBufferActiveRef = React.useRef(true);
 
   useEffect(() => {
-    if (!socket) return;
-    const acceptRealtime = (payload, entityKey = null) => {
-      const { accept: seqOk, gapDetected } = evaluateRealtimeSequence(
-        company?.id,
-        payload?.event_seq
-      );
-      if (!seqOk) return false;
-      if (gapDetected) {
-        // Trou de séquence → une seule resync coalescée (bootstrap + listes)
+    if (!criticalDataReady) return undefined;
+    const t = setTimeout(() => {
+      graceBufferActiveRef.current = false;
+      if (!company?.id) return;
+      const drained = drainContiguousBuffer(company.id);
+      if (!drained.complete || drained.resyncRequired || isResyncRequired(company.id)) {
         startTransition(() => {
           reloadReservations?.();
           refetchAssigned?.();
           refetchDelays?.();
         });
-      }
-      return shouldAcceptRealtimeEvent({
-        eventId: payload?.event_id,
-        entityKey,
-        canonicalTimeMs: canonicalRealtimeTimeMs(payload),
-      });
-    };
-    const refetchAll = () => {
-      if (Date.now() - dashboardMountAtRef.current < REALTIME_MOUNT_GRACE_MS) {
         return;
       }
+      if (drained.events.length > 0) {
+        drained.events.forEach(({ seq }) => commitAppliedSequence(company.id, seq));
+        startTransition(() => {
+          refetchAssigned?.();
+          reloadReservations?.();
+          refetchDelays?.();
+        });
+      }
+    }, REALTIME_MOUNT_GRACE_MS);
+    return () => clearTimeout(t);
+  }, [criticalDataReady, company?.id, reloadReservations, refetchAssigned, refetchDelays]);
+
+  useEffect(() => {
+    if (!socket) return;
+    const onSubscribed = (payload) => {
+      if (payload?.subscribed_cursor != null) {
+        setSubscribedCursor(company?.id, payload.subscribed_cursor);
+      } else if (payload?.subscribed_cursor === null) {
+        setSubscribedCursor(company?.id, null);
+      }
+    };
+    socket.on('company_room_subscribed', onSubscribed);
+    socket.on('subscribed', onSubscribed);
+    return () => {
+      socket.off('company_room_subscribed', onSubscribed);
+      socket.off('subscribed', onSubscribed);
+    };
+  }, [socket, company?.id]);
+
+  useEffect(() => {
+    if (!socket) return;
+    const applyEffect = () => {
       startTransition(() => {
         refetchAssigned?.();
         reloadReservations?.();
@@ -702,6 +761,37 @@ const CompanyDashboard = () => {
           queryKey: lirieKeys.companyReservationsSummary(dispatchDay),
         });
       });
+    };
+    const acceptRealtime = (payload, entityKey = null) => {
+      const inspected = inspectSequence(
+        company?.id,
+        payload?.event_seq,
+        payload?.company_id
+      );
+      if (!inspected.accept) return false;
+      if (inspected.gapDetected) {
+        startTransition(() => {
+          reloadReservations?.();
+          refetchAssigned?.();
+          refetchDelays?.();
+        });
+        return false;
+      }
+      if (graceBufferActiveRef.current || !criticalDataReady) {
+        bufferRealtimeEvent(company?.id, payload?.event_seq, payload);
+        return false;
+      }
+      const dedupeOk = shouldAcceptRealtimeEvent({
+        eventId: payload?.event_id,
+        entityKey,
+        canonicalTimeMs: canonicalRealtimeTimeMs(payload),
+      });
+      if (!dedupeOk) return false;
+      commitAppliedSequence(company?.id, payload?.event_seq);
+      return true;
+    };
+    const refetchAll = () => {
+      applyEffect();
     };
     const onAssignCreated = (data) => {
       if (!acceptRealtime(data, data?.booking_id ? `booking:${data.booking_id}` : null)) return;
@@ -1088,6 +1178,7 @@ const CompanyDashboard = () => {
       if (d && d.booking_id) {
         map[d.booking_id] = {
           delay_minutes: d.delay_minutes,
+          delay_severity: d.delay_severity ?? null,
           is_dropoff: !d.is_pickup,
           pickup_eta: d.pickup_eta ?? null,
           dropoff_eta: d.dropoff_eta ?? null,
@@ -1102,11 +1193,18 @@ const CompanyDashboard = () => {
     return Object.values(delaysByBooking).filter((d) => d?.delay_minutes > 0).length;
   }, [delaysByBooking]);
 
-  /** Aligné sur GET /company_dispatch/delays (plus d’appel parallèle à /delays/live sur ce même écran). */
+  /** Seuil critique backend-authoritative (15 min) — aligné table / KPI. */
+  const CRITICAL_DELAY_MINUTES =
+    Number(bootstrap?.kpi?.critical_delay_minutes) > 0
+      ? Number(bootstrap.kpi.critical_delay_minutes)
+      : 15;
+
   const hasCriticalDelays = useMemo(
     () =>
-      Object.values(delaysByBooking || {}).some((d) => Number(d?.delay_minutes || 0) >= 30),
-    [delaysByBooking]
+      Object.values(delaysByBooking || {}).some(
+        (d) => Number(d?.delay_minutes || 0) >= CRITICAL_DELAY_MINUTES
+      ),
+    [delaysByBooking, CRITICAL_DELAY_MINUTES]
   );
 
   const filterBySearch = useCallback(
@@ -1173,14 +1271,25 @@ const CompanyDashboard = () => {
   const urgentReservations = useMemo(() => {
     if (!urgenceMode) return [];
     const activeStatuses = [
-      'pending', 'accepted', 'assigned', 'en_route', 'in_progress',
+      'accepted', 'assigned', 'en_route', 'in_progress',
       'onboard', 'en_route_pickup', 'en_route_dropoff',
     ];
     return (reservations || []).filter((r) => {
+      const delayInfo = delaysByBooking?.[r.id];
+      if (delayInfo?.delay_minutes > 0) return true;
+      if (delayInfo?.delay_severity === 'critical') return true;
+
       const status = (r.status || '').toLowerCase();
-      return activeStatuses.includes(status) || (delaysByBooking && delaysByBooking[r.id]?.delay_minutes > 0);
+      if (!activeStatuses.includes(status)) return false;
+
+      const scheduled = r.scheduled_time || r.pickup_time;
+      if (!scheduled) return false;
+      const scheduledMs = new Date(scheduled).getTime();
+      if (Number.isNaN(scheduledMs)) return false;
+      const minutesLate = (Date.now() - scheduledMs) / 60000;
+      return minutesLate >= CRITICAL_DELAY_MINUTES;
     });
-  }, [reservations, urgenceMode, delaysByBooking]);
+  }, [reservations, urgenceMode, delaysByBooking, CRITICAL_DELAY_MINUTES]);
 
   const displayPending = useMemo(
     () => applyStructuredFilters(filterByDelaysOnly(filterBySearch(pendingReservations))),
@@ -1359,8 +1468,29 @@ const CompanyDashboard = () => {
             lastHttpSyncAt={lastDataSyncAt}
             isSyncing={loadingReservations || loadingDriver || loadingRealtimeDashboard}
             realtimeConnected={socketConnected}
+            realtimeDegraded={realtimeDegraded}
             className={styles.dashboardFreshness}
           />
+
+          {criticalDataReady && bootstrap?.schema_version >= 2 ? (
+            <ActionQueueNow
+              companyId={company?.id}
+              day={dispatchDay}
+              actionQueue={bootstrap?.action_queue || []}
+              actionQueueTotal={bootstrap?.action_queue_total ?? 0}
+              truncated={Boolean(bootstrap?.action_queue_truncated)}
+              toHandle={bootstrap?.summary?.to_handle ?? null}
+              onAssign={(bookingId) => {
+                const res = reservationsMap.get(bookingId);
+                if (res) openAssignModal(res);
+              }}
+              onActionComplete={() => {
+                startTransition(() => {
+                  reloadReservations();
+                });
+              }}
+            />
+          ) : null}
 
           {/* ============ 2. KPI + MODE DISPATCH ============ */}
           <OverviewCards
@@ -1369,8 +1499,13 @@ const CompanyDashboard = () => {
             assignedReservations={assignedReservations}
             driver={driver}
             day={dispatchDay}
-            delayCount={activeDelayCount || 0}
-            hasCriticalDelays={!!hasCriticalDelays}
+            delayCount={delaysError ? 0 : activeDelayCount || 0}
+            hasCriticalDelays={!delaysError && !!hasCriticalDelays}
+            kpiStats={bootstrap?.kpi || null}
+            delaysError={Boolean(delaysError)}
+            driversError={Boolean(driversError)}
+            bookingsTruncated={Boolean(bootstrap?.bookings_truncated)}
+            bookingsLimit={bootstrap?.bookings_limit ?? null}
           />
 
           <DispatchModeStatusBar
@@ -1385,6 +1520,7 @@ const CompanyDashboard = () => {
               opportunities={opportunities}
               companyPublicId={company?.public_id}
               loading={loadingRealtimeDashboard}
+              error={Boolean(realtimeDashboardError)}
               onAction={handleOpportunityAction}
             />
           )}
@@ -1443,6 +1579,7 @@ const CompanyDashboard = () => {
                   opportunities={opportunities}
                   companyPublicId={company?.public_id}
                   loading={loadingRealtimeDashboard}
+                  error={Boolean(realtimeDashboardError)}
                   onAction={handleOpportunityAction}
                 />
               </div>
@@ -1514,7 +1651,7 @@ const CompanyDashboard = () => {
               }
               totalCount={
                 urgenceMode
-                  ? (reservations || []).length
+                  ? urgentReservations.length
                   : reservationTab === 'pending'
                     ? pendingReservations.length
                     : reservationTab === 'institution'
@@ -1527,14 +1664,19 @@ const CompanyDashboard = () => {
             {!urgenceMode && (
               <div className={styles.tabsHeader} data-active-tab={reservationTab}>
                 <button
+                  type="button"
                   className={`${styles.tab} ${reservationTab === 'pending' ? styles.tabActive : ''}`}
                   data-tour-id="tab-pending"
                   onClick={() => setReservationTab('pending')}
+                  aria-label="À décider"
                 >
-                  En attente
-                  <span className={styles.tabBadge}>{pendingReservations.length}</span>
+                  À décider
+                  <span className={styles.tabBadge}>
+                    {bootstrap?.kpi?.pending_decision ?? pendingReservations.length}
+                  </span>
                 </button>
                 <button
+                  type="button"
                   className={`${styles.tab} ${reservationTab === 'institution' ? styles.tabActive : ''}`}
                   data-tour-id="tab-institutions"
                   onClick={() => setReservationTab('institution')}
@@ -1543,12 +1685,16 @@ const CompanyDashboard = () => {
                   <span className={styles.tabBadge}>{visibleInstitutionOffers.length}</span>
                 </button>
                 <button
+                  type="button"
                   className={`${styles.tab} ${reservationTab === 'assigned' ? styles.tabActive : ''}`}
                   data-tour-id="tab-assigned"
                   onClick={() => setReservationTab('assigned')}
+                  aria-label="Sans chauffeur"
                 >
-                  Assignation chauffeur
-                  <span className={styles.tabBadge}>{assignedReservations.length}</span>
+                  Sans chauffeur
+                  <span className={styles.tabBadge}>
+                    {bootstrap?.kpi?.unassigned ?? assignedReservations.length}
+                  </span>
                 </button>
               </div>
             )}

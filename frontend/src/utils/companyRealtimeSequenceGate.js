@@ -1,17 +1,9 @@
 /**
- * Gate de séquence temps réel — Lot 3 perf espace entreprise.
+ * Gate de séquence temps réel — transactionnel (inspect → apply → commit).
  *
- * Le dashboard n'applique un événement Socket.IO que si son `event_seq` (curseur
- * monotone émis par le backend, voir backend/services/realtime/event_sequence.py)
- * est strictement supérieur :
- *   1. au `snapshot_cursor` du dernier bootstrap chargé (`GET /companies/me/dashboard/bootstrap`) ;
- *   2. au dernier `event_seq` déjà appliqué pour cette entreprise.
- *
- * `updated_at` seul n'est PAS un critère d'ordre valable (horloge client/serveur,
- * granularité seconde, retries) — c'est tout l'objet de ce garde-fou.
- *
- * Événements sans `event_seq` (legacy, ou payload chauffeur sans `company_id`) :
- * toujours acceptés (comportement identique à avant le Lot 3).
+ * - inspectSequence : décide sans avancer lastAppliedSeq
+ * - commitAppliedSequence : avance le curseur après effet réussi
+ * - resyncRequired : trou détecté ; soldé uniquement via clearResyncAfterBootstrapSuccess
  */
 
 const stateByCompany = new Map();
@@ -20,49 +12,146 @@ function getState(companyId) {
   const key = String(companyId);
   let state = stateByCompany.get(key);
   if (!state) {
-    state = { snapshotCursor: 0, lastAppliedSeq: 0 };
+    state = {
+      snapshotCursor: null,
+      lastAppliedSeq: 0,
+      subscribedCursor: null,
+      resyncRequired: false,
+      realtimeDegraded: false,
+      pendingBuffer: new Map(),
+    };
     stateByCompany.set(key, state);
   }
   return state;
 }
 
-/** À appeler après chaque bootstrap réussi — nouveau curseur de référence. */
-export function setSnapshotCursor(companyId, cursor) {
+/**
+ * @param {number|string|null} companyId
+ * @param {number|null|undefined} cursor — null = Redis dégradé
+ * @param {{ degraded?: boolean }} [opts]
+ */
+export function setSnapshotCursor(companyId, cursor, opts = {}) {
   if (companyId == null) return;
-  const value = Number(cursor);
-  if (!Number.isFinite(value) || value < 0) return;
   const state = getState(companyId);
+  if (cursor == null || !Number.isFinite(Number(cursor))) {
+    state.snapshotCursor = null;
+    state.realtimeDegraded = true;
+    return;
+  }
+  const value = Number(cursor);
+  if (value < 0) return;
   state.snapshotCursor = value;
-  // Un nouveau bootstrap rattrape toujours l'état : jamais de régression du curseur appliqué.
+  state.realtimeDegraded = Boolean(opts.degraded);
   if (value > state.lastAppliedSeq) {
     state.lastAppliedSeq = value;
   }
 }
 
+export function setSubscribedCursor(companyId, cursor) {
+  if (companyId == null) return;
+  const state = getState(companyId);
+  if (cursor == null || !Number.isFinite(Number(cursor))) {
+    state.subscribedCursor = null;
+    state.realtimeDegraded = true;
+    return;
+  }
+  state.subscribedCursor = Number(cursor);
+}
+
 /**
- * Décide si un événement temps réel doit être appliqué.
- *
- * @returns {{ accept: boolean, gapDetected: boolean }}
- *   - `accept`: true si l'événement doit être traité (ou s'il n'a pas de `event_seq`).
- *   - `gapDetected`: true si l'on saute au moins un `event_seq` (indice d'événements
- *     manqués — déclenche normalement un resync coalescé côté appelant).
+ * Inspecte sans commit. Rejette si company_id manquant ou event_seq invalide (≤0).
+ * @returns {{ accept: boolean, gapDetected: boolean, reason?: string }}
  */
-export function evaluateRealtimeSequence(companyId, eventSeq) {
+export function inspectSequence(companyId, eventSeq, payloadCompanyId = null) {
+  if (companyId == null) {
+    return { accept: false, gapDetected: false, reason: 'missing_company' };
+  }
+  if (payloadCompanyId != null && Number(payloadCompanyId) !== Number(companyId)) {
+    return { accept: false, gapDetected: false, reason: 'company_mismatch' };
+  }
   const seq = Number(eventSeq);
   if (!Number.isFinite(seq) || seq <= 0) {
-    return { accept: true, gapDetected: false };
-  }
-  if (companyId == null) {
-    return { accept: true, gapDetected: false };
+    return { accept: false, gapDetected: false, reason: 'invalid_event_seq' };
   }
   const state = getState(companyId);
-  const floor = Math.max(state.snapshotCursor, state.lastAppliedSeq);
+  if (state.realtimeDegraded || state.snapshotCursor == null) {
+    return { accept: false, gapDetected: false, reason: 'realtime_degraded' };
+  }
+  const floor = Math.max(state.snapshotCursor || 0, state.lastAppliedSeq || 0);
   if (seq <= floor) {
-    return { accept: false, gapDetected: false };
+    return { accept: false, gapDetected: false, reason: 'stale' };
   }
   const gapDetected = state.lastAppliedSeq > 0 && seq > state.lastAppliedSeq + 1;
-  state.lastAppliedSeq = seq;
+  if (gapDetected) {
+    state.resyncRequired = true;
+  }
   return { accept: true, gapDetected };
+}
+
+/** @deprecated — préférer inspectSequence + commitAppliedSequence */
+export function evaluateRealtimeSequence(companyId, eventSeq) {
+  const result = inspectSequence(companyId, eventSeq);
+  if (result.accept && !result.gapDetected) {
+    commitAppliedSequence(companyId, eventSeq);
+  } else if (result.accept && result.gapDetected) {
+    // Ne pas committer sur un trou — resync d'abord
+  }
+  return { accept: result.accept, gapDetected: result.gapDetected };
+}
+
+export function commitAppliedSequence(companyId, eventSeq) {
+  if (companyId == null) return;
+  const seq = Number(eventSeq);
+  if (!Number.isFinite(seq) || seq <= 0) return;
+  const state = getState(companyId);
+  if (seq > state.lastAppliedSeq) {
+    state.lastAppliedSeq = seq;
+  }
+}
+
+export function bufferRealtimeEvent(companyId, eventSeq, payload) {
+  if (companyId == null) return;
+  const seq = Number(eventSeq);
+  if (!Number.isFinite(seq) || seq <= 0) return;
+  getState(companyId).pendingBuffer.set(seq, payload);
+}
+
+export function drainContiguousBuffer(companyId) {
+  const state = getState(companyId);
+  const floor = Math.max(state.snapshotCursor || 0, state.lastAppliedSeq || 0);
+  const sub = state.subscribedCursor;
+  if (sub == null || state.snapshotCursor == null) {
+    return { complete: false, events: [], resyncRequired: true };
+  }
+  const events = [];
+  for (let s = floor + 1; s <= sub; s += 1) {
+    if (!state.pendingBuffer.has(s)) {
+      return { complete: false, events, resyncRequired: true };
+    }
+    events.push({ seq: s, payload: state.pendingBuffer.get(s) });
+  }
+  events.forEach(({ seq }) => state.pendingBuffer.delete(seq));
+  return { complete: true, events, resyncRequired: false };
+}
+
+export function markResyncRequired(companyId) {
+  if (companyId == null) return;
+  getState(companyId).resyncRequired = true;
+}
+
+export function clearResyncAfterBootstrapSuccess(companyId) {
+  if (companyId == null) return;
+  const state = getState(companyId);
+  state.resyncRequired = false;
+  state.pendingBuffer.clear();
+}
+
+export function isResyncRequired(companyId) {
+  return Boolean(getState(companyId).resyncRequired);
+}
+
+export function isRealtimeDegraded(companyId) {
+  return Boolean(getState(companyId).realtimeDegraded || getState(companyId).snapshotCursor == null);
 }
 
 export function getLastAppliedSeq(companyId) {
@@ -73,7 +162,10 @@ export function getSnapshotCursor(companyId) {
   return getState(companyId).snapshotCursor;
 }
 
-/** Réinitialise l'état (déconnexion / changement d'entreprise). */
+export function getSubscribedCursor(companyId) {
+  return getState(companyId).subscribedCursor;
+}
+
 export function resetCompanySequenceState(companyId) {
   if (companyId == null) return;
   stateByCompany.delete(String(companyId));

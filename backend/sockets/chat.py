@@ -530,6 +530,22 @@ def _extract_token(auth) -> str | None:
     return token_result
 
 
+
+def _emit_company_room_subscribed(company_id: int, room: str) -> None:
+    """ACK explicite apres join room entreprise (dashboard reliability PR2/PR3)."""
+    from services.realtime.event_sequence import get_snapshot_cursor_status
+
+    cursor, health = get_snapshot_cursor_status(int(company_id))
+    emit(
+        "company_room_subscribed",
+        {
+            "company_id": int(company_id),
+            "room": room,
+            "subscribed_cursor": cursor,
+            "health": {"realtime_sequence": health},
+        },
+    )
+
 def init_chat_socket(socketio: SocketIO):
     logger.info("🔧 [INIT] Initialisation des handlers Socket.IO chat")
 
@@ -1078,6 +1094,18 @@ def init_chat_socket(socketio: SocketIO):
                     )
 
                 emit("connected", {"message": f"✅ Entreprise connectée à {room}"})
+
+                # ACK de souscription : le frontend gate les événements temps réel sur
+                # `subscribed_cursor` (même espace que `snapshot_cursor` du bootstrap —
+                # voir services/realtime/event_sequence.py). `None` = Redis dégradé,
+                # jamais 0 présenté comme curseur sain (voir companyRealtimeSequenceGate.js).
+                try:
+                    _emit_company_room_subscribed(company.id, room)
+                except Exception:
+                    logger.exception(
+                        "[socketio] company_room_subscribed ACK failed (company_id=%s)",
+                        company.id,
+                    )
 
                 _store_sid_claims(
                     sid,
@@ -3236,6 +3264,8 @@ def init_chat_socket(socketio: SocketIO):
                 "retry": True,  # Indique au client de retry
             }
 
+
+
     @socketio.on("join_company")
     def handle_join_company(data=None):  # noqa: ARG001
         # Variables pour logging d'erreur
@@ -3276,7 +3306,25 @@ def init_chat_socket(socketio: SocketIO):
                 join_room(room)
                 # ✅ Tracking rooms
                 ws_metrics.on_room_join(room)
-                emit("joined_company", {"company_id": company.id, "room": room})
+                from services.realtime.event_sequence import (
+                    get_snapshot_cursor_status,
+                )
+
+                subscribed_cursor, realtime_health = get_snapshot_cursor_status(
+                    company.id
+                )
+                emit(
+                    "joined_company",
+                    {
+                        "company_id": company.id,
+                        "room": room,
+                        # Curseur temps réel au moment du join (Lot 3/PR1) — `null` si
+                        # Redis dégradé, jamais un faux 0 (voir event_sequence.py).
+                        "subscribed_cursor": subscribed_cursor,
+                        "realtime_sequence_health": realtime_health,
+                    },
+                )
+                _emit_company_room_subscribed(company.id, room)
                 logger.info("🏢 Company %s joined room: %s", company.id, room)
             elif user_role == "driver":
                 driver = Driver.query.filter_by(user_id=user.id).first()
@@ -3293,7 +3341,23 @@ def init_chat_socket(socketio: SocketIO):
                 join_room(room)
                 # ✅ Tracking rooms
                 ws_metrics.on_room_join(room)
-                emit("joined_company", {"company_id": driver.company_id, "room": room})
+                from services.realtime.event_sequence import (
+                    get_snapshot_cursor_status,
+                )
+
+                subscribed_cursor, realtime_health = get_snapshot_cursor_status(
+                    driver.company_id
+                )
+                emit(
+                    "joined_company",
+                    {
+                        "company_id": driver.company_id,
+                        "room": room,
+                        "subscribed_cursor": subscribed_cursor,
+                        "realtime_sequence_health": realtime_health,
+                    },
+                )
+                _emit_company_room_subscribed(driver.company_id, room)
                 logger.info("🚗 Driver %s joined company room: %s", driver.id, room)
             else:
                 emit(

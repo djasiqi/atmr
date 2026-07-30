@@ -327,12 +327,12 @@ def build_company_driver_locations_items(
             loc_item["mission_id"] = booking_id
             loc_item["client_short"] = active_booking.get("client_short", "")
             if status == "busy":
+                # Pas d'adresse / client_short dans les logs (confidentialité).
                 logger.debug(
-                    "[drivers/locations] Chauffeur en course: driver_id=%s booking_id=%s mission_status=%s client=%s",
+                    "[drivers/locations] Chauffeur en course: driver_id=%s booking_id=%s mission_status=%s",
                     driver.id,
                     active_booking.get("current_booking_id"),
                     mission_status,
-                    str(active_booking.get("client_short", ""))[:50],
                 )
         locations.append(loc_item)
 

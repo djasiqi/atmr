@@ -327,6 +327,35 @@ def create_rate_limit_error(
     )
 
 
+def create_service_unavailable_error(
+    message: str,
+    *,
+    error_code: str = "service_unavailable",
+    details: Dict[str, Any] | None = None,
+) -> Tuple[Dict[str, Any], int]:
+    """Crée une réponse d'erreur 503 (dépendance indisponible : DB, Redis, etc.).
+
+    À utiliser quand une donnée critique ne peut pas être calculée de façon fiable
+    (ex: KPI dashboard) — ne jamais renvoyer de valeurs par défaut trompeuses (0,
+    liste vide) dans ce cas, préférer ce 503 explicite.
+
+    Args:
+        message: Message utilisateur lisible (FR)
+        error_code: Code machine (snake_case, défaut "service_unavailable")
+        details: Détails supplémentaires (optionnel)
+
+    Returns:
+        Tuple (response_json, status_code) pour Flask
+    """
+    return create_error_response(
+        message,
+        status_code=503,
+        error_code=error_code,
+        details=details,
+        suggestion="Réessayez dans quelques instants. Si le problème persiste, contactez le support.",
+    )
+
+
 def create_conflict_error(
     message: str,
     resource_type: str | None = None,

@@ -1,14 +1,16 @@
-"""Lot 3 perf espace entreprise — séquence monotone Redis (event_seq / snapshot_cursor)."""
+"""Tests séquence Redis — curseur None si dégradé."""
 
 from __future__ import annotations
 
 import ext
-from services.realtime.event_sequence import current_snapshot_cursor, next_event_seq
+from services.realtime.event_sequence import (
+    current_snapshot_cursor,
+    get_snapshot_cursor_status,
+    next_event_seq,
+)
 
 
 class _FakeRedis:
-    """Stub minimal (incr/get) — pas besoin d'un vrai Redis pour ces tests."""
-
     def __init__(self) -> None:
         self._store: dict[str, int] = {}
 
@@ -27,7 +29,6 @@ def test_next_event_seq_increments_per_company(monkeypatch) -> None:
 
     assert next_event_seq(42) == 1
     assert next_event_seq(42) == 2
-    # Espace de séquence isolé par entreprise (pas de fuite cross-tenant).
     assert next_event_seq(43) == 1
 
 
@@ -35,29 +36,29 @@ def test_current_snapshot_cursor_reflects_last_event_seq(monkeypatch) -> None:
     fake = _FakeRedis()
     monkeypatch.setattr(ext, "redis_client", fake)
 
-    assert current_snapshot_cursor(7) == 0  # aucun événement encore émis
+    assert current_snapshot_cursor(7) == 0
     next_event_seq(7)
     next_event_seq(7)
     assert current_snapshot_cursor(7) == 2
 
 
 def test_events_after_bootstrap_are_strictly_greater_than_cursor(monkeypatch) -> None:
-    """Contrat central du Lot 3 : `snapshot_cursor` lu au bootstrap doit toujours
-    être strictement inférieur à tout `event_seq` émis après coup."""
     fake = _FakeRedis()
     monkeypatch.setattr(ext, "redis_client", fake)
 
-    next_event_seq(99)  # événement avant le bootstrap
+    next_event_seq(99)
     snapshot_cursor = current_snapshot_cursor(99)
-
-    seq_after = next_event_seq(99)  # événement après génération du bootstrap
+    seq_after = next_event_seq(99)
     assert seq_after > snapshot_cursor
 
 
-def test_next_event_seq_fail_open_without_redis(monkeypatch) -> None:
+def test_redis_unavailable_returns_none_degraded(monkeypatch) -> None:
     monkeypatch.setattr(ext, "redis_client", None)
     assert next_event_seq(1) == 0
-    assert current_snapshot_cursor(1) == 0
+    assert current_snapshot_cursor(1) is None
+    cursor, status = get_snapshot_cursor_status(1)
+    assert cursor is None
+    assert status == "degraded"
 
 
 def test_next_event_seq_fail_open_without_company_id(monkeypatch) -> None:

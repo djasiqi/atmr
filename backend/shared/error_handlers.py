@@ -17,6 +17,7 @@ from routes.api_error_utils import (
     create_internal_error,
     create_not_found_error,
     create_permission_error,
+    create_service_unavailable_error,
     create_validation_error,
 )
 from routes.db_error_utils import format_integrity_error
@@ -255,4 +256,28 @@ class APIErrorHandler:
         )
         return create_conflict_error(
             message, resource_type=resource_type, resource_id=resource_id
+        )
+
+    @staticmethod
+    def handle_service_unavailable_error(
+        message: str,
+        error_code: str = "service_unavailable",
+        details: dict[str, Any] | None = None,
+        logger_instance: logging.Logger | None = None,
+    ) -> tuple[dict[str, Any], int]:
+        """Gère une erreur 503 (dépendance critique indisponible : DB, Redis...).
+
+        Args:
+            message: Message d'erreur principal
+            error_code: Code machine (snake_case, défaut "service_unavailable")
+            details: Détails supplémentaires (optionnel)
+            logger_instance: Logger à utiliser (défaut: logger du module)
+
+        Returns:
+            Tuple (response_json, status_code) pour Flask
+        """
+        log = logger_instance or logger
+        log.error("Service indisponible: %s", message)
+        return create_service_unavailable_error(
+            message, error_code=error_code, details=details
         )

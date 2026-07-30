@@ -140,22 +140,30 @@ const ReservationFilterBar = ({
       <div className={styles.alertIndicators}>
         <button
           type="button"
-          className={`${styles.alertDot} ${urgenceMode ? styles.alertDotActive : ''}`}
+          className={`${styles.alertDot} ${styles.alertDotTouch} ${urgenceMode ? styles.alertDotActive : ''}`}
           onClick={onToggleUrgence}
+          aria-pressed={urgenceMode}
+          aria-label={urgenceMode ? 'Désactiver le filtre Urgences' : 'Afficher les Urgences'}
           title="Urgences"
         >
-          <FiAlertTriangle size={11} />
+          <FiAlertTriangle size={11} aria-hidden />
           <span>Urgences</span>
         </button>
 
         {activeDelayCount > 0 && (
           <button
             type="button"
-            className={`${styles.alertDot} ${styles.alertDotDelay} ${delaysOnly ? styles.alertDotActive : ''}`}
+            className={`${styles.alertDot} ${styles.alertDotTouch} ${styles.alertDotDelay} ${delaysOnly ? styles.alertDotActive : ''}`}
             onClick={onToggleDelaysOnly}
+            aria-pressed={delaysOnly}
+            aria-label={
+              delaysOnly
+                ? `Désactiver le filtre retards (${activeDelayCount})`
+                : `Filtrer les ${activeDelayCount} retard${activeDelayCount > 1 ? 's' : ''}`
+            }
             title={`${activeDelayCount} retard${activeDelayCount > 1 ? 's' : ''}`}
           >
-            <FiClock size={11} />
+            <FiClock size={11} aria-hidden />
             <span>{activeDelayCount}</span>
           </button>
         )}
@@ -168,7 +176,7 @@ const ReservationFilterBar = ({
             ? `${visibleCount} / ${totalCount}`
             : `${totalCount} résultat${totalCount !== 1 ? 's' : ''}`}
         </span>
-        <button type="button" className={styles.refreshBtn} title="Rafraîchir" onClick={onRefresh}>
+        <button type="button" className={styles.refreshBtn} title="Rafraîchir" aria-label="Rafraîchir la liste" onClick={onRefresh}>
           <FiRefreshCw size={14} />
         </button>
       </div>

@@ -311,8 +311,9 @@ const createStyledTooltip = (driver, opts = {}) => {
     metaLine = formatLastSeen(lastSeenSeconds);
   } else if (status === 'busy' || status === 'assigned') {
     const parts = [];
-    if (currentBookingId) parts.push(`Mission #${currentBookingId}`);
-    if (clientShort) parts.push(clientShort);
+    if (currentBookingId) parts.push(`Mission #${Number(currentBookingId) || currentBookingId}`);
+    // client_short = adresse pickup côté API — toujours échapper (XSS InfoWindow).
+    if (clientShort) parts.push(escapeHtml(clientShort));
     metaLine = parts.join(' · ');
   }
 
@@ -332,6 +333,9 @@ const createStyledTooltip = (driver, opts = {}) => {
   <div class="lirie-popup-chips">${chips.map((c) => `<span class="lirie-popup-chip">${escapeHtml(c)}</span>`).join('')}</div>` : ''}
 </div>`;
 };
+
+/** Export testable (XSS InfoWindow) — ne pas utiliser hors tests / carte. */
+export { createStyledTooltip, escapeHtml };
 
 function DriverLiveMap({ drivers: propDrivers }) {
   recordDriverLiveMapRender();

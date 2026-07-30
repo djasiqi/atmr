@@ -1,27 +1,14 @@
 # backend/services/realtime/event_sequence.py
-"""Séquence monotone (Redis) pour la cohérence temps réel — Lot 3 perf espace entreprise.
+"""Séquence monotone (Redis) pour la cohérence temps réel — dashboard entreprise.
 
-Contexte:
-    Le frontend applique les événements Socket.IO uniquement s'ils sont plus récents
-    que le `snapshot_cursor` renvoyé par `GET /companies/me/dashboard/bootstrap`
-    (voir docs/perf-company-space-lot3-dashboard.md). `updated_at` seul est insuffisant
-    (horloge, granularité, retries) : on utilise un curseur entier strictement croissant.
-
-Principe:
-    - Un compteur Redis par entreprise (`INCR`) fournit `event_seq` à chaque émission
-      Socket.IO pertinente pour le dashboard (booking_*, dispatch_*, etc.).
-    - Le bootstrap lit la valeur courante du même compteur (`GET`, sans l'incrémenter)
-      pour produire `snapshot_cursor`. Tout événement émis après coup aura donc
-      `event_seq > snapshot_cursor` (le compteur ne fait qu'augmenter).
-    - Fail-open : en l'absence de Redis, on retourne 0 (le frontend retombe sur un
-      comportement « accepter tout », comme avant ce lot).
-
-Pas de PII stockée : uniquement un entier par entreprise.
+Fail-closed pour le curseur de snapshot : Redis indisponible → ``None`` + health degraded
+(jamais ``0`` présenté comme curseur sain).
 """
 
 from __future__ import annotations
 
 import logging
+from typing import Literal, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -33,10 +20,10 @@ def _seq_key(company_id: int) -> str:
 
 
 def next_event_seq(company_id: int | None) -> int:
-    """Incrémente et retourne le prochain `event_seq` pour l'entreprise (émission WS).
+    """Incrémente et retourne le prochain ``event_seq`` (émission WS).
 
-    Retourne 0 si Redis est indisponible ou `company_id` invalide (fail-open : le
-    payload n'aura simplement pas de `event_seq`, comportement pré-Lot 3).
+    Retourne 0 si Redis indisponible (l'émetteur omettra un seq valide ;
+    le client doit rejeter ``event_seq <= 0`` pour les événements critiques).
     """
     if not company_id:
         return 0
@@ -55,23 +42,34 @@ def next_event_seq(company_id: int | None) -> int:
         return 0
 
 
-def current_snapshot_cursor(company_id: int) -> int:
-    """Valeur courante du curseur pour le bootstrap (0 si aucun événement émis encore).
+def get_snapshot_cursor_status(
+    company_id: int,
+) -> tuple[Optional[int], Literal["ok", "degraded"]]:
+    """Lit le curseur courant.
 
-    Ne modifie pas le compteur (lecture seule) — les événements futurs incrémenteront
-    via `next_event_seq` et resteront donc strictement supérieurs à cette valeur.
+    Returns:
+        (cursor, "ok") si Redis répond — cursor=0 si aucun événement encore.
+        (None, "degraded") si Redis indisponible.
     """
     try:
         from ext import redis_client
 
         if redis_client is None:
-            return 0
+            return None, "degraded"
         raw = redis_client.get(_seq_key(int(company_id)))
-        return int(raw) if raw is not None else 0
+        if raw is None:
+            return 0, "ok"
+        return int(raw), "ok"
     except Exception:
         logger.debug(
-            "[event_sequence] current_snapshot_cursor indisponible (company_id=%s)",
+            "[event_sequence] get_snapshot_cursor_status indisponible (company_id=%s)",
             company_id,
             exc_info=True,
         )
-        return 0
+        return None, "degraded"
+
+
+def current_snapshot_cursor(company_id: int) -> Optional[int]:
+    """Valeur courante du curseur pour le bootstrap, ou ``None`` si Redis dégradé."""
+    cursor, _status = get_snapshot_cursor_status(company_id)
+    return cursor

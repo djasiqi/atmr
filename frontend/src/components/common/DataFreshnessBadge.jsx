@@ -20,6 +20,7 @@ export function computeDataFreshnessMeta({
   lastSyncAt = null,
   realtimeEnabled = false,
   realtimeConnected = true,
+  realtimeDegraded = false,
   sourceLabel = 'Données',
   now = Date.now(),
 }) {
@@ -33,6 +34,12 @@ export function computeDataFreshnessMeta({
     return {
       level: 'recent',
       text: 'Mise à jour des données en cours…',
+    };
+  }
+  if (realtimeDegraded) {
+    return {
+      level: 'partial',
+      text: 'Temps réel dégradé : séquence indisponible. Rechargement manuel recommandé.',
     };
   }
   if (!lastSyncAt) {
@@ -75,6 +82,7 @@ export default function DataFreshnessBadge({
   isSyncing = false,
   realtimeEnabled = false,
   realtimeConnected = true,
+  realtimeDegraded = false,
   sourceLabel = 'Données',
   className = '',
 }) {
@@ -104,10 +112,11 @@ export default function DataFreshnessBadge({
         lastSyncAt,
         realtimeEnabled,
         realtimeConnected,
+        realtimeDegraded,
         sourceLabel,
         now,
       }),
-    [isOnline, isSyncing, lastSyncAt, now, realtimeEnabled, realtimeConnected, sourceLabel]
+    [isOnline, isSyncing, lastSyncAt, now, realtimeEnabled, realtimeConnected, realtimeDegraded, sourceLabel]
   );
 
   return (

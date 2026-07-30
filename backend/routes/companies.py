@@ -1615,14 +1615,45 @@ def _reservations_base_query_for_company_day(company_id: int, day_str: str):
     return base_query
 
 
-def _booking_stats_from_base_query(base_query):
-    """Agrégats stats dashboard pour la base_query (sans filtres onglet/recherche)."""
-    from sqlalchemy import case, func
+def _booking_stats_from_base_query(base_query, *, raise_on_error: bool = False):
+    """Agrégats stats dashboard pour la base_query (sans filtres onglet/recherche).
+
+    Inclut les KPI opérationnels (pending_decision, unassigned, in_service, …).
+    Si ``raise_on_error`` : propage l'exception (bootstrap → 503) au lieu de zéros.
+    """
+    from sqlalchemy import and_, case, func, or_
 
     from models import Booking
     from models.enums import BookingStatus
+    from shared.time_utils import now_local
+
+    CRITICAL_DELAY_MINUTES = 15
+    _ACTIVE_DELAYABLE_STATUSES = (
+        BookingStatus.ACCEPTED,
+        BookingStatus.ASSIGNED,
+        BookingStatus.EN_ROUTE,
+        BookingStatus.IN_PROGRESS,
+    )
+    now_ts = now_local()
+    critical_threshold = now_ts - timedelta(minutes=CRITICAL_DELAY_MINUTES)
+
+    empty = {
+        "total": 0,
+        "pending": 0,
+        "inProgress": 0,
+        "completed": 0,
+        "canceled": 0,
+        "revenue": 0.0,
+        "pending_decision": 0,
+        "unassigned": 0,
+        "in_service": 0,
+        "delay_count": 0,
+        "critical_delay_count": 0,
+        "critical_delay_minutes": CRITICAL_DELAY_MINUTES,
+    }
 
     try:
+        no_driver = or_(Booking.driver_id.is_(None), Booking.driver_id == 0)
         stats_row = base_query.with_entities(
             func.count(Booking.id),
             func.sum(case((Booking.status == BookingStatus.PENDING, 1), else_=0)),
@@ -1674,34 +1705,85 @@ def _booking_stats_from_base_query(base_query):
                 ),
                 0,
             ),
+            # pending_decision
+            func.sum(case((Booking.status == BookingStatus.PENDING, 1), else_=0)),
+            # unassigned : acceptée/planifiée sans chauffeur
+            func.sum(
+                case(
+                    (
+                        and_(
+                            Booking.status.in_(
+                                [BookingStatus.ACCEPTED, BookingStatus.ASSIGNED]
+                            ),
+                            no_driver,
+                        ),
+                        1,
+                    ),
+                    else_=0,
+                )
+            ),
+            # in_service
+            func.sum(
+                case(
+                    (
+                        Booking.status.in_(
+                            [BookingStatus.EN_ROUTE, BookingStatus.IN_PROGRESS]
+                        ),
+                        1,
+                    ),
+                    else_=0,
+                )
+            ),
+            # delay_count : encore active (non terminée/annulée) et horaire dépassé
+            func.sum(
+                case(
+                    (
+                        and_(
+                            Booking.status.in_(_ACTIVE_DELAYABLE_STATUSES),
+                            Booking.scheduled_time.isnot(None),
+                            Booking.scheduled_time < now_ts,
+                        ),
+                        1,
+                    ),
+                    else_=0,
+                )
+            ),
+            # critical_delay_count : retard >= CRITICAL_DELAY_MINUTES
+            func.sum(
+                case(
+                    (
+                        and_(
+                            Booking.status.in_(_ACTIVE_DELAYABLE_STATUSES),
+                            Booking.scheduled_time.isnot(None),
+                            Booking.scheduled_time <= critical_threshold,
+                        ),
+                        1,
+                    ),
+                    else_=0,
+                )
+            ),
         ).first()
         if stats_row is None:
-            return {
-                "total": 0,
-                "pending": 0,
-                "inProgress": 0,
-                "completed": 0,
-                "canceled": 0,
-                "revenue": 0.0,
-            }
+            return empty
         return {
-            "total": stats_row[0] or 0,
-            "pending": stats_row[1] or 0,
-            "inProgress": stats_row[2] or 0,
-            "completed": stats_row[3] or 0,
-            "canceled": stats_row[4] or 0,
+            "total": int(stats_row[0] or 0),
+            "pending": int(stats_row[1] or 0),
+            "inProgress": int(stats_row[2] or 0),
+            "completed": int(stats_row[3] or 0),
+            "canceled": int(stats_row[4] or 0),
             "revenue": float(stats_row[5] or 0),
+            "pending_decision": int(stats_row[6] or 0),
+            "unassigned": int(stats_row[7] or 0),
+            "in_service": int(stats_row[8] or 0),
+            "delay_count": int(stats_row[9] or 0),
+            "critical_delay_count": int(stats_row[10] or 0),
+            "critical_delay_minutes": CRITICAL_DELAY_MINUTES,
         }
     except Exception:
         logger.exception("Erreur calcul stats reservations")
-        return {
-            "total": 0,
-            "pending": 0,
-            "inProgress": 0,
-            "completed": 0,
-            "canceled": 0,
-            "revenue": 0,
-        }
+        if raise_on_error:
+            raise
+        return empty
 
 
 @companies_ns.route("/me/reservations/summary", strict_slashes=False)
@@ -1817,23 +1899,45 @@ class CompanyDashboardBootstrap(Resource):
                 logger_instance=logger,
             )
 
+        from services.realtime.event_sequence import get_snapshot_cursor_status
+
+        # Curseur capturé AVANT la construction SQL du snapshot (réduit la race).
+        snapshot_cursor, realtime_health = get_snapshot_cursor_status(company_id)
+
         base_query = _reservations_base_query_for_company_day(company_id, day_str)
-        kpi = _booking_stats_from_base_query(base_query)
+        try:
+            kpi = _booking_stats_from_base_query(base_query, raise_on_error=True)
+        except Exception:
+            logger.exception(
+                "[DashboardBootstrap] Échec KPI (company_id=%s)", company_id
+            )
+            return {
+                "error": "Impossible de calculer les indicateurs du tableau de bord.",
+                "health": {
+                    "realtime_sequence": realtime_health,
+                    "notifications": "unknown",
+                    "kpi": "failed",
+                },
+            }, 503
 
         max_bookings = int(
             getenv("LIRIE_DASHBOARD_BOOTSTRAP_MAX_BOOKINGS", "300") or "300"
         )
-        from sqlalchemy import case
+        from sqlalchemy import case, func
 
-        bookings = (
+        bookings_total = base_query.with_entities(func.count(Booking.id)).scalar() or 0
+
+        bookings_rows = (
             base_query.order_by(
                 case((Booking.scheduled_time.is_(None), 1), else_=0),
                 Booking.scheduled_time.asc().nullslast(),
                 Booking.id.asc(),
             )
-            .limit(max_bookings)
+            .limit(max_bookings + 1)
             .all()
         )
+        bookings_truncated = len(bookings_rows) > max_bookings
+        bookings = bookings_rows[:max_bookings]
 
         try:
             from services.companies.booking_transfer_cache import (
@@ -1851,7 +1955,14 @@ class CompanyDashboardBootstrap(Resource):
                 "[DashboardBootstrap] Erreur sérialisation réservations (company_id=%s)",
                 company_id,
             )
-            bookings_payload = []
+            return {
+                "error": "Impossible de charger les réservations du tableau de bord.",
+                "health": {
+                    "realtime_sequence": realtime_health,
+                    "notifications": "unknown",
+                    "bookings": "failed",
+                },
+            }, 503
 
         dispatch_mode_val = (
             company.dispatch_mode.value
@@ -1859,7 +1970,8 @@ class CompanyDashboardBootstrap(Resource):
             else str(company.dispatch_mode)
         )
 
-        notifications_unread = 0
+        notifications_unread = None
+        notifications_health = "ok"
         try:
             from models.company_notification import CompanyNotification
 
@@ -1872,26 +1984,116 @@ class CompanyDashboardBootstrap(Resource):
                 company_id,
                 exc_info=True,
             )
+            notifications_unread = None
+            notifications_health = "degraded"
 
-        from services.realtime.event_sequence import current_snapshot_cursor
-
-        snapshot_cursor = current_snapshot_cursor(company_id)
         generated_at = datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
-        return {
-            "schema_version": 1,
+        health = {
+            "realtime_sequence": realtime_health,
+            "notifications": notifications_health,
+        }
+
+        schema_version = 1
+        try:
+            schema_version = int(request.args.get("schema_version") or 1)
+        except (TypeError, ValueError):
+            schema_version = 1
+
+        payload = {
+            "schema_version": schema_version if schema_version in (1, 2) else 1,
             "generated_at": generated_at,
             "date": day_str,
             "company_id": company_id,
-            # Curseur monotone temps réel — même espace que `event_seq` des events WS
-            # (voir services/realtime/event_sequence.py). PAS un timestamp.
             "snapshot_cursor": snapshot_cursor,
             "kpi": kpi,
             "bookings": bookings_payload,
-            "bookings_truncated": len(bookings_payload) >= max_bookings,
+            "bookings_truncated": bookings_truncated,
+            "bookings_limit": max_bookings,
+            "bookings_returned": len(bookings_payload),
+            "bookings_total": int(bookings_total),
             "dispatch_mode": dispatch_mode_val,
             "notifications": {"unread_count": notifications_unread},
-        }, 200
+            "health": health,
+        }
+
+        if schema_version == 2:
+            from services.companies.dashboard_action_queue import (
+                serialize_dashboard_v2_extras,
+            )
+
+            action_queue_limit = int(
+                getenv("LIRIE_DASHBOARD_ACTION_QUEUE_LIMIT", "50") or "50"
+            )
+            payload.update(
+                serialize_dashboard_v2_extras(
+                    bookings, kpi, action_queue_limit=action_queue_limit
+                )
+            )
+
+        return payload, 200
+
+
+
+@companies_ns.route(
+    "/me/action-queue/<string:action_id>/execute", strict_slashes=False
+)
+class CompanyActionQueueExecute(Resource):
+    """Exécute une action de la file `action_queue` (v2, PR3).
+
+    Body attendu : ``{action, expected_version, idempotency_key}``. Idempotent
+    (même clé + même payload → même résultat rejoué) et concurrent-safe
+    (``expected_version`` comparée à ``Booking.edit_version`` — 409 `stale_action`
+    si la file affichée côté client est obsolète). Voir
+    ``services/companies/dashboard_action_queue.py`` pour le contrat complet.
+    """
+
+    @jwt_required()
+    @role_required(UserRole.company)
+    @limiter.limit("200 per hour")
+    def post(self, action_id):
+        from services.companies.dashboard_action_queue import execute_action
+
+        company, error_response, status_code = _get_current_company_via_use_case()
+        if error_response:
+            return error_response, status_code
+
+        company_id_obj = getattr(company, "id", None)
+        try:
+            company_id = int(company_id_obj) if company_id_obj is not None else None
+        except Exception:
+            company_id = None
+        if company_id is None:
+            return APIErrorHandler.handle_exception(
+                Exception("Entreprise introuvable (ID invalide)."),
+                logger,
+            )
+
+        body = request.get_json(silent=True) or {}
+        action = str(body.get("action") or "").strip()
+        expected_version = body.get("expected_version")
+        idempotency_key = str(body.get("idempotency_key") or "").strip() or None
+
+        if not idempotency_key:
+            idempotency_key = (
+                str(request.headers.get("Idempotency-Key") or "").strip() or None
+            )
+
+        if not action:
+            return APIErrorHandler.handle_validation_error(
+                "Le champ 'action' est obligatoire",
+                field="action",
+                logger_instance=logger,
+            )
+
+        result, result_status_code = execute_action(
+            company_id=company_id,
+            action_id=action_id,
+            action=action,
+            expected_version=expected_version,
+            idempotency_key=idempotency_key,
+        )
+        return result, result_status_code
 
 
 @companies_ns.route("/me/reservations", strict_slashes=False)

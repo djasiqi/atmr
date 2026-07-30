@@ -61,8 +61,24 @@ export const fetchCompanyReservationsSummary = async (date) => {
  */
 export const fetchCompanyDashboardBootstrap = async (date) => {
   const { data } = await apiClient.get('/companies/me/dashboard/bootstrap', {
-    params: { date },
+    params: { date, schema_version: 2 },
   });
+  return data;
+};
+
+/** Exécute une action de la file bootstrap v2 (accept/reject/acknowledge). */
+export const executeCompanyActionQueueItem = async (
+  actionId,
+  { action, expectedVersion, idempotencyKey }
+) => {
+  const { data } = await apiClient.post(
+    `/companies/me/action-queue/${encodeURIComponent(actionId)}/execute`,
+    {
+      action,
+      expected_version: expectedVersion,
+      idempotency_key: idempotencyKey,
+    }
+  );
   return data;
 };
 

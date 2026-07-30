@@ -29,6 +29,7 @@ const useCompanyData = ({ day } = {}) => {
     bootstrap,
     isBootstrapLoading,
     isBootstrapError,
+    bootstrapError,
     refetchBootstrap,
   } = useCompanyDashboardBootstrap(day, {
     companyId: company?.id,
@@ -152,6 +153,10 @@ const useCompanyData = ({ day } = {}) => {
     loadingReservations,
     loadingDriver,
     error: combinedError,
+    isBootstrapError,
+    bootstrapError,
+    reservationsError: reservationsQueryError,
+    driversError: driversQueryError,
     reloadCompany,
     reloadReservations,
     reloadDriver,

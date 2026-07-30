@@ -13,6 +13,7 @@ import {
 } from './companySocketMetrics';
 import { companyReconnectCircuitBreaker } from './reconnectCircuitBreaker';
 import { bindUrgentAlertSoundListeners } from '../utils/urgentAlertSound';
+import { setSubscribedCursor } from '../utils/companyRealtimeSequenceGate';
 
 const isDevelopment = process.env.NODE_ENV === 'development';
 
@@ -291,6 +292,14 @@ function attachSocketHandlers(targetSocket, generation, { onFirstConnectError } 
     }
 
     setupNetworkListeners(generation);
+  });
+
+  targetSocket.on('joined_company', (payload) => {
+    if (!isSocketGenerationActive(generation)) return;
+    const companyId = payload?.company_id ?? currentCompanyId;
+    // `subscribed_cursor` : null = Redis dégradé au moment du join (PR1 dashboard
+    // reliability) — voir backend/sockets/chat.py::handle_join_company.
+    setSubscribedCursor(companyId, payload?.subscribed_cursor ?? null);
   });
 
   targetSocket.on('reconnect', () => {
