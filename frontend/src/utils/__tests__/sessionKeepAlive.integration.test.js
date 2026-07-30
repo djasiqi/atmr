@@ -9,7 +9,10 @@ import {
   SESSION_WORKING_LOOKBACK_MS,
 } from '../userActivityTracker';
 import {
+  MIN_REFRESH_GAP_MS,
+  noteAuthTokensRenewed,
   resetSessionKeepAliveForTests,
+  resumeSessionKeepAlive,
   tryRefreshSessionIfNeeded,
 } from '../sessionKeepAlive';
 
@@ -55,6 +58,23 @@ describe('sessionKeepAlive integration', () => {
     expect(ok).toBe(true);
     expect(refreshSessionTokens).toHaveBeenCalledTimes(1);
     expect(notifySessionReauthRequired).not.toHaveBeenCalled();
+  });
+
+  it('n’appelle pas refresh immédiatement après login (token fresh préservé)', async () => {
+    recordUserActivity();
+    resumeSessionKeepAlive();
+    const ok = await tryRefreshSessionIfNeeded();
+    expect(ok).toBe(false);
+    expect(refreshSessionTokens).not.toHaveBeenCalled();
+  });
+
+  it('n’appelle pas refresh avant MIN_REFRESH_GAP_MS même si actif', async () => {
+    recordUserActivity();
+    noteAuthTokensRenewed();
+    jest.advanceTimersByTime(MIN_REFRESH_GAP_MS - 1000);
+    const ok = await tryRefreshSessionIfNeeded();
+    expect(ok).toBe(false);
+    expect(refreshSessionTokens).not.toHaveBeenCalled();
   });
 
   it('n’appelle pas refresh si inactif depuis longtemps', async () => {

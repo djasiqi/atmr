@@ -767,15 +767,17 @@ class CompanyMe(Resource):
         # Le use case retourne déjà le modèle SQLAlchemy Company
         return success_response(data=result.company.serialize)
 
-    # ✅ S2: Fresh token requis pour modification données sensibles (IBAN, UID, emails, etc.)
-    @jwt_required(fresh=True)
+    # ✅ S2: CSRF + rôle company suffisent pour la mise à jour du profil.
+    # Note: fresh=True retiré — le keep-alive JWT (/auth/refresh-token) produit un
+    # access token non-fresh ; exiger fresh cassait l'enregistrement des paramètres
+    # entreprise même juste après connexion (dès le premier refresh automatique).
+    # Les actions vraiment sensibles (reset MDP, etc.) gardent fresh=True.
+    @jwt_required()
     @role_required(UserRole.company)
     @companies_ns.expect(company_update_model, validate=False)
     def put(self):
         """Met à jour le profil entreprise (légal, facturation, domiciliation, contact).
         Les validateurs du modèle (IBAN/UID/Email/Tel) lèveront ValueError si invalide.
-
-        ✅ S2: Nécessite un token "fresh" (reconnexion récente) pour modifier des données sensibles.
         """
         result = None
         status_code = 200

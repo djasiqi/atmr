@@ -2,6 +2,28 @@
  * Extrait les éléments médicaux clés d'un texte libre (adresse, email, notes, etc.)
  * Retourne un objet { medical_facility, hospital_service, building, floor, doctor_name }
  */
+
+/** Mots d'établissement / géographie à ne jamais traiter comme « service ». */
+const SERVICE_BLOCKLIST =
+  /^(h[oô]pitaux?|universitaires?|clinique|ems|centre|maison|foyer|r[ée]sidence|gen[eè]ve|lausanne|zurich|suisse|switzerland)$/i;
+
+/**
+ * Nom d'établissement avant la première virgule.
+ * Conserve le libellé complet, y compris l'acronyme entre parenthèses
+ * (ex. "Hôpitaux Universitaires de Genève (HUG)").
+ */
+export function extractEstablishmentLabel(text) {
+  if (!text || typeof text !== 'string') return '';
+  return text.split(',')[0].trim();
+}
+
+function looksLikeMedicalFacility(text) {
+  if (!text) return false;
+  return /(h[oô]pital|h[oô]pitaux|clinique|ems\b|chu?\b|hug\b|centre m[ée]dical|maison m[ée]dicale|polyclinique|ehpad|foyer|r[ée]sidence|imagerie|radiologie)/i.test(
+    text
+  );
+}
+
 export function extractMedicalServiceInfo(text) {
   if (!text) return {};
 
@@ -12,21 +34,36 @@ export function extractMedicalServiceInfo(text) {
     /(dr\.?|docteur|docteure|prof\.?)\s*([A-ZÉÈ][a-zéèêëîïôöûüàâäç\-']{2,}(?:\s+[A-ZÉÈ][a-zéèêëîïôöûüàâäç\-']{2,}){1,2})/i;
   const doctorMatch = text.match(doctorRegex);
   if (doctorMatch) {
-    let match = doctorMatch[0];
-    let split = match.split(/\s(?=\d)/)[0]; // coupe avant premier chiffre (numéro rue)
-    let name = split
+    const match = doctorMatch[0];
+    const split = match.split(/\s(?=\d)/)[0]; // coupe avant premier chiffre (numéro rue)
+    const name = split
       .replace(/\b(M[ée]d\.?|Medecin|Médecin)\b/gi, '')
       .replace(/\s+/g, ' ')
       .trim();
     result.doctor_name = name;
   }
 
-  // 2. Extraction Service (Oncologie, Radiologie, etc.)
-  const serviceRegex =
-    /(unité|service|département|secteur|pôle)?\s?(d['’])?([A-Z][a-zéèêëîïôöûüàâäç]+(ologie|iatrie|graphie|pathie|ie)?)/i;
-  const serviceMatch = text.match(serviceRegex);
-  if (serviceMatch) {
-    result.hospital_service = serviceMatch[0].trim();
+  // 2. Extraction Service — exiger un préfixe métier OU un suffixe de spécialité.
+  // Ne plus matcher n'importe quel mot capitalisé (ex. "Hôpitaux").
+  const serviceWithPrefix =
+    /(?:unité|service|département|secteur|pôle)\s+(?:d['’]\s*)?([A-Za-zÀ-ÿ][\wÀ-ÿ'’\- ]{1,40})/i;
+  const specialtyOnly =
+    /\b([A-ZÉÈ][a-zéèêëîïôöûüàâäç]+(?:ologie|iatrie|graphie|pathie|oscopie|thérapie|urgences?))\b/;
+
+  const prefixMatch = text.match(serviceWithPrefix);
+  if (prefixMatch) {
+    const candidate = (prefixMatch[1] || prefixMatch[0] || '').trim();
+    if (candidate && !SERVICE_BLOCKLIST.test(candidate.split(/\s+/)[0])) {
+      result.hospital_service = prefixMatch[0].trim();
+    }
+  } else {
+    const specialtyMatch = text.match(specialtyOnly);
+    if (specialtyMatch) {
+      const candidate = specialtyMatch[1].trim();
+      if (!SERVICE_BLOCKLIST.test(candidate)) {
+        result.hospital_service = candidate;
+      }
+    }
   }
 
   // 3. Extraction bâtiment (Bâtiment, Building, Aile, Pavillon, etc.)
@@ -44,13 +81,13 @@ export function extractMedicalServiceInfo(text) {
     result.floor = floorMatch[0].trim();
   }
 
-  // 5. Extraction établissement (recherche mot-clé hôpital, clinique, EMS...)
-  const facilityRegex = /(hôpital|hopital|clinique|ems|ch|hug|centre médical|maison médical[e]?)/i;
-  const facilityMatch = text.match(facilityRegex);
-  if (facilityMatch) {
-    // Tente de récupérer la phrase complète jusqu'à la virgule suivante ou fin du mot
-    const after = text.slice(facilityMatch.index).split(',')[0];
-    result.medical_facility = after.trim();
+  // 5. Établissement : nom complet avant virgule (ex. "Hôpitaux Universitaires de Genève (HUG)").
+  const head = text.split(',')[0].trim();
+  if (looksLikeMedicalFacility(head) || looksLikeMedicalFacility(text)) {
+    const label = extractEstablishmentLabel(text);
+    if (label) {
+      result.medical_facility = label;
+    }
   }
 
   return result;

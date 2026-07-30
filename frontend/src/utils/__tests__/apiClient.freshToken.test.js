@@ -20,6 +20,7 @@ const {
   AUTH_TOKEN_NOT_FRESH,
 } = require('../apiClient');
 const { notifySessionReauthRequired } = require('../deferredSessionLogout');
+const { tryRefreshSessionIfNeeded } = require('../sessionKeepAlive');
 
 const fresh401Adapter = (config) =>
   Promise.reject({
@@ -47,6 +48,7 @@ describe('apiClient — séparation Fresh vs Expired', () => {
   });
 
   it('401 token non fresh → déclenche une déconnexion différée', async () => {
+    tryRefreshSessionIfNeeded.mockClear();
     await expect(
       apiClient.get('/companies/me', {
         adapter: fresh401Adapter,
@@ -58,6 +60,8 @@ describe('apiClient — séparation Fresh vs Expired', () => {
 
     await new Promise((resolve) => setTimeout(resolve, 50));
 
+    // Un refresh ne peut pas produire un JWT fresh : ne pas tenter /auth/refresh-token.
+    expect(tryRefreshSessionIfNeeded).not.toHaveBeenCalled();
     expect(notifySessionReauthRequired).toHaveBeenCalled();
   });
 });

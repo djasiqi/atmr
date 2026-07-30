@@ -26,7 +26,10 @@ import { fetchBillingSettings, simulatePricing } from '../../../../services/sett
 import EstablishmentSelect from '../../../../components/common/EstablishmentSelect';
 import ServiceSelect from '../../../../components/common/ServiceSelect';
 
-import { extractMedicalServiceInfo } from '../../../../utils/medicalExtract';
+import {
+  extractEstablishmentLabel,
+  extractMedicalServiceInfo,
+} from '../../../../utils/medicalExtract';
 import { shortAddress } from './formatAddress';
 import { toast } from 'sonner';
 import styles from './ManualBookingForm.module.css';
@@ -1703,27 +1706,29 @@ export default function ManualBookingForm({ onSuccess, onClose, onSubmitStart })
                 }
                 // ✅ 2️⃣ VÉRIFIER SI C'EST UN ÉTABLISSEMENT MÉDICAL/SOCIAL
                 else if (looksLikeMedical) {
-                  // ✅ Pour Google Places, utiliser directement le nom sans extraction
-                  if (isGooglePlace) {
-                    setEstablishmentText(establishmentName);
-                    setMedicalFacility(establishmentName);
-                    // Ajouter l'étage dans les notes si présent et pas déjà présent
-                    if (floorInfo) {
-                      syncNotesMedical((prevNotes) => {
-                        if (hasFloorInNotes(prevNotes, floorInfo)) {
-                          return prevNotes; // L'étage existe déjà, ne pas dupliquer
-                        }
-                        const floorNote = `🏢 ${floorInfo}`;
-                        return prevNotes ? `${prevNotes}\n${floorNote}` : floorNote;
-                      });
-                    }
-                  } else {
-                    // Pour Photon/autre, utiliser l'extraction
-                    const extracted = extractMedicalServiceInfo(establishmentName);
-                    setEstablishmentText(extracted.medical_facility || establishmentName);
-                    setMedicalFacility(extracted.medical_facility || establishmentName);
-                    if (extracted.doctor_name) syncDoctorName(extracted.doctor_name);
-                    if (extracted.hospital_service) syncHospitalService(extracted.hospital_service);
+                  // Nom complet avant virgule (ex. "Hôpitaux Universitaires de Genève (HUG)")
+                  // — évite "HUG)" / service fantôme "Hôpitaux"
+                  const facilityLabel =
+                    extractEstablishmentLabel(establishmentName) ||
+                    establishmentName.split(',')[0].trim() ||
+                    establishmentName;
+                  setEstablishmentText(facilityLabel);
+                  setMedicalFacility(facilityLabel);
+
+                  const extracted = extractMedicalServiceInfo(establishmentName);
+                  if (extracted.doctor_name) syncDoctorName(extracted.doctor_name);
+                  if (extracted.hospital_service) {
+                    syncHospitalService(extracted.hospital_service);
+                  }
+
+                  if (floorInfo) {
+                    syncNotesMedical((prevNotes) => {
+                      if (hasFloorInNotes(prevNotes, floorInfo)) {
+                        return prevNotes;
+                      }
+                      const floorNote = `🏢 ${floorInfo}`;
+                      return prevNotes ? `${prevNotes}\n${floorNote}` : floorNote;
+                    });
                   }
                 }
                 // ✅ 3️⃣ TOUT LE RESTE → NOTES MÉDICALES
@@ -1758,8 +1763,12 @@ export default function ManualBookingForm({ onSuccess, onClose, onSubmitStart })
                     // Pour Photon/autre, essayer l'extraction
                     const extracted = extractMedicalServiceInfo(establishmentName);
                     if (extracted.medical_facility || extracted.doctor_name) {
-                      setEstablishmentText(extracted.medical_facility || '');
-                      setMedicalFacility(extracted.medical_facility || '');
+                      const facilityLabel =
+                        extracted.medical_facility ||
+                        extractEstablishmentLabel(establishmentName) ||
+                        '';
+                      setEstablishmentText(facilityLabel);
+                      setMedicalFacility(facilityLabel);
                       if (extracted.doctor_name) syncDoctorName(extracted.doctor_name);
                       if (extracted.hospital_service)
                         syncHospitalService(extracted.hospital_service || '');

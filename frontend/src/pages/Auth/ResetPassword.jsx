@@ -122,6 +122,12 @@ const ResetPassword = ({ resetMode } = {}) => {
         accessToken: token,
         refreshToken: refresh_token,
       });
+      try {
+        const { resumeSessionKeepAlive } = await import('../../utils/sessionKeepAlive');
+        resumeSessionKeepAlive();
+      } catch (_) {
+        // ignore
+      }
       window.dispatchEvent(new Event('auth-changed'));
 
       const destination = redirect_to || `/dashboard/${roleSegment}/${user.public_id}`;

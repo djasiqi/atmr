@@ -329,7 +329,10 @@ export default function CompanySettings() {
         setIsEditing(false);
       }
     } catch (err) {
-      const errorMsg = err?.response?.data?.error || err?.message || 'Erreur lors de la sauvegarde.';
+      const errorMsg =
+        err?.isFreshTokenRequired || err?.code === 'AUTH_TOKEN_NOT_FRESH'
+          ? err?.message || 'Cette action nécessite une reconnexion récente. Veuillez vous reconnecter.'
+          : err?.response?.data?.error || err?.message || 'Erreur lors de la sauvegarde.';
       setError(errorMsg);
     } finally {
       setSaving(false);

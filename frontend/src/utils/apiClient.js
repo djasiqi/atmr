@@ -394,19 +394,24 @@ const isFreshTokenErrorPayload = (errorData = {}) => {
   );
 };
 
-const requestDeferredSessionLogout = (cfg = {}) => {
+const requestDeferredSessionLogout = (cfg = {}, { allowRefresh = true } = {}) => {
   if (cfg.skipFreshTokenLogout || cfg.skipAuthRedirect || isLoginSessionInProgress()) {
     return;
   }
 
   void (async () => {
-    try {
-      const { tryRefreshSessionIfNeeded } = await import('./sessionKeepAlive');
-      if (await tryRefreshSessionIfNeeded({ force: true })) {
-        return;
+    // Un refresh access/refresh ne peut jamais produire un JWT fresh (fresh=True) :
+    // seuls login et /auth/fresh-token (mot de passe) le peuvent. Tenter un refresh
+    // ici est inutile et peut aggraver l'état de session.
+    if (allowRefresh) {
+      try {
+        const { tryRefreshSessionIfNeeded } = await import('./sessionKeepAlive');
+        if (await tryRefreshSessionIfNeeded({ force: true })) {
+          return;
+        }
+      } catch (_) {
+        // ignore
       }
-    } catch (_) {
-      // ignore
     }
 
     notifySessionReauthRequired({
@@ -480,7 +485,7 @@ export async function refreshSessionTokens(targetEnv = getCurrentAuthEnv()) {
 };
 
 const rejectFreshTokenRequired = (error, cfg = {}) => {
-  requestDeferredSessionLogout(cfg);
+  requestDeferredSessionLogout(cfg, { allowRefresh: false });
   return Promise.reject({
     ...error,
     code: AUTH_TOKEN_NOT_FRESH,

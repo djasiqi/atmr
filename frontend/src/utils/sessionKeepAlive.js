@@ -16,7 +16,13 @@ import {
 /** Intervalle entre deux tentatives de refresh (access token ≈ 1 h). */
 export const SESSION_KEEPALIVE_INTERVAL_MS = 45 * 60 * 1000;
 
-const MIN_REFRESH_GAP_MS = 5 * 60 * 1000;
+/**
+ * Écart minimum entre deux refresh non forcés.
+ * Doit rester proche de l'intervalle keep-alive : un refresh trop tôt après
+ * login remplace le JWT « fresh » (fresh=True) par un access token non-fresh,
+ * ce qui casse les actions protégées (ex. PUT /companies/me).
+ */
+export const MIN_REFRESH_GAP_MS = SESSION_KEEPALIVE_INTERVAL_MS;
 
 let lastRefreshAttemptAt = 0;
 let intervalId = null;
@@ -28,8 +34,15 @@ export function suspendSessionKeepAlive() {
   keepAliveSuspended = true;
 }
 
+/** Marque la session comme venant d'être établie / renouvelée (évite un refresh immédiat). */
+export function noteAuthTokensRenewed() {
+  lastRefreshAttemptAt = Date.now();
+}
+
 export function resumeSessionKeepAlive() {
   keepAliveSuspended = false;
+  // Après login / reprise de session : conserver le token fresh jusqu'au prochain cycle.
+  noteAuthTokensRenewed();
 }
 
 export async function tryRefreshSessionIfNeeded({ force = false } = {}) {
@@ -70,6 +83,8 @@ export function startSessionKeepAlive() {
     return () => {};
   }
   keepAliveStarted = true;
+  // Évite un refresh au premier clic si une session existante est déjà active.
+  noteAuthTokensRenewed();
 
   intervalId = setInterval(() => {
     void tryRefreshSessionIfNeeded();
