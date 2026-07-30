@@ -182,9 +182,10 @@ export const MessageBubble = memo(function MessageBubble({
     else void Linking.openURL(pdfUri);
   };
 
-  const hasImage = Boolean(message.imageUrl);
-  const hasPdf = Boolean(message.pdfUrl);
   const hasAudio = Boolean(message.audioUrl) && Boolean(audioUri);
+  // Ne jamais traiter une pièce vocale comme image (évite le rectangle vertical cassé).
+  const hasImage = Boolean(message.imageUrl) && !hasAudio;
+  const hasPdf = Boolean(message.pdfUrl) && !hasAudio;
   const failed = message.content.includes("(echec envoi)");
   const raw = message.content?.trim() ?? "";
   const isAttachmentPlaceholder =
@@ -585,9 +586,9 @@ const styles = StyleSheet.create({
     color: "rgba(255,255,255,0.75)",
   },
   voiceGroup: {
-    width: "100%",
-    maxWidth: VOICE_GROUP_MAX_W,
-    alignSelf: "center",
+    width: VOICE_GROUP_MAX_W,
+    maxWidth: "100%",
+    alignSelf: "stretch",
   },
   status: {
     color: C_BODY,

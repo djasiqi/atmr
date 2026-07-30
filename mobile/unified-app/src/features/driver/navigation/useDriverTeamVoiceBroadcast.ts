@@ -22,6 +22,8 @@ export function useDriverTeamVoiceBroadcast(options?: {
   const companyId = useDriverCompanyId();
   const queryClient = useQueryClient();
   const { startRecording, stopRecording, abortRecording } = useChatVoiceRecorder();
+  const abortRecordingRef = useRef(abortRecording);
+  abortRecordingRef.current = abortRecording;
   const [isRecording, setIsRecording] = useState(false);
   const [voiceBusy, setVoiceBusy] = useState(false);
   const voiceInteractionEpochRef = useRef(0);
@@ -135,9 +137,9 @@ export function useDriverTeamVoiceBroadcast(options?: {
   useEffect(() => {
     return () => {
       voiceInteractionEpochRef.current += 1;
-      void abortRecording();
+      void abortRecordingRef.current();
     };
-  }, [abortRecording]);
+  }, []);
 
   return {
     disabled,

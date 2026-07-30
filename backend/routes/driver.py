@@ -3272,26 +3272,31 @@ class DriverCompanyBookingsToday(Resource):
     @jwt_required()
     @role_required(UserRole.driver)
     def get(self):
-        """Récupère tous les transports de l'entreprise du jour (collègues inclus)."""
+        """Récupère tous les transports de l'entreprise du jour (collègues inclus).
+
+        Aligné sur le jour entreprise web : inclut aussi les retours / legs
+        « heure à définir » (``scheduled_time`` null ou non confirmée) liés aux
+        allers du jour via ``parent_booking_id`` ou ``route_group_id``.
+        """
         driver, error_response, status_code = get_driver_from_token()
         if error_response:
             return error_response, status_code
         driver = cast("Driver", driver)
 
-        from datetime import datetime as dt_type, time as time_type  # noqa: I001
+        from sqlalchemy import case  # noqa: I001
 
         from models.booking import Booking as BookingModel
+        from routes.companies import _reservations_base_query_for_company_day
         from shared.time_utils import now_local
 
-        today_local = now_local().date()
-        today_start = dt_type.combine(today_local, time_type.min)
-        today_end = dt_type.combine(today_local, time_type.max)
-
+        day_str = now_local().date().strftime("%Y-%m-%d")
         bookings = (
-            BookingModel.query.filter(BookingModel.company_id == driver.company_id)
-            .filter(BookingModel.scheduled_time >= today_start)
-            .filter(BookingModel.scheduled_time <= today_end)
-            .order_by(BookingModel.scheduled_time.asc())
+            _reservations_base_query_for_company_day(driver.company_id, day_str)
+            .order_by(
+                case((BookingModel.scheduled_time.is_(None), 1), else_=0),
+                BookingModel.scheduled_time.asc().nullslast(),
+                BookingModel.id.asc(),
+            )
             .all()
         )
 

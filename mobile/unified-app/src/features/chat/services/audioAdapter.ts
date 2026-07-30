@@ -8,6 +8,11 @@ import {
   useAudioRecorder,
   useAudioRecorderState,
 } from "expo-audio";
+import {
+  safeIsRecording,
+  safeRecorderUri,
+  safeStopRecorder,
+} from "./audioRecorderSafety";
 
 export type ChatAudioFailureReason =
   | "permission_denied"
@@ -36,28 +41,29 @@ async function setRecordingSessionMode(enabled: boolean): Promise<void> {
 }
 
 /**
- * Enregistrement vocal (natif uniquement — utilisé depuis `ChatComposer.tsx`, non résolu sur le web).
+ * Enregistrement vocal (natif uniquement — appelé depuis `ChatComposer.tsx`, non résolu sur le web).
  * Un seul enregistrement global à la fois pour éviter les conflits de session audio.
  */
 export function useChatVoiceRecorder() {
   const ownerRef = useRef(Symbol("chat-voice-recorder"));
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const recorderState = useAudioRecorderState(recorder);
+  const recorderRef = useRef(recorder);
+  recorderRef.current = recorder;
 
   const abortRecording = useCallback(async (): Promise<void> => {
     const owner = ownerRef.current;
+    const current = recorderRef.current;
     const ownsSession = activeRecordingOwner === owner;
     // Ne pas couper la session d'un autre recorder (FAB canal équipe vs ChatComposer).
-    if (!ownsSession && !recorder.isRecording) {
+    // Important : safeIsRecording — un accès direct à isRecording hors try rejette
+    // la Promise (onunhandledrejection) si le shared object natif est déjà libéré.
+    if (!ownsSession && !safeIsRecording(current)) {
       return;
     }
     try {
-      if (ownsSession || recorder.isRecording) {
-        try {
-          await recorder.stop();
-        } catch {
-          /* ignore */
-        }
+      if (ownsSession || safeIsRecording(current)) {
+        await safeStopRecorder(current);
       }
     } catch {
       /* ignore */
@@ -69,11 +75,12 @@ export function useChatVoiceRecorder() {
         await setRecordingSessionMode(false).catch(() => undefined);
       }
     }
-  }, [recorder]);
+  }, []);
 
   const startRecording = useCallback(
     async (options?: { isAborted?: () => boolean }): Promise<ChatAudioResult<null>> => {
       const owner = ownerRef.current;
+      const current = recorderRef.current;
       if (activeRecordingOwner != null && activeRecordingOwner !== owner) {
         return { ok: false, reason: "already_recording" };
       }
@@ -91,18 +98,14 @@ export function useChatVoiceRecorder() {
           await setRecordingSessionMode(false).catch(() => undefined);
           return { ok: false, reason: "aborted" };
         }
-        await recorder.prepareToRecordAsync();
+        await current.prepareToRecordAsync();
         if (options?.isAborted?.()) {
-          try {
-            await recorder.stop();
-          } catch {
-            /* ignore */
-          }
+          await safeStopRecorder(current);
           await setRecordingSessionMode(false).catch(() => undefined);
           return { ok: false, reason: "aborted" };
         }
         activeRecordingOwner = owner;
-        recorder.record();
+        current.record();
         return { ok: true, data: null };
       } catch {
         if (activeRecordingOwner === owner) {
@@ -112,23 +115,19 @@ export function useChatVoiceRecorder() {
         return { ok: false, reason: "recording_error" };
       }
     },
-    [recorder]
+    []
   );
 
   const stopRecording = useCallback(async (): Promise<ChatAudioResult<string>> => {
     const owner = ownerRef.current;
+    const current = recorderRef.current;
     const ownsSession = activeRecordingOwner === owner;
-    if (!ownsSession && !recorder.isRecording) {
+    if (!ownsSession && !safeIsRecording(current)) {
       return { ok: false, reason: "no_active_recording" };
     }
     try {
-      try {
-        await recorder.stop();
-      } catch {
-        /* ignore : stop idempotent si la session n’a pas encore démarré */
-      }
-      const rawUri = recorder.uri;
-      const uri = typeof rawUri === "string" && rawUri.trim().length > 0 ? rawUri : null;
+      await safeStopRecorder(current);
+      const uri = safeRecorderUri(current);
       if (activeRecordingOwner === owner) {
         activeRecordingOwner = null;
       }
@@ -144,8 +143,10 @@ export function useChatVoiceRecorder() {
       await setRecordingSessionMode(false).catch(() => undefined);
       return { ok: false, reason: "recording_error" };
     }
-  }, [recorder]);
+  }, []);
 
+  // Cleanup au démontage uniquement — éviter d'appeler stop() sur un recorder
+  // déjà libéré quand l'identité du hook expo-audio change en cours de vie.
   useEffect(() => {
     return () => {
       void abortRecording();
@@ -243,8 +244,16 @@ export function useChatVoicePlayer(uri: string) {
     };
   }, [pausePlayback, player, uri]);
 
+  const durationSeconds = Math.max(0, Number(status.duration ?? player.duration ?? 0));
+  const currentTimeSeconds = Math.max(0, Number(status.currentTime ?? player.currentTime ?? 0));
+  const progress =
+    durationSeconds > 0 ? Math.min(1, Math.max(0, currentTimeSeconds / durationSeconds)) : 0;
+
   return {
-    isPlaying: player.playing,
+    isPlaying: Boolean(status.playing ?? player.playing),
+    durationSeconds,
+    currentTimeSeconds,
+    progress,
     togglePlayback,
     pausePlayback,
   };

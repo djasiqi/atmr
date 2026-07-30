@@ -24,6 +24,7 @@ import { DriverStateBanners } from "../../../src/features/driver/components/Driv
 import { DriverTrackingReadinessGate } from "../../../src/features/driver/components/DriverTrackingReadinessGate";
 import { useMissionLiveTrackingGuard } from "../../../src/features/driver/hooks/useMissionLiveTrackingGuard";
 import { useTrackingAttentionState } from "../../../src/features/driver/hooks/useTrackingAttentionState";
+import { setDriverTrackingReadinessPanelVisible } from "../../../src/features/driver/services/driverDisclosureOrchestrator";
 import { requiresLiveTrackingPermission } from "../../../src/features/driver/services/missionLiveTrackingEligibility";
 import { DashboardMissionMap } from "../../../src/features/driver/components/DashboardMissionMap";
 import { DashboardActiveMission } from "../../../src/features/driver/components/DashboardActiveMission";
@@ -129,6 +130,11 @@ export default function DriverHomeScreen() {
   } = useTrackingAttentionState();
   const liveTrackingGuard = useMissionLiveTrackingGuard();
 
+  useEffect(() => {
+    setDriverTrackingReadinessPanelVisible(showPedagogicalPanel);
+    return () => setDriverTrackingReadinessPanelVisible(false);
+  }, [showPedagogicalPanel]);
+
   const onOpenMission = useCallback(
     (missionId: number) =>
       router.push({
@@ -232,7 +238,7 @@ export default function DriverHomeScreen() {
               availabilityPending={availabilityPending}
             />
 
-            <DriverStateBanners />
+            <DriverStateBanners hideTrackingPrepDuplicates={showPedagogicalPanel} />
 
             {showPedagogicalPanel ? (
               <DriverTrackingReadinessGate

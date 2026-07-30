@@ -108,9 +108,10 @@ export function GroupMessageBubble({
   }, [imageNatural, maxImageW]);
 
   const raw = message.content?.trim() ?? "";
-  const hasImage = Boolean(message.imageUrl);
-  const hasPdf = Boolean(message.pdfUrl);
   const hasAudio = Boolean(message.audioUrl) && Boolean(audioUri);
+  // Ne jamais traiter une pièce vocale comme image (évite le rectangle vertical cassé).
+  const hasImage = Boolean(message.imageUrl) && !hasAudio;
+  const hasPdf = Boolean(message.pdfUrl) && !hasAudio;
   const isPlaceholder =
     raw === "(piece jointe)" ||
     (hasImage && raw.toLowerCase() === "image jointe") ||
@@ -218,7 +219,9 @@ export function GroupMessageBubble({
           ) : null}
 
           {hasAudio && audioUri ? (
-            <VoiceMessageBar uri={audioUri} isOwn={isOwn} />
+            <View style={styles.voiceWrap}>
+              <VoiceMessageBar uri={audioUri} isOwn={isOwn} />
+            </View>
           ) : null}
 
           <View style={styles.footer}>
@@ -332,6 +335,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
     marginTop: 6,
+  },
+  voiceWrap: {
+    marginTop: 2,
+    minWidth: 200,
+    maxWidth: 248,
+    alignSelf: "stretch",
   },
   footer: {
     flexDirection: "row",

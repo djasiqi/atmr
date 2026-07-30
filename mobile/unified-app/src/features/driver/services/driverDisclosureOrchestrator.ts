@@ -15,6 +15,8 @@ export type DriverDisclosureOrchestrationSnapshot = {
   presenceHintVisible: boolean;
   presenceModalVisible: boolean;
   missionDisclosureVisible: boolean;
+  /** Panneau « Préparation tracking obligatoire » visible (évite doublons UI) */
+  trackingReadinessPanelVisible: boolean;
   /** Masquer la bannière rouge tracking (P4) */
   suppressTrackingBanner: boolean;
 };
@@ -24,6 +26,7 @@ let notificationDismissedSession = false;
 let presenceHintVisible = false;
 let presenceModalVisible = false;
 let missionDisclosureVisible = false;
+let trackingReadinessPanelVisible = false;
 
 const listeners = new Set<() => void>();
 
@@ -41,11 +44,13 @@ function buildSnapshot(): DriverDisclosureOrchestrationSnapshot {
     presenceHintVisible,
     presenceModalVisible,
     missionDisclosureVisible,
+    trackingReadinessPanelVisible,
     suppressTrackingBanner:
       presenceHintVisible ||
       presenceModalVisible ||
       blocksPresenceDisclosure ||
-      missionDisclosureVisible,
+      missionDisclosureVisible ||
+      trackingReadinessPanelVisible,
   };
 }
 
@@ -87,6 +92,13 @@ export function setDriverMissionDisclosureVisible(visible: boolean): void {
   notify();
 }
 
+/** Quand le panneau pédagogique tracking est affiché, masquer modale/bannières doublons. */
+export function setDriverTrackingReadinessPanelVisible(visible: boolean): void {
+  if (trackingReadinessPanelVisible === visible) return;
+  trackingReadinessPanelVisible = visible;
+  notify();
+}
+
 export function initDriverDisclosureOrchestration(): () => void {
   const syncAccepted = async () => {
     const accepted = await readNotificationDisclosureAccepted();
@@ -106,5 +118,6 @@ export function __resetDriverDisclosureOrchestratorForTests(): void {
   presenceHintVisible = false;
   presenceModalVisible = false;
   missionDisclosureVisible = false;
+  trackingReadinessPanelVisible = false;
   notify();
 }

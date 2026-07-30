@@ -5,6 +5,7 @@ import {
   setDriverDisclosureNotificationAccepted,
   setDriverMissionDisclosureVisible,
   setDriverPresenceDisclosureUiState,
+  setDriverTrackingReadinessPanelVisible,
 } from "./driverDisclosureOrchestrator";
 
 describe("driverDisclosureOrchestrator", () => {
@@ -31,5 +32,15 @@ describe("driverDisclosureOrchestrator", () => {
     __resetDriverDisclosureOrchestratorForTests();
     setDriverMissionDisclosureVisible(true);
     expect(getDriverDisclosureOrchestrationSnapshot().suppressTrackingBanner).toBe(true);
+  });
+
+  it("signale le panneau préparation tracking pour supprimer les doublons UI", () => {
+    setDriverTrackingReadinessPanelVisible(true);
+    const snap = getDriverDisclosureOrchestrationSnapshot();
+    expect(snap.trackingReadinessPanelVisible).toBe(true);
+    expect(snap.suppressTrackingBanner).toBe(true);
+
+    setDriverTrackingReadinessPanelVisible(false);
+    expect(getDriverDisclosureOrchestrationSnapshot().trackingReadinessPanelVisible).toBe(false);
   });
 });

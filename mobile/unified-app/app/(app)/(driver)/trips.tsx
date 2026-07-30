@@ -40,6 +40,10 @@ import {
 } from "../../../src/features/driver/utils/pickupScheduling";
 import { buildDriverDayMissionSections } from "../../../src/features/driver/utils/driverDayMissionSections";
 import { MISSION_ROUTE_ARROW } from "../../../src/features/driver/domain/missionDisplay";
+import {
+  inferTripDirection,
+  type MissionHintLike,
+} from "../../../src/features/driver/domain/missionHints";
 
 const softCardShadow = createShadow(missionActiveCardShadow);
 
@@ -130,8 +134,6 @@ function buildDispatchTheme(isDark: boolean): DispatchTheme {
     secondaryActionText: "#0F172A",
   };
 }
-
-import { FONT_SIZE } from "../../../src/design/responsive/typographyTokens";
 
 function missionSortTs(mission: DriverMission): number {
   if (!driverHasScheduledPickupTime(mission)) return Number.MAX_SAFE_INTEGER;
@@ -405,11 +407,22 @@ function MissionAccordionCard({
   late: boolean;
   theme: DispatchTheme;
 }) {
-  const { isVeryLargeText } = useAccessibilityScale();
+  const { isVeryLargeText, shouldStackRows } = useAccessibilityScale();
   const status = String(mission.status ?? "");
   const done = missionStatusBucket(status) === "done";
   const ux = getDriverStatusUx(String(mission.status ?? ""));
   const statusColor = missionStatusColor(status);
+  const tripDirection = inferTripDirection(mission as MissionHintLike);
+  const routeSequence =
+    typeof mission.route_sequence_number === "number" && Number.isFinite(mission.route_sequence_number)
+      ? mission.route_sequence_number
+      : null;
+  const tripLegLabel =
+    tripDirection === "return"
+      ? "Retour"
+      : routeSequence != null && routeSequence > 1
+        ? `Trajet ${routeSequence}`
+        : null;
   const pickup = mission.pickup_location?.trim() || "Depart non defini";
   const destination = mission.dropoff_location?.trim() || "Destination non definie";
   const pickupCompact = compactAddressLabel(pickup);
@@ -438,51 +451,85 @@ function MissionAccordionCard({
   }, [expandAnim, expanded]);
 
   const content = (
-    <View style={[styles.card, { backgroundColor: theme.cardBg }, done && styles.cardDone, done && { backgroundColor: theme.cardDoneBg }]}>
-      <View style={styles.cardBody}>
-        <View style={styles.cardTop}>
-          <AppText variant="sectionTitle" style={[styles.when, { color: theme.title }, done && styles.whenDone, done && { color: theme.mutedText }]}>
+    <View
+      style={[
+        styles.card,
+        { backgroundColor: theme.cardBg },
+        done && styles.cardDone,
+        done && { backgroundColor: theme.cardDoneBg },
+        isVeryLargeText && styles.cardLargeText,
+      ]}
+    >
+      <View style={[styles.cardBody, isVeryLargeText && styles.cardBodyLargeText]}>
+        <View style={[styles.cardTop, shouldStackRows && styles.cardTopStacked]}>
+          <AppText
+            variant="sectionTitle"
+            scaleRole="chrome"
+            style={[styles.when, { color: theme.title }, done && styles.whenDone, done && { color: theme.mutedText }]}
+          >
             {whenLabel(mission)}
           </AppText>
-          <View style={styles.statusBadges}>
+          <View style={[styles.statusBadges, shouldStackRows && styles.statusBadgesStacked]}>
             {late ? (
               <View style={styles.lateBadge}>
-                <AppText variant="label" style={styles.lateBadgeText}>
+                <AppText variant="label" style={styles.lateBadgeText} scaleRole="chrome">
                   Retard
                 </AppText>
               </View>
             ) : null}
+            {tripLegLabel ? (
+              <View style={styles.tripLegBadge}>
+                <AppText variant="label" style={styles.tripLegBadgeText} scaleRole="chrome">
+                  {tripLegLabel}
+                </AppText>
+              </View>
+            ) : null}
             <View style={[styles.badge, done && styles.badgeDone, { borderColor: `${statusColor}55`, backgroundColor: `${statusColor}1F` }]}>
-              <AppText variant="label" style={[styles.badgeText, done && styles.badgeTextDone]} numberOfLines={1}>
+              <AppText
+                variant="label"
+                style={[styles.badgeText, done && styles.badgeTextDone]}
+                scaleRole="chrome"
+                numberOfLines={shouldStackRows ? 2 : 1}
+              >
                 {ux.label}
               </AppText>
             </View>
           </View>
         </View>
 
-        <AppText variant="label" style={[styles.client, { color: theme.sectionText }, done && styles.clientDone, done && { color: theme.mutedText }]} numberOfLines={isVeryLargeText ? undefined : 1}>
+        <AppText
+          variant="label"
+          scaleRole="content"
+          style={[styles.client, { color: theme.sectionText }, done && styles.clientDone, done && { color: theme.mutedText }]}
+          numberOfLines={isVeryLargeText ? undefined : 1}
+        >
           {missionClientName(mission)}
         </AppText>
 
         <View style={styles.routeRow}>
           <Ionicons name="ellipse" size={8} color={done ? "#94A3B8" : statusColor} />
-          <AppText variant="body" style={[styles.route, { color: theme.bodyText }, done && styles.routeDone, done && { color: theme.mutedText }]} numberOfLines={isVeryLargeText ? undefined : 2}>
+          <AppText
+            variant="body"
+            scaleRole="content"
+            style={[styles.route, { color: theme.bodyText }, done && styles.routeDone, done && { color: theme.mutedText }]}
+            numberOfLines={isVeryLargeText ? undefined : 2}
+          >
             {pickupCompact}{MISSION_ROUTE_ARROW}{destinationCompact}
           </AppText>
         </View>
 
         {allowExpand ? (
-          <View style={styles.metaAndHintRow}>
+          <View style={[styles.metaAndHintRow, shouldStackRows && styles.metaAndHintRowStacked]}>
             <View style={styles.metaRow}>
               <View style={styles.metaItem}>
                 <Ionicons name="car-outline" size={13} color={done ? "#94A3B8" : "#334155"} />
-                <AppText variant="caption" style={[styles.metaText, { color: theme.mutedText }, done && styles.routeDone, done && { color: theme.mutedText }]}>
+                <AppText variant="caption" style={[styles.metaText, { color: theme.mutedText }, done && styles.routeDone, done && { color: theme.mutedText }]} scaleRole="chrome">
                   {etaText}
                 </AppText>
               </View>
               <View style={styles.metaItem}>
                 <Ionicons name="navigate-outline" size={13} color={done ? "#94A3B8" : "#334155"} />
-                <AppText variant="caption" style={[styles.metaText, { color: theme.mutedText }, done && styles.routeDone, done && { color: theme.mutedText }]}>
+                <AppText variant="caption" style={[styles.metaText, { color: theme.mutedText }, done && styles.routeDone, done && { color: theme.mutedText }]} scaleRole="chrome">
                   {distanceText}
                 </AppText>
               </View>
@@ -490,7 +537,7 @@ function MissionAccordionCard({
 
             <View style={styles.expandHint}>
               <Ionicons name={expanded ? "chevron-up-outline" : "chevron-down-outline"} size={14} color="#64748B" />
-              <AppText variant="caption" style={[styles.expandHintText, { color: theme.mutedText }]}>
+              <AppText variant="caption" style={[styles.expandHintText, { color: theme.mutedText }]} scaleRole="chrome">
                 {expanded ? "Masquer details" : "Voir details"}
               </AppText>
             </View>
@@ -498,7 +545,12 @@ function MissionAccordionCard({
         ) : null}
 
         {showDriver ? (
-          <AppText variant="caption" style={[styles.driverLine, { color: theme.sectionText }, done && styles.driverLineDone, done && { color: theme.mutedText }]} numberOfLines={1}>
+          <AppText
+            variant="caption"
+            scaleRole="content"
+            style={[styles.driverLine, { color: theme.sectionText }, done && styles.driverLineDone, done && { color: theme.mutedText }]}
+            numberOfLines={isVeryLargeText ? 3 : 2}
+          >
             Chauffeur : {missionDriverName(mission)}
           </AppText>
         ) : null}
@@ -629,9 +681,11 @@ function MissionAccordionCard({
 export default function DriverTripsScreen() {
   const { width } = useAppViewport();
   const scrollPad = useDriverFloatingTabScrollPadding();
+  const { shouldStackRows, isVeryLargeText, fontScale } = useAccessibilityScale();
   const compact = width < 380;
   const isDark = useColorScheme() === "dark";
   const theme = useMemo(() => buildDispatchTheme(isDark), [isDark]);
+  const a11yScrollPad = scrollPad + (fontScale > 1.15 ? Math.round(12 * (fontScale - 1)) : 0);
   const referenceNowTs = useMemo(() => Date.now(), []);
   const now = useMemo(() => new Date(referenceNowTs), [referenceNowTs]);
   const activeDriverContextId = useActiveDriverContextId();
@@ -727,70 +781,97 @@ export default function DriverTripsScreen() {
           scroll
           withHorizontalPadding={false}
           pageTransition={false}
-          extraScrollBottomPadding={scrollPad}
+          extraScrollBottomPadding={a11yScrollPad}
           contentContainerStyle={[styles.page, compact && styles.pageCompact]}
           backgroundColor={theme.bg}
         >
-          <View style={[styles.headerShell, { backgroundColor: theme.headerBg }]}>
+          <View
+            style={[
+              styles.headerShell,
+              { backgroundColor: theme.headerBg },
+              shouldStackRows && styles.headerShellStacked,
+            ]}
+          >
             <View style={styles.header}>
-              <AppText variant="screenTitle" style={[styles.title, { color: theme.title }]}>
+              <AppText variant="screenTitle" scaleRole="content" style={[styles.title, { color: theme.title }]}>
                 Courses du jour
               </AppText>
-              <AppText variant="bodyMuted" style={[styles.subtitle, { color: theme.subtitle }]}>
+              <AppText variant="bodyMuted" scaleRole="chrome" style={[styles.subtitle, { color: theme.subtitle }]}>
                 {todayLabel(now)}
               </AppText>
             </View>
             <View style={styles.headerRight}>
               <View style={styles.liveBadge}>
                 <View style={styles.liveDot} />
-                <AppText variant="caption" style={[styles.liveText, { color: theme.subtitle }]}>
+                <AppText variant="caption" scaleRole="chrome" style={[styles.liveText, { color: theme.subtitle }]}>
                   Live
                 </AppText>
               </View>
             </View>
           </View>
 
-          <View style={styles.metrics}>
-            <View style={[styles.metricCard, { backgroundColor: theme.metricsBg }]}>
-              <View style={styles.metricRow}>
+          <View style={[styles.metrics, shouldStackRows && styles.metricsStacked]}>
+            <View
+              style={[
+                styles.metricCard,
+                { backgroundColor: theme.metricsBg },
+                shouldStackRows && styles.metricCardStacked,
+                isVeryLargeText && styles.metricCardLargeText,
+              ]}
+            >
+              <View style={[styles.metricRow, shouldStackRows && styles.metricRowStacked]}>
                 <View style={[styles.metricIconBubble, { backgroundColor: "rgba(20,184,166,0.14)" }]}>
                   <Ionicons name="calendar-outline" size={13} color="#14B8A6" />
                 </View>
-                <View style={styles.metricTextCol}>
-                  <AppText variant="caption" style={[styles.metricLabel, { color: theme.mutedText }]}>
+                <View style={[styles.metricTextCol, shouldStackRows && styles.metricTextColStacked]}>
+                  <AppText variant="caption" scaleRole="chrome" style={[styles.metricLabel, { color: theme.mutedText }]}>
                     A effectuer
                   </AppText>
-                  <AppText variant="sectionTitle" style={[styles.metricValue, { color: theme.title }]}>
+                  <AppText variant="sectionTitle" scaleRole="chrome" style={[styles.metricValue, { color: theme.title }]}>
                     {stats.todo}
                   </AppText>
                 </View>
               </View>
             </View>
-            <View style={[styles.metricCard, { backgroundColor: theme.metricsBg }]}>
-              <View style={styles.metricRow}>
+            <View
+              style={[
+                styles.metricCard,
+                { backgroundColor: theme.metricsBg },
+                shouldStackRows && styles.metricCardStacked,
+                isVeryLargeText && styles.metricCardLargeText,
+              ]}
+            >
+              <View style={[styles.metricRow, shouldStackRows && styles.metricRowStacked]}>
                 <View style={[styles.metricIconBubble, { backgroundColor: "rgba(59,130,246,0.14)" }]}>
                   <Ionicons name="pulse-outline" size={13} color="#3B82F6" />
                 </View>
-                <View style={styles.metricTextCol}>
-                  <AppText variant="caption" style={[styles.metricLabel, { color: theme.mutedText }]}>
+                <View style={[styles.metricTextCol, shouldStackRows && styles.metricTextColStacked]}>
+                  <AppText variant="caption" scaleRole="chrome" style={[styles.metricLabel, { color: theme.mutedText }]}>
                     En cours
                   </AppText>
-                  <AppText variant="sectionTitle" style={[styles.metricValue, { color: theme.title }]}>
+                  <AppText variant="sectionTitle" scaleRole="chrome" style={[styles.metricValue, { color: theme.title }]}>
                     {stats.progress}
                   </AppText>
                 </View>
               </View>
             </View>
-            <View style={[styles.metricCard, { backgroundColor: theme.metricsBg }]}>
-              <View style={styles.metricRow}>
+            <View
+              style={[
+                styles.metricCard,
+                { backgroundColor: theme.metricsBg },
+                shouldStackRows && styles.metricCardStacked,
+                isVeryLargeText && styles.metricCardLargeText,
+              ]}
+            >
+              <View style={[styles.metricRow, shouldStackRows && styles.metricRowStacked]}>
                 <View style={[styles.metricIconBubble, { backgroundColor: "rgba(148,163,184,0.18)" }]}>
                   <Ionicons name="checkmark-circle-outline" size={13} color="#94A3B8" />
                 </View>
-                <View style={styles.metricTextCol}>
-                  <AppText variant="caption" style={[styles.metricLabel, { color: theme.mutedText }]}>
+                <View style={[styles.metricTextCol, shouldStackRows && styles.metricTextColStacked]}>
+                  <AppText variant="caption" scaleRole="chrome" style={[styles.metricLabel, { color: theme.mutedText }]}>
                     Terminees
                   </AppText>
-                  <AppText variant="sectionTitle" style={[styles.metricValue, { color: theme.title }]}>
+                  <AppText variant="sectionTitle" scaleRole="chrome" style={[styles.metricValue, { color: theme.title }]}>
                     {stats.done}
                   </AppText>
                 </View>
@@ -798,7 +879,10 @@ export default function DriverTripsScreen() {
             </View>
           </View>
 
-          <View style={[styles.tabs, { backgroundColor: theme.tabsBg }]} onLayout={(e) => setTabsWidth(e.nativeEvent.layout.width)}>
+          <View
+            style={[styles.tabs, { backgroundColor: theme.tabsBg }, isVeryLargeText && styles.tabsLargeText]}
+            onLayout={(e) => setTabsWidth(e.nativeEvent.layout.width)}
+          >
             <Animated.View
               pointerEvents="none"
               style={[
@@ -812,19 +896,29 @@ export default function DriverTripsScreen() {
             />
             <Pressable
               onPress={() => setTab("mine")}
-              style={styles.tab}
+              style={[styles.tab, isVeryLargeText && styles.tabLargeText]}
               accessibilityRole="button"
             >
-              <AppText variant="label" style={[styles.tabLabel, { color: theme.tabIdle }, tab === "mine" && styles.tabLabelActive, tab === "mine" && { color: theme.tabActive }]}>
+              <AppText
+                variant="label"
+                scaleRole="chrome"
+                style={[styles.tabLabel, { color: theme.tabIdle }, tab === "mine" && styles.tabLabelActive, tab === "mine" && { color: theme.tabActive }]}
+                numberOfLines={isVeryLargeText ? 2 : 1}
+              >
                 Mes courses
               </AppText>
             </Pressable>
             <Pressable
               onPress={() => setTab("company")}
-              style={styles.tab}
+              style={[styles.tab, isVeryLargeText && styles.tabLargeText]}
               accessibilityRole="button"
             >
-              <AppText variant="label" style={[styles.tabLabel, { color: theme.tabIdle }, tab === "company" && styles.tabLabelActive, tab === "company" && { color: theme.tabActive }]}>
+              <AppText
+                variant="label"
+                scaleRole="chrome"
+                style={[styles.tabLabel, { color: theme.tabIdle }, tab === "company" && styles.tabLabelActive, tab === "company" && { color: theme.tabActive }]}
+                numberOfLines={isVeryLargeText ? 2 : 1}
+              >
                 Entreprise (jour)
               </AppText>
             </Pressable>
@@ -883,19 +977,23 @@ const styles = StyleSheet.create({
   pageCompact: { paddingHorizontal: 12 },
   headerShell: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     justifyContent: "space-between",
     borderRadius: 18,
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderWidth: 0,
-    overflow: "hidden",
+    gap: 8,
     ...softCardShadow,
   },
-  header: { flex: 1, gap: 2, backgroundColor: "transparent" },
-  title: { color: "#0F172A", fontSize: FONT_SIZE.px21, lineHeight: 25, fontWeight: "700" },
-  subtitle: { color: "#475569", textTransform: "capitalize", fontSize: FONT_SIZE.px12, lineHeight: 15, fontWeight: "500", letterSpacing: 0.1 },
-  headerRight: { flexDirection: "row", alignItems: "center", gap: 6 },
+  headerShellStacked: {
+    flexDirection: "column",
+    alignItems: "stretch",
+  },
+  header: { flex: 1, minWidth: 0, gap: 2, backgroundColor: "transparent" },
+  title: { color: "#0F172A", fontWeight: "700" },
+  subtitle: { color: "#475569", textTransform: "capitalize", fontWeight: "500", letterSpacing: 0.1 },
+  headerRight: { flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 0 },
   liveBadge: {
     flexDirection: "row",
     alignItems: "center",
@@ -908,7 +1006,7 @@ const styles = StyleSheet.create({
     borderColor: "rgba(20,184,166,0.28)",
   },
   liveDot: { width: 6, height: 6, borderRadius: 999, backgroundColor: "#14B8A6" },
-  liveText: { fontWeight: "600", letterSpacing: 0.15, fontSize: FONT_SIZE.px12, lineHeight: 14 },
+  liveText: { fontWeight: "600", letterSpacing: 0.15 },
   filterButton: {
     width: 34,
     height: 34,
@@ -920,6 +1018,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.72)",
   },
   metrics: { flexDirection: "row", gap: 6 },
+  metricsStacked: { flexDirection: "column" },
   metricCard: {
     flex: 1,
     minWidth: 0,
@@ -927,24 +1026,44 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     backgroundColor: "#FFFFFF",
     borderWidth: 0,
-    paddingVertical: 6,
-    paddingHorizontal: 9,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
     alignItems: "flex-start",
     justifyContent: "center",
     gap: 1,
     ...softCardShadow,
   },
+  metricCardStacked: {
+    flex: 0,
+    width: "100%",
+    minHeight: 48,
+  },
+  metricCardLargeText: {
+    paddingVertical: 10,
+    minHeight: 64,
+  },
   metricRow: { flexDirection: "row", alignItems: "center", gap: 7, flex: 1 },
+  metricRowStacked: {
+    width: "100%",
+    justifyContent: "space-between",
+  },
   metricIconBubble: {
     width: 20,
     height: 20,
     borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
+    flexShrink: 0,
   },
-  metricTextCol: { flex: 1, minWidth: 0, justifyContent: "center", gap: 0 },
-  metricValue: { color: "#0F172A", fontWeight: "700", fontSize: FONT_SIZE.px16, lineHeight: 18, marginTop: 1 },
-  metricLabel: { color: "#64748B", textTransform: "uppercase", letterSpacing: 0.15, fontSize: FONT_SIZE.px9, lineHeight: 11 },
+  metricTextCol: { flex: 1, minWidth: 0, justifyContent: "center", gap: 2 },
+  metricTextColStacked: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  metricValue: { color: "#0F172A", fontWeight: "700", flexShrink: 0 },
+  metricLabel: { color: "#64748B", textTransform: "uppercase", letterSpacing: 0.15, flexShrink: 1 },
   tabs: {
     backgroundColor: "#E9EEF3",
     borderRadius: 14,
@@ -952,6 +1071,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     position: "relative",
     overflow: "hidden",
+  },
+  tabsLargeText: {
+    minHeight: 52,
   },
   tabIndicator: {
     position: "absolute",
@@ -961,8 +1083,21 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: "#FFFFFF",
   },
-  tab: { flex: 1, minHeight: 36, borderRadius: 10, alignItems: "center", justifyContent: "center", zIndex: 1 },
-  tabLabel: { color: "#64748B", fontSize: FONT_SIZE.px12, lineHeight: 15, fontWeight: "600" },
+  tab: {
+    flex: 1,
+    minHeight: 40,
+    minWidth: 0,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 1,
+    paddingHorizontal: 6,
+    paddingVertical: 6,
+  },
+  tabLargeText: {
+    minHeight: 48,
+  },
+  tabLabel: { color: "#64748B", fontWeight: "600", textAlign: "center" },
   tabLabelActive: { color: "#0F172A", fontWeight: "700" },
   companyHint: { color: "#475569" },
   info: { color: "#64748B" },
@@ -980,20 +1115,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     ...softCardShadow,
   },
-  cardBody: { flex: 1, gap: 8 },
+  cardLargeText: {
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+  },
+  cardBody: { flex: 1, gap: 8, minWidth: 0 },
+  cardBodyLargeText: { gap: 10 },
   cardDone: { backgroundColor: "#F2F4F7" },
-  cardTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
-  statusBadges: { flexDirection: "row", alignItems: "center", gap: 6 },
+  cardTop: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 8 },
+  cardTopStacked: { flexDirection: "column", alignItems: "stretch", gap: 6 },
+  statusBadges: { flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 1, flexWrap: "wrap", justifyContent: "flex-end" },
+  statusBadgesStacked: { justifyContent: "flex-start" },
   client: { color: "#0F172A" },
   clientDone: { color: "#667085" },
   badge: {
     borderWidth: 1,
     borderRadius: 999,
     paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingVertical: 3,
+    maxWidth: "100%",
   },
   badgeDone: {},
-  badgeText: { fontSize: FONT_SIZE.px11, lineHeight: 14 },
+  badgeText: { flexShrink: 1 },
   badgeTextDone: { color: "#667085" },
   lateBadge: {
     borderWidth: 1,
@@ -1001,16 +1144,26 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(239,68,68,0.12)",
     borderRadius: 999,
     paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingVertical: 3,
   },
-  lateBadgeText: { color: "#DC2626", fontSize: FONT_SIZE.px11, lineHeight: 14, fontWeight: "700" },
-  when: { color: "#0F172A" },
+  lateBadgeText: { color: "#DC2626", fontWeight: "700" },
+  tripLegBadge: {
+    borderWidth: 1,
+    borderColor: "rgba(15, 118, 110, 0.35)",
+    backgroundColor: "rgba(15, 118, 110, 0.10)",
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  tripLegBadgeText: { color: "#0F766E", fontWeight: "700" },
+  when: { color: "#0F172A", flexShrink: 1, minWidth: 0 },
   whenDone: { color: "#7C8592" },
-  routeRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  route: { color: "#334155", flex: 1 },
+  routeRow: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
+  route: { color: "#334155", flex: 1, minWidth: 0 },
   routeDone: { color: "#7C8592" },
   metaAndHintRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
-  metaRow: { flexDirection: "row", gap: 12, flexShrink: 1 },
+  metaAndHintRowStacked: { flexDirection: "column", alignItems: "flex-start" },
+  metaRow: { flexDirection: "row", gap: 12, flexShrink: 1, flexWrap: "wrap" },
   metaItem: { flexDirection: "row", alignItems: "center", gap: 4 },
   metaText: { color: "#475569" },
   driverLine: { color: "#163A34", fontWeight: "600" },

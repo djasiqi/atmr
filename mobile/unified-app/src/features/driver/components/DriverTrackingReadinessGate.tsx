@@ -17,13 +17,16 @@ import {
   Platform,
   Pressable,
   StyleSheet,
-  Text,
   View,
 } from "react-native";
 import * as Location from "expo-location";
 
 import { isExpoLocationPermissionGranted } from "../../../core/location/locationPermissionState";
+import { markNotificationDisclosureAccepted } from "../../../core/notifications/notificationDisclosurePersistence";
+import { useAccessibilityScale } from "../../../design/responsive/useAccessibilityScale";
 import { semanticDanger, semanticSuccess, semanticWarning } from "../../../design/responsive/colors";
+import { AppText } from "../../../design/ui/AppText";
+import { createShadow } from "../../../styles/shadowStyles";
 import {
   checkBatteryOptimizationStatus,
   getOemBatteryGuidance,
@@ -37,6 +40,15 @@ import {
   markTrackingOnboarded,
   setTrackingNeedsAttention,
 } from "../services/trackingReadinessPersistence";
+import { D } from "../theme/driverDashboardTheme";
+
+const primaryButtonShadow = createShadow({
+  shadowColor: D.brandDark,
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.18,
+  shadowRadius: 4,
+  elevation: 3,
+});
 
 export type TrackingReadinessSnapshot = {
   ready: boolean;
@@ -106,6 +118,7 @@ type Props = {
 
 export function DriverTrackingReadinessGate(props: Props) {
   const { onReadyChange, silent, onDismiss } = props;
+  const { shouldStackRows } = useAccessibilityScale();
   const [loading, setLoading] = useState(true);
   const [snapshot, setSnapshot] = useState<TrackingReadinessSnapshot | null>(null);
   const onboardedRef = useRef(false);
@@ -141,6 +154,21 @@ export function DriverTrackingReadinessGate(props: Props) {
     });
   }, [refresh]);
 
+  const requestNotifications = useCallback(() => {
+    void (async () => {
+      try {
+        await markNotificationDisclosureAccepted();
+        if (Platform.OS !== "web") {
+          const Notifications = await import("expo-notifications");
+          await Notifications.requestPermissionsAsync();
+        }
+      } catch {
+        /* best-effort — l'utilisateur peut passer par Ouvrir réglages */
+      }
+      await refresh();
+    })();
+  }, [refresh]);
+
   const checklist = useMemo(() => {
     if (!snapshot) return [];
     return [
@@ -167,6 +195,47 @@ export function DriverTrackingReadinessGate(props: Props) {
     ];
   }, [snapshot]);
 
+  const primaryActions = useMemo(() => {
+    const actions: Array<{ key: string; label: string; onPress: () => void }> = [
+      {
+        key: "location",
+        label: "Localisation",
+        onPress: () => void requestBgWithDisclosure(),
+      },
+    ];
+    if (!snapshot?.notificationsGranted) {
+      actions.push({
+        key: "notifications",
+        label: "Notifications",
+        onPress: requestNotifications,
+      });
+    }
+    actions.push({
+      key: "battery",
+      label: "Batterie",
+      onPress: () => void requestIgnoreBatteryOptimizations(),
+    });
+    if (snapshot?.hasOemSettings) {
+      actions.push({
+        key: "oem",
+        label: "Fabricant",
+        onPress: () => void openOemBatterySettings(),
+      });
+    }
+    return actions;
+  }, [requestBgWithDisclosure, requestNotifications, snapshot?.hasOemSettings, snapshot?.notificationsGranted]);
+
+  const primaryRows = useMemo(() => {
+    if (shouldStackRows) {
+      return primaryActions.map((action) => [action]);
+    }
+    const rows: Array<typeof primaryActions> = [];
+    for (let i = 0; i < primaryActions.length; i += 2) {
+      rows.push(primaryActions.slice(i, i + 2));
+    }
+    return rows;
+  }, [primaryActions, shouldStackRows]);
+
   if (silent) return null;
 
   if (loading && !snapshot) {
@@ -184,7 +253,9 @@ export function DriverTrackingReadinessGate(props: Props) {
   return (
     <View style={styles.container}>
       <View style={styles.headerRow}>
-        <Text style={styles.title}>Préparation tracking obligatoire</Text>
+        <AppText variant="sectionTitle" style={styles.title} scaleRole="content">
+          Préparation tracking obligatoire
+        </AppText>
         {onDismiss ? (
           <Pressable
             onPress={onDismiss}
@@ -193,51 +264,92 @@ export function DriverTrackingReadinessGate(props: Props) {
             accessibilityRole="button"
             accessibilityLabel="Fermer le panneau de préparation"
           >
-            <Text style={styles.closeButtonText}>✕</Text>
+            <AppText variant="label" style={styles.closeButtonText} scaleRole="chrome">
+              ✕
+            </AppText>
           </Pressable>
         ) : null}
       </View>
-      <Text style={styles.subtitle}>
+      <AppText variant="bodyMuted" style={styles.subtitle} scaleRole="content">
         Avant votre première mission, vérifiez les réglages ci-dessous.
-      </Text>
+      </AppText>
       {checklist.map((item) => (
-        <Text
+        <AppText
           key={item.label}
+          variant="body"
+          scaleRole="content"
           style={[styles.checkItem, { color: item.ok ? semanticSuccess.fg : semanticDanger.fg }]}
         >
           {item.ok ? "✓" : "✗"} {item.label}
-        </Text>
+        </AppText>
       ))}
       {snapshot?.hasOemSettings ? (
-        <Text style={styles.oemHint}>
+        <AppText variant="caption" style={styles.oemHint} scaleRole="content">
           Fabricant détecté ({snapshot.oem}). Ouvrez aussi les réglages avancés du fabricant
           (auto-start / apps protégées).
-        </Text>
+        </AppText>
       ) : null}
       <View style={styles.actions}>
-        <Pressable style={styles.button} onPress={() => void requestBgWithDisclosure()}>
-          <Text style={styles.buttonText}>Autoriser localisation</Text>
-        </Pressable>
-        <Pressable style={styles.button} onPress={() => void requestIgnoreBatteryOptimizations()}>
-          <Text style={styles.buttonText}>Exemption batterie</Text>
-        </Pressable>
-        {snapshot?.hasOemSettings ? (
-          <Pressable style={styles.button} onPress={() => void openOemBatterySettings()}>
-            <Text style={styles.buttonText}>Réglages fabricant</Text>
+        {primaryRows.map((row) => (
+          <View
+            key={row.map((a) => a.key).join("-")}
+            style={[styles.actionsRow, shouldStackRows && styles.actionsRowStacked]}
+          >
+            {row.map((action) => (
+              <Pressable
+                key={action.key}
+                style={({ pressed }) => [
+                  styles.buttonPrimary,
+                  row.length === 1 || shouldStackRows ? styles.buttonFull : styles.buttonHalf,
+                  pressed && styles.buttonPressed,
+                ]}
+                onPress={action.onPress}
+                accessibilityRole="button"
+                accessibilityLabel={action.label}
+              >
+                <AppText variant="label" style={styles.buttonPrimaryText} scaleRole="chrome">
+                  {action.label}
+                </AppText>
+              </Pressable>
+            ))}
+          </View>
+        ))}
+        <View style={[styles.actionsRow, shouldStackRows && styles.actionsRowStacked]}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.buttonSecondary,
+              shouldStackRows ? styles.buttonFull : styles.buttonHalf,
+              pressed && styles.buttonSecondaryPressed,
+            ]}
+            onPress={() => Linking.openSettings()}
+            accessibilityRole="button"
+            accessibilityLabel="Ouvrir les réglages système"
+          >
+            <AppText variant="label" style={styles.buttonSecondaryText} scaleRole="chrome">
+              Réglages
+            </AppText>
           </Pressable>
-        ) : null}
-        <Pressable style={styles.buttonSecondary} onPress={() => Linking.openSettings()}>
-          <Text style={styles.buttonSecondaryText}>Ouvrir réglages</Text>
-        </Pressable>
-        <Pressable style={styles.buttonSecondary} onPress={() => void refresh()}>
-          <Text style={styles.buttonSecondaryText}>Revérifier</Text>
-        </Pressable>
+          <Pressable
+            style={({ pressed }) => [
+              styles.buttonSecondary,
+              shouldStackRows ? styles.buttonFull : styles.buttonHalf,
+              pressed && styles.buttonSecondaryPressed,
+            ]}
+            onPress={() => void refresh()}
+            accessibilityRole="button"
+            accessibilityLabel="Revérifier les prérequis tracking"
+          >
+            <AppText variant="label" style={styles.buttonSecondaryText} scaleRole="chrome">
+              Revérifier
+            </AppText>
+          </Pressable>
+        </View>
       </View>
       <View style={[styles.warningBox, { backgroundColor: semanticWarning.bg }]}>
-        <Text style={{ color: semanticWarning.fg }}>
+        <AppText variant="body" style={{ color: semanticWarning.fg }} scaleRole="content">
           Le démarrage d&apos;une mission suivie (écran verrouillé) requiert ces réglages.
           Vous pouvez continuer à consulter vos missions.
-        </Text>
+        </AppText>
       </View>
     </View>
   );
@@ -250,13 +362,12 @@ const styles = StyleSheet.create({
   },
   headerRow: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     justifyContent: "space-between",
     gap: 12,
   },
   title: {
     flex: 1,
-    fontSize: 18,
     fontWeight: "700",
   },
   closeButton: {
@@ -266,48 +377,80 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(15, 23, 42, 0.06)",
+    marginTop: 2,
   },
   closeButtonText: {
-    fontSize: 14,
     fontWeight: "700",
     color: "#475569",
-    lineHeight: 16,
   },
   subtitle: {
-    fontSize: 14,
     opacity: 0.8,
   },
   checkItem: {
-    fontSize: 14,
     fontWeight: "600",
   },
   oemHint: {
-    fontSize: 13,
     opacity: 0.85,
   },
   actions: {
-    gap: 8,
-    marginTop: 8,
+    gap: 10,
+    marginTop: 10,
   },
-  button: {
-    backgroundColor: "#0A7F59",
-    borderRadius: 10,
+  actionsRow: {
+    flexDirection: "row",
+    gap: 10,
+    alignItems: "stretch",
+  },
+  actionsRowStacked: {
+    flexDirection: "column",
+  },
+  buttonHalf: {
+    flex: 1,
+    minWidth: 0,
+  },
+  buttonFull: {
+    flex: 1,
+    alignSelf: "stretch",
+  },
+  buttonPrimary: {
+    minHeight: 48,
+    backgroundColor: D.brandCta,
+    borderRadius: 12,
     paddingVertical: 12,
+    paddingHorizontal: 12,
     alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: D.brandDark,
+    ...primaryButtonShadow,
   },
-  buttonText: {
-    color: "#fff",
+  buttonPrimaryText: {
+    color: "#FFFFFF",
     fontWeight: "700",
+    textAlign: "center",
+  },
+  buttonPressed: {
+    opacity: 0.88,
   },
   buttonSecondary: {
-    borderRadius: 10,
-    paddingVertical: 10,
+    minHeight: 48,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
     alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#CBD5E1",
+    justifyContent: "center",
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1.5,
+    borderColor: "rgba(10, 106, 97, 0.35)",
+  },
+  buttonSecondaryPressed: {
+    backgroundColor: "rgba(10, 106, 97, 0.08)",
+    opacity: 0.95,
   },
   buttonSecondaryText: {
-    fontWeight: "600",
+    color: D.brandCta,
+    fontWeight: "700",
+    textAlign: "center",
   },
   warningBox: {
     borderRadius: 10,
@@ -321,7 +464,6 @@ const styles = StyleSheet.create({
   readyTitle: {
     color: semanticSuccess.fg,
     fontWeight: "700",
-    fontSize: 16,
   },
   readyBody: {
     color: semanticSuccess.fg,

@@ -58,7 +58,16 @@ function Banner(props: {
   );
 }
 
-export function DriverStateBanners() {
+type DriverStateBannersProps = {
+  /**
+   * Masque les alertes déjà couvertes par « Préparation tracking obligatoire »
+   * (notifications disclosure, GPS, batterie, OEM) pour éviter le doublon UI.
+   */
+  hideTrackingPrepDuplicates?: boolean;
+};
+
+export function DriverStateBanners(props: DriverStateBannersProps = {}) {
+  const hideTrackingPrepDuplicates = Boolean(props.hideTrackingPrepDuplicates);
   const { status } = useSession();
   const socketStatus = useSocketStatus();
   const [isOffline, setIsOffline] = useState(false);
@@ -137,25 +146,38 @@ export function DriverStateBanners() {
     };
   }, []);
 
+  const showDisclosureBanner =
+    !hideTrackingPrepDuplicates && pushRegistrationState === "disclosure_required";
+  const showPushDeniedBanner =
+    !hideTrackingPrepDuplicates &&
+    pushPermissionDenied &&
+    pushRegistrationState !== "disclosure_required";
+  const showGpsBanner = !hideTrackingPrepDuplicates && !gpsEnabled;
+  const showBatteryBanner = !hideTrackingPrepDuplicates && batteryOptimizationActive;
+  const showOemBanner =
+    !hideTrackingPrepDuplicates &&
+    oemGuidance.hasOemSettings &&
+    batteryOptimizationActive;
+
   const showPushRegistrationBanner =
-    pushRegistrationState === "disclosure_required" ||
+    showDisclosureBanner ||
     pushRegistrationState === "registration_pending" ||
     pushRegistrationState === "registration_failed";
 
   const hasBanner =
-    pushPermissionDenied ||
+    showPushDeniedBanner ||
     showPushRegistrationBanner ||
     isOffline ||
     (socketStatus.degraded && socketStatus.connected) ||
-    !gpsEnabled ||
-    batteryOptimizationActive ||
+    showGpsBanner ||
+    showBatteryBanner ||
     status === "error";
 
   if (!hasBanner) return null;
 
   return (
     <View style={styles.stack}>
-      {pushRegistrationState === "disclosure_required" ? (
+      {showDisclosureBanner ? (
         <Banner
           title="Notifications"
           message="Confirmez l'utilisation des notifications pour recevoir vos missions."
@@ -182,7 +204,7 @@ export function DriverStateBanners() {
           }}
         />
       ) : null}
-      {pushPermissionDenied && pushRegistrationState !== "disclosure_required" ? (
+      {showPushDeniedBanner ? (
         <Banner
           title="Notifications desactivees"
           message="Activez les notifications pour recevoir vos missions."
@@ -207,14 +229,14 @@ export function DriverStateBanners() {
           tone="warn"
         />
       ) : null}
-      {!gpsEnabled ? (
+      {showGpsBanner ? (
         <Banner
           title="GPS desactive"
           message="Activez la localisation pour maintenir le suivi mission."
           tone="error"
         />
       ) : null}
-      {batteryOptimizationActive ? (
+      {showBatteryBanner ? (
         <Banner
           title="Optimisation batterie active"
           message="Vos positions GPS peuvent ne pas etre transmises en arriere-plan."
@@ -228,7 +250,7 @@ export function DriverStateBanners() {
           }}
         />
       ) : null}
-      {oemGuidance.hasOemSettings && batteryOptimizationActive ? (
+      {showOemBanner ? (
         <Banner
           title="Reglages fabricant requis"
           message={`Sur ${oemGuidance.manufacturer || "votre appareil"}, ouvrez aussi Auto-start / apps protegees.`}
@@ -261,7 +283,6 @@ const styles = StyleSheet.create({
   },
   alertText: {
     fontSize: FONT_SIZE.px12,
-    lineHeight: 16,
     fontWeight: "400",
   },
   alertLead: {

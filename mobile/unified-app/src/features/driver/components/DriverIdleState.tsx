@@ -9,10 +9,10 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import LottieView from "lottie-react-native";
 import * as Location from "expo-location";
+import { useAccessibilityScale } from "../../../design/responsive/useAccessibilityScale";
 import { AppText } from "../../../design/ui/AppText";
 import { createShadow } from "../../../styles/shadowStyles";
 import { D, dashboardCardShadow } from "../theme/driverDashboardTheme";
-import { FONT_SIZE } from "../../../design/responsive/typographyTokens";
 import { useSocketStatus } from "../hooks/useSocketStatus";
 import { useTrackingState } from "../hooks/useTrackingState";
 import type { DriverMission } from "../types";
@@ -44,6 +44,7 @@ export const DriverIdleState = memo(function DriverIdleState({
   const tracking = useTrackingState();
   const socket = useSocketStatus();
   const tipIndex = useTipRotation();
+  const { shouldStackRows, isVeryLargeText } = useAccessibilityScale();
 
   const [gpsEnabled, setGpsEnabled] = useState(true);
   useEffect(() => {
@@ -85,21 +86,26 @@ export const DriverIdleState = memo(function DriverIdleState({
       <View style={styles.mainCard}>
         <RadarPulse active={isAvailable && (realtimeConnected || gpsConnected)} />
         <View style={styles.headerTextBlock}>
-          <AppText variant="sectionTitle" style={styles.title}>
+          <AppText variant="sectionTitle" style={styles.title} scaleRole="content">
             {idleTitle}
           </AppText>
-          <AppText variant="bodyMuted" style={styles.subtitle}>
+          <AppText variant="bodyMuted" style={styles.subtitle} scaleRole="content">
             {idleSubtitle}
           </AppText>
         </View>
 
         <View style={styles.summaryDivider} accessibilityElementsHidden />
 
-        <AppText variant="caption" style={styles.summaryHeaderLabel}>
+        <AppText variant="caption" style={styles.summaryHeaderLabel} scaleRole="chrome">
           Aujourd’hui
         </AppText>
 
-        <View style={styles.summaryMetricsRow}>
+        <View
+          style={[
+            styles.summaryMetricsRow,
+            shouldStackRows && styles.summaryMetricsRowStacked,
+          ]}
+        >
           <TodayMetric
             value={`${todayStats.completedMissions}`}
             label={
@@ -107,29 +113,35 @@ export const DriverIdleState = memo(function DriverIdleState({
                 ? "Mission réalisée"
                 : "Missions réalisées"
             }
+            stacked={shouldStackRows}
           />
           <TodayMetric
             value={formatDistanceKm(todayStats.distanceKm)}
             label="Distance parcourue"
-            divider
+            divider={!shouldStackRows}
+            stacked={shouldStackRows}
           />
           <TodayMetric
             value={formatDrivingTime(todayStats.drivingTimeMinutes)}
             label="Temps de travail"
-            divider
+            divider={!shouldStackRows}
+            stacked={shouldStackRows}
           />
         </View>
       </View>
 
-      <View style={styles.tipCard} accessibilityRole="text">
+      <View
+        style={[styles.tipCard, isVeryLargeText && styles.tipCardLarge]}
+        accessibilityRole="text"
+      >
         <View style={styles.tipIconWrap} accessibilityElementsHidden>
           <Ionicons name="bulb-outline" size={14} color={D.brand} />
         </View>
         <View style={styles.tipTextCol}>
-          <AppText variant="caption" style={styles.tipTitle}>
+          <AppText variant="caption" style={styles.tipTitle} scaleRole="chrome">
             Conseil du jour
           </AppText>
-          <AppText variant="caption" style={styles.tipBody} numberOfLines={2}>
+          <AppText variant="caption" style={styles.tipBody} scaleRole="content">
             {IDLE_TIPS[tipIndex]}
           </AppText>
         </View>
@@ -142,20 +154,30 @@ function TodayMetric(props: {
   value: string;
   label: string;
   divider?: boolean;
+  stacked?: boolean;
 }) {
   return (
     <>
       {props.divider ? (
         <View style={styles.todayMetricDivider} accessibilityElementsHidden />
       ) : null}
-      <View style={styles.todayMetric}>
-        <AppText variant="sectionTitle" style={styles.todayMetricValue} numberOfLines={1}>
+      <View style={[styles.todayMetric, props.stacked && styles.todayMetricStacked]}>
+        <AppText
+          variant="sectionTitle"
+          style={styles.todayMetricValue}
+          scaleRole="chrome"
+          numberOfLines={1}
+        >
           {props.value}
         </AppText>
         <AppText
           variant="caption"
-          style={styles.todayMetricLabel}
-          numberOfLines={2}
+          style={[
+            styles.todayMetricLabel,
+            props.stacked && styles.todayMetricLabelStacked,
+          ]}
+          scaleRole="chrome"
+          numberOfLines={props.stacked ? 3 : 2}
         >
           {props.label}
         </AppText>
@@ -522,17 +544,13 @@ const styles = StyleSheet.create({
   },
   title: {
     color: D.text,
-    fontSize: FONT_SIZE.px18,
     fontWeight: "700",
     textAlign: "center",
-    lineHeight: 24,
     letterSpacing: -0.2,
   },
   subtitle: {
     color: D.textMuted,
-    fontSize: FONT_SIZE.px14,
     fontWeight: "500",
-    lineHeight: 20,
     textAlign: "center",
     maxWidth: 320,
   },
@@ -545,7 +563,6 @@ const styles = StyleSheet.create({
   summaryHeaderLabel: {
     alignSelf: "stretch",
     color: D.textMuted,
-    fontSize: FONT_SIZE.px10,
     fontWeight: "700",
     letterSpacing: 1.4,
     textTransform: "uppercase",
@@ -556,6 +573,10 @@ const styles = StyleSheet.create({
     alignItems: "stretch",
     paddingTop: 2,
   },
+  summaryMetricsRowStacked: {
+    flexDirection: "column",
+    gap: 10,
+  },
   todayMetric: {
     flex: 1,
     minWidth: 0,
@@ -563,20 +584,31 @@ const styles = StyleSheet.create({
     gap: 3,
     paddingHorizontal: 6,
   },
+  todayMetricStacked: {
+    flex: 0,
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "baseline",
+    justifyContent: "space-between",
+    gap: 12,
+    paddingHorizontal: 4,
+  },
   todayMetricValue: {
     color: D.text,
-    fontSize: FONT_SIZE.px20,
     fontWeight: "700",
-    lineHeight: 24,
     textAlign: "center",
     letterSpacing: -0.3,
+    flexShrink: 0,
   },
   todayMetricLabel: {
     color: D.textMuted,
-    fontSize: FONT_SIZE.px11,
     fontWeight: "500",
     textAlign: "center",
-    lineHeight: 14,
+    flexShrink: 1,
+  },
+  todayMetricLabelStacked: {
+    textAlign: "right",
+    flex: 1,
   },
   todayMetricDivider: {
     width: StyleSheet.hairlineWidth,
@@ -586,12 +618,15 @@ const styles = StyleSheet.create({
   },
   tipCard: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: 10,
     backgroundColor: TIP_BG,
     borderRadius: 14,
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: 12,
+  },
+  tipCardLarge: {
+    paddingVertical: 14,
   },
   tipIconWrap: {
     width: 28,
@@ -600,23 +635,20 @@ const styles = StyleSheet.create({
     backgroundColor: D.cardBg,
     alignItems: "center",
     justifyContent: "center",
+    marginTop: 2,
   },
   tipTextCol: {
     flex: 1,
     minWidth: 0,
-    gap: 2,
+    gap: 4,
   },
   tipTitle: {
     color: D.brand,
-    fontSize: FONT_SIZE.px11,
     fontWeight: "800",
     letterSpacing: 0.4,
-    lineHeight: 14,
   },
   tipBody: {
     color: D.text,
-    fontSize: FONT_SIZE.px12,
     fontWeight: "500",
-    lineHeight: 16,
   },
 });

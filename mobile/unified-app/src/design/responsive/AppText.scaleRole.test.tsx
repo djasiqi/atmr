@@ -56,6 +56,17 @@ jest.mock("./useAppViewport", () => ({
   }),
 }));
 
+jest.mock("./useAccessibilityScale", () => ({
+  useAccessibilityScale: () => ({
+    fontScale: 1,
+    isLargeText: false,
+    isVeryLargeText: false,
+    shouldStackRows: false,
+    contentMaxFontMultiplier: 2,
+    chromeMaxFontMultiplier: 1.3,
+  }),
+}));
+
 const { AppText } = require("../ui/AppText");
 
 describe("AppText scaleRole", () => {

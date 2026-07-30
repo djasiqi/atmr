@@ -54,6 +54,8 @@ export const ChatComposer = memo(function ChatComposer({
 
   const { startRecording: startVoiceSession, stopRecording: stopVoiceSession, abortRecording } =
     useChatVoiceRecorder();
+  const abortRecordingRef = useRef(abortRecording);
+  abortRecordingRef.current = abortRecording;
   /** Incrémenté à chaque pression / relâchement pour annuler un démarrage d’enregistrement encore en cours. */
   const voiceInteractionEpochRef = useRef(0);
   const pressStartMsRef = useRef(0);
@@ -141,9 +143,9 @@ export const ChatComposer = memo(function ChatComposer({
   useEffect(() => {
     return () => {
       voiceInteractionEpochRef.current += 1;
-      void abortRecording();
+      void abortRecordingRef.current();
     };
-  }, [abortRecording]);
+  }, []);
 
   const sendCircleBg = isRecording ? C_RECORDING : C_BRAND;
 

@@ -98,7 +98,8 @@ export function DriverNotificationDisclosureHost() {
   const modalVisible =
     disclosureVisible &&
     !orchestration.presenceModalVisible &&
-    !orchestration.missionDisclosureVisible;
+    !orchestration.missionDisclosureVisible &&
+    !orchestration.trackingReadinessPanelVisible;
 
   return (
     <View style={styles.host} pointerEvents="box-none">
