@@ -145,6 +145,12 @@ let csrfFetchInFlight: Promise<string | null> | null = null;
 let refreshTokenInFlight: Promise<string | null> | null = null;
 let lastRefreshFailureAtMs = 0;
 let lastRefreshFailureSignature: string | null = null;
+/** Dernier error_code renvoyé par un refresh/refresh-token échoué (coordinateur de récupération, PR C). */
+let lastRefreshErrorCode: string | null = null;
+
+export function getLastRefreshErrorCode(): string | null {
+  return lastRefreshErrorCode;
+}
 let resumeAttemptId: string | null = null;
 /** Toutes les requêtes (driver, company, …) reçoivent le contexte actif pour l’autorisation multi-rôles. */
 let activeContextIdForApi: string | null = null;
@@ -452,15 +458,25 @@ async function refreshAuthToken(): Promise<string | null> {
 async function ensureRefreshToken(): Promise<string | null> {
   if (!refreshTokenInFlight) {
     refreshTokenInFlight = refreshAuthToken()
+      .then((token) => {
+        lastRefreshErrorCode = null;
+        return token;
+      })
       .catch((error) => {
         const err = error as AxiosError;
         const status = err.response?.status ?? null;
         const reason = err.message;
+        const data = err.response?.data as { error_code?: string; error?: string } | undefined;
+        lastRefreshErrorCode =
+          (typeof data?.error_code === "string" && data.error_code) ||
+          (typeof data?.error === "string" && data.error) ||
+          null;
         if (shouldEmitRefreshFailure(status, reason)) {
           emitDriverTelemetry("auth.refresh.failure", {
             source: "core.api.client",
             reason,
             status,
+            error_code: lastRefreshErrorCode,
           });
         }
         throw error;
@@ -890,6 +906,100 @@ export async function logoutSession(): Promise<void> {
     throw toApiError(error);
   } finally {
     await clearLocalAuth();
+  }
+}
+
+/** Reprise session durable après refresh JWT expiré / irrécupérable. */
+export async function sessionResumeRequest(): Promise<{
+  ok: boolean;
+  code: string | null;
+  retryable: boolean;
+}> {
+  try {
+    const store = require("../auth/authCredentialStore") as typeof import("../auth/authCredentialStore");
+    const envelope = await store.readSessionEnvelope();
+    const recovery = await store.readRecoveryCredential();
+    if (envelope.status !== "found" || recovery.status !== "found") {
+      return { ok: false, code: "missing_recovery", retryable: false };
+    }
+    const deviceHeaders = await buildAuthDeviceHeaders();
+    const idempotencyKey = `resume_${envelope.value.session_id}_${envelope.value.refresh_generation}`;
+    const { data } = await apiClient.post(
+      "/auth/session-resume",
+      {
+        session_id: envelope.value.session_id,
+        device_installation_id: envelope.value.device_installation_id,
+        recovery_credential: recovery.value,
+        idempotency_key: idempotencyKey,
+        client_generation: envelope.value.refresh_generation,
+      },
+      { headers: { ...deviceHeaders, "Idempotency-Key": idempotencyKey } }
+    );
+    const token = extractToken(data);
+    const refreshToken = extractRefreshToken(data);
+    const nextRecovery =
+      data && typeof data === "object"
+        ? (data as Record<string, unknown>).recovery_credential
+        : null;
+    if (refreshToken) {
+      await writeRefreshToken(refreshToken);
+    }
+    if (typeof nextRecovery === "string" && nextRecovery.length > 0) {
+      await store.writeRecoveryCredential(nextRecovery);
+    }
+    if (token) {
+      setAuthToken(token);
+    }
+    const sessionId =
+      data && typeof data === "object"
+        ? (data as Record<string, unknown>).session_id
+        : null;
+    const generation =
+      data && typeof data === "object"
+        ? (data as Record<string, unknown>).session_generation
+        : null;
+    if (typeof sessionId === "string") {
+      await store.writeSessionEnvelope({
+        ...envelope.value,
+        session_id: sessionId,
+        refresh_generation:
+          typeof generation === "number" ? generation : envelope.value.refresh_generation + 1,
+        last_authenticated_at: new Date().toISOString(),
+      });
+    }
+    lastRefreshErrorCode = null;
+    markBootstrapAuthFresh();
+    return { ok: Boolean(token), code: null, retryable: false };
+  } catch (error) {
+    const err = error as AxiosError;
+    const data = err.response?.data as
+      | { error_code?: string; error?: string; retryable?: boolean }
+      | undefined;
+    const code =
+      (typeof data?.error_code === "string" && data.error_code) ||
+      (typeof data?.error === "string" && data.error) ||
+      null;
+    lastRefreshErrorCode = code;
+    return {
+      ok: false,
+      code,
+      retryable: Boolean(data?.retryable) || err.response?.status === 503,
+    };
+  }
+}
+
+/** Flush d'un tombstone de révocation hors-ligne. */
+export async function revokeSessionPending(
+  sessionId: string,
+  revocationSecret: string
+): Promise<boolean> {
+  try {
+    await apiClient.post(`/auth/sessions/${encodeURIComponent(sessionId)}/revoke-pending`, {
+      revocation_secret: revocationSecret,
+    });
+    return true;
+  } catch {
+    return false;
   }
 }
 
