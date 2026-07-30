@@ -11,6 +11,7 @@ const mockSetItemAsync = jest.fn();
 const mockDeleteItemAsync = jest.fn();
 
 class MockAxiosError extends Error {
+  isAxiosError = true;
   response?: { status?: number; data?: unknown };
   config?: unknown;
 
@@ -21,22 +22,28 @@ class MockAxiosError extends Error {
   }
 }
 
-jest.mock("axios", () => ({
-  __esModule: true,
-  default: {
-    create: jest.fn(() => ({
-      post: mockPost,
-      get: mockGet,
-      request: mockRequest,
-      interceptors: {
-        request: { use: mockRequestUse },
-        response: { use: mockResponseUse },
-      },
-      defaults: { headers: { common: mockCommonHeaders } },
-    })),
-  },
-  AxiosError: MockAxiosError,
-}));
+jest.mock("axios", () => {
+  const isAxiosError = (error: unknown) =>
+    Boolean(error && typeof error === "object" && (error as { isAxiosError?: boolean }).isAxiosError);
+  return {
+    __esModule: true,
+    default: {
+      create: jest.fn(() => ({
+        post: mockPost,
+        get: mockGet,
+        request: mockRequest,
+        interceptors: {
+          request: { use: mockRequestUse },
+          response: { use: mockResponseUse },
+        },
+        defaults: { headers: { common: mockCommonHeaders } },
+      })),
+      isAxiosError,
+    },
+    AxiosError: MockAxiosError,
+    isAxiosError,
+  };
+});
 
 jest.mock("expo-constants", () => ({
   __esModule: true,

@@ -1181,15 +1181,40 @@ def _login_post_body():
 
     is_mobile_request = _is_mobile_request()
 
+    contract = (request.headers.get("X-Auth-Contract-Version") or "").strip()
+    device_installation_id = request.headers.get(
+        "X-Device-ID"
+    ) or request.headers.get("X-Installation-ID")
+
+    # P0 : contrat v1 sans identité appareil — fail-closed avant toute émission JWT
+    if contract == "mobile-device-session-v1" and not device_installation_id:
+        logger.info(
+            "mobile_login_contract",
+            extra={
+                "trace_id": get_trace_id(),
+                "is_mobile": is_mobile_request,
+                "contract_version": contract,
+                "has_device_id": False,
+                "session_created": False,
+                "has_recovery": False,
+                "has_revocation_secret": False,
+                "error_code": "device_identity_required",
+            },
+        )
+        return {
+            "error": "device_identity_required",
+            "error_code": "device_identity_required",
+            "message": "Identité sécurisée de l'appareil manquante.",
+            "retryable": True,
+            "trace_id": get_trace_id(),
+        }, 400
+
     # ✅ Session durable mobile (B0+) : créée AVANT l'émission des JWT pour que
     # session_id / session_generation soient inclus dès le premier couple access+refresh.
     mobile_session = None
     mobile_recovery_credential = None
     mobile_revocation_secret = None
     if is_mobile_request:
-        device_installation_id = request.headers.get(
-            "X-Device-ID"
-        ) or request.headers.get("X-Installation-ID")
         if device_installation_id:
             driver_id_for_session = getattr(user, "driver_id", None)
             if driver_id_for_session is None:
@@ -1218,7 +1243,6 @@ def _login_post_body():
                 }, 409
             except Exception as mds_exc:
                 # F1b : login mobile v1 fail-closed — pas de session orpheline
-                contract = request.headers.get("X-Auth-Contract-Version", "")
                 logger.error("MobileDeviceSession login failed: %s", mds_exc)
                 if contract == "mobile-device-session-v1" or is_mobile_request:
                     db.session.rollback()
@@ -1229,6 +1253,33 @@ def _login_post_body():
                         "trace_id": get_trace_id(),
                     }, 503
                 mobile_session = None
+
+    # P0 : contrat v1 — aucun HTTP 200 sans session durable complète
+    if contract == "mobile-device-session-v1" and (
+        mobile_session is None
+        or not mobile_recovery_credential
+        or not mobile_revocation_secret
+    ):
+        db.session.rollback()
+        logger.info(
+            "mobile_login_contract",
+            extra={
+                "trace_id": get_trace_id(),
+                "is_mobile": is_mobile_request,
+                "contract_version": contract,
+                "has_device_id": bool(device_installation_id),
+                "session_created": mobile_session is not None,
+                "has_recovery": bool(mobile_recovery_credential),
+                "has_revocation_secret": bool(mobile_revocation_secret),
+                "error_code": "mobile_session_contract_incomplete",
+            },
+        )
+        return {
+            "error": "mobile_session_contract_incomplete",
+            "error_code": "mobile_session_contract_incomplete",
+            "retryable": True,
+            "trace_id": get_trace_id(),
+        }, 503
 
     # Création du token avec le rôle dans additional_claims
     # ✅ SECURITY: Ajout claim 'aud' (audience) pour prévenir token replay
@@ -1414,6 +1465,18 @@ def _login_post_body():
             response_data["recovery_credential"] = mobile_recovery_credential
             response_data["revocation_secret"] = mobile_revocation_secret
         response_data.update(auth_capabilities())
+        logger.info(
+            "mobile_login_contract",
+            extra={
+                "trace_id": trace_id,
+                "is_mobile": True,
+                "contract_version": contract,
+                "has_device_id": bool(device_installation_id),
+                "session_created": mobile_session is not None,
+                "has_recovery": bool(mobile_recovery_credential),
+                "has_revocation_secret": bool(mobile_revocation_secret),
+            },
+        )
 
     # Créer la réponse avec make_response pour pouvoir définir les cookies
     response = make_response(response_data, 200)

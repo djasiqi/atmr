@@ -130,6 +130,20 @@ function toUiErrorMessage(error: unknown, fallback: string): string {
   if (isLoginFlow && effectiveStatus === 401) {
     return "Les données de connexion sont incorrectes.";
   }
+  if (error && typeof error === "object") {
+    const code = typeof (error as { code?: unknown }).code === "string"
+      ? (error as { code: string }).code
+      : null;
+    if (code === "DEVICE_ID_UNAVAILABLE" || code === "device_identity_required") {
+      return "Impossible de sécuriser la session sur cet appareil. Fermez puis rouvrez l'application et réessayez.";
+    }
+    if (code === "STORAGE_UNAVAILABLE" || code === "storage_locked") {
+      return "Stockage sécurisé temporairement indisponible. Fermez puis rouvrez l'application et réessayez.";
+    }
+    if (code === "AUTH_LOGIN_CONTRACT_INCOMPLETE" || code === "mobile_session_contract_incomplete") {
+      return "Le serveur n'a pas retourné les éléments nécessaires à une session sécurisée.";
+    }
+  }
   if (effectiveStatus === 401 || effectiveStatus === 403) {
     return "Session expirée ou invalide. Reconnectez-vous pour continuer.";
   }

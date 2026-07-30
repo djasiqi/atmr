@@ -251,32 +251,67 @@ export class RefreshTokenPersistError extends Error {
   }
 }
 
+/** Erreur contractuelle / locale auth — ne doit jamais être traitée comme panne réseau. */
+export class AuthContractError extends Error {
+  readonly code: string;
+
+  constructor(code: string, message: string) {
+    super(message);
+    this.name = "AuthContractError";
+    this.code = code;
+  }
+}
+
 function sleepMs(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function resolveDeviceName(): Promise<string> {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const Application = require("expo-application") as {
+    applicationName?: string | null;
+  };
+  return (
+    (typeof Application.applicationName === "string" && Application.applicationName.length > 0
+      ? Application.applicationName
+      : null) ?? Platform.OS
+  );
+}
+
+/** Headers appareil best-effort (logout / resume) — ne bloque pas si SecureStore échoue. */
 async function buildAuthDeviceHeaders(): Promise<Record<string, string>> {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { getStableDeviceId } = require("../notifications/getStableDeviceId") as {
-      getStableDeviceId: () => Promise<string>;
-    };
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const Application = require("expo-application") as {
-      applicationName?: string | null;
-    };
-    const deviceId = await getStableDeviceId();
-    const deviceName =
-      (typeof Application.applicationName === "string" && Application.applicationName.length > 0
-        ? Application.applicationName
-        : null) ?? Platform.OS;
-    return {
-      "X-Device-ID": deviceId,
-      "X-Device-Name": deviceName,
-    };
+    return await buildRequiredAuthDeviceHeaders();
   } catch {
     return {};
   }
+}
+
+/** Headers appareil obligatoires pour login / refresh contrat v1. */
+async function buildRequiredAuthDeviceHeaders(): Promise<Record<string, string>> {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { getStableDeviceId } = require("../notifications/getStableDeviceId") as {
+    getStableDeviceId: () => Promise<string>;
+  };
+  let deviceId: string;
+  try {
+    deviceId = await getStableDeviceId();
+  } catch {
+    throw new AuthContractError(
+      "DEVICE_ID_UNAVAILABLE",
+      "Impossible de sécuriser la session sur cet appareil. Fermez puis rouvrez l'application et réessayez."
+    );
+  }
+  if (!deviceId.trim()) {
+    throw new AuthContractError(
+      "DEVICE_ID_UNAVAILABLE",
+      "Impossible de sécuriser la session sur cet appareil. Fermez puis rouvrez l'application et réessayez."
+    );
+  }
+  return {
+    "X-Device-ID": deviceId,
+    "X-Device-Name": await resolveDeviceName(),
+  };
 }
 
 async function writeRefreshToken(value: string | null): Promise<void> {
@@ -438,7 +473,7 @@ async function refreshAuthToken(): Promise<string | null> {
   });
 
   const payload = { refresh_token: refreshToken };
-  const deviceHeaders = await buildAuthDeviceHeaders();
+  const deviceHeaders = await buildRequiredAuthDeviceHeaders();
   const authHeaders = {
     ...deviceHeaders,
     "X-Auth-Contract-Version": "mobile-device-session-v1",
@@ -713,42 +748,67 @@ function buildNoHttpResponseHint(requestUrl: string, error: AxiosError): string 
 }
 
 function toApiError(error: unknown): ApiCallError {
-  const e = error as AxiosError<{
-    message?: string;
-    error_message?: string;
-    error?: string;
-    error_code?: string;
-    reason?: string;
-    outcome_class?: "success" | "retryable_error" | "terminal_error";
-    retryable?: boolean;
-    trace_id?: string;
-    activation_session_id?: string;
-    masked_email?: string;
-    masked_phone?: string;
-    details?: Record<string, unknown>;
-  }>;
+  if (error instanceof AuthContractError) {
+    return {
+      status: null,
+      code: error.code,
+      message: error.message,
+    };
+  }
+
+  if (!axios.isAxiosError(error)) {
+    if (error instanceof Error) {
+      const code =
+        error.message === "storage_locked" ? "STORAGE_UNAVAILABLE" : "CLIENT_RUNTIME_ERROR";
+      return {
+        status: null,
+        code,
+        message: error.message || "Erreur locale inattendue.",
+      };
+    }
+    return {
+      status: null,
+      code: "CLIENT_RUNTIME_ERROR",
+      message: "Erreur locale inattendue.",
+    };
+  }
+
+  const e = error;
+  const data = e.response?.data as
+    | {
+        message?: string;
+        error_message?: string;
+        error?: string;
+        error_code?: string;
+        reason?: string;
+        outcome_class?: "success" | "retryable_error" | "terminal_error";
+        retryable?: boolean;
+        trace_id?: string;
+        activation_session_id?: string;
+        masked_email?: string;
+        masked_phone?: string;
+        details?: Record<string, unknown>;
+      }
+    | undefined;
   const endpoint = e.config?.url ?? "";
   const requestUrl = `${e.config?.baseURL ?? ""}${endpoint}`;
-  const noHttpResponse = e.response == null && e.code !== "ERR_CANCELED";
-  const transportHint = noHttpResponse ? buildNoHttpResponseHint(requestUrl, e) : "";
+  const isTransportFailure =
+    Boolean(e.request) && !e.response && e.code !== "ERR_CANCELED";
+  const transportHint = isTransportFailure ? buildNoHttpResponseHint(requestUrl, e) : "";
   return {
     status: e.response?.status ?? null,
-    code: e.response?.data?.error_code ?? "UNKNOWN_ERROR",
+    code: data?.error_code ?? "UNKNOWN_ERROR",
     message:
-      (e.response?.data?.error_message ??
-        e.response?.data?.error ??
-        e.response?.data?.message ??
-        e.message) +
-      transportHint,
-    reason: e.response?.data?.reason,
-    outcome_class: e.response?.data?.outcome_class,
-    retryable: e.response?.data?.retryable,
+      (data?.error_message ?? data?.error ?? data?.message ?? e.message) + transportHint,
+    reason: data?.reason,
+    outcome_class: data?.outcome_class,
+    retryable: data?.retryable,
     details: {
-      ...(e.response?.data?.details ?? {}),
-      trace_id: e.response?.data?.trace_id,
-      activation_session_id: e.response?.data?.activation_session_id,
-      masked_email: e.response?.data?.masked_email,
-      masked_phone: e.response?.data?.masked_phone,
+      ...(data?.details ?? {}),
+      trace_id: data?.trace_id,
+      activation_session_id: data?.activation_session_id,
+      masked_email: data?.masked_email,
+      masked_phone: data?.masked_phone,
     },
   };
 }
@@ -855,7 +915,7 @@ export async function login(email: string, password: string): Promise<void> {
         "Déconnexion en attente de confirmation serveur. Réessayez plus tard."
       );
     }
-    const deviceHeaders = await buildAuthDeviceHeaders();
+    const deviceHeaders = await buildRequiredAuthDeviceHeaders();
     const { data } = await apiClient.post(
       "/auth/login",
       {
@@ -884,6 +944,14 @@ export async function login(email: string, password: string): Promise<void> {
 
     // Fail-closed : toutes les écritures doivent réussir avant de publier l'access
     if (!refreshToken || typeof recovery !== "string" || !recovery) {
+      emitDriverTelemetry("auth.login.contract_incomplete", {
+        source: "core.api.client",
+        has_access_token: Boolean(token),
+        has_refresh_token: Boolean(refreshToken),
+        has_session_id: typeof responseObj.session_id === "string",
+        has_recovery_credential: typeof recovery === "string" && Boolean(recovery),
+        has_revocation_secret: typeof revocationSecret === "string",
+      });
       // Tenter revoke immédiat si secrets en mémoire
       const sid = responseObj.session_id;
       if (typeof sid === "string" && typeof revocationSecret === "string") {
@@ -893,12 +961,18 @@ export async function login(email: string, password: string): Promise<void> {
           /* best-effort */
         }
       }
-      throw new Error("Persistance session incomplète (refresh/recovery manquants).");
+      throw new AuthContractError(
+        "AUTH_LOGIN_CONTRACT_INCOMPLETE",
+        "Le serveur n'a pas retourné les éléments nécessaires à une session sécurisée."
+      );
     }
 
     const refreshWrite = await store.writeRefreshToken(refreshToken);
     if (refreshWrite.status !== "ok") {
-      throw new Error("storage_locked");
+      throw new AuthContractError(
+        "STORAGE_UNAVAILABLE",
+        "Stockage sécurisé temporairement indisponible. Fermez puis rouvrez l'application et réessayez."
+      );
     }
     // dual-write legacy best-effort
     try {
@@ -910,26 +984,23 @@ export async function login(email: string, password: string): Promise<void> {
     const recoveryWrite = await store.writeRecoveryCredential(recovery);
     if (recoveryWrite.status !== "ok") {
       await store.deleteRefreshToken();
-      throw new Error("storage_locked");
+      throw new AuthContractError(
+        "STORAGE_UNAVAILABLE",
+        "Stockage sécurisé temporairement indisponible. Fermez puis rouvrez l'application et réessayez."
+      );
     }
 
-    const deviceId = await (async () => {
-      try {
-        const { getStableDeviceId } = require("../notifications/getStableDeviceId") as {
-          getStableDeviceId: () => Promise<string>;
-        };
-        return await getStableDeviceId();
-      } catch {
-        return "unknown";
-      }
-    })();
+    const deviceId = deviceHeaders["X-Device-ID"] ?? "unknown";
     const accessClaims = token ? decodeJwtClaims(token) : null;
     const driverIdClaim = accessClaims?.driver_id;
     const sessionId = responseObj.session_id;
     if (typeof sessionId !== "string") {
       await store.deleteRefreshToken();
       await store.deleteRecoveryCredential();
-      throw new Error("session_id manquant");
+      throw new AuthContractError(
+        "AUTH_LOGIN_CONTRACT_INCOMPLETE",
+        "Le serveur n'a pas retourné les éléments nécessaires à une session sécurisée."
+      );
     }
     const envelopeWrite = await store.writeSessionEnvelope({
       schema_version: 1,
@@ -966,7 +1037,10 @@ export async function login(email: string, password: string): Promise<void> {
           /* conserver tombstone */
         }
       }
-      throw new Error("storage_locked");
+      throw new AuthContractError(
+        "STORAGE_UNAVAILABLE",
+        "Stockage sécurisé temporairement indisponible. Fermez puis rouvrez l'application et réessayez."
+      );
     }
 
     store.bumpAuthEpoch();
