@@ -99,9 +99,11 @@ type MetricTileProps = {
   icon: keyof typeof Ionicons.glyphMap;
   showDivider?: boolean;
   stacked?: boolean;
+  /** Mode 3 colonnes : labels plus courts / centrés, moins de wrap agressif. */
+  compactLabel?: boolean;
 };
 
-function MetricTile({ label, value, icon, showDivider, stacked }: MetricTileProps) {
+function MetricTile({ label, value, icon, showDivider, stacked, compactLabel }: MetricTileProps) {
   return (
     <>
       {showDivider ? (
@@ -111,13 +113,23 @@ function MetricTile({ label, value, icon, showDivider, stacked }: MetricTileProp
         />
       ) : null}
       <View style={[styles.metricTile, stacked && styles.metricTileStacked]}>
-        <View style={styles.metricHead}>
+        <View style={[styles.metricHead, compactLabel && styles.metricHeadCompact]}>
           <Ionicons name={icon} size={11} color={D.brand} accessibilityElementsHidden />
-          <AppText variant="caption" style={styles.metricLabel} numberOfLines={2}>
+          <AppText
+            variant="caption"
+            scaleRole="chrome"
+            style={[styles.metricLabel, compactLabel && styles.metricLabelCompact]}
+            numberOfLines={2}
+          >
             {label}
           </AppText>
         </View>
-        <AppText variant="label" style={styles.metricValue} numberOfLines={1}>
+        <AppText
+          variant="label"
+          scaleRole="chrome"
+          style={[styles.metricValue, stacked && styles.metricValueStacked]}
+          numberOfLines={1}
+        >
           {value}
         </AppText>
       </View>
@@ -149,7 +161,12 @@ function QuickAction({ label, icon, onPress, disabled, stacked }: QuickActionPro
       ]}
     >
       <Ionicons name={icon} size={13} color={D.brand} />
-      <AppText variant="caption" style={styles.quickActionLabel} numberOfLines={1}>
+      <AppText
+        variant="caption"
+        scaleRole="chrome"
+        style={styles.quickActionLabel}
+        numberOfLines={1}
+      >
         {label}
       </AppText>
     </Pressable>
@@ -163,7 +180,9 @@ export function DashboardActiveMission({
   onMissionRelease,
 }: Props) {
   const { can } = useSession();
-  const { isVeryLargeText, shouldStackRows } = useAccessibilityScale();
+  const { isVeryLargeText, fontScale } = useAccessibilityScale();
+  /** KPI + actions rapides sur une ligne ; empilement seulement si police vraiment extrême. */
+  const stackMetrics = fontScale >= 1.75;
   const statusUx = getDriverStatusUx(mission.status);
   const statusKey = resolveDriverStatusForUx(mission.status);
   const locationStale = useMissionLocationStale(mission.id, statusKey);
@@ -369,26 +388,29 @@ export function DashboardActiveMission({
         ) : null}
 
         <View style={styles.metricsDivider} accessibilityElementsHidden />
-        <View style={[styles.metricsRow, shouldStackRows && styles.metricsRowStacked]}>
+        <View style={[styles.metricsRow, stackMetrics && styles.metricsRowStacked]}>
           <MetricTile
             label={routeMetrics.distanceMetricLabel}
             value={routeMetrics.distanceLabel}
             icon="trail-sign-outline"
-            stacked={shouldStackRows}
+            stacked={stackMetrics}
+            compactLabel={!stackMetrics}
           />
           <MetricTile
             label={routeMetrics.durationMetricLabel}
             value={routeMetrics.durationLabel}
             icon="timer-outline"
             showDivider
-            stacked={shouldStackRows}
+            stacked={stackMetrics}
+            compactLabel={!stackMetrics}
           />
           <MetricTile
-            label="HEURE PRISE EN CHARGE"
+            label={stackMetrics ? "HEURE PRISE EN CHARGE" : "PRISE EN CHARGE"}
             value={formatMissionPickupTime(mission)}
             icon="calendar-outline"
             showDivider
-            stacked={shouldStackRows}
+            stacked={stackMetrics}
+            compactLabel={!stackMetrics}
           />
         </View>
       </View>
@@ -420,14 +442,14 @@ export function DashboardActiveMission({
         ) : null}
 
         {showQuickActions ? (
-          <View style={[styles.quickActionsRow, shouldStackRows && styles.quickActionsRowStacked]}>
+          <View style={[styles.quickActionsRow, stackMetrics && styles.quickActionsRowStacked]}>
             {showNavigation ? (
               <QuickAction
                 label="NAVIGATION"
                 icon="navigate-outline"
                 onPress={() => void openNavigation(dest)}
                 disabled={pending}
-                stacked={shouldStackRows}
+                stacked={stackMetrics}
               />
             ) : null}
             {showCallAction ? (
@@ -436,7 +458,7 @@ export function DashboardActiveMission({
                 icon="call-outline"
                 onPress={() => void safeCall(phone!)}
                 disabled={pending}
-                stacked={shouldStackRows}
+                stacked={stackMetrics}
               />
             ) : null}
             {canRelease ? (
@@ -445,7 +467,7 @@ export function DashboardActiveMission({
                 icon="refresh-outline"
                 onPress={() => onMissionRelease?.()}
                 disabled={pending}
-                stacked={shouldStackRows}
+                stacked={stackMetrics}
               />
             ) : null}
           </View>
@@ -745,6 +767,7 @@ const styles = StyleSheet.create({
     alignItems: "stretch",
     paddingTop: 5,
     paddingBottom: 1,
+    gap: 0,
   },
   metricsRowStacked: {
     flexDirection: "column",
@@ -768,7 +791,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "flex-start",
     gap: 2,
-    paddingHorizontal: 2,
+    paddingHorizontal: 4,
   },
   metricTileStacked: {
     flexGrow: 0,
@@ -786,6 +809,9 @@ const styles = StyleSheet.create({
     minWidth: 0,
     flexShrink: 1,
   },
+  metricHeadCompact: {
+    flexWrap: "nowrap",
+  },
   metricLabel: {
     flexShrink: 1,
     minWidth: 0,
@@ -795,16 +821,24 @@ const styles = StyleSheet.create({
     letterSpacing: 0.15,
     textAlign: "center",
     textTransform: "uppercase",
-    lineHeight: 8,
+    lineHeight: 10,
+  },
+  metricLabelCompact: {
+    lineHeight: 11,
   },
   metricValue: {
     color: D.text,
     fontWeight: "800",
     fontSize: FONT_SIZE.px13,
-    lineHeight: 15,
+    lineHeight: 16,
     textAlign: "center",
     flexShrink: 1,
     minWidth: 0,
+    width: "100%",
+  },
+  metricValueStacked: {
+    textAlign: "left",
+    width: undefined,
   },
   primaryCta: {
     flexDirection: "row",
@@ -828,11 +862,14 @@ const styles = StyleSheet.create({
   },
   quickActionsRow: {
     flexDirection: "row",
-    gap: 4,
+    alignItems: "stretch",
+    gap: 6,
+    flexWrap: "nowrap",
   },
   quickActionsRowStacked: {
     flexDirection: "column",
     alignItems: "stretch",
+    flexWrap: "wrap",
   },
   quickAction: {
     flex: 1,
@@ -841,17 +878,18 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 34,
+    minHeight: 36,
     backgroundColor: D.cardBg,
     borderWidth: 0,
     borderRadius: 8,
-    gap: 2,
-    paddingVertical: 4,
-    paddingHorizontal: 3,
+    gap: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 6,
     ...softSurfaceShadow,
   },
   quickActionStacked: {
     flexGrow: 0,
+    flex: 0,
     width: "100%",
   },
   quickActionDisabled: {
@@ -862,7 +900,7 @@ const styles = StyleSheet.create({
     minWidth: 0,
     color: D.textSub,
     fontWeight: "700",
-    fontSize: FONT_SIZE.px7,
+    fontSize: FONT_SIZE.px9,
     letterSpacing: 0.1,
     textAlign: "center",
   },
