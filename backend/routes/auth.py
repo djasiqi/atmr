@@ -1884,6 +1884,8 @@ def _bootstrap_base_response(
         "mission_snapshot_version": MISSION_SNAPSHOT_VERSION,
         "driver_socket_contract_version": DRIVER_SOCKET_CONTRACT_VERSION,
         "driver_tracking_contract_version": DRIVER_TRACKING_CONTRACT_VERSION,
+        # ✅ Sessions durables mobile (B0+) : contrat de capacités auth
+        **auth_capabilities(),
     }
 
 
@@ -2661,6 +2663,28 @@ class RefreshToken(Resource):
                 response_data["refresh_token"] = new_refresh_token
                 response_data["token_type"] = "Bearer"
                 response_data["expires_in"] = int(access_expires_delta.total_seconds())
+
+            # ✅ Idempotence : mémorise la réponse chiffrée pour permettre le replay
+            # exact d'une même clé (retry HTTP) sans re-rotationner la session.
+            if idempotency_key and mobile_session_for_rotation is not None:
+                try:
+                    store_rotation_result(
+                        session=mobile_session_for_rotation,
+                        idempotency_key=str(idempotency_key),
+                        request_generation=(
+                            rotation_request_generation
+                            if rotation_request_generation is not None
+                            else int(mobile_session_for_rotation.generation)
+                        ),
+                        successor_generation=int(mobile_session_for_rotation.generation),
+                        response_payload=response_data,
+                    )
+                    db.session.commit()
+                except Exception as rotation_store_error:
+                    logger.warning(
+                        "store_rotation_result refresh-token (non-bloquant): %s",
+                        rotation_store_error,
+                    )
 
             # Créer la réponse avec make_response pour pouvoir définir les cookies
             response = make_response(response_data, 200)
