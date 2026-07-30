@@ -81,9 +81,14 @@ export const ChatComposer = memo(function ChatComposer({
     const result = await stopVoiceSession();
     try {
       if (!result.ok) {
-        if (result.reason !== "no_active_recording" && result.reason !== "aborted") {
-          onVoiceError?.("Impossible d'enregistrer le message vocal.");
+        if (result.reason === "no_active_recording" || result.reason === "aborted") {
+          // Stop trop tôt / conflit FAB : feedback explicite (avant : silence total).
+          onVoiceError?.(
+            "Enregistrement non démarré. Appuyez sur le micro, parlez, puis appuyez à nouveau pour envoyer."
+          );
+          return;
         }
+        onVoiceError?.("Impossible d'enregistrer le message vocal.");
         return;
       }
       if (!result.data || elapsed < MIN_VOICE_MS) {

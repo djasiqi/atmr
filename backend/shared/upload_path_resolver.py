@@ -115,6 +115,14 @@ def build_file_response(
         ".jpeg",
         ".gif",
         ".webp",
+        ".mp3",
+        ".m4a",
+        ".aac",
+        ".wav",
+        ".ogg",
+        ".caf",
+        ".3gp",
+        ".webm",
     }
     disposition = (
         "attachment" if as_attachment or ext not in inline_extensions else "inline"

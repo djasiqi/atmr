@@ -50,9 +50,13 @@ export function useDriverTeamVoiceBroadcast(options?: {
     const result = await stopRecording();
     try {
       if (!result.ok) {
-        if (result.reason !== "no_active_recording" && result.reason !== "aborted") {
-          reportError("Impossible d'enregistrer le message vocal.");
+        if (result.reason === "no_active_recording" || result.reason === "aborted") {
+          reportError(
+            "Enregistrement non démarré. Appuyez sur le micro, parlez, puis appuyez à nouveau pour envoyer."
+          );
+          return;
         }
+        reportError("Impossible d'enregistrer le message vocal.");
         return;
       }
       if (!result.data || elapsed < MIN_VOICE_MS) {

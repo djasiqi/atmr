@@ -220,7 +220,7 @@ export function GroupMessageBubble({
 
           {hasAudio && audioUri ? (
             <View style={styles.voiceWrap}>
-              <VoiceMessageBar uri={audioUri} isOwn={isOwn} />
+              <VoiceMessageBar uri={audioUri} isOwn={isOwn} messageId={message.id} />
             </View>
           ) : null}
 

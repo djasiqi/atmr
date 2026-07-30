@@ -353,7 +353,7 @@ export const MessageBubble = memo(function MessageBubble({
                 { marginTop: showText || hasImage || hasPdf ? IMAGE_BLOCK_GAP : 0 },
               ]}
             >
-              <VoiceMessageBar uri={audioUri} isOwn={isOwn} />
+              <VoiceMessageBar uri={audioUri} isOwn={isOwn} messageId={message.id} />
             </View>
           ) : null}
         </View>

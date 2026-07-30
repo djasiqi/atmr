@@ -9,7 +9,12 @@ import {
 } from "./voiceMessageStyles";
 import { buildVoiceWaveformHeights, formatVoiceDuration } from "./voiceWaveform";
 
-type VoiceMessageBarProps = { uri: string; isOwn: boolean };
+type VoiceMessageBarProps = {
+  uri: string;
+  isOwn: boolean;
+  /** Ignoré sur le web (pas de téléchargement FileSystem). */
+  messageId?: string | number | null;
+};
 
 /**
  * Bundle web : lecture via `HTMLAudioElement` — layout WhatsApp horizontal, sans avatar.

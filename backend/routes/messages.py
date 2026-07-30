@@ -341,6 +341,42 @@ class MessagesList(Resource):
         return result, status_code
 
 
+def _user_can_access_message_attachment(user, message) -> bool:
+    """Autorise la PJ chat (image/pdf/audio) pour conversation ou hub entreprise."""
+    from models import Conversation, Driver
+    from services.messaging.permission_service import MessagingPermissionService
+
+    conversation = None
+    conversation_id = getattr(message, "conversation_id", None)
+    if conversation_id:
+        conversation = Conversation.query.get(conversation_id)
+
+    participant = None
+    if conversation:
+        participant = MessagingPermissionService.participant_for(
+            conversation.id, user.id
+        )
+        if MessagingPermissionService.can_read_message(
+            user, message, conversation, participant
+        ):
+            return True
+
+    # Hub / messages sans conversation : même entreprise (driver ou company).
+    role = str(getattr(user.role, "value", user.role)).upper()
+    message_company_id = getattr(message, "company_id", None)
+    if message_company_id is None:
+        return False
+    if role == "COMPANY":
+        company = getattr(user, "company", None)
+        return company is not None and int(company.id) == int(message_company_id)
+    if role == "DRIVER":
+        driver = getattr(user, "driver", None) or Driver.query.filter_by(
+            user_id=user.id
+        ).first()
+        return driver is not None and int(driver.company_id) == int(message_company_id)
+    return False
+
+
 @messages_ns.route("/<int:message_id>/attachment")
 class MessageAttachmentDownload(Resource):
     """Téléchargement pièce jointe message via lookup DB (Lot 0 SEC-06)."""
@@ -349,8 +385,7 @@ class MessageAttachmentDownload(Resource):
     def get(self, message_id: int):
         from werkzeug.exceptions import NotFound as WzNotFound
 
-        from models import Conversation, Message, User
-        from services.messaging.permission_service import MessagingPermissionService
+        from models import Message, User
         from shared.upload_path_resolver import serve_stored_upload
 
         user = User.query.filter_by(public_id=get_jwt_identity()).first()
@@ -361,24 +396,14 @@ class MessageAttachmentDownload(Resource):
         if not message:
             return {"error": "Message introuvable"}, 404
 
-        conversation = None
-        conversation_id = getattr(message, "conversation_id", None)
-        if conversation_id:
-            conversation = Conversation.query.get(conversation_id)
-
-        participant = None
-        if conversation:
-            participant = MessagingPermissionService.participant_for(
-                conversation.id, user.id
-            )
-
-        if not MessagingPermissionService.can_read_message(
-            user, message, conversation, participant
-        ):
+        if not _user_can_access_message_attachment(user, message):
             return {"error": "Accès non autorisé"}, 403
 
-        stored_url = getattr(message, "pdf_url", None) or getattr(
-            message, "image_url", None
+        # audio_url inclus : les vocaux sont sous /uploads/chat (privé SEC-06).
+        stored_url = (
+            getattr(message, "audio_url", None)
+            or getattr(message, "pdf_url", None)
+            or getattr(message, "image_url", None)
         )
         if not stored_url:
             return {"error": "Aucune pièce jointe"}, 404

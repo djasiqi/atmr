@@ -32,8 +32,11 @@ function inferVoiceMimeType(filename: string): string {
       return "audio/aac";
     case "webm":
       return "audio/webm";
+    case "m4a":
+      return "audio/mp4";
     default:
-      return "audio/m4a";
+      // Android / expo-audio HIGH_QUALITY → souvent conteneur mp4/m4a
+      return "audio/mp4";
   }
 }
 

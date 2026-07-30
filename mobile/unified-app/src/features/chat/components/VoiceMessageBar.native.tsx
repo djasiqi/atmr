@@ -1,8 +1,9 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, View } from "react-native";
 import { AppText } from "../../../design/ui/AppText";
 import { Ionicons } from "@expo/vector-icons";
 import { useChatVoicePlayer } from "../services/audioAdapter";
+import { resolvePlayableChatAudioUri } from "../services/resolvePlayableChatAudio";
 import {
   C_BUBBLE_OWN,
   VOICE_WAVEFORM_HEIGHT,
@@ -10,13 +11,20 @@ import {
 } from "./voiceMessageStyles";
 import { buildVoiceWaveformHeights, formatVoiceDuration } from "./voiceWaveform";
 
-type VoiceMessageBarProps = { uri: string; isOwn: boolean };
+type VoiceMessageBarProps = {
+  uri: string;
+  isOwn: boolean;
+  /** Id DB du message — requis pour télécharger `/uploads/chat` (privé SEC-06). */
+  messageId?: string | number | null;
+};
 
-/**
- * Lecteur vocal style WhatsApp (horizontal) — sans avatar.
- * Natif via `expo-audio`.
- */
-export function VoiceMessageBar({ uri, isOwn }: VoiceMessageBarProps) {
+type ReadyBarProps = {
+  uri: string;
+  isOwn: boolean;
+  heights: number[];
+};
+
+function ReadyVoiceMessageBar({ uri, isOwn, heights }: ReadyBarProps) {
   const {
     isPlaying,
     isLoaded,
@@ -28,7 +36,6 @@ export function VoiceMessageBar({ uri, isOwn }: VoiceMessageBarProps) {
   } = useChatVoicePlayer(uri);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const heights = useMemo(() => buildVoiceWaveformHeights(uri), [uri]);
 
   const toggle = useCallback(async () => {
     if (busy) return;
@@ -121,4 +128,105 @@ export function VoiceMessageBar({ uri, isOwn }: VoiceMessageBarProps) {
       </View>
     </Pressable>
   );
+}
+
+/**
+ * Lecteur vocal style WhatsApp (horizontal) — sans avatar.
+ * Natif via `expo-audio` après résolution auth des uploads chat privés.
+ */
+export function VoiceMessageBar({ uri, isOwn, messageId }: VoiceMessageBarProps) {
+  const heights = useMemo(() => buildVoiceWaveformHeights(uri), [uri]);
+  const [playableUri, setPlayableUri] = useState<string | null>(null);
+  const [resolveError, setResolveError] = useState<string | null>(null);
+  const [resolving, setResolving] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setResolving(true);
+    setResolveError(null);
+    setPlayableUri(null);
+    void resolvePlayableChatAudioUri({ uri, messageId })
+      .then((next) => {
+        if (!cancelled) setPlayableUri(next);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        const message =
+          err instanceof Error && err.message.trim()
+            ? err.message.trim()
+            : "Impossible de charger ce message vocal.";
+        setResolveError(message);
+      })
+      .finally(() => {
+        if (!cancelled) setResolving(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [uri, messageId]);
+
+  if (resolving || (!playableUri && !resolveError)) {
+    const iconColor = isOwn ? "#ECFDF5" : C_BUBBLE_OWN;
+    return (
+      <View style={[styles.voiceRow, isOwn && styles.voiceRowOwn]}>
+        <View style={[styles.playButton, isOwn && styles.playButtonOwn]}>
+          <ActivityIndicator size="small" color={iconColor} />
+        </View>
+        <View style={styles.waveColumn}>
+          <View style={styles.waveTrack}>
+            {heights.map((h, index) => (
+              <View
+                key={`bar-loading-${index}`}
+                style={[
+                  styles.waveBar,
+                  {
+                    height: Math.max(3, h * VOICE_WAVEFORM_HEIGHT),
+                    backgroundColor: isOwn
+                      ? "rgba(255,255,255,0.38)"
+                      : "rgba(148,163,184,0.85)",
+                  },
+                ]}
+              />
+            ))}
+          </View>
+          <AppText
+            variant="caption"
+            scaleRole="chrome"
+            style={[styles.durationText, isOwn ? styles.durationOwn : styles.durationIn]}
+          >
+            …
+          </AppText>
+        </View>
+      </View>
+    );
+  }
+
+  if (resolveError || !playableUri) {
+    return (
+      <View style={[styles.voiceRow, isOwn && styles.voiceRowOwn]}>
+        <View style={[styles.playButton, isOwn && styles.playButtonOwn]}>
+          <Ionicons
+            name="alert-circle-outline"
+            size={18}
+            color={isOwn ? "#ECFDF5" : C_BUBBLE_OWN}
+          />
+        </View>
+        <View style={styles.waveColumn}>
+          <AppText
+            variant="caption"
+            scaleRole="chrome"
+            style={[
+              styles.durationText,
+              styles.durationError,
+              isOwn ? styles.durationErrorOwn : null,
+            ]}
+          >
+            {resolveError ?? "Impossible de charger ce message vocal."}
+          </AppText>
+        </View>
+      </View>
+    );
+  }
+
+  return <ReadyVoiceMessageBar uri={playableUri} isOwn={isOwn} heights={heights} />;
 }
