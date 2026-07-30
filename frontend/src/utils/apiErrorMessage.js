@@ -97,6 +97,14 @@ export function getApiErrorMessage(error, fallback = 'Une erreur est survenue.')
     return fallback;
   }
 
+  const errorCode = typeof d.error === 'string' ? d.error.trim().toLowerCase() : '';
+  if (
+    errorCode === 'missing_token' ||
+    (typeof d.message === 'string' && /missing jwt/i.test(d.message))
+  ) {
+    return 'Session expirée. Veuillez vous reconnecter.';
+  }
+
   if (typeof d.message === 'string' && d.message.trim()) {
     const msg = d.message.trim();
     // Marshmallow brut : préciser le champ si disponible
@@ -140,6 +148,7 @@ export function getApiErrorMessage(error, fallback = 'Une erreur est survenue.')
   if (typeof d.error === 'string' && d.error.trim()) {
     const code = d.error.trim();
     const known = {
+      missing_token: 'Session expirée. Veuillez vous reconnecter.',
       payment_unavailable: 'Le paiement en ligne est temporairement indisponible.',
       saferpay_configuration: 'Configuration du prestataire de paiement (Saferpay) incomplète.',
       saferpay_initialize_failed:

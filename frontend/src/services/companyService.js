@@ -66,22 +66,6 @@ export const fetchCompanyDashboardBootstrap = async (date) => {
   return data;
 };
 
-/** Exécute une action de la file bootstrap v2 (accept/reject/acknowledge). */
-export const executeCompanyActionQueueItem = async (
-  actionId,
-  { action, expectedVersion, idempotencyKey }
-) => {
-  const { data } = await apiClient.post(
-    `/companies/me/action-queue/${encodeURIComponent(actionId)}/execute`,
-    {
-      action,
-      expected_version: expectedVersion,
-      idempotency_key: idempotencyKey,
-    }
-  );
-  return data;
-};
-
 export const fetchCompanyReservations = async (date, { fields } = {}) => {
   try {
     const params = {

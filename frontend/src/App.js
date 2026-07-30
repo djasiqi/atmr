@@ -16,7 +16,11 @@ import { Toaster } from 'sonner';
 import Home from './pages/Home/Home';
 import BookNewRedirect from './pages/Auth/BookNewRedirect';
 import { recordUserActivity } from './utils/userActivityTracker';
-import { isRecoverableAuthError, isFreshTokenRequiredError } from './utils/queryAuthError';
+import {
+  isRecoverableAuthError,
+  isFreshTokenRequiredError,
+  isSessionExpiredError,
+} from './utils/queryAuthError';
 import { SessionBootstrapProvider } from './contexts/SessionBootstrapContext';
 import AuthNavigationBridge from './components/auth/AuthNavigationBridge';
 import RouteSeoManager from './components/seo/RouteSeoManager';
@@ -184,7 +188,11 @@ export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry(failureCount, error) {
-        if (isRecoverableAuthError(error) || isFreshTokenRequiredError(error)) {
+        if (
+          isRecoverableAuthError(error) ||
+          isFreshTokenRequiredError(error) ||
+          isSessionExpiredError(error)
+        ) {
           return false;
         }
         return failureCount < 2;
@@ -195,7 +203,11 @@ export const queryClient = new QueryClient({
     },
     mutations: {
       retry(failureCount, error) {
-        if (isRecoverableAuthError(error) || isFreshTokenRequiredError(error)) {
+        if (
+          isRecoverableAuthError(error) ||
+          isFreshTokenRequiredError(error) ||
+          isSessionExpiredError(error)
+        ) {
           return false;
         }
         return failureCount < 1;

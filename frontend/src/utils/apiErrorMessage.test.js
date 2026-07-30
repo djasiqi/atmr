@@ -26,6 +26,21 @@ describe('getApiErrorMessage', () => {
     expect(getApiErrorMessage(err, 'Défaut')).toMatch(/contacter le support/i);
   });
 
+  it('traduit missing_token au lieu du message JWT anglais', () => {
+    const err = {
+      response: {
+        status: 401,
+        data: {
+          error: 'missing_token',
+          message: 'Missing JWT in cookies or headers (Missing cookie "access_token")',
+        },
+      },
+    };
+    expect(getApiErrorMessage(err, 'Défaut')).toBe(
+      'Session expirée. Veuillez vous reconnecter.'
+    );
+  });
+
   it('ignore le message Axios générique de statut HTTP', () => {
     const err = {
       message: 'Request failed with status code 503',

@@ -366,6 +366,7 @@ const FRESH_TOKEN_REQUIRED_MESSAGE =
   'Cette action nécessite une reconnexion récente. Veuillez vous reconnecter pour continuer.';
 
 export const AUTH_TOKEN_NOT_FRESH = 'AUTH_TOKEN_NOT_FRESH';
+export const AUTH_SESSION_EXPIRED = 'AUTH_SESSION_EXPIRED';
 
 export const isAuthRefreshInProgress = () => isRefreshing;
 
@@ -391,6 +392,20 @@ const isFreshTokenErrorPayload = (errorData = {}) => {
     errorMsg.includes('only fresh tokens') ||
     errorMsg.includes("n'est pas frais") ||
     errorMsg.includes('token n\'est pas frais')
+  );
+};
+
+/** JWT absent (cookies/headers) — session morte, déconnexion immédiate. */
+export const isMissingTokenErrorPayload = (errorData = {}) => {
+  if (!errorData || typeof errorData !== 'object') {
+    return false;
+  }
+  const code = (errorData.error || errorData.error_code || '').toString().toLowerCase();
+  const msg = (errorData.message || errorData.msg || '').toString().toLowerCase();
+  return (
+    code === 'missing_token' ||
+    msg.includes('missing jwt') ||
+    (msg.includes('missing cookie') && msg.includes('access_token'))
   );
 };
 
@@ -491,6 +506,32 @@ const rejectFreshTokenRequired = (error, cfg = {}) => {
     code: AUTH_TOKEN_NOT_FRESH,
     isFreshTokenRequired: true,
     message: FRESH_TOKEN_REQUIRED_MESSAGE,
+  });
+};
+
+const SESSION_EXPIRED_MESSAGE = 'Session expirée. Veuillez vous reconnecter.';
+
+/** Déconnexion immédiate (missing_token / session irrécupérable). */
+const requestImmediateSessionLogout = (cfg = {}) => {
+  if (
+    cfg.skipFreshTokenLogout ||
+    cfg.skipAuthRedirect ||
+    isLoginSessionInProgress() ||
+    isExplicitLogoutInProgress()
+  ) {
+    return;
+  }
+  void logoutUser({ preserveNext: true });
+};
+
+const rejectSessionExpired = (error, cfg = {}) => {
+  requestImmediateSessionLogout(cfg);
+  return Promise.reject({
+    ...error,
+    code: AUTH_SESSION_EXPIRED,
+    isSessionExpired: true,
+    meta: { ...(error?.meta || {}), suppressAuthError: true },
+    message: SESSION_EXPIRED_MESSAGE,
   });
 };
 
@@ -676,9 +717,9 @@ apiClient.interceptors.response.use(
           });
       }
 
-      // Premier 401 → tenter refresh
-      isRefreshing = true;
-
+      // Premier 401 → tenter refresh.
+      // Ne pas poser isRefreshing ici : refreshSessionTokens gère le flag.
+      // Sinon refreshSessionTokens se met en file d'attente sur lui-même (deadlock).
       try {
         const targetEnv = cfg._targetEnv || getCurrentAuthEnv();
         await refreshSessionTokens(targetEnv);
@@ -717,6 +758,13 @@ apiClient.interceptors.response.use(
         const currentEnv = getCurrentAuthEnv();
         const isCrossEnvError = requestEnv && requestEnv !== currentEnv;
         if (!isCrossEnvError) {
+          // missing_token = JWT absent : déconnexion immédiate, pas de toast d'erreur fugace.
+          if (
+            isMissingTokenErrorPayload(refreshError?.response?.data) ||
+            isMissingTokenErrorPayload(error?.response?.data)
+          ) {
+            return rejectSessionExpired(refreshError || error, cfg);
+          }
           requestDeferredSessionLogout(cfg);
         }
         return Promise.reject(refreshError);

@@ -3,11 +3,14 @@ import {
   getQueryErrorMessage,
   isRecoverableAuthError,
   isFreshTokenRequiredError,
+  isSessionExpiredError,
   AUTH_TOKEN_NOT_FRESH,
+  AUTH_SESSION_EXPIRED,
 } from '../queryAuthError';
 
 jest.mock('../apiClient', () => ({
   isAuthRefreshInProgress: jest.fn(() => false),
+  isMissingTokenErrorPayload: jest.fn((data) => data?.error === 'missing_token'),
 }));
 
 const { isAuthRefreshInProgress } = require('../apiClient');
@@ -21,6 +24,19 @@ describe('queryAuthError', () => {
     const error = { code: AUTH_TOKEN_NOT_FRESH, isFreshTokenRequired: true };
     expect(isFreshTokenRequiredError(error)).toBe(true);
     expect(shouldShowQueryError(error)).toBe(false);
+  });
+
+  it('masque missing_token / session expirée (pas de toast UI)', () => {
+    const error = {
+      code: AUTH_SESSION_EXPIRED,
+      isSessionExpired: true,
+      meta: { suppressAuthError: true },
+      response: { status: 401, data: { error: 'missing_token' } },
+    };
+    expect(isSessionExpiredError(error)).toBe(true);
+    expect(isRecoverableAuthError(error)).toBe(true);
+    expect(shouldShowQueryError(error)).toBe(false);
+    expect(getQueryErrorMessage(error)).toBe('');
   });
 
   it('masque les erreurs auth pendant un refresh', () => {

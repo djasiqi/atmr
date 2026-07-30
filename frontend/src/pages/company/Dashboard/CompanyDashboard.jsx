@@ -16,7 +16,6 @@ import useCompanySocket, { useSocketConnected } from '../../../hooks/useCompanyS
 import useDispatchStatus from '../../../hooks/useDispatchStatus';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import OverviewCards from './components/OverviewCards';
-import ActionQueueNow from './components/ActionQueueNow';
 import ReservationTable from './components/ReservationTable';
 import DriverTable from '../../driver/components/Dashboard/DriverTable';
 import OpportunitiesSection from './components/OpportunitiesSection';
@@ -71,6 +70,7 @@ import Modal from '../../../components/common/Modal';
 import { CompanyDashboardFreshnessBadge } from './components/CompanyDashboardFreshnessBadge';
 import InlineDatePicker from '../../../components/ui/InlineDatePicker';
 import { toast } from 'sonner';
+import { logoutUser } from '../../../utils/apiClient';
 import { lirieKeys, LIRIE_QK_PREFIX, lirieInvalidateCompanyReservationLists, listScopeHash } from '../../../queryKeys/lirie';
 import {
   canonicalRealtimeTimeMs,
@@ -270,11 +270,15 @@ const CompanyDashboard = () => {
   useEffect(() => {
     const handler = (e) => {
       const code = (e.detail?.code || e.detail?.message || '').toString();
-      const authCodes = ['AUTH_REQUIRED', 'AUTH_INVALID', 'TOKEN_EXPIRED', 'AUTH_FORBIDDEN', 'COMPANY_NOT_FOUND', 'DRIVER_OR_COMPANY_NOT_FOUND'];
-      // Sonner: passer le même `id` dédoublonne (remplace au lieu d'empiler) — évite la cascade
-      // pendant les reconnexions Socket.IO.
-      if (authCodes.some((c) => code.includes(c))) {
-        toast.error('Session expirée ou accès refusé. Reconnectez-vous.', {
+      // Session morte / JWT manquant ou invalide → déconnexion auto, pas de toast fugace.
+      const logoutCodes = ['AUTH_REQUIRED', 'AUTH_INVALID', 'TOKEN_EXPIRED'];
+      const accessCodes = ['AUTH_FORBIDDEN', 'COMPANY_NOT_FOUND', 'DRIVER_OR_COMPANY_NOT_FOUND'];
+      if (logoutCodes.some((c) => code.includes(c))) {
+        toast.dismiss('socket-auth-rejected');
+        void logoutUser({ preserveNext: true });
+      } else if (accessCodes.some((c) => code.includes(c))) {
+        // Sonner: même `id` pour dédoublonner pendant les reconnexions Socket.IO.
+        toast.error('Accès refusé à la connexion temps réel. Reconnectez-vous.', {
           id: 'socket-auth-rejected',
           duration: 5000,
         });
@@ -1470,26 +1474,6 @@ const CompanyDashboard = () => {
             realtimeDegraded={realtimeDegraded}
             className={styles.dashboardFreshness}
           />
-
-          {criticalDataReady && bootstrap?.schema_version >= 2 ? (
-            <ActionQueueNow
-              companyId={company?.id}
-              day={dispatchDay}
-              actionQueue={bootstrap?.action_queue || []}
-              actionQueueTotal={bootstrap?.action_queue_total ?? 0}
-              truncated={Boolean(bootstrap?.action_queue_truncated)}
-              toHandle={bootstrap?.summary?.to_handle ?? null}
-              onAssign={(bookingId) => {
-                const res = reservationsMap.get(bookingId);
-                if (res) openAssignModal(res);
-              }}
-              onActionComplete={() => {
-                startTransition(() => {
-                  reloadReservations();
-                });
-              }}
-            />
-          ) : null}
 
           {/* ============ 2. KPI + MODE DISPATCH ============ */}
           <OverviewCards
