@@ -4,15 +4,25 @@
  */
 import { Platform } from "react-native";
 import * as SecureStore from "expo-secure-store";
+import type { AuthContext, BootstrapResponse } from "../contracts/auth";
 
 const RECOVERY_KEY = "@atmr/auth/recovery_credential";
+const RECOVERY_TOMBSTONE_KEY = "@atmr/auth/recovery_credential_tombstone";
 const REFRESH_KEY = "@atmr/auth/refresh_token";
+const REFRESH_TOMBSTONE_KEY = "@atmr/auth/refresh_token_tombstone";
 const INSTALLATION_KEY = "@atmr/auth/installation_id";
 const TOMBSTONE_KEY = "@atmr/auth/revocation_tombstone";
 const ENVELOPE_KEY = "@atmr/auth/session_envelope";
 
 export type SecureCredentialReadResult =
   | { status: "found"; value: string }
+  | { status: "missing" }
+  | { status: "temporarily_unavailable"; cause: string }
+  | { status: "permanently_invalidated"; cause: string };
+
+/** Variante typée pour les valeurs JSON (enveloppe de session, tombstone de révocation). */
+export type TypedCredentialReadResult<T> =
+  | { status: "found"; value: T }
   | { status: "missing" }
   | { status: "temporarily_unavailable"; cause: string }
   | { status: "permanently_invalidated"; cause: string };
@@ -30,6 +40,8 @@ const NATIVE_OPTIONS: SecureStore.SecureStoreOptions = {
 function isNative(): boolean {
   return Platform.OS === "ios" || Platform.OS === "android";
 }
+
+const webMemory = new Map<string, string>();
 
 async function nativeGet(key: string): Promise<SecureCredentialReadResult> {
   if (!isNative()) {
@@ -80,36 +92,92 @@ async function nativeDelete(key: string): Promise<SecureCredentialWriteResult> {
   }
 }
 
-const webMemory = new Map<string, string>();
+/**
+ * Lecture d'un credential révocable : distingue "jamais écrit" (missing) de
+ * "explicitement invalidé" (permanently_invalidated, ex. session_revoked / refresh_replay_detected).
+ * Le marqueur d'invalidation est purgé au prochain write réussi.
+ */
+async function readWithInvalidationMarker(
+  key: string,
+  tombstoneKey: string
+): Promise<SecureCredentialReadResult> {
+  const raw = await nativeGet(key);
+  if (raw.status !== "missing") return raw;
+  const marker = await nativeGet(tombstoneKey);
+  if (marker.status === "found") {
+    return { status: "permanently_invalidated", cause: marker.value };
+  }
+  return raw;
+}
+
+async function writeAndClearInvalidationMarker(
+  key: string,
+  tombstoneKey: string,
+  value: string
+): Promise<SecureCredentialWriteResult> {
+  const written = await nativeSet(key, value);
+  if (written.status === "ok") {
+    void nativeDelete(tombstoneKey);
+  }
+  return written;
+}
+
+async function deleteAndClearInvalidationMarker(
+  key: string,
+  tombstoneKey: string
+): Promise<SecureCredentialWriteResult> {
+  const deleted = await nativeDelete(key);
+  void nativeDelete(tombstoneKey);
+  return deleted;
+}
+
+/** Invalide définitivement un credential (session_revoked, refresh_replay_detected, …). */
+async function invalidateCredential(
+  key: string,
+  tombstoneKey: string,
+  reason: string
+): Promise<SecureCredentialWriteResult> {
+  await nativeDelete(key);
+  return nativeSet(tombstoneKey, reason);
+}
 
 export async function readRecoveryCredential(): Promise<SecureCredentialReadResult> {
-  return nativeGet(RECOVERY_KEY);
+  return readWithInvalidationMarker(RECOVERY_KEY, RECOVERY_TOMBSTONE_KEY);
 }
 
 export async function writeRecoveryCredential(value: string): Promise<SecureCredentialWriteResult> {
-  return nativeSet(RECOVERY_KEY, value);
+  return writeAndClearInvalidationMarker(RECOVERY_KEY, RECOVERY_TOMBSTONE_KEY, value);
 }
 
 export async function deleteRecoveryCredential(): Promise<SecureCredentialWriteResult> {
-  return nativeDelete(RECOVERY_KEY);
+  return deleteAndClearInvalidationMarker(RECOVERY_KEY, RECOVERY_TOMBSTONE_KEY);
+}
+
+export async function invalidateRecoveryCredential(reason: string): Promise<SecureCredentialWriteResult> {
+  return invalidateCredential(RECOVERY_KEY, RECOVERY_TOMBSTONE_KEY, reason);
 }
 
 export async function readRefreshToken(): Promise<SecureCredentialReadResult> {
-  return nativeGet(REFRESH_KEY);
+  return readWithInvalidationMarker(REFRESH_KEY, REFRESH_TOMBSTONE_KEY);
 }
 
 export async function writeRefreshToken(value: string): Promise<SecureCredentialWriteResult> {
-  return nativeSet(REFRESH_KEY, value);
+  return writeAndClearInvalidationMarker(REFRESH_KEY, REFRESH_TOMBSTONE_KEY, value);
 }
 
 export async function deleteRefreshToken(): Promise<SecureCredentialWriteResult> {
-  return nativeDelete(REFRESH_KEY);
+  return deleteAndClearInvalidationMarker(REFRESH_KEY, REFRESH_TOMBSTONE_KEY);
+}
+
+export async function invalidateRefreshToken(reason: string): Promise<SecureCredentialWriteResult> {
+  return invalidateCredential(REFRESH_KEY, REFRESH_TOMBSTONE_KEY, reason);
 }
 
 export async function readInstallationId(): Promise<SecureCredentialReadResult> {
   return nativeGet(INSTALLATION_KEY);
 }
 
+/** Génère + persiste + relit l'ID d'installation : n'ignore jamais un échec d'écriture. */
 export async function createAndPersistInstallationId(): Promise<SecureCredentialReadResult> {
   const existing = await readInstallationId();
   if (existing.status === "found") return existing;
@@ -123,7 +191,14 @@ export async function createAndPersistInstallationId(): Promise<SecureCredential
       cause: written.cause || "device_identity_storage_unavailable",
     };
   }
-  return { status: "found", value: generated };
+  const readBack = await readInstallationId();
+  if (readBack.status !== "found" || readBack.value !== generated) {
+    return {
+      status: "temporarily_unavailable",
+      cause: "device_identity_storage_unavailable",
+    };
+  }
+  return readBack;
 }
 
 export type RevocationTombstone = {
@@ -134,11 +209,7 @@ export type RevocationTombstone = {
   created_at: string;
 };
 
-export async function readRevocationTombstone(): Promise<
-  | { status: "found"; value: RevocationTombstone }
-  | { status: "missing" }
-  | { status: "temporarily_unavailable"; cause: string }
-> {
+export async function readRevocationTombstone(): Promise<TypedCredentialReadResult<RevocationTombstone>> {
   const raw = await nativeGet(TOMBSTONE_KEY);
   if (raw.status !== "found") return raw;
   try {
@@ -168,13 +239,17 @@ export type SessionEnvelope = {
   active_context_id: string | null;
   refresh_generation: number;
   last_authenticated_at: string;
+  /** Secret local (jamais transmis sauf via revoke-pending) pour la révocation hors-ligne. */
+  revocation_secret?: string | null;
+  /**
+   * Extension locale (non contractuelle côté backend) : permet de réhydrater
+   * immédiatement l'UI en mode authenticated_offline au cold start, avant tout appel réseau.
+   */
+  cached_active_context?: AuthContext | null;
+  cached_bootstrap?: BootstrapResponse | null;
 };
 
-export async function readSessionEnvelope(): Promise<
-  | { status: "found"; value: SessionEnvelope }
-  | { status: "missing" }
-  | { status: "temporarily_unavailable"; cause: string }
-> {
+export async function readSessionEnvelope(): Promise<TypedCredentialReadResult<SessionEnvelope>> {
   const raw = await nativeGet(ENVELOPE_KEY);
   if (raw.status !== "found") return raw;
   try {
