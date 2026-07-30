@@ -720,10 +720,7 @@ const DraftInvoiceEditorPanel = ({
   }, [
     open,
     companyId,
-    inv?.id,
-    inv?.company_id,
-    inv?.updated_at,
-    inv?.meta,
+    inv,
     allowsLineEditing,
   ]);
 

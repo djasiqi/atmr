@@ -83,7 +83,6 @@ import {
   drainContiguousBuffer,
   setSubscribedCursor,
   isRealtimeDegraded,
-  clearResyncAfterBootstrapSuccess,
   isResyncRequired,
 } from '../../../utils/companyRealtimeSequenceGate';
 import { getAuthEnv } from '../../../utils/webAuthSession';
@@ -704,7 +703,6 @@ const CompanyDashboard = () => {
     return () => socket.off('new_company_notification', handleNewCompanyNotification);
   }, [socket, handleNewCompanyNotification]);
 
-  const dashboardMountAtRef = React.useRef(Date.now());
   const graceBufferActiveRef = React.useRef(true);
 
   useEffect(() => {
@@ -905,6 +903,7 @@ const CompanyDashboard = () => {
     useDispatchDashboardWs,
     company?.id,
     startTransition,
+    criticalDataReady,
   ]);
 
   const handleAccept = async (id) => {
