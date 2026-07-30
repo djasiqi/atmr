@@ -1066,9 +1066,19 @@ def _disable_demo_user(user_id: int | None) -> None:
 
     user.account_status = "disabled"
     try:
-        revoke_all_user_tokens(user_id=user.id, reason="demo_access_disabled")
+        from security.mobile_device_session_service import disable_user_sessions
+
+        disable_user_sessions(
+            user,
+            reason="demo_access_disabled",
+            increment_token_version=True,
+        )
     except Exception:
-        logger.exception("[demo_access] refresh token revocation failed")
+        logger.exception("[demo_access] session/token revocation failed")
+        try:
+            revoke_all_user_tokens(user_id=user.id, reason="demo_access_disabled")
+        except Exception:
+            logger.exception("[demo_access] refresh token revocation failed")
 
 
 def _canonical_request_email_from_demo_login(email: str | None) -> str:

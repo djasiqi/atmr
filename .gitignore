@@ -1,5 +1,6 @@
 # ===== Markdown files =====
 *.md
+!**/gate-session-permanente-gps.md
 
 # ===== Python =====
 __pycache__/
@@ -146,6 +147,8 @@ backend/celerybeat-schedule*
 !/docs/operations/**
 !/docs/development/
 !/docs/development/**
+!/docs/
+!/docs/gate-session-permanente-gps.md
 # Exception: journal pilote requis par CI (prefill-pilot-log)
 !mobile/unified-app/docs/
 !mobile/unified-app/docs/PILOT_EXECUTION_LOG.md

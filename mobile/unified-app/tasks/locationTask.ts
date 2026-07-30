@@ -1,11 +1,14 @@
 /**
- * Tâche périodique de self-heal GPS (PR D2).
+ * Tâche périodique de self-heal GPS (F3 / PR D2).
  *
- * Préfère `expo-background-task` (SDK 54+) ; bascule sur `expo-background-fetch`
- * si le module n'est pas installé. Ne décide JAMAIS de l'absence de session,
- * ne purge JAMAIS les tokens, ne fait JAMAIS de logout.
+ * Chemin unique `expo-background-task` (SDK 54+, minimumInterval en minutes).
+ * Rôle : maintenance best-effort (flush / santé / self-heal) — PAS watchdog GPS temps réel.
+ * Ne purge JAMAIS les tokens, ne fait JAMAIS de logout.
+ *
+ * TaskManager.defineTask DOIT être au scope module (bundle global).
  */
 import { Platform } from "react-native";
+import * as TaskManager from "expo-task-manager";
 import { emitDriverTelemetry } from "../src/core/observability/driverTelemetry";
 import { isFeatureEnabled } from "../src/core/featureFlags/registry";
 import {
@@ -19,7 +22,8 @@ import {
 import { initializeBackgroundLocationTask } from "../src/features/driver/services/backgroundLocationTask";
 
 const DRIVER_LOCATION_TASK = "driver-location-background-task";
-const BACKGROUND_INTERVAL_SECONDS = 60 * 15;
+/** BackgroundTask : intervalle en minutes (minimum Android = 15). */
+const BACKGROUND_INTERVAL_MINUTES = 15;
 
 type TickResult = "NewData" | "NoData" | "Failed";
 
@@ -52,76 +56,32 @@ async function runSelfHealTick(): Promise<TickResult> {
   return "NewData";
 }
 
-async function registerWithBackgroundTask(
-  TaskManager: {
-    defineTask: (name: string, fn: () => Promise<unknown>) => void;
-    isTaskRegisteredAsync: (name: string) => Promise<boolean>;
-  }
-): Promise<boolean> {
-  try {
-    const BackgroundTask = await import("expo-background-task");
-    if (typeof (BackgroundTask as { registerTaskAsync?: unknown }).registerTaskAsync !== "function") {
-      return false;
+// Scope module obligatoire (Expo BackgroundTask / TaskManager)
+if (Platform.OS !== "web" && typeof TaskManager.defineTask === "function") {
+  TaskManager.defineTask(DRIVER_LOCATION_TASK, async () => {
+    try {
+      await runSelfHealTick();
+      try {
+        const BackgroundTask = await import("expo-background-task");
+        const Result = (BackgroundTask as {
+          BackgroundTaskResult?: { Success?: number; Failed?: number };
+        }).BackgroundTaskResult;
+        return Result?.Success ?? 1;
+      } catch {
+        return 1;
+      }
+    } catch {
+      try {
+        const BackgroundTask = await import("expo-background-task");
+        const Result = (BackgroundTask as {
+          BackgroundTaskResult?: { Success?: number; Failed?: number };
+        }).BackgroundTaskResult;
+        return Result?.Failed ?? 2;
+      } catch {
+        return 2;
+      }
     }
-    TaskManager.defineTask(DRIVER_LOCATION_TASK, async () => {
-      await runSelfHealTick();
-      const Result = (BackgroundTask as {
-        BackgroundTaskResult?: { Success?: number; Failed?: number };
-      }).BackgroundTaskResult;
-      return Result?.Success ?? 1;
-    });
-    const already = await TaskManager.isTaskRegisteredAsync(DRIVER_LOCATION_TASK);
-    if (already) return true;
-    await (BackgroundTask as {
-      registerTaskAsync: (
-        name: string,
-        opts: { minimumInterval?: number }
-      ) => Promise<void>;
-    }).registerTaskAsync(DRIVER_LOCATION_TASK, {
-      minimumInterval: BACKGROUND_INTERVAL_SECONDS,
-    });
-    emitDriverTelemetry("tracking.background.task.registered", {
-      source: "driver.tasks.locationTask",
-      task_name: DRIVER_LOCATION_TASK,
-      min_interval_s: BACKGROUND_INTERVAL_SECONDS,
-      api: "expo-background-task",
-    });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function registerWithBackgroundFetch(
-  TaskManager: {
-    defineTask: (name: string, fn: () => Promise<unknown>) => void;
-    isTaskRegisteredAsync: (name: string) => Promise<boolean>;
-  }
-): Promise<boolean> {
-  try {
-    const BackgroundFetch = await import("expo-background-fetch");
-    TaskManager.defineTask(DRIVER_LOCATION_TASK, async () => {
-      await runSelfHealTick();
-      return BackgroundFetch.BackgroundFetchResult.NewData;
-    });
-    const already = await TaskManager.isTaskRegisteredAsync(DRIVER_LOCATION_TASK);
-    if (already) return true;
-    if (typeof BackgroundFetch.registerTaskAsync !== "function") return false;
-    await BackgroundFetch.registerTaskAsync(DRIVER_LOCATION_TASK, {
-      minimumInterval: BACKGROUND_INTERVAL_SECONDS,
-      stopOnTerminate: false,
-      startOnBoot: true,
-    });
-    emitDriverTelemetry("tracking.background.task.registered", {
-      source: "driver.tasks.locationTask",
-      task_name: DRIVER_LOCATION_TASK,
-      min_interval_s: BACKGROUND_INTERVAL_SECONDS,
-      api: "expo-background-fetch",
-    });
-    return true;
-  } catch {
-    return false;
-  }
+  });
 }
 
 export async function registerDriverBackgroundTasks(): Promise<void> {
@@ -140,24 +100,38 @@ export async function registerDriverBackgroundTasks(): Promise<void> {
   initializeBackgroundLocationTask();
 
   try {
-    const taskManagerModule = await import("expo-task-manager");
-    const TaskManager = taskManagerModule;
-    if (typeof TaskManager.defineTask !== "function") return;
     if (typeof TaskManager.isTaskRegisteredAsync !== "function") return;
+    const already = await TaskManager.isTaskRegisteredAsync(DRIVER_LOCATION_TASK);
+    if (already) return;
 
-    const ok =
-      (await registerWithBackgroundTask(TaskManager))
-      || (await registerWithBackgroundFetch(TaskManager));
-    if (!ok) {
+    const BackgroundTask = await import("expo-background-task");
+    if (typeof (BackgroundTask as { registerTaskAsync?: unknown }).registerTaskAsync !== "function") {
       emitDriverTelemetry("tracking.background.task.unavailable", {
         source: "driver.tasks.locationTask",
         task_name: DRIVER_LOCATION_TASK,
+        reason: "registerTaskAsync_missing",
       });
+      return;
     }
-  } catch {
+    await (BackgroundTask as {
+      registerTaskAsync: (
+        name: string,
+        opts: { minimumInterval?: number }
+      ) => Promise<void>;
+    }).registerTaskAsync(DRIVER_LOCATION_TASK, {
+      minimumInterval: BACKGROUND_INTERVAL_MINUTES,
+    });
+    emitDriverTelemetry("tracking.background.task.registered", {
+      source: "driver.tasks.locationTask",
+      task_name: DRIVER_LOCATION_TASK,
+      min_interval_min: BACKGROUND_INTERVAL_MINUTES,
+      api: "expo-background-task",
+    });
+  } catch (err) {
     emitDriverTelemetry("tracking.background.task.unavailable", {
       source: "driver.tasks.locationTask",
       task_name: DRIVER_LOCATION_TASK,
+      reason: err instanceof Error ? err.message : String(err),
     });
   }
 }

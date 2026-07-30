@@ -1189,6 +1189,20 @@ class ResetUserPassword(Resource):
             # avant set_password() - satisfait les exigences de sécurité
             u.set_password(new_password)  # nosem
             u.force_password_change = True
+            try:
+                from security.mobile_device_session_service import (
+                    revoke_user_security_sessions,
+                )
+
+                revoke_user_security_sessions(
+                    u,
+                    reason="admin_password_reset",
+                    increment_token_version=True,
+                )
+            except Exception as revoke_exc:
+                logger.warning(
+                    "Échec révocation sessions MDS après reset admin: %s", revoke_exc
+                )
             db.session.commit()
             return {
                 "message": "Mot de passe réinitialisé",

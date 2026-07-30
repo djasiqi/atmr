@@ -61,6 +61,8 @@ def store_refresh_token(
     expires_at: datetime,
     device_id: str | None = None,
     device_name: str | None = None,
+    *,
+    commit: bool = True,
 ) -> RefreshToken:
     """Stocke un refresh token dans la base de données.
 
@@ -70,6 +72,7 @@ def store_refresh_token(
         expires_at: Date d'expiration du token
         device_id: ID de l'appareil (optionnel)
         device_name: Nom de l'appareil (optionnel)
+        commit: Si False, n'appelle pas db.session.commit() (transaction atomique F1b)
 
     Returns:
         L'objet RefreshToken créé
@@ -90,7 +93,8 @@ def store_refresh_token(
     refresh_token.is_revoked = False
 
     db.session.add(refresh_token)
-    db.session.commit()
+    if commit:
+        db.session.commit()
     logger.debug(
         "Refresh token stocké pour user_id=%d (device_id=%s)", user_id, device_id
     )
@@ -100,7 +104,7 @@ def store_refresh_token(
 ROTATION_GRACE_WINDOW_SECONDS = 300  # 5 minutes (mobile-safe)
 
 
-def mark_token_rotated(old_token: str, new_token: str) -> bool:
+def mark_token_rotated(old_token: str, new_token: str, *, commit: bool = True) -> bool:
     """Marque un token comme ayant ete rotate vers un nouveau token.
 
     L'ancien token reste valide (pas revoque) tant que le nouveau n'a pas
@@ -109,6 +113,7 @@ def mark_token_rotated(old_token: str, new_token: str) -> bool:
     Args:
         old_token: L'ancien refresh token JWT en clair
         new_token: Le nouveau refresh token JWT en clair
+        commit: Si False, n'appelle pas db.session.commit()
 
     Returns:
         True si le marquage a reussi, False sinon
@@ -128,7 +133,8 @@ def mark_token_rotated(old_token: str, new_token: str) -> bool:
 
     token_record.rotated_to_hash = new_hash
     token_record.rotated_at = datetime.now(UTC)
-    db.session.commit()
+    if commit:
+        db.session.commit()
 
     logger.info(
         "refresh_soft_rotated user_id=%d old=%s new=%s",

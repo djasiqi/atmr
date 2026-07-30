@@ -25,16 +25,19 @@ def extract_mobile_session_claims(claims: dict[str, Any] | None = None) -> tuple
     session_id = data.get("session_id")
     if session_id is not None:
         session_id = str(session_id)
-    raw_gen = data.get("session_generation")
+    # Préférer session_epoch ; fallback session_generation (legacy)
+    raw_epoch = data.get("session_epoch")
+    if raw_epoch is None:
+        raw_epoch = data.get("session_generation")
     try:
-        session_generation = int(raw_gen) if raw_gen is not None else None
+        session_epoch = int(raw_epoch) if raw_epoch is not None else None
     except (TypeError, ValueError):
-        session_generation = None
-    return session_id, session_generation
+        session_epoch = None
+    return session_id, session_epoch
 
 
 def mobile_session_required(fn: F) -> F:
-    """Valide session_id + generation sur les endpoints protégés mobile.
+    """Valide session_id + session_epoch sur les endpoints protégés mobile.
 
     Compat : si le JWT n'a pas de session_id (clients legacy), laisse passer.
     Si validation serveur indisponible → 503 retryable (pas de purge client).
@@ -48,7 +51,7 @@ def mobile_session_required(fn: F) -> F:
             return jsonify({"error": "unauthorized", "error_code": "unauthorized"}), 401
 
         claims = get_jwt() or {}
-        session_id, session_generation = extract_mobile_session_claims(claims)
+        session_id, session_epoch = extract_mobile_session_claims(claims)
         user_id = None
         try:
             from models import User
@@ -79,7 +82,7 @@ def mobile_session_required(fn: F) -> F:
 
         error_code, retryable = validate_mobile_session(
             session_id=session_id,
-            session_generation=session_generation,
+            session_epoch=session_epoch,
             user_id=user_id,
         )
         if error_code == "session_validation_unavailable":
@@ -106,19 +109,24 @@ def mobile_session_required(fn: F) -> F:
             )
 
         g.mobile_session_id = session_id
-        g.mobile_session_generation = session_generation
+        g.mobile_session_generation = session_epoch
+        g.mobile_session_epoch = session_epoch
         return fn(*args, **kwargs)
 
     return wrapper  # type: ignore[return-value]
 
 
 def check_mobile_session_from_claims(
-    claims: dict[str, Any], *, user_id: int | None = None
+    claims: dict[str, Any],
+    *,
+    user_id: int | None = None,
+    bypass_positive_cache: bool = False,
 ) -> tuple[str | None, bool]:
     """Pour handshake WebSocket / chemins hors décorateur Flask."""
-    session_id, session_generation = extract_mobile_session_claims(claims)
+    session_id, session_epoch = extract_mobile_session_claims(claims)
     return validate_mobile_session(
         session_id=session_id,
-        session_generation=session_generation,
+        session_epoch=session_epoch,
         user_id=user_id,
+        bypass_positive_cache=bypass_positive_cache,
     )

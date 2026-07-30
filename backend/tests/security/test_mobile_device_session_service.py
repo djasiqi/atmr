@@ -164,12 +164,13 @@ def test_validate_mobile_session_active_session_ok(app, session_user):
         assert retryable is False
 
 
-def test_validate_mobile_session_generation_mismatch():
-    err, retryable = svc.validate_mobile_session(
-        session_id=str(uuid.uuid4()),
-        session_generation=99,
-        user_id=1,
-    )
+def test_validate_mobile_session_generation_mismatch(app):
+    with app.app_context():
+        err, retryable = svc.validate_mobile_session(
+            session_id=str(uuid.uuid4()),
+            session_generation=99,
+            user_id=1,
+        )
     assert err == "session_revoked"
     assert retryable is False
 

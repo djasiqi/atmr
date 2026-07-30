@@ -509,6 +509,47 @@ def get_driver_from_token() -> tuple[Driver | None, dict[str, Any] | None, int |
     from repositories.driver_repository import DriverRepository
     from repositories.user_repository import UserRepository
 
+    # F1b : tout JWT avec session_id doit être validé (fail-closed si PG dispo)
+    try:
+        from flask_jwt_extended import get_jwt
+        from security.mobile_session_guard import check_mobile_session_from_claims
+
+        claims = get_jwt() or {}
+        if claims.get("session_id"):
+            # user_id résolu plus bas — validation préliminaire sans user_id d'abord
+            err_code, _retryable = check_mobile_session_from_claims(claims)
+            if err_code == "session_validation_unavailable":
+                return (
+                    None,
+                    {
+                        "error": err_code,
+                        "error_code": err_code,
+                        "retryable": True,
+                    },
+                    503,
+                )
+            if err_code:
+                return (
+                    None,
+                    {
+                        "error": err_code,
+                        "error_code": err_code,
+                        "retryable": False,
+                    },
+                    401,
+                )
+    except Exception as guard_exc:
+        logger.warning("mobile session guard fail-closed (get_driver): %s", guard_exc)
+        return (
+            None,
+            {
+                "error": "session_validation_unavailable",
+                "error_code": "session_validation_unavailable",
+                "retryable": True,
+            },
+            503,
+        )
+
     user_public_id = get_jwt_identity()
     logger.info("JWT Identity récupérée: %s", user_public_id)
 
@@ -1626,7 +1667,14 @@ class DriverLocation(Resource):
                     "retryable": False,
                 }, 401
         except Exception as session_guard_exc:
-            logger.debug("mobile session guard skip: %s", session_guard_exc)
+            logger.warning(
+                "mobile session guard fail-closed: %s", session_guard_exc
+            )
+            return {
+                "error": "session_validation_unavailable",
+                "error_code": "session_validation_unavailable",
+                "retryable": True,
+            }, 503
 
         # Variables pour stocker le résultat
         result = None

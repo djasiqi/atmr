@@ -17,6 +17,7 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -37,10 +38,13 @@ class MobileDeviceSessionStatus(enum.Enum):
 class MobileDeviceSession(db.Model):
     __tablename__ = "mobile_device_session"
     __table_args__ = (
-        UniqueConstraint(
+        # Unicité partielle : une seule session active par installation
+        Index(
+            "uq_mobile_device_session_active_installation",
             "user_id",
             "device_installation_id",
-            name="uq_mobile_device_session_user_installation",
+            unique=True,
+            postgresql_where=text("status = 'active'"),
         ),
         Index("ix_mobile_device_session_user_id", "user_id"),
         Index("ix_mobile_device_session_status", "status"),
@@ -74,7 +78,17 @@ class MobileDeviceSession(db.Model):
         DateTime(timezone=True), nullable=True
     )
     previous_generation: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # legacy alias — reste aligné sur credential_generation
     generation: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
+    session_epoch: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
+    credential_generation: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
+    refresh_generation: Mapped[int] = mapped_column(
         Integer, nullable=False, default=1, server_default="1"
     )
 
@@ -112,6 +126,9 @@ class MobileDeviceSession(db.Model):
             "device_installation_id": self.device_installation_id,
             "status": self.status.value if self.status else None,
             "generation": self.generation,
+            "session_epoch": self.session_epoch,
+            "credential_generation": self.credential_generation,
+            "refresh_generation": self.refresh_generation,
             "created_at": _iso(self.created_at),
             "last_seen_at": _iso(self.last_seen_at) if self.last_seen_at else None,
             "last_refresh_at": _iso(self.last_refresh_at) if self.last_refresh_at else None,
@@ -152,6 +169,9 @@ class AuthRotationResult(db.Model):
     successor_generation: Mapped[int] = mapped_column(Integer, nullable=False)
     response_ciphertext: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
     encryption_key_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    operation_type: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="refresh", server_default="refresh"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

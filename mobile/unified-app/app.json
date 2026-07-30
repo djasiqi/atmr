@@ -77,7 +77,8 @@
         "UIBackgroundModes": [
           "fetch",
           "remote-notification",
-          "location"
+          "location",
+          "processing"
         ],
         "LSApplicationQueriesSchemes": [
           "tel",
@@ -138,6 +139,7 @@
         }
       ],
       "expo-task-manager",
+      "expo-background-task",
       "expo-background-fetch",
       "expo-secure-store",
       "expo-sqlite",

@@ -203,6 +203,7 @@ export async function createAndPersistInstallationId(): Promise<SecureCredential
 
 export type RevocationTombstone = {
   operation: "revoke_session";
+  operation_id: string;
   session_id: string;
   device_installation_id: string;
   revocation_secret: string;

@@ -1,6 +1,9 @@
 export type DriverTelemetryEventName =
   | "auth.refresh.failure"
   | "auth.refresh.endpoint_used"
+  | "auth.refresh.read_unavailable"
+  | "auth.refresh.permanently_invalidated"
+  | "auth.refresh_token.persist_failed"
   | "auth.bootstrap.failure"
   | "realtime.socket.disconnect"
   | "realtime.socket.reconnect"

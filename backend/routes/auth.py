@@ -88,6 +88,7 @@ from security.mobile_device_session_service import (
     store_rotation_result,
     validate_mobile_session,
 )
+from models.mobile_device_session import MobileDeviceSessionStatus
 from security.mobile_session_guard import extract_mobile_session_claims
 from security.refresh_token_service import (
     RefreshStoreUnavailableError,
@@ -679,12 +680,19 @@ def _reset_user_password_with_policy(user: User, new_password: str):
                 )
 
     try:
+        from security.mobile_device_session_service import revoke_user_security_sessions
         from security.security_metrics import (
             security_token_invalidations_total,
         )
         from security.token_blacklist import revoke_token
 
-        revoke_all_user_tokens(user.id, reason="Changement de mot de passe")
+        # token_version déjà incrémenté ci-dessus — ne pas double-incrémenter
+        revoke_user_security_sessions(
+            user,
+            status=MobileDeviceSessionStatus.security_revoked,
+            reason="Changement de mot de passe",
+            increment_token_version=False,
+        )
         security_token_invalidations_total.labels(reason="password_change").inc()
         with suppress(Exception):
             revoke_token()
@@ -1209,11 +1217,17 @@ def _login_post_body():
                     "trace_id": get_trace_id(),
                 }, 409
             except Exception as mds_exc:
-                # Non-bloquant : dégrade en legacy (pas de session_id) plutôt que
-                # d'empêcher la connexion.
-                logger.warning(
-                    "MobileDeviceSession login (non-bloquant): %s", mds_exc
-                )
+                # F1b : login mobile v1 fail-closed — pas de session orpheline
+                contract = request.headers.get("X-Auth-Contract-Version", "")
+                logger.error("MobileDeviceSession login failed: %s", mds_exc)
+                if contract == "mobile-device-session-v1" or is_mobile_request:
+                    db.session.rollback()
+                    return {
+                        "error": "session_create_failed",
+                        "error_code": "session_create_failed",
+                        "retryable": True,
+                        "trace_id": get_trace_id(),
+                    }, 503
                 mobile_session = None
 
     # Création du token avec le rôle dans additional_claims
@@ -1229,7 +1243,11 @@ def _login_post_body():
     }
     if mobile_session is not None:
         claims["session_id"] = str(mobile_session.session_id)
-        claims["session_generation"] = int(mobile_session.generation)
+        claims["session_epoch"] = int(
+            getattr(mobile_session, "session_epoch", 1) or 1
+        )
+        # Compat clients legacy
+        claims["session_generation"] = claims["session_epoch"]
     access_token = create_access_token(
         identity=str(user.public_id),
         # ⚠️ ID numérique attendu par dispatch_routes
@@ -1255,7 +1273,13 @@ def _login_post_body():
         refresh_claims["remember_me"] = remember_me
     if mobile_session is not None:
         refresh_claims["session_id"] = str(mobile_session.session_id)
-        refresh_claims["session_generation"] = int(mobile_session.generation)
+        refresh_claims["session_epoch"] = int(
+            getattr(mobile_session, "session_epoch", 1) or 1
+        )
+        refresh_claims["refresh_generation"] = int(
+            getattr(mobile_session, "refresh_generation", 1) or 1
+        )
+        refresh_claims["session_generation"] = refresh_claims["session_epoch"]
     refresh_token = create_refresh_token(
         identity=str(user.public_id),
         additional_claims=refresh_claims,
@@ -1265,11 +1289,7 @@ def _login_post_body():
     # ✅ PHASE 2: Stocker le refresh token dans Redis et DB (fail-closed Lot 1)
     try:
         token_service = RefreshTokenService()
-        token_service.store_token(
-            user.id,
-            refresh_token,
-            ttl_seconds=int(refresh_expires_delta.total_seconds()),
-        )
+        # Redis après vérité SQL — écriture best-effort plus bas après commit
 
         refresh_expires_at = datetime.now(UTC) + refresh_expires_delta
         device_id = request.headers.get("X-Device-ID")
@@ -1287,11 +1307,22 @@ def _login_post_body():
             expires_at=refresh_expires_at,
             device_id=device_id,
             device_name=device_name,
+            commit=False,
         )
         if mobile_session is not None and hasattr(stored_refresh_token_row, "session_id"):
             stored_refresh_token_row.session_id = str(mobile_session.session_id)
-            stored_refresh_token_row.session_generation = int(mobile_session.generation)
-            db.session.commit()
+            stored_refresh_token_row.session_generation = int(
+                getattr(mobile_session, "session_epoch", mobile_session.generation) or 1
+            )
+        db.session.commit()
+
+        # Redis best-effort après commit SQL
+        with suppress(Exception):
+            token_service.store_token(
+                user.id,
+                refresh_token,
+                ttl_seconds=int(refresh_expires_delta.total_seconds()),
+            )
 
         if not is_mobile_request:
             max_active_tokens = _resolve_max_active_refresh_tokens(user)
@@ -1369,7 +1400,17 @@ def _login_post_body():
         # Session durable mobile (B0+) — contrat de capacités (B1.5)
         if mobile_session is not None:
             response_data["session_id"] = str(mobile_session.session_id)
-            response_data["session_generation"] = int(mobile_session.generation)
+            response_data["session_epoch"] = int(
+                getattr(mobile_session, "session_epoch", 1) or 1
+            )
+            response_data["credential_generation"] = int(
+                getattr(mobile_session, "credential_generation", mobile_session.generation)
+                or 1
+            )
+            response_data["refresh_generation"] = int(
+                getattr(mobile_session, "refresh_generation", 1) or 1
+            )
+            response_data["session_generation"] = response_data["session_epoch"]
             response_data["recovery_credential"] = mobile_recovery_credential
             response_data["revocation_secret"] = mobile_revocation_secret
         response_data.update(auth_capabilities())
@@ -2429,14 +2470,30 @@ class RefreshToken(Resource):
             except Exception:
                 old_claims = {}
             old_session_id = old_claims.get("session_id")
-            old_session_generation = old_claims.get("session_generation")
+            old_session_epoch = old_claims.get("session_epoch")
+            if old_session_epoch is None:
+                old_session_epoch = old_claims.get("session_generation")
+            old_refresh_generation = old_claims.get("refresh_generation")
             idempotency_key = request.headers.get(
                 "Idempotency-Key"
             ) or request.headers.get("X-Idempotency-Key")
+            auth_contract = request.headers.get("X-Auth-Contract-Version", "")
+            if (
+                auth_contract == "mobile-device-session-v1"
+                and is_mobile_request
+                and not idempotency_key
+            ):
+                return {
+                    "error": "idempotency_key_required",
+                    "error_code": "idempotency_key_required",
+                    "retryable": False,
+                }, 400
             mobile_session_for_rotation = None
             rotation_request_generation = None
             if old_session_id:
-                mobile_session_for_rotation = get_session_by_id(old_session_id)
+                mobile_session_for_rotation = get_session_by_id(
+                    old_session_id, for_update=True
+                )
 
                 # ✅ Idempotence : rejoue la réponse déjà émise pour cette clé
                 # (retry HTTP côté mobile) sans re-rotationner la session.
@@ -2451,9 +2508,9 @@ class RefreshToken(Resource):
 
                 err_code, retryable = validate_mobile_session(
                     session_id=str(old_session_id),
-                    session_generation=(
-                        int(old_session_generation)
-                        if old_session_generation is not None
+                    session_epoch=(
+                        int(old_session_epoch)
+                        if old_session_epoch is not None
                         else None
                     ),
                     user_id=user.id,
@@ -2465,20 +2522,22 @@ class RefreshToken(Resource):
                         "retryable": True,
                     }, 503
                 if err_code:
-                    # Classification fine de la réutilisation pour guider le client :
-                    # generation en retard (rotation manquée) => reprise via
-                    # session-resume ; sinon replay suspect (vol/duplication).
                     classified_code = "refresh_replay_detected"
                     if (
                         mobile_session_for_rotation is not None
-                        and old_session_generation is not None
+                        and old_refresh_generation is not None
                     ):
                         try:
-                            claimed_generation = int(old_session_generation)
+                            claimed_rg = int(old_refresh_generation)
                         except (TypeError, ValueError):
-                            claimed_generation = None
-                        if claimed_generation is not None and claimed_generation < int(
-                            mobile_session_for_rotation.generation
+                            claimed_rg = None
+                        if claimed_rg is not None and claimed_rg < int(
+                            getattr(
+                                mobile_session_for_rotation,
+                                "refresh_generation",
+                                1,
+                            )
+                            or 1
                         ):
                             classified_code = "rotation_recovery_required"
                     return {
@@ -2486,14 +2545,17 @@ class RefreshToken(Resource):
                         "error_code": classified_code,
                         "retryable": False,
                     }, 401
-                rotation_request_generation = (
-                    int(old_session_generation)
-                    if old_session_generation is not None
-                    else None
-                )
+                rotation_request_generation = int(
+                    getattr(mobile_session_for_rotation, "refresh_generation", 1) or 1
+                ) if mobile_session_for_rotation is not None else None
                 claims["session_id"] = str(old_session_id)
-                if old_session_generation is not None:
-                    claims["session_generation"] = int(old_session_generation)
+                epoch_val = int(
+                    getattr(mobile_session_for_rotation, "session_epoch", 1) or 1
+                ) if mobile_session_for_rotation is not None else (
+                    int(old_session_epoch) if old_session_epoch is not None else 1
+                )
+                claims["session_epoch"] = epoch_val
+                claims["session_generation"] = epoch_val
 
             # 6. Générer nouveau access_token
             access_expires_delta = _resolve_access_token_expires(is_mobile_request)
@@ -2514,6 +2576,12 @@ class RefreshToken(Resource):
                 is_mobile_request=is_mobile_request,
                 remember_me=remember_me,
             )
+            # Bump refresh_generation (pas session_epoch, pas recovery)
+            new_refresh_gen = 1
+            if mobile_session_for_rotation is not None:
+                from security.mobile_device_session_service import bump_refresh_generation
+
+                new_refresh_gen = bump_refresh_generation(mobile_session_for_rotation)
             new_refresh_claims: dict[str, object] = {
                 "aud": "atmr-api",
                 "pwd_hash": pwd_hash_version,
@@ -2525,9 +2593,13 @@ class RefreshToken(Resource):
                 new_refresh_claims["session_id"] = str(
                     mobile_session_for_rotation.session_id
                 )
-                new_refresh_claims["session_generation"] = int(
-                    mobile_session_for_rotation.generation
+                new_refresh_claims["session_epoch"] = int(
+                    getattr(mobile_session_for_rotation, "session_epoch", 1) or 1
                 )
+                new_refresh_claims["refresh_generation"] = int(new_refresh_gen)
+                new_refresh_claims["session_generation"] = new_refresh_claims[
+                    "session_epoch"
+                ]
             new_refresh_token = create_refresh_token(
                 identity=str(user.public_id),
                 additional_claims=new_refresh_claims,
@@ -2541,11 +2613,9 @@ class RefreshToken(Resource):
             with suppress(Exception):
                 token_service.touch_token_score(user.id, refresh_token)
 
-            # ✅ ROTATION SOFT : marquer l'ancien token comme rotate (pas revoque)
-            # L'ancien reste valide tant que le nouveau n'a pas ete utilise par le client.
-            # Cela evite les pertes de session si le mobile crash avant de sauvegarder le nouveau.
+            # Transaction SQL atomique : mark + store + AuthRotationResult → 1 commit
             try:
-                mark_token_rotated(refresh_token, new_refresh_token)
+                mark_token_rotated(refresh_token, new_refresh_token, commit=False)
 
                 try:
                     from security.security_metrics import tokens_rotation_total
@@ -2553,31 +2623,17 @@ class RefreshToken(Resource):
                     tokens_rotation_total.inc()
                 except Exception:
                     pass
-            except Exception as rotate_error:
-                logger.warning(
-                    "Soft rotation marking failed (non-blocking): %s",
-                    str(rotate_error),
-                )
-
-            # ✅ SECURITY: Stocker le nouveau token dans Redis et DB (fail-closed)
-            try:
-                token_service.store_token(
-                    user.id,
-                    new_refresh_token,
-                    ttl_seconds=int(refresh_expires_delta.total_seconds()),
-                )
 
                 refresh_expires_at = datetime.now(UTC) + refresh_expires_delta
                 device_id = request.headers.get("X-Device-ID")
                 device_name = request.headers.get("X-Device-Name")
-                # Ne plus appeler revoke_active_tokens_for_device() ici :
-                # cela annulait la rotation soft et provoquait des tempêtes 401.
                 new_refresh_token_row = store_refresh_token(
                     token=new_refresh_token,
                     user_id=user.id,
                     expires_at=refresh_expires_at,
                     device_id=device_id,
                     device_name=device_name,
+                    commit=False,
                 )
                 if mobile_session_for_rotation is not None and hasattr(
                     new_refresh_token_row, "session_id"
@@ -2586,12 +2642,58 @@ class RefreshToken(Resource):
                         mobile_session_for_rotation.session_id
                     )
                     new_refresh_token_row.session_generation = int(
-                        mobile_session_for_rotation.generation
+                        getattr(
+                            mobile_session_for_rotation, "session_epoch", 1
+                        )
+                        or 1
                     )
-                    db.session.commit()
 
-                # Pas d'éviction silencieuse des sessions mobiles durables.
-                # limit_active_tokens reste pour le chemin legacy web uniquement.
+                # Réponse à persister pour idempotence (avant commit)
+                rotation_response_preview = {
+                    "access_token": new_access_token,
+                    "token": new_access_token,
+                    "refresh_token": new_refresh_token,
+                    "session_id": (
+                        str(mobile_session_for_rotation.session_id)
+                        if mobile_session_for_rotation is not None
+                        else None
+                    ),
+                    "session_epoch": (
+                        int(getattr(mobile_session_for_rotation, "session_epoch", 1) or 1)
+                        if mobile_session_for_rotation is not None
+                        else None
+                    ),
+                    "refresh_generation": new_refresh_gen,
+                    "session_generation": (
+                        int(getattr(mobile_session_for_rotation, "session_epoch", 1) or 1)
+                        if mobile_session_for_rotation is not None
+                        else None
+                    ),
+                }
+                if (
+                    idempotency_key
+                    and mobile_session_for_rotation is not None
+                    and rotation_request_generation is not None
+                ):
+                    store_rotation_result(
+                        session=mobile_session_for_rotation,
+                        idempotency_key=str(idempotency_key),
+                        request_generation=int(rotation_request_generation),
+                        successor_generation=int(new_refresh_gen),
+                        response_payload=rotation_response_preview,
+                        operation_type="refresh",
+                    )
+
+                db.session.commit()
+
+                # Redis best-effort après commit SQL
+                with suppress(Exception):
+                    token_service.store_token(
+                        user.id,
+                        new_refresh_token,
+                        ttl_seconds=int(refresh_expires_delta.total_seconds()),
+                    )
+
                 if not is_mobile_request:
                     max_active_tokens = _resolve_max_active_refresh_tokens(user)
                     token_service.limit_active_tokens(user.id, max_active_tokens)
@@ -2600,6 +2702,7 @@ class RefreshToken(Resource):
                     "Soft rotation storage failed: %s",
                     str(store_error),
                 )
+                db.session.rollback()
                 if refresh_fail_closed_enabled() and not current_app.config.get(
                     "TESTING"
                 ):
@@ -2663,28 +2766,19 @@ class RefreshToken(Resource):
                 response_data["refresh_token"] = new_refresh_token
                 response_data["token_type"] = "Bearer"
                 response_data["expires_in"] = int(access_expires_delta.total_seconds())
-
-            # ✅ Idempotence : mémorise la réponse chiffrée pour permettre le replay
-            # exact d'une même clé (retry HTTP) sans re-rotationner la session.
-            if idempotency_key and mobile_session_for_rotation is not None:
-                try:
-                    store_rotation_result(
-                        session=mobile_session_for_rotation,
-                        idempotency_key=str(idempotency_key),
-                        request_generation=(
-                            rotation_request_generation
-                            if rotation_request_generation is not None
-                            else int(mobile_session_for_rotation.generation)
-                        ),
-                        successor_generation=int(mobile_session_for_rotation.generation),
-                        response_payload=response_data,
+                if mobile_session_for_rotation is not None:
+                    response_data["session_id"] = str(
+                        mobile_session_for_rotation.session_id
                     )
-                    db.session.commit()
-                except Exception as rotation_store_error:
-                    logger.warning(
-                        "store_rotation_result refresh-token (non-bloquant): %s",
-                        rotation_store_error,
+                    response_data["session_epoch"] = int(
+                        getattr(mobile_session_for_rotation, "session_epoch", 1) or 1
                     )
+                    response_data["refresh_generation"] = int(
+                        getattr(mobile_session_for_rotation, "refresh_generation", 1)
+                        or 1
+                    )
+                    response_data["session_generation"] = response_data["session_epoch"]
+                    response_data.update(auth_capabilities())
 
             # Créer la réponse avec make_response pour pouvoir définir les cookies
             response = make_response(response_data, 200)
@@ -2876,54 +2970,106 @@ class Logout(Resource):
             current_user_id = get_jwt_identity()
             user = None
             driver_id_for_log = None
+            jwt_claims = {}
+            try:
+                jwt_claims = get_jwt() or {}
+            except Exception:
+                jwt_claims = {}
             if current_user_id:
                 user = user_repo.find_by_public_id(current_user_id)
 
-            # ✅ Migration localStorage → cookies httpOnly
-            # Récupérer le refresh token depuis cookie (priorité), body ou header
-            refresh_token = None
+            logout_body = request.get_json(silent=True) or {}
 
-            # Priorité 1 : Cookie (pour web)
+            # Refresh uniquement cookie (web) ou body explicite — JAMAIS Authorization Bearer
+            # (Bearer = access JWT ; l'interpréter comme refresh est une faille).
+            refresh_token = None
             if not is_mobile_request:
                 refresh_token = request.cookies.get(
                     current_app.config["COOKIE_REFRESH_TOKEN_NAME"]
                 )
-
-            # Priorité 2 : Body JSON (pour mobile ou fallback)
             if not refresh_token:
-                data = request.get_json(silent=True) or {}
                 refresh_token = (
-                    data.get("refresh_token")
-                    or data.get("refreshToken")
-                    or data.get("token")
+                    logout_body.get("refresh_token")
+                    or logout_body.get("refreshToken")
                 )
 
-            # Priorité 3 : Header Authorization (rétrocompatibilité)
-            if not refresh_token:
-                auth_header = request.headers.get("Authorization", "")
-                if auth_header and auth_header.startswith("Bearer "):
-                    refresh_token = auth_header.split(" ", 1)[1].strip()
-
-            # ✅ PHASE 2: Révocation scopée — session courante uniquement (pas revoke-all).
-            # La révocation globale reste sur /logout-all et changement MDP.
-            token_service = RefreshTokenService()
-            logout_body = request.get_json(silent=True) or {}
             session_id = (
                 logout_body.get("session_id")
-                or (get_jwt() or {}).get("session_id")
+                or jwt_claims.get("session_id")
             )
+            already_revoked = False
+            token_service = RefreshTokenService()
+
+            def _has_logout_session_proof(sid: str) -> bool:
+                """Preuve de possession : access JWT ou refresh body (sans rotation)."""
+                # Access JWT : claims.session_id == body/claim session_id
+                claim_sid = jwt_claims.get("session_id")
+                if (
+                    claim_sid is not None
+                    and str(claim_sid) == str(sid)
+                    and current_user_id
+                ):
+                    return True
+                # Refresh token explicite (body/cookie) — ne provoque pas de rotation
+                if not refresh_token:
+                    return False
+                try:
+                    decoded = decode_token(refresh_token, allow_expired=False)
+                except Exception:
+                    return False
+                if str(decoded.get("session_id") or "") != str(sid):
+                    return False
+                if is_token_revoked(refresh_token):
+                    # Token déjà révoqué : preuve faible — accepter si session déjà
+                    # terminale (idempotence) via le chemin already_revoked plus bas
+                    return True
+                # Même utilisateur si identity connue
+                refresh_sub = decoded.get("sub")
+                if current_user_id and refresh_sub and str(refresh_sub) != str(
+                    current_user_id
+                ):
+                    return False
+                return True
+
             try:
                 if session_id:
-                    mds = get_session_by_id(session_id)
-                    if mds is not None and (
-                        user is None or mds.user_id == user.id
-                    ):
-                        revoke_mobile_device_session(
-                            mds, reason="Logout utilisateur (session courante)"
+                    if not _has_logout_session_proof(str(session_id)):
+                        # Ne pas révéler l'existence du session_id
+                        response = make_response(
+                            {
+                                "error": "preuve_requise",
+                                "error_code": "logout_proof_required",
+                            },
+                            401,
                         )
-                        db.session.commit()
-                    # Révoque tous les refresh tokens liés à cette session mobile
-                    # (pas seulement celui transmis) — pas de revoke_all_user_tokens.
+                        if not is_mobile_request:
+                            _clear_web_auth_cookies(response)
+                        return response
+
+                    mds = get_session_by_id(session_id)
+                    if mds is not None:
+                        # La preuve lie session_id ; vérifier cohérence user si connu
+                        if user is not None and mds.user_id != user.id:
+                            response = make_response(
+                                {
+                                    "error": "preuve_requise",
+                                    "error_code": "logout_proof_required",
+                                },
+                                401,
+                            )
+                            if not is_mobile_request:
+                                _clear_web_auth_cookies(response)
+                            return response
+                        if not mds.is_active():
+                            already_revoked = True
+                        else:
+                            revoke_mobile_device_session(
+                                mds, reason="Logout utilisateur (session courante)"
+                            )
+                            db.session.commit()
+                    else:
+                        already_revoked = True
+
                     revoke_tokens_for_session(
                         str(session_id), reason="Logout utilisateur (session courante)"
                     )
@@ -3044,7 +3190,6 @@ class Logout(Resource):
                 from services.security.authentication import AccessTokenService
 
                 access_token_service = AccessTokenService()
-                jwt_claims = get_jwt()
 
                 # Obtenir le jti (JWT ID) et l'expiration
                 token_jti = jwt_claims.get("jti")
@@ -3090,6 +3235,7 @@ class Logout(Resource):
                         result_status="success",
                         action_details={
                             "refresh_token_revoked": refresh_token is not None,
+                            "already_revoked": already_revoked,
                         },
                         ip_address=request.remote_addr,
                         user_agent=request.headers.get("User-Agent"),
@@ -3117,9 +3263,11 @@ class Logout(Resource):
                     current_user_id,
                 )
 
-            # Toujours 200 + clear cookies web : sans JWT valide, il faut quand même
-            # supprimer Domain=.lirie.ch et les host-only hérités (sinon session fantôme).
-            response = make_response({"message": "Déconnexion réussie"}, 200)
+            # Toujours clear cookies web (pas de session fantôme Domain=.lirie.ch).
+            payload = {"message": "Déconnexion réussie", "ok": True}
+            if already_revoked:
+                payload["already_revoked"] = True
+            response = make_response(payload, 200)
             if not is_mobile_request:
                 _clear_web_auth_cookies(response)
             return response

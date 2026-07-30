@@ -2061,6 +2061,18 @@ class InstitutionUserDisable(Resource):
             target_user.disabled_at = datetime.now(UTC)
             target_user.invite_token_hash = None
             target_user.invite_expires_at = None
+            try:
+                from security.mobile_device_session_service import disable_user_sessions
+
+                disable_user_sessions(
+                    target_user,
+                    reason="institution_user_disabled",
+                    increment_token_version=True,
+                )
+            except Exception as disable_exc:
+                logger.warning(
+                    "Échec disable_user_sessions institution: %s", disable_exc
+                )
             db.session.commit()
 
             _record_institution_user_audit(

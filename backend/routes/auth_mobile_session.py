@@ -20,12 +20,13 @@ from models import User
 from models.mobile_device_session import MobileDeviceSessionStatus
 from security.mobile_device_session_service import (
     auth_capabilities,
-    consume_revocation_secret,
     get_rotation_result,
     get_session_by_id,
     list_active_sessions,
     load_rotation_response,
     revoke_all_user_sessions,
+    revoke_pending_idempotent,
+    revoke_session,
     rotate_recovery_credential,
     store_rotation_result,
     verify_recovery_credential,
@@ -40,12 +41,18 @@ def _user_token_version(user: User) -> int:
 
 
 def _issue_token_pair(user: User, session) -> dict:
+    epoch = int(getattr(session, "session_epoch", 1) or 1)
+    refresh_gen = int(getattr(session, "refresh_generation", 1) or 1)
+    cred_gen = int(
+        getattr(session, "credential_generation", session.generation) or 1
+    )
     claims = {
         "role": getattr(user, "role", None),
         "aud": "atmr-api",
         "token_version": _user_token_version(user),
         "session_id": str(session.session_id),
-        "session_generation": int(session.generation),
+        "session_epoch": epoch,
+        "session_generation": epoch,  # compat
     }
     if getattr(user, "company_id", None):
         claims["company_id"] = user.company_id
@@ -63,7 +70,9 @@ def _issue_token_pair(user: User, session) -> dict:
             "aud": "atmr-api",
             "token_version": _user_token_version(user),
             "session_id": str(session.session_id),
-            "session_generation": int(session.generation),
+            "session_epoch": epoch,
+            "refresh_generation": refresh_gen,
+            "session_generation": epoch,
         },
     )
     expires_at = datetime.now(UTC) + timedelta(days=90)
@@ -74,10 +83,11 @@ def _issue_token_pair(user: User, session) -> dict:
             expires_at=expires_at,
             device_id=session.device_installation_id,
             device_name=session.device_name,
+            commit=False,
         )
         if hasattr(row, "session_id"):
             row.session_id = str(session.session_id)
-            row.session_generation = int(session.generation)
+            row.session_generation = epoch
             db.session.add(row)
     except Exception as exc:
         logger.warning("store_refresh_token session-resume: %s", exc)
@@ -87,7 +97,10 @@ def _issue_token_pair(user: User, session) -> dict:
         "access_token": access,
         "refresh_token": refresh,
         "session_id": str(session.session_id),
-        "session_generation": int(session.generation),
+        "session_epoch": epoch,
+        "credential_generation": cred_gen,
+        "refresh_generation": refresh_gen,
+        "session_generation": epoch,
         **auth_capabilities(),
     }
 
@@ -164,6 +177,16 @@ def register_mobile_session_routes(auth_ns) -> None:
             if user is None:
                 return {"error": "utilisateur_introuvable"}, 404
 
+            # Compte / profil actif (même règle que refresh-token)
+            from routes.auth import _check_user_profile_active
+
+            profile_ok, profile_msg = _check_user_profile_active(user)
+            if not profile_ok:
+                return {
+                    "error": profile_msg or "Compte désactivé",
+                    "error_code": "account_disabled",
+                }, 403
+
             request_generation = int(session.generation)
             new_recovery = rotate_recovery_credential(session)
             tokens = _issue_token_pair(user, session)
@@ -176,6 +199,7 @@ def register_mobile_session_routes(auth_ns) -> None:
                     request_generation=request_generation,
                     successor_generation=int(session.generation),
                     response_payload=tokens,
+                    operation_type="session_resume",
                 )
 
             db.session.commit()
@@ -210,16 +234,25 @@ def register_mobile_session_routes(auth_ns) -> None:
             secret = body.get("revocation_secret")
             if not secret:
                 return {"error": "revocation_secret_requis"}, 400
+            operation_id = (
+                body.get("operation_id")
+                or request.headers.get("Idempotency-Key")
+            )
             session = get_session_by_id(session_id)
             if session is None:
+                # Ne pas révéler l'existence : ACK générique si preuve fournie
                 return {"ok": True, "already_absent": True}, 200
-            if not consume_revocation_secret(session, str(secret)):
+
+            payload, err = revoke_pending_idempotent(
+                session, str(secret), operation_id=str(operation_id) if operation_id else None
+            )
+            if err:
                 return {
                     "error": "secret_invalide",
-                    "error_code": "invalid_revocation_secret",
+                    "error_code": err,
                 }, 401
             db.session.commit()
-            return {"ok": True}, 200
+            return payload or {"ok": True}, 200
 
     @auth_ns.route("/device-sessions")
     class DeviceSessions(Resource):
@@ -239,3 +272,62 @@ def register_mobile_session_routes(auth_ns) -> None:
                 ],
                 **auth_capabilities(),
             }, 200
+
+    @auth_ns.route("/device-sessions/<string:session_uuid>")
+    class DeviceSessionById(Resource):
+        @jwt_required()
+        def delete(self, session_uuid: str):
+            """Révoque une session mobile par UUID (multi-appareils)."""
+            identity = get_jwt_identity()
+            user = User.query.filter_by(public_id=str(identity)).first()
+            if not user:
+                return {"error": "utilisateur_introuvable"}, 404
+            session = get_session_by_id(session_uuid)
+            if session is None or session.user_id != user.id:
+                return {"ok": True, "already_absent": True}, 200
+            if not session.is_active():
+                return {"ok": True, "already_revoked": True}, 200
+            revoke_session(
+                session,
+                reason="Revocation manuelle multi-appareils",
+                revoked_by_user_id=user.id,
+                status=MobileDeviceSessionStatus.revoked,
+            )
+            try:
+                from security.refresh_token_service import revoke_tokens_for_session
+
+                revoke_tokens_for_session(
+                    str(session.session_id), reason="Revocation manuelle"
+                )
+            except Exception as exc:
+                logger.warning("revoke_tokens_for_session: %s", exc)
+            db.session.commit()
+            return {"ok": True}, 200
+
+    @auth_ns.route("/device-sessions/revoke-others")
+    class DeviceSessionsRevokeOthers(Resource):
+        @jwt_required()
+        def post(self):
+            """Révoque toutes les autres sessions actives (conserve la courante)."""
+            identity = get_jwt_identity()
+            user = User.query.filter_by(public_id=str(identity)).first()
+            if not user:
+                return {"error": "utilisateur_introuvable"}, 404
+            claims = get_jwt() or {}
+            current_sid = claims.get("session_id")
+            except_id = None
+            if current_sid:
+                try:
+                    import uuid as _uuid
+
+                    except_id = _uuid.UUID(str(current_sid))
+                except (ValueError, TypeError):
+                    except_id = None
+            count = revoke_all_user_sessions(
+                user.id,
+                reason="Revoke-others",
+                status=MobileDeviceSessionStatus.revoked,
+                except_session_id=except_id,
+            )
+            db.session.commit()
+            return {"ok": True, "revoked_sessions": count}, 200

@@ -20,13 +20,21 @@ import {
 import {
   fetchBootstrap,
   hasAuthToken,
-  hasStoredRefreshToken,
   login,
-  logoutSession,
-  refreshAuthTokenNow,
   setActiveContextIdForApi,
   switchContext,
 } from "./api/client";
+import {
+  attemptRestRecovery,
+  flushPendingRevocationTombstone,
+  performLogout,
+  persistOfflineSnapshot,
+  restoreOfflineSessionSnapshot,
+} from "./auth/authRecoveryCoordinator";
+import {
+  resolveOfflineCapabilities,
+  type MobileSessionStatus,
+} from "./auth/mobileSessionStatus";
 import { realtimeManager } from "./realtime/realtimeManager";
 import { contextRealtimeRouter } from "./realtime/contextRealtimeRouter";
 import { isFeatureEnabled, setRuntimeFeatureFlagOverrides } from "./featureFlags/registry";
@@ -48,15 +56,17 @@ type SessionStatus = "idle" | "bootstrapping" | "ready" | "error";
 
 type SessionContextValue = {
   status: SessionStatus;
+  mobileSessionStatus: MobileSessionStatus;
+  offlineCapabilities: ReturnType<typeof resolveOfflineCapabilities>;
   bootstrap: BootstrapResponse | null;
   activeContext: AuthContext | null;
   error: string | null;
   login: (email: string, password: string) => Promise<void>;
   bootstrapSession: () => Promise<void>;
   changeContext: (targetContextId: string) => Promise<void>;
-  /** True pendant POST /auth/switch-context (évite les redirects guards en rebond). */
   contextSwitchInFlight: boolean;
-  logout: () => void;
+  logout: () => Promise<void>;
+  hasPermission: (permission: string) => boolean;
   can: (permission: string) => boolean;
 };
 type PropsWithChildren<P = object> = P & { children?: any };
@@ -152,6 +162,9 @@ const SessionContext = ReactRuntime.createContext(undefined as
 export function SessionProvider({ children }: PropsWithChildren) {
   const queryClient = useQueryClient();
   const [status, setStatus] = ReactRuntime.useState("idle" as SessionStatus);
+  const [mobileSessionStatus, setMobileSessionStatus] = ReactRuntime.useState(
+    "initializing" as MobileSessionStatus
+  );
   const [bootstrap, setBootstrap] = ReactRuntime.useState(
     null as BootstrapResponse | null
   );
@@ -172,34 +185,73 @@ export function SessionProvider({ children }: PropsWithChildren) {
 
   const resumeSessionIfPossible = ReactRuntime.useCallback(async () => {
     void appendSessionJournalEvent("session.resume.start");
-    if (hasAuthToken()) {
-      void appendSessionJournalEvent("session.resume.skipped_has_access_token");
-      return;
-    }
-    const resumeDelaysMs = [0, 500, 1500];
-    try {
-      const hasRefreshToken = await hasStoredRefreshToken();
-      if (!hasRefreshToken) {
-        void appendSessionJournalEvent("session.resume.no_refresh_token");
+    setMobileSessionStatus("auth_recovering");
+    // 1. Flush tombstone pending
+    const flushed = await flushPendingRevocationTombstone();
+    if (!flushed) {
+      const pending = await restoreOfflineSessionSnapshot();
+      if (pending.kind === "revoked") {
+        setMobileSessionStatus("revoked");
         return;
       }
-      for (let attempt = 1; attempt <= resumeDelaysMs.length; attempt += 1) {
-        if (attempt > 1) {
-          await new Promise((resolve) => setTimeout(resolve, resumeDelaysMs[attempt - 1]));
-          void appendSessionJournalEvent("session.resume.retry", { attempt });
-        }
-        const resumed = await refreshAuthTokenNow();
-        if (resumed) {
-          void appendSessionJournalEvent("session.resume.success", { attempt });
-          return;
-        }
+    }
+    // 2. Restore offline snapshot
+    const offline = await restoreOfflineSessionSnapshot();
+    if (offline.kind === "storage_locked") {
+      setMobileSessionStatus("storage_locked");
+      setError("Stockage sécurisé temporairement indisponible");
+      return;
+    }
+    if (offline.kind === "revoked") {
+      setMobileSessionStatus("revoked");
+      return;
+    }
+    if (offline.kind === "restored") {
+      setMobileSessionStatus("authenticated_offline");
+      if (offline.bootstrap) setBootstrap(offline.bootstrap);
+      if (offline.activeContext) {
+        setActiveContext(offline.activeContext);
+        setActiveContextIdForApi(offline.activeContext.context_id ?? null);
       }
-      void appendSessionJournalEvent("session.resume.failed", {
-        reason: "refresh_returned_false",
-      });
-    } catch (error) {
-      const reason = error instanceof Error ? error.message : "resume_failed";
-      void appendSessionJournalEvent("session.resume.failed", { reason });
+    }
+    if (hasAuthToken()) {
+      void appendSessionJournalEvent("session.resume.skipped_has_access_token");
+      setMobileSessionStatus("authenticated_online");
+      return;
+    }
+    // 3. Recovery REST (refresh puis session-resume)
+    const outcome = await attemptRestRecovery("cold_start");
+    if (outcome === "recovered") {
+      setMobileSessionStatus("authenticated_online");
+      void appendSessionJournalEvent("session.resume.success", { via: "coordinator" });
+      // Reprise GPS après auth
+      try {
+        const ctx = activeContextRef.current;
+        if (ctx?.context_type === "driver") {
+          const { driverTrackingQueue } = await import(
+            "../features/driver/services/driverTrackingQueue"
+          );
+          await driverTrackingQueue.resumeAfterAuthRecovery({
+            userId: ctx.context_id,
+            driverId: getDriverIdFromContext(ctx) ?? ctx.context_id,
+            companyId: getCompanyIdFromContext(ctx) ?? "unknown",
+          });
+        }
+      } catch {
+        /* best-effort */
+      }
+      return;
+    }
+    if (outcome === "keep_local" && offline.kind === "restored") {
+      setMobileSessionStatus("authenticated_offline");
+      return;
+    }
+    if (outcome === "terminal") {
+      setMobileSessionStatus("revoked");
+      return;
+    }
+    if (offline.kind !== "restored") {
+      setMobileSessionStatus("anonymous");
     }
   }, []);
 
@@ -318,6 +370,8 @@ export function SessionProvider({ children }: PropsWithChildren) {
       setActiveContextIdForApi(resolved?.context_id ?? null);
       contextRealtimeRouter.setActiveContext(resolved?.context_type ?? null);
       setStatus("ready");
+      setMobileSessionStatus("authenticated_online");
+      void persistOfflineSnapshot(data, resolved).catch(() => undefined);
       void appendSessionJournalEvent(
         data.is_authenticated ? "session.bootstrap.success" : "session.bootstrap.unauthenticated",
         {
@@ -326,9 +380,22 @@ export function SessionProvider({ children }: PropsWithChildren) {
         },
         resolved?.context_id ?? null
       );
+      // Socket en dernier
       syncDriverRealtimeForContext(resolved, {
         enableSocket: isFeatureEnabled("realtime_socket_enabled"),
       });
+      // Reprise GPS après bootstrap auth
+      if (resolved?.context_type === "driver" && data.is_authenticated) {
+        void import("../features/driver/services/driverTrackingQueue")
+          .then(({ driverTrackingQueue }) =>
+            driverTrackingQueue.resumeAfterAuthRecovery({
+              userId: resolved.context_id,
+              driverId: getDriverIdFromContext(resolved) ?? resolved.context_id,
+              companyId: String(getCompanyIdFromContext(resolved) ?? "unknown"),
+            })
+          )
+          .catch(() => undefined);
+      }
       } catch (e) {
         const message = toUiErrorMessage(e, "Bootstrap failed");
         setError(message);
@@ -523,8 +590,8 @@ export function SessionProvider({ children }: PropsWithChildren) {
   }, [activeContext, queryClient, bootstrap]);
 
   const clearSessionState = ReactRuntime.useCallback(
-    (next: { status: SessionStatus; error: string | null; journalEvent: string }) => {
-      void logoutSession().catch(() => undefined);
+    async (next: { status: SessionStatus; error: string | null; journalEvent: string }) => {
+      await performLogout().catch(() => undefined);
       void purgeDriverProfileCache().catch(() => undefined);
       // Phase 0A : quarantaine file GPS — jamais de purge silencieuse
       const ctx = activeContextRef.current;
@@ -546,6 +613,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
       activeContextRef.current = null;
       setActiveContextIdForApi(null);
       setStatus(next.status);
+      setMobileSessionStatus("anonymous");
       setError(next.error);
       setRuntimeFeatureFlagOverrides(null);
       contextRealtimeRouter.setActiveContext(null);
@@ -560,7 +628,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
   );
 
 const logout = ReactRuntime.useCallback(async () => {
-  clearSessionState({
+  await clearSessionState({
     status: "idle",
     error: null,
     journalEvent: "session.logout",
@@ -587,9 +655,13 @@ const logout = ReactRuntime.useCallback(async () => {
     });
   }, []);
 
+  const offlineCapabilities = resolveOfflineCapabilities(mobileSessionStatus);
+
   const value = ReactRuntime.useMemo(
     () => ({
       status,
+      mobileSessionStatus,
+      offlineCapabilities,
       bootstrap,
       activeContext,
       error,
@@ -598,10 +670,13 @@ const logout = ReactRuntime.useCallback(async () => {
       changeContext,
       contextSwitchInFlight,
       logout,
+      hasPermission: (permission: string) => hasPermission(activeContext, permission),
       can: (permission: string) => hasPermission(activeContext, permission),
     }),
     [
       status,
+      mobileSessionStatus,
+      offlineCapabilities,
       bootstrap,
       activeContext,
       error,

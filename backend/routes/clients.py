@@ -2318,18 +2318,14 @@ class DeleteAccount(Resource):
             client_model.is_active = False
             user_id = current_user.id
             try:
-                from security.refresh_token_service import revoke_all_user_tokens
+                from security.mobile_device_session_service import disable_user_sessions
                 from security.token_blacklist import revoke_token
-                from services.security.authentication import RefreshTokenService
 
-                revoke_all_user_tokens(user_id, reason="Account deactivated")
-                try:
-                    RefreshTokenService().revoke_all_user_tokens(user_id)
-                except Exception as redis_revoke_error:
-                    logger.warning(
-                        "Échec révocation refresh tokens Redis (account delete): %s",
-                        redis_revoke_error,
-                    )
+                disable_user_sessions(
+                    current_user,
+                    reason="Account deactivated",
+                    increment_token_version=True,
+                )
                 revoke_token()
             except Exception as revoke_error:
                 logger.warning(

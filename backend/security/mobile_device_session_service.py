@@ -29,7 +29,10 @@ PREVIOUS_CREDENTIAL_GRACE_SECONDS = int(
 )
 DEFAULT_DEVICE_SESSION_LIMIT = int(os.getenv("MAX_MOBILE_DEVICE_SESSIONS_DRIVER", "5"))
 ROTATION_RESULT_TTL_SECONDS = int(os.getenv("AUTH_ROTATION_RESULT_TTL_SECONDS", "600"))
-SESSION_CACHE_TTL_SECONDS = int(os.getenv("MOBILE_SESSION_CACHE_TTL_SECONDS", "30"))
+SESSION_CACHE_TTL_SECONDS = int(os.getenv("MOBILE_SESSION_CACHE_TTL_SECONDS", "5"))
+SESSION_NEGATIVE_CACHE_TTL_SECONDS = int(
+    os.getenv("MOBILE_SESSION_NEGATIVE_CACHE_TTL_SECONDS", "30")
+)
 
 
 def auth_capabilities() -> dict[str, Any]:
@@ -115,6 +118,16 @@ class DeviceSessionLimitReached(Exception):
         super().__init__("device_session_limit_reached")
 
 
+def find_active_session_for_installation(
+    user_id: int, device_installation_id: str
+) -> MobileDeviceSession | None:
+    return MobileDeviceSession.query.filter_by(
+        user_id=user_id,
+        device_installation_id=device_installation_id,
+        status=MobileDeviceSessionStatus.active,
+    ).first()
+
+
 def create_or_reuse_session(
     *,
     user_id: int,
@@ -126,67 +139,92 @@ def create_or_reuse_session(
     platform: str | None = None,
     context_id: str | None = None,
 ) -> tuple[MobileDeviceSession, str, str]:
-    """Crée ou réactive une session pour une installation.
+    """Crée ou tourne les credentials d'une session active pour une installation.
 
-    Returns:
-        (session, recovery_credential_clair, revocation_secret_clair)
+    Sessions terminales : jamais réactivées — nouvelle ligne + nouveau session_id.
+    Concurrence : IntegrityError sur index partiel → recharge gagnante + politique active.
     """
-    existing = find_session_for_installation(user_id, device_installation_id)
-    recovery = generate_opaque_secret()
-    revocation = generate_opaque_secret()
-    now = _now()
+    from sqlalchemy.exc import IntegrityError
 
-    if existing is not None:
-        if existing.status != MobileDeviceSessionStatus.active:
-            # Réactivation uniquement via login explicite sur la même installation
-            existing.status = MobileDeviceSessionStatus.active
-            existing.revoked_at = None
-            existing.revoked_reason = None
-            existing.revoked_by_user_id = None
-        existing.previous_credential_hash = existing.credential_hash
-        existing.previous_generation = existing.generation
-        existing.previous_credential_valid_until = now + timedelta(
-            seconds=PREVIOUS_CREDENTIAL_GRACE_SECONDS
+    for _attempt in range(2):
+        recovery = generate_opaque_secret()
+        revocation = generate_opaque_secret()
+        now = _now()
+
+        existing = find_active_session_for_installation(user_id, device_installation_id)
+        if existing is not None:
+            existing.previous_credential_hash = existing.credential_hash
+            existing.previous_generation = existing.credential_generation or existing.generation
+            existing.previous_credential_valid_until = now + timedelta(
+                seconds=PREVIOUS_CREDENTIAL_GRACE_SECONDS
+            )
+            existing.credential_hash = hash_credential(recovery)
+            existing.revocation_secret_hash = hash_revocation_secret(revocation)
+            new_cred_gen = int(existing.credential_generation or existing.generation or 1) + 1
+            existing.credential_generation = new_cred_gen
+            existing.generation = new_cred_gen  # alias legacy
+            # session_epoch inchangé (même session active)
+            existing.device_name = device_name or existing.device_name
+            existing.driver_id = driver_id if driver_id is not None else existing.driver_id
+            existing.last_seen_at = now
+            existing.last_refresh_at = now
+            existing.last_app_version = app_version
+            existing.last_platform = platform
+            existing.last_context_id = context_id
+            db.session.add(existing)
+            db.session.flush()
+            _invalidate_session_cache(existing.session_id)
+            return existing, recovery, revocation
+
+        active = list_active_sessions(user_id)
+        limit = get_device_session_limit(role)
+        if len(active) >= limit:
+            raise DeviceSessionLimitReached(active)
+
+        session = MobileDeviceSession(
+            session_id=uuid.uuid4(),
+            user_id=user_id,
+            driver_id=driver_id,
+            device_installation_id=device_installation_id,
+            device_name=device_name,
+            status=MobileDeviceSessionStatus.active,
+            credential_hash=hash_credential(recovery),
+            revocation_secret_hash=hash_revocation_secret(revocation),
+            generation=1,
+            session_epoch=1,
+            credential_generation=1,
+            refresh_generation=1,
+            last_seen_at=now,
+            last_refresh_at=now,
+            last_app_version=app_version,
+            last_platform=platform,
+            last_context_id=context_id,
         )
+        db.session.add(session)
+        try:
+            with db.session.begin_nested():
+                db.session.flush()
+            return session, recovery, revocation
+        except IntegrityError:
+            # Concurrent create : recharger la session gagnante
+            continue
+
+    # Dernier recours après 2 tentatives
+    existing = find_active_session_for_installation(user_id, device_installation_id)
+    if existing is not None:
+        recovery = generate_opaque_secret()
+        revocation = generate_opaque_secret()
+        now = _now()
         existing.credential_hash = hash_credential(recovery)
         existing.revocation_secret_hash = hash_revocation_secret(revocation)
-        existing.generation = int(existing.generation or 1) + 1
-        existing.device_name = device_name or existing.device_name
-        existing.driver_id = driver_id if driver_id is not None else existing.driver_id
+        new_cred_gen = int(existing.credential_generation or existing.generation or 1) + 1
+        existing.credential_generation = new_cred_gen
+        existing.generation = new_cred_gen
         existing.last_seen_at = now
-        existing.last_refresh_at = now
-        existing.last_app_version = app_version
-        existing.last_platform = platform
-        existing.last_context_id = context_id
         db.session.add(existing)
         db.session.flush()
-        _invalidate_session_cache(existing.session_id)
         return existing, recovery, revocation
-
-    active = list_active_sessions(user_id)
-    limit = get_device_session_limit(role)
-    if len(active) >= limit:
-        raise DeviceSessionLimitReached(active)
-
-    session = MobileDeviceSession(
-        session_id=uuid.uuid4(),
-        user_id=user_id,
-        driver_id=driver_id,
-        device_installation_id=device_installation_id,
-        device_name=device_name,
-        status=MobileDeviceSessionStatus.active,
-        credential_hash=hash_credential(recovery),
-        revocation_secret_hash=hash_revocation_secret(revocation),
-        generation=1,
-        last_seen_at=now,
-        last_refresh_at=now,
-        last_app_version=app_version,
-        last_platform=platform,
-        last_context_id=context_id,
-    )
-    db.session.add(session)
-    db.session.flush()
-    return session, recovery, revocation
+    raise DeviceSessionLimitReached([])
 
 
 def verify_recovery_credential(
@@ -208,19 +246,29 @@ def verify_recovery_credential(
 def rotate_recovery_credential(
     session: MobileDeviceSession,
 ) -> str:
-    """Tourne le recovery credential ; retourne le nouveau secret en clair."""
+    """Tourne le recovery credential ; incrémente credential_generation (pas session_epoch)."""
     now = _now()
     new_secret = generate_opaque_secret()
     session.previous_credential_hash = session.credential_hash
-    session.previous_generation = session.generation
+    session.previous_generation = session.credential_generation or session.generation
     session.previous_credential_valid_until = now + timedelta(
         seconds=PREVIOUS_CREDENTIAL_GRACE_SECONDS
     )
     session.credential_hash = hash_credential(new_secret)
-    session.generation = int(session.generation or 1) + 1
+    new_gen = int(session.credential_generation or session.generation or 1) + 1
+    session.credential_generation = new_gen
+    session.generation = new_gen  # alias legacy
     session.last_refresh_at = now
     session.last_seen_at = now
     return new_secret
+
+
+def bump_refresh_generation(session: MobileDeviceSession) -> int:
+    """Incrémente refresh_generation sans toucher session_epoch ni recovery."""
+    session.refresh_generation = int(getattr(session, "refresh_generation", 1) or 1) + 1
+    session.last_refresh_at = _now()
+    session.last_seen_at = session.last_refresh_at
+    return int(session.refresh_generation)
 
 
 def revoke_session(
@@ -234,6 +282,9 @@ def revoke_session(
     session.revoked_at = _now()
     session.revoked_reason = reason
     session.revoked_by_user_id = revoked_by_user_id
+    # Rendre tokens/caches structurellement obsolètes
+    session.session_epoch = int(getattr(session, "session_epoch", 1) or 1) + 1
+    _cache_session_revoked(session.session_id)
     _invalidate_session_cache(session.session_id)
 
 
@@ -253,6 +304,45 @@ def revoke_all_user_sessions(
     return count
 
 
+def revoke_user_security_sessions(
+    user: Any,
+    *,
+    status: MobileDeviceSessionStatus = MobileDeviceSessionStatus.security_revoked,
+    reason: str = "password_reset",
+    increment_token_version: bool = True,
+) -> int:
+    """Révoque toutes les sessions actives après un événement de sécurité.
+
+    Couvre reset/changement MDP, reset admin, révocation globale.
+    """
+    if increment_token_version and hasattr(user, "token_version"):
+        user.token_version = int(getattr(user, "token_version", 0) or 0) + 1
+    count = revoke_all_user_sessions(user.id, reason=reason, status=status)
+    try:
+        from security.refresh_token_service import revoke_all_user_tokens
+
+        revoke_all_user_tokens(user.id, reason=reason)
+    except Exception as exc:
+        logger.warning("revoke_all_user_tokens après security revoke: %s", exc)
+    return count
+
+
+def disable_user_sessions(
+    user: Any,
+    *,
+    status: MobileDeviceSessionStatus = MobileDeviceSessionStatus.account_disabled,
+    reason: str = "account_disabled",
+    increment_token_version: bool = True,
+) -> int:
+    """Révoque les sessions lors d'une désactivation de compte / profil."""
+    return revoke_user_security_sessions(
+        user,
+        status=status,
+        reason=reason,
+        increment_token_version=increment_token_version,
+    )
+
+
 def verify_revocation_secret(session: MobileDeviceSession, secret: str) -> bool:
     return secrets.compare_digest(
         hash_revocation_secret(secret), session.revocation_secret_hash
@@ -260,13 +350,72 @@ def verify_revocation_secret(session: MobileDeviceSession, secret: str) -> bool:
 
 
 def consume_revocation_secret(session: MobileDeviceSession, secret: str) -> bool:
+    """Legacy one-shot (sans operation_id). Préférer revoke_pending_idempotent."""
     if not verify_revocation_secret(session, secret):
         return False
-    # One-shot : invalider le secret après usage
     session.revocation_secret_hash = hash_revocation_secret(generate_opaque_secret())
     if session.is_active():
         revoke_session(session, reason="pending_revocation")
     return True
+
+
+def revoke_pending_idempotent(
+    session: MobileDeviceSession,
+    secret: str,
+    *,
+    operation_id: str | None = None,
+) -> tuple[dict[str, Any] | None, str | None]:
+    """Révoque via revocation_secret avec rejeu idempotent (perte d'ACK).
+
+    Returns:
+        (payload_ok, error_code) — error_code None si succès.
+    """
+    if operation_id:
+        existing = get_rotation_result(session.session_id, str(operation_id))
+        if existing is not None:
+            cached = load_rotation_response(existing)
+            if cached is not None:
+                secret_hash = cached.get("secret_hash")
+                if secret_hash and secrets.compare_digest(
+                    str(secret_hash), hash_revocation_secret(secret)
+                ):
+                    return (
+                        {
+                            "ok": True,
+                            "already_revoked": True,
+                            "error_code": cached.get("error_code"),
+                        },
+                        None,
+                    )
+                # Même operation_id mais preuve différente → rejeter
+                return None, "invalid_revocation_secret"
+
+    if not verify_revocation_secret(session, secret):
+        return None, "invalid_revocation_secret"
+
+    already = not session.is_active()
+    if session.is_active():
+        revoke_session(session, reason="pending_revocation")
+
+    # One-shot après succès (rejeu via operation_id + receipt)
+    consumed_hash = hash_revocation_secret(secret)
+    session.revocation_secret_hash = hash_revocation_secret(generate_opaque_secret())
+
+    payload = {
+        "ok": True,
+        "already_revoked": already,
+        "secret_hash": consumed_hash,
+    }
+    if operation_id:
+        store_rotation_result(
+            session=session,
+            idempotency_key=str(operation_id),
+            request_generation=int(session.generation or 1),
+            successor_generation=int(session.generation or 1),
+            response_payload=payload,
+            operation_type="logout_pending",
+        )
+    return {"ok": True, "already_revoked": already}, None
 
 
 # --- Cache Redis session validation ---
@@ -295,12 +444,35 @@ def cache_session_snapshot(session: MobileDeviceSession) -> None:
             {
                 "status": session.status.value,
                 "generation": session.generation,
+                "session_epoch": int(getattr(session, "session_epoch", 1) or 1),
+                "credential_generation": int(
+                    getattr(session, "credential_generation", session.generation) or 1
+                ),
+                "refresh_generation": int(
+                    getattr(session, "refresh_generation", 1) or 1
+                ),
                 "user_id": session.user_id,
             }
         )
         r.setex(_cache_key(session.session_id), SESSION_CACHE_TTL_SECONDS, payload)
     except Exception as exc:
         logger.debug("cache session snapshot failed: %s", exc)
+
+
+def _cache_session_revoked(session_id: uuid.UUID) -> None:
+    """Cache négatif immédiat après révocation (SLO ≤ 5 s)."""
+    r = _get_redis()
+    if not r:
+        return
+    try:
+        import json
+
+        payload = json.dumps({"status": "revoked", "session_epoch": -1})
+        r.setex(
+            _cache_key(session_id), SESSION_NEGATIVE_CACHE_TTL_SECONDS, payload
+        )
+    except Exception as exc:
+        logger.debug("cache session revoked failed: %s", exc)
 
 
 def _invalidate_session_cache(session_id: uuid.UUID) -> None:
@@ -316,14 +488,18 @@ def _invalidate_session_cache(session_id: uuid.UUID) -> None:
 def validate_mobile_session(
     *,
     session_id: str | None,
-    session_generation: int | None,
+    session_generation: int | None = None,
+    session_epoch: int | None = None,
     user_id: int | None = None,
+    bypass_positive_cache: bool = False,
 ) -> tuple[str | None, bool]:
     """Valide une session mobile.
 
     Returns:
         (error_code | None, retryable)
         None error = OK
+
+    bypass_positive_cache: ops sensibles (logout-all, MDP) → toujours PostgreSQL.
     """
     if not session_id:
         # Compat legacy : pas encore de session_id
@@ -334,8 +510,13 @@ def validate_mobile_session(
     except (ValueError, TypeError):
         return "session_revoked", False
 
-    # Cache Redis
-    r = _get_redis()
+    # epoch effectif : nouveau claim ou legacy session_generation
+    effective_epoch = session_epoch
+    if effective_epoch is None and session_generation is not None:
+        effective_epoch = session_generation
+
+    # Cache Redis (sauf ops sensibles)
+    r = None if bypass_positive_cache else _get_redis()
     if r:
         try:
             import json
@@ -345,9 +526,11 @@ def validate_mobile_session(
                 data = json.loads(raw)
                 if data.get("status") != "active":
                     return "session_revoked", False
+                cached_epoch = data.get("session_epoch", data.get("generation"))
                 if (
-                    session_generation is not None
-                    and int(data.get("generation", -1)) != int(session_generation)
+                    effective_epoch is not None
+                    and cached_epoch is not None
+                    and int(cached_epoch) != int(effective_epoch)
                 ):
                     return "session_revoked", False
                 if user_id is not None and int(data.get("user_id", -1)) != int(user_id):
@@ -362,13 +545,12 @@ def validate_mobile_session(
         return "session_validation_unavailable", True
 
     if session is None or not session.is_active():
+        _cache_session_revoked(sid)
         return "session_revoked", False
     if user_id is not None and session.user_id != user_id:
         return "session_revoked", False
-    if (
-        session_generation is not None
-        and int(session.generation) != int(session_generation)
-    ):
+    db_epoch = int(getattr(session, "session_epoch", session.generation) or 1)
+    if effective_epoch is not None and db_epoch != int(effective_epoch):
         return "session_revoked", False
 
     cache_session_snapshot(session)
@@ -421,6 +603,7 @@ def store_rotation_result(
     request_generation: int,
     successor_generation: int,
     response_payload: dict[str, Any],
+    operation_type: str = "refresh",
 ) -> AuthRotationResult:
     ciphertext, key_id = encrypt_rotation_response(response_payload)
     row = AuthRotationResult(
@@ -431,6 +614,7 @@ def store_rotation_result(
         successor_generation=successor_generation,
         response_ciphertext=ciphertext,
         encryption_key_id=key_id,
+        operation_type=operation_type,
         expires_at=_now() + timedelta(seconds=ROTATION_RESULT_TTL_SECONDS),
     )
     db.session.add(row)

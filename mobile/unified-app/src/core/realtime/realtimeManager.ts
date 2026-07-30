@@ -117,6 +117,32 @@ class RealtimeManager {
     this.socketGeneration += 1;
   }
 
+  /** Epoch auth courant (login/logout/refresh) — permet d'abandonner un refresh devenu obsolète. */
+  private captureAuthEpoch(): number {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { getAuthEpoch } = require("../auth/authCredentialStore") as {
+        getAuthEpoch: () => number;
+      };
+      return getAuthEpoch();
+    } catch {
+      return -1;
+    }
+  }
+
+  private isAuthEpochStillCurrent(epoch: number): boolean {
+    if (epoch === -1) return true;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { isCurrentAuthEpoch } = require("../auth/authCredentialStore") as {
+        isCurrentAuthEpoch: (e: number) => boolean;
+      };
+      return isCurrentAuthEpoch(epoch);
+    } catch {
+      return true;
+    }
+  }
+
   /** Évite qu'un refresh token async réécrive l'auth d'un socket déjà remplacé (logout/reconnect). */
   private applyFreshAuthToken(socket: Socket, generation: number): boolean {
     if (!this.isCurrentSocket(socket, generation)) return false;
@@ -425,6 +451,7 @@ class RealtimeManager {
 
     const socketBeforeAwait = this.socket;
     const generationBeforeAwait = this.socketGeneration;
+    const epochAtStart = this.captureAuthEpoch();
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { refreshAuthTokenNow } = require("../api/client") as {
@@ -440,6 +467,8 @@ class RealtimeManager {
         }
         return;
       }
+      // Epoch changé pendant l'await (logout/login concurrent) : abandonner ce refresh.
+      if (!this.isAuthEpochStillCurrent(epochAtStart)) return;
 
       if (!this.applyFreshAuthToken(socketBeforeAwait, generationBeforeAwait)) return;
       if (!socketBeforeAwait.connected) {
@@ -599,9 +628,11 @@ class RealtimeManager {
       const { refreshAuthTokenNow } = require("../api/client") as {
         refreshAuthTokenNow: () => Promise<boolean>;
       };
+      const epochAtStart = this.captureAuthEpoch();
       void refreshAuthTokenNow()
         .then(() => {
           if (!this.isCurrentSocket(socket, generation)) return;
+          if (!this.isAuthEpochStillCurrent(epochAtStart)) return;
           this.applyFreshAuthToken(socket, generation);
         })
         .catch(() => undefined);
@@ -611,6 +642,7 @@ class RealtimeManager {
 
     socket.io.on("reconnect_attempt", () => {
       if (!this.isCurrentSocket(socket, generation)) return;
+      const epochAtStart = this.captureAuthEpoch();
       void (async () => {
         try {
           // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -620,6 +652,7 @@ class RealtimeManager {
           };
           await refreshAuthTokenNow();
           if (!this.isCurrentSocket(socket, generation)) return;
+          if (!this.isAuthEpochStillCurrent(epochAtStart)) return;
           this.applyFreshAuthToken(socket, generation);
         } catch {
           // ignore: reconnect continuera en mode degrade/polling
@@ -873,6 +906,7 @@ class RealtimeManager {
       if (this.socket?.connected) return;
       void (async () => {
         const reconnectGeneration = this.socketGeneration;
+        const epochAtStart = this.captureAuthEpoch();
         try {
           // eslint-disable-next-line @typescript-eslint/no-require-imports
           const { refreshAuthTokenNow } = require("../api/client") as {
@@ -884,6 +918,8 @@ class RealtimeManager {
         }
         if (this.state.activeContextId !== contextId || this.state.authExhausted) return;
         if (this.socketGeneration !== reconnectGeneration && this.socket?.connected) return;
+        // Epoch changé pendant l'await (logout/login concurrent) : ne pas reconnecter avec un contexte obsolète.
+        if (!this.isAuthEpochStillCurrent(epochAtStart)) return;
         this.connectSocket(contextId);
       })();
     }, backoffMs);

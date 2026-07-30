@@ -44,6 +44,15 @@ jest.mock("./api/client", () => ({
   setActiveContextIdForApi: (contextId: string | null) => mockSetActiveContextIdForApi(contextId),
 }));
 
+jest.mock("./auth/authRecoveryCoordinator", () => ({
+  attemptRestRecovery: jest.fn(async () => "no_action"),
+  flushPendingRevocationTombstone: jest.fn(async () => true),
+  performLogout: jest.fn(async () => undefined),
+  persistOfflineSnapshot: jest.fn(async () => undefined),
+  restoreOfflineSessionSnapshot: jest.fn(async () => ({ kind: "anonymous" })),
+  hasPendingRevocationTombstone: jest.fn(async () => false),
+}));
+
 jest.mock("./realtime/realtimeManager", () => ({
   realtimeManager: {
     onContextSwitch: (nextContextId: string | null) => mockOnContextSwitch(nextContextId),

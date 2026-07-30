@@ -204,15 +204,29 @@ async function readRefreshToken(): Promise<string | null> {
     const result = await readStrict();
     if (result.status === "found") return result.value;
     if (result.status === "temporarily_unavailable") {
-      // Ne pas convertir en missing — signaler via null + télémétrie
       emitDriverTelemetry("auth.refresh.read_unavailable", {
+        source: "core.api.client",
+        cause: result.cause,
+      });
+      // Jamais convertir en missing / legacy
+      return null;
+    }
+    if (result.status === "permanently_invalidated") {
+      emitDriverTelemetry("auth.refresh.permanently_invalidated", {
         source: "core.api.client",
         cause: result.cause,
       });
       return null;
     }
+    // missing strict : legacy seulement si pas de migration stricte / pas de marker
+    const { readInstallationId } = require("../auth/authCredentialStore") as typeof import("../auth/authCredentialStore");
+    const installation = await readInstallationId();
+    // Si installation stricte existe, migration déjà faite → pas de legacy
+    if (installation.status === "found") {
+      return null;
+    }
   } catch {
-    /* fallback legacy key */
+    /* fallback legacy encadré ci-dessous */
   }
   try {
     const value = await SecureStore.getItemAsync(REFRESH_TOKEN_STORAGE_KEY);
@@ -394,21 +408,57 @@ async function ensureCsrfToken(): Promise<string | null> {
 }
 
 async function refreshAuthToken(): Promise<string | null> {
+  const {
+    getAuthEpoch,
+    isCurrentAuthEpoch,
+    readSessionEnvelope,
+  } = require("../auth/authCredentialStore") as typeof import("../auth/authCredentialStore");
+  // authEpoch capturé AVANT toute I/O réseau
+  const epochAtStart = getAuthEpoch();
+
   const refreshToken = await readRefreshToken();
   if (!refreshToken) {
     return null;
   }
+  if (!isCurrentAuthEpoch(epochAtStart)) return null;
+
+  const envelope = await readSessionEnvelope();
+  const sessionId =
+    envelope.status === "found" ? envelope.value.session_id : "unknown";
+  const sourceGen =
+    envelope.status === "found" ? envelope.value.refresh_generation : 0;
+
+  const {
+    ensurePendingRefreshOperation,
+    clearPendingRefreshOperation,
+  } = require("../auth/pendingRefreshOperation") as typeof import("../auth/pendingRefreshOperation");
+  const pending = await ensurePendingRefreshOperation({
+    sessionId,
+    sourceRefreshGeneration: sourceGen,
+  });
+
   const payload = { refresh_token: refreshToken };
   const deviceHeaders = await buildAuthDeviceHeaders();
+  const authHeaders = {
+    ...deviceHeaders,
+    "X-Auth-Contract-Version": "mobile-device-session-v1",
+    "Idempotency-Key": pending.operationId,
+  };
 
   let endpointUsed: "refresh-token" | "refresh" = "refresh-token";
-  let data: { access_token?: string; token?: string; refresh_token?: string } | null = null;
+  let data: {
+    access_token?: string;
+    token?: string;
+    refresh_token?: string;
+    refresh_generation?: number;
+  } | null = null;
   try {
     const response = await apiClient.post<{
       access_token?: string;
       token?: string;
       refresh_token?: string;
-    }>("/auth/refresh-token", payload, { headers: deviceHeaders });
+      refresh_generation?: number;
+    }>("/auth/refresh-token", payload, { headers: authHeaders });
     data = response.data;
   } catch (error) {
     const err = error as AxiosError;
@@ -421,7 +471,7 @@ async function refreshAuthToken(): Promise<string | null> {
       access_token?: string;
       token?: string;
       refresh_token?: string;
-    }>("/auth/refresh", payload, { headers: deviceHeaders });
+    }>("/auth/refresh", payload, { headers: authHeaders });
     data = fallbackResponse.data;
   }
 
@@ -429,16 +479,27 @@ async function refreshAuthToken(): Promise<string | null> {
     source: "core.api.client",
     endpoint: endpointUsed,
   });
+  if (!isCurrentAuthEpoch(epochAtStart)) return null;
+
   const token = extractToken(data);
   const nextRefreshToken = extractRefreshToken(data);
-  const {
-    getAuthEpoch,
-    isCurrentAuthEpoch,
-  } = require("../auth/authCredentialStore") as typeof import("../auth/authCredentialStore");
-  const epochAtStart = getAuthEpoch();
   if (nextRefreshToken) {
     if (!isCurrentAuthEpoch(epochAtStart)) return null;
     await writeRefreshToken(nextRefreshToken);
+    if (envelope.status === "found") {
+      const nextGen =
+        typeof data?.refresh_generation === "number"
+          ? data.refresh_generation
+          : envelope.value.refresh_generation + 1;
+      await (
+        require("../auth/authCredentialStore") as typeof import("../auth/authCredentialStore")
+      ).writeSessionEnvelope({
+        ...envelope.value,
+        refresh_generation: nextGen,
+        last_authenticated_at: new Date().toISOString(),
+      });
+    }
+    await clearPendingRefreshOperation();
   }
   if (token) {
     if (!isCurrentAuthEpoch(epochAtStart)) return null;
@@ -722,16 +783,23 @@ export function setAuthToken(token: string | null) {
   }
 }
 
-/** Purge locale awaitée (access + refresh). Incrémente authEpoch. */
+/** Purge locale awaitée (access + refresh + recovery + envelope). Incrémente authEpoch. */
 export async function clearLocalAuth(): Promise<void> {
   try {
-    const { bumpAuthEpoch } = require("../auth/authCredentialStore") as typeof import("../auth/authCredentialStore");
-    bumpAuthEpoch();
+    const store = require("../auth/authCredentialStore") as typeof import("../auth/authCredentialStore");
+    store.bumpAuthEpoch();
+    await store.deleteRefreshToken();
+    await store.deleteRecoveryCredential();
+    await store.deleteSessionEnvelope();
   } catch {
     /* ignore */
   }
   setAuthToken(null);
-  await writeRefreshToken(null);
+  try {
+    await SecureStore.deleteItemAsync(REFRESH_TOKEN_STORAGE_KEY);
+  } catch {
+    /* ignore */
+  }
 }
 
 export function hasAuthToken(): boolean {
@@ -779,6 +847,14 @@ export async function fetchBootstrap(activeContextId?: string | null): Promise<B
 export async function login(email: string, password: string): Promise<void> {
   if (useMockBootstrap) return;
   try {
+    const {
+      hasPendingRevocationTombstone,
+    } = require("../auth/authRecoveryCoordinator") as typeof import("../auth/authRecoveryCoordinator");
+    if (await hasPendingRevocationTombstone()) {
+      throw new Error(
+        "Déconnexion en attente de confirmation serveur. Réessayez plus tard."
+      );
+    }
     const deviceHeaders = await buildAuthDeviceHeaders();
     const { data } = await apiClient.post(
       "/auth/login",
@@ -786,61 +862,114 @@ export async function login(email: string, password: string): Promise<void> {
         email: email.trim(),
         password,
       },
-      { headers: deviceHeaders }
+      {
+        headers: {
+          ...deviceHeaders,
+          "X-Auth-Contract-Version": "mobile-device-session-v1",
+        },
+      }
     );
     const token = extractToken(data);
     const refreshToken = extractRefreshToken(data);
-    // Persister le refresh AVANT de publier l'access (invariant C).
-    if (refreshToken) {
-      await writeRefreshToken(refreshToken);
-    }
-    // Recovery credential durable (B0) si le serveur le fournit.
-    const recovery =
-      data && typeof data === "object"
-        ? (data as Record<string, unknown>).recovery_credential
-        : null;
-    if (typeof recovery === "string" && recovery.length > 0) {
-      try {
-        const {
-          writeRecoveryCredential,
-          writeSessionEnvelope,
-          bumpAuthEpoch,
-        } = require("../auth/authCredentialStore") as typeof import("../auth/authCredentialStore");
-        bumpAuthEpoch();
-        await writeRecoveryCredential(recovery);
-        const sessionId = (data as Record<string, unknown>).session_id;
-        const deviceId = await (async () => {
-          try {
-            const { getStableDeviceId } = require("../notifications/getStableDeviceId") as {
-              getStableDeviceId: () => Promise<string>;
-            };
-            return await getStableDeviceId();
-          } catch {
-            return "unknown";
-          }
-        })();
-        if (typeof sessionId === "string") {
-          await writeSessionEnvelope({
-            schema_version: 1,
-            session_id: sessionId,
-            device_installation_id: deviceId,
-            user_public_id: String((data as Record<string, unknown>).user_public_id ?? ""),
-            driver_id:
-              typeof (data as Record<string, unknown>).driver_id === "number"
-                ? ((data as Record<string, unknown>).driver_id as number)
-                : null,
-            role: String((data as Record<string, unknown>).role ?? "driver"),
-            active_context_id: null,
-            refresh_generation: Number(
-              (data as Record<string, unknown>).session_generation ?? 1
-            ),
-            last_authenticated_at: new Date().toISOString(),
-          });
+    const responseObj = data && typeof data === "object" ? (data as Record<string, unknown>) : {};
+    const recovery = responseObj.recovery_credential;
+    const revocationSecret = responseObj.revocation_secret;
+    const userObj =
+      responseObj.user && typeof responseObj.user === "object"
+        ? (responseObj.user as Record<string, unknown>)
+        : {};
+
+    const store = require("../auth/authCredentialStore") as typeof import("../auth/authCredentialStore");
+    const { decodeJwtClaims } = require("../auth/jwtClaims") as typeof import("../auth/jwtClaims");
+
+    // Fail-closed : toutes les écritures doivent réussir avant de publier l'access
+    if (!refreshToken || typeof recovery !== "string" || !recovery) {
+      // Tenter revoke immédiat si secrets en mémoire
+      const sid = responseObj.session_id;
+      if (typeof sid === "string" && typeof revocationSecret === "string") {
+        try {
+          await revokeSessionPending(sid, revocationSecret);
+        } catch {
+          /* best-effort */
         }
-      } catch {
-        /* recovery optionnel pendant rollout */
       }
+      throw new Error("Persistance session incomplète (refresh/recovery manquants).");
     }
+
+    const refreshWrite = await store.writeRefreshToken(refreshToken);
+    if (refreshWrite.status !== "ok") {
+      throw new Error("storage_locked");
+    }
+    // dual-write legacy best-effort
+    try {
+      await SecureStore.setItemAsync(REFRESH_TOKEN_STORAGE_KEY, refreshToken);
+    } catch {
+      /* ignore */
+    }
+
+    const recoveryWrite = await store.writeRecoveryCredential(recovery);
+    if (recoveryWrite.status !== "ok") {
+      await store.deleteRefreshToken();
+      throw new Error("storage_locked");
+    }
+
+    const deviceId = await (async () => {
+      try {
+        const { getStableDeviceId } = require("../notifications/getStableDeviceId") as {
+          getStableDeviceId: () => Promise<string>;
+        };
+        return await getStableDeviceId();
+      } catch {
+        return "unknown";
+      }
+    })();
+    const accessClaims = token ? decodeJwtClaims(token) : null;
+    const driverIdClaim = accessClaims?.driver_id;
+    const sessionId = responseObj.session_id;
+    if (typeof sessionId !== "string") {
+      await store.deleteRefreshToken();
+      await store.deleteRecoveryCredential();
+      throw new Error("session_id manquant");
+    }
+    const envelopeWrite = await store.writeSessionEnvelope({
+      schema_version: 1,
+      session_id: sessionId,
+      device_installation_id: deviceId,
+      user_public_id: String(userObj.public_id ?? ""),
+      driver_id: typeof driverIdClaim === "number" ? driverIdClaim : null,
+      role: String(userObj.role ?? "driver"),
+      active_context_id: null,
+      refresh_generation: Number(
+        responseObj.refresh_generation ?? responseObj.session_generation ?? 1
+      ),
+      last_authenticated_at: new Date().toISOString(),
+      revocation_secret: typeof revocationSecret === "string" ? revocationSecret : null,
+    });
+    if (envelopeWrite.status !== "ok") {
+      await store.deleteRefreshToken();
+      await store.deleteRecoveryCredential();
+      // Tombstone revoke si secret dispo
+      if (typeof revocationSecret === "string") {
+        const opId = `login-fail-${Date.now()}`;
+        await store.writeRevocationTombstone({
+          operation: "revoke_session",
+          operation_id: opId,
+          session_id: sessionId,
+          device_installation_id: deviceId,
+          revocation_secret: revocationSecret,
+          created_at: new Date().toISOString(),
+        });
+        try {
+          await revokeSessionPending(sessionId, revocationSecret, opId);
+          await store.deleteRevocationTombstone();
+        } catch {
+          /* conserver tombstone */
+        }
+      }
+      throw new Error("storage_locked");
+    }
+
+    store.bumpAuthEpoch();
     if (token) {
       setAuthToken(token);
     }
@@ -879,7 +1008,7 @@ export async function switchContext(targetContextId: string): Promise<SwitchCont
   }
 }
 
-export async function logoutSession(): Promise<void> {
+export async function logoutSession(opts?: { skipLocalPurge?: boolean }): Promise<void> {
   if (useMockBootstrap) return;
   try {
     const deviceHeaders = await buildAuthDeviceHeaders();
@@ -902,10 +1031,11 @@ export async function logoutSession(): Promise<void> {
     }
     await apiClient.post("/auth/logout", body, { headers: deviceHeaders });
   } catch (error) {
-    // Logout backend best-effort: on purge toujours localement côté session provider.
     throw toApiError(error);
   } finally {
-    await clearLocalAuth();
+    if (!opts?.skipLocalPurge) {
+      await clearLocalAuth();
+    }
   }
 }
 
@@ -988,15 +1118,24 @@ export async function sessionResumeRequest(): Promise<{
   }
 }
 
-/** Flush d'un tombstone de révocation hors-ligne. */
+/** Flush d'un tombstone de révocation hors-ligne (idempotent via operation_id). */
 export async function revokeSessionPending(
   sessionId: string,
-  revocationSecret: string
+  revocationSecret: string,
+  operationId?: string
 ): Promise<boolean> {
   try {
-    await apiClient.post(`/auth/sessions/${encodeURIComponent(sessionId)}/revoke-pending`, {
-      revocation_secret: revocationSecret,
-    });
+    const opId = operationId || `revoke-${Date.now()}`;
+    await apiClient.post(
+      `/auth/sessions/${encodeURIComponent(sessionId)}/revoke-pending`,
+      { revocation_secret: revocationSecret, operation_id: opId },
+      {
+        headers: {
+          "Idempotency-Key": opId,
+          "X-Auth-Contract-Version": "mobile-device-session-v1",
+        },
+      }
+    );
     return true;
   } catch {
     return false;

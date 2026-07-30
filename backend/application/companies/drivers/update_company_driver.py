@@ -181,7 +181,30 @@ class UpdateCompanyDriverUseCase:
                 driver.license_categories = lc if isinstance(lc, list) else []
 
         if not validation_error and "is_active" in data:
-            driver.is_active = bool(data["is_active"])
+            new_active = bool(data["is_active"])
+            was_active = bool(getattr(driver, "is_active", True))
+            driver.is_active = new_active
+            if was_active and not new_active:
+                try:
+                    user = getattr(driver, "user", None)
+                    if user is None and getattr(driver, "user_id", None):
+                        from models import User
+
+                        user = User.query.get(driver.user_id)
+                    if user is not None:
+                        from security.mobile_device_session_service import (
+                            disable_user_sessions,
+                        )
+
+                        disable_user_sessions(
+                            user,
+                            reason="driver_profile_disabled",
+                            increment_token_version=True,
+                        )
+                except Exception:
+                    # Ne pas bloquer la mise à jour métier ; la session sera
+                    # refusée au prochain refresh / session-resume via is_active.
+                    pass
 
         if not validation_error and "driver_type" in data:
             try:
