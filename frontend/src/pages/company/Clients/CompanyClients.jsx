@@ -16,9 +16,11 @@ import {
   FiRefreshCw,
   FiX,
   FiList,
+  FiDownload,
 } from 'react-icons/fi';
 import {
-  fetchCompanyClients,
+  fetchCompanyClientsPaginated,
+  exportCompanyClientsCsv,
   createClient,
   updateClient,
   deleteClient,
@@ -26,8 +28,7 @@ import {
   createClientStay,
   linkClientBillingParty,
 } from '../../../services/companyService';
-import CompanyHeader from '../../../components/layout/Header/CompanyHeader';
-import CompanySidebar from '../../../components/layout/Sidebar/CompanySidebar/CompanySidebar';
+import { toast } from 'sonner';
 import ClientsTable from './components/ClientsTable';
 import ClientsTableSkeleton from './components/ClientsTableSkeleton';
 import { useLirieCompany } from '../../../hooks/useLirieCompany';
@@ -39,11 +40,6 @@ import ClientReadView from './components/ClientReadView';
 import ClientEditForm from './components/ClientEditForm';
 import styles from './CompanyClients.module.css';
 import useUrlSearchSync from '../../../hooks/useUrlSearchSync';
-import {
-  normalizeText,
-  buildSearchHaystack,
-  getClientDisplayName,
-} from '../../../utils/clientSearchUtils';
 
 /** Garde la fiche la plus ancienne (id minimal) par `linked_institution_id` (établissements). */
 function dedupeInstitutionClientsByLinkedId(list) {
@@ -109,32 +105,9 @@ const CompanyClients = () => {
   const { company } = useLirieCompany();
   const canLoadClients = Boolean(company?.id);
 
-  const {
-    data: clientsData,
-    isLoading: clientsListInitialLoading,
-    isRefetching: clientsListRefetching,
-    isError: clientsListError,
-    refetch: refetchClients,
-  } = useQuery({
-    queryKey: canLoadClients
-      ? lirieKeys.companyClients(company.id)
-      : [LIRIE_QK_PREFIX, 'company-clients', 'disabled'],
-    enabled: canLoadClients,
-    queryFn: async () => {
-      const data = await fetchCompanyClients();
-      return Array.isArray(data) ? data : [];
-    },
-    placeholderData: keepPreviousData,
-    staleTime: 30_000,
-  });
-
-  const clients = useMemo(
-    () => (Array.isArray(clientsData) ? clientsData : []),
-    [clientsData]
-  );
-
   const [detailsError, setDetailsError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('all');
   const [editingClient, setEditingClient] = useState(null);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -143,9 +116,62 @@ const CompanyClients = () => {
   const [clientToDelete, setClientToDelete] = useState(null);
 
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [itemsPerPage, setItemsPerPage] = useState(25);
   const [sortBy, setSortBy] = useState('name');
   const [sortOrder, setSortOrder] = useState('asc');
+  const [isExporting, setIsExporting] = useState(false);
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const next = (searchTerm || '').trim().slice(0, 100);
+      if (next.length === 1) {
+        setDebouncedSearchTerm('');
+        return;
+      }
+      setDebouncedSearchTerm(next);
+    }, 350);
+    return () => clearTimeout(t);
+  }, [searchTerm]);
+
+  const {
+    data: clientsPage,
+    isLoading: clientsListInitialLoading,
+    isRefetching: clientsListRefetching,
+    isError: clientsListError,
+    refetch: refetchClients,
+  } = useQuery({
+    queryKey: canLoadClients
+      ? [
+          ...lirieKeys.companyClients(company.id),
+          currentPage,
+          itemsPerPage,
+          debouncedSearchTerm,
+          sortBy,
+          sortOrder,
+        ]
+      : [LIRIE_QK_PREFIX, 'company-clients', 'disabled'],
+    enabled: canLoadClients,
+    queryFn: async ({ signal }) => {
+      const perPage = Math.min(Math.max(Number(itemsPerPage) || 25, 1), 50);
+      return fetchCompanyClientsPaginated({
+        page: Math.max(Number(currentPage) || 1, 1),
+        perPage,
+        search: debouncedSearchTerm,
+        sortBy,
+        sortOrder,
+        signal,
+      });
+    },
+    placeholderData: keepPreviousData,
+    staleTime: 30_000,
+  });
+
+  const clients = useMemo(() => {
+    const rows = clientsPage?.data || clientsPage?.clients || [];
+    return Array.isArray(rows) ? rows : [];
+  }, [clientsPage]);
+
+  const serverTotal = clientsPage?.pagination?.total ?? clients.length;
 
   const [selectedClientId, setSelectedClientId] = useState(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -176,6 +202,19 @@ const CompanyClients = () => {
     await refetchClients();
   }, [refetchClients]);
 
+  // Export CSV streamé — indépendant de la liste UI paginée (Lot 5 perf).
+  const handleExportCsv = useCallback(async () => {
+    setIsExporting(true);
+    try {
+      await exportCompanyClientsCsv({ search: debouncedSearchTerm });
+    } catch (err) {
+      console.error('Erreur export CSV clients:', err);
+      toast.error("Erreur lors de l'export CSV");
+    } finally {
+      setIsExporting(false);
+    }
+  }, [debouncedSearchTerm]);
+
   useEffect(() => {
     if (!initialized) return;
 
@@ -205,68 +244,27 @@ const CompanyClients = () => {
     }
   }, [searchParams]);
 
-  const clientsWithHaystack = useMemo(
-    () =>
-      clientsDeduped.map((c) => ({
-        client: c,
-        haystackNorm: normalizeText(buildSearchHaystack(c)),
-      })),
-    [clientsDeduped]
-  );
-
   const filteredAndSortedClients = useMemo(() => {
-    const qNorm = searchTerm ? normalizeText(searchTerm) : '';
-    let filtered = clientsWithHaystack.filter(({ client, haystackNorm }) => {
-      const matchesSearch = !qNorm || haystackNorm.includes(qNorm);
-      const matchesType =
-        filterType === 'all'
-          ? true
-          : filterType === 'institution'
-            ? client.is_institution
-            : !client.is_institution;
-      return matchesSearch && matchesType;
+    // Tri/recherche serveur ; filtre type institution appliqué sur la page courante
+    return clientsDeduped.filter((client) => {
+      if (filterType === 'all') return true;
+      if (filterType === 'institution') return Boolean(client.is_institution);
+      return !client.is_institution;
     });
+  }, [clientsDeduped, filterType]);
 
-    const list = filtered.map(({ client }) => client);
-    list.sort((a, b) => {
-      let compareA, compareB;
-
-      switch (sortBy) {
-        case 'name': {
-          const getNameKey = (c) => {
-            if (c.is_institution) return getClientDisplayName(c).toLowerCase();
-            const last = (c.last_name || '').toLowerCase();
-            const first = (c.first_name || '').toLowerCase();
-            return last ? `${last} ${first}` : getClientDisplayName(c).toLowerCase();
-          };
-          compareA = getNameKey(a);
-          compareB = getNameKey(b);
-          break;
-        }
-        case 'created':
-          compareA = new Date(a.created_at || 0);
-          compareB = new Date(b.created_at || 0);
-          break;
-        default:
-          return 0;
-      }
-
-      if (compareA < compareB) return sortOrder === 'asc' ? -1 : 1;
-      if (compareA > compareB) return sortOrder === 'asc' ? 1 : -1;
-      return 0;
-    });
-
-    return list;
-  }, [clientsWithHaystack, searchTerm, filterType, sortBy, sortOrder]);
-
-  const totalPages = Math.ceil(filteredAndSortedClients.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const paginatedClients = filteredAndSortedClients.slice(startIndex, endIndex);
+  const totalPages = Math.max(
+    1,
+    Math.ceil((Number(serverTotal) || filteredAndSortedClients.length) / itemsPerPage)
+  );
+  const paginatedClients = filteredAndSortedClients;
+  // Pagination serveur : indices affichés dérivés de la page/taille courantes (pas d'un slice local).
+  const startIndex = Math.max(0, (currentPage - 1) * itemsPerPage);
+  const endIndex = startIndex + paginatedClients.length;
 
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, filterType]);
+  }, [debouncedSearchTerm, filterType, itemsPerPage, sortBy, sortOrder]);
 
   const handlePageChange = (newPage) => {
     if (newPage >= 1 && newPage <= totalPages) {
@@ -582,10 +580,7 @@ const CompanyClients = () => {
 
   return (
     <>
-      <CompanyHeader />
-      <div className={styles.layout}>
-        <CompanySidebar />
-        <div className={`${styles.contentArea} ${panelOpen ? styles.contentAreaWithPanel : ''}`}>
+      <div className={`${styles.contentArea} ${panelOpen ? styles.contentAreaWithPanel : ''}`}>
           <main className={styles.main}>
             {/* Zone A -- Header */}
             <div className={styles.header}>
@@ -683,6 +678,16 @@ const CompanyClients = () => {
                 <span className={styles.barResultCount}>
                   {filteredAndSortedClients.length} résultat{filteredAndSortedClients.length !== 1 ? 's' : ''}
                 </span>
+                <button
+                  type="button"
+                  className={styles.refreshBtn}
+                  title="Exporter en CSV (tous les résultats filtrés, pas uniquement la page)"
+                  onClick={handleExportCsv}
+                  aria-busy={isExporting}
+                  disabled={isExporting}
+                >
+                  <FiDownload size={14} />
+                </button>
                 <button
                   type="button"
                   className={styles.refreshBtn}
@@ -831,7 +836,6 @@ const CompanyClients = () => {
               </div>
             </aside>
           )}
-        </div>
       </div>
 
       {/* Modals (rendered outside layout to avoid z-index issues) */}

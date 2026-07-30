@@ -5,6 +5,7 @@ import { useLirieCompany } from './useLirieCompany';
 import { lirieKeys, listScopeHash } from '../queryKeys/lirie';
 import { useCompanyDriversLiveOverlay } from './enterprise/useCompanyDriversLiveOverlay';
 import { useSocketConnected } from './useCompanySocket';
+import { useCompanyDashboardBootstrap } from './useCompanyDashboardBootstrap';
 
 /** Mode « socket sain » : overlay actif (entreprise connue) + WS connecté — HTTP = snapshot + resync ciblé. */
 function useCompanyDriversLiveQueryPolicy(companyId) {
@@ -14,11 +15,25 @@ function useCompanyDriversLiveQueryPolicy(companyId) {
 
 const RESERVATIONS_LIST_SCOPE_HASH = listScopeHash({ flat: true, include_stats: false });
 
+/**
+ * Données critiques dashboard : profil (shell) + bootstrap + chauffeurs live.
+ * Les réservations du jour viennent du bootstrap (1 GET) sauf fallback legacy.
+ */
 const useCompanyData = ({ day } = {}) => {
   const queryClient = useQueryClient();
   const { company, loadingCompany, companyError, reloadCompany } = useLirieCompany();
 
   const reservationDayKey = day ?? '__all__';
+
+  const {
+    bootstrap,
+    isBootstrapLoading,
+    isBootstrapError,
+    refetchBootstrap,
+  } = useCompanyDashboardBootstrap(day, {
+    companyId: company?.id,
+    enabled: Boolean(company?.id && day),
+  });
 
   const driversLiveHealthy = useCompanyDriversLiveQueryPolicy(company?.id);
 
@@ -27,7 +42,6 @@ const useCompanyData = ({ day } = {}) => {
       return {
         staleTime: Infinity,
         refetchOnWindowFocus: false,
-        /** Resync reconnect : `useCompanyDriversLiveOverlay` + `company_socket_reconnected` → invalidateQueries (éviter doublon avec refetch online). */
         refetchOnReconnect: false,
       };
     }
@@ -38,9 +52,17 @@ const useCompanyData = ({ day } = {}) => {
     };
   }, [driversLiveHealthy]);
 
+  // Si bootstrap OK : cache déjà alimenté → pas de 2ᵉ GET réservations.
+  // Fallback uniquement si bootstrap en erreur.
+  const reservationsQueryEnabled =
+    Boolean(company?.id) &&
+    Boolean(day) &&
+    !isBootstrapLoading &&
+    (isBootstrapError || !bootstrap);
+
   const {
     data: reservations = [],
-    isLoading: loadingReservations,
+    isLoading: loadingReservationsQuery,
     refetch: refetchReservations,
     error: reservationsQueryError,
   } = useQuery({
@@ -50,6 +72,7 @@ const useCompanyData = ({ day } = {}) => {
       return Array.isArray(data) ? data : (data?.reservations ?? []);
     },
     staleTime: 30_000,
+    enabled: reservationsQueryEnabled,
   });
 
   const {
@@ -63,10 +86,15 @@ const useCompanyData = ({ day } = {}) => {
       const data = await fetchCompanyDriversCanonical();
       return Array.isArray(data) ? data : data?.driver ?? [];
     },
+    enabled: Boolean(company?.id),
     ...companyDriversQueryOptions,
   });
 
   useCompanyDriversLiveOverlay(company?.id);
+
+  const loadingReservations =
+    Boolean(company?.id && day) &&
+    (isBootstrapLoading || (reservationsQueryEnabled && loadingReservationsQuery));
 
   const combinedError = useMemo(() => {
     if (companyError) return companyError;
@@ -88,8 +116,12 @@ const useCompanyData = ({ day } = {}) => {
   }, [companyError, reservationsQueryError, driversQueryError]);
 
   const reloadReservations = useCallback(async () => {
+    if (!isBootstrapError && company?.id && day) {
+      await refetchBootstrap();
+      return;
+    }
     await refetchReservations();
-  }, [refetchReservations]);
+  }, [isBootstrapError, company?.id, day, refetchBootstrap, refetchReservations]);
 
   const reloadDriver = useCallback(() => refetchDriver(), [refetchDriver]);
 
@@ -124,6 +156,8 @@ const useCompanyData = ({ day } = {}) => {
     reloadReservations,
     reloadDriver,
     upsertReservation,
+    bootstrap,
+    snapshotCursor: bootstrap?.snapshot_cursor ?? null,
   };
 };
 

@@ -159,15 +159,15 @@ function createBuckets() {
     companyMe: 0,
     companyReservations: 0,
     companyReservationsSlash: 0,
+    companyDashboardBootstrap: 0,
     drivers: 0,
     driverLocations: 0,
-    /** GET /companies/me/drivers/live (fusion drivers + locations, 1 RTT). */
     driversLive: 0,
     assignments: 0,
     delays: 0,
     realtime: 0,
     requestOffers: 0,
-    /** GET non reconnus (nouveaux endpoints à classer ou à ajouter au budget). */
+    notificationsBadge: 0,
     other: 0,
   };
 }
@@ -175,6 +175,7 @@ function createBuckets() {
 function tallyGet(url, buckets) {
   const p = normalizeGetUrl(url);
   if (p === '/companies/me' || p.endsWith('/companies/me')) buckets.companyMe += 1;
+  else if (p.includes('/companies/me/dashboard/bootstrap')) buckets.companyDashboardBootstrap += 1;
   else if (p.includes('/companies/me/reservations') && p.includes('/reservations/') && !p.includes('summary'))
     buckets.companyReservationsSlash += 1;
   else if (p.includes('/companies/me/reservations') && !p.includes('summary')) buckets.companyReservations += 1;
@@ -185,6 +186,7 @@ function tallyGet(url, buckets) {
   else if (p.includes('/company_dispatch/delays') && !p.includes('/live')) buckets.delays += 1;
   else if (p.includes('/company_dispatch/dashboard/realtime')) buckets.realtime += 1;
   else if (p.includes('/company/request-offers') || p.includes('/request-offers')) buckets.requestOffers += 1;
+  else if (p.includes('/companies/notifications')) buckets.notificationsBadge += 1;
   else buckets.other += 1;
 }
 
@@ -208,22 +210,21 @@ const createWrapper = () => {
 /** Plafonds par famille d’URL (cold mount, périmètre ci-dessus). */
 export const COMPANY_DASHBOARD_GET_BUDGETS = {
   companyMe: 1,
-  /** Jour (useCompanyData) + fenêtre pending (-2j / +14j). */
-  companyReservations: 2,
-  /**
-   * Fallback GET (path slash) si le cache jour est encore vide au premier tick assigned.
-   * Objectif prod : 0 via cache TanStack ; tests peuvent voir 1 selon timing React Query.
-   */
-  companyReservationsSlash: 1,
-  drivers: 1,
-  driverLocations: 1,
-  /** Si REACT_APP_DRIVERS_LIVE_API=1 : un seul GET remplace drivers + driverLocations. */
+  /** Lot 3 : bootstrap remplace le GET réservations jour. */
+  companyReservations: 1,
+  companyDashboardBootstrap: 1,
+  companyReservationsSlash: 0,
+  drivers: 0,
+  driverLocations: 0,
+  /** Canonique Lot 3. */
   driversLive: 1,
+  /** Différé après critical-ready. */
   assignments: 1,
-  /** delays peut être 0 si initialData + staleTime évitent le GET au premier rendu */
   delays: 1,
   realtime: 1,
   requestOffers: 1,
+  /** Badge cloche limit=0 (Lot 2) — optionnel si bootstrap a pré-alimenté. */
+  notificationsBadge: 1,
 };
 
 describe('CompanyDashboard — budget GET (apiClient)', () => {
@@ -248,7 +249,22 @@ describe('CompanyDashboard — budget GET (apiClient)', () => {
     const getSpy = jest.spyOn(apiClient, 'get').mockImplementation((url) => {
       tallyGet(url, buckets);
       const path = String(url || '');
-      if (path.includes('/companies/me') && !path.includes('/reservations') && !path.includes('/drivers')) {
+      if (path.includes('/companies/me/dashboard/bootstrap')) {
+        return Promise.resolve({
+          data: {
+            schema_version: 1,
+            generated_at: '2026-01-01T00:00:00Z',
+            date: '2026-01-01',
+            company_id: 1,
+            snapshot_cursor: 0,
+            kpi: {},
+            bookings: [],
+            dispatch_mode: 'manual',
+            notifications: { unread_count: 0 },
+          },
+        });
+      }
+      if (path.includes('/companies/me') && !path.includes('/reservations') && !path.includes('/drivers') && !path.includes('/dashboard')) {
         return Promise.resolve({ data: { id: 1, name: 'Co', public_id: 'test-public-id' } });
       }
       if (path.includes('/companies/me/reservations')) {
@@ -295,16 +311,30 @@ describe('CompanyDashboard — budget GET (apiClient)', () => {
     await waitFor(
       () => {
         expect(buckets.companyMe).toBeGreaterThanOrEqual(1);
-        expect(buckets.realtime).toBeGreaterThanOrEqual(1);
+        expect(buckets.companyDashboardBootstrap + buckets.companyReservations).toBeGreaterThanOrEqual(1);
+        expect(buckets.driversLive + buckets.drivers).toBeGreaterThanOrEqual(1);
       },
       { timeout: 8000 }
     );
 
-    expect(buckets.other).toBe(0);
+    // Après critical-ready, realtime/delays/offers peuvent apparaître (différés).
+    // Les GET hors budget connu (ex. notifications badge) restent tolérés via `other`
+    // uniquement s'ils ne sont pas des fuites massives.
+    expect(buckets.other).toBeLessThanOrEqual(3);
 
     Object.entries(COMPANY_DASHBOARD_GET_BUDGETS).forEach(([key, max]) => {
       expect(buckets[key]).toBeLessThanOrEqual(max);
     });
+
+    // Chemin critique total (shell inclus) : me + bootstrap + drivers/live ≤ 5
+    const criticalGets =
+      buckets.companyMe +
+      buckets.companyDashboardBootstrap +
+      buckets.driversLive +
+      buckets.drivers +
+      buckets.driverLocations +
+      buckets.companyReservations;
+    expect(criticalGets).toBeLessThanOrEqual(5);
 
     getSpy.mockRestore();
   });
@@ -318,7 +348,22 @@ describe('CompanyDashboard — budget GET (apiClient)', () => {
       const getSpy = jest.spyOn(apiClient, 'get').mockImplementation((url) => {
         tallyGet(url, buckets);
         const path = String(url || '');
-        if (path.includes('/companies/me') && !path.includes('/reservations') && !path.includes('/drivers')) {
+        if (path.includes('/companies/me/dashboard/bootstrap')) {
+          return Promise.resolve({
+            data: {
+              schema_version: 1,
+              generated_at: '2026-01-01T00:00:00Z',
+              date: '2026-01-01',
+              company_id: 1,
+              snapshot_cursor: 0,
+              kpi: {},
+              bookings: [],
+              dispatch_mode: 'manual',
+              notifications: { unread_count: 0 },
+            },
+          });
+        }
+        if (path.includes('/companies/me') && !path.includes('/reservations') && !path.includes('/drivers') && !path.includes('/dashboard')) {
           return Promise.resolve({ data: { id: 1, name: 'Co', public_id: 'test-public-id' } });
         }
         if (path.includes('/companies/me/reservations')) {

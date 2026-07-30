@@ -120,8 +120,25 @@ const CompanyNotificationBell = () => {
     () => (company?.id ? lirieKeys.companyNotifications(company.id) : null),
     [company?.id]
   );
+  const unreadQueryKey = useMemo(
+    () =>
+      company?.id
+        ? [...lirieKeys.companyNotifications(company.id), 'unread-badge']
+        : null,
+    [company?.id]
+  );
 
   const canLoad = canLoadCompanyNotifications();
+
+  // Badge uniquement au mount (limit=0) — pas de liste de 30
+  const { data: badgeData } = useQuery({
+    queryKey: unreadQueryKey ?? [LIRIE_QK_PREFIX, 'company-notifications', 'badge', 'disabled'],
+    queryFn: async () => fetchCompanyNotifications({ limit: 0 }),
+    enabled: Boolean(unreadQueryKey && canLoad),
+    staleTime: NOTIFICATIONS_STALE_MS,
+    refetchInterval: NOTIFICATIONS_RESYNC_INTERVAL_MS,
+    refetchIntervalInBackground: false,
+  });
 
   const {
     data: inboxData,
@@ -140,15 +157,15 @@ const CompanyNotificationBell = () => {
       }
       return fetchCompanyNotifications({ limit: 30 });
     },
-    enabled: Boolean(notificationsQueryKey && canLoad),
+    enabled: Boolean(notificationsQueryKey && canLoad && isOpen),
     staleTime: NOTIFICATIONS_STALE_MS,
-    refetchInterval: NOTIFICATIONS_RESYNC_INTERVAL_MS,
+    refetchInterval: isOpen ? NOTIFICATIONS_RESYNC_INTERVAL_MS : false,
     refetchIntervalInBackground: false,
   });
 
   const notifications = inboxData?.notifications ?? [];
-  const unreadCount = inboxData?.unread_count ?? 0;
-  const showInitialLoader = isLoading && notifications.length === 0;
+  const unreadCount = inboxData?.unread_count ?? badgeData?.unread_count ?? 0;
+  const showInitialLoader = isOpen && isLoading && notifications.length === 0;
   const isBackgroundRefresh = isFetching && notifications.length > 0;
 
   const prefetchNotifications = useCallback(() => {
@@ -162,22 +179,37 @@ const CompanyNotificationBell = () => {
 
   const mergeIncomingNotification = useCallback(
     (raw) => {
-      if (!raw?.id || !notificationsQueryKey) return;
-      queryClient.setQueryData(notificationsQueryKey, (prev) => {
-        if (!prev) return prev;
-        if ((prev.notifications || []).some((n) => n.id === raw.id)) return prev;
-        const incoming = {
-          ...raw,
-          metadata: raw.metadata != null ? raw.metadata : {},
-        };
-        return {
-          ...prev,
-          notifications: [incoming, ...(prev.notifications || [])].slice(0, 30),
-          unread_count: (prev.unread_count || 0) + (incoming.is_read ? 0 : 1),
-        };
-      });
+      if (!raw?.id) return;
+      const incoming = {
+        ...raw,
+        metadata: raw.metadata != null ? raw.metadata : {},
+      };
+      if (notificationsQueryKey) {
+        queryClient.setQueryData(notificationsQueryKey, (prev) => {
+          if (!prev) {
+            return {
+              notifications: [incoming],
+              unread_count: incoming.is_read ? 0 : 1,
+              total: 1,
+            };
+          }
+          if ((prev.notifications || []).some((n) => n.id === raw.id)) return prev;
+          return {
+            ...prev,
+            notifications: [incoming, ...(prev.notifications || [])].slice(0, 30),
+            unread_count: (prev.unread_count || 0) + (incoming.is_read ? 0 : 1),
+          };
+        });
+      }
+      if (unreadQueryKey) {
+        queryClient.setQueryData(unreadQueryKey, (prev) => ({
+          notifications: prev?.notifications || [],
+          unread_count: (prev?.unread_count || 0) + (incoming.is_read ? 0 : 1),
+          total: prev?.total || 0,
+        }));
+      }
     },
-    [notificationsQueryKey, queryClient]
+    [notificationsQueryKey, unreadQueryKey, queryClient]
   );
 
   useEffect(() => {
@@ -251,13 +283,23 @@ const CompanyNotificationBell = () => {
             unread_count: Math.max(0, (prev.unread_count || 0) - 1),
           };
         });
+        if (unreadQueryKey) {
+          queryClient.setQueryData(unreadQueryKey, (prev) => ({
+            notifications: prev?.notifications || [],
+            unread_count: Math.max(0, (prev?.unread_count || 0) - 1),
+            total: prev?.total || 0,
+          }));
+        }
         void markCompanyNotificationRead(notif.id).catch((err) => {
           console.error('[CompanyNotificationBell] Mark read error:', err);
           void queryClient.invalidateQueries({ queryKey: notificationsQueryKey });
+          if (unreadQueryKey) {
+            void queryClient.invalidateQueries({ queryKey: unreadQueryKey });
+          }
         });
       }
     },
-    [public_id, navigate, dashboardRoot, notificationsQueryKey, queryClient]
+    [public_id, navigate, dashboardRoot, notificationsQueryKey, unreadQueryKey, queryClient]
   );
 
   const handleMarkAllRead = useCallback(async () => {
@@ -272,14 +314,24 @@ const CompanyNotificationBell = () => {
           unread_count: 0,
         };
       });
+      if (unreadQueryKey) {
+        queryClient.setQueryData(unreadQueryKey, (prev) => ({
+          notifications: prev?.notifications || [],
+          unread_count: 0,
+          total: prev?.total || 0,
+        }));
+      }
       await markAllCompanyNotificationsRead();
     } catch (err) {
       console.error('[CompanyNotificationBell] Mark all read error:', err);
       void queryClient.invalidateQueries({ queryKey: notificationsQueryKey });
+      if (unreadQueryKey) {
+        void queryClient.invalidateQueries({ queryKey: unreadQueryKey });
+      }
     } finally {
       setMarkingAllRead(false);
     }
-  }, [notificationsQueryKey, queryClient]);
+  }, [notificationsQueryKey, unreadQueryKey, queryClient]);
 
   const handleBellClick = useCallback(() => {
     setIsOpen((prev) => !prev);

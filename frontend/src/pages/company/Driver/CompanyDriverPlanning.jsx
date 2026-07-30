@@ -8,8 +8,6 @@ import {
   updateShift,
   deleteShift,
 } from '../../../services/driverPlanningService';
-import CompanyHeader from '../../../components/layout/Header/CompanyHeader';
-import CompanySidebar from '../../../components/layout/Sidebar/CompanySidebar/CompanySidebar';
 import styles from './CompanyDriverPlanning.module.css';
 
 function DriverSidePanel({ driver, onUpdate }) {
@@ -285,10 +283,7 @@ function CompanyDriverPlanning() {
   };
 
   return (
-    <div className={styles.pageContainer}>
-      <CompanyHeader />
-      <div className={styles.layoutWrapper}>
-        <CompanySidebar />
+    <div className={styles.layoutWrapper}>
         <div className={styles.mainContent}>
           <div className={styles.container}>
             <h1 className={styles.pageTitle}>Planning des chauffeurs</h1>
@@ -499,7 +494,6 @@ function CompanyDriverPlanning() {
             )}
           </div>
         </div>
-      </div>
     </div>
   );
 }

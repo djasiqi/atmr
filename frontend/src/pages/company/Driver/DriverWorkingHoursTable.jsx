@@ -8,7 +8,7 @@ function formatTime(minutes) {
   return `${h}h${m.toString().padStart(2, '0')}`;
 }
 
-export default function DriverWorkingHoursTable({ driverHoursData = [] }) {
+export default function DriverWorkingHoursTable({ driverHoursData = [], onViewDetails }) {
   return (
     // 1. On ajoute le conteneur principal pour l'ombre et les bordures
     <div className={styles.tableContainer}>
@@ -19,13 +19,14 @@ export default function DriverWorkingHoursTable({ driverHoursData = [] }) {
             <th>Chauffeur</th>
             <th className={styles.numericHeader}>Nombre de courses</th>
             <th className={styles.numericHeader}>Heures travaillees</th>
+            {onViewDetails && <th className={styles.numericHeader}>Détail</th>}
           </tr>
         </thead>
         <tbody>
           {driverHoursData.length === 0 ? (
             <tr>
               {/* 3. On remplace le style en ligne par la classe CSS */}
-              <td colSpan={3} className={styles.noDataCell}>
+              <td colSpan={onViewDetails ? 4 : 3} className={styles.noDataCell}>
                 Aucune donnée d'heure disponible
               </td>
             </tr>
@@ -39,6 +40,18 @@ export default function DriverWorkingHoursTable({ driverHoursData = [] }) {
                   <td className={styles.driverName}>{driver.driverName}</td>
                   <td className={styles.numericCell}>{count}</td>
                   <td className={styles.numericCell}>{formatTime(totalMinutes)}</td>
+                  {onViewDetails && (
+                    <td className={styles.numericCell}>
+                      <button
+                        type="button"
+                        className={styles.detailsBtn}
+                        onClick={() => onViewDetails(driver.driverId, driver.driverName)}
+                        disabled={count === 0}
+                      >
+                        Voir
+                      </button>
+                    </td>
+                  )}
                 </tr>
               );
             })

@@ -67,6 +67,8 @@
     "e2e:demo": "playwright test e2e/demo-commercial.spec.js",
     "e2e:dashboard-targeted-audit": "node scripts/collect-dashboard-targeted-audit.mjs",
     "e2e:dashboard-targeted-audit:merge": "node scripts/merge-targeted-audit-summary.mjs",
+    "e2e:company-space-baseline": "node scripts/collect-company-space-baseline.mjs",
+    "e2e:company-space-baseline:30": "node scripts/collect-company-space-baseline.mjs --mode=prod-build --runs=30",
     "analyze:bundle": "npm run build && source-map-explorer \"build/static/js/*.js\" --html build-analyze.html --json build-analyze.json",
     "eject": "react-scripts eject",
     "lint": "eslint .",
@@ -98,6 +100,7 @@
     ],
     "moduleNameMapper": {
       "^@atmr/google-maps-bootstrap$": "<rootDir>/src/shared/google-maps/bootstrap.js",
+      "^react-router/dom$": "<rootDir>/node_modules/react-router/dist/development/dom-export.js",
       "^services/(.*)$": "<rootDir>/src/services/$1",
       "^hooks/(.*)$": "<rootDir>/src/hooks/$1",
       "^utils/(.*)$": "<rootDir>/src/utils/$1",

@@ -383,7 +383,12 @@ const Login = () => {
       }
 
       cleanLocalSession();
-      queryClient.clear();
+      try {
+        const { clearTenantScopedClientCaches } = await import('../../utils/clearTenantScopedClientCaches');
+        clearTenantScopedClientCaches();
+      } catch {
+        queryClient.clear();
+      }
       clearExplicitLogoutMarker();
 
       let roleSegment;

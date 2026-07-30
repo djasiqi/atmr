@@ -32,8 +32,6 @@ import {
   Area,
   AreaChart,
 } from 'recharts';
-import CompanyHeader from '../../../components/layout/Header/CompanyHeader';
-import CompanySidebar from '../../../components/layout/Sidebar/CompanySidebar/CompanySidebar';
 import styles from './AnalyticsDashboard.module.css';
 import {
   fetchDashboardAnalytics,
@@ -72,16 +70,10 @@ const AnalyticsDashboard = () => {
   // Rendu du loading analytics
   if (loading) {
     return (
-      <div className={styles.companyContainer}>
-        <CompanyHeader />
-        <div className={styles.dashboardLayout}>
-          <CompanySidebar />
-          <div className={styles.mainContent}>
-            <div className={styles.loadingContainer}>
-              <div className="spinner spinner-lg"></div>
-              <p>Chargement de l'entreprise...</p>
-            </div>
-          </div>
+      <div className={styles.mainContent}>
+        <div className={styles.loadingContainer}>
+          <div className="spinner spinner-lg"></div>
+          <p>Chargement de l'entreprise...</p>
         </div>
       </div>
     );
@@ -90,16 +82,10 @@ const AnalyticsDashboard = () => {
   // Rendu du loading analytics
   if (loading) {
     return (
-      <div className={styles.companyContainer}>
-        <CompanyHeader />
-        <div className={styles.dashboardLayout}>
-          <CompanySidebar />
-          <div className={styles.mainContent}>
-            <div className={styles.loadingContainer}>
-              <div className="spinner spinner-lg"></div>
-              <p>Chargement des analytics...</p>
-            </div>
-          </div>
+      <div className={styles.mainContent}>
+        <div className={styles.loadingContainer}>
+          <div className="spinner spinner-lg"></div>
+          <p>Chargement des analytics...</p>
         </div>
       </div>
     );
@@ -108,19 +94,13 @@ const AnalyticsDashboard = () => {
   // Rendu de l'erreur
   if (error) {
     return (
-      <div className={styles.companyContainer}>
-        <CompanyHeader />
-        <div className={styles.dashboardLayout}>
-          <CompanySidebar />
-          <div className={styles.mainContent}>
-            <div className={styles.errorContainer}>
-              <h2>❌ Erreur</h2>
-              <p>{error}</p>
-              <button onClick={fetchAnalytics} className="btn btn-primary">
-                🔄 Réessayer
-              </button>
-            </div>
-          </div>
+      <div className={styles.mainContent}>
+        <div className={styles.errorContainer}>
+          <h2>❌ Erreur</h2>
+          <p>{error}</p>
+          <button onClick={fetchAnalytics} className="btn btn-primary">
+            🔄 Réessayer
+          </button>
         </div>
       </div>
     );
@@ -129,61 +109,55 @@ const AnalyticsDashboard = () => {
   // Données vides / En construction
   if (!analytics || !analytics.trends || analytics.trends.length === 0) {
     return (
-      <div className={styles.companyContainer}>
-        <CompanyHeader />
-        <div className={styles.dashboardLayout}>
-          <CompanySidebar />
-          <div className={styles.mainContent}>
-            {/* Header */}
-            <div className={styles.emptyHeader}>
-              <div className={styles.emptyHeaderLeft}>
-                <h1 className={styles.emptyTitle}>Analytics & Performance</h1>
-                <p className={styles.emptySubtitle}>Analyse de la performance de votre activité</p>
-              </div>
-              <span className={styles.wipBadge}>
-                <FiTool size={12} />
-                En construction
-              </span>
+      <div className={styles.mainContent}>
+        {/* Header */}
+        <div className={styles.emptyHeader}>
+          <div className={styles.emptyHeaderLeft}>
+            <h1 className={styles.emptyTitle}>Analytics & Performance</h1>
+            <p className={styles.emptySubtitle}>Analyse de la performance de votre activité</p>
+          </div>
+          <span className={styles.wipBadge}>
+            <FiTool size={12} />
+            En construction
+          </span>
+        </div>
+
+        {/* Illustration + message */}
+        <div className={styles.emptyCard}>
+          <div className={styles.emptyIconGrid}>
+            <div className={styles.emptyIconItem}><FiBarChart2 size={24} /></div>
+            <div className={styles.emptyIconItem}><FiTrendingUp size={24} /></div>
+            <div className={styles.emptyIconItem}><FiActivity size={24} /></div>
+            <div className={styles.emptyIconItem}><FiClock size={24} /></div>
+          </div>
+          <h2 className={styles.emptyCardTitle}>Module en cours de développement</h2>
+          <p className={styles.emptyCardMessage}>
+            Ce tableau de bord affichera les métriques clés de votre activité : volume de courses,
+            taux de ponctualité, retards moyens et score qualité.
+          </p>
+
+          <div className={styles.emptyFeatures}>
+            <div className={styles.emptyFeature}>
+              <FiCheckCircle size={14} className={styles.emptyFeatureIcon} />
+              <span>KPIs en temps réel</span>
             </div>
-
-            {/* Illustration + message */}
-            <div className={styles.emptyCard}>
-              <div className={styles.emptyIconGrid}>
-                <div className={styles.emptyIconItem}><FiBarChart2 size={24} /></div>
-                <div className={styles.emptyIconItem}><FiTrendingUp size={24} /></div>
-                <div className={styles.emptyIconItem}><FiActivity size={24} /></div>
-                <div className={styles.emptyIconItem}><FiClock size={24} /></div>
-              </div>
-              <h2 className={styles.emptyCardTitle}>Module en cours de développement</h2>
-              <p className={styles.emptyCardMessage}>
-                Ce tableau de bord affichera les métriques clés de votre activité : volume de courses,
-                taux de ponctualité, retards moyens et score qualité.
-              </p>
-
-              <div className={styles.emptyFeatures}>
-                <div className={styles.emptyFeature}>
-                  <FiCheckCircle size={14} className={styles.emptyFeatureIcon} />
-                  <span>KPIs en temps réel</span>
-                </div>
-                <div className={styles.emptyFeature}>
-                  <FiCheckCircle size={14} className={styles.emptyFeatureIcon} />
-                  <span>Graphiques de tendances</span>
-                </div>
-                <div className={styles.emptyFeature}>
-                  <FiCheckCircle size={14} className={styles.emptyFeatureIcon} />
-                  <span>Insights automatiques</span>
-                </div>
-                <div className={styles.emptyFeature}>
-                  <FiCheckCircle size={14} className={styles.emptyFeatureIcon} />
-                  <span>Export CSV / JSON</span>
-                </div>
-              </div>
-
-              <p className={styles.emptyHint}>
-                Les données seront collectées automatiquement à mesure que vous utilisez la plateforme.
-              </p>
+            <div className={styles.emptyFeature}>
+              <FiCheckCircle size={14} className={styles.emptyFeatureIcon} />
+              <span>Graphiques de tendances</span>
+            </div>
+            <div className={styles.emptyFeature}>
+              <FiCheckCircle size={14} className={styles.emptyFeatureIcon} />
+              <span>Insights automatiques</span>
+            </div>
+            <div className={styles.emptyFeature}>
+              <FiCheckCircle size={14} className={styles.emptyFeatureIcon} />
+              <span>Export CSV / JSON</span>
             </div>
           </div>
+
+          <p className={styles.emptyHint}>
+            Les données seront collectées automatiquement à mesure que vous utilisez la plateforme.
+          </p>
         </div>
       </div>
     );
@@ -192,12 +166,6 @@ const AnalyticsDashboard = () => {
   const { summary, trends, insights } = analytics;
 
   return (
-    <div className={styles.companyContainer}>
-      <CompanyHeader />
-
-      <div className={styles.dashboardLayout}>
-        <CompanySidebar />
-
         <div className={styles.mainContent}>
           <div className={styles.analytics}>
             {/* Section Header + Insights */}
@@ -452,8 +420,6 @@ const AnalyticsDashboard = () => {
             </div>
           </div>
         </div>
-      </div>
-    </div>
   );
 
   // Handler pour l'export

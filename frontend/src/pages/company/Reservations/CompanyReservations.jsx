@@ -1,9 +1,7 @@
-import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef, Suspense, lazy } from 'react';
 import { useQuery, keepPreviousData, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { FiPlus, FiDownload, FiInbox, FiChevronLeft, FiChevronRight, FiChevronDown } from 'react-icons/fi';
-import CompanyHeader from '../../../components/layout/Header/CompanyHeader';
-import CompanySidebar from '../../../components/layout/Sidebar/CompanySidebar/CompanySidebar';
 import { useLirieCompany } from '../../../hooks/useLirieCompany';
 import useUrlSearchSync from '../../../hooks/useUrlSearchSync';
 import {
@@ -25,21 +23,24 @@ import { computeAcceptNowPickupIso } from '../../../utils/institutionOfferAction
 import ReservationTable from '../Dashboard/components/ReservationTable';
 import ReservationTableSkeleton from '../Dashboard/components/ReservationTableSkeleton';
 import ProposeOfferTimeModal from '../Dashboard/components/ProposeOfferTimeModal';
-import InstitutionOfferDetailPanel from './components/InstitutionOfferDetailPanel';
-import ReservationDetailPanel from './components/ReservationDetailPanel';
-import CancellationModal from '../../../components/reservations/CancellationModal';
 import ReservationStats from './components/ReservationStats';
 import ReservationFilters from './components/ReservationFilters';
-import ReservationMapView from './components/ReservationMapView';
 import TopClients from './components/TopClients';
-import ReservationModals from '../../../components/reservations/ReservationModals';
-import TransferBookingModal from '../../../components/reservations/TransferBookingModal';
-import ManualBookingForm from '../Dashboard/components/ManualBookingForm';
 import Modal from '../../../components/common/Modal';
 import { toast } from 'sonner';
 import { isCompletedStatus } from '../../../utils/reservationStatusUtils';
 import { lirieKeys, lirieInvalidateCompanyReservationLists } from '../../../queryKeys/lirie';
 import styles from './CompanyReservations.module.css';
+
+// Lot 4 perf — jamais montés au premier rendu : carte, formulaire, panneaux de détail
+// et modales ne pèsent sur le bundle/le réseau qu'à l'ouverture effective.
+const ReservationMapView = lazy(() => import('./components/ReservationMapView'));
+const ManualBookingForm = lazy(() => import('../Dashboard/components/ManualBookingForm'));
+const InstitutionOfferDetailPanel = lazy(() => import('./components/InstitutionOfferDetailPanel'));
+const ReservationDetailPanel = lazy(() => import('./components/ReservationDetailPanel'));
+const CancellationModal = lazy(() => import('../../../components/reservations/CancellationModal'));
+const ReservationModals = lazy(() => import('../../../components/reservations/ReservationModals'));
+const TransferBookingModal = lazy(() => import('../../../components/reservations/TransferBookingModal'));
 
 const PER_PAGE_OPTIONS = [10, 25, 50, 100];
 
@@ -195,6 +196,7 @@ const CompanyReservations = () => {
     return /^\d{4}-\d{2}-\d{2}$/.test(dateParam || '') ? dateParam : 'all';
   });
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [statusFilter] = useState('all');
   const [sortOrder, setSortOrder] = useState('desc');
   const [currentPage, setCurrentPage] = useState(1);
@@ -224,7 +226,21 @@ const CompanyReservations = () => {
   const [exporting, setExporting] = useState(false);
 
   const searchInputRef = useRef(null);
+  const listAbortRef = useRef(null);
   const { initialSearch, shouldFocus, consumeFocus, initialized } = useUrlSearchSync();
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const next = (searchTerm || '').trim().slice(0, 100);
+      // min 2 caractères pour recherche serveur ; vide = liste non filtrée
+      if (next.length === 1) {
+        setDebouncedSearchTerm('');
+        return;
+      }
+      setDebouncedSearchTerm(next);
+    }, 350);
+    return () => clearTimeout(t);
+  }, [searchTerm]);
 
   const openReservationPanel = useCallback((reservation) => {
     setSelectedOffer(null);
@@ -240,13 +256,27 @@ const CompanyReservations = () => {
     () => ({
       selectedDay,
       currentPage,
-      reservationsPerPage,
+      reservationsPerPage: Math.min(Math.max(reservationsPerPage, 1), 100),
       statusFilter,
       activeTab,
-      searchTerm: searchTerm?.trim() || '',
-      sortOrder,
+      searchTerm: debouncedSearchTerm,
+      sortOrder: sortOrder === 'asc' || sortOrder === 'desc' ? sortOrder : 'desc',
     }),
-    [selectedDay, currentPage, reservationsPerPage, statusFilter, activeTab, searchTerm, sortOrder]
+    [selectedDay, currentPage, reservationsPerPage, statusFilter, activeTab, debouncedSearchTerm, sortOrder]
+  );
+
+  // Portée des KPI — volontairement SANS `currentPage`/`reservationsPerPage` : les agrégats API
+  // (base_query) ne dépendent pas de la pagination, donc changer de page ne doit ni invalider
+  // ni refetcher les stats (Lot 4 perf).
+  const statsQueryScope = useMemo(
+    () => ({
+      selectedDay,
+      statusFilter,
+      activeTab,
+      searchTerm: debouncedSearchTerm,
+      sortOrder: sortOrder === 'asc' || sortOrder === 'desc' ? sortOrder : 'desc',
+    }),
+    [selectedDay, statusFilter, activeTab, debouncedSearchTerm, sortOrder]
   );
 
   const canLoadReservations = Boolean(company?.id);
@@ -261,7 +291,57 @@ const CompanyReservations = () => {
       ? lirieKeys.companyReservationsPaginated(company.id, listQueryFilterScope)
       : ['lirie', 'company-reservations-paginated', 'disabled'],
     enabled: canLoadReservations,
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
+      if (listAbortRef.current) {
+        try {
+          listAbortRef.current.abort();
+        } catch {
+          // ignore
+        }
+      }
+      listAbortRef.current = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const mergedSignal = signal || listAbortRef.current?.signal;
+      const isDateRange = selectedDay && selectedDay.includes(':');
+      const apiParam = selectedDay === 'all' || isDateRange ? null : selectedDay;
+      const [startDate, endDate] = isDateRange ? selectedDay.split(':') : [null, null];
+      const page = Math.max(Number(currentPage) || 1, 1);
+      const perPage = Math.min(Math.max(Number(reservationsPerPage) || 25, 1), 100);
+      return fetchCompanyReservationsPaginated({
+        date: apiParam,
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+        page,
+        perPage,
+        status: statusFilter !== 'all' ? statusFilter : undefined,
+        tab: activeTab !== 'all' ? activeTab : undefined,
+        search: debouncedSearchTerm || undefined,
+        sortOrder: sortOrder === 'asc' || sortOrder === 'desc' ? sortOrder : 'desc',
+        excludeCanceled: activeTab === 'all' && statusFilter !== 'canceled',
+        signal: mergedSignal,
+      });
+    },
+    placeholderData: keepPreviousData,
+    staleTime: 30_000,
+  });
+
+  // KPI indépendants de la pagination — clé de cache SANS `page`, `per_page` minimal
+  // pour ne transférer aucune ligne de réservation (Lot 4 perf).
+  const statsAbortRef = useRef(null);
+  const { data: statsPayload } = useQuery({
+    queryKey: canLoadReservations
+      ? lirieKeys.companyReservationsStats(company.id, statsQueryScope)
+      : ['lirie', 'company-reservations-stats', 'disabled'],
+    enabled: canLoadReservations,
+    queryFn: async ({ signal }) => {
+      if (statsAbortRef.current) {
+        try {
+          statsAbortRef.current.abort();
+        } catch {
+          // ignore
+        }
+      }
+      statsAbortRef.current = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const mergedSignal = signal || statsAbortRef.current?.signal;
       const isDateRange = selectedDay && selectedDay.includes(':');
       const apiParam = selectedDay === 'all' || isDateRange ? null : selectedDay;
       const [startDate, endDate] = isDateRange ? selectedDay.split(':') : [null, null];
@@ -269,16 +349,16 @@ const CompanyReservations = () => {
         date: apiParam,
         startDate: startDate || undefined,
         endDate: endDate || undefined,
-        page: currentPage,
-        perPage: reservationsPerPage,
+        page: 1,
+        perPage: 1,
         status: statusFilter !== 'all' ? statusFilter : undefined,
         tab: activeTab !== 'all' ? activeTab : undefined,
-        search: searchTerm ? searchTerm.trim() || undefined : undefined,
-        sortOrder,
+        search: debouncedSearchTerm || undefined,
+        sortOrder: sortOrder === 'asc' || sortOrder === 'desc' ? sortOrder : 'desc',
         excludeCanceled: activeTab === 'all' && statusFilter !== 'canceled',
+        signal: mergedSignal,
       });
     },
-    placeholderData: keepPreviousData,
     staleTime: 30_000,
   });
 
@@ -459,15 +539,19 @@ const CompanyReservations = () => {
     [queryClient]
   );
 
-  // KPI = agrégats API (même période / visibilité que le compteur total) — pas seulement la page courante
+  // KPI = agrégats API (même période / visibilité que le compteur total) — pas seulement la page courante.
+  // Source primaire : query stats dédiée (clé sans page) ; repli sur les stats de la liste
+  // (ex. premier rendu avant résolution de la query stats) puis calcul local.
   const stats = useMemo(() => {
+    const fromStatsQuery = normalizeApiStats(statsPayload?.stats);
+    if (fromStatsQuery) return fromStatsQuery;
     const fromApi = normalizeApiStats(listPayload?.stats);
     if (fromApi) return fromApi;
     if (!listPayload) return EMPTY_STATS;
     return computeStatsFromReservations(
       Array.isArray(listPayload.reservations) ? listPayload.reservations : []
     );
-  }, [listPayload]);
+  }, [statsPayload, listPayload]);
 
   // Force table mode for date ranges
   useEffect(() => {
@@ -603,7 +687,7 @@ const CompanyReservations = () => {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [selectedDay, searchTerm, statusFilter, sortOrder, activeTab, reservationsPerPage]);
+  }, [selectedDay, debouncedSearchTerm, statusFilter, sortOrder, activeTab, reservationsPerPage]);
 
   // --- CTA "Voir" handler ---
   const handleFilterByAlert = useCallback((type) => {
@@ -860,12 +944,11 @@ const CompanyReservations = () => {
   ];
 
   return (
-    <div className={styles.companyContainer} data-tour-id="reservations-page">
-      <CompanyHeader />
-      <div className={styles.dashboard} data-tour-id="reservations-board">
-        <CompanySidebar />
-        <div className={`${styles.contentArea} ${selectedReservation ? styles.contentAreaWithPanel : ''}`}>
-        <main className={styles.content}>
+    <div
+      className={`${styles.contentArea} ${selectedReservation ? styles.contentAreaWithPanel : ''}`}
+      data-tour-id="reservations-page"
+    >
+        <main className={styles.content} data-tour-id="reservations-board">
 
           {/* ===== ZONE A - Page Header ===== */}
           <div className={styles.pageHeader}>
@@ -1047,7 +1130,9 @@ const CompanyReservations = () => {
                   </div>
                 </>
               ) : (
-                <ReservationMapView reservations={mapReservations} />
+                <Suspense fallback={<div className={styles.listBlock}>Chargement de la carte…</div>}>
+                  <ReservationMapView reservations={mapReservations} />
+                </Suspense>
               )}
             </div>
           )}
@@ -1059,59 +1144,73 @@ const CompanyReservations = () => {
             onToggle={() => setTopClientsOpen((prev) => !prev)}
           />
 
-          <CancellationModal
-            isOpen={showConfirmModal}
-            reservation={reservationToDelete}
-            onConfirm={handleConfirmDelete}
-            onClose={handleCloseConfirmModal}
-          />
+          {showConfirmModal && (
+            <Suspense fallback={null}>
+              <CancellationModal
+                isOpen={showConfirmModal}
+                reservation={reservationToDelete}
+                onConfirm={handleConfirmDelete}
+                onClose={handleCloseConfirmModal}
+              />
+            </Suspense>
+          )}
 
-          <ReservationModals
-            scheduleModalOpen={scheduleModalOpen}
-            scheduleModalReservation={scheduleModalReservation}
-            onScheduleConfirm={handleConfirmSchedule}
-            onScheduleClose={() => {
-              setScheduleModalOpen(false);
-              setScheduleModalReservation(null);
-            }}
-            assignModalOpen={false}
-            assignModalReservation={null}
-            assignModalDrivers={[]}
-            onAssignConfirm={() => {}}
-            onAssignClose={() => {}}
-            editModalOpen={editModalOpen}
-            editModalReservation={editModalReservation}
-            onEditConfirm={handleConfirmEdit}
-            onEditClose={() => {
-              setEditModalOpen(false);
-              setEditModalReservation(null);
-            }}
-            deleteModalOpen={false}
-            deleteModalReservation={null}
-            onDeleteConfirm={() => {}}
-            onDeleteClose={() => {}}
-          />
+          {(scheduleModalOpen || editModalOpen) && (
+            <Suspense fallback={null}>
+              <ReservationModals
+                scheduleModalOpen={scheduleModalOpen}
+                scheduleModalReservation={scheduleModalReservation}
+                onScheduleConfirm={handleConfirmSchedule}
+                onScheduleClose={() => {
+                  setScheduleModalOpen(false);
+                  setScheduleModalReservation(null);
+                }}
+                assignModalOpen={false}
+                assignModalReservation={null}
+                assignModalDrivers={[]}
+                onAssignConfirm={() => {}}
+                onAssignClose={() => {}}
+                editModalOpen={editModalOpen}
+                editModalReservation={editModalReservation}
+                onEditConfirm={handleConfirmEdit}
+                onEditClose={() => {
+                  setEditModalOpen(false);
+                  setEditModalReservation(null);
+                }}
+                deleteModalOpen={false}
+                deleteModalReservation={null}
+                onDeleteConfirm={() => {}}
+                onDeleteClose={() => {}}
+              />
+            </Suspense>
+          )}
 
-          <TransferBookingModal
-            isOpen={transferModalOpen}
-            onClose={() => {
-              setTransferModalOpen(false);
-              setTransferModalReservation(null);
-            }}
-            reservation={transferModalReservation}
-            onSuccess={handleTransferSuccess}
-          />
+          {transferModalOpen && (
+            <Suspense fallback={null}>
+              <TransferBookingModal
+                isOpen={transferModalOpen}
+                onClose={() => {
+                  setTransferModalOpen(false);
+                  setTransferModalReservation(null);
+                }}
+                reservation={transferModalReservation}
+                onSuccess={handleTransferSuccess}
+              />
+            </Suspense>
+          )}
 
           {newBookingOpen && (
             <Modal onClose={() => setNewBookingOpen(false)} size="xl" className="modal-booking">
-              <ManualBookingForm
-                onSuccess={() => {
-                  setNewBookingOpen(false);
-                  afterListMutation();
-                  toast.success('Réservation créée');
-                }}
-                onClose={() => setNewBookingOpen(false)}
-              />
+              <Suspense fallback={<div>Chargement du formulaire…</div>}>
+                <ManualBookingForm
+                  onSuccess={() => {
+                    setNewBookingOpen(false);
+                    afterListMutation();
+                    toast.success('Réservation créée');
+                  }}
+                  onClose={() => setNewBookingOpen(false)}
+                />
+              </Suspense>
             </Modal>
           )}
 
@@ -1130,54 +1229,56 @@ const CompanyReservations = () => {
         {/* Side panel */}
         {selectedReservation && (
           <aside className={styles.detailPanel}>
-            <ReservationDetailPanel
-              reservation={selectedReservation}
-              onClose={() => setSelectedReservation(null)}
-              onSave={async (id, data) => {
-                await updateReservation(id, data);
-                afterListMutation();
-              }}
-              onDelete={handleDeleteRequest}
-              onReservationUpdated={(updated) => {
-                if (updated?.id) setSelectedReservation(updated);
-                afterListMutation();
-              }}
-            />
+            <Suspense fallback={null}>
+              <ReservationDetailPanel
+                reservation={selectedReservation}
+                onClose={() => setSelectedReservation(null)}
+                onSave={async (id, data) => {
+                  await updateReservation(id, data);
+                  afterListMutation();
+                }}
+                onDelete={handleDeleteRequest}
+                onReservationUpdated={(updated) => {
+                  if (updated?.id) setSelectedReservation(updated);
+                  afterListMutation();
+                }}
+              />
+            </Suspense>
           </aside>
         )}
 
         {/* Side panel — demande institution en attente (lecture seule + actions) */}
         {selectedOffer && (
           <aside className={styles.detailPanel}>
-            <InstitutionOfferDetailPanel
-              offer={selectedOffer}
-              onClose={() => setSelectedOffer(null)}
-              onValidate={(offer) => {
-                acceptOfferById(offer.id, undefined, offer);
-                setSelectedOffer(null);
-              }}
-              onPlan={(offer) => {
-                if (!canRespondToInstitutionOffer(offer)) {
-                  toast.error('Offre expirée, vous ne pouvez plus répondre.');
-                  return;
-                }
+            <Suspense fallback={null}>
+              <InstitutionOfferDetailPanel
+                offer={selectedOffer}
+                onClose={() => setSelectedOffer(null)}
+                onValidate={(offer) => {
+                  acceptOfferById(offer.id, undefined, offer);
+                  setSelectedOffer(null);
+                }}
+                onPlan={(offer) => {
+                  if (!canRespondToInstitutionOffer(offer)) {
+                    toast.error('Offre expirée, vous ne pouvez plus répondre.');
+                    return;
+                  }
 
-                setProposeOffer(offer);
-                setSelectedOffer(null);
-              }}
-              onAcceptNow={(offer) => {
-                acceptOfferById(offer.id, computeAcceptNowPickupIso(), offer);
-                setSelectedOffer(null);
-              }}
-              onReject={(offerId) => {
-                handleRejectInstitutionOffer(offerId, selectedOffer);
-                setSelectedOffer(null);
-              }}
-            />
+                  setProposeOffer(offer);
+                  setSelectedOffer(null);
+                }}
+                onAcceptNow={(offer) => {
+                  acceptOfferById(offer.id, computeAcceptNowPickupIso(), offer);
+                  setSelectedOffer(null);
+                }}
+                onReject={(offerId) => {
+                  handleRejectInstitutionOffer(offerId, selectedOffer);
+                  setSelectedOffer(null);
+                }}
+              />
+            </Suspense>
           </aside>
         )}
-        </div>
-      </div>
     </div>
   );
 };

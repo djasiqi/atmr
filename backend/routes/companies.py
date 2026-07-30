@@ -1772,6 +1772,128 @@ class CompanyReservationsSummary(Resource):
         return payload, 200
 
 
+@companies_ns.route("/me/dashboard/bootstrap", strict_slashes=False)
+class CompanyDashboardBootstrap(Resource):
+    """Agrégat unique pour le chemin critique du dashboard entreprise (Lot 3 perf).
+
+    Combine en **1 RTT** ce qui nécessitait plusieurs GET séparés : KPI du jour,
+    projection légère des réservations (mêmes champs que ``fields=dashboard``),
+    mode de dispatch, résumé notifications non lues, et curseur temps réel
+    (``snapshot_cursor``) pour le gating des événements Socket.IO côté frontend.
+
+    Ne remplace pas ``GET /me/drivers/live`` (chargé en parallèle côté client) :
+    voir docs/perf-company-space-lot3-dashboard.md pour le contrat complet.
+    """
+
+    @jwt_required()
+    @role_required(UserRole.company)
+    def get(self):
+        company, error_response, status_code = _get_current_company_via_use_case()
+        if error_response:
+            return error_response, status_code
+
+        company_id_obj = getattr(company, "id", None)
+        try:
+            company_id = int(company_id_obj) if company_id_obj is not None else None
+        except Exception:
+            company_id = None
+        if company_id is None:
+            return APIErrorHandler.handle_exception(
+                Exception("Entreprise introuvable (ID invalide)."),
+                logger,
+            )
+
+        from shared.time_utils import day_local_bounds
+
+        day_str = (request.args.get("date") or "").strip()
+        if not day_str:
+            day_str = datetime.now(UTC).strftime("%Y-%m-%d")
+        try:
+            day_local_bounds(day_str)
+        except ValueError:
+            return APIErrorHandler.handle_validation_error(
+                "Format de date invalide. Utilisez YYYY-MM-DD",
+                field="date",
+                logger_instance=logger,
+            )
+
+        base_query = _reservations_base_query_for_company_day(company_id, day_str)
+        kpi = _booking_stats_from_base_query(base_query)
+
+        max_bookings = int(
+            getenv("LIRIE_DASHBOARD_BOOTSTRAP_MAX_BOOKINGS", "300") or "300"
+        )
+        from sqlalchemy import case
+
+        bookings = (
+            base_query.order_by(
+                case((Booking.scheduled_time.is_(None), 1), else_=0),
+                Booking.scheduled_time.asc().nullslast(),
+                Booking.id.asc(),
+            )
+            .limit(max_bookings)
+            .all()
+        )
+
+        try:
+            from services.companies.booking_transfer_cache import (
+                attach_route_group_leg_counts_to_bookings,
+                attach_serialize_context_to_bookings,
+                attach_transfer_cache_to_bookings,
+            )
+
+            attach_transfer_cache_to_bookings(bookings)
+            attach_route_group_leg_counts_to_bookings(bookings)
+            attach_serialize_context_to_bookings(bookings, company_id)
+            bookings_payload = [b.serialize_dashboard for b in bookings]
+        except Exception:
+            logger.exception(
+                "[DashboardBootstrap] Erreur sérialisation réservations (company_id=%s)",
+                company_id,
+            )
+            bookings_payload = []
+
+        dispatch_mode_val = (
+            company.dispatch_mode.value
+            if hasattr(company.dispatch_mode, "value")
+            else str(company.dispatch_mode)
+        )
+
+        notifications_unread = 0
+        try:
+            from models.company_notification import CompanyNotification
+
+            notifications_unread = CompanyNotification.query.filter_by(
+                company_id=company_id, is_read=False
+            ).count()
+        except Exception:
+            logger.debug(
+                "[DashboardBootstrap] Comptage notifications indisponible (company_id=%s)",
+                company_id,
+                exc_info=True,
+            )
+
+        from services.realtime.event_sequence import current_snapshot_cursor
+
+        snapshot_cursor = current_snapshot_cursor(company_id)
+        generated_at = datetime.now(UTC).isoformat().replace("+00:00", "Z")
+
+        return {
+            "schema_version": 1,
+            "generated_at": generated_at,
+            "date": day_str,
+            "company_id": company_id,
+            # Curseur monotone temps réel — même espace que `event_seq` des events WS
+            # (voir services/realtime/event_sequence.py). PAS un timestamp.
+            "snapshot_cursor": snapshot_cursor,
+            "kpi": kpi,
+            "bookings": bookings_payload,
+            "bookings_truncated": len(bookings_payload) >= max_bookings,
+            "dispatch_mode": dispatch_mode_val,
+            "notifications": {"unread_count": notifications_unread},
+        }, 200
+
+
 @companies_ns.route("/me/reservations", strict_slashes=False)
 class CompanyReservations(Resource):
     @jwt_required()
@@ -1814,12 +1936,18 @@ class CompanyReservations(Resource):
             getenv("LIRIE_COMPANY_RESERVATIONS_MAX_RANGE_DAYS", "400") or "400"
         )
 
-        # Ajouter des paramètres de pagination
-        page = int(request.args.get("page", 1))
-        # Par défaut 100 résultats max
-        per_page = int(request.args.get("per_page", 100))
-        # Limiter à 500 résultats maximum par page
-        per_page = min(per_page, 500)
+        # Ajouter des paramètres de pagination (bornés — Lot 4 perf : jamais page < 1
+        # ni per_page hors [1, 500], sinon offset négatif / division par zéro sur total_pages).
+        try:
+            page = int(request.args.get("page", 1))
+        except (TypeError, ValueError):
+            page = 1
+        page = max(page, 1)
+        try:
+            per_page = int(request.args.get("per_page", 100))
+        except (TypeError, ValueError):
+            per_page = 100
+        per_page = min(max(per_page, 1), 500)
 
         include_stats = request.args.get("include_stats", "true").lower() != "false"
 
@@ -4337,16 +4465,20 @@ class CompanyClients(Resource):
     )
     @companies_ns.param(
         "per_page",
-        "Résultats par page (défaut: 100, min: 1, max: 1000)",
+        "Résultats par page (défaut: 100, min: 1, max: 100)",
         type="integer",
         default=100,
         minimum=1,
-        maximum=1000,
+        maximum=100,
     )
     def get(self):
-        """GET /companies/me/clients?search=<query>&page=1&per_page=0.100
+        """GET /companies/me/clients?search=<query>&page=1&per_page=100
         Retourne les clients manuels (PRIVATE ou CORPORATE) de l'entreprise courante,
         éventuellement filtrés par prénom ou nom (paginés).
+
+        Note (Lot 5 perf) : plafond 100 lignes/page — pas de dump massif (ancien
+        per_page=1000) ; un export volumineux doit passer par un endpoint streamé
+        dédié (voir ``CompanyClientsExport``), pas par cette liste UI.
         """
         # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
         # ✅ DDD: Utilise use-case au lieu de service directement
@@ -4365,11 +4497,21 @@ class CompanyClients(Resource):
                 logger,
             )
 
-        # Pagination
-        page = int(request.args.get("page", 1))
-        per_page = min(int(request.args.get("per_page", 100)), 1000)
+        # Pagination (bornée — jamais page < 1 ni per_page hors [1, 100] — Lot 5 perf).
+        try:
+            page = int(request.args.get("page", 1))
+        except (TypeError, ValueError):
+            page = 1
+        page = max(page, 1)
+        try:
+            per_page = int(request.args.get("per_page", 100))
+        except (TypeError, ValueError):
+            per_page = 100
+        per_page = min(max(per_page, 1), 100)
 
         q = request.args.get("search", "").strip()
+        sort_by = (request.args.get("sort_by") or "").strip().lower() or None
+        sort_order = (request.args.get("sort_order") or "").strip().lower() or None
         # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
         from application.companies.clients.list_company_clients import (
             ListCompanyClientsUseCase,
@@ -4384,6 +4526,8 @@ class CompanyClients(Resource):
             search=q if q else None,
             page=page,
             per_page=per_page,
+            sort_by=sort_by,
+            sort_order=sort_order,
         )
         list_result = uc.execute(input_data)
         if not list_result.success:
@@ -4624,6 +4768,98 @@ class CompanyClients(Resource):
         return response_data, 201
 
 
+# ======================================================
+# 18bis. Export CSV streamé des clients (Lot 5 perf) — séparé de la liste UI paginée
+# ======================================================
+@companies_ns.route("/me/clients/export")
+class CompanyClientsExport(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    @limiter.limit("10 per hour")
+    @companies_ns.param(
+        "search", "Terme à chercher dans le prénom ou le nom", type="string"
+    )
+    def get(self):
+        """Export CSV streamé de tous les clients filtrés (pas de dump mémoire).
+
+        Contrairement à la liste UI (``GET /me/clients``, plafonnée à 100 lignes/page),
+        cet endpoint est dédié à l'export volumineux : la requête SQL est itérée par
+        lots (``yield_per``) et les lignes CSV sont envoyées au fil de l'eau.
+        """
+        # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
+        from flask import Response
+
+        from repositories.client_repository import ClientRepository
+
+        company, err, code = _get_current_company_via_use_case()
+        if err:
+            return err, code
+        cid_obj = getattr(company, "id", None)
+        try:
+            cid = int(cid_obj) if cid_obj is not None else None
+        except Exception:
+            cid = None
+        if cid is None:
+            return APIErrorHandler.handle_exception(
+                Exception("Entreprise introuvable (ID invalide)."),
+                logger,
+            )
+
+        search = request.args.get("search", "").strip() or None
+        query = ClientRepository().build_export_query(cid, search)
+
+        def _csv_escape(value: Any) -> str:
+            text = "" if value is None else str(value)
+            if any(c in text for c in (";", '"', "\n", "\r")):
+                text = '"' + text.replace('"', '""') + '"'
+            return text
+
+        def generate_csv():
+            header = [
+                "id",
+                "type",
+                "nom",
+                "email",
+                "telephone",
+                "ville",
+                "actif",
+            ]
+            yield "\ufeff" + ";".join(header) + "\r\n"
+            for client in query.yield_per(200):
+                user = getattr(client, "user", None)
+                is_institution = bool(getattr(client, "is_institution", False))
+                if is_institution:
+                    name = getattr(client, "institution_name", "") or ""
+                else:
+                    first = getattr(user, "first_name", "") or ""
+                    last = getattr(user, "last_name", "") or ""
+                    name = f"{first} {last}".strip()
+                row = [
+                    client.id,
+                    "institution" if is_institution else "particulier",
+                    name,
+                    getattr(client, "contact_email", None)
+                    or getattr(user, "email", "")
+                    or "",
+                    getattr(client, "contact_phone", None)
+                    or getattr(user, "phone", "")
+                    or "",
+                    getattr(client, "domicile_city", "") or "",
+                    "oui" if getattr(client, "is_active", True) else "non",
+                ]
+                yield ";".join(_csv_escape(v) for v in row) + "\r\n"
+
+        ts = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+        return Response(
+            generate_csv(),
+            mimetype="text/csv; charset=utf-8",
+            headers={
+                "Content-Disposition": f'attachment; filename="clients_{ts}.csv"',
+                "Cache-Control": "private, no-store",
+            },
+        )
+
+
 @companies_ns.route("/me/clients/<int:client_id>")
 class CompanyClientDetail(Resource):
     @jwt_required()
@@ -4785,6 +5021,76 @@ class CompanyClientDetail(Resource):
 
 
 # ======================================================
+# 18bis. Stats agrégées chauffeurs (Lot 5) — COUNT + durée GROUP BY driver_id
+# ======================================================
+@companies_ns.route("/me/drivers/completed-trips-stats")
+class DriversCompletedTripsStats(Resource):
+    @limiter.limit("120 per hour")
+    @jwt_required()
+    @role_required(UserRole.company)
+    def get(self):
+        """Agrégats terminés par chauffeur : count + durée totale (minutes)."""
+        from sqlalchemy import case, func
+
+        company, error_response, status_code = _get_current_company_via_use_case()
+        if error_response:
+            return error_response, status_code
+        cid_obj = getattr(company, "id", None)
+        try:
+            cid = int(cid_obj) if cid_obj is not None else None
+        except Exception:
+            cid = None
+        if cid is None:
+            return APIErrorHandler.handle_exception(
+                Exception("Entreprise introuvable (ID invalide)."),
+                logger,
+            )
+
+        duration_expr = case(
+            (
+                (Booking.boarded_at.isnot(None)) & (Booking.completed_at.isnot(None)),
+                func.greatest(
+                    func.floor(
+                        func.extract("epoch", Booking.completed_at - Booking.boarded_at)
+                        / 60
+                    ),
+                    0,
+                ),
+            ),
+            else_=0,
+        )
+
+        rows = (
+            db.session.query(
+                Booking.driver_id.label("driver_id"),
+                func.count(Booking.id).label("count"),
+                func.coalesce(func.sum(duration_expr), 0).label("total_minutes"),
+            )
+            .filter(
+                Booking.company_id == cid,
+                Booking.driver_id.isnot(None),
+                Booking.status.in_(
+                    [BookingStatus.COMPLETED, BookingStatus.RETURN_COMPLETED]
+                ),
+            )
+            .group_by(Booking.driver_id)
+            .all()
+        )
+
+        return {
+            "schema_version": 1,
+            "stats": [
+                {
+                    "driver_id": int(r.driver_id),
+                    "count": int(r.count or 0),
+                    "total_minutes": int(r.total_minutes or 0),
+                }
+                for r in rows
+                if r.driver_id is not None
+            ],
+        }, 200
+
+
 # 19. Liste des trajets complétés par un chauffeur
 # ======================================================
 @companies_ns.route("/me/drivers/<int:driver_id>/completed-trips")
@@ -4843,17 +5149,23 @@ class DriverCompletedTrips(Resource):
         from repositories.booking_repository import BookingRepository
 
         booking_repo = BookingRepository()
-        trips = booking_repo.find_models_by_driver_and_company(
+        page = max(request.args.get("page", default=1, type=int) or 1, 1)
+        per_page = min(max(request.args.get("per_page", default=25, type=int) or 25, 1), 50)
+
+        # Pagination SQL à l'ouverture du détail (Lot 5) — pas de dump complet en mémoire
+        page_trips, total = booking_repo.find_models_by_driver_and_company_paginated(
             did,
             cid,
             statuses=[
                 BookingStatus.COMPLETED,
                 BookingStatus.RETURN_COMPLETED,
             ],
+            page=page,
+            per_page=per_page,
         )
 
         trip_list = []
-        for trip in trips:
+        for trip in page_trips:
             duration = 0
             # Assure-toi que les champs existent avant calcul
             if getattr(trip, "boarded_at", None) and getattr(
@@ -4878,12 +5190,15 @@ class DriverCompletedTrips(Resource):
                     else None,
                     "duration_in_minutes": duration,
                     "status": str(trip.status),
-                    # Optionnel: "client_name": trip.customer_name
-                    # ou trip.client.user.full_name
                 }
             )
 
-        return trip_list, 200
+        return {
+            "trips": trip_list,
+            "total": total,
+            "page": page,
+            "per_page": per_page,
+        }, 200
 
 
 # ======================================================

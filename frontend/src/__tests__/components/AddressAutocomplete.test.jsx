@@ -2,7 +2,9 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import AddressAutocomplete from 'components/common/AddressAutocomplete';
+import AddressAutocomplete, {
+  clearAddressAutocompleteCache,
+} from 'components/common/AddressAutocomplete';
 
 jest.mock('../../utils/apiClient', () => ({
   __esModule: true,
@@ -13,17 +15,20 @@ jest.mock('../../utils/apiClient', () => ({
 
 import apiClient from '../../utils/apiClient';
 
-// Mock fetch (fallback Photon)
-global.fetch = jest.fn();
-
 describe('AddressAutocomplete', () => {
   const mockOnChange = jest.fn();
   const mockOnSelect = jest.fn();
 
   beforeEach(() => {
     jest.clearAllMocks();
-    global.fetch.mockClear();
-    apiClient.get.mockReset();
+    clearAddressAutocompleteCache();
+    // Public autocomplete + favorites JWT (401 anonyme = OK)
+    apiClient.get.mockImplementation((url) => {
+      if (String(url).includes('favorites/autocomplete')) {
+        return Promise.resolve({ status: 401, data: { error: 'Authentification requise' } });
+      }
+      return Promise.resolve({ status: 200, data: [] });
+    });
   });
 
   it('devrait afficher un champ de saisie', () => {
@@ -64,7 +69,12 @@ describe('AddressAutocomplete', () => {
       },
     ];
 
-    apiClient.get.mockResolvedValue({ status: 200, data: mockSuggestions });
+    apiClient.get.mockImplementation((url) => {
+      if (String(url).includes('favorites/autocomplete')) {
+        return Promise.resolve({ status: 401, data: {} });
+      }
+      return Promise.resolve({ status: 200, data: mockSuggestions });
+    });
 
     const user = userEvent.setup();
     render(
@@ -73,6 +83,7 @@ describe('AddressAutocomplete', () => {
         value=""
         onChange={mockOnChange}
         onSelect={mockOnSelect}
+        debounceMs={50}
       />
     );
 
@@ -105,11 +116,22 @@ describe('AddressAutocomplete', () => {
     ];
 
     // Mock API backend qui retourne directement les suggestions
-    apiClient.get.mockResolvedValue({ status: 200, data: mockSuggestions });
+    apiClient.get.mockImplementation((url) => {
+      if (String(url).includes('favorites/autocomplete')) {
+        return Promise.resolve({ status: 401, data: {} });
+      }
+      return Promise.resolve({ status: 200, data: mockSuggestions });
+    });
 
     const user = userEvent.setup();
     render(
-      <AddressAutocomplete name="pickup" value="" onChange={mockOnChange} onSelect={mockOnSelect} />
+      <AddressAutocomplete
+        name="pickup"
+        value=""
+        onChange={mockOnChange}
+        onSelect={mockOnSelect}
+        debounceMs={50}
+      />
     );
 
     const input = screen.getByRole('combobox');
@@ -156,7 +178,12 @@ describe('AddressAutocomplete', () => {
       },
     ];
 
-    apiClient.get.mockResolvedValue({ status: 200, data: mockSuggestions });
+    apiClient.get.mockImplementation((url) => {
+      if (String(url).includes('favorites/autocomplete')) {
+        return Promise.resolve({ status: 401, data: {} });
+      }
+      return Promise.resolve({ status: 200, data: mockSuggestions });
+    });
 
     const user = userEvent.setup();
     render(
@@ -165,6 +192,8 @@ describe('AddressAutocomplete', () => {
         value=""
         onChange={mockOnChange}
         onSelect={mockOnSelect}
+        minChars={2}
+        debounceMs={50}
       />
     );
 
@@ -173,30 +202,49 @@ describe('AddressAutocomplete', () => {
 
     await waitFor(
       () => {
-        expect(screen.getByRole('listbox')).toBeInTheDocument();
+        expect(screen.getByRole('option', { name: /Genève Ville/i })).toBeInTheDocument();
       },
       { timeout: 3000 }
     );
 
-    // Navigation avec flèche bas
-    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    const combobox = screen.getByRole('combobox');
+    await waitFor(() => {
+      expect(combobox).toHaveAttribute('aria-activedescendant', 'destination-ac-option-0');
+    });
 
-    // Sélection avec Enter
-    fireEvent.keyDown(input, { key: 'Enter' });
+    fireEvent.keyDown(combobox, { key: 'ArrowDown', code: 'ArrowDown' });
+    await waitFor(() => {
+      expect(combobox).toHaveAttribute('aria-activedescendant', 'destination-ac-option-1');
+    });
+
+    fireEvent.keyDown(combobox, { key: 'Enter', code: 'Enter', keyCode: 13, which: 13 });
 
     await waitFor(() => {
-      expect(mockOnSelect).toHaveBeenCalled();
+      expect(mockOnSelect).toHaveBeenCalledWith(
+        expect.objectContaining({ label: 'Lausanne Centre' })
+      );
     });
   });
 
   it('devrait fermer les suggestions avec Escape', async () => {
     const mockSuggestions = [{ source: 'photon', label: 'Test', lat: 46.2, lon: 6.1 }];
 
-    apiClient.get.mockResolvedValue({ status: 200, data: mockSuggestions });
+    apiClient.get.mockImplementation((url) => {
+      if (String(url).includes('favorites/autocomplete')) {
+        return Promise.resolve({ status: 401, data: {} });
+      }
+      return Promise.resolve({ status: 200, data: mockSuggestions });
+    });
 
     const user = userEvent.setup();
     render(
-      <AddressAutocomplete name="test" value="" onChange={mockOnChange} onSelect={mockOnSelect} />
+      <AddressAutocomplete
+        name="test"
+        value=""
+        onChange={mockOnChange}
+        onSelect={mockOnSelect}
+        debounceMs={50}
+      />
     );
 
     const input = screen.getByRole('combobox');
@@ -209,7 +257,7 @@ describe('AddressAutocomplete', () => {
       { timeout: 3000 }
     );
 
-    fireEvent.keyDown(input, { key: 'Escape' });
+    fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Escape', code: 'Escape' });
 
     await waitFor(() => {
       expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
@@ -237,11 +285,22 @@ describe('AddressAutocomplete', () => {
       },
     ];
 
-    apiClient.get.mockResolvedValue({ status: 200, data: mockSuggestions });
+    apiClient.get.mockImplementation((url) => {
+      if (String(url).includes('favorites/autocomplete')) {
+        return Promise.resolve({ status: 401, data: {} });
+      }
+      return Promise.resolve({ status: 200, data: mockSuggestions });
+    });
 
     const user = userEvent.setup();
     render(
-      <AddressAutocomplete name="dropoff" value="" onChange={mockOnChange} onSelect={mockOnSelect} />
+      <AddressAutocomplete
+        name="dropoff"
+        value=""
+        onChange={mockOnChange}
+        onSelect={mockOnSelect}
+        debounceMs={50}
+      />
     );
 
     await user.type(screen.getByRole('combobox'), 'HUG');
@@ -265,19 +324,18 @@ describe('AddressAutocomplete', () => {
     });
   });
 
-  it('ne devrait pas afficher de suggestions si moins de 2 caractères', async () => {
+  it('ne devrait pas appeler l’API si moins de minChars (défaut 3)', async () => {
     render(
       <AddressAutocomplete
         name="address"
         value=""
         onChange={mockOnChange}
         onSelect={mockOnSelect}
-        minChars={2}
       />
     );
 
     const input = screen.getByRole('combobox');
-    fireEvent.change(input, { target: { value: 'G' } });
+    fireEvent.change(input, { target: { value: 'Ge' } });
 
     await waitFor(() => {
       expect(apiClient.get).not.toHaveBeenCalled();
@@ -299,22 +357,30 @@ describe('AddressAutocomplete', () => {
         value=""
         onChange={mockOnChange}
         onSelect={mockOnSelect}
-        debounceMs={100}
+        debounceMs={50}
       />
     );
 
     const input = screen.getByRole('combobox');
     await user.type(input, 'Genève');
 
-    await new Promise((r) => setTimeout(r, 150));
-
-    expect(apiClient.get).toHaveBeenCalled();
+    await waitFor(
+      () => {
+        expect(apiClient.get).toHaveBeenCalled();
+      },
+      { timeout: 3000 }
+    );
 
     resolvePromise({ status: 200, data: [] });
   });
 
   it('devrait afficher "Aucun résultat" si pas de suggestions', async () => {
-    apiClient.get.mockResolvedValue({ status: 200, data: [] });
+    apiClient.get.mockImplementation((url) => {
+      if (String(url).includes('favorites/autocomplete')) {
+        return Promise.resolve({ status: 401, data: {} });
+      }
+      return Promise.resolve({ status: 200, data: [] });
+    });
 
     const user = userEvent.setup();
     render(
@@ -323,6 +389,7 @@ describe('AddressAutocomplete', () => {
         value=""
         onChange={mockOnChange}
         onSelect={mockOnSelect}
+        debounceMs={50}
       />
     );
 

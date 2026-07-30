@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo, Suspense, lazy } from 'react';
 import { useQuery, keepPreviousData, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
@@ -37,15 +37,18 @@ import { useLirieCompany } from '../../../../hooks/useLirieCompany';
 import { lirieKeys, invoiceFiltersHash } from '../../../../queryKeys/lirie';
 import CommandBar from './components/CommandBar';
 import InvoiceRowActions from './components/InvoiceRowActions';
-import PaymentModal from './components/PaymentModal';
-import ReminderModal from './components/ReminderModal';
-import NewInvoiceModal from './components/NewInvoiceModal';
-import BillPeriodModal from './components/BillPeriodModal';
-import InvoiceDraftEditModal from './components/InvoiceDraftEditModal';
-import SendEmailModal from './components/SendEmailModal';
-import ExportPaymentsModal from './components/ExportPaymentsModal';
 import useUrlSearchSync from '../../../../hooks/useUrlSearchSync';
 import InvoicesTableSkeleton from './components/InvoicesTableSkeleton';
+
+// Éditeurs/PDF/composer/modales chargés à la demande uniquement (Lot 6 perf) —
+// jamais dans le bundle initial de la page factures.
+const PaymentModal = lazy(() => import('./components/PaymentModal'));
+const ReminderModal = lazy(() => import('./components/ReminderModal'));
+const NewInvoiceModal = lazy(() => import('./components/NewInvoiceModal'));
+const BillPeriodModal = lazy(() => import('./components/BillPeriodModal'));
+const InvoiceDraftEditModal = lazy(() => import('./components/InvoiceDraftEditModal'));
+const SendEmailModal = lazy(() => import('./components/SendEmailModal'));
+const ExportPaymentsModal = lazy(() => import('./components/ExportPaymentsModal'));
 
 const extractApiError = (err, fallback = 'Erreur inconnue') => {
   const data = err?.response?.data;
@@ -1069,73 +1072,99 @@ const InvoicesRegistry = () => {
         </div>
       )}
 
-      {/* Modals */}
-      <PaymentModal
-        open={paymentModal.open}
-        invoice={paymentModal.invoice}
-        onClose={() => setPaymentModal({ open: false, invoice: null })}
-        onPayment={handlePayment}
-      />
-
-      <ReminderModal
-        open={reminderModal.open}
-        invoice={reminderModal.invoice}
-        onClose={() => setReminderModal({ open: false, invoice: null })}
-        onReminder={handleReminder}
-      />
-
-      <BillPeriodModal
-        open={billPeriodOpen}
-        onClose={() => setBillPeriodOpen(false)}
-        companyId={company?.id}
-        onInvoiceGenerated={handleComposerInvoiceGenerated}
-        onOpenSendEmail={handleOpenSendEmail}
-        onMarkAsSent={(inv) =>
-          handleMarkAsSent(inv.id, { afterSuccess: () => setBillPeriodOpen(false) })
-        }
-      />
-
-      <InvoiceDraftEditModal
-        open={Boolean(draftEditInvoice)}
-        initialInvoice={draftEditInvoice}
-        companyId={company?.id}
-        onClose={closeDraftEdit}
-        onUpdated={loadInvoices}
-        onOpenSendEmail={(inv) => {
-          setSendEmailModal({ open: true, invoice: inv, isReminder: false, reminderId: null });
-        }}
-        onMarkAsSent={(inv) => {
-          if (inv?.id) handleMarkAsSent(inv.id, { afterSuccess: closeDraftEdit });
-        }}
-      />
-
-      <NewInvoiceModal
-        open={newInvoiceModal.open}
-        initialDraft={newInvoiceModal.invoiceDraft}
-        onClose={() => setNewInvoiceModal({ open: false, invoiceDraft: null })}
-        onInvoiceGenerated={handleNewInvoiceGenerated}
-        companyId={company?.id}
-        refreshTrigger={invoiceDataRefreshTrigger}
-      />
-
-      {sendEmailModal.open && (
-        <SendEmailModal
-          invoice={sendEmailModal.invoice}
-          isReminder={sendEmailModal.isReminder}
-          reminderId={sendEmailModal.reminderId}
-          onClose={() => setSendEmailModal({ open: false, invoice: null, isReminder: false, reminderId: null })}
-          onSend={handleSendEmail}
-        />
+      {/* Modals — montées uniquement à l'ouverture (Lot 6 perf), jamais en arrière-plan fermées */}
+      {paymentModal.open && (
+        <Suspense fallback={null}>
+          <PaymentModal
+            open={paymentModal.open}
+            invoice={paymentModal.invoice}
+            onClose={() => setPaymentModal({ open: false, invoice: null })}
+            onPayment={handlePayment}
+          />
+        </Suspense>
       )}
 
-      <ExportPaymentsModal
-        open={exportPaymentsModal.open}
-        onClose={() => setExportPaymentsModal({ open: false })}
-        companyId={company?.id}
-        companyName={company?.name}
-        initialYear={filters.year}
-        initialMonth={filters.month || null}
-      />
+      {reminderModal.open && (
+        <Suspense fallback={null}>
+          <ReminderModal
+            open={reminderModal.open}
+            invoice={reminderModal.invoice}
+            onClose={() => setReminderModal({ open: false, invoice: null })}
+            onReminder={handleReminder}
+          />
+        </Suspense>
+      )}
+
+      {billPeriodOpen && (
+        <Suspense fallback={null}>
+          <BillPeriodModal
+            open={billPeriodOpen}
+            onClose={() => setBillPeriodOpen(false)}
+            companyId={company?.id}
+            onInvoiceGenerated={handleComposerInvoiceGenerated}
+            onOpenSendEmail={handleOpenSendEmail}
+            onMarkAsSent={(inv) =>
+              handleMarkAsSent(inv.id, { afterSuccess: () => setBillPeriodOpen(false) })
+            }
+          />
+        </Suspense>
+      )}
+
+      {Boolean(draftEditInvoice) && (
+        <Suspense fallback={null}>
+          <InvoiceDraftEditModal
+            open={Boolean(draftEditInvoice)}
+            initialInvoice={draftEditInvoice}
+            companyId={company?.id}
+            onClose={closeDraftEdit}
+            onUpdated={loadInvoices}
+            onOpenSendEmail={(inv) => {
+              setSendEmailModal({ open: true, invoice: inv, isReminder: false, reminderId: null });
+            }}
+            onMarkAsSent={(inv) => {
+              if (inv?.id) handleMarkAsSent(inv.id, { afterSuccess: closeDraftEdit });
+            }}
+          />
+        </Suspense>
+      )}
+
+      {newInvoiceModal.open && (
+        <Suspense fallback={null}>
+          <NewInvoiceModal
+            open={newInvoiceModal.open}
+            initialDraft={newInvoiceModal.invoiceDraft}
+            onClose={() => setNewInvoiceModal({ open: false, invoiceDraft: null })}
+            onInvoiceGenerated={handleNewInvoiceGenerated}
+            companyId={company?.id}
+            refreshTrigger={invoiceDataRefreshTrigger}
+          />
+        </Suspense>
+      )}
+
+      {sendEmailModal.open && (
+        <Suspense fallback={null}>
+          <SendEmailModal
+            invoice={sendEmailModal.invoice}
+            isReminder={sendEmailModal.isReminder}
+            reminderId={sendEmailModal.reminderId}
+            onClose={() => setSendEmailModal({ open: false, invoice: null, isReminder: false, reminderId: null })}
+            onSend={handleSendEmail}
+          />
+        </Suspense>
+      )}
+
+      {exportPaymentsModal.open && (
+        <Suspense fallback={null}>
+          <ExportPaymentsModal
+            open={exportPaymentsModal.open}
+            onClose={() => setExportPaymentsModal({ open: false })}
+            companyId={company?.id}
+            companyName={company?.name}
+            initialYear={filters.year}
+            initialMonth={filters.month || null}
+          />
+        </Suspense>
+      )}
 
       {/* Confirm dialog */}
       {confirmDialog.open && (

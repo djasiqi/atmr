@@ -601,12 +601,12 @@ export const logoutUser = async (options = {}) => {
       // ignore
     }
 
-    // Vider le cache React Query pour éviter les données stale entre comptes
+    // Vider le cache React Query + autocomplete pour éviter les fuites multi-tenant
     try {
-      const { queryClient } = require('../App');
-      queryClient.clear();
+      const { clearTenantScopedClientCaches } = require('./clearTenantScopedClientCaches');
+      clearTenantScopedClientCaches();
     } catch (_) {
-      // Silencieux si App pas encore chargé
+      // Silencieux si modules pas encore chargés
     }
 
     window.dispatchEvent(new Event('auth-changed'));

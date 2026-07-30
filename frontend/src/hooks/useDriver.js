@@ -12,7 +12,9 @@ import { useSocketConnected } from './useCompanySocket';
 import { useCompanyDriversLiveOverlay } from './enterprise/useCompanyDriversLiveOverlay';
 import { lirieKeys } from '../queryKeys/lirie';
 
-const POLL_INTERVAL_MS = 5000;
+// Roster (liste chauffeurs) : 30-60s si le socket est down — pas de spam HTTP (Lot 5 perf).
+// Le suivi GPS temps réel passe par le watchdog socket (useCompanyDriversLiveOverlay), pas ce polling.
+const POLL_INTERVAL_MS = 45_000;
 
 const useDriver = () => {
   const queryClient = useQueryClient();
@@ -64,12 +66,31 @@ const useDriver = () => {
   }, [company?.id, drivers]);
 
   useEffect(() => {
+    const isHidden = () => typeof document !== 'undefined' && document.hidden;
+
     const poll = () => {
-      if (driversLiveHealthy) return;
+      if (driversLiveHealthy || isHidden()) return;
       queryClient.invalidateQueries({ queryKey: lirieKeys.companyDrivers() });
     };
     const intervalId = setInterval(poll, POLL_INTERVAL_MS);
-    return () => clearInterval(intervalId);
+
+    // Onglet caché → on met le polling en pause ; au retour, un seul refetch immédiat
+    // rattrape l'état (pas de rafale de requêtes accumulées pendant l'absence).
+    const onVisibilityChange = () => {
+      if (!isHidden() && !driversLiveHealthy) {
+        queryClient.invalidateQueries({ queryKey: lirieKeys.companyDrivers() });
+      }
+    };
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', onVisibilityChange);
+    }
+
+    return () => {
+      clearInterval(intervalId);
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', onVisibilityChange);
+      }
+    };
   }, [driversLiveHealthy, queryClient]);
 
   const refreshDrivers = useCallback(() => refetch(), [refetch]);

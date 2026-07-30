@@ -58,6 +58,18 @@ export const lirieKeys = {
     day,
   ],
 
+  /**
+   * Stats agrégées (KPI) réservations entreprise — clé SANS numéro de page
+   * (les agrégats API ne dépendent pas de la pagination, cf. Lot 4 perf :
+   * on évite de refetcher les stats à chaque changement de page).
+   */
+  companyReservationsStats: (companyId, scope) => [
+    LIRIE_QK_PREFIX,
+    'company-reservations-stats',
+    String(companyId),
+    listScopeHash(scope),
+  ],
+
   assignedReservations: (day) => [LIRIE_QK_PREFIX, 'assigned-reservations', day],
 
   companyDrivers: () => [LIRIE_QK_PREFIX, 'company-drivers'],
@@ -88,6 +100,19 @@ export const lirieKeys = {
 
   dispatchMode: () => [LIRIE_QK_PREFIX, 'dispatch-mode'],
 
+  /**
+   * Bootstrap dashboard entreprise (Lot 3 perf) — scopé auth env × entreprise × jour
+   * pour éviter toute fuite cross-tenant si plusieurs sessions (app/demo) partagent
+   * le même QueryClient (voir clearTenantScopedClientCaches).
+   */
+  companyDashboardBootstrap: (authEnv, companyId, day) => [
+    LIRIE_QK_PREFIX,
+    'company-dashboard-bootstrap',
+    String(authEnv ?? 'app'),
+    String(companyId ?? 'me'),
+    day ?? '__today__',
+  ],
+
   /** @deprecated Utiliser companyInvoices — conservé si des imports legacy pointent ici. */
   invoices: (filtersHash) => [LIRIE_QK_PREFIX, 'invoices', filtersHash],
 
@@ -112,5 +137,6 @@ export function lirieInvalidateCompanyReservationLists(queryClient) {
   return Promise.all([
     queryClient.invalidateQueries({ queryKey: [LIRIE_QK_PREFIX, 'company-reservations'], exact: false }),
     queryClient.invalidateQueries({ queryKey: [LIRIE_QK_PREFIX, 'company-reservations-paginated'], exact: false }),
+    queryClient.invalidateQueries({ queryKey: [LIRIE_QK_PREFIX, 'company-reservations-stats'], exact: false }),
   ]);
 }

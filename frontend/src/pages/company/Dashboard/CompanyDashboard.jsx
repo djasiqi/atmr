@@ -5,6 +5,7 @@ import React, {
   useEffect,
   useLayoutEffect,
   useMemo,
+  useRef,
   useTransition,
   lazy,
   Suspense,
@@ -14,7 +15,6 @@ import { FiZap, FiPlus, FiBarChart2, FiMessageSquare } from 'react-icons/fi';
 import useCompanySocket, { useSocketConnected } from '../../../hooks/useCompanySocket';
 import useDispatchStatus from '../../../hooks/useDispatchStatus';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import CompanySidebar from '../../../components/layout/Sidebar/CompanySidebar/CompanySidebar';
 import OverviewCards from './components/OverviewCards';
 import ReservationTable from './components/ReservationTable';
 import DriverTable from '../../driver/components/Dashboard/DriverTable';
@@ -67,7 +67,6 @@ import {
 import { resetDuplicationReport } from '../../../utils/companyDashboardDuplicationReport';
 import styles from './CompanyDashboard.module.css';
 import Modal from '../../../components/common/Modal';
-import CompanyHeader from '../../../components/layout/Header/CompanyHeader';
 import { CompanyDashboardFreshnessBadge } from './components/CompanyDashboardFreshnessBadge';
 import InlineDatePicker from '../../../components/ui/InlineDatePicker';
 import { toast } from 'sonner';
@@ -76,6 +75,7 @@ import {
   canonicalRealtimeTimeMs,
   shouldAcceptRealtimeEvent,
 } from '../../../utils/realtimeEventGuard';
+import { evaluateRealtimeSequence } from '../../../utils/companyRealtimeSequenceGate';
 import { getAuthEnv } from '../../../utils/webAuthSession';
 import {
   countConstrainedAssignedImminentDrivers,
@@ -188,6 +188,12 @@ const CompanyDashboard = () => {
   const { driversForMap } = useCompanyDriversForMap(company?.id);
   const socketConnected = useSocketConnected();
 
+  const criticalDataReady =
+    Boolean(company?.id) &&
+    !loadingReservations &&
+    !loadingDriver &&
+    Array.isArray(reservations);
+
   /** Demandes PENDING visibles pour l'entreprise sur une fenêtre de dates (repère les courses hors jour sélectionné). */
   const pendingWindowStart = useMemo(() => offsetCalendarYmd(-2), []);
   const pendingWindowEnd = useMemo(() => offsetCalendarYmd(14), []);
@@ -210,7 +216,7 @@ const CompanyDashboard = () => {
       }),
     staleTime: 20_000,
     refetchInterval: socketConnected ? false : 30_000,
-    enabled: Boolean(company?.id) && reservationTab === 'pending',
+    enabled: Boolean(company?.id) && reservationTab === 'pending' && criticalDataReady,
   });
   const pendingWindowReservations = useMemo(
     () => (Array.isArray(pendingWindowPayload?.reservations) ? pendingWindowPayload.reservations : []),
@@ -251,12 +257,6 @@ const CompanyDashboard = () => {
     window.addEventListener('socket_connection_rejected', handler);
     return () => window.removeEventListener('socket_connection_rejected', handler);
   }, []);
-
-  const criticalDataReady =
-    Boolean(company?.id) &&
-    !loadingReservations &&
-    !loadingDriver &&
-    Array.isArray(reservations);
 
   const {
     loading: loadingRealtimeDashboard,
@@ -401,50 +401,30 @@ const CompanyDashboard = () => {
   }, [location.pathname, location.search, navigate]);
 
   /**
-   * Active la carte live sans clic : double rAF pour le premier paint, puis
-   * requestIdleCallback (ou repli 600 ms) + `startTransition` afin d'éviter
-   * de figer l'UI pendant le chargement de Google Maps.
+   * Active la carte live quand la section entre dans le viewport (IntersectionObserver).
+   * Pas de prefetch Maps global au shell (Lot 2).
    */
+  const mapSectionRef = useRef(null);
+
   useEffect(() => {
     if (process.env.NODE_ENV === 'test') return;
     if (liveMapEnabled) return;
-    let cancelled = false;
-    let raf1Id;
-    let raf2Id;
-    let idleId;
-    let timeoutId;
-
-    const run = () => {
-      if (cancelled) return;
-      startTransition(() => {
-        if (!cancelled) handleEnableLiveMap();
-      });
-    };
-
-    raf1Id = requestAnimationFrame(() => {
-      raf2Id = requestAnimationFrame(() => {
-        if (cancelled) return;
-        if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
-          idleId = window.requestIdleCallback(run, { timeout: 2000 });
-        } else {
-          timeoutId = window.setTimeout(run, 650);
+    const el = mapSectionRef.current;
+    if (!el || typeof IntersectionObserver === 'undefined') {
+      handleEnableLiveMap();
+      return undefined;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          startTransition(() => handleEnableLiveMap());
+          observer.disconnect();
         }
-      });
-    });
-
-    return () => {
-      cancelled = true;
-      if (raf1Id != null) window.cancelAnimationFrame(raf1Id);
-      if (raf2Id != null) window.cancelAnimationFrame(raf2Id);
-      if (idleId != null && typeof window !== 'undefined' && typeof window.cancelIdleCallback === 'function') {
-        try {
-          window.cancelIdleCallback(idleId);
-        } catch {
-          // ignore
-        }
-      }
-      if (timeoutId != null) clearTimeout(timeoutId);
-    };
+      },
+      { root: null, rootMargin: '120px', threshold: 0.05 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
   }, [liveMapEnabled, handleEnableLiveMap]);
 
   const handleEditDriver = (d) => {
@@ -580,7 +560,7 @@ const CompanyDashboard = () => {
       });
     },
     staleTime: 30_000,
-    enabled: !!company?.id,
+    enabled: !!company?.id && criticalDataReady,
   });
 
   const {
@@ -592,7 +572,7 @@ const CompanyDashboard = () => {
     queryFn: () => fetchDispatchDelays(dispatchDay),
     initialData: [],
     staleTime: 20_000,
-    enabled: !!company?.id,
+    enabled: !!company?.id && criticalDataReady,
   });
 
   const {
@@ -604,7 +584,7 @@ const CompanyDashboard = () => {
     queryFn: () => fetchRequestOffers('PENDING'),
     staleTime: 15_000,
     refetchInterval: socketConnected ? false : 30_000,
-    enabled: !!company?.id,
+    enabled: !!company?.id && criticalDataReady,
   });
   const institutionOffers = useMemo(
     () => institutionOffersData?.offers || [],
@@ -690,12 +670,26 @@ const CompanyDashboard = () => {
 
   useEffect(() => {
     if (!socket) return;
-    const acceptRealtime = (payload, entityKey = null) =>
-      shouldAcceptRealtimeEvent({
+    const acceptRealtime = (payload, entityKey = null) => {
+      const { accept: seqOk, gapDetected } = evaluateRealtimeSequence(
+        company?.id,
+        payload?.event_seq
+      );
+      if (!seqOk) return false;
+      if (gapDetected) {
+        // Trou de séquence → une seule resync coalescée (bootstrap + listes)
+        startTransition(() => {
+          reloadReservations?.();
+          refetchAssigned?.();
+          refetchDelays?.();
+        });
+      }
+      return shouldAcceptRealtimeEvent({
         eventId: payload?.event_id,
         entityKey,
         canonicalTimeMs: canonicalRealtimeTimeMs(payload),
       });
+    };
     const refetchAll = () => {
       if (Date.now() - dashboardMountAtRef.current < REALTIME_MOUNT_GRACE_MS) {
         return;
@@ -819,6 +813,8 @@ const CompanyDashboard = () => {
     dispatchDay,
     useUnifiedDispatchWs,
     useDispatchDashboardWs,
+    company?.id,
+    startTransition,
   ]);
 
   const handleAccept = async (id) => {
@@ -1306,12 +1302,15 @@ const CompanyDashboard = () => {
   };
 
   return (
-    <div className={styles.companyContainer}>
-      <CompanyHeader />
-
-      <div className={styles.dashboard}>
-        <CompanySidebar />
-        <main className={styles.content}>
+    <>
+        <main
+          className={styles.content}
+          data-testid="company-dashboard"
+          data-critical-ready={criticalDataReady ? '1' : '0'}
+        >
+          {criticalDataReady ? (
+            <span data-testid="dashboard-critical-ready" hidden aria-hidden="true" />
+          ) : null}
           {demoMission === 'transporteur' && (
             <Suspense fallback={null}>
               <DemoInteractiveGuide role="transporteur" />
@@ -1396,7 +1395,11 @@ const CompanyDashboard = () => {
               « saute » en pleine largeur quand le mode arrive. */}
           <div className={isSemiAutoMode ? styles.twoColumnLayout : styles.singleColumnLayout}>
             <div className={isSemiAutoMode ? styles.leftColumn : styles.fullColumn}>
-              <section className={styles.mapSection} data-tour-id="dispatch-assign">
+              <section
+                ref={mapSectionRef}
+                className={styles.mapSection}
+                data-tour-id="dispatch-assign"
+              >
                 {liveMapEnabled ? (
                   <Suspense
                     fallback={
@@ -1714,7 +1717,6 @@ const CompanyDashboard = () => {
             </Suspense>
           </Modal>
         )}
-      </div>
 
       {company?.id && !chatWidgetActive && (
         <button
@@ -1792,7 +1794,7 @@ const CompanyDashboard = () => {
         onAssign={handleQuickAssign}
         assigning={quickAssigning}
       />
-    </div>
+    </>
   );
 };
 

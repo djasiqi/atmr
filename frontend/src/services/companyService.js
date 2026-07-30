@@ -54,6 +54,18 @@ export const fetchCompanyReservationsSummary = async (date) => {
   }
 };
 
+/**
+ * Agrégat unique pour le chemin critique du dashboard entreprise (Lot 3 perf) :
+ * KPI du jour + réservations (projection dashboard) + mode dispatch + notifications
+ * non lues + `snapshot_cursor` (curseur temps réel — voir realtimeEventGuard / Lot 3).
+ */
+export const fetchCompanyDashboardBootstrap = async (date) => {
+  const { data } = await apiClient.get('/companies/me/dashboard/bootstrap', {
+    params: { date },
+  });
+  return data;
+};
+
 export const fetchCompanyReservations = async (date, { fields } = {}) => {
   try {
     const params = {
@@ -96,25 +108,27 @@ export const fetchCompanyReservationsPaginated = async ({
   search,
   sortOrder = 'desc',
   excludeCanceled = false,
+  signal,
 } = {}) => {
   try {
     const params = {
       flat: true,
       include_stats: true,
-      page,
-      per_page: perPage,
-      sort_order: sortOrder,
+      page: Math.max(Number(page) || 1, 1),
+      per_page: Math.min(Math.max(Number(perPage) || 25, 1), 100),
+      sort_order: sortOrder === 'asc' || sortOrder === 'desc' ? sortOrder : 'desc',
     };
     if (date) params.date = date;
     if (startDate) params.start_date = startDate;
     if (endDate) params.end_date = endDate;
     if (status && status !== 'all') params.status = status;
     if (tab && tab !== 'all') params.tab = tab;
-    if (search) params.search = search;
+    if (search) params.search = String(search).slice(0, 100);
     if (excludeCanceled) params.exclude_canceled = true;
 
     const { data } = await apiClient.get('/companies/me/reservations', {
       params,
+      signal,
       headers: {
         'Cache-Control': 'no-cache',
         Pragma: 'no-cache',
@@ -122,10 +136,13 @@ export const fetchCompanyReservationsPaginated = async ({
     });
     return data || {};
   } catch (e) {
-    if (e.response?.status === 401 || e.response?.status === 422) {
-      console.error("Erreur d'authentification JWT:", e.response.data);
+    if (e?.name === 'CanceledError' || e?.code === 'ERR_CANCELED') {
+      throw e;
     }
-    console.error('fetchCompanyReservationsPaginated failed:', e?.response?.data || e);
+    if (e.response?.status === 401 || e.response?.status === 422) {
+      console.error("Erreur d'authentification JWT");
+    }
+    console.error('fetchCompanyReservationsPaginated failed');
     return {
       reservations: [],
       total: 0,
@@ -385,11 +402,13 @@ export const fetchCompanyDriverLocations = async () => {
   }
 };
 
-/** Voir `frontend/env.example` — réduit le volume GET (1 RTT vs 2) lorsque l’API live est validée en prod. */
-const isDriversLiveApiEnabled = () =>
-  typeof process !== 'undefined' &&
-  (process.env.REACT_APP_DRIVERS_LIVE_API === 'true' ||
-    process.env.REACT_APP_DRIVERS_LIVE_API === '1');
+/** Lot 3 : `/drivers/live` par défaut ; désactiver avec REACT_APP_DRIVERS_LIVE_API=0. */
+const isDriversLiveApiEnabled = () => {
+  if (typeof process === 'undefined') return true;
+  const v = process.env.REACT_APP_DRIVERS_LIVE_API;
+  if (v === '0' || v === 'false') return false;
+  return true;
+};
 
 /** GET fusionné liste + live (1 RTT) si REACT_APP_DRIVERS_LIVE_API est actif. */
 export const fetchCompanyDriversLive = async () => {
@@ -512,9 +531,19 @@ export const deleteDriver = async (driverId) => {
   return data;
 };
 
-export const fetchDriverCompletedTrips = async (driverId) => {
-  const { data } = await apiClient.get(`/companies/me/drivers/${driverId}/completed-trips`);
-  return data;
+export const fetchDriverCompletedTrips = async (driverId, { page = 1, perPage = 25 } = {}) => {
+  const { data } = await apiClient.get(`/companies/me/drivers/${driverId}/completed-trips`, {
+    params: { page, per_page: perPage },
+  });
+  // Compat : ancien format = tableau ; nouveau = { trips, total, page, per_page }
+  if (Array.isArray(data)) return data;
+  return Array.isArray(data?.trips) ? data.trips : [];
+};
+
+/** Lot 5 : 1 GET agrégé COUNT + durée par chauffeur (pas de N× completed-trips). */
+export const fetchDriversCompletedTripsStats = async () => {
+  const { data } = await apiClient.get('/companies/me/drivers/completed-trips-stats');
+  return Array.isArray(data?.stats) ? data.stats : [];
 };
 
 export const toggleDriverType = async (driverId) => {
@@ -588,15 +617,64 @@ export const fetchCompanyMessages = async (companyId) => {
 
 /* --------------------------- CLIENTS / ÉTABLISSEMENTS ------------------------- */
 
-export const fetchCompanyClients = async () => {
-  // Récupérer tous les clients en une seule fois (max 1000 par page)
-  const { data } = await apiClient.get('/companies/me/clients?per_page=1000');
-  // L'API retourne un format paginé : {data: [...], pagination: {...}, links: {...}}
+export const fetchCompanyClients = async ({ page = 1, perPage = 50, search = '', signal } = {}) => {
+  const bounded = Math.min(Math.max(Number(perPage) || 50, 1), 50);
+  const pageNum = Math.max(Number(page) || 1, 1);
+  const params = { page: pageNum, per_page: bounded };
+  const q = (search || '').toString().trim();
+  if (q.length >= 2) params.search = q.slice(0, 100);
+  const { data } = await apiClient.get('/companies/me/clients', { params, signal });
   if (data && data.data && Array.isArray(data.data)) {
     return data.data;
   }
-  // Fallback : format ancien {clients: [...]}
   return data.clients || [];
+};
+
+/**
+ * Liste paginée clients (Lot 5) — ne jamais utiliser per_page=1000 côté UI.
+ */
+export const fetchCompanyClientsPaginated = async ({
+  page = 1,
+  perPage = 50,
+  search = '',
+  sortBy,
+  sortOrder,
+  signal,
+} = {}) => {
+  const bounded = Math.min(Math.max(Number(perPage) || 50, 1), 50);
+  const pageNum = Math.max(Number(page) || 1, 1);
+  const params = { page: pageNum, per_page: bounded };
+  const q = (search || '').toString().trim();
+  if (q.length >= 2) params.search = q.slice(0, 100);
+  if (sortBy) params.sort_by = sortBy;
+  if (sortOrder) params.sort_order = sortOrder;
+  const { data } = await apiClient.get('/companies/me/clients', { params, signal });
+  return data || { data: [], pagination: { total: 0, page: pageNum, per_page: bounded } };
+};
+
+/**
+ * Export CSV streamé des clients (Lot 5 perf) — indépendant de la liste UI paginée.
+ * Déclenche le téléchargement du fichier dans le navigateur.
+ */
+export const exportCompanyClientsCsv = async ({ search = '' } = {}) => {
+  const params = {};
+  const q = (search || '').toString().trim();
+  if (q.length >= 2) params.search = q.slice(0, 100);
+  const response = await apiClient.get('/companies/me/clients/export', {
+    params,
+    responseType: 'blob',
+  });
+  const disposition = response.headers?.['content-disposition'] || '';
+  const match = /filename="?([^"]+)"?/.exec(disposition);
+  const filename = match ? match[1] : `clients_${Date.now()}.csv`;
+  const url = window.URL.createObjectURL(new Blob([response.data], { type: 'text/csv' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', filename);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
 };
 
 /**
@@ -608,10 +686,7 @@ export const fetchCompanyClients = async () => {
  */
 export const fetchClientDetails = async (clientId) => {
   try {
-    // Récupérer le client depuis la liste (ou créer un endpoint dédié si nécessaire)
-    const clients = await fetchCompanyClients();
-    const client = clients.find((c) => c.id === clientId);
-    
+    const { data: client } = await apiClient.get(`/companies/me/clients/${clientId}`);
     if (!client) {
       throw new Error('Client non trouvé');
     }
@@ -661,35 +736,41 @@ export const fetchClientReservations = async (
   return data;
 };
 
-export const searchClients = async (query) => {
+export const searchClients = async (query, { signal, limit = 20 } = {}) => {
   try {
     const normalizedQuery = String(query || '').trim();
+    const perPage = Math.min(Math.max(Number(limit) || 20, 1), 50);
+    // Première ouverture : récents ≤ 20 (pas de dump 1000)
     if (!normalizedQuery) {
-      return await fetchCompanyClients();
+      return await fetchCompanyClients({ page: 1, perPage, signal });
     }
-    const { data } = await apiClient.get(
-      `/companies/me/clients?search=${encodeURIComponent(normalizedQuery)}`
-    );
-    // ✅ Le backend retourne un format paginé : {"data": [...], "pagination": {...}, "links": {...}}
-    // Extraire le tableau clients depuis data.data
+    if (normalizedQuery.length < 2) {
+      return [];
+    }
+    const { data } = await apiClient.get('/companies/me/clients', {
+      params: {
+        search: normalizedQuery.slice(0, 100),
+        page: 1,
+        per_page: perPage,
+      },
+      signal,
+    });
     if (data && data.data && Array.isArray(data.data)) {
-      console.log(`✅ ${data.data.length} client(s) trouvé(s) pour "${normalizedQuery}"`);
       return data.data;
     }
-    // Fallback : format ancien {"clients": [...]}
     if (data && Array.isArray(data.clients)) {
-      console.log(`✅ ${data.clients.length} client(s) trouvé(s) pour "${normalizedQuery}"`);
       return data.clients;
     }
-    // Fallback : si c'est déjà un tableau
     if (Array.isArray(data)) {
       return data;
     }
-    console.warn('⚠️ Format de réponse inattendu:', data);
     return [];
   } catch (error) {
-    console.error('❌ Error searching clients:', error?.response?.data || error);
-    return []; // Return empty array on error
+    if (error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED') {
+      return [];
+    }
+    console.error('Erreur recherche clients');
+    return [];
   }
 };
 

@@ -599,31 +599,20 @@ export default function ManualBookingForm({ onSuccess, onClose, onSubmitStart })
   React.useEffect(() => {
     const loadDefaultClients = async () => {
       try {
-        console.log('📥 Chargement des clients par défaut...');
-        const clients = await searchClients('');
-        console.log('✅ Clients chargés:', clients);
-
+        const clients = await searchClients('', { limit: 20 });
         const options = clients.map((c) => {
-          // 🏥 Pour les institutions, afficher le nom de l'institution
-          let label = `Client #${c.id}`; // Par défaut
-
+          let label = `Client #${c.id}`;
           if (c.is_institution && c.institution_name) {
             label = `🏥 ${c.institution_name}`;
+          } else if (c.full_name && c.full_name !== 'Nom non renseigné') {
+            label = c.full_name;
           } else {
-            // Pour les clients normaux, utiliser full_name, first_name et last_name
-            // (le backend retourne ces champs depuis Client.serialize)
-            if (c.full_name && c.full_name !== 'Nom non renseigné') {
-              label = c.full_name;
-            } else {
-              const firstName = c.first_name || '';
-              const lastName = c.last_name || '';
-              
-              if (firstName || lastName) {
-                label = `${firstName} ${lastName}`.trim();
-              }
+            const firstName = c.first_name || '';
+            const lastName = c.last_name || '';
+            if (firstName || lastName) {
+              label = `${firstName} ${lastName}`.trim();
             }
           }
-
           return {
             value: c.id,
             label: label,
@@ -876,16 +865,12 @@ export default function ManualBookingForm({ onSuccess, onClose, onSubmitStart })
             lat: clinic.latitude || null,
             lon: clinic.longitude || null,
           });
-          console.log(`🏥 Client hospitalisé: utilisation adresse clinique ${clinic.name}`);
-          console.log(`📍 Adresse clinique: ${clinicAddress}`);
-        } else {
-          console.warn('⚠️ Aucune adresse disponible pour la clinique:', clinic.name);
         }
 
         return;
       }
     } catch (error) {
-      console.warn('⚠️ Erreur lors de la récupération du séjour actif:', error);
+      console.warn('⚠️ Erreur lors de la récupération du séjour actif');
       // Continuer avec l'adresse du client en cas d'erreur
     }
 
@@ -908,7 +893,6 @@ export default function ManualBookingForm({ onSuccess, onClose, onSubmitStart })
           lat: client.domicile.lat,
           lon: client.domicile.lon,
         };
-        console.log(`📍 GPS du domicile chargés: ${homeGPS.lat}, ${homeGPS.lon}`);
       }
     }
     // Priorité 2: billing_address (adresse de facturation)
@@ -921,7 +905,6 @@ export default function ManualBookingForm({ onSuccess, onClose, onSubmitStart })
           lat: client.billing_lat,
           lon: client.billing_lon,
         };
-        console.log(`📍 GPS de facturation chargés: ${homeGPS.lat}, ${homeGPS.lon}`);
       }
     }
     // Priorité 3: adresse utilisateur (peut être un nom de résidence)
@@ -936,7 +919,6 @@ export default function ManualBookingForm({ onSuccess, onClose, onSubmitStart })
     if (homeAddress) {
       setPickupLocation(homeAddress);
       setPickupCoords(homeGPS); // ✅ Charger les GPS du client
-      console.log(`📍 Adresse du client: ${homeAddress}`);
     }
 
   }, [getClinicPickupAddress, syncHospitalService]);
@@ -949,49 +931,80 @@ export default function ManualBookingForm({ onSuccess, onClose, onSubmitStart })
     setBillToPatient(checked);
   }, []);
 
-  const loadClientOptions = useCallback(async (q) => {
-    try {
-      console.log('🔍 Recherche de clients avec query:', q);
+  // Recherche client débouncée (300-400ms) + annulation de la requête précédente
+  const clientSearchDebounceRef = useRef(null);
+  const clientSearchAbortRef = useRef(null);
 
-      // Si pas de recherche, charger tous les clients (limité par le backend)
-      const clients = q ? await searchClients(q) : await searchClients('');
+  const mapClientsToOptions = useCallback((clients) => {
+    return clients.map((c) => {
+      let label = `Client #${c.id}`;
+      if (c.is_institution && c.institution_name) {
+        label = `🏥 ${c.institution_name}`;
+      } else if (c.full_name && c.full_name !== 'Nom non renseigné') {
+        label = c.full_name;
+      } else {
+        const firstName = c.first_name || '';
+        const lastName = c.last_name || '';
+        if (firstName || lastName) {
+          label = `${firstName} ${lastName}`.trim();
+        }
+      }
+      return {
+        value: c.id,
+        label: label,
+        raw: c,
+      };
+    });
+  }, []);
 
-      console.log('✅ Clients trouvés:', clients.length);
+  const loadClientOptions = useCallback((q) => {
+    const query = String(q || '').trim().slice(0, 100);
 
-      const options = clients.map((c) => {
-        // 🏥 Pour les institutions, afficher le nom de l'institution
-        let label = `Client #${c.id}`; // Par défaut
+    return new Promise((resolve) => {
+      if (clientSearchDebounceRef.current) {
+        clearTimeout(clientSearchDebounceRef.current);
+        clientSearchDebounceRef.current = null;
+      }
 
-        if (c.is_institution && c.institution_name) {
-          label = `🏥 ${c.institution_name}`;
-        } else {
-          // Pour les clients normaux, utiliser full_name, first_name et last_name
-          // (le backend retourne ces champs depuis Client.serialize)
-          if (c.full_name && c.full_name !== 'Nom non renseigné') {
-            label = c.full_name;
-          } else {
-            const firstName = c.first_name || '';
-            const lastName = c.last_name || '';
-            
-            if (firstName || lastName) {
-              label = `${firstName} ${lastName}`.trim();
-            }
+      // Recherche serveur : minimum 2 caractères (1 caractère → options par défaut)
+      if (query.length === 1) {
+        resolve(defaultClientOptions);
+        return;
+      }
+
+      clientSearchDebounceRef.current = setTimeout(async () => {
+        if (clientSearchAbortRef.current) {
+          try {
+            clientSearchAbortRef.current.abort();
+          } catch {
+            // annulation silencieuse
           }
         }
+        const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        clientSearchAbortRef.current = controller;
+        try {
+          const clients = await searchClients(query, { limit: 20, signal: controller?.signal });
+          resolve(mapClientsToOptions(clients));
+        } catch (e) {
+          resolve([]);
+        }
+      }, 350);
+    });
+  }, [defaultClientOptions, mapClientsToOptions]);
 
-        return {
-          value: c.id,
-          label: label,
-          raw: c,
-        };
-      });
-
-      console.log('📋 Options formatées:', options);
-      return options;
-    } catch (e) {
-      console.error('❌ searchClients error', e);
-      return [];
-    }
+  useEffect(() => {
+    return () => {
+      if (clientSearchDebounceRef.current) {
+        clearTimeout(clientSearchDebounceRef.current);
+      }
+      if (clientSearchAbortRef.current) {
+        try {
+          clientSearchAbortRef.current.abort();
+        } catch {
+          // annulation silencieuse
+        }
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -1532,14 +1545,12 @@ export default function ManualBookingForm({ onSuccess, onClose, onSubmitStart })
                   setPickupCoords({ lat: null, lon: null });
                 }}
                 onSelect={(item) => {
-                  console.log('📍 [Pickup] Item sélectionné:', item);
                   const address = item.label || item.address || '';
                   setPickupLocation(address);
                   setPickupCoords({
                     lat: item.lat ?? null,
                     lon: item.lon ?? null,
                   });
-                  console.log(`📍 [Pickup] Adresse: ${address}, GPS: ${item.lat}, ${item.lon}`);
                 }}
                 placeholder="Saisir ou choisir l'adresse"
                 required
@@ -1554,14 +1565,6 @@ export default function ManualBookingForm({ onSuccess, onClose, onSubmitStart })
                 setDropoffCoords({ lat: null, lon: null });
               }}
               onSelect={(item) => {
-                // DEBUG : Afficher la structure complète de l'item
-                console.log('🏥 [Destination sélectionnée] item complet:', item);
-                console.log('🏥 [Destination] item.label:', item.label);
-                console.log('🏥 [Destination] item.main_text:', item.main_text);
-                console.log('🏥 [Destination] item.address:', item.address);
-                console.log('🏥 [Destination] item.secondary_text:', item.secondary_text);
-                console.log('🏥 [Destination] item.types:', item.types);
-
                 // ✅ Fonction pour extraire et nettoyer les informations d'étage
                 const extractFloorInfo = (text) => {
                   const floorRegex = /(au\s+)?(\d{1,2}(?:er|ème|e)?)\s+étage/gi;
@@ -1610,10 +1613,6 @@ export default function ManualBookingForm({ onSuccess, onClose, onSubmitStart })
                 
                 // Utiliser l'adresse nettoyée, ou l'originale si pas d'étage
                 fullAddress = cleanedLabel || originalLabel;
-
-                console.log('🏥 [Destination] fullAddress final:', fullAddress);
-                console.log('🏥 [Destination] establishmentName final:', establishmentName);
-                console.log('🏥 [Destination] floorInfo:', floorInfo);
 
                 // Utiliser l'adresse complète pour la destination
                 setDropoffLocation(fullAddress);
@@ -1677,10 +1676,6 @@ export default function ManualBookingForm({ onSuccess, onClose, onSubmitStart })
 
                 // ✅ 1️⃣ VÉRIFIER D'ABORD SI C'EST UN MÉDECIN
                 if (looksLikeDoctor) {
-                  console.log(
-                    '✅ [Destination] Cabinet médical/docteur détecté:',
-                    establishmentName
-                  );
                   // ✅ Pour Google Places, nettoyer juste avant la virgule
                   if (isGooglePlace) {
                     const cleanName = establishmentName.split(',')[0].trim();
@@ -1708,7 +1703,6 @@ export default function ManualBookingForm({ onSuccess, onClose, onSubmitStart })
                 }
                 // ✅ 2️⃣ VÉRIFIER SI C'EST UN ÉTABLISSEMENT MÉDICAL/SOCIAL
                 else if (looksLikeMedical) {
-                  console.log('✅ [Destination] Établissement médical détecté:', establishmentName);
                   // ✅ Pour Google Places, utiliser directement le nom sans extraction
                   if (isGooglePlace) {
                     setEstablishmentText(establishmentName);
@@ -1744,7 +1738,6 @@ export default function ManualBookingForm({ onSuccess, onClose, onSubmitStart })
 
                     if (hasTypes && isNamedPlace) {
                       // C'est un lieu nommé (restaurant, magasin, parc, etc.)
-                      console.log('📍 [Destination] Lieu public/POI détecté:', establishmentName);
                       let locationNote = `📍 Rendez-vous: ${establishmentName}`;
                       syncNotesMedical((prevNotes) => {
                         // Construire la note avec l'étage si présent et pas déjà dans prevNotes
@@ -1760,13 +1753,11 @@ export default function ManualBookingForm({ onSuccess, onClose, onSubmitStart })
                       syncDoctorName('');
                     } else {
                       // Juste une adresse de rue → ne rien faire
-                      console.log('ℹ️ [Destination] Adresse de rue normale:', establishmentName);
                     }
                   } else {
                     // Pour Photon/autre, essayer l'extraction
                     const extracted = extractMedicalServiceInfo(establishmentName);
                     if (extracted.medical_facility || extracted.doctor_name) {
-                      console.log('✅ [Destination] Info médicale extraite:', extracted);
                       setEstablishmentText(extracted.medical_facility || '');
                       setMedicalFacility(extracted.medical_facility || '');
                       if (extracted.doctor_name) syncDoctorName(extracted.doctor_name);

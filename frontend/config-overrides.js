@@ -114,25 +114,35 @@ module.exports = {
       }),
     };
 
-    // PWA : precache des assets de build + fallback SPA (Workbox)
+    // PWA : précache shell/offline uniquement (budget Lot 0 ≤ 1,5 Mo manifeste)
     const WorkboxWebpackPlugin = require('workbox-webpack-plugin');
     config.plugins.push(
       new WorkboxWebpackPlugin.GenerateSW({
         clientsClaim: true,
         skipWaiting: true,
-        maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
+        maximumFileSizeToCacheInBytes: 512 * 1024,
         navigateFallback: '/index.html',
-        // Ne pas détourner les fichiers statiques (robots.txt, sitemap.xml, assets…)
-        // sinon le navigateur reçoit index.html → React affiche « 404 Page introuvable ».
         navigateFallbackDenylist: [
           /^\/api/,
           /^\/socket\.io/,
           /^\/uploads/,
           /\/[^/?]+\.[^/]+$/,
         ],
+        // Exclure chunks métier massifs (maps, factures, analytics, dispatch)
+        exclude: [
+          /\.map$/,
+          /maps/i,
+          /Invoice/i,
+          /Analytics/i,
+          /Dispatch/i,
+          /pdf\.worker/i,
+          /recharts/i,
+          /Vendor/i,
+        ],
         additionalManifestEntries: [
           { url: '/offline.html', revision: '20260408-offline-v1' },
         ],
+        // Pas de runtimeCaching d'API auth
       })
     );
   }

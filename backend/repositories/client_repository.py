@@ -340,15 +340,25 @@ class ClientRepository:
 
         return query.all()
 
+    #: Whitelist des tris exposés côté API (Lot 5 perf) — jamais de tri arbitraire piloté par le client.
+    SORT_FIELDS = ("name", "created")
+
     def find_models_by_company_with_user_and_search_paginated(
         self,
         company_id: int,
         search: str | None,
         page: int,
         per_page: int,
+        sort_by: str | None = None,
+        sort_order: str | None = None,
     ) -> tuple[list[Client], int]:
-        """Liste paginée en SQL (OFFSET/LIMIT) + total, sans charger toute la table."""
-        from sqlalchemy import String, cast, func, or_
+        """Liste paginée en SQL (OFFSET/LIMIT) + total, sans charger toute la table.
+
+        Déduplication des fiches « institution » liées (``linked_institution_id``) faite
+        **en SQL** (sous-requête ``MIN(id)`` par groupe) — pas de filtrage client-side
+        après pagination, qui fausserait `total`/`total_pages` (Lot 5 perf).
+        """
+        from sqlalchemy import String, asc, cast, desc, func, or_
         from sqlalchemy.orm import joinedload
 
         from models import ClientType
@@ -359,6 +369,25 @@ class ClientRepository:
         ).filter(
             Client.company_id == company_id,
             Client.client_type != ClientType.PORTAL,
+        )
+
+        # Ne garder qu'une fiche par établissement lié (la plus ancienne = id minimal).
+        min_institution_ids_subq = (
+            Client.query.with_entities(func.min(Client.id))
+            .filter(
+                Client.company_id == company_id,
+                Client.is_institution.is_(True),
+                Client.linked_institution_id.isnot(None),
+            )
+            .group_by(Client.linked_institution_id)
+            .subquery()
+        )
+        query = query.filter(
+            or_(
+                Client.is_institution.is_(False),
+                Client.linked_institution_id.is_(None),
+                Client.id.in_(min_institution_ids_subq),
+            )
         )
 
         patterns = _build_search_patterns(search or "")
@@ -399,11 +428,82 @@ class ClientRepository:
                     conditions.append(field.ilike(pattern))
             query = query.filter(or_(*conditions))
 
-        query = query.order_by(Client.id.asc())
+        direction = desc if str(sort_order or "").strip().lower() == "desc" else asc
+        sort_key = str(sort_by or "name").strip().lower()
+        if sort_key == "created":
+            query = query.order_by(direction(Client.created_at), direction(Client.id))
+        else:
+            # Nom affiché = institution_name (si présent) sinon nom de l'utilisateur lié.
+            name_expr = func.coalesce(
+                Client.institution_name,
+                func.concat(
+                    func.coalesce(User.last_name, ""),
+                    " ",
+                    func.coalesce(User.first_name, ""),
+                ),
+            )
+            query = query.outerjoin(User, Client.user_id == User.id).order_by(
+                direction(name_expr), direction(Client.id)
+            )
+
         total = query.order_by(None).count()
         offset = max(page - 1, 0) * per_page
         page_clients = query.offset(offset).limit(per_page).all()
         return page_clients, total
+
+    def build_export_query(self, company_id: int, search: str | None = None):
+        """Requête (non exécutée) pour l'export CSV streamé des clients (Lot 5 perf).
+
+        Même filtre/dédup institution que la liste paginée, mais **sans** pagination :
+        l'appelant doit itérer avec ``.yield_per(n)`` pour ne jamais charger tout le
+        résultat en mémoire.
+        """
+        from sqlalchemy import func, or_
+        from sqlalchemy.orm import joinedload
+
+        from models import ClientType
+
+        query = Client.query.options(joinedload(Client.user)).filter(
+            Client.company_id == company_id,
+            Client.client_type != ClientType.PORTAL,
+        )
+
+        min_institution_ids_subq = (
+            Client.query.with_entities(func.min(Client.id))
+            .filter(
+                Client.company_id == company_id,
+                Client.is_institution.is_(True),
+                Client.linked_institution_id.isnot(None),
+            )
+            .group_by(Client.linked_institution_id)
+            .subquery()
+        )
+        query = query.filter(
+            or_(
+                Client.is_institution.is_(False),
+                Client.linked_institution_id.is_(None),
+                Client.id.in_(min_institution_ids_subq),
+            )
+        )
+
+        patterns = _build_search_patterns(search or "")
+        if patterns:
+            user_fields = [User.first_name, User.last_name, User.email, User.phone]
+            client_fields = [
+                Client.contact_email,
+                Client.contact_phone,
+                Client.domicile_city,
+                Client.institution_name,
+            ]
+            conditions = []
+            for pattern in patterns:
+                for field in user_fields:
+                    conditions.append(Client.user.has(field.ilike(pattern)))
+                for field in client_fields:
+                    conditions.append(field.ilike(pattern))
+            query = query.filter(or_(*conditions))
+
+        return query.order_by(Client.id.asc())
 
     def find_models_by_company_and_institution_status(
         self, company_id: int, is_institution: bool = True, is_active: bool = True

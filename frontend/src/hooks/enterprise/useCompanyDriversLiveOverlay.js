@@ -11,8 +11,11 @@ import { recordGpsEvent } from '../../utils/companyDashboardPerfInstrumentation'
 
 /** Si le snapshot TanStack est encore frais, pas d’invalidate complet (réduit pics en flapping WS). */
 const RECONNECT_MIN_FULL_REFETCH_MS = 60000;
-/** Silence sur les événements de position (pas sync/bookings) avant refetch HTTP. */
-const SOCKET_LOCATION_SILENCE_WATCHDOG_MS = 35000;
+/**
+ * Silence sur les événements de position (pas sync/bookings) avant refetch HTTP.
+ * Borne 10-15s (Lot 5 perf) : cadence de secours de la carte live quand le socket est down.
+ */
+const SOCKET_LOCATION_SILENCE_WATCHDOG_MS = 12000;
 const WATCHDOG_CHECK_INTERVAL_MS = 5000;
 const WATCHDOG_ENABLED = process.env.REACT_APP_COMPANY_REALTIME_WATCHDOG_ENABLED !== 'false';
 
@@ -108,6 +111,8 @@ export function useCompanyDriversLiveOverlay(companyId) {
     };
     const watchdogInterval = WATCHDOG_ENABLED
       ? setInterval(() => {
+          // Onglet masqué : pas de refetch GPS en arrière-plan (Lot 5 perf).
+          if (typeof document !== 'undefined' && document.hidden) return;
           const now = Date.now();
           if (
             !shouldTriggerCompanyDriversWatchdog({

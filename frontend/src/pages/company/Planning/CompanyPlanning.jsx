@@ -16,8 +16,6 @@ import ShiftModal from './components/ShiftModal';
 import UnavailabilityModal from './components/UnavailabilityModal';
 import BreakModal from './components/BreakModal';
 import TemplateEditor from './components/TemplateEditor';
-import CompanyHeader from '../../../components/layout/Header/CompanyHeader';
-import CompanySidebar from '../../../components/layout/Sidebar/CompanySidebar/CompanySidebar';
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
@@ -179,10 +177,7 @@ export default function CompanyPlanning() {
   };
 
   return (
-    <div className={styles.pageContainer} data-tour-id="planning-page">
-      <CompanyHeader />
-      <div className={styles.layoutWrapper}>
-        <CompanySidebar />
+    <div className={styles.layoutWrapper} data-tour-id="planning-page">
         <div className={styles.mainContent}>
           <div className={styles.container} data-tour-id="planning-board">
             <div className={styles.toolbar}>
@@ -305,7 +300,6 @@ export default function CompanyPlanning() {
             />
           </div>
         </div>
-      </div>
     </div>
   );
 }

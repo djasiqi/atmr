@@ -33,7 +33,8 @@ const DispatchHeader = ({
   dispatchSuccess,
   dispatchProgress = 0,
   dispatchLabel = '',
-  dispatchMode = 'semi_auto',
+  /** null tant que le mode n'est pas chargé — ne pas défaut à semi_auto (flash UI). */
+  dispatchMode = null,
   modeLoading = false,
   styles = {},
   onShowAdvancedSettings,
@@ -41,12 +42,12 @@ const DispatchHeader = ({
   fastMode = false,
   setFastMode,
 }) => {
+  const modePending = modeLoading || dispatchMode == null;
   const isManual = dispatchMode === 'manual';
   const isFullyAuto = dispatchMode === 'fully_auto';
-  const modeLabel =
-    modeLoading && dispatchMode == null
-      ? null
-      : (MODE_BADGE[dispatchMode] || '—');
+  /** Contrôles Semi-Auto / lancement : uniquement une fois le mode connu et non manuel. */
+  const showAutomationControls = !modePending && !isManual;
+  const modeLabel = modePending ? null : MODE_BADGE[dispatchMode] || '—';
 
   return (
     <div className={styles.headerSection}>
@@ -57,10 +58,10 @@ const DispatchHeader = ({
             <span
               className={styles.modeBadge}
               data-tour-id="dispatch-mode-badge"
-              data-mode-loading={modeLoading && dispatchMode == null ? 'true' : undefined}
-              title={modeLoading && dispatchMode == null ? 'Chargement du mode' : modeLabel}
+              data-mode-loading={modePending ? 'true' : undefined}
+              title={modePending ? 'Chargement du mode' : modeLabel}
             >
-              {modeLoading && dispatchMode == null ? (
+              {modePending ? (
                 <FiLoader
                   className={styles.spinIcon}
                   size={15}
@@ -94,9 +95,9 @@ const DispatchHeader = ({
           </div>
         </div>
         <p className={styles.modeSubtitle}>
-          {modeLoading && dispatchMode == null
+          {modePending
             ? 'Chargement du mode de dispatch...'
-            : (MODE_SUBTITLE[dispatchMode] || MODE_SUBTITLE.manual)}
+            : MODE_SUBTITLE[dispatchMode] || MODE_SUBTITLE.manual}
         </p>
       </div>
 
@@ -111,8 +112,8 @@ const DispatchHeader = ({
         </div>
       )}
 
-      {/* Controles semi-auto / fully-auto uniquement */}
-      {!isManual && (
+      {/* Contrôles semi-auto / fully-auto uniquement — jamais pendant le chargement du mode */}
+      {showAutomationControls && (
         <div className={styles.compactFilters}>
           {isFullyAuto ? null : (
             <>

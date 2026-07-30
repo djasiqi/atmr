@@ -71,6 +71,21 @@ GEOCODE_AUTOCOMPLETE_CACHE_TTL = int(
 GEOCODE_PLACE_DETAILS_CACHE_TTL = int(
     os.getenv("GEOCODE_PLACE_DETAILS_CACHE_TTL", "3600")
 )  # 1 h
+
+
+def _geocode_log_correlation(raw: str) -> str:
+    """Corrélation opaque (HMAC) — jamais le texte d'adresse ni un hash simple réidentifiable."""
+    import hmac
+
+    secret = (
+        os.getenv("GEOCODE_LOG_HMAC_SECRET")
+        or os.getenv("SECRET_KEY")
+        or "geocode-log-dev-only"
+    ).encode("utf-8")
+    digest = hmac.new(
+        secret, (raw or "").encode("utf-8"), hashlib.sha256
+    ).hexdigest()
+    return digest[:16]
 GEOADMIN_BASE_URL = os.getenv("GEOADMIN_BASE_URL", "https://api3.geo.admin.ch").rstrip(
     "/"
 )
@@ -1453,7 +1468,6 @@ class GeocodeAutocomplete(Resource):
             "lat": "Latitude pour le biais",
             "lon": "Longitude pour le biais",
             "limit": "Nombre max de résultats (def 8, max 12)",
-            "company_id": "Optionnel: filtre favoris d'une société",
         },
     )
     @limiter.limit("60 per minute")
@@ -1465,7 +1479,11 @@ class GeocodeAutocomplete(Resource):
         # ✅ Ignorer les valeurs par défaut qui ne sont pas de vraies adresses
         DEFAULT_VALUES = ["non spécifié", "non specifie", "n/a", "na"]
         if q.lower() in DEFAULT_VALUES:
-            current_app.logger.debug("⚠️ Requête ignorée (valeur par défaut): '%s'", q)
+            current_app.logger.debug(
+                "geocode.autocomplete ignored_default corr=%s len=%s",
+                _geocode_log_correlation(q),
+                len(q),
+            )
             return [], 200
 
         # Biais (fallback Genève)
@@ -1492,31 +1510,13 @@ class GeocodeAutocomplete(Resource):
         if alias:
             results.append(serialize_alias_hit(alias))
 
-        # 2) Favoris (optionnel)
-        company_id = request.args.get("company_id")
-        if company_id:
-            try:
-                from repositories.favorite_place_repository import (
-                    FavoritePlaceRepository,
-                )
-
-                favorite_place_repo = FavoritePlaceRepository()
-                favs = favorite_place_repo.find_by_company_id_with_label_search(
-                    company_id=int(company_id), search_query=q, limit=6
-                )
-                for f in favs:
-                    results.append(
-                        {
-                            "source": "favorite",
-                            "label": f.label,
-                            "address": f.address,
-                            "lat": f.lat,
-                            "lon": f.lon,
-                            "category": "favorite",
-                        }
-                    )
-            except Exception as e:
-                current_app.logger.warning("Favorites lookup failed: %s", e)
+        # 2) Favoris : INTERDIT sur l'endpoint public (fuite multi-tenant via company_id).
+        # Utiliser GET /geocode/favorites/autocomplete (JWT) — company_id dérivé du token.
+        if request.args.get("company_id"):
+            current_app.logger.info(
+                "geocode.autocomplete ignored_client_company_id corr=%s",
+                _geocode_log_correlation(q),
+            )
 
         # 3) Google Places API (prioritaire) ou fallback Photon — avec cache Redis
         cache_key = _geocode_autocomplete_cache_key(q, lat, lon, country_mode)
@@ -1764,9 +1764,9 @@ class GeocodeAutocomplete(Resource):
                 photon_results = normalize_photon(ph)
                 if photon_results:
                     current_app.logger.debug(
-                        "✅ Photon retourne %d résultats pour '%s'",
+                        "geocode.autocomplete photon_ok corr=%s count=%s",
+                        _geocode_log_correlation(q),
                         len(photon_results),
-                        q,
                     )
                 api_results.extend(photon_results)
             except requests.HTTPError as e:
@@ -1774,25 +1774,27 @@ class GeocodeAutocomplete(Resource):
                 if e.response and e.response.status_code == HTTP_FORBIDDEN:
                     # 403 Forbidden : Photon bloque probablement notre serveur
                     current_app.logger.warning(
-                        "⚠️ Photon API bloque les requêtes (403 Forbidden) pour '%s'. Ignoré (fallback uniquement).",
-                        q,
+                        "geocode.autocomplete photon_forbidden corr=%s",
+                        _geocode_log_correlation(q),
                     )
                 elif e.response and e.response.status_code == HTTP_TOO_MANY_REQUESTS:
                     # 429 Too Many Requests : Rate limiting
                     current_app.logger.warning(
-                        "⚠️ Photon API rate limit atteint (429) pour '%s'. Ignoré (fallback uniquement).",
-                        q,
+                        "geocode.autocomplete photon_rate_limited corr=%s",
+                        _geocode_log_correlation(q),
                     )
                 else:
                     current_app.logger.warning(
-                        "⚠️ Photon autocomplete error (HTTP %s): %s",
+                        "geocode.autocomplete photon_http_error corr=%s status=%s",
+                        _geocode_log_correlation(q),
                         e.response.status_code if e.response else "unknown",
-                        e,
                     )
             except Exception as e:
-                # Autres erreurs (timeout, réseau, etc.)
+                # Autres erreurs (timeout, réseau, etc.) — pas de texte d'adresse
                 current_app.logger.warning(
-                    "⚠️ Photon autocomplete error (non-HTTP): %s", e
+                    "geocode.autocomplete photon_error corr=%s err=%s",
+                    _geocode_log_correlation(q),
+                    type(e).__name__,
                 )
             _geocode_autocomplete_cache_set(
                 cache_key, api_results, GEOCODE_AUTOCOMPLETE_CACHE_TTL
@@ -1819,6 +1821,110 @@ class GeocodeAutocomplete(Resource):
             uniq.append(r)
 
         return uniq[:limit], 200
+
+
+@geocode_ns.route("/favorites/autocomplete")
+class GeocodeFavoritesAutocomplete(Resource):
+    @geocode_ns.doc(
+        params={
+            "q": "Texte saisi (min 2 car.)",
+            "limit": "Nombre max de favoris (def 6, max 12)",
+        },
+    )
+    @limiter.limit("60 per minute")
+    def get(self):
+        """Autocomplete favoris d'entreprise — JWT obligatoire ; company_id uniquement depuis le token."""
+        from flask_jwt_extended import verify_jwt_in_request
+        from flask_jwt_extended.exceptions import NoAuthorizationError
+        from jwt.exceptions import PyJWTError
+
+        from models.enums import UserRole
+        from routes.companies import get_company_from_token
+        from shared.infrastructure.adapters.auth_adapter import (
+            get_current_user_via_use_case,
+        )
+
+        try:
+            verify_jwt_in_request()
+        except (NoAuthorizationError, PyJWTError):
+            return {"error": "Authentification requise"}, 401, {
+                "Cache-Control": "private, no-store"
+            }
+
+        user = get_current_user_via_use_case()
+        if user is None or getattr(user, "role", None) != UserRole.company:
+            return {"error": "Accès réservé aux entreprises"}, 403, {
+                "Cache-Control": "private, no-store"
+            }
+
+        q = (request.args.get("q") or "").strip()
+        if len(q) < MIN_QUERY_LENGTH:
+            return [], 200, {"Cache-Control": "private, no-store"}
+
+        # Ignorer tout company_id client (ne jamais l'utiliser)
+        if request.args.get("company_id"):
+            current_app.logger.info(
+                "geocode.favorites ignored_client_company_id corr=%s",
+                _geocode_log_correlation(q),
+            )
+
+        company, err, code = get_company_from_token()
+        if err or company is None:
+            current_app.logger.info(
+                "geocode.favorites company_unresolved corr=%s code=%s",
+                _geocode_log_correlation(q),
+                code,
+            )
+            return (
+                {"error": (err or {}).get("error", "Entreprise introuvable")},
+                code or 404,
+                {"Cache-Control": "private, no-store"},
+            )
+
+        try:
+            limit = int(request.args.get("limit", 6))
+        except Exception:
+            limit = 6
+        limit = max(1, min(limit, 12))
+
+        results: List[Dict[str, Any]] = []
+        try:
+            from repositories.favorite_place_repository import FavoritePlaceRepository
+
+            favorite_place_repo = FavoritePlaceRepository()
+            favs = favorite_place_repo.find_by_company_id_with_label_search(
+                company_id=int(company.id), search_query=q, limit=limit
+            )
+            for f in favs:
+                results.append(
+                    {
+                        "source": "favorite",
+                        "label": f.label,
+                        "address": f.address,
+                        "lat": f.lat,
+                        "lon": f.lon,
+                        "category": "favorite",
+                    }
+                )
+        except Exception as e:
+            current_app.logger.warning(
+                "geocode.favorites lookup_failed corr=%s err=%s",
+                _geocode_log_correlation(q),
+                type(e).__name__,
+            )
+            return (
+                {"error": "Recherche favoris indisponible"},
+                500,
+                {"Cache-Control": "private, no-store"},
+            )
+
+        current_app.logger.info(
+            "geocode.favorites ok corr=%s len_q=%s count=%s",
+            _geocode_log_correlation(q),
+            len(q),
+            len(results),
+        )
+        return results, 200, {"Cache-Control": "private, no-store"}
 
 
 @geocode_ns.route("/place-details")

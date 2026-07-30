@@ -26,8 +26,33 @@ import { FaSignOutAlt, FaChevronDown } from 'react-icons/fa';
 import { useLirieCompany } from '../../../../hooks/useLirieCompany';
 import { logoutUser } from '../../../../utils/apiClient';
 import { getActiveUser, getAuthEnv } from '../../../../utils/webAuthSession';
+import { prefetchCompanyRouteChunk } from '../../CompanyEnterpriseLayout';
 import styles from './CompanySidebar.module.css';
 
+const ROUTE_CHUNK_LOADERS = {
+  '': () => import('../../../../pages/company/Dashboard/CompanyDashboard'),
+  reservations: () => import('../../../../pages/company/Reservations/CompanyReservations'),
+  drivers: () => import('../../../../pages/company/Driver/CompanyDriver'),
+  clients: () => import('../../../../pages/company/Clients/CompanyClients'),
+  'invoices/clients': () => import('../../../../pages/company/Invoices/ClientInvoices'),
+  invoices: () => import('../../../../pages/company/Invoices/CompanyInvoices'),
+  dispatch: () => import('../../../../pages/company/Dispatch/UnifiedDispatchRefactored'),
+  analytics: () => import('../../../../pages/company/Analytics/AnalyticsDashboard'),
+  settings: () => import('../../../../pages/company/Settings/CompanySettings'),
+  planning: () => import('../../../../pages/company/Planning/CompanyPlanning'),
+};
+
+function prefetchForNavPath(path) {
+  if (!path || typeof path !== 'string') return;
+  const segments = path.replace(/\/$/, '').split('/').filter(Boolean);
+  const idx = segments.indexOf('company');
+  const relative = idx >= 0 ? segments.slice(idx + 2).join('/') : '';
+  const loader =
+    ROUTE_CHUNK_LOADERS[relative] ||
+    ROUTE_CHUNK_LOADERS[relative.split('/')[0]] ||
+    (relative === '' ? ROUTE_CHUNK_LOADERS[''] : null);
+  if (loader) prefetchCompanyRouteChunk(loader);
+}
 function getInitials(name = '') {
   const parts = name.trim().split(/\s+/).slice(0, 2);
   return parts.map((p) => p[0]?.toUpperCase() || '').join('') || 'CO';
@@ -179,6 +204,8 @@ const CompanySidebar = () => {
               }
               aria-label={item.label}
               title={item.label}
+              onMouseEnter={() => prefetchForNavPath(item.path)}
+              onFocus={() => prefetchForNavPath(item.path)}
             >
               <span className={styles.navIcon}>{item.icon}</span>
               <span className={styles.navText}>{item.label}</span>
@@ -208,6 +235,8 @@ const CompanySidebar = () => {
               }
               aria-label={item.label}
               title={item.label}
+              onMouseEnter={() => prefetchForNavPath(item.path)}
+              onFocus={() => prefetchForNavPath(item.path)}
             >
               <span className={styles.navIcon}>{item.icon}</span>
               <span className={styles.navText}>{item.label}</span>
@@ -229,6 +258,8 @@ const CompanySidebar = () => {
               }
               aria-label={item.label}
               title={item.label}
+              onMouseEnter={() => prefetchForNavPath(item.path)}
+              onFocus={() => prefetchForNavPath(item.path)}
             >
               <span className={styles.navIcon}>{item.icon}</span>
               <span className={styles.navText}>{item.label}</span>

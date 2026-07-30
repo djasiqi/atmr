@@ -8,10 +8,8 @@
  * - FULLY_AUTO : Interface de surveillance avec journal d'activité
  */
 
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef, Suspense, lazy } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import CompanyHeader from '../../../components/layout/Header/CompanyHeader';
-import CompanySidebar from '../../../components/layout/Sidebar/CompanySidebar/CompanySidebar';
 import useCompanySocket from '../../../hooks/useCompanySocket';
 import useDispatchStatus from '../../../hooks/useDispatchStatus';
 import useCompanyData from '../../../hooks/useCompanyData';
@@ -48,15 +46,8 @@ import { toast } from 'sonner';
 
 // Composants
 import DispatchHeader from './components/DispatchHeader';
-import ManualModePanel from './components/ManualModePanel';
 import DispatchTableSkeleton from '../../../components/SkeletonLoaders/DispatchTableSkeleton';
-import SemiAutoPanel from './components/SemiAutoPanel';
-import FullyAutoPanel from './components/FullyAutoPanel';
-import AdvancedSettings from './components/AdvancedSettings';
-import ReservationModals from '../../../components/reservations/ReservationModals';
 import DispatchProgress from './components/DispatchProgress';
-import ReservationDetailPanel from '../../company/Reservations/components/ReservationDetailPanel';
-import ChatWidget from '../../../components/widgets/ChatWidget';
 import DemoInteractiveGuide from '../../../components/demo/DemoInteractiveGuide';
 
 // Import dynamique des styles par mode
@@ -64,6 +55,17 @@ import commonStyles from './modes/Common.module.css';
 import manualStyles from './modes/Manual.module.css';
 import semiAutoStyles from './modes/SemiAuto.module.css';
 import fullyAutoStyles from './modes/FullyAuto.module.css';
+
+// Lot 7 perf — un seul mode de dispatch actif à la fois : seul le panneau du mode
+// courant est chargé (chunk séparé), pas les trois. Paramètres avancés, panneau de
+// détail, modales et widget de chat ne pèsent sur le bundle qu'à l'ouverture réelle.
+const ManualModePanel = lazy(() => import('./components/ManualModePanel'));
+const SemiAutoPanel = lazy(() => import('./components/SemiAutoPanel'));
+const FullyAutoPanel = lazy(() => import('./components/FullyAutoPanel'));
+const AdvancedSettings = lazy(() => import('./components/AdvancedSettings'));
+const ReservationModals = lazy(() => import('../../../components/reservations/ReservationModals'));
+const ReservationDetailPanel = lazy(() => import('../../company/Reservations/components/ReservationDetailPanel'));
+const ChatWidget = lazy(() => import('../../../components/widgets/ChatWidget'));
 
 // Fonction pour fusionner les styles selon le mode actif
 const getModeStyles = (mode) => {
@@ -1289,10 +1291,11 @@ const UnifiedDispatchRefactored = () => {
   };
 
   return (
-    <div className={styles.container} data-tour-id="dispatch-page">
-      <CompanyHeader />
-      <div className={`${styles.mainContent} ${selectedDispatch ? styles.mainContentWithPanel : ''}`}>
-        <CompanySidebar />
+    <>
+      <div
+        className={`${styles.mainContent} ${selectedDispatch ? styles.mainContentWithPanel : ''}`}
+        data-tour-id="dispatch-page"
+      >
         <div className={styles.content} data-tour-id="dispatch-board">
           {showDispatchMiniGuide && (
             <DemoInteractiveGuide
@@ -1335,11 +1338,13 @@ const UnifiedDispatchRefactored = () => {
                 <button className="modal-close" onClick={() => setShowAdvancedSettings(false)}>
                   ✕
                 </button>
-                <AdvancedSettings
-                  key={JSON.stringify(overrides)} // 🆕 Force remount si overrides change
-                  onApply={handleApplyOverrides}
-                  initialSettings={overrides || {}}
-                />
+                <Suspense fallback={null}>
+                  <AdvancedSettings
+                    key={JSON.stringify(overrides)} // 🆕 Force remount si overrides change
+                    onApply={handleApplyOverrides}
+                    initialSettings={overrides || {}}
+                  />
+                </Suspense>
               </div>
             </div>
           )}
@@ -1363,7 +1368,7 @@ const UnifiedDispatchRefactored = () => {
             }}
           />
 
-          {renderModePanel()}
+          <Suspense fallback={<DispatchTableSkeleton rows={8} />}>{renderModePanel()}</Suspense>
 
           {/* Messages d'erreur/succès des actions */}
           {actionsError && <div className={styles.errorMessage}>{actionsError}</div>}
@@ -1373,52 +1378,62 @@ const UnifiedDispatchRefactored = () => {
         {/* Panel lateral de details */}
         {selectedDispatch && (
           <aside className={styles.dispatchDetailPanel}>
-            <ReservationDetailPanel
-              reservation={selectedDispatch}
-              onClose={() => setSelectedDispatch(null)}
-              onSave={async (id, data) => {
-                await updateReservation(id, data);
-                loadDispatches();
-              }}
-              onDelete={onDeleteReservationClick}
-              onReservationUpdated={(updated) => {
-                if (updated?.id) setSelectedDispatch(updated);
-                loadDispatches();
-              }}
-            />
+            <Suspense fallback={null}>
+              <ReservationDetailPanel
+                reservation={selectedDispatch}
+                onClose={() => setSelectedDispatch(null)}
+                onSave={async (id, data) => {
+                  await updateReservation(id, data);
+                  loadDispatches();
+                }}
+                onDelete={onDeleteReservationClick}
+                onReservationUpdated={(updated) => {
+                  if (updated?.id) setSelectedDispatch(updated);
+                  loadDispatches();
+                }}
+              />
+            </Suspense>
           </aside>
         )}
       </div>
 
-      {/* Modales centralisées */}
-      <ReservationModals
-        scheduleModalOpen={scheduleModalOpen}
-        scheduleModalReservation={scheduleModalReservation}
-        onScheduleConfirm={handleConfirmReturnTime}
-        onScheduleClose={() => {
-          setScheduleModalOpen(false);
-          setScheduleModalReservation(null);
-        }}
-        assignModalOpen={assignModalOpen}
-        assignModalReservation={assignModalReservation}
-        assignModalDrivers={(driversList || []).filter((d) => d.is_active)}
-        onAssignConfirm={handleConfirmAssign}
-        onAssignClose={() => {
-          setAssignModalOpen(false);
-          setAssignModalReservation(null);
-        }}
-        deleteModalOpen={deleteModalOpen}
-        deleteModalReservation={deleteModalReservation}
-        onDeleteConfirm={handleConfirmDelete}
-        onDeleteClose={() => {
-          setDeleteModalOpen(false);
-          setDeleteModalReservation(null);
-        }}
-      />
+      {/* Modales centralisées — montées uniquement quand l'une d'elles est ouverte */}
+      {(scheduleModalOpen || assignModalOpen || deleteModalOpen) && (
+        <Suspense fallback={null}>
+          <ReservationModals
+            scheduleModalOpen={scheduleModalOpen}
+            scheduleModalReservation={scheduleModalReservation}
+            onScheduleConfirm={handleConfirmReturnTime}
+            onScheduleClose={() => {
+              setScheduleModalOpen(false);
+              setScheduleModalReservation(null);
+            }}
+            assignModalOpen={assignModalOpen}
+            assignModalReservation={assignModalReservation}
+            assignModalDrivers={(driversList || []).filter((d) => d.is_active)}
+            onAssignConfirm={handleConfirmAssign}
+            onAssignClose={() => {
+              setAssignModalOpen(false);
+              setAssignModalReservation(null);
+            }}
+            deleteModalOpen={deleteModalOpen}
+            deleteModalReservation={deleteModalReservation}
+            onDeleteConfirm={handleConfirmDelete}
+            onDeleteClose={() => {
+              setDeleteModalOpen(false);
+              setDeleteModalReservation(null);
+            }}
+          />
+        </Suspense>
+      )}
 
       {/* Bulle de discussion */}
-      {company?.id && <ChatWidget companyId={company.id} />}
-    </div>
+      {company?.id && (
+        <Suspense fallback={null}>
+          <ChatWidget companyId={company.id} />
+        </Suspense>
+      )}
+    </>
   );
 };
 

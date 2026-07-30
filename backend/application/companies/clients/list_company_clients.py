@@ -17,7 +17,14 @@ class _ClientRepo(Protocol):
         search: str | None,
         page: int,
         per_page: int,
+        sort_by: str | None = None,
+        sort_order: str | None = None,
     ) -> tuple[list[Any], int]: ...
+
+
+#: Tris exposés côté API (whitelist — Lot 5 perf, pas de tri arbitraire).
+ALLOWED_CLIENT_SORT_FIELDS = ("name", "created")
+ALLOWED_CLIENT_SORT_ORDERS = ("asc", "desc")
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,12 +36,16 @@ class ListCompanyClientsInput:
         search: Recherche textuelle (optionnel)
         page: Numéro de page (commence à 1)
         per_page: Nombre de résultats par page
+        sort_by: Champ de tri whitelisté (``name`` | ``created``)
+        sort_order: Ordre whitelisté (``asc`` | ``desc``)
     """
 
     company_id: int
     search: str | None = None
     page: int = 1
     per_page: int = 20
+    sort_by: str | None = None
+    sort_order: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,7 +75,7 @@ class ListCompanyClientsUseCase:
     """Use-case Application: liste + search + pagination (slice)
     pour les clients d'une company."""
 
-    MAX_PER_PAGE = 1000  # ✅ Aligné avec la validation de la route backend (max: 1000)
+    MAX_PER_PAGE = 100  # ✅ Aligné avec la validation de la route backend (Lot 5 perf : max 100)
 
     def __init__(  # pyright: ignore[reportMissingSuperCall]
         self, *, client_repo: _ClientRepo
@@ -101,12 +112,24 @@ class ListCompanyClientsUseCase:
             per_page = max(input_data.per_page, 1)
 
             q = (input_data.search or "").strip()
+            sort_by = (
+                input_data.sort_by
+                if input_data.sort_by in ALLOWED_CLIENT_SORT_FIELDS
+                else "name"
+            )
+            sort_order = (
+                input_data.sort_order
+                if input_data.sort_order in ALLOWED_CLIENT_SORT_ORDERS
+                else "asc"
+            )
             page_clients, total = (
                 self._client_repo.find_models_by_company_with_user_and_search_paginated(
                     input_data.company_id,
                     q if q else None,
                     page,
                     per_page,
+                    sort_by,
+                    sort_order,
                 )
             )
 

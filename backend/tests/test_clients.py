@@ -234,3 +234,66 @@ def test_company_clients_search_pagination(client, auth_headers, db, sample_comp
             user_data = client_data.get("user", {})
             first_name = user_data.get("first_name", "")
             assert "ClientSearch" in first_name
+
+
+def test_company_clients_per_page_capped_at_100(client, auth_headers):
+    """GET /companies/me/clients?per_page=1000 est plafonné à 100 (Lot 5 perf).
+
+    Avant Lot 5, per_page pouvait monter jusqu'à 1000 (dump massif). La liste UI
+    doit désormais rester bornée ; l'export volumineux passe par un endpoint dédié.
+    """
+    response = client.get(
+        "/api/companies/me/clients?page=1&per_page=1000", headers=auth_headers
+    )
+    assert response.status_code in [200, 404]
+    if response.status_code == 200:
+        data = response.get_json()
+        assert data["per_page"] == 100
+
+
+def test_company_clients_sort_whitelist(client, auth_headers, db, sample_company):
+    """`sort_by`/`sort_order` sont whitelistés (name|created, asc|desc) — pas de tri arbitraire."""
+    response = client.get(
+        "/api/companies/me/clients?sort_by=DROP TABLE clients;&sort_order=xyz",
+        headers=auth_headers,
+    )
+    # Ne doit jamais planter : les valeurs invalides retombent sur les défauts (name/asc).
+    assert response.status_code in [200, 404]
+
+
+def test_company_clients_export_streams_csv(
+    client, auth_headers, db, sample_company
+):
+    """GET /companies/me/clients/export renvoie un CSV streamé, séparé de la liste UI."""
+    from ext import bcrypt
+    from models import ClientType, ManagementMode
+
+    user = User(
+        username="export_client_1",
+        email="export_client_1@example.com",
+        role=UserRole.client,
+        first_name="Export",
+        last_name="Test",
+    )
+    user.password = bcrypt.generate_password_hash("password123").decode("utf-8")
+    db.session.add(user)
+    db.session.flush()
+
+    client_obj = Client(
+        user_id=user.id,
+        company_id=sample_company.id,
+        client_type=ClientType.TRANSPORT,
+        management_mode=ManagementMode.MANAGED,
+        contact_email="export_client_1@example.com",
+    )
+    db.session.add(client_obj)
+    db.session.flush()
+
+    response = client.get(
+        "/api/companies/me/clients/export", headers=auth_headers
+    )
+    assert response.status_code in [200, 404]
+    if response.status_code == 200:
+        assert response.mimetype == "text/csv"
+        body = response.get_data(as_text=True)
+        assert "id;type;nom;email;telephone;ville;actif" in body

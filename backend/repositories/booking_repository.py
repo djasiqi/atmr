@@ -567,6 +567,38 @@ class BookingRepository:
 
         return query.all()
 
+    def find_models_by_driver_and_company_paginated(
+        self,
+        driver_id: int,
+        company_id: int,
+        statuses: list[BookingStatus] | None = None,
+        page: int = 1,
+        per_page: int = 25,
+    ) -> tuple[list[Booking], int]:
+        """Historique paginé des courses d'un chauffeur (SQL LIMIT/OFFSET — Lot 5).
+
+        Évite de charger tout l'historique en mémoire avant de découper la page :
+        le tri (plus récent d'abord) et la pagination sont effectués en SQL.
+
+        Returns:
+            Tuple (page de Booking, total correspondant aux filtres).
+        """
+        query = Booking.query.filter_by(driver_id=driver_id, company_id=company_id)
+
+        if statuses:
+            query = query.filter(Booking.status.in_(statuses))
+
+        total = query.order_by(None).with_entities(Booking.id).count()
+
+        page_items = (
+            query.order_by(Booking.completed_at.desc().nullslast(), Booking.id.desc())
+            .offset((page - 1) * per_page)
+            .limit(per_page)
+            .all()
+        )
+
+        return page_items, total
+
     def count_by_client_id(self, client_id: int) -> int:
         """Compte les bookings d'un client.
 

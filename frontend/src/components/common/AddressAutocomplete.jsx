@@ -45,10 +45,20 @@ function createAutocompleteLRUCache() {
     order.push(key);
   }
 
-  return { get, set };
+  function clear() {
+    entries.clear();
+    order.length = 0;
+  }
+
+  return { get, set, clear };
 }
 
 const autocompleteCache = createAutocompleteLRUCache();
+
+/** Vide le cache LRU autocomplete (logout / changement d'entreprise). */
+export function clearAddressAutocompleteCache() {
+  autocompleteCache.clear();
+}
 
 export default function AddressAutocomplete({
   name,
@@ -72,11 +82,19 @@ export default function AddressAutocomplete({
     name === 'pickup_location' ? 'PICKUP' : 'ADDRESS';
   const log = useCallback((phase, payload) => {
     if (process.env.NODE_ENV !== 'development') return;
-    if (payload === undefined) {
+    // Jamais de texte d'adresse / query brute dans les logs
+    const safe =
+      payload && typeof payload === 'object'
+        ? {
+            ...payload,
+            query: payload.query != null ? `[len=${String(payload.query).length}]` : undefined,
+          }
+        : payload;
+    if (safe === undefined) {
       console.log(`[${logTag}][${phase}]`);
       return;
     }
-    console.log(`[${logTag}][${phase}]`, payload);
+    console.log(`[${logTag}][${phase}]`, safe);
   }, [logTag]);
 
   const [query, setQuery] = useState(value || '');
@@ -100,24 +118,23 @@ export default function AddressAutocomplete({
   const rafIdRef = useRef(null);
   const pendingRef = useRef(false);
   const requestSeqRef = useRef(0);
+  /** Empêche une réponse API tardive de rouvrir le menu après Escape / clic extérieur. */
+  const suggestionsDismissedRef = useRef(false);
 
   // Biais géographique (Genève par défaut) – useMemo pour stabilité des deps useCallback
   const BIAS = useMemo(() => (bias != null ? bias : DEFAULT_BIAS), [bias]);
-
-  // Base Photon (env front ou cloud public)
-  const PHOTON_BASE = process.env.REACT_APP_PHOTON_URL || 'https://photon.komoot.io';
 
   // Sync externe -> interne
   useEffect(() => {
     const next = value ? String(value) : '';
     setQuery(next);
-    log('PROP_SYNC', { value: next });
+    log('PROP_SYNC', { valueLen: next.length });
   }, [value, log]);
 
   useEffect(() => {
     log('RENDER', {
-      value,
-      query,
+      valueLen: value ? String(value).length : 0,
+      queryLen: query ? String(query).length : 0,
       open,
       loading,
       suggestions: items.length,
@@ -130,11 +147,13 @@ export default function AddressAutocomplete({
     log('UNMOUNT');
   }, [log]);
 
-  // Fermer la liste si on clique à l'extérieur
+  // Fermer la liste si on clique à l'extérieur (portail inclus via dropdownRef)
   useEffect(() => {
     function onDocClick(e) {
-      if (!wrapRef.current) return;
-      if (!wrapRef.current.contains(e.target)) setOpen(false);
+      const t = e.target;
+      if (wrapRef.current?.contains(t) || dropdownRef.current?.contains(t)) return;
+      suggestionsDismissedRef.current = true;
+      setOpen(false);
     }
     document.addEventListener('mousedown', onDocClick);
     return () => document.removeEventListener('mousedown', onDocClick);
@@ -149,118 +168,19 @@ export default function AddressAutocomplete({
     };
   }, []);
 
-  // Normalise les features Photon vers notre format
-  function normalizePhoton(features) {
-    return (features || []).map((f) => {
-      const props = f.properties || {};
-      const coords = f.geometry?.coordinates || []; // [lon, lat]
-      const lon = Number(coords[0]);
-      const lat = Number(coords[1]);
-
-      // Construire l'adresse complète avec numéro et rue
-      // Format : "Rue, Numéro" (avec virgule)
-      const street = props.street || '';
-      const housenumber = props.housenumber || '';
-      const fullStreetAddress = street && housenumber ? `${street}, ${housenumber}` : street || '';
-
-      const postcode = props.postcode || '';
-      const city = props.city || props.locality || '';
-      const placeName = props.name;
-
-      // Construire le label : FORCER le format "Rue, Numéro, Code Postal, Ville" (SANS PAYS)
-      // ✅ Le code postal doit TOUJOURS être inclus s'il est disponible
-      // ✅ Le pays ne doit JAMAIS être inclus dans le label
-      let label = '';
-
-      if (placeName && fullStreetAddress) {
-        // Lieu nommé avec adresse complète : "Nom, Rue, Numéro, CP, Ville"
-        const addressParts = [fullStreetAddress];
-        // ✅ Toujours inclure le code postal s'il est disponible
-        if (postcode) addressParts.push(postcode);
-        if (city) addressParts.push(city);
-        // ❌ NE PAS inclure le pays
-        const addressStr = addressParts.join(', ');
-        label = `${placeName}, ${addressStr}`;
-      } else if (placeName && street) {
-        // Lieu nommé avec rue mais sans numéro : "Nom, Rue, CP, Ville"
-        const addressParts = [street];
-        // ✅ Toujours inclure le code postal s'il est disponible
-        if (postcode) addressParts.push(postcode);
-        if (city) addressParts.push(city);
-        // ❌ NE PAS inclure le pays
-        const addressStr = addressParts.join(', ');
-        label = `${placeName}, ${addressStr}`;
-      } else if (placeName) {
-        // Lieu nommé sans adresse : juste le nom (fallback)
-        label = placeName;
-      } else if (fullStreetAddress && city) {
-        // Format complet : "Rue, Numéro, CP, Ville"
-        const parts = [fullStreetAddress];
-        // ✅ Toujours inclure le code postal s'il est disponible
-        if (postcode) parts.push(postcode);
-        if (city) parts.push(city);
-        // ❌ NE PAS inclure le pays
-        label = parts.join(', ');
-      } else if (fullStreetAddress && postcode) {
-        // Rue avec numéro et code postal mais sans ville : "Rue, Numéro, CP"
-        const parts = [fullStreetAddress, postcode];
-        label = parts.join(', ');
-      } else if (street && city) {
-        // Rue sans numéro : "Rue, CP, Ville"
-        const parts = [street];
-        // ✅ Toujours inclure le code postal s'il est disponible
-        if (postcode) parts.push(postcode);
-        if (city) parts.push(city);
-        // ❌ NE PAS inclure le pays
-        label = parts.join(', ');
-      } else if (street && postcode) {
-        // Rue avec code postal mais sans ville : "Rue, CP"
-        label = `${street}, ${postcode}`;
-      } else if (city) {
-        // Au moins la ville : inclure le code postal s'il est disponible
-        label = postcode && city ? `${postcode} ${city}` : city;
-      } else if (postcode) {
-        // Seulement le code postal (cas rare)
-        label = postcode;
-      } else {
-        // Dernier recours
-        label = props.osm_value || 'Adresse';
-      }
-
-      return {
-        source: 'photon',
-        label,
-        address: fullStreetAddress || street || null,
-        postcode: postcode || null,
-        city: city || null,
-        country: props.country || null,
-        lat,
-        lon,
-        raw: f,
-        name: placeName || null,
-      };
-    });
-  }
-
   // Helper pour détecter les erreurs d'annulation (fetch natif ou Axios)
   const isCanceledError = useCallback((error) => {
-    // AbortError pour fetch natif
     if (error?.name === 'AbortError') return true;
-    // CanceledError pour Axios
     if (error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED') return true;
     return false;
   }, []);
 
-  // Fetch proxy backend puis fallback Photon direct
+  // Fetch backend uniquement (public + favoris JWT) — pas de Photon navigateur
   const fetchSuggestions = useCallback(async (queryText, signal) => {
     const q = (queryText || '').toString().trim();
 
-    // ✅ Ignorer les valeurs par défaut qui ne sont pas de vraies adresses
     const DEFAULT_VALUES = ['non spécifié', 'non specifie', 'n/a', 'na', ''];
     if (DEFAULT_VALUES.includes(q.toLowerCase())) {
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`[AddressAutocomplete] ⚠️ Ignoré valeur par défaut: "${q}"`);
-      }
       return [];
     }
 
@@ -272,110 +192,58 @@ export default function AddressAutocomplete({
       }
     }
 
-    // 1) Proxy backend
+    const publicUrl = `geocode/autocomplete?q=${encodeURIComponent(q)}&lat=${encodeURIComponent(
+      BIAS.lat
+    )}&lon=${encodeURIComponent(BIAS.lon)}&limit=${encodeURIComponent(maxResults)}`;
+
+    let publicResults = [];
     try {
-      // ✅ URL relative au baseURL (pas de / initial) pour que prod atteigne /api/v1/geocode/autocomplete
-      const url = `geocode/autocomplete?q=${encodeURIComponent(q)}&lat=${encodeURIComponent(
-        BIAS.lat
-      )}&lon=${encodeURIComponent(BIAS.lon)}&limit=${encodeURIComponent(maxResults)}`;
-      const res = await apiClient.get(url, { signal });
-      if (res.status === 200) {
-        const data = res.data || [];
-        if (Array.isArray(data)) {
-          if (data.length > 0) {
-            if (process.env.NODE_ENV === 'development') {
-              console.log(`[AddressAutocomplete] ✅ Backend retourne ${data.length} résultats pour "${q}"`);
-            }
-            if (cacheKey) autocompleteCache.set(cacheKey, data);
-            return data;
-          } else {
-            // Ne pas logger d'avertissement pour les valeurs par défaut
-            const DEFAULT_VALUES = ['non spécifié', 'non specifie', 'n/a', 'na'];
-            if (
-              process.env.NODE_ENV === 'development' &&
-              !DEFAULT_VALUES.includes(q.toLowerCase())
-            ) {
-              console.log(`[AddressAutocomplete] ⚠️ Backend retourne une liste vide pour "${q}"`);
-            }
-          }
-      }
-      } else {
-        console.warn(`[AddressAutocomplete] ⚠️ Erreur backend (${res.status}) pour "${q}"`);
+      const res = await apiClient.get(publicUrl, { signal });
+      if (res.status === 200 && Array.isArray(res.data)) {
+        publicResults = res.data;
       }
     } catch (error) {
-      // ✅ Ne pas logger les erreurs d'annulation (AbortError pour fetch natif, CanceledError pour Axios)
       if (isCanceledError(error)) {
         return [];
       }
-      console.error(`[AddressAutocomplete] ❌ Erreur lors de l'appel backend:`, error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('[AddressAutocomplete] erreur backend public', error?.code || error?.message);
+      }
     }
 
-    // 2) Fallback Photon direct (+ variantes intelligentes)
-    const fetchFromPhoton = async (searchQuery) => {
-      const url = new URL('/api', PHOTON_BASE);
-      url.searchParams.set('q', searchQuery);
-      url.searchParams.set('limit', String(maxResults));
-      url.searchParams.set('lang', 'fr');
-      url.searchParams.set('lat', String(BIAS.lat));
-      url.searchParams.set('lon', String(BIAS.lon));
-
-      const res = await fetch(url.toString(), { signal });
-      if (!res.ok) throw new Error(`Photon error: ${res.status}`);
-      const data = await res.json();
-      const feats = Array.isArray(data?.features) ? data.features : [];
-      return normalizePhoton(feats);
-    };
-
+    let favoriteResults = [];
     try {
-      let normalized = await fetchFromPhoton(q);
-
-      if (normalized.length === 0) {
-        const fallbackQueries = [];
-        const stripped = q
-          .normalize('NFD')
-          .replace(/[\u0300-\u036f]/g, '')
-          .replace(/[’']/g, ' ')
-          .replace(/\s+/g, ' ')
-          .trim();
-
-        if (stripped && stripped !== q) fallbackQueries.push(stripped);
-        if (stripped && !/geneve|genève/i.test(stripped)) fallbackQueries.push(`${stripped} geneve`);
-        if (!/geneve|genève/i.test(q)) fallbackQueries.push(`${q} geneve`);
-
-        for (const fq of fallbackQueries) {
-          const candidate = await fetchFromPhoton(fq);
-          if (candidate.length > 0) {
-            normalized = candidate;
-            if (process.env.NODE_ENV === 'development') {
-              console.log(
-                `[AddressAutocomplete] ✅ Photon fallback variante "${fq}" -> ${candidate.length} résultats`
-              );
-            }
-            break;
-          }
-        }
+      const favUrl = `geocode/favorites/autocomplete?q=${encodeURIComponent(q)}&limit=6`;
+      const favRes = await apiClient.get(favUrl, {
+        signal,
+        skipAuthRedirect: true,
+        validateStatus: (status) => status === 200 || status === 401 || status === 403,
+      });
+      if (favRes.status === 200 && Array.isArray(favRes.data)) {
+        favoriteResults = favRes.data;
       }
-
-      if (normalized.length > 0) {
-        if (process.env.NODE_ENV === 'development') {
-          console.log(
-            `[AddressAutocomplete] ✅ Photon fallback retourne ${normalized.length} résultats pour "${q}"`
-          );
-        }
-        if (cacheKey) autocompleteCache.set(cacheKey, normalized);
-      } else if (process.env.NODE_ENV === 'development') {
-        console.log(`[AddressAutocomplete] ⚠️ Photon fallback ne trouve aucun résultat pour "${q}"`);
-      }
-      return normalized;
     } catch (error) {
-      // ✅ Ne pas logger les erreurs d'annulation (AbortError pour fetch natif, CanceledError pour Axios)
       if (isCanceledError(error)) {
         return [];
       }
-      console.error(`[AddressAutocomplete] ❌ Erreur Photon fallback:`, error);
-      return [];
+      // Anonyme / hors entreprise : silencieux
     }
-  }, [BIAS, PHOTON_BASE, maxResults, isCanceledError]);
+
+    const seen = new Set();
+    const merged = [];
+    for (const item of [...favoriteResults, ...publicResults]) {
+      const key =
+        item?.place_id ||
+        `${(item?.address || item?.label || '').trim().toLowerCase()}|${item?.lat}|${item?.lon}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      merged.push(item);
+      if (merged.length >= maxResults) break;
+    }
+
+    if (cacheKey) autocompleteCache.set(cacheKey, merged);
+    return merged;
+  }, [BIAS, maxResults, isCanceledError]);
 
   // Charger les suggestions (debounce + abort)
   useEffect(() => {
@@ -405,20 +273,18 @@ export default function AddressAutocomplete({
         });
 
         const queryStr = String(queryToUse || '');
-        log('FETCH_START', { query: queryStr, requestSeq });
+        log('FETCH_START', { queryLen: queryStr.length, requestSeq });
         const next = await fetchSuggestions(queryStr, ctl.signal);
-        // Exclure favoris de la saisie automatique (alias conservés en tête de liste)
-        let enriched = (Array.isArray(next) ? next : []).filter(
-          (it) => it?.source !== 'favorite'
-        );
+        // Favoris JWT en tête + alias/providers
+        let enriched = Array.isArray(next) ? next : [];
         if (requestSeq !== requestSeqRef.current) {
-          log('FETCH_IGNORED_STALE', { query: queryStr, requestSeq });
+          log('FETCH_IGNORED_STALE', { queryLen: queryStr.length, requestSeq });
           return;
         }
         if (enriched.length > 0) {
-          log('FETCH_SUCCESS', { query: queryStr, count: enriched.length, requestSeq });
+          log('FETCH_SUCCESS', { queryLen: queryStr.length, count: enriched.length, requestSeq });
         } else {
-          log('FETCH_EMPTY', { query: queryStr, requestSeq });
+          log('FETCH_EMPTY', { queryLen: queryStr.length, requestSeq });
         }
 
         // ✅ PERF: Utiliser startTransition pour les mises à jour non-urgentes
@@ -426,7 +292,9 @@ export default function AddressAutocomplete({
           setItems(enriched);
           const focused = document.activeElement === inputRef.current;
           const hasQuery = queryStr.trim().length >= minChars;
-          setOpen(focused && !justSelected && hasQuery);
+          const mayOpen =
+            focused && !justSelected && hasQuery && !suggestionsDismissedRef.current;
+          setOpen(mayOpen);
           setHighlight(enriched.length ? 0 : -1);
           setLoading(false);
         });
@@ -441,7 +309,9 @@ export default function AddressAutocomplete({
           setItems([]);
           const focused = document.activeElement === inputRef.current;
           const hasQuery = String(queryToUse || '').trim().length >= minChars;
-          setOpen(focused && !justSelected && hasQuery);
+          const mayOpen =
+            focused && !justSelected && hasQuery && !suggestionsDismissedRef.current;
+          setOpen(mayOpen);
           setLoading(false);
         });
       } finally {
@@ -471,6 +341,7 @@ export default function AddressAutocomplete({
     setQuery(v);
     setJustSelected(false); // Réinitialiser le flag si l'utilisateur modifie
     setUserIsTyping(true); // L'utilisateur est en train de taper
+    suggestionsDismissedRef.current = false;
     const focused = document.activeElement === inputRef.current;
     if ((v || '').trim().length >= minChars && focused) {
       setOpen(true);
@@ -618,6 +489,14 @@ export default function AddressAutocomplete({
   }
 
   function onKeyDown(e) {
+    if (e.key === 'Escape') {
+      if (open) {
+        e.preventDefault();
+        suggestionsDismissedRef.current = true;
+        setOpen(false);
+      }
+      return;
+    }
     if (!open || visibleItems.length === 0) return;
     if (e.key === 'ArrowDown') {
       e.preventDefault();
@@ -630,8 +509,6 @@ export default function AddressAutocomplete({
       if (highlight >= 0 && highlight < visibleItems.length) {
         chooseItem(visibleItems[highlight]);
       }
-    } else if (e.key === 'Escape') {
-      setOpen(false);
     }
   }
 
@@ -729,7 +606,6 @@ export default function AddressAutocomplete({
         name={name}
         value={query}
         onChange={handleInputChange}
-        onKeyDown={onKeyDown}
         onFocus={() => {
           log('FOCUS', { value: query });
           const focused = document.activeElement === inputRef.current;
@@ -760,6 +636,7 @@ export default function AddressAutocomplete({
           .filter(Boolean)
           .join(' ')}
         {...restProps}
+        onKeyDown={onKeyDown}
       />
 
       {open &&

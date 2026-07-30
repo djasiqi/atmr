@@ -1,5 +1,5 @@
 // src/pages/company/Driver/CompanyDriver.jsx
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, Suspense, lazy } from 'react';
 import { Link } from 'react-router-dom';
 import {
   FiPlus,
@@ -16,8 +16,6 @@ import {
   FiX,
 } from 'react-icons/fi';
 import { createPortal } from 'react-dom';
-import CompanyHeader from '../../../components/layout/Header/CompanyHeader';
-import CompanySidebar from '../../../components/layout/Sidebar/CompanySidebar/CompanySidebar';
 import DriverLiveMap from '../Dashboard/components/DriverLiveMap';
 import useDriver from '../../../hooks/useDriver';
 import CompanyDriverTable from '../components/CompanyDriverTable';
@@ -26,7 +24,7 @@ import AddDriverForm from '../components/AddDriverForm';
 import EditDriverForm from '../components/EditDriverForm';
 import useAuthToken from '../../../hooks/useAuthToken';
 import {
-  fetchDriverCompletedTrips,
+  fetchDriversCompletedTripsStats,
   createDriver,
   updateDriverDetails,
 } from '../../../services/companyService';
@@ -34,6 +32,9 @@ import DriverWorkingHoursTable from './DriverWorkingHoursTable';
 import { toast } from 'sonner';
 import s from './CompanyDriver.module.css';
 import { useCompanySocketConnected } from '../../../hooks/enterprise/useCompanySocketConnected';
+
+// Chargée uniquement à l'ouverture (Lot 5 perf) — jamais dans le bundle initial de la page.
+const DriverTripsHistoryModal = lazy(() => import('./DriverTripsHistoryModal'));
 
 const AVAILABILITY_OPTIONS = [
   { value: 'all', label: 'Tous' },
@@ -117,6 +118,7 @@ const CompanyDriver = () => {
   const [activeTab, setActiveTab] = useState('drivers');
   const [driverHoursData, setDriverHoursData] = useState([]);
   const [mapCollapsed, setMapCollapsed] = useState(true);
+  const [historyModalDriver, setHistoryModalDriver] = useState(null);
 
   // Stats
   const driverStats = useMemo(() => {
@@ -157,34 +159,43 @@ const CompanyDriver = () => {
     });
   }, [drivers, searchTerm, statusFilter, availabilityFilter]);
 
-  // Working hours data
+  // Working hours — 1 GET agrégé (Lot 5), pas de N appels completed-trips
   useEffect(() => {
+    let cancelled = false;
     async function loadStats() {
-      const mappedData = [];
-      const BATCH_SIZE = 10;
-      for (let i = 0; i < drivers.length; i += BATCH_SIZE) {
-        const batch = drivers.slice(i, i + BATCH_SIZE);
-        const batchPromises = batch.map(async (drv) => {
-          let trips = [];
-          try {
-            trips = await fetchDriverCompletedTrips(drv.id);
-          } catch {
-            trips = [];
-          }
-          const count = trips.length;
-          const totalMinutes = trips.reduce((sum, trip) => sum + (trip.duration_in_minutes || 0), 0);
-          return { driverId: drv.id, driverName: drv.username, count, totalMinutes };
-        });
-        const batchResults = await Promise.all(batchPromises);
-        mappedData.push(...batchResults);
+      if (!drivers?.length) {
+        setDriverHoursData([]);
+        return;
       }
-      setDriverHoursData(mappedData);
+      if (typeof document !== 'undefined' && document.hidden) return;
+      try {
+        const stats = await fetchDriversCompletedTripsStats();
+        if (cancelled) return;
+        const byId = new Map(stats.map((s) => [Number(s.driver_id), s]));
+        setDriverHoursData(
+          drivers.map((drv) => {
+            const s = byId.get(Number(drv.id));
+            return {
+              driverId: drv.id,
+              driverName: drv.username,
+              count: s?.count || 0,
+              totalMinutes: s?.total_minutes || 0,
+            };
+          })
+        );
+      } catch {
+        if (!cancelled) setDriverHoursData([]);
+      }
     }
-    if (drivers && drivers.length > 0) {
-      loadStats();
-    } else {
-      setDriverHoursData([]);
-    }
+    loadStats();
+    const onVis = () => {
+      if (!document.hidden) loadStats();
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', onVis);
+    };
   }, [drivers]);
 
   // Handlers
@@ -265,15 +276,17 @@ const CompanyDriver = () => {
     setStatusFilter(tabId);
   }, []);
 
+  const openHistoryModal = useCallback((driverId, driverName) => {
+    setHistoryModalDriver({ id: driverId, name: driverName });
+  }, []);
+
+  const closeHistoryModal = useCallback(() => setHistoryModalDriver(null), []);
+
   const showTableSkeleton = loading;
   const showListRefresh = isRefetching && !showTableSkeleton;
 
   return (
-    <div className={s.pageContainer}>
-      <CompanyHeader />
-      <div className={s.layout}>
-        <CompanySidebar />
-        <div className={`${s.contentArea} ${panelOpen ? s.contentAreaWithPanel : ''}`}>
+    <div className={`${s.contentArea} ${panelOpen ? s.contentAreaWithPanel : ''}`}>
         <main className={s.main}>
           {error && <div className={s.errorBanner}>{error}</div>}
 
@@ -534,7 +547,22 @@ const CompanyDriver = () => {
             </>
           )}
 
-          {activeTab === 'hours' && <DriverWorkingHoursTable driverHoursData={driverHoursData} />}
+          {activeTab === 'hours' && (
+            <DriverWorkingHoursTable
+              driverHoursData={driverHoursData}
+              onViewDetails={openHistoryModal}
+            />
+          )}
+
+          {historyModalDriver && (
+            <Suspense fallback={null}>
+              <DriverTripsHistoryModal
+                driverId={historyModalDriver.id}
+                driverName={historyModalDriver.name}
+                onClose={closeHistoryModal}
+              />
+            </Suspense>
+          )}
 
           {confirmDialog.open && (
             <div className={s.confirmOverlay} onClick={() => setConfirmDialog((d) => ({ ...d, open: false }))}>
@@ -580,8 +608,6 @@ const CompanyDriver = () => {
             </div>
           </aside>
         )}
-        </div>
-      </div>
     </div>
   );
 };

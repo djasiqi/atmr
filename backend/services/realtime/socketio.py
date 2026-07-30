@@ -155,6 +155,30 @@ def _enrich_payload_if_needed(
     )
 
 
+def _attach_event_seq_if_needed(
+    payload: dict[str, Any], company_id: int | None
+) -> dict[str, Any]:
+    """Attache `event_seq` (curseur monotone Redis — Lot 3 perf espace entreprise).
+
+    Même espace de séquence que `snapshot_cursor` du bootstrap
+    (``GET /companies/me/dashboard/bootstrap``) : permet au frontend de rejeter les
+    événements obsolètes/rejoués sans dépendre uniquement de `updated_at`.
+
+    N'écrase jamais un `event_seq` déjà présent (idempotence relais / retries).
+    """
+    if not company_id or "event_seq" in payload:
+        return payload
+    try:
+        from services.realtime.event_sequence import next_event_seq
+
+        seq = next_event_seq(int(company_id))
+    except Exception:
+        return payload
+    if seq <= 0:
+        return payload
+    return {**payload, "event_seq": seq}
+
+
 # ---------------------------------------------------------------------------
 # Émission thread-safe (depuis handlers HTTP, workers, threads…)
 # - Flask-SocketIO >= 5: 'to='
@@ -318,8 +342,13 @@ def emit_driver_event(
     """Émet un événement générique vers un chauffeur (room driver_...).
 
     Enrichit automatiquement le payload avec event_id, version, timestamp si absents.
+    Attache aussi `event_seq` (Lot 3) si un `company_id` est présent dans le payload
+    (best-effort : les événements chauffeur n'ont pas toujours ce champ).
     """
     enriched_payload = _enrich_payload_if_needed(payload, event)
+    enriched_payload = _attach_event_seq_if_needed(
+        enriched_payload, enriched_payload.get("company_id")
+    )
     _safe_emit(
         event, enriched_payload, room=get_driver_room(driver_id), namespace=namespace
     )
@@ -352,8 +381,11 @@ def emit_company_event(
     Ne lève pas d'exception : log l'erreur si l'envoi échoue.
 
     Enrichit automatiquement le payload avec event_id, version, timestamp si absents.
+    Attache aussi `event_seq` (Lot 3) : même espace de séquence que le
+    `snapshot_cursor` du bootstrap, pour un gate de fraîcheur côté frontend.
     """
     enriched_payload = _enrich_payload_if_needed(payload, event)
+    enriched_payload = _attach_event_seq_if_needed(enriched_payload, company_id)
     _safe_emit(
         event, enriched_payload, room=get_company_room(company_id), namespace=namespace
     )

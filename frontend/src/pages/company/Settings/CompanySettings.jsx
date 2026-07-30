@@ -1,5 +1,5 @@
 // frontend/src/pages/company/Settings/CompanySettings.jsx
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, Suspense, lazy } from 'react';
 import { useLocation } from 'react-router-dom';
 import {
   FiEdit2,
@@ -14,19 +14,19 @@ import {
   FiShield,
 } from 'react-icons/fi';
 import styles from './CompanySettings.module.css';
-import CompanyHeader from '../../../components/layout/Header/CompanyHeader';
-import CompanySidebar from '../../../components/layout/Sidebar/CompanySidebar/CompanySidebar';
-import GeneralTab from './tabs/GeneralTab';
-import OperationsTab from './tabs/OperationsTab';
-import PartnershipsTab from './tabs/PartnershipsTab';
-import BillingTab from './tabs/BillingTab';
-import NotificationsTab from './tabs/NotificationsTab';
-import SecurityTab from './tabs/SecurityTab';
-import VehiclesTab from './tabs/VehiclesTab';
-
 import { useLirieCompany } from '../../../hooks/useLirieCompany';
 import { updateCompanyInfo, uploadCompanyLogo } from '../../../services/companyService';
 import resolveLogoUrl from '../../../utils/resolveLogoUrl';
+
+// Onglets chargés à la demande (Lot 7 perf) — chunk importé seulement au premier
+// affichage réel de chaque onglet, jamais les 7 au chargement initial de la page.
+const GeneralTab = lazy(() => import('./tabs/GeneralTab'));
+const OperationsTab = lazy(() => import('./tabs/OperationsTab'));
+const PartnershipsTab = lazy(() => import('./tabs/PartnershipsTab'));
+const BillingTab = lazy(() => import('./tabs/BillingTab'));
+const NotificationsTab = lazy(() => import('./tabs/NotificationsTab'));
+const SecurityTab = lazy(() => import('./tabs/SecurityTab'));
+const VehiclesTab = lazy(() => import('./tabs/VehiclesTab'));
 
 // Validations locales
 const emailRx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -43,6 +43,15 @@ export default function CompanySettings() {
     const validTabs = ['general', 'operations', 'partnerships', 'billing', 'notifications', 'security', 'vehicles'];
     return validTabs.includes(hash) ? hash : 'general';
   });
+
+  // Onglets déjà affichés au moins une fois : restent montés (masqués en CSS) après
+  // un changement d'onglet pour préserver les formulaires non enregistrés (Lot 7 perf) —
+  // le "Enregistrer" global appelle les refs de tous les onglets édités, pas seulement
+  // celui actuellement visible, donc un démontage ferait perdre ces changements.
+  const [visitedTabs, setVisitedTabs] = useState(() => new Set([activeTab]));
+  useEffect(() => {
+    setVisitedTabs((prev) => (prev.has(activeTab) ? prev : new Set(prev).add(activeTab)));
+  }, [activeTab]);
 
   // Écouter les changements de hash (via React Router location)
   useEffect(() => {
@@ -458,10 +467,6 @@ export default function CompanySettings() {
 
   // ======== RENDER ========
   return (
-    <div className={styles.companyContainer}>
-      <CompanyHeader />
-      <div className={styles.dashboard}>
-        <CompanySidebar />
         <main className={styles.content}>
           {/* Zone A — Header sticky (V1/V7) */}
           <div className={styles.settingsHeader}>
@@ -529,41 +534,68 @@ export default function CompanySettings() {
             })}
           </div>
 
-          {/* Zone C — Contenu de l'onglet actif */}
+          {/* Zone C — Contenu de l'onglet actif (les onglets déjà visités restent montés,
+              masqués en CSS, pour ne pas perdre un formulaire en cours d'édition) */}
           {company && (
             <div className={styles.tabContent}>
-              {activeTab === 'general' && (
-                <GeneralTab
-                  company={company}
-                  isEditing={isEditing}
-                  form={form}
-                  fieldErrors={fieldErrors}
-                  handleChange={handleChange}
-                  handleAddressSelect={handleAddressSelect}
-                  handleDomicileAddressSelect={handleDomicileAddressSelect}
-                  logoPreview={logoPreview}
-                  onClickPickFile={() => fileInputRef.current?.click()}
-                  onPickFile={onPickFile}
-                  logoUrlEditOpen={logoUrlEditOpen}
-                  setLogoUrlEditOpen={setLogoUrlEditOpen}
-                  logoUrlInput={logoUrlInput}
-                  setLogoUrlInput={setLogoUrlInput}
-                  onSaveLogoUrl={onSaveLogoUrl}
-                  onRemoveLogo={onRemoveLogo}
-                  logoBusy={logoBusy}
-                />
-              )}
+              <Suspense fallback={<p>Chargement de l'onglet…</p>}>
+                {visitedTabs.has('general') && (
+                  <div hidden={activeTab !== 'general'}>
+                    <GeneralTab
+                      company={company}
+                      isEditing={isEditing}
+                      form={form}
+                      fieldErrors={fieldErrors}
+                      handleChange={handleChange}
+                      handleAddressSelect={handleAddressSelect}
+                      handleDomicileAddressSelect={handleDomicileAddressSelect}
+                      logoPreview={logoPreview}
+                      onClickPickFile={() => fileInputRef.current?.click()}
+                      onPickFile={onPickFile}
+                      logoUrlEditOpen={logoUrlEditOpen}
+                      setLogoUrlEditOpen={setLogoUrlEditOpen}
+                      logoUrlInput={logoUrlInput}
+                      setLogoUrlInput={setLogoUrlInput}
+                      onSaveLogoUrl={onSaveLogoUrl}
+                      onRemoveLogo={onRemoveLogo}
+                      logoBusy={logoBusy}
+                    />
+                  </div>
+                )}
 
-              {activeTab === 'operations' && <OperationsTab ref={operationsRef} isEditing={isEditing} />}
-              {activeTab === 'partnerships' && <PartnershipsTab ref={partnershipsRef} isEditing={isEditing} />}
-              {activeTab === 'vehicles' && <VehiclesTab ref={vehiclesRef} isEditing={isEditing} />}
-              {activeTab === 'billing' && <BillingTab ref={billingRef} companyId={company?.id} isEditing={isEditing} />}
-              {activeTab === 'notifications' && <NotificationsTab isEditing={isEditing} />}
-              {activeTab === 'security' && <SecurityTab isEditing={isEditing} />}
+                {visitedTabs.has('operations') && (
+                  <div hidden={activeTab !== 'operations'}>
+                    <OperationsTab ref={operationsRef} isEditing={isEditing} />
+                  </div>
+                )}
+                {visitedTabs.has('partnerships') && (
+                  <div hidden={activeTab !== 'partnerships'}>
+                    <PartnershipsTab ref={partnershipsRef} isEditing={isEditing} />
+                  </div>
+                )}
+                {visitedTabs.has('vehicles') && (
+                  <div hidden={activeTab !== 'vehicles'}>
+                    <VehiclesTab ref={vehiclesRef} isEditing={isEditing} />
+                  </div>
+                )}
+                {visitedTabs.has('billing') && (
+                  <div hidden={activeTab !== 'billing'}>
+                    <BillingTab ref={billingRef} companyId={company?.id} isEditing={isEditing} />
+                  </div>
+                )}
+                {visitedTabs.has('notifications') && (
+                  <div hidden={activeTab !== 'notifications'}>
+                    <NotificationsTab isEditing={isEditing} />
+                  </div>
+                )}
+                {visitedTabs.has('security') && (
+                  <div hidden={activeTab !== 'security'}>
+                    <SecurityTab isEditing={isEditing} />
+                  </div>
+                )}
+              </Suspense>
             </div>
           )}
         </main>
-      </div>
-    </div>
   );
 }
