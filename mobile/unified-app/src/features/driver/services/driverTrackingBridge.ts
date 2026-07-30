@@ -73,6 +73,13 @@ const STALE_FALLBACK_BREAKER_MS = Number(
 let permissionRequestInFlight: Promise<boolean> | null = null;
 let nativeTrackingAppStateSubscribed = false;
 let stopDriverTrackingInProgress: Promise<void> | null = null;
+/** Génération de cycle de vie : un ancien stop ne peut pas muter une génération plus récente. */
+let lifecycleGeneration = 0;
+/** Watchdog : pas de callback GPS pendant mission EN_ROUTE. */
+let noLocationCallbackTimer: ReturnType<typeof setTimeout> | null = null;
+const NO_LOCATION_CALLBACK_MS = Number(
+  process.env.EXPO_PUBLIC_DRIVER_NO_LOCATION_CALLBACK_MS ?? String(3 * 60_000)
+);
 
 function resolveForegroundIntervalMs(): number {
   if (isFeatureEnabled("driver_capture_aggressive_enabled")) {
@@ -437,9 +444,15 @@ async function handleAntiZombieIfNeeded(appState: AppStateStatus): Promise<void>
         }
       },
       restartEngine: async () => {
+        // Capturer la mission AVANT stop (sinon missionId=null après await).
+        const capturedMissionId = state.missionId;
+        const capturedStatus = state.missionStatus;
+        const capturedScheduling = state.missionScheduling;
+        const gen = lifecycleGeneration;
         await stopDriverTrackingBridge();
-        if (state.missionId != null && state.missionStatus != null) {
-          startDriverTrackingBridge(state.missionId, state.missionStatus);
+        if (gen !== lifecycleGeneration) return;
+        if (capturedMissionId != null && capturedStatus != null) {
+          startDriverTrackingBridge(capturedMissionId, capturedStatus, capturedScheduling);
         }
       },
     });
@@ -1068,9 +1081,18 @@ const trackingManager = new TrackingManager({
   },
 });
 
-async function stopMissionTrackingBridge(): Promise<void> {
+async function stopMissionTrackingBridge(expectedGeneration?: number): Promise<void> {
+  if (expectedGeneration != null && expectedGeneration !== lifecycleGeneration) {
+    return;
+  }
   await flushDriverTrackingQueueNow();
+  if (expectedGeneration != null && expectedGeneration !== lifecycleGeneration) {
+    return;
+  }
   await syncBridgeQueueDepthFromPersistence();
+  if (expectedGeneration != null && expectedGeneration !== lifecycleGeneration) {
+    return;
+  }
   state.missionId = null;
   state.missionStatus = null;
   state.missionScheduling = null;
@@ -1150,11 +1172,40 @@ function ensureManagerState() {
   trackingManager.updateMode(mode);
 }
 
+function clearNoLocationCallbackWatchdog(): void {
+  if (noLocationCallbackTimer) {
+    clearTimeout(noLocationCallbackTimer);
+    noLocationCallbackTimer = null;
+  }
+}
+
+function armNoLocationCallbackWatchdog(missionId: number, generation: number): void {
+  clearNoLocationCallbackWatchdog();
+  noLocationCallbackTimer = setTimeout(() => {
+    noLocationCallbackTimer = null;
+    if (generation !== lifecycleGeneration) return;
+    if (state.missionId !== missionId) return;
+    if (state.lastFixProducedAtMs != null) return;
+    emitDriverTelemetry("tracking.no_location_callback", {
+      source: "driver.tracking.bridge",
+      mission_id: missionId,
+      lifecycle_generation: generation,
+    });
+    void forceRestartTrackingWatchFromBridge("no_location_callback", AppState.currentState).catch(
+      () => undefined
+    );
+  }, NO_LOCATION_CALLBACK_MS);
+}
+
 export function startDriverTrackingBridge(
   missionId: number,
   status: DriverMissionStatus,
   scheduling?: MissionSchedulingSnapshot | null
 ) {
+  // Incrémente la génération : tout stop en cours avec une génération plus ancienne
+  // ne doit plus effacer missionId / arrêter le runtime.
+  lifecycleGeneration += 1;
+  const operationGeneration = lifecycleGeneration;
   state.missionId = missionId;
   state.missionStatus = status;
   state.missionScheduling = scheduling ?? null;
@@ -1177,6 +1228,7 @@ export function startDriverTrackingBridge(
       );
   }
   ensureManagerState();
+  armNoLocationCallbackWatchdog(missionId, operationGeneration);
   notifyTrackingBridgeListeners();
 }
 
@@ -1192,15 +1244,22 @@ export function updateDriverTrackingBridgeStatus(status: DriverMissionStatus) {
 }
 
 export async function stopDriverTrackingBridge(): Promise<void> {
+  const stopGeneration = lifecycleGeneration;
+
   if (stopDriverTrackingInProgress) {
     return stopDriverTrackingInProgress;
   }
 
   stopDriverTrackingInProgress = (async () => {
+    clearNoLocationCallbackWatchdog();
     void hideMissionBarAndroid();
     const missionIdForBar = state.missionId;
     if (missionIdForBar != null && isFeatureEnabled("driver_mission_bar_enabled")) {
       void stopMissionLiveActivity(missionIdForBar);
+    }
+    // Si un start plus récent a déjà pris le relais, abandonner sans muter l'état.
+    if (stopGeneration !== lifecycleGeneration) {
+      return;
     }
     state.lastBackendAckLatencyMs = null;
     state.networkProfile = "normal";
@@ -1211,7 +1270,11 @@ export async function stopDriverTrackingBridge(): Promise<void> {
     state.lastHttpFallbackTrackingEventId = null;
     resetPermissionState();
 
-    await stopMissionTrackingBridge();
+    await stopMissionTrackingBridge(stopGeneration);
+
+    if (stopGeneration !== lifecycleGeneration) {
+      return;
+    }
 
     if (state.presenceWindowActive) {
       await ensurePresenceTrackingState();

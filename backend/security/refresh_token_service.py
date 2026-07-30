@@ -423,6 +423,41 @@ def revoke_active_tokens_for_device(
     return count
 
 
+def revoke_tokens_for_session(session_id: str, reason: str | None = None) -> int:
+    """Révoque les refresh tokens rattachés à une MobileDeviceSession donnée.
+
+    Utilisé par le logout scopé session (pas de revoke_all_user_tokens).
+    """
+    if not session_id or not str(session_id).strip():
+        return 0
+
+    now = datetime.now(UTC)
+    revoked_reason = reason or "Session mobile révoquée"
+
+    active_tokens = RefreshToken.query.filter(
+        and_(
+            RefreshToken.session_id == str(session_id),
+            ~RefreshToken.is_revoked,
+            RefreshToken.expires_at > now,
+        )
+    ).all()
+
+    count = len(active_tokens)
+    if count > 0:
+        for token in active_tokens:
+            token.is_revoked = True
+            token.revoked_at = now
+            token.revoked_reason = revoked_reason
+        db.session.commit()
+        logger.info(
+            "%d refresh token(s) révoqué(s) pour session_id=%s",
+            count,
+            session_id,
+        )
+
+    return count
+
+
 def get_user_active_sessions(user_id: int) -> list[RefreshToken]:
     """Récupère toutes les sessions actives d'un utilisateur.
 

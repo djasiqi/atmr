@@ -32,13 +32,25 @@ export type IosBackgroundRefreshStatus =
   | "restricted"
   | "unknown";
 
+export type TrackingHealthState =
+  | "starting"
+  | "healthy"
+  | "capture_failed"
+  | "queue_blocked"
+  | "auth_blocked"
+  | "offline"
+  | "stopped";
+
 export type DeviceHealthPayload = {
   kind: "tracking_health";
   manufacturer?: string | null;
   model?: string | null;
   platform?: string | null;
   fgs_running: boolean;
+  /** @deprecated Préférer tracking_state — conservé pour compat backend. */
   tracking_active?: boolean;
+  /** État calculé (pas un alias de fgs_running). */
+  tracking_state?: TrackingHealthState;
   fg_permission: DevicePermissionStatus;
   bg_permission: DevicePermissionStatus;
   location_permission?: DevicePermissionStatus | "always" | "when_in_use" | "denied" | "undetermined";
@@ -71,6 +83,10 @@ export type DeviceHealthPayload = {
   ios_low_power_mode?: boolean | null;
   /** iOS : statut Background App Refresh — null hors iOS. */
   ios_background_refresh_status?: IosBackgroundRefreshStatus | null;
+  /** Métriques session (sans JWT). */
+  tracking_session_id?: string | null;
+  sequence?: number | null;
+  queue_depth?: number | null;
 };
 
 export type DeviceHealthRequestPayload = DeviceHealthPayload & {
@@ -83,6 +99,7 @@ export type StartDeviceHealthHeartbeatOptions = {
 };
 
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 120_000;
+const MISSION_HEARTBEAT_INTERVAL_MS = 60_000;
 const FIX_STALE_THRESHOLD_SECONDS = 300;
 const DEVICE_HEALTH_ENDPOINT = "/driver/me/device-health";
 const LEGACY_DEVICE_STATUS_ENDPOINT = "/driver/me/device-status";
@@ -308,6 +325,7 @@ async function readBatteryCharging(): Promise<boolean | null> {
 type BridgeSnapshotLike = {
   missionId: number | null;
   lastWatchAt: string | null;
+  queueDepth?: number | null;
 };
 
 function readBridgeSnapshot(): BridgeSnapshotLike | null {
@@ -320,6 +338,7 @@ function readBridgeSnapshot(): BridgeSnapshotLike | null {
     return {
       missionId: snapshot.missionId ?? null,
       lastWatchAt: snapshot.lastWatchAt ?? null,
+      queueDepth: (snapshot as { queueDepth?: number | null }).queueDepth ?? null,
     };
   } catch {
     return null;
@@ -409,7 +428,18 @@ export async function collectDeviceHealth(): Promise<DeviceHealthPayload> {
   const fgsExpected = expectFgsRunning(snapshot);
   const identity = readDeviceIdentity();
   const { appVersion, osVersion } = readAppOsVersion();
-  const trackingActive = fgsRunning;
+
+  const trackingState = resolveTrackingHealthState({
+    fgsRunning,
+    fgsExpected,
+    lastFixAgeSeconds,
+    nativeLastFixAgeSeconds,
+    gpsProviderEnabled,
+    missionId: snapshot?.missionId ?? null,
+    queueDepth: snapshot?.queueDepth ?? null,
+  });
+  const trackingActive =
+    trackingState === "healthy" || trackingState === "starting";
 
   const constraintReason = resolveConstraintReason({
     fgPermission,
@@ -420,6 +450,11 @@ export async function collectDeviceHealth(): Promise<DeviceHealthPayload> {
     fgsExpected,
     lastFixAgeSeconds,
   });
+
+  // Fix NULL pendant mission attendue = capture_failed (pas un tracking « sain »).
+  const effectiveConstraint =
+    constraintReason
+    ?? (trackingState === "capture_failed" ? "no_location_fix" : null);
 
   const locationPermission =
     bgPermission === "granted"
@@ -440,6 +475,7 @@ export async function collectDeviceHealth(): Promise<DeviceHealthPayload> {
     platform: Platform.OS,
     fgs_running: fgsRunning,
     tracking_active: trackingActive,
+    tracking_state: trackingState,
     fg_permission: fgPermission,
     bg_permission: bgPermission,
     location_permission: locationPermission,
@@ -450,7 +486,7 @@ export async function collectDeviceHealth(): Promise<DeviceHealthPayload> {
     is_charging: isCharging,
     last_fix_age_seconds: lastFixAgeSeconds,
     fix_success_rate_last_5min: null,
-    constraint_reason: constraintReason,
+    constraint_reason: effectiveConstraint,
     app_state: AppState.currentState,
     native_start_phase: nativeDiag.native_start_phase,
     native_start_error: nativeStartError,
@@ -464,7 +500,50 @@ export async function collectDeviceHealth(): Promise<DeviceHealthPayload> {
     ios_accuracy_authorization: iosAccuracyAuthorization,
     ios_low_power_mode: iosLowPowerMode,
     ios_background_refresh_status: iosBackgroundRefreshStatus,
+    queue_depth: snapshot?.queueDepth ?? null,
   };
+}
+
+function resolveTrackingHealthState(input: {
+  fgsRunning: boolean;
+  fgsExpected: boolean;
+  lastFixAgeSeconds: number | null;
+  nativeLastFixAgeSeconds: number | null;
+  gpsProviderEnabled: boolean;
+  missionId: number | null;
+  queueDepth: number | null;
+}): TrackingHealthState {
+  if (!input.fgsExpected && input.missionId == null) {
+    return "stopped";
+  }
+  if (!input.gpsProviderEnabled) {
+    return "offline";
+  }
+  if (input.fgsExpected && !input.fgsRunning) {
+    return "starting";
+  }
+  // FGS vivant mais aucun fix (NULL) pendant une mission attendue = capture_failed.
+  if (
+    input.missionId != null
+    && input.fgsRunning
+    && input.lastFixAgeSeconds == null
+    && input.nativeLastFixAgeSeconds == null
+  ) {
+    return "capture_failed";
+  }
+  if (
+    input.lastFixAgeSeconds != null
+    && input.lastFixAgeSeconds > FIX_STALE_THRESHOLD_SECONDS
+  ) {
+    return "capture_failed";
+  }
+  if ((input.queueDepth ?? 0) > 50) {
+    return "queue_blocked";
+  }
+  if (input.fgsRunning || (input.lastFixAgeSeconds != null && input.lastFixAgeSeconds < 120)) {
+    return "healthy";
+  }
+  return input.fgsExpected ? "starting" : "stopped";
 }
 
 type ApiClientLike = {
@@ -493,7 +572,12 @@ export async function sendDeviceHealth(payload: DeviceHealthRequestPayload): Pro
       triggerReason !== "health_monitor_ok" &&
       !triggerReason.startsWith("health_monitor_ok"));
   const constraintChanged = payload.constraint_reason !== lastSentConstraintReason;
-  const intervalElapsed = now - lastSentAtMs >= DEFAULT_HEARTBEAT_INTERVAL_MS;
+  const throttleMs =
+    payload.tracking_state === "healthy" || payload.tracking_state === "starting" || payload.tracking_state === "capture_failed"
+      ? MISSION_HEARTBEAT_INTERVAL_MS
+      : DEFAULT_HEARTBEAT_INTERVAL_MS;
+  // Mission active (fix NULL / capture_failed inclus) → throttle 60s.
+  const intervalElapsed = now - lastSentAtMs >= throttleMs;
 
   if (!(intervalElapsed || constraintChanged || (criticalSignal && lastSentAtMs === 0))) {
     emitDriverTelemetry("tracking.device_health.send_skipped", {

@@ -243,15 +243,49 @@ export const isDeviceHealthSignalActive = (driver) => {
 
 export const getDriverFreshnessLabel = (driver) => {
   const status = getFreshnessStatus(driver);
+  const recordedAt = driver?.recorded_at ?? driver?.timestamp ?? null;
+  const absoluteSuffix = formatAbsolutePositionTime(recordedAt);
   if (status === 'offline_unknown' && isDeviceHealthSignalActive(driver)) {
     return 'Signal actif · position non synchronisée';
   }
   if (status === 'live') return `Live · ${formatLastSeen(driver.last_seen_seconds)}`;
   if (status === 'recent') return `Recent · ${formatLastSeen(driver.last_seen_seconds)}`;
-  if (status === 'stale') return `Stale · ${formatLastSeen(driver.last_seen_seconds)}`;
+  if (status === 'stale') {
+    return absoluteSuffix
+      ? `Signal ancien · dernière position ${absoluteSuffix}`
+      : `Stale · ${formatLastSeen(driver.last_seen_seconds)}`;
+  }
+  if (status === 'last_known') {
+    return absoluteSuffix
+      ? `GPS hors ligne — dernière position ${absoluteSuffix}`
+      : 'GPS hors ligne — dernière position connue';
+  }
   if (status === 'offline_unknown') return 'Offline';
+  if (status === 'offline' || String(driver?.position_source || '').toLowerCase() === 'db_fallback') {
+    return absoluteSuffix
+      ? `GPS hors ligne — dernière position ${absoluteSuffix}`
+      : 'GPS hors ligne';
+  }
   return 'Offline';
 };
+
+function formatAbsolutePositionTime(iso) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  try {
+    return new Intl.DateTimeFormat('fr-CH', {
+      day: 'numeric',
+      month: 'long',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: 'UTC',
+      timeZoneName: 'short',
+    }).format(d);
+  } catch {
+    return d.toISOString();
+  }
+}
 
 // ─── Marqueurs SVG professionnels Lirie ───
 

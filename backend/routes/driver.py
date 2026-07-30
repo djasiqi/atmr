@@ -1601,6 +1601,33 @@ class DriverLocation(Resource):
             return error_response, status_code
         driver = cast("Driver", driver)
 
+        # Validation session durable mobile (compat : pas de session_id = legacy OK)
+        try:
+            from flask_jwt_extended import get_jwt
+            from security.mobile_session_guard import check_mobile_session_from_claims
+
+            claims = get_jwt() or {}
+            user_id = getattr(getattr(driver, "user", None), "id", None) or getattr(
+                driver, "user_id", None
+            )
+            err_code, retryable = check_mobile_session_from_claims(
+                claims, user_id=user_id
+            )
+            if err_code == "session_validation_unavailable":
+                return {
+                    "error": err_code,
+                    "error_code": err_code,
+                    "retryable": True,
+                }, 503
+            if err_code:
+                return {
+                    "error": err_code,
+                    "error_code": err_code,
+                    "retryable": False,
+                }, 401
+        except Exception as session_guard_exc:
+            logger.debug("mobile session guard skip: %s", session_guard_exc)
+
         # Variables pour stocker le résultat
         result = None
         status_code = 200

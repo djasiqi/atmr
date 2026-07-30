@@ -448,6 +448,15 @@ def merge_drivers_with_locations(
             "tracking_display_status": loc.get("tracking_display_status")
             if loc.get("tracking_display_status") is not None
             else drv.get("tracking_display_status"),
+            "position_source": loc.get("position_source")
+            if loc.get("position_source") is not None
+            else drv.get("position_source"),
+            "offline_reason": loc.get("offline_reason")
+            if loc.get("offline_reason") is not None
+            else drv.get("offline_reason"),
+            "timestamp": loc.get("timestamp")
+            if loc.get("timestamp") is not None
+            else drv.get("timestamp"),
             "device_health": loc.get("device_health")
             if loc.get("device_health") is not None
             else drv.get("device_health"),

@@ -591,6 +591,30 @@ class DriverTrackingQueue {
     driverId: number | string;
     companyId: number | string;
   }): Promise<boolean> {
+    return this.resumeAfterAuthRecovery(identity, {
+      authSessionChanged: false,
+      preservePendingTrackingSessions: true,
+    });
+  }
+
+  /**
+   * Reprise après recovery auth.
+   * Les points déjà persistés conservent tracking_session_id / sequence_id / event_id.
+   * Une nouvelle tracking session n'est créée que si authSessionChanged et qu'aucun backlog
+   * n'est en attente — sinon on flush d'abord avec les IDs existants.
+   */
+  async resumeAfterAuthRecovery(
+    identity: {
+      userId: number | string;
+      driverId: number | string;
+      companyId: number | string;
+    },
+    options: {
+      authSessionChanged?: boolean;
+      preservePendingTrackingSessions?: boolean;
+      beginNewSessionIfIdle?: boolean;
+    } = {}
+  ): Promise<boolean> {
     await this.ensureLoaded();
     const key = `${identity.userId}:${identity.driverId}:${identity.companyId}`;
     const ok = await trackingQueueStore.clearQuarantineIfMatch(key);
@@ -601,10 +625,52 @@ class DriverTrackingQueue {
       return false;
     }
     this.identityKey = key;
-    if (this.sessionGeneration == null && this.trackingSessionId) {
+
+    const preserve = options.preservePendingTrackingSessions !== false;
+    const pendingCount = this.items.filter(
+      (i) => (i.persistState ?? "non_ingested") !== "persisted"
+    ).length;
+
+    emitDriverTelemetry("tracking.queue.resume_after_auth", {
+      source: "driver.tracking.queue",
+      pending_count: pendingCount,
+      auth_session_changed: Boolean(options.authSessionChanged),
+      preserve_pending: preserve,
+    });
+
+    // Ne jamais réécrire tracking_session_id / sequence des points existants.
+    if (preserve && pendingCount > 0) {
+      void this.flush().catch(() => undefined);
+      return true;
+    }
+
+    const shouldBeginNew =
+      options.beginNewSessionIfIdle === true
+      || (options.authSessionChanged === true && pendingCount === 0);
+
+    if (shouldBeginNew) {
+      await this.beginNewTrackingSession();
+    } else if (this.sessionGeneration == null && this.trackingSessionId) {
       await this.registerSessionWithBackend();
     }
     return true;
+  }
+
+  /**
+   * Ouvre une nouvelle session tracking pour les points futurs uniquement.
+   * N'altère pas les items déjà en file.
+   */
+  async beginNewTrackingSession(): Promise<void> {
+    await this.ensureLoaded();
+    this.trackingSessionId = null;
+    this.sessionGeneration = null;
+    this.sequenceCounter = 0;
+    await this.registerSessionWithBackend();
+    emitDriverTelemetry("tracking.queue.new_session_begun", {
+      source: "driver.tracking.queue",
+      tracking_session_id: this.trackingSessionId,
+      session_generation: this.sessionGeneration,
+    });
   }
 
   /** Contigu ingested local (serveur ne maintient pas cet état). */

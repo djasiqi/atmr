@@ -5,7 +5,9 @@ import {
   projectDriversForMap,
   isDriverConstrained,
   resolveDriverMapVisualStatus,
+  resolveDriverMapProjection,
   resolveDriverMapMarkerColor,
+  isNonLiveGpsPosition,
   CONSTRAINED_MARKER_COLOR,
 } from '../../utils/companyDriverProjections';
 import { STATUS_COLORS } from '../../utils/mapUtils';
@@ -24,21 +26,30 @@ describe('companyDriverProjections', () => {
     expect(buildDriverStructuralSetKey(driversA, 'bob')).not.toBe(buildDriverStructuralSetKey(driversA));
   });
 
-  it('projectDriverForMap conserve id/coords/statut', () => {
+  it('projectDriverForMap conserve id/coords/statut et champs GPS', () => {
     const projected = projectDriverForMap({
       id: 5,
       lat: 46.5,
       lng: 6.4,
       status: 'busy',
       notes: 'secret',
+      location_status: 'last_known',
+      position_source: 'db_fallback',
+      recorded_at: '2026-07-29T09:47:47Z',
     });
     expect(projected).toMatchObject({
       id: 5,
       latitude: 46.5,
       longitude: 6.4,
       status: 'busy',
+      location_status: 'last_known',
+      position_source: 'db_fallback',
+      recorded_at: '2026-07-29T09:47:47Z',
+      businessStatus: 'busy',
+      visualTreatment: 'gps_stale',
     });
     expect(projected.notes).toBeUndefined();
+    expect(projected.lastPositionAt).toBe('2026-07-29T09:47:47Z');
   });
 
   it('isSameMarkerPosition tolère micro-variations', () => {
@@ -70,6 +81,67 @@ describe('DriverLiveMap anti-régression lat/lng only', () => {
   });
 });
 
+describe('découplage métier / GPS', () => {
+  it('busy + last_known + db_fallback → jamais couleur live', () => {
+    const driver = {
+      status: 'busy',
+      location_status: 'last_known',
+      position_source: 'db_fallback',
+      recorded_at: '2026-07-29T09:47:47Z',
+    };
+    const projection = resolveDriverMapProjection(driver);
+    expect(projection.businessStatus).toBe('busy');
+    expect(projection.gpsFreshness).toBe('last_known');
+    expect(projection.positionSource).toBe('db_fallback');
+    expect(projection.visualTreatment).toBe('gps_stale');
+    expect(projection.visualStatus).toBe('offline');
+    expect(resolveDriverMapVisualStatus(driver)).toBe('offline');
+    expect(isNonLiveGpsPosition(driver)).toBe(true);
+  });
+
+  it('busy + offline → GPS hors ligne', () => {
+    const driver = {
+      status: 'busy',
+      location_status: 'offline',
+      tracking_display_status: 'offline_unknown',
+    };
+    const projection = resolveDriverMapProjection(driver);
+    expect(projection.businessStatus).toBe('busy');
+    expect(projection.visualTreatment).toBe('gps_offline');
+    expect(projection.visualStatus).toBe('offline');
+  });
+
+  it('assigned + stale → signal ancien', () => {
+    const driver = {
+      status: 'assigned',
+      location_status: 'stale',
+    };
+    const projection = resolveDriverMapProjection(driver);
+    expect(projection.businessStatus).toBe('assigned');
+    expect(projection.visualTreatment).toBe('gps_stale');
+    expect(projection.visualStatus).toBe('offline');
+  });
+
+  it('constrained + last_known → non-live dominant (pas orange actif)', () => {
+    const driver = {
+      location_status: 'last_known',
+      presence_status: 'degraded_constrained',
+      status: 'assigned',
+    };
+    expect(resolveDriverMapVisualStatus(driver)).toBe('offline');
+    expect(resolveDriverMapProjection(driver).visualTreatment).toBe('gps_stale_constrained');
+  });
+
+  it('constrained + live → orange contrainte', () => {
+    const driver = {
+      location_status: 'live',
+      presence_status: 'degraded_constrained',
+      status: 'assigned',
+    };
+    expect(resolveDriverMapVisualStatus(driver)).toBe('constrained');
+  });
+});
+
 describe('degraded_constrained / batterie restreinte', () => {
   it('isDriverConstrained détecte presence_status degraded_constrained', () => {
     expect(isDriverConstrained({ presence_status: 'degraded_constrained' })).toBe(true);
@@ -91,6 +163,7 @@ describe('degraded_constrained / batterie restreinte', () => {
       lng: 6.1,
       status: 'assigned_constrained',
       presence_status: 'degraded_constrained',
+      location_status: 'live',
       device_health: { constraint_reason: 'battery_optimized', battery_optimized: true },
     });
     expect(projected).toMatchObject({
@@ -100,10 +173,11 @@ describe('degraded_constrained / batterie restreinte', () => {
     });
   });
 
-  it('resolveDriverMapVisualStatus renvoie constrained pour un chauffeur restreint', () => {
+  it('resolveDriverMapVisualStatus renvoie constrained pour un chauffeur restreint frais', () => {
     const driver = {
       status: 'assigned',
       presence_status: 'degraded_constrained',
+      location_status: 'live',
     };
     expect(resolveDriverMapVisualStatus(driver)).toBe('constrained');
     expect(resolveDriverMapVisualStatus(driver, { isFallback: true })).toBe('offline');
@@ -115,13 +189,5 @@ describe('degraded_constrained / batterie restreinte', () => {
     expect(resolveDriverMapMarkerColor('constrained', colors)).toBe('#f97316');
     expect(resolveDriverMapMarkerColor('assigned', colors)).toBe(STATUS_COLORS.assigned);
     expect(resolveDriverMapMarkerColor('offline', colors)).toBe(STATUS_COLORS.offline);
-  });
-
-  it('resolveDriverMapVisualStatus renvoie constrained pour last_known + constrained', () => {
-    const driver = {
-      location_status: 'last_known',
-      presence_status: 'degraded_constrained',
-    };
-    expect(resolveDriverMapVisualStatus(driver)).toBe('constrained');
   });
 });

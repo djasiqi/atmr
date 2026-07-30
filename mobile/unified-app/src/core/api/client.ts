@@ -192,6 +192,23 @@ export function setResumeAttemptCorrelationId(value: string | null) {
 
 async function readRefreshToken(): Promise<string | null> {
   try {
+    const {
+      readRefreshToken: readStrict,
+    } = require("../auth/authCredentialStore") as typeof import("../auth/authCredentialStore");
+    const result = await readStrict();
+    if (result.status === "found") return result.value;
+    if (result.status === "temporarily_unavailable") {
+      // Ne pas convertir en missing — signaler via null + télémétrie
+      emitDriverTelemetry("auth.refresh.read_unavailable", {
+        source: "core.api.client",
+        cause: result.cause,
+      });
+      return null;
+    }
+  } catch {
+    /* fallback legacy key */
+  }
+  try {
     const value = await SecureStore.getItemAsync(REFRESH_TOKEN_STORAGE_KEY);
     if (typeof value === "string" && value.trim().length > 0) {
       return value;
@@ -249,17 +266,28 @@ async function writeRefreshToken(value: string | null): Promise<void> {
 
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
+      const store = require("../auth/authCredentialStore") as typeof import("../auth/authCredentialStore");
       if (isDelete) {
-        await SecureStore.deleteItemAsync(REFRESH_TOKEN_STORAGE_KEY);
-        const readBack = await readRefreshToken();
-        if (readBack !== null) {
-          throw new RefreshTokenPersistError("delete_read_back_failed");
+        const del = await store.deleteRefreshToken();
+        if (del.status !== "ok") {
+          throw new RefreshTokenPersistError(del.cause || "delete_failed");
+        }
+        // Compat legacy key
+        try {
+          await SecureStore.deleteItemAsync(REFRESH_TOKEN_STORAGE_KEY);
+        } catch {
+          /* ignore */
         }
       } else {
-        await SecureStore.setItemAsync(REFRESH_TOKEN_STORAGE_KEY, value);
-        const readBack = await readRefreshToken();
-        if (readBack !== value) {
-          throw new RefreshTokenPersistError("read_back_mismatch");
+        const written = await store.writeRefreshToken(value);
+        if (written.status !== "ok") {
+          throw new RefreshTokenPersistError(written.cause || "write_failed");
+        }
+        // Compat dual-write legacy pendant rollout
+        try {
+          await SecureStore.setItemAsync(REFRESH_TOKEN_STORAGE_KEY, value);
+        } catch {
+          /* ignore */
         }
       }
       void appendSessionJournalEvent("auth.refresh_token.persist_success", { attempt });
@@ -397,10 +425,17 @@ async function refreshAuthToken(): Promise<string | null> {
   });
   const token = extractToken(data);
   const nextRefreshToken = extractRefreshToken(data);
+  const {
+    getAuthEpoch,
+    isCurrentAuthEpoch,
+  } = require("../auth/authCredentialStore") as typeof import("../auth/authCredentialStore");
+  const epochAtStart = getAuthEpoch();
   if (nextRefreshToken) {
+    if (!isCurrentAuthEpoch(epochAtStart)) return null;
     await writeRefreshToken(nextRefreshToken);
   }
   if (token) {
+    if (!isCurrentAuthEpoch(epochAtStart)) return null;
     setAuthToken(token);
     try {
       const { notifyAuthRefreshSuccess } = require("../auth/authRefreshListeners") as {
@@ -667,8 +702,20 @@ export function setAuthToken(token: string | null) {
   } else {
     delete apiClient.defaults.headers.common.Authorization;
     csrfTokenCache = null;
-    void writeRefreshToken(null);
+    // Ne plus fire-and-forget wipe SecureStore ici — utiliser clearLocalAuth().
   }
+}
+
+/** Purge locale awaitée (access + refresh). Incrémente authEpoch. */
+export async function clearLocalAuth(): Promise<void> {
+  try {
+    const { bumpAuthEpoch } = require("../auth/authCredentialStore") as typeof import("../auth/authCredentialStore");
+    bumpAuthEpoch();
+  } catch {
+    /* ignore */
+  }
+  setAuthToken(null);
+  await writeRefreshToken(null);
 }
 
 export function hasAuthToken(): boolean {
@@ -727,10 +774,60 @@ export async function login(email: string, password: string): Promise<void> {
     );
     const token = extractToken(data);
     const refreshToken = extractRefreshToken(data);
+    // Persister le refresh AVANT de publier l'access (invariant C).
+    if (refreshToken) {
+      await writeRefreshToken(refreshToken);
+    }
+    // Recovery credential durable (B0) si le serveur le fournit.
+    const recovery =
+      data && typeof data === "object"
+        ? (data as Record<string, unknown>).recovery_credential
+        : null;
+    if (typeof recovery === "string" && recovery.length > 0) {
+      try {
+        const {
+          writeRecoveryCredential,
+          writeSessionEnvelope,
+          bumpAuthEpoch,
+        } = require("../auth/authCredentialStore") as typeof import("../auth/authCredentialStore");
+        bumpAuthEpoch();
+        await writeRecoveryCredential(recovery);
+        const sessionId = (data as Record<string, unknown>).session_id;
+        const deviceId = await (async () => {
+          try {
+            const { getStableDeviceId } = require("../notifications/getStableDeviceId") as {
+              getStableDeviceId: () => Promise<string>;
+            };
+            return await getStableDeviceId();
+          } catch {
+            return "unknown";
+          }
+        })();
+        if (typeof sessionId === "string") {
+          await writeSessionEnvelope({
+            schema_version: 1,
+            session_id: sessionId,
+            device_installation_id: deviceId,
+            user_public_id: String((data as Record<string, unknown>).user_public_id ?? ""),
+            driver_id:
+              typeof (data as Record<string, unknown>).driver_id === "number"
+                ? ((data as Record<string, unknown>).driver_id as number)
+                : null,
+            role: String((data as Record<string, unknown>).role ?? "driver"),
+            active_context_id: null,
+            refresh_generation: Number(
+              (data as Record<string, unknown>).session_generation ?? 1
+            ),
+            last_authenticated_at: new Date().toISOString(),
+          });
+        }
+      } catch {
+        /* recovery optionnel pendant rollout */
+      }
+    }
     if (token) {
       setAuthToken(token);
     }
-    await writeRefreshToken(refreshToken);
     markBootstrapAuthFresh();
   } catch (error) {
     throw toApiError(error);
@@ -770,12 +867,29 @@ export async function logoutSession(): Promise<void> {
   if (useMockBootstrap) return;
   try {
     const deviceHeaders = await buildAuthDeviceHeaders();
-    await apiClient.post("/auth/logout", undefined, { headers: deviceHeaders });
+    let body: Record<string, string> | undefined;
+    try {
+      const store = require("../auth/authCredentialStore") as typeof import("../auth/authCredentialStore");
+      const envelope = await store.readSessionEnvelope();
+      const refresh = await store.readRefreshToken();
+      body = {};
+      if (envelope.status === "found") {
+        body.session_id = envelope.value.session_id;
+        body.device_installation_id = envelope.value.device_installation_id;
+      }
+      if (refresh.status === "found") {
+        body.refresh_token = refresh.value;
+      }
+      if (Object.keys(body).length === 0) body = undefined;
+    } catch {
+      body = undefined;
+    }
+    await apiClient.post("/auth/logout", body, { headers: deviceHeaders });
   } catch (error) {
     // Logout backend best-effort: on purge toujours localement côté session provider.
     throw toApiError(error);
   } finally {
-    setAuthToken(null);
+    await clearLocalAuth();
   }
 }
 

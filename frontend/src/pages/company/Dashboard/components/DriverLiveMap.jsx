@@ -9,6 +9,8 @@ import {
   isDriverConstrained,
   getDriverConstraintReason,
   resolveDriverMapVisualStatus,
+  resolveDriverMapProjection,
+  isNonLiveGpsPosition,
   CONSTRAINED_MARKER_COLOR,
 } from '../../../../utils/companyDriverProjections';
 import { resolveDriverClusteringEnabled } from '../../../../utils/driverMapClustering';
@@ -35,6 +37,7 @@ import {
   resolveDriverCoords,
   getDriverStatus,
   getFreshnessStatus,
+  getDriverFreshnessLabel,
   formatLastSeen,
   makeCircleMarkerIcon,
   makeClusterIcon,
@@ -284,8 +287,11 @@ const createStyledTooltip = (driver, opts = {}) => {
     noGps,
     isConstrained,
     constraintReason,
+    businessStatus,
+    gpsLabel,
   } = opts;
   const status = statusOverride ?? getDriverStatus(driver);
+  const biz = businessStatus ?? getDriverStatus(driver);
 
   const statusConf = {
     available:   { label: 'Disponible',         dot: AVAILABLE_LIGHT_GREEN, bg: '#dcfce7', color: '#15803d' },
@@ -295,24 +301,25 @@ const createStyledTooltip = (driver, opts = {}) => {
     emergency:   { label: 'Urgence',            dot: '#ef4444',             bg: '#fee2e2', color: '#dc2626' },
     constrained: { label: 'Batterie restreinte', dot: CONSTRAINED_MARKER_COLOR,   bg: '#ffedd5', color: '#9a3412' },
   };
-  const conf = { ...(statusConf[status] || statusConf.offline) };
+  // Badge principal = métier si en course/assigné, sinon statut visuel GPS.
+  const badgeKey = (biz === 'busy' || biz === 'assigned') ? biz : status;
+  const conf = { ...(statusConf[badgeKey] || statusConf.offline) };
   if (noGps) conf.label = 'Sans GPS';
 
   const displayName = getDriverDisplayName(driver);
 
   // Ligne meta
   let metaLine = '';
-  if (status === 'constrained' || isConstrained) {
-    // Badge piloté par la contrainte réelle (Tracking arrêté, GPS désactivé…),
-    // plus « Batterie restreinte » par défaut.
+  if (status === 'constrained' || (isConstrained && !isStale)) {
     if (!noGps) conf.label = resolveConstraintBadgeLabel(constraintReason);
     metaLine = buildConstraintMetaLine(constraintReason, lastSeenSeconds);
+  } else if (gpsLabel) {
+    metaLine = escapeHtml(gpsLabel);
   } else if (status === 'offline' && (lastSeenSeconds != null || isStale)) {
     metaLine = formatLastSeen(lastSeenSeconds);
-  } else if (status === 'busy' || status === 'assigned') {
+  } else if (status === 'busy' || status === 'assigned' || biz === 'busy' || biz === 'assigned') {
     const parts = [];
     if (currentBookingId) parts.push(`Mission #${Number(currentBookingId) || currentBookingId}`);
-    // client_short = adresse pickup côté API — toujours échapper (XSS InfoWindow).
     if (clientShort) parts.push(escapeHtml(clientShort));
     metaLine = parts.join(' · ');
   }
@@ -321,6 +328,9 @@ const createStyledTooltip = (driver, opts = {}) => {
   const chips = [];
   if (driver.vehicle_name || driver.vehicle_model) {
     chips.push(driver.vehicle_name || driver.vehicle_model);
+  }
+  if ((biz === 'busy' || biz === 'assigned') && (status === 'offline' || isStale) && !noGps) {
+    chips.push(conf.label === 'En course' || conf.label === 'Assigné' ? 'GPS hors ligne' : conf.label);
   }
 
   return `<div class="lirie-popup">
@@ -639,7 +649,12 @@ function DriverLiveMap({ drivers: propDrivers }) {
     const titleStatus = status === 'constrained'
       ? resolveConstraintBadgeLabel(getDriverConstraintReason(driver))
       : (STATUS_TITLE_LABELS[status] || status || 'Inconnu');
-    const markerTitle = `${getDriverDisplayName(driver)} · ${titleStatus}${isStale ? ' · signal ancien' : ''}`;
+    const businessLabel = STATUS_TITLE_LABELS[tooltipOpts?.businessStatus]
+      || tooltipOpts?.businessStatus
+      || null;
+    const markerTitle = businessLabel && status === 'offline' && !tooltipOpts?.noGps
+      ? `${getDriverDisplayName(driver)} · ${businessLabel} · GPS hors ligne`
+      : `${getDriverDisplayName(driver)} · ${titleStatus}${isStale ? ' · signal ancien' : ''}`;
     const iconUrl = makeCircleMarkerIcon(color, opacity, {
       label: markerLabel,
       textColor: '#ffffff',
@@ -942,38 +957,54 @@ function DriverLiveMap({ drivers: propDrivers }) {
       if (!resolved) return;
 
       const { coords, isFallback } = resolved;
+      const projection = resolveDriverMapProjection(d, { isFallback });
       const isConstrained = !isFallback && isDriverConstrained(d);
-      const visualStatus = resolveDriverMapVisualStatus(d, { isFallback });
+      const visualStatus = projection.visualStatus;
       const constraintReason = isConstrained ? getDriverConstraintReason(d) : null;
-      const freshness = getFreshnessStatus(d);
-      const isLocated = !isFallback && !['offline', 'offline_unknown'].includes(freshness);
+      const isLocated = !isFallback && !isNonLiveGpsPosition(d, { isFallback });
       if (isLocated) newLocatedIds.add(d.id);
 
       const lastSeenSecondsNumber = Number(d.last_seen_seconds);
       const locStat = String(d.tracking_display_status || d.location_status || '').toLowerCase();
+      const positionSource = String(d.position_source || '').toLowerCase();
       const hasBackendStatus = locStat === 'stale' || locStat === 'offline'
         || locStat === 'live' || locStat === 'recent'
         || locStat === 'last_known'
-        || locStat === 'degraded_constrained' || locStat === 'offline_unknown';
+        || locStat === 'degraded_constrained' || locStat === 'offline_unknown'
+        || positionSource === 'db_fallback';
       const staleByAge = !d.location_status && !d.tracking_display_status
         && Number.isFinite(lastSeenSecondsNumber)
         && lastSeenSecondsNumber > STALE_SECONDS_THRESHOLD;
       const staleByStatus = locStat === 'stale' || locStat === 'offline'
-        || locStat === 'degraded_constrained' || locStat === 'offline_unknown';
+        || locStat === 'last_known'
+        || locStat === 'degraded_constrained' || locStat === 'offline_unknown'
+        || positionSource === 'db_fallback'
+        || projection.visualTreatment === 'gps_stale'
+        || projection.visualTreatment === 'gps_stale_constrained'
+        || projection.visualTreatment === 'gps_offline';
       const isStaleMarker = isFallback
         || (hasBackendStatus ? staleByStatus : staleByAge);
       if (isStaleMarker) staleMarkersCount += 1;
 
+      const gpsLabel = getDriverFreshnessLabel(d);
       const tooltipOpts = isFallback
-        ? { status: 'offline', isStale: true, noGps: true }
+        ? {
+            status: 'offline',
+            isStale: true,
+            noGps: true,
+            businessStatus: projection.businessStatus,
+            gpsLabel: 'Sans GPS — fallback entreprise',
+          }
         : {
             lastSeenSeconds: d.last_seen_seconds,
             isStale: isStaleMarker,
             clientShort: d.client_short,
             currentBookingId: d.current_booking_id,
             status: visualStatus,
+            businessStatus: projection.businessStatus,
             isConstrained,
             constraintReason,
+            gpsLabel,
           };
       upsertMarker(d.id, coords, visualStatus, isStaleMarker, d, tooltipOpts);
     });

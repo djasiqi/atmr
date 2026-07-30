@@ -1,7 +1,8 @@
 import * as Application from "expo-application";
-import * as SecureStore from "expo-secure-store";
-
-const DEVICE_ID_KEY = "@atmr/device_id";
+import {
+  createAndPersistInstallationId,
+  readInstallationId,
+} from "../auth/authCredentialStore";
 
 let cachedDeviceId: string | null = null;
 
@@ -11,6 +12,7 @@ type ApplicationWithInstallationId = typeof Application & {
 
 /**
  * Identifiant d'installation stable (survit aux redémarrages, change après réinstallation).
+ * Échec de persistance → erreur device_identity_storage_unavailable (pas d'ID mémoire silencieux).
  */
 export async function getStableDeviceId(): Promise<string> {
   if (cachedDeviceId) return cachedDeviceId;
@@ -25,19 +27,24 @@ export async function getStableDeviceId(): Promise<string> {
       return installationId;
     }
   } catch {
-    // fallback SecureStore
+    // fallback SecureStore via authCredentialStore
   }
 
-  const stored = await SecureStore.getItemAsync(DEVICE_ID_KEY).catch(() => null);
-  if (stored && stored.length > 0) {
-    cachedDeviceId = stored;
-    return stored;
+  const stored = await readInstallationId();
+  if (stored.status === "found") {
+    cachedDeviceId = stored.value;
+    return stored.value;
+  }
+  if (stored.status === "temporarily_unavailable") {
+    throw new Error("device_identity_storage_unavailable");
   }
 
-  const generated = `atmr-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
-  await SecureStore.setItemAsync(DEVICE_ID_KEY, generated).catch(() => undefined);
-  cachedDeviceId = generated;
-  return generated;
+  const created = await createAndPersistInstallationId();
+  if (created.status !== "found") {
+    throw new Error("device_identity_storage_unavailable");
+  }
+  cachedDeviceId = created.value;
+  return created.value;
 }
 
 /** Réinitialise le cache (tests uniquement). */

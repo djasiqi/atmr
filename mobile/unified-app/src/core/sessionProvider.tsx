@@ -559,14 +559,14 @@ export function SessionProvider({ children }: PropsWithChildren) {
     [queryClient]
   );
 
-  const logout = ReactRuntime.useCallback(() => {
-    clearSessionState({
-      status: "idle",
-      error: null,
-      journalEvent: "session.logout",
-    });
-    void bootstrapSession();
-  }, [bootstrapSession, clearSessionState]);
+const logout = ReactRuntime.useCallback(async () => {
+  clearSessionState({
+    status: "idle",
+    error: null,
+    journalEvent: "session.logout",
+  });
+  // Pas de bootstrap automatique après logout — évite les courses avec un login concurrent.
+}, [clearSessionState]);
 
   ReactRuntime.useEffect(() => {
     return realtimeManager.onAuthExhausted((reason, code) => {
@@ -578,22 +578,14 @@ export function SessionProvider({ children }: PropsWithChildren) {
         reason,
         error_code: code ?? null,
         terminal: reason === "terminal",
+        // Ne jamais logout / clearSession ici : panne socket ≠ révocation session.
+        action: "degraded_polling",
       });
-      if (!isFeatureEnabled("realtime_auth_exhaustion_guard_enabled")) {
-        logout();
-        return;
-      }
-      const message =
-        reason === "terminal"
-          ? "Session live terminee. Reconnectez-vous pour reprendre le suivi mission."
-          : "Session live expiree apres plusieurs tentatives. Reconnectez-vous pour reprendre le suivi mission.";
-      clearSessionState({
-        status: "error",
-        error: message,
-        journalEvent: "session.realtime_auth_exhausted",
-      });
+      // Le realtimeManager bascule déjà en mode dégradé/polling.
+      // Un refresh REST éventuel est géré par le coordinateur auth (vague 401),
+      // sans purge SecureStore ni quarantaine GPS.
     });
-  }, [clearSessionState, logout]);
+  }, []);
 
   const value = ReactRuntime.useMemo(
     () => ({

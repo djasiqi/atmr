@@ -207,6 +207,7 @@ from .payment import Payment
 from .worldline_webhook_event import WorldlineWebhookEvent
 from .profiling_metrics import ProfilingMetrics  # ✅ 3.4: Profiling automatique
 from .refresh_token import RefreshToken
+from .mobile_device_session import AuthRotationResult, MobileDeviceSession, MobileDeviceSessionStatus
 from .rl_feedback import RLFeedback
 from .rl_suggestion import RLSuggestion
 from .rl_suggestion_metric import RLSuggestionMetric
@@ -382,6 +383,9 @@ __all__ = [
     "RealtimeEvent",
     "RealtimeEventType",
     "RefreshToken",
+    "MobileDeviceSession",
+    "MobileDeviceSessionStatus",
+    "AuthRotationResult",
     "RequestOffer",  # ✅ ÉTAPE 4: Offres de transport
     "RequestStatus",  # ✅ Statut demande transport
     "CarrierSource",  # ✅ Mode d'exécution LIRIE / externe

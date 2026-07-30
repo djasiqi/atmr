@@ -3,10 +3,13 @@
  * l'objet driver complet à la carte quand seuls lat/lng changent côté métier.
  */
 
-import { getDriverStatus } from './mapUtils';
+import { getDriverStatus, getFreshnessStatus } from './mapUtils';
 
 /** Couleur marqueur carte pour chauffeur en mode batterie restreinte (Tailwind orange-500). */
 export const CONSTRAINED_MARKER_COLOR = '#f97316';
+
+/** Couleur marqueur GPS hors ligne / last_known (gris slate). */
+export const GPS_OFFLINE_MARKER_COLOR = '#94A3B8';
 
 function numOrNull(value) {
   const n = Number(value);
@@ -24,6 +27,14 @@ const CONSTRAINED_DRIVER_STATUSES = new Set([
   'available_constrained',
 ]);
 
+const FRESH_GPS = new Set(['live', 'recent']);
+const NON_LIVE_GPS = new Set([
+  'stale',
+  'last_known',
+  'offline',
+  'offline_unknown',
+]);
+
 /**
  * Détecte si un chauffeur est en mode "contraint" (app figée / position figée à cause
  * d'une optimisation batterie de l'OS). Signal métier réutilisé par la carte, la liste
@@ -34,6 +45,8 @@ export function isDriverConstrained(driver) {
   if (!driver) return false;
   const presence = String(driver.presence_status || '').toLowerCase();
   if (presence === 'degraded_constrained') return true;
+  const tracking = String(driver.tracking_display_status || '').toLowerCase();
+  if (tracking === 'degraded_constrained') return true;
   const status = String(driver.status || '').toLowerCase();
   return CONSTRAINED_DRIVER_STATUSES.has(status);
 }
@@ -47,14 +60,96 @@ export function getDriverConstraintReason(driver) {
 }
 
 /**
- * Statut visuel carte (clé couleur marqueur). Priorise `constrained` sur le statut métier.
+ * Résout la fraîcheur GPS pour la carte (tracking_display_status / location_status / âge).
+ * @param {object} driver
+ */
+export function resolveGpsFreshness(driver) {
+  if (!driver) return 'offline';
+  const source = String(driver.position_source || '').toLowerCase();
+  if (source === 'company_fallback') return 'company_fallback';
+  if (source === 'db_fallback') {
+    const freshness = getFreshnessStatus(driver);
+    if (freshness === 'live' || freshness === 'recent') return 'last_known';
+    return freshness === 'offline' || freshness === 'offline_unknown' ? freshness : 'last_known';
+  }
+  return getFreshnessStatus(driver);
+}
+
+/**
+ * Projection duale métier / GPS pour la carte.
+ * @param {object} driver
+ * @param {{ isFallback?: boolean }} [opts]
+ * @returns {{
+ *   businessStatus: string,
+ *   gpsFreshness: string,
+ *   positionSource: string|null,
+ *   visualTreatment: string,
+ *   lastPositionAt: string|null,
+ *   visualStatus: string,
+ * }}
+ */
+export function resolveDriverMapProjection(driver, { isFallback = false } = {}) {
+  const businessStatus = isFallback ? 'offline' : getDriverStatus(driver);
+  const positionSource = isFallback
+    ? 'company_fallback'
+    : (driver?.position_source != null ? String(driver.position_source) : null);
+  const gpsFreshness = isFallback ? 'company_fallback' : resolveGpsFreshness(driver);
+  const lastPositionAt =
+    driver?.recorded_at
+    ?? driver?.timestamp
+    ?? driver?.received_at
+    ?? null;
+  const constrained = !isFallback && isDriverConstrained(driver);
+
+  let visualTreatment = 'business';
+  let visualStatus = businessStatus;
+
+  if (isFallback || gpsFreshness === 'company_fallback') {
+    visualTreatment = 'company_fallback';
+    visualStatus = 'offline';
+  } else if (
+    gpsFreshness === 'offline'
+    || gpsFreshness === 'offline_unknown'
+  ) {
+    visualTreatment = 'gps_offline';
+    visualStatus = 'offline';
+  } else if (
+    gpsFreshness === 'stale'
+    || gpsFreshness === 'last_known'
+    || positionSource === 'db_fallback'
+  ) {
+    // Contrainte + last_known : traitement non-live dominant (pas d'orange « actif »).
+    visualTreatment = constrained ? 'gps_stale_constrained' : 'gps_stale';
+    visualStatus = 'offline';
+  } else if (constrained && FRESH_GPS.has(gpsFreshness)) {
+    visualTreatment = 'constrained';
+    visualStatus = 'constrained';
+  } else if (FRESH_GPS.has(gpsFreshness)) {
+    visualTreatment = 'business';
+    visualStatus = businessStatus;
+  } else {
+    visualTreatment = 'gps_offline';
+    visualStatus = 'offline';
+  }
+
+  return {
+    businessStatus,
+    gpsFreshness,
+    positionSource,
+    visualTreatment,
+    lastPositionAt: lastPositionAt != null ? String(lastPositionAt) : null,
+    visualStatus,
+  };
+}
+
+/**
+ * Statut visuel carte (clé couleur marqueur).
+ * GPS non-live / db_fallback / offline dominent le statut métier.
  * @param {object} driver
  * @param {{ isFallback?: boolean }} [opts]
  */
 export function resolveDriverMapVisualStatus(driver, { isFallback = false } = {}) {
-  if (isFallback) return 'offline';
-  if (isDriverConstrained(driver)) return 'constrained';
-  return getDriverStatus(driver);
+  return resolveDriverMapProjection(driver, { isFallback }).visualStatus;
 }
 
 /**
@@ -64,13 +159,23 @@ export function resolveDriverMapVisualStatus(driver, { isFallback = false } = {}
  */
 export function resolveDriverMapMarkerColor(visualStatus, statusColors = {}) {
   if (visualStatus === 'constrained') return CONSTRAINED_MARKER_COLOR;
+  if (visualStatus === 'offline' && statusColors.offline) return statusColors.offline;
   if (visualStatus === 'available' && statusColors.available) return statusColors.available;
   return statusColors[visualStatus] ?? statusColors.available ?? CONSTRAINED_MARKER_COLOR;
 }
 
-/** Champs minimaux pour DriverLiveMap (position + statut visuel). */
+/** True si la position ne doit pas compter comme « localisée live ». */
+export function isNonLiveGpsPosition(driver, { isFallback = false } = {}) {
+  if (isFallback) return true;
+  const { gpsFreshness, positionSource } = resolveDriverMapProjection(driver, { isFallback });
+  if (positionSource === 'db_fallback' || positionSource === 'company_fallback') return true;
+  return NON_LIVE_GPS.has(gpsFreshness) || gpsFreshness === 'company_fallback';
+}
+
+/** Champs minimaux pour DriverLiveMap (position + statut visuel + fraîcheur GPS). */
 export function projectDriverForMap(driver) {
   if (!driver || driver.id == null) return null;
+  const projection = resolveDriverMapProjection(driver);
   return {
     id: driver.id,
     latitude: numOrNull(driver.latitude ?? driver.lat),
@@ -78,6 +183,12 @@ export function projectDriverForMap(driver) {
     status: driver.status ?? null,
     location_status: driver.location_status ?? null,
     presence_status: driver.presence_status ?? null,
+    tracking_display_status: driver.tracking_display_status ?? null,
+    position_source: driver.position_source ?? null,
+    offline_reason: driver.offline_reason ?? null,
+    recorded_at: driver.recorded_at ?? null,
+    received_at: driver.received_at ?? null,
+    timestamp: driver.timestamp ?? null,
     device_health: driver.device_health ?? null,
     last_seen_seconds: driver.last_seen_seconds ?? null,
     is_active: driver.is_active ?? true,
@@ -91,6 +202,11 @@ export function projectDriverForMap(driver) {
     current_booking_id: driver.current_booking_id ?? null,
     vehicle_name: driver.vehicle_name ?? null,
     vehicle_model: driver.vehicle_model ?? null,
+    businessStatus: projection.businessStatus,
+    gpsFreshness: projection.gpsFreshness,
+    positionSource: projection.positionSource,
+    visualTreatment: projection.visualTreatment,
+    lastPositionAt: projection.lastPositionAt,
   };
 }
 

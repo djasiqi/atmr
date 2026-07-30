@@ -79,6 +79,10 @@ class RefreshToken(db.Model):
         DateTime(timezone=True), nullable=True
     )
 
+    # Session durable mobile (nullable pendant rollout B1)
+    session_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    session_generation: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
     # Relation avec User
     user = relationship("User", backref="refresh_tokens")
 
