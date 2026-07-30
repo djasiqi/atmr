@@ -54,9 +54,15 @@ export function VoiceMessageBar({ uri, isOwn }: VoiceMessageBarProps) {
     return audioRef.current;
   }, [uri]);
 
+  const [error, setError] = useState<string | null>(null);
+
   const toggle = useCallback(() => {
     const el = ensureAudio();
-    if (!el) return;
+    if (!el) {
+      setError("Impossible de lire ce message vocal.");
+      return;
+    }
+    setError(null);
     if (playing) {
       el.pause();
       setPlaying(false);
@@ -65,7 +71,10 @@ export function VoiceMessageBar({ uri, isOwn }: VoiceMessageBarProps) {
     void el
       .play()
       .then(() => setPlaying(true))
-      .catch(() => setPlaying(false));
+      .catch(() => {
+        setPlaying(false);
+        setError("Impossible de lire ce message vocal.");
+      });
   }, [ensureAudio, playing]);
 
   const progress =
@@ -123,9 +132,14 @@ export function VoiceMessageBar({ uri, isOwn }: VoiceMessageBarProps) {
         <AppText
           variant="caption"
           scaleRole="chrome"
-          style={[styles.durationText, isOwn ? styles.durationOwn : styles.durationIn]}
+          style={[
+            styles.durationText,
+            isOwn ? styles.durationOwn : styles.durationIn,
+            error ? styles.durationError : null,
+            error && isOwn ? styles.durationErrorOwn : null,
+          ]}
         >
-          {durationLabel}
+          {error ?? durationLabel}
         </AppText>
       </View>
     </Pressable>

@@ -1,13 +1,12 @@
 /**
  * Panneau pédagogique tracking — informatif, non bloquant pour la navigation.
  *
- * - onboarding : premier contact
- * - needs_attention : réglages incomplets ou révoqués (sans reset onboarding)
+ * Assistant de correction contextuel : n'affiche que les actions encore nécessaires.
+ * Ne confond pas non vérifiable / non configuré / non applicable.
  *
  * NB : la lecture des prérequis device (permissions Location, GPS) est
  * faite directement via expo-location, indépendamment du feature flag
- * `tracking_background_enabled`. Le flag contrôle l'orchestration runtime
- * du tracking BG, pas l'état réel des permissions OS.
+ * `tracking_background_enabled`.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -21,10 +20,18 @@ import {
 } from "react-native";
 import * as Location from "expo-location";
 
-import { isExpoLocationPermissionGranted } from "../../../core/location/locationPermissionState";
+import {
+  isExpoLocationPermissionGranted,
+  resolveLocationAccuracy,
+} from "../../../core/location/locationPermissionState";
 import { markNotificationDisclosureAccepted } from "../../../core/notifications/notificationDisclosurePersistence";
+import { emitDriverTelemetry } from "../../../core/observability/driverTelemetry";
 import { useAccessibilityScale } from "../../../design/responsive/useAccessibilityScale";
-import { semanticDanger, semanticSuccess, semanticWarning } from "../../../design/responsive/colors";
+import {
+  semanticDanger,
+  semanticSuccess,
+  semanticWarning,
+} from "../../../design/responsive/colors";
 import { AppText } from "../../../design/ui/AppText";
 import { createShadow } from "../../../styles/shadowStyles";
 import {
@@ -35,12 +42,29 @@ import {
 } from "../services/batteryOptimization";
 import {
   openMissionLiveTrackingDisclosureForReadiness,
+  type ReadinessLocationAction,
 } from "../services/missionLiveTrackingDisclosureBridge";
+import {
+  isOemGuidanceAcknowledgedFor,
+  markOemGuidanceAcknowledged,
+} from "../services/oemGuidancePersistence";
 import {
   markTrackingOnboarded,
   setTrackingNeedsAttention,
 } from "../services/trackingReadinessPersistence";
+import {
+  batteryActionLabel,
+  computeTrackingReady,
+  locationActionLabel,
+  resolveBatteryReadinessStatus,
+  resolveLocationReadinessAction,
+  shouldApplyRefreshSequence,
+  shouldShowOemGuidance,
+  type TrackingReadinessSnapshot,
+} from "../services/trackingReadinessModel";
 import { D } from "../theme/driverDashboardTheme";
+
+export type { TrackingReadinessSnapshot };
 
 const primaryButtonShadow = createShadow({
   shadowColor: D.brandDark,
@@ -50,26 +74,43 @@ const primaryButtonShadow = createShadow({
   elevation: 3,
 });
 
-export type TrackingReadinessSnapshot = {
-  ready: boolean;
-  bgPermissionGranted: boolean;
-  fgPermissionGranted: boolean;
-  notificationsGranted: boolean;
-  batteryExempt: boolean;
-  gpsEnabled: boolean;
-  oem: string | null;
-  hasOemSettings: boolean;
-};
-
 async function readNotificationsGranted(): Promise<boolean> {
   if (Platform.OS === "web") return true;
   try {
-    const Notifications = await import("expo-notifications");
+    // require : compatible mocks Jest (import() dynamique peut contourner le mock).
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- module optionnel runtime
+    const Notifications = require("expo-notifications") as {
+      getPermissionsAsync: () => Promise<{ granted?: boolean; status?: string }>;
+    };
     const perm = await Notifications.getPermissionsAsync();
     return Boolean(perm.granted || perm.status === "granted");
   } catch {
     return false;
   }
+}
+
+async function openLocationServicesSettings(): Promise<void> {
+  if (Platform.OS === "android") {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports -- Android-only
+      const IntentLauncher = require("expo-intent-launcher") as {
+        startActivityAsync: (action: string, params?: Record<string, unknown>) => Promise<unknown>;
+        ActivityAction?: { LOCATION_SOURCE_SETTINGS?: string };
+      };
+      const action =
+        IntentLauncher.ActivityAction?.LOCATION_SOURCE_SETTINGS ??
+        "android.settings.LOCATION_SOURCE_SETTINGS";
+      await IntentLauncher.startActivityAsync(action);
+      return;
+    } catch {
+      /* fallback réglages app */
+    }
+  }
+  if (Platform.OS === "ios") {
+    await Linking.openURL("app-settings:").catch(() => Linking.openSettings());
+    return;
+  }
+  await Linking.openSettings();
 }
 
 export async function evaluateTrackingReadiness(): Promise<TrackingReadinessSnapshot> {
@@ -84,16 +125,25 @@ export async function evaluateTrackingReadiness(): Promise<TrackingReadinessSnap
 
   const fgPermissionGranted = isExpoLocationPermissionGranted(fg);
   const bgPermissionGranted = isExpoLocationPermissionGranted(bg);
+  const locationAccuracy = resolveLocationAccuracy(fg);
   const gpsEnabled = Boolean(servicesEnabled);
+  const batteryStatus = resolveBatteryReadinessStatus({
+    platformOs: Platform.OS,
+    checked: battery.checked,
+    isIgnoring: battery.isIgnoring,
+  });
   const batteryExempt =
-    Platform.OS !== "android" || !battery.checked || battery.isIgnoring !== false;
+    batteryStatus === "exempt" || batteryStatus === "not_applicable";
+  const oemGuidanceAcknowledged = await isOemGuidanceAcknowledgedFor(oem.oem);
 
-  const ready =
-    gpsEnabled &&
-    bgPermissionGranted &&
-    fgPermissionGranted &&
-    notificationsGranted &&
-    batteryExempt;
+  const ready = computeTrackingReady({
+    fgPermissionGranted,
+    bgPermissionGranted,
+    locationAccuracy,
+    gpsEnabled,
+    notificationsGranted,
+    batteryStatus,
+  });
 
   return {
     ready,
@@ -101,9 +151,12 @@ export async function evaluateTrackingReadiness(): Promise<TrackingReadinessSnap
     fgPermissionGranted,
     notificationsGranted,
     batteryExempt,
+    batteryStatus,
+    locationAccuracy,
     gpsEnabled,
     oem: oem.oem,
     hasOemSettings: oem.hasOemSettings,
+    oemGuidanceAcknowledged,
   };
 }
 
@@ -116,28 +169,84 @@ type Props = {
   onDismiss?: () => void;
 };
 
+type GateAction = {
+  key: string;
+  label: string;
+  onPress: () => void;
+  variant: "primary" | "secondary";
+};
+
+type ChecklistTone = "ok" | "bad" | "warn" | "na";
+
+type ChecklistItem = {
+  key: string;
+  label: string;
+  tone: ChecklistTone;
+};
+
+function chunkActions<T>(items: T[], size: number): T[][] {
+  const rows: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    rows.push(items.slice(i, i + size));
+  }
+  return rows;
+}
+
+function toneColor(tone: ChecklistTone): string {
+  switch (tone) {
+    case "ok":
+      return semanticSuccess.fg;
+    case "bad":
+      return semanticDanger.fg;
+    case "warn":
+      return semanticWarning.fg;
+    case "na":
+      return "#64748B";
+  }
+}
+
+function toneMark(tone: ChecklistTone): string {
+  if (tone === "ok") return "✓";
+  if (tone === "na") return "–";
+  if (tone === "warn") return "!";
+  return "✗";
+}
+
 export function DriverTrackingReadinessGate(props: Props) {
   const { onReadyChange, silent, onDismiss } = props;
-  const { shouldStackRows } = useAccessibilityScale();
+  const { fontScale, isVeryLargeText } = useAccessibilityScale();
+  /** Empilement uniquement si police vraiment extrême ; sinon grille 2–3 colonnes (chrome capped). */
+  const stackActions = fontScale >= 1.75;
+  const columnsPerRow = stackActions ? 1 : isVeryLargeText ? 2 : 3;
   const [loading, setLoading] = useState(true);
   const [snapshot, setSnapshot] = useState<TrackingReadinessSnapshot | null>(null);
   const onboardedRef = useRef(false);
+  const refreshSequenceRef = useRef(0);
 
   const refresh = useCallback(async () => {
+    const sequence = ++refreshSequenceRef.current;
     setLoading(true);
-    const next = await evaluateTrackingReadiness();
-    setSnapshot(next);
-    onReadyChange?.(next.ready);
-    if (next.ready) {
-      if (!onboardedRef.current) {
-        onboardedRef.current = true;
-        void markTrackingOnboarded().catch(() => undefined);
+    try {
+      const next = await evaluateTrackingReadiness();
+      if (!shouldApplyRefreshSequence(sequence, refreshSequenceRef.current)) {
+        return;
       }
-      void setTrackingNeedsAttention(false).catch(() => undefined);
-    } else {
-      void setTrackingNeedsAttention(true).catch(() => undefined);
+      setSnapshot(next);
+      onReadyChange?.(next.ready);
+      if (next.ready) {
+        if (!onboardedRef.current) {
+          onboardedRef.current = true;
+          void markTrackingOnboarded().catch(() => undefined);
+        }
+        void setTrackingNeedsAttention(false).catch(() => undefined);
+      } else {
+        void setTrackingNeedsAttention(true).catch(() => undefined);
+      }
+    } finally {
+      if (shouldApplyRefreshSequence(sequence, refreshSequenceRef.current)) {
+        setLoading(false);
+      }
     }
-    setLoading(false);
   }, [onReadyChange]);
 
   useEffect(() => {
@@ -148,18 +257,60 @@ export function DriverTrackingReadinessGate(props: Props) {
     return () => sub.remove();
   }, [refresh]);
 
-  const requestBgWithDisclosure = useCallback(() => {
-    openMissionLiveTrackingDisclosureForReadiness(() => {
-      void refresh();
-    });
-  }, [refresh]);
+  const runLocationAction = useCallback(
+    (action: Exclude<ReturnType<typeof resolveLocationReadinessAction>, null>) => {
+      if (action === "enable_precise" || action === "verify_accuracy") {
+        emitDriverTelemetry("tracking.readiness.action.location_accuracy", {
+          source: "driver.tracking_readiness_gate",
+          reason: action,
+        });
+        void (async () => {
+          if (action === "enable_precise") {
+            try {
+              const fg = await Location.requestForegroundPermissionsAsync();
+              if (resolveLocationAccuracy(fg) === "precise") {
+                await refresh();
+                return;
+              }
+            } catch {
+              /* ouvrir les réglages ci-dessous */
+            }
+          }
+          await Linking.openSettings().catch(() => undefined);
+          await refresh();
+        })();
+        return;
+      }
+
+      const bridgeAction: ReadinessLocationAction =
+        action === "background" ? "background" : "foreground";
+
+      emitDriverTelemetry(
+        bridgeAction === "foreground"
+          ? "tracking.readiness.action.location_foreground"
+          : "tracking.readiness.action.location_background",
+        { source: "driver.tracking_readiness_gate" }
+      );
+
+      openMissionLiveTrackingDisclosureForReadiness(() => {
+        void refresh();
+      }, bridgeAction);
+    },
+    [refresh]
+  );
 
   const requestNotifications = useCallback(() => {
+    emitDriverTelemetry("tracking.readiness.action.notifications", {
+      source: "driver.tracking_readiness_gate",
+    });
     void (async () => {
       try {
         await markNotificationDisclosureAccepted();
         if (Platform.OS !== "web") {
-          const Notifications = await import("expo-notifications");
+          // eslint-disable-next-line @typescript-eslint/no-require-imports -- module optionnel runtime
+          const Notifications = require("expo-notifications") as {
+            requestPermissionsAsync: () => Promise<unknown>;
+          };
           await Notifications.requestPermissionsAsync();
         }
       } catch {
@@ -169,72 +320,190 @@ export function DriverTrackingReadinessGate(props: Props) {
     })();
   }, [refresh]);
 
-  const checklist = useMemo(() => {
+  const requestBattery = useCallback(() => {
+    emitDriverTelemetry("tracking.readiness.action.battery", {
+      source: "driver.tracking_readiness_gate",
+      reason: snapshot?.batteryStatus ?? null,
+    });
+    void requestIgnoreBatteryOptimizations().finally(() => {
+      void refresh();
+    });
+  }, [refresh, snapshot?.batteryStatus]);
+
+  const requestOem = useCallback(() => {
+    emitDriverTelemetry("tracking.readiness.action.oem", {
+      source: "driver.tracking_readiness_gate",
+      oem: snapshot?.oem ?? null,
+    });
+    void (async () => {
+      const result = await openOemBatterySettings();
+      if (result.opened && snapshot?.oem) {
+        await markOemGuidanceAcknowledged(snapshot.oem).catch(() => undefined);
+      } else if (!result.opened) {
+        await Linking.openSettings().catch(() => undefined);
+      }
+      await refresh();
+    })();
+  }, [refresh, snapshot?.oem]);
+
+  const requestGps = useCallback(() => {
+    emitDriverTelemetry("tracking.readiness.action.gps_settings", {
+      source: "driver.tracking_readiness_gate",
+    });
+    void openLocationServicesSettings().finally(() => {
+      void refresh();
+    });
+  }, [refresh]);
+
+  const checklist = useMemo((): ChecklistItem[] => {
     if (!snapshot) return [];
-    return [
+    const accuracyTone: ChecklistTone =
+      snapshot.locationAccuracy === "precise"
+        ? "ok"
+        : snapshot.locationAccuracy === "approximate"
+          ? "bad"
+          : snapshot.fgPermissionGranted
+            ? "warn"
+            : "bad";
+    const batteryTone: ChecklistTone =
+      snapshot.batteryStatus === "not_applicable"
+        ? "na"
+        : snapshot.batteryStatus === "exempt"
+          ? "ok"
+          : snapshot.batteryStatus === "restricted"
+            ? "bad"
+            : "warn";
+
+    const items: ChecklistItem[] = [
       {
-        ok: snapshot.fgPermissionGranted,
+        key: "fg",
         label: "Localisation autorisée",
+        tone: snapshot.fgPermissionGranted ? "ok" : "bad",
       },
       {
-        ok: snapshot.bgPermissionGranted,
+        key: "accuracy",
+        label:
+          snapshot.locationAccuracy === "approximate"
+            ? "Position précise requise"
+            : "Précision de localisation",
+        tone: accuracyTone,
+      },
+      {
+        key: "bg",
         label: "Localisation arrière-plan (Toujours)",
+        tone: snapshot.bgPermissionGranted ? "ok" : "bad",
       },
       {
-        ok: snapshot.notificationsGranted,
-        label: "Notifications autorisées",
-      },
-      {
-        ok: snapshot.batteryExempt,
-        label: "Optimisation batterie désactivée",
-      },
-      {
-        ok: snapshot.gpsEnabled,
+        key: "gps",
         label: "GPS activé",
+        tone: snapshot.gpsEnabled ? "ok" : "bad",
+      },
+      {
+        key: "notifications",
+        label: "Notifications autorisées",
+        tone: snapshot.notificationsGranted ? "ok" : "bad",
       },
     ];
+
+    if (snapshot.batteryStatus !== "not_applicable") {
+      items.push({
+        key: "battery",
+        label:
+          snapshot.batteryStatus === "unknown"
+            ? "Batterie à vérifier"
+            : "Optimisation batterie désactivée",
+        tone: batteryTone,
+      });
+    }
+
+    return items;
   }, [snapshot]);
 
-  const primaryActions = useMemo(() => {
-    const actions: Array<{ key: string; label: string; onPress: () => void }> = [
-      {
-        key: "location",
-        label: "Localisation",
-        onPress: () => void requestBgWithDisclosure(),
-      },
-    ];
-    if (!snapshot?.notificationsGranted) {
+  const showOem = snapshot
+    ? shouldShowOemGuidance({
+        hasOemSettings: snapshot.hasOemSettings,
+        oemGuidanceAcknowledged: snapshot.oemGuidanceAcknowledged,
+        batteryStatus: snapshot.batteryStatus,
+      })
+    : false;
+
+  const gateActions = useMemo((): GateAction[] => {
+    const actions: GateAction[] = [];
+    if (!snapshot) return actions;
+
+    const locationAction = resolveLocationReadinessAction({
+      fgPermissionGranted: snapshot.fgPermissionGranted,
+      bgPermissionGranted: snapshot.bgPermissionGranted,
+      locationAccuracy: snapshot.locationAccuracy,
+    });
+    if (locationAction) {
+      actions.push({
+        key: `location_${locationAction}`,
+        label: locationActionLabel(locationAction),
+        onPress: () => runLocationAction(locationAction),
+        variant: "primary",
+      });
+    }
+
+    if (!snapshot.gpsEnabled) {
+      actions.push({
+        key: "gps",
+        label: "Activer le GPS",
+        onPress: requestGps,
+        variant: "primary",
+      });
+    }
+
+    if (!snapshot.notificationsGranted) {
       actions.push({
         key: "notifications",
         label: "Notifications",
         onPress: requestNotifications,
+        variant: "primary",
       });
     }
-    actions.push({
-      key: "battery",
-      label: "Batterie",
-      onPress: () => void requestIgnoreBatteryOptimizations(),
-    });
-    if (snapshot?.hasOemSettings) {
+
+    const batteryLabel = batteryActionLabel(snapshot.batteryStatus);
+    if (batteryLabel) {
+      actions.push({
+        key: "battery",
+        label: batteryLabel,
+        onPress: requestBattery,
+        variant: "primary",
+      });
+    }
+
+    if (showOem) {
       actions.push({
         key: "oem",
-        label: "Fabricant",
-        onPress: () => void openOemBatterySettings(),
+        label: "Guide fabricant",
+        onPress: requestOem,
+        variant: "primary",
       });
     }
-    return actions;
-  }, [requestBgWithDisclosure, requestNotifications, snapshot?.hasOemSettings, snapshot?.notificationsGranted]);
 
-  const primaryRows = useMemo(() => {
-    if (shouldStackRows) {
-      return primaryActions.map((action) => [action]);
-    }
-    const rows: Array<typeof primaryActions> = [];
-    for (let i = 0; i < primaryActions.length; i += 2) {
-      rows.push(primaryActions.slice(i, i + 2));
-    }
-    return rows;
-  }, [primaryActions, shouldStackRows]);
+    actions.push({
+      key: "settings",
+      label: "Réglages",
+      onPress: () => Linking.openSettings(),
+      variant: "secondary",
+    });
+
+    return actions;
+  }, [
+    snapshot,
+    showOem,
+    runLocationAction,
+    requestGps,
+    requestNotifications,
+    requestBattery,
+    requestOem,
+  ]);
+
+  const actionRows = useMemo(
+    () => chunkActions(gateActions, columnsPerRow),
+    [columnsPerRow, gateActions]
+  );
 
   if (silent) return null;
 
@@ -271,86 +540,70 @@ export function DriverTrackingReadinessGate(props: Props) {
         ) : null}
       </View>
       <AppText variant="bodyMuted" style={styles.subtitle} scaleRole="content">
-        Avant votre première mission, vérifiez les réglages ci-dessous.
+        Corrigez uniquement les éléments manquants ci-dessous.
       </AppText>
       {checklist.map((item) => (
         <AppText
-          key={item.label}
+          key={item.key}
           variant="body"
           scaleRole="content"
-          style={[styles.checkItem, { color: item.ok ? semanticSuccess.fg : semanticDanger.fg }]}
+          style={[styles.checkItem, { color: toneColor(item.tone) }]}
         >
-          {item.ok ? "✓" : "✗"} {item.label}
+          {toneMark(item.tone)} {item.label}
         </AppText>
       ))}
-      {snapshot?.hasOemSettings ? (
+      {showOem ? (
         <AppText variant="caption" style={styles.oemHint} scaleRole="content">
-          Fabricant détecté ({snapshot.oem}). Ouvrez aussi les réglages avancés du fabricant
-          (auto-start / apps protégées).
+          Guide fabricant ({snapshot?.oem}). Ouvrez les réglages avancés (auto-start /
+          apps protégées) — l’application ne peut pas confirmer ce réglage
+          techniquement.
         </AppText>
       ) : null}
       <View style={styles.actions}>
-        {primaryRows.map((row) => (
+        {actionRows.map((row) => (
           <View
             key={row.map((a) => a.key).join("-")}
-            style={[styles.actionsRow, shouldStackRows && styles.actionsRowStacked]}
+            style={[styles.actionsRow, stackActions && styles.actionsRowStacked]}
           >
-            {row.map((action) => (
-              <Pressable
-                key={action.key}
-                style={({ pressed }) => [
-                  styles.buttonPrimary,
-                  row.length === 1 || shouldStackRows ? styles.buttonFull : styles.buttonHalf,
-                  pressed && styles.buttonPressed,
-                ]}
-                onPress={action.onPress}
-                accessibilityRole="button"
-                accessibilityLabel={action.label}
-              >
-                <AppText variant="label" style={styles.buttonPrimaryText} scaleRole="chrome">
-                  {action.label}
-                </AppText>
-              </Pressable>
-            ))}
+            {row.map((action) => {
+              const isPrimary = action.variant === "primary";
+              return (
+                <Pressable
+                  key={action.key}
+                  style={({ pressed }) => [
+                    isPrimary ? styles.buttonPrimary : styles.buttonSecondary,
+                    stackActions || row.length === 1 ? styles.buttonFull : styles.buttonCell,
+                    pressed && (isPrimary ? styles.buttonPressed : styles.buttonSecondaryPressed),
+                  ]}
+                  onPress={action.onPress}
+                  accessibilityRole="button"
+                  accessibilityLabel={action.label}
+                >
+                  <AppText
+                    variant="label"
+                    style={isPrimary ? styles.buttonPrimaryText : styles.buttonSecondaryText}
+                    scaleRole="chrome"
+                    numberOfLines={2}
+                  >
+                    {action.label}
+                  </AppText>
+                </Pressable>
+              );
+            })}
           </View>
         ))}
-        <View style={[styles.actionsRow, shouldStackRows && styles.actionsRowStacked]}>
-          <Pressable
-            style={({ pressed }) => [
-              styles.buttonSecondary,
-              shouldStackRows ? styles.buttonFull : styles.buttonHalf,
-              pressed && styles.buttonSecondaryPressed,
-            ]}
-            onPress={() => Linking.openSettings()}
-            accessibilityRole="button"
-            accessibilityLabel="Ouvrir les réglages système"
-          >
-            <AppText variant="label" style={styles.buttonSecondaryText} scaleRole="chrome">
-              Réglages
-            </AppText>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [
-              styles.buttonSecondary,
-              shouldStackRows ? styles.buttonFull : styles.buttonHalf,
-              pressed && styles.buttonSecondaryPressed,
-            ]}
-            onPress={() => void refresh()}
-            accessibilityRole="button"
-            accessibilityLabel="Revérifier les prérequis tracking"
-          >
-            <AppText variant="label" style={styles.buttonSecondaryText} scaleRole="chrome">
-              Revérifier
-            </AppText>
-          </Pressable>
-        </View>
       </View>
-      <View style={[styles.warningBox, { backgroundColor: semanticWarning.bg }]}>
-        <AppText variant="body" style={{ color: semanticWarning.fg }} scaleRole="content">
-          Le démarrage d&apos;une mission suivie (écran verrouillé) requiert ces réglages.
-          Vous pouvez continuer à consulter vos missions.
+      <Pressable
+        onPress={() => void refresh()}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel="Revérifier l’état du tracking"
+        style={styles.recheckLink}
+      >
+        <AppText variant="caption" style={styles.recheckLinkText} scaleRole="chrome">
+          État incorrect ? Revérifier
         </AppText>
-      </View>
+      </Pressable>
     </View>
   );
 }
@@ -393,18 +646,18 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
   actions: {
-    gap: 10,
-    marginTop: 10,
+    gap: 6,
+    marginTop: 8,
   },
   actionsRow: {
     flexDirection: "row",
-    gap: 10,
+    gap: 6,
     alignItems: "stretch",
   },
   actionsRowStacked: {
     flexDirection: "column",
   },
-  buttonHalf: {
+  buttonCell: {
     flex: 1,
     minWidth: 0,
   },
@@ -413,11 +666,11 @@ const styles = StyleSheet.create({
     alignSelf: "stretch",
   },
   buttonPrimary: {
-    minHeight: 48,
+    minHeight: 36,
     backgroundColor: D.brandCta,
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
@@ -428,15 +681,16 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontWeight: "700",
     textAlign: "center",
+    fontSize: 12,
   },
   buttonPressed: {
     opacity: 0.88,
   },
   buttonSecondary: {
-    minHeight: 48,
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
+    minHeight: 36,
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#FFFFFF",
@@ -451,21 +705,15 @@ const styles = StyleSheet.create({
     color: D.brandCta,
     fontWeight: "700",
     textAlign: "center",
+    fontSize: 12,
   },
-  warningBox: {
-    borderRadius: 10,
-    padding: 12,
-    marginTop: 8,
+  recheckLink: {
+    alignSelf: "center",
+    paddingVertical: 4,
+    marginTop: 2,
   },
-  readyBox: {
-    backgroundColor: semanticSuccess.bg,
-    borderRadius: 12,
-  },
-  readyTitle: {
-    color: semanticSuccess.fg,
-    fontWeight: "700",
-  },
-  readyBody: {
-    color: semanticSuccess.fg,
+  recheckLinkText: {
+    color: "#64748B",
+    textDecorationLine: "underline",
   },
 });

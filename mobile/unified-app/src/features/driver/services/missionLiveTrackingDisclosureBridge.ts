@@ -1,10 +1,17 @@
 /**
  * Point de vérité unique pour la modale « Suivi de mission » (P2).
+ *
+ * Ordre Play verrouillé pour le readiness :
+ * disclosure complète (si 1ʳᵉ fois) → FG → précision → BG (seulement si FG précis OK).
  */
 import { Linking, Platform } from "react-native";
 import * as Location from "expo-location";
 
 import { isFeatureEnabled } from "../../../core/featureFlags/registry";
+import {
+  isExpoLocationPermissionGranted,
+  resolveLocationAccuracy,
+} from "../../../core/location/locationPermissionState";
 import { emitDriverTelemetry } from "../../../core/observability/driverTelemetry";
 import type { DriverTransitionStatus } from "../types";
 import {
@@ -30,11 +37,17 @@ export type MissionLiveTrackingDisclosureSnapshot = {
   compact: boolean;
 };
 
+export type ReadinessLocationAction =
+  | "foreground"
+  | "background"
+  | "accuracy";
+
 type PendingRequest = {
   missionId: number | null;
   target: DriverTransitionStatus | null;
   onProceed: (() => void) | null;
   onComplete: (() => void) | null;
+  readinessAction: ReadinessLocationAction | null;
 };
 
 const INITIAL: MissionLiveTrackingDisclosureSnapshot = {
@@ -50,6 +63,7 @@ let pendingRequest: PendingRequest = {
   target: null,
   onProceed: null,
   onComplete: null,
+  readinessAction: null,
 };
 let permissionRequestedThisAttempt = false;
 
@@ -72,6 +86,7 @@ function closeDisclosure(): void {
     target: null,
     onProceed: null,
     onComplete: null,
+    readinessAction: null,
   };
   setSnapshot({ ...INITIAL });
 }
@@ -87,6 +102,14 @@ export function subscribeMissionLiveTrackingDisclosure(listener: () => void): ()
   };
 }
 
+function backgroundTrackingAvailable(): boolean {
+  return (
+    isFeatureEnabled("tracking_background_enabled") &&
+    typeof Location.requestBackgroundPermissionsAsync === "function"
+  );
+}
+
+/** Parcours mission : FG puis BG si FG accordée (après disclosure). */
 async function requestMissionTrackingPermissions(): Promise<{
   fgGranted: boolean;
   bgGranted: boolean;
@@ -94,13 +117,73 @@ async function requestMissionTrackingPermissions(): Promise<{
   const fg = await Location.requestForegroundPermissionsAsync().catch(() => ({
     granted: false,
   }));
-  if (!fg.granted) {
+  if (!isExpoLocationPermissionGranted(fg)) {
     return { fgGranted: false, bgGranted: false };
   }
-  if (
-    !isFeatureEnabled("tracking_background_enabled") ||
-    typeof Location.requestBackgroundPermissionsAsync !== "function"
-  ) {
+  if (!backgroundTrackingAvailable()) {
+    return { fgGranted: true, bgGranted: false };
+  }
+  const accuracy = resolveLocationAccuracy(fg);
+  if (accuracy !== "precise") {
+    return { fgGranted: true, bgGranted: false };
+  }
+  const bg = await Location.requestBackgroundPermissionsAsync().catch(() => ({
+    granted: false,
+  }));
+  return { fgGranted: true, bgGranted: Boolean(bg.granted) };
+}
+
+/**
+ * Parcours readiness : une anomalie à la fois ; BG seulement si FG + précision OK.
+ */
+async function requestPermissionsForReadinessAction(
+  action: ReadinessLocationAction
+): Promise<{ fgGranted: boolean; bgGranted: boolean }> {
+  if (action === "accuracy") {
+    const fg = await Location.requestForegroundPermissionsAsync().catch(() => ({
+      granted: false,
+    }));
+    const fgGranted = isExpoLocationPermissionGranted(fg);
+    return { fgGranted, bgGranted: false };
+  }
+
+  if (action === "background") {
+    const currentFg = await Location.getForegroundPermissionsAsync().catch(() => ({
+      granted: false,
+    }));
+    let fgGranted = isExpoLocationPermissionGranted(currentFg);
+    let accuracy = resolveLocationAccuracy(currentFg);
+    if (!fgGranted || accuracy !== "precise") {
+      const fg = await Location.requestForegroundPermissionsAsync().catch(() => ({
+        granted: false,
+      }));
+      fgGranted = isExpoLocationPermissionGranted(fg);
+      accuracy = resolveLocationAccuracy(fg);
+      if (!fgGranted || accuracy !== "precise") {
+        return { fgGranted, bgGranted: false };
+      }
+    }
+    if (!backgroundTrackingAvailable()) {
+      return { fgGranted: true, bgGranted: false };
+    }
+    const bg = await Location.requestBackgroundPermissionsAsync().catch(() => ({
+      granted: false,
+    }));
+    return { fgGranted: true, bgGranted: Boolean(bg.granted) };
+  }
+
+  // foreground : FG seule, puis BG seulement si précis
+  const fg = await Location.requestForegroundPermissionsAsync().catch(() => ({
+    granted: false,
+  }));
+  const fgGranted = isExpoLocationPermissionGranted(fg);
+  if (!fgGranted) {
+    return { fgGranted: false, bgGranted: false };
+  }
+  if (resolveLocationAccuracy(fg) !== "precise") {
+    return { fgGranted: true, bgGranted: false };
+  }
+  if (!backgroundTrackingAvailable()) {
     return { fgGranted: true, bgGranted: false };
   }
   const bg = await Location.requestBackgroundPermissionsAsync().catch(() => ({
@@ -152,12 +235,16 @@ async function trySilentPermissionPath(
   missionId: number | null,
   target: DriverTransitionStatus | null,
   onProceed: (() => void) | null,
-  onComplete: (() => void) | null
+  onComplete: (() => void) | null,
+  readinessAction: ReadinessLocationAction | null
 ): Promise<boolean> {
   if (!hasPriorLocationDisclosure()) return false;
 
   markLiveTrackingDisclosureAccepted();
-  const perms = await requestMissionTrackingPermissions();
+  const perms =
+    readinessAction != null
+      ? await requestPermissionsForReadinessAction(readinessAction)
+      : await requestMissionTrackingPermissions();
   permissionRequestedThisAttempt = true;
 
   if (missionId != null && target != null) {
@@ -170,6 +257,27 @@ async function trySilentPermissionPath(
       bg_granted: perms.bgGranted,
       silent: true,
     });
+  }
+
+  if (readinessAction != null) {
+    const accuracyOk =
+      readinessAction !== "accuracy" ||
+      (await Location.getForegroundPermissionsAsync()
+        .then((fg) => resolveLocationAccuracy(fg) === "precise")
+        .catch(() => false));
+    const actionResolved =
+      readinessAction === "foreground"
+        ? perms.fgGranted
+        : readinessAction === "background"
+          ? perms.bgGranted
+          : accuracyOk;
+    if (actionResolved) {
+      onComplete?.();
+      closeDisclosure();
+      return true;
+    }
+    // Disclosure déjà acceptée mais anomalie encore ouverte → modal compacte.
+    return false;
   }
 
   const capability = await evaluateMissionTrackingCapability({ forLiveTransition: true });
@@ -191,6 +299,7 @@ function openDisclosureModal(params: {
   onProceed: (() => void) | null;
   onComplete: (() => void) | null;
   compact?: boolean;
+  readinessAction?: ReadinessLocationAction | null;
 }): void {
   permissionRequestedThisAttempt = false;
   pendingRequest = {
@@ -198,6 +307,7 @@ function openDisclosureModal(params: {
     target: params.target,
     onProceed: params.onProceed,
     onComplete: params.onComplete,
+    readinessAction: params.readinessAction ?? null,
   };
 
   if (params.missionId != null && params.target != null) {
@@ -246,7 +356,7 @@ export function guardMissionLiveTransition(params: {
       return;
     }
 
-    const silentOk = await trySilentPermissionPath(missionId, target, onProceed, null);
+    const silentOk = await trySilentPermissionPath(missionId, target, onProceed, null, null);
     if (silentOk) return;
 
     openDisclosureModal({
@@ -263,7 +373,7 @@ export function openMissionLiveTrackingDisclosureForBanner(): void {
   void (async () => {
     const silentOk = await trySilentPermissionPath(null, null, null, () => {
       notifyMissionTrackingCapabilityRefresh();
-    });
+    }, null);
     if (silentOk) return;
 
     openDisclosureModal({
@@ -275,9 +385,16 @@ export function openMissionLiveTrackingDisclosureForBanner(): void {
   })();
 }
 
-export function openMissionLiveTrackingDisclosureForReadiness(onComplete: () => void): void {
+/**
+ * Gate readiness : disclosure complète avant toute 1ʳᵉ demande FG/BG.
+ * Compact uniquement si disclosure déjà acceptée et parcours silencieux insuffisant.
+ */
+export function openMissionLiveTrackingDisclosureForReadiness(
+  onComplete: () => void,
+  action: ReadinessLocationAction = "foreground"
+): void {
   void (async () => {
-    const silentOk = await trySilentPermissionPath(null, null, null, onComplete);
+    const silentOk = await trySilentPermissionPath(null, null, null, onComplete, action);
     if (silentOk) return;
 
     openDisclosureModal({
@@ -286,6 +403,7 @@ export function openMissionLiveTrackingDisclosureForReadiness(onComplete: () => 
       onProceed: null,
       onComplete,
       compact: hasPriorLocationDisclosure(),
+      readinessAction: action,
     });
   })();
 }
@@ -295,10 +413,15 @@ export function cancelMissionLiveTrackingDisclosure(): void {
 }
 
 export function continueMissionLiveTrackingDisclosure(): void {
-  const { missionId, target, onProceed, onComplete } = pendingRequest;
+  const { missionId, target, onProceed, onComplete, readinessAction } = pendingRequest;
   if (missionId == null && !onComplete) return;
 
   if (permissionRequestedThisAttempt) {
+    if (readinessAction != null) {
+      onComplete?.();
+      closeDisclosure();
+      return;
+    }
     void runAfterCapability(missionId, target, onProceed, onComplete);
     return;
   }
@@ -307,7 +430,10 @@ export function continueMissionLiveTrackingDisclosure(): void {
   markLiveTrackingDisclosureAccepted();
 
   void (async () => {
-    const perms = await requestMissionTrackingPermissions();
+    const perms =
+      readinessAction != null
+        ? await requestPermissionsForReadinessAction(readinessAction)
+        : await requestMissionTrackingPermissions();
     permissionRequestedThisAttempt = true;
 
     if (missionId != null && target != null) {
@@ -319,6 +445,12 @@ export function continueMissionLiveTrackingDisclosure(): void {
         fg_granted: perms.fgGranted,
         bg_granted: perms.bgGranted,
       });
+    }
+
+    if (readinessAction != null) {
+      onComplete?.();
+      closeDisclosure();
+      return;
     }
 
     await runAfterCapability(missionId, target, onProceed, onComplete);

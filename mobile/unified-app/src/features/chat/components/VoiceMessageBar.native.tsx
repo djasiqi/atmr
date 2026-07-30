@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { Pressable, View } from "react-native";
+import { ActivityIndicator, Pressable, View } from "react-native";
 import { AppText } from "../../../design/ui/AppText";
 import { Ionicons } from "@expo/vector-icons";
 import { useChatVoicePlayer } from "../services/audioAdapter";
@@ -17,18 +17,30 @@ type VoiceMessageBarProps = { uri: string; isOwn: boolean };
  * Natif via `expo-audio`.
  */
 export function VoiceMessageBar({ uri, isOwn }: VoiceMessageBarProps) {
-  const { isPlaying, progress, durationSeconds, currentTimeSeconds, togglePlayback } =
-    useChatVoicePlayer(uri);
+  const {
+    isPlaying,
+    isLoaded,
+    isBuffering,
+    progress,
+    durationSeconds,
+    currentTimeSeconds,
+    togglePlayback,
+  } = useChatVoicePlayer(uri);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const heights = useMemo(() => buildVoiceWaveformHeights(uri), [uri]);
 
   const toggle = useCallback(async () => {
     if (busy) return;
     setBusy(true);
+    setError(null);
     try {
-      await togglePlayback();
+      const result = await togglePlayback();
+      if (!result.ok) {
+        setError("Impossible de lire ce message vocal.");
+      }
     } catch {
-      /* ignore */
+      setError("Impossible de lire ce message vocal.");
     } finally {
       setBusy(false);
     }
@@ -44,10 +56,12 @@ export function VoiceMessageBar({ uri, isOwn }: VoiceMessageBarProps) {
   const barIdle = isOwn ? "rgba(255,255,255,0.38)" : "rgba(148,163,184,0.85)";
   const scrubColor = isOwn ? "#FFFFFF" : C_BUBBLE_OWN;
   const iconColor = isOwn ? "#ECFDF5" : C_BUBBLE_OWN;
+  const showSpinner = busy || (isBuffering && !isPlaying);
 
   return (
     <Pressable
       onPress={toggle}
+      disabled={busy}
       style={({ pressed }) => [
         styles.voiceRow,
         isOwn && styles.voiceRowOwn,
@@ -57,9 +71,14 @@ export function VoiceMessageBar({ uri, isOwn }: VoiceMessageBarProps) {
       accessibilityLabel={
         isPlaying ? "Mettre le message vocal en pause" : "Lire le message vocal"
       }
+      accessibilityState={{ disabled: busy, busy: showSpinner }}
     >
       <View style={[styles.playButton, isOwn && styles.playButtonOwn]}>
-        <Ionicons name={isPlaying ? "pause" : "play"} size={18} color={iconColor} />
+        {showSpinner ? (
+          <ActivityIndicator size="small" color={iconColor} />
+        ) : (
+          <Ionicons name={isPlaying ? "pause" : "play"} size={18} color={iconColor} />
+        )}
       </View>
 
       <View style={styles.waveColumn}>
@@ -93,9 +112,11 @@ export function VoiceMessageBar({ uri, isOwn }: VoiceMessageBarProps) {
           style={[
             styles.durationText,
             isOwn ? styles.durationOwn : styles.durationIn,
+            error ? styles.durationError : null,
+            error && isOwn ? styles.durationErrorOwn : null,
           ]}
         >
-          {durationLabel}
+          {error ?? (durationSeconds > 0 || isLoaded ? durationLabel : "…")}
         </AppText>
       </View>
     </Pressable>

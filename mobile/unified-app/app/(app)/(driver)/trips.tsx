@@ -461,15 +461,30 @@ function MissionAccordionCard({
       ]}
     >
       <View style={[styles.cardBody, isVeryLargeText && styles.cardBodyLargeText]}>
-        <View style={[styles.cardTop, shouldStackRows && styles.cardTopStacked]}>
+        <View
+          style={[
+            styles.cardTop,
+            /* Badge à droite de la date ; empilement seulement si police agrandie (a11y). */
+            isVeryLargeText && styles.cardTopStacked,
+          ]}
+        >
           <AppText
             variant="sectionTitle"
             scaleRole="chrome"
-            style={[styles.when, { color: theme.title }, done && styles.whenDone, done && { color: theme.mutedText }]}
+            style={[
+              styles.when,
+              { color: theme.title },
+              done && styles.whenDone,
+              done && { color: theme.mutedText },
+              !isVeryLargeText && styles.whenInline,
+            ]}
+            numberOfLines={isVeryLargeText ? 2 : 1}
           >
             {whenLabel(mission)}
           </AppText>
-          <View style={[styles.statusBadges, shouldStackRows && styles.statusBadgesStacked]}>
+          <View
+            style={[styles.statusBadges, isVeryLargeText && styles.statusBadgesStacked]}
+          >
             {late ? (
               <View style={styles.lateBadge}>
                 <AppText variant="label" style={styles.lateBadgeText} scaleRole="chrome">
@@ -489,7 +504,7 @@ function MissionAccordionCard({
                 variant="label"
                 style={[styles.badgeText, done && styles.badgeTextDone]}
                 scaleRole="chrome"
-                numberOfLines={shouldStackRows ? 2 : 1}
+                numberOfLines={isVeryLargeText ? 2 : 1}
               >
                 {ux.label}
               </AppText>
@@ -682,6 +697,8 @@ export default function DriverTripsScreen() {
   const { width } = useAppViewport();
   const scrollPad = useDriverFloatingTabScrollPadding();
   const { shouldStackRows, isVeryLargeText, fontScale } = useAccessibilityScale();
+  /** KPI : une ligne compacte par défaut ; empilement seulement en très grande police. */
+  const stackMetrics = fontScale >= 1.75;
   const compact = width < 380;
   const isDark = useColorScheme() === "dark";
   const theme = useMemo(() => buildDispatchTheme(isDark), [isDark]);
@@ -810,21 +827,25 @@ export default function DriverTripsScreen() {
             </View>
           </View>
 
-          <View style={[styles.metrics, shouldStackRows && styles.metricsStacked]}>
+          <View style={[styles.metrics, stackMetrics && styles.metricsStacked]}>
             <View
               style={[
                 styles.metricCard,
                 { backgroundColor: theme.metricsBg },
-                shouldStackRows && styles.metricCardStacked,
-                isVeryLargeText && styles.metricCardLargeText,
+                stackMetrics && styles.metricCardStacked,
               ]}
             >
-              <View style={[styles.metricRow, shouldStackRows && styles.metricRowStacked]}>
+              <View style={[styles.metricRow, stackMetrics && styles.metricRowStacked]}>
                 <View style={[styles.metricIconBubble, { backgroundColor: "rgba(20,184,166,0.14)" }]}>
-                  <Ionicons name="calendar-outline" size={13} color="#14B8A6" />
+                  <Ionicons name="calendar-outline" size={12} color="#14B8A6" />
                 </View>
-                <View style={[styles.metricTextCol, shouldStackRows && styles.metricTextColStacked]}>
-                  <AppText variant="caption" scaleRole="chrome" style={[styles.metricLabel, { color: theme.mutedText }]}>
+                <View style={[styles.metricTextCol, stackMetrics && styles.metricTextColStacked]}>
+                  <AppText
+                    variant="caption"
+                    scaleRole="chrome"
+                    style={[styles.metricLabel, { color: theme.mutedText }]}
+                    numberOfLines={stackMetrics ? 1 : 2}
+                  >
                     A effectuer
                   </AppText>
                   <AppText variant="sectionTitle" scaleRole="chrome" style={[styles.metricValue, { color: theme.title }]}>
@@ -837,16 +858,20 @@ export default function DriverTripsScreen() {
               style={[
                 styles.metricCard,
                 { backgroundColor: theme.metricsBg },
-                shouldStackRows && styles.metricCardStacked,
-                isVeryLargeText && styles.metricCardLargeText,
+                stackMetrics && styles.metricCardStacked,
               ]}
             >
-              <View style={[styles.metricRow, shouldStackRows && styles.metricRowStacked]}>
+              <View style={[styles.metricRow, stackMetrics && styles.metricRowStacked]}>
                 <View style={[styles.metricIconBubble, { backgroundColor: "rgba(59,130,246,0.14)" }]}>
-                  <Ionicons name="pulse-outline" size={13} color="#3B82F6" />
+                  <Ionicons name="pulse-outline" size={12} color="#3B82F6" />
                 </View>
-                <View style={[styles.metricTextCol, shouldStackRows && styles.metricTextColStacked]}>
-                  <AppText variant="caption" scaleRole="chrome" style={[styles.metricLabel, { color: theme.mutedText }]}>
+                <View style={[styles.metricTextCol, stackMetrics && styles.metricTextColStacked]}>
+                  <AppText
+                    variant="caption"
+                    scaleRole="chrome"
+                    style={[styles.metricLabel, { color: theme.mutedText }]}
+                    numberOfLines={1}
+                  >
                     En cours
                   </AppText>
                   <AppText variant="sectionTitle" scaleRole="chrome" style={[styles.metricValue, { color: theme.title }]}>
@@ -859,16 +884,20 @@ export default function DriverTripsScreen() {
               style={[
                 styles.metricCard,
                 { backgroundColor: theme.metricsBg },
-                shouldStackRows && styles.metricCardStacked,
-                isVeryLargeText && styles.metricCardLargeText,
+                stackMetrics && styles.metricCardStacked,
               ]}
             >
-              <View style={[styles.metricRow, shouldStackRows && styles.metricRowStacked]}>
+              <View style={[styles.metricRow, stackMetrics && styles.metricRowStacked]}>
                 <View style={[styles.metricIconBubble, { backgroundColor: "rgba(148,163,184,0.18)" }]}>
-                  <Ionicons name="checkmark-circle-outline" size={13} color="#94A3B8" />
+                  <Ionicons name="checkmark-circle-outline" size={12} color="#94A3B8" />
                 </View>
-                <View style={[styles.metricTextCol, shouldStackRows && styles.metricTextColStacked]}>
-                  <AppText variant="caption" scaleRole="chrome" style={[styles.metricLabel, { color: theme.mutedText }]}>
+                <View style={[styles.metricTextCol, stackMetrics && styles.metricTextColStacked]}>
+                  <AppText
+                    variant="caption"
+                    scaleRole="chrome"
+                    style={[styles.metricLabel, { color: theme.mutedText }]}
+                    numberOfLines={1}
+                  >
                     Terminees
                   </AppText>
                   <AppText variant="sectionTitle" scaleRole="chrome" style={[styles.metricValue, { color: theme.title }]}>
@@ -1017,53 +1046,76 @@ const styles = StyleSheet.create({
     borderColor: "rgba(15,23,42,0.08)",
     backgroundColor: "rgba(255,255,255,0.72)",
   },
-  metrics: { flexDirection: "row", gap: 6 },
+  metrics: { flexDirection: "row", gap: 6, alignItems: "stretch" },
   metricsStacked: { flexDirection: "column" },
   metricCard: {
     flex: 1,
     minWidth: 0,
-    minHeight: 56,
-    borderRadius: 18,
+    minHeight: 52,
+    borderRadius: 14,
     backgroundColor: "#FFFFFF",
     borderWidth: 0,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    alignItems: "flex-start",
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    alignItems: "stretch",
     justifyContent: "center",
-    gap: 1,
     ...softCardShadow,
   },
   metricCardStacked: {
     flex: 0,
     width: "100%",
-    minHeight: 48,
+    minHeight: 40,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
   },
-  metricCardLargeText: {
-    paddingVertical: 10,
-    minHeight: 64,
+  metricRow: {
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: 4,
+    flex: 1,
   },
-  metricRow: { flexDirection: "row", alignItems: "center", gap: 7, flex: 1 },
   metricRowStacked: {
+    flexDirection: "row",
+    alignItems: "center",
     width: "100%",
-    justifyContent: "space-between",
+    justifyContent: "flex-start",
+    gap: 8,
   },
   metricIconBubble: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
     alignItems: "center",
     justifyContent: "center",
     flexShrink: 0,
   },
-  metricTextCol: { flex: 1, minWidth: 0, justifyContent: "center", gap: 2 },
+  metricTextCol: {
+    flex: 1,
+    minWidth: 0,
+    justifyContent: "center",
+    gap: 0,
+    width: "100%",
+  },
   metricTextColStacked: {
     flexDirection: "row",
     alignItems: "baseline",
     justifyContent: "space-between",
     gap: 12,
   },
-  metricValue: { color: "#0F172A", fontWeight: "700", flexShrink: 0 },
-  metricLabel: { color: "#64748B", textTransform: "uppercase", letterSpacing: 0.15, flexShrink: 1 },
+  metricValue: {
+    color: "#0F172A",
+    fontWeight: "700",
+    flexShrink: 0,
+    fontSize: 16,
+    marginTop: 1,
+  },
+  metricLabel: {
+    color: "#64748B",
+    textTransform: "uppercase",
+    letterSpacing: 0.1,
+    flexShrink: 1,
+    fontSize: 9,
+  },
   tabs: {
     backgroundColor: "#E9EEF3",
     borderRadius: 14,
@@ -1122,10 +1174,25 @@ const styles = StyleSheet.create({
   cardBody: { flex: 1, gap: 8, minWidth: 0 },
   cardBodyLargeText: { gap: 10 },
   cardDone: { backgroundColor: "#F2F4F7" },
-  cardTop: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 8 },
-  cardTopStacked: { flexDirection: "column", alignItems: "stretch", gap: 6 },
-  statusBadges: { flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 1, flexWrap: "wrap", justifyContent: "flex-end" },
-  statusBadgesStacked: { justifyContent: "flex-start" },
+  cardTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+    flexWrap: "nowrap",
+  },
+  cardTopStacked: { flexDirection: "column", alignItems: "stretch", gap: 6, flexWrap: "wrap" },
+  statusBadges: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    flexShrink: 1,
+    flexGrow: 0,
+    flexWrap: "wrap",
+    justifyContent: "flex-end",
+    maxWidth: "58%",
+  },
+  statusBadgesStacked: { justifyContent: "flex-start", maxWidth: "100%", alignSelf: "flex-start" },
   client: { color: "#0F172A" },
   clientDone: { color: "#667085" },
   badge: {
@@ -1157,6 +1224,8 @@ const styles = StyleSheet.create({
   },
   tripLegBadgeText: { color: "#0F766E", fontWeight: "700" },
   when: { color: "#0F172A", flexShrink: 1, minWidth: 0 },
+  /** Laisse la place au badge à droite sur une seule ligne. */
+  whenInline: { flex: 1, flexShrink: 1, paddingRight: 4 },
   whenDone: { color: "#7C8592" },
   routeRow: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
   route: { color: "#334155", flex: 1, minWidth: 0 },

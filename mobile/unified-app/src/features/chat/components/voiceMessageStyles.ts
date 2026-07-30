@@ -71,6 +71,12 @@ export const voiceStyles = StyleSheet.create({
   durationIn: {
     color: "#6B7280",
   },
+  durationError: {
+    color: "#B91C1C",
+  },
+  durationErrorOwn: {
+    color: "#FECACA",
+  },
 });
 
 export { C_BUBBLE_OWN };

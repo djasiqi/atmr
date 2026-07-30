@@ -40,6 +40,31 @@ async function setRecordingSessionMode(enabled: boolean): Promise<void> {
   });
 }
 
+async function setPlaybackSessionMode(): Promise<void> {
+  // Quitter le mode micro (sinon Android/iOS refusent souvent la lecture).
+  await setAudioModeAsync({
+    allowsRecording: false,
+    playsInSilentMode: true,
+  });
+}
+
+function isRemoteAudioUri(uri: string): boolean {
+  return /^https?:\/\//i.test(uri.trim());
+}
+
+async function waitUntil(
+  predicate: () => boolean,
+  timeoutMs: number,
+  stepMs = 60
+): Promise<boolean> {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    if (predicate()) return true;
+    await new Promise((resolve) => setTimeout(resolve, stepMs));
+  }
+  return predicate();
+}
+
 /**
  * Enregistrement vocal (natif uniquement — appelé depuis `ChatComposer.tsx`, non résolu sur le web).
  * Un seul enregistrement global à la fois pour éviter les conflits de session audio.
@@ -168,8 +193,16 @@ export function useChatVoiceRecorder() {
 export function useChatVoicePlayer(uri: string) {
   const ownerRef = useRef(Symbol("chat-voice-player"));
   const source = useMemo(() => ({ uri }), [uri]);
-  const player = useAudioPlayer(source);
+  const downloadFirst = isRemoteAudioUri(uri);
+  const player = useAudioPlayer(source, {
+    downloadFirst,
+    updateInterval: 200,
+  });
   const status = useAudioPlayerStatus(player);
+  const playerRef = useRef(player);
+  playerRef.current = player;
+  const statusRef = useRef(status);
+  statusRef.current = status;
 
   const releasePlaybackOwnership = useCallback(() => {
     if (activePlaybackOwner === ownerRef.current) {
@@ -180,34 +213,63 @@ export function useChatVoicePlayer(uri: string) {
 
   const pausePlayback = useCallback(() => {
     try {
-      player.pause();
+      playerRef.current.pause();
     } catch {
       /* ignore */
     } finally {
       releasePlaybackOwnership();
     }
-  }, [player, releasePlaybackOwnership]);
+  }, [releasePlaybackOwnership]);
 
   const playPlayback = useCallback(async (): Promise<ChatAudioResult<null>> => {
+    const current = playerRef.current;
     try {
       if (activePlaybackOwner != null && activePlaybackOwner !== ownerRef.current) {
         activePlaybackPause?.();
       }
-      await setAudioModeAsync({
-        allowsRecording: false,
-        playsInSilentMode: true,
-      });
-      const duration = Number(player.duration ?? 0);
-      const currentTime = Number(player.currentTime ?? 0);
-      const atEnd = duration > 0 && currentTime >= duration - PLAYBACK_END_TOLERANCE_SECONDS;
-      if (atEnd) {
-        await player.seekTo(0);
+      await setPlaybackSessionMode();
+
+      const ready = await waitUntil(() => {
+        const s = statusRef.current;
+        const loaded = Boolean(
+          s.isLoaded ||
+            (typeof (current as { isLoaded?: boolean }).isLoaded === "boolean" &&
+              (current as { isLoaded?: boolean }).isLoaded)
+        );
+        // Durée connue = source exploitable même si isLoaded tarde.
+        const hasDuration = Number(s.duration ?? current.duration ?? 0) > 0;
+        return loaded || hasDuration || !downloadFirst;
+      }, downloadFirst ? 6000 : 1500);
+
+      if (!ready && downloadFirst) {
+        // Dernière tentative : forcer un replace n’est pas exposé ; on joue quand même.
       }
-      player.play();
+
+      const duration = Number(statusRef.current.duration ?? current.duration ?? 0);
+      const currentTime = Number(statusRef.current.currentTime ?? current.currentTime ?? 0);
+      const atEnd = duration > 0 && currentTime >= duration - PLAYBACK_END_TOLERANCE_SECONDS;
+      if (atEnd || currentTime > 0) {
+        try {
+          await current.seekTo(0);
+        } catch {
+          /* ignore */
+        }
+      }
+
+      current.play();
+      // Android : premier play parfois no-op — second essai court.
+      await new Promise((resolve) => setTimeout(resolve, 120));
+      const playingNow = Boolean(
+        statusRef.current.playing || current.playing
+      );
+      if (!playingNow) {
+        current.play();
+      }
+
       activePlaybackOwner = ownerRef.current;
       activePlaybackPause = () => {
         try {
-          player.pause();
+          playerRef.current.pause();
         } catch {
           /* ignore */
         }
@@ -217,10 +279,10 @@ export function useChatVoicePlayer(uri: string) {
       releasePlaybackOwnership();
       return { ok: false, reason: "playback_error" };
     }
-  }, [player, releasePlaybackOwnership]);
+  }, [downloadFirst, releasePlaybackOwnership]);
 
   const togglePlayback = useCallback(async (): Promise<ChatAudioResult<"playing" | "paused">> => {
-    if (player.playing) {
+    if (statusRef.current.playing || playerRef.current.playing) {
       pausePlayback();
       return { ok: true, data: "paused" };
     }
@@ -229,7 +291,7 @@ export function useChatVoicePlayer(uri: string) {
       return started;
     }
     return { ok: true, data: "playing" };
-  }, [pausePlayback, playPlayback, player.playing]);
+  }, [pausePlayback, playPlayback]);
 
   useEffect(() => {
     if (status.didJustFinish) {
@@ -237,20 +299,34 @@ export function useChatVoicePlayer(uri: string) {
     }
   }, [releasePlaybackOwnership, status.didJustFinish]);
 
+  // Cleanup au démontage seulement — éviter de couper la lecture quand le player se stabilise.
   useEffect(() => {
     return () => {
-      pausePlayback();
-      void player.seekTo(0).catch(() => undefined);
+      try {
+        playerRef.current.pause();
+      } catch {
+        /* ignore */
+      }
+      releasePlaybackOwnership();
     };
-  }, [pausePlayback, player, uri]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- démontage uniquement
+  }, []);
 
   const durationSeconds = Math.max(0, Number(status.duration ?? player.duration ?? 0));
   const currentTimeSeconds = Math.max(0, Number(status.currentTime ?? player.currentTime ?? 0));
   const progress =
     durationSeconds > 0 ? Math.min(1, Math.max(0, currentTimeSeconds / durationSeconds)) : 0;
+  const isLoaded = Boolean(
+    status.isLoaded ||
+      durationSeconds > 0 ||
+      (typeof (player as { isLoaded?: boolean }).isLoaded === "boolean" &&
+        (player as { isLoaded?: boolean }).isLoaded)
+  );
 
   return {
     isPlaying: Boolean(status.playing ?? player.playing),
+    isLoaded,
+    isBuffering: Boolean(status.isBuffering),
     durationSeconds,
     currentTimeSeconds,
     progress,

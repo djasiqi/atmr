@@ -72,21 +72,21 @@ export function MissionLiveTrackingDisclosureModal({
             <AppText variant="body" style={styles.heroTitle}>
               {compact
                 ? "Autorisation « Toujours » requise"
-                : "Suivi lorsque l&apos;écran est verrouillé"}
+                : "Suivi lorsque l’écran est verrouillé"}
             </AppText>
           </View>
         </View>
 
         {compact ? (
           <AppText variant="body" style={styles.bodyText}>
-            La localisation en arrière-plan n&apos;est pas encore active. Ouvrez les réglages
+            La localisation en arrière-plan n’est pas encore active. Ouvrez les réglages
             et autorisez « Toujours » pour permettre le suivi de mission.
           </AppText>
         ) : (
           <>
             <AppText variant="body" style={styles.bodyText}>
-              Pour permettre le suivi de la mission lorsque l&apos;écran est verrouillé,
-              l&apos;autorisation de localisation en arrière-plan est requise. Cette
+              Pour permettre le suivi de la mission lorsque l’écran est verrouillé,
+              l’autorisation de localisation en arrière-plan est requise. Cette
               localisation est utilisée uniquement pour le suivi opérationnel de la mission
               en cours.
             </AppText>

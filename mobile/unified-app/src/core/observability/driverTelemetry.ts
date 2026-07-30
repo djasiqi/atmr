@@ -153,7 +153,14 @@ export type DriverTelemetryEventName =
   | "tracking.background.task.stop_failed"
   | "tracking.background.fgs_recover"
   | "tracking.background.wake_restart"
-  | "tracking.background.wake_restart_failed";
+  | "tracking.background.wake_restart_failed"
+  | "tracking.readiness.action.location_foreground"
+  | "tracking.readiness.action.location_background"
+  | "tracking.readiness.action.location_accuracy"
+  | "tracking.readiness.action.gps_settings"
+  | "tracking.readiness.action.notifications"
+  | "tracking.readiness.action.battery"
+  | "tracking.readiness.action.oem";
 
 export type DriverTelemetryPayload = {
   source: string;
