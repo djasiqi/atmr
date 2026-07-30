@@ -6,13 +6,29 @@ import { Platform } from "react-native";
 import * as SecureStore from "expo-secure-store";
 import type { AuthContext, BootstrapResponse } from "../contracts/auth";
 
-const RECOVERY_KEY = "@atmr/auth/recovery_credential";
-const RECOVERY_TOMBSTONE_KEY = "@atmr/auth/recovery_credential_tombstone";
-const REFRESH_KEY = "@atmr/auth/refresh_token";
-const REFRESH_TOMBSTONE_KEY = "@atmr/auth/refresh_token_tombstone";
-const INSTALLATION_KEY = "@atmr/auth/installation_id";
-const TOMBSTONE_KEY = "@atmr/auth/revocation_tombstone";
-const ENVELOPE_KEY = "@atmr/auth/session_envelope";
+/**
+ * Clés SecureStore : uniquement [A-Za-z0-9._-] (regex expo-secure-store /^[\w.-]+$/).
+ * Les anciennes clés `@atmr/auth/...` (avec `@` et `/`) étaient rejetées systématiquement
+ * → DEVICE_ID_UNAVAILABLE / STORAGE_UNAVAILABLE sur login mobile.
+ */
+const RECOVERY_KEY = "atmr.auth.recovery_credential";
+const RECOVERY_TOMBSTONE_KEY = "atmr.auth.recovery_credential_tombstone";
+const REFRESH_KEY = "atmr.auth.refresh_token";
+const REFRESH_TOMBSTONE_KEY = "atmr.auth.refresh_token_tombstone";
+const INSTALLATION_KEY = "atmr.auth.installation_id";
+const TOMBSTONE_KEY = "atmr.auth.revocation_tombstone";
+const ENVELOPE_KEY = "atmr.auth.session_envelope";
+
+/** Exporté pour tests de non-régression (format de clé SecureStore). */
+export const AUTH_SECURE_STORE_KEYS = [
+  RECOVERY_KEY,
+  RECOVERY_TOMBSTONE_KEY,
+  REFRESH_KEY,
+  REFRESH_TOMBSTONE_KEY,
+  INSTALLATION_KEY,
+  TOMBSTONE_KEY,
+  ENVELOPE_KEY,
+] as const;
 
 export type SecureCredentialReadResult =
   | { status: "found"; value: string }
@@ -32,10 +48,24 @@ export type SecureCredentialWriteResult =
   | { status: "temporarily_unavailable"; cause: string }
   | { status: "failed"; cause: string };
 
-const NATIVE_OPTIONS: SecureStore.SecureStoreOptions = {
-  keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK,
-  requireAuthentication: false,
-};
+/** Options iOS uniquement — keychainAccessible n'a pas d'effet Android et peut perturber. */
+const NATIVE_OPTIONS: SecureStore.SecureStoreOptions =
+  Platform.OS === "ios"
+    ? {
+        keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK,
+        requireAuthentication: false,
+      }
+    : {
+        requireAuthentication: false,
+      };
+
+function assertSecureStoreKey(key: string): void {
+  if (!/^[\w.-]+$/.test(key)) {
+    throw new Error(
+      `Invalid SecureStore key "${key}". Only alphanumeric, ".", "-" and "_" are allowed.`
+    );
+  }
+}
 
 function isNative(): boolean {
   return Platform.OS === "ios" || Platform.OS === "android";
@@ -44,6 +74,7 @@ function isNative(): boolean {
 const webMemory = new Map<string, string>();
 
 async function nativeGet(key: string): Promise<SecureCredentialReadResult> {
+  assertSecureStoreKey(key);
   if (!isNative()) {
     // Web / tests : stockage mémoire isolé (pas de credentials prod).
     const mem = webMemory.get(key);
@@ -61,6 +92,7 @@ async function nativeGet(key: string): Promise<SecureCredentialReadResult> {
 }
 
 async function nativeSet(key: string, value: string): Promise<SecureCredentialWriteResult> {
+  assertSecureStoreKey(key);
   if (!isNative()) {
     webMemory.set(key, value);
     return { status: "ok" };
@@ -79,6 +111,7 @@ async function nativeSet(key: string, value: string): Promise<SecureCredentialWr
 }
 
 async function nativeDelete(key: string): Promise<SecureCredentialWriteResult> {
+  assertSecureStoreKey(key);
   if (!isNative()) {
     webMemory.delete(key);
     return { status: "ok" };

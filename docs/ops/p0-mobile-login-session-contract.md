@@ -1,41 +1,53 @@
 # P0 — Contrat login mobile `mobile-device-session-v1`
 
-## Symptôme
+## Cause racine (S23, 2026-07-30)
 
-Login mobile affiche « Persistance session incomplète » + faux hint VPN/TLS alors que `POST /auth/login` répondait HTTP 200.
+Messages UI observés après OTA session-contract :
 
-## Cause
+- `Impossible de sécuriser la session sur cet appareil` → `DEVICE_ID_UNAVAILABLE`
+- `Stockage sécurisé temporairement indisponible` → `STORAGE_UNAVAILABLE`
+
+**Cause précise :** les clés SecureStore utilisaient le format `@atmr/auth/...` (caractères `@` et `/`).  
+`expo-secure-store` n’accepte que `[A-Za-z0-9._-]` (`/^[\w.-]+$/`) et lève :
+
+```text
+Invalid key provided to SecureStore. Keys must not be empty and contain only alphanumeric characters, ".", "-", and "_".
+```
+
+Conséquence : `createAndPersistInstallationId()` et toutes les écritures credentials échouaient → aucun login durable, souvent **aucun** `POST /auth/login` (fail avant requête).
+
+## Correctif SecureStore
+
+Clés renommées en `atmr.auth.*` dans [`authCredentialStore.ts`](../../mobile/unified-app/src/core/auth/authCredentialStore.ts).  
+Test : `authCredentialStore.keys.test.ts`.
+
+## Cause (précédente — contrat partiel)
 
 1. `buildAuthDeviceHeaders()` avalait les erreurs SecureStore (`return {}`) → login sans `X-Device-ID`.
-2. Backend reconnaissait Android via `X-Client-Platform` mais ne créait une `MobileDeviceSession` que si un device ID était présent → 200 avec tokens sans `recovery_credential`.
-3. `toApiError()` traitait toute exception locale comme une erreur Axios sans réponse HTTP.
+2. Backend mobile sans device ID → 200 tokens sans `recovery_credential`.
+3. `toApiError()` transformait l’erreur locale en faux hint VPN/TLS.
 
-## Correctifs (code)
+## Correctifs contrat
 
-- Backend [`backend/routes/auth.py`](../backend/routes/auth.py) :
-  - contrat v1 sans device ID → **400** `device_identity_required` (avant JWT) ;
-  - contrat v1 sans session/recovery/revocation → **503** `mobile_session_contract_incomplete` ;
-  - log structuré `mobile_login_contract` (booléens uniquement).
-- Mobile [`mobile/unified-app/src/core/api/client.ts`](../mobile/unified-app/src/core/api/client.ts) :
-  - `buildRequiredAuthDeviceHeaders()` strict pour login/refresh ;
-  - `AuthContractError` + `toApiError` transport-only ;
-  - codes `DEVICE_ID_UNAVAILABLE`, `AUTH_LOGIN_CONTRACT_INCOMPLETE`, `STORAGE_UNAVAILABLE`.
+- Backend : 400 `device_identity_required` / 503 `mobile_session_contract_incomplete` + log `mobile_login_contract`.
+- Mobile : headers device stricts, `AuthContractError`, `toApiError` transport-only.
 
 ## Tests
 
 - `backend/tests/security/test_mobile_login_contract_p0.py`
 - `mobile/unified-app/src/core/api/client.login-contract.test.ts`
+- `mobile/unified-app/src/core/auth/authCredentialStore.keys.test.ts`
 
-## Rollout obligatoire
+## Rollout
 
-1. Migration MDS déjà en prod (`b7428dc318e7` → `c8f1a2b3d4e5`) — préflight schéma OK.
-2. Déployer **backend** fail-closed.
-3. Smoke : headers `X-Auth-Contract-Version: mobile-device-session-v1` + `X-Device-ID` → présence `session_id` / `recovery_credential` / `revocation_secret` (jamais logger les valeurs).
-4. Déployer **mobile EAS** ensuite.
+1. Backend fail-closed déployé (`sha-3481ca9d221b`).
+2. OTA mobile avec clés SecureStore valides.
+3. Smoke : login → ligne MDS → restart → refresh.
 
 Invariants :
 
 ```text
 contrat v1 sans identité appareil → jamais accepté
 HTTP 200 login mobile v1 → session durable complète
+clés SecureStore auth → /^[\w.-]+$/ uniquement
 ```
