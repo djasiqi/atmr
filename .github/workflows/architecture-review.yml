@@ -11,7 +11,18 @@ on:
       - "backend/services/geolocation/**"
       - "backend/routes/internal_tracking.py"
       - "frontend/src/utils/mergeDriverLiveUpdate.js"
+      - "backend/application/bookings/**"
+      - "backend/bookings/application/use_cases/**"
+      - "backend/bookings/infrastructure/adapters/booking_service_adapter.py"
+      - "backend/infrastructure/persistence/bookings/**"
+      - "backend/routes/bookings.py"
+      - "backend/routes/clients.py"
+      - "backend/routes/companies.py"
+      - "backend/routes_api.py"
+      - "backend/tests/services/test_booking_create_use_case.py"
+      - "backend/tests/architecture/**"
       - "scripts/architecture/**"
+      - ".github/workflows/architecture-review.yml"
 
 jobs:
   architecture-review:
@@ -21,8 +32,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Architecture contract tests
+      - name: Architecture contract tests (tracking)
         run: python scripts/architecture/check_tracking_contract.py
+      - name: Architecture contract tests (booking create authority)
+        run: python scripts/architecture/check_booking_create_authority.py
       - name: Backend contract tests
         working-directory: backend
         run: |

@@ -21,6 +21,7 @@ from infrastructure.persistence.bookings.booking_writer import SqlAlchemyBooking
 from repositories.client_repository import ClientRepository
 from repositories.company_repository import CompanyRepository
 from services.geolocation.geocoding_interface import get_geocoding_service
+from services.platform_tenant_gates import assert_company_not_platform_suspended
 
 
 def create_booking_use_case() -> CreateBookingUseCase:
@@ -35,6 +36,7 @@ def create_booking_use_case() -> CreateBookingUseCase:
         booking_writer=cast(BookingWriterPort, SqlAlchemyBookingWriter()),
         geocoding_service=get_geocoding_service(),
         distance_duration_fn=get_distance_duration_fn(),
+        company_creation_gate_fn=assert_company_not_platform_suspended,
         fallback_coords_fn=get_booking_fallback_coords,
         trigger_async_geocoding_fn=trigger_async_geocoding,
     )
