@@ -1515,6 +1515,11 @@ const BillPeriodModal = ({
     }
   };
 
+  /** Référence stable : un callback recréé à chaque rendu relancerait le chargement du panneau brouillon. */
+  const handleDraftPanelUpdated = useCallback(() => {
+    onInvoiceGenerated?.(draftInvoiceStub);
+  }, [onInvoiceGenerated, draftInvoiceStub]);
+
   const assemblyNoSelectable =
     hasAssemblyLines &&
     preview &&
@@ -1543,7 +1548,7 @@ const BillPeriodModal = ({
               open
               initialInvoice={draftInvoiceStub}
               companyId={companyId}
-              onUpdated={() => onInvoiceGenerated?.(draftInvoiceStub)}
+              onUpdated={handleDraftPanelUpdated}
               onOpenSendEmail={onOpenSendEmail}
               onMarkAsSent={onMarkAsSent}
             />

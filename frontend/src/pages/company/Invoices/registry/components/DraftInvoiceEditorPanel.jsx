@@ -272,6 +272,8 @@ const DraftInvoiceEditorPanel = ({
   /** Cache octets PDF pour réimpression / prefetch (évite un 2e GET API). */
   const printPdfBytesCacheRef = useRef({ key: '', bytes: null });
   const mountedRef = useRef(true);
+  /** Clé « société:facture » déjà chargée — empêche un GET répété si les callbacks parent changent. */
+  const initialLoadKeyRef = useRef('');
   /** Dernière date « ligne suppl. » connue (évite perte si blur/changement d’état pas encore rejoué). */
   const customLineServiceDateRef = useRef('');
   const addLineHeadingId = useId();
@@ -294,6 +296,18 @@ const DraftInvoiceEditorPanel = ({
   useEffect(() => {
     customLineServiceDateRef.current = customLineServiceDate;
   }, [customLineServiceDate]);
+
+  /**
+   * Notification parent via ref : un `onUpdated` recréé à chaque rendu du parent ne doit pas
+   * changer l’identité de `load`, sinon chaque GET relance un GET (rechargement en boucle).
+   */
+  const onUpdatedRef = useRef(onUpdated);
+  useEffect(() => {
+    onUpdatedRef.current = onUpdated;
+  }, [onUpdated]);
+  const notifyUpdated = useCallback(() => {
+    onUpdatedRef.current?.();
+  }, []);
 
   /** Verrou optimiste (optionnel côté API si absent). */
   const draftConcurrencyPayload = useMemo(() => {
@@ -362,33 +376,38 @@ const DraftInvoiceEditorPanel = ({
       const data = unwrapInvoicePayload(payload);
       if (data) {
         applyInvoiceData(data);
-        onUpdated?.();
+        notifyUpdated();
         return data;
       }
       return null;
     },
-    [applyInvoiceData, onUpdated]
+    [applyInvoiceData, notifyUpdated]
   );
 
   /**
    * GET détail (cacheBust) — JSON facture + lignes à jour. Ne régénère pas le PDF côté serveur pour un brouillon.
    * Deps : `inv?.id` / `initialInvoice?.id` seulement — pas l’objet `inv` (nouvelle référence à chaque GET → boucle load).
+   * @param {{notify?: boolean}} [options] `notify: false` pour une simple lecture : rien n’a changé côté serveur,
+   *   la liste des factures du parent n’a donc pas besoin d’être rechargée.
    * @throws {Error} INVALID_INVOICE_PAYLOAD | erreurs réseau/API
    */
-  const reloadPdfPreviewFromServer = useCallback(async () => {
-    const id = inv?.id ?? initialInvoice?.id;
-    if (!companyId || !id) {
-      throw new Error('MISSING_INVOICE_CONTEXT');
-    }
-    const res = await getInvoice(companyId, id, { cacheBust: true });
-    const data = unwrapInvoicePayload(res) ?? res?.data ?? res;
-    if (!data || typeof data !== 'object' || data.id == null) {
-      throw new Error('INVALID_INVOICE_PAYLOAD');
-    }
-    applyInvoiceData(data);
-    onUpdated?.();
-    return data;
-  }, [companyId, inv?.id, initialInvoice?.id, applyInvoiceData, onUpdated]);
+  const reloadPdfPreviewFromServer = useCallback(
+    async ({ notify = true } = {}) => {
+      const id = inv?.id ?? initialInvoice?.id;
+      if (!companyId || !id) {
+        throw new Error('MISSING_INVOICE_CONTEXT');
+      }
+      const res = await getInvoice(companyId, id, { cacheBust: true });
+      const data = unwrapInvoicePayload(res) ?? res?.data ?? res;
+      if (!data || typeof data !== 'object' || data.id == null) {
+        throw new Error('INVALID_INVOICE_PAYLOAD');
+      }
+      applyInvoiceData(data);
+      if (notify) notifyUpdated();
+      return data;
+    },
+    [companyId, inv?.id, initialInvoice?.id, applyInvoiceData, notifyUpdated]
+  );
 
   /** Après mutation brouillon : GET détail pour JSON à jour (totaux, lignes). */
   const syncInvoiceAfterDraftMutation = useCallback(async () => {
@@ -398,12 +417,12 @@ const DraftInvoiceEditorPanel = ({
       const data = unwrapInvoicePayload(res) ?? res?.data ?? res;
       if (data && typeof data === 'object' && data.id != null) {
         applyInvoiceData(data);
-        onUpdated?.();
+        notifyUpdated();
       }
     } catch {
       setError('Impossible de recharger la facture.');
     }
-  }, [companyId, inv?.id, applyInvoiceData, onUpdated]);
+  }, [companyId, inv?.id, applyInvoiceData, notifyUpdated]);
 
   /** Réponse mutation contient déjà ``invoice`` → pas de GET redondant. */
   const afterDraftMutation = useCallback(
@@ -419,7 +438,7 @@ const DraftInvoiceEditorPanel = ({
     setLoading(true);
     setError('');
     try {
-      await reloadPdfPreviewFromServer();
+      await reloadPdfPreviewFromServer({ notify: false });
     } catch (e) {
       if (e?.message === 'INVALID_INVOICE_PAYLOAD') {
         setError('Réponse facture invalide.');
@@ -439,9 +458,17 @@ const DraftInvoiceEditorPanel = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initialInvoice?.id]);
 
+  /** Un seul GET initial par (société, facture) : le bouton « Recharger » reste la relance manuelle. */
   useEffect(() => {
-    if (open) void load();
-  }, [open, load]);
+    if (!open || !companyId || initialInvoice?.id == null) {
+      initialLoadKeyRef.current = '';
+      return;
+    }
+    const key = `${companyId}:${initialInvoice.id}`;
+    if (initialLoadKeyRef.current === key) return;
+    initialLoadKeyRef.current = key;
+    void load();
+  }, [open, companyId, initialInvoice?.id, load]);
 
   useEffect(() => {
     if (!open) {
