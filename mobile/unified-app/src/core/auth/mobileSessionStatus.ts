@@ -1,7 +1,9 @@
-/** Machine d'état de session mobile (PR C) — orthogonale au `status` legacy de sessionProvider. */
+/** Machine d'état de session mobile (PR C / PR2) — orthogonale au `status` legacy de sessionProvider. */
 export type MobileSessionStatus =
   | "initializing"
   | "anonymous"
+  | "logging_out"
+  /** @deprecated Preférer auth_recovering — conservé pour compat lectures. */
   | "restoring"
   | "authenticated_online"
   | "authenticated_offline"
@@ -53,6 +55,7 @@ export function resolveOfflineCapabilities(status: MobileSessionStatus): Offline
       return OFFLINE_FIRST_CAPABILITIES;
     case "initializing":
     case "restoring":
+    case "logging_out":
     case "anonymous":
     case "storage_locked":
     case "revoked":

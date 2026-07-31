@@ -847,10 +847,11 @@ export function setAuthToken(token: string | null) {
 export async function clearLocalAuth(): Promise<void> {
   try {
     const store = require("../auth/authCredentialStore") as typeof import("../auth/authCredentialStore");
-    store.bumpAuthEpoch();
-    await store.deleteRefreshToken();
-    await store.deleteRecoveryCredential();
-    await store.deleteSessionEnvelope();
+    const { withCredentialStoreLock } = require("../auth/sessionCredentialMutex") as typeof import("../auth/sessionCredentialMutex");
+    await withCredentialStoreLock(async () => {
+      store.bumpAuthEpoch();
+      await store.clearLocalAuthCredentialsLocked();
+    });
   } catch {
     /* ignore */
   }
@@ -907,14 +908,28 @@ export async function fetchBootstrap(activeContextId?: string | null): Promise<B
 export async function login(email: string, password: string): Promise<void> {
   if (useMockBootstrap) return;
   try {
+    const store = require("../auth/authCredentialStore") as typeof import("../auth/authCredentialStore");
     const {
-      hasPendingRevocationTombstone,
+      withCredentialStoreLock,
+      withSessionCredentialMutation,
+    } = require("../auth/sessionCredentialMutex") as typeof import("../auth/sessionCredentialMutex");
+    const {
+      enqueueOrphanedLoginRevocation,
+      flushOrphanedLoginRevocationInBackground,
     } = require("../auth/authRecoveryCoordinator") as typeof import("../auth/authRecoveryCoordinator");
-    if (await hasPendingRevocationTombstone()) {
-      throw new Error(
-        "Déconnexion en attente de confirmation serveur. Réessayez plus tard."
-      );
+    const { decodeJwtClaims } = require("../auth/jwtClaims") as typeof import("../auth/jwtClaims");
+
+    // Claim génération au début de l'intention login (avant réseau).
+    const loginGeneration = await withCredentialStoreLock(() => store.bumpSessionGeneration());
+
+    // Flush best-effort des pending historiques — ne bloque jamais le login.
+    try {
+      const recoveryMod = require("../auth/authRecoveryCoordinator") as typeof import("../auth/authRecoveryCoordinator");
+      void recoveryMod.flushPendingRevocationTombstone().catch(() => undefined);
+    } catch {
+      /* ignore */
     }
+
     const deviceHeaders = await buildRequiredAuthDeviceHeaders();
     const { data } = await apiClient.post(
       "/auth/login",
@@ -939,9 +954,6 @@ export async function login(email: string, password: string): Promise<void> {
         ? (responseObj.user as Record<string, unknown>)
         : {};
 
-    const store = require("../auth/authCredentialStore") as typeof import("../auth/authCredentialStore");
-    const { decodeJwtClaims } = require("../auth/jwtClaims") as typeof import("../auth/jwtClaims");
-
     // Fail-closed : toutes les écritures doivent réussir avant de publier l'access
     if (!refreshToken || typeof recovery !== "string" || !recovery) {
       emitDriverTelemetry("auth.login.contract_incomplete", {
@@ -952,7 +964,6 @@ export async function login(email: string, password: string): Promise<void> {
         has_recovery_credential: typeof recovery === "string" && Boolean(recovery),
         has_revocation_secret: typeof revocationSecret === "string",
       });
-      // Tenter revoke immédiat si secrets en mémoire
       const sid = responseObj.session_id;
       if (typeof sid === "string" && typeof revocationSecret === "string") {
         try {
@@ -967,88 +978,122 @@ export async function login(email: string, password: string): Promise<void> {
       );
     }
 
-    const refreshWrite = await store.writeRefreshToken(refreshToken);
-    if (refreshWrite.status !== "ok") {
-      throw new AuthContractError(
-        "STORAGE_UNAVAILABLE",
-        "Stockage sécurisé temporairement indisponible. Fermez puis rouvrez l'application et réessayez."
-      );
-    }
-    // dual-write legacy best-effort
-    try {
-      await SecureStore.setItemAsync(REFRESH_TOKEN_STORAGE_KEY, refreshToken);
-    } catch {
-      /* ignore */
-    }
-
-    const recoveryWrite = await store.writeRecoveryCredential(recovery);
-    if (recoveryWrite.status !== "ok") {
-      await store.deleteRefreshToken();
-      throw new AuthContractError(
-        "STORAGE_UNAVAILABLE",
-        "Stockage sécurisé temporairement indisponible. Fermez puis rouvrez l'application et réessayez."
-      );
-    }
-
     const deviceId = deviceHeaders["X-Device-ID"] ?? "unknown";
     const accessClaims = token ? decodeJwtClaims(token) : null;
     const driverIdClaim = accessClaims?.driver_id;
     const sessionId = responseObj.session_id;
     if (typeof sessionId !== "string") {
-      await store.deleteRefreshToken();
-      await store.deleteRecoveryCredential();
       throw new AuthContractError(
         "AUTH_LOGIN_CONTRACT_INCOMPLETE",
         "Le serveur n'a pas retourné les éléments nécessaires à une session sécurisée."
       );
     }
-    const envelopeWrite = await store.writeSessionEnvelope({
+
+    const envelopePayload = {
       schema_version: 1,
       session_id: sessionId,
       device_installation_id: deviceId,
       user_public_id: String(userObj.public_id ?? ""),
       driver_id: typeof driverIdClaim === "number" ? driverIdClaim : null,
       role: String(userObj.role ?? "driver"),
-      active_context_id: null,
+      active_context_id: null as string | null,
       refresh_generation: Number(
         responseObj.refresh_generation ?? responseObj.session_generation ?? 1
       ),
       last_authenticated_at: new Date().toISOString(),
       revocation_secret: typeof revocationSecret === "string" ? revocationSecret : null,
-    });
-    if (envelopeWrite.status !== "ok") {
-      await store.deleteRefreshToken();
-      await store.deleteRecoveryCredential();
-      // Tombstone revoke si secret dispo
-      if (typeof revocationSecret === "string") {
-        const opId = `login-fail-${Date.now()}`;
-        await store.writeRevocationTombstone({
-          operation: "revoke_session",
-          operation_id: opId,
-          session_id: sessionId,
-          device_installation_id: deviceId,
-          revocation_secret: revocationSecret,
-          created_at: new Date().toISOString(),
-        });
-        try {
-          await revokeSessionPending(sessionId, revocationSecret, opId);
-          await store.deleteRevocationTombstone();
-        } catch {
-          /* conserver tombstone */
+    };
+
+    const persistResult = await withSessionCredentialMutation(loginGeneration, async () => {
+      const refreshWrite = await store.writeRefreshToken(refreshToken);
+      if (refreshWrite.status !== "ok") {
+        throw new AuthContractError(
+          "STORAGE_UNAVAILABLE",
+          "Stockage sécurisé temporairement indisponible. Fermez puis rouvrez l'application et réessayez."
+        );
+      }
+      try {
+        await SecureStore.setItemAsync(REFRESH_TOKEN_STORAGE_KEY, refreshToken);
+      } catch {
+        /* ignore */
+      }
+
+      const recoveryWrite = await store.writeRecoveryCredential(recovery);
+      if (recoveryWrite.status !== "ok") {
+        await store.deleteRefreshToken();
+        throw new AuthContractError(
+          "STORAGE_UNAVAILABLE",
+          "Stockage sécurisé temporairement indisponible. Fermez puis rouvrez l'application et réessayez."
+        );
+      }
+
+      const envelopeWrite = await store.writeSessionEnvelope(envelopePayload);
+      if (envelopeWrite.status !== "ok") {
+        await store.deleteRefreshToken();
+        await store.deleteRecoveryCredential();
+        if (typeof revocationSecret === "string") {
+          await store.appendPendingRevocation({
+            operation_id: `login-fail-${Date.now()}`,
+            session_id: sessionId,
+            device_installation_id: deviceId,
+            revocation_secret: revocationSecret,
+            created_at: new Date().toISOString(),
+            origin: "orphaned_login_cleanup",
+          });
         }
+        throw new AuthContractError(
+          "STORAGE_UNAVAILABLE",
+          "Stockage sécurisé temporairement indisponible. Fermez puis rouvrez l'application et réessayez."
+        );
+      }
+      return true;
+    });
+
+    if (persistResult.status === "stale") {
+      // Login orphelin : enqueue durable sans toucher à la session courante.
+      if (typeof revocationSecret === "string") {
+        const orphan = await enqueueOrphanedLoginRevocation({
+          sessionId,
+          deviceInstallationId: deviceId,
+          revocationSecret,
+        });
+        flushOrphanedLoginRevocationInBackground(orphan);
       }
       throw new AuthContractError(
-        "STORAGE_UNAVAILABLE",
-        "Stockage sécurisé temporairement indisponible. Fermez puis rouvrez l'application et réessayez."
+        "AUTH_LOGIN_STALE",
+        "Une autre session a pris le relais pendant la connexion. Réessayez."
       );
     }
 
-    store.bumpAuthEpoch();
-    if (token) {
-      setAuthToken(token);
+    if (persistResult.status === "applied") {
+      // Accès publié hors mutex (mémoire) — génération encore courante vérifiée à l'instant.
+      if (!store.isCurrentSessionGeneration(loginGeneration)) {
+        if (typeof revocationSecret === "string") {
+          const orphan = await enqueueOrphanedLoginRevocation({
+            sessionId,
+            deviceInstallationId: deviceId,
+            revocationSecret,
+          });
+          flushOrphanedLoginRevocationInBackground(orphan);
+        }
+        throw new AuthContractError(
+          "AUTH_LOGIN_STALE",
+          "Une autre session a pris le relais pendant la connexion. Réessayez."
+        );
+      }
+      if (token) {
+        setAuthToken(token);
+      }
+      markBootstrapAuthFresh();
     }
-    markBootstrapAuthFresh();
   } catch (error) {
+    // Best-effort : flush pending créés lors d'un échec d'écriture login.
+    try {
+      const recoveryMod = require("../auth/authRecoveryCoordinator") as typeof import("../auth/authRecoveryCoordinator");
+      void recoveryMod.flushPendingRevocationTombstone().catch(() => undefined);
+    } catch {
+      /* ignore */
+    }
     throw toApiError(error);
   }
 }

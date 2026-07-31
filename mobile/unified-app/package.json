@@ -25,6 +25,7 @@
     "check-build-ready": "node ./scripts/check-build-ready.js",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
+    "typecheck:session-lifecycle": "node ./scripts/typecheckSessionLifecycle.cjs",
     "test": "jest --watchAll=false",
     "sync:fleet-markers": "node scripts/syncFleetLirieMarkerPngs.mjs",
     "check:fleet-map-no-runtime-resolve": "node scripts/checkFleetMapNoRuntimeResolve.mjs",

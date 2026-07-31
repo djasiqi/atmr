@@ -56,6 +56,8 @@ jobs:
         run: npm ci
       - name: Lint
         run: npm run lint
+      - name: Typecheck (surface session PR2)
+        run: npm run typecheck:session-lifecycle
       - name: Play compliance (push permission single site)
         run: npm run check:play-compliance
       - name: Unit tests

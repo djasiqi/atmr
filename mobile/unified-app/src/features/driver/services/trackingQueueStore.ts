@@ -92,6 +92,7 @@ type MemoryDb = {
   gaps: LocalGapRecord[];
   cursors: Map<string, ContiguousCursor>;
   quarantineIdentity: string | null;
+  quarantineOperationId: string | null;
   migrationCompleted: boolean;
 };
 
@@ -100,6 +101,7 @@ const memory: MemoryDb = {
   gaps: [],
   cursors: new Map(),
   quarantineIdentity: null,
+  quarantineOperationId: null,
   migrationCompleted: false,
 };
 
@@ -840,23 +842,35 @@ export const trackingQueueStore = {
   },
 
   /**
-   * Quarantaine logout : marque l'identité ; ne purge jamais les points non ACKés.
+   * Quarantaine logout : marque l'identité (+ operation_id optionnel) ;
+   * ne purge jamais les points non ACKés.
    * Réconciliation uniquement si la même identité se reconnecte.
    */
-  async quarantineForIdentity(identityKey: string): Promise<void> {
+  async quarantineForIdentity(
+    identityKey: string,
+    lifecycleOperationId?: string | null
+  ): Promise<void> {
     return runSerialized(async () => {
       const mode = await ensureBackendMode();
       if (mode === "sqlite") {
-        await runSqliteOperation((db) =>
-          db.runAsync(
+        await runSqliteOperation(async (db) => {
+          await db.runAsync(
             `INSERT INTO tracking_quarantine_meta (key, value) VALUES ('identity', ?)
              ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
             identityKey
-          )
-        );
+          );
+          if (lifecycleOperationId) {
+            await db.runAsync(
+              `INSERT INTO tracking_quarantine_meta (key, value) VALUES ('operation_id', ?)
+               ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+              lifecycleOperationId
+            );
+          }
+        });
         return;
       }
       memory.quarantineIdentity = identityKey;
+      memory.quarantineOperationId = lifecycleOperationId ?? null;
     });
   },
 
@@ -887,6 +901,7 @@ export const trackingQueueStore = {
           if (current == null) return true;
           if (current !== identityKey) return false;
           await db.runAsync("DELETE FROM tracking_quarantine_meta WHERE key = 'identity'");
+          await db.runAsync("DELETE FROM tracking_quarantine_meta WHERE key = 'operation_id'");
           return true;
         });
       }
@@ -894,6 +909,35 @@ export const trackingQueueStore = {
       if (current == null) return true;
       if (current !== identityKey) return false;
       memory.quarantineIdentity = null;
+      memory.quarantineOperationId = null;
+      return true;
+    });
+  },
+
+  /**
+   * Compensation logout stale : lève la quarantaine uniquement si l'operation_id correspond.
+   */
+  async clearQuarantineIfOperationMatches(lifecycleOperationId: string): Promise<boolean> {
+    return runSerialized(async () => {
+      const mode = await ensureBackendMode();
+      if (mode === "sqlite") {
+        return runSqliteOperation(async (db) => {
+          const row = await db.getFirstAsync<{ value: string }>(
+            "SELECT value FROM tracking_quarantine_meta WHERE key = 'operation_id'"
+          );
+          const current = row?.value ?? null;
+          if (current == null) return true;
+          if (current !== lifecycleOperationId) return false;
+          await db.runAsync("DELETE FROM tracking_quarantine_meta WHERE key = 'identity'");
+          await db.runAsync("DELETE FROM tracking_quarantine_meta WHERE key = 'operation_id'");
+          return true;
+        });
+      }
+      const current = memory.quarantineOperationId;
+      if (current == null) return true;
+      if (current !== lifecycleOperationId) return false;
+      memory.quarantineIdentity = null;
+      memory.quarantineOperationId = null;
       return true;
     });
   },
@@ -904,6 +948,7 @@ export const trackingQueueStore = {
     memory.gaps = [];
     memory.cursors.clear();
     memory.quarantineIdentity = null;
+    memory.quarantineOperationId = null;
     memory.migrationCompleted = false;
     useMemory = true;
     durableUnavailable = false;

@@ -17,6 +17,7 @@ const REFRESH_KEY = "atmr.auth.refresh_token";
 const REFRESH_TOMBSTONE_KEY = "atmr.auth.refresh_token_tombstone";
 const INSTALLATION_KEY = "atmr.auth.installation_id";
 const TOMBSTONE_KEY = "atmr.auth.revocation_tombstone";
+const PENDING_REVOCATIONS_KEY = "atmr.auth.pending_revocations";
 const ENVELOPE_KEY = "atmr.auth.session_envelope";
 
 /** Exporté pour tests de non-régression (format de clé SecureStore). */
@@ -27,6 +28,7 @@ export const AUTH_SECURE_STORE_KEYS = [
   REFRESH_TOMBSTONE_KEY,
   INSTALLATION_KEY,
   TOMBSTONE_KEY,
+  PENDING_REVOCATIONS_KEY,
   ENVELOPE_KEY,
 ] as const;
 
@@ -150,7 +152,7 @@ async function writeAndClearInvalidationMarker(
 ): Promise<SecureCredentialWriteResult> {
   const written = await nativeSet(key, value);
   if (written.status === "ok") {
-    void nativeDelete(tombstoneKey);
+    await nativeDelete(tombstoneKey);
   }
   return written;
 }
@@ -160,7 +162,7 @@ async function deleteAndClearInvalidationMarker(
   tombstoneKey: string
 ): Promise<SecureCredentialWriteResult> {
   const deleted = await nativeDelete(key);
-  void nativeDelete(tombstoneKey);
+  await nativeDelete(tombstoneKey);
   return deleted;
 }
 
@@ -234,6 +236,7 @@ export async function createAndPersistInstallationId(): Promise<SecureCredential
   return readBack;
 }
 
+/** @deprecated Utiliser PendingRevocation — conservé pour migration du singleton historique. */
 export type RevocationTombstone = {
   operation: "revoke_session";
   operation_id: string;
@@ -243,24 +246,180 @@ export type RevocationTombstone = {
   created_at: string;
 };
 
-export async function readRevocationTombstone(): Promise<TypedCredentialReadResult<RevocationTombstone>> {
-  const raw = await nativeGet(TOMBSTONE_KEY);
-  if (raw.status !== "found") return raw;
+export type PendingRevocationOrigin = "explicit_logout" | "orphaned_login_cleanup";
+
+export type PendingRevocationLocalCleanup = {
+  tracking_identity: {
+    user_id: string;
+    driver_id: string;
+    company_id: string;
+  } | null;
+  quarantine_required: boolean;
+};
+
+/**
+ * Intention durable de révocation réseau (≠ preuve terminale revoked).
+ * Une PendingRevocation appartient à une session historique ; son écriture
+ * ne dépend pas du fait que sa génération soit encore courante.
+ */
+export type PendingRevocation = {
+  operation_id: string;
+  session_id: string;
+  device_installation_id: string;
+  revocation_secret: string;
+  created_at: string;
+  origin: PendingRevocationOrigin;
+  local_cleanup?: PendingRevocationLocalCleanup;
+};
+
+function tombstoneToPending(t: RevocationTombstone): PendingRevocation {
+  return {
+    operation_id: t.operation_id,
+    session_id: t.session_id,
+    device_installation_id: t.device_installation_id,
+    revocation_secret: t.revocation_secret,
+    created_at: t.created_at,
+    origin: "explicit_logout",
+  };
+}
+
+async function migrateLegacyTombstoneIntoList(
+  list: PendingRevocation[]
+): Promise<PendingRevocation[]> {
+  const legacy = await nativeGet(TOMBSTONE_KEY);
+  if (legacy.status !== "found") return list;
   try {
-    return { status: "found", value: JSON.parse(raw.value) as RevocationTombstone };
+    const parsed = JSON.parse(legacy.value) as RevocationTombstone;
+    if (
+      parsed &&
+      typeof parsed.operation_id === "string" &&
+      typeof parsed.session_id === "string" &&
+      typeof parsed.revocation_secret === "string"
+    ) {
+      const exists = list.some((p) => p.operation_id === parsed.operation_id);
+      if (!exists) {
+        list = [...list, tombstoneToPending(parsed)];
+      }
+    }
   } catch {
-    return { status: "permanently_invalidated", cause: "tombstone_parse_error" };
+    /* ignore parse error — on purge le singleton */
+  }
+  await nativeDelete(TOMBSTONE_KEY);
+  return list;
+}
+
+async function readPendingRevocationsRaw(): Promise<PendingRevocation[]> {
+  const raw = await nativeGet(PENDING_REVOCATIONS_KEY);
+  let list: PendingRevocation[] = [];
+  if (raw.status === "found") {
+    try {
+      const parsed = JSON.parse(raw.value) as unknown;
+      if (Array.isArray(parsed)) {
+        list = parsed.filter(
+          (item): item is PendingRevocation =>
+            !!item &&
+            typeof item === "object" &&
+            typeof (item as PendingRevocation).operation_id === "string" &&
+            typeof (item as PendingRevocation).session_id === "string" &&
+            typeof (item as PendingRevocation).revocation_secret === "string"
+        );
+      }
+    } catch {
+      list = [];
+    }
+  }
+  const legacyBefore = await nativeGet(TOMBSTONE_KEY);
+  const migrated = await migrateLegacyTombstoneIntoList(list);
+  if (legacyBefore.status === "found" || migrated.length !== list.length) {
+    await writePendingRevocationsRaw(migrated);
+  }
+  return migrated;
+}
+
+async function writePendingRevocationsRaw(
+  list: PendingRevocation[]
+): Promise<SecureCredentialWriteResult> {
+  return nativeSet(PENDING_REVOCATIONS_KEY, JSON.stringify(list));
+}
+
+/** Lecture de la file (hors verrou — préférer via withCredentialStoreLock pour muter). */
+export async function readPendingRevocations(): Promise<
+  TypedCredentialReadResult<PendingRevocation[]>
+> {
+  try {
+    const list = await readPendingRevocationsRaw();
+    return { status: "found", value: list };
+  } catch (err) {
+    const cause = err instanceof Error ? err.message : String(err);
+    return { status: "temporarily_unavailable", cause };
   }
 }
 
+/** Append sans écrasement — à appeler sous withCredentialStoreLock. */
+export async function appendPendingRevocation(
+  entry: PendingRevocation
+): Promise<SecureCredentialWriteResult> {
+  const list = await readPendingRevocationsRaw();
+  if (list.some((p) => p.operation_id === entry.operation_id)) {
+    return { status: "ok" };
+  }
+  list.push(entry);
+  const written = await writePendingRevocationsRaw(list);
+  if (written.status === "ok") {
+    await nativeDelete(TOMBSTONE_KEY);
+  }
+  return written;
+}
+
+/** Suppression par operation_id — sous withCredentialStoreLock. */
+export async function deletePendingRevocationIfOperationMatches(
+  operationId: string
+): Promise<SecureCredentialWriteResult> {
+  const list = await readPendingRevocationsRaw();
+  const next = list.filter((p) => p.operation_id !== operationId);
+  if (next.length === list.length) {
+    return { status: "ok" };
+  }
+  return writePendingRevocationsRaw(next);
+}
+
+export async function replacePendingRevocations(
+  list: PendingRevocation[]
+): Promise<SecureCredentialWriteResult> {
+  return writePendingRevocationsRaw(list);
+}
+
+/** Compat lecture : premier pending ou singleton migré. */
+export async function readRevocationTombstone(): Promise<TypedCredentialReadResult<RevocationTombstone>> {
+  const listResult = await readPendingRevocations();
+  if (listResult.status === "temporarily_unavailable") return listResult;
+  if (listResult.status === "permanently_invalidated") return listResult;
+  const first = listResult.status === "found" ? listResult.value[0] : undefined;
+  if (!first) return { status: "missing" };
+  return {
+    status: "found",
+    value: {
+      operation: "revoke_session",
+      operation_id: first.operation_id,
+      session_id: first.session_id,
+      device_installation_id: first.device_installation_id,
+      revocation_secret: first.revocation_secret,
+      created_at: first.created_at,
+    },
+  };
+}
+
+/** Compat écriture : append en file (n'écrase plus les autres). */
 export async function writeRevocationTombstone(
   tombstone: RevocationTombstone
 ): Promise<SecureCredentialWriteResult> {
-  return nativeSet(TOMBSTONE_KEY, JSON.stringify(tombstone));
+  return appendPendingRevocation(tombstoneToPending(tombstone));
 }
 
+/** Compat : supprime toute la file (préférer deletePendingRevocationIfOperationMatches). */
 export async function deleteRevocationTombstone(): Promise<SecureCredentialWriteResult> {
-  return nativeDelete(TOMBSTONE_KEY);
+  await nativeDelete(TOMBSTONE_KEY);
+  return writePendingRevocationsRaw([]);
 }
 
 export type SessionEnvelope = {
@@ -303,18 +462,62 @@ export async function deleteSessionEnvelope(): Promise<SecureCredentialWriteResu
   return nativeDelete(ENVELOPE_KEY);
 }
 
-/** Epoch auth monotone — partagé avec client / sessionProvider / realtime. */
+/** Génération de session monotone (alias runtime de authEpoch) — process-local. */
+export type SessionGenerationId = number;
+
 let authEpoch = 0;
 
-export function bumpAuthEpoch(): number {
+export function bumpAuthEpoch(): SessionGenerationId {
   authEpoch += 1;
   return authEpoch;
 }
 
-export function getAuthEpoch(): number {
+export function getAuthEpoch(): SessionGenerationId {
   return authEpoch;
 }
 
-export function isCurrentAuthEpoch(epoch: number): boolean {
+export function isCurrentAuthEpoch(epoch: SessionGenerationId): boolean {
   return epoch === authEpoch;
+}
+
+/** Alias PR2 — même runtime que authEpoch. */
+export const bumpSessionGeneration = bumpAuthEpoch;
+export const getSessionGenerationId = getAuthEpoch;
+export const isCurrentSessionGeneration = isCurrentAuthEpoch;
+
+async function clearPendingRefreshOperationMarker(): Promise<void> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- évite import() dynamique sous Jest
+    const AsyncStorage = require("@react-native-async-storage/async-storage")
+      .default as { removeItem: (key: string) => Promise<void> };
+    await AsyncStorage.removeItem("@atmr/auth/pending_refresh_operation");
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Purge credentials locaux sans bump — appelant sous verrou / mutation de session. */
+export async function clearLocalAuthCredentialsLocked(): Promise<void> {
+  await deleteRefreshToken();
+  await deleteRecoveryCredential();
+  await deleteSessionEnvelope();
+  await clearPendingRefreshOperationMarker();
+}
+
+/**
+ * Preuve terminale durable puis purge enveloppe / access.
+ * À appeler sous withSessionCredentialMutation après claim terminal.
+ */
+export async function persistTerminalRevocationEvidenceLocked(
+  reason: string
+): Promise<void> {
+  await invalidateRefreshToken(reason);
+  await invalidateRecoveryCredential(reason);
+  await deleteSessionEnvelope();
+  await clearPendingRefreshOperationMarker();
+}
+
+/** Réservé aux tests. */
+export function __resetSessionGenerationForTests(): void {
+  authEpoch = 0;
 }

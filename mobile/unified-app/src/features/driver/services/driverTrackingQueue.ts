@@ -570,20 +570,28 @@ class DriverTrackingQueue {
   /**
    * Quarantaine logout — ne purge jamais les points non ACKés.
    * Réconciliation uniquement si la même identité se reconnecte.
+   * `lifecycleOperationId` permet la compensation si le logout devient stale.
    */
   async quarantineOnLogout(identity: {
     userId: number | string;
     driverId: number | string;
     companyId: number | string;
+    lifecycleOperationId?: string;
   }): Promise<void> {
     await this.ensureLoaded();
     const key = `${identity.userId}:${identity.driverId}:${identity.companyId}`;
     this.identityKey = key;
-    await trackingQueueStore.quarantineForIdentity(key);
+    await trackingQueueStore.quarantineForIdentity(key, identity.lifecycleOperationId ?? null);
     emitDriverTelemetry("tracking.queue.quarantined", {
       source: "driver.tracking.queue",
       queue_depth: this.items.length,
+      lifecycle_operation_id: identity.lifecycleOperationId ?? null,
     });
+  }
+
+  async clearQuarantineIfOperationMatches(lifecycleOperationId: string): Promise<boolean> {
+    await this.ensureLoaded();
+    return trackingQueueStore.clearQuarantineIfOperationMatches(lifecycleOperationId);
   }
 
   async resumeAfterLogin(identity: {

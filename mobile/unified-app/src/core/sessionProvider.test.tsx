@@ -32,6 +32,15 @@ const mockRestoreContextCache = jest.fn().mockReturnValue(false) as jest.MockedF
 >;
 const mockClearAllContextCache = jest.fn() as jest.MockedFunction<(queryClient: QueryClient) => void>;
 const mockPurgeDriverProfileCache = jest.fn() as jest.Mock<any>;
+const mockAttemptRestRecovery = jest.fn(async () => "no_action");
+const mockPerformExplicitLogout = jest.fn(async (params: {
+  onLogoutClaimed?: (gen: number) => void;
+  commitSessionStateIfCurrent: (gen: number) => boolean;
+}) => {
+  params.onLogoutClaimed?.(2);
+  params.commitSessionStateIfCurrent(2);
+  return { status: "completed" as const, logoutGeneration: 2, lifecycleOperationId: "op" };
+});
 
 jest.mock("./api/client", () => ({
   fetchBootstrap: (activeContextId?: string | null) => mockFetchBootstrap(activeContextId),
@@ -42,15 +51,33 @@ jest.mock("./api/client", () => ({
   refreshAuthTokenNow: () => mockRefreshAuthTokenNow(),
   switchContext: (targetContextId: string) => mockSwitchContext(targetContextId),
   setActiveContextIdForApi: (contextId: string | null) => mockSetActiveContextIdForApi(contextId),
+  getLastRefreshErrorCode: () => null,
 }));
 
 jest.mock("./auth/authRecoveryCoordinator", () => ({
-  attemptRestRecovery: jest.fn(async () => "no_action"),
+  attemptRestRecovery: (...args: unknown[]) => mockAttemptRestRecovery(...args),
   flushPendingRevocationTombstone: jest.fn(async () => true),
   performLogout: jest.fn(async () => undefined),
+  performExplicitLogout: (...args: unknown[]) =>
+    mockPerformExplicitLogout(...(args as [Parameters<typeof mockPerformExplicitLogout>[0]])),
+  applyTerminalRevocationIfCurrent: jest.fn(async () => "stale"),
+  finishInterruptedExplicitLogout: jest.fn(async () => undefined),
   persistOfflineSnapshot: jest.fn(async () => undefined),
   restoreOfflineSessionSnapshot: jest.fn(async () => ({ kind: "anonymous" })),
   hasPendingRevocationTombstone: jest.fn(async () => false),
+}));
+
+jest.mock("./auth/authCredentialStore", () => ({
+  getSessionGenerationId: () => 1,
+  isCurrentSessionGeneration: () => true,
+  readSessionEnvelope: jest.fn(async () => ({
+    status: "found",
+    value: {
+      session_id: "sess-test",
+      device_installation_id: "dev",
+      revocation_secret: "sec",
+    },
+  })),
 }));
 
 jest.mock("./realtime/realtimeManager", () => ({
@@ -159,6 +186,9 @@ describe("session provider gates", () => {
     mockRestoreContextCache.mockReturnValue(false);
     mockClearAllContextCache.mockReset();
     mockPurgeDriverProfileCache.mockReset();
+    mockAttemptRestRecovery.mockReset();
+    mockAttemptRestRecovery.mockResolvedValue("no_action");
+    mockPerformExplicitLogout.mockClear();
     mockPurgeDriverProfileCache.mockResolvedValue(undefined);
     mockHasAuthToken.mockReturnValue(false);
     mockHasStoredRefreshToken.mockResolvedValue(false);
@@ -186,8 +216,7 @@ describe("session provider gates", () => {
 
   it("tries refresh on cold start when access token is missing", async () => {
     mockHasAuthToken.mockReturnValue(false);
-    mockHasStoredRefreshToken.mockResolvedValue(true);
-    mockRefreshAuthTokenNow.mockResolvedValue(true);
+    mockAttemptRestRecovery.mockResolvedValueOnce("recovered");
     mockFetchBootstrap.mockResolvedValue(buildBootstrap("driver:42"));
     const handle: { current: SessionHandle | null } = { current: null };
     const { renderer } = await buildHarness(handle);
@@ -196,8 +225,7 @@ describe("session provider gates", () => {
       await handle.current?.bootstrapSession();
     });
 
-    expect(mockHasStoredRefreshToken).toHaveBeenCalled();
-    expect(mockRefreshAuthTokenNow).toHaveBeenCalled();
+    expect(mockAttemptRestRecovery).toHaveBeenCalledWith("cold_start");
     expect(handle.current?.status).toBe("ready");
     expect(handle.current?.activeContext?.context_id).toBe("driver:42");
     await act(async () => {
@@ -226,8 +254,7 @@ describe("session provider gates", () => {
 
   it("keeps ready status when refresh fails and backend returns unauthenticated bootstrap", async () => {
     mockHasAuthToken.mockReturnValue(false);
-    mockHasStoredRefreshToken.mockResolvedValue(true);
-    mockRefreshAuthTokenNow.mockResolvedValue(false);
+    mockAttemptRestRecovery.mockResolvedValueOnce("no_action");
     mockFetchBootstrap.mockResolvedValue(buildUnauthenticatedBootstrap());
     const handle: { current: SessionHandle | null } = { current: null };
     const { renderer } = await buildHarness(handle);
@@ -236,7 +263,7 @@ describe("session provider gates", () => {
       await handle.current?.bootstrapSession();
     });
 
-    expect(mockRefreshAuthTokenNow).toHaveBeenCalled();
+    expect(mockAttemptRestRecovery).toHaveBeenCalledWith("cold_start");
     expect(handle.current?.status).toBe("ready");
     expect(handle.current?.activeContext).toBeNull();
     await act(async () => {
@@ -392,7 +419,7 @@ describe("session provider gates", () => {
     });
 
     expect(mockLogin).toHaveBeenCalledWith("driver@lirie.ch", "secret");
-    expect(mockLogoutSession).toHaveBeenCalled();
+    expect(mockPerformExplicitLogout).toHaveBeenCalled();
     expect(mockPurgeDriverProfileCache).toHaveBeenCalled();
     expect(mockDisconnect).toHaveBeenCalled();
     expect(mockClearAllContextCache).toHaveBeenCalled();

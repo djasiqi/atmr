@@ -8,13 +8,33 @@ import { FONT_SIZE } from "../src/design/responsive/typographyTokens";
 const ReactRuntime: any = require("react");
 
 export default function IndexScreen() {
-  const { status, bootstrap, error, bootstrapSession } = useSession();
+  const {
+    status,
+    bootstrap,
+    error,
+    bootstrapSession,
+    mobileSessionStatus,
+    autoBootstrapAllowed,
+  } = useSession();
 
   ReactRuntime.useEffect(() => {
     if (status === "idle") {
-      void bootstrapSession();
+      void bootstrapSession({ trigger: "cold_start_auto" });
     }
   }, [status, bootstrapSession]);
+
+  // Post-logout : pas d'auto-bootstrap — orienter vers login.
+  if (
+    status === "idle" &&
+    !autoBootstrapAllowed &&
+    (mobileSessionStatus === "anonymous" || mobileSessionStatus === "logging_out")
+  ) {
+    return <Redirect href={"/(public)/login" as any} />;
+  }
+
+  if (mobileSessionStatus === "revoked") {
+    return <Redirect href={"/(public)/login" as any} />;
+  }
 
   if (status === "error") {
     return (
@@ -25,7 +45,10 @@ export default function IndexScreen() {
             <Text style={styles.body}>
               {error ?? "Impossible de charger la session depuis le backend."}
             </Text>
-            <Pressable onPress={() => void bootstrapSession()} style={styles.retry}>
+            <Pressable
+              onPress={() => void bootstrapSession({ trigger: "manual_retry" })}
+              style={styles.retry}
+            >
               <Text style={styles.retryText}>Réessayer</Text>
             </Pressable>
           </View>
@@ -34,12 +57,16 @@ export default function IndexScreen() {
     );
   }
 
-  if (!bootstrap || status === "bootstrapping") {
+  if (!bootstrap || status === "bootstrapping" || mobileSessionStatus === "logging_out") {
     return (
       <Screen backgroundColor={brandSurfaceSoft}>
         <ResponsiveContainer>
           <View style={styles.loadingWrap}>
-            <Text style={styles.loadingText}>Chargement de la session…</Text>
+            <Text style={styles.loadingText}>
+              {mobileSessionStatus === "logging_out"
+                ? "Déconnexion…"
+                : "Chargement de la session…"}
+            </Text>
           </View>
         </ResponsiveContainer>
       </Screen>

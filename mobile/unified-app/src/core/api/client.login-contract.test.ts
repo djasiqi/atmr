@@ -98,17 +98,37 @@ jest.mock("../auth/authCredentialStore", () => ({
   deleteRefreshToken: (...args: unknown[]) => mockDeleteRefreshToken(...args),
   deleteRecoveryCredential: (...args: unknown[]) => mockDeleteRecoveryCredential(...args),
   bumpAuthEpoch: (...args: unknown[]) => mockBumpAuthEpoch(...args),
+  bumpSessionGeneration: (...args: unknown[]) => mockBumpAuthEpoch(...args),
   getAuthEpoch: () => 1,
+  getSessionGenerationId: () => 1,
   isCurrentAuthEpoch: () => true,
+  isCurrentSessionGeneration: () => true,
+  appendPendingRevocation: jest.fn(async () => ({ status: "ok" })),
   readSessionEnvelope: jest.fn(),
   readRefreshToken: jest.fn(),
   writeRevocationTombstone: jest.fn(),
   deleteRevocationTombstone: jest.fn(),
+  clearLocalAuthCredentialsLocked: jest.fn(async () => undefined),
+}));
+
+jest.mock("../auth/sessionCredentialMutex", () => ({
+  withCredentialStoreLock: async <T,>(fn: () => Promise<T> | T) => fn(),
+  withSessionCredentialMutation: async <T,>(
+    _gen: number,
+    fn: () => Promise<T> | T
+  ) => ({ status: "applied" as const, value: await fn() }),
+  claimNextSessionGenerationIfCurrent: async () => ({
+    status: "claimed" as const,
+    generation: 2,
+  }),
 }));
 
 jest.mock("../auth/authRecoveryCoordinator", () => ({
   hasPendingRevocationTombstone: (...args: unknown[]) =>
     mockHasPendingRevocationTombstone(...args),
+  flushPendingRevocationTombstone: jest.fn(async () => true),
+  enqueueOrphanedLoginRevocation: jest.fn(async (args: unknown) => args),
+  flushOrphanedLoginRevocationInBackground: jest.fn(),
 }));
 
 jest.mock("../auth/jwtClaims", () => ({
