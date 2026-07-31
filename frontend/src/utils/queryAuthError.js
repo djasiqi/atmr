@@ -1,5 +1,6 @@
 /**
- * Couche transversale : masquer les erreurs auth transitoires dans React Query.
+ * Couche transversale : masquer les erreurs auth transitoires dans React Query
+ * et identifier les erreurs à ne jamais rejouer automatiquement.
  */
 
 import { isAuthRefreshInProgress, isMissingTokenErrorPayload } from './apiClient';
@@ -28,6 +29,17 @@ export const isRecoverableAuthError = (error) => {
     return isAuthRefreshInProgress();
   }
   return false;
+};
+
+/**
+ * Quota API dépassé (429 `too_many_requests`) : chaque tentative supplémentaire consomme
+ * le quota et retarde le déblocage de la fenêtre glissante côté serveur.
+ */
+export const isRateLimitError = (error) => {
+  if (!error) return false;
+  const status = error?.response?.status ?? error?.status;
+  if (status === 429) return true;
+  return error?.response?.data?.error === 'too_many_requests';
 };
 
 export const shouldShowQueryError = (error) => {

@@ -20,6 +20,7 @@ import {
   isRecoverableAuthError,
   isFreshTokenRequiredError,
   isSessionExpiredError,
+  isRateLimitError,
 } from './utils/queryAuthError';
 import { SessionBootstrapProvider } from './contexts/SessionBootstrapContext';
 import AuthNavigationBridge from './components/auth/AuthNavigationBridge';
@@ -191,7 +192,8 @@ export const queryClient = new QueryClient({
         if (
           isRecoverableAuthError(error) ||
           isFreshTokenRequiredError(error) ||
-          isSessionExpiredError(error)
+          isSessionExpiredError(error) ||
+          isRateLimitError(error)
         ) {
           return false;
         }
@@ -206,7 +208,8 @@ export const queryClient = new QueryClient({
         if (
           isRecoverableAuthError(error) ||
           isFreshTokenRequiredError(error) ||
-          isSessionExpiredError(error)
+          isSessionExpiredError(error) ||
+          isRateLimitError(error)
         ) {
           return false;
         }

@@ -4,6 +4,7 @@ import {
   isRecoverableAuthError,
   isFreshTokenRequiredError,
   isSessionExpiredError,
+  isRateLimitError,
   AUTH_TOKEN_NOT_FRESH,
   AUTH_SESSION_EXPIRED,
 } from '../queryAuthError';
@@ -50,5 +51,17 @@ describe('queryAuthError', () => {
     const error = { message: 'Erreur serveur' };
     expect(shouldShowQueryError(error)).toBe(true);
     expect(getQueryErrorMessage(error)).toBe('Erreur serveur');
+  });
+
+  it('identifie un quota API dépassé (429 ou too_many_requests)', () => {
+    expect(isRateLimitError({ response: { status: 429 } })).toBe(true);
+    expect(
+      isRateLimitError({
+        response: { status: 429, data: { error: 'too_many_requests' } },
+      })
+    ).toBe(true);
+    expect(isRateLimitError({ status: 429 })).toBe(true);
+    expect(isRateLimitError({ response: { status: 500 } })).toBe(false);
+    expect(isRateLimitError(null)).toBe(false);
   });
 });
