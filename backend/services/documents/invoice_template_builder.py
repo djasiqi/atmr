@@ -13,6 +13,10 @@ from decimal import Decimal
 from typing import Any
 
 from services.billing import BillingProfileService
+from services.documents.invoice_recipient import (
+    institution_patient_billing_address,
+    resolve_invoice_institution_patient,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -302,10 +306,17 @@ class InvoiceTemplateBuilder:
             from models.billing_party import ClientBillingParty
             from models.enums import BillingPartyType
 
+            # Un BillingParty PATIENT n'est pas un tiers payeur : le payeur EST le
+            # bénéficiaire, il n'y a aucune délégation de facturation à vérifier.
+            is_patient_party = (
+                getattr(getattr(invoice, "billing_party", None), "type", None)
+                == BillingPartyType.PATIENT
+            )
+
             # Si le client n'a plus de lien avec ce tiers payeur (lien supprimé), facturer au domicile du client
             client_id = getattr(invoice, "client_id", None)
             bp_id = getattr(invoice, "billing_party_id", None)
-            if client_id is not None and bp_id is not None:
+            if not is_patient_party and client_id is not None and bp_id is not None:
                 link = ClientBillingParty.query.filter_by(
                     client_id=client_id, billing_party_id=bp_id
                 ).first()
@@ -321,6 +332,14 @@ class InvoiceTemplateBuilder:
             if bp is not None:
                 bp_name = (getattr(bp, "display_name", None) or "Payeur").strip()
                 addr = (getattr(bp, "billing_address", None) or "").strip()
+                if is_patient_party:
+                    # Facturation au patient : son domicile légal fait foi, le
+                    # snapshot du BillingParty peut être vide ou périmé.
+                    domicile = institution_patient_billing_address(
+                        resolve_invoice_institution_patient(invoice)
+                    )
+                    if domicile:
+                        addr = domicile
                 if addr:
                     addr_html = (
                         addr.replace("\r\n", "\n")

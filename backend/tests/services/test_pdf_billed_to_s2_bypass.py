@@ -11,6 +11,7 @@ Contexte:
 """
 
 import uuid
+from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
@@ -141,6 +142,7 @@ class TestGetBilledToS2Bypass:
         invoice.balance_due = Decimal("100.00")
         invoice.period_month = 1
         invoice.period_year = 2026
+        invoice.due_date = datetime(2026, 2, 28, tzinfo=UTC)
         db.session.add(invoice)
         db.session.flush()
 
@@ -181,6 +183,7 @@ class TestGetBilledToS2Bypass:
         invoice.balance_due = Decimal("50.00")
         invoice.period_month = 1
         invoice.period_year = 2026
+        invoice.due_date = datetime(2026, 2, 28, tzinfo=UTC)
         db.session.add(invoice)
         db.session.flush()
 
@@ -213,6 +216,7 @@ class TestGetBilledToS2Bypass:
         invoice.balance_due = Decimal("60.00")
         invoice.period_month = 1
         invoice.period_year = 2026
+        invoice.due_date = datetime(2026, 2, 28, tzinfo=UTC)
         db.session.add(invoice)
         db.session.flush()
 
@@ -245,6 +249,7 @@ class TestGetBilledToS2Bypass:
         invoice.balance_due = Decimal("40.00")
         invoice.period_month = 1
         invoice.period_year = 2026
+        invoice.due_date = datetime(2026, 2, 28, tzinfo=UTC)
         db.session.add(invoice)
         db.session.flush()
 

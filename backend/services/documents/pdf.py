@@ -20,6 +20,11 @@ from sqlalchemy.orm import joinedload, selectinload
 
 from infrastructure.invoices.invoice_calculator import round_to_5_cents
 from models import Client, CompanyBillingSettings, Invoice, InvoiceLine, InvoiceLineType
+from services.documents.invoice_recipient import (
+    institution_patient_billing_address,
+    iter_invoice_bookings,
+    resolve_invoice_institution_patient,
+)
 from services.documents.invoice_template_builder import InvoiceTemplateBuilder
 from services.documents.qrbill import QRBillService
 
@@ -50,27 +55,22 @@ DEST_ADDR_MAX_WIDTH_MM = 85.0  # Largeur max wrapping (zone fenêtre C5, safe pa
 DEST_ADDR_LINE_HEIGHT_MM = 4.0  # Interligne (mm)
 DEST_ADDR_ZONE_HEIGHT_MM = 45.0  # Hauteur zone fenêtre C5
 
-# Espacement pour pousser le QR-Bill en bas de sa page (A4 - margins - QR height)
-# Formule: spacer_max = usable_height - QR_height - overhead
-#   marge bas 0.5cm: usable=771pt, QR+overhead~292pt → spacer_safe≈475
-# Source unique : utilisé par pdf.py et partnerships/invoices_pdf.py
-QR_BILL_SPACER_PT = 478
+# Dimensions normées de la QR-facture suisse (Implementation Guidelines v2.3) :
+# récépissé 62 mm + section paiement 148 mm = 210 mm de large, 105 mm de haut,
+# collés au bord bas de la page A4. La lib `qrbill` ajoute 1 mm en haut pour la
+# ligne de ciseaux, d'où 106 mm de hauteur de dessin.
+# Rendre à cette taille exacte est indispensable : le carré du QR doit mesurer
+# 46 mm, sinon il devient illisible au scan après impression.
+QR_BILL_WIDTH_MM = 210.0
+QR_BILL_HEIGHT_MM = 106.0
 
-# Dimensions du QR-Bill (12x6 cm standard suisse) — source unique pour tous les PDF
-QR_BILL_WIDTH_CM = 12.0
-QR_BILL_HEIGHT_CM = 6.0
-QR_BILL_TABLE_COL_WIDTHS_CM = (6.0, 12.0)  # (colonne QR, colonne vide)
+# Décalage fin du bloc QR-facture par rapport au coin bas-gauche de la page (mm).
+# À laisser à 0 sauf calibration d'une imprimante particulière.
+QR_BILL_OFFSET_X_MM = 0.0
+QR_BILL_OFFSET_Y_MM = 0.0
 
-# Zoom : facteur d'échelle (1.0 = 100%, 1.1 = agrandir 10%, 0.9 = rétrécir 10%)
-# 1.57 = compromis pour spacer 435 (1.6 débordait à 435)
-QR_BILL_SCALE_FACTOR = 1.6
-
-# Positionnement horizontal : décalage gauche/droite (mm)
-# > 0 = décaler vers la droite, < 0 = décaler vers la gauche
-QR_BILL_LEFT_PADDING_MM = -5.0
-
-# Marge bas page QR-Bill (pas de pied de page légal) — QR-Bill au maximum en bas
-# 0.5 cm = spacer 475 avec scale 1.6 (maximum descente sans débordement)
+# Marge bas de la page QR-Bill (pas de pied de page légal) : le bloc QR est
+# positionné en coordonnées page absolues, cette marge ne borne que le cadre.
 QR_BILL_PAGE_BOTTOM_MARGIN_CM = 0.5
 
 # Pied « totaux » : deux colonnes (libellé | montant), alignées à droite sous le détail.
@@ -199,45 +199,53 @@ def _make_invoice_doc_with_qrbill_page(
     return doc
 
 
-def _make_qr_bill_table(drawing: Any) -> Any:
-    """Crée un tableau ReportLab pour afficher le QR-Bill (dimensions et style unifiés).
+class _QRBillBottomFlowable(Flowable):
+    """QR-facture rendue à taille normée et collée au bas de la page.
+
+    Le dessin est positionné en coordonnées page absolues (coin bas-gauche),
+    indépendamment des marges du cadre courant, comme l'exige la norme suisse.
+    """
+
+    def __init__(self, drawing: Any) -> None:
+        super().__init__()
+        self._drawing = drawing
+
+    @override
+    def wrap(self, aW: float, aH: float) -> tuple[float, float]:
+        # Occupe le reste du cadre : le dessin sort volontairement des marges.
+        self.width = float(aW)
+        self.height = max(float(aH), 0.0)
+        return (self.width, self.height)
+
+    def draw(self) -> None:
+        from reportlab.lib.units import mm
+
+        origin_x, origin_y = self.canv.absolutePosition(0, 0)
+        self._drawing.drawOn(
+            self.canv,
+            QR_BILL_OFFSET_X_MM * mm - origin_x,
+            QR_BILL_OFFSET_Y_MM * mm - origin_y,
+        )
+
+
+def _make_qr_bill_flowable(drawing: Any) -> Any:
+    """Prépare le QR-Bill à l'échelle normée (210 × 106 mm), ancré en bas de page.
 
     Utilisé par pdf.py et partnerships/invoices_pdf.py.
     """
-    from reportlab.lib import colors
-    from reportlab.lib.units import cm, mm
-    from reportlab.platypus import Table, TableStyle
+    from reportlab.lib.units import mm
 
-    w_pt = QR_BILL_WIDTH_CM * cm * QR_BILL_SCALE_FACTOR
-    h_pt = QR_BILL_HEIGHT_CM * cm * QR_BILL_SCALE_FACTOR
-    orig_w, orig_h = drawing.width, drawing.height
-    drawing.width = w_pt
-    drawing.height = h_pt
+    target_w = QR_BILL_WIDTH_MM * mm
+    target_h = QR_BILL_HEIGHT_MM * mm
+    orig_w, orig_h = float(drawing.width), float(drawing.height)
     if orig_w > 0 and orig_h > 0:
-        drawing.scale(w_pt / orig_w, h_pt / orig_h)
+        # Échelle uniforme : toute distorsion réduirait la lisibilité du QR.
+        factor = min(target_w / orig_w, target_h / orig_h)
+        drawing.scale(factor, factor)
+        drawing.width = orig_w * factor
+        drawing.height = orig_h * factor
 
-    col_widths = [
-        QR_BILL_TABLE_COL_WIDTHS_CM[0] * cm,
-        QR_BILL_TABLE_COL_WIDTHS_CM[1] * cm,
-    ]
-    qr_table = Table([[drawing, ""]], colWidths=col_widths)
-    left_pad_pt = QR_BILL_LEFT_PADDING_MM * mm
-    qr_table.setStyle(
-        TableStyle(
-            [
-                ("ALIGN", (0, 0), (0, 0), "LEFT"),
-                ("ALIGN", (1, 0), (1, 0), "LEFT"),
-                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("BACKGROUND", (0, 0), (-1, -1), colors.white),
-                ("LEFTPADDING", (0, 0), (0, 0), left_pad_pt),
-                ("LEFTPADDING", (1, 0), (1, 0), 0),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-                ("TOPPADDING", (0, 0), (-1, -1), 0),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
-            ]
-        )
-    )
-    return qr_table
+    return _QRBillBottomFlowable(drawing)
 
 
 def _compute_c5_zone_canvas_coords(
@@ -2171,9 +2179,13 @@ def _get_billed_to(
             )
         )
 
-        if _is_clinic_invoice:
+        # Un BillingParty PATIENT n'est pas un tiers payeur : le payeur EST le
+        # bénéficiaire, il n'y a donc aucune délégation de facturation à vérifier.
+        _is_patient_party = _bp_type == BillingPartyType.PATIENT
+
+        if _is_clinic_invoice or _is_patient_party:
             app_logger.info(
-                "[PDF] Facture clinique/établissement (strategy=%s, bp_type=%s) → bypass lien ClientBillingParty (invoice_id=%s).",
+                "[PDF] Facture clinique/établissement ou payeur patient (strategy=%s, bp_type=%s) → bypass lien ClientBillingParty (invoice_id=%s).",
                 _billing_strategy.value if _billing_strategy else None,
                 _bp_type.value if _bp_type else None,
                 getattr(invoice, "id", None),
@@ -2199,7 +2211,18 @@ def _get_billed_to(
                 use_billing_party = False
 
         if use_billing_party and bp:
-            raw = bp.billing_address or "Adresse non renseignée"
+            raw = bp.billing_address or ""
+            if _is_patient_party:
+                # Facturation au patient : son domicile légal fait foi, le snapshot
+                # du BillingParty peut être vide ou périmé.
+                _domicile = institution_patient_billing_address(
+                    resolve_invoice_institution_patient(
+                        invoice, bookings_by_id=bookings_by_id
+                    )
+                )
+                if _domicile:
+                    raw = _domicile
+            raw = raw or "Adresse non renseignée"
             raw = _sanitize_billed_to_address(bp.display_name or "Payeur", raw)
             addr = _format_billed_to_three_lines(
                 raw or "Adresse non renseignée", company_country=company_country
@@ -2300,56 +2323,24 @@ def _get_billed_to(
         # Chercher le nom du patient depuis le premier booking de la facture
         _patient_name = None
         _patient_address = None
-        if hasattr(invoice, "lines") and invoice.lines:
-            from models import Booking
-
-            for line in invoice.lines:
-                # billed_booking est un backref InstrumentedList, pas un objet unique
-                _bk_rel = getattr(line, "billed_booking", None)
-                if isinstance(_bk_rel, list) and _bk_rel:
-                    _bk = _bk_rel[0]
-                elif _bk_rel and not isinstance(_bk_rel, list):
-                    _bk = _bk_rel
-                elif line.reservation_id and bookings_by_id is not None:
-                    _bk = bookings_by_id.get(line.reservation_id)
-                else:
-                    # Hors pipeline PDF : requête unique de repli
-                    _bk = (
-                        Booking.query.get(line.reservation_id)
-                        if line.reservation_id
-                        else None
+        for _bk in iter_invoice_bookings(invoice, bookings_by_id=bookings_by_id):
+            if getattr(_bk, "customer_name", None):
+                _patient_name = _bk.customer_name
+                break
+        # Adresse : uniquement le patient de CETTE facture. Déduire le patient à
+        # l'échelle de l'institution donnerait la même adresse à tous les résidents.
+        try:
+            _ip = resolve_invoice_institution_patient(
+                invoice, bookings_by_id=bookings_by_id
+            )
+            if _ip:
+                if not _patient_name:
+                    _patient_name = (
+                        f"{_ip.first_name or ''} {_ip.last_name or ''}".strip()
                     )
-                if _bk and getattr(_bk, "customer_name", None):
-                    _patient_name = _bk.customer_name
-                    break
-        # Chercher l'adresse du patient via InstitutionPatient
-        if client.linked_institution_id:
-            try:
-                from models.institution_patient import InstitutionPatient
-                from models.transport_request import TransportRequest
-
-                _tr = (
-                    TransportRequest.query.filter_by(
-                        institution_id=client.linked_institution_id,
-                    )
-                    .order_by(TransportRequest.id.desc())
-                    .first()
-                )
-                if _tr and _tr.patient_id:
-                    _ip = InstitutionPatient.query.get(_tr.patient_id)
-                    if _ip:
-                        if not _patient_name:
-                            _patient_name = (
-                                f"{_ip.first_name or ''} {_ip.last_name or ''}".strip()
-                            )
-                        parts = [
-                            _ip.address or "",
-                            _ip.postal_code or "",
-                            _ip.city or "",
-                        ]
-                        _patient_address = ", ".join(p for p in parts if p)
-            except Exception as e:
-                app_logger.warning("[PDF] Patient lookup error: %s", e)
+                _patient_address = institution_patient_billing_address(_ip)
+        except Exception as e:
+            app_logger.warning("[PDF] Patient lookup error: %s", e)
 
         if _patient_name:
             p_name = _name_with_uppercase_last_name(_patient_name)
@@ -6298,9 +6289,6 @@ class PDFService:
         story.append(NextPageTemplate("QRBill"))
         story.append(PageBreak())
 
-        # Espacement pour pousser le QR-Bill en bas de sa page (doit tenir dans usable_height)
-        story.append(Spacer(1, QR_BILL_SPACER_PT))
-
         _perf_qr_start = perf_counter()
         try:
             qr_bill_service = self.qrbill_service
@@ -6316,7 +6304,7 @@ class PDFService:
             if qr_bill_svg_content:
                 drawing = _svg_content_to_drawing(qr_bill_svg_content)
                 if drawing:
-                    story.append(_make_qr_bill_table(drawing))
+                    story.append(_make_qr_bill_flowable(drawing))
             else:
                 story.append(Paragraph("QR-Bill non disponible", normal_style))
 
@@ -7070,7 +7058,6 @@ class PDFService:
 
         # === QR-BILL (SIMPLIFIÉ) ===
         story.append(PageBreak())
-        story.append(Spacer(1, QR_BILL_SPACER_PT))
 
         try:
             qr_bill_service = self.qrbill_service
@@ -7083,7 +7070,7 @@ class PDFService:
             if qr_bill_svg_content:
                 drawing = _svg_content_to_drawing(qr_bill_svg_content)
                 if drawing:
-                    story.append(_make_qr_bill_table(drawing))
+                    story.append(_make_qr_bill_flowable(drawing))
         except Exception as e:
             app_logger.warning("Impossible de générer le QR-Bill: %s", e)
 
@@ -7691,7 +7678,6 @@ class PDFService:
         # === QR-BILL ===
         story.append(NextPageTemplate("QRBill"))
         story.append(PageBreak())
-        story.append(Spacer(1, QR_BILL_SPACER_PT))
 
         _perf_qrd_start = perf_counter()
         try:
@@ -7707,7 +7693,7 @@ class PDFService:
             if qr_bill_svg_content:
                 drawing = _svg_content_to_drawing(qr_bill_svg_content)
                 if drawing:
-                    story.append(_make_qr_bill_table(drawing))
+                    story.append(_make_qr_bill_flowable(drawing))
         except Exception as e:
             app_logger.warning("Impossible de générer le QR-Bill: %s", e)
         app_logger.info(
@@ -7977,7 +7963,6 @@ class PDFService:
         if reminder and reminder.total_due > 0 and reminder.qr_reference:
             story.append(Spacer(1, 30))
             story.append(PageBreak())
-            story.append(Spacer(1, QR_BILL_SPACER_PT))
 
             try:
                 # Créer une facture "virtuelle" pour le QR-bill avec le montant total
@@ -8006,7 +7991,7 @@ class PDFService:
                 if qr_bill_svg_content:
                     drawing = _svg_content_to_drawing(qr_bill_svg_content)
                     if drawing:
-                        story.append(_make_qr_bill_table(drawing))
+                        story.append(_make_qr_bill_flowable(drawing))
                         app_logger.info("QR-bill ajouté au PDF de rappel consolidé")
             except Exception as e:
                 app_logger.warning(

@@ -5,13 +5,13 @@ Ce module génère des factures partenaires avec EXACTEMENT le même template
 que les factures client/clinique :
 - Même structure de document (BaseDocTemplate + PageTemplates)
 - Même footer fixe (callback onPage)
-- Même page QR-Bill dédiée (NextPageTemplate + PageBreak + Spacer)
+- Même page QR-Bill dédiée (NextPageTemplate + PageBreak)
 - Même génération de référence (SCOR)
 
 Architecture:
 - Réutilise _make_invoice_doc_with_qrbill_page() pour le document
 - Réutilise _make_legal_footer_page_callback() pour le footer fixe
-- Réutilise _make_qr_bill_table() pour le QR-Bill
+- Réutilise _make_qr_bill_flowable() pour le QR-Bill
 - Génère une référence SCOR comme les factures client
 """
 
@@ -47,13 +47,12 @@ from services.documents.pdf import (
     INVOICE_PREVIEW_TOTALS_AMOUNT_CM,
     INVOICE_PREVIEW_TOTALS_LABEL_CM,
     INVOICE_PREVIEW_TOTALS_LABEL_RIGHT_PADDING_PT,
-    QR_BILL_SPACER_PT,
     _build_default_legal_footer_html,
     _format_company_contact_footer_bar,
     _load_logo_ratio_safe,
     _make_invoice_doc_with_qrbill_page,
     _make_legal_footer_page_callback,
-    _make_qr_bill_table,
+    _make_qr_bill_flowable,
     _svg_content_to_drawing,
     _xml_escape_for_paragraph,
 )
@@ -182,7 +181,7 @@ def generate_partner_invoice_pdf_content(
     Utilise EXACTEMENT le même template que les factures client/clinique:
     - BaseDocTemplate avec PageTemplates (First, Later, QRBill)
     - Footer fixe via callback onPage (pas dans le flow)
-    - Page QR-Bill dédiée avec NextPageTemplate + PageBreak + Spacer
+    - Page QR-Bill dédiée avec NextPageTemplate + PageBreak
     - Référence SCOR générée comme pour client/clinique
 
     Args:
@@ -630,9 +629,6 @@ def generate_partner_invoice_pdf_content(
     story.append(NextPageTemplate("QRBill"))
     story.append(PageBreak())
 
-    # Espacement pour pousser le QR-Bill en bas de sa page (IDENTIQUE à pdf.py)
-    story.append(Spacer(1, QR_BILL_SPACER_PT))
-
     try:
         if not billing_settings or not billing_settings.iban:
             story.append(
@@ -708,7 +704,7 @@ def generate_partner_invoice_pdf_content(
             # Utiliser les mêmes helpers que pdf.py pour le rendu
             drawing = _svg_content_to_drawing(svg_content)
             if drawing:
-                story.append(_make_qr_bill_table(drawing))
+                story.append(_make_qr_bill_flowable(drawing))
             else:
                 story.append(Paragraph("QR-Bill non disponible", normal_style))
 
