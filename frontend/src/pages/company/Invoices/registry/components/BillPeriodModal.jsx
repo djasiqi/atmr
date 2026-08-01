@@ -942,9 +942,11 @@ const BillPeriodModal = ({
           ? ` — facturé à ${c.payer_display_name}`
           : '';
       const blocked = c.can_generate === false ? ' [à compléter]' : '';
+      const segments = Number(c.segments_count) || 0;
+      const trips = segments > 0 ? ` — ${segments} transport${segments > 1 ? 's' : ''}` : '';
       return {
         value: String(c.id),
-        label: `${name}${payer}${amt != null ? ` — ${amt} CHF` : ''}${blocked}`,
+        label: `${name}${payer}${trips}${amt != null ? ` — ${amt} CHF` : ''}${blocked}`,
         disabled: c.can_generate === false,
       };
     });

@@ -10,15 +10,17 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any, Literal
 
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import joinedload
 
 from application.invoices.billable_amount import calculate_billable_booking_amount
+from application.invoices.institution_patient_resolution import (
+    resolve_missing_institution_patient_ids,
+)
 from application.invoices.invoice_booking_units import resolve_invoice_booking_units
 from application.invoices.period_invoice_preview import build_period_invoice_preview
 from application.invoices.subject_identity import resolve_subject_identity
 from ext import db
-from sqlalchemy import and_, or_
-
 from models import BillingParty, Booking, Client, Company, InstitutionPatient
 from models.enums import BookingStatus
 from repositories.client_repository import ClientRepository
@@ -231,6 +233,23 @@ def build_opportunity_key(subject_key: str, billing_party_id: int) -> str:
     return f"{subject_key}|billing_party:{int(billing_party_id)}"
 
 
+def pick_canonical_billing_party_id(bookings: list[Booking]) -> int | None:
+    """Payeur retenu pour un sujet facturable.
+
+    Un même patient peut porter plusieurs ``BillingParty`` historiques (créés avant
+    la déduplication par ``external_ref``). On retient le plus fréquent, puis le plus
+    ancien, pour que le sujet ne produise qu'une seule opportunité.
+    """
+    counts: dict[int, int] = defaultdict(int)
+    for booking in bookings:
+        bp_id = getattr(booking, "billing_party_id", None)
+        if bp_id is not None:
+            counts[int(bp_id)] += 1
+    if not counts:
+        return None
+    return min(counts, key=lambda bp_id: (-counts[bp_id], bp_id))
+
+
 def resolve_recipient_status(
     *,
     billing_party: BillingParty | None,
@@ -315,33 +334,35 @@ def load_eligible_bookings_for_opportunity(
     excluded = excluded_booking_ids or set()
     canceled_ok = and_canceled_billable()
 
-    q = Booking.query.options(
-        joinedload(Booking.client),
-        joinedload(Booking.institution_patient),
-    ).filter(
-        Booking.company_id == company_id,
-        Booking.billed_to_type == "patient",
-        Booking.invoice_line_id.is_(None),
-        Booking.scheduled_time >= start_date,
-        Booking.scheduled_time < end_date,
-        or_status_billable(canceled_ok),
-    )
-    if parsed.billing_party_id is not None:
-        q = q.filter(Booking.billing_party_id == parsed.billing_party_id)
-
-    if parsed.subject_type == "institution_patient" and parsed.subject_id is not None:
-        q = q.filter(Booking.institution_patient_id == parsed.subject_id)
-    elif parsed.subject_type == "client" and parsed.subject_id is not None:
-        q = q.filter(Booking.client_id == parsed.subject_id)
-    elif (
-        parsed.subject_type == "legacy_institution_booking"
-        and parsed.subject_id is not None
-    ):
-        q = q.filter(Booking.id == parsed.subject_id)
-    else:
+    if parsed.subject_id is None:
         return []
 
-    bookings = q.order_by(Booking.scheduled_time.asc()).all()
+    period_bookings = (
+        Booking.query.options(
+            joinedload(Booking.client),
+            joinedload(Booking.institution_patient),
+        )
+        .filter(
+            Booking.company_id == company_id,
+            Booking.billed_to_type == "patient",
+            Booking.invoice_line_id.is_(None),
+            Booking.scheduled_time >= start_date,
+            Booking.scheduled_time < end_date,
+            or_status_billable(canceled_ok),
+        )
+        .order_by(Booking.scheduled_time.asc())
+        .all()
+    )
+    # Même rattrapage que la liste des opportunités, sinon le sujet ne matcherait pas.
+    resolve_missing_institution_patient_ids(period_bookings)
+
+    bookings = [
+        b
+        for b in period_bookings
+        if resolve_subject_identity(b).key == parsed.subject_key
+    ]
+    if not bookings:
+        return []
 
     # Expand pairs hors période
     peer_ids = collect_explicit_peer_ids_to_load(bookings)
@@ -363,6 +384,7 @@ def load_eligible_bookings_for_opportunity(
             to_load.add(int(c.id))
     if to_load:
         extras = Booking.query.filter(Booking.id.in_(to_load)).all()
+        resolve_missing_institution_patient_ids(extras)
         by_id = {int(b.id): b for b in bookings}
         for e in extras:
             if e.invoice_line_id is None:
@@ -380,11 +402,6 @@ def load_eligible_bookings_for_opportunity(
         if subj.key != parsed.subject_key and not (
             parsed.subject_type == "institution_patient"
             and getattr(b, "institution_patient_id", None) == parsed.subject_id
-        ):
-            continue
-        if (
-            parsed.billing_party_id is not None
-            and getattr(b, "billing_party_id", None) != parsed.billing_party_id
         ):
             continue
         out.append(b)
@@ -425,20 +442,23 @@ def list_billing_opportunities(
         .all()
     )
 
-    # Grouper par (subject_key, billing_party_id)
-    groups: dict[tuple[str, int | None], list[Booking]] = defaultdict(list)
+    # Rattrapage : sans institution_patient_id, chaque transport formerait sa
+    # propre opportunité (clé legacy-institution-booking).
+    resolve_missing_institution_patient_ids(patient_bookings)
+
+    # Grouper par sujet facturable : un patient = une facture pour la période.
+    groups: dict[str, list[Booking]] = defaultdict(list)
     for b in patient_bookings:
-        subj = resolve_subject_identity(b)
-        bp_id = getattr(b, "billing_party_id", None)
-        groups[(subj.key, int(bp_id) if bp_id is not None else None)].append(b)
+        groups[resolve_subject_identity(b).key].append(b)
 
     patient_items: list[PatientOpportunity] = []
     ip_cache: dict[int, InstitutionPatient] = {}
     bp_cache: dict[int, BillingParty] = {}
 
-    for (subject_key, bp_id), bookings in groups.items():
+    for subject_key, bookings in groups.items():
         if not bookings:
             continue
+        bp_id = pick_canonical_billing_party_id(bookings)
         sample = bookings[0]
         subj = resolve_subject_identity(sample)
         carrier = int(sample.client_id) if sample.client_id is not None else 0
@@ -507,13 +527,11 @@ def list_billing_opportunities(
             ).all():
                 to_load.add(int(child.id))
         if to_load:
-            for extra in Booking.query.filter(Booking.id.in_(to_load)).all():
+            extras = Booking.query.filter(Booking.id.in_(to_load)).all()
+            resolve_missing_institution_patient_ids(extras)
+            for extra in extras:
                 if extra.invoice_line_id is None:
-                    sk = resolve_subject_identity(extra).key
-                    if sk != subject_key:
-                        continue
-                    ebp = getattr(extra, "billing_party_id", None)
-                    if bp_id is not None and ebp not in (None, bp_id):
+                    if resolve_subject_identity(extra).key != subject_key:
                         continue
                     scope_by_id[int(extra.id)] = extra
         scope_bookings = list(scope_by_id.values())

@@ -10,6 +10,9 @@ from typing import Any
 from sqlalchemy import or_
 from sqlalchemy.orm import aliased
 
+from application.invoices.institution_patient_resolution import (
+    resolve_missing_institution_patient_ids,
+)
 from application.invoices.invoice_line_description import (
     booking_source_type_for_preview,
     build_invoice_line_description,
@@ -303,13 +306,16 @@ def build_period_invoice_preview(
             amount_ht_fn=lambda b: _preview_base_amount_ht(b, billing_settings_dto),
         )
         if institution_patient_id is not None:
+            # Le patient prime : un même patient peut porter plusieurs
+            # BillingParty historiques, on ne filtre donc pas sur le payeur.
+            resolve_missing_institution_patient_ids(bookings)
             bookings = [
                 b
                 for b in bookings
                 if getattr(b, "institution_patient_id", None)
                 == int(institution_patient_id)
             ]
-        if billing_party_id is not None:
+        elif billing_party_id is not None:
             bookings = [
                 b
                 for b in bookings
