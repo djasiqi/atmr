@@ -80,23 +80,12 @@ def _is_strict_round_trip_pair(bookings_pair: list[Any]) -> bool:
 
 
 def _preview_base_amount_ht(booking: Any, billing_settings_dto: Any) -> Decimal:
-    """HT ligne pour preview : même logique de base que generate_invoice / clinic (hors overrides)."""
-    two_places = Decimal("0.01")
-    mission_type = getattr(booking, "mission_type", None) or "patient_transport"
-    if mission_type == "material_delivery":
-        fp = getattr(billing_settings_dto, "material_delivery_price_fixed", None)
-        if fp is None or fp <= 0:
-            return Decimal("0.00")
-        return Decimal(str(fp)).quantize(two_places)
-    base_amount = Decimal(str(getattr(booking, "amount", None) or 0)).quantize(
-        two_places
-    )
-    if (
-        str(getattr(booking, "status", "") or "").upper() == "CANCELED"
-        and getattr(booking, "cancellation_fee_amount", None) is not None
-    ):
-        base_amount = Decimal(str(booking.cancellation_fee_amount)).quantize(two_places)
-    return round_to_5_cents(base_amount)
+    """HT ligne pour preview : montant facturable canonique."""
+    from application.invoices.billable_amount import calculate_billable_booking_amount
+
+    return calculate_billable_booking_amount(
+        booking, billing_settings=billing_settings_dto
+    ).amount_ht
 
 
 def _scheduled_iso(booking: Any) -> str | None:
@@ -263,8 +252,13 @@ def build_period_invoice_preview(
     period_month: int,
     client_id: int | None = None,
     clinic_company_id: int | None = None,
+    institution_patient_id: int | None = None,
+    billing_party_id: int | None = None,
 ) -> PeriodPreviewResult:
-    """Aperçu read-only : exactement un de client_id (patient direct) ou clinic_company_id (S2)."""
+    """Aperçu read-only : exactement un de client_id (patient direct) ou clinic_company_id (S2).
+
+    Filtres optionnels patient institutionnel : ``institution_patient_id`` / ``billing_party_id``.
+    """
     if bool(client_id) == bool(clinic_company_id):
         raise ValueError(
             "Fournir exactement un des paramètres: client_id ou clinic_company_id"
@@ -308,6 +302,19 @@ def build_period_invoice_preview(
             eligible_b,
             amount_ht_fn=lambda b: _preview_base_amount_ht(b, billing_settings_dto),
         )
+        if institution_patient_id is not None:
+            bookings = [
+                b
+                for b in bookings
+                if getattr(b, "institution_patient_id", None)
+                == int(institution_patient_id)
+            ]
+        if billing_party_id is not None:
+            bookings = [
+                b
+                for b in bookings
+                if getattr(b, "billing_party_id", None) == int(billing_party_id)
+            ]
         client = crepo.find_model_by_id_with_user(int(client_id), company_id)
         patient_name = resolve_patient_name_for_invoice(client, bookings)
         rt_map = _round_trip_leg_by_booking_id(bookings)
@@ -540,8 +547,23 @@ def build_period_invoice_preview(
 
 
 def preview_line_to_dict(pl: PeriodPreviewLine) -> dict[str, Any]:
+    booking_ids = [int(pl.booking_id)]
+    if pl.round_trip_partner_booking_id is not None:
+        partner = int(pl.round_trip_partner_booking_id)
+        if partner not in booking_ids:
+            booking_ids.append(partner)
+    unit_type = "round_trip" if pl.is_round_trip_leg else "single"
     d: dict[str, Any] = {
         "booking_id": pl.booking_id,
+        "primary_booking_id": pl.booking_id,
+        "booking_ids": booking_ids,
+        "unit_type": unit_type,
+        "segments_count": len(booking_ids),
+        "preview_row_id": (
+            f"unit:round_trip:{booking_ids[0]}:{booking_ids[1]}"
+            if len(booking_ids) == 2
+            else f"unit:single:{pl.booking_id}"
+        ),
         "scheduled_at": pl.scheduled_at,
         "amount_ht": pl.amount_ht,
         "origin_amount_ht": pl.origin_amount_ht,

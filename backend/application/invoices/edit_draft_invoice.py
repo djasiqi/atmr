@@ -629,10 +629,11 @@ def remove_draft_invoice_line(
     else:
         _unlink_round_trip_preview_partner(inv, line)
 
-    if line.reservation_id:
-        bk = Booking.query.get(line.reservation_id)
-        if bk and getattr(bk, "invoice_line_id", None) == line.id:
-            bk.invoice_line_id = None
+    # Libérer tous les bookings rattachés à cette ligne (A/R inclus).
+    Booking.query.filter_by(invoice_line_id=line.id).update(
+        {"invoice_line_id": None, "updated_at": datetime.now(UTC)},
+        synchronize_session=False,
+    )
 
     db.session.delete(line)
     db.session.flush()

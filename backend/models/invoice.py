@@ -123,6 +123,13 @@ class Invoice(db.Model):
         ForeignKey("company.id", ondelete="SET NULL"), nullable=True, index=True
     )
 
+    # Bénéficiaire institutionnel (facture patient) — distinct du client_id porteur technique.
+    institution_patient_id: Mapped[int | None] = mapped_column(
+        ForeignKey("institution_patients.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
     # Période de facturation
     period_month: Mapped[int] = mapped_column(Integer, nullable=False)  # 1-12
     period_year: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -209,6 +216,9 @@ class Invoice(db.Model):
     )
     billing_party = relationship("BillingParty", foreign_keys=[billing_party_id])
     billed_to_company = relationship("Company", foreign_keys=[billed_to_company_id])
+    institution_patient = relationship(
+        "InstitutionPatient", foreign_keys=[institution_patient_id]
+    )
     lines = relationship(
         "InvoiceLine", back_populates="invoice", cascade="all, delete-orphan"
     )
@@ -225,6 +235,13 @@ class Invoice(db.Model):
             "company_id", "invoice_number", name="uq_company_invoice_number"
         ),
         Index("ix_invoice_company_period", "company_id", "period_year", "period_month"),
+        Index(
+            "ix_invoice_company_institution_patient_period",
+            "company_id",
+            "institution_patient_id",
+            "period_year",
+            "period_month",
+        ),
         Index("ix_invoice_status", "company_id", "status"),
         Index("ix_invoice_due_date", "due_date"),
         CheckConstraint("total_amount >= 0", name="chk_invoice_amount_positive"),

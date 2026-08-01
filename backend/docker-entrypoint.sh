@@ -59,6 +59,18 @@ echo "  FLASK_ENV: $FLASK_ENV"
 echo "  OMP_NUM_THREADS: $OMP_NUM_THREADS"
 echo "  MKL_NUM_THREADS: $MKL_NUM_THREADS"
 
+# Garde-fou déploiement : refuser images locales en production.
+# (La cible Docker « testing » démarre pytest sans ce entrypoint — voir docs/facturation/deploiement-images-billing.md.)
+_IMAGE_REF="${DOCKER_IMAGE:-${IMAGE_TAG:-${ATMR_IMAGE:-}}}"
+if [ "$FLASK_ENV" = "production" ]; then
+    case "$_IMAGE_REF" in
+        local-*|*local-patient*|*local-*)
+            echo "❌ Refus de démarrer en production avec une image locale: $_IMAGE_REF"
+            exit 1
+            ;;
+    esac
+fi
+
 # ⚠️ CRITIQUE: Empêcher pytest de s'exécuter automatiquement en production
 # pytest peut être déclenché automatiquement lors de l'import de modules si pytest.ini existe
 # ou si pytest est dans le PYTHONPATH. On désactive tout cela en production.

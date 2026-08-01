@@ -672,6 +672,7 @@ class InvoiceRepository:
             "billing_strategy", InvoiceBillingStrategy.S1_PATIENT
         )
         invoice.billed_to_company_id = invoice_data.get("billed_to_company_id")
+        invoice.institution_patient_id = invoice_data.get("institution_patient_id")
         invoice.period_month = invoice_data["period_month"]
         invoice.period_year = invoice_data["period_year"]
         invoice.invoice_number = invoice_data["invoice_number"]

@@ -339,11 +339,37 @@ function mergePeriodPreviewInvoice(baseInvoice, linePatch, extraLinesRaw, remise
  */
 function periodPreviewRowKey(row) {
   if (row == null || typeof row !== 'object') return null;
-  const pr = row.preview_row_id;
-  if (pr != null && Number.isFinite(Number(pr))) return Number(pr);
-  const bid = row.booking_id;
+  // Clé UI = booking primaire (l'unité A/R est développée à l'envoi via booking_ids).
+  const bid = row.booking_id ?? row.primary_booking_id;
   if (bid != null && Number.isFinite(Number(bid))) return Number(bid);
   return null;
+}
+
+/** Union des booking_ids des lignes sélectionnées (A/R inclus). */
+function collectReservationIdsFromSelection(preview, selectedBookingIds) {
+  const lines = Array.isArray(preview?.preview_lines) ? preview.preview_lines : [];
+  const ids = new Set();
+  for (const row of lines) {
+    const k = periodPreviewRowKey(row);
+    if (k == null || !selectedBookingIds.has(k)) continue;
+    if (Array.isArray(row.booking_ids) && row.booking_ids.length > 0) {
+      for (const id of row.booking_ids) {
+        const n = Number(id);
+        if (Number.isFinite(n)) ids.add(n);
+      }
+      continue;
+    }
+    if (row.booking_id != null && Number.isFinite(Number(row.booking_id))) {
+      ids.add(Number(row.booking_id));
+    }
+    if (
+      row.round_trip_partner_booking_id != null &&
+      Number.isFinite(Number(row.round_trip_partner_booking_id))
+    ) {
+      ids.add(Number(row.round_trip_partner_booking_id));
+    }
+  }
+  return [...ids];
 }
 
 function buildSyntheticInvoiceForPeriodAssembly({
@@ -636,29 +662,43 @@ const BillPeriodModal = ({
     setLoadingLists(true);
     setError('');
     try {
-      const eligParams = {
-        year: periodYear,
-        month: periodMonth,
-        limit: 500,
-        billed_to_type: 'patient',
-      };
-      /** Sans billed_to_type, l’API eligible agrège tous les types — ne charger les patients qu’en mode direct patient. */
-      const eligPromise =
+      /** Opportunités patient (sujet + payeur) — remplace le regroupement par client_id seul. */
+      const oppPromise =
         payerType === 'patient'
-          ? invoiceService.fetchEligibleClients(companyId, eligParams)
+          ? invoiceService.fetchBillingOpportunities(companyId, periodYear, periodMonth)
           : Promise.resolve(null);
 
-      const [elig, inst, bpRaw] = await Promise.all([
-        eligPromise,
+      const [oppRaw, inst, bpRaw] = await Promise.all([
+        oppPromise,
         invoiceService.fetchInstitutions(companyId),
         invoiceService.fetchBillablePartners(companyId, {
           year: periodYear,
           month: periodMonth,
         }),
       ]);
+      const oppData = oppRaw?.data ?? oppRaw;
+      const payers = Array.isArray(oppData?.patient_payers) ? oppData.patient_payers : [];
       const ec =
         payerType === 'patient'
-          ? elig?.data?.clients ?? elig?.clients ?? []
+          ? payers.map((p) => ({
+              id: p.opportunity_key || `client:${p.client_id}`,
+              opportunity_key: p.opportunity_key,
+              client_id: p.carrier_client_id ?? p.client_id,
+              carrier_client_id: p.carrier_client_id ?? p.client_id,
+              institution_patient_id:
+                p.subject_type === 'institution_patient' ? p.subject_id : null,
+              billing_party_id: p.billing_party_id,
+              first_name: '',
+              last_name: p.display_name || '',
+              display_name: p.display_name,
+              payer_display_name: p.payer_display_name,
+              unbilled_total_amount: p.unbilled_total_amount ?? p.estimated_total,
+              can_generate: p.can_generate !== false,
+              identity_status: p.identity_status,
+              recipient_status: p.recipient_status,
+              segments_count: p.segments_count,
+              units_count: p.units_count,
+            }))
           : [];
       setClients(Array.isArray(ec) ? ec : []);
       setInstitutions(inst?.institutions || inst?.data?.institutions || []);
@@ -817,7 +857,7 @@ const BillPeriodModal = ({
     if (payerType === 'patient' && clientId) {
       const c = clients.find((x) => String(x.id) === String(clientId));
       if (c) {
-        const n = `${c.first_name || ''} ${c.last_name || ''}`.trim();
+        const n = (c.display_name || `${c.first_name || ''} ${c.last_name || ''}`).trim();
         if (n) return `${periodPart} · ${n}`;
       }
     }
@@ -894,14 +934,20 @@ const BillPeriodModal = ({
   );
 
   const billPatientChipOptions = useMemo(() => {
-    const rows = clients.map((c) => ({
-      value: String(c.id),
-      label: `${c.first_name} ${c.last_name}${
-        c.unbilled_total_amount
-          ? ` (${c.unbilled_total_amount} CHF non fact. sur la période, direct patient)`
-          : ''
-      }`,
-    }));
+    const rows = clients.map((c) => {
+      const name = c.display_name || `${c.first_name || ''} ${c.last_name || ''}`.trim();
+      const amt = c.unbilled_total_amount;
+      const payer =
+        c.payer_display_name && c.payer_display_name !== name
+          ? ` — facturé à ${c.payer_display_name}`
+          : '';
+      const blocked = c.can_generate === false ? ' [à compléter]' : '';
+      return {
+        value: String(c.id),
+        label: `${name}${payer}${amt != null ? ` — ${amt} CHF` : ''}${blocked}`,
+        disabled: c.can_generate === false,
+      };
+    });
     return rows;
   }, [clients]);
 
@@ -1325,18 +1371,21 @@ const BillPeriodModal = ({
     setPreviewLoading(true);
     try {
       let parsedClientId;
+      let selectedOpp = null;
       if (payerType === 'patient') {
-        parsedClientId = parseInt(clientId, 10);
-        if (!Number.isFinite(parsedClientId) || parsedClientId <= 0) {
-          setError('Sélectionnez un patient dans la liste.');
-          setPreviewLoading(false);
-          return;
-        }
-        const clientAllowed = clients.some((c) => Number(c.id) === parsedClientId);
-        if (!clientAllowed) {
+        selectedOpp = clients.find((c) => String(c.id) === String(clientId));
+        if (!selectedOpp) {
           setError(
             'Ce patient ne correspond pas à la liste chargée pour cette période. Attendez la fin du chargement ou sélectionnez à nouveau un patient.'
           );
+          setPreviewLoading(false);
+          return;
+        }
+        parsedClientId = Number(
+          selectedOpp.carrier_client_id ?? selectedOpp.client_id ?? selectedOpp.id
+        );
+        if (!Number.isFinite(parsedClientId) || parsedClientId <= 0) {
+          setError('Sélectionnez un patient dans la liste.');
           setPreviewLoading(false);
           return;
         }
@@ -1362,6 +1411,14 @@ const BillPeriodModal = ({
         month: periodMonth,
         clientId: payerType === 'patient' ? parsedClientId : undefined,
         clinicCompanyId: payerType === 'clinic' ? clinicCompanyId : undefined,
+        institutionPatientId:
+          payerType === 'patient' && selectedOpp?.institution_patient_id
+            ? selectedOpp.institution_patient_id
+            : undefined,
+        billingPartyId:
+          payerType === 'patient' && selectedOpp?.billing_party_id
+            ? selectedOpp.billing_party_id
+            : undefined,
       });
       setPreview(unwrapApi(res));
     } catch (err) {
@@ -1409,8 +1466,7 @@ const BillPeriodModal = ({
       }
 
       if (payerType === 'patient') {
-        const cid = parseInt(clientId, 10);
-        if (!clients.some((c) => Number(c.id) === cid)) {
+        if (!clients.some((c) => String(c.id) === String(clientId))) {
           setError('Patient invalide pour cette période — sélectionnez-le à nouveau dans la liste.');
           setGenerateLoading(false);
           return;
@@ -1428,20 +1484,26 @@ const BillPeriodModal = ({
 
       let payload;
       if (payerType === 'patient') {
-        const ids = [...selectedBookingIds];
+        const ids = collectReservationIdsFromSelection(preview, selectedBookingIds);
         if (hasAssemblyLines && ids.length === 0) {
           setError('Cochez au moins une ligne valide pour préparer la facture.');
           setGenerateLoading(false);
           return;
         }
+        const opp = clients.find((c) => String(c.id) === String(clientId));
+        const carrierId = Number(opp?.carrier_client_id ?? opp?.client_id);
+        const oppKey = String(opp?.opportunity_key || clientId);
         payload = {
-          client_id: parseInt(clientId, 10),
+          ...(Number.isFinite(carrierId) && carrierId > 0
+            ? { client_id: carrierId }
+            : {}),
           period_year: periodYear,
           period_month: periodMonth,
           ...(hasAssemblyLines ? { reservation_ids: ids } : {}),
+          billing_opportunity_key: oppKey,
         };
       } else {
-        const ids = [...selectedBookingIds];
+        const ids = collectReservationIdsFromSelection(preview, selectedBookingIds);
         if (hasAssemblyLines && ids.length === 0) {
           setError('Cochez au moins une ligne valide pour préparer la facture.');
           setGenerateLoading(false);

@@ -132,45 +132,39 @@ export async function syncDraftInvoiceWithMergedAssemblyPreview(companyId, invoi
   const mergedRides = mergedLines.filter((l) => isRideLike(l.type || l.line_type));
   let serverRides = inv.lines.filter((l) => isRideLike(l.type) && l.reservation_id != null);
 
-  // Consolidation A/R : une ligne dans l’aperçu, plusieurs lignes réservation côté serveur (même total HT)
-  if (mergedRides.length === 1 && serverRides.length > 1) {
+  // Ne plus fusionner/supprimer des lignes transport serveur : le backend crée déjà
+  // une ligne A/R atomique (line_meta.booking_ids). La sync ne porte que libellés /
+  // montants / lignes custom / dates.
+  const serverAlreadyAtomicAr = serverRides.some((l) => {
+    const meta = l.line_meta && typeof l.line_meta === 'object' ? l.line_meta : {};
+    return Array.isArray(meta.booking_ids) && meta.booking_ids.length >= 2;
+  });
+  if (
+    !serverAlreadyAtomicAr &&
+    mergedRides.length === 1 &&
+    serverRides.length > 1
+  ) {
+    // Legacy : brouillon créé avant correctif A/R — sync meta seulement sur la 1re ligne,
+    // sans supprimer les autres (évite de libérer un retour à tort).
     const m = mergedRides[0];
-    const sumHt = serverRides.reduce((s, l) => s + Number(l.line_total || 0), 0);
-    if (Math.abs(sumHt - Number(m.line_total || 0)) < 0.02) {
-      const sorted = [...serverRides].sort((a, b) => Number(a.id) - Number(b.id));
-      const [keep, ...drop] = sorted;
-      inv = await loadInvoice(companyId, invoiceId);
-      const km = m.line_meta && typeof m.line_meta === 'object' ? m.line_meta : {};
-      const mergeBody = {
-        ...concurrency(inv),
-        description: m.description,
-        line_total: Number(m.line_total),
-        adjustment_note:
-          m.adjustment_note != null && String(m.adjustment_note).trim()
-            ? String(m.adjustment_note).trim()
-            : null,
-      };
-      if (km.original_line_total != null && Number.isFinite(Number(km.original_line_total))) {
-        mergeBody.original_line_total = Number(km.original_line_total);
-      }
-      const tp = transportMetaSyncPatch(km, keep);
-      if (tp) {
-        mergeBody.line_meta_merge = tp;
-      }
-      const wantSd = serviceDateIsoFromLineMeta(km);
-      if (wantSd) {
-        mergeBody.service_date_iso = wantSd;
-      }
-      await invoiceService.updateDraftInvoiceLine(companyId, invoiceId, keep.id, mergeBody);
-      inv = await loadInvoice(companyId, invoiceId);
-      for (const row of drop) {
-        inv = await loadInvoice(companyId, invoiceId);
-        await invoiceService.removeDraftInvoiceLine(companyId, invoiceId, row.id, {
-          expected_updated_at: inv.updated_at,
-        });
-      }
-      inv = await loadInvoice(companyId, invoiceId);
-    }
+    const keep = [...serverRides].sort((a, b) => Number(a.id) - Number(b.id))[0];
+    inv = await loadInvoice(companyId, invoiceId);
+    const km = m.line_meta && typeof m.line_meta === 'object' ? m.line_meta : {};
+    const mergeBody = {
+      ...concurrency(inv),
+      description: m.description,
+      line_total: Number(m.line_total),
+      adjustment_note:
+        m.adjustment_note != null && String(m.adjustment_note).trim()
+          ? String(m.adjustment_note).trim()
+          : null,
+    };
+    const tp = transportMetaSyncPatch(km, keep);
+    if (tp) mergeBody.line_meta_merge = tp;
+    const wantSd = serviceDateIsoFromLineMeta(km);
+    if (wantSd) mergeBody.service_date_iso = wantSd;
+    await invoiceService.updateDraftInvoiceLine(companyId, invoiceId, keep.id, mergeBody);
+    inv = await loadInvoice(companyId, invoiceId);
   }
 
   // PATCH trajets / livraisons : réservation ↔ pv-{booking_id}

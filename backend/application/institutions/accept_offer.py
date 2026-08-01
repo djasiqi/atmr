@@ -820,6 +820,7 @@ class AcceptOfferUseCase:
             # Montant: tarif préférentiel ou minimum par défaut
             amount=amount,
             created_via=BookingCreatedVia.INSTITUTION_PORTAL,
+            institution_patient_id=getattr(transport_request, "patient_id", None),
         )
 
         self._apply_clinical_dropoff_from_request(booking, transport_request)
@@ -919,6 +920,8 @@ class AcceptOfferUseCase:
                 status=BookingStatus.ACCEPTED.value,
                 amount=booking.amount,
                 created_via=BookingCreatedVia.INSTITUTION_PORTAL,
+                institution_patient_id=booking.institution_patient_id
+                or getattr(transport_request, "patient_id", None),
             )
             if booking.billed_to_company_id is not None:
                 return_booking.billed_to_company_id = booking.billed_to_company_id
@@ -1064,6 +1067,8 @@ class AcceptOfferUseCase:
             status=BookingStatus.ACCEPTED.value,
             amount=outbound_booking.amount,
             created_via=BookingCreatedVia.INSTITUTION_PORTAL,
+            institution_patient_id=outbound_booking.institution_patient_id
+            or getattr(transport_request, "patient_id", None),
         )
         if outbound_booking.billed_to_company_id is not None:
             return_booking.billed_to_company_id = outbound_booking.billed_to_company_id
@@ -1249,6 +1254,7 @@ class AcceptOfferUseCase:
                 route_group_id=route_group_id,
                 route_sequence_number=leg.route_sequence_number,
                 created_via=BookingCreatedVia.INSTITUTION_PORTAL,
+                institution_patient_id=getattr(transport_request, "patient_id", None),
             )
 
             self._apply_clinical_dropoff_from_leg(booking, leg)

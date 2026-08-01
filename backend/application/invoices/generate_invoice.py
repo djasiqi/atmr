@@ -117,7 +117,7 @@ class GenerateInvoiceInput:
 
     Attributes:
         company_id: ID de l'entreprise
-        client_id: ID du bénéficiaire du service (patient)
+        client_id: ID du bénéficiaire / compte porteur (optionnel si billing_opportunity_key)
         period_year: Année de facturation (ex: 2025)
         period_month: Mois de facturation (1-12)
         billing_party_id: ID du destinataire de facturation unifié (BillingParty).
@@ -129,10 +129,12 @@ class GenerateInvoiceInput:
         reservation_ids: Liste d'IDs de réservations spécifiques.
             Si None, prend toutes les réservations non facturées
         overrides: Dict facultatif {reservation_id: {amount, vat_rate, note}}
+        billing_opportunity_key: Clé opportunité sujet|payeur (autorité serveur)
+        excluded_booking_ids: IDs à exclure lors de la génération par opportunité
     """
 
     company_id: int
-    client_id: int
+    client_id: int | None
     period_year: int
     period_month: int
     billing_party_id: int | None = None
@@ -142,6 +144,8 @@ class GenerateInvoiceInput:
     overrides: dict[str, Any] | None = None
     global_discount_percent: float | None = None
     global_discount_note: str | None = None
+    billing_opportunity_key: str | None = None
+    excluded_booking_ids: list[int] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -225,6 +229,20 @@ class GenerateInvoiceUseCase:
         """
         generated_pdf_url: str | None = None
         try:
+            from application.invoices.billing_opportunities import (
+                build_billing_subject_snapshot,
+                build_recipient_snapshot,
+                load_eligible_bookings_for_opportunity,
+                parse_billing_opportunity_key,
+                resolve_recipient_status,
+            )
+            from application.invoices.subject_identity import resolve_subject_identity
+            from models.institution_patient import InstitutionPatient
+            from sqlalchemy import and_
+
+            HTTP_409_CONFLICT = 409
+            HTTP_422_UNPROCESSABLE = 422
+
             # Garde-fou: un seul mode "destinataire" à la fois.
             destinations = [
                 bool(input_data.billing_party_id),
@@ -235,6 +253,183 @@ class GenerateInvoiceUseCase:
                 raise ValueError(
                     "Fournir un seul parmi billing_party_id, bill_to_client_id, clinic_company_id."
                 )
+
+            if not input_data.billing_opportunity_key and not input_data.client_id:
+                raise ValueError(
+                    "client_id ou billing_opportunity_key est requis pour générer une facture."
+                )
+
+            # PR3 : résolution opportunité (autorité serveur)
+            opportunity_reservations: list[Booking] | None = None
+            institution_patient_id_for_invoice: int | None = None
+            opportunity_meta: dict[str, Any] | None = None
+            effective_client_id: int | None = input_data.client_id
+            opportunity_billing_party_id: int | None = None
+
+            if input_data.billing_opportunity_key:
+                parsed = parse_billing_opportunity_key(input_data.billing_opportunity_key)
+                if parsed.billing_party_id is None or parsed.subject_id is None:
+                    raise ValueError("billing_opportunity_key incomplet")
+                excluded = {
+                    int(x) for x in (input_data.excluded_booking_ids or []) if x
+                }
+                opportunity_reservations = load_eligible_bookings_for_opportunity(
+                    company_id=input_data.company_id,
+                    parsed=parsed,
+                    period_year=input_data.period_year,
+                    period_month=input_data.period_month,
+                    excluded_booking_ids=excluded,
+                )
+                if not opportunity_reservations:
+                    raise ValueError(
+                        "Aucune réservation éligible pour cette opportunité / période"
+                    )
+
+                if parsed.billing_party_id is None:
+                    return GenerateInvoiceOutput(
+                        success=False,
+                        error={
+                            "error": (
+                                "Destinataire (BillingParty) manquant sur cette opportunité. "
+                                "Rattachez un payeur aux transports avant de générer."
+                            ),
+                            "recipient_status": "incomplete",
+                            "billing_opportunity_key": parsed.opportunity_key,
+                        },
+                        status_code=HTTP_422_UNPROCESSABLE,
+                    )
+                bp = BillingParty.query.filter_by(
+                    id=int(parsed.billing_party_id),
+                    company_id=input_data.company_id,
+                    is_active=True,
+                ).first()
+                if not bp:
+                    raise ValueError(
+                        "BillingParty introuvable, inactif, ou n'appartient pas à l'entreprise."
+                    )
+                opportunity_billing_party_id = bp.id
+
+                sample = opportunity_reservations[0]
+                subject = resolve_subject_identity(sample)
+                if subject.status != "resolved":
+                    return GenerateInvoiceOutput(
+                        success=False,
+                        error={
+                            "error": (
+                                "Identité patient non résolue (needs_review) : "
+                                "impossible de générer la facture."
+                            ),
+                            "identity_status": subject.status,
+                            "subject_key": subject.key,
+                        },
+                        status_code=HTTP_422_UNPROCESSABLE,
+                    )
+
+                ip: InstitutionPatient | None = getattr(
+                    sample, "institution_patient", None
+                )
+                if (
+                    ip is None
+                    and parsed.subject_type == "institution_patient"
+                ):
+                    ip = db.session.get(InstitutionPatient, parsed.subject_id)
+
+                display = (bp.display_name or "").strip()
+                if ip is not None:
+                    display = (
+                        f"{ip.first_name or ''} {ip.last_name or ''}".strip() or display
+                    )
+                recipient_status = resolve_recipient_status(
+                    billing_party=bp,
+                    institution_patient=ip,
+                    display_name=display,
+                )
+                if recipient_status != "ready":
+                    return GenerateInvoiceOutput(
+                        success=False,
+                        error={
+                            "error": (
+                                "Adresse de facturation incomplète pour le destinataire "
+                                "(nom + rue + NPA + ville requis pour un patient)."
+                            ),
+                            "recipient_status": recipient_status,
+                            "billing_opportunity_key": parsed.opportunity_key,
+                        },
+                        status_code=HTTP_422_UNPROCESSABLE,
+                    )
+
+                carriers = {
+                    int(b.client_id)
+                    for b in opportunity_reservations
+                    if getattr(b, "client_id", None) is not None
+                }
+                if effective_client_id is None:
+                    if len(carriers) == 1:
+                        effective_client_id = next(iter(carriers))
+                    elif subject.carrier_client_id is not None:
+                        effective_client_id = int(subject.carrier_client_id)
+                    elif carriers:
+                        effective_client_id = sorted(carriers)[0]
+                if effective_client_id is None:
+                    raise ValueError(
+                        "Impossible de déterminer le client porteur (carrier) pour l'opportunité."
+                    )
+
+                if parsed.subject_type == "institution_patient":
+                    institution_patient_id_for_invoice = parsed.subject_id
+
+                # Max 1 DRAFT par (company, sujet, party, période)
+                draft_q = Invoice.query.filter(
+                    and_(
+                        Invoice.company_id == input_data.company_id,
+                        Invoice.billing_party_id == parsed.billing_party_id,
+                        Invoice.period_year == input_data.period_year,
+                        Invoice.period_month == input_data.period_month,
+                        Invoice.status == InvoiceStatus.DRAFT,
+                    )
+                )
+                if institution_patient_id_for_invoice is not None:
+                    draft_q = draft_q.filter(
+                        Invoice.institution_patient_id
+                        == institution_patient_id_for_invoice
+                    )
+                else:
+                    draft_q = draft_q.filter(
+                        Invoice.client_id == effective_client_id,
+                        Invoice.institution_patient_id.is_(None),
+                    )
+                existing_draft = (
+                    draft_q.order_by(Invoice.id.asc()).with_for_update().first()
+                )
+                if existing_draft is not None:
+                    return GenerateInvoiceOutput(
+                        success=False,
+                        error={
+                            "error": (
+                                "Une facture brouillon existe déjà pour ce sujet, "
+                                "ce destinataire et cette période. "
+                                "Complétez-la ou annulez-la avant d'en créer une nouvelle."
+                            ),
+                            "existing_invoice_id": existing_draft.id,
+                            "existing_invoice_number": existing_draft.invoice_number,
+                        },
+                        status_code=HTTP_409_CONFLICT,
+                    )
+
+                opportunity_meta = {
+                    "billing_subject_snapshot": build_billing_subject_snapshot(
+                        subject,
+                        display_name=display,
+                        institution_patient=ip,
+                        client=getattr(sample, "client", None),
+                    ),
+                    "recipient_snapshot": build_recipient_snapshot(
+                        bp,
+                        recipient_status=recipient_status,
+                        institution_patient=ip,
+                    ),
+                    "billing_opportunity_key": parsed.opportunity_key,
+                }
 
             # 1. Récupérer les paramètres de facturation
             billing_settings_dto = self.billing_settings_repo.find_or_create(
@@ -255,7 +450,9 @@ class GenerateInvoiceUseCase:
             # 3. Résoudre le destinataire de facturation
             billing_party_id: int | None = None
             payer_needs_review_reason: str | None = None
-            if input_data.billing_party_id:
+            if opportunity_billing_party_id is not None:
+                billing_party_id = opportunity_billing_party_id
+            elif input_data.billing_party_id:
                 bp = BillingParty.query.filter_by(
                     id=input_data.billing_party_id,
                     company_id=input_data.company_id,
@@ -306,20 +503,24 @@ class GenerateInvoiceUseCase:
             else:
                 # Facturation directe au client : si le client a un tiers payeur par défaut, l'utiliser
                 # (PDF affichera "Client c/o Tiers payeur" + adresse du tiers)
-                from services.billing.client_stay_resolver import (
-                    resolve_default_billing_party_for_client,
-                )
+                if effective_client_id is not None:
+                    from services.billing.client_stay_resolver import (
+                        resolve_default_billing_party_for_client,
+                    )
 
-                bp = resolve_default_billing_party_for_client(
-                    client_id=input_data.client_id,
-                    company_id=input_data.company_id,
-                )
-                if bp is not None:
-                    billing_party_id = bp.id
+                    bp = resolve_default_billing_party_for_client(
+                        client_id=effective_client_id,
+                        company_id=input_data.company_id,
+                    )
+                    if bp is not None:
+                        billing_party_id = bp.id
 
             # 4. Récupérer les réservations
             target_statuses = ["COMPLETED", "RETURN_COMPLETED", "CANCELED"]
-            if input_data.reservation_ids:
+            if opportunity_reservations is not None:
+                reservations = opportunity_reservations
+                bookings_by_id = {r.id: r for r in reservations}
+            elif input_data.reservation_ids:
                 # Mode sélection manuelle : accepter aussi les annulations facturables
                 booking_dtos = self.booking_repo.find_by_ids(input_data.reservation_ids)
                 # Charger les modèles Booking pour les annulations (vérifier is_cancellation_billable / billing_override_reason)
@@ -331,7 +532,7 @@ class GenerateInvoiceUseCase:
                 }
                 filtered_booking_dtos = []
                 for dto in booking_dtos:
-                    if dto.client_id != input_data.client_id:
+                    if dto.client_id != effective_client_id:
                         continue
                     if getattr(dto, "invoice_line_id", None) is not None:
                         continue
@@ -384,7 +585,7 @@ class GenerateInvoiceUseCase:
                     raise ValueError(msg)
                 eligible_period = self.booking_repo.find_models_eligible_for_billing_period_by_company_and_client(
                     company_id=input_data.company_id,
-                    client_id=input_data.client_id,
+                    client_id=int(effective_client_id),
                     period_year=input_data.period_year,
                     period_month=input_data.period_month,
                     billed_to_type=None,
@@ -439,7 +640,7 @@ class GenerateInvoiceUseCase:
                 )
                 eligible_owner = self.booking_repo.find_models_eligible_for_billing_period_by_company_and_client(
                     company_id=input_data.company_id,
-                    client_id=input_data.client_id,
+                    client_id=int(effective_client_id),
                     period_year=input_data.period_year,
                     period_month=input_data.period_month,
                     billed_to_type="patient",
@@ -447,8 +648,6 @@ class GenerateInvoiceUseCase:
 
                 # Pour ASSIGN_TO_PARTNER : inclure aussi les bookings où
                 # l'entreprise est exécutante (y compris déjà facturés pour le graphe A/R)
-                from sqlalchemy import and_
-
                 from models.booking_transfer import BookingTransfer
                 from models.enums import TransferModel, TransferStatus
 
@@ -458,7 +657,7 @@ class GenerateInvoiceUseCase:
                         and_(
                             Booking.executing_company_id == input_data.company_id,
                             Booking.company_id != input_data.company_id,
-                            Booking.client_id == input_data.client_id,
+                            Booking.client_id == effective_client_id,
                             Booking.status.in_(target_statuses),
                             Booking.scheduled_time >= start_date,
                             Booking.scheduled_time < end_date,
@@ -714,13 +913,28 @@ class GenerateInvoiceUseCase:
             vat_label = billing_settings_dto.vat_label or "TVA"
             vat_number = billing_settings_dto.vat_number
 
+            if effective_client_id is None:
+                raise ValueError("client_id manquant pour la génération de facture")
+
             # 7. Récupérer les infos du client pour les descriptions
             client = self.client_repo.find_model_by_id_with_user(
-                input_data.client_id, input_data.company_id
+                effective_client_id, input_data.company_id
             )
             patient_name = ""
+            if opportunity_meta and isinstance(
+                opportunity_meta.get("billing_subject_snapshot"), dict
+            ):
+                patient_name = (
+                    opportunity_meta["billing_subject_snapshot"].get("display_name")
+                    or ""
+                ).strip()
             # Pour les clients institution : utiliser customer_name du premier booking
-            if client and getattr(client, "is_institution", False) and reservations:
+            if (
+                not patient_name
+                and client
+                and getattr(client, "is_institution", False)
+                and reservations
+            ):
                 for _r in reservations:
                     if getattr(_r, "customer_name", None):
                         patient_name = _r.customer_name
@@ -730,7 +944,7 @@ class GenerateInvoiceUseCase:
                     f"{client.user.first_name} {client.user.last_name}".strip()
                 )
             if not patient_name:
-                patient_name = f"Client #{input_data.client_id}"
+                patient_name = f"Client #{effective_client_id}"
 
             # 8. Créer la facture
             two_places = Decimal("0.01")
@@ -744,6 +958,8 @@ class GenerateInvoiceUseCase:
                         "clinic_company_id": input_data.clinic_company_id,
                     },
                 }
+            if opportunity_meta:
+                meta = {**(meta or {}), **opportunity_meta}
             # ✅ S2: Déterminer si c'est une facture S2 (clinique mensuelle multi-patients)
             # S2 = clinic_company_id fourni ET plusieurs clients différents dans les bookings
             unique_client_ids = {
@@ -755,7 +971,7 @@ class GenerateInvoiceUseCase:
 
             invoice_data = {
                 "company_id": input_data.company_id,
-                "client_id": input_data.client_id,
+                "client_id": effective_client_id,
                 "bill_to_client_id": input_data.bill_to_client_id,
                 "billing_party_id": billing_party_id,
                 "billed_to_company_id": input_data.clinic_company_id,
@@ -777,6 +993,7 @@ class GenerateInvoiceUseCase:
                 "total_amount": Decimal("0.00"),
                 "balance_due": Decimal("0.00"),
                 "meta": meta,
+                "institution_patient_id": institution_patient_id_for_invoice,
             }
             invoice_dto = self.invoice_repo.create(invoice_data)
             # Récupérer le modèle pour les opérations suivantes
@@ -1218,14 +1435,14 @@ class GenerateInvoiceUseCase:
                 logger.info(
                     "Facture générée: %s pour client %s (facturée à institution %s)",
                     invoice_number,
-                    input_data.client_id,
+                    effective_client_id,
                     input_data.bill_to_client_id,
                 )
             else:
                 logger.info(
                     "Facture générée: %s pour client %s",
                     invoice_number,
-                    input_data.client_id,
+                    effective_client_id,
                 )
 
             return GenerateInvoiceOutput(

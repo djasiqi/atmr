@@ -404,12 +404,26 @@ export const invoiceService = {
   },
 
   /** Prévisualisation V1 (payeur + mois) — GET period-preview */
-  async fetchPeriodPreview(companyId, { year, month, clientId, clinicCompanyId }) {
+  async fetchPeriodPreview(
+    companyId,
+    {
+      year,
+      month,
+      clientId,
+      clinicCompanyId,
+      institutionPatientId,
+      billingPartyId,
+    }
+  ) {
     const params = new URLSearchParams();
     params.append('year', year);
     params.append('month', month);
     if (clientId) params.append('client_id', clientId);
     if (clinicCompanyId) params.append('clinic_company_id', clinicCompanyId);
+    if (institutionPatientId) {
+      params.append('institution_patient_id', institutionPatientId);
+    }
+    if (billingPartyId) params.append('billing_party_id', billingPartyId);
     const response = await apiClient.get(
       `${API_BASE}/invoices/companies/${companyId}/invoices/period-preview?${params}`
     );

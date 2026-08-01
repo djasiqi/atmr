@@ -318,6 +318,15 @@ class Booking(db.Model):
         index=True,
     )
 
+    # Patient institutionnel transporté (copie de TransportRequest.patient_id à l'acceptation).
+    # Distinct du client_id technique porteur (souvent le compte institution).
+    institution_patient_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("institution_patients.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
     # ✅ Source de la décision de facturation (traçabilité)
     billing_source: Mapped[BillingSource | None] = mapped_column(
         SAEnum(
@@ -391,6 +400,9 @@ class Booking(db.Model):
         "User", foreign_keys=[billing_locked_by_user_id]
     )
     billing_party = relationship("BillingParty", foreign_keys=[billing_party_id])
+    institution_patient = relationship(
+        "InstitutionPatient", foreign_keys=[institution_patient_id]
+    )
     pickup_geo_unit = relationship("GeoUnit", foreign_keys=[pickup_geo_unit_id])
     dropoff_geo_unit = relationship("GeoUnit", foreign_keys=[dropoff_geo_unit_id])
     pricing_profile = relationship("PricingProfile", foreign_keys=[pricing_profile_id])

@@ -301,11 +301,23 @@ invoice_generate_model = invoices_ns.model(
     "InvoiceGenerate",
     {
         "client_id": fields.Integer(
-            description="ID client unique (optionnel si client_ids utilisé)", minimum=1
+            description="ID client unique (optionnel si client_ids ou billing_opportunity_key)",
+            minimum=1,
         ),
         "client_ids": fields.List(
             fields.Integer(description="ID client", minimum=1),
             description="Liste d'IDs clients (au moins 1 élément)",
+        ),
+        "billing_opportunity_key": fields.String(
+            description=(
+                "Clé opportunité (institution_patient:{id}|billing_party:{id} "
+                "ou client:{id}|billing_party:{id})"
+            ),
+            allow_null=True,
+        ),
+        "excluded_booking_ids": fields.List(
+            fields.Integer(description="ID booking à exclure", minimum=1),
+            description="Exclusions optionnelles (génération par opportunité)",
         ),
         "billing_party_id": fields.Integer(
             description="ID BillingParty (destinataire unifié) - alternative à bill_to_client_id",
@@ -1606,6 +1618,8 @@ class PeriodInvoicePreview(Resource):
         )
         c_id = request.args.get("client_id", type=int)
         cc_id = request.args.get("clinic_company_id", type=int)
+        ip_id = request.args.get("institution_patient_id", type=int)
+        bp_id = request.args.get("billing_party_id", type=int)
         if not y or not m or not (1 <= m <= PERIOD_MONTH_MAX):
             return APIErrorHandler.handle_validation_error(
                 "Paramètres year (ou period_year) et month (1-12) requis",
@@ -1623,6 +1637,8 @@ class PeriodInvoicePreview(Resource):
                 period_month=m,
                 client_id=c_id,
                 clinic_company_id=cc_id,
+                institution_patient_id=ip_id,
+                billing_party_id=bp_id,
             )
             return success_response(data=preview_to_dict(prev))
         except ValueError as e:
@@ -2083,6 +2099,8 @@ class GenerateInvoice(Resource):
             clinic_company_id = validated_data.get("clinic_company_id")
             # NOUVEAU: support BillingParty explicite (destinataire unifié)
             billing_party_id = validated_data.get("billing_party_id")
+            billing_opportunity_key = validated_data.get("billing_opportunity_key")
+            excluded_booking_ids = validated_data.get("excluded_booking_ids")
             period_year = validated_data["period_year"]
             period_month = validated_data["period_month"]
             # ✅ S2: Mode de génération
@@ -2164,6 +2182,47 @@ class GenerateInvoice(Resource):
                     result = {"error": "Facture générée mais non retournée"}
                     status_code = 500
                 return result, status_code
+
+            # Cas opportunité patient (sujet + payeur) — autorité serveur
+            if billing_opportunity_key:
+                from application.invoices import GenerateInvoiceInput
+
+                uc = GenerateInvoiceUseCase()
+                input_data = GenerateInvoiceInput(
+                    company_id=company_id,
+                    client_id=client_id,
+                    period_year=period_year,
+                    period_month=period_month,
+                    billing_party_id=None,
+                    bill_to_client_id=None,
+                    clinic_company_id=None,
+                    reservation_ids=None,
+                    overrides=overrides,
+                    global_discount_percent=validated_data.get(
+                        "global_discount_percent"
+                    ),
+                    global_discount_note=validated_data.get("global_discount_note"),
+                    billing_opportunity_key=billing_opportunity_key,
+                    excluded_booking_ids=excluded_booking_ids,
+                )
+                invoice_result = uc.execute(input_data)
+                if not invoice_result.success:
+                    return (
+                        invoice_result.error,
+                        invoice_result.status_code or 400,
+                    )
+                if invoice_result.invoice:
+                    return invoice_result.invoice.to_dict(), 201
+                if invoice_result.invoice_id:
+                    from repositories.invoice_repository import InvoiceRepository
+
+                    inv = InvoiceRepository().find_model_by_id_and_company(
+                        invoice_result.invoice_id, company_id
+                    )
+                    if inv:
+                        return inv.to_dict(), 201
+                    return {"error": "Facture générée mais non trouvée"}, 500
+                return {"error": "Facture générée mais non retournée"}, 500
 
             # Cas 1: Facturation groupée de plusieurs clients vers une
             # institution
@@ -2345,6 +2404,12 @@ class GenerateInvoice(Resource):
                         billing_party_id=billing_party_id,
                         bill_to_client_id=bill_to_client_id,
                         clinic_company_id=clinic_company_id,
+                        billing_opportunity_key=validated_data.get(
+                            "billing_opportunity_key"
+                        ),
+                        excluded_booking_ids=validated_data.get(
+                            "excluded_booking_ids"
+                        ),
                         reservation_ids=validated_data.get("reservation_ids"),
                         overrides=overrides,
                         global_discount_percent=validated_data.get(
@@ -2382,7 +2447,7 @@ class GenerateInvoice(Resource):
 
             else:
                 result, status_code = APIErrorHandler.handle_validation_error(
-                    "client_id ou client_ids requis",
+                    "client_id, client_ids ou billing_opportunity_key requis",
                     logger_instance=logger,
                 )
 

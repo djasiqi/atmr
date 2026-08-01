@@ -140,3 +140,14 @@ class InvoiceGenerateSchema(Schema):
     global_discount_note = fields.Str(
         validate=validate.Length(max=500), allow_none=True
     )
+    # PR3 : génération via opportunité (sujet + payeur) — compat client_id conservée
+    billing_opportunity_key = fields.Str(
+        allow_none=True,
+        load_default=None,
+        validate=validate.Length(max=120),
+    )
+    excluded_booking_ids = fields.List(
+        fields.Int(validate=validate.Range(min=1)),
+        allow_none=True,
+        load_default=None,
+    )
