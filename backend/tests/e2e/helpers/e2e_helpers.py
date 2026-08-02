@@ -7,6 +7,8 @@ de tests end-to-end en encapsulant les opérations courantes :
 - Vérifications (assertions sur assignations, notifications, dispatch runs)
 """
 
+import itertools
+import secrets
 from datetime import date
 from typing import TYPE_CHECKING, Any
 
@@ -31,6 +33,32 @@ from tests.factories import BookingFactory, ClientFactory, CompanyFactory, Drive
 
 if TYPE_CHECKING:
     from datetime import timedelta
+
+
+# Départ aléatoire (isolation entre exécutions sur une DB non réinitialisée)
+# puis incrément (unicité garantie à l'intérieur d'une session de tests).
+_PHONE_SEQUENCE = itertools.count(secrets.randbelow(10**7))
+
+
+def unique_phone(prefix: str = "+4179") -> str:
+    """Génère un numéro suisse unique pour les inscriptions E2E.
+
+    Les données créées via l'API (`/auth/register`) sont commitées et
+    survivent aux tests : réutiliser un numéro en dur provoque un 409
+    ``username_exists`` dès le second test qui l'emploie.
+
+    Args:
+        prefix: Préfixe international (défaut: mobile suisse ``+4179``)
+
+    Returns:
+        Numéro au format ``+41 7X XXX XX XX`` sans espaces
+
+    Exemple:
+        ```python
+        register_payload = {"phone": unique_phone(), ...}
+        ```
+    """
+    return f"{prefix}{next(_PHONE_SEQUENCE) % 10**7:07d}"
 
 
 # =====================================================

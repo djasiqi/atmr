@@ -1,0 +1,108 @@
+"""Payload QR-facture suisse générique (plateforme : arrondi 0.01, pas 0.05)."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from decimal import Decimal
+from typing import Any
+
+from services.platform_billing.money import money_round_chf
+
+
+@dataclass(frozen=True)
+class QrParty:
+    name: str
+    street: str
+    building_number: str | None
+    postal_code: str
+    city: str
+    country_code: str
+
+
+@dataclass(frozen=True)
+class SwissQrBillPayload:
+    creditor: QrParty
+    debtor: QrParty
+    iban: str
+    reference_type: str
+    reference: str | None
+    amount: Decimal
+    currency: str = "CHF"
+    additional_information: str | None = None
+
+
+def platform_qr_amount(total_ttc: Decimal) -> Decimal:
+    """Montant QR plateforme = total TTC figé exact (0.01), sans round_to_5_cents."""
+    return money_round_chf(total_ttc)
+
+
+def is_swiss_qr_iban(iban: str | None) -> bool:
+    """QR-IBAN suisse : IID (positions 5–9) dans 30000–31999."""
+    compact = (iban or "").replace(" ", "").upper()
+    if len(compact) < 9 or not compact.startswith("CH"):
+        return False
+    try:
+        iid = int(compact[4:9])
+    except ValueError:
+        return False
+    return 30000 <= iid <= 31999
+
+
+def resolve_platform_reference_mode(iban: str | None, requested_mode: str | None) -> str:
+    """QRR n'est valide qu'avec un QR-IBAN ; sinon NON (ou SCOR si demandé)."""
+    mode = (requested_mode or "QRR").upper()
+    if mode == "QRR" and not is_swiss_qr_iban(iban):
+        return "NON"
+    if mode == "NON":
+        return "NON"
+    return mode
+
+
+def render_swiss_qr_bill(payload: SwissQrBillPayload) -> dict[str, Any]:
+    """Construit les données prêtes pour la lib qrbill (sans arrondi 0.05)."""
+    from qrbill import QRBill
+
+    amount = platform_qr_amount(payload.amount)
+    creditor_addr = {
+        "name": payload.creditor.name,
+        "street": payload.creditor.street,
+        "house_num": payload.creditor.building_number or "",
+        "pcode": payload.creditor.postal_code,
+        "city": payload.creditor.city,
+        "country": payload.creditor.country_code or "CH",
+    }
+    debtor_addr = {
+        "name": payload.debtor.name,
+        "street": payload.debtor.street,
+        "house_num": payload.debtor.building_number or "",
+        "pcode": payload.debtor.postal_code,
+        "city": payload.debtor.city,
+        "country": payload.debtor.country_code or "CH",
+    }
+    ref_type = resolve_platform_reference_mode(
+        payload.iban, payload.reference_type or "NON"
+    )
+    kwargs: dict[str, Any] = {
+        "account": payload.iban.replace(" ", ""),
+        "creditor": creditor_addr,
+        "amount": f"{amount:.2f}",
+        "currency": payload.currency or "CHF",
+        "debtor": debtor_addr,
+    }
+    # QRR uniquement avec QR-IBAN + référence 27 chiffres
+    if ref_type == "QRR" and payload.reference:
+        kwargs["reference_number"] = payload.reference
+    elif ref_type == "SCOR" and payload.reference:
+        kwargs["reference_number"] = payload.reference
+    if payload.additional_information:
+        kwargs["additional_information"] = payload.additional_information[:140]
+
+    bill = QRBill(**kwargs)
+    return {
+        "amount": str(amount),
+        "currency": payload.currency,
+        "iban": payload.iban,
+        "reference": payload.reference if ref_type in ("QRR", "SCOR") else None,
+        "reference_type": ref_type,
+        "qr_bill": bill,
+    }

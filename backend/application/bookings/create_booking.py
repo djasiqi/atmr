@@ -40,6 +40,21 @@ logger = logging.getLogger(__name__)
 WEEKEND_START_INDEX = 5
 BOOKING_FREEZE_FLAG = "FF_BOOKING_PRICE_FREEZE_ON_CREATE"
 
+# Champs réservés aux flux internes / dispatcher — jamais acceptés sur le UC client.
+FORBIDDEN_CLIENT_FIELDS = frozenset({"bill_to_patient", "amount_source"})
+
+
+class InvalidClientBookingCommand(ValueError):
+    """Commande client contenant des champs internes interdits."""
+
+    code = "CLIENT_BOOKING_INTERNAL_FIELDS_FORBIDDEN"
+
+    def __init__(self, fields: list[str]) -> None:
+        self.fields = fields
+        super().__init__(
+            f"Champs internes interdits dans la commande client: {', '.join(fields)}"
+        )
+
 
 def _is_valid_positive_amount(value: Any) -> bool:
     try:
@@ -190,9 +205,14 @@ class CreateBookingUseCase:
             Booking créé (type concret côté Infrastructure).
 
         Raises:
+            InvalidClientBookingCommand: champs internes présents dans cmd.data.
             ValueError: données invalides / client introuvable.
             RuntimeError: erreurs de géocodage ou calcul distance/durée.
         """
+        unexpected = sorted(FORBIDDEN_CLIENT_FIELDS.intersection(cmd.data or {}))
+        if unexpected:
+            raise InvalidClientBookingCommand(unexpected)
+
         # Validation des données (défense en profondeur)
         validated_data = cast(dict[str, Any], BookingCreateSchema().load(cmd.data))
 
@@ -243,7 +263,6 @@ class CreateBookingUseCase:
             client_id=cmd.client_id, reference_date=scheduled_time
         )
         manual_amount = validated_data.get("amount")
-        amount_source = str(cmd.data.get("amount_source") or "").strip().lower()
         prefer_clinic = None
         prefer_client = getattr(client_dto, "preferential_rate", None)
 
@@ -259,9 +278,6 @@ class CreateBookingUseCase:
                 )
 
                 prefer_clinic = clinic_info.get("preferential_rate")
-
-        if cmd.data.get("bill_to_patient"):
-            prefer_clinic = None
 
         preferential_amount = None
         preferential_source = None
@@ -399,14 +415,13 @@ class CreateBookingUseCase:
                 preferential_source,
                 preferential_amount,
             )
-        elif amount_source == "manual" and manual_amount_value is not None:
-            validated_data["amount"] = manual_amount_value
-            if isinstance(price_breakdown_json, dict):
-                price_breakdown_json["manual_amount_applied"] = True
         elif price_amount is not None and _is_valid_positive_amount(price_amount):
             validated_data["amount"] = float(price_amount)
             if isinstance(price_breakdown_json, dict):
                 price_breakdown_json["pricing_amount_applied"] = True
+        elif manual_amount_value is not None:
+            # Montant body client (prévisualisation) — jamais via amount_source=manual.
+            validated_data["amount"] = manual_amount_value
 
         if has_app_context():
             get_transaction = getattr(db.session, "get_transaction", None)

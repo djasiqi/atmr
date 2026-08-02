@@ -85,6 +85,13 @@ class Company(db.Model):
         String(200), nullable=True, name="iban"
     )  # Augmenté à 200 pour stocker le texte chiffré
     uid_ide: Mapped[str] = mapped_column(String(20), nullable=True, index=True)
+    legal_form: Mapped[str | None] = mapped_column(
+        String(32),
+        nullable=True,
+        comment="Forme juridique contractuelle (LegalForm)",
+    )
+    signatory_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    signatory_title: Mapped[str | None] = mapped_column(String(120), nullable=True)
     billing_email: Mapped[str] = mapped_column(String(100), nullable=True)
     billing_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
@@ -241,6 +248,9 @@ class Company(db.Model):
             "contact_phone": self.contact_phone,
             "iban": self.iban,
             "uid_ide": self.uid_ide,
+            "legal_form": self.legal_form,
+            "signatory_name": self.signatory_name,
+            "signatory_title": self.signatory_title,
             "billing_email": self.billing_email,
             "billing_notes": self.billing_notes,
             "preferential_rate": (

@@ -12,7 +12,10 @@ from unittest.mock import MagicMock
 import pytest
 from marshmallow import ValidationError
 
-from application.bookings.create_booking import CreateBookingUseCase
+from application.bookings.create_booking import (
+    CreateBookingUseCase,
+    InvalidClientBookingCommand,
+)
 from domain.bookings.commands import CreateBookingCommand
 from domain.events.events import BookingCreatedEvent
 from models.enums import ClientType
@@ -131,29 +134,6 @@ def _build_uc(
         fallback_coords_fn=lambda _company: (46.2044, 6.1432),
         trigger_async_geocoding_fn=trigger_async,
     )
-
-
-_SCHEMA_SIDE_CHANNELS = frozenset({"amount_source", "bill_to_patient"})
-
-
-def _allow_cmd_data_side_channels(monkeypatch: pytest.MonkeyPatch) -> None:
-    """amount_source / bill_to_patient sont lus sur cmd.data mais absents du schema.
-
-    On les retire uniquement pour Marshmallow ; cmd.data reste intact pour le UC.
-    """
-    from schemas.booking_schemas import BookingCreateSchema
-
-    original_load = BookingCreateSchema.load
-
-    def _load(self, data, *args, **kwargs):  # type: ignore[no-untyped-def]
-        filtered = {
-            key: value
-            for key, value in dict(data or {}).items()
-            if key not in _SCHEMA_SIDE_CHANNELS
-        }
-        return original_load(self, filtered, *args, **kwargs)
-
-    monkeypatch.setattr(BookingCreateSchema, "load", _load)
 
 
 def _patch_common(monkeypatch: pytest.MonkeyPatch, mod: Any) -> None:
@@ -392,13 +372,12 @@ def test_active_stay_rewrites_pickup_before_distance(
     assert distance_calls[0][0] == clinic_address
 
 
-def test_clinic_preferential_rate_wins_over_client_manual_and_computed_price(
+def test_clinic_preferential_rate_wins_over_client_and_computed_price(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import application.bookings.create_booking as mod
     import services.billing.client_stay_resolver as stay_mod
 
-    _allow_cmd_data_side_channels(monkeypatch)
     monkeypatch.setattr(mod, "publish_event", lambda _evt: None)
     monkeypatch.setattr(mod, "resolve_pickup_admin", _admin_token)
     monkeypatch.setattr(
@@ -427,57 +406,40 @@ def test_clinic_preferential_rate_wins_over_client_manual_and_computed_price(
         writer=writer,
         client_repo=_FakeClientRepo(company_id=7, preferential_rate=30.0),
     )
-    cmd = _base_cmd(amount=12.0)
-    cmd.data["amount_source"] = "manual"
-    uc.execute(cmd)
+    uc.execute(_base_cmd(amount=12.0))
     assert writer.last_kwargs["amount"] == 42.5
     breakdown = writer.last_kwargs.get("price_breakdown_json") or {}
     assert breakdown.get("overridden_by_preferential") is True
     assert breakdown.get("preferential_source") == "clinic"
 
 
-def test_bill_to_patient_excludes_clinic_rate_but_preserves_client_rate_precedence(
+@pytest.mark.parametrize(
+    "forbidden_field,forbidden_value",
+    [
+        ("bill_to_patient", True),
+        ("amount_source", "manual"),
+        ("amount_source", "client_override"),
+    ],
+)
+def test_forbidden_client_fields_rejected_before_pricing(
     monkeypatch: pytest.MonkeyPatch,
+    forbidden_field: str,
+    forbidden_value: Any,
 ) -> None:
+    """Option B : bill_to_patient / amount_source ne franchissent jamais le UC client."""
     import application.bookings.create_booking as mod
-    import services.billing.client_stay_resolver as stay_mod
 
-    _allow_cmd_data_side_channels(monkeypatch)
     monkeypatch.setattr(mod, "publish_event", lambda _evt: None)
-    monkeypatch.setattr(mod, "resolve_pickup_admin", _admin_token)
-    monkeypatch.setattr(
-        stay_mod,
-        "find_active_stay_for_client",
-        lambda **_k: SimpleNamespace(id=1),
-    )
-    monkeypatch.setattr(
-        stay_mod,
-        "get_clinic_address_for_stay",
-        lambda _stay: {
-            "address": "Clinique X",
-            "clinic_name": "X",
-            "clinic_id": 1,
-            "preferential_rate": 42.5,
-        },
-    )
-    monkeypatch.setattr(
-        CreateBookingUseCase,
-        "_compute_pricing_freeze",
-        lambda *a, **k: (None, None, None, {}),
-    )
-
+    _patch_common(monkeypatch, mod)
     writer = _FakeBookingWriter()
-    uc = _build_uc(
-        writer=writer,
-        client_repo=_FakeClientRepo(company_id=7, preferential_rate=33.0),
-    )
+    uc = _build_uc(writer=writer)
     cmd = _base_cmd(amount=10.0)
-    cmd.data["bill_to_patient"] = True
-    uc.execute(cmd)
-    assert writer.last_kwargs["amount"] == 33.0
-    breakdown = writer.last_kwargs.get("price_breakdown_json") or {}
-    assert breakdown.get("preferential_source") == "client"
-    assert breakdown.get("overridden_by_preferential") is True
+    cmd.data[forbidden_field] = forbidden_value
+    with pytest.raises(InvalidClientBookingCommand) as exc_info:
+        uc.execute(cmd)
+    assert exc_info.value.code == "CLIENT_BOOKING_INTERNAL_FIELDS_FORBIDDEN"
+    assert forbidden_field in exc_info.value.fields
+    assert writer.calls == 0
 
 
 def test_price_freeze_persists_profile_version_amount_and_breakdown(

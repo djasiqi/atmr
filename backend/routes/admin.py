@@ -41,15 +41,6 @@ from repositories.user_repository import UserRepository
 from routes.admin_platform_billing import register_platform_billing_routes
 from security.ip_whitelist import ip_whitelist_required
 from services.admin_dashboard_summary import build_admin_dashboard_summary
-from services.admin_platform_billing_pilotage import (
-    build_pilotage_summary,
-    export_pilotage_csv,
-    get_pilotage_company_detail,
-    list_pilotage_companies,
-    parse_pilotage_detail_args,
-    parse_pilotage_list_args,
-    parse_pilotage_request_args,
-)
 from services.admin_platform_bookings import (
     build_admin_booking_detail,
     export_admin_bookings_csv,
@@ -415,119 +406,9 @@ class AdminPlatformBookingsExport(Resource):
             admin_ns.abort(500, "Une erreur interne est survenue.")
 
 
-@admin_ns.route("/billing/pilotage/summary")
-class AdminBillingPilotageSummary(Resource):
-    """GET /admin/billing/pilotage/summary — KPIs pilotage billing plateforme."""
-
-    @jwt_required()
-    @role_required(UserRole.admin)
-    @ip_whitelist_required()
-    @limiter.limit("120 per hour")
-    def get(self):
-        try:
-            params = parse_pilotage_request_args(request.args)
-            return build_pilotage_summary(**params), 200
-        except ValidationError as e:
-            logger.warning("Validation pilotage summary échouée: %s", e.messages)
-            return APIErrorHandler.handle_exception(e, logger)
-        except Exception as e:
-            sentry_sdk.capture_exception(e)
-            logger.exception("❌ ERREUR get_billing_pilotage_summary: %s", e)
-            admin_ns.abort(500, "Une erreur interne est survenue.")
-
-
-@admin_ns.route("/billing/pilotage/companies")
-class AdminBillingPilotageCompanies(Resource):
-    """GET /admin/billing/pilotage/companies — tableau entreprises."""
-
-    @jwt_required()
-    @role_required(UserRole.admin)
-    @ip_whitelist_required()
-    @limiter.limit("120 per hour")
-    def get(self):
-        try:
-            raw = parse_pilotage_list_args(request.args)
-            page = raw.pop("page", 1)
-            per_page = raw.pop("per_page", 25)
-            sort = raw.pop("sort", "total_bookings")
-            order = raw.pop("order", "desc")
-            return list_pilotage_companies(
-                page=page,
-                per_page=per_page,
-                sort=sort,
-                order=order,
-                **raw,
-            ), 200
-        except ValidationError as e:
-            logger.warning("Validation pilotage companies échouée: %s", e.messages)
-            return APIErrorHandler.handle_exception(e, logger)
-        except Exception as e:
-            sentry_sdk.capture_exception(e)
-            logger.exception("❌ ERREUR get_billing_pilotage_companies: %s", e)
-            admin_ns.abort(500, "Une erreur interne est survenue.")
-
-
-@admin_ns.route("/billing/pilotage/companies/<int:company_id>")
-class AdminBillingPilotageCompanyDetail(Resource):
-    """GET /admin/billing/pilotage/companies/:id — détail entreprise."""
-
-    @jwt_required()
-    @role_required(UserRole.admin)
-    @ip_whitelist_required()
-    @limiter.limit("120 per hour")
-    def get(self, company_id: int):
-        try:
-            raw = parse_pilotage_detail_args(request.args)
-            page = raw.pop("page", 1)
-            per_page = raw.pop("per_page", 50)
-            raw.pop("company_id", None)
-            payload = get_pilotage_company_detail(
-                company_id, page=page, per_page=per_page, **raw
-            )
-            if payload is None:
-                admin_ns.abort(404, "Entreprise introuvable ou hors périmètre.")
-            return payload, 200
-        except ValidationError as e:
-            logger.warning("Validation pilotage detail échouée: %s", e.messages)
-            return APIErrorHandler.handle_exception(e, logger)
-        except Exception as e:
-            sentry_sdk.capture_exception(e)
-            logger.exception("❌ ERREUR get_billing_pilotage_company_detail: %s", e)
-            admin_ns.abort(500, "Une erreur interne est survenue.")
-
-
-@admin_ns.route("/billing/pilotage/export")
-class AdminBillingPilotageExport(Resource):
-    """GET /admin/billing/pilotage/export — CSV."""
-
-    @jwt_required()
-    @role_required(UserRole.admin)
-    @ip_whitelist_required()
-    @limiter.limit("20 per hour")
-    def get(self):
-        try:
-            params = parse_pilotage_request_args(request.args)
-            data, filename = export_pilotage_csv(**params)
-            return Response(
-                data,
-                mimetype="text/csv; charset=utf-8",
-                headers={
-                    "Content-Disposition": f'attachment; filename="{filename}"',
-                },
-            )
-        except ValidationError as e:
-            logger.warning("Validation export pilotage échouée: %s", e.messages)
-            return APIErrorHandler.handle_exception(e, logger)
-        except Exception as e:
-            sentry_sdk.capture_exception(e)
-            logger.exception("❌ ERREUR export_billing_pilotage: %s", e)
-            admin_ns.abort(500, "Une erreur interne est survenue.")
-
-
 @admin_ns.route("/bookings/<int:booking_id>")
 class AdminPlatformBookingDetail(Resource):
     """GET /admin/bookings/:id — détail + timeline."""
-
     @jwt_required()
     @role_required(UserRole.admin)
     @ip_whitelist_required()
@@ -2361,5 +2242,5 @@ class AdminClientIndicativeFareConfig(Resource):
             return APIErrorHandler.handle_exception(e, logger)
 
 
-# --- Facturation plateforme LIRIE V1 (distinct Invoice / pilotage) ---
+# --- Facturation plateforme LIRIE (relevés dual-produit) ---
 register_platform_billing_routes(admin_ns)

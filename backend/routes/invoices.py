@@ -3,7 +3,7 @@ import json
 import logging
 import os
 import traceback
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any, cast
 
@@ -369,8 +369,10 @@ class InvoicesList(Resource):
     @role_required(["ADMIN", "COMPANY"])
     def get(self, company_id):
         """Récupère la liste des factures (normales + partenaires) — UNION ALL SQL (Lot 6)."""
+        from services.invoices.company_invoices_list import (
+            list_company_invoices_unified,
+        )
         from shared.tenant_guard import assert_company_access
-        from services.invoices.company_invoices_list import list_company_invoices_unified
 
         _user, access_err = assert_company_access(company_id, resource="invoices_list")
         if access_err:
@@ -2077,18 +2079,20 @@ class GenerateInvoice(Resource):
             )
 
             from schemas.invoice_schemas import InvoiceGenerateSchema
-            from schemas.validation_utils import validate_request
+            from schemas.validation_utils import (
+                handle_validation_error,
+                validate_request,
+            )
 
             try:
                 validated_data = validate_request(
                     InvoiceGenerateSchema(), data, strict=False
                 )
             except ValidationError as e:
-                result, status_code = APIErrorHandler.handle_validation_error(
-                    str(e),
-                    logger_instance=logger,
+                logger.warning(
+                    "Erreur de validation génération facture: %s", e.messages
                 )
-                return result, status_code
+                return handle_validation_error(e)
 
             client_id = validated_data.get("client_id")
             # NOUVEAU: pour facturation groupée
@@ -2407,9 +2411,7 @@ class GenerateInvoice(Resource):
                         billing_opportunity_key=validated_data.get(
                             "billing_opportunity_key"
                         ),
-                        excluded_booking_ids=validated_data.get(
-                            "excluded_booking_ids"
-                        ),
+                        excluded_booking_ids=validated_data.get("excluded_booking_ids"),
                         reservation_ids=validated_data.get("reservation_ids"),
                         overrides=overrides,
                         global_discount_percent=validated_data.get(

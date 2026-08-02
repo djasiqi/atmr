@@ -10,7 +10,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from models import BookingStatus
+from models import BookingStatus, User
 from tests.e2e.helpers.e2e_helpers import (
     assert_booking_assigned,
     create_test_booking,
@@ -18,6 +18,27 @@ from tests.e2e.helpers.e2e_helpers import (
     create_test_company,
     create_test_driver,
 )
+
+
+def _login_driver_mobile(e2e_client, user: User, password: str) -> dict[str, str]:
+    """Connecte un chauffeur et retourne les headers Bearer.
+
+    Les routes ``/api/v1/driver/*`` sont traitées comme mobiles par
+    ``_lot1_jwt_locations_web_mobile_split`` : seul le header Authorization
+    est accepté, les cookies web posés par /auth/login sont ignorés.
+    """
+    login_response = e2e_client.post(
+        "/api/v1/auth/login",
+        json={"email": user.email, "password": password},
+        headers={"Content-Type": "application/json", "X-Requested-With": "Expo"},
+    )
+    assert login_response.status_code == 200, (
+        f"Login chauffeur doit réussir, reçu {login_response.status_code}: "
+        f"{login_response.get_json()}"
+    )
+    token = (login_response.get_json() or {}).get("access_token")
+    assert token, "Le login mobile doit retourner un access_token"
+    return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
 
 class TestDriverCreationToAssignmentFlow:
@@ -95,17 +116,13 @@ class TestDriverStatusUpdateFlow:
         db.session.commit()
 
         # 1. Login en tant que driver
-        login_response = e2e_client.post(
-            "/api/v1/auth/login",
-            json={"email": user.email, "password": "testpassword123"},
-        )
-        assert login_response.status_code == 200
+        auth_headers = _login_driver_mobile(e2e_client, user, "testpassword123")
 
         # 2. Mettre à jour le statut du booking (en_route)
         update_status_response = e2e_client.put(
             f"/api/v1/driver/me/bookings/{booking.id}/status",
             json={"status": "en_route"},
-            headers={"Content-Type": "application/json"},
+            headers=auth_headers,
         )
 
         assert update_status_response.status_code in (200, 201), (
@@ -127,7 +144,7 @@ class TestDriverStatusUpdateFlow:
         update_status_response = e2e_client.put(
             f"/api/v1/driver/me/bookings/{booking.id}/status",
             json={"status": "in_progress"},
-            headers={"Content-Type": "application/json"},
+            headers=auth_headers,
         )
 
         assert update_status_response.status_code in (200, 201)
@@ -167,17 +184,13 @@ class TestDriverBookingCompletionFlow:
         db.session.commit()
 
         # 1. Login en tant que driver
-        login_response = e2e_client.post(
-            "/api/v1/auth/login",
-            json={"email": user.email, "password": "testpassword123"},
-        )
-        assert login_response.status_code == 200
+        auth_headers = _login_driver_mobile(e2e_client, user, "testpassword123")
 
         # 2. Démarrer le booking (en_route)
         update_status_response = e2e_client.put(
             f"/api/v1/driver/me/bookings/{booking.id}/status",
             json={"status": "en_route"},
-            headers={"Content-Type": "application/json"},
+            headers=auth_headers,
         )
         assert update_status_response.status_code in (200, 201)
 
@@ -185,7 +198,7 @@ class TestDriverBookingCompletionFlow:
         update_status_response = e2e_client.put(
             f"/api/v1/driver/me/bookings/{booking.id}/status",
             json={"status": "in_progress"},
-            headers={"Content-Type": "application/json"},
+            headers=auth_headers,
         )
         assert update_status_response.status_code in (200, 201)
 
@@ -196,7 +209,7 @@ class TestDriverBookingCompletionFlow:
         update_status_response = e2e_client.put(
             f"/api/v1/driver/me/bookings/{booking.id}/status",
             json={"status": "completed"},
-            headers={"Content-Type": "application/json"},
+            headers=auth_headers,
         )
         assert update_status_response.status_code in (200, 201), (
             f"Terminaison booking doit réussir, "

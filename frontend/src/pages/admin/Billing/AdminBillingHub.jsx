@@ -4,8 +4,7 @@ import shell from '../adminShell.module.css';
 import styles from './AdminBillingHub.module.css';
 
 /**
- * Hub unique « Facturation LIRIE » : pilotage analytique, relevés plateforme, paramètres transporteurs.
- * Les moteurs backend restent séparés ; seule l’entrée UX est unifiée.
+ * Hub « Facturation LIRIE » : synthèse, relevés, configuration transporteurs.
  */
 const AdminBillingHub = () => {
   const { public_id: adminId } = useParams();
@@ -16,28 +15,27 @@ const AdminBillingHub = () => {
       <header className={styles.hubHeader}>
         <h1 className={styles.hubTitle}>Facturation LIRIE</h1>
         <p className={styles.hubSubtitle}>
-          Pilotage du périmètre facturable, relevés contractuels plateforme (abonnement, commission
-          institution, support) et paramètres par transporteur. Les exports CSV restent distincts par
-          onglet.
+          Relevés mensuels aux transporteurs — abonnement, commission et support.
         </p>
         <nav className={styles.tabs} aria-label="Sections facturation">
           <NavLink
-            to={`${base}/pilotage`}
+            to={base}
+            end
             className={({ isActive }) => `${styles.tab} ${isActive ? styles.tabActive : ''}`}
           >
-            Pilotage facturable
+            Vue d&apos;ensemble
           </NavLink>
           <NavLink
             to={`${base}/releves`}
             className={({ isActive }) => `${styles.tab} ${isActive ? styles.tabActive : ''}`}
           >
-            Relevés plateforme
+            Relevés
           </NavLink>
           <NavLink
             to={`${base}/config`}
             className={({ isActive }) => `${styles.tab} ${isActive ? styles.tabActive : ''}`}
           >
-            Paramètres transporteurs
+            Entreprises
           </NavLink>
         </nav>
       </header>

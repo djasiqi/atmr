@@ -1,0 +1,11 @@
+# Exceptions Trivy — CRITICAL fixable non autorisées sans entrée datée + owner.
+# Le job CI doit échouer si expires_at est passé ou owner manquant.
+exceptions: []
+# Exemple :
+# - id: CVE-2024-XXXX
+#   owner: platform
+#   reason: "..."
+#   scope: backend-runtime
+#   expires_at: "2026-09-01"
+#   compensating_controls:
+#     - "..."

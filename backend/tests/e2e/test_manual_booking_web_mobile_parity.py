@@ -59,6 +59,11 @@ def _requires_postgres(db_session):
         pytest.skip("Parity E2E tests require PostgreSQL (got SQLite)")
 
 
+# Les companies de test n'ont pas de grille tarifaire : sans montant saisi,
+# le booking serait créé à 0 et rejeté par la validation (minimum 0.5).
+_MANUAL_AMOUNT = 45.0
+
+
 def _base_canonical_payload(client_id: int, scheduled_time: str):
     """Payload canonique minimal (web)."""
     return {
@@ -70,6 +75,8 @@ def _base_canonical_payload(client_id: int, scheduled_time: str):
         "dropoff_lat": 46.5160,
         "dropoff_lon": 6.6328,
         "scheduled_time": scheduled_time,
+        "amount": _MANUAL_AMOUNT,
+        "amount_source": "manual",
     }
 
 
@@ -84,6 +91,8 @@ def _base_mobile_payload(client_id: int, scheduled_time: str):
         "dropoff_lat": 46.5160,
         "dropoff_lon": 6.6328,
         "scheduled_time": scheduled_time,
+        "amount": _MANUAL_AMOUNT,
+        "amount_source": "manual",
     }
 
 
@@ -162,6 +171,13 @@ class TestManualBookingWebMobileParity:
         assert web_booking is not None
         assert mobile_booking is not None
 
+        # Chaque canal utilise sa propre company/client (évite les conflits de
+        # dates) : la parité porte sur les champs issus du payload.
+        assert web_booking.client_id == customer.id
+        assert web_booking.company_id == company.id
+        assert mobile_booking.client_id == customer2.id
+        assert mobile_booking.company_id == company2.id
+
         fields_to_compare = [
             "pickup_location",
             "dropoff_location",
@@ -169,8 +185,7 @@ class TestManualBookingWebMobileParity:
             "pickup_lon",
             "dropoff_lat",
             "dropoff_lon",
-            "client_id",
-            "company_id",
+            "amount",
             "status",
         ]
         for f in fields_to_compare:

@@ -5,6 +5,8 @@ Requiert PostgreSQL + RUN_E2E_TESTS=1.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
+
 import pytest
 
 from models import BookingStatus, User, UserRole
@@ -57,6 +59,11 @@ class TestMobileUpdateRideE2E:
         booking.company_id = company.id
         db.session.commit()
 
+        # Date relative : une date en dur finit par passer dans le passé (rejet 400).
+        scheduled_time = (datetime.now(UTC) + timedelta(days=2)).strftime(
+            "%Y-%m-%dT09:45:00"
+        )
+
         headers = _company_headers(app, company)
         r = client.put(
             f"/api/v1/company_mobile/dispatch/v1/rides/{booking.id}",
@@ -67,7 +74,7 @@ class TestMobileUpdateRideE2E:
                 "pickup_lon": None,
                 "dropoff_lat": None,
                 "dropoff_lon": None,
-                "scheduled_time": "2026-06-22T09:45:00",
+                "scheduled_time": scheduled_time,
                 "notes": None,
                 "notes_medical": None,
             },

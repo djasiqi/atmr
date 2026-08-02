@@ -164,79 +164,177 @@ except Exception:
 " 2>/dev/null
 }
 
-# Fonction de rollback
+RELEASE_DIR="${RELEASE_DIR:-/srv/atmr/releases}"
+CURRENT_RELEASE_LINK="${RELEASE_DIR}/current-release.json"
+PREVIOUS_RELEASE_LINK="${RELEASE_DIR}/previous-release.json"
+RELEASE_MANIFEST_ARG=""
+ENV_FILE_ARG=""
+
+# Parse flags (--env-file / --release-manifest) ; sinon args positionnels (legacy, déprécié).
+POSITIONAL=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --env-file)
+      ENV_FILE_ARG="${2:-}"
+      shift 2
+      ;;
+    --release-manifest)
+      RELEASE_MANIFEST_ARG="${2:-}"
+      shift 2
+      ;;
+    --)
+      shift
+      POSITIONAL+=("$@")
+      break
+      ;;
+    -*)
+      echo "Option inconnue: $1" >&2
+      exit 1
+      ;;
+    *)
+      POSITIONAL+=("$1")
+      shift
+      ;;
+  esac
+done
+set -- "${POSITIONAL[@]+"${POSITIONAL[@]}"}"
+
+deploy_from_manifest() {
+  local manifest_path="$1"
+  if [ ! -f "$manifest_path" ]; then
+    echo "Manifeste introuvable: $manifest_path" >&2
+    return 1
+  fi
+  if command -v jq >/dev/null 2>&1; then
+    export BACKEND_IMAGE_REF
+    BACKEND_IMAGE_REF="$(jq -r '.backend.reference' "$manifest_path")"
+    export WS_SERVICE_IMAGE_REF
+    WS_SERVICE_IMAGE_REF="$(jq -r '.ws.reference' "$manifest_path")"
+  fi
+  echo "📦 Pull digests depuis manifeste..."
+  docker pull "${BACKEND_IMAGE_REF}"
+  docker pull "${WS_SERVICE_IMAGE_REF}"
+  docker compose -f docker-compose.production.yml up -d --remove-orphans
+}
+
+# Fonction de rollback — redéploie le manifeste précédent (pas un simple compose down).
 rollback() {
-  echo "🔄 Rollback en cours..."
+  echo "🔄 Rollback vers previous-release.json..."
+  if [ -f "$PREVIOUS_RELEASE_LINK" ]; then
+    if deploy_from_manifest "$PREVIOUS_RELEASE_LINK"; then
+      echo "✅ Rollback manifeste précédent réussi"
+      exit 1
+    fi
+  fi
+  echo "⚠️  previous-release.json absent ou échec — arrêt de la stack (dernier recours)"
   docker compose -f docker-compose.production.yml down --remove-orphans || true
   echo "❌ Déploiement échoué, rollback effectué"
   exit 1
 }
 trap rollback ERR
 
-# Export des variables d'environnement depuis les arguments
-export APP_ENCRYPTION_KEY_B64="$1"
-export SECRET_KEY="$2"
-export JWT_SECRET_KEY="$3"
-export POSTGRES_PASSWORD="$4"
-export POSTGRES_USER="$5"
-export POSTGRES_DB="$6"
-export REDIS_PASSWORD="$7"
-export MAIL_PASSWORD="$8"
-export SENTRY_DSN="$9"
-export PDF_BASE_URL="${10}"
-export GOOGLE_MAPS_API_KEY="${11}"
-export MASTER_ENCRYPTION_KEY="${12}"
-export DOCKER_IMAGE="${13}"
-export DOCKER_TAG="${14}"
-# ws-service : même tag que le backend ; nom d’image = …/atmr-ws-service (aligné Docker Hub CI)
-case "${DOCKER_IMAGE}" in
-  *atmr-backend)
-    export WS_SERVICE_IMAGE="${DOCKER_IMAGE/%atmr-backend/atmr-ws-service}"
-    ;;
-  *)
-    export WS_SERVICE_IMAGE="${WS_SERVICE_IMAGE:-docker.io/djasiqi/atmr-ws-service}"
-    ;;
-esac
-export GRAFANA_ADMIN_USER="${15}"
-export GRAFANA_ADMIN_PASSWORD="${16}"
-export GRAFANA_ROOT_URL="${17}"
-export SMTP_HOST="${18}"
-export SMTP_PORT="${19}"
-export SMTP_USERNAME="${20}"
-export SMTP_PASSWORD="${21}"
-export ALERTMANAGER_FROM_EMAIL="${22}"
-export ALERT_EMAIL_TO="${23}"
-export SOCKETIO_CORS_ORIGINS="${24}"
-export BREVO_API_KEY="${25}"
-export POSTGRES_HOST="${26:-postgres}"
-export FLASK_ENV="${27:-production}"
-export FLASK_CONFIG="${28:-production}"
-export ENVIRONMENT="${29:-production}"
-# Admin Ops / Platform (GET /api/v1/platform/status) — surcharges via GitHub Actions vars
-export PLATFORM_API_URL_PROD="${30:-}"
-export PLATFORM_LINK_PROMETHEUS="${31:-}"
-export PLATFORM_LINK_ALERTMANAGER="${32:-}"
-export PLATFORM_API_URL_DEMO="${33:-}"
-export SAFERPAY_CUSTOMER_ID="${34:-}"
-export SAFERPAY_TERMINAL_ID="${35:-}"
-export SAFERPAY_API_USERNAME="${36:-}"
-export SAFERPAY_API_PASSWORD="${37:-}"
-export SMS_NOTIFICATIONS_ENABLED="${38:-false}"
-export TWILIO_ACCOUNT_SID="${39:-}"
-export TWILIO_AUTH_TOKEN="${40:-}"
-export TWILIO_PHONE_NUMBER="${41:-}"
-export INTERNAL_SERVICE_TOKEN="${42:-}"
-export INTERNAL_SERVICE_TOKEN_NEXT="${43:-}"
+if [ -n "${ENV_FILE_ARG}" ]; then
+  if [ ! -f "${ENV_FILE_ARG}" ]; then
+    echo "Fichier env introuvable: ${ENV_FILE_ARG}" >&2
+    exit 1
+  fi
+  set -a
+  # shellcheck disable=SC1090
+  source "${ENV_FILE_ARG}"
+  set +a
+  echo "✅ Secrets chargés depuis --env-file (hors argv)"
+elif [ $# -ge 14 ]; then
+  echo "⚠️  Args positionnels dépréciés — préférer --env-file"
+  export APP_ENCRYPTION_KEY_B64="$1"
+  export SECRET_KEY="$2"
+  export JWT_SECRET_KEY="$3"
+  export POSTGRES_PASSWORD="$4"
+  export POSTGRES_USER="$5"
+  export POSTGRES_DB="$6"
+  export REDIS_PASSWORD="$7"
+  export MAIL_PASSWORD="$8"
+  export SENTRY_DSN="$9"
+  export PDF_BASE_URL="${10}"
+  export GOOGLE_MAPS_API_KEY="${11}"
+  export MASTER_ENCRYPTION_KEY="${12}"
+  export DOCKER_IMAGE="${13}"
+  export DOCKER_TAG="${14}"
+else
+  echo "Usage: deploy-production.sh --env-file FILE [--release-manifest FILE]" >&2
+  echo "   ou: deploy-production.sh <43 args positionnels legacy>" >&2
+  exit 1
+fi
+
+if [ -z "${ENV_FILE_ARG}" ]; then
+  # Legacy positional continuation (args 15+)
+  case "${DOCKER_IMAGE}" in
+    *atmr-backend)
+      export WS_SERVICE_IMAGE="${DOCKER_IMAGE/%atmr-backend/atmr-ws-service}"
+      ;;
+    *)
+      export WS_SERVICE_IMAGE="${WS_SERVICE_IMAGE:-docker.io/djasiqi/atmr-ws-service}"
+      ;;
+  esac
+  export GRAFANA_ADMIN_USER="${15}"
+  export GRAFANA_ADMIN_PASSWORD="${16}"
+  export GRAFANA_ROOT_URL="${17}"
+  export SMTP_HOST="${18}"
+  export SMTP_PORT="${19}"
+  export SMTP_USERNAME="${20}"
+  export SMTP_PASSWORD="${21}"
+  export ALERTMANAGER_FROM_EMAIL="${22}"
+  export ALERT_EMAIL_TO="${23}"
+  export SOCKETIO_CORS_ORIGINS="${24}"
+  export BREVO_API_KEY="${25}"
+  export POSTGRES_HOST="${26:-postgres}"
+  export FLASK_ENV="${27:-production}"
+  export FLASK_CONFIG="${28:-production}"
+  export ENVIRONMENT="${29:-production}"
+  export PLATFORM_API_URL_PROD="${30:-}"
+  export PLATFORM_LINK_PROMETHEUS="${31:-}"
+  export PLATFORM_LINK_ALERTMANAGER="${32:-}"
+  export PLATFORM_API_URL_DEMO="${33:-}"
+  export SAFERPAY_CUSTOMER_ID="${34:-}"
+  export SAFERPAY_TERMINAL_ID="${35:-}"
+  export SAFERPAY_API_USERNAME="${36:-}"
+  export SAFERPAY_API_PASSWORD="${37:-}"
+  export SMS_NOTIFICATIONS_ENABLED="${38:-false}"
+  export TWILIO_ACCOUNT_SID="${39:-}"
+  export TWILIO_AUTH_TOKEN="${40:-}"
+  export TWILIO_PHONE_NUMBER="${41:-}"
+  export INTERNAL_SERVICE_TOKEN="${42:-}"
+  export INTERNAL_SERVICE_TOKEN_NEXT="${43:-}"
+fi
+
+# Commun env-file + legacy
+if [ -z "${WS_SERVICE_IMAGE:-}" ] && [ -n "${DOCKER_IMAGE:-}" ]; then
+  case "${DOCKER_IMAGE}" in
+    *atmr-backend)
+      export WS_SERVICE_IMAGE="${DOCKER_IMAGE/%atmr-backend/atmr-ws-service}"
+      ;;
+    *)
+      export WS_SERVICE_IMAGE="${WS_SERVICE_IMAGE:-docker.io/djasiqi/atmr-ws-service}"
+      ;;
+  esac
+fi
+
 INTERNAL_SERVICE_TOKEN="$(load_internal_service_token INTERNAL_SERVICE_TOKEN "${INTERNAL_SERVICE_TOKEN:-}")" || true
 INTERNAL_SERVICE_TOKEN_NEXT="$(load_internal_service_token INTERNAL_SERVICE_TOKEN_NEXT "${INTERNAL_SERVICE_TOKEN_NEXT:-}")" || true
 export INTERNAL_SERVICE_TOKEN INTERNAL_SERVICE_TOKEN_NEXT
-# SAFERPAY_API_BASE_URL + SAFERPAY_ALLOW_TEST_API_IN_PRODUCTION : non sensibles →
-# scripts/env.production.defaults.fragment (append après le bloc CI).
-# Réglages mobile/token/websocket (optionnels, avec defaults robustes)
 export JWT_MOBILE_ACCESS_TOKEN_EXPIRES_SECONDS="${JWT_MOBILE_ACCESS_TOKEN_EXPIRES_SECONDS:-259200}"
 export JWT_DECODE_LEEWAY_SECONDS="${JWT_DECODE_LEEWAY_SECONDS:-300}"
 export SOCKETIO_PING_TIMEOUT_SECONDS="${SOCKETIO_PING_TIMEOUT_SECONDS:-180}"
 export SOCKETIO_PING_INTERVAL_SECONDS="${SOCKETIO_PING_INTERVAL_SECONDS:-25}"
+
+if [ -n "${RELEASE_MANIFEST_ARG}" ] && [ -f "${RELEASE_MANIFEST_ARG}" ]; then
+  if command -v jq >/dev/null 2>&1; then
+    export BACKEND_IMAGE_REF
+    BACKEND_IMAGE_REF="$(jq -r '.backend.reference' "${RELEASE_MANIFEST_ARG}")"
+    export WS_SERVICE_IMAGE_REF
+    WS_SERVICE_IMAGE_REF="$(jq -r '.ws.reference' "${RELEASE_MANIFEST_ARG}")"
+    echo "✅ Images par digest depuis manifeste"
+  fi
+fi
 
 # Validation des secrets
 MISSING_SECRETS=()
@@ -248,8 +346,10 @@ MISSING_SECRETS=()
 [ -z "${POSTGRES_DB:-}" ] && MISSING_SECRETS+=("POSTGRES_DB")
 [ -z "${POSTGRES_HOST:-}" ] && MISSING_SECRETS+=("POSTGRES_HOST")
 [ -z "${REDIS_PASSWORD:-}" ] && MISSING_SECRETS+=("REDIS_PASSWORD")
-[ -z "${DOCKER_IMAGE:-}" ] && MISSING_SECRETS+=("DOCKER_IMAGE")
-[ -z "${DOCKER_TAG:-}" ] && MISSING_SECRETS+=("DOCKER_TAG")
+if [ -z "${BACKEND_IMAGE_REF:-}" ]; then
+  [ -z "${DOCKER_IMAGE:-}" ] && MISSING_SECRETS+=("DOCKER_IMAGE")
+  [ -z "${DOCKER_TAG:-}" ] && MISSING_SECRETS+=("DOCKER_TAG")
+fi
 [ -z "${SOCKETIO_CORS_ORIGINS:-}" ] && MISSING_SECRETS+=("SOCKETIO_CORS_ORIGINS")
 [ -z "${BREVO_API_KEY:-}" ] && MISSING_SECRETS+=("BREVO_API_KEY")
 [ -z "${FLASK_ENV:-}" ] && MISSING_SECRETS+=("FLASK_ENV")

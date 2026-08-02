@@ -1,6 +1,6 @@
-"""Noyau partagé : classification source, montant observable, qualification pilotage billing.
+"""Noyau partagé : classification source, montant observable, qualification billing.
 
-Utilisé par la liste admin / export CSV et par `/admin/billing/pilotage/*`.
+Utilisé par la liste admin / export CSV et par le moteur facturation plateforme.
 Les versions permettent de tracer les changements de règles métier.
 """
 

@@ -20,6 +20,7 @@ from tests.e2e.helpers.e2e_helpers import (
     create_test_booking,
     create_test_client,
     create_test_company,
+    unique_phone,
 )
 from tests.e2e.test_auth_activation_e2e import _ensure_hmac_activation_token
 
@@ -91,7 +92,7 @@ class TestClientRegistrationToBookingFlow:
             "password": password,
             "first_name": "Jean",
             "last_name": "Dupont",
-            "phone": "+41791234567",
+            "phone": unique_phone(),
             "address": "Rue de Test 1, 1200 Geneve",
         }
 
@@ -208,7 +209,7 @@ class TestClientProfileUpdateFlow:
         update_data = {
             "first_name": "NouveauPrénom",
             "last_name": "NouveauNom",
-            "phone": "+41799999999",
+            "phone": unique_phone(),
             "address": "Nouvelle Adresse, 2000 Neuchâtel",
         }
 
@@ -340,6 +341,8 @@ class TestCompanyClientCreateUpdatePersistE2E:
         api = e2e_authenticated_company_client
         unique = str(uuid.uuid4())[:8]
         email = f"e2e-create-update-{unique}@internal.atmr.local"
+        initial_phone = unique_phone(prefix="+4122")
+        updated_phone = unique_phone(prefix="+4122")
 
         # 1. Create company client (aligné NewClientModal payload)
         create_payload = {
@@ -349,7 +352,7 @@ class TestCompanyClientCreateUpdatePersistE2E:
             "last_name": "CreateUpdate",
             "gender": "female",
             "address": "Rue de la Paix 1, 1202 Genève",
-            "phone": "+41221234567",
+            "phone": initial_phone,
             "access_notes": "Notes créées à la création",
             "is_active": True,
         }
@@ -368,7 +371,7 @@ class TestCompanyClientCreateUpdatePersistE2E:
 
         # 2. Update (aligné EditClientModal / ClientEditForm payload)
         update_payload = {
-            "phone": "+41987654321",
+            "phone": updated_phone,
             "access_notes": "Notes modifiées en édition",
             "first_name": "E2E",
             "last_name": "CreateUpdate",
@@ -386,7 +389,7 @@ class TestCompanyClientCreateUpdatePersistE2E:
         updated = update_resp.get_json()
 
         # 3. Assert persisted
-        assert updated.get("phone") == "+41987654321", (
+        assert updated.get("phone") == updated_phone, (
             "phone doit être persisté après update"
         )
         access = updated.get("access") or {}

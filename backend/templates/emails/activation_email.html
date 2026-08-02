@@ -49,13 +49,8 @@
                             <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
                                 <tr>
                                     <td align="center" style="padding:8px 0 20px;">
-                                        <!-- nosemgrep generic.html-templates.security.var-in-href.var-in-href : URL absolue émise serveur (jeton signé). -->
-                                        <a
-                                            href="{{ activation_link }}"
-                                            style="display:inline-block;padding:14px 28px;font-size:16px;font-weight:700;color:#FFFFFF;background-color:#00796B;text-decoration:none;border-radius:999px;"
-                                        >
-                                            Confirmer mon email
-                                        </a>
+                                        <!-- nosemgrep generic.html-templates.security.var-in-href.var-in-href : URL https absolue emise serveur (jeton signe); pas une saisie utilisateur. -->
+                                        <a href="{{ activation_link }}" style="display:inline-block;padding:14px 28px;font-size:16px;font-weight:700;color:#FFFFFF;background-color:#00796B;text-decoration:none;border-radius:999px;">Confirmer mon email</a>
                                     </td>
                                 </tr>
                             </table>

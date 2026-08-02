@@ -41,6 +41,7 @@ from models import (
     User,
     UserRole,
 )
+from tests.e2e.helpers.e2e_helpers import create_test_booking
 
 
 # Marker pour identifier les tests E2E
@@ -86,14 +87,12 @@ class TestE2EInstitutionFlow:
     def e2e_institution_headers(self, e2e_institution_admin, e2e_institution):
         """Headers JWT pour l'utilisateur institution."""
         token = create_access_token(
-            identity=e2e_institution_admin.id,
+            identity=str(e2e_institution_admin.public_id),
             additional_claims={
                 "role": UserRole.INSTITUTION.value,
                 "institution_id": e2e_institution.id,
                 "institution_role": "institution_admin",
-                "public_id": e2e_institution_admin.public_id
-                if hasattr(e2e_institution_admin, "public_id")
-                else str(uuid.uuid4()),
+                "aud": "atmr-api",
             },
         )
         return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
@@ -118,23 +117,49 @@ class TestE2EInstitutionFlow:
         company.phone = "+41791234567"
         company.email = company_user.email
         company.is_active = True
+        # Accepter une offre exige une entreprise approuvée (accept_offer.py)
+        company.is_approved = True
         db.session.add(company)
         db.session.flush()
 
         return company, company_user
 
     @pytest.fixture
+    def e2e_clinic_company(self, db, e2e_institution):
+        """Company clinique homonyme de l'institution (payeuse).
+
+        `billing_intent=institution` impose de résoudre `billed_to_company_id`
+        avant flush : le résolveur cherche une Company portant le nom de
+        l'institution (institution_billing_resolver). Sans elle, l'acceptation
+        d'offre échoue.
+        """
+        clinic_user = User()
+        clinic_user.email = f"clinic_{uuid.uuid4().hex[:8]}@e2e-clinique.ch"
+        clinic_user.set_password("password123", force_change=False)
+        clinic_user.role = UserRole.COMPANY.value
+        db.session.add(clinic_user)
+        db.session.flush()
+
+        clinic_company = Company()
+        clinic_company.name = e2e_institution.name
+        clinic_company.user_id = clinic_user.id
+        clinic_company.address = e2e_institution.address
+        clinic_company.email = clinic_user.email
+        clinic_company.is_active = True
+        db.session.add(clinic_company)
+        db.session.flush()
+        return clinic_company
+
+    @pytest.fixture
     def e2e_company_headers(self, e2e_company):
         """Headers JWT pour l'utilisateur company."""
         company, company_user = e2e_company
         token = create_access_token(
-            identity=company_user.id,
+            identity=str(company_user.public_id),
             additional_claims={
                 "role": UserRole.COMPANY.value,
                 "company_id": company.id,
-                "public_id": company_user.public_id
-                if hasattr(company_user, "public_id")
-                else str(uuid.uuid4()),
+                "aud": "atmr-api",
             },
         )
         return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
@@ -152,6 +177,7 @@ class TestE2EInstitutionFlow:
         e2e_institution_headers,
         e2e_company,
         e2e_company_headers,
+        e2e_clinic_company,
     ):
         """Test E2E complet: Institution crée une demande, Company l'accepte.
 
@@ -191,7 +217,9 @@ class TestE2EInstitutionFlow:
             f"Failed to create patient: {response.get_json()}"
         )
         patient_response = response.get_json()
-        patient_id = patient_response.get("id")
+        # La réponse encapsule le patient : {"patient": {...}, "sync": {...}}
+        patient_payload = patient_response.get("patient") or patient_response
+        patient_id = patient_payload.get("id")
         assert patient_id is not None, "Patient ID should be returned"
 
         # =====================================================================
@@ -269,7 +297,7 @@ class TestE2EInstitutionFlow:
         # STEP 4: Company récupère les offres PENDING
         # =====================================================================
         response = client.get(
-            "/api/v1/company/request-offers?status=pending",
+            f"/api/v1/company/request-offers?status={OfferStatus.PENDING.value}",
             headers=e2e_company_headers,
         )
 
@@ -452,11 +480,12 @@ class TestE2EInstitutionFlowEdgeCases:
     def e2e_institution_headers(self, e2e_institution_admin, e2e_institution):
         """Headers JWT pour l'utilisateur institution."""
         token = create_access_token(
-            identity=e2e_institution_admin.id,
+            identity=str(e2e_institution_admin.public_id),
             additional_claims={
                 "role": UserRole.INSTITUTION.value,
                 "institution_id": e2e_institution.id,
                 "institution_role": "institution_admin",
+                "aud": "atmr-api",
             },
         )
         return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
@@ -470,15 +499,18 @@ class TestE2EInstitutionFlowEdgeCases:
         e2e_institution_headers,
     ):
         """Test: Annuler une request CONVERTED retourne 409 avec resulting_booking_id."""
-        # Créer une request déjà convertie
+        # Créer une request déjà convertie (booking réel : FK booking_id)
+        scheduled_at = datetime.now(UTC) + timedelta(days=2)
+        converted_booking = create_test_booking(db, scheduled_time=scheduled_at)
         transport_req = TransportRequest()
         transport_req.institution_id = e2e_institution.id
         transport_req.external_reference = f"EDGE-{uuid.uuid4().hex[:8]}"
         transport_req.pickup_location = "123 Rue Test"
         transport_req.dropoff_location = "456 Avenue Test"
-        transport_req.scheduled_time = datetime.now(UTC) + timedelta(days=2)
+        transport_req.mission_date = scheduled_at.date()
+        transport_req.scheduled_time = scheduled_at
         transport_req.status = RequestStatus.CONVERTED.value
-        transport_req.booking_id = 99999  # ID fictif
+        transport_req.booking_id = converted_booking.id
         db.session.add(transport_req)
         db.session.commit()
 
@@ -509,12 +541,14 @@ class TestE2EInstitutionFlowEdgeCases:
     ):
         """Test: Annuler une request DRAFT réussit."""
         # Créer une request DRAFT
+        scheduled_at = datetime.now(UTC) + timedelta(days=2)
         transport_req = TransportRequest()
         transport_req.institution_id = e2e_institution.id
         transport_req.external_reference = f"DRAFT-{uuid.uuid4().hex[:8]}"
         transport_req.pickup_location = "123 Rue Test"
         transport_req.dropoff_location = "456 Avenue Test"
-        transport_req.scheduled_time = datetime.now(UTC) + timedelta(days=2)
+        transport_req.mission_date = scheduled_at.date()
+        transport_req.scheduled_time = scheduled_at
         transport_req.status = RequestStatus.DRAFT.value
         db.session.add(transport_req)
         db.session.commit()

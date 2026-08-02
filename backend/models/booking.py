@@ -373,6 +373,23 @@ class Booking(db.Model):
         server_default=BookingCreatedVia.LEGACY.value,
     )
 
+    # Origine commerciale facturable (distinct de created_via technique)
+    billing_origin: Mapped[str | None] = mapped_column(
+        String(32),
+        nullable=True,
+        index=True,
+        comment="OWN_PORTFOLIO | LIRIE_MARKETPLACE | IMPORTED | ADMIN_CREATED | UNKNOWN",
+    )
+    billing_origin_source: Mapped[str | None] = mapped_column(
+        String(32),
+        nullable=True,
+        comment="EXPLICIT_AT_CREATION | BACKFILL_* | ADMIN_CORRECTION",
+    )
+    billing_origin_reason: Mapped[str | None] = mapped_column(
+        String(512),
+        nullable=True,
+    )
+
     # Relations
     client = relationship("Client", back_populates="bookings", passive_deletes=True)
     company = relationship(

@@ -12,6 +12,32 @@ import pytest
 from models import UserRole
 
 
+def _company_auth_headers(company):
+    """En-têtes Bearer pour une company.
+
+    Le login web ne renvoie plus de token JSON (cookies uniquement), on génère
+    donc le JWT directement.
+    """
+    from flask_jwt_extended import create_access_token
+
+    from models import User
+
+    company_user = (
+        getattr(company, "user", None)
+        or User.query.filter_by(id=company.user_id).first()
+    )
+    token = create_access_token(
+        identity=str(company_user.public_id),
+        additional_claims={
+            "role": UserRole.company.value,
+            "company_id": company.id,
+            "aud": "atmr-api",
+        },
+        expires_delta=timedelta(hours=1),
+    )
+    return {"Authorization": f"Bearer {token}"}
+
+
 class TestSchemaValidationE2E:
     """Tests E2E pour validation des schemas sur les endpoints validés."""
 
@@ -476,9 +502,11 @@ class TestSchemaValidationE2E:
         client_headers = {"Authorization": f"Bearer {client_token}"}
 
         # Test avec format date invalide (scheduled_time)
+        # NB : le schéma ignore les valeurs sans "T" (horaires partiels UI),
+        # il faut donc une chaîne ISO-like mais invalide.
         response = client.put(
             f"/api/v1/bookings/{booking.id}",
-            json={"scheduled_time": "invalid-date-format"},
+            json={"scheduled_time": "2024-13-45T99:99:99"},
             headers=client_headers,
         )
         # ✅ FIX: Accepter 404 si le booking n'est pas trouvé ou si
@@ -862,18 +890,26 @@ class TestSchemaValidationE2E:
     def test_create_client_valid_schema_self_service(self, client, db, sample_company):
         """✅ Test E2E POST /api/companies/me/clients
         avec ClientCreateSchema valide (SELF_SERVICE)."""
-        from models import User
+        from models import User, UserRole
 
-        # Login en tant que company
+        # Auth company via JWT direct (le login web ne renvoie plus de token JSON)
         company_user = sample_company.user if hasattr(sample_company, "user") else None
         if not company_user:
             company_user = User.query.filter_by(id=sample_company.user_id).first()
 
-        login_response = client.post(
-            "/api/auth/login",
-            json={"email": company_user.email, "password": "password123"},
+        from datetime import timedelta
+
+        from flask_jwt_extended import create_access_token
+
+        company_token = create_access_token(
+            identity=str(company_user.public_id),
+            additional_claims={
+                "role": UserRole.company.value,
+                "company_id": sample_company.id,
+                "aud": "atmr-api",
+            },
+            expires_delta=timedelta(hours=1),
         )
-        company_token = login_response.get_json()["token"]
         company_headers = {"Authorization": f"Bearer {company_token}"}
 
         # Test création client SELF_SERVICE (email requis)
@@ -915,6 +951,7 @@ class TestSchemaValidationE2E:
             additional_claims={
                 "role": UserRole.company.value,
                 "company_id": sample_company.id,
+                "aud": "atmr-api",
             },
             expires_delta=timedelta(hours=1),
         )
@@ -958,6 +995,7 @@ class TestSchemaValidationE2E:
             additional_claims={
                 "role": UserRole.company.value,
                 "company_id": sample_company.id,
+                "aud": "atmr-api",
             },
             expires_delta=timedelta(hours=1),
         )
@@ -1002,6 +1040,7 @@ class TestSchemaValidationE2E:
             additional_claims={
                 "role": UserRole.company.value,
                 "company_id": sample_company.id,
+                "aud": "atmr-api",
             },
             expires_delta=timedelta(hours=1),
         )
@@ -1218,6 +1257,7 @@ class TestSchemaValidationE2E:
             additional_claims={
                 "role": client_user.role.value,
                 "user_id": client_user.id,
+                "aud": "atmr-api",
             },
             expires_delta=timedelta(hours=1),
         )
@@ -1235,7 +1275,7 @@ class TestSchemaValidationE2E:
         data = response.get_json() or {}
         if response.status_code in [200, 201]:
             assert "message" in data
-            assert "payment_id" in data
+            assert "payment_id" in data or "id" in (data.get("data") or {})
         else:
             assert "error" in data
 
@@ -1251,7 +1291,7 @@ class TestSchemaValidationE2E:
         data = response.get_json() or {}
         if response.status_code in [200, 201]:
             assert "message" in data
-            assert "payment_id" in data
+            assert "payment_id" in data or "id" in (data.get("data") or {})
         elif response.status_code != 404:
             assert "error" in data
 
@@ -1316,6 +1356,7 @@ class TestSchemaValidationE2E:
             additional_claims={
                 "role": client_user.role.value,
                 "user_id": client_user.id,
+                "aud": "atmr-api",
             },
             expires_delta=timedelta(hours=1),
         )
@@ -1519,7 +1560,7 @@ class TestSchemaValidationE2E:
 
         admin_token = create_access_token(
             identity=str(admin_user.public_id),
-            additional_claims={"role": admin_user.role.value},
+            additional_claims={"role": admin_user.role.value, "aud": "atmr-api"},
             expires_delta=timedelta(hours=1),
         )
         admin_headers = {"Authorization": f"Bearer {admin_token}"}
@@ -1644,7 +1685,7 @@ class TestSchemaValidationE2E:
 
         admin_token = create_access_token(
             identity=str(admin_user.public_id),
-            additional_claims={"role": admin_user.role.value},
+            additional_claims={"role": admin_user.role.value, "aud": "atmr-api"},
             expires_delta=timedelta(hours=1),
         )
         admin_headers = {"Authorization": f"Bearer {admin_token}"}
@@ -1766,7 +1807,7 @@ class TestSchemaValidationE2E:
 
         client_token = create_access_token(
             identity=str(client_user.public_id),
-            additional_claims={"role": UserRole.client.value},
+            additional_claims={"role": UserRole.client.value, "aud": "atmr-api"},
             expires_delta=timedelta(hours=1),
         )
         client_headers = {"Authorization": f"Bearer {client_token}"}
@@ -1853,7 +1894,7 @@ class TestSchemaValidationE2E:
 
         client_token = create_access_token(
             identity=str(client_user.public_id),
-            additional_claims={"role": UserRole.client.value},
+            additional_claims={"role": UserRole.client.value, "aud": "atmr-api"},
             expires_delta=timedelta(hours=1),
         )
         client_headers = {"Authorization": f"Bearer {client_token}"}
@@ -2298,17 +2339,7 @@ class TestSchemaValidationE2E:
         db.session.add(billing_settings)
         db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
 
-        # Login en tant que company
-        company_user = sample_company.user if hasattr(sample_company, "user") else None
-        if not company_user:
-            company_user = User.query.filter_by(id=sample_company.user_id).first()
-
-        login_response = client.post(
-            "/api/auth/login",
-            json={"email": company_user.email, "password": "password123"},
-        )
-        company_token = login_response.get_json()["token"]
-        company_headers = {"Authorization": f"Bearer {company_token}"}
+        company_headers = _company_auth_headers(sample_company)
 
         # Test mise à jour avec tous les champs valides
         response = client.put(
@@ -2369,17 +2400,7 @@ class TestSchemaValidationE2E:
         db.session.add(billing_settings)
         db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
 
-        # Login en tant que company
-        company_user = sample_company.user if hasattr(sample_company, "user") else None
-        if not company_user:
-            company_user = User.query.filter_by(id=sample_company.user_id).first()
-
-        login_response = client.post(
-            "/api/auth/login",
-            json={"email": company_user.email, "password": "password123"},
-        )
-        company_token = login_response.get_json()["token"]
-        company_headers = {"Authorization": f"Bearer {company_token}"}
+        company_headers = _company_auth_headers(sample_company)
 
         # Test avec payment_terms_days négatif (< 0)
         response = client.put(
@@ -2645,17 +2666,7 @@ class TestSchemaValidationE2E:
         db.session.add(test_client)
         db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
 
-        # Login en tant que company
-        company_user = sample_company.user if hasattr(sample_company, "user") else None
-        if not company_user:
-            company_user = User.query.filter_by(id=sample_company.user_id).first()
-
-        login_response = client.post(
-            "/api/auth/login",
-            json={"email": company_user.email, "password": "password123"},
-        )
-        company_token = login_response.get_json()["token"]
-        company_headers = {"Authorization": f"Bearer {company_token}"}
+        company_headers = _company_auth_headers(sample_company)
 
         # Test génération facture simple avec client_id
         current_date = datetime.now(UTC)
@@ -2977,10 +2988,10 @@ class TestSchemaValidationE2E:
 
     # ========== COMPANIES ENDPOINTS ==========
 
-    def test_update_company_valid_schema(self, authenticated_client):
-        """Test PUT /api/companies/me avec payload valide."""
+    def test_update_company_valid_schema(self, authenticated_client, sample_company):  # noqa: ARG002
+        """Test PUT /api/v1/companies/me avec payload valide."""
         response = authenticated_client.put(
-            "/api/companies/me",
+            "/api/v1/companies/me",
             json={
                 "name": "Updated Company Name",
                 "contact_email": "updated@example.com",
@@ -2990,10 +3001,10 @@ class TestSchemaValidationE2E:
         )
         assert response.status_code in [200, 404]  # 404 si pas de company
 
-    def test_update_company_invalid_schema(self, authenticated_client):
-        """Test PUT /api/companies/me avec payload invalide (IBAN invalide)."""
+    def test_update_company_invalid_schema(self, authenticated_client, sample_company):  # noqa: ARG002
+        """Test PUT /api/v1/companies/me avec payload invalide (IBAN invalide)."""
         response = authenticated_client.put(
-            "/api/companies/me",
+            "/api/v1/companies/me",
             json={"name": "Updated Company", "iban": "INVALID-IBAN"},
         )
         assert response.status_code == 400
@@ -3613,7 +3624,7 @@ class TestSchemaValidationE2E:
             assert "id" in body
             assert ("name" in body) or ("contact_email" in body) or ("address" in body)
 
-    def test_company_me_update_valid_schema(self, authenticated_client):
+    def test_company_me_update_valid_schema(self, authenticated_client, sample_company):  # noqa: ARG002
         url = "/api/v1/companies/me"
         payload = {
             "name": "ATMR Transports SA",
@@ -3636,15 +3647,23 @@ class TestSchemaValidationE2E:
                 "uid_ide",
             ]:
                 assert k in data
-            assert "domicile" in data
-            domicile = data["domicile"]
-            assert isinstance(domicile, dict)
-            assert domicile.get("city") is not None
-            assert domicile.get("country") is not None
+            # La sérialisation expose les champs de domiciliation à plat
+            # (compatibilité frontend), avec fallback objet imbriqué.
+            domicile = data.get("domicile")
+            if isinstance(domicile, dict):
+                assert domicile.get("city") is not None
+                assert domicile.get("country") is not None
+            else:
+                assert data.get("domicile_city") is not None
+                assert data.get("domicile_country") is not None
         else:
             assert ("message" in data and "errors" in data) or ("error" in data)
 
-    def test_company_me_update_invalid_schema(self, authenticated_client):
+    def test_company_me_update_invalid_schema(
+        self,
+        authenticated_client,
+        sample_company,  # noqa: ARG002
+    ):
         url = "/api/v1/companies/me"
         payload = {
             "iban": "XX-INVALID",
@@ -3909,7 +3928,7 @@ class TestCompaniesVehicles:
         if isinstance(data, list) and data and isinstance(data[0], dict):
             data = data[0]
         if resp.status_code not in [429, 404]:
-            assert ("message" in data) or ("errors" in data)
+            assert ("message" in data) or ("errors" in data) or ("error" in data)
 
     def test_company_vehicle_get_by_id(self, client, db, sample_company):
         headers = self._company_headers(client, db, sample_company)
@@ -4339,7 +4358,7 @@ class TestCompaniesAssignedReservations:
 
 
 class TestCompaniesDriverById:
-    def _company_headers(self, client, db, sample_company):
+    def _company_headers(self, client, db, sample_company, fresh=False):
         from models import User, UserRole
 
         company_user = sample_company.user if hasattr(sample_company, "user") else None
@@ -4355,7 +4374,9 @@ class TestCompaniesDriverById:
         }
         with client.application.app_context():
             token = create_access_token(
-                identity=str(company_user.public_id), additional_claims=claims
+                identity=str(company_user.public_id),
+                additional_claims=claims,
+                fresh=fresh,
             )
         return {"Authorization": f"Bearer {token}"}
 
@@ -4366,7 +4387,8 @@ class TestCompaniesDriverById:
         _ = resp.get_json() if resp.is_json else None
 
     def test_company_driver_update_invalid(self, client, db, sample_company):
-        headers = self._company_headers(client, db, sample_company)
+        # PUT /me/drivers/<id> exige un token fresh (donnée sensible).
+        headers = self._company_headers(client, db, sample_company, fresh=True)
         resp = client.put(
             "/api/v1/companies/me/drivers/999999", json={}, headers=headers
         )

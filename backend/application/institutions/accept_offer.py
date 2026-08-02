@@ -822,6 +822,13 @@ class AcceptOfferUseCase:
             created_via=BookingCreatedVia.INSTITUTION_PORTAL,
             institution_patient_id=getattr(transport_request, "patient_id", None),
         )
+        from services.platform_billing.billing_origin import apply_origin_on_booking
+
+        apply_origin_on_booking(
+            booking,
+            created_via=BookingCreatedVia.INSTITUTION_PORTAL,
+            is_institution_flow=True,
+        )
 
         self._apply_clinical_dropoff_from_request(booking, transport_request)
 
@@ -922,6 +929,13 @@ class AcceptOfferUseCase:
                 created_via=BookingCreatedVia.INSTITUTION_PORTAL,
                 institution_patient_id=booking.institution_patient_id
                 or getattr(transport_request, "patient_id", None),
+            )
+            from services.platform_billing.billing_origin import apply_origin_on_booking
+
+            apply_origin_on_booking(
+                return_booking,
+                created_via=BookingCreatedVia.INSTITUTION_PORTAL,
+                is_institution_flow=True,
             )
             if booking.billed_to_company_id is not None:
                 return_booking.billed_to_company_id = booking.billed_to_company_id
@@ -1069,6 +1083,13 @@ class AcceptOfferUseCase:
             created_via=BookingCreatedVia.INSTITUTION_PORTAL,
             institution_patient_id=outbound_booking.institution_patient_id
             or getattr(transport_request, "patient_id", None),
+        )
+        from services.platform_billing.billing_origin import apply_origin_on_booking
+
+        apply_origin_on_booking(
+            return_booking,
+            created_via=BookingCreatedVia.INSTITUTION_PORTAL,
+            is_institution_flow=True,
         )
         if outbound_booking.billed_to_company_id is not None:
             return_booking.billed_to_company_id = outbound_booking.billed_to_company_id
@@ -1255,6 +1276,13 @@ class AcceptOfferUseCase:
                 route_sequence_number=leg.route_sequence_number,
                 created_via=BookingCreatedVia.INSTITUTION_PORTAL,
                 institution_patient_id=getattr(transport_request, "patient_id", None),
+            )
+            from services.platform_billing.billing_origin import apply_origin_on_booking
+
+            apply_origin_on_booking(
+                booking,
+                created_via=BookingCreatedVia.INSTITUTION_PORTAL,
+                is_institution_flow=True,
             )
 
             self._apply_clinical_dropoff_from_leg(booking, leg)

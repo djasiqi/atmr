@@ -698,9 +698,17 @@ def execute_client_booking_creation(public_id: str) -> Any:
         )
 
         try:
+            from application.bookings.create_booking import InvalidClientBookingCommand
+
             new_booking = create_booking_via_use_case(
                 user_id=user.id, client_id=client.id, data=data
             )
+        except InvalidClientBookingCommand as e:
+            return {
+                "error": str(e),
+                "error_code": e.code,
+                "fields": e.fields,
+            }, 400
         except ValueError as e:
             return APIErrorHandler.handle_validation_error(
                 str(e),
@@ -1356,7 +1364,8 @@ def _get_client_bookings(
     result = uc.execute(input_data)
     if not result or not result.success:
         return None
-    if not result.bookings or result.total is None:
+    # Une liste vide est un résultat valide (client sans réservation).
+    if result.bookings is None or result.total is None:
         return None
 
     headers = _build_pagination_links(

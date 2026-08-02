@@ -1,10 +1,2 @@
-# .trivyignore
-# Fichier pour ignorer les vulnérabilités acceptées dans les scans Trivy
-# Format: CVE-ID ou package:version
-# 
-# Exemple d'utilisation:
-# CVE-2023-12345
-# python:3.11.0
-
-# Ajouter ici les vulnérabilités acceptées après validation par l'équipe de sécurité
-
+# CVE explicitement acceptées (voir aussi security/trivy-exceptions.yml pour métadonnées).
+# Format Trivy : une CVE par ligne.

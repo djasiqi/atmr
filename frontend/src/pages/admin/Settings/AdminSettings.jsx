@@ -7,6 +7,7 @@ import {
   updateAdminPricingZoneSet,
 } from '../../../services/settingsService';
 import IndicativeFareAdminSection from '../../../components/admin/IndicativeFareAdminSection';
+import AdminPlatformCreditorSettings from './AdminPlatformCreditorSettings';
 import styles from './AdminSettings.module.css';
 import shell from '../adminShell.module.css';
 
@@ -462,10 +463,20 @@ const AdminSettings = () => {
 
   return (
     <main className={shell.content}>
+          <section className={styles.hero}>
+            <h1>Paramètres administrateur</h1>
+            <p>
+              Créancier LIRIE (QR-facture), tarifs indicatifs, et zone sets tarifaires utilisés par
+              les sociétés.
+            </p>
+          </section>
+
+          <AdminPlatformCreditorSettings />
+
           <IndicativeFareAdminSection />
 
           <section className={styles.hero}>
-            <h1>Paramètres administrateur</h1>
+            <h1>Zone sets tarifaires</h1>
             <p>
               Configuration centrale des zone sets tarifaires plateforme utilisés par les sociétés.
             </p>

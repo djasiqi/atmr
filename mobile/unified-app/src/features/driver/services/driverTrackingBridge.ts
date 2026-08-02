@@ -48,6 +48,19 @@ import {
   type TrackingFsmState,
 } from "../tracking/TrackingStateMachine";
 import { runTrackingRecoveryCascade } from "../tracking/TrackingRecoveryOrchestrator";
+import {
+  captureActiveRuntime,
+  ensureTrackingAuthTerminalSubscription,
+  isRuntimeActive,
+  clearActiveRuntimeIfGeneration,
+  registerTrackingPhysicalStop,
+  startOrJoinTrackingRuntime,
+  toNativeTrackingOwner,
+  updateMissionContext,
+  type TrackingMissionContext,
+  type TrackingRuntimeIdentity,
+} from "./trackingRuntimeRegistry";
+import { getTrackingAuthAvailability } from "../../../core/auth/sessionAuthDecision";
 
 const FOREGROUND_INTERVAL_MS = Number(process.env.EXPO_PUBLIC_DRIVER_GPS_FOREGROUND_INTERVAL_MS ?? "8000");
 const AGGRESSIVE_FOREGROUND_INTERVAL_MS = Number(
@@ -95,24 +108,51 @@ function resolveWatchDistanceMeters(): number {
   return WATCH_DISTANCE_METERS;
 }
 
+function resolveBridgeDriverId(): number {
+  const availability = getTrackingAuthAvailability();
+  if (availability.kind === "SESSION_AVAILABLE") {
+    return availability.driverId;
+  }
+  return 0;
+}
+
 function ensureNativeTrackingAppStateListener(): void {
   if (nativeTrackingAppStateSubscribed || Platform.OS === "web") return;
   nativeTrackingAppStateSubscribed = true;
   initializeBackgroundLocationTask();
+  ensureTrackingAuthTerminalSubscription();
+  registerTrackingPhysicalStop(async (request) => {
+    await stopDriverTrackingBridge({
+      expectedTrackingGenerationId: request.expectedTrackingGenerationId,
+      reason: request.reason,
+      skipRegistryStop: true,
+    });
+  });
   AppState.addEventListener("change", (next) => {
     if (next === "active") {
+      const runtime = captureActiveRuntime();
+      if (!runtime) {
+        void resumePendingNativeTrackingIfNeeded();
+        return;
+      }
       void resumePendingNativeTrackingIfNeeded();
-      if (state.missionId != null && isFeatureEnabled("tracking_background_enabled")) {
+      if (
+        !isRuntimeActive(runtime.identity) ||
+        !isFeatureEnabled("tracking_background_enabled")
+      ) {
+        return;
+      }
+      const missionSnapshot = runtime.missionContext;
+      if (missionSnapshot.missionId != null) {
         void ensureNativeTrackingWhileForeground(
-          state.missionId,
-          state.missionStatus,
+          missionSnapshot.missionId,
+          missionSnapshot.missionStatus,
           {},
           "app_resume"
         );
       } else if (
         state.presenceWindowActive &&
-        isPresenceDisclosureAccepted() &&
-        isFeatureEnabled("tracking_background_enabled")
+        isPresenceDisclosureAccepted()
       ) {
         void ensureNativeTrackingWhileForeground(
           null,
@@ -650,9 +690,18 @@ async function flushPoint(appState: AppStateStatus) {
   if (!canAttemptTrackingOperation(Date.now(), true)) {
     return;
   }
+  const runtimeAtStart = captureActiveRuntime();
+  const identitySnapshot: TrackingRuntimeIdentity | null =
+    runtimeAtStart?.identity ?? null;
+  const missionSnapshot: TrackingMissionContext | null =
+    runtimeAtStart?.missionContext ?? null;
+  const capturedMissionId =
+    missionSnapshot?.missionId ?? state.missionId;
+
   void emitBatteryBaselineIfTracing("driver.tracking.bridge");
   const granted = await ensurePermission(appState);
   if (!granted) return;
+  if (identitySnapshot && !isRuntimeActive(identitySnapshot)) return;
   const mode = resolveTrackingMode(appState);
   const payloadMode = resolvePayloadLocationMode(mode);
   refreshFsmState(appState, false);
@@ -661,18 +710,19 @@ async function flushPoint(appState: AppStateStatus) {
     refreshFsmState(appState, true);
     emitDriverTelemetry("tracking.send.skipped", {
       source: "driver.tracking.bridge",
-      mission_id: state.missionId,
+      mission_id: capturedMissionId,
       reason: "no_position_fix",
       app_state: appState,
     });
     return;
   }
+  if (identitySnapshot && !isRuntimeActive(identitySnapshot)) return;
   const nowIso = new Date(position.timestamp ?? Date.now()).toISOString();
   state.lastFixProducedAtMs = Date.now();
   recordTrackingCircuitSuccess();
   const cadence = getCadenceForTick(appState, mode);
   const enqueuedItem = await driverTrackingQueue.enqueue({
-    missionId: state.missionId,
+    missionId: capturedMissionId,
     appState,
     locationMode: payloadMode,
     payload: {
@@ -681,10 +731,13 @@ async function flushPoint(appState: AppStateStatus) {
       accuracy: position.coords.accuracy ?? undefined,
       heading: position.coords.heading ?? undefined,
       speed: position.coords.speed ?? undefined,
-      missionId: state.missionId,
+      missionId: capturedMissionId,
       isBackground: appState !== "active",
       timestamp: nowIso,
       locationMode: payloadMode,
+      trackingGenerationId: identitySnapshot?.trackingGenerationId,
+      missionContextVersion: missionSnapshot?.missionContextVersion,
+      trackingIdentityId: identitySnapshot?.trackingIdentityId,
     },
   });
   const attemptSeq = beginBridgeAttempt(enqueuedItem.id);
@@ -693,6 +746,10 @@ async function flushPoint(appState: AppStateStatus) {
     networkProfile: cadence.networkProfile,
     forceHttpFallback: appState !== "active",
   });
+  // Mutations runtime / ACK UI seulement si génération encore active.
+  if (identitySnapshot && !isRuntimeActive(identitySnapshot)) {
+    return;
+  }
   state.queueDepth = flushResult.queueDepth;
   state.flushPathUsed = flushResult.flushPathUsed;
   const ackMatchesCurrentPoint =
@@ -1206,6 +1263,20 @@ export function startDriverTrackingBridge(
   // ne doit plus effacer missionId / arrêter le runtime.
   lifecycleGeneration += 1;
   const operationGeneration = lifecycleGeneration;
+  const driverId = resolveBridgeDriverId();
+  void startOrJoinTrackingRuntime({
+    driverId,
+    missionId,
+    missionStatus: status,
+  }).then((runtime) => {
+    void setBackgroundTrackingMissionContext(
+      missionId,
+      status,
+      "mission",
+      scheduling,
+      toNativeTrackingOwner(runtime)
+    );
+  });
   state.missionId = missionId;
   state.missionStatus = status;
   state.missionScheduling = scheduling ?? null;
@@ -1217,7 +1288,6 @@ export function startDriverTrackingBridge(
   state.lastHttpFallbackTrackingEventId = null;
   resetPermissionState();
   void hideMissionBarAndroid();
-  void setBackgroundTrackingMissionContext(missionId, status, "mission", scheduling);
   ensureNativeTrackingAppStateListener();
   if (isFeatureEnabled("tracking_background_enabled")) {
       void ensureNativeTrackingWhileForeground(
@@ -1234,6 +1304,7 @@ export function startDriverTrackingBridge(
 
 export function updateDriverTrackingBridgeStatus(status: DriverMissionStatus) {
   state.missionStatus = status;
+  updateMissionContext(state.missionId, status);
   void hideMissionBarAndroid();
   if (!isEligible()) {
     void stopDriverTrackingBridge();
@@ -1243,8 +1314,30 @@ export function updateDriverTrackingBridgeStatus(status: DriverMissionStatus) {
   notifyTrackingBridgeListeners();
 }
 
-export async function stopDriverTrackingBridge(): Promise<void> {
+export async function stopDriverTrackingBridge(opts?: {
+  expectedTrackingGenerationId?: string;
+  reason?:
+    | "explicit_logout"
+    | "account_revoked"
+    | "identity_changed"
+    | "manual_stop"
+    | "forced_recovery"
+    | "runtime_replaced";
+  skipRegistryStop?: boolean;
+}): Promise<void> {
   const stopGeneration = lifecycleGeneration;
+  const expectedGenId =
+    opts?.expectedTrackingGenerationId ??
+    captureActiveRuntime()?.identity.trackingGenerationId;
+
+  if (
+    opts?.expectedTrackingGenerationId &&
+    captureActiveRuntime()?.identity.trackingGenerationId &&
+    captureActiveRuntime()!.identity.trackingGenerationId !==
+      opts.expectedTrackingGenerationId
+  ) {
+    return;
+  }
 
   if (stopDriverTrackingInProgress) {
     return stopDriverTrackingInProgress;
@@ -1260,6 +1353,9 @@ export async function stopDriverTrackingBridge(): Promise<void> {
     // Si un start plus récent a déjà pris le relais, abandonner sans muter l'état.
     if (stopGeneration !== lifecycleGeneration) {
       return;
+    }
+    if (expectedGenId && !opts?.skipRegistryStop) {
+      clearActiveRuntimeIfGeneration(expectedGenId);
     }
     state.lastBackendAckLatencyMs = null;
     state.networkProfile = "normal";

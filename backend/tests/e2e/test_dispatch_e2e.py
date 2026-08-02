@@ -871,7 +871,7 @@ class TestDispatchE2E:
         au lieu de retourner un résultat structuré.
         """
         from services.unified_dispatch import engine
-        from services.unified_dispatch.exceptions import CompanyNotFoundError
+        from services.unified_dispatch.core.exceptions import CompanyNotFoundError
 
         # Test avec un company_id qui n'existe pas
         invalid_company_id = 999999

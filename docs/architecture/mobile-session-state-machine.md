@@ -65,11 +65,18 @@ Single-flight par `(session_id, sourceGeneration)` :
 - `mobile/unified-app/src/core/sessionProvider.tsx`
 - `mobile/unified-app/app/index.tsx`
 
+## Phase 1B — durcissement
+
+- Refresh : application credentials (SecureStore + header Axios + notify) sous `withSessionCredentialMutation` ; `stale` ⇒ aucun effet.
+- `contextSwitchOperationId` : intention distincte de la génération session (`contextSwitchOperation.ts`).
+- API tracking : `sessionAuthDecision.ts` — `getTrackingAuthAvailability` + `subscribeToTrackingAuthTerminalEvents` ; politique `TRACKING_AUTH_EFFECT_POLICY`.
+- Quarantaine GPS déclenchée par événement terminal (`operationId`), pas par l’état `anonymous`.
+
 ## CI
 
 - Workflow `.github/workflows/mobile-unified-app-tests.yml` : lint → `npm run typecheck:session-lifecycle` → Jest.
-- `typecheck:session-lifecycle` garde la surface PR2 (le `tsc` global conserve une dette hors scope).
+- `typecheck:session-lifecycle` garde la surface PR2 / 1B (le `tsc` global conserve une dette hors scope).
 
 ## Tests
 
-- `src/core/auth/sessionStateMachine.pr2.test.ts` — courses mutex / pending / logout / preuve terminale.
+- `src/core/auth/sessionStateMachine.pr2.test.ts` — courses mutex / pending / logout / preuve terminale / 1B adversariaux.

@@ -2,6 +2,9 @@
 
 ## 1. Création client canonique
 
+**Invariant** : une seule autorité pour toute création de réservation **issue d’une commande client**.  
+Ce n’est **pas** « tous les Booking passent par CreateBookingUseCase ».
+
 **Module** : [`backend/application/bookings/create_booking.py`](../../backend/application/bookings/create_booking.py)  
 **Factory** : [`backend/bookings/infrastructure/adapters/booking_service_adapter.py`](../../backend/bookings/infrastructure/adapters/booking_service_adapter.py)  
 **Helper HTTP** : `execute_client_booking_creation` dans [`backend/routes/bookings.py`](../../backend/routes/bookings.py)
@@ -15,14 +18,19 @@
 ### Ordre d'exécution
 
 ```text
-validation → dates/notes → client → company → company_creation_gate_fn
-→ stay / collecte préférentiels
-→ distance → geocode/admin
-→ price freeze → résolution montant
+FORBIDDEN_CLIENT_FIELDS → validation Marshmallow → dates/notes → client → company
+→ company_creation_gate_fn → stay / collecte préférentiels
+→ distance → geocode/admin → price freeze → résolution montant
 → writer → (si id <= 0: RuntimeError)
-→ async geocoding si geocode_miss
-→ publish_event → audit
+→ async geocoding si geocode_miss → publish_event → audit
 ```
+
+### Contrat HTTP / champs internes (Option B — résolu)
+
+- `bill_to_patient` et `amount_source` sont **internes / dispatcher** (flux manuel).
+- Le schéma client (`BookingCreateSchema` via `unknown=exclude`) **ignore** ces champs s’ils sont envoyés (pas de 400).
+- Le use case refuse toute présence dans `cmd.data` (`InvalidClientBookingCommand`, code `CLIENT_BOOKING_INTERNAL_FIELDS_FORBIDDEN`) — défense pour appels directs / futurs refactors.
+- ✅ **Implémenté** : Option B ; tests HTTP dans `backend/tests/routes/test_client_booking_creation.py`.
 
 ### Garanties événementielles (honnêtes)
 
@@ -34,7 +42,7 @@ validation → dates/notes → client → company → company_creation_gate_fn
 
 Toute nouvelle création **client** doit passer par `application.bookings.create_booking` via l’adapter / le helper partagé.
 
-Garde-fou CI : `scripts/architecture/check_booking_create_authority.py`.
+Garde-fou CI : `scripts/architecture/check_booking_create_authority.py` — exécuté **systématiquement** (workflow `architecture-review.yml`, sans path-filter).
 
 ## 2. Façade legacy
 
@@ -48,7 +56,7 @@ Garde-fou CI : `scripts/architecture/check_booking_create_authority.py`.
 | Chemin | created_via | Owner | Raison séparation | Invariants communs | PR cible |
 |---|---|---|---|---|---|
 | Accept offer | `INSTITUTION_PORTAL` | `AcceptOfferUseCase` | offre + billing / multi-stop | tenant, pricing figé | ultérieure |
-| Manual | `DISPATCHER` | `CreateManualBookingUseCase` | opérateur ACCEPTED | company authz | ultérieure |
+| Manual | `DISPATCHER` | `CreateManualBookingUseCase` | opérateur ACCEPTED ; peut utiliser `bill_to_patient` / `amount_source` | company authz | ultérieure |
 | Trigger return | retour (route) | UC décision + `TriggerReturnBooking.post` | clone retour | lien outbound | ultérieure |
 | Guest Saferpay | `PUBLIC_GUEST` | `promote_guest_booking_after_saferpay` | post-paiement public | idempotence promote | ultérieure |
 
@@ -61,25 +69,6 @@ Seeds / demo / scripts / factories de tests créent encore des `Booking` hors du
 
 ## Implémenté
 
-✅ **Implémenté** : autorité unique client (`CreateBookingUseCase` canonique), gate `company_creation_gate_fn` fail-closed, garde `booking_id > 0`, façade legacy, tests de caractérisation, script AST + workflow `architecture-review.yml`.
+✅ **Implémenté** : autorité unique client (`CreateBookingUseCase` canonique), gate `company_creation_gate_fn` fail-closed, garde `booking_id > 0`, façade legacy, tests de caractérisation, script AST + workflow `architecture-review.yml` systématique, Option B contrat `bill_to_patient` / `amount_source`, tests HTTP d’ignore.
 
-**Statut** : PR1 — GO fusion confirmé (revue de cohérence code ↔ plan OK).
-
-## 5. Backlog — dette schéma (hors PR1)
-
-### Dette schéma booking client — `bill_to_patient` / `amount_source`
-
-**Constat** :  
-Le use case lit `bill_to_patient` et `amount_source` depuis `cmd.data`, mais ces champs ne sont pas déclarés dans `BookingCreateSchema`.
-
-**Impact** :  
-Le comportement existe dans le domaine, mais n’est pas exposé de manière explicite et stable par le contrat d’entrée client.
-
-**Hors scope PR1** :  
-La PR1 n’introduit pas cet écart et ne modifie pas le contrat HTTP. Les tests de caractérisation filtrent ces champs avant Marshmallow uniquement pour exercer la logique métier.
-
-**Correctif futur** :
-- décider si ces champs doivent être acceptés par les routes client ;
-- les ajouter explicitement au schéma avec validation et documentation ;
-- ou supprimer leur lecture du flux client s’ils sont réservés à un autre canal ;
-- ajouter des tests d’intégration passant réellement par Marshmallow, sans injection via filtre de test.
+**Statut** : PR1 / Phase 1A — clôture contrat client confirmée.

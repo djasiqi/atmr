@@ -1,56 +1,55 @@
 .hubHeader {
-  margin-bottom: var(--spacing-lg);
+  margin-bottom: var(--spacing-md);
+  padding-bottom: 0;
 }
 
 .hubTitle {
-  font-size: 1.5rem;
+  font-size: 1.35rem;
   font-weight: 700;
-  margin: 0 0 var(--spacing-xs);
+  margin: 0 0 0.25rem;
   color: var(--text-primary);
+  letter-spacing: -0.02em;
+  line-height: 1.25;
 }
 
 .hubSubtitle {
   margin: 0 0 var(--spacing-md);
-  font-size: 0.95rem;
+  font-size: 0.875rem;
   color: var(--text-secondary);
-  line-height: 1.45;
-  max-width: 52rem;
+  line-height: 1.4;
+  max-width: 40rem;
 }
 
 .tabs {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--spacing-xs);
-  border-bottom: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.08));
-  padding-bottom: var(--spacing-sm);
+  gap: 0;
+  border-bottom: 1px solid var(--border-primary, rgba(0, 0, 0, 0.1));
 }
 
 .tab {
   display: inline-flex;
   align-items: center;
-  padding: 0.5rem 0.85rem;
-  border-radius: var(--radius-md, 8px);
-  font-size: 0.9rem;
+  padding: 0.65rem 1rem;
+  margin-bottom: -1px;
+  font-size: 0.875rem;
   font-weight: 500;
   color: var(--text-secondary);
   text-decoration: none;
-  border: 1px solid transparent;
-  transition:
-    background 0.15s ease,
-    color 0.15s ease;
+  border-bottom: 2px solid transparent;
+  transition: color 0.12s ease, border-color 0.12s ease;
 }
 
 .tab:hover {
-  background: var(--bg-hover, rgba(0, 0, 0, 0.04));
   color: var(--text-primary);
 }
 
 .tabActive {
   color: var(--text-primary);
-  background: var(--bg-secondary, rgba(0, 0, 0, 0.06));
-  border-color: var(--border-subtle, rgba(0, 0, 0, 0.1));
+  border-bottom-color: var(--brand-primary, #0f766e);
+  font-weight: 600;
 }
 
 .outlet {
-  padding-top: var(--spacing-md);
+  padding-top: var(--spacing-lg);
 }

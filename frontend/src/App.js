@@ -42,25 +42,17 @@ const AdminDashboard = lazy(() => import('./pages/admin/Dashboard/AdminDashboard
 const AdminUsers = lazy(() => import('./pages/admin/Users/AdminUsers'));
 const AdminReservations = lazy(() => import('./pages/admin/Reservations/AdminReservations'));
 const AdminBookingDetail = lazy(() => import('./pages/admin/Reservations/AdminBookingDetail'));
-const AdminInvoices = lazy(() => import('./pages/admin/Invoices/AdminInvoices'));
+const AdminBillingOverview = lazy(() => import('./pages/admin/Billing/AdminBillingOverview'));
 const AdminPlatformBilling = lazy(() => import('./pages/admin/PlatformBilling/AdminPlatformBilling'));
 const AdminBillingHub = lazy(() => import('./pages/admin/Billing/AdminBillingHub'));
 const AdminBillingTransportConfig = lazy(() =>
   import('./pages/admin/Billing/AdminBillingTransportConfig')
 );
-const AdminPilotageCompanyDetail = lazy(() =>
-  import('./pages/admin/Invoices/AdminPilotageCompanyDetail')
-);
 
-/** Ancienne URL détail pilotage → hub Facturation. */
-function RedirectToBillingPilotageCompany() {
-  const { public_id, companyId } = useParams();
-  return (
-    <Navigate
-      to={`/dashboard/admin/${public_id}/billing/pilotage/companies/${companyId}`}
-      replace
-    />
-  );
+/** Anciennes URLs facturation / pilotage → hub Facturation. */
+function RedirectToAdminBilling() {
+  const { public_id } = useParams();
+  return <Navigate to={`/dashboard/admin/${public_id}/billing`} replace />;
 }
 
 function ScrollToTopOnNavigation() {
@@ -565,19 +557,16 @@ const App = () => {
               <Route path="shadow-mode" element={<ShadowModeDashboard />} />
               <Route path="optuna" element={<AdminOptuna />} />
               <Route path="billing" element={<AdminBillingHub />}>
-                <Route index element={<Navigate to="pilotage" replace />} />
-                <Route path="pilotage" element={<AdminInvoices />} />
-                <Route
-                  path="pilotage/companies/:companyId"
-                  element={<AdminPilotageCompanyDetail />}
-                />
+                <Route index element={<AdminBillingOverview />} />
+                <Route path="pilotage" element={<RedirectToAdminBilling />} />
+                <Route path="pilotage/companies/:companyId" element={<RedirectToAdminBilling />} />
                 <Route path="releves" element={<AdminPlatformBilling />} />
                 <Route path="config" element={<AdminBillingTransportConfig />} />
               </Route>
-              <Route path="invoices" element={<Navigate to="../billing/pilotage" replace />} />
+              <Route path="invoices" element={<RedirectToAdminBilling />} />
               <Route
                 path="invoices/pilotage/companies/:companyId"
-                element={<RedirectToBillingPilotageCompany />}
+                element={<RedirectToAdminBilling />}
               />
               <Route path="platform-billing" element={<Navigate to="../billing/releves" replace />} />
               <Route path="settings" element={<AdminSettings />} />

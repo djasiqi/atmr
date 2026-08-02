@@ -135,76 +135,6 @@ export const downloadAdminBookingsExport = async (params = {}) => {
 };
 
 /**
- * Pilotage billing plateforme — synthèse KPIs.
- */
-export const fetchBillingPilotageSummary = async (params = {}) => {
-  const token = getAuthToken();
-  const headers = token ? { Authorization: `Bearer ${token}` } : {};
-  const response = await apiClient.get('/admin/billing/pilotage/summary', {
-    headers,
-    params,
-    timeout: 120000,
-  });
-  return response.data;
-};
-
-/**
- * Pilotage billing — tableau entreprises.
- */
-export const fetchBillingPilotageCompanies = async (params = {}) => {
-  const token = getAuthToken();
-  const headers = token ? { Authorization: `Bearer ${token}` } : {};
-  const response = await apiClient.get('/admin/billing/pilotage/companies', {
-    headers,
-    params,
-    timeout: 120000,
-  });
-  return response.data;
-};
-
-/**
- * Pilotage billing — détail entreprise.
- */
-export const fetchBillingPilotageCompanyDetail = async (companyId, params = {}) => {
-  const token = getAuthToken();
-  const headers = token ? { Authorization: `Bearer ${token}` } : {};
-  const response = await apiClient.get(`/admin/billing/pilotage/companies/${companyId}`, {
-    headers,
-    params,
-    timeout: 120000,
-  });
-  return response.data;
-};
-
-/**
- * Export CSV pilotage billing.
- */
-export const downloadBillingPilotageExport = async (params = {}) => {
-  const token = getAuthToken();
-  const headers = token ? { Authorization: `Bearer ${token}` } : {};
-  const response = await apiClient.get('/admin/billing/pilotage/export', {
-    headers,
-    params,
-    responseType: 'blob',
-    timeout: 120000,
-  });
-  const disposition = response.headers['content-disposition'];
-  let filename = 'pilotage_export.csv';
-  if (disposition && disposition.includes('filename=')) {
-    const m = disposition.match(/filename="?([^";]+)"?/);
-    if (m && m[1]) filename = m[1];
-  }
-  const url = window.URL.createObjectURL(new Blob([response.data], { type: 'text/csv;charset=utf-8' }));
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  window.URL.revokeObjectURL(url);
-};
-
-/**
  * Récupère les utilisateurs récents.
  */
 export const fetchRecentUsers = async () => {
@@ -739,6 +669,294 @@ export const fetchPlatformSubscriptionPricing = async () => {
 export const putPlatformBillingCompanyConfig = async (companyId, payload) => {
   const response = await apiClient.put(
     `/admin/platform-billing/companies/${companyId}/config`,
+    payload,
+    { headers: _adminAuthHeaders() }
+  );
+  return response.data;
+};
+
+/** Feature flags facturation plateforme. */
+export const fetchPlatformBillingFeatureFlags = async () => {
+  const response = await apiClient.get('/admin/platform-billing/feature-flags', {
+    headers: _adminAuthHeaders(),
+  });
+  return response.data;
+};
+
+export const fetchPlatformBillingContracts = async (companyId) => {
+  const response = await apiClient.get(
+    `/admin/platform-billing/companies/${companyId}/billing-contracts`,
+    { headers: _adminAuthHeaders() }
+  );
+  return response.data;
+};
+
+export const createPlatformBillingContract = async (companyId, payload) => {
+  const response = await apiClient.post(
+    `/admin/platform-billing/companies/${companyId}/billing-contracts`,
+    payload,
+    { headers: _adminAuthHeaders() }
+  );
+  return response.data;
+};
+
+export const closePlatformBillingContract = async (contractId, payload = {}) => {
+  const response = await apiClient.post(
+    `/admin/platform-billing/billing-contracts/${contractId}/close`,
+    payload,
+    { headers: _adminAuthHeaders() }
+  );
+  return response.data;
+};
+
+export const fetchPlatformBillingCreditor = async () => {
+  const response = await apiClient.get('/admin/platform-billing/creditor', {
+    headers: _adminAuthHeaders(),
+  });
+  return response.data;
+};
+
+export const putPlatformBillingCreditor = async (payload) => {
+  const response = await apiClient.put('/admin/platform-billing/creditor', payload, {
+    headers: _adminAuthHeaders(),
+  });
+  return response.data;
+};
+
+/** Adresse de facturation débiteur (transporteur) pour QR-facture plateforme. */
+export const putPlatformBillingDebtorAddress = async (companyId, payload) => {
+  const response = await apiClient.put(
+    `/admin/platform-billing/companies/${companyId}/debtor-address`,
+    payload,
+    { headers: _adminAuthHeaders() }
+  );
+  return response.data;
+};
+
+/** Génère / régénère le DOCX d'accord partenaire pour une version commerciale. */
+export const generatePartnerAgreement = async (contractId) => {
+  const response = await apiClient.post(
+    `/admin/platform-billing/billing-contracts/${contractId}/agreements`,
+    {},
+    { headers: _adminAuthHeaders() }
+  );
+  return response.data;
+};
+
+export const fetchPartnerAgreements = async (contractId) => {
+  const response = await apiClient.get(
+    `/admin/platform-billing/billing-contracts/${contractId}/agreements`,
+    { headers: _adminAuthHeaders() }
+  );
+  return response.data;
+};
+
+export const markPartnerAgreementSent = async (agreementId) => {
+  const response = await apiClient.post(
+    `/admin/platform-billing/agreements/${agreementId}/mark-sent`,
+    {},
+    { headers: _adminAuthHeaders() }
+  );
+  return response.data;
+};
+
+export const voidPartnerAgreement = async (agreementId, reason) => {
+  const response = await apiClient.post(
+    `/admin/platform-billing/agreements/${agreementId}/void`,
+    { reason },
+    { headers: _adminAuthHeaders() }
+  );
+  return response.data;
+};
+
+export const uploadPartnerAgreementSigned = async (
+  agreementId,
+  file,
+  agreementSignedOn
+) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('agreement_signed_on', agreementSignedOn);
+  const response = await apiClient.post(
+    `/admin/platform-billing/agreements/${agreementId}/upload-signed`,
+    formData,
+    {
+      headers: {
+        ..._adminAuthHeaders(),
+        'Content-Type': 'multipart/form-data',
+      },
+    }
+  );
+  return response.data;
+};
+
+export const downloadPartnerAgreementDocxUrl = (agreementId) =>
+  `/admin/platform-billing/agreements/${agreementId}/docx`;
+
+export const downloadPartnerAgreementSignedUrl = (agreementId) =>
+  `/admin/platform-billing/agreements/${agreementId}/signed`;
+
+/** Téléchargement authentifié (blob) d'un accord. */
+export const downloadPartnerAgreementFile = async (urlPath, filename) => {
+  const response = await apiClient.get(urlPath, {
+    headers: _adminAuthHeaders(),
+    responseType: 'blob',
+  });
+  const blob = new Blob([response.data]);
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename || 'document';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+};
+
+export const fetchPlatformPricingGrids = async () => {
+  const response = await apiClient.get('/admin/platform-billing/pricing-grids', {
+    headers: _adminAuthHeaders(),
+  });
+  return response.data;
+};
+
+export const validatePlatformBillingInvoice = async (invoiceId) => {
+  const response = await apiClient.post(
+    `/admin/platform-billing/invoices/${invoiceId}/validate`,
+    {},
+    { headers: _adminAuthHeaders() }
+  );
+  return response.data;
+};
+
+/** Réouvre un relevé validé/verrouillé (annule facture non envoyée) pour correction. */
+export const reopenPlatformBillingInvoice = async (invoiceId) => {
+  const response = await apiClient.post(
+    `/admin/platform-billing/invoices/${invoiceId}/reopen`,
+    {},
+    { headers: _adminAuthHeaders() }
+  );
+  return response.data;
+};
+
+export const issuePlatformBillingInvoice = async (invoiceId) => {
+  const response = await apiClient.post(
+    `/admin/platform-billing/invoices/${invoiceId}/issue`,
+    {},
+    { headers: _adminAuthHeaders() }
+  );
+  return response.data;
+};
+
+/** Télécharge le PDF d'une facture plateforme émise. */
+export const downloadPlatformIssuedInvoicePdf = async (issuedId) => {
+  const response = await apiClient.get(
+    `/admin/platform-billing/issued-invoices/${issuedId}/pdf`,
+    {
+      headers: _adminAuthHeaders(),
+      responseType: 'blob',
+      timeout: 120000,
+    }
+  );
+  const disposition = response.headers['content-disposition'];
+  let filename = `facture-lirie-${issuedId}.pdf`;
+  if (disposition && disposition.includes('filename=')) {
+    const m = disposition.match(/filename="?([^";]+)"?/);
+    if (m && m[1]) filename = m[1];
+  }
+  const url = window.URL.createObjectURL(
+    new Blob([response.data], { type: 'application/pdf' })
+  );
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+};
+
+export const fetchPlatformBillingInvoiceReadiness = async (invoiceId) => {
+  const response = await apiClient.get(
+    `/admin/platform-billing/invoices/${invoiceId}/readiness`,
+    { headers: _adminAuthHeaders() }
+  );
+  return response.data;
+};
+
+export const fetchPlatformBillingStatementItems = async (invoiceId) => {
+  const response = await apiClient.get(
+    `/admin/platform-billing/invoices/${invoiceId}/statement-items`,
+    { headers: _adminAuthHeaders() }
+  );
+  return response.data;
+};
+
+/** Liste des heures de support plateforme (optionnellement filtrées par entreprise). */
+export const fetchPlatformSupportEntries = async (companyId) => {
+  const response = await apiClient.get('/admin/platform-billing/support-entries', {
+    headers: _adminAuthHeaders(),
+    params: companyId != null ? { company_id: companyId } : undefined,
+  });
+  return response.data;
+};
+
+/**
+ * Saisie d'heures de support plateforme.
+ * @param {object} payload
+ * @param {number} payload.company_id
+ * @param {number|string} [payload.duration_hours]
+ * @param {number} [payload.duration_minutes]
+ * @param {string} [payload.hourly_rate_snapshot]
+ * @param {string} [payload.description]
+ * @param {string} [payload.category]
+ * @param {number} [payload.billing_period_id]
+ * @param {boolean} [payload.auto_validate]
+ * @param {boolean} [payload.recalculate_period]
+ */
+export const createPlatformSupportEntry = async (payload) => {
+  const response = await apiClient.post(
+    '/admin/platform-billing/support-entries',
+    payload,
+    { headers: _adminAuthHeaders() }
+  );
+  return response.data;
+};
+
+/** Rectifie une entrée support (durée, catégorie, tarif…). */
+export const updatePlatformSupportEntry = async (entryId, payload) => {
+  const response = await apiClient.patch(
+    `/admin/platform-billing/support-entries/${entryId}`,
+    payload,
+    { headers: _adminAuthHeaders() }
+  );
+  return response.data;
+};
+
+/** Supprime une entrée support et recalcule le relevé si demandé. */
+export const deletePlatformSupportEntry = async (entryId, params = {}) => {
+  const response = await apiClient.delete(
+    `/admin/platform-billing/support-entries/${entryId}`,
+    {
+      headers: _adminAuthHeaders(),
+      params,
+    }
+  );
+  return response.data;
+};
+
+export const sendPlatformIssuedInvoice = async (issuedId) => {
+  const response = await apiClient.post(
+    `/admin/platform-billing/issued-invoices/${issuedId}/send`,
+    {},
+    { headers: _adminAuthHeaders() }
+  );
+  return response.data;
+};
+
+export const payPlatformIssuedInvoice = async (issuedId, payload) => {
+  const response = await apiClient.post(
+    `/admin/platform-billing/issued-invoices/${issuedId}/payments`,
     payload,
     { headers: _adminAuthHeaders() }
   );

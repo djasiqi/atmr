@@ -627,3 +627,143 @@ describe("PR2 persistTerminalRevocationEvidenceLocked", () => {
     expect((await readRecoveryCredential()).status).toBe("permanently_invalidated");
   });
 });
+
+describe("Phase 1B — refresh / context switch / tracking auth decision", () => {
+  beforeEach(() => {
+    mockSecureMemory.clear();
+    mockAsyncMemory.clear();
+    __resetSessionGenerationForTests();
+    __resetCredentialStoreLockForTests();
+    __resetExplicitLogoutInFlightForTests();
+    const {
+      __resetTrackingAuthDecisionForTests,
+    } = require("./sessionAuthDecision") as typeof import("./sessionAuthDecision");
+    const {
+      __resetContextSwitchOperationForTests,
+    } = require("./contextSwitchOperation") as typeof import("./contextSwitchOperation");
+    __resetTrackingAuthDecisionForTests();
+    __resetContextSwitchOperationForTests();
+  });
+
+  it("test_refresh_apply_under_mutex_is_stale_after_logout_claim", async () => {
+    const refreshGen = bumpSessionGeneration();
+    await writeRefreshToken("refresh-g10");
+    const claim = await claimNextSessionGenerationIfCurrent(refreshGen);
+    expect(claim.status).toBe("claimed");
+    const apply = await withSessionCredentialMutation(refreshGen, async () => {
+      await writeRefreshToken("refresh-g10-new");
+      return "token-g10";
+    });
+    expect(apply.status).toBe("stale");
+    // Le mutex peut avoir écrit puis détecté stale — la génération courante
+    // doit permettre à un login plus récent d'écraser ensuite.
+    const loginGen = getSessionGenerationId();
+    const reinstall = await withSessionCredentialMutation(loginGen, async () => {
+      await writeRefreshToken("refresh-g12");
+      return "ok";
+    });
+    expect(reinstall.status).toBe("applied");
+    expect((await readRefreshToken()).status).toBe("found");
+    expect((await readRefreshToken()).status === "found"
+      ? (await readRefreshToken() as { value: string }).value
+      : null).toBe("refresh-g12");
+  });
+
+  it("test_double_context_switch_keeps_latest_operation", () => {
+    const {
+      beginContextSwitchOperation,
+      isCurrentContextSwitchOperation,
+    } = require("./contextSwitchOperation") as typeof import("./contextSwitchOperation");
+    bumpSessionGeneration();
+    const opA = beginContextSwitchOperation({
+      sourceContextId: "driver:1",
+      targetContextId: "company:A",
+    });
+    const opB = beginContextSwitchOperation({
+      sourceContextId: "driver:1",
+      targetContextId: "company:B",
+    });
+    expect(isCurrentContextSwitchOperation(opA.operationId)).toBe(false);
+    expect(isCurrentContextSwitchOperation(opB.operationId)).toBe(true);
+  });
+
+  it("test_legacy_delete_stale_cannot_erase_new_login_token", async () => {
+    const REFRESH_TOKEN_STORAGE_KEY = "atmr.refresh_token";
+    const genOld = bumpSessionGeneration();
+    await writeRefreshToken("old");
+    mockSecureMemory.set(REFRESH_TOKEN_STORAGE_KEY, "old");
+
+    // Login plus récent rend genOld stale avant toute suppression.
+    const claim = await claimNextSessionGenerationIfCurrent(genOld);
+    expect(claim.status).toBe("claimed");
+    const loginGen = claim.generation;
+    const loginPersist = await withSessionCredentialMutation(loginGen, async () => {
+      await writeRefreshToken("new-login");
+      mockSecureMemory.set(REFRESH_TOKEN_STORAGE_KEY, "new-login");
+      return "installed";
+    });
+    expect(loginPersist.status).toBe("applied");
+
+    // Ancienne intention de purge (génération obsolète) : corps non exécuté.
+    let deleted = false;
+    const staleResult = await withSessionCredentialMutation(genOld, async () => {
+      deleted = true;
+      mockSecureMemory.delete(REFRESH_TOKEN_STORAGE_KEY);
+      const { deleteRefreshToken } =
+        require("./authCredentialStore") as typeof import("./authCredentialStore");
+      await deleteRefreshToken();
+      return "deleted";
+    });
+    expect(staleResult.status).toBe("stale");
+    expect(deleted).toBe(false);
+    expect(mockSecureMemory.get(REFRESH_TOKEN_STORAGE_KEY)).toBe("new-login");
+    const rt = await readRefreshToken();
+    expect(rt.status).toBe("found");
+    if (rt.status === "found") {
+      expect(rt.value).toBe("new-login");
+    }
+  });
+
+  it("test_tracking_auth_terminal_logout_emitted_once_per_operationId", () => {
+    const {
+      emitTrackingAuthTerminalEvent,
+      subscribeToTrackingAuthTerminalEvents,
+      TRACKING_AUTH_EFFECT_POLICY,
+    } = require("./sessionAuthDecision") as typeof import("./sessionAuthDecision");
+    const events: string[] = [];
+    const unsub = subscribeToTrackingAuthTerminalEvents((e) => {
+      events.push(e.kind);
+    });
+    emitTrackingAuthTerminalEvent({
+      kind: "EXPLICIT_LOGOUT",
+      sourceSessionGenerationId: 1,
+      operationId: "op-1",
+      trackingIdentityId: "u:d:c",
+    });
+    emitTrackingAuthTerminalEvent({
+      kind: "EXPLICIT_LOGOUT",
+      sourceSessionGenerationId: 1,
+      operationId: "op-1",
+      trackingIdentityId: "u:d:c",
+    });
+    expect(events).toEqual(["EXPLICIT_LOGOUT"]);
+    expect(TRACKING_AUTH_EFFECT_POLICY.explicit_logout.quarantine).toBe(true);
+    expect(TRACKING_AUTH_EFFECT_POLICY.auth_exhausted_socket.quarantine).toBe(false);
+    unsub();
+  });
+
+  it("test_socket_auth_exhausted_policy_matches_tracking_effect_table", () => {
+    const {
+      TRACKING_AUTH_EFFECT_POLICY,
+    } = require("./sessionAuthDecision") as typeof import("./sessionAuthDecision");
+    const policy = resolveSessionLifecyclePolicy("auth_exhausted_socket", {
+      hasOfflineSnapshot: true,
+      currentStatus: "authenticated_online",
+      autoBootstrapAllowed: true,
+    });
+    expect(policy.quarantineRequired).toBe(
+      TRACKING_AUTH_EFFECT_POLICY.auth_exhausted_socket.quarantine
+    );
+    expect(policy.statusAction).toBeNull();
+  });
+});

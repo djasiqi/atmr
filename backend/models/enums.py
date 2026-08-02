@@ -498,6 +498,93 @@ class PlatformSupportEntryCategory(str, PyEnum):
     OTHER = "other"
 
 
+class SubscriptionPricingMode(str, PyEnum):
+    """Mode de tarification abonnement portefeuille propre."""
+
+    VOLUME = "volume"
+    FIXED = "fixed"
+    FREE = "free"
+
+
+class CommissionCancellationPolicy(str, PyEnum):
+    """Politique de commission sur annulation marketplace."""
+
+    EXCLUDE = "exclude"
+    ON_CANCELLATION_FEES = "on_cancellation_fees"
+    ON_BILLED_AMOUNT = "on_billed_amount"
+
+
+class LegalForm(str, PyEnum):
+    """Forme juridique pour contrats partenaires / créancier LIRIE."""
+
+    SOLE_PROPRIETORSHIP = "sole_proprietorship"
+    SARL = "sarl"
+    SA = "sa"
+    ASSOCIATION = "association"
+    FOUNDATION = "foundation"
+    OTHER = "other"
+
+
+class PartnerAgreementStatus(str, PyEnum):
+    """Statut d'un accord juridique partenaire (DOCX / PDF signé)."""
+
+    DRAFT = "draft"
+    SENT = "sent"
+    SIGNED = "signed"
+    VOID = "void"
+
+
+class BookingBillingOrigin(str, PyEnum):
+    """Origine commerciale facturable (distinct de created_via technique)."""
+
+    OWN_PORTFOLIO = "OWN_PORTFOLIO"
+    LIRIE_MARKETPLACE = "LIRIE_MARKETPLACE"
+    IMPORTED = "IMPORTED"
+    ADMIN_CREATED = "ADMIN_CREATED"
+    UNKNOWN = "UNKNOWN"
+
+
+class BillingOriginSource(str, PyEnum):
+    """Provenance du classement billing_origin."""
+
+    EXPLICIT_AT_CREATION = "EXPLICIT_AT_CREATION"
+    BACKFILL_DETERMINISTIC = "BACKFILL_DETERMINISTIC"
+    BACKFILL_HEURISTIC = "BACKFILL_HEURISTIC"
+    ADMIN_CORRECTION = "ADMIN_CORRECTION"
+
+
+class PlatformStatementStatus(str, PyEnum):
+    """Statut autonome du relevé plateforme (PlatformInvoice)."""
+
+    DRAFT = "DRAFT"
+    CALCULATED = "CALCULATED"
+    NEEDS_REVIEW = "NEEDS_REVIEW"
+    VALIDATED = "VALIDATED"
+    LOCKED = "LOCKED"
+
+
+class PlatformStatementItemType(str, PyEnum):
+    """Type de ligne de preuve du relevé plateforme."""
+
+    OWN_PORTFOLIO_USAGE = "OWN_PORTFOLIO_USAGE"
+    MARKETPLACE_COMMISSION = "MARKETPLACE_COMMISSION"
+    SUPPORT = "SUPPORT"
+    ADJUSTMENT = "ADJUSTMENT"
+    DISCOUNT = "DISCOUNT"
+
+
+class PlatformIssuedInvoiceStatus(str, PyEnum):
+    """Statut de la facture légale plateforme (émission)."""
+
+    DRAFT = "DRAFT"
+    ISSUED = "ISSUED"
+    SENT = "SENT"
+    PAID = "PAID"
+    OVERDUE = "OVERDUE"
+    CANCELLED = "CANCELLED"
+    CREDITED = "CREDITED"
+
+
 class TransferModel(str, PyEnum):
     """Modèles de transfert de courses entre entreprises.
     - SUBCONTRACT: A facture client, B facture A (sous-traitance classique)

@@ -518,37 +518,57 @@ async function refreshAuthToken(): Promise<string | null> {
 
   const token = extractToken(data);
   const nextRefreshToken = extractRefreshToken(data);
-  if (nextRefreshToken) {
-    if (!isCurrentAuthEpoch(epochAtStart)) return null;
-    await writeRefreshToken(nextRefreshToken);
-    if (envelope.status === "found") {
-      const nextGen =
-        typeof data?.refresh_generation === "number"
-          ? data.refresh_generation
-          : envelope.value.refresh_generation + 1;
-      await (
-        require("../auth/authCredentialStore") as typeof import("../auth/authCredentialStore")
-      ).writeSessionEnvelope({
-        ...envelope.value,
-        refresh_generation: nextGen,
-        last_authenticated_at: new Date().toISOString(),
-      });
-    }
-    await clearPendingRefreshOperation();
+  if (!token && !nextRefreshToken) {
+    return null;
   }
-  if (token) {
-    if (!isCurrentAuthEpoch(epochAtStart)) return null;
-    setAuthToken(token);
-    try {
-      const { notifyAuthRefreshSuccess } = require("../auth/authRefreshListeners") as {
-        notifyAuthRefreshSuccess: () => void;
-      };
-      notifyAuthRefreshSuccess();
-    } catch {
-      /* optional */
+
+  const { withSessionCredentialMutation } =
+    require("../auth/sessionCredentialMutex") as typeof import("../auth/sessionCredentialMutex");
+  const {
+    setTrackingAuthTemporarilyUnavailable,
+  } = require("../auth/sessionAuthDecision") as typeof import("../auth/sessionAuthDecision");
+
+  setTrackingAuthTemporarilyUnavailable("refreshing");
+  try {
+    const applyResult = await withSessionCredentialMutation(epochAtStart, async () => {
+      if (nextRefreshToken) {
+        await writeRefreshToken(nextRefreshToken);
+        if (envelope.status === "found") {
+          const nextGen =
+            typeof data?.refresh_generation === "number"
+              ? data.refresh_generation
+              : envelope.value.refresh_generation + 1;
+          await (
+            require("../auth/authCredentialStore") as typeof import("../auth/authCredentialStore")
+          ).writeSessionEnvelope({
+            ...envelope.value,
+            refresh_generation: nextGen,
+            last_authenticated_at: new Date().toISOString(),
+          });
+        }
+        await clearPendingRefreshOperation();
+      }
+      if (token) {
+        setAuthToken(token);
+        try {
+          const { notifyAuthRefreshSuccess } = require("../auth/authRefreshListeners") as {
+            notifyAuthRefreshSuccess: () => void;
+          };
+          notifyAuthRefreshSuccess();
+        } catch {
+          /* optional */
+        }
+      }
+      return token;
+    });
+
+    if (applyResult.status === "stale") {
+      return null;
     }
+    return applyResult.value;
+  } finally {
+    setTrackingAuthTemporarilyUnavailable(null);
   }
-  return token;
 }
 
 async function ensureRefreshToken(): Promise<string | null> {
@@ -1098,30 +1118,94 @@ export async function login(email: string, password: string): Promise<void> {
   }
 }
 
-export async function switchContext(targetContextId: string): Promise<SwitchContextResponse> {
+export async function switchContext(
+  targetContextId: string,
+  opts?: { sourceContextId?: string | null }
+): Promise<SwitchContextResponse> {
   if (useMockBootstrap) {
     return switchContextResponseSchema.parse(buildMockSwitchContext(targetContextId));
   }
+  const {
+    beginContextSwitchOperation,
+    isCurrentContextSwitchOperation,
+  } = require("../auth/contextSwitchOperation") as typeof import("../auth/contextSwitchOperation");
+  const { isCurrentSessionGeneration } =
+    require("../auth/authCredentialStore") as typeof import("../auth/authCredentialStore");
+  const { withSessionCredentialMutation } =
+    require("../auth/sessionCredentialMutex") as typeof import("../auth/sessionCredentialMutex");
+
+  const operation = beginContextSwitchOperation({
+    sourceContextId: opts?.sourceContextId ?? null,
+    targetContextId,
+  });
+
   try {
     const { data } = await apiClient.post<Record<string, unknown>>(
       "/auth/switch-context",
       { target_context_id: targetContextId },
       { timeout: 12_000, headers: { "X-Allow-Offline-Attempt": "1" } }
     );
-    // Jetons explicites si le serveur en émet (futur) ; sinon refresh pour réhydrater le header (web/HMR, perte in-memory).
+
+    if (
+      !isCurrentContextSwitchOperation(operation.operationId) ||
+      !isCurrentSessionGeneration(operation.sessionGenerationId)
+    ) {
+      throw new AuthContractError(
+        "CONTEXT_SWITCH_STALE",
+        "Changement de contexte obsolète ignoré."
+      );
+    }
+
     const inlineAccess = extractToken(data);
-    if (inlineAccess) {
-      setAuthToken(inlineAccess);
-    }
     const inlineRefresh = extractRefreshToken(data);
-    if (inlineRefresh) {
-      await writeRefreshToken(inlineRefresh);
+    if (inlineAccess || inlineRefresh) {
+      const applyResult = await withSessionCredentialMutation(
+        operation.sessionGenerationId,
+        async () => {
+          if (
+            !isCurrentContextSwitchOperation(operation.operationId) ||
+            !isCurrentSessionGeneration(operation.sessionGenerationId)
+          ) {
+            return "stale" as const;
+          }
+          if (inlineAccess) {
+            setAuthToken(inlineAccess);
+          }
+          if (inlineRefresh) {
+            await writeRefreshToken(inlineRefresh);
+          }
+          return "applied" as const;
+        }
+      );
+      if (
+        applyResult.status === "stale" ||
+        (applyResult.status === "applied" && applyResult.value === "stale")
+      ) {
+        throw new AuthContractError(
+          "CONTEXT_SWITCH_STALE",
+          "Changement de contexte obsolète ignoré."
+        );
+      }
     }
+
+    if (
+      !isCurrentContextSwitchOperation(operation.operationId) ||
+      !isCurrentSessionGeneration(operation.sessionGenerationId)
+    ) {
+      throw new AuthContractError(
+        "CONTEXT_SWITCH_STALE",
+        "Changement de contexte obsolète ignoré."
+      );
+    }
+
     const parsed = switchContextResponseSchema.parse(data);
     if (!shouldSkipPostBootstrapRefresh()) {
       void refreshAuthTokenNow().catch(() => false);
     }
-    return parsed;
+    return Object.assign(parsed, {
+      contextSwitchOperationId: operation.operationId,
+      contextSwitchSessionGenerationId: operation.sessionGenerationId,
+    });
   } catch (error) {
     throw toApiError(error);
   }

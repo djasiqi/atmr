@@ -8,7 +8,7 @@ const path = require("path");
 
 /** Fichiers introduits / fortement remaniés par PR2 (hors dette TS préexistante client/sessionProvider). */
 const SURFACE =
-  /src\/core\/auth\/(sessionCredentialMutex|sessionLifecycle|authRecoveryCoordinator|authCredentialStore|mobileSessionStatus|sessionStateMachine)|app\/index\.tsx/;
+  /src\/core\/auth\/(sessionCredentialMutex|sessionLifecycle|authRecoveryCoordinator|authCredentialStore|mobileSessionStatus|sessionStateMachine|sessionAuthDecision|contextSwitchOperation)|app\/index\.tsx/;
 
 const result = spawnSync("npx", ["tsc", "--noEmit", "--pretty", "false"], {
   cwd: path.resolve(__dirname, ".."),

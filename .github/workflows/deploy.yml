@@ -25,9 +25,7 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  actions: write
   contents: read
-  security-events: write
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
@@ -36,6 +34,9 @@ jobs:
   build-and-push:
     name: Build & Push Production Image
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
       DOCKER_IMAGE: ${{ secrets.DOCKER_IMAGE }}
@@ -122,13 +123,14 @@ jobs:
 
       - name: Generate SBOM with Trivy
         uses: aquasecurity/trivy-action@0.35.0
-        continue-on-error: true
         with:
           scan-type: "fs"
           scan-ref: "./backend"
           format: "cyclonedx"
           output: "sbom-cyclonedx.json"
           exit-code: "0"
+      - name: Ensure SBOM artefact produced
+        run: test -s sbom-cyclonedx.json
 
       - name: Login to Docker Hub
         uses: docker/login-action@v3
@@ -290,32 +292,58 @@ jobs:
           echo "BACKEND_IMAGE_DIGEST=${BACKEND_DIGEST}"
           echo "DOCKER_TAG=${DOCKER_TAG}"
 
-      - name: Scan image with Trivy
+      - name: Scan image with Trivy (CRITICAL fixable bloque)
         uses: aquasecurity/trivy-action@0.35.0
-        continue-on-error: true
         with:
           image-ref: ${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }}
-          format: sarif
-          output: trivy-results.sarif
+          format: table
+          exit-code: "1"
           ignore-unfixed: true
           vuln-type: os,library
-          severity: CRITICAL,HIGH
+          severity: CRITICAL
           scanners: vuln
+          trivyignores: .trivyignore
 
-      - name: Upload Trivy results to GitHub Security
-        if: false
-        uses: github/codeql-action/upload-sarif@v3
+      - name: Build release manifest
+        id: release_manifest
+        run: |
+          set -euo pipefail
+          chmod +x scripts/release/build_release_manifest.sh
+          BACKEND_DIGEST="${{ steps.build_backend.outputs.digest }}"
+          WS_DIGEST="${{ steps.build_ws.outputs.digest }}"
+          WS_REPO="${DOCKER_IMAGE/%atmr-backend/atmr-ws-service}"
+          SOURCE_SHA="${SOURCE_SHA}" \
+          BACKEND_REPO="${DOCKER_IMAGE}" \
+          BACKEND_DIGEST="${BACKEND_DIGEST}" \
+          WS_REPO="${WS_REPO}" \
+          WS_DIGEST="${WS_DIGEST}" \
+          OUT_FILE=release-manifest.json \
+            ./scripts/release/build_release_manifest.sh
+          echo "manifest_path=release-manifest.json" >> "$GITHUB_OUTPUT"
+
+      - name: Upload release manifest
+        uses: actions/upload-artifact@v4
         with:
-          sarif_file: trivy-results.sarif
+          name: release-manifest
+          path: release-manifest.json
+
+  phase1-gates:
+    name: Phase 1 gates (re-run before deploy)
+    needs: build-and-push
+    if: github.event.inputs.skip_deploy != 'true'
+    uses: ./.github/workflows/phase1-gates.yml
 
   deploy:
     name: Deploy Production Environment
-    needs: build-and-push
+    needs: [build-and-push, phase1-gates]
     if: |
       github.event.inputs.skip_deploy != 'true' &&
-      needs.build-and-push.outputs.push_success == 'true'
+      needs.build-and-push.outputs.push_success == 'true' &&
+      needs.phase1-gates.result == 'success'
     runs-on: ubuntu-latest
     environment: production
+    permissions:
+      contents: read
     env:
       DOCKER_IMAGE: ${{ secrets.DOCKER_IMAGE }}
       DOCKER_TAG: ${{ needs.build-and-push.outputs.docker_tag }}
@@ -485,8 +513,88 @@ jobs:
           key: ${{ env.SSH_KEY }}
           port: ${{ env.SSH_PORT }}
           script: |
-            chmod 644 /srv/atmr/firebase-service-account.json
-            echo "✅ Firebase service account permissions set"
+            install -m 600 /srv/atmr/firebase-service-account.json /srv/atmr/firebase-service-account.json.bak 2>/dev/null || true
+            chmod 600 /srv/atmr/firebase-service-account.json
+            echo "✅ Firebase service account permissions set (0600)"
+
+      - name: Prepare env-file and release manifest (no secrets in argv)
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p /tmp/atmr-deploy
+          ENV_FILE=/tmp/atmr-deploy/.env.production
+          {
+            echo "APP_ENCRYPTION_KEY_B64=${{ secrets.APP_ENCRYPTION_KEY_B64 }}"
+            echo "SECRET_KEY=${{ secrets.SECRET_KEY }}"
+            echo "JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}"
+            echo "POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}"
+            echo "POSTGRES_USER=${{ secrets.POSTGRES_USER }}"
+            echo "POSTGRES_DB=${{ secrets.POSTGRES_DB }}"
+            echo "REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}"
+            echo "MAIL_PASSWORD=${{ secrets.MAIL_PASSWORD }}"
+            echo "SENTRY_DSN=${{ secrets.SENTRY_DSN }}"
+            echo "PDF_BASE_URL=${{ secrets.PDF_BASE_URL }}"
+            echo "GOOGLE_MAPS_API_KEY=${{ secrets.GOOGLE_MAPS_API_KEY }}"
+            echo "MASTER_ENCRYPTION_KEY=${{ secrets.MASTER_ENCRYPTION_KEY }}"
+            DOCKER_IMAGE="${{ env.DOCKER_IMAGE }}"
+            DOCKER_TAG="${{ env.DOCKER_TAG }}"
+            echo "DOCKER_IMAGE=${DOCKER_IMAGE}"
+            echo "DOCKER_TAG=${DOCKER_TAG}"
+            BACKEND_DIGEST="${{ needs.build-and-push.outputs.backend_image_digest }}"
+            WS_DIGEST="${{ needs.build-and-push.outputs.ws_service_image_digest }}"
+            WS_REPO="${DOCKER_IMAGE/atmr-backend/atmr-ws-service}"
+            case "${BACKEND_DIGEST}" in sha256:*) ;; *) BACKEND_DIGEST="sha256:${BACKEND_DIGEST}" ;; esac
+            case "${WS_DIGEST}" in sha256:*) ;; *) WS_DIGEST="sha256:${WS_DIGEST}" ;; esac
+            echo "BACKEND_IMAGE_REF=${DOCKER_IMAGE}@${BACKEND_DIGEST}"
+            echo "WS_SERVICE_IMAGE_REF=${WS_REPO}@${WS_DIGEST}"
+            echo "GRAFANA_ADMIN_USER=${{ secrets.GRAFANA_ADMIN_USER }}"
+            echo "GRAFANA_ADMIN_PASSWORD=${{ secrets.GRAFANA_ADMIN_PASSWORD }}"
+            echo "GRAFANA_ROOT_URL=${{ secrets.GRAFANA_ROOT_URL }}"
+            echo "SMTP_HOST=${{ secrets.SMTP_HOST }}"
+            echo "SMTP_PORT=${{ secrets.SMTP_PORT }}"
+            echo "SMTP_USERNAME=${{ secrets.SMTP_USERNAME }}"
+            echo "SMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }}"
+            echo "ALERTMANAGER_FROM_EMAIL=${{ secrets.ALERTMANAGER_FROM_EMAIL }}"
+            echo "ALERT_EMAIL_TO=${{ secrets.ALERT_EMAIL_TO }}"
+            echo "SOCKETIO_CORS_ORIGINS=${{ secrets.SOCKETIO_CORS_ORIGINS }}"
+            echo "BREVO_API_KEY=${{ secrets.BREVO_API_KEY }}"
+            echo "POSTGRES_HOST=${{ secrets.POSTGRES_HOST }}"
+            echo "FLASK_ENV=${{ secrets.FLASK_ENV }}"
+            echo "FLASK_CONFIG=${{ secrets.FLASK_CONFIG }}"
+            echo "ENVIRONMENT=${{ secrets.ENVIRONMENT }}"
+            echo "PLATFORM_API_URL_PROD=${{ vars.PLATFORM_API_URL_PROD }}"
+            echo "PLATFORM_LINK_PROMETHEUS=${{ vars.PLATFORM_LINK_PROMETHEUS }}"
+            echo "PLATFORM_LINK_ALERTMANAGER=${{ vars.PLATFORM_LINK_ALERTMANAGER }}"
+            echo "PLATFORM_API_URL_DEMO=${{ vars.PLATFORM_API_URL_DEMO }}"
+            echo "SAFERPAY_CUSTOMER_ID=${{ secrets.SAFERPAY_CUSTOMER_ID }}"
+            echo "SAFERPAY_TERMINAL_ID=${{ secrets.SAFERPAY_TERMINAL_ID }}"
+            echo "SAFERPAY_API_USERNAME=${{ secrets.SAFERPAY_API_USERNAME }}"
+            echo "SAFERPAY_API_PASSWORD=${{ secrets.SAFERPAY_API_PASSWORD }}"
+            echo "SMS_NOTIFICATIONS_ENABLED=${{ secrets.SMS_NOTIFICATIONS_ENABLED }}"
+            echo "TWILIO_ACCOUNT_SID=${{ secrets.TWILIO_ACCOUNT_SID }}"
+            echo "TWILIO_AUTH_TOKEN=${{ secrets.TWILIO_AUTH_TOKEN }}"
+            echo "TWILIO_PHONE_NUMBER=${{ secrets.TWILIO_PHONE_NUMBER }}"
+            echo "INTERNAL_SERVICE_TOKEN=${{ secrets.INTERNAL_SERVICE_TOKEN }}"
+            echo "INTERNAL_SERVICE_TOKEN_NEXT=${{ secrets.INTERNAL_SERVICE_TOKEN_NEXT }}"
+          } > "${ENV_FILE}"
+          chmod 600 "${ENV_FILE}"
+          echo "ENV_FILE=${ENV_FILE}" >> "$GITHUB_ENV"
+
+      - name: Download release manifest
+        uses: actions/download-artifact@v4
+        with:
+          name: release-manifest
+          path: /tmp/atmr-deploy
+
+      - name: Copy env-file and manifest to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ env.SSH_HOST }}
+          username: ${{ env.SSH_USER }}
+          key: ${{ env.SSH_KEY }}
+          port: ${{ env.SSH_PORT }}
+          source: "/tmp/atmr-deploy/*"
+          target: "/srv/atmr/releases/${{ needs.build-and-push.outputs.source_sha }}"
 
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.2.2
@@ -496,51 +604,24 @@ jobs:
           key: ${{ env.SSH_KEY }}
           port: ${{ env.SSH_PORT }}
           script: |
+            set -euo pipefail
+            SHA="${{ needs.build-and-push.outputs.source_sha }}"
+            RELEASE_DIR="/srv/atmr/releases/${SHA}"
+            mkdir -p "${RELEASE_DIR}" /srv/atmr/releases /srv/atmr/scripts/release
             chmod +x /srv/atmr/scripts/deploy-production.sh
             chmod +x /srv/atmr/scripts/smoke_tests.sh
-            chmod +x /srv/atmr/scripts/ops-tracking-p0-recreate-ingest.sh || true
-            chmod +x /srv/atmr/scripts/kafka-env-effective.sh || true
+            chmod +x /srv/atmr/scripts/release/*.sh 2>/dev/null || true
+            chmod 600 "${RELEASE_DIR}/.env.production"
+            if [ -f /srv/atmr/releases/current-release.json ]; then
+              cp -f /srv/atmr/releases/current-release.json /srv/atmr/releases/previous-release.json
+            fi
             /srv/atmr/scripts/deploy-production.sh \
-              "${{ secrets.APP_ENCRYPTION_KEY_B64 }}" \
-              "${{ secrets.SECRET_KEY }}" \
-              "${{ secrets.JWT_SECRET_KEY }}" \
-              "${{ secrets.POSTGRES_PASSWORD }}" \
-              "${{ secrets.POSTGRES_USER }}" \
-              "${{ secrets.POSTGRES_DB }}" \
-              "${{ secrets.REDIS_PASSWORD }}" \
-              "${{ secrets.MAIL_PASSWORD }}" \
-              "${{ secrets.SENTRY_DSN }}" \
-              "${{ secrets.PDF_BASE_URL }}" \
-              "${{ secrets.GOOGLE_MAPS_API_KEY }}" \
-              "${{ secrets.MASTER_ENCRYPTION_KEY }}" \
-              "${{ env.DOCKER_IMAGE }}" \
-              "${{ env.DOCKER_TAG }}" \
-              "${{ secrets.GRAFANA_ADMIN_USER }}" \
-              "${{ secrets.GRAFANA_ADMIN_PASSWORD }}" \
-              "${{ secrets.GRAFANA_ROOT_URL }}" \
-              "${{ secrets.SMTP_HOST }}" \
-              "${{ secrets.SMTP_PORT }}" \
-              "${{ secrets.SMTP_USERNAME }}" \
-              "${{ secrets.SMTP_PASSWORD }}" \
-              "${{ secrets.ALERTMANAGER_FROM_EMAIL }}" \
-              "${{ secrets.ALERT_EMAIL_TO }}" \
-              "${{ secrets.SOCKETIO_CORS_ORIGINS }}" \
-              "${{ secrets.BREVO_API_KEY }}" \
-              "${{ secrets.POSTGRES_HOST }}" \
-              "${{ secrets.FLASK_ENV }}" \
-              "${{ secrets.FLASK_CONFIG }}" \
-              "${{ secrets.ENVIRONMENT }}" \
-              "${{ vars.PLATFORM_API_URL_PROD }}" \
-              "${{ vars.PLATFORM_LINK_PROMETHEUS }}" \
-              "${{ vars.PLATFORM_LINK_ALERTMANAGER }}" \
-              "${{ vars.PLATFORM_API_URL_DEMO }}" \
-              "${{ secrets.SAFERPAY_CUSTOMER_ID }}" \
-              "${{ secrets.SAFERPAY_TERMINAL_ID }}" \
-              "${{ secrets.SAFERPAY_API_USERNAME }}" \
-              "${{ secrets.SAFERPAY_API_PASSWORD }}" \
-              "${{ secrets.SMS_NOTIFICATIONS_ENABLED }}" \
-              "${{ secrets.TWILIO_ACCOUNT_SID }}" \
-              "${{ secrets.TWILIO_AUTH_TOKEN }}" \
-              "${{ secrets.TWILIO_PHONE_NUMBER }}" \
-              "${{ secrets.INTERNAL_SERVICE_TOKEN }}" \
-              "${{ secrets.INTERNAL_SERVICE_TOKEN_NEXT }}"
+              --env-file "${RELEASE_DIR}/.env.production" \
+              --release-manifest "${RELEASE_DIR}/release-manifest.json"
+            cp -f "${RELEASE_DIR}/release-manifest.json" /srv/atmr/releases/current-release.json
+            if [ -x /srv/atmr/scripts/release/verify_image_digest.sh ]; then
+              bash /srv/atmr/scripts/release/verify_image_digest.sh \
+                /srv/atmr/releases/current-release.json backend
+            fi
+            rm -f "${RELEASE_DIR}/.env.production"
+            echo "✅ Deploy digest-aware terminé"

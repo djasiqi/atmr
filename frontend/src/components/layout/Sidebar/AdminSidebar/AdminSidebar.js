@@ -116,7 +116,7 @@ const AdminSidebar = () => {
         {
           icon: FaFileInvoice,
           label: 'Facturation',
-          to: `${base}/billing/pilotage`,
+          to: `${base}/billing`,
           isBillingHub: true,
           isPlatform: false,
         },

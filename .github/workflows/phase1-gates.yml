@@ -1,0 +1,101 @@
+name: Phase 1 Gates
+
+permissions:
+  contents: read
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+  workflow_call:
+
+jobs:
+  booking-critical:
+    name: booking-critical
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: AST booking authority
+        run: python scripts/architecture/check_booking_create_authority.py
+      - name: Booking characterization + HTTP contrat
+        working-directory: backend
+        run: |
+          pip install pytest -q
+          pytest tests/services/test_booking_create_use_case.py tests/routes/test_client_booking_creation.py -q --tb=short
+
+  mobile-auth-critical:
+    name: mobile-auth-critical
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile/unified-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: mobile/unified-app/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck:session-lifecycle
+      - run: npx jest src/core/auth/sessionStateMachine.pr2.test.ts --no-coverage
+
+  mobile-tracking-critical:
+    name: mobile-tracking-critical
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile/unified-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: mobile/unified-app/package-lock.json
+      - run: npm ci
+      - run: npx jest src/features/driver/services/trackingRuntimeRegistry.test.ts --no-coverage
+
+  deployment-critical:
+    name: deployment-critical
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Shellcheck release scripts
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+          shellcheck -x scripts/release/build_release_manifest.sh
+          shellcheck -x scripts/release/verify_image_digest.sh
+      - name: Compose config dry-run
+        run: |
+          DOCKER_IMAGE=docker.io/example/atmr-backend \
+          DOCKER_TAG=sha-test \
+          BACKEND_IMAGE_REF=docker.io/example/atmr-backend@sha256:$(printf '0%.0s' {1..64}) \
+          WS_SERVICE_IMAGE_REF=docker.io/example/atmr-ws-service@sha256:$(printf '0%.0s' {1..64}) \
+          docker compose -f docker-compose.production.yml config >/dev/null
+      - name: Gitleaks (arbre courant, no-git)
+        run: |
+          docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.21.2 detect \
+            --source=/repo --no-git --no-banner --redact --exit-code 1
+
+  phase1-gates:
+    name: phase1-gates
+    if: always()
+    needs:
+      - booking-critical
+      - mobile-auth-critical
+      - mobile-tracking-critical
+      - deployment-critical
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify all gates
+        run: |
+          test "${{ needs.booking-critical.result }}" = "success"
+          test "${{ needs.mobile-auth-critical.result }}" = "success"
+          test "${{ needs.mobile-tracking-critical.result }}" = "success"
+          test "${{ needs.deployment-critical.result }}" = "success"
+          echo "✅ Phase 1 gates OK"

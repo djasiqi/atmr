@@ -174,7 +174,8 @@ services:
 
   # Backend API (Production)
   backend:
-    image: ${DOCKER_IMAGE:-docker.io/djasiqi/atmr-backend}:${DOCKER_TAG:-latest}
+    # BACKEND_IMAGE_REF = repo@sha256:… (préféré) ou repli tag mutable
+    image: ${BACKEND_IMAGE_REF:-${DOCKER_IMAGE:-docker.io/djasiqi/atmr-backend}:${DOCKER_TAG:-latest}}
     restart: unless-stopped
     # Charger les variables depuis .env.production (créé par le workflow GitHub Actions)
     env_file:
@@ -416,7 +417,7 @@ services:
 
   # Image construite et poussée par CI (services/ws-service) — pas de contexte local sur /srv/atmr
   ws-service:
-    image: ${WS_SERVICE_IMAGE:-docker.io/djasiqi/atmr-ws-service}:${DOCKER_TAG:-latest}
+    image: ${WS_SERVICE_IMAGE_REF:-${WS_SERVICE_IMAGE:-docker.io/djasiqi/atmr-ws-service}:${DOCKER_TAG:-latest}}
     container_name: atmr-ws-service
     restart: unless-stopped
     env_file:
@@ -513,7 +514,8 @@ services:
 
   # Worker Celery
   celery-worker:
-    image: ${DOCKER_IMAGE:-docker.io/djasiqi/atmr-backend}:${DOCKER_TAG:-latest}
+    # BACKEND_IMAGE_REF = repo@sha256:… (préféré) ou repli tag mutable
+    image: ${BACKEND_IMAGE_REF:-${DOCKER_IMAGE:-docker.io/djasiqi/atmr-backend}:${DOCKER_TAG:-latest}}
     container_name: atmr-celery-worker
     restart: unless-stopped
     # Charger les variables depuis .env.production (créé par le workflow GitHub Actions)
@@ -613,7 +615,8 @@ services:
   tracking-kafka-consumer:
     profiles:
       - kafka
-    image: ${DOCKER_IMAGE:-docker.io/djasiqi/atmr-backend}:${DOCKER_TAG:-latest}
+    # BACKEND_IMAGE_REF = repo@sha256:… (préféré) ou repli tag mutable
+    image: ${BACKEND_IMAGE_REF:-${DOCKER_IMAGE:-docker.io/djasiqi/atmr-backend}:${DOCKER_TAG:-latest}}
     # Pas de container_name : requis pour `docker compose up --scale tracking-kafka-consumer=3` (Compose classique, 3 processus / partitions).
     restart: unless-stopped
     env_file:
@@ -697,7 +700,8 @@ services:
   tracking-outbox-publisher:
     profiles:
       - kafka
-    image: ${DOCKER_IMAGE:-docker.io/djasiqi/atmr-backend}:${DOCKER_TAG:-latest}
+    # BACKEND_IMAGE_REF = repo@sha256:… (préféré) ou repli tag mutable
+    image: ${BACKEND_IMAGE_REF:-${DOCKER_IMAGE:-docker.io/djasiqi/atmr-backend}:${DOCKER_TAG:-latest}}
     restart: unless-stopped
     env_file:
       - .env.production
@@ -756,7 +760,8 @@ services:
   tracking-processed-fanout:
     profiles:
       - kafka
-    image: ${DOCKER_IMAGE:-docker.io/djasiqi/atmr-backend}:${DOCKER_TAG:-latest}
+    # BACKEND_IMAGE_REF = repo@sha256:… (préféré) ou repli tag mutable
+    image: ${BACKEND_IMAGE_REF:-${DOCKER_IMAGE:-docker.io/djasiqi/atmr-backend}:${DOCKER_TAG:-latest}}
     # Pas de container_name : incompatible avec deploy.replicas > 1 (noms de conteneurs uniques par instance).
     restart: unless-stopped
     env_file:
@@ -825,7 +830,8 @@ services:
   kafka-dlq-consumer:
     profiles:
       - kafka
-    image: ${DOCKER_IMAGE:-docker.io/djasiqi/atmr-backend}:${DOCKER_TAG:-latest}
+    # BACKEND_IMAGE_REF = repo@sha256:… (préféré) ou repli tag mutable
+    image: ${BACKEND_IMAGE_REF:-${DOCKER_IMAGE:-docker.io/djasiqi/atmr-backend}:${DOCKER_TAG:-latest}}
     container_name: atmr-kafka-dlq-consumer
     restart: unless-stopped
     env_file:
@@ -889,7 +895,8 @@ services:
 
   # Beat Celery (planificateur)
   celery-beat:
-    image: ${DOCKER_IMAGE:-docker.io/djasiqi/atmr-backend}:${DOCKER_TAG:-latest}
+    # BACKEND_IMAGE_REF = repo@sha256:… (préféré) ou repli tag mutable
+    image: ${BACKEND_IMAGE_REF:-${DOCKER_IMAGE:-docker.io/djasiqi/atmr-backend}:${DOCKER_TAG:-latest}}
     container_name: atmr-celery-beat
     restart: unless-stopped
     # Charger les variables depuis .env.production (créé par le workflow GitHub Actions)
@@ -972,7 +979,8 @@ services:
 
   # Flower (monitoring Celery) - Optionnel
   flower:
-    image: ${DOCKER_IMAGE:-docker.io/djasiqi/atmr-backend}:${DOCKER_TAG:-latest}
+    # BACKEND_IMAGE_REF = repo@sha256:… (préféré) ou repli tag mutable
+    image: ${BACKEND_IMAGE_REF:-${DOCKER_IMAGE:-docker.io/djasiqi/atmr-backend}:${DOCKER_TAG:-latest}}
     container_name: atmr-flower
     restart: unless-stopped
     # Charger les variables depuis .env.production (créé par le workflow GitHub Actions)

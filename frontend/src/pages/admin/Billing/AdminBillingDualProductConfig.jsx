@@ -1,0 +1,1270 @@
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link, useParams } from 'react-router-dom';
+import {
+  closePlatformBillingContract,
+  createPlatformBillingContract,
+  downloadPartnerAgreementDocxUrl,
+  downloadPartnerAgreementFile,
+  downloadPartnerAgreementSignedUrl,
+  fetchPlatformBillingCompaniesConfig,
+  fetchPlatformBillingContracts,
+  fetchPlatformBillingCreditor,
+  fetchPlatformPricingGrids,
+  generatePartnerAgreement,
+  markPartnerAgreementSent,
+  putPlatformBillingDebtorAddress,
+  uploadPartnerAgreementSigned,
+  voidPartnerAgreement,
+} from '../../../services/adminService';
+import styles from './AdminBillingTransportConfig.module.css';
+
+const emptyContract = {
+  is_billing_enabled: true,
+  own_portfolio_billing_enabled: true,
+  lirie_commission_enabled: true,
+  support_enabled: false,
+  subscription_pricing_mode: 'volume',
+  custom_subscription_amount: '',
+  use_global_pricing_grid: true,
+  commission_rate: '0.030000',
+  commission_cancellation_policy: 'exclude',
+  free_license_max_months: '60',
+  statement_dispute_days: '10',
+  support_hourly_rate_default: '',
+  payment_terms_days: '30',
+  effective_from: '',
+  notes: '',
+};
+
+const LEGAL_FORMS = [
+  { value: 'sole_proprietorship', label: 'Indépendant' },
+  { value: 'sarl', label: 'Sàrl' },
+  { value: 'sa', label: 'SA' },
+  { value: 'association', label: 'Association' },
+  { value: 'foundation', label: 'Fondation' },
+  { value: 'other', label: 'Autre' },
+];
+
+const CANCEL_POLICIES = [
+  { value: 'exclude', label: 'Exclure les annulations' },
+  { value: 'on_cancellation_fees', label: 'Commission sur frais d’annulation' },
+  { value: 'on_billed_amount', label: 'Commission sur montant facturé' },
+];
+
+const statusLabel = (s) =>
+  ({
+    draft: 'Brouillon',
+    sent: 'Envoyé',
+    signed: 'Signé',
+    void: 'Annulé',
+  }[s] || s || '—');
+
+const fmtDec = (s) => (s == null || s === '' ? '—' : `${s} CHF`);
+
+const portfolioLabel = (c) => {
+  if (!c?.is_billing_enabled || !c?.own_portfolio_billing_enabled) return 'Désactivé';
+  if (c.subscription_pricing_mode === 'fixed') return 'Montant fixe';
+  if (c.subscription_pricing_mode === 'free') return 'Gratuit';
+  return 'Par volume';
+};
+
+/** commission_rate API = décimal "0.030000" → affichage "3 %". */
+const commissionLabel = (c) => {
+  if (!c?.is_billing_enabled || !c?.lirie_commission_enabled) return 'Désactivée';
+  if (c.commission_rate == null || c.commission_rate === '') return '—';
+  const n = Number(String(c.commission_rate).replace(',', '.'));
+  if (Number.isNaN(n)) return String(c.commission_rate);
+  return `${(n * 100).toLocaleString('fr-CH', { maximumFractionDigits: 2 })} %`;
+};
+
+const configLabel = (c) => {
+  if (!c) return 'Non configurée';
+  if (!c.is_billing_enabled) return 'Inactive';
+  return 'Active';
+};
+
+const isLikelyTestCompany = (name) => {
+  const n = (name || '').trim().toLowerCase();
+  if (!n) return true;
+  return (
+    n.startsWith('test ') ||
+    n.startsWith('test company') ||
+    n.startsWith('transport ') ||
+    n.includes('test co') ||
+    n.includes('footer test') ||
+    n.includes('header gate') ||
+    n.includes('lines gate') ||
+    /^test company [0-9a-f]{6,}/i.test(name) ||
+    /^transport [0-9a-f]{6,}/i.test(name)
+  );
+};
+
+/** Décimal API "0.030000" → pourcentage affichable "3". */
+const rateToPercent = (rate) => {
+  if (rate == null || rate === '') return '3';
+  const n = Number(String(rate).replace(',', '.'));
+  if (Number.isNaN(n)) return '3';
+  return String(Number((n * 100).toFixed(4)));
+};
+
+/** Pourcentage UI → décimal API. */
+const percentToRate = (percent) => {
+  const n = Number(String(percent).replace(',', '.'));
+  if (Number.isNaN(n)) return '0.030000';
+  return (n / 100).toFixed(6);
+};
+
+const isoToMonth = (iso) => {
+  if (!iso) return '';
+  const m = String(iso).match(/^(\d{4}-\d{2})/);
+  if (m) return m[1];
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+};
+
+/** Mois calendaire → début de période Zurich (ISO). */
+const monthToIso = (ym) => {
+  if (!ym || !/^\d{4}-\d{2}$/.test(ym)) return null;
+  return `${ym}-01T00:00:00+02:00`;
+};
+
+const fmtPeriod = (from, to) => {
+  const a = isoToMonth(from) || 'ouvert';
+  const b = isoToMonth(to) || '∞';
+  return `${a} → ${b}`;
+};
+
+/** Affiche uniquement les points encore à compléter (masque les « Prêt »). */
+const ReadinessItem = ({ ok, label, hint, errors }) => {
+  if (ok) return null;
+  return (
+    <li className={`${styles.readinessItem} ${styles.readinessItemWarn}`}>
+      <div className={styles.readinessRow}>
+        <span className={styles.readinessLabel}>{label}</span>
+        <span className={styles.badgeOff}>À compléter</span>
+      </div>
+      {hint ? <p className={styles.readinessHint}>{hint}</p> : null}
+      {errors?.length ? (
+        <p className={styles.readinessHint}>{errors.join(' · ')}</p>
+      ) : null}
+    </li>
+  );
+};
+
+const emptyDebtor = {
+  legal_name: '',
+  street_name: '',
+  building_number: '',
+  postal_code: '',
+  city: '',
+  country_code: 'CH',
+  uid_ide: '',
+  legal_form: 'sarl',
+  signatory_name: '',
+  signatory_title: '',
+};
+
+const AdminBillingDualProductConfig = () => {
+  const { public_id: adminId } = useParams();
+  const settingsPath = `/dashboard/admin/${adminId}/settings`;
+
+  const [items, setItems] = useState([]);
+  const [grids, setGrids] = useState([]);
+  const [creditor, setCreditor] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [search, setSearch] = useState('');
+  const [showTestCompanies, setShowTestCompanies] = useState(false);
+  const [modalCompany, setModalCompany] = useState(null);
+  const [contracts, setContracts] = useState([]);
+  const [readiness, setReadiness] = useState(null);
+  const [debtorForm, setDebtorForm] = useState(emptyDebtor);
+  const [form, setForm] = useState(emptyContract);
+  const [commissionPercent, setCommissionPercent] = useState('3');
+  const [effectiveMonth, setEffectiveMonth] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [modalError, setModalError] = useState(null);
+  const [partnerIdentity, setPartnerIdentity] = useState(null);
+  const [selectedContractId, setSelectedContractId] = useState(null);
+  const [savedSnapshot, setSavedSnapshot] = useState('');
+  const [signedOn, setSignedOn] = useState('');
+  const [docBusy, setDocBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [listRes, gridRes, credRes] = await Promise.all([
+        fetchPlatformBillingCompaniesConfig(
+          showTestCompanies ? { include_unapproved: true } : {}
+        ),
+        fetchPlatformPricingGrids(),
+        fetchPlatformBillingCreditor(),
+      ]);
+      setItems(listRes?.items || []);
+      setGrids(gridRes?.items || []);
+      setCreditor(credRes?.creditor || null);
+    } catch (e) {
+      setError(e?.response?.data?.message || e?.message || 'Erreur chargement');
+    } finally {
+      setLoading(false);
+    }
+  }, [showTestCompanies]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const visibleItems = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return items.filter((row) => {
+      if (!showTestCompanies && isLikelyTestCompany(row.company_name)) return false;
+      if (q && !(row.company_name || '').toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }, [items, search, showTestCompanies]);
+
+  const closeModal = useCallback(() => {
+    setModalCompany(null);
+    setModalError(null);
+    setContracts([]);
+    setReadiness(null);
+  }, []);
+
+  useEffect(() => {
+    if (!modalCompany) return undefined;
+    const onKey = (e) => {
+      if (e.key === 'Escape') closeModal();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [modalCompany, closeModal]);
+
+  const buildSnapshot = (f, d, pct, month) =>
+    JSON.stringify({ f, d, pct, month });
+
+  const openCompany = async (row) => {
+    setModalCompany(row);
+    setModalError(null);
+    setSignedOn('');
+    const c = row.config;
+    const nextForm = {
+      ...emptyContract,
+      is_billing_enabled: c?.is_billing_enabled ?? true,
+      own_portfolio_billing_enabled: c?.own_portfolio_billing_enabled ?? true,
+      lirie_commission_enabled: c?.lirie_commission_enabled ?? true,
+      support_enabled: c?.support_enabled ?? false,
+      subscription_pricing_mode: c?.subscription_pricing_mode || 'volume',
+      custom_subscription_amount: c?.custom_subscription_amount || '',
+      commission_rate: c?.commission_rate || '0.030000',
+      commission_cancellation_policy:
+        c?.commission_cancellation_policy || 'exclude',
+      free_license_max_months:
+        c?.free_license_max_months != null
+          ? String(c.free_license_max_months)
+          : '60',
+      statement_dispute_days:
+        c?.statement_dispute_days != null
+          ? String(c.statement_dispute_days)
+          : '10',
+      support_hourly_rate_default: c?.support_hourly_rate_default || '',
+      payment_terms_days:
+        c?.payment_terms_days != null ? String(c.payment_terms_days) : '30',
+      effective_from: c?.effective_from || '',
+      notes: c?.notes || '',
+    };
+    const pct = rateToPercent(c?.commission_rate);
+    const month = isoToMonth(c?.effective_from);
+    setForm(nextForm);
+    setCommissionPercent(pct);
+    setEffectiveMonth(month);
+    setDebtorForm({
+      ...emptyDebtor,
+      legal_name: row.company_name || '',
+    });
+    try {
+      const res = await fetchPlatformBillingContracts(row.company_id);
+      const list = res?.contracts || [];
+      setContracts(list);
+      setSelectedContractId(list[0]?.id ?? null);
+      setReadiness(res?.readiness || null);
+      setPartnerIdentity(res?.partner_identity || null);
+      const addr = res?.debtor_address;
+      const cf = res?.partner_identity?.company_fields || {};
+      const nextDebtor = {
+        legal_name: addr?.legal_name || row.company_name || '',
+        street_name: addr?.street_name || '',
+        building_number: addr?.building_number || '',
+        postal_code: addr?.postal_code || '',
+        city: addr?.city || '',
+        country_code: addr?.country_code || 'CH',
+        uid_ide: cf.uid_ide || '',
+        legal_form: cf.legal_form || 'sarl',
+        signatory_name: cf.signatory_name || '',
+        signatory_title: cf.signatory_title || '',
+      };
+      if (list[0]) {
+        nextForm.commission_cancellation_policy =
+          list[0].commission_cancellation_policy || 'exclude';
+        nextForm.free_license_max_months =
+          list[0].free_license_max_months != null
+            ? String(list[0].free_license_max_months)
+            : nextForm.free_license_max_months;
+        nextForm.statement_dispute_days =
+          list[0].statement_dispute_days != null
+            ? String(list[0].statement_dispute_days)
+            : nextForm.statement_dispute_days;
+        setForm({ ...nextForm });
+        setCommissionPercent(rateToPercent(list[0].commission_rate));
+        setEffectiveMonth(isoToMonth(list[0].effective_from));
+      }
+      setDebtorForm(nextDebtor);
+      setSavedSnapshot(
+        buildSnapshot(
+          list[0]
+            ? {
+                ...nextForm,
+                commission_cancellation_policy:
+                  list[0].commission_cancellation_policy || 'exclude',
+              }
+            : nextForm,
+          nextDebtor,
+          list[0] ? rateToPercent(list[0].commission_rate) : pct,
+          list[0] ? isoToMonth(list[0].effective_from) : month
+        )
+      );
+    } catch (e) {
+      setModalError(e?.message || 'Erreur contrats');
+    }
+  };
+
+  const isDirty = useMemo(() => {
+    if (!savedSnapshot) return false;
+    return (
+      buildSnapshot(form, debtorForm, commissionPercent, effectiveMonth) !==
+      savedSnapshot
+    );
+  }, [form, debtorForm, commissionPercent, effectiveMonth, savedSnapshot]);
+
+  const selectedContract = useMemo(
+    () => contracts.find((c) => c.id === selectedContractId) || contracts[0] || null,
+    [contracts, selectedContractId]
+  );
+
+  const activeAgreement = selectedContract?.active_agreement || null;
+
+  const saveContract = async () => {
+    if (!modalCompany) return;
+    setSaving(true);
+    setModalError(null);
+    try {
+      if (debtorForm.street_name?.trim() && debtorForm.postal_code?.trim()) {
+        await putPlatformBillingDebtorAddress(modalCompany.company_id, debtorForm);
+      }
+      const now = new Date();
+      const month =
+        effectiveMonth ||
+        `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      const created = await createPlatformBillingContract(modalCompany.company_id, {
+        ...form,
+        commission_rate: percentToRate(commissionPercent),
+        commission_cancellation_policy: form.commission_cancellation_policy,
+        free_license_max_months:
+          form.subscription_pricing_mode === 'free'
+            ? Number(form.free_license_max_months || 60)
+            : null,
+        statement_dispute_days: Number(form.statement_dispute_days || 10),
+        custom_subscription_amount: form.custom_subscription_amount || null,
+        support_hourly_rate_default: form.support_hourly_rate_default || null,
+        payment_terms_days: form.payment_terms_days
+          ? Number(form.payment_terms_days)
+          : null,
+        effective_from: monthToIso(month),
+        auto_close_overlapping: true,
+      });
+      setEffectiveMonth(month);
+      if (created?.contract?.id) {
+        setSelectedContractId(created.contract.id);
+      }
+      await openCompany(modalCompany);
+      await load();
+    } catch (e) {
+      setModalError(
+        e?.response?.data?.error ||
+          e?.response?.data?.message ||
+          e?.message ||
+          'Erreur sauvegarde'
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const refreshContractsOnly = async () => {
+    if (!modalCompany) return;
+    const res = await fetchPlatformBillingContracts(modalCompany.company_id);
+    setContracts(res?.contracts || []);
+    setPartnerIdentity(res?.partner_identity || null);
+    setReadiness(res?.readiness || null);
+  };
+
+  const onGenerateAgreement = async () => {
+    if (!selectedContract || isDirty) return;
+    setDocBusy(true);
+    setModalError(null);
+    try {
+      await generatePartnerAgreement(selectedContract.id);
+      await refreshContractsOnly();
+    } catch (e) {
+      setModalError(
+        e?.response?.data?.error || e?.message || 'Erreur génération contrat'
+      );
+    } finally {
+      setDocBusy(false);
+    }
+  };
+
+  const onMarkSent = async () => {
+    if (!activeAgreement) return;
+    setDocBusy(true);
+    try {
+      await markPartnerAgreementSent(activeAgreement.id);
+      await refreshContractsOnly();
+    } catch (e) {
+      setModalError(e?.response?.data?.error || e?.message || 'Erreur envoi');
+    } finally {
+      setDocBusy(false);
+    }
+  };
+
+  const onVoidAgreement = async () => {
+    if (!activeAgreement) return;
+    const reason = window.prompt('Motif d’annulation du document :');
+    if (!reason?.trim()) return;
+    setDocBusy(true);
+    try {
+      await voidPartnerAgreement(activeAgreement.id, reason.trim());
+      await refreshContractsOnly();
+    } catch (e) {
+      setModalError(e?.response?.data?.error || e?.message || 'Erreur annulation');
+    } finally {
+      setDocBusy(false);
+    }
+  };
+
+  const onUploadSigned = async (file) => {
+    if (!activeAgreement || !file || !signedOn) {
+      setModalError('Date de signature et fichier PDF requis');
+      return;
+    }
+    setDocBusy(true);
+    try {
+      await uploadPartnerAgreementSigned(activeAgreement.id, file, signedOn);
+      await refreshContractsOnly();
+    } catch (e) {
+      setModalError(e?.response?.data?.error || e?.message || 'Erreur upload');
+    } finally {
+      setDocBusy(false);
+    }
+  };
+
+  const closeLatest = async () => {
+    const latest = contracts[0];
+    if (!latest) return;
+    setSaving(true);
+    try {
+      await closePlatformBillingContract(latest.id, {});
+      await openCompany(modalCompany);
+    } catch (e) {
+      setModalError(e?.response?.data?.message || e?.message || 'Erreur clôture');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const defaultGrid = grids.find((g) => g.grid_key === 'default') || grids[0];
+
+  return (
+    <div className={`${styles.layout} ${styles.layoutWithAside}`}>
+      <div>
+        <h2>Configuration commerciale transporteurs</h2>
+        <p className={styles.lead}>
+          Deux produits distincts : <strong>abonnement portefeuille</strong> (selon le volume) et{' '}
+          <strong>commission LIRIE</strong> (sur les transports reçus via le réseau). Support
+          optionnel. Les contrats sont versionnés dans le temps.
+        </p>
+
+        {error && <div className={styles.errorBanner}>{error}</div>}
+
+        <div className={styles.toolbar}>
+          <input
+            type="search"
+            className={styles.search}
+            placeholder="Filtrer par nom d’entreprise…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            aria-label="Filtrer"
+          />
+          <label className={styles.muted} style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
+            <input
+              type="checkbox"
+              checked={showTestCompanies}
+              onChange={(e) => setShowTestCompanies(e.target.checked)}
+            />
+            Inclure non approuvées / tests
+          </label>
+          <button type="button" className={styles.btn} onClick={() => load()} disabled={loading}>
+            Actualiser
+          </button>
+        </div>
+
+        {loading ? (
+          <p className={styles.muted}>Chargement…</p>
+        ) : (
+          <div className={styles.tableWrap}>
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th>Entreprise</th>
+                  <th>Abonnement portefeuille</th>
+                  <th>Commission LIRIE</th>
+                  <th>Configuration</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {visibleItems.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className={styles.muted}>
+                      Aucune entreprise approuvée. Activez « Inclure non approuvées / tests » ou
+                      élargissez le filtre.
+                    </td>
+                  </tr>
+                ) : (
+                  visibleItems.map((row) => {
+                    const c = row.config;
+                    return (
+                      <tr key={row.company_id}>
+                        <td>
+                          <strong>{row.company_name}</strong>
+                        </td>
+                        <td>{portfolioLabel(c)}</td>
+                        <td>{commissionLabel(c)}</td>
+                        <td>
+                          {configLabel(c) === 'Active' ? (
+                            <span className={styles.badgeOn}>Active</span>
+                          ) : (
+                            <span className={styles.badgeOff}>{configLabel(c)}</span>
+                          )}
+                        </td>
+                        <td>
+                          <button
+                            type="button"
+                            className={styles.btn}
+                            onClick={() => openCompany(row)}
+                          >
+                            {c ? 'Ouvrir' : 'Configurer'}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <aside className={styles.aside}>
+        <h3 className={styles.asideTitle}>Grille volume (globale)</h3>
+        <p className={styles.asideLead}>
+          Paliers d’abonnement portefeuille — sans mode dispatch.
+        </p>
+        {defaultGrid ? (
+          <table className={styles.pricingTable}>
+            <thead>
+              <tr>
+                <th>Volume mensuel</th>
+                <th>Prix</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(defaultGrid.tiers || []).map((t) => (
+                <tr key={t.id}>
+                  <td>
+                    {t.volume_min}–{t.volume_max ?? '∞'}
+                  </td>
+                  <td>{fmtDec(t.price_monthly)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <p className={styles.muted}>Aucune grille chargée.</p>
+        )}
+
+        <h3 className={styles.asideTitle} style={{ marginTop: '1.25rem' }}>
+          Créancier LIRIE
+        </h3>
+        {creditor ? (
+          <>
+            <p className={styles.asideLead}>
+              {creditor.legal_name}
+              <br />
+              {[creditor.street_name, creditor.building_number].filter(Boolean).join(' ')}
+              <br />
+              {creditor.postal_code} {creditor.city}
+              <br />
+              IBAN : {creditor.iban || creditor.qr_iban || '—'}
+              <br />
+              TVA :{' '}
+              {Number(creditor.default_tax_rate) === 0
+                ? 'non applicable (franchise)'
+                : `${creditor.default_tax_rate} %`}
+            </p>
+            <Link className={styles.btn} to={settingsPath}>
+              Modifier dans Paramètres
+            </Link>
+          </>
+        ) : (
+          <p className={styles.muted}>
+            Aucun créancier configuré.{' '}
+            <Link to={settingsPath}>Configurer l’adresse et l’IBAN dans Paramètres</Link>.
+          </p>
+        )}
+      </aside>
+
+      {modalCompany && (
+        <div
+          className={styles.modalOverlay}
+          role="presentation"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) closeModal();
+          }}
+        >
+          <div
+            className={styles.modal}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="billing-contract-title"
+          >
+            <header className={styles.modalHeader}>
+              <div className={styles.modalHeaderText}>
+                <h2 id="billing-contract-title">{modalCompany.company_name}</h2>
+                <p className={styles.modalSubtitle}>Contrat commercial · nouvelle version à l’enregistrement</p>
+              </div>
+              <button
+                type="button"
+                className={styles.modalClose}
+                onClick={closeModal}
+                aria-label="Fermer"
+              >
+                ×
+              </button>
+            </header>
+
+            <div className={styles.modalBody}>
+              {readiness && (() => {
+                const calcOk = Boolean(readiness.contract_calculation_ready);
+                const debtorOk = Boolean(readiness.debtor_identity_ready);
+                const creditorOk = Boolean(readiness.creditor_qr_ready);
+                const allReady = calcOk && debtorOk && creditorOk;
+                if (allReady) return null;
+                return (
+                  <section className={styles.readinessBlock} aria-label="À compléter">
+                    <ul className={styles.readinessList}>
+                      <ReadinessItem
+                        ok={calcOk}
+                        label="Calcul du relevé"
+                        hint="Activez au moins un produit puis enregistrez."
+                        errors={readiness.contract_calculation_errors}
+                      />
+                      <ReadinessItem
+                        ok={debtorOk}
+                        label="Adresse de facturation"
+                        hint="Raison sociale, rue, NPA et localité requis."
+                        errors={readiness.debtor_identity_errors}
+                      />
+                      <ReadinessItem
+                        ok={creditorOk}
+                        label="Créancier LIRIE"
+                        hint="IBAN et adresse LIRIE dans Paramètres."
+                        errors={readiness.creditor_errors}
+                      />
+                    </ul>
+                    {!creditorOk ? (
+                      <p className={styles.formSectionLead}>
+                        <Link to={settingsPath}>Configurer le créancier LIRIE</Link>
+                      </p>
+                    ) : null}
+                  </section>
+                );
+              })()}
+
+              {modalError && (
+                <div className={styles.errorBanner} role="alert">
+                  {modalError}
+                </div>
+              )}
+
+              <section className={styles.formSection}>
+                <h3 className={styles.formSectionTitle}>Adresse de facturation</h3>
+                <p className={styles.formSectionLead}>
+                  Débiteur sur la QR-facture émise par LIRIE.
+                </p>
+                <div className={styles.formGridTwo}>
+                  <label className={styles.field}>
+                    Raison sociale
+                    <input
+                      value={debtorForm.legal_name}
+                      onChange={(e) =>
+                        setDebtorForm((f) => ({ ...f, legal_name: e.target.value }))
+                      }
+                    />
+                  </label>
+                  <label className={styles.field}>
+                    Pays
+                    <input
+                      value={debtorForm.country_code}
+                      maxLength={2}
+                      onChange={(e) =>
+                        setDebtorForm((f) => ({ ...f, country_code: e.target.value }))
+                      }
+                    />
+                  </label>
+                </div>
+                <div className={`${styles.formGridTwo} ${styles.addressRow}`}>
+                  <label className={`${styles.field} ${styles.fieldGrow}`}>
+                    Rue
+                    <input
+                      value={debtorForm.street_name}
+                      onChange={(e) =>
+                        setDebtorForm((f) => ({ ...f, street_name: e.target.value }))
+                      }
+                    />
+                  </label>
+                  <label className={`${styles.field} ${styles.fieldNarrow}`}>
+                    N°
+                    <input
+                      value={debtorForm.building_number}
+                      onChange={(e) =>
+                        setDebtorForm((f) => ({ ...f, building_number: e.target.value }))
+                      }
+                    />
+                  </label>
+                </div>
+                <div className={styles.formGridTwo}>
+                  <label className={styles.field}>
+                    NPA
+                    <input
+                      value={debtorForm.postal_code}
+                      onChange={(e) =>
+                        setDebtorForm((f) => ({ ...f, postal_code: e.target.value }))
+                      }
+                    />
+                  </label>
+                  <label className={styles.field}>
+                    Localité
+                    <input
+                      value={debtorForm.city}
+                      onChange={(e) =>
+                        setDebtorForm((f) => ({ ...f, city: e.target.value }))
+                      }
+                    />
+                  </label>
+                </div>
+                <div className={styles.formGridTwo}>
+                  <label className={styles.field}>
+                    IDE
+                    <input
+                      value={debtorForm.uid_ide}
+                      onChange={(e) =>
+                        setDebtorForm((f) => ({ ...f, uid_ide: e.target.value }))
+                      }
+                      placeholder="CHE-XXX.XXX.XXX"
+                    />
+                  </label>
+                  <label className={styles.field}>
+                    Forme juridique
+                    <select
+                      value={debtorForm.legal_form}
+                      onChange={(e) =>
+                        setDebtorForm((f) => ({ ...f, legal_form: e.target.value }))
+                      }
+                    >
+                      {LEGAL_FORMS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                <div className={styles.formGridTwo}>
+                  <label className={styles.field}>
+                    Représentant / signataire
+                    <input
+                      value={debtorForm.signatory_name}
+                      onChange={(e) =>
+                        setDebtorForm((f) => ({
+                          ...f,
+                          signatory_name: e.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className={styles.field}>
+                    Titre
+                    <input
+                      value={debtorForm.signatory_title}
+                      onChange={(e) =>
+                        setDebtorForm((f) => ({
+                          ...f,
+                          signatory_title: e.target.value,
+                        }))
+                      }
+                      placeholder="Gérant"
+                    />
+                  </label>
+                </div>
+                {partnerIdentity?.divergence_warnings?.length ? (
+                  <p className={styles.readinessHint}>
+                    Divergence profil / entreprise détectée (
+                    {partnerIdentity.divergence_warnings.join(', ')}). La génération
+                    utilisera un seul bloc d’identité, sans mélange.
+                  </p>
+                ) : null}
+                {partnerIdentity && !partnerIdentity.is_complete ? (
+                  <p className={styles.readinessHint}>
+                    Identité contractuelle incomplète :{' '}
+                    {(partnerIdentity.missing_fields || []).join(', ')}
+                  </p>
+                ) : null}
+              </section>
+
+              <section className={styles.productCard}>
+                <label className={styles.productToggle}>
+                  <input
+                    type="checkbox"
+                    checked={form.is_billing_enabled}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, is_billing_enabled: e.target.checked }))
+                    }
+                  />
+                  <span>
+                    <strong>Facturation active</strong>
+                    <small>Sans activation, aucun relevé n’est généré.</small>
+                  </span>
+                </label>
+              </section>
+
+              <section className={styles.productCard}>
+                <label className={styles.productToggle}>
+                  <input
+                    type="checkbox"
+                    checked={form.own_portfolio_billing_enabled}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        own_portfolio_billing_enabled: e.target.checked,
+                      }))
+                    }
+                  />
+                  <span>
+                    <strong>Abonnement portefeuille</strong>
+                    <small>Volume mensuel — paliers 79 / 149 / 249 CHF</small>
+                  </span>
+                </label>
+                {form.own_portfolio_billing_enabled ? (
+                  <div className={styles.productBody}>
+                    <label className={styles.field}>
+                      Tarification
+                      <select
+                        value={form.subscription_pricing_mode}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            subscription_pricing_mode: e.target.value,
+                          }))
+                        }
+                      >
+                        <option value="volume">Selon le volume</option>
+                        <option value="fixed">Montant fixe</option>
+                        <option value="free">Gratuit</option>
+                      </select>
+                    </label>
+                    {form.subscription_pricing_mode === 'fixed' ? (
+                      <label className={styles.field}>
+                        Montant mensuel
+                        <div className={styles.inputWithSuffix}>
+                          <input
+                            inputMode="decimal"
+                            value={form.custom_subscription_amount}
+                            onChange={(e) =>
+                              setForm((f) => ({
+                                ...f,
+                                custom_subscription_amount: e.target.value,
+                              }))
+                            }
+                          />
+                          <span className={styles.inputSuffix}>CHF</span>
+                        </div>
+                      </label>
+                    ) : null}
+                    {form.subscription_pricing_mode === 'free' ? (
+                      <label className={styles.field}>
+                        Durée max. gratuité
+                        <div className={styles.inputWithSuffix}>
+                          <input
+                            inputMode="numeric"
+                            value={form.free_license_max_months}
+                            onChange={(e) =>
+                              setForm((f) => ({
+                                ...f,
+                                free_license_max_months: e.target.value,
+                              }))
+                            }
+                          />
+                          <span className={styles.inputSuffix}>mois</span>
+                        </div>
+                      </label>
+                    ) : null}
+                  </div>
+                ) : null}
+              </section>
+
+              <section className={styles.productCard}>
+                <label className={styles.productToggle}>
+                  <input
+                    type="checkbox"
+                    checked={form.lirie_commission_enabled}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        lirie_commission_enabled: e.target.checked,
+                      }))
+                    }
+                  />
+                  <span>
+                    <strong>Commission LIRIE</strong>
+                    <small>Sur les transports marketplace terminés</small>
+                  </span>
+                </label>
+                {form.lirie_commission_enabled ? (
+                  <div className={styles.productBody}>
+                    <label className={styles.field}>
+                      Taux
+                      <div className={styles.inputWithSuffix}>
+                        <input
+                          inputMode="decimal"
+                          value={commissionPercent}
+                          onChange={(e) => setCommissionPercent(e.target.value)}
+                        />
+                        <span className={styles.inputSuffix}>%</span>
+                      </div>
+                    </label>
+                    <label className={styles.field}>
+                      Politique d’annulation
+                      <select
+                        value={form.commission_cancellation_policy}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            commission_cancellation_policy: e.target.value,
+                          }))
+                        }
+                      >
+                        {CANCEL_POLICIES.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                ) : null}
+              </section>
+
+              <section className={styles.productCard}>
+                <label className={styles.productToggle}>
+                  <input
+                    type="checkbox"
+                    checked={form.support_enabled}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, support_enabled: e.target.checked }))
+                    }
+                  />
+                  <span>
+                    <strong>Support</strong>
+                    <small>Heures saisies sur le relevé</small>
+                  </span>
+                </label>
+                {form.support_enabled ? (
+                  <div className={styles.productBody}>
+                    <label className={styles.field}>
+                      Tarif horaire
+                      <div className={styles.inputWithSuffix}>
+                        <input
+                          inputMode="decimal"
+                          value={form.support_hourly_rate_default}
+                          onChange={(e) =>
+                            setForm((f) => ({
+                              ...f,
+                              support_hourly_rate_default: e.target.value,
+                            }))
+                          }
+                        />
+                        <span className={styles.inputSuffix}>CHF/h</span>
+                      </div>
+                    </label>
+                  </div>
+                ) : null}
+              </section>
+
+              <section className={styles.formSection}>
+                <h3 className={styles.formSectionTitle}>Conditions</h3>
+                <div className={styles.formGridTwo}>
+                  <label className={styles.field}>
+                    Mois d’effet
+                    <input
+                      type="month"
+                      value={effectiveMonth}
+                      onChange={(e) => setEffectiveMonth(e.target.value)}
+                    />
+                  </label>
+                  <label className={styles.field}>
+                    Délai de paiement
+                    <div className={styles.inputWithSuffix}>
+                      <input
+                        inputMode="numeric"
+                        value={form.payment_terms_days}
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, payment_terms_days: e.target.value }))
+                        }
+                      />
+                      <span className={styles.inputSuffix}>jours</span>
+                    </div>
+                  </label>
+                </div>
+                <div className={styles.formGridTwo}>
+                  <label className={styles.field}>
+                    Délai de contestation relevé
+                    <div className={styles.inputWithSuffix}>
+                      <input
+                        inputMode="numeric"
+                        value={form.statement_dispute_days}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            statement_dispute_days: e.target.value,
+                          }))
+                        }
+                      />
+                      <span className={styles.inputSuffix}>jours</span>
+                    </div>
+                  </label>
+                </div>
+              </section>
+
+              {selectedContract ? (
+                <section className={styles.formSection}>
+                  <h3 className={styles.formSectionTitle}>Document Word</h3>
+                  <p className={styles.formSectionLead}>
+                    Contrat commercial n°{selectedContract.id} · applicable{' '}
+                    {fmtPeriod(
+                      selectedContract.effective_from,
+                      selectedContract.effective_to
+                    )}{' '}
+                    · {portfolioLabel(selectedContract)} ·{' '}
+                    {commissionLabel(selectedContract)}
+                    {selectedContract.commercially_frozen
+                      ? ' · conditions gelées (accord envoyé/signé)'
+                      : ''}
+                  </p>
+                  {isDirty ? (
+                    <p className={styles.readinessHint}>
+                      Enregistrez d’abord la version commerciale avant de générer le
+                      document.
+                    </p>
+                  ) : null}
+                  <p className={styles.formSectionLead}>
+                    Statut document :{' '}
+                    <strong>{statusLabel(activeAgreement?.status)}</strong>
+                    {activeAgreement?.reference
+                      ? ` · ${activeAgreement.reference}`
+                      : ''}
+                  </p>
+                  <div className={styles.footerRight} style={{ justifyContent: 'flex-start', flexWrap: 'wrap', gap: '0.5rem' }}>
+                    <button
+                      type="button"
+                      className={styles.btn}
+                      disabled={docBusy || isDirty || !selectedContract}
+                      onClick={onGenerateAgreement}
+                    >
+                      Générer le contrat
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.btn}
+                      disabled={docBusy || !activeAgreement?.has_generated_docx}
+                      onClick={() =>
+                        downloadPartnerAgreementFile(
+                          downloadPartnerAgreementDocxUrl(activeAgreement.id),
+                          `${(activeAgreement.reference || 'contrat').replaceAll('/', '_')}.docx`
+                        )
+                      }
+                    >
+                      Télécharger DOCX
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.btn}
+                      disabled={
+                        docBusy ||
+                        !activeAgreement ||
+                        activeAgreement.status !== 'draft'
+                      }
+                      onClick={onMarkSent}
+                    >
+                      Marquer envoyé
+                    </button>
+                    <button
+                      type="button"
+                      className={`${styles.btn} ${styles.btnGhost}`}
+                      disabled={
+                        docBusy ||
+                        !activeAgreement ||
+                        !['draft', 'sent'].includes(activeAgreement.status)
+                      }
+                      onClick={onVoidAgreement}
+                    >
+                      Annuler le document
+                    </button>
+                  </div>
+                  {activeAgreement?.status === 'sent' ? (
+                    <div className={styles.formGridTwo} style={{ marginTop: '0.75rem' }}>
+                      <label className={styles.field}>
+                        Date de signature
+                        <input
+                          type="date"
+                          value={signedOn}
+                          onChange={(e) => setSignedOn(e.target.value)}
+                        />
+                      </label>
+                      <label className={styles.field}>
+                        PDF signé
+                        <input
+                          type="file"
+                          accept="application/pdf,.pdf"
+                          disabled={docBusy || !signedOn}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) onUploadSigned(file);
+                            e.target.value = '';
+                          }}
+                        />
+                      </label>
+                    </div>
+                  ) : null}
+                  {activeAgreement?.has_signed_pdf ? (
+                    <button
+                      type="button"
+                      className={styles.btn}
+                      style={{ marginTop: '0.5rem' }}
+                      onClick={() =>
+                        downloadPartnerAgreementFile(
+                          downloadPartnerAgreementSignedUrl(activeAgreement.id),
+                          activeAgreement.signed_original_filename ||
+                            'contrat-signe.pdf'
+                        )
+                      }
+                    >
+                      Télécharger le PDF signé
+                    </button>
+                  ) : null}
+                  <p className={styles.readinessHint} style={{ marginTop: '0.75rem' }}>
+                    Document généré à titre opérationnel — validation juridique externe
+                    recommandée avant signature.
+                  </p>
+                </section>
+              ) : null}
+
+              {contracts.length > 0 ? (
+                <details className={styles.versionsDetails}>
+                  <summary>
+                    Versions ({contracts.length})
+                    {selectedContract
+                      ? ` · sélection #${selectedContract.id} ${fmtPeriod(
+                          selectedContract.effective_from,
+                          selectedContract.effective_to
+                        )}`
+                      : ''}
+                  </summary>
+                  <ul className={styles.versionsList}>
+                    {contracts.map((c) => (
+                      <li key={c.id} className={styles.versionItem}>
+                        <button
+                          type="button"
+                          className={styles.btn}
+                          onClick={() => setSelectedContractId(c.id)}
+                          style={{
+                            fontWeight:
+                              c.id === selectedContract?.id ? 700 : 400,
+                          }}
+                        >
+                          <span className={styles.versionId}>#{c.id}</span>
+                          <span className={styles.versionMeta}>
+                            {fmtPeriod(c.effective_from, c.effective_to)}
+                          </span>
+                          <span>
+                            {portfolioLabel(c)} · {commissionLabel(c)}
+                            {c.active_agreement
+                              ? ` · ${statusLabel(c.active_agreement.status)}`
+                              : ''}
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              ) : null}
+            </div>
+
+            <footer className={styles.modalFooter}>
+              <button
+                type="button"
+                className={`${styles.btn} ${styles.btnGhost}`}
+                onClick={closeLatest}
+                disabled={saving || !contracts.length}
+              >
+                Clôturer la version
+              </button>
+              <div className={styles.footerRight}>
+                <button
+                  type="button"
+                  className={styles.btn}
+                  onClick={closeModal}
+                  disabled={saving}
+                >
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.btn} ${styles.btnPrimary}`}
+                  onClick={saveContract}
+                  disabled={saving}
+                >
+                  {saving ? 'Enregistrement…' : 'Enregistrer'}
+                </button>
+              </div>
+            </footer>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default AdminBillingDualProductConfig;

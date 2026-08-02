@@ -774,6 +774,12 @@ class CreateManualBookingUseCase:
             outbound.company_id = cid
             outbound.booking_type = "manual"
             outbound.created_via = BookingCreatedVia.DISPATCHER
+            from services.platform_billing.billing_origin import apply_origin_on_booking
+
+            apply_origin_on_booking(
+                outbound,
+                created_via=BookingCreatedVia.DISPATCHER,
+            )
             outbound.user_id = user.id if user else None
             outbound.is_return = False
             outbound.duration_seconds = dur_s
@@ -856,6 +862,11 @@ class CreateManualBookingUseCase:
                 return_booking.company_id = cid
                 return_booking.booking_type = "manual"
                 return_booking.created_via = BookingCreatedVia.DISPATCHER
+                from services.platform_billing.billing_origin import apply_origin_on_booking
+
+                apply_origin_on_booking(
+                    return_booking, created_via=BookingCreatedVia.DISPATCHER
+                )
                 return_booking.mission_type = mission_type
                 return_booking.delivery_description = delivery_description
                 return_booking.user_id = user.id if user else None

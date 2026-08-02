@@ -1,9 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   fetchPlatformBillingCompaniesConfig,
+  fetchPlatformBillingFeatureFlags,
   fetchPlatformSubscriptionPricing,
   putPlatformBillingCompanyConfig,
 } from '../../../services/adminService';
+import AdminBillingDualProductConfig from './AdminBillingDualProductConfig';
 import styles from './AdminBillingTransportConfig.module.css';
 
 const DISPATCH_OPTIONS = [
@@ -43,14 +45,14 @@ const emptyForm = {
   notes: '',
 };
 
-const AdminBillingTransportConfig = () => {
+/** UI legacy V1 — hooks toujours appelés dans ce composant uniquement. */
+const AdminBillingTransportConfigLegacy = () => {
   const [items, setItems] = useState([]);
   const [pricing, setPricing] = useState([]);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-
   const [modalCompany, setModalCompany] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
@@ -396,6 +398,35 @@ const AdminBillingTransportConfig = () => {
       ) : null}
     </div>
   );
+};
+
+/**
+ * Routeur config : feature flag avant tout rendu dual/legacy.
+ * Les hooks de chaque UI restent dans leur composant (pas de return anticipé
+ * au milieu d'une liste de hooks).
+ */
+const AdminBillingTransportConfig = () => {
+  // Nouvelle UI dual-produit par défaut ; legacy uniquement si flag explicitement false.
+  const [dualUi, setDualUi] = useState(true);
+  const [flagLoaded, setFlagLoaded] = useState(false);
+
+  useEffect(() => {
+    fetchPlatformBillingFeatureFlags()
+      .then((f) => {
+        const raw = f?.PLATFORM_BILLING_DUAL_PRODUCT_CONFIG_UI;
+        setDualUi(raw === undefined ? true : Boolean(raw));
+      })
+      .catch(() => setDualUi(true))
+      .finally(() => setFlagLoaded(true));
+  }, []);
+
+  if (!flagLoaded) {
+    return <p className={styles.muted}>Chargement…</p>;
+  }
+  if (dualUi) {
+    return <AdminBillingDualProductConfig />;
+  }
+  return <AdminBillingTransportConfigLegacy />;
 };
 
 export default AdminBillingTransportConfig;

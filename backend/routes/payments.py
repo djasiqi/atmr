@@ -242,10 +242,25 @@ class PaymentResource(Resource):
             update_result = uc.execute(input_data)
 
             if not update_result.success:
+                error_payload = update_result.error or {}
+                error_message = (
+                    error_payload.get("message")
+                    or error_payload.get("error")
+                    or next(iter(error_payload.values()), None)
+                    or "Erreur inconnue"
+                )
+                if update_result.status_code == 404:
+                    return APIErrorHandler.handle_not_found_error(
+                        error_message,
+                        logger_instance=logger,
+                    )
+                if update_result.status_code == 500:
+                    return APIErrorHandler.handle_exception(
+                        RuntimeError(error_message),
+                        logger,
+                    )
                 return APIErrorHandler.handle_validation_error(
-                    update_result.error.get("message", "Erreur inconnue")
-                    if update_result.error
-                    else "Erreur inconnue",
+                    error_message,
                     logger_instance=logger,
                 )
 

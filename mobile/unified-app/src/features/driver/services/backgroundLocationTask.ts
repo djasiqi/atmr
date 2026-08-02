@@ -47,12 +47,20 @@ type BackgroundTrackingTaskMode = "mission" | "presence_window";
 
 type MissionSchedulingSnapshot = Pick<DriverMission, "scheduled_time" | "time_confirmed" | "scheduling">;
 
+type NativeTrackingOwnerPersist = {
+  trackingGenerationId: string;
+  sessionGenerationId: number;
+  trackingIdentityId: string;
+  missionContextVersion: number;
+};
+
 type BackgroundTaskRuntimeContext = {
   missionId: number | null;
   missionStatus: DriverMissionStatus | null;
   missionScheduling: MissionSchedulingSnapshot | null;
   taskMode: BackgroundTrackingTaskMode;
   updatedAt: string;
+  nativeOwner?: NativeTrackingOwnerPersist | null;
 };
 
 export const BACKGROUND_LOCATION_TASK_NAME = "background-location-task";
@@ -174,6 +182,7 @@ async function readTaskContext(): Promise<BackgroundTaskRuntimeContext | null> {
   try {
     const parsed = JSON.parse(raw) as Partial<BackgroundTaskRuntimeContext>;
     if (!parsed || typeof parsed !== "object") return null;
+    const owner = parsed.nativeOwner as NativeTrackingOwnerPersist | null | undefined;
     return {
       missionId:
         typeof parsed.missionId === "number" && Number.isFinite(parsed.missionId)
@@ -191,6 +200,12 @@ async function readTaskContext(): Promise<BackgroundTaskRuntimeContext | null> {
         parsed.taskMode === "presence_window" ? "presence_window" : "mission",
       updatedAt:
         typeof parsed.updatedAt === "string" ? parsed.updatedAt : new Date().toISOString(),
+      nativeOwner:
+        owner &&
+        typeof owner.trackingGenerationId === "string" &&
+        typeof owner.trackingIdentityId === "string"
+          ? owner
+          : null,
     };
   } catch {
     return null;
@@ -559,7 +574,8 @@ export async function setBackgroundTrackingMissionContext(
   missionId: number | null,
   missionStatus: DriverMissionStatus | null,
   taskMode: BackgroundTrackingTaskMode = "mission",
-  scheduling?: MissionSchedulingSnapshot | null
+  scheduling?: MissionSchedulingSnapshot | null,
+  nativeOwner?: NativeTrackingOwnerPersist | null
 ) {
   if (missionId == null && taskMode !== "presence_window") {
     await writeTaskContext(null);
@@ -571,6 +587,7 @@ export async function setBackgroundTrackingMissionContext(
     missionScheduling: scheduling ?? null,
     taskMode,
     updatedAt: new Date().toISOString(),
+    nativeOwner: nativeOwner ?? null,
   });
 }
 
@@ -1037,6 +1054,17 @@ export async function resumePendingNativeTrackingIfNeeded(): Promise<void> {
   const pending = getPendingFgsStart();
   if (!pending.active) return;
   const ctx = await readTaskContext();
+  if (ctx?.nativeOwner) {
+    const { isNativeOwnerCurrent } = await import("./trackingRuntimeRegistry");
+    if (!isNativeOwnerCurrent(ctx.nativeOwner)) {
+      emitDriverTelemetry("tracking.background.resume.rejected_stale_owner", {
+        source: "driver.services.backgroundLocationTask",
+        tracking_generation_id: ctx.nativeOwner.trackingGenerationId,
+      });
+      await stopBackgroundLocationTask("stale_native_owner");
+      return;
+    }
+  }
   if (ctx?.taskMode === "presence_window") {
     await ensureNativeTrackingWhileForeground(null, null, { presenceWindow: true }, "app_resume");
     return;

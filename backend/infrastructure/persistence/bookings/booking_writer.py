@@ -178,6 +178,11 @@ class SqlAlchemyBookingWriter:
             price_breakdown_json=price_breakdown_json,
             created_via=BookingCreatedVia.CLIENT_APP,
         )
+        from services.platform_billing.billing_origin import apply_origin_on_booking
+
+        apply_origin_on_booking(
+            new_booking, created_via=BookingCreatedVia.CLIENT_APP
+        )
 
         def _write_core() -> None:
             db.session.add(new_booking)
@@ -241,6 +246,18 @@ class SqlAlchemyBookingWriter:
             price_amount=return_price_amount,
             created_via=BookingCreatedVia.CLIENT_APP,
         )
+        from services.platform_billing.billing_origin import apply_origin_on_booking
+
+        apply_origin_on_booking(
+            return_booking, created_via=BookingCreatedVia.CLIENT_APP
+        )
+        # Hérite l'origine commerciale de l'aller si définie
+        if getattr(outbound_booking, "billing_origin", None):
+            return_booking.billing_origin = outbound_booking.billing_origin
+            return_booking.billing_origin_source = (
+                outbound_booking.billing_origin_source
+            )
+            return_booking.billing_origin_reason = "RETURN_LEG_SAME_ORIGIN"
 
         # Best effort coords
         try:

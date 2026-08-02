@@ -610,7 +610,28 @@ export function SessionProvider({ children }: PropsWithChildren) {
 
     setContextSwitchInFlight(true);
     try {
-      const response = await switchContext(targetContextId);
+      const response = await switchContext(targetContextId, {
+        sourceContextId: previousContextId,
+      });
+      const {
+        isCurrentContextSwitchOperation,
+        clearContextSwitchOperationIfCurrent,
+      } = await import("./auth/contextSwitchOperation");
+      const opId = (response as { contextSwitchOperationId?: string })
+        .contextSwitchOperationId;
+      if (opId && !isCurrentContextSwitchOperation(opId)) {
+        throw new Error("CONTEXT_SWITCH_STALE");
+      }
+      if (
+        typeof (response as { contextSwitchSessionGenerationId?: number })
+          .contextSwitchSessionGenerationId === "number" &&
+        !isCurrentSessionGeneration(
+          (response as { contextSwitchSessionGenerationId: number })
+            .contextSwitchSessionGenerationId
+        )
+      ) {
+        throw new Error("CONTEXT_SWITCH_STALE");
+      }
       const nextAvailableContexts: AuthContext[] =
         response.available_contexts ?? bootstrap?.available_contexts ?? [];
       const nextContext =
@@ -636,6 +657,9 @@ export function SessionProvider({ children }: PropsWithChildren) {
         if (crossWorkspaceSwitch) {
           prefetchContextTarget(queryClient, nextContext);
         }
+      }
+      if (opId) {
+        clearContextSwitchOperationIfCurrent(opId);
       }
       void appendSessionJournalEvent("session.context.switch", {
         previous_context_id: previousContextId,
@@ -743,6 +767,22 @@ export function SessionProvider({ children }: PropsWithChildren) {
       onLogoutClaimed: () => {
         setAutoBootstrapAllowedSync(false);
         setMobileSessionStatus("logging_out");
+        void import("./auth/sessionAuthDecision").then(
+          ({
+            emitTrackingAuthTerminalEvent,
+            setTrackingAuthAvailability,
+          }) => {
+            setTrackingAuthAvailability({ kind: "TRACKING_IDENTITY_UNAVAILABLE" });
+            emitTrackingAuthTerminalEvent({
+              kind: "EXPLICIT_LOGOUT",
+              sourceSessionGenerationId: sourceGeneration,
+              operationId: lifecycleOperationId,
+              trackingIdentityId: trackingIdentity
+                ? `${trackingIdentity.user_id}:${trackingIdentity.driver_id}:${trackingIdentity.company_id}`
+                : null,
+            });
+          }
+        );
       },
       runQuarantine: runDriverQuarantine,
       clearQuarantineIfOperationMatches: async (opId) => {

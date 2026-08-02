@@ -19,6 +19,7 @@ from services.notifications.activation_token import (
     derive_activation_token,
     hash_activation_token,
 )
+from tests.e2e.helpers.e2e_helpers import unique_phone
 
 
 def _ensure_hmac_activation_token(
@@ -89,7 +90,7 @@ class TestAuthActivationFlow:
             "password": password,
             "first_name": "Alice",
             "last_name": "Activation",
-            "phone": "+41791234567",
+            "phone": unique_phone(),
             "address": "Rue de Test 1, 1200 Geneve",
         }
 
@@ -205,7 +206,7 @@ class TestAuthActivationFlow:
             "password": password,
             "first_name": "Bob",
             "last_name": "Guardrail",
-            "phone": "+41790001122",
+            "phone": unique_phone(),
             "address": "Rue de Garde 2, 1200 Geneve",
         }
 
@@ -303,7 +304,7 @@ class TestAuthActivationFlow:
             "password": password,
             "first_name": "Eve",
             "last_name": "Expired",
-            "phone": "+41790009988",
+            "phone": unique_phone(),
             "address": "Rue Expiree 3, 1200 Geneve",
         }
 
@@ -353,7 +354,7 @@ class TestAuthActivationFlow:
             "password": password,
             "first_name": "Nina",
             "last_name": "Finalize",
-            "phone": "+41790007766",
+            "phone": unique_phone(),
             "address": "Rue Finalize 4, 1200 Geneve",
         }
 
@@ -413,7 +414,7 @@ class TestAuthActivationFlow:
             "password": password,
             "first_name": "Leo",
             "last_name": "SmsExpired",
-            "phone": "+41790006655",
+            "phone": unique_phone(),
             "address": "Rue SMS 5, 1200 Geneve",
         }
 
@@ -477,7 +478,7 @@ class TestAuthActivationFlow:
             "password": password,
             "first_name": "Mia",
             "last_name": "ResendMail",
-            "phone": "+41790005544",
+            "phone": unique_phone(),
             "address": "Rue Mail Limit 6, 1200 Geneve",
         }
 
@@ -529,7 +530,7 @@ class TestAuthActivationFlow:
             "password": password,
             "first_name": "Noa",
             "last_name": "ResendSms",
-            "phone": "+41790004433",
+            "phone": unique_phone(),
             "address": "Rue SMS Limit 7, 1200 Geneve",
         }
 
@@ -580,7 +581,7 @@ class TestAuthActivationFlow:
             "password": password,
             "first_name": "Iris",
             "last_name": "ResendFail",
-            "phone": "+41790007766",
+            "phone": unique_phone(),
             "address": "Rue Mail Fail 8, 1200 Geneve",
         }
 
