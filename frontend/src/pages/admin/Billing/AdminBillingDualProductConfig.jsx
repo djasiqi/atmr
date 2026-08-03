@@ -32,6 +32,16 @@ const emptyContract = {
   statement_dispute_days: '10',
   support_hourly_rate_default: '',
   payment_terms_days: '30',
+  automated_dunning_enabled: true,
+  reminder_delay_days_after_due: '0',
+  reminder_grace_days: '10',
+  full_suspend_days_after_due: '30',
+  full_suspend_overdue_invoice_count: '2',
+  termination_notice_days: '10',
+  partial_block_marketplace_offers: true,
+  partial_block_marketplace_acceptance: true,
+  partial_block_billable_support: true,
+  partial_block_billable_configuration: true,
   effective_from: '',
   notes: '',
 };
@@ -271,6 +281,24 @@ const AdminBillingDualProductConfig = () => {
       support_hourly_rate_default: c?.support_hourly_rate_default || '',
       payment_terms_days:
         c?.payment_terms_days != null ? String(c.payment_terms_days) : '30',
+      automated_dunning_enabled: c?.automated_dunning_enabled !== false,
+      reminder_delay_days_after_due: String(
+        c?.reminder_delay_days_after_due ?? 0
+      ),
+      reminder_grace_days: String(c?.reminder_grace_days ?? 10),
+      full_suspend_days_after_due: String(c?.full_suspend_days_after_due ?? 30),
+      full_suspend_overdue_invoice_count: String(
+        c?.full_suspend_overdue_invoice_count ?? 2
+      ),
+      termination_notice_days: String(c?.termination_notice_days ?? 10),
+      partial_block_marketplace_offers:
+        c?.partial_block_marketplace_offers !== false,
+      partial_block_marketplace_acceptance:
+        c?.partial_block_marketplace_acceptance !== false,
+      partial_block_billable_support:
+        c?.partial_block_billable_support !== false,
+      partial_block_billable_configuration:
+        c?.partial_block_billable_configuration !== false,
       effective_from: c?.effective_from || '',
       notes: c?.notes || '',
     };
@@ -380,6 +408,24 @@ const AdminBillingDualProductConfig = () => {
         payment_terms_days: form.payment_terms_days
           ? Number(form.payment_terms_days)
           : null,
+        automated_dunning_enabled: !!form.automated_dunning_enabled,
+        reminder_delay_days_after_due: Number(
+          form.reminder_delay_days_after_due || 0
+        ),
+        reminder_grace_days: Number(form.reminder_grace_days || 10),
+        full_suspend_days_after_due: Number(
+          form.full_suspend_days_after_due || 30
+        ),
+        full_suspend_overdue_invoice_count: Number(
+          form.full_suspend_overdue_invoice_count || 2
+        ),
+        termination_notice_days: Number(form.termination_notice_days || 10),
+        partial_block_marketplace_offers: !!form.partial_block_marketplace_offers,
+        partial_block_marketplace_acceptance:
+          !!form.partial_block_marketplace_acceptance,
+        partial_block_billable_support: !!form.partial_block_billable_support,
+        partial_block_billable_configuration:
+          !!form.partial_block_billable_configuration,
         effective_from: monthToIso(month),
         auto_close_overlapping: true,
       });
@@ -816,7 +862,7 @@ const AdminBillingDualProductConfig = () => {
                     />
                   </label>
                   <label className={styles.field}>
-                    Titre
+                    Titre / pouvoir de signature
                     <input
                       value={debtorForm.signatory_title}
                       onChange={(e) =>
@@ -825,7 +871,7 @@ const AdminBillingDualProductConfig = () => {
                           signatory_title: e.target.value,
                         }))
                       }
-                      placeholder="Gérant"
+                      placeholder="associé-gérant, avec signature individuelle"
                     />
                   </label>
                 </div>
@@ -1066,6 +1112,185 @@ const AdminBillingDualProductConfig = () => {
                     </div>
                   </label>
                 </div>
+              </section>
+
+              <section className={styles.formSection}>
+                <h3 className={styles.formSectionTitle}>
+                  Défaut de paiement (art. 6 bis)
+                </h3>
+                <p className={styles.formSectionLead}>
+                  Rappel, suspension partielle Marketplace / support, puis
+                  restriction commerciale complète. Les courses déjà engagées,
+                  GPS, factures, paiement et export restent toujours disponibles.
+                </p>
+                <label className={styles.productToggle}>
+                  <input
+                    type="checkbox"
+                    checked={!!form.automated_dunning_enabled}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        automated_dunning_enabled: e.target.checked,
+                      }))
+                    }
+                  />
+                  Activer les mesures automatisées de rappel et de suspension
+                </label>
+                {form.automated_dunning_enabled ? (
+                  <>
+                    <div className={styles.formGridTwo}>
+                      <label className={styles.field}>
+                        Délai rappel après échéance
+                        <div className={styles.inputWithSuffix}>
+                          <input
+                            inputMode="numeric"
+                            value={form.reminder_delay_days_after_due}
+                            onChange={(e) =>
+                              setForm((f) => ({
+                                ...f,
+                                reminder_delay_days_after_due: e.target.value,
+                              }))
+                            }
+                          />
+                          <span className={styles.inputSuffix}>jours</span>
+                        </div>
+                      </label>
+                      <label className={styles.field}>
+                        Grâce après rappel
+                        <div className={styles.inputWithSuffix}>
+                          <input
+                            inputMode="numeric"
+                            value={form.reminder_grace_days}
+                            onChange={(e) =>
+                              setForm((f) => ({
+                                ...f,
+                                reminder_grace_days: e.target.value,
+                              }))
+                            }
+                          />
+                          <span className={styles.inputSuffix}>jours</span>
+                        </div>
+                      </label>
+                    </div>
+                    <div className={styles.formGridTwo}>
+                      <label className={styles.field}>
+                        Suspension complète après
+                        <div className={styles.inputWithSuffix}>
+                          <input
+                            inputMode="numeric"
+                            value={form.full_suspend_days_after_due}
+                            onChange={(e) =>
+                              setForm((f) => ({
+                                ...f,
+                                full_suspend_days_after_due: e.target.value,
+                              }))
+                            }
+                          />
+                          <span className={styles.inputSuffix}>jours</span>
+                        </div>
+                      </label>
+                      <label className={styles.field}>
+                        Ou nb factures échues
+                        <input
+                          inputMode="numeric"
+                          value={form.full_suspend_overdue_invoice_count}
+                          onChange={(e) =>
+                            setForm((f) => ({
+                              ...f,
+                              full_suspend_overdue_invoice_count: e.target.value,
+                            }))
+                          }
+                        />
+                      </label>
+                    </div>
+                    <div className={styles.formGridTwo}>
+                      <label className={styles.field}>
+                        Mise en demeure finale
+                        <div className={styles.inputWithSuffix}>
+                          <input
+                            inputMode="numeric"
+                            value={form.termination_notice_days}
+                            onChange={(e) =>
+                              setForm((f) => ({
+                                ...f,
+                                termination_notice_days: e.target.value,
+                              }))
+                            }
+                          />
+                          <span className={styles.inputSuffix}>jours</span>
+                        </div>
+                      </label>
+                    </div>
+                    <p className={styles.formSectionLead}>
+                      Avec cette configuration : J
+                      {form.reminder_delay_days_after_due || 0} rappel · J
+                      {Number(form.reminder_delay_days_after_due || 0) +
+                        Number(form.reminder_grace_days || 10)}{' '}
+                      suspension partielle · J
+                      {form.full_suspend_days_after_due || 30} suspension
+                      complète (ou{' '}
+                      {form.full_suspend_overdue_invoice_count || 2} factures
+                      échues).
+                    </p>
+                    <label className={styles.productToggle}>
+                      <input
+                        type="checkbox"
+                        checked={!!form.partial_block_marketplace_offers}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            partial_block_marketplace_offers: e.target.checked,
+                          }))
+                        }
+                      />
+                      Bloquer nouvelles offres Marketplace
+                    </label>
+                    <label className={styles.productToggle}>
+                      <input
+                        type="checkbox"
+                        checked={!!form.partial_block_marketplace_acceptance}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            partial_block_marketplace_acceptance: e.target.checked,
+                          }))
+                        }
+                      />
+                      Bloquer acceptation d’offres Marketplace
+                    </label>
+                    <label className={styles.productToggle}>
+                      <input
+                        type="checkbox"
+                        checked={!!form.partial_block_billable_support}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            partial_block_billable_support: e.target.checked,
+                          }))
+                        }
+                      />
+                      Bloquer support facturable
+                    </label>
+                    <label className={styles.productToggle}>
+                      <input
+                        type="checkbox"
+                        checked={!!form.partial_block_billable_configuration}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            partial_block_billable_configuration: e.target.checked,
+                          }))
+                        }
+                      />
+                      Bloquer configuration facturable
+                    </label>
+                  </>
+                ) : (
+                  <p className={styles.readinessHint}>
+                    Automation désactivée : LIRIE conserve ses droits de
+                    recouvrement manuel ; aucune suspension automatique.
+                  </p>
+                )}
               </section>
 
               {selectedContract ? (

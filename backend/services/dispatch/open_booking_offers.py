@@ -173,6 +173,19 @@ def seed_dispatch_offers_for_unassigned_booking(booking_id: int) -> int:
         pickup_geo_unit=booking.pickup_geo_unit,
         drop_geo_unit=booking.dropoff_geo_unit,
     )
+    from services.platform_billing.capabilities import (
+        BillingCapability,
+        is_billing_capability_allowed,
+    )
+
+    candidates = [
+        c
+        for c in candidates
+        if is_billing_capability_allowed(
+            int(c.company_id),
+            BillingCapability.RECEIVE_MARKETPLACE_OFFERS,
+        )
+    ]
     created_total: list[Any] = []
     for threshold in (100, 70, 50, 10):
         created = persist_offers_for_threshold(

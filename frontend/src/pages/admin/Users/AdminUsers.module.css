@@ -159,8 +159,90 @@ h1,
 }
 
 /* 📅 Date */
-td:nth-child(4) {
+.dateCell {
   font-size: var(--font-sm);
+  color: var(--text-secondary);
+}
+
+.companyHint {
+  display: block;
+  margin-top: 4px;
+  font-size: var(--font-xs, 0.75rem);
+  font-weight: var(--font-weight-medium, 500);
+  color: var(--brand-primary);
+}
+
+.billingAccessCell {
+  min-width: 180px;
+  vertical-align: top;
+}
+
+.billingAccessBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.billingBadge {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-xs, 0.75rem);
+  font-weight: var(--font-weight-semibold, 600);
+}
+
+.billingBadgeActive {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.billingBadgePartial {
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+.billingBadgeFull {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.dunningPauseHint {
+  font-size: var(--font-xs, 0.75rem);
+  color: var(--text-secondary);
+}
+
+.billingActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.billingActionButton,
+.billingActionButtonWarn {
+  padding: 2px 8px !important;
+  font-size: var(--font-xs, 0.75rem) !important;
+  border: 1px solid var(--border-secondary) !important;
+  background: white !important;
+  color: var(--text-primary) !important;
+}
+
+.billingActionButton:hover {
+  border-color: var(--brand-primary) !important;
+  color: var(--brand-primary) !important;
+}
+
+.billingActionButtonWarn {
+  border-color: #fecaca !important;
+  color: #b91c1c !important;
+}
+
+.billingActionButtonWarn:hover {
+  background: #fef2f2 !important;
+}
+
+.billingNa {
   color: var(--text-secondary);
 }
 

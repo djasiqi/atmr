@@ -309,7 +309,34 @@ class CompanyPlatformBillingConfig(db.Model):
     """Contrat commercial versionné par entreprise (fenêtre [effective_from, effective_to))."""
 
     __tablename__ = "company_platform_billing_config"
-    __table_args__ = (Index("ix_cpb_config_company_active", "company_id", "is_active"),)
+    __table_args__ = (
+        Index("ix_cpb_config_company_active", "company_id", "is_active"),
+        CheckConstraint(
+            "reminder_delay_days_after_due BETWEEN 0 AND 30",
+            name="ck_cpb_reminder_delay",
+        ),
+        CheckConstraint(
+            "reminder_grace_days BETWEEN 1 AND 30",
+            name="ck_cpb_reminder_grace",
+        ),
+        CheckConstraint(
+            "full_suspend_days_after_due BETWEEN 7 AND 90",
+            name="ck_cpb_full_suspend_days",
+        ),
+        CheckConstraint(
+            "full_suspend_overdue_invoice_count BETWEEN 1 AND 12",
+            name="ck_cpb_full_suspend_count",
+        ),
+        CheckConstraint(
+            "termination_notice_days BETWEEN 1 AND 30",
+            name="ck_cpb_termination_notice",
+        ),
+        CheckConstraint(
+            "full_suspend_days_after_due > "
+            "(reminder_delay_days_after_due + reminder_grace_days)",
+            name="ck_cpb_full_after_grace",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     company_id: Mapped[int] = mapped_column(
@@ -368,6 +395,37 @@ class CompanyPlatformBillingConfig(db.Model):
     )
     support_hourly_rate_default: Mapped[Decimal | None] = mapped_column(
         Numeric(12, 2), nullable=True
+    )
+    # Art. 6 bis — dunning automatisé (paramètres versionnés)
+    automated_dunning_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="true"
+    )
+    reminder_delay_days_after_due: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="0"
+    )
+    reminder_grace_days: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="10"
+    )
+    full_suspend_days_after_due: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="30"
+    )
+    full_suspend_overdue_invoice_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="2"
+    )
+    termination_notice_days: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="10"
+    )
+    partial_block_marketplace_offers: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="true"
+    )
+    partial_block_marketplace_acceptance: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="true"
+    )
+    partial_block_billable_support: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="true"
+    )
+    partial_block_billable_configuration: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="true"
     )
     effective_from: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
@@ -551,6 +609,24 @@ class PlatformIssuedInvoice(db.Model):
     )
     creditor_snapshot: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB, nullable=True
+    )
+    billing_config_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("company_platform_billing_config.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    partner_agreement_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("platform_partner_agreement.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    dunning_policy_snapshot: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB, nullable=True
+    )
+    dunning_automation_authorized_at_issuance: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
     )
     amount_paid: Mapped[Decimal] = mapped_column(
         Numeric(12, 2), nullable=False, server_default="0.00"
@@ -737,4 +813,164 @@ class PlatformPartnerAgreement(db.Model):
         nullable=False,
         server_default=func.now(),
         onupdate=func.now(),
+    )
+
+
+class PlatformDunningCase(db.Model):
+    """Dossier de recouvrement entreprise (une affaire active max)."""
+
+    __tablename__ = "platform_dunning_case"
+    __table_args__ = (
+        Index(
+            "uq_platform_dunning_case_active",
+            "company_id",
+            unique=True,
+            postgresql_where=text("status IN ('open', 'partial', 'full')"),
+        ),
+        CheckConstraint(
+            "status IN ('open', 'partial', 'full', 'resolved')",
+            name="ck_platform_dunning_case_status",
+        ),
+        Index("ix_platform_dunning_case_company", "company_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    company_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("company.id", ondelete="CASCADE"), nullable=False
+    )
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, server_default="open"
+    )
+    policy_snapshot: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    opened_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    partial_suspended_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    full_suspended_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    resolved_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    trigger_invoice_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("platform_issued_invoice.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    events = relationship(
+        "PlatformDunningEvent",
+        back_populates="dunning_case",
+        cascade="all, delete-orphan",
+    )
+
+
+class PlatformDunningEvent(db.Model):
+    """Événement outbox de recouvrement (notice / apply / rappel)."""
+
+    __tablename__ = "platform_dunning_event"
+    __table_args__ = (
+        Index("ix_platform_dunning_event_case", "dunning_case_id"),
+        Index("ix_platform_dunning_event_status", "status"),
+        Index(
+            "uq_platform_dunning_event_invoice_type_ver",
+            "invoice_id",
+            "event_type",
+            "policy_version",
+            unique=True,
+            postgresql_where=text("invoice_id IS NOT NULL"),
+        ),
+        Index(
+            "uq_platform_dunning_event_case_type",
+            "dunning_case_id",
+            "event_type",
+            unique=True,
+            postgresql_where=text("invoice_id IS NULL"),
+        ),
+        CheckConstraint(
+            "status IN ('pending', 'sent', 'failed', 'applied')",
+            name="ck_platform_dunning_event_status",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    dunning_case_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("platform_dunning_case.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    invoice_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("platform_issued_invoice.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, server_default="pending"
+    )
+    policy_version: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="1"
+    )
+    scheduled_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    sent_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    provider_message_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    attempt_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="0"
+    )
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    dunning_case = relationship("PlatformDunningCase", back_populates="events")
+
+
+class PlatformInvoiceDunningHold(db.Model):
+    """Hold de contestation / pause sur le solde exécutoire d'une facture."""
+
+    __tablename__ = "platform_invoice_dunning_hold"
+    __table_args__ = (
+        Index("ix_platform_dunning_hold_invoice", "issued_invoice_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    issued_invoice_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("platform_issued_invoice.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    reason: Mapped[str] = mapped_column(String(512), nullable=False)
+    disputed_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    hold_until: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("user.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    released_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )

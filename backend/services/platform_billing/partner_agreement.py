@@ -205,6 +205,8 @@ def _storage_key(company_id: int, agreement_id: int, filename: str) -> str:
 
 
 def _build_commercial_snapshot(cfg: CompanyPlatformBillingConfig) -> dict[str, Any]:
+    from services.platform_billing.dunning_policy import serialize_dunning_fields
+
     return {
         "billing_config_id": cfg.id,
         "is_billing_enabled": bool(cfg.is_billing_enabled),
@@ -227,6 +229,7 @@ def _build_commercial_snapshot(cfg: CompanyPlatformBillingConfig) -> dict[str, A
         if cfg.effective_from
         else None,
         "effective_to": cfg.effective_to.isoformat() if cfg.effective_to else None,
+        **serialize_dunning_fields(cfg),
     }
 
 
@@ -324,20 +327,28 @@ def generate_agreement(
 
     profile = CompanyBillingProfile.query.filter_by(company_id=company.id).first()
     partner = resolve_partner_contract_identity(company, profile)
-    if not partner.is_complete:
+    if not partner.is_complete(require_uid_ide=True):
         raise PartnerAgreementError(
             "Identité contractuelle partenaire incomplète : "
-            + ", ".join(partner.missing_fields),
+            + ", ".join(partner.missing_fields(require_uid_ide=True))
+            + ". Renseignez IDE, forme juridique et signataire dans le modal.",
             status_code=400,
         )
 
     creditor = PlatformBillingCreditor.query.filter_by(is_active=True).first()
     operator = resolve_operator_contract_identity(creditor)
-    if operator is None or not operator.is_complete:
-        missing = operator.missing_fields if operator else ["creditor"]
+    # Exploitant : IDE optionnel (indépendant) ; forme + signataire obligatoires
+    if operator is None or not operator.is_complete(require_uid_ide=False):
+        missing = (
+            operator.missing_fields(require_uid_ide=False)
+            if operator
+            else ["crediteur_absent"]
+        )
         raise PartnerAgreementError(
             "Identité juridique LIRIE (créancier) incomplète : "
-            + ", ".join(missing),
+            + ", ".join(missing)
+            + ". Complétez Paramètres admin → Facturation plateforme LIRIE "
+            "(forme juridique et signataire au minimum).",
             status_code=400,
         )
 

@@ -155,8 +155,45 @@ class Company(db.Model):
         comment="Intention persistée : tenant suspendu au sens plateforme",
     )
 
+    # Recouvrement facturation plateforme (jamais via platform_suspended)
+    platform_billing_access_state: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        server_default="active",
+        comment="active|partial|full — mode restreint commercial",
+    )
+    platform_billing_state_source: Mapped[str | None] = mapped_column(
+        String(32),
+        nullable=True,
+        comment="automatic_dunning|admin_manual",
+    )
+    platform_billing_state_reason_code: Mapped[str | None] = mapped_column(
+        String(64), nullable=True
+    )
+    platform_billing_state_since: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    platform_billing_state_config_id: Mapped[int | None] = mapped_column(
+        Integer, nullable=True
+    )
+    platform_billing_state_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    dunning_paused_until: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    dunning_pause_reason: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    dunning_paused_by_user_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("user.id", ondelete="SET NULL"), nullable=True
+    )
+
     # Relations
-    user = relationship("User", back_populates="company", passive_deletes=True)
+    user = relationship(
+        "User",
+        back_populates="company",
+        passive_deletes=True,
+        foreign_keys=[user_id],
+    )
     clients = relationship(
         "Client",
         back_populates="company",

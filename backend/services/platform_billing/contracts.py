@@ -235,7 +235,33 @@ def serialize_contract(cfg: CompanyPlatformBillingConfig) -> dict[str, Any]:
         "is_active": cfg.is_active,
         "notes": cfg.notes,
         "commercially_frozen": _is_commercially_frozen(cfg.id),
+        **_serialize_dunning(cfg),
+        "dunning_automation_ready": _dunning_ready_payload(cfg),
     }
+
+
+def _serialize_dunning(cfg: CompanyPlatformBillingConfig) -> dict[str, Any]:
+    from services.platform_billing.dunning_policy import serialize_dunning_fields
+
+    return serialize_dunning_fields(cfg)
+
+
+def _dunning_ready_payload(cfg: CompanyPlatformBillingConfig) -> dict[str, Any]:
+    from models.enums import PartnerAgreementStatus
+    from models.platform_billing import PlatformPartnerAgreement
+    from services.platform_billing.dunning_policy import (
+        compute_dunning_automation_ready,
+    )
+
+    agr = (
+        PlatformPartnerAgreement.query.filter_by(
+            billing_config_id=cfg.id,
+            status=PartnerAgreementStatus.SIGNED.value,
+        )
+        .order_by(PlatformPartnerAgreement.id.desc())
+        .first()
+    )
+    return compute_dunning_automation_ready(cfg=cfg, agreement=agr)
 
 
 def _is_commercially_frozen(billing_config_id: int) -> bool:
@@ -340,6 +366,10 @@ def create_contract_version(
     comm = bool(data.get("lirie_commission_enabled", is_billing))
     support = bool(data.get("support_enabled", is_billing))
 
+    from services.platform_billing.dunning_policy import parse_dunning_fields
+
+    dunning = parse_dunning_fields(data)
+
     cfg = CompanyPlatformBillingConfig(
         company_id=company_id,
         is_billing_enabled=is_billing,
@@ -364,6 +394,7 @@ def create_contract_version(
         notes=data.get("notes"),
         # legacy non écrit depuis la nouvelle API
         dispatch_mode_override=None,
+        **dunning,
     )
     db.session.add(cfg)
     db.session.commit()

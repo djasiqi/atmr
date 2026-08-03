@@ -585,6 +585,53 @@ class PlatformIssuedInvoiceStatus(str, PyEnum):
     CREDITED = "CREDITED"
 
 
+class PlatformBillingAccessState(str, PyEnum):
+    """Accès commercial billing (distinct de platform_suspended gouvernance)."""
+
+    ACTIVE = "active"
+    PARTIAL = "partial"
+    FULL = "full"
+
+
+class PlatformBillingStateSource(str, PyEnum):
+    """Origine de l'état d'accès billing."""
+
+    AUTOMATIC_DUNNING = "automatic_dunning"
+    ADMIN_MANUAL = "admin_manual"
+
+
+class PlatformDunningCaseStatus(str, PyEnum):
+    """Statut d'un dossier de recouvrement plateforme."""
+
+    OPEN = "open"
+    PARTIAL = "partial"
+    FULL = "full"
+    RESOLVED = "resolved"
+
+
+class PlatformDunningEventType(str, PyEnum):
+    """Types d'événements outbox de recouvrement."""
+
+    REMINDER = "reminder"
+    PARTIAL_SUSPENSION_NOTICE = "partial_suspension_notice"
+    PARTIAL_SUSPENSION_APPLIED = "partial_suspension_applied"
+    FULL_SUSPENSION_NOTICE = "full_suspension_notice"
+    FULL_SUSPENSION_APPLIED = "full_suspension_applied"
+    REINSTATEMENT_NOTICE = "reinstatement_notice"
+    REINSTATEMENT_APPLIED = "reinstatement_applied"
+    FINAL_NOTICE_REQUIRED = "final_notice_required"
+    PAYMENT_RECEIVED = "payment_received"
+
+
+class PlatformDunningEventStatus(str, PyEnum):
+    """Statut outbox d'un événement de recouvrement."""
+
+    PENDING = "pending"
+    SENT = "sent"
+    FAILED = "failed"
+    APPLIED = "applied"
+
+
 class TransferModel(str, PyEnum):
     """Modèles de transfert de courses entre entreprises.
     - SUBCONTRACT: A facture client, B facture A (sous-traitance classique)

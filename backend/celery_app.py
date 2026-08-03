@@ -301,6 +301,15 @@ celery.conf.beat_schedule = {
             "jitter": 10,  # ✅ Jitter jusqu'à 10 secondes
         },
     },
+    # Art. 6 bis — recouvrement facturation plateforme (horaire)
+    "platform-dunning-cycle": {
+        "task": "tasks.platform_dunning_tasks.run_platform_dunning_cycle",
+        "schedule": 3600.0,
+        "options": {
+            "expires": 3500,
+            "jitter": 120,
+        },
+    },
     # ✅ PR2: Expiration des demandes de validation de modification (toutes les minutes)
     "expire-pending-change-requests": {
         "task": "tasks.change_request_tasks.expire_pending_change_requests",

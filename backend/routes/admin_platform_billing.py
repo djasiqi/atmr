@@ -77,6 +77,27 @@ logger = logging.getLogger(__name__)
 _MAX_CALENDAR_MONTH = 12
 
 
+def _admin_user_id_from_jwt() -> int | None:
+    """Résout l'identité JWT (public_id UUID) vers user.id entier.
+
+    get_jwt_identity() renvoie un public_id, jamais l'id numérique.
+    """
+    from flask_jwt_extended import get_jwt_identity
+
+    from models import User
+
+    identity = get_jwt_identity()
+    if identity is None or identity == "":
+        return None
+    # Compat éventuelle si un token legacy porte un id numérique
+    try:
+        return int(identity)
+    except (TypeError, ValueError):
+        pass
+    user = User.query.filter_by(public_id=str(identity)).first()
+    return int(user.id) if user is not None else None
+
+
 def _serialize_period(p: PlatformBillingPeriod) -> dict[str, Any]:
     return {
         "id": p.id,
@@ -630,19 +651,13 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
         @ip_whitelist_required()
         @limiter.limit(_RL_ADMIN_WRITE)
         def post(self):
-            from flask_jwt_extended import get_jwt_identity
-
             from services.platform_billing.support_entries import (
                 create_support_entry,
                 serialize_support_entry,
             )
 
             data = request.get_json(silent=True) or {}
-            uid = get_jwt_identity()
-            try:
-                user_id = int(uid) if uid is not None else None
-            except (TypeError, ValueError):
-                user_id = None
+            user_id = _admin_user_id_from_jwt()
             try:
                 se = create_support_entry(data, validated_by_user_id=user_id)
             except ValueError as e:
@@ -677,19 +692,13 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
         @ip_whitelist_required()
         @limiter.limit(_RL_ADMIN_WRITE)
         def patch(self, entry_id: int):
-            from flask_jwt_extended import get_jwt_identity
-
             from services.platform_billing.support_entries import (
                 serialize_support_entry,
                 update_support_entry,
             )
 
             data = request.get_json(silent=True) or {}
-            uid = get_jwt_identity()
-            try:
-                user_id = int(uid) if uid is not None else None
-            except (TypeError, ValueError):
-                user_id = None
+            user_id = _admin_user_id_from_jwt()
             try:
                 se = update_support_entry(
                     entry_id, data, validated_by_user_id=user_id
@@ -775,16 +784,10 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
         @ip_whitelist_required()
         @limiter.limit(_RL_ADMIN_READ)
         def post(self, entry_id: int):
-            from flask_jwt_extended import get_jwt_identity
-
             se = db.session.get(PlatformSupportEntry, entry_id)
             if not se:
                 admin_ns.abort(404, "Entrée introuvable")
-            uid = get_jwt_identity()
-            try:
-                user_id = int(uid) if uid is not None else None
-            except (TypeError, ValueError):
-                user_id = None
+            user_id = _admin_user_id_from_jwt()
             se.validated_at = datetime.now(UTC)
             se.validated_by_user_id = user_id
             db.session.commit()
@@ -924,6 +927,10 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
             profile = CompanyBillingProfile.query.filter_by(
                 company_id=company_id
             ).first()
+            if legal_name:
+                # Raison sociale contractuelle = nom entreprise (ex. Emmenez-moi Sàrl)
+                company.name = legal_name[:100]
+
             if profile is not None:
                 profile.legal_name = legal_name
                 profile.street_name = street
@@ -936,8 +943,6 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                     profile.uid_ide = (data.get("uid_ide") or "").strip()
             else:
                 # Fallback domicile entreprise (pas de création de profil)
-                if legal_name:
-                    company.name = legal_name[:100]
                 company.domicile_address_line1 = street
                 company.domicile_address_line2 = building
                 company.domicile_zip = postal
@@ -1034,8 +1039,6 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
         @limiter.limit(_RL_ADMIN_WRITE)
         def post(self, contract_id: int):
             """Génère ou régénère le DOCX (brouillon)."""
-            from flask_jwt_extended import get_jwt_identity
-
             from services.platform_billing.partner_agreement import (
                 PartnerAgreementError,
                 generate_agreement,
@@ -1043,10 +1046,9 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
             )
 
             try:
-                uid = get_jwt_identity()
                 agr = generate_agreement(
                     contract_id,
-                    user_id=int(uid) if uid is not None else None,
+                    user_id=_admin_user_id_from_jwt(),
                 )
             except PartnerAgreementError as exc:
                 return {"ok": False, "error": exc.message}, exc.status_code
@@ -1080,8 +1082,6 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
         @ip_whitelist_required()
         @limiter.limit(_RL_ADMIN_READ)
         def get(self, agreement_id: int):
-            from flask_jwt_extended import get_jwt_identity
-
             from models.platform_billing import PlatformPartnerAgreement
             from security.audit_log import AuditLogger
             from shared.upload_path_resolver import serve_stored_upload
@@ -1092,7 +1092,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
             AuditLogger.log_action(
                 action_type="partner_agreement_downloaded",
                 action_category="platform_billing",
-                user_id=int(get_jwt_identity() or 0) or None,
+                user_id=_admin_user_id_from_jwt(),
                 user_type="admin",
                 company_id=agr.company_id,
                 action_details={
@@ -1118,8 +1118,6 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
         @ip_whitelist_required()
         @limiter.limit(_RL_ADMIN_WRITE)
         def post(self, agreement_id: int):
-            from flask_jwt_extended import get_jwt_identity
-
             from services.platform_billing.partner_agreement import (
                 PartnerAgreementError,
                 mark_agreement_sent,
@@ -1129,7 +1127,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
             try:
                 agr = mark_agreement_sent(
                     agreement_id,
-                    user_id=int(get_jwt_identity() or 0) or None,
+                    user_id=_admin_user_id_from_jwt(),
                 )
             except PartnerAgreementError as exc:
                 return {"ok": False, "error": exc.message}, exc.status_code
@@ -1144,8 +1142,6 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
         @ip_whitelist_required()
         @limiter.limit(_RL_ADMIN_WRITE)
         def post(self, agreement_id: int):
-            from flask_jwt_extended import get_jwt_identity
-
             from services.platform_billing.partner_agreement import (
                 PartnerAgreementError,
                 serialize_agreement,
@@ -1157,7 +1153,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                 agr = void_agreement(
                     agreement_id,
                     reason=str(data.get("reason") or ""),
-                    user_id=int(get_jwt_identity() or 0) or None,
+                    user_id=_admin_user_id_from_jwt(),
                 )
             except PartnerAgreementError as exc:
                 return {"ok": False, "error": exc.message}, exc.status_code
@@ -1173,8 +1169,6 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
         @limiter.limit(_RL_ADMIN_WRITE)
         def post(self, agreement_id: int):
             from datetime import date as date_cls
-
-            from flask_jwt_extended import get_jwt_identity
 
             from services.platform_billing.partner_agreement import (
                 PartnerAgreementError,
@@ -1211,7 +1205,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                     content=content,
                     original_filename=f.filename,
                     agreement_signed_on=signed_on,
-                    user_id=int(get_jwt_identity() or 0) or None,
+                    user_id=_admin_user_id_from_jwt(),
                 )
             except PartnerAgreementError as exc:
                 return {"ok": False, "error": exc.message}, exc.status_code
@@ -1226,8 +1220,6 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
         @ip_whitelist_required()
         @limiter.limit(_RL_ADMIN_READ)
         def get(self, agreement_id: int):
-            from flask_jwt_extended import get_jwt_identity
-
             from models.platform_billing import PlatformPartnerAgreement
             from security.audit_log import AuditLogger
             from shared.upload_path_resolver import serve_stored_upload
@@ -1238,7 +1230,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
             AuditLogger.log_action(
                 action_type="partner_agreement_downloaded",
                 action_category="platform_billing",
-                user_id=int(get_jwt_identity() or 0) or None,
+                user_id=_admin_user_id_from_jwt(),
                 user_type="admin",
                 company_id=agr.company_id,
                 action_details={
@@ -1273,10 +1265,24 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
         @limiter.limit(_RL_ADMIN_WRITE)
         def put(self):
             data = request.get_json(silent=True) or {}
+            legal_name = (data.get("legal_name") or "").strip()
+            if not legal_name:
+                return APIErrorHandler.handle_validation_error(
+                    "Nom / raison sociale du créancier obligatoire "
+                    "(personne physique si indépendant, pas l'enseigne LIRIE)",
+                    logger_instance=logger,
+                )
+            # Typographie adresses (ex. Ernest- Pictet → Ernest-Pictet)
+            if "street_name" in data and data.get("street_name"):
+                import re as _re
+
+                data["street_name"] = _re.sub(
+                    r"\s*-\s*", "-", str(data["street_name"]).strip()
+                )
             c = PlatformBillingCreditor.query.filter_by(is_active=True).first()
             if not c:
                 c = PlatformBillingCreditor(
-                    legal_name=data.get("legal_name") or "LIRIE",
+                    legal_name=legal_name,
                     street_name=data.get("street_name") or "",
                     postal_code=data.get("postal_code") or "",
                     city=data.get("city") or "",
@@ -1302,6 +1308,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
             ):
                 if field in data:
                     setattr(c, field, data.get(field))
+            c.legal_name = legal_name
             if "legal_form" in data:
                 from services.platform_billing.partner_identity import (
                     validate_legal_form,
@@ -1527,8 +1534,6 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
         @role_required(UserRole.admin)
         @ip_whitelist_required()
         def post(self, issued_id: int):
-            from flask_jwt_extended import get_jwt_identity
-
             data = request.get_json(silent=True) or {}
             try:
                 amount = parse_decimal(
@@ -1543,11 +1548,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                     if paid_at
                     else None
                 )
-                uid = get_jwt_identity()
-                try:
-                    user_id = int(uid) if uid is not None else None
-                except (TypeError, ValueError):
-                    user_id = None
+                user_id = _admin_user_id_from_jwt()
                 inv = record_payment(
                     issued_id,
                     amount=amount,
@@ -1612,8 +1613,6 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
         @role_required(UserRole.admin)
         @ip_whitelist_required()
         def post(self, booking_id: int):
-            from flask_jwt_extended import get_jwt_identity
-
             from models import Booking
             from services.platform_billing.billing_origin import correct_billing_origin
 
@@ -1621,11 +1620,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
             if not booking:
                 admin_ns.abort(404, "Réservation introuvable")
             data = request.get_json(silent=True) or {}
-            uid = get_jwt_identity()
-            try:
-                user_id = int(uid) if uid is not None else None
-            except (TypeError, ValueError):
-                user_id = None
+            user_id = _admin_user_id_from_jwt()
             try:
                 correct_billing_origin(
                     booking,
@@ -1643,3 +1638,131 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                 "billing_origin": booking.billing_origin,
                 "billing_origin_source": booking.billing_origin_source,
             }, 200
+
+    @admin_ns.route(
+        "/platform-billing/companies/<int:company_id>/dunning/pause"
+    )
+    class PlatformBillingDunningPause(Resource):
+        @jwt_required()
+        @role_required(UserRole.admin)
+        @ip_whitelist_required()
+        @limiter.limit(_RL_ADMIN_WRITE)
+        def post(self, company_id: int):
+            from datetime import datetime, timedelta, timezone
+
+            from services.platform_billing.capabilities import pause_dunning
+
+            company = db.session.get(Company, company_id)
+            if not company:
+                admin_ns.abort(404, "Entreprise introuvable")
+            data = request.get_json(silent=True) or {}
+            days = int(data.get("days") or 14)
+            reason = (data.get("reason") or "pause_admin").strip()
+            until = datetime.now(timezone.utc) + timedelta(days=max(1, days))
+            pause_dunning(
+                company_id,
+                until=until,
+                reason=reason,
+                user_id=_admin_user_id_from_jwt(),
+            )
+            db.session.commit()
+            return {
+                "ok": True,
+                "dunning_paused_until": until.isoformat(),
+                "dunning_pause_reason": reason,
+            }, 200
+
+    @admin_ns.route(
+        "/platform-billing/companies/<int:company_id>/billing-access"
+    )
+    class PlatformBillingAccessStateResource(Resource):
+        @jwt_required()
+        @role_required(UserRole.admin)
+        @ip_whitelist_required()
+        @limiter.limit(_RL_ADMIN_WRITE)
+        def put(self, company_id: int):
+            from datetime import datetime, timedelta, timezone
+
+            from models.enums import (
+                PlatformBillingAccessState,
+                PlatformBillingStateSource,
+            )
+            from services.platform_billing.capabilities import (
+                pause_dunning,
+                set_billing_access_state,
+            )
+
+            company = db.session.get(Company, company_id)
+            if not company:
+                admin_ns.abort(404, "Entreprise introuvable")
+            data = request.get_json(silent=True) or {}
+            state = (data.get("state") or "").strip()
+            reason = (data.get("reason_code") or "admin_manual").strip()
+            pause_days = data.get("pause_days_after_lift")
+            try:
+                set_billing_access_state(
+                    company_id,
+                    state,
+                    source=PlatformBillingStateSource.ADMIN_MANUAL.value
+                    if state != PlatformBillingAccessState.ACTIVE.value
+                    else PlatformBillingStateSource.ADMIN_MANUAL.value,
+                    reason_code=reason
+                    if state != PlatformBillingAccessState.ACTIVE.value
+                    else "admin_lift",
+                    force=True,
+                )
+                if (
+                    state == PlatformBillingAccessState.ACTIVE.value
+                    and pause_days is not None
+                ):
+                    until = datetime.now(timezone.utc) + timedelta(
+                        days=max(1, int(pause_days))
+                    )
+                    pause_dunning(
+                        company_id,
+                        until=until,
+                        reason="pause_after_admin_lift",
+                        user_id=_admin_user_id_from_jwt(),
+                    )
+                db.session.commit()
+            except ValueError as e:
+                return APIErrorHandler.handle_validation_error(
+                    str(e), logger_instance=logger
+                )
+            db.session.refresh(company)
+            return {
+                "ok": True,
+                "platform_billing_access_state": company.platform_billing_access_state,
+                "platform_billing_state_source": company.platform_billing_state_source,
+                "dunning_paused_until": company.dunning_paused_until.isoformat()
+                if company.dunning_paused_until
+                else None,
+            }, 200
+
+    @admin_ns.route(
+        "/platform-billing/issued-invoices/<int:issued_id>/dunning-hold"
+    )
+    class PlatformInvoiceDunningHoldResource(Resource):
+        @jwt_required()
+        @role_required(UserRole.admin)
+        @ip_whitelist_required()
+        @limiter.limit(_RL_ADMIN_WRITE)
+        def post(self, issued_id: int):
+            from decimal import Decimal
+
+            from services.platform_billing.dunning import create_dunning_hold
+
+            data = request.get_json(silent=True) or {}
+            try:
+                hold = create_dunning_hold(
+                    issued_id,
+                    reason=str(data.get("reason") or "contestation"),
+                    disputed_amount=Decimal(str(data.get("disputed_amount") or 0)),
+                    hold_until=None,
+                    user_id=_admin_user_id_from_jwt(),
+                )
+            except ValueError as e:
+                return APIErrorHandler.handle_validation_error(
+                    str(e), logger_instance=logger
+                )
+            return {"ok": True, "hold_id": hold.id}, 201

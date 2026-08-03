@@ -252,6 +252,18 @@ class CreateBookingUseCase:
         company_id = resolve_booking_owner_company_id_for_create(client_dto)
         if company_id is not None and company_id > 0:
             self.company_creation_gate_fn(company_id)
+            from services.platform_billing.capabilities import (
+                BillingAccessRestricted,
+                BillingCapability,
+                assert_billing_capability_allowed,
+            )
+
+            try:
+                assert_billing_capability_allowed(
+                    company_id, BillingCapability.CREATE_OWN_PORTFOLIO_BOOKING
+                )
+            except BillingAccessRestricted as exc:
+                raise PermissionError(str(exc)) from exc
 
         # ✅ Détecter si le client est hospitalisé et utiliser l'adresse de la clinique
         from services.billing.client_stay_resolver import (

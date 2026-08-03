@@ -462,6 +462,28 @@ def issue_platform_invoice(statement_id: int) -> PlatformIssuedInvoice:
     now = datetime.now(UTC)
     due = now + timedelta(days=int(days))
 
+    from models.enums import PartnerAgreementStatus
+    from models.platform_billing import PlatformPartnerAgreement
+    from services.platform_billing.dunning_policy import (
+        build_dunning_policy_snapshot,
+        is_dunning_authorized_at_issuance,
+    )
+
+    agreement = None
+    if cfg is not None:
+        agreement = (
+            PlatformPartnerAgreement.query.filter_by(
+                billing_config_id=cfg.id,
+                status=PartnerAgreementStatus.SIGNED.value,
+            )
+            .order_by(PlatformPartnerAgreement.id.desc())
+            .first()
+        )
+    dunning_snap = build_dunning_policy_snapshot(cfg) if cfg else None
+    dunning_authorized = is_dunning_authorized_at_issuance(
+        cfg=cfg, agreement=agreement, today=now.date()
+    )
+
     # Colonnes NOT NULL : tout doit être renseigné avant le premier flush/INSERT.
     issued_fields = {
         "invoice_number": invoice_number,
@@ -476,6 +498,10 @@ def issue_platform_invoice(statement_id: int) -> PlatformIssuedInvoice:
         "due_at": due,
         "debtor_snapshot": debtor_snap,
         "creditor_snapshot": creditor_snap,
+        "billing_config_id": cfg.id if cfg else None,
+        "partner_agreement_id": agreement.id if agreement else None,
+        "dunning_policy_snapshot": dunning_snap,
+        "dunning_automation_authorized_at_issuance": dunning_authorized,
     }
 
     if existing:

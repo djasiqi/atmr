@@ -32,6 +32,8 @@ def _company(**kwargs):
         legal_form=LegalForm.SARL.value,
         signatory_name="Khalid ALAOUI",
         signatory_title="Gérant",
+        billing_email=None,
+        contact_email=None,
     )
     base.update(kwargs)
     return SimpleNamespace(**base)
@@ -67,7 +69,7 @@ def test_resolve_partner_uses_profile_block_not_hybrid():
     assert identity.postal_code == "1247"
     assert identity.city == "Anières"
     assert identity.signatory_name == "Khalid ALAOUI"
-    assert identity.is_complete
+    assert identity.is_complete(require_uid_ide=True)
 
 
 def test_resolve_partner_falls_back_to_company_block():
@@ -75,14 +77,63 @@ def test_resolve_partner_falls_back_to_company_block():
     identity = resolve_partner_contract_identity(company, None)
     assert identity.identity_source == "company"
     assert identity.street_name == "Route de Chevrens 145"
-    assert identity.is_complete
+    assert identity.is_complete(require_uid_ide=True)
 
 
 def test_resolve_incomplete_without_signatory():
     company = _company(signatory_name=None)
     identity = resolve_partner_contract_identity(company, None)
-    assert not identity.is_complete
-    assert "signataire" in identity.missing_fields
+    assert not identity.is_complete(require_uid_ide=True)
+    assert "signataire" in identity.missing_fields(require_uid_ide=True)
+
+
+def test_operator_uid_ide_optional():
+    from services.platform_billing.partner_identity import (
+        resolve_operator_contract_identity,
+    )
+
+    creditor = SimpleNamespace(
+        id=1,
+        legal_name="Drin Jasiqi",
+        uid_ide=None,
+        street_name="Avenue Ernest-Pictet",
+        building_number="9",
+        postal_code="1203",
+        city="Genève",
+        country_code="CH",
+        legal_form=LegalForm.SOLE_PROPRIETORSHIP.value,
+        signatory_name="Drin Jasiqi",
+        signatory_title="Exploitant",
+    )
+    op = resolve_operator_contract_identity(creditor)
+    assert op is not None
+    assert op.is_complete(require_uid_ide=False)
+    assert "uid_ide" not in op.missing_fields(require_uid_ide=False)
+
+
+def test_operator_brand_name_replaced_by_signatory():
+    """Si legal_name = enseigne LIRIE, utiliser le signataire (personne physique)."""
+    from services.platform_billing.partner_identity import (
+        resolve_operator_contract_identity,
+    )
+
+    creditor = SimpleNamespace(
+        id=1,
+        legal_name="LIRIE",
+        uid_ide=None,
+        street_name="Avenue Ernest- Pictet",
+        building_number="9",
+        postal_code="1203",
+        city="Genève",
+        country_code="CH",
+        legal_form=LegalForm.SOLE_PROPRIETORSHIP.value,
+        signatory_name="Drin Jasiqi",
+        signatory_title="Exploitant",
+    )
+    op = resolve_operator_contract_identity(creditor)
+    assert op is not None
+    assert op.legal_name == "Drin Jasiqi"
+    assert op.contractual_email == "info@lirie.ch"
 
 
 def test_divergence_warnings():
@@ -99,19 +150,24 @@ def test_docx_contains_reference_and_commission():
 
     parties = {
         "operator": {
-            "legal_name": "Drin Jasiqi",
+            # Enseigne stockée à tort — le DOCX doit utiliser le signataire
+            "legal_name": "LIRIE",
+            "legal_form": LegalForm.SOLE_PROPRIETORSHIP.value,
             "legal_form_label": "Indépendant",
-            "street_name": "Avenue Ernest-Pictet",
+            "street_name": "Avenue Ernest- Pictet",
             "building_number": "9",
             "postal_code": "1203",
             "city": "Genève",
             "country_code": "CH",
-            "uid_ide": "CHE-000.000.000",
+            "uid_ide": None,
             "signatory_name": "Drin Jasiqi",
             "signatory_title": "Exploitant",
+            "contractual_email": "info@lirie.ch",
         },
         "partner": {
-            "legal_name": "Emmenez-moi Sàrl",
+            # Sans suffixe Sàrl — le générateur le complète
+            "legal_name": "Emmenez-moi",
+            "legal_form": LegalForm.SARL.value,
             "legal_form_label": "Sàrl",
             "street_name": "Route de Chevrens",
             "building_number": "145",
@@ -120,7 +176,8 @@ def test_docx_contains_reference_and_commission():
             "country_code": "CH",
             "uid_ide": "CHE-273.048.653",
             "signatory_name": "Khalid ALAOUI",
-            "signatory_title": "Gérant",
+            "signatory_title": "associé-gérant, avec signature individuelle",
+            "contractual_email": "contact@emmenez-moi.ch",
         },
     }
     commercial = {
@@ -129,7 +186,7 @@ def test_docx_contains_reference_and_commission():
         "lirie_commission_enabled": True,
         "own_portfolio_billing_enabled": True,
         "commission_rate": "0.100000",
-        "commission_cancellation_policy": "on_cancellation_fees",
+        "commission_cancellation_policy": "exclude",
         "payment_terms_days": 30,
         "statement_dispute_days": 10,
     }
@@ -148,6 +205,59 @@ def test_docx_contains_reference_and_commission():
     assert "{{" not in xml
     assert "OWN_PORTFOLIO" in xml
     assert "LIRIE_MARKETPLACE" in xml
+    assert "Drin Jasiqi, exerçant en qualité d'indépendant sous l'enseigne LIRIE" in xml
+    assert "Statut : indépendant" in xml
+    assert "Représenté(e) par : Drin Jasiqi" not in xml
+    assert "Ernest-Pictet" in xml
+    assert "Ernest- Pictet" not in xml
+    assert "Emmenez-moi Sàrl" in xml
+    assert "Ci-après désigné : « le Partenaire »" in xml
+    assert "non attribué" in xml
+    assert "notification de la mise à disposition du relevé dans LIRIE" in xml
+    assert "date d'émission de la facture" in xml
+    assert "cinq (5) jours ouvrables suivant son exécution" in xml
+    assert "n'altère pas son origine commerciale" in xml
+    assert "renouvelle tacitement pour une durée indéterminée" in xml
+    assert "Aucun abonnement ne sera appliqué automatiquement" in xml
+    assert "données anonymisées ou agrégées" in xml
+    assert "se substitue à l'Exploitant pour les obligations futures" in xml
+    assert "info@lirie.ch" in xml
+    assert "contact@emmenez-moi.ch" in xml
+    assert "CHF 10'000" in xml
+    assert "mise en demeure" in xml
+    assert "Lieu :" in xml
+    assert "courrier recommandé" in xml
+    assert "objection motivée" in xml
+    assert "ARTICLE 6 BIS" in xml
+    assert "DÉFAUT DE PAIEMENT" in xml
+    assert "factures échues et impayées" in xml
+    assert "frais officiels de poursuite" in xml
+    assert "Aucun frais forfaitaire de recouvrement" in xml
+    assert "échéancier écrit" in xml
+    # Snapshot commercial du test n'inclut pas encore les champs dunning → défauts
+    commercial_with_dunning = {
+        **commercial,
+        "automated_dunning_enabled": True,
+        "reminder_delay_days_after_due": 0,
+        "reminder_grace_days": 10,
+        "full_suspend_days_after_due": 30,
+        "full_suspend_overdue_invoice_count": 2,
+        "termination_notice_days": 10,
+        "partial_block_marketplace_offers": True,
+        "partial_block_marketplace_acceptance": True,
+        "partial_block_billable_support": True,
+        "partial_block_billable_configuration": True,
+    }
+    raw2 = build_partner_agreement_docx_bytes(
+        reference="LIRIE/PART/2026-08/001",
+        parties=parties,
+        commercial=commercial_with_dunning,
+        agreement_effective_from="2026-08-01",
+    )
+    with zipfile.ZipFile(io.BytesIO(raw2)) as zf:
+        xml2 = zf.read("word/document.xml").decode("utf-8")
+    assert "lirie-partner-v1.4" in xml2
+    assert "Courses Marketplace LIRIE" in xml2
 
 
 def test_mark_sent_requires_draft():

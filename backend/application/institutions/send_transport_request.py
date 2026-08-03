@@ -479,6 +479,21 @@ class SendTransportRequestUseCase:
         expires_at: datetime,
     ) -> int:
         """Crée une offre séquentielle pour une préférence donnée."""
+        from services.platform_billing.capabilities import (
+            BillingCapability,
+            is_billing_capability_allowed,
+        )
+
+        if not is_billing_capability_allowed(
+            preference.company_id,
+            BillingCapability.RECEIVE_MARKETPLACE_OFFERS,
+        ):
+            logger.info(
+                "[SendTransportRequest] Offre séquentielle ignorée "
+                "(billing_access_restricted) company_id=%s",
+                preference.company_id,
+            )
+            return 0
         offer = RequestOffer(
             transport_request_id=transport_request.id,
             company_id=preference.company_id,
@@ -559,7 +574,18 @@ class SendTransportRequestUseCase:
             companies = filter_companies_for_institution(
                 companies, transport_request.institution
             )
-        return companies
+        from services.platform_billing.capabilities import (
+            BillingCapability,
+            is_billing_capability_allowed,
+        )
+
+        return [
+            c
+            for c in companies
+            if is_billing_capability_allowed(
+                c.id, BillingCapability.RECEIVE_MARKETPLACE_OFFERS
+            )
+        ]
 
     @staticmethod
     def _reactivate_offer(

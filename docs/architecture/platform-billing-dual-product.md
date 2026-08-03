@@ -109,6 +109,21 @@
 - ✅ **Implémenté** : UI modal dual-produit — identité étendue, politique
   d’annulation, durée gratuité, délai contestation, section document
   (dirty-form bloque la génération).
+- ✅ **Implémenté** : modèle DOCX `lirie-partner-v1.4` + **dunning runtime**
+  art. 6 bis configurable : champs `automated_dunning_*` sur
+  `CompanyPlatformBillingConfig` ; snapshot + autorisation figés à
+  l’émission ; `PlatformDunningCase` / `Event` / `Hold` ; état
+  `platform_billing_access_state` (jamais `platform_suspended`) ; gates
+  `BillingCapability` (dispatch, accept, own portfolio) ; Celery
+  `platform-dunning-cycle` ; notice avant restriction ; priorité
+  `admin_manual` ; pause / hold admin ; Word paramétré.
+- ✅ **Implémenté** : gestion des accès commerciaux sur **Gestion des utilisateurs**
+  (`/admin/users`) — colonne « Accès commercial » pour les comptes `company`
+  (badge `active` / `partial` / `full`, pause dunning, lever / restreindre) ;
+  enrichissement `GET /admin/users` (`company_id`, `platform_billing_access_state`,
+  `dunning_paused_until`) ; actions via
+  `PUT .../billing-access` et `POST .../dunning/pause`
+  (`AdminUsers.jsx`, `adminService.js`, `routes/admin.py`).
 - Fichiers : `backend/services/platform_billing/partner_agreement.py`,
   `partner_agreement_docx.py`, `partner_identity.py`,
   `frontend/src/pages/admin/Billing/AdminBillingDualProductConfig.jsx`,
@@ -120,3 +135,4 @@
 - `backend/services/platform_billing/`
 - `backend/routes/admin_platform_billing.py`
 - `frontend/src/pages/admin/Billing/`
+- `frontend/src/pages/admin/Users/AdminUsers.jsx`

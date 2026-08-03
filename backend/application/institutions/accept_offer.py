@@ -243,6 +243,25 @@ class AcceptOfferUseCase:
                     status_code=403,
                 )
 
+            from services.platform_billing.capabilities import (
+                BillingCapability,
+                ERROR_BILLING_ACCESS_RESTRICTED,
+                is_billing_capability_allowed,
+            )
+
+            if not is_billing_capability_allowed(
+                company.id, BillingCapability.ACCEPT_MARKETPLACE_OFFERS
+            ):
+                return AcceptOfferResult(
+                    success=False,
+                    offer_id=input_data.offer_id,
+                    error=(
+                        "Accès marketplace restreint pour cause de facturation "
+                        f"({ERROR_BILLING_ACCESS_RESTRICTED})"
+                    ),
+                    status_code=403,
+                )
+
             # 2. Verrouiller la TransportRequest (FOR UPDATE)
             transport_request = (
                 db.session.query(TransportRequest)

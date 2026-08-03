@@ -962,3 +962,28 @@ export const payPlatformIssuedInvoice = async (issuedId, payload) => {
   );
   return response.data;
 };
+
+/**
+ * Met à jour l'état d'accès commercial billing d'une entreprise (active|partial|full).
+ * Distinct de platform_suspended (gouvernance).
+ */
+export const setCompanyBillingAccess = async (companyId, payload) => {
+  const response = await apiClient.put(
+    `/admin/platform-billing/companies/${companyId}/billing-access`,
+    payload,
+    { headers: _adminAuthHeaders() }
+  );
+  return response.data;
+};
+
+/**
+ * Met en pause le recouvrement automatique (dunning) pour une entreprise.
+ */
+export const pauseCompanyDunning = async (companyId, payload = {}) => {
+  const response = await apiClient.post(
+    `/admin/platform-billing/companies/${companyId}/dunning/pause`,
+    payload,
+    { headers: _adminAuthHeaders() }
+  );
+  return response.data;
+};

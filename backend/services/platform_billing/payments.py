@@ -54,8 +54,11 @@ def record_payment(
     if inv.amount_paid >= inv.total_amount:
         inv.status = PlatformIssuedInvoiceStatus.PAID.value
         inv.paid_at = when
-    elif inv.status == PlatformIssuedInvoiceStatus.OVERDUE.value:
-        inv.status = PlatformIssuedInvoiceStatus.SENT.value
+    elif inv.due_at is not None:
+        due = inv.due_at if inv.due_at.tzinfo else inv.due_at.replace(tzinfo=UTC)
+        # Paiement partiel après échéance : rester OVERDUE
+        if due < when:
+            inv.status = PlatformIssuedInvoiceStatus.OVERDUE.value
     db.session.commit()
     db.session.refresh(inv)
     return inv
@@ -118,6 +121,10 @@ def create_credit_note(issued_invoice_id: int) -> PlatformIssuedInvoice:
         credit_of_invoice_id=source.id,
         debtor_snapshot=source.debtor_snapshot,
         creditor_snapshot=source.creditor_snapshot,
+        billing_config_id=source.billing_config_id,
+        partner_agreement_id=source.partner_agreement_id,
+        dunning_policy_snapshot=source.dunning_policy_snapshot,
+        dunning_automation_authorized_at_issuance=False,
     )
     source.status = PlatformIssuedInvoiceStatus.CREDITED.value
     source.credited_at = datetime.now(UTC)
@@ -128,19 +135,28 @@ def create_credit_note(issued_invoice_id: int) -> PlatformIssuedInvoice:
 
 
 def refresh_overdue_statuses(*, now: datetime | None = None) -> int:
+    """Passe en OVERDUE les factures envoyées échues avec solde restant."""
     now = now or datetime.now(UTC)
     rows = PlatformIssuedInvoice.query.filter(
         PlatformIssuedInvoice.status.in_(
             [
-                PlatformIssuedInvoiceStatus.ISSUED.value,
                 PlatformIssuedInvoiceStatus.SENT.value,
+                PlatformIssuedInvoiceStatus.OVERDUE.value,
             ]
         ),
+        PlatformIssuedInvoice.sent_at.isnot(None),
         PlatformIssuedInvoice.due_at.isnot(None),
         PlatformIssuedInvoice.due_at < now,
     ).all()
+    changed = 0
     for inv in rows:
-        inv.status = PlatformIssuedInvoiceStatus.OVERDUE.value
-    if rows:
+        paid = Decimal(str(inv.amount_paid or 0))
+        total = Decimal(str(inv.total_amount or 0))
+        if paid >= total:
+            continue
+        if inv.status != PlatformIssuedInvoiceStatus.OVERDUE.value:
+            inv.status = PlatformIssuedInvoiceStatus.OVERDUE.value
+            changed += 1
+    if changed:
         db.session.commit()
-    return len(rows)
+    return changed

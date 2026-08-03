@@ -179,6 +179,7 @@ class User(db.Model):
         uselist=False,
         cascade="all, delete-orphan",
         passive_deletes=True,
+        foreign_keys="Company.user_id",
     )
     # ✅ Institution: Relation vers Institution (Many-to-One)
     institution = relationship(

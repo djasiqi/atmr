@@ -37,6 +37,15 @@ def _notify_company_new_offer(
 ) -> None:
     """Notifie une entreprise d'une nouvelle offre de transport."""
     try:
+        from services.platform_billing.capabilities import (
+            BillingCapability,
+            is_billing_capability_allowed,
+        )
+
+        if not is_billing_capability_allowed(
+            company_id, BillingCapability.RECEIVE_MARKETPLACE_OFFERS
+        ):
+            return
         from models import Company
         from services.demo.soft_delete_guard import (
             company_is_demo,
@@ -299,6 +308,23 @@ def _escalate_sequential_request(
         # Créer l'offre suivante
         expires_at = now + timedelta(minutes=timeout_minutes)
 
+        from services.platform_billing.capabilities import (
+            BillingCapability,
+            is_billing_capability_allowed,
+        )
+
+        if not is_billing_capability_allowed(
+            next_pref.company_id, BillingCapability.RECEIVE_MARKETPLACE_OFFERS
+        ):
+            logger.info(
+                "[RequestOfferTask] Escalade ignorée (billing_access_restricted) "
+                "company_id=%s request=%s",
+                next_pref.company_id,
+                transport_request.id,
+            )
+            _create_fallback_broadcast(transport_request)
+            return
+
         new_offer = RequestOffer(
             transport_request_id=transport_request.id,
             company_id=next_pref.company_id,
@@ -372,6 +398,18 @@ def _create_fallback_broadcast(transport_request: TransportRequest) -> None:
     eligible = filter_companies_for_institution(
         query.all(), transport_request.institution
     )
+    from services.platform_billing.capabilities import (
+        BillingCapability,
+        is_billing_capability_allowed,
+    )
+
+    eligible = [
+        c
+        for c in eligible
+        if is_billing_capability_allowed(
+            c.id, BillingCapability.RECEIVE_MARKETPLACE_OFFERS
+        )
+    ]
 
     if not eligible:
         # Aucune entreprise disponible -> request EXPIRED

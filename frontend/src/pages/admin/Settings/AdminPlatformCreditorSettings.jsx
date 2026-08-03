@@ -6,7 +6,7 @@ import {
 import styles from './AdminSettings.module.css';
 
 const emptyForm = {
-  legal_name: 'LIRIE',
+  legal_name: '',
   street_name: '',
   building_number: '',
   postal_code: '',
@@ -16,7 +16,7 @@ const emptyForm = {
   vat_number: '',
   legal_form: 'sole_proprietorship',
   signatory_name: '',
-  signatory_title: '',
+  signatory_title: 'Exploitant',
   default_tax_rate: '0',
   iban: '',
   qr_iban: '',
@@ -40,7 +40,7 @@ const AdminPlatformCreditorSettings = () => {
       const c = res?.creditor;
       if (c) {
         setForm({
-          legal_name: c.legal_name || 'LIRIE',
+          legal_name: c.legal_name || '',
           street_name: c.street_name || '',
           building_number: c.building_number || '',
           postal_code: c.postal_code || '',
@@ -50,7 +50,7 @@ const AdminPlatformCreditorSettings = () => {
           vat_number: c.vat_number || '',
           legal_form: c.legal_form || 'sole_proprietorship',
           signatory_name: c.signatory_name || '',
-          signatory_title: c.signatory_title || '',
+          signatory_title: c.signatory_title || 'Exploitant',
           default_tax_rate:
             c.default_tax_rate != null ? String(c.default_tax_rate) : '0',
           iban: c.iban || '',
@@ -128,7 +128,10 @@ const AdminPlatformCreditorSettings = () => {
       <h2 id="creditor-settings-title">Facturation plateforme LIRIE (créancier)</h2>
       <p className={styles.helperText}>
         Adresse de domicile et IBAN utilisés sur les <strong>QR-factures</strong> émises par LIRIE
-        vers les transporteurs. Sans ces informations, l’émission PDF/QR reste bloquée.
+        vers les transporteurs, ainsi que pour l’identité de l’Exploitant dans les contrats
+        partenaires. En indépendant, la raison sociale doit être le <strong>nom de la personne
+        physique</strong> (ex. Drin Jasiqi), pas l’enseigne LIRIE. Sans ces informations,
+        l’émission PDF/QR reste bloquée.
       </p>
 
       {error ? <div className={styles.error}>{error}</div> : null}
@@ -140,12 +143,19 @@ const AdminPlatformCreditorSettings = () => {
         <form onSubmit={onSave}>
           <div className={styles.formRow}>
             <label className={styles.formGroup}>
-              Raison sociale
+              {form.legal_form === 'sole_proprietorship'
+                ? 'Nom de l’indépendant (personne physique)'
+                : 'Raison sociale'}
               <input
                 value={form.legal_name}
                 onChange={(e) => setField('legal_name', e.target.value)}
                 required
                 autoComplete="organization"
+                placeholder={
+                  form.legal_form === 'sole_proprietorship'
+                    ? 'Drin Jasiqi'
+                    : 'Raison sociale au registre'
+                }
               />
             </label>
             <label className={styles.formGroup}>

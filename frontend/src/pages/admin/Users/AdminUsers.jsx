@@ -7,6 +7,8 @@ import {
   updateUserRole,
   fetchCompanies,
   fetchInstitutions,
+  setCompanyBillingAccess,
+  pauseCompanyDunning,
 } from '../../../services/adminService';
 import styles from './AdminUsers.module.css';
 import adminShell from '../adminShell.module.css';
@@ -17,6 +19,22 @@ const ROLE_LABELS = {
   driver: 'Chauffeur',
   company: 'Entreprise',
   institution: 'Institution',
+};
+
+const BILLING_ACCESS_LABELS = {
+  active: 'Actif',
+  partial: 'Partiel',
+  full: 'Complet',
+};
+
+const formatBillingAccessLabel = (state) =>
+  BILLING_ACCESS_LABELS[String(state || 'active').toLowerCase()] || 'Actif';
+
+const billingAccessBadgeClass = (state, stylesMap) => {
+  const key = String(state || 'active').toLowerCase();
+  if (key === 'partial') return stylesMap.billingBadgePartial;
+  if (key === 'full') return stylesMap.billingBadgeFull;
+  return stylesMap.billingBadgeActive;
 };
 
 const AdminUsers = () => {
@@ -221,6 +239,72 @@ const AdminUsers = () => {
     }
   };
 
+  const handleSetBillingAccess = async (user, state) => {
+    if (!user?.company_id) {
+      alert("Aucune entreprise liee a ce compte.");
+      return;
+    }
+    const label = formatBillingAccessLabel(state);
+    const confirmMsg =
+      state === 'active'
+        ? 'Lever la restriction d acces commercial pour cette entreprise ?'
+        : `Appliquer une restriction d acces commercial (${label}) pour cette entreprise ?`;
+    if (!window.confirm(confirmMsg)) {
+      return;
+    }
+    try {
+      const payload = {
+        state,
+        reason_code: state === 'active' ? 'admin_lift' : 'admin_manual',
+      };
+      if (state === 'active') {
+        const pauseDaysRaw = window.prompt(
+          'Pause du recouvrement automatique apres levee (jours, laisser vide pour aucune) :',
+          '14'
+        );
+        if (pauseDaysRaw !== null && String(pauseDaysRaw).trim() !== '') {
+          const pauseDays = parseInt(pauseDaysRaw, 10);
+          if (!Number.isNaN(pauseDays) && pauseDays > 0) {
+            payload.pause_days_after_lift = pauseDays;
+          }
+        }
+      }
+      await setCompanyBillingAccess(user.company_id, payload);
+      await loadUsers();
+      alert(`Acces commercial mis a jour : ${label}`);
+    } catch (error) {
+      console.error('Erreur mise a jour acces billing :', error.response?.data || error.message);
+      alert("Impossible de mettre a jour l acces commercial.");
+    }
+  };
+
+  const handlePauseDunning = async (user) => {
+    if (!user?.company_id) {
+      alert("Aucune entreprise liee a ce compte.");
+      return;
+    }
+    const daysRaw = window.prompt('Duree de pause du recouvrement (jours) :', '14');
+    if (daysRaw === null) {
+      return;
+    }
+    const days = parseInt(daysRaw, 10);
+    if (Number.isNaN(days) || days < 1) {
+      alert('Duree invalide.');
+      return;
+    }
+    try {
+      await pauseCompanyDunning(user.company_id, {
+        days,
+        reason: 'pause_admin',
+      });
+      await loadUsers();
+      alert(`Recouvrement mis en pause pour ${days} jour(s).`);
+    } catch (error) {
+      console.error('Erreur pause dunning :', error.response?.data || error.message);
+      alert('Impossible de mettre en pause le recouvrement.');
+    }
+  };
+
   const startRow = totalUsers === 0 ? 0 : (page - 1) * perPage + 1;
   const endRow = Math.min(page * perPage, totalUsers);
 
@@ -238,7 +322,8 @@ const AdminUsers = () => {
           <header className={styles.pageHeader}>
             <h1>Gestion des utilisateurs</h1>
             <p className={styles.subtext}>
-              Recherche, tri, attribution des roles et actions de maintenance des comptes.
+              Recherche, tri, attribution des roles, acces commercial entreprises et
+              actions de maintenance des comptes.
             </p>
           </header>
 
@@ -334,6 +419,7 @@ const AdminUsers = () => {
                   <th>Nom</th>
                   <th>Email</th>
                   <th>Role</th>
+                  <th>Acces commercial</th>
                   <th>Date d inscription</th>
                   <th>Actions</th>
                 </tr>
@@ -341,16 +427,26 @@ const AdminUsers = () => {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan="5" className={styles.placeholderRow}>
+                    <td colSpan="6" className={styles.placeholderRow}>
                       Chargement des utilisateurs...
                     </td>
                   </tr>
                 ) : users.length > 0 ? (
                   users.map((user) => {
                     const userRole = String(user.role || '').toLowerCase();
+                    const isCompany = userRole === 'company' && Boolean(user.company_id);
+                    const billingState = String(
+                      user.platform_billing_access_state || 'active'
+                    ).toLowerCase();
+                    const dunningPaused = Boolean(user.dunning_paused_until);
                     return (
                       <tr key={user.id}>
-                        <td className={styles.userNameCell}>{user.username || '-'}</td>
+                        <td className={styles.userNameCell}>
+                          {user.username || '-'}
+                          {isCompany && user.company_name ? (
+                            <span className={styles.companyHint}>{user.company_name}</span>
+                          ) : null}
+                        </td>
                         <td className={styles.emailCell}>{user.email || '-'}</td>
                         <td>
                           <select
@@ -365,7 +461,66 @@ const AdminUsers = () => {
                             ))}
                           </select>
                         </td>
-
+                        <td className={styles.billingAccessCell}>
+                          {isCompany ? (
+                            <div className={styles.billingAccessBlock}>
+                              <span
+                                className={`${styles.billingBadge} ${billingAccessBadgeClass(
+                                  billingState,
+                                  styles
+                                )}`}
+                              >
+                                {formatBillingAccessLabel(billingState)}
+                              </span>
+                              {dunningPaused ? (
+                                <span className={styles.dunningPauseHint}>
+                                  Pause jusqu au{' '}
+                                  {new Date(user.dunning_paused_until).toLocaleDateString(
+                                    'fr-CH'
+                                  )}
+                                </span>
+                              ) : null}
+                              <div className={styles.billingActions}>
+                                {billingState !== 'active' ? (
+                                  <button
+                                    type="button"
+                                    className={styles.billingActionButton}
+                                    onClick={() => handleSetBillingAccess(user, 'active')}
+                                  >
+                                    Lever
+                                  </button>
+                                ) : null}
+                                {billingState !== 'partial' ? (
+                                  <button
+                                    type="button"
+                                    className={styles.billingActionButton}
+                                    onClick={() => handleSetBillingAccess(user, 'partial')}
+                                  >
+                                    Partiel
+                                  </button>
+                                ) : null}
+                                {billingState !== 'full' ? (
+                                  <button
+                                    type="button"
+                                    className={styles.billingActionButtonWarn}
+                                    onClick={() => handleSetBillingAccess(user, 'full')}
+                                  >
+                                    Complet
+                                  </button>
+                                ) : null}
+                                <button
+                                  type="button"
+                                  className={styles.billingActionButton}
+                                  onClick={() => handlePauseDunning(user)}
+                                >
+                                  Pause
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <span className={styles.billingNa}>—</span>
+                          )}
+                        </td>
                         <td className={styles.dateCell}>
                           {user.created_at
                             ? new Date(user.created_at).toLocaleString('fr-CH')
@@ -390,7 +545,7 @@ const AdminUsers = () => {
                   })
                 ) : (
                   <tr>
-                    <td colSpan="5" className={styles.placeholderRow}>
+                    <td colSpan="6" className={styles.placeholderRow}>
                       Aucun utilisateur trouve
                     </td>
                   </tr>

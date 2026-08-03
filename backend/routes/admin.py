@@ -26,6 +26,7 @@ from ext import db, limiter, redis_client, role_required
 from models import (
     Booking,
     BookingStatus,
+    Company,
     Payment,
     PlatformClientIndicativeFareConfig,
     User,
@@ -431,6 +432,54 @@ class AdminPlatformBookingDetail(Resource):
             admin_ns.abort(500, "Une erreur interne est survenue.")
 
 
+def _enrich_users_admin_payload(users: list[User]) -> list[dict[str, Any]]:
+    """Sérialise les users admin + accès facturation pour les comptes entreprise."""
+    company_user_ids = [
+        u.id
+        for u in users
+        if (
+            (
+                getattr(u, "role", None).value
+                if hasattr(getattr(u, "role", None), "value")
+                else str(getattr(u, "role", None) or "")
+            ).lower()
+            == UserRole.company.value
+        )
+    ]
+    companies_by_user_id: dict[int, Company] = {}
+    if company_user_ids:
+        for company in db.session.scalars(
+            select(Company).where(Company.user_id.in_(company_user_ids))
+        ).all():
+            if company.user_id is not None:
+                companies_by_user_id[int(company.user_id)] = company
+
+    result: list[dict[str, Any]] = []
+    for user in users:
+        data = dict(cast("Any", user).serialize)
+        company = companies_by_user_id.get(user.id)
+        if company is None:
+            result.append(data)
+            continue
+        data["company_id"] = company.id
+        data["company_name"] = company.name
+        data["platform_billing_access_state"] = (
+            company.platform_billing_access_state or "active"
+        )
+        data["platform_billing_state_source"] = company.platform_billing_state_source
+        data["platform_billing_state_reason_code"] = (
+            company.platform_billing_state_reason_code
+        )
+        data["dunning_paused_until"] = (
+            company.dunning_paused_until.isoformat()
+            if company.dunning_paused_until
+            else None
+        )
+        data["platform_suspended"] = bool(company.platform_suspended)
+        result.append(data)
+    return result
+
+
 @admin_ns.route("/users")
 class AllUsers(Resource):
     @jwt_required()
@@ -481,7 +530,7 @@ class AllUsers(Resource):
 
             if not paginate and not has_filters:
                 users = query.order_by(User.created_at.desc(), User.id.desc()).all()
-                return {"users": [cast("Any", u).serialize for u in users]}, 200
+                return {"users": _enrich_users_admin_payload(users)}, 200
 
             if search:
                 pattern = f"%{search}%"
@@ -537,7 +586,7 @@ class AllUsers(Resource):
             users = query.offset(offset).limit(per_page).all()
 
             return {
-                "users": [cast("Any", u).serialize for u in users],
+                "users": _enrich_users_admin_payload(users),
                 "total": total,
                 "page": page,
                 "per_page": per_page,
