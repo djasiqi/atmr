@@ -1,4 +1,3 @@
-import contextlib
 import logging
 import random
 import string
@@ -21,6 +20,7 @@ from flask_restx import (
 from marshmallow import ValidationError
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import IntegrityError
+from werkzeug.exceptions import HTTPException
 
 from ext import db, limiter, redis_client, role_required
 from models import (
@@ -41,11 +41,27 @@ from repositories.invoice_repository import InvoiceRepository
 from repositories.user_repository import UserRepository
 from routes.admin_platform_billing import register_platform_billing_routes
 from security.ip_whitelist import ip_whitelist_required
+from services.admin_partners_organizations import (
+    build_account_integrity,
+    list_partner_organizations,
+)
 from services.admin_authz import (
+    CAP_ACCOUNTS_READ,
     CAP_LABS_EXECUTE,
+    CAP_ORGANIZATIONS_READ,
+    CAP_PARTNERS_READ,
+    CAP_USERS_MANAGE,
+    CAP_USERS_SECURITY,
     capabilities_payload_for_user,
     require_admin_capability,
 )
+from services.control_plane.effective_access import compute_effective_access
+from services.control_plane.organizations_read import (
+    get_organization_by_public_id,
+    list_anomalies,
+    list_organizations_with_read_mode,
+)
+from services.admin_role_utils import normalized_role_value
 from services.admin_dashboard_summary import build_admin_dashboard_summary
 from services.admin_platform_bookings import (
     build_admin_booking_detail,
@@ -442,14 +458,12 @@ class AdminPlatformBookingDetail(Resource):
         try:
             booking = booking_repo.find_model_by_id_with_eager_loading(booking_id)
             if booking is None:
-                admin_ns.abort(404, "Réservation introuvable.")
+                admin_ns.abort(404, "Transport introuvable.")
             assert booking is not None  # narrow pour le typage (abort ne retourne pas)
-            identity = get_jwt_identity()
-            admin_public_id = identity if isinstance(identity, str) else str(identity)
-            payload = build_admin_booking_detail(
-                booking, admin_public_id=admin_public_id
-            )
+            payload = build_admin_booking_detail(booking)
             return payload, 200
+        except HTTPException:
+            raise
         except Exception as e:
             sentry_sdk.capture_exception(e)
             logger.exception("❌ ERREUR get_admin_platform_booking_detail: %s", e)
@@ -461,14 +475,8 @@ def _enrich_users_admin_payload(users: list[User]) -> list[dict[str, Any]]:
     company_user_ids = [
         u.id
         for u in users
-        if (
-            (
-                getattr(u, "role", None).value
-                if hasattr(getattr(u, "role", None), "value")
-                else str(getattr(u, "role", None) or "")
-            ).lower()
-            == UserRole.company.value
-        )
+        if normalized_role_value(getattr(u, "role", None))
+        == UserRole.COMPANY.value
     ]
     companies_by_user_id: dict[int, Company] = {}
     if company_user_ids:
@@ -508,6 +516,7 @@ def _enrich_users_admin_payload(users: list[User]) -> list[dict[str, Any]]:
 class AllUsers(Resource):
     @jwt_required()
     @role_required(UserRole.admin)
+    @require_admin_capability(CAP_PARTNERS_READ)
     @ip_whitelist_required()  # ✅ Phase 3: IP whitelist pour endpoints admin
     # ✅ S2: Rate limiting pour liste utilisateurs (endpoint admin)
     @limiter.limit("100 per hour")
@@ -659,6 +668,7 @@ class AllCompanies(Resource):
 class AllInstitutions(Resource):
     @jwt_required()
     @role_required(UserRole.admin)
+    @require_admin_capability(CAP_PARTNERS_READ)
     @ip_whitelist_required()  # ✅ Phase 3: IP whitelist pour endpoints admin
     @limiter.limit("100 per hour")  # ✅ Rate limiting pour liste institutions
     def get(self):
@@ -689,6 +699,7 @@ class AllInstitutions(Resource):
 class ManageUser(Resource):
     @jwt_required()
     @role_required(UserRole.admin)
+    @require_admin_capability(CAP_PARTNERS_READ)
     def get(self, user_id):
         """Récupère les détails d'un utilisateur."""
         try:
@@ -704,8 +715,21 @@ class ManageUser(Resource):
 
     @jwt_required()
     @role_required(UserRole.admin)
+    @require_admin_capability(CAP_USERS_SECURITY)
     def delete(self, user_id):
-        """Supprime un utilisateur."""
+        """Supprime un utilisateur (gelé hors contexte TESTING — PR1 Partenaires)."""
+        from flask import current_app
+
+        # PR1 : aucune suppression physique hors tests applicatifs.
+        if not bool(current_app.config.get("TESTING")):
+            return {
+                "error": "physical_user_deletion_requires_review",
+                "message": (
+                    "La suppression physique d'un compte nécessite une analyse "
+                    "des dépendances et n'est pas disponible dans cette version."
+                ),
+            }, 409
+
         try:
             user = user_repo.find_by_id_with_clients_and_company(user_id)
             if not user:
@@ -772,44 +796,6 @@ class ManageUser(Resource):
             return APIErrorHandler.handle_exception(e, logger)
 
 
-def _setup_driver_role(
-    user: User, company_id: int | None
-) -> tuple[bool, dict[str, str] | None, int | None]:
-    """Helper pour configurer le rôle DRIVER.
-    Retourne (success, error_response, status_code).
-    """
-    if not company_id:
-        db.session.rollback()
-        error_response, status_code = APIErrorHandler.handle_validation_error(
-            "company_id is required for a driver.",
-            field="company_id",
-            logger_instance=logger,
-        )
-        return False, error_response, status_code
-
-    from models import Driver
-
-    company = company_repo.find_model_by_id(company_id)
-    if company is None:
-        db.session.rollback()
-        error_response, status_code = APIErrorHandler.handle_not_found(
-            "Company",
-            company_id,
-            logger,
-        )
-        return False, error_response, status_code
-
-    drv = getattr(user, "driver", None)
-    if drv is None:
-        DriverCtor = cast("Any", Driver)
-        drv = DriverCtor(user_id=user.id, company_id=company_id, is_active=True)
-        db.session.add(drv)
-    else:
-        drv.company_id = company_id
-
-    return True, None, None
-
-
 # Modèle Swagger pour mise à jour rôle utilisateur
 user_role_update_model = admin_ns.model(
     "UserRoleUpdate",
@@ -848,30 +834,26 @@ autonomous_action_review_model = admin_ns.model(
 class UpdateUserRole(Resource):
     @jwt_required()
     @role_required(UserRole.admin)
+    @require_admin_capability(CAP_USERS_MANAGE)
     # ✅ S2: Rate limiting strict pour changement rôle (action sensible)
     @limiter.limit("20 per hour")
     @admin_ns.expect(user_role_update_model, validate=False)
     def put(self, user_id: int):
-        """Met à jour le rôle d'un utilisateur et, si besoin,
-        crée/assigne Driver ou Company en gérant la transition depuis l'ancien rôle.
-        """
+        """PR1 : no-op si même rôle ; tout vrai changement → 409 (assistant ultérieur)."""
         try:
-            # ---------- 1) Charger l'utilisateur + relations ----------
             user_opt: User | None = user_repo.find_by_id_with_driver_and_company(
                 user_id
             )
             if user_opt is None:
                 return APIErrorHandler.handle_not_found(
                     "User",
-                    user_id if "user_id" in locals() else None,
+                    user_id,
                     logger,
                 )
             user = user_opt
 
-            # ---------- 2) Lire & valider le payload ----------
             data = request.get_json(silent=True) or {}
 
-            # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
             from schemas.admin_schemas import UserRoleUpdateSchema
             from schemas.validation_utils import (
                 handle_validation_error,
@@ -883,7 +865,6 @@ class UpdateUserRole(Resource):
             except ValidationError as e:
                 return handle_validation_error(e)
 
-            # Normaliser le rôle depuis les données validées
             raw = validated_data["role"].strip().lower()
             key = raw.upper()
             try:
@@ -900,194 +881,22 @@ class UpdateUserRole(Resource):
                     logger_instance=logger,
                 )
 
-            old_role_value = (
-                user.role.value if hasattr(user.role, "value") else str(user.role)
-            )
-            old_role_value = str(old_role_value or "").upper()
+            old_role = normalized_role_value(user.role)
+            new_role = normalized_role_value(new_role_enum)
 
-            # ---------- 3) Affecter le nouveau rôle ----------
-            cast("Any", user).role = new_role_enum.value
-
-            # ---------- 4) Transitions selon le nouveau rôle ----------
-            role_upper = str(new_role_enum.value).upper()
-
-            if role_upper == "DRIVER":
-                success, error, status = _setup_driver_role(
-                    user, validated_data.get("company_id")
-                )
-                if not success:
-                    return error, status
-
-            elif role_upper == "COMPANY":
-                from models import Company
-
-                comp = getattr(user, "company", None)
-                if comp is None:
-                    name = validated_data.get("company_name") or user.username
-                    CompanyCtor = cast("Any", Company)
-                    comp = CompanyCtor(user_id=user.id, name=name)
-                    db.session.add(comp)
-                else:
-                    new_name = validated_data.get("company_name")
-                    if new_name:
-                        comp.name = new_name
-
-                # Auto-approuver et activer le dispatch quand l'admin assigne le rôle
-                comp.approve()
-                comp.dispatch_enabled = True
-
-                if old_role_value == "DRIVER":
-                    drv = getattr(user, "driver", None)
-                    if drv:
-                        db.session.delete(drv)
-
-            elif role_upper == "CLIENT":
-                drv = getattr(user, "driver", None)
-                if drv:
-                    db.session.delete(drv)
-                comp = getattr(user, "company", None)
-                if comp:
-                    db.session.delete(comp)
-                    with contextlib.suppress(Exception):
-                        cast("Any", user).company = None
-
-            elif role_upper == "INSTITUTION":
-                # Assigner l'utilisateur à une institution
-                institution_id = validated_data.get("institution_id")
-                institution_role = validated_data.get(
-                    "institution_role", "institution_admin"
-                )
-
-                from models import Institution
-
-                # ✅ Si aucune institution_id fournie, créer automatiquement l'institution
-                if not institution_id:
-                    # Utiliser le nom de l'utilisateur comme nom d'institution
-                    institution_name = (
-                        cast("Any", user).username
-                        or cast("Any", user).email.split("@")[0]
-                    )
-                    user_email = cast("Any", user).email
-
-                    # Vérifier si une institution existe déjà avec cet email
-                    existing_inst = (
-                        db.session.query(Institution)
-                        .filter_by(contact_email=user_email)
-                        .first()
-                    )
-
-                    if existing_inst:
-                        institution = existing_inst
-                        logger.info(
-                            "🏥 Institution existante trouvée pour %s: %s (id=%s)",
-                            user_email,
-                            institution.name,
-                            institution.id,
-                        )
-                    else:
-                        # Créer une nouvelle institution
-                        import uuid
-
-                        InstitutionCtor = cast("Any", Institution)
-                        institution = InstitutionCtor(
-                            public_id=str(uuid.uuid4()),
-                            name=institution_name,
-                            institution_type="clinic",  # Type par défaut
-                            contact_email=user_email,
-                        )
-                        db.session.add(institution)
-                        db.session.flush()  # Pour obtenir l'ID
-                        logger.info(
-                            "🏥 Nouvelle institution créée: %s (id=%s) pour %s",
-                            institution.name,
-                            institution.id,
-                            user_email,
-                        )
-
-                    institution_id = institution.id
-                else:
-                    # Vérifier que l'institution existe
-                    institution = (
-                        db.session.query(Institution)
-                        .filter_by(id=institution_id)
-                        .first()
-                    )
-                    if institution is None:
-                        return APIErrorHandler.handle_not_found(
-                            "Institution",
-                            institution_id,
-                            logger,
-                        )
-
-                # Assigner l'institution et le rôle
-                cast("Any", user).institution_id = institution_id
-                cast("Any", user).institution_role = institution_role
-
-                # Nettoyer les anciennes associations si nécessaire
-                drv = getattr(user, "driver", None)
-                if drv:
-                    db.session.delete(drv)
-                comp = getattr(user, "company", None)
-                if comp:
-                    db.session.delete(comp)
-                    with contextlib.suppress(Exception):
-                        cast("Any", user).company = None
-
-            elif role_upper == "ADMIN":
-                drv = getattr(user, "driver", None)
-                if drv:
-                    db.session.delete(drv)
-
-            # ---------- 5) Commit ----------
-            db.session.commit()
-
-            # ✅ Priorité 7: Audit logging et métriques pour changement de rôle
-            try:
-                from security.audit_log import AuditLogger
-                from security.security_metrics import (
-                    security_permission_changes_total,
-                    security_sensitive_actions_total,
-                )
-                from shared.logging_utils import mask_email
-
-                current_user = get_current_user_via_use_case()
-
-                AuditLogger.log_action(
-                    action_type="permission_changed",
-                    action_category="security",
-                    user_id=current_user.id if current_user else None,
-                    user_type=current_user.role.value
-                    if current_user and current_user.role
-                    else "admin",
-                    result_status="success",
-                    action_details={
-                        "modified_user_id": user.id,
-                        "modified_user_email": mask_email(str(user.email))
-                        if user.email is not None
-                        else None,
-                        "old_role": old_role_value,
-                        "new_role": str(new_role_enum.value),
-                    },
-                    ip_address=request.remote_addr,
-                    user_agent=request.headers.get("User-Agent"),
-                )
-                # ✅ Priorité 7: Métriques Prometheus pour changement de permissions
-                security_sensitive_actions_total.labels(
-                    action_type="permission_changed"
-                ).inc()
-                security_permission_changes_total.inc()
-            except Exception as audit_error:
-                # Ne pas bloquer la modification si l'audit logging échoue
-                logger.warning(
-                    "Échec audit logging permission_changed: %s", audit_error
-                )
+            if old_role == new_role:
+                return {
+                    "message": "Rôle inchangé.",
+                    "user": cast("Any", user).serialize,
+                }, 200
 
             return {
+                "error": "role_transition_requires_assistant",
                 "message": (
-                    f"✅ Rôle de {user.username} mis à jour en {new_role_enum.value}"
+                    "Toute modification de rôle nécessite l'assistant sécurisé "
+                    "prévu dans une évolution ultérieure."
                 ),
-                "user": cast("Any", user).serialize,
-            }, 200
+            }, 409
 
         except Exception as e:
             db.session.rollback()
@@ -1099,6 +908,7 @@ class UpdateUserRole(Resource):
 class ResetUserPassword(Resource):
     @jwt_required()
     @role_required(UserRole.admin)
+    @require_admin_capability(CAP_USERS_SECURITY)
     # ✅ Pas de rate limiting pour les admins (déjà protégé par @role_required)
     def post(self, user_id):
         """Réinitialise le mot de passe d'un utilisateur."""
@@ -2319,3 +2129,130 @@ class AdminClientIndicativeFareConfig(Resource):
 
 # --- Facturation plateforme LIRIE (relevés dual-produit) ---
 register_platform_billing_routes(admin_ns)
+
+
+@admin_ns.route("/partners/organizations")
+class AdminPartnersOrganizations(Resource):
+    @jwt_required()
+    @role_required(UserRole.admin)
+    @require_admin_capability(CAP_ORGANIZATIONS_READ)
+    @ip_whitelist_required()
+    @limiter.limit("100 per hour")
+    def get(self):
+        """Liste organisations (legacy | compare | control_plane selon env)."""
+        try:
+            include_synthetic = str(
+                request.args.get("include_synthetic", "false")
+            ).strip().lower() in {"1", "true", "yes"}
+            page = max(request.args.get("page", 1, type=int) or 1, 1)
+            per_page = min(
+                max(request.args.get("per_page", 50, type=int) or 50, 1), 200
+            )
+            payload = list_organizations_with_read_mode(
+                page=page,
+                per_page=per_page,
+                include_synthetic=include_synthetic,
+                organization_type=(request.args.get("organization_type") or "").strip()
+                or None,
+                configuration_status=(
+                    request.args.get("configuration_status") or ""
+                ).strip()
+                or None,
+                lifecycle_status=(request.args.get("lifecycle_status") or "").strip()
+                or None,
+                search=(request.args.get("search") or "").strip() or None,
+            )
+            return payload, 200
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            logger.exception("❌ ERREUR partners organizations: %s", e)
+            admin_ns.abort(500, "Une erreur interne est survenue.")
+
+
+@admin_ns.route("/organizations/<string:public_id>")
+class AdminOrganizationDetail(Resource):
+    @jwt_required()
+    @role_required(UserRole.admin)
+    @require_admin_capability(CAP_ORGANIZATIONS_READ)
+    @ip_whitelist_required()
+    @limiter.limit("100 per hour")
+    def get(self, public_id: str):
+        """Fiche organisation control plane (lecture seule)."""
+        try:
+            payload = get_organization_by_public_id(public_id)
+            if payload is None:
+                admin_ns.abort(404, "Organisation introuvable")
+            return payload, 200
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            logger.exception("❌ ERREUR organization detail: %s", e)
+            admin_ns.abort(500, "Une erreur interne est survenue.")
+
+
+@admin_ns.route("/control-plane/anomalies")
+class AdminControlPlaneAnomalies(Resource):
+    @jwt_required()
+    @role_required(UserRole.admin)
+    @require_admin_capability(CAP_ACCOUNTS_READ)
+    @ip_whitelist_required()
+    @limiter.limit("100 per hour")
+    def get(self):
+        """File d'anomalies control plane persistées."""
+        try:
+            page = max(request.args.get("page", 1, type=int) or 1, 1)
+            per_page = min(
+                max(request.args.get("per_page", 50, type=int) or 50, 1), 100
+            )
+            payload = list_anomalies(
+                page=page,
+                per_page=per_page,
+                entity_type=(request.args.get("entity_type") or "").strip() or None,
+                severity=(request.args.get("severity") or "").strip() or None,
+                code=(request.args.get("code") or "").strip() or None,
+                unresolved_only=str(
+                    request.args.get("unresolved_only", "true")
+                ).strip().lower()
+                in {"1", "true", "yes"},
+            )
+            return payload, 200
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            logger.exception("❌ ERREUR control-plane anomalies: %s", e)
+            admin_ns.abort(500, "Une erreur interne est survenue.")
+
+
+@admin_ns.route("/accounts/<int:user_id>/effective-access")
+class AdminAccountEffectiveAccess(Resource):
+    @jwt_required()
+    @role_required(UserRole.admin)
+    @require_admin_capability(CAP_ACCOUNTS_READ)
+    @ip_whitelist_required()
+    @limiter.limit("100 per hour")
+    def get(self, user_id: int):
+        """Accès effectif diagnostique (decision_mode=shadow)."""
+        try:
+            return compute_effective_access(user_id), 200
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            logger.exception("❌ ERREUR effective-access: %s", e)
+            admin_ns.abort(500, "Une erreur interne est survenue.")
+
+
+@admin_ns.route("/partners/accounts/<int:user_id>/integrity")
+class AdminPartnersAccountIntegrity(Resource):
+    @jwt_required()
+    @role_required(UserRole.admin)
+    @require_admin_capability(CAP_PARTNERS_READ)
+    @ip_whitelist_required()
+    @limiter.limit("100 per hour")
+    def get(self, user_id: int):
+        """Diagnostic d'intégrité d'un compte (lecture seule)."""
+        try:
+            payload = build_account_integrity(user_id)
+            if payload is None:
+                admin_ns.abort(404, "User not found")
+            return payload, 200
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            logger.exception("❌ ERREUR partners integrity: %s", e)
+            admin_ns.abort(500, "Une erreur interne est survenue.")

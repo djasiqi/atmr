@@ -21,6 +21,7 @@ describe('adminNavRegistry', () => {
     expect(resolveActiveWorkspace('').id).toBe('overview');
     expect(resolveActiveWorkspace('operations/bookings').id).toBe('operations');
     expect(resolveActiveWorkspace('partners/users').id).toBe('partners');
+    expect(resolveActiveWorkspace('partners/organizations').id).toBe('partners');
     expect(resolveActiveWorkspace('finance/releves').id).toBe('finance');
     expect(resolveActiveWorkspace('configuration').id).toBe('configuration');
     expect(resolveActiveWorkspace('advanced/platform/runtime').id).toBe('advanced');

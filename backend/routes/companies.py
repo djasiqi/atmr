@@ -572,10 +572,9 @@ manual_booking_model = companies_ns.model(
 def get_company_from_token() -> tuple[
     Company | None, dict[str, str] | None, int | None
 ]:
-    """Récupère (ou crée au besoin) l'entreprise associée à l'utilisateur courant.
+    """Récupère l'entreprise associée à l'utilisateur courant.
 
-    ✅ REFACTORING: Délègue à GetCurrentCompanyOrCreateUseCase pour la logique métier.
-    Cette fonction est conservée pour compatibilité avec les routes existantes.
+    CP-PR1 : ne crée plus automatiquement de Company (409 si profil manquant).
     """
     from application.companies.get_current_company_or_create import (
         GetCurrentCompanyOrCreateUseCase,
@@ -585,71 +584,34 @@ def get_company_from_token() -> tuple[
         get_current_user_via_use_case,
     )
 
-    # Créer le use case avec les dépendances nécessaires
     def _is_company_user(u: object) -> bool:
         from models.enums import UserRole
 
         return hasattr(u, "role") and getattr(u, "role", None) == UserRole.company
 
-    def _create_company_for_user(
+    def _company_profile_missing(
         user: object,
     ) -> tuple[Company | None, dict[str, str] | None, int | None]:
-        """Crée une entreprise pour un utilisateur de rôle company."""
-        from ext import db
-        from models import Company
-
-        try:
-            user_id = getattr(user, "id", None) if hasattr(user, "id") else None
-            username = (
-                getattr(user, "username", "Company")
-                if hasattr(user, "username")
-                else "Company"
-            )
-            email = getattr(user, "email", None) if hasattr(user, "email") else None
-            company_kwargs = {
-                "name": username,
-                "user_id": user_id,
-                "address": "",
-                "latitude": None,
-                "longitude": None,
-                "contact_email": email,
-                "contact_phone": "",
-                "service_area": "",
-                "max_daily_bookings": 50,
-                "is_approved": False,
-            }
-            new_company = Company(**company_kwargs)
-            db.session.add(new_company)
-            db.session.commit()
-
-            # Recharger l'utilisateur avec la relation mise à jour
-            user_repo = UserRepository()
-            user_refetched = user_repo.find_model_by_id(user_id) if user_id else None
-            if user_refetched is None:
-                return (
-                    None,
-                    {"error": "Failed to load user after company creation"},
-                    500,
-                )
-
-            company_rel = (
-                user_refetched.company if hasattr(user_refetched, "company") else None
-            )
-            if company_rel is None:
-                return None, {"error": "Failed to create company"}, 500
-
-            return company_rel, None, None
-        except Exception:
-            db.session.rollback()
-            logger.exception("Erreur lors de la création automatique de Company")
-            return None, {"error": "Failed to create default company"}, 500
+        """CP-PR1 : refuse la création implicite."""
+        _ = user
+        return (
+            None,
+            {
+                "error": "company_profile_missing",
+                "message": (
+                    "Ce compte entreprise n'est rattaché à aucune entreprise."
+                ),
+                "support_code": "CP-COMPANY-PROFILE-MISSING",
+            },
+            409,
+        )
 
     uc = GetCurrentCompanyOrCreateUseCase(
         get_current_company_fn=lambda: _get_current_company_via_use_case(),
         get_current_user_fn=get_current_user_via_use_case,
         is_company_user_fn=_is_company_user,
         user_repo=UserRepository(),
-        create_company_for_user_fn=_create_company_for_user,
+        create_company_for_user_fn=_company_profile_missing,
         handle_user_not_found_fn=lambda user_id: APIErrorHandler.handle_not_found(
             "User", user_id, logger
         ),

@@ -30,8 +30,9 @@ export const ADMIN_WORKSPACES = [
     path: 'partners',
     matchPrefixes: ['partners'],
     children: [
-      { id: 'users', label: 'Utilisateurs', path: 'partners/users' },
-      { id: 'demo-requests', label: 'Demandes de démonstration', path: 'partners/demo-requests' },
+      { id: 'organizations', label: 'Organisations', path: 'partners/organizations', end: true },
+      { id: 'users', label: 'Comptes et accès', path: 'partners/users' },
+      { id: 'demo-requests', label: 'Démonstrations', path: 'partners/demo-requests' },
     ],
   },
   {

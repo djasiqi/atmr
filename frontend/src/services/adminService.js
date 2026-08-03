@@ -170,9 +170,11 @@ export const fetchUsers = async (params = {}) => {
           role: params.role || '',
           sort_by: params.sort_by || 'created_at',
           sort_order: params.sort_order || 'desc',
+          include_synthetic: params.include_synthetic ? 'true' : 'false',
         }
       : {
           paginate: false,
+          include_synthetic: params.include_synthetic ? 'true' : 'false',
         };
 
     const response = await apiClient.get('/admin/users', {
@@ -201,6 +203,104 @@ export const fetchUsers = async (params = {}) => {
   } catch (error) {
     console.error(
       '❌ Erreur récupération des utilisateurs :',
+      error.response?.data || error.message
+    );
+    throw error;
+  }
+};
+
+/**
+ * Liste unifiée des organisations partenaires (CP-PR1).
+ */
+export const fetchPartnerOrganizations = async (params = {}) => {
+  try {
+    const token = getAuthToken();
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const response = await apiClient.get('/admin/partners/organizations', {
+      headers,
+      params: {
+        page: params.page || 1,
+        per_page: params.per_page || 50,
+        include_synthetic: params.include_synthetic ? 'true' : 'false',
+        organization_type: params.organization_type || undefined,
+        configuration_status: params.configuration_status || undefined,
+        lifecycle_status: params.lifecycle_status || undefined,
+        search: params.search || undefined,
+      },
+    });
+    return response.data || {};
+  } catch (error) {
+    console.error(
+      '❌ Erreur organisations partenaires :',
+      error.response?.data || error.message
+    );
+    throw error;
+  }
+};
+
+/**
+ * Fiche organisation control plane (public_id).
+ */
+export const fetchOrganizationDetail = async (publicId) => {
+  try {
+    const token = getAuthToken();
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const response = await apiClient.get(`/admin/organizations/${publicId}`, {
+      headers,
+    });
+    return response.data || {};
+  } catch (error) {
+    console.error(
+      '❌ Erreur détail organisation :',
+      error.response?.data || error.message
+    );
+    throw error;
+  }
+};
+
+/**
+ * Anomalies control plane persistées.
+ */
+export const fetchControlPlaneAnomalies = async (params = {}) => {
+  try {
+    const token = getAuthToken();
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const response = await apiClient.get('/admin/control-plane/anomalies', {
+      headers,
+      params: {
+        page: params.page || 1,
+        per_page: params.per_page || 50,
+        entity_type: params.entity_type || undefined,
+        severity: params.severity || undefined,
+        code: params.code || undefined,
+        unresolved_only: params.unresolved_only === false ? 'false' : 'true',
+      },
+    });
+    return response.data || {};
+  } catch (error) {
+    console.error(
+      '❌ Erreur anomalies control plane :',
+      error.response?.data || error.message
+    );
+    throw error;
+  }
+};
+
+/**
+ * Diagnostic d'intégrité d'un compte (lecture seule).
+ */
+export const fetchAccountIntegrity = async (userId) => {
+  try {
+    const token = getAuthToken();
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const response = await apiClient.get(
+      `/admin/partners/accounts/${userId}/integrity`,
+      { headers }
+    );
+    return response.data || {};
+  } catch (error) {
+    console.error(
+      '❌ Erreur diagnostic compte :',
       error.response?.data || error.message
     );
     throw error;
@@ -663,6 +763,15 @@ export const fetchPlatformSubscriptionPricing = async () => {
   const response = await apiClient.get('/admin/platform-billing/subscription-pricing', {
     headers: _adminAuthHeaders(),
   });
+  return response.data;
+};
+
+/** Config facturation plateforme d'une entreprise (lecture). */
+export const fetchPlatformBillingCompanyConfig = async (companyId) => {
+  const response = await apiClient.get(
+    `/admin/platform-billing/companies/${companyId}/config`,
+    { headers: _adminAuthHeaders() }
+  );
   return response.data;
 };
 

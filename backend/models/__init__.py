@@ -202,6 +202,17 @@ from .messaging_enums import (
 from .ml_prediction import MLPrediction
 from .partner_invoice import PartnerInvoice
 from .partnership import Partnership
+from .control_plane import (
+    ControlPlaneAnomaly,
+    ControlPlaneEntityOverride,
+    OrganizationMembership,
+    OrganizationServiceEntitlement,
+    PermissionCatalog,
+    PlatformOrganization,
+    RoleTemplate,
+    RoleTemplatePermission,
+    ServiceCatalog,
+)
 from .platform_admin_permission_grant import PlatformAdminPermissionGrant
 from .platform_billing import (
     BookingBillingOriginAudit,
@@ -298,6 +309,8 @@ __all__ = [
     "ManagementMode",
     "Company",
     "ContactRequest",
+    "ControlPlaneAnomaly",
+    "ControlPlaneEntityOverride",
     "CuratorTeam",
     "CuratorTeamMember",
     "CompanyBillingSettings",
@@ -339,6 +352,13 @@ __all__ = [
     "InstitutionApiKey",  # ✅ API Keys DPI
     "InstitutionNotification",  # ✅ Notifications in-app
     "InstitutionPatient",  # ✅ Patients institution
+    "OrganizationMembership",
+    "OrganizationServiceEntitlement",
+    "PermissionCatalog",
+    "PlatformOrganization",
+    "RoleTemplate",
+    "RoleTemplatePermission",
+    "ServiceCatalog",
     "PatientAuditLog",  # ✅ Curatelle: audit log
     "PatientIdentity",  # ✅ Curatelle: master index
     "PatientIdentityLink",  # ✅ Curatelle: liens entités

@@ -127,43 +127,25 @@ class AuthorizationService:
 
         company: Company | None = getattr(user_with_company, "company", None)
 
-        # Si l'utilisateur est de rôle company mais n'a pas encore d'objet Company,
-        # on le crée automatiquement (compatibilité avec get_company_from_token)
+        # CP-PR1 : plus de création automatique — profil manquant = anomalie admin
         if company is None:
-            msg = (
-                "[Authorization] ⚠️ Aucun objet Company associé à l'utilisateur %s - "
-                "tentative de création"
+            logger.warning(
+                "[Authorization] Compte company sans profil Company user=%s",
+                user.username,
             )
-            logger.warning(msg, user.username)
-            try:
-                # Créer l'instance Company et assigner les attributs
-                company = Company()
-                company.name = user.username or "Company"
-                company.user_id = user.id
-                company.address = ""
-                company.latitude = None
-                company.longitude = None
-                company.contact_email = user.email
-                company.contact_phone = ""
-                company.service_area = ""
-                company.max_daily_bookings = 50
-                company.is_approved = False
-                db.session.add(company)
-                db.session.commit()
-                logger.info(
-                    "[Authorization] ✅ Company créée automatiquement pour user %s",
-                    user.username,
-                )
-            except Exception as e:
-                logger.exception(
-                    "[Authorization] ❌ Erreur lors de la création automatique de Company : %s",
-                    e,
-                )
-                db.session.rollback()
-                abort(500, description="Failed to create default company")
+            from flask import jsonify
 
-        # company ne peut plus être None ici (soit existait déjà, soit créé ci-dessus)
-        assert company is not None, "Company should not be None at this point"
+            response = jsonify(
+                {
+                    "error": "company_profile_missing",
+                    "message": (
+                        "Ce compte entreprise n'est rattaché à aucune entreprise."
+                    ),
+                    "support_code": "CP-COMPANY-PROFILE-MISSING",
+                }
+            )
+            response.status_code = 409
+            abort(response)
 
         return company, user
 

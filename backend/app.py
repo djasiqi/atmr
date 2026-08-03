@@ -2277,5 +2277,8 @@ def create_app(config_name: str | None = None):
     from cli.platform_billing_cli import register_platform_billing_cli
 
     register_platform_billing_cli(app)
+    from cli.control_plane_cli import register_control_plane_cli
+
+    register_control_plane_cli(app)
 
     return app

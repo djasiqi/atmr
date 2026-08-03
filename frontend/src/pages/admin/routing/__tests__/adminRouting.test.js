@@ -15,6 +15,9 @@ describe('adminRoutePaths', () => {
       '/dashboard/admin/pub-1/operations/bookings/b42'
     );
     expect(adminPaths.partnersUsers(id)).toBe('/dashboard/admin/pub-1/partners/users');
+    expect(adminPaths.partnersOrganizations(id)).toBe(
+      '/dashboard/admin/pub-1/partners/organizations'
+    );
     expect(adminPaths.financeReleves(id)).toBe('/dashboard/admin/pub-1/finance/releves');
     expect(adminPaths.configuration(id)).toBe('/dashboard/admin/pub-1/configuration');
     expect(adminPaths.advancedPlatform(id, 'runtime')).toBe(

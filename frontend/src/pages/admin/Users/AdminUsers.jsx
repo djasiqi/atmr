@@ -1,795 +1,373 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { FiSearch } from 'react-icons/fi';
 import {
   fetchUsers,
-  deleteUser,
-  resetUserPassword,
-  updateUserRole,
-  fetchCompanies,
-  fetchInstitutions,
-  setCompanyBillingAccess,
-  pauseCompanyDunning,
+  fetchAccountIntegrity,
+  fetchControlPlaneAnomalies,
 } from '../../../services/adminService';
-import AdminActionDialog from '../components/AdminActionDialog';
-import AdminTempPasswordDialog from '../components/AdminTempPasswordDialog';
+import AdminAccountIntegrityDrawer from '../Organizations/AdminAccountIntegrityDrawer';
 import styles from './AdminUsers.module.css';
 import adminShell from '../adminShell.module.css';
-import { toast } from 'sonner';
 
 const ROLE_LABELS = {
   admin: 'Admin',
+  ADMIN: 'Admin',
   client: 'Client',
+  CLIENT: 'Client',
   driver: 'Chauffeur',
+  DRIVER: 'Chauffeur',
   company: 'Entreprise',
+  COMPANY: 'Entreprise',
   institution: 'Institution',
+  INSTITUTION: 'Institution',
 };
 
-const BILLING_ACCESS_LABELS = {
-  active: 'Actif',
-  partial: 'Partiel',
-  full: 'Complet',
+const formatRole = (role) => ROLE_LABELS[role] || role || '—';
+
+const formatDate = (value) => {
+  if (!value) return '—';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return String(value);
+  return d.toLocaleDateString('fr-CH');
 };
 
-const formatBillingAccessLabel = (state) =>
-  BILLING_ACCESS_LABELS[String(state || 'active').toLowerCase()] || 'Actif';
-
-const billingAccessBadgeClass = (state, stylesMap) => {
-  const key = String(state || 'active').toLowerCase();
-  if (key === 'partial') return stylesMap.billingBadgePartial;
-  if (key === 'full') return stylesMap.billingBadgeFull;
-  return stylesMap.billingBadgeActive;
+const organizationLabel = (user) => {
+  if (user.company_name) return user.company_name;
+  if (user.institution_id) return `Institution #${user.institution_id}`;
+  if (String(user.role || '').toUpperCase() === 'COMPANY' && !user.company_id) {
+    return 'Aucune (orphelin)';
+  }
+  if (String(user.role || '').toUpperCase() === 'INSTITUTION' && !user.institution_id) {
+    return 'Aucune (orphelin)';
+  }
+  return '—';
 };
 
+/**
+ * Comptes et accès — surface lecture seule (CP-PR1).
+ */
 const AdminUsers = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [tab, setTab] = useState(searchParams.get('tab') || 'all');
   const [users, setUsers] = useState([]);
-  const [search, setSearch] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [roleFilter, setRoleFilter] = useState('');
-  const [sortBy, setSortBy] = useState('created_at');
-  const [sortOrder, setSortOrder] = useState('desc');
-  const [page, setPage] = useState(1);
-  const [perPage, setPerPage] = useState(50);
-  const [totalUsers, setTotalUsers] = useState(0);
+  const [anomalies, setAnomalies] = useState([]);
+  const [anomalyTotal, setAnomalyTotal] = useState(0);
+  const [search, setSearch] = useState((searchParams.get('search') || '').trim());
+  const [debouncedSearch, setDebouncedSearch] = useState(search);
+  const [roleFilter, setRoleFilter] = useState(searchParams.get('role') || '');
+  const [includeSynthetic, setIncludeSynthetic] = useState(
+    searchParams.get('include_synthetic') === 'true'
+  );
+  const [page, setPage] = useState(Number(searchParams.get('page') || 1) || 1);
   const [totalPages, setTotalPages] = useState(1);
-  const [globalStats, setGlobalStats] = useState({
-    admin: 0,
-    company: 0,
-    institution: 0,
-    driver: 0,
-    client: 0,
-  });
+  const [totalUsers, setTotalUsers] = useState(0);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
-
-  const [companyOptions, setCompanyOptions] = useState([]);
-  const [showCompanyDropdown, setShowCompanyDropdown] = useState(false);
-  const [pendingDriverUserId, setPendingDriverUserId] = useState(null);
-
-  const [institutionOptions, setInstitutionOptions] = useState([]);
-  const [showInstitutionDropdown, setShowInstitutionDropdown] = useState(false);
-  const [pendingInstitutionUserId, setPendingInstitutionUserId] = useState(null);
-  const [selectedInstitutionId, setSelectedInstitutionId] = useState(null);
-  const [selectedInstitutionRole, setSelectedInstitutionRole] = useState('institution_admin');
-
-  const [actionDialog, setActionDialog] = useState(null);
-  const [tempPasswordDialog, setTempPasswordDialog] = useState(null);
+  const [integrityAccountId, setIntegrityAccountId] = useState(null);
 
   useEffect(() => {
-    const loadCompanies = async () => {
-      try {
-        const companies = await fetchCompanies();
-        setCompanyOptions((companies || []).map((c) => ({ ...c, selected: false })));
-      } catch (error) {
-        console.error('Erreur chargement entreprises :', error);
-      }
-    };
-    loadCompanies();
-  }, []);
-
-  useEffect(() => {
-    const loadInstitutions = async () => {
-      try {
-        const institutions = await fetchInstitutions();
-        setInstitutionOptions(institutions || []);
-      } catch (error) {
-        console.error('Erreur chargement institutions :', error);
-      }
-    };
-    loadInstitutions();
-  }, []);
-
-  useEffect(() => {
-    const timeout = setTimeout(() => {
-      setDebouncedSearch(search.trim());
-      setPage(1);
-    }, 300);
-    return () => clearTimeout(timeout);
+    const t = setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => clearTimeout(t);
   }, [search]);
 
-  const loadUsers = useCallback(async () => {
-    setLoading(true);
-    setLoadError(null);
-    try {
-      const data = await fetchUsers({
-        page,
-        per_page: perPage,
-        search: debouncedSearch,
-        role: roleFilter,
-        sort_by: sortBy,
-        sort_order: sortOrder,
-      });
-      setUsers(data.users || []);
-      setTotalUsers(data.total || 0);
-      setTotalPages(data.total_pages || 1);
-      if (data.role_counts) {
-        setGlobalStats({
-          admin: Number(data.role_counts.admin || 0),
-          company: Number(data.role_counts.company || 0),
-          institution: Number(data.role_counts.institution || 0),
-          driver: Number(data.role_counts.driver || 0),
-          client: Number(data.role_counts.client || 0),
-        });
-      } else {
-        setGlobalStats({
-          admin: 0,
-          company: 0,
-          institution: 0,
-          driver: 0,
-          client: 0,
-        });
-      }
-
-      if ((data.total_pages || 1) < page) {
-        setPage(1);
-      }
-    } catch (error) {
-      const status = error?.response?.status;
-      let message = 'Impossible de charger les utilisateurs.';
-      if (status === 401 || status === 403) {
-        message = 'Accès refusé — vérifiez vos droits administrateur.';
-      } else if (status >= 500) {
-        message = 'Service indisponible — réessayez plus tard.';
-      } else if (!error?.response) {
-        message = 'Erreur réseau — vérifiez votre connexion.';
-      }
-      setLoadError(message);
-      setUsers([]);
-      setTotalUsers(0);
-      setTotalPages(1);
-    } finally {
-      setLoading(false);
-    }
-  }, [debouncedSearch, page, perPage, roleFilter, sortBy, sortOrder]);
+  useEffect(() => {
+    const next = new URLSearchParams();
+    if (tab && tab !== 'all') next.set('tab', tab);
+    if (debouncedSearch) next.set('search', debouncedSearch);
+    if (roleFilter) next.set('role', roleFilter);
+    if (includeSynthetic) next.set('include_synthetic', 'true');
+    if (page > 1) next.set('page', String(page));
+    setSearchParams(next, { replace: true });
+  }, [tab, debouncedSearch, roleFilter, includeSynthetic, page, setSearchParams]);
 
   useEffect(() => {
-    loadUsers();
-  }, [loadUsers]);
-
-  const updateUserRoleHandler = async (userId, newRole) => {
-    if (!userId || !newRole) {
-      toast.error("L'utilisateur ou le rôle est invalide.");
-      return;
-    }
-
-    if (newRole.toLowerCase() === 'driver') {
-      if (!companyOptions.length) {
-        toast.error('Aucune entreprise disponible.');
-        return;
-      }
-      setPendingDriverUserId(userId);
-      setShowCompanyDropdown(true);
-      return;
-    }
-
-    if (newRole.toLowerCase() === 'institution') {
-      setActionDialog({
-        kind: 'role-institution',
-        userId,
-        title: 'Attribuer le rôle institution',
-        description: 'Confirmer l’attribution du rôle institution (admin institution).',
-        confirmationLabel: 'Attribuer',
-        onConfirm: async () => {
-          await updateUserRole(userId, {
-            role: 'institution',
-            institution_role: 'institution_admin',
+    let cancelled = false;
+    const load = async () => {
+      setLoading(true);
+      setLoadError(null);
+      try {
+        if (tab === 'anomalies') {
+          const data = await fetchControlPlaneAnomalies({
+            page,
+            per_page: 50,
+            unresolved_only: true,
           });
-          await loadUsers();
-          setActionDialog(null);
-          toast.success('Rôle institution attribué.');
-        },
-      });
-      return;
-    }
-
-    setActionDialog({
-      kind: 'role',
-      userId,
-      title: 'Changer le rôle',
-      description: `Nouveau rôle : ${ROLE_LABELS[newRole.toLowerCase()] || newRole}.`,
-      confirmationLabel: 'Mettre à jour',
-      onConfirm: async () => {
-        await updateUserRole(userId, { role: newRole });
-        await loadUsers();
-        setActionDialog(null);
-        toast.success(`Rôle mis à jour : ${newRole}`);
-      },
-    });
-  };
-
-  const handleDelete = (user) => {
-    setActionDialog({
-      kind: 'delete',
-      title: 'Supprimer l’utilisateur',
-      description: `Supprimer définitivement le compte « ${user.username || user.email} ».`,
-      impact: 'Cette action est irréversible.',
-      confirmationLabel: 'Supprimer',
-      confirmText: 'SUPPRIMER',
-      danger: true,
-      onConfirm: async () => {
-        await deleteUser(user.id);
-        await loadUsers();
-        setActionDialog(null);
-        toast.success('Utilisateur supprimé.');
-      },
-    });
-  };
-
-  const handleResetPassword = (user) => {
-    setActionDialog({
-      kind: 'reset-password',
-      title: 'Réinitialiser le mot de passe',
-      description: `Générer un mot de passe temporaire pour « ${user.username || user.email} ».`,
-      impact: 'Le mot de passe actuel ne fonctionnera plus.',
-      confirmationLabel: 'Réinitialiser',
-      danger: true,
-      onConfirm: async () => {
-        const response = await resetUserPassword(user.id);
-        if (!response?.new_password) {
-          throw new Error('Aucun mot de passe généré par le serveur.');
-        }
-        setActionDialog(null);
-        setTempPasswordDialog({
-          accountLabel: user.email || user.username || `ID ${user.id}`,
-          temporaryPassword: response.new_password,
-        });
-      },
-    });
-  };
-
-  const handleSetBillingAccess = (user, state) => {
-    if (!user?.company_id) {
-      toast.error('Aucune entreprise liée à ce compte.');
-      return;
-    }
-    const label = formatBillingAccessLabel(state);
-    const needsPauseDays = state === 'active';
-    setActionDialog({
-      kind: 'billing-access',
-      title: 'Accès commercial',
-      description:
-        state === 'active'
-          ? 'Lever la restriction d’accès commercial pour cette entreprise.'
-          : `Appliquer une restriction d’accès commercial (${label}).`,
-      confirmationLabel: 'Confirmer',
-      reason: needsPauseDays
-        ? {
-            required: false,
-            label: 'Pause du recouvrement après levée (jours, vide = aucune)',
-          }
-        : undefined,
-      onConfirm: async ({ reason }) => {
-        const payload = {
-          state,
-          reason_code: state === 'active' ? 'admin_lift' : 'admin_manual',
-        };
-        if (needsPauseDays && reason && String(reason).trim() !== '') {
-          const pauseDays = parseInt(reason, 10);
-          if (!Number.isNaN(pauseDays) && pauseDays > 0) {
-            payload.pause_days_after_lift = pauseDays;
+          if (cancelled) return;
+          setAnomalies(data.items || []);
+          setAnomalyTotal(data.pagination?.total || 0);
+          setTotalPages(data.pagination?.pages || 1);
+        } else {
+          const data = await fetchUsers({
+            page,
+            per_page: 50,
+            search: debouncedSearch,
+            role: roleFilter,
+            include_synthetic: includeSynthetic,
+            paginate: true,
+          });
+          if (cancelled) return;
+          setUsers(data.users || []);
+          setTotalPages(data.total_pages || 1);
+          setTotalUsers(data.total || 0);
+          const attention = await fetchControlPlaneAnomalies({
+            page: 1,
+            per_page: 5,
+            unresolved_only: true,
+          });
+          if (!cancelled) {
+            setAnomalies(attention.items || []);
+            setAnomalyTotal(attention.pagination?.total || 0);
           }
         }
-        await setCompanyBillingAccess(user.company_id, payload);
-        await loadUsers();
-        setActionDialog(null);
-        toast.success(`Accès commercial mis à jour : ${label}`);
-      },
-    });
-  };
-
-  const handlePauseDunning = (user) => {
-    if (!user?.company_id) {
-      toast.error('Aucune entreprise liée à ce compte.');
-      return;
-    }
-    setActionDialog({
-      kind: 'pause-dunning',
-      title: 'Pause du recouvrement',
-      description: 'Mettre en pause le recouvrement automatique pour cette entreprise.',
-      confirmationLabel: 'Mettre en pause',
-      reason: {
-        required: true,
-        label: 'Durée de pause (jours)',
-        minLength: 1,
-      },
-      onConfirm: async ({ reason }) => {
-        const days = parseInt(reason, 10);
-        if (Number.isNaN(days) || days < 1) {
-          throw new Error('Durée invalide — indiquez un nombre de jours ≥ 1.');
+      } catch (err) {
+        if (!cancelled) {
+          setLoadError(err?.response?.data?.message || 'Impossible de charger les comptes.');
         }
-        await pauseCompanyDunning(user.company_id, {
-          days,
-          reason: 'pause_admin',
-        });
-        await loadUsers();
-        setActionDialog(null);
-        toast.success(`Recouvrement mis en pause pour ${days} jour(s).`);
-      },
-    });
-  };
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [page, debouncedSearch, roleFilter, includeSynthetic, tab]);
 
-  const startRow = totalUsers === 0 ? 0 : (page - 1) * perPage + 1;
-  const endRow = Math.min(page * perPage, totalUsers);
-
-  const resetFilters = () => {
-    setSearch('');
-    setRoleFilter('');
-    setSortBy('created_at');
-    setSortOrder('desc');
-    setPage(1);
+  const openAccount = async (user) => {
+    try {
+      await fetchAccountIntegrity(user.id);
+      setIntegrityAccountId(user.id);
+    } catch {
+      setIntegrityAccountId(user.id);
+    }
   };
 
   return (
-    <>
-      <main className={`${adminShell.content} ${styles.shellMain}`}>
-          <header className={styles.pageHeader}>
-            <h1>Gestion des utilisateurs</h1>
-            <p className={styles.subtext}>
-              Recherche, tri, attribution des roles, acces commercial entreprises et
-              actions de maintenance des comptes.
-            </p>
-          </header>
+    <main className={adminShell.content}>
+      <header className={styles.pageHeader}>
+        <div className={styles.pageHeaderLeft}>
+          <p className={styles.pageEyebrow}>Partenaires</p>
+          <h1 className={styles.pageTitle}>Comptes et accès</h1>
+          <p className={styles.pageSubtitle}>
+            Lecture seule — {totalUsers} compte{totalUsers === 1 ? '' : 's'}
+            {includeSynthetic ? '' : ' (hors techniques/démo)'}. {anomalyTotal} anomalie
+            {anomalyTotal === 1 ? '' : 's'} à traiter.
+          </p>
+        </div>
+      </header>
 
-          <section className={styles.metricsGrid} aria-label="Synthese utilisateurs">
-            <article className={styles.metricCard}>
-              <span>Total</span>
-              <strong>{totalUsers}</strong>
-            </article>
-            <article className={styles.metricCard}>
-              <span>Admins</span>
-              <strong>{globalStats.admin}</strong>
-            </article>
-            <article className={styles.metricCard}>
-              <span>Entreprises</span>
-              <strong>{globalStats.company}</strong>
-            </article>
-            <article className={styles.metricCard}>
-              <span>Institutions</span>
-              <strong>{globalStats.institution}</strong>
-            </article>
-            <article className={styles.metricCard}>
-              <span>Chauffeurs</span>
-              <strong>{globalStats.driver}</strong>
-            </article>
-            <article className={styles.metricCard}>
-              <span>Clients</span>
-              <strong>{globalStats.client}</strong>
-            </article>
-          </section>
+      <div className={styles.filters}>
+        <button
+          type="button"
+          className={tab === 'all' ? styles.actionBtn : undefined}
+          onClick={() => {
+            setTab('all');
+            setPage(1);
+          }}
+        >
+          Tous
+        </button>
+        <button
+          type="button"
+          className={tab === 'anomalies' ? styles.actionBtn : undefined}
+          onClick={() => {
+            setTab('anomalies');
+            setPage(1);
+          }}
+        >
+          Anomalies ({anomalyTotal})
+        </button>
+        <label className={styles.searchBox}>
+          <FiSearch aria-hidden />
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
+            placeholder="Rechercher un compte…"
+            disabled={tab === 'anomalies'}
+          />
+        </label>
+        <select
+          value={roleFilter}
+          onChange={(e) => {
+            setRoleFilter(e.target.value);
+            setPage(1);
+          }}
+          aria-label="Filtrer par rôle"
+          disabled={tab === 'anomalies'}
+        >
+          <option value="">Tous les rôles</option>
+          <option value="admin">Admin</option>
+          <option value="company">Entreprise</option>
+          <option value="institution">Institution</option>
+          <option value="driver">Chauffeur</option>
+          <option value="client">Client</option>
+        </select>
+        <label className={styles.checkboxLabel}>
+          <input
+            type="checkbox"
+            checked={includeSynthetic}
+            onChange={(e) => {
+              setIncludeSynthetic(e.target.checked);
+              setPage(1);
+            }}
+            disabled={tab === 'anomalies'}
+          />
+          Inclure comptes techniques et démo
+        </label>
+      </div>
 
-          <section className={styles.toolbar}>
-            <input
-              type="text"
-              placeholder="Rechercher par nom ou email"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className={styles.searchInput}
-            />
+      {tab === 'all' && anomalies.length > 0 ? (
+        <section className={styles.tableContainer} aria-label="À traiter">
+          <h2>À traiter</h2>
+          <ul>
+            {anomalies.slice(0, 5).map((a) => (
+              <li key={a.id}>
+                [{a.severity}] {a.code} — {a.entity_key}
+                {a.user_id ? (
+                  <>
+                    {' '}
+                    <button
+                      type="button"
+                      className={styles.actionBtn}
+                      onClick={() => setIntegrityAccountId(a.user_id)}
+                    >
+                      Ouvrir
+                    </button>
+                  </>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
-            <div className={styles.filters}>
-              <select
-                value={roleFilter}
-                onChange={(e) => {
-                  setRoleFilter(e.target.value);
-                  setPage(1);
-                }}
-                className={styles.roleFilter}
-              >
-                <option value="">Tous les roles</option>
-                <option value="admin">Admin</option>
-                <option value="client">Client</option>
-                <option value="driver">Chauffeur</option>
-                <option value="company">Entreprise</option>
-                <option value="institution">Institution</option>
-              </select>
+      {loading ? <p>Chargement…</p> : null}
+      {loadError ? (
+        <p className={styles.errorText} role="alert">
+          {loadError}
+        </p>
+      ) : null}
 
-              <select
-                value={sortBy}
-                onChange={(e) => {
-                  setSortBy(e.target.value);
-                  setPage(1);
-                }}
-                className={styles.roleFilter}
-              >
-                <option value="created_at">Tri : date inscription</option>
-                <option value="username">Tri : nom</option>
-                <option value="role">Tri : role</option>
-                <option value="email">Tri : email</option>
-              </select>
-
-              <select
-                value={sortOrder}
-                onChange={(e) => {
-                  setSortOrder(e.target.value);
-                  setPage(1);
-                }}
-                className={styles.roleFilter}
-              >
-                <option value="desc">Ordre : decroissant</option>
-                <option value="asc">Ordre : croissant</option>
-              </select>
-
-              <button type="button" className={styles.ghostFilterButton} onClick={resetFilters}>
-                Reinitialiser filtres
-              </button>
-            </div>
-          </section>
-
-          <div className={styles.tableContainer}>
-            <table className={styles.userTable}>
-              <thead>
+      {!loading && !loadError && tab === 'anomalies' ? (
+        <div className={styles.tableContainer}>
+          <table className={styles.userTable}>
+            <thead>
+              <tr>
+                <th>Code</th>
+                <th>Sévérité</th>
+                <th>Entité</th>
+                <th>Dernière détection</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {anomalies.length === 0 ? (
                 <tr>
-                  <th>Nom</th>
-                  <th>Email</th>
-                  <th>Role</th>
-                  <th>Acces commercial</th>
-                  <th>Date d inscription</th>
-                  <th>Actions</th>
+                  <td colSpan={5}>Aucune anomalie ouverte.</td>
                 </tr>
-              </thead>
-              <tbody>
-                {loading ? (
-                  <tr>
-                    <td colSpan="6" className={styles.placeholderRow}>
-                      Chargement des utilisateurs...
+              ) : (
+                anomalies.map((a) => (
+                  <tr key={a.id}>
+                    <td>{a.code}</td>
+                    <td>{a.severity}</td>
+                    <td>
+                      {a.entity_type} / {a.entity_key}
+                    </td>
+                    <td>{formatDate(a.last_seen_at)}</td>
+                    <td>
+                      {a.user_id ? (
+                        <button
+                          type="button"
+                          className={styles.actionBtn}
+                          onClick={() => setIntegrityAccountId(a.user_id)}
+                        >
+                          Ouvrir
+                        </button>
+                      ) : (
+                        '—'
+                      )}
                     </td>
                   </tr>
-                ) : loadError ? (
-                  <tr>
-                    <td colSpan="6" className={styles.placeholderRow} role="alert">
-                      {loadError}{' '}
-                      <button type="button" className={styles.ghostFilterButton} onClick={loadUsers}>
-                        Réessayer
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+
+      {!loading && !loadError && tab === 'all' ? (
+        <div className={styles.tableContainer}>
+          <table className={styles.userTable}>
+            <thead>
+              <tr>
+                <th>Nom</th>
+                <th>E-mail</th>
+                <th>Rôle actuel</th>
+                <th>Organisation liée</th>
+                <th>Inscription</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {users.length === 0 ? (
+                <tr>
+                  <td colSpan={6}>Aucun compte trouvé.</td>
+                </tr>
+              ) : (
+                users.map((user) => (
+                  <tr key={user.id}>
+                    <td>{user.username || '—'}</td>
+                    <td>{user.email || '—'}</td>
+                    <td>
+                      <span className={styles.roleBadge}>{formatRole(user.role)}</span>
+                    </td>
+                    <td>{organizationLabel(user)}</td>
+                    <td>{formatDate(user.created_at)}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className={styles.actionBtn}
+                        onClick={() => openAccount(user)}
+                      >
+                        Ouvrir
                       </button>
                     </td>
                   </tr>
-                ) : users.length > 0 ? (
-                  users.map((user) => {
-                    const userRole = String(user.role || '').toLowerCase();
-                    const isCompany = userRole === 'company' && Boolean(user.company_id);
-                    const billingState = String(
-                      user.platform_billing_access_state || 'active'
-                    ).toLowerCase();
-                    const dunningPaused = Boolean(user.dunning_paused_until);
-                    return (
-                      <tr key={user.id}>
-                        <td className={styles.userNameCell}>
-                          {user.username || '-'}
-                          {isCompany && user.company_name ? (
-                            <span className={styles.companyHint}>{user.company_name}</span>
-                          ) : null}
-                        </td>
-                        <td className={styles.emailCell}>{user.email || '-'}</td>
-                        <td>
-                          <select
-                            className={styles.roleSelect}
-                            value={userRole}
-                            onChange={(e) => updateUserRoleHandler(user.id, e.target.value)}
-                          >
-                            {Object.entries(ROLE_LABELS).map(([value, label]) => (
-                              <option key={value} value={value}>
-                                {label}
-                              </option>
-                            ))}
-                          </select>
-                        </td>
-                        <td className={styles.billingAccessCell}>
-                          {isCompany ? (
-                            <div className={styles.billingAccessBlock}>
-                              <span
-                                className={`${styles.billingBadge} ${billingAccessBadgeClass(
-                                  billingState,
-                                  styles
-                                )}`}
-                              >
-                                {formatBillingAccessLabel(billingState)}
-                              </span>
-                              {dunningPaused ? (
-                                <span className={styles.dunningPauseHint}>
-                                  Pause jusqu au{' '}
-                                  {new Date(user.dunning_paused_until).toLocaleDateString(
-                                    'fr-CH'
-                                  )}
-                                </span>
-                              ) : null}
-                              <div className={styles.billingActions}>
-                                {billingState !== 'active' ? (
-                                  <button
-                                    type="button"
-                                    className={styles.billingActionButton}
-                                    onClick={() => handleSetBillingAccess(user, 'active')}
-                                  >
-                                    Lever
-                                  </button>
-                                ) : null}
-                                {billingState !== 'partial' ? (
-                                  <button
-                                    type="button"
-                                    className={styles.billingActionButton}
-                                    onClick={() => handleSetBillingAccess(user, 'partial')}
-                                  >
-                                    Partiel
-                                  </button>
-                                ) : null}
-                                {billingState !== 'full' ? (
-                                  <button
-                                    type="button"
-                                    className={styles.billingActionButtonWarn}
-                                    onClick={() => handleSetBillingAccess(user, 'full')}
-                                  >
-                                    Complet
-                                  </button>
-                                ) : null}
-                                <button
-                                  type="button"
-                                  className={styles.billingActionButton}
-                                  onClick={() => handlePauseDunning(user)}
-                                >
-                                  Pause
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            <span className={styles.billingNa}>—</span>
-                          )}
-                        </td>
-                        <td className={styles.dateCell}>
-                          {user.created_at
-                            ? new Date(user.created_at).toLocaleString('fr-CH')
-                            : 'Inconnu'}
-                        </td>
-                        <td className={styles.actionsCell}>
-                          <button
-                            onClick={() => handleResetPassword(user)}
-                            className={styles.resetButton}
-                          >
-                            Reinitialiser
-                          </button>
-                          <button
-                            onClick={() => handleDelete(user)}
-                            className={styles.deleteButton}
-                          >
-                            Supprimer
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })
-                ) : (
-                  <tr>
-                    <td colSpan="6" className={styles.placeholderRow}>
-                      Aucun utilisateur trouvé
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          <div className={styles.paginationBar}>
-            <p className={styles.paginationInfo}>
-              Affichage {startRow}-{endRow} sur {totalUsers}
-            </p>
-            <div className={styles.paginationControls}>
-              <label className={styles.perPageLabel}>
-                Lignes
-                <select
-                  value={perPage}
-                  onChange={(e) => {
-                    setPerPage(parseInt(e.target.value, 10));
-                    setPage(1);
-                  }}
-                  className={styles.perPageSelect}
-                >
-                  <option value={25}>25</option>
-                  <option value={50}>50</option>
-                  <option value={100}>100</option>
-                </select>
-              </label>
-              <button
-                type="button"
-                className={styles.paginationButton}
-                disabled={page <= 1 || loading}
-                onClick={() => setPage((prev) => Math.max(1, prev - 1))}
-              >
-                Precedent
-              </button>
-              <span className={styles.pageIndicator}>
-                Page {page} / {Math.max(totalPages, 1)}
-              </span>
-              <button
-                type="button"
-                className={styles.paginationButton}
-                disabled={page >= totalPages || loading}
-                onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
-              >
-                Suivant
-              </button>
-            </div>
-          </div>
-        </main>
-      {showCompanyDropdown && (
-        <div className={styles.modal}>
-          <div className={styles.modalContent}>
-            <h3>Assigner une entreprise au chauffeur</h3>
-            <select
-              className={styles.modalInput}
-              onChange={(e) =>
-                setCompanyOptions((prev) =>
-                  prev.map((c) => ({
-                    ...c,
-                    selected: c.id === parseInt(e.target.value, 10),
-                  }))
-                )
-              }
-            >
-              <option value="">Sélectionnez une entreprise</option>
-              {companyOptions.map((company) => (
-                <option key={company.id} value={company.id}>
-                  {company.name}
-                </option>
-              ))}
-            </select>
-            <button
-              className={styles.modalPrimaryButton}
-              onClick={async () => {
-                const selectedCompany = companyOptions.find((c) => c.selected);
-                if (!selectedCompany) {
-                  toast.error('Veuillez sélectionner une entreprise.');
-                  return;
-                }
-                try {
-                  await updateUserRole(pendingDriverUserId, {
-                    role: 'driver',
-                    company_id: selectedCompany.id,
-                  });
-                  await loadUsers();
-                  setShowCompanyDropdown(false);
-                  setPendingDriverUserId(null);
-                  toast.success('Rôle chauffeur attribué.');
-                } catch (error) {
-                  toast.error(
-                    error?.response?.data?.error ||
-                      'Impossible de mettre à jour le rôle.'
-                  );
-                }
-              }}
-            >
-              Valider
-            </button>
-            <button
-              className={styles.modalGhostButton}
-              onClick={() => {
-                setShowCompanyDropdown(false);
-                setPendingDriverUserId(null);
-              }}
-            >
-              Annuler
-            </button>
-          </div>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
-      )}
-
-      {showInstitutionDropdown && (
-        <div className={styles.modal}>
-          <div className={styles.modalContent}>
-            <h3>Assigner une institution</h3>
-            <div className={styles.modalField}>
-              <label>Institution</label>
-              <select
-                className={styles.modalInput}
-                value={selectedInstitutionId || ''}
-                onChange={(e) => setSelectedInstitutionId(parseInt(e.target.value, 10) || null)}
-              >
-                <option value="">Sélectionnez une institution</option>
-                {institutionOptions.map((inst) => (
-                  <option key={inst.id} value={inst.id}>
-                    {inst.name} ({inst.type || 'clinique'})
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className={styles.modalField}>
-              <label>Role dans l institution</label>
-              <select
-                className={styles.modalInput}
-                value={selectedInstitutionRole}
-                onChange={(e) => setSelectedInstitutionRole(e.target.value)}
-              >
-                <option value="institution_admin">Admin institution</option>
-                <option value="institution_requester">Demandeur</option>
-                <option value="institution_reader">Lecteur</option>
-                <option value="institution_billing">Facturation</option>
-              </select>
-            </div>
-            <div className={styles.modalActions}>
-              <button
-                className={styles.modalPrimaryButton}
-                onClick={async () => {
-                  if (!selectedInstitutionId) {
-                    toast.error('Veuillez sélectionner une institution.');
-                    return;
-                  }
-                  try {
-                    await updateUserRole(pendingInstitutionUserId, {
-                      role: 'institution',
-                      institution_id: selectedInstitutionId,
-                      institution_role: selectedInstitutionRole,
-                    });
-                    await loadUsers();
-                    setShowInstitutionDropdown(false);
-                    setPendingInstitutionUserId(null);
-                    setSelectedInstitutionId(null);
-                    setSelectedInstitutionRole('institution_admin');
-                    toast.success('Rôle institution attribué.');
-                  } catch (error) {
-                    toast.error(
-                      error?.response?.data?.error ||
-                        'Impossible de mettre à jour le rôle.'
-                    );
-                  }
-                }}
-              >
-                Valider
-              </button>
-              <button
-                className={styles.modalGhostButton}
-                onClick={() => {
-                  setShowInstitutionDropdown(false);
-                  setPendingInstitutionUserId(null);
-                  setSelectedInstitutionId(null);
-                  setSelectedInstitutionRole('institution_admin');
-                }}
-              >
-                Annuler
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {actionDialog ? (
-        <AdminActionDialog
-          open
-          title={actionDialog.title}
-          description={actionDialog.description}
-          impact={actionDialog.impact}
-          confirmationLabel={actionDialog.confirmationLabel}
-          confirmText={actionDialog.confirmText}
-          reason={actionDialog.reason}
-          danger={Boolean(actionDialog.danger)}
-          onConfirm={actionDialog.onConfirm}
-          onClose={() => setActionDialog(null)}
-        />
       ) : null}
 
-      {tempPasswordDialog ? (
-        <AdminTempPasswordDialog
-          open
-          accountLabel={tempPasswordDialog.accountLabel}
-          temporaryPassword={tempPasswordDialog.temporaryPassword}
-          onClose={() => setTempPasswordDialog(null)}
+      <div className={styles.pagination}>
+        <button type="button" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+          Précédent
+        </button>
+        <span>
+          Page {page} / {totalPages}
+        </span>
+        <button
+          type="button"
+          disabled={page >= totalPages}
+          onClick={() => setPage((p) => p + 1)}
+        >
+          Suivant
+        </button>
+      </div>
+
+      {integrityAccountId ? (
+        <AdminAccountIntegrityDrawer
+          accountId={integrityAccountId}
+          onClose={() => setIntegrityAccountId(null)}
         />
       ) : null}
-    </>
+    </main>
   );
 };
 

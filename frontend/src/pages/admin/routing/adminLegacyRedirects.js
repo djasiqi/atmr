@@ -49,6 +49,12 @@ export function RedirectLegacyDemoRequests() {
   return <AdminLegacyRedirect toPathname={adminPaths.partnersDemoRequests(publicId)} />;
 }
 
+/** partners → partners/organizations (conserve search/hash/state) */
+export function RedirectPartnersToOrganizations() {
+  const { public_id: publicId } = useParams();
+  return <AdminLegacyRedirect toPathname={adminPaths.partnersOrganizations(publicId)} />;
+}
+
 /** /billing → finance */
 export function RedirectLegacyBilling() {
   const { public_id: publicId } = useParams();

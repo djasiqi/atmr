@@ -388,6 +388,17 @@ def invite_or_attach_institution_user(
         if job_title is not None:
             existing_user.job_title = job_title
 
+        try:
+            from services.control_plane.projector import get_projector
+
+            get_projector().sync_institution_user(existing_user)
+        except Exception:
+            logger.exception(
+                "[Institution Invite] projection control plane échouée (existing_user)"
+            )
+            db.session.rollback()
+            raise
+
         db.session.commit()
 
         access_result = dispatch_institution_email(
@@ -459,6 +470,18 @@ def invite_or_attach_institution_user(
     new_user.set_password(placeholder_password, force_change=True)
 
     db.session.add(new_user)
+    try:
+        from services.control_plane.projector import get_projector
+
+        db.session.flush()
+        get_projector().sync_institution_user(new_user)
+    except Exception:
+        logger.exception(
+            "[Institution Invite] projection control plane échouée (new_user)"
+        )
+        db.session.rollback()
+        raise
+
     db.session.commit()
 
     invite_result = dispatch_institution_email(
@@ -579,6 +602,18 @@ def _create_username_mode_user(
     new_user.set_password(temp_password, force_change=True)
 
     db.session.add(new_user)
+    try:
+        from services.control_plane.projector import get_projector
+
+        db.session.flush()
+        get_projector().sync_institution_user(new_user)
+    except Exception:
+        logger.exception(
+            "[Institution Invite] projection control plane échouée (new_username)"
+        )
+        db.session.rollback()
+        raise
+
     db.session.commit()
 
     logger.info(

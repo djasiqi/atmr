@@ -25,6 +25,7 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy import Enum as SAEnum
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 from typing_extensions import override
@@ -156,10 +157,24 @@ class User(db.Model):
     disabled_at = Column(DateTime(timezone=True), nullable=True)
     archived_at = Column(DateTime(timezone=True), nullable=True)
 
+    # CP-PR1 : classification d'origine des données (défaut unknown)
+    data_origin: Mapped[str] = mapped_column(
+        String(32), nullable=False, server_default="unknown"
+    )
+    data_origin_source: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    data_origin_confidence: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    classified_at = Column(DateTime(timezone=True), nullable=True)
+    classified_by_user_id: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+    classification_evidence_json = Column(JSONB, nullable=True)
+
     # ✅ Ajout de l'index sur `public_id` pour optimiser les recherches
     __table_args__ = (
         Index("idx_public_id", "public_id"),
         Index("idx_user_institution_id", "institution_id"),
+        Index("idx_user_data_origin", "data_origin"),
     )
 
     # ✅ Relations bidirectionnelles avec suppression en cascade

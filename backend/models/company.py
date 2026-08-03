@@ -56,6 +56,8 @@ logger = logging.getLogger(__name__)
 
 class Company(db.Model):
     __tablename__ = "company"
+    # CP-PR1 : pas de UNIQUE(user_id) — les coquilles cliniques partagent
+    # volontairement le user_id du transporteur / client.
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False)

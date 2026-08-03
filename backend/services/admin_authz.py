@@ -35,6 +35,8 @@ CAP_OVERVIEW_READ = "admin.overview.read"
 CAP_BOOKINGS_READ = "admin.bookings.read"
 CAP_BOOKINGS_EXPORT = "admin.bookings.export"
 CAP_PARTNERS_READ = "admin.partners.read"
+CAP_ORGANIZATIONS_READ = "admin.organizations.read"
+CAP_ACCOUNTS_READ = "admin.accounts.read"
 CAP_USERS_MANAGE = "admin.users.manage"
 CAP_USERS_SECURITY = "admin.users.security"
 CAP_BILLING_READ = "admin.billing.read"
@@ -51,6 +53,8 @@ ALL_ADMIN_CAPABILITIES: frozenset[str] = frozenset(
         CAP_BOOKINGS_READ,
         CAP_BOOKINGS_EXPORT,
         CAP_PARTNERS_READ,
+        CAP_ORGANIZATIONS_READ,
+        CAP_ACCOUNTS_READ,
         CAP_USERS_MANAGE,
         CAP_USERS_SECURITY,
         CAP_BILLING_READ,
@@ -62,6 +66,12 @@ ALL_ADMIN_CAPABILITIES: frozenset[str] = frozenset(
         CAP_LABS_EXECUTE,
     }
 )
+
+# Alias temporaire CP-PR1 : nouvelles caps acceptées si partners.read présent
+CAPABILITY_ALIASES: dict[str, frozenset[str]] = {
+    CAP_ORGANIZATIONS_READ: frozenset({CAP_PARTNERS_READ}),
+    CAP_ACCOUNTS_READ: frozenset({CAP_PARTNERS_READ}),
+}
 
 ADMIN_IMPLIED_CAPABILITIES: frozenset[str] = ALL_ADMIN_CAPABILITIES
 
@@ -125,6 +135,15 @@ def user_has_admin_capability(user_id: int | None, capability: str) -> bool:
 
     grants = _admin_capability_grants(user_id)
     if capability in grants:
+        return True
+    aliases = CAPABILITY_ALIASES.get(capability)
+    if aliases and grants.intersection(aliases):
+        logger.info(
+            "admin_capability_alias_allow user_id=%s capability=%s via=%s",
+            user_id,
+            capability,
+            sorted(grants.intersection(aliases)),
+        )
         return True
     logger.info(
         "admin_capability_denied user_id=%s capability=%s enforced=true",

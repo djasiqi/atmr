@@ -26,6 +26,7 @@ import {
   RedirectLegacyPlatformOpsIndex,
   RedirectLegacyPlatformOpsSegment,
   RedirectToAdminFinance,
+  RedirectPartnersToOrganizations,
 } from './pages/admin/routing/adminLegacyRedirects';
 import { adminPaths } from './pages/admin/routing/adminRoutePaths';
 import GoogleMapsProvider from './components/common/GoogleMapsProvider';
@@ -58,6 +59,10 @@ import NotFound from './pages/Error/NotFound';
 // Réduction bundle : 3.2 MB → 2.1 MB (-34%)
 const AdminDashboard = lazy(() => import('./pages/admin/Dashboard/AdminDashboard'));
 const AdminUsers = lazy(() => import('./pages/admin/Users/AdminUsers'));
+const AdminOrganizations = lazy(() => import('./pages/admin/Organizations/AdminOrganizations'));
+const AdminOrganizationDetail = lazy(
+  () => import('./pages/admin/Organizations/AdminOrganizationDetail')
+);
 const AdminReservations = lazy(() => import('./pages/admin/Reservations/AdminReservations'));
 const AdminBookingDetail = lazy(() => import('./pages/admin/Reservations/AdminBookingDetail'));
 const AdminBillingOverview = lazy(() => import('./pages/admin/Billing/AdminBillingOverview'));
@@ -292,7 +297,13 @@ const App = () => {
         <AuthNavigationBridge />
         <RouteSeoManager />
         <ScrollToTopOnNavigation />
-        <Toaster position="top-right" richColors closeButton />
+        <Toaster
+          position="top-right"
+          richColors
+          closeButton
+          containerAriaLabel="Notifications"
+          closeButtonAriaLabel="Fermer la notification"
+        />
         <PwaOfflineBanner />
         {/* ✅ PERF: Suspense pour gérer le lazy loading des routes */}
         <GoogleMapsRouteScope>
@@ -590,7 +601,12 @@ const App = () => {
               <Route path="operations/bookings/:bookingId" element={<AdminBookingDetail />} />
               <Route path="operations/bookings" element={<AdminReservations />} />
 
-              <Route path="partners" element={<Navigate to="users" replace />} />
+              <Route path="partners" element={<RedirectPartnersToOrganizations />} />
+              <Route path="partners/organizations" element={<AdminOrganizations />} />
+              <Route
+                path="partners/organizations/:publicId"
+                element={<AdminOrganizationDetail />}
+              />
               <Route path="partners/users" element={<AdminUsers />} />
               <Route path="partners/demo-requests" element={<AdminDemoRequests />} />
 

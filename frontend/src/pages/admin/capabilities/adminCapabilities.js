@@ -10,6 +10,8 @@ export const ADMIN_CAP = {
   BOOKINGS_READ: 'admin.bookings.read',
   BOOKINGS_EXPORT: 'admin.bookings.export',
   PARTNERS_READ: 'admin.partners.read',
+  ORGANIZATIONS_READ: 'admin.organizations.read',
+  ACCOUNTS_READ: 'admin.accounts.read',
   USERS_MANAGE: 'admin.users.manage',
   USERS_SECURITY: 'admin.users.security',
   BILLING_READ: 'admin.billing.read',

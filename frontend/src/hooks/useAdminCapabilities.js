@@ -28,6 +28,8 @@ export function useAdminCapabilities() {
     canLabsExecute: can(ADMIN_CAP.LABS_EXECUTE),
     canBillingLock: can(ADMIN_CAP.BILLING_LOCK),
     canBillingIssue: can(ADMIN_CAP.BILLING_ISSUE),
+    canBillingValidate: can(ADMIN_CAP.BILLING_VALIDATE),
+    canConfigurationManage: can(ADMIN_CAP.CONFIGURATION_MANAGE),
   };
 }
 
