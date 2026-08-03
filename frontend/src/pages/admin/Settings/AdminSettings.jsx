@@ -92,6 +92,7 @@ const AdminSettings = () => {
   const [showAdvancedFields, setShowAdvancedFields] = useState(false);
   const [listScopeFilter, setListScopeFilter] = useState('ALL');
   const [listStatusFilter, setListStatusFilter] = useState('ALL');
+  const [activeTab, setActiveTab] = useState('creditor');
 
   const selected = useMemo(
     () => zoneSets.find((item) => String(item.key) === String(selectedKey)) || null,
@@ -462,73 +463,99 @@ const AdminSettings = () => {
   };
 
   return (
-    <main className={shell.content}>
-          <section className={styles.hero}>
-            <h1>Paramètres administrateur</h1>
-            <p>
-              Créancier LIRIE (QR-facture), tarifs indicatifs, et zone sets tarifaires utilisés par
-              les sociétés.
-            </p>
-          </section>
+    <main className={`${shell.content} ${styles.page}`}>
+      <header className={styles.pageHeader}>
+        <div className={styles.headerText}>
+          <span className={shell.brandSub}>Configuration</span>
+          <h1>Paramètres</h1>
+          <p className={styles.pageLead}>
+            Réglages plateforme : créancier des QR-factures, indicatif client, et zonages
+            tarifaires.
+          </p>
+        </div>
+      </header>
 
-          <AdminPlatformCreditorSettings />
+      <div className={styles.tabs} role="tablist" aria-label="Rubriques paramètres">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === 'creditor'}
+          className={`${styles.tab} ${activeTab === 'creditor' ? styles.tabActive : ''}`}
+          onClick={() => setActiveTab('creditor')}
+        >
+          Créancier LIRIE
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === 'indicative'}
+          className={`${styles.tab} ${activeTab === 'indicative' ? styles.tabActive : ''}`}
+          onClick={() => setActiveTab('indicative')}
+        >
+          Indicatif client
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === 'zonesets'}
+          className={`${styles.tab} ${activeTab === 'zonesets' ? styles.tabActive : ''}`}
+          onClick={() => setActiveTab('zonesets')}
+        >
+          Zone sets
+        </button>
+      </div>
 
-          <IndicativeFareAdminSection />
-
-          <section className={styles.hero}>
-            <h1>Zone sets tarifaires</h1>
-            <p>
-              Configuration centrale des zone sets tarifaires plateforme utilisés par les sociétés.
-            </p>
-            <p>
-              Une zone = un groupe de communes. Exemple: zone <strong>A</strong> = centre-ville
-              (plusieurs `commune:xxxx`), zone <strong>B</strong> = rive droite, etc.
-            </p>
-            <div className={styles.workflowHint}>
-              <span>1. Créer un zone set</span>
-              <span>2. Sélectionner dans la liste</span>
-              <span>3. Editer et enregistrer</span>
+      <div className={styles.tabPanel} role="tabpanel">
+        {activeTab === 'creditor' ? <AdminPlatformCreditorSettings /> : null}
+        {activeTab === 'indicative' ? <IndicativeFareAdminSection /> : null}
+        {activeTab === 'zonesets' ? (
+          <div className={styles.zonesPanel}>
+            <div className={styles.panelIntro}>
+              <h2 className={styles.panelTitle}>Zone sets tarifaires</h2>
+              <p className={styles.panelLead}>
+                Regroupez des communes en zones (centre-ville, périphérie…) utilisées par les
+                grilles tarifaires des sociétés.
+              </p>
             </div>
-          </section>
 
-          {error && <div className={styles.error}>{error}</div>}
-          {success && <div className={styles.success}>{success}</div>}
+            {error && <div className={styles.error}>{error}</div>}
+            {success && <div className={styles.success}>{success}</div>}
 
-          <section className={styles.summaryGrid} aria-label="Synthese zone sets">
-            <article className={styles.summaryCard}>
-              <span>Total zone sets</span>
-              <strong>{zoneSetStats.total}</strong>
-            </article>
-            <article className={styles.summaryCard}>
-              <span>Actifs</span>
-              <strong>{zoneSetStats.active}</strong>
-            </article>
-            <article className={styles.summaryCard}>
-              <span>Inactifs</span>
-              <strong>{zoneSetStats.inactive}</strong>
-            </article>
-            <article className={styles.summaryCard}>
-              <span>Communes couvertes (cumule)</span>
-              <strong>{zoneSetStats.communesCovered}</strong>
-            </article>
-            <article className={styles.summaryCard}>
-              <span>Communes du zone set selectionne</span>
-              <strong>{zoneSetStats.selectedCommunes}</strong>
-            </article>
-          </section>
-
-          {loading ? (
-            <section className={styles.placeholder}>
-              <h2>Chargement…</h2>
+            <section className={styles.summaryGrid} aria-label="Synthèse des zone sets">
+              <article className={styles.summaryCard}>
+                <span>Total</span>
+                <strong>{zoneSetStats.total}</strong>
+              </article>
+              <article className={styles.summaryCard}>
+                <span>Actifs</span>
+                <strong>{zoneSetStats.active}</strong>
+              </article>
+              <article className={styles.summaryCard}>
+                <span>Inactifs</span>
+                <strong>{zoneSetStats.inactive}</strong>
+              </article>
+              <article className={styles.summaryCard}>
+                <span>Communes couvertes</span>
+                <strong>{zoneSetStats.communesCovered}</strong>
+              </article>
+              <article className={styles.summaryCard}>
+                <span>Sélection actuelle</span>
+                <strong>{zoneSetStats.selectedCommunes}</strong>
+              </article>
             </section>
-          ) : (
-            <section className={styles.zoneGrid}>
-              <div className={styles.card}>
-                <h2>Créer un zone set</h2>
-                <p className={styles.helperText}>
-                  Étape 1: choisis le canton. Étape 2: donne un nom métier au zonage. La clé technique
-                  est générée automatiquement (sans saisie manuelle).
-                </p>
+
+            {loading ? (
+              <section className={styles.placeholder}>
+                <h2>Chargement…</h2>
+                <p>Récupération des zone sets en cours.</p>
+              </section>
+            ) : (
+              <section className={styles.zoneGrid}>
+                <div className={styles.card}>
+                  <h2>Nouveau zone set</h2>
+                  <p className={styles.helperText}>
+                    Canton + nom métier. La clé technique est générée automatiquement.
+                  </p>
                 <div className={styles.previewBox}>
                   <small>Clé technique prévisionnelle</small>
                   <code>{generatedKeyPreview}</code>
@@ -597,7 +624,9 @@ const AdminSettings = () => {
                   </div>
                 </div>
                 <p className={styles.helperText}>
-                  {filteredSortedZoneSets.length} résultat(s) affiché(s)
+                  {filteredSortedZoneSets.length} résultat
+                  {filteredSortedZoneSets.length > 1 ? 's' : ''} affiché
+                  {filteredSortedZoneSets.length > 1 ? 's' : ''}
                 </p>
                 <div className={styles.list}>
                   {filteredSortedZoneSets.map((item) => (
@@ -610,7 +639,8 @@ const AdminSettings = () => {
                       <strong>{item.label}</strong>
                       <span>
                         {item.scope || 'N/A'} · {item.active ? 'Actif' : 'Inactif'} ·{' '}
-                        {Number(item.communes_count || 0)} communes
+                        {Number(item.communes_count || 0)} commune
+                        {Number(item.communes_count || 0) > 1 ? 's' : ''}
                       </span>
                       <small className={styles.secondaryMeta}>
                         {item.active ? 'Production' : 'Archive'}
@@ -620,9 +650,15 @@ const AdminSettings = () => {
                       )}
                     </button>
                   ))}
-                  {zoneSets.length === 0 && <p>Aucun zone set.</p>}
+                  {zoneSets.length === 0 && (
+                    <div className={styles.emptyState}>
+                      Aucun zone set. Crée le premier à gauche pour démarrer.
+                    </div>
+                  )}
                   {zoneSets.length > 0 && filteredSortedZoneSets.length === 0 && (
-                    <p>Aucun zone set ne correspond au filtre.</p>
+                    <div className={styles.emptyState}>
+                      Aucun zone set ne correspond au filtre.
+                    </div>
                   )}
                 </div>
               </div>
@@ -630,7 +666,9 @@ const AdminSettings = () => {
               <div className={styles.cardWide}>
                 <h2>Éditer le zone set sélectionné</h2>
                 {!selected ? (
-                  <p>Sélectionne un zone set dans la liste.</p>
+                  <div className={styles.emptyState}>
+                    Sélectionne un zone set dans la liste pour l’éditer.
+                  </div>
                 ) : (
                   <>
                     <div className={styles.selectedMetaRow}>
@@ -828,14 +866,19 @@ const AdminSettings = () => {
                       )}
                     </div>
 
-                    <button type="button" className={styles.primaryButton} onClick={handleSaveSelected} disabled={saving}>
-                      Enregistrer zone set
-                    </button>
+                    <div className={styles.advancedActions}>
+                      <button type="button" className={styles.primaryButton} onClick={handleSaveSelected} disabled={saving}>
+                        Enregistrer le zone set
+                      </button>
+                    </div>
                   </>
                 )}
               </div>
             </section>
-          )}
+            )}
+          </div>
+        ) : null}
+      </div>
     </main>
   );
 };

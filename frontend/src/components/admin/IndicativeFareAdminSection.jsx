@@ -5,9 +5,14 @@ import styles from '../../pages/admin/Settings/AdminSettings.module.css';
 
 const defaultSim = { distance_km: '13.5', duration_min: '20' };
 
-/**
- * Bloc autonome : GET/PUT /admin/client-indicative-fare, aperçu per_km, simulation distance/durée.
- */
+const PARAMS = [
+  { key: 'min_fare_chf', label: 'Minimum', suffix: 'CHF' },
+  { key: 'base_chf', label: 'Base', suffix: 'CHF' },
+  { key: 'per_minute_chf', label: 'Par minute', suffix: 'CHF' },
+  { key: 'ref_km', label: 'Réf. distance', suffix: 'km' },
+  { key: 'ref_min', label: 'Réf. durée', suffix: 'min' },
+];
+
 function IndicativeFareAdminSection() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -23,7 +28,11 @@ function IndicativeFareAdminSection() {
     ref_min: 20,
     calibration_note: '',
   });
-  const [audit, setAudit] = useState({ config_version: null, updated_at: null, updated_by_user_id: null });
+  const [audit, setAudit] = useState({
+    config_version: null,
+    updated_at: null,
+    updated_by_user_id: null,
+  });
   const [sim, setSim] = useState(defaultSim);
 
   const load = useCallback(async () => {
@@ -65,7 +74,12 @@ function IndicativeFareAdminSection() {
   const derivedPerKm = useMemo(() => {
     const refK = Number(form.ref_km);
     if (!Number.isFinite(refK) || refK <= 0) return null;
-    return (Number(form.min_fare_chf) - Number(form.base_chf) - Number(form.ref_min) * Number(form.per_minute_chf)) / refK;
+    return (
+      (Number(form.min_fare_chf) -
+        Number(form.base_chf) -
+        Number(form.ref_min) * Number(form.per_minute_chf)) /
+      refK
+    );
   }, [form.min_fare_chf, form.base_chf, form.per_minute_chf, form.ref_km, form.ref_min]);
 
   const previewAmount = useMemo(() => {
@@ -86,6 +100,18 @@ function IndicativeFareAdminSection() {
     );
   }, [form, sim.distance_km, sim.duration_min]);
 
+  const updatedAtLabel = useMemo(() => {
+    if (!audit.updated_at) return null;
+    try {
+      return new Date(audit.updated_at).toLocaleString('fr-CH', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      });
+    } catch {
+      return audit.updated_at;
+    }
+  }, [audit.updated_at]);
+
   const onSave = async () => {
     setSaving(true);
     setError('');
@@ -105,7 +131,7 @@ function IndicativeFareAdminSection() {
         updated_at: out.updated_at,
         updated_by_user_id: out.updated_by_user_id,
       });
-      setSuccess('Configuration enregistrée. La version a été incrémentée.');
+      setSuccess('Configuration enregistrée.');
     } catch (e) {
       const msg = e?.response?.data?.message || e?.response?.data?.error || e?.message;
       setError(String(msg || 'Enregistrement refusé.'));
@@ -116,100 +142,145 @@ function IndicativeFareAdminSection() {
 
   if (loading) {
     return (
-      <section className={styles.card} style={{ marginBottom: '1.5rem' }}>
-        <h2>Indicatif portail client</h2>
-        <p>Chargement…</p>
-      </section>
+      <div className={styles.panelBody}>
+        <p className={styles.helperText}>Chargement de l’indicatif…</p>
+      </div>
     );
   }
 
   return (
-    <section className={styles.card} style={{ marginBottom: '1.5rem' }}>
-      <h2>Indicatif portail client (calibration)</h2>
-      <p className={styles.helperText}>
-        Règle serveur unique (non confondue avec la prévisualisation de réservation / compute_price). Le
-        <code> per_km</code> affiché est dérivé pour respecter l’ancrage à ref_km / ref_min.
-      </p>
+    <div className={styles.panelBody}>
+      <div className={styles.panelIntroRow}>
+        <div className={styles.panelIntro}>
+          <h2 className={styles.panelTitle}>Indicatif portail client</h2>
+          <p className={styles.panelLead}>
+            Estimation affichée aux clients — distincte de <code>compute_price</code>.
+          </p>
+        </div>
+        <div className={styles.statusRow}>
+          <span
+            className={`${styles.statusChip} ${
+              form.is_enabled ? styles.statusOk : styles.statusWarn
+            }`}
+          >
+            {form.is_enabled ? 'Activé' : 'Désactivé'}
+          </span>
+          <span className={`${styles.statusChip} ${styles.statusMuted}`}>
+            v{audit.config_version != null ? audit.config_version : '—'}
+          </span>
+        </div>
+      </div>
+
       {error ? <div className={styles.error}>{error}</div> : null}
       {success ? <div className={styles.success}>{success}</div> : null}
-      <div className={styles.previewBox}>
-        <p>
-          <strong>Version config</strong> : {audit.config_version != null ? audit.config_version : '—'}
-        </p>
-        {audit.updated_at ? (
-          <p>
-            <strong>Dernière MAJ</strong> : {audit.updated_at} — éditeur (user_id){' '}
-            {audit.updated_by_user_id != null ? audit.updated_by_user_id : '—'}
-          </p>
-        ) : null}
-      </div>
-      <label className={styles.formRow} style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: 8 }}>
-        <input
-          type="checkbox"
-          checked={form.is_enabled}
-          onChange={(e) => setForm((p) => ({ ...p, is_enabled: e.target.checked }))}
-        />
-        <span>Indicatif activé (sinon 412 côté API estimate)</span>
-      </label>
-      <div className={styles.formRow} style={{ display: 'grid', gap: 8, marginTop: 8 }}>
-        {['min_fare_chf', 'base_chf', 'per_minute_chf', 'ref_km', 'ref_min'].map((k) => (
-          <label key={k} style={{ display: 'flex', flexDirection: 'column', maxWidth: 360 }}>
-            <span>{k}</span>
+
+      <div className={styles.splitForm}>
+        <div className={styles.splitCol}>
+          <label className={styles.toggleRow}>
             <input
-              type="number"
-              step="0.0001"
-              value={form[k]}
-              onChange={(e) => {
-                const v = e.target.value;
-                setForm((p) => ({ ...p, [k]: v === '' ? '' : Number(v) }));
-              }}
+              type="checkbox"
+              checked={form.is_enabled}
+              onChange={(e) => setForm((p) => ({ ...p, is_enabled: e.target.checked }))}
+            />
+            <span>Indicatif actif (sinon estimate → 412)</span>
+          </label>
+
+          <div className={styles.paramGrid}>
+            {PARAMS.map(({ key, label, suffix }) => (
+              <label key={key} className={styles.formGroup}>
+                {label}
+                <div className={styles.inputWithSuffix}>
+                  <input
+                    type="number"
+                    step="0.0001"
+                    value={form[key]}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setForm((p) => ({ ...p, [key]: v === '' ? '' : Number(v) }));
+                    }}
+                  />
+                  <span className={styles.inputSuffix}>{suffix}</span>
+                </div>
+              </label>
+            ))}
+          </div>
+
+          <div className={styles.derivedValue}>
+            <span>Tarif au km (dérivé)</span>
+            <strong>
+              {derivedPerKm == null || Number.isNaN(derivedPerKm)
+                ? '—'
+                : `${derivedPerKm.toFixed(4)} CHF/km`}
+            </strong>
+          </div>
+
+          <label className={styles.formGroup}>
+            Note interne
+            <textarea
+              rows={3}
+              value={form.calibration_note}
+              onChange={(e) => setForm((p) => ({ ...p, calibration_note: e.target.value }))}
+              placeholder="Contexte de calibration…"
             />
           </label>
-        ))}
-        <p>
-          <strong>per_km dérivé (lecture seule)</strong> : {derivedPerKm == null || Number.isNaN(derivedPerKm) ? '—' : derivedPerKm.toFixed(4)} CHF/km
-        </p>
-        <label style={{ display: 'flex', flexDirection: 'column', maxWidth: 480 }}>
-          <span>Note de calibration (interne)</span>
-          <textarea
-            rows={3}
-            value={form.calibration_note}
-            onChange={(e) => setForm((p) => ({ ...p, calibration_note: e.target.value }))}
-          />
-        </label>
+
+          {updatedAtLabel ? (
+            <p className={styles.metaLine}>
+              Dernière mise à jour : {updatedAtLabel}
+              {audit.updated_by_user_id != null
+                ? ` · #${audit.updated_by_user_id}`
+                : ''}
+            </p>
+          ) : null}
+        </div>
+
+        <div className={`${styles.splitCol} ${styles.simCard}`}>
+          <h3 className={styles.colTitle}>Simulation</h3>
+          <p className={styles.helperText}>
+            Trajet simple théorique (sans A/R ni récurrence).
+          </p>
+          <div className={styles.formRow2}>
+            <label className={styles.formGroup}>
+              Distance
+              <div className={styles.inputWithSuffix}>
+                <input
+                  value={sim.distance_km}
+                  onChange={(e) => setSim((s) => ({ ...s, distance_km: e.target.value }))}
+                />
+                <span className={styles.inputSuffix}>km</span>
+              </div>
+            </label>
+            <label className={styles.formGroup}>
+              Durée
+              <div className={styles.inputWithSuffix}>
+                <input
+                  value={sim.duration_min}
+                  onChange={(e) => setSim((s) => ({ ...s, duration_min: e.target.value }))}
+                />
+                <span className={styles.inputSuffix}>min</span>
+              </div>
+            </label>
+          </div>
+          <div className={styles.simAmount}>
+            <span>Indicatif</span>
+            <strong>
+              {previewAmount == null ? '—' : `${previewAmount.toFixed(2)} CHF`}
+            </strong>
+          </div>
+        </div>
+
+        <div className={styles.formFooter}>
+          <button
+            type="button"
+            className={styles.primaryButton}
+            onClick={onSave}
+            disabled={saving}
+          >
+            {saving ? 'Enregistrement…' : 'Enregistrer'}
+          </button>
+        </div>
       </div>
-      <h3 style={{ marginTop: 16 }}>Trajet de référence simulé (aperçu)</h3>
-      <p className={styles.helperText}>
-        Saisis une distance (km) et une durée (min) : montant indicatif théorique (un trajet simple, sans
-        A/R ni récurrence).
-      </p>
-      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-        <label>
-          Distance (km)
-          <input
-            value={sim.distance_km}
-            onChange={(e) => setSim((s) => ({ ...s, distance_km: e.target.value }))}
-            style={{ marginLeft: 8, width: 100 }}
-          />
-        </label>
-        <label>
-          Durée (min)
-          <input
-            value={sim.duration_min}
-            onChange={(e) => setSim((s) => ({ ...s, duration_min: e.target.value }))}
-            style={{ marginLeft: 8, width: 80 }}
-          />
-        </label>
-      </div>
-      <p>
-        <strong>Indicatif simulé</strong> : {previewAmount == null ? '—' : `${previewAmount.toFixed(2)} CHF`}
-      </p>
-      <div style={{ marginTop: 12 }}>
-        <button type="button" className={styles.primaryButton} onClick={onSave} disabled={saving}>
-          {saving ? 'Enregistrement…' : 'Enregistrer'}
-        </button>
-      </div>
-    </section>
+    </div>
   );
 }
 
