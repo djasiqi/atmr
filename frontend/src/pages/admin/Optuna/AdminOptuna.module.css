@@ -202,9 +202,6 @@
 @media (max-width: 768px) {
   .main {
     margin: 12px;
-    margin-top: 88px;
-    margin-left: calc(var(--sidebar-w, 72px) + 12px);
-    max-width: calc(100% - var(--sidebar-w, 72px) - 24px);
     padding: 16px;
   }
 

@@ -14,10 +14,10 @@ import {
   FiZap,
 } from 'react-icons/fi';
 import { FaExclamationTriangle, FaRedoAlt } from 'react-icons/fa';
-import InlineDatePicker from '../../../components/ui/InlineDatePicker';
 import ov from '../../company/Dashboard/components/OverviewCards.module.css';
 import dms from '../../company/Dashboard/components/DispatchModeStatusBar.module.css';
 import { fetchAdminDashboardSummary } from '../../../services/adminService';
+import { adminPaths } from '../routing/adminRoutePaths';
 import {
   LineChart,
   Line,
@@ -30,12 +30,6 @@ import {
 } from 'recharts';
 import styles from './AdminDashboard.module.css';
 import shell from '../adminShell.module.css';
-
-function makeToday() {
-  const d = new Date();
-  const pad = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
 
 const formatFrDateTime = (iso) => {
   if (!iso) return '—';
@@ -75,7 +69,6 @@ const AdminDashboard = () => {
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [dashboardDay, setDashboardDay] = useState(makeToday);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -95,17 +88,14 @@ const AdminDashboard = () => {
     load();
   }, [adminId, load]);
 
-  const base = `/dashboard/admin/${adminId}`;
-
   const priorityCards = useMemo(() => {
-    const b = `/dashboard/admin/${adminId}`;
     return [
       {
         key: 'bookings_pending_action',
         title: 'À traiter',
         subtitle: 'Réservations (opérationnel)',
         Icon: FiClipboard,
-        to: `${b}/reservations`,
+        to: adminPaths.operationsBookings(adminId),
         value: summary?.priorities?.bookings_pending_action ?? 0,
         accentKey: 'bookings_pending_action',
       },
@@ -114,7 +104,7 @@ const AdminDashboard = () => {
         title: 'Démos',
         subtitle: 'Demandes nouvelles',
         Icon: FiLayers,
-        to: `${b}/demo-requests?status=new`,
+        to: `${adminPaths.partnersDemoRequests(adminId)}?status=new`,
         value: summary?.priorities?.demo_requests_open ?? 0,
         accentKey: 'demo_requests_open',
       },
@@ -123,7 +113,7 @@ const AdminDashboard = () => {
         title: 'Tenants',
         subtitle: 'Suspendus',
         Icon: FiAlertTriangle,
-        to: `${b}/platform-ops/tenants`,
+        to: adminPaths.advancedPlatform(adminId, 'tenants'),
         value: summary?.priorities?.tenants_suspended ?? 0,
         accentKey: 'tenants_suspended',
       },
@@ -132,7 +122,7 @@ const AdminDashboard = () => {
         title: 'Gouvernance',
         subtitle: 'CR ouverts',
         Icon: FiServer,
-        to: `${b}/platform-ops/overview`,
+        to: adminPaths.advancedPlatform(adminId, 'overview'),
         value: summary?.priorities?.platform_alerts_open ?? 0,
         accentKey: 'platform_alerts_open',
       },
@@ -174,7 +164,6 @@ const AdminDashboard = () => {
             Tableau de bord administrateur
           </h1>
           <div className={styles.headerMeta}>
-            <InlineDatePicker value={dashboardDay} onChange={(iso) => setDashboardDay(iso)} />
             {loading ? <span className={styles.liveBadge}>Chargement…</span> : null}
             {dataReady ? (
               <span className={styles.liveBadgeOk}>
@@ -185,11 +174,18 @@ const AdminDashboard = () => {
           </div>
         </div>
         <div className={styles.headerActions}>
-          <Link to={`${base}/platform-ops/overview`} className={styles.headerBtnSecondary}>
+          <Link
+            to={adminPaths.advancedPlatform(adminId, 'overview')}
+            className={styles.headerBtnSecondary}
+          >
             <FiZap size={16} aria-hidden />
             Plateforme
           </Link>
-          <Link to={`${base}/reservations`} className={styles.headerBtnPrimary} data-tour-id="admin-reservations-cta">
+          <Link
+            to={adminPaths.operationsBookings(adminId)}
+            className={styles.headerBtnPrimary}
+            data-tour-id="admin-reservations-cta"
+          >
             <FiPlus size={16} aria-hidden />
             Réservations
           </Link>
@@ -259,13 +255,13 @@ const AdminDashboard = () => {
             {fmtNum(plat?.tenants_in_drift)}
           </span>
           <div className={styles.platformBarLinks}>
-            <Link to={`${base}/platform-ops/audit`}>Audit</Link>
+            <Link to={adminPaths.advancedPlatform(adminId, 'audit')}>Audit</Link>
             <span className={styles.platformBarSep}>·</span>
-            <Link to={`${base}/platform-ops/tenants`}>Tenants</Link>
+            <Link to={adminPaths.advancedPlatform(adminId, 'tenants')}>Tenants</Link>
             <span className={styles.platformBarSep}>·</span>
-            <Link to={`${base}/platform-ops/runbooks`}>Runbooks</Link>
+            <Link to={adminPaths.advancedPlatform(adminId, 'runbooks')}>Runbooks</Link>
             <span className={styles.platformBarSep}>·</span>
-            <Link to={`${base}/platform-ops/reconciliation`}>Réconciliation</Link>
+            <Link to={adminPaths.advancedPlatform(adminId, 'reconciliation')}>Réconciliation</Link>
           </div>
         </div>
       </div>
@@ -340,7 +336,7 @@ const AdminDashboard = () => {
           <h2 className={styles.sectionHeading}>Réservations par mois — 12 derniers mois</h2>
           <p className={styles.chartSub}>
             Créations (agrégat mensuel).{' '}
-            <Link to={`${base}/reservations`} className={styles.inlineLink}>
+            <Link to={adminPaths.operationsBookings(adminId)} className={styles.inlineLink}>
               Voir les réservations
             </Link>
           </p>

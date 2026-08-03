@@ -1,0 +1,48 @@
+/**
+ * Tokens CSS Administration LIRIE.
+ * Appliqués sur le shell admin (.adminShell).
+ */
+
+:root,
+.adminShell {
+  --admin-brand: #00796b;
+  --admin-brand-hover: #00695c;
+  --admin-brand-soft: #e8f4f1;
+
+  --admin-bg: #f5f7f6;
+  --admin-surface: #ffffff;
+  --admin-surface-muted: #f8faf9;
+
+  --admin-text: #18302c;
+  --admin-text-secondary: #5f716d;
+  --admin-border: #dfe7e4;
+
+  --admin-success: #18794e;
+  --admin-warning: #a96600;
+  --admin-danger: #b42318;
+  --admin-info: #1769aa;
+
+  --admin-sidebar-width: 248px;
+  --admin-header-height: 56px;
+}
+
+@media (max-width: 1024px) {
+  :root,
+  .adminShell {
+    --admin-sidebar-width: 220px;
+  }
+}
+
+@media (max-width: 768px) {
+  :root,
+  .adminShell {
+    --admin-sidebar-width: 64px;
+  }
+}
+
+@media (max-width: 480px) {
+  :root,
+  .adminShell {
+    --admin-sidebar-width: 56px;
+  }
+}

@@ -585,9 +585,6 @@
   .main {
     padding: var(--spacing-md);
     margin: var(--spacing-sm);
-    margin-top: calc(var(--header-height) + var(--spacing-sm));
-    margin-left: calc(var(--sidebar-w, 72px) + var(--spacing-sm)); /* Sidebar toujours visible */
-    max-width: calc(100% - var(--sidebar-w, 72px) - calc(var(--spacing-sm) * 2));
     width: 100%;
   }
 

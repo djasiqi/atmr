@@ -6,6 +6,7 @@ import { fetchAdminBookings, downloadAdminBookingsExport } from '../../../servic
 import rfChipStyles from '../../company/Reservations/components/ReservationFilters.module.css';
 import styles from './AdminReservations.module.css';
 import shell from '../adminShell.module.css';
+import { adminPaths } from '../routing/adminRoutePaths';
 
 /** Même composant que ReservationFilters (entreprise) — styles partagés via rfChipStyles */
 function ChipDropdown({ icon, value, options, onChange, activeWhen }) {
@@ -204,8 +205,6 @@ const AdminReservations = () => {
   useEffect(() => {
     setQDraft(qFromUrl);
   }, [qFromUrl]);
-
-  const base = `/dashboard/admin/${adminId}`;
 
   return (
     <main className={shell.content}>
@@ -487,7 +486,10 @@ const AdminReservations = () => {
                       {row.amount_chf != null ? `${row.amount_chf} CHF` : '—'}
                     </td>
                     <td>
-                      <Link className={styles.detailLink} to={`${base}/reservations/${row.id}`}>
+                      <Link
+                        className={styles.detailLink}
+                        to={adminPaths.operationsBooking(adminId, row.id)}
+                      >
                         Détail
                       </Link>
                     </td>

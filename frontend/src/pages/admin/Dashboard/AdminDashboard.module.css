@@ -1,24 +1,4 @@
-/* Shell aligné dashboard entreprise (CompanyDashboard) */
-.adminContainer {
-  display: flex;
-  flex-direction: column;
-  min-height: 100vh;
-  background-color: var(--bg-secondary);
-  box-sizing: border-box;
-  /* Aligné CompanyHeader (--hdr-h 56px) pour header + marges contenu */
-  --header-height: 56px;
-}
-
-/* Mise en page : zone sous le header, pleine largeur pour que le contenu calcule bien % */
-.dashboard {
-  display: flex;
-  flex-grow: 1;
-  width: 100%;
-  min-width: 0;
-  height: 100%;
-}
-
-/* Panneau principal : voir adminShell.module.css (.content) */
+/* Shell layout : voir shell/AdminShell.module.css */
 
 /* ── En-tête page — aligné CompanyDashboard ── */
 .dashboardHeader {

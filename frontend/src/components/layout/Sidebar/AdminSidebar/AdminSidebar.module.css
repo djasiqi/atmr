@@ -1,8 +1,8 @@
 /* AdminSidebar — aligné CompanySidebar (structure, tokens, bloc utilisateur) */
 
 .sidebar {
-  --brand: #00796b;
-  --brand-hover: #00695c;
+  --brand: var(--admin-brand, #00796b);
+  --brand-hover: var(--admin-brand-hover, #00695c);
   --sidebar-bg: var(--brand);
   --sidebar-text: rgba(255, 255, 255, 0.75);
   --sidebar-text-muted: rgba(255, 255, 255, 0.45);
@@ -12,10 +12,11 @@
   --sidebar-active-indicator: #ffffff;
   --sidebar-divider: rgba(255, 255, 255, 0.15);
 
-  position: fixed;
-  left: 0;
+  position: sticky;
   top: 0;
+  align-self: start;
   height: 100vh;
+  width: 100%;
   background: var(--sidebar-bg);
   z-index: var(--z-side-rail);
   display: flex;
@@ -23,9 +24,8 @@
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-width: none;
-  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   min-height: 0;
-  width: 256px;
+  box-sizing: border-box;
 }
 
 .sidebar::-webkit-scrollbar {
@@ -119,6 +119,9 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
+  padding: 0 12px;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .navItem {
@@ -331,17 +334,17 @@
   color: #1e293b;
 }
 
-/* Tablettes — aligné CompanySidebar */
+/* Tablettes — largeur via --admin-sidebar-width (grille) */
 @media (max-width: 1024px) {
   .sidebar {
-    width: 220px;
+    width: 100%;
   }
 }
 
 /* Petit écran — icônes seules */
 @media (max-width: 768px) {
   .sidebar {
-    width: 64px;
+    width: 100%;
   }
 
   .sidebarBrand {
@@ -410,7 +413,7 @@
 
 @media (max-width: 480px) {
   .sidebar {
-    width: 56px;
+    width: 100%;
   }
 
   .brandLogo {

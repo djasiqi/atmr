@@ -41,6 +41,11 @@ from repositories.invoice_repository import InvoiceRepository
 from repositories.user_repository import UserRepository
 from routes.admin_platform_billing import register_platform_billing_routes
 from security.ip_whitelist import ip_whitelist_required
+from services.admin_authz import (
+    CAP_LABS_EXECUTE,
+    capabilities_payload_for_user,
+    require_admin_capability,
+)
 from services.admin_dashboard_summary import build_admin_dashboard_summary
 from services.admin_platform_bookings import (
     build_admin_booking_detail,
@@ -324,6 +329,25 @@ class AdminDashboardSummary(Resource):
 
 # Alias (même handler) : certains proxies / anciennes intégrations utilisaient un chemin à deux segments.
 admin_ns.add_resource(AdminDashboardSummary, "/dashboard/summary")
+
+
+@admin_ns.route("/capabilities")
+class AdminCapabilities(Resource):
+    """GET /admin/capabilities — capacités admin.* effectives + flag d'enforcement."""
+
+    @jwt_required()
+    @role_required(UserRole.admin)
+    @ip_whitelist_required()
+    @limiter.limit("120 per hour")
+    def get(self):
+        from shared.infrastructure.adapters.auth_adapter import (
+            get_current_user_via_use_case,
+        )
+
+        user = get_current_user_via_use_case()
+        if not user:
+            return {"error": "unauthorized", "message": "Utilisateur introuvable."}, 401
+        return capabilities_payload_for_user(user.id), 200
 
 
 @admin_ns.route("/recent-bookings")
@@ -1507,6 +1531,7 @@ class OptunaOptimize(Resource):
     @jwt_required()
     @role_required(UserRole.admin)
     @ip_whitelist_required()
+    @require_admin_capability(CAP_LABS_EXECUTE)
     @limiter.limit("10 per hour")  # Limite pour éviter les abus
     @admin_ns.expect(optuna_optimize_model, validate=False)
     def post(self):
@@ -1808,6 +1833,7 @@ class OptunaTrain(Resource):
     @jwt_required()
     @role_required(UserRole.admin)
     @ip_whitelist_required()
+    @require_admin_capability(CAP_LABS_EXECUTE)
     @limiter.limit("5 per hour")  # Limite plus stricte (entraînement long)
     @admin_ns.expect(train_optimal_model, validate=False)
     def post(self):

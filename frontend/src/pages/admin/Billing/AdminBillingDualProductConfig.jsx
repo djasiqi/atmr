@@ -17,6 +17,8 @@ import {
   voidPartnerAgreement,
 } from '../../../services/adminService';
 import styles from './AdminBillingTransportConfig.module.css';
+import { adminPaths } from '../routing/adminRoutePaths';
+import AdminActionDialog from '../components/AdminActionDialog';
 
 const emptyContract = {
   is_billing_enabled: true,
@@ -177,7 +179,7 @@ const emptyDebtor = {
 
 const AdminBillingDualProductConfig = () => {
   const { public_id: adminId } = useParams();
-  const settingsPath = `/dashboard/admin/${adminId}/settings`;
+  const settingsPath = adminPaths.configuration(adminId);
 
   const [items, setItems] = useState([]);
   const [grids, setGrids] = useState([]);
@@ -200,6 +202,7 @@ const AdminBillingDualProductConfig = () => {
   const [savedSnapshot, setSavedSnapshot] = useState('');
   const [signedOn, setSignedOn] = useState('');
   const [docBusy, setDocBusy] = useState(false);
+  const [actionDialog, setActionDialog] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -484,19 +487,29 @@ const AdminBillingDualProductConfig = () => {
     }
   };
 
-  const onVoidAgreement = async () => {
+  const onVoidAgreement = () => {
     if (!activeAgreement) return;
-    const reason = window.prompt('Motif d’annulation du document :');
-    if (!reason?.trim()) return;
-    setDocBusy(true);
-    try {
-      await voidPartnerAgreement(activeAgreement.id, reason.trim());
-      await refreshContractsOnly();
-    } catch (e) {
-      setModalError(e?.response?.data?.error || e?.message || 'Erreur annulation');
-    } finally {
-      setDocBusy(false);
-    }
+    setActionDialog({
+      title: 'Annuler le document contractuel',
+      description: 'Annuler le document partenaire actif.',
+      confirmationLabel: 'Annuler le document',
+      danger: true,
+      reason: {
+        required: true,
+        label: 'Motif d’annulation',
+        minLength: 3,
+      },
+      onConfirm: async ({ reason }) => {
+        setDocBusy(true);
+        try {
+          await voidPartnerAgreement(activeAgreement.id, reason);
+          await refreshContractsOnly();
+          setActionDialog(null);
+        } finally {
+          setDocBusy(false);
+        }
+      },
+    });
   };
 
   const onUploadSigned = async (file) => {
@@ -1488,6 +1501,20 @@ const AdminBillingDualProductConfig = () => {
           </div>
         </div>
       )}
+
+      {actionDialog ? (
+        <AdminActionDialog
+          open
+          title={actionDialog.title}
+          description={actionDialog.description}
+          confirmationLabel={actionDialog.confirmationLabel}
+          reason={actionDialog.reason}
+          danger={Boolean(actionDialog.danger)}
+          loading={docBusy}
+          onConfirm={actionDialog.onConfirm}
+          onClose={() => setActionDialog(null)}
+        />
+      ) : null}
     </div>
   );
 };

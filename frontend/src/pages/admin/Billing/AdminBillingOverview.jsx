@@ -8,6 +8,7 @@ import {
   recalculatePlatformBillingPeriod,
 } from '../../../services/adminService';
 import styles from './AdminBillingOverview.module.css';
+import { adminPaths } from '../routing/adminRoutePaths';
 
 const MONTHS_FR = [
   'janvier',
@@ -66,7 +67,7 @@ const isLikelyTestCompany = (name) => {
 
 const AdminBillingOverview = () => {
   const { public_id: adminId } = useParams();
-  const base = `/dashboard/admin/${adminId}/billing`;
+  const base = adminPaths.finance(adminId);
 
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());

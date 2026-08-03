@@ -18,6 +18,8 @@ import {
   updatePlatformSupportEntry,
   validatePlatformBillingInvoice,
 } from '../../../services/adminService';
+import AdminActionDialog from '../components/AdminActionDialog';
+import { useAdminCapabilities } from '../../../hooks/useAdminCapabilities';
 import styles from './AdminPlatformBilling.module.css';
 
 const MONTHS_FR = [
@@ -98,6 +100,7 @@ const statementBadge = (s) => {
 
 const AdminPlatformBilling = () => {
   const location = useLocation();
+  const { canBillingLock } = useAdminCapabilities();
   const focusFromOverview = location.state || {};
   const openedFocusRef = useRef(null);
   const didAutoSelectRef = useRef(false);
@@ -128,6 +131,7 @@ const AdminPlatformBilling = () => {
   const [supportRate, setSupportRate] = useState('');
   const [supportSaving, setSupportSaving] = useState(false);
   const [editingSupportId, setEditingSupportId] = useState(null);
+  const [actionDialog, setActionDialog] = useState(null);
 
   const loadPeriods = useCallback(async () => {
     setLoading(true);
@@ -277,33 +281,28 @@ const AdminPlatformBilling = () => {
     }
   };
 
-  const onLock = async () => {
+  const onLock = () => {
     if (!selectedId) return;
-    if (
-      !window.confirm(
-        'Verrouiller cette période ? Le recalcul ne sera plus possible.'
-      )
-    ) {
-      return;
-    }
-    setActionLoading(true);
-    setInfo(null);
-    setError(null);
-    try {
-      await lockPlatformBillingPeriod(selectedId);
-      setInfo('Période verrouillée.');
-      await loadPeriods();
-      await loadInvoices(selectedId);
-    } catch (e) {
-      setError(
-        e?.response?.data?.error ||
-          e?.response?.data?.message ||
-          e?.message ||
-          'Erreur verrouillage'
-      );
-    } finally {
-      setActionLoading(false);
-    }
+    setActionDialog({
+      title: 'Verrouiller la période',
+      description: 'Verrouiller cette période ? Le recalcul ne sera plus possible.',
+      confirmationLabel: 'Verrouiller',
+      danger: true,
+      onConfirm: async () => {
+        setActionLoading(true);
+        setInfo(null);
+        setError(null);
+        try {
+          await lockPlatformBillingPeriod(selectedId);
+          setInfo('Période verrouillée.');
+          await loadPeriods();
+          await loadInvoices(selectedId);
+          setActionDialog(null);
+        } finally {
+          setActionLoading(false);
+        }
+      },
+    });
   };
 
   const onExport = async () => {
@@ -420,35 +419,36 @@ const AdminPlatformBilling = () => {
     );
   };
 
-  const onDeleteSupport = async (entry) => {
+  const onDeleteSupport = (entry) => {
     if (!entry?.id) return;
-    if (!window.confirm('Supprimer cette entrée support ?')) return;
-    const companyId = modalInvoice?.company_id;
-    setSupportSaving(true);
-    setError(null);
-    setInfo(null);
-    try {
-      const res = await deletePlatformSupportEntry(entry.id, {
-        recalculate_period: true,
-        billing_period_id: modalInvoice?.period_id || selectedId || undefined,
-      });
-      if (res?.recalculate_error) {
-        setInfo(`Entrée supprimée — recalcul : ${res.recalculate_error}`);
-      } else {
-        setInfo('Entrée support supprimée.');
-      }
-      resetSupportForm();
-      await reloadModalAfterRecalculate(companyId);
-    } catch (e) {
-      setError(
-        e?.response?.data?.message ||
-          e?.response?.data?.error ||
-          e?.message ||
-          'Erreur suppression'
-      );
-    } finally {
-      setSupportSaving(false);
-    }
+    setActionDialog({
+      title: 'Supprimer l’entrée support',
+      description: 'Supprimer cette entrée support ?',
+      confirmationLabel: 'Supprimer',
+      danger: true,
+      onConfirm: async () => {
+        const companyId = modalInvoice?.company_id;
+        setSupportSaving(true);
+        setError(null);
+        setInfo(null);
+        try {
+          const res = await deletePlatformSupportEntry(entry.id, {
+            recalculate_period: true,
+            billing_period_id: modalInvoice?.period_id || selectedId || undefined,
+          });
+          if (res?.recalculate_error) {
+            setInfo(`Entrée supprimée — recalcul : ${res.recalculate_error}`);
+          } else {
+            setInfo('Entrée support supprimée.');
+          }
+          resetSupportForm();
+          await reloadModalAfterRecalculate(companyId);
+          setActionDialog(null);
+        } finally {
+          setSupportSaving(false);
+        }
+      },
+    });
   };
 
   const onAddSupportHours = async () => {
@@ -597,8 +597,17 @@ const AdminPlatformBilling = () => {
               <button
                 type="button"
                 className={`${styles.btn} ${styles.btnDanger}`}
-                disabled={actionLoading || selectedPeriod.status === 'locked'}
+                disabled={
+                  actionLoading ||
+                  selectedPeriod.status === 'locked' ||
+                  !canBillingLock
+                }
                 onClick={onLock}
+                title={
+                  !canBillingLock
+                    ? 'Capacité admin.billing.lock requise'
+                    : undefined
+                }
               >
                 Verrouiller
               </button>
@@ -1108,32 +1117,27 @@ const AdminPlatformBilling = () => {
                       <button
                         type="button"
                         className={styles.btn}
-                        onClick={async () => {
-                          if (
-                            !window.confirm(
-                              'Réouvrir ce relevé ? La facture non envoyée sera annulée.'
-                            )
-                          ) {
-                            return;
-                          }
-                          try {
-                            const res = await reopenPlatformBillingInvoice(
-                              modalInvoice.id
-                            );
-                            setInfo(
-                              `Relevé réouvert — ${
-                                res?.recalculate?.invoices_generated ?? '—'
-                              } régénéré(s).`
-                            );
-                            setModalInvoice(null);
-                            if (selectedId) await loadInvoices(selectedId);
-                          } catch (e) {
-                            setError(
-                              e?.response?.data?.error ||
-                                e?.response?.data?.message ||
-                                e?.message
-                            );
-                          }
+                        onClick={() => {
+                          setActionDialog({
+                            title: 'Réouvrir le relevé',
+                            description:
+                              'Réouvrir ce relevé ? La facture non envoyée sera annulée.',
+                            confirmationLabel: 'Réouvrir',
+                            danger: true,
+                            onConfirm: async () => {
+                              const res = await reopenPlatformBillingInvoice(
+                                modalInvoice.id
+                              );
+                              setInfo(
+                                `Relevé réouvert — ${
+                                  res?.recalculate?.invoices_generated ?? '—'
+                                } régénéré(s).`
+                              );
+                              setModalInvoice(null);
+                              if (selectedId) await loadInvoices(selectedId);
+                              setActionDialog(null);
+                            },
+                          });
                         }}
                       >
                         Réouvrir
@@ -1148,6 +1152,18 @@ const AdminPlatformBilling = () => {
             ) : null}
           </div>
         </div>
+      ) : null}
+
+      {actionDialog ? (
+        <AdminActionDialog
+          open
+          title={actionDialog.title}
+          description={actionDialog.description}
+          confirmationLabel={actionDialog.confirmationLabel}
+          danger={Boolean(actionDialog.danger)}
+          onConfirm={actionDialog.onConfirm}
+          onClose={() => setActionDialog(null)}
+        />
       ) : null}
     </div>
   );

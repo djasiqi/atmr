@@ -1,21 +1,31 @@
 import React from 'react';
-import { Outlet } from 'react-router-dom';
-import HeaderDashboard from '../../components/layout/Header/HeaderDashboard';
+import { Outlet, useLocation, useParams } from 'react-router-dom';
 import AdminSidebar from '../../components/layout/Sidebar/AdminSidebar/AdminSidebar';
-import styles from './Dashboard/AdminDashboard.module.css';
+import AdminTopbar from './shell/AdminTopbar';
+import AdminWorkspaceNav from './shell/AdminWorkspaceNav';
+import shellStyles from './shell/AdminShell.module.css';
+import './shell/adminTokens.css';
 
 /**
- * Cadre commun admin : header + sidebar + pages filles (Outlet).
- * Les routes sont définies sous /dashboard/admin/:public_id/* dans App.js.
+ * Cadre commun admin : sidebar + topbar + sous-nav workspace + pages filles.
+ * Routes sous /dashboard/admin/:public_id/* dans App.js.
  */
-const AdminLayout = () => (
-  <div className={styles.adminContainer}>
-    <HeaderDashboard variant="admin" />
-    <div className={styles.dashboard}>
+const AdminLayout = () => {
+  const { public_id: publicId } = useParams();
+  const location = useLocation();
+
+  return (
+    <div className={`adminShell ${shellStyles.adminShell}`}>
       <AdminSidebar />
-      <Outlet />
+      <div className={shellStyles.adminMain}>
+        <AdminTopbar publicId={publicId} pathname={location.pathname} />
+        <AdminWorkspaceNav />
+        <div className={shellStyles.adminMainBody}>
+          <Outlet />
+        </div>
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 export default AdminLayout;

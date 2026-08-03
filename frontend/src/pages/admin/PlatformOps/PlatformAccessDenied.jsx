@@ -1,10 +1,14 @@
 import React from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { adminPaths } from '../routing/adminRoutePaths';
 import styles from './AdminPlatformOps.module.css';
 
+/**
+ * Accès refusé à un segment platform — pas de redirection automatique (évite les boucles).
+ * Lien de sortie vers la vue d’ensemble admin (hors platform-ops).
+ */
 export default function PlatformAccessDenied() {
   const { public_id: adminId } = useParams();
-  const base = `/dashboard/admin/${adminId}/platform-ops`;
 
   return (
     <div className={styles.tabPanel}>
@@ -13,9 +17,7 @@ export default function PlatformAccessDenied() {
         segment. Contactez un administrateur ou utilisez un compte avec les bundles requis.
       </div>
       <p className={styles.tabPanelHint}>
-        <Link to={`${base}/overview`}>Retour à la vue globale plateforme</Link>
-        {' · '}
-        <Link to={`/dashboard/admin/${adminId}`}>Tableau de bord admin</Link>
+        <Link to={adminPaths.overview(adminId)}>Retour au tableau de bord admin</Link>
       </p>
     </div>
   );

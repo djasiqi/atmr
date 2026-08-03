@@ -33,6 +33,11 @@ from models.platform_billing import (
     PlatformSupportEntry,
 )
 from security.ip_whitelist import ip_whitelist_required
+from services.admin_authz import (
+    CAP_BILLING_ISSUE,
+    CAP_BILLING_LOCK,
+    require_admin_capability,
+)
 
 # Admin déjà protégé (JWT + rôle + IP) : plafonds adaptés à l’UI interactive
 # (rechargements modal / recalculs), pas aux endpoints publics.
@@ -347,6 +352,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
         @jwt_required()
         @role_required(UserRole.admin)
         @ip_whitelist_required()
+        @require_admin_capability(CAP_BILLING_LOCK)
         @limiter.limit(_RL_ADMIN_HEAVY)
         def post(self, period_id: int):
             try:
@@ -1455,6 +1461,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
         @jwt_required()
         @role_required(UserRole.admin)
         @ip_whitelist_required()
+        @require_admin_capability(CAP_BILLING_ISSUE)
         @limiter.limit(_RL_ADMIN_WRITE)
         def post(self, invoice_id: int):
             try:

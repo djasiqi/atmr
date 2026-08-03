@@ -1,0 +1,28 @@
+/**
+ * Coquille AdminShell — grille sidebar | zone principale.
+ * Les pages filles ne calculent plus de marge pour la sidebar.
+ */
+
+.adminShell {
+  display: grid;
+  grid-template-columns: var(--admin-sidebar-width) minmax(0, 1fr);
+  grid-template-rows: minmax(100vh, auto);
+  min-height: 100vh;
+  background-color: var(--admin-bg, var(--bg-secondary));
+  box-sizing: border-box;
+  --header-height: var(--admin-header-height);
+}
+
+.adminMain {
+  display: grid;
+  grid-template-rows: var(--admin-header-height) auto minmax(0, 1fr);
+  min-width: 0;
+  min-height: 100vh;
+  background-color: var(--admin-bg, var(--bg-secondary));
+}
+
+.adminMainBody {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}

@@ -203,14 +203,7 @@ export const fetchUsers = async (params = {}) => {
       '❌ Erreur récupération des utilisateurs :',
       error.response?.data || error.message
     );
-    return {
-      users: [],
-      total: 0,
-      page: 1,
-      per_page: 50,
-      total_pages: 1,
-      role_counts: null,
-    };
+    throw error;
   }
 };
 
@@ -458,6 +451,14 @@ const platformHeaders = () => {
 /** GET /platform/me */
 export const fetchPlatformMe = async () => {
   const response = await apiClient.get('/platform/me', { headers: platformHeaders() });
+  return response.data;
+};
+
+/** GET /admin/capabilities — capacités admin.* + flag enforcement (PR2bis) */
+export const fetchAdminCapabilities = async () => {
+  const token = getAuthToken();
+  const headers = token ? { Authorization: `Bearer ${token}` } : {};
+  const response = await apiClient.get('/admin/capabilities', { headers });
   return response.data;
 };
 

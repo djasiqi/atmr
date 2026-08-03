@@ -10,6 +10,22 @@ import { startCompanyDashboardWebVitals } from './utils/companyDashboardWebPerf'
 import DefaultLayout from './store/layouts/DefaultLayout';
 import ProtectedRoute from './utils/ProtectedRoute';
 import PlatformSegmentGuard from './pages/admin/PlatformOps/PlatformSegmentGuard';
+import {
+  RedirectLegacyReservations,
+  RedirectLegacyReservationDetail,
+  RedirectLegacyUsers,
+  RedirectLegacyDemoRequests,
+  RedirectLegacyBilling,
+  RedirectLegacyBillingReleves,
+  RedirectLegacyBillingConfig,
+  RedirectLegacySettings,
+  RedirectLegacyShadowMode,
+  RedirectLegacyOptuna,
+  RedirectLegacyPlatformOpsIndex,
+  RedirectLegacyPlatformOpsSegment,
+  RedirectToAdminFinance,
+} from './pages/admin/routing/adminLegacyRedirects';
+import { adminPaths } from './pages/admin/routing/adminRoutePaths';
 import GoogleMapsProvider from './components/common/GoogleMapsProvider';
 import PwaOfflineBanner from './components/common/PwaOfflineBanner';
 import { Toaster } from 'sonner';
@@ -49,10 +65,25 @@ const AdminBillingTransportConfig = lazy(() =>
   import('./pages/admin/Billing/AdminBillingTransportConfig')
 );
 
-/** Anciennes URLs facturation / pilotage → hub Facturation. */
+/** Anciennes URLs facturation / pilotage → hub Finance. */
 function RedirectToAdminBilling() {
+  return <RedirectToAdminFinance />;
+}
+
+function RedirectLegacyPlatformBilling() {
   const { public_id } = useParams();
-  return <Navigate to={`/dashboard/admin/${public_id}/billing`} replace />;
+  const location = useLocation();
+  return (
+    <Navigate
+      to={{
+        pathname: adminPaths.financeReleves(public_id),
+        search: location.search,
+        hash: location.hash,
+      }}
+      replace
+      state={location.state}
+    />
+  );
 }
 
 function ScrollToTopOnNavigation() {
@@ -551,27 +582,26 @@ const App = () => {
               }
             >
               <Route index element={<AdminDashboard />} />
-              <Route path="reservations/:bookingId" element={<AdminBookingDetail />} />
-              <Route path="reservations" element={<AdminReservations />} />
-              <Route path="users" element={<AdminUsers />} />
-              <Route path="shadow-mode" element={<ShadowModeDashboard />} />
-              <Route path="optuna" element={<AdminOptuna />} />
-              <Route path="billing" element={<AdminBillingHub />}>
+
+              {/* Architecture cible — 6 workspaces */}
+              <Route path="operations" element={<Navigate to="bookings" replace />} />
+              <Route path="operations/bookings/:bookingId" element={<AdminBookingDetail />} />
+              <Route path="operations/bookings" element={<AdminReservations />} />
+
+              <Route path="partners" element={<Navigate to="users" replace />} />
+              <Route path="partners/users" element={<AdminUsers />} />
+              <Route path="partners/demo-requests" element={<AdminDemoRequests />} />
+
+              <Route path="finance" element={<AdminBillingHub />}>
                 <Route index element={<AdminBillingOverview />} />
-                <Route path="pilotage" element={<RedirectToAdminBilling />} />
-                <Route path="pilotage/companies/:companyId" element={<RedirectToAdminBilling />} />
                 <Route path="releves" element={<AdminPlatformBilling />} />
                 <Route path="config" element={<AdminBillingTransportConfig />} />
               </Route>
-              <Route path="invoices" element={<RedirectToAdminBilling />} />
-              <Route
-                path="invoices/pilotage/companies/:companyId"
-                element={<RedirectToAdminBilling />}
-              />
-              <Route path="platform-billing" element={<Navigate to="../billing/releves" replace />} />
-              <Route path="settings" element={<AdminSettings />} />
-              <Route path="demo-requests" element={<AdminDemoRequests />} />
-              <Route path="platform-ops" element={<PlatformLayout />}>
+
+              <Route path="configuration" element={<AdminSettings />} />
+
+              <Route path="advanced" element={<Navigate to="platform/overview" replace />} />
+              <Route path="advanced/platform" element={<PlatformLayout />}>
                 <Route index element={<Navigate to="overview" replace />} />
                 <Route
                   path="overview"
@@ -630,6 +660,30 @@ const App = () => {
                   }
                 />
               </Route>
+              <Route path="advanced/labs/shadow-mode" element={<ShadowModeDashboard />} />
+              <Route path="advanced/labs/optuna" element={<AdminOptuna />} />
+
+              {/* Redirections legacy (conservent search/hash/state) */}
+              <Route path="reservations/:bookingId" element={<RedirectLegacyReservationDetail />} />
+              <Route path="reservations" element={<RedirectLegacyReservations />} />
+              <Route path="users" element={<RedirectLegacyUsers />} />
+              <Route path="demo-requests" element={<RedirectLegacyDemoRequests />} />
+              <Route path="billing" element={<RedirectLegacyBilling />} />
+              <Route path="billing/releves" element={<RedirectLegacyBillingReleves />} />
+              <Route path="billing/config" element={<RedirectLegacyBillingConfig />} />
+              <Route path="billing/pilotage" element={<RedirectToAdminBilling />} />
+              <Route path="billing/pilotage/companies/:companyId" element={<RedirectToAdminBilling />} />
+              <Route path="settings" element={<RedirectLegacySettings />} />
+              <Route path="shadow-mode" element={<RedirectLegacyShadowMode />} />
+              <Route path="optuna" element={<RedirectLegacyOptuna />} />
+              <Route path="invoices" element={<RedirectToAdminBilling />} />
+              <Route
+                path="invoices/pilotage/companies/:companyId"
+                element={<RedirectToAdminBilling />}
+              />
+              <Route path="platform-billing" element={<RedirectLegacyPlatformBilling />} />
+              <Route path="platform-ops" element={<RedirectLegacyPlatformOpsIndex />} />
+              <Route path="platform-ops/:segment" element={<RedirectLegacyPlatformOpsSegment />} />
             </Route>
 
             <Route

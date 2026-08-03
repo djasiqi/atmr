@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import apiClient from '../../../utils/apiClient';
 import {
   fetchUsers,
   deleteUser,
@@ -10,8 +9,11 @@ import {
   setCompanyBillingAccess,
   pauseCompanyDunning,
 } from '../../../services/adminService';
+import AdminActionDialog from '../components/AdminActionDialog';
+import AdminTempPasswordDialog from '../components/AdminTempPasswordDialog';
 import styles from './AdminUsers.module.css';
 import adminShell from '../adminShell.module.css';
+import { toast } from 'sonner';
 
 const ROLE_LABELS = {
   admin: 'Admin',
@@ -56,6 +58,7 @@ const AdminUsers = () => {
     client: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
 
   const [companyOptions, setCompanyOptions] = useState([]);
   const [showCompanyDropdown, setShowCompanyDropdown] = useState(false);
@@ -66,6 +69,9 @@ const AdminUsers = () => {
   const [pendingInstitutionUserId, setPendingInstitutionUserId] = useState(null);
   const [selectedInstitutionId, setSelectedInstitutionId] = useState(null);
   const [selectedInstitutionRole, setSelectedInstitutionRole] = useState('institution_admin');
+
+  const [actionDialog, setActionDialog] = useState(null);
+  const [tempPasswordDialog, setTempPasswordDialog] = useState(null);
 
   useEffect(() => {
     const loadCompanies = async () => {
@@ -101,6 +107,7 @@ const AdminUsers = () => {
 
   const loadUsers = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const data = await fetchUsers({
         page,
@@ -135,17 +142,19 @@ const AdminUsers = () => {
         setPage(1);
       }
     } catch (error) {
-      console.error('Erreur chargement utilisateurs :', error);
+      const status = error?.response?.status;
+      let message = 'Impossible de charger les utilisateurs.';
+      if (status === 401 || status === 403) {
+        message = 'Accès refusé — vérifiez vos droits administrateur.';
+      } else if (status >= 500) {
+        message = 'Service indisponible — réessayez plus tard.';
+      } else if (!error?.response) {
+        message = 'Erreur réseau — vérifiez votre connexion.';
+      }
+      setLoadError(message);
       setUsers([]);
       setTotalUsers(0);
       setTotalPages(1);
-      setGlobalStats({
-        admin: 0,
-        company: 0,
-        institution: 0,
-        driver: 0,
-        client: 0,
-      });
     } finally {
       setLoading(false);
     }
@@ -157,152 +166,164 @@ const AdminUsers = () => {
 
   const updateUserRoleHandler = async (userId, newRole) => {
     if (!userId || !newRole) {
-      alert("Erreur : l utilisateur ou le role est invalide.");
+      toast.error("L'utilisateur ou le rôle est invalide.");
       return;
     }
 
     if (newRole.toLowerCase() === 'driver') {
       if (!companyOptions.length) {
-        alert('Aucune entreprise disponible.');
+        toast.error('Aucune entreprise disponible.');
         return;
       }
-
       setPendingDriverUserId(userId);
       setShowCompanyDropdown(true);
-    } else if (newRole.toLowerCase() === 'institution') {
-      try {
-        await updateUserRole(userId, {
-          role: 'institution',
-          institution_role: 'institution_admin',
-        });
-        alert('Role institution attribue avec succes.');
+      return;
+    }
+
+    if (newRole.toLowerCase() === 'institution') {
+      setActionDialog({
+        kind: 'role-institution',
+        userId,
+        title: 'Attribuer le rôle institution',
+        description: 'Confirmer l’attribution du rôle institution (admin institution).',
+        confirmationLabel: 'Attribuer',
+        onConfirm: async () => {
+          await updateUserRole(userId, {
+            role: 'institution',
+            institution_role: 'institution_admin',
+          });
+          await loadUsers();
+          setActionDialog(null);
+          toast.success('Rôle institution attribué.');
+        },
+      });
+      return;
+    }
+
+    setActionDialog({
+      kind: 'role',
+      userId,
+      title: 'Changer le rôle',
+      description: `Nouveau rôle : ${ROLE_LABELS[newRole.toLowerCase()] || newRole}.`,
+      confirmationLabel: 'Mettre à jour',
+      onConfirm: async () => {
+        await updateUserRole(userId, { role: newRole });
         await loadUsers();
-      } catch (error) {
-        console.error('Erreur attribution role institution :', error);
-        alert('Impossible d attribuer le role institution.');
-      }
-      return;
-    }
-
-    try {
-      await updateUserRole(userId, { role: newRole });
-      alert(`Role mis a jour avec succes : ${newRole}`);
-      await loadUsers();
-    } catch (error) {
-      console.error('Erreur mise a jour role :', error);
-      alert('Impossible de mettre a jour le role.');
-    }
+        setActionDialog(null);
+        toast.success(`Rôle mis à jour : ${newRole}`);
+      },
+    });
   };
 
-  const handleDelete = async (userId) => {
-    if (!window.confirm('Confirmer la suppression de cet utilisateur ?')) {
-      return;
-    }
-    try {
-      await deleteUser(userId);
-      await loadUsers();
-      alert('Utilisateur supprime avec succes.');
-    } catch (error) {
-      console.error('Erreur suppression utilisateur :', error);
-      alert("Impossible de supprimer l utilisateur.");
-    }
+  const handleDelete = (user) => {
+    setActionDialog({
+      kind: 'delete',
+      title: 'Supprimer l’utilisateur',
+      description: `Supprimer définitivement le compte « ${user.username || user.email} ».`,
+      impact: 'Cette action est irréversible.',
+      confirmationLabel: 'Supprimer',
+      confirmText: 'SUPPRIMER',
+      danger: true,
+      onConfirm: async () => {
+        await deleteUser(user.id);
+        await loadUsers();
+        setActionDialog(null);
+        toast.success('Utilisateur supprimé.');
+      },
+    });
   };
 
-  const handleResetPassword = async (userId) => {
-    if (!userId) {
-      console.error('Erreur : userId est undefined.');
-      alert('Impossible de reinitialiser le mot de passe : ID utilisateur introuvable.');
-      return;
-    }
-
-    const confirmation = window.confirm(
-      'Voulez-vous vraiment réinitialiser le mot de passe de cet utilisateur ?'
-    );
-
-    if (!confirmation) return;
-
-    try {
-      const response = await resetUserPassword(userId);
-
-      if (response?.new_password) {
-        alert(`Mot de passe reinitialise : ${response.new_password}`);
-      } else {
-        console.warn('La reponse API ne contient pas de mot de passe.');
-        alert('Echec de la reinitialisation : aucun mot de passe genere.');
-      }
-    } catch (error) {
-      console.error(
-        'Erreur lors de la reinitialisation du mot de passe :',
-        error.response?.data || error.message
-      );
-      alert('Une erreur est survenue lors de la reinitialisation.');
-    }
+  const handleResetPassword = (user) => {
+    setActionDialog({
+      kind: 'reset-password',
+      title: 'Réinitialiser le mot de passe',
+      description: `Générer un mot de passe temporaire pour « ${user.username || user.email} ».`,
+      impact: 'Le mot de passe actuel ne fonctionnera plus.',
+      confirmationLabel: 'Réinitialiser',
+      danger: true,
+      onConfirm: async () => {
+        const response = await resetUserPassword(user.id);
+        setActionDialog(null);
+        if (!response?.new_password) {
+          throw new Error('Aucun mot de passe généré par le serveur.');
+        }
+        setTempPasswordDialog({
+          accountLabel: user.email || user.username || `ID ${user.id}`,
+          temporaryPassword: response.new_password,
+        });
+      },
+    });
   };
 
-  const handleSetBillingAccess = async (user, state) => {
+  const handleSetBillingAccess = (user, state) => {
     if (!user?.company_id) {
-      alert("Aucune entreprise liee a ce compte.");
+      toast.error('Aucune entreprise liée à ce compte.');
       return;
     }
     const label = formatBillingAccessLabel(state);
-    const confirmMsg =
-      state === 'active'
-        ? 'Lever la restriction d acces commercial pour cette entreprise ?'
-        : `Appliquer une restriction d acces commercial (${label}) pour cette entreprise ?`;
-    if (!window.confirm(confirmMsg)) {
-      return;
-    }
-    try {
-      const payload = {
-        state,
-        reason_code: state === 'active' ? 'admin_lift' : 'admin_manual',
-      };
-      if (state === 'active') {
-        const pauseDaysRaw = window.prompt(
-          'Pause du recouvrement automatique apres levee (jours, laisser vide pour aucune) :',
-          '14'
-        );
-        if (pauseDaysRaw !== null && String(pauseDaysRaw).trim() !== '') {
-          const pauseDays = parseInt(pauseDaysRaw, 10);
+    const needsPauseDays = state === 'active';
+    setActionDialog({
+      kind: 'billing-access',
+      title: 'Accès commercial',
+      description:
+        state === 'active'
+          ? 'Lever la restriction d’accès commercial pour cette entreprise.'
+          : `Appliquer une restriction d’accès commercial (${label}).`,
+      confirmationLabel: 'Confirmer',
+      reason: needsPauseDays
+        ? {
+            required: false,
+            label: 'Pause du recouvrement après levée (jours, vide = aucune)',
+          }
+        : undefined,
+      onConfirm: async ({ reason }) => {
+        const payload = {
+          state,
+          reason_code: state === 'active' ? 'admin_lift' : 'admin_manual',
+        };
+        if (needsPauseDays && reason && String(reason).trim() !== '') {
+          const pauseDays = parseInt(reason, 10);
           if (!Number.isNaN(pauseDays) && pauseDays > 0) {
             payload.pause_days_after_lift = pauseDays;
           }
         }
-      }
-      await setCompanyBillingAccess(user.company_id, payload);
-      await loadUsers();
-      alert(`Acces commercial mis a jour : ${label}`);
-    } catch (error) {
-      console.error('Erreur mise a jour acces billing :', error.response?.data || error.message);
-      alert("Impossible de mettre a jour l acces commercial.");
-    }
+        await setCompanyBillingAccess(user.company_id, payload);
+        await loadUsers();
+        setActionDialog(null);
+        toast.success(`Accès commercial mis à jour : ${label}`);
+      },
+    });
   };
 
-  const handlePauseDunning = async (user) => {
+  const handlePauseDunning = (user) => {
     if (!user?.company_id) {
-      alert("Aucune entreprise liee a ce compte.");
+      toast.error('Aucune entreprise liée à ce compte.');
       return;
     }
-    const daysRaw = window.prompt('Duree de pause du recouvrement (jours) :', '14');
-    if (daysRaw === null) {
-      return;
-    }
-    const days = parseInt(daysRaw, 10);
-    if (Number.isNaN(days) || days < 1) {
-      alert('Duree invalide.');
-      return;
-    }
-    try {
-      await pauseCompanyDunning(user.company_id, {
-        days,
-        reason: 'pause_admin',
-      });
-      await loadUsers();
-      alert(`Recouvrement mis en pause pour ${days} jour(s).`);
-    } catch (error) {
-      console.error('Erreur pause dunning :', error.response?.data || error.message);
-      alert('Impossible de mettre en pause le recouvrement.');
-    }
+    setActionDialog({
+      kind: 'pause-dunning',
+      title: 'Pause du recouvrement',
+      description: 'Mettre en pause le recouvrement automatique pour cette entreprise.',
+      confirmationLabel: 'Mettre en pause',
+      reason: {
+        required: true,
+        label: 'Durée de pause (jours)',
+        minLength: 1,
+      },
+      onConfirm: async ({ reason }) => {
+        const days = parseInt(reason, 10);
+        if (Number.isNaN(days) || days < 1) {
+          throw new Error('Durée invalide — indiquez un nombre de jours ≥ 1.');
+        }
+        await pauseCompanyDunning(user.company_id, {
+          days,
+          reason: 'pause_admin',
+        });
+        await loadUsers();
+        setActionDialog(null);
+        toast.success(`Recouvrement mis en pause pour ${days} jour(s).`);
+      },
+    });
   };
 
   const startRow = totalUsers === 0 ? 0 : (page - 1) * perPage + 1;
@@ -431,6 +452,15 @@ const AdminUsers = () => {
                       Chargement des utilisateurs...
                     </td>
                   </tr>
+                ) : loadError ? (
+                  <tr>
+                    <td colSpan="6" className={styles.placeholderRow} role="alert">
+                      {loadError}{' '}
+                      <button type="button" className={styles.ghostFilterButton} onClick={loadUsers}>
+                        Réessayer
+                      </button>
+                    </td>
+                  </tr>
                 ) : users.length > 0 ? (
                   users.map((user) => {
                     const userRole = String(user.role || '').toLowerCase();
@@ -528,13 +558,13 @@ const AdminUsers = () => {
                         </td>
                         <td className={styles.actionsCell}>
                           <button
-                            onClick={() => handleResetPassword(user.id)}
+                            onClick={() => handleResetPassword(user)}
                             className={styles.resetButton}
                           >
                             Reinitialiser
                           </button>
                           <button
-                            onClick={() => handleDelete(user.id)}
+                            onClick={() => handleDelete(user)}
                             className={styles.deleteButton}
                           >
                             Supprimer
@@ -546,7 +576,7 @@ const AdminUsers = () => {
                 ) : (
                   <tr>
                     <td colSpan="6" className={styles.placeholderRow}>
-                      Aucun utilisateur trouve
+                      Aucun utilisateur trouvé
                     </td>
                   </tr>
                 )}
@@ -623,30 +653,23 @@ const AdminUsers = () => {
               onClick={async () => {
                 const selectedCompany = companyOptions.find((c) => c.selected);
                 if (!selectedCompany) {
-                  alert('Veuillez sélectionner une entreprise.');
+                  toast.error('Veuillez sélectionner une entreprise.');
                   return;
                 }
                 try {
-                  const updateData = {
+                  await updateUserRole(pendingDriverUserId, {
                     role: 'driver',
                     company_id: selectedCompany.id,
-                  };
-                  const response = await apiClient.put(
-                    `/admin/users/${pendingDriverUserId}/role`,
-                    updateData
-                  );
-                  if (response.status === 200) {
-                    alert('Role mis a jour avec succes : driver');
-                    await loadUsers();
-                    setShowCompanyDropdown(false);
-                    setPendingDriverUserId(null);
-                  }
+                  });
+                  await loadUsers();
+                  setShowCompanyDropdown(false);
+                  setPendingDriverUserId(null);
+                  toast.success('Rôle chauffeur attribué.');
                 } catch (error) {
-                  console.error(
-                    'Erreur lors de la mise a jour du role :',
-                    error.response?.data || error.message
+                  toast.error(
+                    error?.response?.data?.error ||
+                      'Impossible de mettre à jour le rôle.'
                   );
-                  alert('Impossible de mettre a jour le role.');
                 }
               }}
             >
@@ -702,33 +725,26 @@ const AdminUsers = () => {
                 className={styles.modalPrimaryButton}
                 onClick={async () => {
                   if (!selectedInstitutionId) {
-                    alert('Veuillez sélectionner une institution.');
+                    toast.error('Veuillez sélectionner une institution.');
                     return;
                   }
                   try {
-                    const updateData = {
+                    await updateUserRole(pendingInstitutionUserId, {
                       role: 'institution',
                       institution_id: selectedInstitutionId,
                       institution_role: selectedInstitutionRole,
-                    };
-                    const response = await apiClient.put(
-                      `/admin/users/${pendingInstitutionUserId}/role`,
-                      updateData
-                    );
-                    if (response.status === 200) {
-                      alert('Role mis a jour avec succes : institution');
-                      await loadUsers();
-                      setShowInstitutionDropdown(false);
-                      setPendingInstitutionUserId(null);
-                      setSelectedInstitutionId(null);
-                      setSelectedInstitutionRole('institution_admin');
-                    }
+                    });
+                    await loadUsers();
+                    setShowInstitutionDropdown(false);
+                    setPendingInstitutionUserId(null);
+                    setSelectedInstitutionId(null);
+                    setSelectedInstitutionRole('institution_admin');
+                    toast.success('Rôle institution attribué.');
                   } catch (error) {
-                    console.error(
-                      'Erreur lors de la mise a jour du role :',
-                      error.response?.data || error.message
+                    toast.error(
+                      error?.response?.data?.error ||
+                        'Impossible de mettre à jour le rôle.'
                     );
-                    alert('Impossible de mettre a jour le role.');
                   }
                 }}
               >
@@ -749,6 +765,30 @@ const AdminUsers = () => {
           </div>
         </div>
       )}
+
+      {actionDialog ? (
+        <AdminActionDialog
+          open
+          title={actionDialog.title}
+          description={actionDialog.description}
+          impact={actionDialog.impact}
+          confirmationLabel={actionDialog.confirmationLabel}
+          confirmText={actionDialog.confirmText}
+          reason={actionDialog.reason}
+          danger={Boolean(actionDialog.danger)}
+          onConfirm={actionDialog.onConfirm}
+          onClose={() => setActionDialog(null)}
+        />
+      ) : null}
+
+      {tempPasswordDialog ? (
+        <AdminTempPasswordDialog
+          open
+          accountLabel={tempPasswordDialog.accountLabel}
+          temporaryPassword={tempPasswordDialog.temporaryPassword}
+          onClose={() => setTempPasswordDialog(null)}
+        />
+      ) : null}
     </>
   );
 };

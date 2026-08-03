@@ -1,21 +1,24 @@
-// src/components/layout/Sidebar/AdminSidebar/AdminSidebar.js
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Link, NavLink, useLocation, useParams, useNavigate } from 'react-router-dom';
+import { Link, NavLink, useLocation, useParams } from 'react-router-dom';
 import {
   FaHome,
   FaUser,
   FaCar,
   FaFileInvoice,
   FaCog,
-  FaRobot,
-  FaChartLine,
-  FaServer,
+  FaTools,
   FaSignOutAlt,
   FaChevronDown,
 } from 'react-icons/fa';
-import { usePlatformCapabilities, PLATFORM_SEGMENTS } from '../../../../hooks/usePlatformCapabilities';
+import { usePlatformCapabilities } from '../../../../hooks/usePlatformCapabilities';
 import { logoutUser } from '../../../../utils/apiClient';
 import { getActiveUser } from '../../../../utils/webAuthSession';
+import {
+  ADMIN_WORKSPACES,
+  getAdminRelativePath,
+  resolveActiveWorkspace,
+} from '../../../../pages/admin/navigation/adminNavRegistry';
+import { adminPaths, adminBasePath } from '../../../../pages/admin/routing/adminRoutePaths';
 import styles from './AdminSidebar.module.css';
 
 function getInitials(name = '') {
@@ -23,41 +26,49 @@ function getInitials(name = '') {
   return parts.map((p) => p[0]?.toUpperCase() || '').join('') || 'AD';
 }
 
-/** Largeurs alignées sur CompanySidebar + --sidebar-w pour le contenu principal */
-function getAdminSidebarWidthPx() {
-  const w = window.innerWidth;
-  if (w <= 480) return 56;
-  if (w <= 768) return 64;
-  if (w <= 1024) return 220;
-  return 256;
+const WORKSPACE_ICONS = {
+  overview: FaHome,
+  operations: FaCar,
+  partners: FaUser,
+  finance: FaFileInvoice,
+  configuration: FaCog,
+  advanced: FaTools,
+};
+
+/**
+ * Cible sidebar pour un workspace (première page utile).
+ * @param {string} publicId
+ * @param {import('../../../../pages/admin/navigation/adminNavRegistry').AdminWorkspace} workspace
+ * @param {(s: string) => boolean} canAccess
+ */
+function workspaceHref(publicId, workspace, canAccess) {
+  if (workspace.id === 'overview') return adminPaths.overview(publicId);
+  if (workspace.id === 'operations') return adminPaths.operationsBookings(publicId);
+  if (workspace.id === 'partners') return adminPaths.partnersUsers(publicId);
+  if (workspace.id === 'finance') return adminPaths.finance(publicId);
+  if (workspace.id === 'configuration') return adminPaths.configuration(publicId);
+  if (workspace.id === 'advanced') {
+    const firstPlatform = (workspace.children || []).find(
+      (c) => c.platformCapability && canAccess(c.platformCapability)
+    );
+    if (firstPlatform) {
+      return `${adminBasePath(publicId)}/${firstPlatform.path}`;
+    }
+    return adminPaths.advancedLabsShadowMode(publicId);
+  }
+  return `${adminBasePath(publicId)}/${workspace.path}`;
 }
 
 const AdminSidebar = () => {
   const { public_id } = useParams();
   const location = useLocation();
-  const navigate = useNavigate();
   const adminId = public_id ?? '';
-  const { canAccess, isLoading: platformLoading } = usePlatformCapabilities();
+  const { canAccess } = usePlatformCapabilities();
 
-  const showPlatformNav = useMemo(() => {
-    if (platformLoading) return true;
-    return PLATFORM_SEGMENTS.some((s) => canAccess(s));
-  }, [platformLoading, canAccess]);
+  const showAdvanced = true;
 
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef(null);
-
-  useEffect(() => {
-    const update = () => {
-      document.documentElement.style.setProperty('--sidebar-w', `${getAdminSidebarWidthPx()}px`);
-    };
-    update();
-    window.addEventListener('resize', update);
-    return () => {
-      window.removeEventListener('resize', update);
-      document.documentElement.style.setProperty('--sidebar-w', '72px');
-    };
-  }, []);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -90,7 +101,6 @@ const AdminSidebar = () => {
     return () => window.removeEventListener('auth-changed', syncUser);
   }, []);
 
-  const publicId = userData?.public_id || null;
   const displayName = userData?.username || 'Administrateur';
   const userEmail = userData?.email || '';
   const initials = useMemo(() => getInitials(displayName), [displayName]);
@@ -99,65 +109,19 @@ const AdminSidebar = () => {
     await logoutUser();
   }, []);
 
-  const handleAccountClick = () => {
-    if (!publicId) return;
-    navigate(`/dashboard/account/${publicId}`);
-    setUserMenuOpen(false);
-  };
+  const relative = getAdminRelativePath(location.pathname, adminId);
+  const activeWorkspace = resolveActiveWorkspace(relative);
+  const overviewHref = adminPaths.overview(adminId);
 
-  const base = `/dashboard/admin/${adminId}`;
-
-  const sections = [
-    {
-      title: 'Exploitation métier',
-      items: [
-        { icon: FaHome, label: 'Tableau de bord', to: base, end: true, isPlatform: false },
-        { icon: FaCar, label: 'Réservations', to: `${base}/reservations`, isPlatform: false },
-        {
-          icon: FaFileInvoice,
-          label: 'Facturation',
-          to: `${base}/billing`,
-          isBillingHub: true,
-          isPlatform: false,
-        },
-        { icon: FaChartLine, label: 'Demandes demo', to: `${base}/demo-requests`, isPlatform: false },
-      ],
-    },
-    {
-      title: 'Administration applicative',
-      items: [
-        { icon: FaUser, label: 'Utilisateurs', to: `${base}/users`, isPlatform: false },
-        { icon: FaCog, label: 'Paramètres', to: `${base}/settings`, isPlatform: false },
-      ],
-    },
-    {
-      title: 'Intelligence / optimisation',
-      items: [
-        { icon: FaRobot, label: 'Shadow Mode MDI', to: `${base}/shadow-mode`, isPlatform: false },
-        { icon: FaChartLine, label: 'Optimisation Optuna', to: `${base}/optuna`, isPlatform: false },
-      ],
-    },
-  ];
-
-  if (showPlatformNav) {
-    sections.push({
-      title: 'Plateforme',
-      items: [
-        {
-          icon: FaServer,
-          label: 'Ops / Platform',
-          to: `${base}/platform-ops/overview`,
-          end: false,
-          isPlatform: true,
-        },
-      ],
-    });
-  }
+  const workspaces = useMemo(
+    () => ADMIN_WORKSPACES.filter((w) => (w.id === 'advanced' ? showAdvanced : true)),
+    [showAdvanced]
+  );
 
   return (
     <aside className={styles.sidebar} aria-label="Navigation administration">
       <div className={styles.sidebarBrand}>
-        <Link to={base} className={styles.brandLink} title="Tableau de bord admin">
+        <Link to={overviewHref} className={styles.brandLink} title="Tableau de bord admin">
           <img src="/icon-dark.png" alt="Lirie" className={styles.brandLogo} />
           <div className={styles.brandText}>
             <span className={styles.brandName}>Lirie</span>
@@ -166,38 +130,27 @@ const AdminSidebar = () => {
         </Link>
       </div>
 
-      {sections.map((section, idx) => (
-        <div key={section.title} className={styles.navSection}>
-          {idx > 0 && <div className={styles.navDivider} aria-hidden="true" />}
-          <div className={styles.navLabel}>{section.title}</div>
-          <nav className={styles.nav} aria-label={section.title}>
-            {section.items.map((item) => {
-              const Icon = item.icon;
-              return (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  end={item.end ?? false}
-                  className={({ isActive }) => {
-                    const active = item.isPlatform
-                      ? location.pathname.includes('/platform-ops')
-                      : item.isBillingHub
-                        ? location.pathname.startsWith(`${base}/billing`)
-                        : isActive;
-                    return `${styles.navItem} ${active ? styles.navActive : ''}`;
-                  }}
-                  title={item.label}
-                >
-                  <span className={styles.navIcon}>
-                    <Icon />
-                  </span>
-                  <span className={styles.navText}>{item.label}</span>
-                </NavLink>
-              );
-            })}
-          </nav>
-        </div>
-      ))}
+      <nav className={styles.nav} aria-label="Espaces de travail">
+        {workspaces.map((workspace) => {
+          const Icon = WORKSPACE_ICONS[workspace.id] || FaHome;
+          const to = workspaceHref(adminId, workspace, canAccess);
+          const isActive = activeWorkspace?.id === workspace.id;
+          return (
+            <NavLink
+              key={workspace.id}
+              to={to}
+              end={workspace.id === 'overview'}
+              className={() => `${styles.navItem} ${isActive ? styles.navActive : ''}`}
+              title={workspace.label}
+            >
+              <span className={styles.navIcon}>
+                <Icon />
+              </span>
+              <span className={styles.navText}>{workspace.label}</span>
+            </NavLink>
+          );
+        })}
+      </nav>
 
       <div className={styles.sidebarSpacer} aria-hidden="true" />
 
@@ -223,33 +176,6 @@ const AdminSidebar = () => {
           <div className={styles.userDropdown}>
             {userEmail ? <div className={styles.userDropdownEmail}>{userEmail}</div> : null}
             {userEmail ? <div className={styles.userDropdownDivider} /> : null}
-            <button type="button" className={styles.userDropdownItem} onClick={handleAccountClick}>
-              Gestion du compte
-            </button>
-            {publicId ? (
-              <Link
-                to={`/reservations/${publicId}`}
-                className={styles.userDropdownItem}
-                onClick={() => setUserMenuOpen(false)}
-              >
-                Mes réservations
-              </Link>
-            ) : null}
-            <Link
-              to="/dashboard/support"
-              className={styles.userDropdownItem}
-              onClick={() => setUserMenuOpen(false)}
-            >
-              Support client
-            </Link>
-            <Link
-              to="/dashboard/upcoming-rides"
-              className={styles.userDropdownItem}
-              onClick={() => setUserMenuOpen(false)}
-            >
-              Prochaines courses
-            </Link>
-            <div className={styles.userDropdownDivider} />
             <button type="button" className={styles.userDropdownItem} onClick={handleLogout}>
               <FaSignOutAlt />
               <span>Déconnexion</span>

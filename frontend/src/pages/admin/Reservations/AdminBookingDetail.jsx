@@ -4,6 +4,7 @@ import { FaClipboardList } from 'react-icons/fa';
 import { fetchAdminBookingDetail } from '../../../services/adminService';
 import styles from './AdminReservations.module.css';
 import shell from '../adminShell.module.css';
+import { adminPaths } from '../routing/adminRoutePaths';
 
 const SOURCE_LABELS = {
   client: 'Client',
@@ -76,7 +77,7 @@ const AdminBookingDetail = () => {
     };
   }, [bookingId]);
 
-  const base = `/dashboard/admin/${adminId}`;
+  const bookingsListPath = adminPaths.operationsBookings(adminId);
   const booking = data?.booking;
 
   const createdBy = data?.created_by;
@@ -86,7 +87,7 @@ const AdminBookingDetail = () => {
   return (
     <main className={`${shell.content} ${styles.detailMain}`}>
       <header className={styles.detailPageHeader}>
-        <Link to={`${base}/reservations`} className={styles.detailBack}>
+        <Link to={bookingsListPath} className={styles.detailBack}>
           ← Retour aux réservations
         </Link>
         <div className={styles.detailTitleRow}>
