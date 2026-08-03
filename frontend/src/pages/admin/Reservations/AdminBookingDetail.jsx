@@ -300,7 +300,7 @@ const AdminBookingDetail = () => {
                   Utilisateurs / entreprises
                 </Link>
               ) : null}
-              <Link className={styles.linkPill} to={base}>
+              <Link className={styles.linkPill} to={bookingsListPath}>
                 Tableau de bord admin
               </Link>
             </nav>
