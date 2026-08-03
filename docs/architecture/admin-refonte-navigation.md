@@ -62,6 +62,10 @@ Variables `--admin-*` dans [`adminTokens.css`](../../frontend/src/pages/admin/sh
 
 - ✅ **Implémenté** : `services/admin_authz.py` + flag `ADMIN_CAPABILITIES_ENFORCED` (défaut `false`) ; grants `admin.*` via `platform_admin_permission_grant` ; logs `admin_capability_would_deny` ; endpoint `GET /admin/capabilities` ; garde Optuna + billing lock/issue ; hook `useAdminCapabilities` ; filtre labs dans `AdminWorkspaceNav` ; bouton Verrouiller conditionné.
 
+## Durcissement post-merge (`fix/admin-post-merge-hardening`)
+
+- ✅ **Implémenté** : alignement FE/BE sur `enforced` (`hasAdminCapability` ignore la liste en compat) ; mode enforced = grants uniquement (sans grants ⇒ aucune capacité) ; `AdminCapabilityGuard` sur routes Labs ; `canBillingIssue` sur « Générer PDF/QR » ; cycle de vie `AdminActionDialog` (reset uniquement à l’ouverture) ; reset MDP valide avant fermeture ; overlay secret non cliquable ; tests ciblés.
+
 ## Backlog
 
 - **PR3** : opérations / partenaires (fiches org, pipeline démos)

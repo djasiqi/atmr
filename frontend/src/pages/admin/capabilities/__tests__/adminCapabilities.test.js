@@ -1,13 +1,28 @@
 import { ADMIN_CAP, hasAdminCapability } from '../adminCapabilities';
 
 describe('adminCapabilities', () => {
-  it('autorise pendant le chargement (liste vide)', () => {
-    expect(hasAdminCapability(null, ADMIN_CAP.LABS_READ)).toBe(true);
-    expect(hasAdminCapability([], ADMIN_CAP.LABS_READ)).toBe(true);
+  it('enforced=false autorise même avec liste partielle', () => {
+    expect(
+      hasAdminCapability([ADMIN_CAP.BILLING_LOCK], ADMIN_CAP.LABS_READ, {
+        enforced: false,
+      })
+    ).toBe(true);
+    expect(hasAdminCapability(null, ADMIN_CAP.LABS_READ, { enforced: false })).toBe(true);
   });
 
-  it('respecte la liste effective', () => {
-    expect(hasAdminCapability([ADMIN_CAP.LABS_READ], ADMIN_CAP.LABS_READ)).toBe(true);
-    expect(hasAdminCapability([ADMIN_CAP.BILLING_LOCK], ADMIN_CAP.LABS_READ)).toBe(false);
+  it('enforced=true avec capacité présente', () => {
+    expect(
+      hasAdminCapability([ADMIN_CAP.LABS_READ], ADMIN_CAP.LABS_READ, { enforced: true })
+    ).toBe(true);
+  });
+
+  it('enforced=true avec capacité absente', () => {
+    expect(
+      hasAdminCapability([ADMIN_CAP.BILLING_LOCK], ADMIN_CAP.LABS_READ, {
+        enforced: true,
+      })
+    ).toBe(false);
+    expect(hasAdminCapability([], ADMIN_CAP.LABS_READ, { enforced: true })).toBe(false);
+    expect(hasAdminCapability(null, ADMIN_CAP.LABS_READ, { enforced: true })).toBe(false);
   });
 });

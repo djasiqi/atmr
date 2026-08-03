@@ -1,4 +1,4 @@
-"""Tests PR2bis — admin_authz (flag + fallback legacy)."""
+"""Tests admin_authz — compat vs enforced."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from services.admin_authz import (
     CAP_BILLING_LOCK,
     CAP_LABS_EXECUTE,
     admin_capabilities_enforced,
+    user_effective_admin_capabilities,
     user_has_admin_capability,
 )
 
@@ -22,28 +23,55 @@ def test_admin_capabilities_enforced_true(monkeypatch):
     assert admin_capabilities_enforced() is True
 
 
-def test_would_deny_allows_when_not_enforced(monkeypatch):
+def test_compat_allows_even_with_partial_policy(monkeypatch):
     monkeypatch.setenv("ADMIN_CAPABILITIES_ENFORCED", "false")
+    fake_user = type("U", (), {"role": type("R", (), {"__eq__": lambda s, o: True})()})()
+    # Simplify: patch role check path
     with (
+        patch("services.admin_authz.db.session.get") as get_user,
         patch(
-            "services.admin_authz.user_effective_admin_capabilities",
-            return_value=frozenset(),
+            "services.admin_authz.user_policy_admin_capabilities",
+            return_value=frozenset({CAP_BILLING_LOCK}),
         ),
         patch("services.admin_authz.logger") as log,
     ):
+        from models.enums import UserRole
+
+        get_user.return_value = type("U", (), {"role": UserRole.ADMIN})()
         assert user_has_admin_capability(1, CAP_LABS_EXECUTE) is True
-        log.info.assert_called()
         assert "admin_capability_would_deny" in log.info.call_args[0][0]
 
 
-def test_denies_when_enforced_and_missing(monkeypatch):
+def test_enforced_denies_without_grants(monkeypatch):
     monkeypatch.setenv("ADMIN_CAPABILITIES_ENFORCED", "true")
-    with patch(
-        "services.admin_authz.user_effective_admin_capabilities",
-        return_value=frozenset({CAP_BILLING_LOCK}),
+    from models.enums import UserRole
+
+    with (
+        patch("services.admin_authz.db.session.get") as get_user,
+        patch(
+            "services.admin_authz._admin_capability_grants",
+            return_value=frozenset(),
+        ),
     ):
+        get_user.return_value = type("U", (), {"role": UserRole.ADMIN})()
         assert user_has_admin_capability(1, CAP_LABS_EXECUTE) is False
+        assert user_effective_admin_capabilities(1) == frozenset()
+
+
+def test_enforced_allows_granted_capability(monkeypatch):
+    monkeypatch.setenv("ADMIN_CAPABILITIES_ENFORCED", "true")
+    from models.enums import UserRole
+
+    with (
+        patch("services.admin_authz.db.session.get") as get_user,
+        patch(
+            "services.admin_authz._admin_capability_grants",
+            return_value=frozenset({CAP_BILLING_LOCK}),
+        ),
+    ):
+        get_user.return_value = type("U", (), {"role": UserRole.ADMIN})()
         assert user_has_admin_capability(1, CAP_BILLING_LOCK) is True
+        assert user_has_admin_capability(1, CAP_LABS_EXECUTE) is False
 
 
 def test_none_user_denied():

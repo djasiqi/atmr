@@ -1,7 +1,8 @@
 /**
- * Capacités admin.* (PR2bis) — aligné sur GET /admin/capabilities.
- * Avec ADMIN_CAPABILITIES_ENFORCED=false, le backend autorise toujours (compat)
- * mais journalise les « aurait refusé » ; le front peut masquer les labs / actions.
+ * Capacités admin.* — aligné sur GET /admin/capabilities + flag enforced.
+ *
+ * Mode compat (enforced=false) : l’UI autorise tout (legacy admin = accès complet).
+ * Mode enforced=true : seule la liste effective compte.
  */
 
 export const ADMIN_CAP = {
@@ -23,12 +24,9 @@ export const ADMIN_CAP = {
 /**
  * @param {string[]|null|undefined} list
  * @param {string} capability
- * @param {{ enforced?: boolean }} [opts] réservé (API d’enforcement côté serveur)
+ * @param {{ enforced?: boolean }} [opts]
  */
-export function hasAdminCapability(list, capability, _opts = {}) {
-  if (!list || !Array.isArray(list) || list.length === 0) {
-    // Pas encore chargé / legacy : autoriser (ne pas casser l’UI)
-    return true;
-  }
-  return list.includes(capability);
+export function hasAdminCapability(list, capability, { enforced = false } = {}) {
+  if (!enforced) return true;
+  return Array.isArray(list) && list.includes(capability);
 }

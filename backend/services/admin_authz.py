@@ -1,9 +1,14 @@
-"""Autorisations granulaires admin.* (PR2bis).
+"""Autorisations granulaires admin.* (PR2bis + durcissement).
 
-Réutilise les grants `platform_admin_permission_grant` (mêmes lignes permission).
-Le flag ADMIN_CAPABILITIES_ENFORCED (défaut false) contrôle l'activation :
-- false : compat rôle admin (accès autorisé) + log si le grant aurait refusé ;
-- true : refuse réellement si la capacité manque.
+Réutilise les grants `platform_admin_permission_grant` (permissions admin.*).
+
+Mode compatibilité (ADMIN_CAPABILITIES_ENFORCED=false, défaut) :
+  - accès effectif = toutes les capacités (rôle admin legacy) ;
+  - politique simulée = grants présents (logs « aurait refusé » si grant partiel).
+
+Mode enforced (ADMIN_CAPABILITIES_ENFORCED=true) :
+  - accès effectif = grants uniquement ;
+  - sans grants admin.* ⇒ aucune capacité (matrice explicite obligatoire).
 """
 
 from __future__ import annotations
@@ -26,7 +31,6 @@ logger = logging.getLogger(__name__)
 
 F = TypeVar("F", bound=Callable[..., Any])
 
-# Capacités admin (matrice initiale — premiers consommateurs : labs + billing)
 CAP_OVERVIEW_READ = "admin.overview.read"
 CAP_BOOKINGS_READ = "admin.bookings.read"
 CAP_BOOKINGS_EXPORT = "admin.bookings.export"
@@ -59,7 +63,6 @@ ALL_ADMIN_CAPABILITIES: frozenset[str] = frozenset(
     }
 )
 
-# Compat legacy : rôle admin ⇒ toutes les capacités tant que pas de grants admin.*
 ADMIN_IMPLIED_CAPABILITIES: frozenset[str] = ALL_ADMIN_CAPABILITIES
 
 
@@ -79,43 +82,56 @@ def _admin_capability_grants(user_id: int) -> frozenset[str]:
     return frozenset(rows)
 
 
-def user_effective_admin_capabilities(user_id: int) -> frozenset[str]:
-    """Capacités effectives : grants admin.* en DB, sinon ensemble legacy complet."""
+def user_policy_admin_capabilities(user_id: int) -> frozenset[str]:
+    """Politique simulée = grants admin.* uniquement (peut être vide)."""
     u = db.session.get(User, user_id)
     if not u or u.role != UserRole.ADMIN:
         return frozenset()
-    grants = _admin_capability_grants(user_id)
-    if grants:
-        return grants
+    return _admin_capability_grants(user_id)
+
+
+def user_effective_admin_capabilities(user_id: int) -> frozenset[str]:
+    """Capacités effectivement accordées pour l'UI / le contrôle d'accès.
+
+    Compat : ensemble complet.
+    Enforced : grants uniquement (vide si aucune matrice explicite).
+    """
+    u = db.session.get(User, user_id)
+    if not u or u.role != UserRole.ADMIN:
+        return frozenset()
+    if admin_capabilities_enforced():
+        return _admin_capability_grants(user_id)
     return ADMIN_IMPLIED_CAPABILITIES
 
 
 def user_has_admin_capability(user_id: int | None, capability: str) -> bool:
-    """Décide l'accès effectif (tient compte de ADMIN_CAPABILITIES_ENFORCED)."""
+    """Décide l'accès (tient compte de ADMIN_CAPABILITIES_ENFORCED)."""
     if user_id is None:
         return False
-    effective = user_effective_admin_capabilities(user_id)
-    has_cap = capability in effective
-    if has_cap:
-        return True
-
-    # Manque la capacité dans le modèle effectif
-    if admin_capabilities_enforced():
-        logger.info(
-            "admin_capability_denied user_id=%s capability=%s enforced=true",
-            user_id,
-            capability,
-        )
+    u = db.session.get(User, user_id)
+    if not u or u.role != UserRole.ADMIN:
         return False
 
-    # Mode compat : autoriser mais journaliser la décision « aurait refusé »
+    if not admin_capabilities_enforced():
+        policy = user_policy_admin_capabilities(user_id)
+        if policy and capability not in policy:
+            logger.info(
+                "admin_capability_would_deny user_id=%s capability=%s enforced=false "
+                "decision=allow_legacy",
+                user_id,
+                capability,
+            )
+        return True
+
+    grants = _admin_capability_grants(user_id)
+    if capability in grants:
+        return True
     logger.info(
-        "admin_capability_would_deny user_id=%s capability=%s enforced=false "
-        "decision=allow_legacy",
+        "admin_capability_denied user_id=%s capability=%s enforced=true",
         user_id,
         capability,
     )
-    return True
+    return False
 
 
 def require_admin_capability(capability: str) -> Callable[[F], F]:
@@ -150,14 +166,18 @@ def require_admin_capability(capability: str) -> Callable[[F], F]:
 
 def capabilities_payload_for_user(user_id: int) -> dict[str, Any]:
     """Payload API pour le frontend (hook useAdminCapabilities)."""
+    enforced = admin_capabilities_enforced()
     effective = sorted(user_effective_admin_capabilities(user_id))
+    policy = sorted(user_policy_admin_capabilities(user_id))
     return {
-        "enforced": admin_capabilities_enforced(),
+        "enforced": enforced,
         "capabilities_effective": effective,
+        "capabilities_policy": policy,
         "note": (
-            "ADMIN_CAPABILITIES_ENFORCED=false : compat rôle admin ; "
-            "les décisions « aurait refusé » sont journalisées."
-            if not admin_capabilities_enforced()
-            else "ADMIN_CAPABILITIES_ENFORCED=true : les capacités sont appliquées."
+            "ADMIN_CAPABILITIES_ENFORCED=false : compat rôle admin (accès complet) ; "
+            "capabilities_policy reflète les grants pour simulation."
+            if not enforced
+            else "ADMIN_CAPABILITIES_ENFORCED=true : accès = grants admin.* uniquement "
+            "(matrice explicite obligatoire)."
         ),
     }

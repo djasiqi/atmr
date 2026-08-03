@@ -100,7 +100,7 @@ const statementBadge = (s) => {
 
 const AdminPlatformBilling = () => {
   const location = useLocation();
-  const { canBillingLock } = useAdminCapabilities();
+  const { canBillingLock, canBillingIssue } = useAdminCapabilities();
   const focusFromOverview = location.state || {};
   const openedFocusRef = useRef(null);
   const didAutoSelectRef = useRef(false);
@@ -863,7 +863,13 @@ const AdminPlatformBilling = () => {
                     disabled={
                       Boolean(modalInvoice.issued_invoice) ||
                       (modalInvoice.statement_status !== 'VALIDATED' &&
-                        modalInvoice.statement_status !== 'LOCKED')
+                        modalInvoice.statement_status !== 'LOCKED') ||
+                      !canBillingIssue
+                    }
+                    title={
+                      !canBillingIssue
+                        ? 'Capacité admin.billing.issue requise'
+                        : undefined
                     }
                     onClick={async () => {
                       try {

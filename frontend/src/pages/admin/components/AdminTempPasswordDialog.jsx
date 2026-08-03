@@ -32,13 +32,12 @@ export default function AdminTempPasswordDialog({
   };
 
   return (
-    <div className={styles.overlay} role="presentation" onClick={onClose}>
+    <div className={styles.overlay} role="presentation">
       <div
         className={styles.dialog}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        onClick={(e) => e.stopPropagation()}
       >
         <h2 id={titleId} className={styles.title}>
           Mot de passe temporaire généré

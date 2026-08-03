@@ -243,10 +243,10 @@ const AdminUsers = () => {
       danger: true,
       onConfirm: async () => {
         const response = await resetUserPassword(user.id);
-        setActionDialog(null);
         if (!response?.new_password) {
           throw new Error('Aucun mot de passe généré par le serveur.');
         }
+        setActionDialog(null);
         setTempPasswordDialog({
           accountLabel: user.email || user.username || `ID ${user.id}`,
           temporaryPassword: response.new_password,

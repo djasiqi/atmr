@@ -10,6 +10,8 @@ import { startCompanyDashboardWebVitals } from './utils/companyDashboardWebPerf'
 import DefaultLayout from './store/layouts/DefaultLayout';
 import ProtectedRoute from './utils/ProtectedRoute';
 import PlatformSegmentGuard from './pages/admin/PlatformOps/PlatformSegmentGuard';
+import AdminCapabilityGuard from './pages/admin/components/AdminCapabilityGuard';
+import { ADMIN_CAP } from './pages/admin/capabilities/adminCapabilities';
 import {
   RedirectLegacyReservations,
   RedirectLegacyReservationDetail,
@@ -660,8 +662,22 @@ const App = () => {
                   }
                 />
               </Route>
-              <Route path="advanced/labs/shadow-mode" element={<ShadowModeDashboard />} />
-              <Route path="advanced/labs/optuna" element={<AdminOptuna />} />
+              <Route
+                path="advanced/labs/shadow-mode"
+                element={
+                  <AdminCapabilityGuard capability={ADMIN_CAP.LABS_READ}>
+                    <ShadowModeDashboard />
+                  </AdminCapabilityGuard>
+                }
+              />
+              <Route
+                path="advanced/labs/optuna"
+                element={
+                  <AdminCapabilityGuard capability={ADMIN_CAP.LABS_READ}>
+                    <AdminOptuna />
+                  </AdminCapabilityGuard>
+                }
+              />
 
               {/* Redirections legacy (conservent search/hash/state) */}
               <Route path="reservations/:bookingId" element={<RedirectLegacyReservationDetail />} />

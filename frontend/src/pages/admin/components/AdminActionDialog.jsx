@@ -39,20 +39,32 @@ export default function AdminActionDialog({
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const inFlightRef = useRef(false);
+  const loadingRef = useRef(loading);
+  const onCloseRef = useRef(onClose);
 
+  loadingRef.current = loading;
+  onCloseRef.current = onClose;
+
+  // Réinitialisation uniquement à l’ouverture (pas sur loading / onClose)
   useEffect(() => {
-    if (!open) return undefined;
+    if (!open) return;
     setReasonValue('');
     setConfirmValue('');
     setError(null);
     setSubmitting(false);
     inFlightRef.current = false;
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return undefined;
     const onKey = (e) => {
-      if (e.key === 'Escape' && !loading && !inFlightRef.current) onClose();
+      if (e.key === 'Escape' && !loadingRef.current && !inFlightRef.current) {
+        onCloseRef.current();
+      }
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [open, loading, onClose]);
+  }, [open]);
 
   if (!open) return null;
 
