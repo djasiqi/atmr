@@ -113,6 +113,9 @@
 - ✅ **Implémenté** : `GET /admin/platform-billing/dossiers` (+ export + détail) ;
   KPI distincts À émettre / Facturé net / Encaissé / Solde ouvert ;
   filtre « Toutes les périodes » + chip À traiter.
+- ✅ **Implémenté** : sélecteur Période = mois depuis **juillet 2026** jusqu’au mois
+  civil courant (`PERIOD_SELECTOR_START` dans `AdminPlatformInvoicesRegistry.jsx`) ;
+  chaque nouveau mois s’ajoute automatiquement ; pas de fenêtre glissante.
 - ✅ **Implémenté** : `POST …/companies/{id}/recalculate` ; `POST …/issue-ready`
   (batch serveur) ; `CAP_BILLING_VALIDATE` sur recalcul période.
 - ✅ **Implémenté** : UI Finance = **Factures** | **Contrats et accès** ; hub Outlet

@@ -43,6 +43,15 @@ const MONTHS_FR = [
   'décembre',
 ];
 
+/** Premier mois facturable plateforme : visible dès juillet, puis chaque mois s'ajoute. */
+const PERIOD_SELECTOR_START = { year: 2026, month: 7 };
+
+const periodKey = (year, month) => `${year}-${month}`;
+
+const isOnOrAfterPeriodStart = (year, month) =>
+  year > PERIOD_SELECTOR_START.year ||
+  (year === PERIOD_SELECTOR_START.year && month >= PERIOD_SELECTOR_START.month);
+
 const CHIP_FILTERS = [
   { id: 'a_traiter', label: 'À traiter' },
   { id: '', label: 'Toutes' },
@@ -149,8 +158,9 @@ const AdminPlatformInvoicesRegistry = () => {
   });
 
   const periodsQuery = useQuery({
-    queryKey: ['admin', 'platform-billing-periods', { with_activity: 1 }],
-    queryFn: () => fetchPlatformBillingPeriods({ with_activity: 1 }),
+    // Toutes les périodes créées (y compris vides) pour enrichir le sélecteur.
+    queryKey: ['admin', 'platform-billing-periods'],
+    queryFn: () => fetchPlatformBillingPeriods(),
   });
 
   const periods = useMemo(() => {
@@ -334,16 +344,8 @@ const AdminPlatformInvoicesRegistry = () => {
       const year = Number(p.billing_year);
       const month = Number(p.billing_month);
       if (!year || !month) return;
-      // Uniquement périodes avec activité (relevé ou facture), sauf si
-      // l'API a déjà filtré with_activity.
-      if (
-        p.has_billing_activity === false &&
-        Number(p.statement_count || 0) === 0 &&
-        Number(p.issued_count || 0) === 0
-      ) {
-        return;
-      }
-      byKey.set(`${year}-${month}`, {
+      if (!isOnOrAfterPeriodStart(year, month)) return;
+      byKey.set(periodKey(year, month), {
         year,
         month,
         status: p.status,
@@ -351,19 +353,28 @@ const AdminPlatformInvoicesRegistry = () => {
         pending: false,
       });
     });
-    // Mois civil courant : proposé s'il n'est pas déjà listé (pour l'ouvrir)
+    // De juillet 2026 jusqu'au mois civil courant (chaque nouveau mois s'ajoute).
     const now = new Date();
-    const cy = now.getFullYear();
-    const cm = now.getMonth() + 1;
-    const currentKey = `${cy}-${cm}`;
-    if (!byKey.has(currentKey)) {
-      byKey.set(currentKey, {
-        year: cy,
-        month: cm,
-        status: null,
-        id: null,
-        pending: true,
-      });
+    let year = PERIOD_SELECTOR_START.year;
+    let month = PERIOD_SELECTOR_START.month;
+    const endYear = now.getFullYear();
+    const endMonth = now.getMonth() + 1;
+    while (year < endYear || (year === endYear && month <= endMonth)) {
+      const key = periodKey(year, month);
+      if (!byKey.has(key)) {
+        byKey.set(key, {
+          year,
+          month,
+          status: null,
+          id: null,
+          pending: true,
+        });
+      }
+      month += 1;
+      if (month > 12) {
+        month = 1;
+        year += 1;
+      }
     }
     return Array.from(byKey.values()).sort((a, b) => {
       if (a.year !== b.year) return b.year - a.year;
