@@ -185,7 +185,8 @@ def _make_invoice_doc_with_qrbill_page(
         [
             PageTemplate(id="First", frames=frame_first, onPage=on_first_page),
             PageTemplate(id="Later", frames=frame_later, onPage=on_later_pages),
-            PageTemplate(id="QRBill", frames=frame_qrbill),
+            # Pas de pied marketing / légal sur la page QR-facture (norme plein format)
+            PageTemplate(id="QRBill", frames=frame_qrbill, onPage=_doNothing),
         ]
     )
 
@@ -931,15 +932,125 @@ def _short_detail_label(address: str) -> str:
     return s
 
 
-def _svg_content_to_drawing(svg_content: str | bytes) -> Any:
+def _inset_swiss_qrbill_svg_text(
+    svg_content: str | bytes,
+    *,
+    left_margin_mm: float | None = None,
+    right_margin_mm: float | None = None,
+) -> str:
+    """Recule uniquement les ``<text>`` du SVG QR-facture pour respecter les marges page.
+
+    Les lignes de découpe (``<line>`` / ciseaux) restent en pleine largeur 210 mm.
+    Les textes du récépissé trop à gauche (et éventuellement trop à droite côté
+    paiement) sont décalés ; les ancres ``text-anchor=end`` restent dans leur
+    colonne.
+    """
+    import re
+
+    raw = (
+        svg_content.decode("utf-8")
+        if isinstance(svg_content, (bytes, bytearray))
+        else str(svg_content)
+    )
+    left_mm = (
+        float(left_margin_mm)
+        if left_margin_mm is not None
+        else float(INVOICE_PAGE_LEFT_MARGIN_CM) * 10.0
+    )
+    right_mm = (
+        float(right_margin_mm)
+        if right_margin_mm is not None
+        else float(INVOICE_PAGE_RIGHT_MARGIN_CM) * 10.0
+    )
+
+    vb = re.search(
+        r'viewBox="\s*([0-9.]+)\s+([0-9.]+)\s+([0-9.]+)\s+([0-9.]+)\s*"',
+        raw,
+    )
+    if not vb:
+        return raw
+    page_w = float(vb.group(3))
+    # Récépissé = 62 mm sur 210 mm (norme SIX)
+    sep_x = page_w * (62.0 / 210.0)
+    pt_per_mm = page_w / 210.0
+    left_pt = left_mm * pt_per_mm
+    right_limit = page_w - right_mm * pt_per_mm
+
+    # Collecte des x des textes du récépissé (hors ancre end) pour calculer le delta
+    receipt_xs: list[float] = []
+    for m in re.finditer(r"<text\b([^>]*)>", raw):
+        attrs = m.group(1)
+        xm = re.search(r'\bx="([0-9.+-eE]+)"', attrs)
+        if not xm:
+            continue
+        x = float(xm.group(1))
+        if x >= sep_x:
+            continue
+        if 'text-anchor="end"' in attrs or "text-anchor='end'" in attrs:
+            continue
+        receipt_xs.append(x)
+
+    if not receipt_xs:
+        return raw
+
+    min_x = min(receipt_xs)
+    delta = left_pt - min_x
+    if abs(delta) < 0.5:
+        delta = 0.0
+
+    def _rewrite_text_tag(match: re.Match[str]) -> str:
+        attrs = match.group(1)
+        xm = re.search(r'\bx="([0-9.+-eE]+)"', attrs)
+        if not xm:
+            return match.group(0)
+        x = float(xm.group(1))
+        anchor_end = 'text-anchor="end"' in attrs or "text-anchor='end'" in attrs
+        new_x = x
+        if x < sep_x:
+            # Récépissé : décaler vers la droite (marge gauche page)
+            if delta > 0:
+                if anchor_end:
+                    new_x = min(x + delta, sep_x - 6.0 * pt_per_mm)
+                else:
+                    new_x = x + delta
+        else:
+            # Partie paiement : si trop proche du bord droit, reculer
+            if not anchor_end and x > right_limit - 40.0 * pt_per_mm:
+                # colonne info (~148 mm à droite) : garder une marge droite
+                overflow = (x + 55.0 * pt_per_mm) - right_limit
+                if overflow > 0:
+                    new_x = x - overflow
+            elif anchor_end and x > right_limit:
+                new_x = right_limit
+        if abs(new_x - x) < 0.01:
+            return match.group(0)
+        new_attrs = re.sub(
+            r'\bx="[0-9.+-eE]+"',
+            f'x="{new_x:.5f}"',
+            attrs,
+            count=1,
+        )
+        return f"<text{new_attrs}>"
+
+    return re.sub(r"<text\b([^>]*)>", _rewrite_text_tag, raw)
+
+
+def _svg_content_to_drawing(
+    svg_content: str | bytes, *, inset_qrbill_text: bool = False
+) -> Any:
     """Convertit du contenu SVG (str ou bytes) en drawing ReportLab via un fichier temporaire.
 
     svg2rlg() n'accepte que str | PathLike[str], pas BytesIO.
+    Si ``inset_qrbill_text``, décale les libellés QR-facture pour les marges page
+    sans déplacer les traits de découpe.
     """
     import os
     import tempfile
 
     from svglib.svglib import svg2rlg
+
+    if inset_qrbill_text:
+        svg_content = _inset_swiss_qrbill_svg_text(svg_content)
 
     content = (
         svg_content.encode("utf-8") if isinstance(svg_content, str) else svg_content
@@ -6302,7 +6413,7 @@ class PDFService:
             )
 
             if qr_bill_svg_content:
-                drawing = _svg_content_to_drawing(qr_bill_svg_content)
+                drawing = _svg_content_to_drawing(qr_bill_svg_content, inset_qrbill_text=True)
                 if drawing:
                     story.append(_make_qr_bill_flowable(drawing))
             else:
@@ -7068,7 +7179,7 @@ class PDFService:
                 invoice, override_amount=qr_override_m
             )
             if qr_bill_svg_content:
-                drawing = _svg_content_to_drawing(qr_bill_svg_content)
+                drawing = _svg_content_to_drawing(qr_bill_svg_content, inset_qrbill_text=True)
                 if drawing:
                     story.append(_make_qr_bill_flowable(drawing))
         except Exception as e:
@@ -7691,7 +7802,7 @@ class PDFService:
                 invoice, override_amount=qr_override_d
             )
             if qr_bill_svg_content:
-                drawing = _svg_content_to_drawing(qr_bill_svg_content)
+                drawing = _svg_content_to_drawing(qr_bill_svg_content, inset_qrbill_text=True)
                 if drawing:
                     story.append(_make_qr_bill_flowable(drawing))
         except Exception as e:
@@ -7989,7 +8100,7 @@ class PDFService:
                 )
 
                 if qr_bill_svg_content:
-                    drawing = _svg_content_to_drawing(qr_bill_svg_content)
+                    drawing = _svg_content_to_drawing(qr_bill_svg_content, inset_qrbill_text=True)
                     if drawing:
                         story.append(_make_qr_bill_flowable(drawing))
                         app_logger.info("QR-bill ajouté au PDF de rappel consolidé")

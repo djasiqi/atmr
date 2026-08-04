@@ -5,6 +5,9 @@ import {
   createPlatformBillingContract,
   downloadPartnerAgreementDocxUrl,
   downloadPartnerAgreementFile,
+  downloadPartnerAgreementPackageUrl,
+  downloadPartnerAgreementParticularPdfUrl,
+  downloadPartnerAgreementPreviewUrl,
   downloadPartnerAgreementSignedUrl,
   fetchPlatformBillingCompaniesConfig,
   fetchPlatformBillingContracts,
@@ -12,6 +15,7 @@ import {
   fetchPlatformPricingGrids,
   generatePartnerAgreement,
   markPartnerAgreementSent,
+  migratePartnerAgreementToV120,
   putPlatformBillingDebtorAddress,
   uploadPartnerAgreementSigned,
   voidPartnerAgreement,
@@ -46,6 +50,7 @@ const emptyContract = {
   partial_block_billable_configuration: true,
   effective_from: '',
   notes: '',
+  contract_special_conditions: '',
 };
 
 const LEGAL_FORMS = [
@@ -62,6 +67,20 @@ const CANCEL_POLICIES = [
   { value: 'on_cancellation_fees', label: 'Commission sur frais d’annulation' },
   { value: 'on_billed_amount', label: 'Commission sur montant facturé' },
 ];
+
+const CONTRACT_TABS = [
+  { id: 'identity', label: 'Identité' },
+  { id: 'products', label: 'Produits' },
+  { id: 'dunning', label: 'Recouvrement' },
+  { id: 'document', label: 'Document' },
+];
+
+const agreementStatusClass = (status) => {
+  if (status === 'signed') return 'docBadgeSigned';
+  if (status === 'sent') return 'docBadgeSent';
+  if (status === 'void') return 'docBadgeVoid';
+  return 'docBadgeDraft';
+};
 
 const statusLabel = (s) =>
   ({
@@ -185,6 +204,7 @@ const contractFromRow = (c) => ({
     c?.partial_block_billable_configuration !== false,
   effective_from: c?.effective_from || '',
   notes: c?.notes || '',
+  contract_special_conditions: c?.contract_special_conditions || '',
 });
 
 /** Affiche uniquement les points encore à compléter (masque les « Prêt »). */
@@ -245,6 +265,18 @@ const AdminBillingDualProductConfig = () => {
   const [signedOn, setSignedOn] = useState('');
   const [docBusy, setDocBusy] = useState(false);
   const [actionDialog, setActionDialog] = useState(null);
+  const [modalTab, setModalTab] = useState('identity');
+  const [rcAttested, setRcAttested] = useState(false);
+  const [deliveryChannel, setDeliveryChannel] = useState('email');
+  const [deliveryRecipient, setDeliveryRecipient] = useState('');
+  const [signedAdditionalPagesConfirmed, setSignedAdditionalPagesConfirmed] =
+    useState(false);
+  const [rcSignatureMode, setRcSignatureMode] = useState('individual');
+  const [rcCoSignatoryName, setRcCoSignatoryName] = useState('');
+  const [rcCoSignatoryFunction, setRcCoSignatoryFunction] = useState('');
+  const [rcRegisterName, setRcRegisterName] = useState(
+    'Registre du commerce / Zefix'
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -314,18 +346,19 @@ const AdminBillingDualProductConfig = () => {
   const closeModal = requestCloseModal;
 
   useEffect(() => {
-    if (!modalCompany) return undefined;
+    if (!modalCompany || actionDialog) return undefined;
     const onKey = (e) => {
       if (e.key === 'Escape') requestCloseModal();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [modalCompany, requestCloseModal]);
+  }, [modalCompany, actionDialog, requestCloseModal]);
 
   const openCompany = async (row) => {
     setModalCompany(row);
     setModalError(null);
     setSignedOn('');
+    setModalTab('identity');
     const c = row.config;
     let nextForm = contractFromRow(c);
     // Entreprise sans config : défauts inactifs (emptyContract)
@@ -433,6 +466,15 @@ const AdminBillingDualProductConfig = () => {
   const activeAgreement = selectedContract?.active_agreement || null;
   const dunningReady = selectedContract?.dunning_automation_ready || null;
 
+  const calcOk = Boolean(readiness?.contract_calculation_ready);
+  const debtorOk = Boolean(readiness?.debtor_identity_ready);
+  const creditorOk = Boolean(readiness?.creditor_qr_ready);
+  const allReady = !readiness || (calcOk && debtorOk && creditorOk);
+
+  const dunningPartialDay =
+    Number(form.reminder_delay_days_after_due || 0) +
+    Number(form.reminder_grace_days || 10);
+
   const selectContractVersion = (c) => {
     setSelectedContractId(c.id);
     setModalError(null);
@@ -531,6 +573,7 @@ const AdminBillingDualProductConfig = () => {
           e?.message ||
           'Erreur sauvegarde'
       );
+      setActionDialog(null);
     } finally {
       setSaving(false);
     }
@@ -574,12 +617,43 @@ const AdminBillingDualProductConfig = () => {
     setReadiness(res?.readiness || null);
   };
 
+  const buildSignatoryAuthorityVerification = () => {
+    const identity = partnerIdentity?.partner || partnerIdentity || {};
+    const signatoryName =
+      debtorForm.signatory_name || identity.signatory_name || '';
+    const signatoryFunction =
+      debtorForm.signatory_title || identity.signatory_title || '';
+    return {
+      source: 'registre_du_commerce',
+      register_name: rcRegisterName,
+      checked_at: new Date().toISOString(),
+      company_uid: debtorForm.uid_ide || identity.uid_ide || null,
+      signatory_name: signatoryName,
+      signatory_function: signatoryFunction,
+      signature_mode: rcSignatureMode,
+      co_signatory_name:
+        rcSignatureMode === 'collective' ? rcCoSignatoryName : null,
+      co_signatory_function:
+        rcSignatureMode === 'collective' ? rcCoSignatoryFunction : null,
+      attested: rcAttested,
+    };
+  };
+
   const onGenerateAgreement = async () => {
     if (!selectedContract || isDirty || formReadOnly) return;
+    if (!rcAttested) {
+      setModalError(
+        'Attestez le pouvoir de signature sur la base du Registre du commerce.'
+      );
+      return;
+    }
     setDocBusy(true);
     setModalError(null);
     try {
-      await generatePartnerAgreement(selectedContract.id);
+      await generatePartnerAgreement(
+        selectedContract.id,
+        buildSignatoryAuthorityVerification()
+      );
       await refreshContractsOnly();
     } catch (e) {
       setModalError(
@@ -590,11 +664,50 @@ const AdminBillingDualProductConfig = () => {
     }
   };
 
+  const onMigrateAgreementV120 = async () => {
+    if (!activeAgreement) return;
+    if (!rcAttested) {
+      setModalError(
+        'Attestez le pouvoir de signature avant de migrer vers v1.20.'
+      );
+      return;
+    }
+    setDocBusy(true);
+    setModalError(null);
+    try {
+      await migratePartnerAgreementToV120(
+        activeAgreement.id,
+        buildSignatoryAuthorityVerification()
+      );
+      await refreshContractsOnly();
+    } catch (e) {
+      setModalError(
+        e?.response?.data?.error || e?.message || 'Erreur migration v1.20'
+      );
+    } finally {
+      setDocBusy(false);
+    }
+  };
+
   const onMarkSent = async () => {
     if (!activeAgreement) return;
+    const recipient =
+      deliveryRecipient.trim() ||
+      activeAgreement?.parties_snapshot?.partner?.contractual_email ||
+      '';
+    const ok = window.confirm(
+      'Je confirme que ce dossier a été ou va immédiatement être remis au partenaire.\n\n' +
+        `Canal : ${deliveryChannel}\n` +
+        `Destinataire déclaré : ${recipient || '—'}`
+    );
+    if (!ok) return;
     setDocBusy(true);
     try {
-      await markPartnerAgreementSent(activeAgreement.id);
+      await markPartnerAgreementSent(activeAgreement.id, {
+        confirmed: true,
+        channel: deliveryChannel,
+        recipient: recipient || null,
+      });
       await refreshContractsOnly();
     } catch (e) {
       setModalError(e?.response?.data?.error || e?.message || 'Erreur envoi');
@@ -635,8 +748,11 @@ const AdminBillingDualProductConfig = () => {
     }
     setDocBusy(true);
     try {
-      await uploadPartnerAgreementSigned(activeAgreement.id, file, signedOn);
+      await uploadPartnerAgreementSigned(activeAgreement.id, file, signedOn, {
+        additionalPagesConfirmed: signedAdditionalPagesConfirmed,
+      });
       await refreshContractsOnly();
+      setSignedAdditionalPagesConfirmed(false);
     } catch (e) {
       setModalError(e?.response?.data?.error || e?.message || 'Erreur upload');
     } finally {
@@ -860,7 +976,28 @@ const AdminBillingDualProductConfig = () => {
             <header className={styles.modalHeader}>
               <div className={styles.modalHeaderText}>
                 <h2 id="billing-contract-title">{modalCompany.company_name}</h2>
-                <p className={styles.modalSubtitle}>Contrat commercial · nouvelle version à l’enregistrement</p>
+                <p className={styles.modalSubtitle}>
+                  Contrat commercial
+                  {activeContract ? ` · version active nº ${activeContract.id}` : ''}
+                  {formReadOnly ? ' · lecture seule' : ' · nouvelle version à l’enregistrement'}
+                </p>
+                <div className={styles.headerMeta}>
+                  {form.is_billing_enabled ? (
+                    <span className={styles.metaChipOn}>Facturation active</span>
+                  ) : (
+                    <span className={styles.metaChipOff}>Facturation inactive</span>
+                  )}
+                  {activeAgreement ? (
+                    <span
+                      className={`${styles.docBadge} ${styles[agreementStatusClass(activeAgreement.status)]}`}
+                    >
+                      {statusLabel(activeAgreement.status)}
+                    </span>
+                  ) : null}
+                  {isDirty ? (
+                    <span className={styles.metaChipWarn}>Non enregistré</span>
+                  ) : null}
+                </div>
               </div>
               <button
                 type="button"
@@ -872,9 +1009,29 @@ const AdminBillingDualProductConfig = () => {
               </button>
             </header>
 
+            <nav className={styles.tabs} aria-label="Sections du contrat">
+              {CONTRACT_TABS.map((tab) => {
+                const warn =
+                  (tab.id === 'identity' && readiness && !debtorOk) ||
+                  (tab.id === 'products' && readiness && !calcOk);
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    className={modalTab === tab.id ? styles.tabActive : styles.tab}
+                    onClick={() => setModalTab(tab.id)}
+                    aria-current={modalTab === tab.id ? 'page' : undefined}
+                  >
+                    {tab.label}
+                    {warn ? <span className={styles.tabDot} aria-hidden /> : null}
+                  </button>
+                );
+              })}
+            </nav>
+
             <div className={styles.modalBody}>
               {formReadOnly ? (
-                <section className={styles.readinessBlock} aria-label="Version historique">
+                <div className={styles.bannerWarn} role="status">
                   <p className={styles.readinessHint}>
                     Version historique nº {selectedContract?.id} — lecture seule.
                     Revenez à la version active nº {activeContract?.id} pour créer
@@ -884,55 +1041,66 @@ const AdminBillingDualProductConfig = () => {
                     <button
                       type="button"
                       className={styles.btn}
-                      onClick={() => selectContractVersion(activeContract)}
+                      onClick={() => {
+                        selectContractVersion(activeContract);
+                        setModalTab('products');
+                      }}
                     >
                       Revenir à la version active
                     </button>
                   ) : null}
-                </section>
-              ) : (
-                <p className={styles.readinessHint}>
-                  Formulaire d’édition : nouvelle version basée sur la version
-                  active
-                  {activeContract ? ` nº ${activeContract.id}` : ''}.
-                </p>
-              )}
-              {readiness && (() => {
-                const calcOk = Boolean(readiness.contract_calculation_ready);
-                const debtorOk = Boolean(readiness.debtor_identity_ready);
-                const creditorOk = Boolean(readiness.creditor_qr_ready);
-                const allReady = calcOk && debtorOk && creditorOk;
-                if (allReady) return null;
-                return (
-                  <section className={styles.readinessBlock} aria-label="À compléter">
-                    <ul className={styles.readinessList}>
-                      <ReadinessItem
-                        ok={calcOk}
-                        label="Calcul du relevé"
-                        hint="Activez au moins un produit puis enregistrez."
-                        errors={readiness.contract_calculation_errors}
-                      />
-                      <ReadinessItem
-                        ok={debtorOk}
-                        label="Adresse de facturation"
-                        hint="Raison sociale, rue, NPA et localité requis."
-                        errors={readiness.debtor_identity_errors}
-                      />
-                      <ReadinessItem
-                        ok={creditorOk}
-                        label="Créancier LIRIE"
-                        hint="IBAN et adresse LIRIE dans Paramètres."
-                        errors={readiness.creditor_errors}
-                      />
-                    </ul>
-                    {!creditorOk ? (
-                      <p className={styles.formSectionLead}>
-                        <Link to={settingsPath}>Configurer le créancier LIRIE</Link>
-                      </p>
+                </div>
+              ) : null}
+
+              {!allReady ? (
+                <section className={styles.readinessBlock} aria-label="À compléter">
+                  <ul className={styles.readinessList}>
+                    <ReadinessItem
+                      ok={calcOk}
+                      label="Calcul du relevé"
+                      hint="Activez au moins un produit puis enregistrez."
+                      errors={readiness?.contract_calculation_errors}
+                    />
+                    <ReadinessItem
+                      ok={debtorOk}
+                      label="Adresse de facturation"
+                      hint="Raison sociale, rue, NPA et localité requis."
+                      errors={readiness?.debtor_identity_errors}
+                    />
+                    <ReadinessItem
+                      ok={creditorOk}
+                      label="Créancier LIRIE"
+                      hint="IBAN et adresse LIRIE dans Paramètres."
+                      errors={readiness?.creditor_errors}
+                    />
+                  </ul>
+                  <div className={styles.readinessActions}>
+                    {!debtorOk ? (
+                      <button
+                        type="button"
+                        className={`${styles.btn} ${styles.btnGhost}`}
+                        onClick={() => setModalTab('identity')}
+                      >
+                        Compléter l’identité
+                      </button>
                     ) : null}
-                  </section>
-                );
-              })()}
+                    {!calcOk ? (
+                      <button
+                        type="button"
+                        className={`${styles.btn} ${styles.btnGhost}`}
+                        onClick={() => setModalTab('products')}
+                      >
+                        Configurer les produits
+                      </button>
+                    ) : null}
+                    {!creditorOk ? (
+                      <Link className={styles.btn} to={settingsPath}>
+                        Créancier LIRIE
+                      </Link>
+                    ) : null}
+                  </div>
+                </section>
+              ) : null}
 
               {modalError && (
                 <div className={styles.errorBanner} role="alert">
@@ -940,6 +1108,11 @@ const AdminBillingDualProductConfig = () => {
                 </div>
               )}
 
+              {modalTab === 'identity' ? (
+              <div
+                className={`${styles.tabPanel}${formReadOnly ? ` ${styles.tabPanelReadonly}` : ''}`}
+                inert={formReadOnly || undefined}
+              >
               <section className={styles.formSection}>
                 <h3 className={styles.formSectionTitle}>Adresse de facturation</h3>
                 <p className={styles.formSectionLead}>
@@ -1074,8 +1247,15 @@ const AdminBillingDualProductConfig = () => {
                   </p>
                 ) : null}
               </section>
+              </div>
+              ) : null}
 
-              <section className={styles.productCard}>
+              {modalTab === 'products' ? (
+              <div
+                className={`${styles.tabPanel}${formReadOnly ? ` ${styles.tabPanelReadonly}` : ''}`}
+                inert={formReadOnly || undefined}
+              >
+              <section className={`${styles.productCard} ${form.is_billing_enabled ? styles.productCardOn : ''}`}>
                 <label className={styles.productToggle}>
                   <input
                     type="checkbox"
@@ -1091,7 +1271,8 @@ const AdminBillingDualProductConfig = () => {
                 </label>
               </section>
 
-              <section className={styles.productCard}>
+              <div className={styles.productGrid}>
+              <section className={`${styles.productCard} ${form.own_portfolio_billing_enabled ? styles.productCardOn : ''}`}>
                 <label className={styles.productToggle}>
                   <input
                     type="checkbox"
@@ -1166,7 +1347,7 @@ const AdminBillingDualProductConfig = () => {
                 ) : null}
               </section>
 
-              <section className={styles.productCard}>
+              <section className={`${styles.productCard} ${form.lirie_commission_enabled ? styles.productCardOn : ''}`}>
                 <label className={styles.productToggle}>
                   <input
                     type="checkbox"
@@ -1218,7 +1399,7 @@ const AdminBillingDualProductConfig = () => {
                 ) : null}
               </section>
 
-              <section className={styles.productCard}>
+              <section className={`${styles.productCard} ${form.support_enabled ? styles.productCardOn : ''}`}>
                 <label className={styles.productToggle}>
                   <input
                     type="checkbox"
@@ -1253,9 +1434,13 @@ const AdminBillingDualProductConfig = () => {
                   </div>
                 ) : null}
               </section>
+              </div>
 
               <section className={styles.formSection}>
                 <h3 className={styles.formSectionTitle}>Conditions</h3>
+                <p className={styles.formSectionLead}>
+                  Mois d’effet de la nouvelle version et délais contractuels.
+                </p>
                 <div className={styles.formGridTwo}>
                   <label className={styles.field}>
                     Mois d’effet
@@ -1298,7 +1483,14 @@ const AdminBillingDualProductConfig = () => {
                   </label>
                 </div>
               </section>
+              </div>
+              ) : null}
 
+              {modalTab === 'dunning' ? (
+              <div
+                className={`${styles.tabPanel}${formReadOnly ? ` ${styles.tabPanelReadonly}` : ''}`}
+                inert={formReadOnly || undefined}
+              >
               <section className={styles.formSection}>
                 <h3 className={styles.formSectionTitle}>
                   Défaut de paiement (art. 6 bis)
@@ -1308,15 +1500,31 @@ const AdminBillingDualProductConfig = () => {
                   restriction commerciale complète. Les courses déjà engagées,
                   GPS, factures, paiement et export restent toujours disponibles.
                 </p>
-                <p className={styles.readinessHint}>
-                  Configuration :{' '}
-                  {form.automated_dunning_enabled ? 'activée' : 'désactivée'}
-                  {' · '}
-                  Exécution : {dunningReady?.ready ? 'autorisée' : 'inactive'}
-                  {!dunningReady?.ready && (dunningReady?.reasons || []).length
-                    ? ` — ${(dunningReady.reasons || []).join(' · ')}`
-                    : ''}
-                </p>
+                <div className={styles.dunningStatusRow}>
+                  <span
+                    className={
+                      form.automated_dunning_enabled
+                        ? styles.metaChipOn
+                        : styles.metaChipOff
+                    }
+                  >
+                    Config. {form.automated_dunning_enabled ? 'activée' : 'désactivée'}
+                  </span>
+                  <span
+                    className={
+                      dunningReady?.ready ? styles.metaChipOn : styles.metaChipWarn
+                    }
+                  >
+                    Exécution{' '}
+                    {dunningReady?.ready
+                      ? 'autorisée'
+                      : `inactive${
+                          (dunningReady?.reasons || []).length
+                            ? ` — ${(dunningReady.reasons || []).join(' · ')}`
+                            : ''
+                        }`}
+                  </span>
+                </div>
                 <label className={styles.productToggle}>
                   <input
                     type="checkbox"
@@ -1329,10 +1537,37 @@ const AdminBillingDualProductConfig = () => {
                       }))
                     }
                   />
-                  Activer les mesures automatisées de rappel et de suspension
+                  <span>
+                    <strong>Mesures automatisées</strong>
+                    <small>Rappel, suspension partielle puis complète</small>
+                  </span>
                 </label>
                 {form.automated_dunning_enabled ? (
                   <>
+                    <ol className={styles.dunningTimeline} aria-label="Calendrier de recouvrement">
+                      <li>
+                        <span className={styles.dunningStepDay}>
+                          J{form.reminder_delay_days_after_due || 0}
+                        </span>
+                        <span className={styles.dunningStepLabel}>Rappel</span>
+                      </li>
+                      <li>
+                        <span className={styles.dunningStepDay}>J{dunningPartialDay}</span>
+                        <span className={styles.dunningStepLabel}>Suspension partielle</span>
+                      </li>
+                      <li>
+                        <span className={styles.dunningStepDay}>
+                          J{form.full_suspend_days_after_due || 30}
+                        </span>
+                        <span className={styles.dunningStepLabel}>
+                          Suspension complète
+                          <small>
+                            ou {form.full_suspend_overdue_invoice_count || 2} factures
+                            échues
+                          </small>
+                        </span>
+                      </li>
+                    </ol>
                     <div className={styles.formGridTwo}>
                       <label className={styles.field}>
                         Délai rappel après échéance
@@ -1416,17 +1651,8 @@ const AdminBillingDualProductConfig = () => {
                         </div>
                       </label>
                     </div>
-                    <p className={styles.formSectionLead}>
-                      Avec cette configuration : J
-                      {form.reminder_delay_days_after_due || 0} rappel · J
-                      {Number(form.reminder_delay_days_after_due || 0) +
-                        Number(form.reminder_grace_days || 10)}{' '}
-                      suspension partielle · J
-                      {form.full_suspend_days_after_due || 30} suspension
-                      complète (ou{' '}
-                      {form.full_suspend_overdue_invoice_count || 2} factures
-                      échues).
-                    </p>
+                    <h4 className={styles.subSectionTitle}>Blocages en suspension partielle</h4>
+                    <div className={styles.blockGrid}>
                     <label className={styles.productToggle}>
                       <input
                         type="checkbox"
@@ -1438,7 +1664,7 @@ const AdminBillingDualProductConfig = () => {
                           }))
                         }
                       />
-                      Bloquer nouvelles offres Marketplace
+                      Nouvelles offres Marketplace
                     </label>
                     <label className={styles.productToggle}>
                       <input
@@ -1451,7 +1677,7 @@ const AdminBillingDualProductConfig = () => {
                           }))
                         }
                       />
-                      Bloquer acceptation d’offres Marketplace
+                      Acceptation d’offres Marketplace
                     </label>
                     <label className={styles.productToggle}>
                       <input
@@ -1464,7 +1690,7 @@ const AdminBillingDualProductConfig = () => {
                           }))
                         }
                       />
-                      Bloquer support facturable
+                      Support facturable
                     </label>
                     <label className={styles.productToggle}>
                       <input
@@ -1477,8 +1703,9 @@ const AdminBillingDualProductConfig = () => {
                           }))
                         }
                       />
-                      Bloquer configuration facturable
+                      Configuration facturable
                     </label>
+                    </div>
                   </>
                 ) : (
                   <p className={styles.readinessHint}>
@@ -1487,10 +1714,21 @@ const AdminBillingDualProductConfig = () => {
                   </p>
                 )}
               </section>
+              </div>
+              ) : null}
 
+              {modalTab === 'document' ? (
+              <div className={styles.tabPanel}>
               {selectedContract ? (
                 <section className={styles.formSection}>
-                  <h3 className={styles.formSectionTitle}>Document Word</h3>
+                  <div className={styles.sectionHead}>
+                    <h3 className={styles.formSectionTitle}>Document Word</h3>
+                    <span
+                      className={`${styles.docBadge} ${styles[agreementStatusClass(activeAgreement?.status)]}`}
+                    >
+                      {statusLabel(activeAgreement?.status)}
+                    </span>
+                  </div>
                   <p className={styles.formSectionLead}>
                     Contrat commercial n°{selectedContract.id} · applicable{' '}
                     {fmtPeriod(
@@ -1503,41 +1741,237 @@ const AdminBillingDualProductConfig = () => {
                       ? ' · conditions gelées (accord envoyé/signé)'
                       : ''}
                   </p>
+                  {activeAgreement?.reference ? (
+                    <p className={styles.docReference}>{activeAgreement.reference}</p>
+                  ) : null}
+
+                  <div className={styles.readinessBox}>
+                    <h4 className={styles.formSectionTitle}>
+                      Document qui sera généré (v1.20)
+                    </h4>
+                    <ul className={styles.readinessList}>
+                      <li>
+                        Commission :{' '}
+                        {form.lirie_commission_enabled
+                          ? `${commissionPercent || '—'} %`
+                          : 'désactivée'}
+                      </li>
+                      <li>
+                        Abonnement : {form.subscription_pricing_mode}
+                        {form.subscription_pricing_mode === 'free'
+                          ? ` · gratuité ${form.free_license_max_months || 60} mois (sans bascule auto)`
+                          : ''}
+                      </li>
+                      <li>
+                        Support :{' '}
+                        {form.support_enabled
+                          ? `${form.support_hourly_rate_default || '—'} CHF/h`
+                          : 'désactivé'}
+                      </li>
+                      <li>
+                        Pénalité : commissions éludées + max(2×, CHF 1&apos;000)
+                      </li>
+                      <li>Modèle : lirie-partner-v1.20 · annexes B + C</li>
+                      <li>
+                        Date d&apos;effet : {effectiveMonth || '—'}
+                      </li>
+                    </ul>
+                  </div>
+
+                  <label className={styles.field}>
+                    Conditions particulières (annexe B)
+                    <textarea
+                      rows={3}
+                      value={form.contract_special_conditions || ''}
+                      disabled={formReadOnly}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          contract_special_conditions: e.target.value,
+                        }))
+                      }
+                      placeholder="Texte contractuel optionnel — jamais confondu avec les notes internes"
+                    />
+                  </label>
+
+                  <div className={styles.formGridTwo}>
+                    <label className={styles.field}>
+                      Mode de signature (RC)
+                      <select
+                        value={rcSignatureMode}
+                        onChange={(e) => setRcSignatureMode(e.target.value)}
+                      >
+                        <option value="individual">Individuelle</option>
+                        <option value="collective">Collective à deux</option>
+                      </select>
+                    </label>
+                    <label className={styles.field}>
+                      Registre consulté
+                      <input
+                        type="text"
+                        value={rcRegisterName}
+                        onChange={(e) => setRcRegisterName(e.target.value)}
+                      />
+                    </label>
+                  </div>
+                  {rcSignatureMode === 'collective' ? (
+                    <div className={styles.formGridTwo}>
+                      <label className={styles.field}>
+                        Co-signataire (nom)
+                        <input
+                          type="text"
+                          value={rcCoSignatoryName}
+                          onChange={(e) => setRcCoSignatoryName(e.target.value)}
+                        />
+                      </label>
+                      <label className={styles.field}>
+                        Co-signataire (fonction)
+                        <input
+                          type="text"
+                          value={rcCoSignatoryFunction}
+                          onChange={(e) =>
+                            setRcCoSignatoryFunction(e.target.value)
+                          }
+                        />
+                      </label>
+                    </div>
+                  ) : null}
+                  <label className={styles.checkRow}>
+                    <input
+                      type="checkbox"
+                      checked={rcAttested}
+                      onChange={(e) => setRcAttested(e.target.checked)}
+                    />
+                    Pouvoir de signature vérifié exclusivement au Registre du
+                    commerce
+                  </label>
+
                   {isDirty ? (
                     <p className={styles.readinessHint}>
                       Enregistrez d’abord la version commerciale avant de générer le
                       document.
                     </p>
                   ) : null}
-                  <p className={styles.formSectionLead}>
-                    Statut document :{' '}
-                    <strong>{statusLabel(activeAgreement?.status)}</strong>
-                    {activeAgreement?.reference
-                      ? ` · ${activeAgreement.reference}`
-                      : ''}
-                  </p>
-                  <div className={styles.footerRight} style={{ justifyContent: 'flex-start', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  <div className={styles.docActions}>
                     <button
                       type="button"
-                      className={styles.btn}
-                      disabled={docBusy || isDirty || !selectedContract}
+                      className={`${styles.btn} ${styles.btnPrimary}`}
+                      disabled={
+                        docBusy ||
+                        isDirty ||
+                        !selectedContract ||
+                        formReadOnly ||
+                        !rcAttested
+                      }
                       onClick={onGenerateAgreement}
                     >
                       Générer le contrat
                     </button>
+                    {activeAgreement?.needs_v120_migration ? (
+                      <button
+                        type="button"
+                        className={`${styles.btn} ${styles.btnPrimary}`}
+                        disabled={docBusy || !rcAttested}
+                        onClick={onMigrateAgreementV120}
+                      >
+                        Migrer vers le pack partenaire
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       className={styles.btn}
-                      disabled={docBusy || !activeAgreement?.has_generated_docx}
+                      disabled={
+                        docBusy ||
+                        !activeAgreement?.has_generated_particular_pdf ||
+                        activeAgreement?.status !== 'draft'
+                      }
                       onClick={() =>
                         downloadPartnerAgreementFile(
-                          downloadPartnerAgreementDocxUrl(activeAgreement.id),
-                          `${(activeAgreement.reference || 'contrat').replaceAll('/', '_')}.docx`
+                          downloadPartnerAgreementPreviewUrl(activeAgreement.id),
+                          `${(activeAgreement.reference || 'contrat').replaceAll('/', '_')}_BROUILLON.pdf`
                         )
                       }
                     >
-                      Télécharger DOCX
+                      Prévisualiser le contrat
                     </button>
+                    <button
+                      type="button"
+                      className={styles.btn}
+                      disabled={
+                        docBusy ||
+                        !(
+                          activeAgreement?.has_internal_docx ||
+                          activeAgreement?.has_generated_docx
+                        )
+                      }
+                      onClick={() =>
+                        downloadPartnerAgreementFile(
+                          downloadPartnerAgreementDocxUrl(activeAgreement.id),
+                          `${(activeAgreement.reference || 'contrat').replaceAll('/', '_')}_interne.docx`
+                        )
+                      }
+                    >
+                      Télécharger DOCX interne
+                    </button>
+                    <button
+                      type="button"
+                      className={`${styles.btn} ${styles.btnPrimary}`}
+                      disabled={
+                        docBusy ||
+                        !activeAgreement?.particular_pdf_available_for_signature
+                      }
+                      onClick={() =>
+                        downloadPartnerAgreementFile(
+                          downloadPartnerAgreementParticularPdfUrl(
+                            activeAgreement.id
+                          ),
+                          `${(activeAgreement.reference || 'contrat').replaceAll('/', '_')}_contrat-particulier.pdf`
+                        )
+                      }
+                    >
+                      Télécharger le contrat à signer
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.btn}
+                      disabled={
+                        docBusy || !activeAgreement?.has_delivery_package
+                      }
+                      onClick={() =>
+                        downloadPartnerAgreementFile(
+                          downloadPartnerAgreementPackageUrl(activeAgreement.id),
+                          `${(activeAgreement.reference || 'dossier').replaceAll('/', '_')}_Dossier-remise.zip`
+                        )
+                      }
+                    >
+                      Télécharger le dossier complet
+                    </button>
+                    {activeAgreement?.status === 'draft' ? (
+                      <div className={styles.formGridTwo}>
+                        <label className={styles.field}>
+                          Canal de remise
+                          <select
+                            value={deliveryChannel}
+                            onChange={(e) => setDeliveryChannel(e.target.value)}
+                          >
+                            <option value="email">E-mail</option>
+                            <option value="hand_delivery">
+                              Remise en main propre
+                            </option>
+                            <option value="other">Autre</option>
+                          </select>
+                        </label>
+                        <label className={styles.field}>
+                          Destinataire déclaré
+                          <input
+                            type="text"
+                            value={deliveryRecipient}
+                            onChange={(e) => setDeliveryRecipient(e.target.value)}
+                            placeholder="ex. contact@partenaire.ch"
+                          />
+                        </label>
+                      </div>
+                    ) : null}
                     <button
                       type="button"
                       className={styles.btn}
@@ -1548,7 +1982,7 @@ const AdminBillingDualProductConfig = () => {
                       }
                       onClick={onMarkSent}
                     >
-                      Marquer envoyé
+                      Marquer envoyé (finaliser le dossier)
                     </button>
                     <button
                       type="button"
@@ -1564,35 +1998,47 @@ const AdminBillingDualProductConfig = () => {
                     </button>
                   </div>
                   {activeAgreement?.status === 'sent' ? (
-                    <div className={styles.formGridTwo} style={{ marginTop: '0.75rem' }}>
+                    <>
+                      <div className={styles.formGridTwo}>
+                        <label className={styles.field}>
+                          Date de signature
+                          <input
+                            type="date"
+                            value={signedOn}
+                            onChange={(e) => setSignedOn(e.target.value)}
+                          />
+                        </label>
+                        <label className={styles.field}>
+                          Téléverser le contrat particulier signé
+                          <input
+                            type="file"
+                            accept="application/pdf,.pdf"
+                            disabled={docBusy || !signedOn}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) onUploadSigned(file);
+                              e.target.value = '';
+                            }}
+                          />
+                        </label>
+                      </div>
                       <label className={styles.field}>
-                        Date de signature
                         <input
-                          type="date"
-                          value={signedOn}
-                          onChange={(e) => setSignedOn(e.target.value)}
-                        />
+                          type="checkbox"
+                          checked={signedAdditionalPagesConfirmed}
+                          onChange={(e) =>
+                            setSignedAdditionalPagesConfirmed(e.target.checked)
+                          }
+                        />{' '}
+                        Pages supplémentaires = certificat / journal de signature
+                        électronique
                       </label>
-                      <label className={styles.field}>
-                        PDF signé
-                        <input
-                          type="file"
-                          accept="application/pdf,.pdf"
-                          disabled={docBusy || !signedOn}
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) onUploadSigned(file);
-                            e.target.value = '';
-                          }}
-                        />
-                      </label>
-                    </div>
+                    </>
                   ) : null}
                   {activeAgreement?.has_signed_pdf ? (
                     <button
                       type="button"
                       className={styles.btn}
-                      style={{ marginTop: '0.5rem' }}
                       onClick={() =>
                         downloadPartnerAgreementFile(
                           downloadPartnerAgreementSignedUrl(activeAgreement.id),
@@ -1604,52 +2050,55 @@ const AdminBillingDualProductConfig = () => {
                       Télécharger le PDF signé
                     </button>
                   ) : null}
-                  <p className={styles.readinessHint} style={{ marginTop: '0.75rem' }}>
+                  <p className={styles.readinessHint}>
                     Document généré à titre opérationnel — validation juridique externe
                     recommandée avant signature.
                   </p>
                 </section>
-              ) : null}
+              ) : (
+                <p className={styles.readinessHint}>
+                  Enregistrez une première version commerciale pour générer le
+                  document.
+                </p>
+              )}
 
               {contracts.length > 0 ? (
-                <details className={styles.versionsDetails}>
-                  <summary>
+                <section className={styles.formSection}>
+                  <h3 className={styles.formSectionTitle}>
                     Versions ({contracts.length})
-                    {selectedContract
-                      ? ` · sélection #${selectedContract.id} ${fmtPeriod(
-                          selectedContract.effective_from,
-                          selectedContract.effective_to
-                        )}`
-                      : ''}
-                  </summary>
+                  </h3>
                   <ul className={styles.versionsList}>
-                    {contracts.map((c) => (
-                      <li key={c.id} className={styles.versionItem}>
-                        <button
-                          type="button"
-                          className={styles.btn}
-                          onClick={() => selectContractVersion(c)}
-                          style={{
-                            fontWeight:
-                              c.id === selectedContract?.id ? 700 : 400,
-                          }}
-                        >
-                          <span className={styles.versionId}>#{c.id}</span>
-                          <span className={styles.versionMeta}>
-                            {fmtPeriod(c.effective_from, c.effective_to)}
-                            {!isContractOpen(c) ? ' · remplacée' : ' · active'}
-                          </span>
-                          <span>
-                            {portfolioLabel(c)} · {commissionLabel(c)}
-                            {c.active_agreement
-                              ? ` · ${statusLabel(c.active_agreement.status)}`
-                              : ''}
-                          </span>
-                        </button>
-                      </li>
-                    ))}
+                    {contracts.map((c) => {
+                      const selected = c.id === selectedContract?.id;
+                      const open = isContractOpen(c);
+                      return (
+                        <li key={c.id}>
+                          <button
+                            type="button"
+                            className={`${styles.versionBtn} ${
+                              selected ? styles.versionBtnActive : ''
+                            }`}
+                            onClick={() => selectContractVersion(c)}
+                          >
+                            <span className={styles.versionId}>#{c.id}</span>
+                            <span className={styles.versionMeta}>
+                              {fmtPeriod(c.effective_from, c.effective_to)}
+                              {open ? ' · active' : ' · remplacée'}
+                            </span>
+                            <span className={styles.versionProducts}>
+                              {portfolioLabel(c)} · {commissionLabel(c)}
+                              {c.active_agreement
+                                ? ` · ${statusLabel(c.active_agreement.status)}`
+                                : ''}
+                            </span>
+                          </button>
+                        </li>
+                      );
+                    })}
                   </ul>
-                </details>
+                </section>
+              ) : null}
+              </div>
               ) : null}
             </div>
 
@@ -1663,7 +2112,7 @@ const AdminBillingDualProductConfig = () => {
                   onClick={closeActiveContract}
                   disabled={saving}
                 >
-                  {`Clôturer la version active nº ${activeContract.id}`}
+                  {`Clôturer nº ${activeContract.id}`}
                 </button>
               ) : (
                 <span />
@@ -1671,7 +2120,7 @@ const AdminBillingDualProductConfig = () => {
               <div className={styles.footerRight}>
                 <button
                   type="button"
-                  className={styles.btn}
+                  className={`${styles.btn} ${styles.btnGhost}`}
                   onClick={closeModal}
                   disabled={saving}
                 >
@@ -1708,7 +2157,7 @@ const AdminBillingDualProductConfig = () => {
           confirmationLabel={actionDialog.confirmationLabel}
           reason={actionDialog.reason}
           danger={Boolean(actionDialog.danger)}
-          loading={docBusy}
+          loading={saving || docBusy}
           onConfirm={actionDialog.onConfirm}
           onClose={() => setActionDialog(null)}
         />

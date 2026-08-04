@@ -19,6 +19,7 @@ describe('adminRoutePaths', () => {
       '/dashboard/admin/pub-1/partners/organizations'
     );
     expect(adminPaths.financeReleves(id)).toBe('/dashboard/admin/pub-1/finance/releves');
+    expect(adminPaths.financeFactures(id)).toBe('/dashboard/admin/pub-1/finance/factures');
     expect(adminPaths.configuration(id)).toBe('/dashboard/admin/pub-1/configuration');
     expect(adminPaths.advancedPlatform(id, 'runtime')).toBe(
       '/dashboard/admin/pub-1/advanced/platform/runtime'
@@ -42,8 +43,10 @@ describe('adminLegacyRedirects', () => {
       'advanced/platform/investigation'
     );
     expect(resolveLegacyRelativePath('platform-ops')).toBe('advanced/platform/overview');
-    expect(resolveLegacyRelativePath('billing/releves')).toBe('finance/releves');
+    expect(resolveLegacyRelativePath('billing/releves')).toBe('finance/factures');
     expect(resolveLegacyRelativePath('billing/config')).toBe('finance/config');
+    expect(resolveLegacyRelativePath('platform-billing')).toBe('finance/factures');
+    expect(resolveLegacyRelativePath('finance/releves')).toBe('finance/factures');
     expect(resolveLegacyRelativePath('users')).toBe('partners/users');
     expect(resolveLegacyRelativePath('settings')).toBe('configuration');
     expect(resolveLegacyRelativePath('shadow-mode')).toBe('advanced/labs/shadow-mode');

@@ -702,7 +702,7 @@ def generate_partner_invoice_pdf_content(
                 Path(temp_svg.name).unlink()
 
             # Utiliser les mêmes helpers que pdf.py pour le rendu
-            drawing = _svg_content_to_drawing(svg_content)
+            drawing = _svg_content_to_drawing(svg_content, inset_qrbill_text=True)
             if drawing:
                 story.append(_make_qr_bill_flowable(drawing))
             else:

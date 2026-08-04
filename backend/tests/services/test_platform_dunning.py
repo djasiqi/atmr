@@ -31,11 +31,11 @@ from services.platform_billing.dunning_policy import (
     compute_dunning_automation_ready,
     parse_dunning_fields,
 )
-from services.platform_billing.partner_agreement_docx import (
-    TEMPLATE_VERSION,
-    build_partner_agreement_docx_bytes,
-)
 from models.enums import LegalForm
+from services.platform_billing.partner_agreement_versions import (
+    PACK_SCHEMA_VERSION,
+    PARTICULAR_VERSION,
+)
 
 
 def test_parse_dunning_invariant_full_after_grace():
@@ -127,9 +127,20 @@ def test_set_billing_access_admin_priority(app_ctx=None):
             )
 
 
-def test_docx_v14_contains_configurable_dunning():
-    import io
-    import zipfile
+def test_particular_mentions_progressive_suspension():
+    from io import BytesIO
+
+    from pypdf import PdfReader
+
+    from services.platform_billing.partner_agreement_canonical import (
+        ensure_canonical_documents,
+    )
+    from services.platform_billing.partner_agreement_particular_content import (
+        build_particular_agreement_content,
+    )
+    from services.platform_billing.partner_agreement_particular_pdf import (
+        build_particular_pdf_bytes,
+    )
 
     parties = {
         "operator": {
@@ -141,9 +152,7 @@ def test_docx_v14_contains_configurable_dunning():
             "postal_code": "1203",
             "city": "Genève",
             "country_code": "CH",
-            "uid_ide": None,
             "signatory_name": "Drin Jasiqi",
-            "signatory_title": "Exploitant",
             "contractual_email": "info@lirie.ch",
         },
         "partner": {
@@ -162,79 +171,43 @@ def test_docx_v14_contains_configurable_dunning():
         },
     }
     commercial = {
-        "subscription_pricing_mode": "free",
-        "free_license_max_months": 60,
         "lirie_commission_enabled": True,
         "own_portfolio_billing_enabled": True,
         "commission_rate": "0.100000",
-        "commission_cancellation_policy": "exclude",
         "payment_terms_days": 30,
         "statement_dispute_days": 10,
-        "automated_dunning_enabled": True,
-        "reminder_delay_days_after_due": 0,
-        "reminder_grace_days": 10,
-        "full_suspend_days_after_due": 30,
-        "full_suspend_overdue_invoice_count": 2,
-        "termination_notice_days": 10,
-        "partial_block_marketplace_offers": True,
-        "partial_block_marketplace_acceptance": True,
-        "partial_block_billable_support": True,
-        "partial_block_billable_configuration": True,
+        "free_license_max_months": 12,
     }
-    raw = build_partner_agreement_docx_bytes(
+    canon = ensure_canonical_documents()
+    content = build_particular_agreement_content(
         reference="LIRIE/PART/2026-08/002",
         parties=parties,
         commercial=commercial,
         agreement_effective_from="2026-08-01",
+        general_terms_sha256=canon["general_terms"].sha256,
+        dpa_sha256=canon["dpa"].sha256,
     )
-    with zipfile.ZipFile(io.BytesIO(raw)) as zf:
-        xml = zf.read("word/document.xml").decode("utf-8")
-    assert TEMPLATE_VERSION == "lirie-partner-v1.4"
-    assert "lirie-partner-v1.4" in xml
-    assert "factures échues et impayées" in xml
-    assert "10 jours calendaires" in xml or "10" in xml
-
-
-def test_docx_automation_off_no_renunciation():
-    import io
-    import zipfile
-
-    parties = {
-        "operator": {
-            "legal_name": "Drin Jasiqi",
-            "legal_form": LegalForm.SOLE_PROPRIETORSHIP.value,
-            "street_name": "Avenue Ernest-Pictet",
-            "building_number": "9",
-            "postal_code": "1203",
-            "city": "Genève",
-            "country_code": "CH",
-            "signatory_name": "Drin Jasiqi",
-        },
-        "partner": {
-            "legal_name": "Emmenez-moi Sàrl",
-            "legal_form": LegalForm.SARL.value,
-            "legal_form_label": "Sàrl",
-            "street_name": "Route",
-            "building_number": "1",
-            "postal_code": "1200",
-            "city": "Genève",
-            "country_code": "CH",
-            "uid_ide": "CHE-1",
-            "signatory_name": "X",
-        },
-    }
-    commercial = {
-        "automated_dunning_enabled": False,
-        "lirie_commission_enabled": False,
-        "own_portfolio_billing_enabled": False,
-    }
-    raw = build_partner_agreement_docx_bytes(
-        reference="LIRIE/PART/2026-08/003",
-        parties=parties,
-        commercial=commercial,
-        agreement_effective_from="2026-08-01",
+    pdf = build_particular_pdf_bytes(content)
+    text = "\n".join(
+        (p.extract_text() or "") for p in PdfReader(BytesIO(pdf)).pages
     )
-    with zipfile.ZipFile(io.BytesIO(raw)) as zf:
-        xml = zf.read("word/document.xml").decode("utf-8")
-    assert "mesures automatisées" in xml
-    assert "conserve ses droits" in xml
+    assert PACK_SCHEMA_VERSION == "lirie-partner-pack-v1"
+    assert PARTICULAR_VERSION in text
+    assert "suspension" in text.lower()
+    assert "impay" in text.lower()
+
+
+def test_canonical_terms_cover_dunning_procedure():
+    from pathlib import Path
+
+    source = (
+        Path(__file__).resolve().parents[2]
+        / "assets"
+        / "contracts"
+        / "canonical"
+        / "sources"
+        / "lirie-partner-terms-v1.20.md"
+    )
+    md = source.read_text(encoding="utf-8")
+    assert "Procédure de rappel" in md or "suspension" in md.lower()
+    assert "défaut de paiement" in md.lower()

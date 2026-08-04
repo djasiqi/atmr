@@ -49,13 +49,21 @@ def is_swiss_qr_iban(iban: str | None) -> bool:
 
 
 def resolve_platform_reference_mode(iban: str | None, requested_mode: str | None) -> str:
-    """QRR n'est valide qu'avec un QR-IBAN ; sinon NON (ou SCOR si demandé)."""
+    """Résout le type de référence QR-facture.
+
+    - QRR : uniquement avec un QR-IBAN ; sinon bascule SCOR (IBAN classique).
+    - SCOR : référence créancier ISO 11649 (RF…).
+    - NON : aucune référence.
+    """
     mode = (requested_mode or "QRR").upper()
-    if mode == "QRR" and not is_swiss_qr_iban(iban):
-        return "NON"
     if mode == "NON":
         return "NON"
-    return mode
+    if mode == "SCOR":
+        return "SCOR"
+    if mode == "QRR":
+        return "QRR" if is_swiss_qr_iban(iban) else "SCOR"
+    # Défaut prudent
+    return "QRR" if is_swiss_qr_iban(iban) else "SCOR"
 
 
 def render_swiss_qr_bill(payload: SwissQrBillPayload) -> dict[str, Any]:
@@ -88,6 +96,7 @@ def render_swiss_qr_bill(payload: SwissQrBillPayload) -> dict[str, Any]:
         "amount": f"{amount:.2f}",
         "currency": payload.currency or "CHF",
         "debtor": debtor_addr,
+        "language": "fr",
     }
     # QRR uniquement avec QR-IBAN + référence 27 chiffres
     if ref_type == "QRR" and payload.reference:

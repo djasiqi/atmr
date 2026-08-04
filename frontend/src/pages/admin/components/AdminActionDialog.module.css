@@ -1,7 +1,8 @@
 .overlay {
   position: fixed;
   inset: 0;
-  z-index: var(--z-modal, 1000);
+  /* Au-dessus des modales métier admin (--z-modal-app ≈ 10001) */
+  z-index: calc(var(--z-modal-app, 10001) + 20);
   background: rgba(24, 48, 44, 0.45);
   display: flex;
   align-items: center;

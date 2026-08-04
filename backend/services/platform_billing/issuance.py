@@ -23,6 +23,7 @@ from models.enums import (
 from models.platform_billing import (
     CompanyPlatformBillingConfig,
     PlatformBillingCreditor,
+    PlatformBillingPeriod,
     PlatformIssuedInvoice,
     PlatformInvoice,
     PlatformSupportEntry,
@@ -30,6 +31,7 @@ from models.platform_billing import (
 from services.platform_billing.errors import BillingInvariantError
 from services.platform_billing.invoice_pdf import (
     build_platform_qrr_reference,
+    build_platform_scor_reference,
     generate_platform_invoice_pdf_bytes,
     publish_platform_invoice_pdf,
 )
@@ -351,8 +353,6 @@ def _enrich_line_label_for_pdf(ln: Any) -> str:
                 pass
         return base
     if "support" in line_type or label.lower().startswith("support"):
-        if " h" in label.lower() or "heure" in label.lower():
-            return label
         hours_raw = resolved.get("quantity")
         rate_raw = resolved.get("unit_amount")
         if hours_raw is None:
@@ -371,31 +371,118 @@ def _statement_line_dicts(statement: PlatformInvoice) -> list[dict[str, Any]]:
     result: list[dict[str, Any]] = []
     for ln in lines:
         resolved = resolve_line_qty_unit(ln)
+        qty = resolved["quantity"]
+        unit = resolved["unit_amount"]
+        mode = (
+            "UNIT_PRICE"
+            if qty is not None and unit is not None
+            else "FIXED_AMOUNT"
+        )
         result.append(
             {
                 "line_type": ln.line_type,
                 "label": _enrich_line_label_for_pdf(ln),
-                "amount": ln.amount,
-                "quantity": resolved["quantity"],
-                "unit_amount": resolved["unit_amount"],
+                "amount": str(money_round_chf(Decimal(str(ln.amount)))),
+                "quantity": str(qty) if qty is not None else None,
+                "unit_amount": str(unit) if unit is not None else None,
+                "calculation_mode": mode,
             }
         )
     return result
 
 
+def _lines_for_pdf(inv: PlatformIssuedInvoice, statement: PlatformInvoice | None) -> list[dict[str, Any]]:
+    """Préfère lines_snapshot ; fallback relevé (legacy)."""
+    from services.platform_billing.invoice_replace import sync_derived_line_label
+
+    snap = inv.lines_snapshot
+    if isinstance(snap, list) and snap:
+        out: list[dict[str, Any]] = []
+        for raw in snap:
+            if not isinstance(raw, dict):
+                continue
+            amount = raw.get("amount")
+            qty = (
+                Decimal(str(raw["quantity"]))
+                if raw.get("quantity") is not None
+                else None
+            )
+            unit = (
+                Decimal(str(raw["unit_amount"]))
+                if raw.get("unit_amount") is not None
+                else None
+            )
+            line_type = raw.get("line_type") or "ADJUSTMENT"
+            label = sync_derived_line_label(
+                label=str(raw.get("label") or line_type or "Ligne"),
+                line_type=str(line_type),
+                quantity=qty,
+                unit_amount=unit,
+            )
+            out.append(
+                {
+                    "line_type": line_type,
+                    "label": label,
+                    "amount": Decimal(str(amount or 0)),
+                    "quantity": qty,
+                    "unit_amount": unit,
+                }
+            )
+        return out
+    if statement is not None:
+        return [
+            {
+                **ln,
+                "label": sync_derived_line_label(
+                    label=str(ln.get("label") or ln.get("line_type") or "Ligne"),
+                    line_type=str(ln.get("line_type") or "ADJUSTMENT"),
+                    quantity=(
+                        Decimal(str(ln["quantity"]))
+                        if ln.get("quantity") is not None
+                        else None
+                    ),
+                    unit_amount=(
+                        Decimal(str(ln["unit_amount"]))
+                        if ln.get("unit_amount") is not None
+                        else None
+                    ),
+                ),
+                "amount": Decimal(str(ln["amount"])),
+                "quantity": (
+                    Decimal(str(ln["quantity"])) if ln.get("quantity") is not None else None
+                ),
+                "unit_amount": (
+                    Decimal(str(ln["unit_amount"]))
+                    if ln.get("unit_amount") is not None
+                    else None
+                ),
+            }
+            for ln in _statement_line_dicts(statement)
+        ]
+    return []
+
+
 def _build_and_store_pdf(
     *,
     inv: PlatformIssuedInvoice,
-    statement: PlatformInvoice,
+    statement: PlatformInvoice | None,
     creditor: PlatformBillingCreditor,
     debtor_snap: dict[str, Any],
     creditor_snap: dict[str, Any],
     iban: str,
     payment_terms_days: int,
 ) -> None:
-    period = statement.period
-    year = period.billing_year if period else 0
-    month = period.billing_month if period else 0
+    period = statement.period if statement is not None else None
+    year = (
+        period.billing_year
+        if period
+        else int(inv.billing_year or 0)
+    )
+    month = (
+        period.billing_month
+        if period
+        else int(inv.billing_month or 0)
+    )
     pdf_bytes = generate_platform_invoice_pdf_bytes(
         invoice_number=inv.invoice_number,
         issued_at=inv.issued_at,
@@ -404,7 +491,7 @@ def _build_and_store_pdf(
         period_month=month,
         creditor_snap=creditor_snap,
         debtor_snap=debtor_snap,
-        lines=_statement_line_dicts(statement),
+        lines=_lines_for_pdf(inv, statement),
         subtotal=money_round_chf(Decimal(str(inv.subtotal_amount))),
         tax_rate=Decimal(str(inv.tax_rate)),
         tax_amount=money_round_chf(Decimal(str(inv.tax_amount))),
@@ -424,6 +511,41 @@ def _build_and_store_pdf(
     inv.pdf_checksum = checksum
 
 
+def _active_issued_for_statement(statement_id: int) -> PlatformIssuedInvoice | None:
+    inactive = {
+        PlatformIssuedInvoiceStatus.CANCELLED.value,
+        PlatformIssuedInvoiceStatus.CREDITED.value,
+    }
+    rows = (
+        PlatformIssuedInvoice.query.filter_by(statement_id=int(statement_id))
+        .filter(
+            PlatformIssuedInvoice.document_type
+            == PlatformIssuedDocumentType.INVOICE.value
+        )
+        .order_by(PlatformIssuedInvoice.id.desc())
+        .all()
+    )
+    for row in rows:
+        if row.status not in inactive:
+            return row
+    return None
+
+
+def _cancelled_issued_for_replace(statement_id: int) -> PlatformIssuedInvoice | None:
+    """Dernière facture annulée du relevé (pour replaces_*), sans détacher statement_id."""
+    return (
+        PlatformIssuedInvoice.query.filter_by(statement_id=int(statement_id))
+        .filter(
+            PlatformIssuedInvoice.document_type
+            == PlatformIssuedDocumentType.INVOICE.value,
+            PlatformIssuedInvoice.status
+            == PlatformIssuedInvoiceStatus.CANCELLED.value,
+        )
+        .order_by(PlatformIssuedInvoice.id.desc())
+        .first()
+    )
+
+
 def issue_platform_invoice(
     statement_id: int,
     *,
@@ -439,24 +561,21 @@ def issue_platform_invoice(
             status_code=404,
             details={"statement_id": statement_id},
         )
-    existing = PlatformIssuedInvoice.query.filter_by(statement_id=statement_id).first()
+    existing = _active_issued_for_statement(statement_id)
     if existing and existing.status not in (
         PlatformIssuedInvoiceStatus.DRAFT.value,
-        PlatformIssuedInvoiceStatus.CANCELLED.value,
     ):
         raise BillingInvariantError(
             "INVOICE_ALREADY_ISSUED",
             "Facture déjà émise pour ce relevé",
             details={"statement_id": statement_id, "issued_id": existing.id},
         )
-    if existing and existing.status == PlatformIssuedInvoiceStatus.CANCELLED.value:
-        # Libère le lien pour une nouvelle émission après correction
-        replaces_id = existing.id
-        existing.statement_id = None
-        db.session.flush()
-        existing = None
-    else:
-        replaces_id = None
+
+    cancelled = _cancelled_issued_for_replace(statement_id)
+    replaces_id = cancelled.id if cancelled is not None else None
+    # Réutiliser un brouillon éventuel ; sinon créer une nouvelle ligne (1:N)
+    draft = existing if existing and existing.status == PlatformIssuedInvoiceStatus.DRAFT.value else None
+    existing = draft
 
     period = statement.period
     if period is None:
@@ -579,6 +698,7 @@ def issue_platform_invoice(
         "billing_month": int(month),
         "period_id": period.id,
         "replaces_issued_invoice_id": replaces_id,
+        "lines_snapshot": _statement_line_dicts(statement),
     }
 
     if existing:
@@ -606,7 +726,7 @@ def issue_platform_invoice(
             or "21",
         )
     elif ref_mode == "SCOR":
-        qr_reference = f"RF{inv.id:021d}"[:25]
+        qr_reference = build_platform_scor_reference(invoice_number=invoice_number)
     else:
         qr_reference = None
     inv.qr_reference = qr_reference
@@ -642,6 +762,44 @@ def issue_platform_invoice(
     return inv
 
 
+def _heal_lines_snapshot_labels(inv: PlatformIssuedInvoice) -> None:
+    """Resynchronise les libellés auto du snapshot (support h) avec qté/prix."""
+    from services.platform_billing.invoice_replace import sync_derived_line_label
+
+    snap = inv.lines_snapshot
+    if not isinstance(snap, list) or not snap:
+        return
+    healed: list[dict[str, Any]] = []
+    changed = False
+    for raw in snap:
+        if not isinstance(raw, dict):
+            continue
+        row = dict(raw)
+        qty = (
+            Decimal(str(row["quantity"]))
+            if row.get("quantity") is not None
+            else None
+        )
+        unit = (
+            Decimal(str(row["unit_amount"]))
+            if row.get("unit_amount") is not None
+            else None
+        )
+        line_type = str(row.get("line_type") or "ADJUSTMENT")
+        synced = sync_derived_line_label(
+            label=str(row.get("label") or line_type or "Ligne"),
+            line_type=line_type,
+            quantity=qty,
+            unit_amount=unit,
+        )
+        if synced != row.get("label"):
+            row["label"] = synced
+            changed = True
+        healed.append(row)
+    if changed:
+        inv.lines_snapshot = healed
+
+
 def regenerate_issued_invoice_pdf(
     issued_id: int, *, commit: bool = True
 ) -> PlatformIssuedInvoice:
@@ -656,10 +814,11 @@ def regenerate_issued_invoice_pdf(
         raise ValueError(
             "PDF immuable après envoi — prolongation d'échéance sans régénération"
         )
+    _heal_lines_snapshot_labels(inv)
     statement = (
         db.session.get(PlatformInvoice, inv.statement_id) if inv.statement_id else None
     )
-    if not statement:
+    if not statement and not inv.lines_snapshot:
         raise ValueError("Relevé lié introuvable — régénération impossible")
 
     creditor = PlatformBillingCreditor.query.filter_by(is_active=True).first()
@@ -687,7 +846,9 @@ def regenerate_issued_invoice_pdf(
             or "21",
         )
     elif ref_mode == "SCOR":
-        inv.qr_reference = f"RF{inv.id:021d}"[:25]
+        inv.qr_reference = build_platform_scor_reference(
+            invoice_number=inv.invoice_number
+        )
     else:
         inv.qr_reference = None
 
@@ -722,6 +883,7 @@ def read_issued_invoice_pdf(issued_id: int) -> tuple[bytes, str]:
         or not path.exists()
         or path.suffix.lower() != ".pdf"
         or path.stat().st_size < 15000  # stub / PDF sans page QR
+        or inv.sent_at is None  # avant envoi : coller au snapshot (libellés sync)
     )
     if needs_regen:
         if inv.sent_at is not None:
@@ -737,3 +899,87 @@ def read_issued_invoice_pdf(issued_id: int) -> tuple[bytes, str]:
 
     assert path is not None
     return path.read_bytes(), filename
+
+
+def issue_ready_for_period(period_id: int) -> dict[str, Any]:
+    """Émet toutes les factures prêtes de la période (idempotent, partial success)."""
+    from services.platform_billing.dossier_status import dossier_key
+
+    period = db.session.get(PlatformBillingPeriod, period_id)
+    if not period:
+        raise ValueError("Période introuvable")
+
+    issued: list[dict[str, Any]] = []
+    skipped: list[dict[str, Any]] = []
+    failed: list[dict[str, Any]] = []
+
+    statements = PlatformInvoice.query.filter_by(period_id=period_id).all()
+    for statement in statements:
+        key = dossier_key(period_id, statement.company_id)
+        st = statement.statement_status or PlatformStatementStatus.DRAFT.value
+        if st != PlatformStatementStatus.LOCKED.value:
+            skipped.append(
+                {
+                    "dossier_key": key,
+                    "code": "NOT_LOCKED",
+                    "message": "Relevé non verrouillé",
+                }
+            )
+            continue
+        existing = _active_issued_for_statement(statement.id)
+        if existing and existing.status not in (
+            PlatformIssuedInvoiceStatus.DRAFT.value,
+        ):
+            skipped.append(
+                {
+                    "dossier_key": key,
+                    "code": "ALREADY_ISSUED",
+                    "message": "Facture déjà émise",
+                    "issued_invoice_id": existing.id,
+                    "invoice_number": existing.invoice_number,
+                }
+            )
+            continue
+        qr_ok, qr_errors = statement_qr_ready(statement)
+        if not qr_ok:
+            failed.append(
+                {
+                    "dossier_key": key,
+                    "code": "NOT_ISSUABLE",
+                    "message": "; ".join(qr_errors) or "Émission non prête",
+                }
+            )
+            continue
+        try:
+            inv = issue_platform_invoice(statement.id)
+            issued.append(
+                {
+                    "dossier_key": key,
+                    "issued_invoice_id": inv.id,
+                    "invoice_number": inv.invoice_number,
+                }
+            )
+        except BillingInvariantError as e:
+            failed.append(
+                {
+                    "dossier_key": key,
+                    "code": e.code,
+                    "message": e.message,
+                }
+            )
+        except Exception as e:  # noqa: BLE001 — batch isolé
+            logger.exception("issue-ready failed for %s", key)
+            failed.append(
+                {
+                    "dossier_key": key,
+                    "code": "ISSUE_ERROR",
+                    "message": str(e),
+                }
+            )
+
+    return {
+        "period_id": period_id,
+        "issued": issued,
+        "skipped": skipped,
+        "failed": failed,
+    }

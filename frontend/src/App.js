@@ -614,8 +614,8 @@ const App = () => {
               <Route path="partners/demo-requests" element={<AdminDemoRequests />} />
 
               <Route path="finance" element={<AdminBillingHub />}>
-                <Route index element={<AdminBillingOverview />} />
-                <Route path="releves" element={<AdminPlatformBilling />} />
+                <Route index element={<Navigate to="factures" replace />} />
+                <Route path="releves" element={<Navigate to="../factures" replace />} />
                 <Route path="factures" element={<AdminPlatformInvoicesRegistry />} />
                 <Route path="config" element={<AdminBillingTransportConfig />} />
               </Route>

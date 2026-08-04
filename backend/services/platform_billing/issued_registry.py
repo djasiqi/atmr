@@ -59,6 +59,196 @@ def serialize_due_change(c: PlatformInvoiceDueDateChange) -> dict[str, Any]:
     }
 
 
+def _fmt_due(dt: datetime | None) -> str | None:
+    if dt is None:
+        return None
+    return dt.strftime("%d.%m.%Y")
+
+
+def build_issued_invoice_timeline(inv: PlatformIssuedInvoice) -> list[dict[str, Any]]:
+    """Chronologie documentaire reconstruite depuis les faits persistés."""
+    events: list[dict[str, Any]] = []
+
+    def add(
+        *,
+        type_: str,
+        at: datetime | None,
+        label: str,
+        detail: str | None = None,
+        seq: int = 50,
+        **extra: Any,
+    ) -> None:
+        if at is None:
+            return
+        ts = at if at.tzinfo else at.replace(tzinfo=UTC)
+        events.append(
+            {
+                "type": type_,
+                "at": ts.isoformat(),
+                "label": label,
+                "detail": detail,
+                "_sort": (ts, seq, type_),
+                **extra,
+            }
+        )
+
+    is_credit = inv.document_type == PlatformIssuedDocumentType.CREDIT_NOTE.value
+    issued_label = "Avoir émis" if is_credit else "Facture émise"
+    add(
+        type_="ISSUED",
+        at=inv.issued_at or inv.created_at,
+        label=issued_label,
+        detail=f"{inv.invoice_number} · {decimal_to_str(inv.total_amount)} {inv.currency}",
+        seq=0,
+    )
+
+    replaces_id = getattr(inv, "replaces_issued_invoice_id", None)
+    if replaces_id:
+        prev = db.session.get(PlatformIssuedInvoice, int(replaces_id))
+        prev_num = prev.invoice_number if prev else f"#{replaces_id}"
+        add(
+            type_="REPLACES",
+            at=inv.issued_at or inv.created_at,
+            label="Remplace une facture",
+            detail=prev_num,
+            related_invoice_id=int(replaces_id),
+            related_invoice_number=prev_num,
+            seq=1,
+        )
+
+    credit_of = getattr(inv, "credit_of_invoice_id", None)
+    if credit_of:
+        src = db.session.get(PlatformIssuedInvoice, int(credit_of))
+        src_num = src.invoice_number if src else f"#{credit_of}"
+        add(
+            type_="CREDIT_OF",
+            at=inv.issued_at or inv.created_at,
+            label="Avoir sur facture",
+            detail=src_num,
+            related_invoice_id=int(credit_of),
+            related_invoice_number=src_num,
+            seq=1,
+        )
+
+    if inv.due_at and not (getattr(inv, "due_date_changes", None) or []):
+        add(
+            type_="DUE_SET",
+            at=inv.issued_at or inv.created_at,
+            label="Échéance",
+            detail=_fmt_due(inv.due_at),
+            seq=2,
+        )
+
+    add(
+        type_="SENT",
+        at=inv.sent_at,
+        label="Marquée comme envoyée",
+        detail=None,
+        seq=10,
+    )
+
+    for c in getattr(inv, "due_date_changes", None) or []:
+        old_s = _fmt_due(c.old_due_at) or "—"
+        new_s = _fmt_due(c.new_due_at) or "—"
+        detail = f"{old_s} → {new_s}"
+        if c.reason:
+            detail = f"{detail} · {c.reason}"
+        add(
+            type_="DUE_CHANGED",
+            at=c.created_at,
+            label="Échéance modifiée",
+            detail=detail,
+            seq=20,
+        )
+
+    for p in inv.payments or []:
+        entry = getattr(p, "entry_type", None) or "PAYMENT"
+        if entry == "REVERSAL":
+            bits = [f"{decimal_to_str(p.amount)} {inv.currency}"]
+            if p.reversal_reason:
+                bits.append(p.reversal_reason)
+            add(
+                type_="PAYMENT_REVERSAL",
+                at=p.paid_at or p.created_at,
+                label="Paiement contrepassé",
+                detail=" · ".join(bits),
+                payment_id=p.id,
+                seq=30,
+            )
+        else:
+            bits = [f"{decimal_to_str(p.amount)} {inv.currency}"]
+            if p.method:
+                bits.append(str(p.method))
+            if p.reference:
+                bits.append(f"réf. {p.reference}")
+            add(
+                type_="PAYMENT",
+                at=p.paid_at or p.created_at,
+                label="Paiement enregistré",
+                detail=" · ".join(bits),
+                payment_id=p.id,
+                seq=30,
+            )
+
+    credit_note = getattr(inv, "credit_note", None)
+    if credit_note is not None:
+        bits = [credit_note.invoice_number]
+        reason = getattr(inv, "credit_reason", None) or getattr(
+            credit_note, "credit_reason", None
+        )
+        if reason:
+            bits.append(reason)
+        add(
+            type_="CREDITED",
+            at=inv.credited_at or credit_note.issued_at or credit_note.created_at,
+            label="Avoir créé",
+            detail=" · ".join(bits),
+            related_invoice_id=credit_note.id,
+            related_invoice_number=credit_note.invoice_number,
+            seq=40,
+        )
+    elif inv.credited_at:
+        detail = getattr(inv, "credit_reason", None)
+        add(
+            type_="CREDITED",
+            at=inv.credited_at,
+            label="Facture créditée",
+            detail=detail,
+            seq=40,
+        )
+
+    replaced_by = getattr(inv, "replaced_by", None)
+    if inv.cancelled_at:
+        label = "Facture annulée"
+        detail = None
+        if replaced_by is not None:
+            label = "Annulée (remplacement)"
+            detail = f"→ {replaced_by.invoice_number}"
+        add(
+            type_="CANCELLED",
+            at=inv.cancelled_at,
+            label=label,
+            detail=detail,
+            seq=45,
+        )
+
+    if replaced_by is not None:
+        add(
+            type_="REPLACED_BY",
+            at=replaced_by.issued_at or replaced_by.created_at or inv.cancelled_at,
+            label="Remplacée par",
+            detail=replaced_by.invoice_number,
+            related_invoice_id=replaced_by.id,
+            related_invoice_number=replaced_by.invoice_number,
+            seq=46,
+        )
+    events.sort(key=lambda e: e["_sort"])
+    for e in events:
+        e.pop("_sort", None)
+    return events
+
+
+
 def serialize_issued_invoice(
     inv: PlatformIssuedInvoice,
     *,
@@ -346,7 +536,13 @@ def get_issued_invoice_detail(issued_id: int) -> dict[str, Any]:
     data = serialize_issued_invoice(
         inv, include_payments=True, include_due_changes=True
     )
-    # Lignes du relevé
+    # Lignes documentaires (snapshot) + lignes relevé (lecture seule / reset éditeur)
+    snap = inv.lines_snapshot
+    if isinstance(snap, list) and snap:
+        data["lines"] = snap
+    else:
+        data["lines"] = []
+
     statement = inv.statement
     if statement is not None:
         lines = sorted(statement.lines or [], key=lambda x: (x.sort_order, x.id))
@@ -360,11 +556,34 @@ def get_issued_invoice_detail(issued_id: int) -> dict[str, Any]:
                     decimal_to_str(ln.unit_amount) if ln.unit_amount is not None else None
                 ),
                 "amount": decimal_to_str(ln.amount),
+                "calculation_mode": (
+                    "UNIT_PRICE"
+                    if ln.quantity is not None and ln.unit_amount is not None
+                    else "FIXED_AMOUNT"
+                ),
             }
             for ln in lines
         ]
+        if not data["lines"]:
+            data["lines"] = [
+                {
+                    "line_type": ln["line_type"],
+                    "label": ln["label"],
+                    "quantity": ln["quantity"],
+                    "unit_amount": ln["unit_amount"],
+                    "amount": ln["amount"],
+                    "calculation_mode": ln["calculation_mode"],
+                }
+                for ln in data["statement_lines"]
+            ]
     else:
         data["statement_lines"] = []
+
+    data["commercial_reference"] = getattr(inv, "commercial_reference", None)
+    data["source_updated_at"] = (
+        inv.updated_at.isoformat() if inv.updated_at else None
+    )
+    data["timeline"] = build_issued_invoice_timeline(inv)
 
     # Dunning résumé
     from models.platform_billing import PlatformDunningCase, PlatformInvoiceDunningHold

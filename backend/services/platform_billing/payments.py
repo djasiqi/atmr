@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
+from typing import Any
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select
 
@@ -21,6 +23,8 @@ from services.platform_billing.issued_status import (
 )
 from services.platform_billing.money import money_round_chf
 
+_ZURICH = ZoneInfo("Europe/Zurich")
+
 
 _ALLOWED_CANCEL = {
     PlatformIssuedInvoiceStatus.DRAFT.value,
@@ -32,6 +36,36 @@ _ALLOWED_CREDIT_SOURCE = {
     PlatformIssuedInvoiceStatus.SENT.value,
     PlatformIssuedInvoiceStatus.OVERDUE.value,
 }
+
+
+def _as_utc(dt: datetime | None) -> datetime | None:
+    """Normalise un datetime en UTC aware (évite naive vs aware)."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        # Naive : interpréter en Europe/Zurich (saisie admin locale), pas UTC.
+        return dt.replace(tzinfo=_ZURICH).astimezone(UTC)
+    return dt.astimezone(UTC)
+
+
+def parse_payment_paid_at(raw: Any) -> datetime | None:
+    """Parse ``paid_at`` API : date seule → jour local Zurich + heure courante si aujourd’hui.
+
+    Une date ``YYYY-MM-DD`` ne doit pas devenir minuit UTC (affichage 02:00 en été).
+    """
+    if raw is None or raw == "":
+        return None
+    text = str(raw).strip().replace("Z", "+00:00")
+    if len(text) == 10 and text[4] == "-" and text[7] == "-":
+        day = date.fromisoformat(text)
+        now_zh = datetime.now(_ZURICH)
+        if day == now_zh.date():
+            return now_zh
+        return datetime(day.year, day.month, day.day, 12, 0, 0, tzinfo=_ZURICH)
+    dt = datetime.fromisoformat(text)
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=_ZURICH)
+    return dt
 
 
 def _lock_invoice(issued_invoice_id: int) -> PlatformIssuedInvoice:
@@ -58,7 +92,7 @@ def recompute_invoice_payment_state(
     invoice: PlatformIssuedInvoice, *, now: datetime | None = None
 ) -> None:
     """Recalcule amount_paid et le statut stocké depuis le journal."""
-    now = now or datetime.now(UTC)
+    now = _as_utc(now) or datetime.now(UTC)
     if is_credit_note(invoice):
         invoice.amount_paid = Decimal("0.00")
         return
@@ -91,8 +125,8 @@ def recompute_invoice_payment_state(
 
     due = invoice.due_at
     if due is not None:
-        due_aware = due if due.tzinfo else due.replace(tzinfo=UTC)
-        if due_aware < now and balance > 0:
+        due_aware = _as_utc(due)
+        if due_aware is not None and due_aware < now and balance > 0:
             invoice.status = PlatformIssuedInvoiceStatus.OVERDUE.value
             return
     invoice.status = PlatformIssuedInvoiceStatus.SENT.value
@@ -137,7 +171,7 @@ def record_payment(
         raise ValueError(
             f"Paiement supérieur au solde ({bal} CHF) — trop-perçu interdit"
         )
-    when = paid_at or datetime.now(UTC)
+    when = _as_utc(paid_at) or datetime.now(UTC)
     db.session.add(
         PlatformInvoicePayment(
             issued_invoice_id=inv.id,
@@ -242,14 +276,13 @@ def cancel_issued_invoice(issued_invoice_id: int) -> PlatformIssuedInvoice:
     return inv
 
 
-def create_credit_note(
-    issued_invoice_id: int,
+def _create_credit_note_no_commit(
+    source: PlatformIssuedInvoice,
     *,
     reason: str,
     created_by_user_id: int | None = None,
 ) -> PlatformIssuedInvoice:
-    """Note de crédit totale — uniquement si aucun encaissement."""
-    source = _lock_invoice(issued_invoice_id)
+    """Crée un avoir total sans commit (pour transactions atomiques)."""
     reason_clean = (reason or "").strip()
     if not reason_clean:
         raise ValueError("Motif d'avoir obligatoire")
@@ -292,6 +325,7 @@ def create_credit_note(
         credit_created_by_user_id=created_by_user_id,
         debtor_snapshot=source.debtor_snapshot,
         creditor_snapshot=source.creditor_snapshot,
+        lines_snapshot=source.lines_snapshot,
         billing_config_id=source.billing_config_id,
         partner_agreement_id=source.partner_agreement_id,
         dunning_policy_snapshot=source.dunning_policy_snapshot,
@@ -315,7 +349,20 @@ def create_credit_note(
         logging.getLogger(__name__).warning(
             "PDF avoir non généré pour %s: %s", credit.invoice_number, exc
         )
+    return credit
 
+
+def create_credit_note(
+    issued_invoice_id: int,
+    *,
+    reason: str,
+    created_by_user_id: int | None = None,
+) -> PlatformIssuedInvoice:
+    """Note de crédit totale — uniquement si aucun encaissement."""
+    source = _lock_invoice(issued_invoice_id)
+    credit = _create_credit_note_no_commit(
+        source, reason=reason, created_by_user_id=created_by_user_id
+    )
     db.session.commit()
     db.session.refresh(credit)
     return credit

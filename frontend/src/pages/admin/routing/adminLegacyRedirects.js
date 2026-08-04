@@ -132,8 +132,8 @@ export const ADMIN_LEGACY_REDIRECT_SPECS = [
   { from: 'reservations/:bookingId', to: 'operations/bookings/:bookingId' },
   { from: 'users', to: 'partners/users' },
   { from: 'demo-requests', to: 'partners/demo-requests' },
-  { from: 'billing', to: 'finance' },
-  { from: 'billing/releves', to: 'finance/releves' },
+  { from: 'billing', to: 'finance/factures' },
+  { from: 'billing/releves', to: 'finance/factures' },
   { from: 'billing/config', to: 'finance/config' },
   { from: 'settings', to: 'configuration' },
   { from: 'shadow-mode', to: 'advanced/labs/shadow-mode' },
@@ -163,20 +163,21 @@ export function resolveLegacyRelativePath(relativePath) {
     reservations: 'operations/bookings',
     users: 'partners/users',
     'demo-requests': 'partners/demo-requests',
-    billing: 'finance',
-    'billing/releves': 'finance/releves',
+    billing: 'finance/factures',
+    'billing/releves': 'finance/factures',
     'billing/config': 'finance/config',
-    'billing/pilotage': 'finance',
+    'billing/pilotage': 'finance/factures',
     settings: 'configuration',
     'shadow-mode': 'advanced/labs/shadow-mode',
     optuna: 'advanced/labs/optuna',
-    'platform-billing': 'finance/releves',
-    invoices: 'finance',
+    'platform-billing': 'finance/factures',
+    invoices: 'finance/factures',
   };
 
   if (staticMap[rel]) return staticMap[rel];
 
-  if (rel.startsWith('billing/pilotage/')) return 'finance';
+  if (rel.startsWith('billing/pilotage/')) return 'finance/factures';
+  if (rel === 'finance' || rel === 'finance/releves') return 'finance/factures';
   if (rel.startsWith('invoices/')) return 'finance';
 
   return null;

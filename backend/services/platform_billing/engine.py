@@ -309,45 +309,21 @@ def subscription_volume_count(
 
 
 def _select_tier_from_grid(grid_id: int, volume: int) -> PlatformSubscriptionPricingTier | None:
-    rows = (
-        PlatformSubscriptionPricingTier.query.filter_by(grid_id=grid_id)
-        .order_by(PlatformSubscriptionPricingTier.volume_min.asc())
-        .all()
+    from services.platform_billing.subscription_pricing_resolver import (
+        select_tier_from_grid,
     )
-    for row in rows:
-        if volume < row.volume_min:
-            continue
-        if row.volume_max is not None and volume > row.volume_max:
-            continue
-        return row
-    return None
+
+    return select_tier_from_grid(grid_id, volume)
 
 
 def _active_default_grid(
     period_start: datetime,
 ) -> PlatformSubscriptionPricingGrid | None:
-    grids = (
-        PlatformSubscriptionPricingGrid.query.filter_by(
-            grid_key="default", is_active=True
-        )
-        .order_by(PlatformSubscriptionPricingGrid.id.desc())
-        .all()
+    from services.platform_billing.subscription_pricing_resolver import (
+        active_default_grid,
     )
-    for g in grids:
-        ef = g.valid_from
-        et = g.valid_until
-        if ef is not None:
-            if ef.tzinfo is None:
-                ef = ef.replace(tzinfo=UTC)
-            if period_start < ef:
-                continue
-        if et is not None:
-            if et.tzinfo is None:
-                et = et.replace(tzinfo=UTC)
-            if period_start >= et:
-                continue
-        return g
-    return grids[0] if grids else None
+
+    return active_default_grid(period_start)
 
 
 def _resolve_tax_rate(cfg: CompanyPlatformBillingConfig) -> Decimal:
@@ -446,6 +422,61 @@ def recalculate_platform_period_drafts(period_id: int) -> dict[str, Any]:
 
     db.session.commit()
     return {"period_id": period_id, "invoices_generated": generated}
+
+
+def recalculate_platform_company_draft(
+    period_id: int, company_id: int
+) -> dict[str, Any]:
+    """Recalcule le relevé d'une seule entreprise pour une période ouverte.
+
+    Refuse VALIDATED / LOCKED. Retourne les ids du dossier reconstruit.
+    """
+    period = db.session.get(PlatformBillingPeriod, period_id)
+    if not period:
+        raise ValueError("Période introuvable")
+    if period.status == PlatformBillingPeriodStatus.LOCKED.value:
+        raise ValueError("Période verrouillée — recalcul interdit")
+
+    company = db.session.get(Company, company_id)
+    if not company:
+        raise ValueError("Entreprise introuvable")
+
+    existing = PlatformInvoice.query.filter_by(
+        period_id=period_id, company_id=company_id
+    ).first()
+    if existing is not None:
+        status = (
+            getattr(existing, "statement_status", None)
+            or PlatformStatementStatus.DRAFT.value
+        )
+        if status in (
+            PlatformStatementStatus.VALIDATED.value,
+            PlatformStatementStatus.LOCKED.value,
+        ):
+            raise BillingInvariantError(
+                "STATEMENT_LOCKED_FOR_RECALC",
+                "Relevé validé ou verrouillé — recalcul individuel interdit.",
+                details={
+                    "statement_id": existing.id,
+                    "statement_status": status,
+                },
+            )
+        db.session.delete(existing)
+        db.session.flush()
+
+    period_start = month_start_zurich_utc(period.billing_year, period.billing_month)
+    active = effective_config_for_period(company_id, period_start)
+    if not active:
+        raise ValueError("Aucun contrat applicable pour cette entreprise / période")
+
+    inv = _build_invoice_for_company(period, company, active)
+    db.session.commit()
+    return {
+        "period_id": period_id,
+        "company_id": company_id,
+        "statement_id": inv.id,
+        "dossier_key": f"{period_id}:{company_id}",
+    }
 
 
 def _build_invoice_for_company(
@@ -897,7 +928,11 @@ def reopen_statement_for_correction(statement_id: int) -> dict[str, Any]:
             PlatformIssuedInvoiceStatus.CANCELLED.value,
             PlatformIssuedInvoiceStatus.DRAFT.value,
         ):
+            # reopen supprime le relevé → détachement obligatoire (FK RESTRICT)
             issued.statement_id = None
+            if issued.status == PlatformIssuedInvoiceStatus.DRAFT.value:
+                issued.status = PlatformIssuedInvoiceStatus.CANCELLED.value
+                issued.cancelled_at = datetime.now(UTC)
             continue
         blocked = {
             PlatformIssuedInvoiceStatus.PAID.value,
@@ -912,7 +947,7 @@ def reopen_statement_for_correction(statement_id: int) -> dict[str, Any]:
             )
         issued.status = PlatformIssuedInvoiceStatus.CANCELLED.value
         issued.cancelled_at = datetime.now(UTC)
-        issued.statement_id = None
+        issued.statement_id = None  # reopen détruit le relevé
         cancelled_issued_id = issued.id
 
     period_id = inv.period_id

@@ -151,10 +151,11 @@ class PlatformInvoice(db.Model):
         back_populates="statement",
         cascade="all, delete-orphan",
     )
-    issued_invoice = relationship(
+    issued_invoices = relationship(
         "PlatformIssuedInvoice",
         back_populates="statement",
-        uselist=False,
+        uselist=True,
+        order_by="PlatformIssuedInvoice.id",
     )
 
 
@@ -437,6 +438,10 @@ class CompanyPlatformBillingConfig(db.Model):
         Boolean, nullable=False, server_default="true"
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Conditions particulières imprimées dans l'annexe B (jamais confondues avec notes).
+    contract_special_conditions: Mapped[str | None] = mapped_column(
+        Text, nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -543,11 +548,18 @@ class PlatformIssuedInvoice(db.Model):
 
     __tablename__ = "platform_issued_invoice"
     __table_args__ = (
-        # Une facture primaire par relevé (notes de crédit : statement_id NULL)
+        # Index non unique : plusieurs versions (annulées / remplacées) par relevé
+        Index("ix_platform_issued_invoice_statement_id", "statement_id"),
+        # Une seule facture INVOICE active par relevé
         Index(
-            "uq_platform_issued_invoice_statement",
+            "uq_platform_issued_active_statement",
             "statement_id",
             unique=True,
+            postgresql_where=text(
+                "statement_id IS NOT NULL "
+                "AND document_type = 'INVOICE' "
+                "AND status NOT IN ('CANCELLED', 'CREDITED')"
+            ),
         ),
         UniqueConstraint(
             "invoice_number", name="uq_platform_issued_invoice_number"
@@ -560,6 +572,18 @@ class PlatformIssuedInvoice(db.Model):
             "credit_of_invoice_id",
             unique=True,
             postgresql_where=text("credit_of_invoice_id IS NOT NULL"),
+        ),
+        Index(
+            "uq_platform_issued_replaces",
+            "replaces_issued_invoice_id",
+            unique=True,
+            postgresql_where=text("replaces_issued_invoice_id IS NOT NULL"),
+        ),
+        Index(
+            "uq_platform_issued_replace_idempotency",
+            "replace_idempotency_key",
+            unique=True,
+            postgresql_where=text("replace_idempotency_key IS NOT NULL"),
         ),
         Index(
             "ix_platform_issued_billing_period",
@@ -640,6 +664,15 @@ class PlatformIssuedInvoice(db.Model):
     creditor_snapshot: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB, nullable=True
     )
+    lines_snapshot: Mapped[list[Any] | dict[str, Any] | None] = mapped_column(
+        JSONB, nullable=True
+    )
+    replace_idempotency_key: Mapped[str | None] = mapped_column(
+        String(64), nullable=True
+    )
+    commercial_reference: Mapped[str | None] = mapped_column(
+        String(128), nullable=True
+    )
     billing_config_id: Mapped[int | None] = mapped_column(
         Integer,
         ForeignKey("company_platform_billing_config.id", ondelete="SET NULL"),
@@ -671,7 +704,7 @@ class PlatformIssuedInvoice(db.Model):
         onupdate=func.now(),
     )
 
-    statement = relationship("PlatformInvoice", back_populates="issued_invoice")
+    statement = relationship("PlatformInvoice", back_populates="issued_invoices")
     payments = relationship(
         "PlatformInvoicePayment",
         back_populates="issued_invoice",
@@ -683,6 +716,12 @@ class PlatformIssuedInvoice(db.Model):
         remote_side="PlatformIssuedInvoice.id",
         foreign_keys=[credit_of_invoice_id],
         backref=db.backref("credit_note", uselist=False),
+    )
+    replaces_invoice = relationship(
+        "PlatformIssuedInvoice",
+        remote_side="PlatformIssuedInvoice.id",
+        foreign_keys=[replaces_issued_invoice_id],
+        backref=db.backref("replaced_by", uselist=False),
     )
     due_date_changes = relationship(
         "PlatformInvoiceDueDateChange",

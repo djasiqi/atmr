@@ -1,0 +1,16 @@
+{
+  "lirie-partner-terms-v1.20": {
+    "version": "lirie-partner-terms-v1.20",
+    "sha256": "1888539602782266549897ad2bff4ef5cda69b7982dbdfe002ff914352d86b85",
+    "size_bytes": 4731,
+    "source": "sources/lirie-partner-terms-v1.20.md",
+    "pdf": "pdf/lirie-partner-terms-v1.20.pdf"
+  },
+  "lirie-dpa-v1.20": {
+    "version": "lirie-dpa-v1.20",
+    "sha256": "feb486b6371053029998c236963cb5f98883b503012e6db3525e508d8e547f30",
+    "size_bytes": 6598,
+    "source": "sources/lirie-dpa-v1.20.md",
+    "pdf": "pdf/lirie-dpa-v1.20.pdf"
+  }
+}

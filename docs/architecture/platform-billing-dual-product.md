@@ -75,6 +75,10 @@
 - ✅ **Implémenté** : modal contrat entreprise simplifié (`AdminBillingDualProductConfig.jsx`)
   — readiness uniquement si incomplet ; produits en cartes (abo / commission / support) ;
   adresse + contrat en un seul « Enregistrer » ; historique versions repliable.
+- ✅ **Implémenté** : modal contrat restructuré en onglets (Identité / Produits /
+  Recouvrement / Document) — header avec pastilles statut, grille produits, timeline
+  recouvrement, actions document hiérarchisées, versions dans l’onglet Document
+  (`AdminBillingDualProductConfig.jsx` + `AdminBillingTransportConfig.module.css`).
 
 ### PR1 invariants workflow (sécurisation Finance) — ✅ Implémenté
 
@@ -98,7 +102,30 @@
   clôture refusée si déjà clôturée ; FE adresse seule ≠ nouvelle version ; versions
   historiques lecture seule ; KPIs Overview séparés.
 
-### PR6 — Paiements / registre factures émises — ✅ Implémenté (PR1–PR3)
+### PR7 — Registre unifié dossiers Factures — ✅ Implémenté
+
+- ✅ **Implémenté** : projection opérationnelle `dossier_key = "{period_id}:{company_id}"`
+  sans fusion des tables `PlatformInvoice` / `PlatformIssuedInvoice` —
+  `dossier_status.py`, `dossier_registry.py`.
+- ✅ **Implémenté** : statuts SSOT `A_CALCULER` … `CREDITED` + **Prête à clôturer** /
+  **Prête à émettre** séparés ; flags `zero_charge` / `issuable` ; actions
+  `primary_action` / `allowed_actions` / `blocked_actions` calculées côté API.
+- ✅ **Implémenté** : `GET /admin/platform-billing/dossiers` (+ export + détail) ;
+  KPI distincts À émettre / Facturé net / Encaissé / Solde ouvert ;
+  filtre « Toutes les périodes » + chip À traiter.
+- ✅ **Implémenté** : `POST …/companies/{id}/recalculate` ; `POST …/issue-ready`
+  (batch serveur) ; `CAP_BILLING_VALIDATE` sur recalcul période.
+- ✅ **Implémenté** : UI Finance = **Factures** | **Contrats et accès** ; hub Outlet
+  seul ; page unique + drawer ; envoi = « Marquer comme envoyée » uniquement.
+- ✅ **Implémenté** : éditeur de facture (`EDIT_INVOICE` / `CORRECT_INVOICE`) —
+  `lines_snapshot` sur `PlatformIssuedInvoice` (relevé immuable), relation
+  relevé→factures 1:N (unicité partielle facture active), replace atomique
+  + idempotence (`invoice_replace.py`), preview PDF non payable, caps
+  `admin_authz` CANCEL+ISSUE / CREDIT+ISSUE ; correction bloquée si
+  `amount_paid > 0`.
+- Hors scope V1 : statut enum Remplacée, SMTP facture, `send_method`,
+  remboursements / avoir si paiements enregistrés.
+
 
 - ✅ **Implémenté** : ledger paiements (`entry_type` PAYMENT/REVERSAL, idempotence
   par facture, `FOR UPDATE`, `amount_paid = SUM`, trop-perçu interdit,
@@ -154,6 +181,83 @@
 - ✅ **Implémenté** : UI modal dual-produit — identité étendue, politique
   d’annulation, durée gratuité, délai contestation, section document
   (dirty-form bloque la génération).
+- ✅ **Implémenté** : modèle DOCX `lirie-partner-v1.20` — refonte complète du
+  contenu juridique en trois parties : **Partie A** (contrat-cadre, art. 1 à 15 :
+  définitions, obligation de moyens de LIRIE, formation du contrat de transport
+  à l'acceptation définitive, non-contournement 6 mois avec pénalité
+  commissions éludées + max(2×, CHF 1'000), responsabilité à 3 niveaux sans
+  plancher forfaitaire, durée indéterminée + préavis 30 jours, hiérarchie
+  avenant > B > C > A), **Partie B** (Annexe financière : produits, commission,
+  abonnement free/fixed/volume avec table de paliers, support, paiement,
+  recouvrement, TVA, conditions particulières) et **Partie C** (Annexe
+  protection des données : matrice des rôles, finalités GPS, durées de
+  conservation, sous-traitants actifs, incidents) ; `GENERATOR_VERSION` /
+  `TEMPLATE_VERSION` proviennent désormais de `partner_agreement_versions.py`
+  (source unique) et sont ré-exportés par compatibilité ; signature collective
+  Partenaire supportée (`_add_signatures_table`) (`partner_agreement_docx.py`).
+- ✅ **Implémenté** : correctifs juridiques post-revue (texte `lirie-legal-text-v1.20.1`) :
+  rétroactivité limitée à la Partie B + Partie C depuis la date d'effet
+  commerciale ; définitions Client contractuel / Passager / Demandeur / Payeur /
+  Destinataire ; logs = présomption d'opérations système (pas de lecture
+  effective) ; commission selon résultat financier définitif (Partie B) ;
+  modifications substantielles élargies ; saisie des montants HT (pas le
+  Relevé) ; peine = commissions éludées + max(2×, CHF 1'000.–) avec réserve
+  judiciaire ; préavis 30 jours calendaires à tout moment ; gratuité pendant
+  N mois (pas « au maximum ») ; hiérarchie C > A/B pour la LPD ; Partie C
+  renforcée (matrice des rôles, instructions, TOM, incidents, sous-traitants) ;
+  Article 16 dispositions finales ; formats CHF / dates FR.
+- ✅ **Implémenté** : correctifs LPD / prestataires post-revue 9,2/10
+  (texte `lirie-legal-text-v1.20.2`, `lirie-subprocessors-v2`) :
+  matrice C.1 sans contradiction responsable/sous-traitant (sécurité,
+  GPS mixte, facturation) ; C.1 bis limité à l'hébergement / missions
+  portefeuille propre + cadre d'audit ; C.2 GPS + information chauffeurs ;
+  Google Maps = responsable distinct (conditions EEE), sans CCT Cloud ;
+  garanties Hetzner / Brevo ; non-contournement (suite LIRIE + intention) ;
+  Payeur sans acceptation tacite ; anonymisation irréversible ; cession
+  élargie ; formats Relevé mensuel / jours en toutes lettres / versions
+  politiques affichées (`partner_agreement_docx.py`,
+  `partner_agreement_compliance.py`).
+- ✅ **Implémenté** : architecture pack partenaire `lirie-partner-pack-v1`
+  (contrat particulier `lirie-partner-particular-v1.32` = **3 pages PDF
+  officiel** dans `generated_*` ; DOCX interne dans
+  `generation_snapshot.internal_docx` ; CG/DPA canoniques immuables sous
+  `assets/contracts/canonical/` avec SHA vérifiés ; source unique
+  `ParticularAgreementContent` ; versions CG/DPA dans le contrat signé ;
+  SHA CG/DPA dans le bordereau et le snapshot (pas dans le PDF particulier) ;
+  `mark_agreement_sent` finalise bordereau (sans SHA ZIP) + ZIP déterministe ;
+  preview brouillon = filigrane dynamique ; upload signé 3 pages (+ certificat
+  optionnel) ; FE : prévisualiser / DOCX interne / contrat à signer / dossier
+  ZIP) — modules `partner_agreement_particular_*`,
+  `partner_agreement_canonical*`, `partner_agreement_package.py`,
+  `partner_agreement_preview.py`.
+- ✅ **Implémenté** : gel des conditions dans `generate_agreement` — copie de
+  grille contractuelle `contract-cfg-{id}-r{rev}` (`is_active=False`), pin
+  `pricing_grid_id` + `use_global_pricing_grid=false`, hashes canoniques
+  `parties_snapshot_sha256` / `commercial_snapshot_sha256` ;
+  `mark_agreement_sent` = intégrité + bordereau/ZIP ; migration atomique
+  brouillon `migrate_draft_agreement_to_v120` (pack) ; champ
+  `contract_special_conditions` (distinct de `notes`) ; attestation RC
+  obligatoire à la génération ; resolver partagé
+  `subscription_pricing_resolver.py` (`partner_agreement.py`, migration
+  `a6a422986202`).
+- ✅ **Implémenté** (historique) : modèle DOCX `lirie-partner-v1.10` — espacements
+  légèrement aérés (interligne 1,15 ; corps 8 pt après ; titres 12/6)
+  (`partner_agreement_docx.py`).
+- ✅ **Implémenté** (historique) : modèle DOCX `lirie-partner-v1.9` — corps à 10,5 pt ;
+  titres vert `#00796b` + Calibri ; logo ; pagination p1–p8
+  (`partner_agreement_docx.py`).
+- ✅ **Implémenté** (historique) : modèle DOCX `lirie-partner-v1.8` — titres en vert LIRIE
+  `#00796b` + police Calibri (charte) ; logo page 1 ; pagination p1–p8
+  (`partner_agreement_docx.py`).
+- ✅ **Implémenté** (historique) : modèle DOCX `lirie-partner-v1.7` — logo LIRIE en tête de
+  page 1 + pagination contrôlée p1–p8 + pied de page (`partner_agreement_docx.py`).
+- ✅ **Implémenté** (historique) : modèle DOCX `lirie-partner-v1.6` — pagination contrôlée :
+  p1 Parties · p2 préambule→art.4 · p3 art.5-6 · p4 art.6 bis · p5 art.7-9 ·
+  p6 art.10-12 · p7 art.13-16 · p8 art.17 + signatures côte à côte ; pied de page
+  (réf. + Page X / Y) (`partner_agreement_docx.py`).
+- ✅ **Implémenté** (historique) : modèle DOCX `lirie-partner-v1.5` — page 1 = titre + Parties
+  (saut avant préambule) ; pied de page (réf. + Page X / Y) ; art. 17 + signatures
+  côte à côte sur page de clôture (`partner_agreement_docx.py`).
 - ✅ **Implémenté** : modèle DOCX `lirie-partner-v1.4` + **dunning runtime**
   art. 6 bis configurable : champs `automated_dunning_*` sur
   `CompanyPlatformBillingConfig` ; snapshot + autorisation figés à

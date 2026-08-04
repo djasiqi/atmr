@@ -195,6 +195,39 @@ def require_admin_capability(capability: str) -> Callable[[F], F]:
     return decorator
 
 
+def require_admin_capabilities_all(*capabilities: str) -> Callable[[F], F]:
+    """Exige toutes les capacités listées (AND)."""
+
+    caps = tuple(capabilities)
+
+    def decorator(fn: F) -> F:
+        @wraps(fn)
+        def wrapper(*args: Any, **kwargs: Any):
+            from shared.infrastructure.adapters.auth_adapter import (
+                get_current_user_via_use_case,
+            )
+
+            user = get_current_user_via_use_case()
+            if not user:
+                return jsonify(
+                    {"error": "unauthorized", "message": "Utilisateur introuvable."}
+                ), 401
+            for capability in caps:
+                if not user_has_admin_capability(user.id, capability):
+                    return jsonify(
+                        {
+                            "error": "forbidden",
+                            "message": "Capacité administrateur insuffisante.",
+                            "capability": capability,
+                        }
+                    ), 403
+            return fn(*args, **kwargs)
+
+        return wrapper  # type: ignore[return-value]
+
+    return decorator
+
+
 def capabilities_payload_for_user(user_id: int) -> dict[str, Any]:
     """Payload API pour le frontend (hook useAdminCapabilities)."""
     enforced = admin_capabilities_enforced()

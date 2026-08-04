@@ -41,10 +41,8 @@ export const ADMIN_WORKSPACES = [
     path: 'finance',
     matchPrefixes: ['finance'],
     children: [
-      { id: 'finance-overview', label: 'Vue d’ensemble', path: 'finance', end: true },
-      { id: 'releves', label: 'Relevés', path: 'finance/releves' },
-      { id: 'factures', label: 'Factures émises', path: 'finance/factures' },
-      { id: 'config', label: 'Entreprises', path: 'finance/config' },
+      { id: 'factures', label: 'Factures', path: 'finance/factures', end: false },
+      { id: 'config', label: 'Contrats et accès', path: 'finance/config' },
     ],
   },
   {

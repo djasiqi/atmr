@@ -67,6 +67,7 @@ from services.platform_billing.decimal_json import (
 from services.platform_billing.engine import (
     get_or_create_period,
     lock_platform_billing_period,
+    recalculate_platform_company_draft,
     recalculate_platform_period_drafts,
     reopen_statement_for_correction,
     validate_statement,
@@ -74,6 +75,7 @@ from services.platform_billing.engine import (
 from services.platform_billing.errors import BillingInvariantError
 from services.platform_billing.issuance import (
     issue_platform_invoice,
+    issue_ready_for_period,
     read_issued_invoice_pdf,
     statement_issuance_ready,
     statement_qr_ready,
@@ -82,11 +84,17 @@ from services.platform_billing.payments import (
     cancel_issued_invoice,
     create_credit_note,
     mark_sent,
+    parse_payment_paid_at,
     record_payment,
     refresh_overdue_statuses,
     reverse_payment,
 )
 from services.platform_billing.due_date import update_issued_invoice_due_date
+from services.platform_billing.dossier_registry import (
+    export_dossiers_csv,
+    get_dossier,
+    list_dossiers,
+)
 from services.platform_billing.issued_registry import (
     export_issued_invoices_csv,
     get_issued_invoice_detail,
@@ -121,8 +129,13 @@ def _admin_user_id_from_jwt() -> int | None:
     return int(user.id) if user is not None else None
 
 
-def _serialize_period(p: PlatformBillingPeriod) -> dict[str, Any]:
-    return {
+def _serialize_period(
+    p: PlatformBillingPeriod,
+    *,
+    statement_count: int | None = None,
+    issued_count: int | None = None,
+) -> dict[str, Any]:
+    data = {
         "id": p.id,
         "billing_year": p.billing_year,
         "billing_month": p.billing_month,
@@ -131,6 +144,45 @@ def _serialize_period(p: PlatformBillingPeriod) -> dict[str, Any]:
         "created_at": p.created_at.isoformat() if p.created_at else None,
         "updated_at": p.updated_at.isoformat() if p.updated_at else None,
     }
+    if statement_count is not None:
+        data["statement_count"] = int(statement_count)
+    if issued_count is not None:
+        data["issued_count"] = int(issued_count)
+    if statement_count is not None or issued_count is not None:
+        data["has_billing_activity"] = bool(
+            (statement_count or 0) > 0 or (issued_count or 0) > 0
+        )
+    return data
+
+
+def _period_activity_counts(
+    period_ids: list[int],
+) -> tuple[dict[int, int], dict[int, int]]:
+    """Compte relevés et factures émises par période."""
+    stmt_counts: dict[int, int] = {}
+    issued_counts: dict[int, int] = {}
+    if not period_ids:
+        return stmt_counts, issued_counts
+    for pid, cnt in (
+        db.session.query(PlatformInvoice.period_id, func.count(PlatformInvoice.id))
+        .filter(PlatformInvoice.period_id.in_(period_ids))
+        .group_by(PlatformInvoice.period_id)
+        .all()
+    ):
+        stmt_counts[int(pid)] = int(cnt)
+    for pid, cnt in (
+        db.session.query(
+            PlatformIssuedInvoice.period_id, func.count(PlatformIssuedInvoice.id)
+        )
+        .filter(
+            PlatformIssuedInvoice.period_id.in_(period_ids),
+            PlatformIssuedInvoice.period_id.isnot(None),
+        )
+        .group_by(PlatformIssuedInvoice.period_id)
+        .all()
+    ):
+        issued_counts[int(pid)] = int(cnt)
+    return stmt_counts, issued_counts
 
 
 def _dual_product_config_ui_enabled() -> bool:
@@ -297,7 +349,22 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                 .limit(120)
                 .all()
             )
-            return {"periods": [_serialize_period(p) for p in rows]}, 200
+            stmt_c, iss_c = _period_activity_counts([p.id for p in rows])
+            only_active = str(
+                request.args.get("with_activity", "false")
+            ).lower() in ("1", "true", "yes", "on")
+            payload = []
+            for p in rows:
+                sc = stmt_c.get(p.id, 0)
+                ic = iss_c.get(p.id, 0)
+                if only_active and sc == 0 and ic == 0:
+                    continue
+                payload.append(
+                    _serialize_period(
+                        p, statement_count=sc, issued_count=ic
+                    )
+                )
+            return {"periods": payload}, 200
 
         @jwt_required()
         @role_required(UserRole.admin)
@@ -337,11 +404,50 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
         @jwt_required()
         @role_required(UserRole.admin)
         @ip_whitelist_required()
+        @require_admin_capability(CAP_BILLING_VALIDATE)
         @limiter.limit(_RL_ADMIN_HEAVY)
         def post(self, period_id: int):
             try:
                 out = recalculate_platform_period_drafts(period_id)
                 return out, 200
+            except ValueError as e:
+                return {"error": str(e)}, 400
+
+    @admin_ns.route(
+        "/platform-billing/periods/<int:period_id>/companies/"
+        "<int:company_id>/recalculate"
+    )
+    class PlatformBillingCompanyRecalculate(Resource):
+        @jwt_required()
+        @role_required(UserRole.admin)
+        @ip_whitelist_required()
+        @require_admin_capability(CAP_BILLING_VALIDATE)
+        @limiter.limit(_RL_ADMIN_HEAVY)
+        def post(self, period_id: int, company_id: int):
+            try:
+                out = recalculate_platform_company_draft(period_id, company_id)
+                dossier = get_dossier(
+                    period_id,
+                    company_id,
+                    admin_user_id=_admin_user_id_from_jwt(),
+                    check_qr=False,
+                )
+                return {"recalculate": out, "dossier": dossier}, 200
+            except BillingInvariantError as e:
+                return e.to_response()
+            except ValueError as e:
+                return {"error": str(e)}, 400
+
+    @admin_ns.route("/platform-billing/periods/<int:period_id>/issue-ready")
+    class PlatformBillingIssueReady(Resource):
+        @jwt_required()
+        @role_required(UserRole.admin)
+        @ip_whitelist_required()
+        @require_admin_capability(CAP_BILLING_ISSUE)
+        @limiter.limit(_RL_ADMIN_HEAVY)
+        def post(self, period_id: int):
+            try:
+                return issue_ready_for_period(period_id), 200
             except ValueError as e:
                 return {"error": str(e)}, 400
 
@@ -1061,17 +1167,55 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
         @require_admin_capability(CAP_CONFIGURATION_MANAGE)
         @limiter.limit(_RL_ADMIN_WRITE)
         def post(self, contract_id: int):
-            """Génère ou régénère le DOCX (brouillon)."""
+            """Génère ou régénère le DOCX (brouillon) avec attestation RC."""
+            from flask import request
+
             from services.platform_billing.partner_agreement import (
                 PartnerAgreementError,
                 generate_agreement,
                 serialize_agreement,
             )
 
+            payload = request.get_json(silent=True) or {}
             try:
                 agr = generate_agreement(
                     contract_id,
                     user_id=_admin_user_id_from_jwt(),
+                    signatory_authority_verification=payload.get(
+                        "signatory_authority_verification"
+                    ),
+                )
+            except PartnerAgreementError as exc:
+                return {"ok": False, "error": exc.message}, exc.status_code
+            return {"ok": True, "agreement": serialize_agreement(agr)}, 201
+
+    @admin_ns.route(
+        "/platform-billing/agreements/<int:agreement_id>/migrate-v120"
+    )
+    class PartnerAgreementMigrateV120(Resource):
+        @jwt_required()
+        @role_required(UserRole.admin)
+        @ip_whitelist_required()
+        @require_admin_capability(CAP_CONFIGURATION_MANAGE)
+        @limiter.limit(_RL_ADMIN_WRITE)
+        def post(self, agreement_id: int):
+            """Migration atomique d'un brouillon ancien modèle vers v1.20."""
+            from flask import request
+
+            from services.platform_billing.partner_agreement import (
+                PartnerAgreementError,
+                migrate_draft_agreement_to_v120,
+                serialize_agreement,
+            )
+
+            payload = request.get_json(silent=True) or {}
+            try:
+                agr = migrate_draft_agreement_to_v120(
+                    agreement_id,
+                    user_id=_admin_user_id_from_jwt(),
+                    signatory_authority_verification=payload.get(
+                        "signatory_authority_verification"
+                    ),
                 )
             except PartnerAgreementError as exc:
                 return {"ok": False, "error": exc.message}, exc.status_code
@@ -1105,13 +1249,22 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
         @ip_whitelist_required()
         @limiter.limit(_RL_ADMIN_READ)
         def get(self, agreement_id: int):
+            """DOCX interne (outil) — pas l'original juridique."""
             from models.platform_billing import PlatformPartnerAgreement
             from security.audit_log import AuditLogger
+            from services.platform_billing.partner_agreement import (
+                PartnerAgreementError,
+                read_internal_docx_key,
+            )
             from shared.upload_path_resolver import serve_stored_upload
 
             agr = db.session.get(PlatformPartnerAgreement, agreement_id)
-            if not agr or not agr.generated_storage_key:
-                admin_ns.abort(404, "Document généré introuvable")
+            if not agr:
+                admin_ns.abort(404, "Accord introuvable")
+            try:
+                storage_key = read_internal_docx_key(agr)
+            except PartnerAgreementError as exc:
+                admin_ns.abort(exc.status_code, exc.message)
             AuditLogger.log_action(
                 action_type="partner_agreement_downloaded",
                 action_category="platform_billing",
@@ -1120,7 +1273,95 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                 company_id=agr.company_id,
                 action_details={
                     "agreement_id": agr.id,
-                    "kind": "generated_docx",
+                    "kind": "internal_docx",
+                    "reference": agr.reference,
+                },
+                resource_type="platform_partner_agreement",
+                resource_id=str(agr.id),
+            )
+            return serve_stored_upload(
+                storage_key,
+                as_attachment=True,
+                download_filename=(
+                    f"{agr.reference.replace('/', '_')}_interne.docx"
+                ),
+            )
+
+    @admin_ns.route(
+        "/platform-billing/agreements/<int:agreement_id>/preview.pdf"
+    )
+    class PartnerAgreementPreviewPdf(Resource):
+        @jwt_required()
+        @role_required(UserRole.admin)
+        @ip_whitelist_required()
+        @limiter.limit(_RL_ADMIN_READ)
+        def get(self, agreement_id: int):
+            """PDF officiel + filigrane BROUILLON (non stocké)."""
+            from flask import Response
+
+            from models.platform_billing import PlatformPartnerAgreement
+            from services.platform_billing.partner_agreement import (
+                PartnerAgreementError,
+                build_preview_pdf_bytes,
+            )
+
+            agr = db.session.get(PlatformPartnerAgreement, agreement_id)
+            if not agr:
+                admin_ns.abort(404, "Accord introuvable")
+            try:
+                pdf_bytes = build_preview_pdf_bytes(agr)
+            except PartnerAgreementError as exc:
+                return {"ok": False, "error": exc.message}, exc.status_code
+            filename = f"{agr.reference.replace('/', '_')}_BROUILLON.pdf"
+            return Response(
+                pdf_bytes,
+                mimetype="application/pdf",
+                headers={
+                    "Content-Disposition": f'inline; filename="{filename}"',
+                },
+            )
+
+    @admin_ns.route(
+        "/platform-billing/agreements/<int:agreement_id>/particular.pdf"
+    )
+    class PartnerAgreementParticularPdf(Resource):
+        @jwt_required()
+        @role_required(UserRole.admin)
+        @ip_whitelist_required()
+        @limiter.limit(_RL_ADMIN_READ)
+        def get(self, agreement_id: int):
+            """PDF particulier officiel — disponible pour signature si sent+."""
+            from models.enums import PartnerAgreementStatus
+            from models.platform_billing import PlatformPartnerAgreement
+            from security.audit_log import AuditLogger
+            from shared.upload_path_resolver import serve_stored_upload
+
+            agr = db.session.get(PlatformPartnerAgreement, agreement_id)
+            if not agr or not agr.generated_storage_key:
+                admin_ns.abort(404, "PDF particulier introuvable")
+            if agr.status not in (
+                PartnerAgreementStatus.SENT.value,
+                PartnerAgreementStatus.SIGNED.value,
+            ):
+                admin_ns.abort(
+                    409,
+                    "Le PDF à signer n'est disponible qu'après marquage envoyé. "
+                    "Utilisez la prévisualisation brouillon.",
+                )
+            if not (agr.generated_content_type or "").startswith("application/pdf"):
+                admin_ns.abort(
+                    409,
+                    "Cet accord n'a pas de PDF particulier. Migrez le brouillon.",
+                )
+            AuditLogger.log_action(
+                action_type="partner_agreement_downloaded",
+                action_category="platform_billing",
+                user_id=_admin_user_id_from_jwt(),
+                user_type="admin",
+                company_id=agr.company_id,
+                action_details={
+                    "agreement_id": agr.id,
+                    "kind": "particular_pdf",
                     "reference": agr.reference,
                 },
                 resource_type="platform_partner_agreement",
@@ -1129,7 +1370,56 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
             return serve_stored_upload(
                 agr.generated_storage_key,
                 as_attachment=True,
-                download_filename=f"{agr.reference.replace('/', '_')}.docx",
+                download_filename=(
+                    f"{agr.reference.replace('/', '_')}_contrat-particulier.pdf"
+                ),
+            )
+
+    @admin_ns.route(
+        "/platform-billing/agreements/<int:agreement_id>/package"
+    )
+    class PartnerAgreementPackageDownload(Resource):
+        @jwt_required()
+        @role_required(UserRole.admin)
+        @ip_whitelist_required()
+        @limiter.limit(_RL_ADMIN_READ)
+        def get(self, agreement_id: int):
+            from models.platform_billing import PlatformPartnerAgreement
+            from security.audit_log import AuditLogger
+            from services.platform_billing.partner_agreement import (
+                PartnerAgreementError,
+                read_delivery_zip_key,
+            )
+            from services.platform_billing.partner_agreement_package import (
+                delivery_zip_filename,
+            )
+            from shared.upload_path_resolver import serve_stored_upload
+
+            agr = db.session.get(PlatformPartnerAgreement, agreement_id)
+            if not agr:
+                admin_ns.abort(404, "Accord introuvable")
+            try:
+                zip_key = read_delivery_zip_key(agr)
+            except PartnerAgreementError as exc:
+                admin_ns.abort(exc.status_code, exc.message)
+            AuditLogger.log_action(
+                action_type="partner_agreement_downloaded",
+                action_category="platform_billing",
+                user_id=_admin_user_id_from_jwt(),
+                user_type="admin",
+                company_id=agr.company_id,
+                action_details={
+                    "agreement_id": agr.id,
+                    "kind": "delivery_package",
+                    "reference": agr.reference,
+                },
+                resource_type="platform_partner_agreement",
+                resource_id=str(agr.id),
+            )
+            return serve_stored_upload(
+                zip_key,
+                as_attachment=True,
+                download_filename=delivery_zip_filename(agr.reference),
             )
 
     @admin_ns.route(
@@ -1148,10 +1438,12 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                 serialize_agreement,
             )
 
+            payload = request.get_json(silent=True) or {}
             try:
                 agr = mark_agreement_sent(
                     agreement_id,
                     user_id=_admin_user_id_from_jwt(),
+                    delivery_declaration=payload.get("delivery_declaration"),
                 )
             except PartnerAgreementError as exc:
                 return {"ok": False, "error": exc.message}, exc.status_code
@@ -1225,6 +1517,11 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                     "agreement_signed_on invalide (attendu YYYY-MM-DD)",
                     logger_instance=logger,
                 )
+            confirmed_raw = (
+                request.form.get("additional_pages_confirmed")
+                or ""
+            ).strip().lower()
+            additional_confirmed = confirmed_raw in ("1", "true", "yes", "oui")
             try:
                 agr = upload_signed_pdf(
                     agreement_id,
@@ -1232,6 +1529,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                     original_filename=f.filename,
                     agreement_signed_on=signed_on,
                     user_id=_admin_user_id_from_jwt(),
+                    additional_pages_confirmed=additional_confirmed,
                 )
             except PartnerAgreementError as exc:
                 return {"ok": False, "error": exc.message}, exc.status_code
@@ -1497,6 +1795,99 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                 )
             return {"ok": True, "issued_invoice": _serialize_issued(issued)}, 201
 
+    @admin_ns.route("/platform-billing/dossiers")
+    class PlatformBillingDossiers(Resource):
+        @jwt_required()
+        @role_required(UserRole.admin)
+        @ip_whitelist_required()
+        @require_admin_capability(CAP_BILLING_READ)
+        @limiter.limit(_RL_ADMIN_READ)
+        def get(self):
+            try:
+                period_id = request.args.get("period_id", type=int)
+                year = request.args.get("year", type=int)
+                month = request.args.get("month", type=int)
+                q = request.args.get("q") or None
+                status = request.args.get("operational_status") or None
+                a_traiter = str(
+                    request.args.get("a_traiter", "false")
+                ).lower() in ("1", "true", "yes", "on")
+                page = request.args.get("page", default=1, type=int)
+                per_page = request.args.get("per_page", default=50, type=int)
+                return list_dossiers(
+                    period_id=period_id,
+                    year=year,
+                    month=month,
+                    q=q,
+                    operational_status_filter=status,
+                    a_traiter=a_traiter,
+                    page=page or 1,
+                    per_page=per_page or 50,
+                    admin_user_id=_admin_user_id_from_jwt(),
+                    check_qr=False,
+                ), 200
+            except ValueError as e:
+                return {"error": str(e)}, 400
+
+    @admin_ns.route("/platform-billing/dossiers/export")
+    class PlatformBillingDossiersExport(Resource):
+        @jwt_required()
+        @role_required(UserRole.admin)
+        @ip_whitelist_required()
+        @require_admin_capability(CAP_BILLING_READ)
+        @limiter.limit(_RL_ADMIN_WRITE)
+        def get(self):
+            try:
+                period_id = request.args.get("period_id", type=int)
+                year = request.args.get("year", type=int)
+                month = request.args.get("month", type=int)
+                q = request.args.get("q") or None
+                status = request.args.get("operational_status") or None
+                a_traiter = str(
+                    request.args.get("a_traiter", "false")
+                ).lower() in ("1", "true", "yes", "on")
+                csv_body = export_dossiers_csv(
+                    period_id=period_id,
+                    year=year,
+                    month=month,
+                    q=q,
+                    operational_status_filter=status,
+                    a_traiter=a_traiter,
+                    admin_user_id=_admin_user_id_from_jwt(),
+                    check_qr=False,
+                )
+                return Response(
+                    csv_body,
+                    mimetype="text/csv; charset=utf-8",
+                    headers={
+                        "Content-Disposition": (
+                            "attachment; filename=dossiers-factures.csv"
+                        )
+                    },
+                )
+            except ValueError as e:
+                return {"error": str(e)}, 400
+
+    @admin_ns.route(
+        "/platform-billing/dossiers/<int:period_id>/<int:company_id>"
+    )
+    class PlatformBillingDossierDetail(Resource):
+        @jwt_required()
+        @role_required(UserRole.admin)
+        @ip_whitelist_required()
+        @require_admin_capability(CAP_BILLING_READ)
+        @limiter.limit(_RL_ADMIN_READ)
+        def get(self, period_id: int, company_id: int):
+            dossier = get_dossier(
+                period_id,
+                company_id,
+                admin_user_id=_admin_user_id_from_jwt(),
+                check_qr=True,
+            )
+            if not dossier:
+                admin_ns.abort(404, "Dossier introuvable")
+            return dossier, 200
+
     @admin_ns.route("/platform-billing/issued-invoices")
     class PlatformIssuedInvoicesList(Resource):
         @jwt_required()
@@ -1707,11 +2098,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                     allow_none=False,
                 )
                 paid_at = data.get("paid_at")
-                dt = (
-                    datetime.fromisoformat(str(paid_at).replace("Z", "+00:00"))
-                    if paid_at
-                    else None
-                )
+                dt = parse_payment_paid_at(paid_at)
                 user_id = _admin_user_id_from_jwt()
                 inv = record_payment(
                     issued_id,
@@ -1791,6 +2178,161 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                     str(e), logger_instance=logger
                 )
             return {"ok": True, "issued_invoice": _serialize_issued(inv)}, 201
+
+    @admin_ns.route(
+        "/platform-billing/issued-invoices/<int:issued_id>/editor"
+    )
+    class PlatformIssuedInvoiceEditor(Resource):
+        @jwt_required()
+        @role_required(UserRole.admin)
+        @require_admin_capability(CAP_BILLING_READ)
+        @ip_whitelist_required()
+        @limiter.limit(_RL_ADMIN_READ)
+        def get(self, issued_id: int):
+            from services.platform_billing.invoice_replace import (
+                InvoiceReplaceError,
+                get_editor_bootstrap,
+            )
+
+            try:
+                return get_editor_bootstrap(issued_id), 200
+            except InvoiceReplaceError as e:
+                return APIErrorHandler.handle_validation_error(
+                    str(e), logger_instance=logger
+                )
+
+    @admin_ns.route(
+        "/platform-billing/issued-invoices/<int:issued_id>/editor/preview"
+    )
+    class PlatformIssuedInvoiceEditorPreview(Resource):
+        @jwt_required()
+        @role_required(UserRole.admin)
+        @require_admin_capability(CAP_BILLING_READ)
+        @ip_whitelist_required()
+        @limiter.limit(_RL_ADMIN_WRITE)
+        def post(self, issued_id: int):
+            from services.platform_billing.invoice_replace import (
+                InvoiceReplaceError,
+                editor_mode_for,
+                preview_editor_pdf,
+            )
+            from models.platform_billing import PlatformIssuedInvoice as PII
+
+            inv = db.session.get(PII, issued_id)
+            if not inv:
+                return APIErrorHandler.handle_validation_error(
+                    "Facture introuvable", logger_instance=logger
+                )
+            mode = editor_mode_for(inv)
+            # Caps selon mode (EDIT=CANCEL+ISSUE, CORRECT=CREDIT+ISSUE)
+            from services.admin_authz import user_has_admin_capability
+            from shared.infrastructure.adapters.auth_adapter import (
+                get_current_user_via_use_case,
+            )
+
+            user = get_current_user_via_use_case()
+            if not user:
+                return {"error": "unauthorized"}, 401
+            if mode == "edit":
+                needed = (CAP_BILLING_CANCEL, CAP_BILLING_ISSUE)
+            elif mode == "correct":
+                needed = (CAP_BILLING_CREDIT, CAP_BILLING_ISSUE)
+            else:
+                return APIErrorHandler.handle_validation_error(
+                    "Aperçu indisponible pour cette facture",
+                    logger_instance=logger,
+                )
+            for cap in needed:
+                if not user_has_admin_capability(user.id, cap):
+                    return {
+                        "error": "forbidden",
+                        "message": "Capacité administrateur insuffisante.",
+                        "capability": cap,
+                    }, 403
+
+            data = request.get_json(silent=True) or {}
+            try:
+                pdf_bytes = preview_editor_pdf(issued_id, data)
+            except InvoiceReplaceError as e:
+                return APIErrorHandler.handle_validation_error(
+                    str(e), logger_instance=logger
+                )
+            return Response(
+                pdf_bytes,
+                mimetype="application/pdf",
+                headers={
+                    "Content-Disposition": 'inline; filename="apercu-facture.pdf"',
+                },
+            )
+
+    @admin_ns.route(
+        "/platform-billing/issued-invoices/<int:issued_id>/replace"
+    )
+    class PlatformIssuedInvoiceReplace(Resource):
+        @jwt_required()
+        @role_required(UserRole.admin)
+        @ip_whitelist_required()
+        @limiter.limit(_RL_ADMIN_WRITE)
+        def post(self, issued_id: int):
+            from services.platform_billing.invoice_replace import (
+                InvoiceReplaceConflict,
+                InvoiceReplaceError,
+                editor_mode_for,
+                replace_issued_invoice,
+            )
+            from models.platform_billing import PlatformIssuedInvoice as PII
+            from services.admin_authz import user_has_admin_capability
+            from shared.infrastructure.adapters.auth_adapter import (
+                get_current_user_via_use_case,
+            )
+
+            inv = db.session.get(PII, issued_id)
+            if not inv:
+                return APIErrorHandler.handle_validation_error(
+                    "Facture introuvable", logger_instance=logger
+                )
+            mode = editor_mode_for(inv)
+            user = get_current_user_via_use_case()
+            if not user:
+                return {"error": "unauthorized"}, 401
+            if mode == "edit":
+                needed = (CAP_BILLING_CANCEL, CAP_BILLING_ISSUE)
+            elif mode == "correct":
+                needed = (CAP_BILLING_CREDIT, CAP_BILLING_ISSUE)
+            else:
+                return APIErrorHandler.handle_validation_error(
+                    "Remplacement impossible pour cette facture",
+                    logger_instance=logger,
+                )
+            for cap in needed:
+                if not user_has_admin_capability(user.id, cap):
+                    return {
+                        "error": "forbidden",
+                        "message": "Capacité administrateur insuffisante.",
+                        "capability": cap,
+                    }, 403
+
+            data = request.get_json(silent=True) or {}
+            try:
+                new_inv = replace_issued_invoice(
+                    issued_id,
+                    data,
+                    admin_user_id=_admin_user_id_from_jwt(),
+                )
+            except InvoiceReplaceConflict as e:
+                return {
+                    "error": "conflict",
+                    "message": str(e),
+                }, 409
+            except InvoiceReplaceError as e:
+                return APIErrorHandler.handle_validation_error(
+                    str(e), logger_instance=logger
+                )
+            return {
+                "ok": True,
+                "issued_invoice": _serialize_issued(new_inv),
+                "issued_id": new_inv.id,
+            }, 201
 
     @admin_ns.route("/platform-billing/issued-invoices/refresh-overdue")
     class PlatformIssuedRefreshOverdue(Resource):

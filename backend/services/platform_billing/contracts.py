@@ -309,6 +309,9 @@ def serialize_contract(cfg: CompanyPlatformBillingConfig) -> dict[str, Any]:
         "effective_timezone": "Europe/Zurich",
         "is_active": cfg.is_active,
         "notes": cfg.notes,
+        "contract_special_conditions": getattr(
+            cfg, "contract_special_conditions", None
+        ),
         "commercially_frozen": _is_commercially_frozen(cfg.id),
         **_serialize_dunning(cfg),
         "dunning_automation_ready": _dunning_ready_payload(cfg),
@@ -351,6 +354,25 @@ def _parse_iso_dt(raw: Any) -> datetime | None:
     if raw is None or raw == "":
         return None
     return datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+
+
+def _parse_special_conditions(raw: Any) -> str | None:
+    from services.platform_billing.partner_agreement_versions import (
+        SPECIAL_CONDITIONS_MAX_LENGTH,
+    )
+
+    if raw is None:
+        return None
+    text = str(raw).strip()
+    if not text:
+        return None
+    if len(text) > SPECIAL_CONDITIONS_MAX_LENGTH:
+        raise BillingInvariantError(
+            "SPECIAL_CONDITIONS_TOO_LONG",
+            f"Conditions particulières : maximum {SPECIAL_CONDITIONS_MAX_LENGTH} caractères.",
+            details={"max_length": SPECIAL_CONDITIONS_MAX_LENGTH, "length": len(text)},
+        )
+    return text
 
 
 def create_contract_version(
@@ -485,6 +507,9 @@ def create_contract_version(
         effective_to=effective_to,
         is_active=bool(data.get("is_active", True)),
         notes=data.get("notes"),
+        contract_special_conditions=_parse_special_conditions(
+            data.get("contract_special_conditions")
+        ),
         # legacy non écrit depuis la nouvelle API
         dispatch_mode_override=None,
         **dunning,
