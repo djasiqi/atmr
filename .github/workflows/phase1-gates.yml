@@ -139,22 +139,24 @@ jobs:
           shellcheck -x scripts/release/verify_image_digest.sh
       - name: Compose config dry-run
         env:
-          # Interpolation uniquement (pas de fichier .env) — secrets réels uniquement au deploy
           DOCKER_IMAGE: docker.io/example/atmr-backend
           DOCKER_TAG: sha-test
           POSTGRES_USER: atmr
           POSTGRES_DB: atmr
-          POSTGRES_PASSWORD: ci-dummy-postgres
-          REDIS_PASSWORD: ci-dummy-redis
-          REDIS_URL: redis://:ci-dummy-redis@redis:6379/0
-          SECRET_KEY: ci-dummy-secret-key
-          JWT_SECRET_KEY: ci-dummy-jwt-secret
-          APP_ENCRYPTION_KEY_B64: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY
-          MASTER_ENCRYPTION_KEY: ci-dummy-master-encryption-key
-          INTERNAL_SERVICE_TOKEN: ci-dummy-internal-service-token
         run: |
-          BACKEND_IMAGE_REF="docker.io/example/atmr-backend@sha256:$(printf '0%.0s' {1..64})" \
-          WS_SERVICE_IMAGE_REF="docker.io/example/atmr-ws-service@sha256:$(printf '0%.0s' {1..64})" \
+          set -euo pipefail
+          # Placeholders générés à la volée (jamais versionnés) — dry-run interpolation only
+          _ph() { openssl rand -hex 24; }
+          export POSTGRES_PASSWORD="$(_ph)"
+          export REDIS_PASSWORD="$(_ph)"
+          export REDIS_URL="redis://:${REDIS_PASSWORD}@redis:6379/0"
+          export SECRET_KEY="$(_ph)"
+          export JWT_SECRET_KEY="$(_ph)"
+          export MASTER_ENCRYPTION_KEY="$(_ph)"
+          export INTERNAL_SERVICE_TOKEN="$(_ph)"
+          export APP_ENCRYPTION_KEY_B64="$(openssl rand -base64 32 | tr -d '\n')"
+          export BACKEND_IMAGE_REF="docker.io/example/atmr-backend@sha256:$(printf '0%.0s' {1..64})"
+          export WS_SERVICE_IMAGE_REF="docker.io/example/atmr-ws-service@sha256:$(printf '0%.0s' {1..64})"
           docker compose -f docker-compose.production.yml config >/dev/null
       - name: Gitleaks (arbre courant, no-git)
         run: |

@@ -13,7 +13,7 @@
 
 ### `deployment-critical` (compose dry-run)
 
-✅ **Implémenté** : le dry-run `docker compose … config` injecte des variables d'environnement pour les `:?required` (pas de fichier `.env`). Les `env_file: .env.production` du compose prod sont `required: false` pour que le dry-run CI ne dépende pas d'un fichier absent.
+✅ **Implémenté** : le dry-run `docker compose … config` génère des placeholders `:?required` à la volée via `openssl` (aucune valeur type secret versionnée dans le YAML). Les `env_file: .env.production` du compose prod sont `required: false`.
 
 ## Artefacts
 
