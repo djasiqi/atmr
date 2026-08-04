@@ -13,11 +13,78 @@ on:
 jobs:
   architecture-review:
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://test:test@localhost:5432/atmr_test
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: test
+      PGPASSWORD: test
+      PGDATABASE: atmr_test
+      REDIS_URL: redis://localhost:6379/0
+      FLASK_CONFIG: testing
+      SECRET_KEY: test-secret-key
+      JWT_SECRET_KEY: test-jwt-secret
+      APP_ENCRYPTION_KEY_B64: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY
+      API_LEGACY_ENABLED: "false"
+      PYTHONPATH: ${{ github.workspace }}
+      SOCKETIO_ASYNC_MODE: threading
+      SKIP_SOCKETIO: "true"
+      SKIP_ROUTES_INIT: "false"
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: atmr_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test -d atmr_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: |
+            backend/requirements-dev.txt
+            backend/requirements.base.txt
+            backend/requirements.prod.txt
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libcairo2-dev libffi-dev pkg-config postgresql-client
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements-dev.txt
+      - name: Wait for PostgreSQL
+        run: |
+          for i in $(seq 1 30); do
+            PGPASSWORD=test psql -h localhost -U test -d atmr_test -c 'SELECT 1' >/dev/null 2>&1 && break
+            sleep 1
+          done
+          PGPASSWORD=test psql -h localhost -U test -d atmr_test -c 'SELECT 1'
+      - name: Run database migrations
+        env:
+          FLASK_APP: backend.wsgi
+          DISABLE_EVENTLET: "1"
+        run: |
+          cd backend
+          flask db upgrade heads
       - name: Architecture contract tests (booking create authority)
         run: python scripts/architecture/check_booking_create_authority.py
       - name: Architecture contract tests (tracking)
@@ -25,5 +92,7 @@ jobs:
       - name: Backend contract tests
         working-directory: backend
         run: |
-          pip install pytest -q
-          pytest tests/architecture/ tests/contracts/ tests/integration/test_tracking_pipeline_e2e.py tests/services/test_stale_fix_watchdog.py tests/services/test_booking_create_use_case.py -q --tb=short
+          pytest tests/architecture/ tests/contracts/ \
+            tests/integration/test_tracking_pipeline_e2e.py \
+            tests/services/test_stale_fix_watchdog.py \
+            tests/services/test_booking_create_use_case.py -q --tb=short

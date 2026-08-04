@@ -14,18 +14,85 @@ jobs:
   booking-critical:
     name: booking-critical
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://test:test@localhost:5432/atmr_test
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: test
+      PGPASSWORD: test
+      PGDATABASE: atmr_test
+      REDIS_URL: redis://localhost:6379/0
+      FLASK_CONFIG: testing
+      SECRET_KEY: test-secret-key
+      JWT_SECRET_KEY: test-jwt-secret
+      APP_ENCRYPTION_KEY_B64: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY
+      API_LEGACY_ENABLED: "false"
+      PYTHONPATH: ${{ github.workspace }}
+      SOCKETIO_ASYNC_MODE: threading
+      SKIP_SOCKETIO: "true"
+      SKIP_ROUTES_INIT: "false"
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: atmr_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test -d atmr_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: |
+            backend/requirements-dev.txt
+            backend/requirements.base.txt
+            backend/requirements.prod.txt
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libcairo2-dev libffi-dev pkg-config postgresql-client
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements-dev.txt
+      - name: Wait for PostgreSQL
+        run: |
+          for i in $(seq 1 30); do
+            PGPASSWORD=test psql -h localhost -U test -d atmr_test -c 'SELECT 1' >/dev/null 2>&1 && break
+            sleep 1
+          done
+          PGPASSWORD=test psql -h localhost -U test -d atmr_test -c 'SELECT 1'
+      - name: Run database migrations
+        env:
+          FLASK_APP: backend.wsgi
+          DISABLE_EVENTLET: "1"
+        run: |
+          cd backend
+          flask db upgrade heads
       - name: AST booking authority
         run: python scripts/architecture/check_booking_create_authority.py
       - name: Booking characterization + HTTP contrat
         working-directory: backend
         run: |
-          pip install pytest -q
-          pytest tests/services/test_booking_create_use_case.py tests/routes/test_client_booking_creation.py -q --tb=short
+          pytest tests/services/test_booking_create_use_case.py \
+            tests/routes/test_client_booking_creation.py -q --tb=short
 
   mobile-auth-critical:
     name: mobile-auth-critical
@@ -71,11 +138,19 @@ jobs:
           shellcheck -x scripts/release/build_release_manifest.sh
           shellcheck -x scripts/release/verify_image_digest.sh
       - name: Compose config dry-run
+        env:
+          # Valeurs factices CI — valide l'interpolation, pas un déploiement réel
+          DOCKER_IMAGE: docker.io/example/atmr-backend
+          DOCKER_TAG: sha-test
+          POSTGRES_PASSWORD: ci-dummy-postgres
+          REDIS_PASSWORD: ci-dummy-redis
+          SECRET_KEY: ci-dummy-secret-key
+          JWT_SECRET_KEY: ci-dummy-jwt-secret
+          APP_ENCRYPTION_KEY_B64: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY
+          INTERNAL_SERVICE_TOKEN: ci-dummy-internal-service-token
         run: |
-          DOCKER_IMAGE=docker.io/example/atmr-backend \
-          DOCKER_TAG=sha-test \
-          BACKEND_IMAGE_REF=docker.io/example/atmr-backend@sha256:$(printf '0%.0s' {1..64}) \
-          WS_SERVICE_IMAGE_REF=docker.io/example/atmr-ws-service@sha256:$(printf '0%.0s' {1..64}) \
+          BACKEND_IMAGE_REF="docker.io/example/atmr-backend@sha256:$(printf '0%.0s' {1..64})" \
+          WS_SERVICE_IMAGE_REF="docker.io/example/atmr-ws-service@sha256:$(printf '0%.0s' {1..64})" \
           docker compose -f docker-compose.production.yml config >/dev/null
       - name: Gitleaks (arbre courant, no-git)
         run: |
