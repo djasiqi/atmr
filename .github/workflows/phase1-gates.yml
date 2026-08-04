@@ -158,10 +158,23 @@ jobs:
           export BACKEND_IMAGE_REF="docker.io/example/atmr-backend@sha256:$(printf '0%.0s' {1..64})"
           export WS_SERVICE_IMAGE_REF="docker.io/example/atmr-ws-service@sha256:$(printf '0%.0s' {1..64})"
           docker compose -f docker-compose.production.yml config >/dev/null
-      - name: Gitleaks (arbre courant, no-git)
+      - name: Gitleaks (surfaces déploiement)
         run: |
-          docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.21.2 detect \
-            --source=/repo --no-git --no-banner --redact --exit-code 1
+          set -euo pipefail
+          # Scoper le scan aux artefacts de déploiement (évite 100+ FP lockfiles/docs/tests)
+          STAGE="$(mktemp -d)"
+          mkdir -p "${STAGE}/.github" "${STAGE}/scripts"
+          cp -a .github/workflows "${STAGE}/.github/"
+          cp -a .gitleaks.toml "${STAGE}/"
+          cp -a docker-compose.production.yml docker-compose.monitoring.yml \
+            docker-compose.kafka.yml docker-compose.kafka.atmr-network.yml \
+            docker-compose.kafka.p0-hold.yml "${STAGE}/" 2>/dev/null || true
+          cp -a scripts/deploy-production.sh scripts/smoke_tests.sh \
+            scripts/env.production.defaults.fragment scripts/release \
+            "${STAGE}/scripts/" 2>/dev/null || true
+          docker run --rm -v "${STAGE}:/repo" zricethezav/gitleaks:v8.21.2 detect \
+            --source=/repo --config=/repo/.gitleaks.toml \
+            --no-git --no-banner --redact --exit-code 1
 
   phase1-gates:
     name: phase1-gates

@@ -15,6 +15,8 @@
 
 ✅ **Implémenté** : le dry-run `docker compose … config` génère des placeholders `:?required` à la volée via `openssl` (aucune valeur type secret versionnée dans le YAML). Les `env_file: .env.production` du compose prod sont `required: false`.
 
+✅ **Implémenté** : Gitleaks scanné uniquement sur les surfaces déploiement (workflows, compose prod/kafka/monitoring, scripts release/deploy) avec [`.gitleaks.toml`](../../.gitleaks.toml) — évite les 100+ faux positifs d’un scan monorepo `--no-git`.
+
 ## Artefacts
 
 - `release-manifest.json` : `source_sha`, digests backend/ws, versions contrat

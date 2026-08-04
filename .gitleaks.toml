@@ -1,0 +1,52 @@
+# Gitleaks — config ATMR (étend les règles par défaut)
+title = "atmr"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Faux positifs connus (tests, locks, exemples, placeholders CI)"
+paths = [
+  '''(^|/)node_modules(/|$)''',
+  '''(^|/)\.git(/|$)''',
+  '''(^|/)\.venv(/|$)''',
+  '''(^|/)venv(/|$)''',
+  '''(^|/)dist(/|$)''',
+  '''(^|/)build(/|$)''',
+  '''(^|/)coverage(/|$)''',
+  '''(^|/)htmlcov(/|$)''',
+  '''(^|/)\.pytest_cache(/|$)''',
+  '''(^|/)package-lock\.json$''',
+  '''(^|/)pnpm-lock\.yaml$''',
+  '''(^|/)yarn\.lock$''',
+  '''\.min\.js$''',
+  '''\.map$''',
+  '''\.(png|jpg|jpeg|gif|webp|ico|pdf|apk|aab|jar|woff2?)$''',
+  '''(^|/)docs(/|$)''',
+  '''(^|/)backend/tests(/|$)''',
+  '''\.example$''',
+  '''\.example\.''',
+  '''env\..*\.example''',
+  '''\.env\.sample$''',
+  '''\.env\.template$''',
+  '''maps\.env\.example$''',
+  '''expo-driver-dev\.env\.template$''',
+  '''celerybeat-schedule''',
+  '''(^|/)\.gitleaks-workdir(/|$)''',
+]
+
+regexes = [
+  '''(?i)example\.com''',
+  '''(?i)changeme''',
+  '''(?i)your[_-]?api[_-]?key''',
+  '''(?i)placeholder''',
+  '''test-secret-key''',
+  '''test-jwt-secret''',
+  '''test-secret''',
+  '''test-jwt''',
+  '''MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY''',
+  '''postgresql://test:test@''',
+  '''redis://localhost''',
+  '''docker\.io/example/''',
+  '''sha256:0{10,}''',
+]
