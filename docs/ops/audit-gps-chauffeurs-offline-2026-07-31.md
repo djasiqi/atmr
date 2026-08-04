@@ -74,8 +74,9 @@ ongoing           GET /companies/me/drivers/live 200 mais location_status offlin
 ### P0 — Consumer fail-stop sur contrainte session/sequence
 
 - Fichiers : `backend/services/tracking/persist_with_outbox.py`, `db_error_classification.py`, `ingest_consumer.py`
-- Comportement : `ON CONFLICT (driver_id, location_event_id)` seulement ; doublon `(driver_id, tracking_session_id, sequence_id)` → `IntegrityError` → **FAIL_STOP** (pas DLQ) → offset non commit → poison permanent
-- Preuve prod : logs consumer + rows PG session `trk_sess_1785454202260_q98hodqy` seq 1 déjà présents
+- Comportement (avant fix) : `ON CONFLICT (driver_id, location_event_id)` seulement ; doublon `(driver_id, tracking_session_id, sequence_id)` → `IntegrityError` → **FAIL_STOP** (pas DLQ) → offset non commit → poison permanent
+- Preuve prod : logs consumer + rows PG session `trk_sess_1785454202260_q98hodqy` seq 1 déjà présents ; Sentry `PYTHON-FLASK-DE` / `PYTHON-FLASK-DF` (ex. `http-legacy-3` seq 3)
+- ✅ **Implémenté** : idempotence `ON CONFLICT DO NOTHING` + skip `session_sequence_already_persisted` ; seed Redis séquence depuis PG (`http_session_bridge`) — voir PR1 ci-dessous. Déploiement consumer encore à valider.
 
 ### P0 — Async Kafka sans filet live
 
@@ -104,7 +105,7 @@ ongoing           GET /companies/me/drivers/live 200 mais location_status offlin
 
 | PR | Objectif | Changements | GO/NO-GO |
 | --- | --- | --- | --- |
-| PR1 | Dépoisonner consumer | Idempotence `uq_tracking_ingest_session_sequence` (skip+commit) ; duplicate IntegrityError ≠ fail-stop ; aligner image consumer sur SHA backend | Consumer stable 30m, lag≈0 |
+| PR1 | Dépoisonner consumer | ✅ **Implémenté** : `persist_with_outbox` utilise `ON CONFLICT DO NOTHING` (toutes contraintes uniques) + skip idempotent si `(driver_id, tracking_session_id, sequence_id)` déjà pris (`reason=session_sequence_already_persisted`) ; seed Redis `tracking:http_seq:*` depuis `tracking_session_state.max_seen_sequence` pour éviter le recyclage après expire (`http_session_bridge.py`). Fichiers : `backend/services/tracking/persist_with_outbox.py`, `http_session_bridge.py`, tests `test_persist_with_outbox_idempotence.py` / `test_http_session_bridge.py` / `test_tracking_persist_outbox_consumer.py`. Reste : déployer image consumer alignée SHA backend + valider lag≈0 en prod (Sentry `PYTHON-FLASK-DE` / `PYTHON-FLASK-DF`). | Consumer stable 30m, lag≈0 |
 | PR2 | Filet live | Si consumer unhealthy/lag>N → fallback sync `LocationService` ; alerte | Redis canonical age≤120s pour chauffeurs actifs |
 | PR3 | Rate-limit | Pas de `zadd` sur 429 ; backoff client ; métriques | 429 ≪ 202/200 |
 | PR4 | Android availability | Fallback last-known / high accuracy si availability=false | Plus de silence FGS > seuil |
@@ -113,7 +114,8 @@ ongoing           GET /companies/me/drivers/live 200 mais location_status offlin
 
 ## 7. Tests à ajouter (minimum)
 
-- UniqueViolation session/sequence → skip/DLQ, offset avance
+- ✅ **Implémenté** : UniqueViolation session/sequence → skip duplicate + commit offset (`test_persist_with_outbox_idempotence.py`, `test_tracking_persist_outbox_consumer.py`)
+- ✅ **Implémenté** : seed Redis séquence depuis PG (`test_http_session_bridge.py`)
 - Async ACK puis consumer down → fallback sync Redis
 - Rate-limit : rejet n’incrémente pas le compteur
 - Course login/logout/startTracking/stopTracking

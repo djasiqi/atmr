@@ -11,6 +11,10 @@ from typing import Any
 
 from models import Booking, BookingStatus
 from models.enums import UserRole
+from services.admin_booking_investigation import (
+    compute_needs_investigation_booking,
+    evaluate_incomplete,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -113,52 +117,6 @@ def booking_is_executed(booking: Booking) -> bool:
     return key in ("COMPLETED", "RETURN_COMPLETED")
 
 
-def _evaluate_incomplete(booking: Booking) -> bool:
-    if booking.scheduled_time is None:
-        return True
-    if not (booking.customer_name or "").strip():
-        return True
-    if not (booking.pickup_location or "").strip():
-        return True
-    return not (booking.dropoff_location or "").strip()
-
-
-def _compute_needs_investigation_booking(
-    booking: Booking,
-    *,
-    has_pending_transfer: bool | None = None,
-) -> bool:
-    from datetime import UTC, datetime, timedelta
-
-    from models.booking_transfer import BookingTransfer
-    from models.enums import TransferStatus
-
-    now = datetime.now(UTC)
-    if _evaluate_incomplete(booking):
-        return True
-    if booking.status == BookingStatus.PENDING and booking.scheduled_time:
-        st = booking.scheduled_time
-        if st.tzinfo is None:
-            st = st.replace(tzinfo=UTC)
-        if st < now - timedelta(hours=24):
-            return True
-    if has_pending_transfer is True:
-        return True
-    if has_pending_transfer is False:
-        return False
-    try:
-        pending_tr = (
-            BookingTransfer.query.filter_by(booking_id=booking.id)
-            .filter_by(status=TransferStatus.PENDING)
-            .first()
-        )
-        if pending_tr:
-            return True
-    except Exception:
-        pass
-    return False
-
-
 def qualify_booking(
     booking: Booking,
     *,
@@ -176,7 +134,7 @@ def qualify_booking(
     src = classify_booking_source(booking)
     amt = observed_transport_amount(booking)
 
-    if _evaluate_incomplete(booking):
+    if evaluate_incomplete(booking):
         return {
             "state": "needs_review",
             "reasons": ["incomplete_data"],
@@ -204,7 +162,7 @@ def qualify_booking(
             "families": ["transfert"],
         }
 
-    if _compute_needs_investigation_booking(
+    if compute_needs_investigation_booking(
         booking, has_pending_transfer=has_pending_transfer
     ):
         return {

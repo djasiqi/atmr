@@ -171,10 +171,16 @@ export const fetchUsers = async (params = {}) => {
           sort_by: params.sort_by || 'created_at',
           sort_order: params.sort_order || 'desc',
           include_synthetic: params.include_synthetic ? 'true' : 'false',
+          ...(params.company_id != null && params.company_id !== ''
+            ? { company_id: params.company_id }
+            : {}),
         }
       : {
           paginate: false,
           include_synthetic: params.include_synthetic ? 'true' : 'false',
+          ...(params.company_id != null && params.company_id !== ''
+            ? { company_id: params.company_id }
+            : {}),
         };
 
     const response = await apiClient.get('/admin/users', {
@@ -356,22 +362,19 @@ export const fetchInstitutions = async () => {
  */
 export const updateUserRole = async (userId, updatedData) => {
   try {
-    // ✅ apiClient gère automatiquement l'authentification (token dans localStorage ou cookies httpOnly)
     const token = getAuthToken();
 
     if (!updatedData.role) {
       throw new Error("Le champ 'role' est requis.");
     }
 
-    // Si le rôle est 'driver' et qu'aucun company_id n'est fourni,
-    // on renvoie une erreur pour signaler à l'interface de demander la sélection.
     if (updatedData.role.toLowerCase() === 'driver' && !updatedData.company_id) {
       throw new Error("Un company_id est requis pour le rôle 'driver'.");
     }
 
     const payload = {
       ...updatedData,
-      role: String(updatedData.role).toLowerCase(), // <-- normalisation
+      role: String(updatedData.role).toLowerCase(),
     };
     const headers = token ? { Authorization: `Bearer ${token}` } : {};
     const response = await apiClient.put(`/admin/users/${userId}/role`, payload, { headers });
@@ -379,59 +382,111 @@ export const updateUserRole = async (userId, updatedData) => {
   } catch (error) {
     console.error(
       '❌ Erreur mise à jour du rôle utilisateur :',
-      error.response?.data || error.message
+      error.response?.data?.message || error.message
     );
     throw error;
   }
 };
 
 /**
- * Supprime un utilisateur.
- * @param {number} userId - L'ID de l'utilisateur.
+ * Prévisualise une transition de rôle.
  */
-export const deleteUser = async (userId) => {
-  try {
-    // ✅ apiClient gère automatiquement l'authentification (token dans localStorage ou cookies httpOnly)
-    const token = getAuthToken();
-    console.log(`📌 Tentative de suppression de l'utilisateur ID: ${userId}`);
-    const headers = token ? { Authorization: `Bearer ${token}` } : {};
-    const response = await apiClient.delete(`/admin/users/${userId}`, { headers });
-    console.log('✅ Utilisateur supprimé avec succès :', response.data);
-    return response.data;
-  } catch (error) {
-    console.error(
-      "❌ Erreur lors de la suppression de l'utilisateur :",
-      error.response?.data || error.message
-    );
-    throw error;
-  }
+export const previewUserRoleTransition = async (userId, payload) => {
+  const token = getAuthToken();
+  const headers = token ? { Authorization: `Bearer ${token}` } : {};
+  const response = await apiClient.post(
+    `/admin/users/${userId}/role-transition/preview`,
+    { ...payload, role: String(payload.role || '').toLowerCase() },
+    { headers }
+  );
+  return response.data;
+};
+
+/**
+ * Contexte drawer gestion compte.
+ */
+export const fetchAccountManageContext = async (userId) => {
+  const token = getAuthToken();
+  const headers = token ? { Authorization: `Bearer ${token}` } : {};
+  const response = await apiClient.get(`/admin/accounts/${userId}/manage-context`, {
+    headers,
+  });
+  return response.data || {};
 };
 
 /**
  * Réinitialise le mot de passe d'un utilisateur.
- * @param {number} userId - L'ID de l'utilisateur.
+ * @param {number} userId
+ * @param {{ reason: string }} payload
  */
-export const resetUserPassword = async (userId) => {
+export const resetUserPassword = async (userId, payload = {}) => {
   if (!userId) {
     console.error('❌ Erreur : userId est undefined dans resetUserPassword !');
     return;
   }
   try {
-    // ✅ apiClient gère automatiquement l'authentification (token dans localStorage ou cookies httpOnly)
     const token = getAuthToken();
-    console.log(`🔄 Réinitialisation du mot de passe pour user ID: ${userId}`);
     const headers = token ? { Authorization: `Bearer ${token}` } : {};
     const response = await apiClient.post(
       `/admin/users/${userId}/reset-password`,
-      {},
+      { reason: payload.reason },
       { headers }
     );
-    console.log('✅ Mot de passe réinitialisé :', response.data);
     return response.data;
   } catch (error) {
     console.error(
       '❌ Erreur lors de la réinitialisation du mot de passe :',
-      error.response?.data || error.message
+      error.response?.data?.message || error.message
+    );
+    throw error;
+  }
+};
+
+/**
+ * Soft-disable / réactivation chauffeur (sans changer le rôle).
+ * @param {number} userId
+ * @param {{ is_active: boolean, reason: string, expected_is_active?: boolean }} payload
+ */
+export const updateDriverStatus = async (userId, payload) => {
+  const token = getAuthToken();
+  const headers = token ? { Authorization: `Bearer ${token}` } : {};
+  const response = await apiClient.put(
+    `/admin/users/${userId}/driver-status`,
+    payload,
+    { headers }
+  );
+  return response.data;
+};
+
+/**
+ * Révoque toutes les sessions d'un compte (sans reset MDP).
+ * @param {number} userId
+ * @param {{ reason: string }} payload
+ */
+export const revokeUserSessions = async (userId, payload = {}) => {
+  const token = getAuthToken();
+  const headers = token ? { Authorization: `Bearer ${token}` } : {};
+  const response = await apiClient.post(
+    `/admin/users/${userId}/revoke-sessions`,
+    { reason: payload.reason },
+    { headers }
+  );
+  return response.data;
+};
+
+/**
+ * Supprime un utilisateur (backend gelé hors TESTING).
+ */
+export const deleteUser = async (userId) => {
+  try {
+    const token = getAuthToken();
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const response = await apiClient.delete(`/admin/users/${userId}`, { headers });
+    return response.data;
+  } catch (error) {
+    console.error(
+      "❌ Erreur lors de la suppression de l'utilisateur :",
+      error.response?.data?.message || error.message
     );
     throw error;
   }
@@ -1088,11 +1143,51 @@ export const setCompanyBillingAccess = async (companyId, payload) => {
 
 /**
  * Met en pause le recouvrement automatique (dunning) pour une entreprise.
+ * Payload : { paused_until?: ISO, days?: number, reason }
  */
 export const pauseCompanyDunning = async (companyId, payload = {}) => {
   const response = await apiClient.post(
     `/admin/platform-billing/companies/${companyId}/dunning/pause`,
     payload,
+    { headers: _adminAuthHeaders() }
+  );
+  return response.data;
+};
+
+/** Reprend immédiatement le recouvrement automatique. */
+export const resumeCompanyDunning = async (companyId, payload = {}) => {
+  const response = await apiClient.post(
+    `/admin/platform-billing/companies/${companyId}/dunning/resume`,
+    payload,
+    { headers: _adminAuthHeaders() }
+  );
+  return response.data;
+};
+
+/** Approbation plateforme Company (indépendante du dispatch). */
+export const setCompanyApproval = async (companyId, payload) => {
+  const response = await apiClient.put(
+    `/admin/companies/${companyId}/approval`,
+    payload,
+    { headers: _adminAuthHeaders() }
+  );
+  return response.data;
+};
+
+/** Statut dispatch Company. */
+export const setCompanyDispatchStatus = async (companyId, payload) => {
+  const response = await apiClient.put(
+    `/admin/companies/${companyId}/dispatch-status`,
+    payload,
+    { headers: _adminAuthHeaders() }
+  );
+  return response.data;
+};
+
+/** Preview d'impact avant désactivation dispatch. */
+export const fetchCompanyDispatchDisablePreview = async (companyId) => {
+  const response = await apiClient.get(
+    `/admin/companies/${companyId}/dispatch-disable-preview`,
     { headers: _adminAuthHeaders() }
   );
   return response.data;

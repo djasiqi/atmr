@@ -24,8 +24,9 @@ INCOMPLETE_DATA_DEFINITION = (
 
 # needs_investigation: signal léger pour le support (sous-ensemble minimal, extensible).
 NEEDS_INVESTIGATION_DEFINITION = (
-    "À investiguer = données incomplètes OU (statut PENDING et transport prévu dépassé depuis > 24h) "
-    "OU transfert uniquement en PENDING (bloqué)."
+    "À investiguer = données incomplètes OU (statut PENDING et transport prévu dépassé "
+    "depuis > 24h) OU transfert en attente (PENDING) OU incohérence chauffeur "
+    "(ASSIGNED / EN_ROUTE / IN_PROGRESS sans driver_id)."
 )
 
 # institution_q: filtre texte (ILIKE %terme%) sur le nom de l'institution liée au client.

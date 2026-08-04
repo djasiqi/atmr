@@ -288,7 +288,15 @@ class ControlPlaneProjector:
                 m.removed_at = _now()
                 m.updated_at = _now()
 
-        status = membership_status_from_user(user)
+        user_status = membership_status_from_user(user)
+        if user_status == "removed":
+            status = "removed"
+        elif not bool(driver.is_active) or user_status == "suspended":
+            status = "suspended"
+        elif user_status == "invited":
+            status = "invited"
+        else:
+            status = "active"
         return self._upsert_membership(
             organization_id=int(org.id),
             user_id=int(user.id),
@@ -318,6 +326,75 @@ class ControlPlaneProjector:
                 m.activated_at = m.activated_at or _now()
             m.updated_at = _now()
 
+    def sync_user_role_transition(
+        self,
+        user: User,
+        *,
+        old_role: str,
+        old_company_id: int | None,
+        old_institution_id: int | None,
+        old_driver_id: int | None,
+    ) -> None:
+        """Nettoie les memberships legacy_sync obsolètes puis re-projette.
+
+        Ne retire jamais company_owner ici : quitter COMPANY est bloqué en amont
+        (CP-PR3). Retire driver / institution memberships devenues invalides.
+        """
+        _ = (old_company_id, old_institution_id, old_driver_id)
+        new_role = (
+            user.role.value if hasattr(user.role, "value") else str(user.role or "")
+        ).upper()
+
+        driver_role_id = _role_template_id("company", "company_driver")
+        owner_role_id = _role_template_id("company", "company_owner")
+        inst_role_ids = db.session.scalars(
+            select(RoleTemplate.id).where(RoleTemplate.organization_type == "institution")
+        ).all()
+
+        memberships = db.session.scalars(
+            select(OrganizationMembership).where(
+                OrganizationMembership.user_id == user.id,
+                OrganizationMembership.membership_status != "removed",
+                OrganizationMembership.source == "legacy_sync",
+            )
+        ).all()
+
+        for m in memberships:
+            role_id = m.role_template_id
+            # Ne jamais retirer company_owner dans cette PR
+            if owner_role_id is not None and role_id == owner_role_id:
+                continue
+
+            should_remove = False
+            if driver_role_id is not None and role_id == driver_role_id:
+                if new_role != "DRIVER":
+                    should_remove = True
+            elif role_id in set(inst_role_ids):
+                if new_role != "INSTITUTION":
+                    should_remove = True
+
+            if should_remove:
+                m.membership_status = "removed"
+                m.removed_at = _now()
+                m.updated_at = _now()
+
+        if new_role == "DRIVER":
+            driver = db.session.scalar(
+                select(Driver).where(Driver.user_id == user.id)
+            )
+            if driver is not None:
+                self.sync_driver(driver)
+        elif new_role == "INSTITUTION" and user.institution_id:
+            self.sync_institution_user(user)
+        elif new_role == "COMPANY":
+            companies = db.session.scalars(
+                select(Company).where(Company.user_id == user.id)
+            ).all()
+            for company in companies:
+                org = self.ensure_company_organization(company)
+                if org is not None:
+                    self.sync_company_owner(company, organization=org)
+
     def _maybe_update_lifecycle(self, org: PlatformOrganization, lifecycle: str) -> None:
         if org.lifecycle_source == "explicit_admin":
             return
@@ -346,6 +423,7 @@ class ControlPlaneProjector:
             )
         )
         if existing is None:
+            now = _now()
             stmt = (
                 pg_insert(OrganizationMembership)
                 .values(
@@ -357,10 +435,11 @@ class ControlPlaneProjector:
                     scope_schema_version=1,
                     scope_json=scope_json or {},
                     source=source,
-                    activated_at=_now() if membership_status == "active" else None,
-                    invited_at=_now() if membership_status == "invited" else None,
-                    created_at=_now(),
-                    updated_at=_now(),
+                    activated_at=now if membership_status == "active" else None,
+                    suspended_at=now if membership_status == "suspended" else None,
+                    invited_at=now if membership_status == "invited" else None,
+                    created_at=now,
+                    updated_at=now,
                 )
                 .on_conflict_do_update(
                     constraint="uq_organization_membership_org_user",
@@ -378,15 +457,48 @@ class ControlPlaneProjector:
             mid = db.session.execute(stmt).scalar_one()
             membership = db.session.get(OrganizationMembership, mid)
             assert membership is not None
+            self._apply_membership_status_timestamps(membership, membership_status)
             return membership
 
+        previous_status = existing.membership_status
         existing.role_template_id = role_template_id
         existing.membership_status = membership_status
         existing.scope_type = scope_type
         existing.scope_json = scope_json or {}
         existing.source = source
         existing.updated_at = _now()
+        self._apply_membership_status_timestamps(
+            existing, membership_status, previous_status=previous_status
+        )
         return existing
+
+    @staticmethod
+    def _apply_membership_status_timestamps(
+        membership: OrganizationMembership,
+        membership_status: str,
+        *,
+        previous_status: str | None = None,
+    ) -> None:
+        """Met à jour suspended_at / activated_at selon les transitions de statut."""
+        now = _now()
+        if previous_status is None:
+            # Post-insert / ON CONFLICT : normaliser selon statut cible
+            if membership_status == "suspended" and membership.suspended_at is None:
+                membership.suspended_at = now
+            elif membership_status == "active":
+                membership.activated_at = membership.activated_at or now
+                membership.suspended_at = None
+            elif membership_status == "removed" and membership.removed_at is None:
+                membership.removed_at = now
+            return
+
+        if membership_status == "suspended" and previous_status != "suspended":
+            membership.suspended_at = now
+        elif membership_status == "active" and previous_status != "active":
+            membership.activated_at = membership.activated_at or now
+            membership.suspended_at = None
+        elif membership_status == "removed" and previous_status != "removed":
+            membership.removed_at = membership.removed_at or now
 
     def _ensure_shadow_entitlements_company(
         self, org: PlatformOrganization, company: Company

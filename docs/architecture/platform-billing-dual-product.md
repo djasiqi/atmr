@@ -76,6 +76,28 @@
   — readiness uniquement si incomplet ; produits en cartes (abo / commission / support) ;
   adresse + contrat en un seul « Enregistrer » ; historique versions repliable.
 
+### PR1 invariants workflow (sécurisation Finance) — ✅ Implémenté
+
+- ✅ **Implémenté** : workflow strict `CALCULATED → VALIDATED → période LOCKED → émission`
+  ; `validate_statement` uniquement depuis `CALCULATED` ; `NEEDS_REVIEW`/`DRAFT` refusés
+  (`STATEMENT_REVIEW_REQUIRED`) — `engine.py`.
+- ✅ **Implémenté** : `lock_platform_billing_period` via
+  `build_platform_billing_period_readiness` (mois terminé Zurich, tous `VALIDATED`,
+  items `needs_review`, relevés manquants explicites) — plus d’acceptation `CALCULATED`.
+- ✅ **Implémenté** : `billing_period_has_ended` / `next_month_start_zurich_utc`
+  (`time_bounds.py`) ; garde sur validate / lock / issue ; `BillingInvariantError` 409
+  (`errors.py` + routes).
+- ✅ **Implémenté** : émission uniquement si relevé `LOCKED` **et** période `locked` ;
+  suppression de la promotion silencieuse `VALIDATED → LOCKED` dans
+  `issue_platform_invoice` ; UI « Émettre la facture » + confirmation + message d’étape
+  suivante (`AdminPlatformBilling.jsx`).
+- ✅ **Implémenté** : `CAP_BILLING_VALIDATE` sur validate ; `CAP_CONFIGURATION_MANAGE`
+  sur contrats / adresse / accords (`admin_platform_billing.py`).
+- ✅ **Implémenté** : dates contractuelles `effective_year`/`effective_month` (Zurich) ;
+  défauts création inactifs + `BILLING_PRODUCTS_REQUIRED` ; dunning défaut `False` ;
+  clôture refusée si déjà clôturée ; FE adresse seule ≠ nouvelle version ; versions
+  historiques lecture seule ; KPIs Overview séparés.
+
 ### PR5 — Émission PDF/QR
 
 - `platform_issued_invoice`
@@ -117,13 +139,24 @@
   `BillingCapability` (dispatch, accept, own portfolio) ; Celery
   `platform-dunning-cycle` ; notice avant restriction ; priorité
   `admin_manual` ; pause / hold admin ; Word paramétré.
-- ✅ **Implémenté** : gestion des accès commerciaux sur **Gestion des utilisateurs**
-  (`/admin/users`) — colonne « Accès commercial » pour les comptes `company`
-  (badge `active` / `partial` / `full`, pause dunning, lever / restreindre) ;
-  enrichissement `GET /admin/users` (`company_id`, `platform_billing_access_state`,
-  `dunning_paused_until`) ; actions via
-  `PUT .../billing-access` et `POST .../dunning/pause`
-  (`AdminUsers.jsx`, `adminService.js`, `routes/admin.py`).
+- ✅ **Implémenté** : gestion de la **restriction commerciale LIRIE** (ex-libellé
+  « Accès commercial ») sur le drawer COMPANY / gestion utilisateurs — états API
+  `active` / `partial` / `full` affichés comme Aucune restriction / partielle /
+  complète ; pause dunning séparée (`paused_until` + resume) ; distinct de
+  `is_approved` / `dispatch_enabled` / `platform_suspended` ;
+  enrichissement `GET /admin/users` et `GET .../manage-context`
+  (`company_profile`, `commercial_restriction`) ; actions via
+  `PUT .../billing-access`, `POST .../dunning/pause|resume`
+  (`AdminAccountManageDrawer.jsx`, `adminService.js`, `routes/admin_platform_billing.py`).
+- ✅ **Implémenté** : gouvernance ops Company P1 —
+  `PUT /admin/companies/<id>/approval`, `PUT .../dispatch-status`,
+  preview désactivation dispatch ; entitlements CP shadow en lecture dans le
+  drawer (`decision_mode=shadow`) ; compteurs chauffeurs informatifs (sans quota).
+- ✅ **Implémenté** : enforcement `CREATE_OWN_PORTFOLIO_BOOKING` aussi sur la
+  création manuelle entreprise (`CreateManualBookingUseCase` /
+  `POST .../me/reservations/manual`) — auparavant le gate n'existait que sur
+  le parcours client `create_booking` ; en `full`, réponse 403
+  `billing_access_restricted`.
 - Fichiers : `backend/services/platform_billing/partner_agreement.py`,
   `partner_agreement_docx.py`, `partner_identity.py`,
   `frontend/src/pages/admin/Billing/AdminBillingDualProductConfig.jsx`,

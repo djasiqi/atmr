@@ -1,5 +1,4 @@
 import logging
-import random
 import string
 from datetime import UTC, datetime
 from os import getenv
@@ -471,12 +470,21 @@ class AdminPlatformBookingDetail(Resource):
 
 
 def _enrich_users_admin_payload(users: list[User]) -> list[dict[str, Any]]:
-    """Sérialise les users admin + accès facturation pour les comptes entreprise."""
+    """Sérialise les users admin + org liée (owner COMPANY ou DRIVER)."""
+    from sqlalchemy.orm import joinedload
+
+    from models.driver import Driver
+
     company_user_ids = [
         u.id
         for u in users
         if normalized_role_value(getattr(u, "role", None))
         == UserRole.COMPANY.value
+    ]
+    driver_user_ids = [
+        u.id
+        for u in users
+        if normalized_role_value(getattr(u, "role", None)) == UserRole.DRIVER.value
     ]
     companies_by_user_id: dict[int, Company] = {}
     if company_user_ids:
@@ -486,28 +494,48 @@ def _enrich_users_admin_payload(users: list[User]) -> list[dict[str, Any]]:
             if company.user_id is not None:
                 companies_by_user_id[int(company.user_id)] = company
 
+    drivers_by_user_id: dict[int, Driver] = {}
+    if driver_user_ids:
+        for driver in db.session.scalars(
+            select(Driver)
+            .options(joinedload(Driver.company))
+            .where(Driver.user_id.in_(driver_user_ids))
+        ).unique().all():
+            if driver.user_id is not None:
+                drivers_by_user_id[int(driver.user_id)] = driver
+
     result: list[dict[str, Any]] = []
     for user in users:
         data = dict(cast("Any", user).serialize)
-        company = companies_by_user_id.get(user.id)
-        if company is None:
-            result.append(data)
-            continue
-        data["company_id"] = company.id
-        data["company_name"] = company.name
-        data["platform_billing_access_state"] = (
-            company.platform_billing_access_state or "active"
-        )
-        data["platform_billing_state_source"] = company.platform_billing_state_source
-        data["platform_billing_state_reason_code"] = (
-            company.platform_billing_state_reason_code
-        )
-        data["dunning_paused_until"] = (
-            company.dunning_paused_until.isoformat()
-            if company.dunning_paused_until
-            else None
-        )
-        data["platform_suspended"] = bool(company.platform_suspended)
+        role = normalized_role_value(getattr(user, "role", None))
+        if role == UserRole.COMPANY.value:
+            company = companies_by_user_id.get(user.id)
+            if company is not None:
+                data["company_id"] = company.id
+                data["company_name"] = company.name
+                data["platform_billing_access_state"] = (
+                    company.platform_billing_access_state or "active"
+                )
+                data["platform_billing_state_source"] = (
+                    company.platform_billing_state_source
+                )
+                data["platform_billing_state_reason_code"] = (
+                    company.platform_billing_state_reason_code
+                )
+                data["dunning_paused_until"] = (
+                    company.dunning_paused_until.isoformat()
+                    if company.dunning_paused_until
+                    else None
+                )
+                data["platform_suspended"] = bool(company.platform_suspended)
+        elif role == UserRole.DRIVER.value:
+            driver = drivers_by_user_id.get(user.id)
+            if driver is not None:
+                data["driver_id"] = driver.id
+                data["driver_is_active"] = bool(driver.is_active)
+                data["company_id"] = driver.company_id
+                company = getattr(driver, "company", None)
+                data["company_name"] = company.name if company else None
         result.append(data)
     return result
 
@@ -540,6 +568,13 @@ class AllUsers(Resource):
             per_page = min(per_page, 200)
             search = (request.args.get("search", "") or "").strip().lower()
             role = (request.args.get("role", "") or "").strip().lower()
+            company_id_raw = request.args.get("company_id")
+            company_id: int | None = None
+            if company_id_raw is not None and str(company_id_raw).strip():
+                try:
+                    company_id = int(company_id_raw)
+                except (TypeError, ValueError):
+                    return {"message": "company_id invalide"}, 400
             sort_by = (
                 request.args.get("sort_by", "created_at") or "created_at"
             ).strip()
@@ -550,7 +585,9 @@ class AllUsers(Resource):
             # Compatibilité: sans pagination explicite, sans page/per_page et sans
             # filtres explicites, conserver l'ancien comportement (retour complet).
             # Sinon, forcer la pagination serveur.
-            has_filters = bool(search or role or has_sort_args or has_page_args)
+            has_filters = bool(
+                search or role or company_id is not None or has_sort_args or has_page_args
+            )
             if not paginate and has_filters:
                 paginate = True
             include_synthetic = str(
@@ -578,6 +615,13 @@ class AllUsers(Resource):
                 query = query.filter(
                     func.lower(func.coalesce(func.cast(User.role, db.String), ""))
                     == role
+                )
+
+            if company_id is not None:
+                from models.driver import Driver
+
+                query = query.join(Driver, Driver.user_id == User.id).filter(
+                    Driver.company_id == company_id
                 )
 
             role_counts_rows = (
@@ -830,77 +874,315 @@ autonomous_action_review_model = admin_ns.model(
 )
 
 
+@admin_ns.route("/users/<int:user_id>/role-transition/preview")
+class PreviewUserRoleTransition(Resource):
+    @jwt_required()
+    @role_required(UserRole.admin)
+    @require_admin_capability(CAP_USERS_MANAGE)
+    @limiter.limit("60 per hour")
+    def post(self, user_id: int):
+        """Prévisualise une transition de rôle (sans mutation)."""
+        from schemas.admin_schemas import UserRoleUpdateSchema
+        from schemas.validation_utils import handle_validation_error, validate_request
+        from services.admin_account_role_transition import (
+            AdminAccountRoleTransitionService,
+            RoleTransitionError,
+        )
+
+        try:
+            data = request.get_json(silent=True) or {}
+            try:
+                validated = validate_request(UserRoleUpdateSchema(), data)
+            except ValidationError as e:
+                return handle_validation_error(e)
+
+            preview = AdminAccountRoleTransitionService().preview(
+                user_id=user_id,
+                target_role=validated["role"],
+                company_id=validated.get("company_id"),
+                institution_id=validated.get("institution_id"),
+                institution_role=validated.get("institution_role"),
+                expected_current_role=validated.get("expected_current_role"),
+                expected_company_id=validated.get("expected_company_id"),
+                expected_institution_id=validated.get("expected_institution_id"),
+                expected_institution_role=validated.get("expected_institution_role"),
+            )
+            return preview.to_dict(), 200
+        except RoleTransitionError as exc:
+            return exc.to_response()
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            logger.exception("❌ ERREUR role_transition_preview: %s", e)
+            return {"message": "Une erreur interne est survenue."}, 500
+
+
 @admin_ns.route("/users/<int:user_id>/role")
 class UpdateUserRole(Resource):
     @jwt_required()
     @role_required(UserRole.admin)
     @require_admin_capability(CAP_USERS_MANAGE)
-    # ✅ S2: Rate limiting strict pour changement rôle (action sensible)
     @limiter.limit("20 per hour")
     @admin_ns.expect(user_role_update_model, validate=False)
     def put(self, user_id: int):
-        """PR1 : no-op si même rôle ; tout vrai changement → 409 (assistant ultérieur)."""
+        """Applique une transition de rôle sécurisée (service dédié)."""
+        from routes.admin_platform_billing import _admin_user_id_from_jwt
+        from schemas.admin_schemas import UserRoleApplySchema
+        from schemas.validation_utils import handle_validation_error, validate_request
+        from services.admin_account_role_transition import (
+            AdminAccountRoleTransitionService,
+            RoleTransitionError,
+        )
+
         try:
-            user_opt: User | None = user_repo.find_by_id_with_driver_and_company(
-                user_id
-            )
-            if user_opt is None:
-                return APIErrorHandler.handle_not_found(
-                    "User",
-                    user_id,
-                    logger,
-                )
-            user = user_opt
-
             data = request.get_json(silent=True) or {}
-
-            from schemas.admin_schemas import UserRoleUpdateSchema
-            from schemas.validation_utils import (
-                handle_validation_error,
-                validate_request,
-            )
-
             try:
-                validated_data = validate_request(UserRoleUpdateSchema(), data)
+                validated = validate_request(UserRoleApplySchema(), data)
             except ValidationError as e:
                 return handle_validation_error(e)
 
-            raw = validated_data["role"].strip().lower()
-            key = raw.upper()
-            try:
-                new_role_enum = UserRole[key]
-            except KeyError:
-                new_role_enum = next(
-                    (r for r in UserRole if str(r.value).upper() == key), None
-                )
-
-            if new_role_enum is None:
-                return APIErrorHandler.handle_validation_error(
-                    "Invalid role",
-                    field="role",
-                    logger_instance=logger,
-                )
-
-            old_role = normalized_role_value(user.role)
-            new_role = normalized_role_value(new_role_enum)
-
-            if old_role == new_role:
+            actor_id = _admin_user_id_from_jwt()
+            if actor_id is None:
                 return {
-                    "message": "Rôle inchangé.",
-                    "user": cast("Any", user).serialize,
-                }, 200
+                    "message": "Administrateur introuvable.",
+                    "error": "actor_required",
+                }, 403
 
-            return {
-                "error": "role_transition_requires_assistant",
-                "message": (
-                    "Toute modification de rôle nécessite l'assistant sécurisé "
-                    "prévu dans une évolution ultérieure."
-                ),
-            }, 409
-
+            result = AdminAccountRoleTransitionService().apply(
+                user_id=user_id,
+                target_role=validated["role"],
+                expected_current_role=validated["expected_current_role"],
+                reason=validated["reason"],
+                actor_admin_id=actor_id,
+                company_id=validated.get("company_id"),
+                institution_id=validated.get("institution_id"),
+                institution_role=validated.get("institution_role"),
+                expected_company_id=validated.get("expected_company_id"),
+                expected_institution_id=validated.get("expected_institution_id"),
+                expected_institution_role=validated.get("expected_institution_role"),
+                preview_id=validated.get("preview_id"),
+                transition_id=validated.get("transition_id"),
+                ip_address=request.remote_addr,
+                user_agent=request.headers.get("User-Agent"),
+                request_id=request.headers.get("X-Request-Id"),
+            )
+            return result.to_dict(), 200
+        except RoleTransitionError as exc:
+            db.session.rollback()
+            return exc.to_response()
         except Exception as e:
             db.session.rollback()
             logger.exception("❌ ERREUR update_user_role: %s", e)
+            return {"message": "Une erreur interne est survenue."}, 500
+
+
+@admin_ns.route("/users/<int:user_id>/driver-status")
+class AdminDriverStatus(Resource):
+    @jwt_required()
+    @role_required(UserRole.admin)
+    @require_admin_capability(CAP_USERS_MANAGE)
+    @limiter.limit("30 per hour")
+    def put(self, user_id: int):
+        """Soft-disable / réactivation chauffeur (sans changer le rôle)."""
+        from routes.admin_platform_billing import _admin_user_id_from_jwt
+        from schemas.admin_schemas import AdminDriverStatusSchema
+        from schemas.validation_utils import handle_validation_error, validate_request
+        from services.admin_driver_status import (
+            AdminDriverStatusError,
+            set_driver_status,
+        )
+
+        try:
+            data = request.get_json(silent=True) or {}
+            try:
+                validated = validate_request(AdminDriverStatusSchema(), data)
+            except ValidationError as e:
+                return handle_validation_error(e)
+
+            actor_id = _admin_user_id_from_jwt()
+            if actor_id is None:
+                return {
+                    "message": "Administrateur introuvable.",
+                    "error": "actor_required",
+                }, 403
+
+            result = set_driver_status(
+                user_id=user_id,
+                is_active=bool(validated["is_active"]),
+                reason=validated["reason"],
+                actor_admin_id=actor_id,
+                expected_is_active=validated.get("expected_is_active"),
+                ip_address=request.remote_addr,
+                user_agent=request.headers.get("User-Agent"),
+            )
+            return result.to_dict(), 200
+        except AdminDriverStatusError as exc:
+            db.session.rollback()
+            return exc.to_response()
+        except Exception as e:
+            db.session.rollback()
+            logger.exception("❌ ERREUR driver_status: %s", e)
+            return {"message": "Une erreur interne est survenue."}, 500
+
+
+@admin_ns.route("/users/<int:user_id>/revoke-sessions")
+class AdminRevokeUserSessions(Resource):
+    @jwt_required()
+    @role_required(UserRole.admin)
+    @require_admin_capability(CAP_USERS_SECURITY)
+    @limiter.limit("20 per hour")
+    def post(self, user_id: int):
+        """Révoque toutes les sessions (tous rôles) sans reset MDP."""
+        from routes.admin_platform_billing import _admin_user_id_from_jwt
+        from schemas.admin_schemas import AdminReasonSchema
+        from schemas.validation_utils import handle_validation_error, validate_request
+        from services.admin_driver_status import (
+            AdminDriverStatusError,
+            revoke_user_sessions_admin,
+        )
+
+        try:
+            data = request.get_json(silent=True) or {}
+            try:
+                validated = validate_request(AdminReasonSchema(), data)
+            except ValidationError as e:
+                return handle_validation_error(e)
+
+            actor_id = _admin_user_id_from_jwt()
+            if actor_id is None:
+                return {
+                    "message": "Administrateur introuvable.",
+                    "error": "actor_required",
+                }, 403
+
+            result = revoke_user_sessions_admin(
+                user_id=user_id,
+                reason=validated["reason"],
+                actor_admin_id=actor_id,
+                ip_address=request.remote_addr,
+                user_agent=request.headers.get("User-Agent"),
+            )
+            return result.to_dict(), 200
+        except AdminDriverStatusError as exc:
+            db.session.rollback()
+            return exc.to_response()
+        except Exception as e:
+            db.session.rollback()
+            logger.exception("❌ ERREUR revoke_sessions: %s", e)
+            return {"message": "Une erreur interne est survenue."}, 500
+
+
+@admin_ns.route("/companies/<int:company_id>/approval")
+class AdminCompanyApproval(Resource):
+    @jwt_required()
+    @role_required(UserRole.admin)
+    @require_admin_capability(CAP_USERS_MANAGE)
+    @limiter.limit("30 per hour")
+    def put(self, company_id: int):
+        """Approbation plateforme (indépendante du dispatch / commercial)."""
+        from routes.admin_platform_billing import _admin_user_id_from_jwt
+        from schemas.admin_schemas import AdminCompanyApprovalSchema
+        from schemas.validation_utils import handle_validation_error, validate_request
+        from services.admin_company_ops import AdminCompanyOpsError, set_company_approval
+
+        try:
+            data = request.get_json(silent=True) or {}
+            try:
+                validated = validate_request(AdminCompanyApprovalSchema(), data)
+            except ValidationError as e:
+                return handle_validation_error(e)
+
+            actor_id = _admin_user_id_from_jwt()
+            if actor_id is None:
+                return {
+                    "message": "Administrateur introuvable.",
+                    "error": "actor_required",
+                }, 403
+
+            result = set_company_approval(
+                company_id=company_id,
+                is_approved=bool(validated["is_approved"]),
+                reason=validated["reason"],
+                actor_admin_id=actor_id,
+                expected_is_approved=validated.get("expected_is_approved"),
+                ip_address=request.remote_addr,
+                user_agent=request.headers.get("User-Agent"),
+            )
+            return result.to_dict(), 200
+        except AdminCompanyOpsError as exc:
+            db.session.rollback()
+            return exc.to_response()
+        except Exception as e:
+            db.session.rollback()
+            logger.exception("❌ ERREUR company_approval: %s", e)
+            return {"message": "Une erreur interne est survenue."}, 500
+
+
+@admin_ns.route("/companies/<int:company_id>/dispatch-status")
+class AdminCompanyDispatchStatus(Resource):
+    @jwt_required()
+    @role_required(UserRole.admin)
+    @require_admin_capability(CAP_USERS_MANAGE)
+    @limiter.limit("30 per hour")
+    def put(self, company_id: int):
+        """Active / désactive le dispatch (sans toucher commercial ni suspension)."""
+        from routes.admin_platform_billing import _admin_user_id_from_jwt
+        from schemas.admin_schemas import AdminCompanyDispatchSchema
+        from schemas.validation_utils import handle_validation_error, validate_request
+        from services.admin_company_ops import AdminCompanyOpsError, set_company_dispatch
+
+        try:
+            data = request.get_json(silent=True) or {}
+            try:
+                validated = validate_request(AdminCompanyDispatchSchema(), data)
+            except ValidationError as e:
+                return handle_validation_error(e)
+
+            actor_id = _admin_user_id_from_jwt()
+            if actor_id is None:
+                return {
+                    "message": "Administrateur introuvable.",
+                    "error": "actor_required",
+                }, 403
+
+            result = set_company_dispatch(
+                company_id=company_id,
+                dispatch_enabled=bool(validated["dispatch_enabled"]),
+                reason=validated["reason"],
+                actor_admin_id=actor_id,
+                expected_dispatch_enabled=validated.get("expected_dispatch_enabled"),
+                ip_address=request.remote_addr,
+                user_agent=request.headers.get("User-Agent"),
+            )
+            return result.to_dict(), 200
+        except AdminCompanyOpsError as exc:
+            db.session.rollback()
+            return exc.to_response()
+        except Exception as e:
+            db.session.rollback()
+            logger.exception("❌ ERREUR company_dispatch: %s", e)
+            return {"message": "Une erreur interne est survenue."}, 500
+
+
+@admin_ns.route("/companies/<int:company_id>/dispatch-disable-preview")
+class AdminCompanyDispatchDisablePreview(Resource):
+    @jwt_required()
+    @role_required(UserRole.admin)
+    @require_admin_capability(CAP_USERS_MANAGE)
+    @ip_whitelist_required()
+    @limiter.limit("60 per hour")
+    def get(self, company_id: int):
+        """Prévisualisation d'impact avant désactivation du dispatch."""
+        from services.admin_company_ops import (
+            AdminCompanyOpsError,
+            preview_dispatch_disable,
+        )
+
+        try:
+            return preview_dispatch_disable(company_id), 200
+        except AdminCompanyOpsError as exc:
+            return exc.to_response()
+        except Exception as e:
+            logger.exception("❌ ERREUR dispatch_preview: %s", e)
             return {"message": "Une erreur interne est survenue."}, 500
 
 
@@ -909,39 +1191,48 @@ class ResetUserPassword(Resource):
     @jwt_required()
     @role_required(UserRole.admin)
     @require_admin_capability(CAP_USERS_SECURITY)
-    # ✅ Pas de rate limiting pour les admins (déjà protégé par @role_required)
+    @limiter.limit("10 per hour")
     def post(self, user_id):
-        """Réinitialise le mot de passe d'un utilisateur."""
-        try:
-            # Récupérer le modèle User SQLAlchemy (pas le DTO)
-            from models.user import User
+        """Réinitialise le mot de passe (secrets + revoke fail-closed)."""
+        import json as _json
+        import secrets as pysecrets
+        from datetime import timedelta
 
-            u = db.session.query(User).filter_by(id=user_id).first()
+        from routes.admin_platform_billing import _admin_user_id_from_jwt
+        from schemas.admin_schemas import AdminResetPasswordSchema
+        from schemas.validation_utils import handle_validation_error, validate_request
+        from security.audit_log import AuditLog
+        from security.mobile_device_session_service import revoke_user_security_sessions
+        from security.password_policy import PasswordPolicyError, PasswordPolicyService
+
+        try:
+            data = request.get_json(silent=True) or {}
+            try:
+                validated = validate_request(AdminResetPasswordSchema(), data)
+            except ValidationError as e:
+                return handle_validation_error(e)
+
+            from models.user import User as UserModel
+
+            u = db.session.execute(
+                select(UserModel).where(UserModel.id == user_id).with_for_update()
+            ).scalar_one_or_none()
             if u is None:
                 admin_ns.abort(404, "User not found")
-                return None  # abort() lève, mais ce return rassure l'analyste statique
-            # Générer un mot de passe avec au moins: 1 maj, 1 min, 1 chiffre, 1 spécial
+                return None
+
             special_chars = "!@#$%^&*()_+-=[]{}|;:,.<>?"
+            alphabet = string.ascii_letters + string.digits + special_chars
             new_password = (
-                random.choice(string.ascii_uppercase)  # 1 majuscule
-                + random.choice(string.ascii_lowercase)  # 1 minuscule
-                + random.choice(string.digits)  # 1 chiffre
-                + random.choice(special_chars)  # 1 caractère spécial
-                + "".join(
-                    random.choices(  # 8 caractères aléatoires supplémentaires
-                        string.ascii_letters + string.digits + special_chars, k=8
-                    )
-                )
+                pysecrets.choice(string.ascii_uppercase)
+                + pysecrets.choice(string.ascii_lowercase)
+                + pysecrets.choice(string.digits)
+                + pysecrets.choice(special_chars)
+                + "".join(pysecrets.choice(alphabet) for _ in range(8))
             )
-            # Mélanger les caractères pour plus de sécurité
-            password_list = list(new_password)
-            random.shuffle(password_list)
-            new_password = "".join(password_list)
-            # ✅ S3: Validation avec politique renforcée (complexité + HIBP + historique)
-            from security.password_policy import (
-                PasswordPolicyError,
-                PasswordPolicyService,
-            )
+            pwd_list = list(new_password)
+            pysecrets.SystemRandom().shuffle(pwd_list)
+            new_password = "".join(pwd_list)
 
             try:
                 PasswordPolicyService.validate_password(
@@ -949,34 +1240,71 @@ class ResetUserPassword(Resource):
                 )
             except PasswordPolicyError as e:
                 admin_ns.abort(400, e.message)
-            # Le mot de passe est validé explicitement par validate_password()
-            # avant set_password() - satisfait les exigences de sécurité
-            u.set_password(new_password)  # nosem
-            u.force_password_change = True
-            try:
-                from security.mobile_device_session_service import (
-                    revoke_user_security_sessions,
-                )
 
+            u.set_password(new_password, force_change=True)  # nosem
+            u.force_password_change = True
+            u.password_expires_at = datetime.now(UTC) + timedelta(hours=24)
+
+            try:
                 revoke_user_security_sessions(
                     u,
                     reason="admin_password_reset",
                     increment_token_version=True,
+                    fail_closed=True,
+                    commit_tokens=False,
                 )
             except Exception as revoke_exc:
-                logger.warning(
+                db.session.rollback()
+                logger.exception(
                     "Échec révocation sessions MDS après reset admin: %s", revoke_exc
                 )
+                return {
+                    "error": "session_revoke_failed",
+                    "message": (
+                        "Impossible de révoquer les sessions ; "
+                        "réinitialisation annulée."
+                    ),
+                }, 500
+
+            actor_id = _admin_user_id_from_jwt()
+            audit = AuditLog()
+            audit.user_id = actor_id
+            audit.user_type = "ADMIN"
+            audit.action_type = "admin_password_reset"
+            audit.action_category = "security"
+            audit.action_details = _json.dumps(
+                {
+                    "target_user_id": u.id,
+                    "reason": validated["reason"],
+                    "sessions_revoked": True,
+                },
+                ensure_ascii=False,
+            )
+            audit.result_status = "success"
+            audit.result_message = "password_reset"
+            audit.ip_address = request.remote_addr
+            audit.user_agent = request.headers.get("User-Agent")
+            audit.resource_type = "user"
+            audit.resource_id = str(u.id)
+            audit.created_at = datetime.now(UTC)
+            db.session.add(audit)
+
             db.session.commit()
             return {
                 "message": "Mot de passe réinitialisé",
                 "new_password": new_password,
                 "force_password_change": True,
+                "password_expires_at": (
+                    u.password_expires_at.isoformat() if u.password_expires_at else None
+                ),
+                "sessions_revoked": True,
             }, 200
+        except HTTPException:
+            raise
         except Exception as e:
             sentry_sdk.capture_exception(e)
             db.session.rollback()
-            logger.exception("❌ ERREUR reset_password: {e!s}")
+            logger.exception("❌ ERREUR reset_password")
             admin_ns.abort(500, "Une erreur interne est survenue.")
 
 
@@ -2235,6 +2563,31 @@ class AdminAccountEffectiveAccess(Resource):
         except Exception as e:
             sentry_sdk.capture_exception(e)
             logger.exception("❌ ERREUR effective-access: %s", e)
+            admin_ns.abort(500, "Une erreur interne est survenue.")
+
+
+@admin_ns.route("/accounts/<int:user_id>/manage-context")
+class AdminAccountManageContext(Resource):
+    @jwt_required()
+    @role_required(UserRole.admin)
+    @require_admin_capability(CAP_ACCOUNTS_READ)
+    @ip_whitelist_required()
+    @limiter.limit("100 per hour")
+    def get(self, user_id: int):
+        """Contexte unique pour le drawer de gestion compte."""
+        from routes.admin_platform_billing import _admin_user_id_from_jwt
+        from services.admin_account_manage_context import build_account_manage_context
+
+        try:
+            payload = build_account_manage_context(
+                user_id, actor_admin_id=_admin_user_id_from_jwt()
+            )
+            if payload is None:
+                admin_ns.abort(404, "Compte introuvable")
+            return payload, 200
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            logger.exception("❌ ERREUR manage-context: %s", e)
             admin_ns.abort(500, "Une erreur interne est survenue.")
 
 

@@ -24,3 +24,12 @@ export function getServiceUnavailableMessage() {
 
   return `${parts.join(' ')}.`;
 }
+
+/** Ligne contact courte : « Support LIRIE : 022… · info@… » */
+export function getLirieSupportContactLine() {
+  const bits = [];
+  if (LIRIE_SUPPORT_PHONE) bits.push(LIRIE_SUPPORT_PHONE);
+  if (LIRIE_SUPPORT_EMAIL) bits.push(LIRIE_SUPPORT_EMAIL);
+  if (!bits.length) return 'Support LIRIE';
+  return `Support LIRIE : ${bits.join(' · ')}`;
+}

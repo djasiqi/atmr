@@ -9,25 +9,30 @@
 .contentArea {
   display: flex;
   flex: 1;
+  align-items: stretch;
   margin: var(--spacing-lg);
   margin-left: calc(var(--sidebar-w, 72px) + var(--spacing-lg));
   max-width: calc(100% - var(--sidebar-w, 72px) - calc(var(--spacing-lg) * 2));
+  min-height: calc(100vh - calc(var(--spacing-lg) * 2));
   transition: margin-left var(--transition-base), max-width var(--transition-base);
 }
 
 .main {
-  flex: 1;
+  flex: 1 1 auto;
   min-width: 0;
   padding: var(--spacing-lg);
   background: var(--bg-primary);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-md);
   transition: border-radius var(--transition-base);
+  overflow-x: hidden;
 }
 
 .contentAreaWithPanel .main {
   border-top-right-radius: 0;
   border-bottom-right-radius: 0;
+  flex: 1 1 0;
+  min-width: 280px;
 }
 
 /* Zone A -- Header */
@@ -605,9 +610,10 @@
    Side Panel (inline, same pattern as CompanyDriver)
    ============================================================ */
 .sidePanel {
-  width: 420px;
-  min-width: 420px;
-  max-width: 420px;
+  flex: 0 0 clamp(340px, 36vw, 440px);
+  width: clamp(340px, 36vw, 440px);
+  min-width: 340px;
+  max-width: 440px;
   background: #fff;
   border-left: 1px solid var(--border-primary, #e2e8f0);
   border-radius: 0 var(--radius-lg, 10px) var(--radius-lg, 10px) 0;
@@ -615,6 +621,7 @@
   animation: slideInPanel 0.2s ease;
   display: flex;
   flex-direction: column;
+  box-shadow: -8px 0 24px rgba(15, 23, 42, 0.06);
 }
 
 @keyframes slideInPanel {
@@ -625,11 +632,17 @@
 .sidePanelInner {
   position: sticky;
   top: 0;
-  max-height: 100%;
-  overflow-y: auto;
-  overflow-x: hidden;
+  max-height: calc(100vh - calc(var(--spacing-lg) * 2));
+  height: 100%;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
+  min-height: 0;
+}
+
+.sidePanelInner > * {
+  flex: 1;
+  min-height: 0;
 }
 
 .sidePanelInner::-webkit-scrollbar {
@@ -655,7 +668,48 @@
   color: var(--text-muted, #64748b);
 }
 
+.panelBackdrop {
+  display: none;
+}
+
 /* ====== Responsive ====== */
+
+/* Desktop étroit + panneau : passer en overlay pour ne pas écraser le tableau */
+@media (max-width: 1280px) {
+  .contentAreaWithPanel {
+    position: relative;
+  }
+
+  .contentAreaWithPanel .sidePanel {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 40;
+    width: min(420px, 92vw);
+    min-width: min(420px, 92vw);
+    max-width: min(420px, 92vw);
+    border-radius: var(--radius-lg);
+    box-shadow: -12px 0 40px rgba(15, 23, 42, 0.14);
+  }
+
+  .contentAreaWithPanel .main {
+    border-radius: var(--radius-lg);
+    width: 100%;
+  }
+
+  .panelBackdrop {
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: 35;
+    background: rgba(15, 23, 42, 0.28);
+    border-radius: var(--radius-lg);
+    border: none;
+    padding: 0;
+    cursor: pointer;
+  }
+}
 
 /* Tablet */
 @media (max-width: 1024px) {
@@ -669,12 +723,6 @@
     padding: var(--spacing-md);
   }
 
-  .sidePanel {
-    width: 380px;
-    min-width: 380px;
-    max-width: 380px;
-  }
-
   .commandBar {
     gap: 6px;
   }
@@ -682,15 +730,6 @@
   .searchWrap {
     flex: 1 1 200px;
     min-width: 160px;
-  }
-}
-
-/* Large tablet - panel overlay */
-@media (max-width: 1200px) {
-  .sidePanel {
-    width: 360px;
-    min-width: 360px;
-    max-width: 360px;
   }
 }
 
@@ -801,6 +840,14 @@
   }
 
   /* On mobile, side panel becomes full-width overlay */
+  .panelBackdrop {
+    position: fixed;
+    inset: 0;
+    z-index: calc(var(--z-modal-app) - 1);
+    border-radius: 0;
+    background: rgba(15, 23, 42, 0.4);
+  }
+
   .sidePanel {
     position: fixed;
     top: 0;

@@ -1,18 +1,22 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { fetchPlatformAuditReplay, postPlatformSearch } from '../../../services/adminService';
 import styles from './AdminPlatformOps.module.css';
 import { GovJsonBlock } from './platformOpsShared';
 
 const PlatformInvestigationPage = () => {
-  const [govSearchQuery, setGovSearchQuery] = useState('');
+  const [searchParams] = useSearchParams();
+  const bookingIdParam = (searchParams.get('booking_id') || '').trim();
+  const [govSearchQuery, setGovSearchQuery] = useState(bookingIdParam);
   const [govSearchResult, setGovSearchResult] = useState(null);
   const [govReplayCid, setGovReplayCid] = useState('');
   const [govReplayResult, setGovReplayResult] = useState(null);
   const [govError, setGovError] = useState(null);
   const [govBusy, setGovBusy] = useState(false);
+  const autoRanRef = useRef(false);
 
-  const runGovSearch = useCallback(async () => {
-    const q = govSearchQuery.trim();
+  const runGovSearch = useCallback(async (overrideQuery) => {
+    const q = String(overrideQuery ?? govSearchQuery).trim();
     if (!q) {
       setGovError('Saisissez une requête (ID tenant, booking, ou UUID utilisateur).');
       return;
@@ -29,6 +33,13 @@ const PlatformInvestigationPage = () => {
       setGovBusy(false);
     }
   }, [govSearchQuery]);
+
+  useEffect(() => {
+    if (!bookingIdParam || autoRanRef.current) return;
+    autoRanRef.current = true;
+    setGovSearchQuery(bookingIdParam);
+    runGovSearch(bookingIdParam);
+  }, [bookingIdParam, runGovSearch]);
 
   const loadGovReplay = useCallback(async () => {
     const cid = govReplayCid.trim();
@@ -55,7 +66,8 @@ const PlatformInvestigationPage = () => {
         <div className={styles.pageHeaderText}>
           <h1>Investigation</h1>
           <p className={styles.pageSubtitle}>
-            Recherche et replay — aucun appel au montage jusqu’à action utilisateur.
+            Recherche et replay — préremplissage possible via{' '}
+            <code>booking_id</code> dans l&apos;URL.
           </p>
         </div>
       </header>
@@ -106,7 +118,7 @@ const PlatformInvestigationPage = () => {
               <button
                 type="button"
                 className={styles.govBtn}
-                onClick={runGovSearch}
+                onClick={() => runGovSearch()}
                 disabled={govBusy}
               >
                 Rechercher

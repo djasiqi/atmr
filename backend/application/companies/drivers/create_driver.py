@@ -106,18 +106,10 @@ class CreateCompanyDriverUseCase:
             driver_attrs=driver_attrs,
         )
 
-        try:
-            from services.control_plane.projector import get_projector
+        from services.control_plane.projector import get_projector
 
-            get_projector().sync_driver(driver)
-        except Exception:
-            # Ne pas casser la création chauffeur si le catalogue n'est pas seedé ;
-            # reconcile réparera. Log pour observabilité.
-            import logging
-
-            logging.getLogger(__name__).exception(
-                "[cp.projector] sync_driver après create_driver a échoué"
-            )
+        # Même transaction : échec projection → rollback de la création chauffeur
+        get_projector().sync_driver(driver)
 
         return CreateCompanyDriverResult(
             ok=True,

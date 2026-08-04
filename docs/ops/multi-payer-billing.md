@@ -39,6 +39,17 @@ Institution | Patient | Assurance | Institution
 
 Tests : `backend/tests/integration/test_multi_payer_billing_scenario_b_e2e.py`
 
+## Portefeuille propre — destinataire PATIENT technique
+
+Les courses manuelles « Direct patient » (sans tiers payeur / curatelle) reçoivent automatiquement un `BillingParty` de type `PATIENT` :
+
+- `external_ref = patient_client:{client_id}`
+- **aucun** `ClientBillingParty` (l’UI garde « Aucun tiers payeur configuré »)
+- création dans `CreateManualBookingUseCase` via `resolve_billing_party_for_portfolio_patient`
+- backfill ops : `python scripts/backfill_booking_direct_patient_billing_party.py --dry-run` puis `--apply`
+
+Le registre V2 (`billing-opportunities`) exige ce `billing_party_id` ; sans lui le patient est ignoré (compteur `ignored_missing_billing_party_count`).
+
 ## Checklist manuelle post-déploiement
 
 - [ ] Création demande multi-destination avec override sur une destination

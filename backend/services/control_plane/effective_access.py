@@ -35,6 +35,14 @@ _ROLE_EXPECTED: dict[str, str] = {
     "company_reader": "COMPANY",
 }
 
+_STATE_RANK = {"blocked": 3, "needs_review": 2, "eligible": 1}
+
+
+def _raise_state(current: str, candidate: str) -> str:
+    if _STATE_RANK.get(candidate, 0) > _STATE_RANK.get(current, 0):
+        return candidate
+    return current
+
 
 def _role_value(user: User) -> str:
     role = getattr(user, "role", None)
@@ -59,12 +67,20 @@ def compute_effective_access(user_id: int) -> dict[str, Any]:
         }
 
     blocking: list[dict[str, Any]] = []
+    subject_state = "eligible"
+
     if getattr(user, "archived_at", None) is not None:
         blocking.append({"code": "ACCOUNT_ARCHIVED"})
+        subject_state = "blocked"
     if getattr(user, "disabled_at", None) is not None or user.account_status == "disabled":
         blocking.append({"code": "ACCOUNT_DISABLED"})
+        subject_state = "blocked"
+    if user.account_status in ("invited", "pending_activation"):
+        blocking.append({"code": "ACCOUNT_NOT_ACTIVATED"})
+        subject_state = "blocked"
     if bool(getattr(user, "force_password_change", False)):
         blocking.append({"code": "PASSWORD_CHANGE_REQUIRED"})
+        subject_state = _raise_state(subject_state, "blocked")
 
     memberships = db.session.scalars(
         select(OrganizationMembership).where(
@@ -75,9 +91,10 @@ def compute_effective_access(user_id: int) -> dict[str, Any]:
 
     membership_payloads: list[dict[str, Any]] = []
     all_detected: list[str] = []
-    subject_state = "eligible"
+    has_active_membership = False
 
-    if blocking:
+    if not memberships and subject_state != "blocked":
+        blocking.append({"code": "NO_ACTIVE_MEMBERSHIP"})
         subject_state = "blocked"
 
     for m in memberships:
@@ -85,11 +102,19 @@ def compute_effective_access(user_id: int) -> dict[str, Any]:
         if org is None:
             continue
         m_block: list[dict[str, Any]] = []
-        if m.membership_status == "needs_review":
+
+        if m.membership_status == "invited":
+            m_block.append({"code": "MEMBERSHIP_INVITED"})
+            subject_state = _raise_state(subject_state, "blocked")
+        elif m.membership_status == "needs_review":
             m_block.append({"code": "MEMBERSHIP_NEEDS_REVIEW"})
-            subject_state = "needs_review" if subject_state == "eligible" else subject_state
-        if m.membership_status not in ("active", "needs_review", "invited"):
+            subject_state = _raise_state(subject_state, "needs_review")
+        elif m.membership_status != "active":
             m_block.append({"code": "MEMBERSHIP_NOT_ACTIVE"})
+            subject_state = _raise_state(subject_state, "blocked")
+        else:
+            has_active_membership = True
+
         if org.lifecycle_status != "active":
             m_block.append(
                 {
@@ -97,6 +122,7 @@ def compute_effective_access(user_id: int) -> dict[str, Any]:
                     "lifecycle_status": org.lifecycle_status,
                 }
             )
+            subject_state = _raise_state(subject_state, "blocked")
 
         role = (
             db.session.get(RoleTemplate, m.role_template_id)
@@ -104,6 +130,10 @@ def compute_effective_access(user_id: int) -> dict[str, Any]:
             else None
         )
         role_key = role.role_key if role else None
+        if role is None:
+            m_block.append({"code": "ROLE_TEMPLATE_MISSING"})
+            subject_state = _raise_state(subject_state, "needs_review")
+
         expected = _ROLE_EXPECTED.get(role_key or "", "")
         actual = _role_value(user)
         if expected and actual != expected:
@@ -114,15 +144,26 @@ def compute_effective_access(user_id: int) -> dict[str, Any]:
                     "actual": actual,
                 }
             )
+            subject_state = _raise_state(subject_state, "blocked")
 
         detected: list[str] = []
-        if (
+        can_detect = (
             role is not None
             and m.membership_status == "active"
             and org.lifecycle_status == "active"
             and not any(b["code"] == "LEGACY_ROLE_MISMATCH" for b in m_block)
-            and not blocking
-        ):
+            and not any(
+                b["code"]
+                in (
+                    "ACCOUNT_ARCHIVED",
+                    "ACCOUNT_DISABLED",
+                    "ACCOUNT_NOT_ACTIVATED",
+                    "PASSWORD_CHANGE_REQUIRED",
+                )
+                for b in blocking
+            )
+        )
+        if can_detect:
             now = datetime.now(UTC)
             entitlements = db.session.scalars(
                 select(OrganizationServiceEntitlement).where(
@@ -155,9 +196,6 @@ def compute_effective_access(user_id: int) -> dict[str, Any]:
                 ):
                     detected.append(perm.permission_key)
 
-        if m_block and subject_state == "eligible":
-            subject_state = "blocked"
-
         all_detected.extend(detected)
         membership_payloads.append(
             {
@@ -174,6 +212,10 @@ def compute_effective_access(user_id: int) -> dict[str, Any]:
                 },
             }
         )
+
+    if memberships and not has_active_membership and subject_state == "eligible":
+        subject_state = "blocked"
+        blocking.append({"code": "NO_ACTIVE_MEMBERSHIP"})
 
     return {
         "decision_mode": "shadow",

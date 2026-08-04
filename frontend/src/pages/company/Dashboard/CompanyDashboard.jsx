@@ -45,6 +45,7 @@ import useCompanyData from '../../../hooks/useCompanyData';
 import useCompanyDriversForMap from '../../../hooks/useCompanyDriversForMap';
 import useRealtimeDashboard from '../../../hooks/useRealtimeDashboard';
 import { useDispatchMode } from '../../../hooks/useDispatchMode';
+import { hasCompanyScopedAccessToken } from '../../../utils/webAuthSession';
 import {
   recordCompanyDashboardRender,
   recordReactCommitMs,
@@ -277,16 +278,22 @@ const CompanyDashboard = () => {
         toast.dismiss('socket-auth-rejected');
         void logoutUser({ preserveNext: true });
       } else if (accessCodes.some((c) => code.includes(c))) {
-        // Sonner: même `id` pour dédoublonner pendant les reconnexions Socket.IO.
-        toast.error('Accès refusé à la connexion temps réel. Reconnectez-vous.', {
+        const reason =
+          e.detail?.reasonLabel ||
+          'Accès refusé à la connexion temps réel. Reconnectez-vous.';
+        toast.error(reason, {
           id: 'socket-auth-rejected',
           duration: 5000,
         });
       } else if (code.includes('RATE_LIMIT')) {
-        toast.warning('Trop de tentatives de connexion. Réessayez dans quelques instants.', {
-          id: 'socket-rate-limit',
-          duration: 5000,
-        });
+        toast.warning(
+          e.detail?.reasonLabel ||
+            'Trop de tentatives de connexion. Réessayez dans quelques instants.',
+          {
+            id: 'socket-rate-limit',
+            duration: 5000,
+          }
+        );
       }
       // Sinon (erreurs transport: websocket error, xhr poll error, timeout, transport close...):
       // pas de toast. Socket.IO reconnecte tout seul et le circuit breaker affiche déjà
@@ -600,7 +607,8 @@ const CompanyDashboard = () => {
       });
     },
     staleTime: 30_000,
-    enabled: !!company?.id && deferredQueriesEnabled,
+    enabled:
+      !!company?.id && deferredQueriesEnabled && hasCompanyScopedAccessToken(),
   });
 
   const {
@@ -613,7 +621,8 @@ const CompanyDashboard = () => {
     queryFn: () => fetchDispatchDelays(dispatchDay),
     initialData: [],
     staleTime: 20_000,
-    enabled: !!company?.id && deferredQueriesEnabled,
+    enabled:
+      !!company?.id && deferredQueriesEnabled && hasCompanyScopedAccessToken(),
   });
 
   const {

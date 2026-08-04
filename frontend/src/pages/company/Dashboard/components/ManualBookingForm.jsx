@@ -32,6 +32,7 @@ import {
 } from '../../../../utils/medicalExtract';
 import { shortAddress } from './formatAddress';
 import { toast } from 'sonner';
+import { getApiErrorMessage } from '../../../../utils/apiErrorMessage';
 import styles from './ManualBookingForm.module.css';
 import InlineDatePicker from '../../../../components/ui/InlineDatePicker';
 import InlineTimePicker from '../../../../components/ui/InlineTimePicker';
@@ -1326,13 +1327,18 @@ export default function ManualBookingForm({ onSuccess, onClose, onSubmitStart })
         }
       }
 
-      // Message d'erreur générique
-      const errorMessage =
-        err?.response?.data?.error ||
-        err?.response?.data?.message ||
-        `Erreur création réservation : ${err.message || 'Erreur inconnue'}`;
+      // Message d'erreur générique (messages métier lisibles via getApiErrorMessage)
+      const errorMessage = getApiErrorMessage(
+        err,
+        `Erreur création réservation : ${err.message || 'Erreur inconnue'}`
+      );
 
-      toast.error(errorMessage);
+      toast.error(errorMessage, {
+        duration:
+          err?.response?.data?.error_code === 'billing_access_restricted'
+            ? 12000
+            : 6000,
+      });
     },
   });
 

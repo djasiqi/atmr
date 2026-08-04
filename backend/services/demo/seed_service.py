@@ -357,6 +357,15 @@ def reset_and_seed_demo_dataset(
         company.is_approved = True
         db.session.add(company)
         db.session.flush()
+        try:
+            from services.control_plane.legacy_hooks import project_company_tenant
+
+            project_company_tenant(company)
+        except Exception:
+            logger.exception(
+                "[demo.seed] projection control plane company id=%s échouée",
+                company.id,
+            )
         companies.append(company)
 
     vehicles: list[Vehicle] = []

@@ -310,10 +310,15 @@ def revoke_user_security_sessions(
     status: MobileDeviceSessionStatus = MobileDeviceSessionStatus.security_revoked,
     reason: str = "password_reset",
     increment_token_version: bool = True,
+    fail_closed: bool = False,
+    commit_tokens: bool = True,
 ) -> int:
     """Révoque toutes les sessions actives après un événement de sécurité.
 
     Couvre reset/changement MDP, reset admin, révocation globale.
+
+    fail_closed=True : propage l'échec refresh tokens (pas de swallow).
+    commit_tokens=False : flush only — commit laissé à l'appelant.
     """
     if increment_token_version and hasattr(user, "token_version"):
         user.token_version = int(getattr(user, "token_version", 0) or 0) + 1
@@ -321,8 +326,10 @@ def revoke_user_security_sessions(
     try:
         from security.refresh_token_service import revoke_all_user_tokens
 
-        revoke_all_user_tokens(user.id, reason=reason)
+        revoke_all_user_tokens(user.id, reason=reason, commit=commit_tokens)
     except Exception as exc:
+        if fail_closed:
+            raise
         logger.warning("revoke_all_user_tokens après security revoke: %s", exc)
     return count
 

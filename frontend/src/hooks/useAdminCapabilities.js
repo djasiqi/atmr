@@ -30,6 +30,10 @@ export function useAdminCapabilities() {
     canBillingIssue: can(ADMIN_CAP.BILLING_ISSUE),
     canBillingValidate: can(ADMIN_CAP.BILLING_VALIDATE),
     canConfigurationManage: can(ADMIN_CAP.CONFIGURATION_MANAGE),
+    canUsersManage: can(ADMIN_CAP.USERS_MANAGE),
+    canUsersSecurity: can(ADMIN_CAP.USERS_SECURITY),
+    canOrganizationsRead: can(ADMIN_CAP.ORGANIZATIONS_READ),
+    canAccountsRead: can(ADMIN_CAP.ACCOUNTS_READ),
   };
 }
 

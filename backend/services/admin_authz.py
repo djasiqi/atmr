@@ -104,14 +104,19 @@ def user_effective_admin_capabilities(user_id: int) -> frozenset[str]:
     """Capacités effectivement accordées pour l'UI / le contrôle d'accès.
 
     Compat : ensemble complet.
-    Enforced : grants uniquement (vide si aucune matrice explicite).
+    Enforced : grants + capacités déduites via CAPABILITY_ALIASES.
     """
     u = db.session.get(User, user_id)
     if not u or u.role != UserRole.ADMIN:
         return frozenset()
-    if admin_capabilities_enforced():
-        return _admin_capability_grants(user_id)
-    return ADMIN_IMPLIED_CAPABILITIES
+    if not admin_capabilities_enforced():
+        return ADMIN_IMPLIED_CAPABILITIES
+
+    effective = set(_admin_capability_grants(user_id))
+    for target, aliases in CAPABILITY_ALIASES.items():
+        if effective.intersection(aliases):
+            effective.add(target)
+    return frozenset(effective)
 
 
 def user_has_admin_capability(user_id: int | None, capability: str) -> bool:
@@ -133,17 +138,14 @@ def user_has_admin_capability(user_id: int | None, capability: str) -> bool:
             )
         return True
 
-    grants = _admin_capability_grants(user_id)
-    if capability in grants:
-        return True
-    aliases = CAPABILITY_ALIASES.get(capability)
-    if aliases and grants.intersection(aliases):
-        logger.info(
-            "admin_capability_alias_allow user_id=%s capability=%s via=%s",
-            user_id,
-            capability,
-            sorted(grants.intersection(aliases)),
-        )
+    effective = user_effective_admin_capabilities(user_id)
+    if capability in effective:
+        if capability not in _admin_capability_grants(user_id):
+            logger.info(
+                "admin_capability_alias_allow user_id=%s capability=%s",
+                user_id,
+                capability,
+            )
         return True
     logger.info(
         "admin_capability_denied user_id=%s capability=%s enforced=true",

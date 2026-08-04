@@ -89,4 +89,28 @@ describe('getApiErrorMessage', () => {
     };
     expect(getApiErrorMessage(err, 'Défaut')).toBe('Incorrect old password');
   });
+
+  it('explique la restriction commerciale LIRIE full', () => {
+    const err = {
+      message: 'Request failed with status code 403',
+      response: {
+        status: 403,
+        data: {
+          error: 'Création de course bloquée…',
+          error_code: 'billing_access_restricted',
+          details: {
+            billing_access_state: 'full',
+            capability: 'CREATE_OWN_PORTFOLIO_BOOKING',
+          },
+        },
+      },
+    };
+    const msg = getApiErrorMessage(err, 'Défaut');
+    expect(msg).toMatch(/Nouvelle course impossible/i);
+    expect(msg).toMatch(/recouvrement/i);
+    expect(msg).toMatch(/facturation plateforme/i);
+    expect(msg).toMatch(/022 512 02 03/);
+    expect(msg).toMatch(/info@lirie\.ch/);
+    expect(msg).not.toMatch(/CREATE_OWN_PORTFOLIO/i);
+  });
 });

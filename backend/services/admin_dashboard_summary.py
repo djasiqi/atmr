@@ -1,11 +1,16 @@
-"""Agrégats légers pour GET /admin/dashboard/summary (orientation admin, pas fourre-tout)."""
+"""Agrégats légers pour GET /admin/dashboard/summary (orientation admin, pas fourre-tout).
+
+Champs dépréciés (conservés pour compat JSON, non affichés côté FE dashboard) :
+- booking_trends → toujours [] (plus de requête mensuelle)
+- active_users_30d, invoices_current_month, revenue_current_month_chf
+- platform_alerts_open (sémantique réelle = actions plateforme / CR en exécution)
+"""
 
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from dateutil.relativedelta import relativedelta
 from sqlalchemy import and_, desc, func, nullslast, or_, select
 from sqlalchemy.orm import joinedload
 
@@ -15,14 +20,21 @@ from models.client import Client
 from models.company import Company
 from models.demo_request import DemoRequest
 from models.dispatch import DispatchRun
-from models.enums import DispatchStatus
+from models.enums import (
+    DispatchStatus,
+    PlatformBillingPeriodStatus,
+    PlatformIssuedInvoiceStatus,
+    PlatformStatementStatus,
+)
 from models.invoice import Invoice
+from models.platform_billing import (
+    PlatformBillingPeriod,
+    PlatformInvoice,
+    PlatformIssuedInvoice,
+)
 from models.platform_change_request import PlatformChangeRequest
 from models.platform_runbook_execution import PlatformRunbookExecution
-from repositories.booking_repository import BookingRepository
 from services.platform_governance_constants import CHANGE_REQUEST_EXECUTING
-
-booking_repo = BookingRepository()
 
 # Réservations « à traiter » : non terminées / non annulées (aligné dispatch opérationnel).
 BOOKING_PENDING_ACTION_STATUSES: tuple[BookingStatus, ...] = (
@@ -36,6 +48,17 @@ BOOKING_PENDING_ACTION_STATUSES: tuple[BookingStatus, ...] = (
 # Demandes démo « ouvertes » : même règle que le compteur `new` côté AdminDemoRequests.
 DEMO_OPEN_STATUSES: frozenset[str] = frozenset({"new"})
 _DECEMBER = 12
+
+_STATEMENT_TO_REVIEW: tuple[str, ...] = (
+    PlatformStatementStatus.NEEDS_REVIEW.value,
+    PlatformStatementStatus.CALCULATED.value,
+)
+
+_ISSUED_EXCLUDED: tuple[str, ...] = (
+    PlatformIssuedInvoiceStatus.DRAFT.value,
+    PlatformIssuedInvoiceStatus.CANCELLED.value,
+    PlatformIssuedInvoiceStatus.CREDITED.value,
+)
 
 
 def _is_synthetic_demo_email_expr(column):
@@ -108,10 +131,29 @@ def build_admin_dashboard_summary() -> dict[str, Any]:
         or 0
     )
 
+    # Compat API : clé historique ; sémantique = actions plateforme (CR en exécution).
     platform_alerts_open = (
         db.session.scalar(
             select(func.count(PlatformChangeRequest.id)).where(
                 PlatformChangeRequest.status == CHANGE_REQUEST_EXECUTING
+            )
+        )
+        or 0
+    )
+
+    billing_to_review = (
+        db.session.scalar(
+            select(func.count(PlatformInvoice.id))
+            .select_from(PlatformInvoice)
+            .join(
+                PlatformBillingPeriod,
+                PlatformInvoice.period_id == PlatformBillingPeriod.id,
+            )
+            .where(
+                PlatformInvoice.statement_status.in_(_STATEMENT_TO_REVIEW),
+                PlatformBillingPeriod.status
+                == PlatformBillingPeriodStatus.DRAFT.value,
+                PlatformInvoice.cancelled_at.is_(None),
             )
         )
         or 0
@@ -142,6 +184,7 @@ def build_admin_dashboard_summary() -> dict[str, Any]:
         or 0
     )
 
+    # Compat : annulations touchées récemment (updated_at) — ne pas utiliser pour le taux.
     bookings_canceled_7d = (
         db.session.scalar(
             select(func.count(Booking.id)).where(
@@ -153,6 +196,25 @@ def build_admin_dashboard_summary() -> dict[str, Any]:
         or 0
     )
 
+    # Cohorte : créées dans la fenêtre ET actuellement annulées.
+    bookings_canceled_from_created_7d = (
+        db.session.scalar(
+            select(func.count(Booking.id)).where(
+                Booking.created_at >= seven_ago,
+                Booking.created_at <= now,
+                Booking.status == BookingStatus.CANCELED,
+            )
+        )
+        or 0
+    )
+    created_for_rate = max(int(bookings_created_7d), 1)
+    cancellation_rate_7d = float(bookings_canceled_from_created_7d) / float(
+        created_for_rate
+    )
+    if int(bookings_created_7d) == 0:
+        cancellation_rate_7d = 0.0
+
+    # Déprécié FE : conservé temporairement.
     active_users_30d = (
         db.session.scalar(
             select(func.count(User.id)).where(
@@ -175,6 +237,7 @@ def build_admin_dashboard_summary() -> dict[str, Any]:
         or 0
     )
 
+    # Déprécié : valeur transports terminés (pas le CA LIRIE).
     revenue_stmt = select(func.coalesce(func.sum(Booking.amount), 0)).where(
         and_(
             Booking.status == BookingStatus.COMPLETED,
@@ -186,7 +249,22 @@ def build_admin_dashboard_summary() -> dict[str, Any]:
         db.session.execute(revenue_stmt).scalar_one() or 0
     )
 
-    # --- platform_snippet (léger : pas de build_platform_status_payload) ---
+    # Vrai montant facturé LIRIE (factures légales émises).
+    effective_issued_at = func.coalesce(
+        PlatformIssuedInvoice.issued_at, PlatformIssuedInvoice.created_at
+    )
+    platform_invoiced_stmt = select(
+        func.coalesce(func.sum(PlatformIssuedInvoice.total_amount), 0)
+    ).where(
+        effective_issued_at >= start_of_month,
+        effective_issued_at < end_of_month,
+        PlatformIssuedInvoice.status.notin_(_ISSUED_EXCLUDED),
+    )
+    platform_invoiced_current_month_chf = float(
+        db.session.execute(platform_invoiced_stmt).scalar_one() or 0
+    )
+
+    # --- platform_snippet ---
     runbooks_today = (
         db.session.scalar(
             select(func.count(PlatformRunbookExecution.id)).where(
@@ -197,7 +275,6 @@ def build_admin_dashboard_summary() -> dict[str, Any]:
         or 0
     )
 
-    # Drift : tenants suspendus avec activité résiduelle (même règle que gouvernance).
     active_statuses = tuple(s.value for s in BOOKING_PENDING_ACTION_STATUSES)
     tenants_in_drift = (
         db.session.scalar(
@@ -223,28 +300,17 @@ def build_admin_dashboard_summary() -> dict[str, Any]:
     )
 
     open_governance = int(platform_alerts_open)
-    overall_status = (
-        "degraded" if (tenants_in_drift > 0 or open_governance > 0) else "ok"
-    )
+    critical_attention_count = int(tenants_in_drift) + open_governance
+    overall_status = "degraded" if critical_attention_count > 0 else "ok"
 
-    # --- booking_trends (12 mois, created_at) — même logique que /admin/stats ---
-
-    current_month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    window_start = current_month_start - relativedelta(months=11)
-    counts_by_month = booking_repo.get_monthly_booking_counts(window_start, now)
+    # Déprécié : plus de requête mensuelle — clé conservée vide.
     booking_trends: list[dict[str, Any]] = []
-    for i in range(11, -1, -1):
-        month_start = current_month_start - relativedelta(months=i)
-        month_label = month_start.strftime("%Y-%m")
-        booking_trends.append(
-            {"month": month_label, "bookings": counts_by_month.get(month_label, 0)}
-        )
 
-    # --- recent_activity : dernières réservations (V1), sans adresses ---
+    # --- recent_activity : 5 dernières réservations ---
     recent_rows = (
         Booking.query.options(joinedload(Booking.client).joinedload(Client.user))
         .order_by(nullslast(desc(Booking.updated_at)), desc(Booking.id))
-        .limit(10)
+        .limit(5)
         .all()
     )
     recent_activity: list[dict[str, Any]] = []
@@ -272,34 +338,44 @@ def build_admin_dashboard_summary() -> dict[str, Any]:
         recent_activity.append(
             {
                 "type": "booking",
+                "entity_id": int(b.id),
                 "label": label,
                 "status": st,
                 "occurred_at": occurred.isoformat() if occurred else now.isoformat(),
-                "href": None,
+                "action": "open_booking",
             }
         )
 
     return {
+        "generated_at": now.isoformat(),
         "priorities": {
             "bookings_pending_action": int(bookings_pending_action),
             "demo_requests_open": int(demo_requests_open),
             "tenants_suspended": int(tenants_suspended),
+            "organizations_suspended": int(tenants_suspended),
             "platform_alerts_open": int(platform_alerts_open),
+            "billing_to_review": int(billing_to_review),
+            "critical_attention_count": int(critical_attention_count),
         },
         "kpi_business": {
             "bookings_created_7d": int(bookings_created_7d),
             "bookings_completed_7d": int(bookings_completed_7d),
             "bookings_canceled_7d": int(bookings_canceled_7d),
+            "bookings_canceled_from_created_7d": int(bookings_canceled_from_created_7d),
+            "cancellation_rate_7d": cancellation_rate_7d,
             "active_users_30d": int(active_users_30d),
             "invoices_current_month": int(invoices_current_month),
             "revenue_current_month_chf": revenue_current_month_chf,
+            "platform_invoiced_current_month_chf": platform_invoiced_current_month_chf,
         },
         "platform_snippet": {
             "overall_status": overall_status,
             "open_alerts": open_governance,
             "runbooks_today": int(runbooks_today),
             "tenants_in_drift": int(tenants_in_drift),
+            "critical_attention_count": int(critical_attention_count),
         },
+        # Déprécié : toujours vide — ne plus appeler get_monthly_booking_counts.
         "booking_trends": booking_trends,
         "recent_activity": recent_activity,
     }

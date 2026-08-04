@@ -350,12 +350,18 @@ def revoke_refresh_token(token: str, reason: str | None = None) -> bool:
     return False
 
 
-def revoke_all_user_tokens(user_id: int, reason: str | None = None) -> int:
+def revoke_all_user_tokens(
+    user_id: int,
+    reason: str | None = None,
+    *,
+    commit: bool = True,
+) -> int:
     """Révoque tous les refresh tokens actifs d'un utilisateur.
 
     Args:
         user_id: ID de l'utilisateur
         reason: Raison de la révocation (optionnel, défaut: "Révoqué par l'admin")
+        commit: Si False, flush seulement (transaction appelante)
 
     Returns:
         Nombre de tokens révoqués
@@ -380,7 +386,10 @@ def revoke_all_user_tokens(user_id: int, reason: str | None = None) -> int:
             token.revoked_at = now
             token.revoked_reason = revoked_reason
 
-        db.session.commit()
+        if commit:
+            db.session.commit()
+        else:
+            db.session.flush()
         logger.info(
             "%d refresh token(s) révoqué(s) pour user_id=%d (reason=%s)",
             count,

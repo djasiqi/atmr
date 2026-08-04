@@ -44,3 +44,14 @@ def register_control_plane_cli(app: Flask) -> None:
 
         out = backfill_control_plane(dry_run=dry_run)
         click.echo(json.dumps(out, ensure_ascii=False, default=str))
+
+    @control_plane.command("cutover-status")
+    @with_appcontext
+    def cutover_status_cmd() -> None:
+        """Vérifie si CONTROL_PLANE_ORGANIZATIONS_READ_MODE=control_plane est prêt."""
+        from services.control_plane.cutover import control_plane_cutover_status
+
+        out = control_plane_cutover_status()
+        click.echo(json.dumps(out, ensure_ascii=False, default=str))
+        if not out.get("ready"):
+            raise SystemExit(1)

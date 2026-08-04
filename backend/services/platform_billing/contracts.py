@@ -17,6 +17,7 @@ from models.enums import (
 )
 from models.platform_billing import CompanyPlatformBillingConfig
 from services.platform_billing.decimal_json import decimal_to_str, parse_decimal
+from services.platform_billing.errors import BillingInvariantError
 
 # Import tardif dans les fonctions pour éviter cycles avec partner_agreement
 
@@ -187,7 +188,76 @@ def supersede_overlapping_contracts(
     return touched
 
 
+def calendar_year_month_zurich(dt: datetime | None) -> tuple[int | None, int | None]:
+    """Année / mois calendaires Europe/Zurich pour une instant UTC."""
+    if dt is None:
+        return None, None
+    aware = _as_aware(dt)
+    if aware is None:
+        return None, None
+    local = aware.astimezone(_ZURICH)
+    return local.year, local.month
+
+
+def resolve_effective_instant_from_payload(
+    data: dict[str, Any],
+    *,
+    year_key: str,
+    month_key: str,
+    iso_key: str,
+) -> datetime | None:
+    """Résout une date d'effet : year/month prioritaires, sinon ISO normalisé.
+
+    Si year/month et ISO sont tous présents et contradictoires → 409.
+    """
+    year_raw = data.get(year_key)
+    month_raw = data.get(month_key)
+    has_ym = year_raw is not None and year_raw != ""
+    has_m = month_raw is not None and month_raw != ""
+    if has_ym ^ has_m:
+        raise BillingInvariantError(
+            "EFFECTIVE_YM_INCOMPLETE",
+            f"{year_key} et {month_key} doivent être fournis ensemble.",
+            details={year_key: year_raw, month_key: month_raw},
+        )
+    from_ym: datetime | None = None
+    if has_ym and has_m:
+        try:
+            year = int(year_raw)
+            month = int(month_raw)
+        except (TypeError, ValueError) as exc:
+            raise BillingInvariantError(
+                "EFFECTIVE_YM_INVALID",
+                f"{year_key}/{month_key} invalides.",
+                details={year_key: year_raw, month_key: month_raw},
+            ) from exc
+        if month < 1 or month > 12:
+            raise BillingInvariantError(
+                "EFFECTIVE_MONTH_OUT_OF_RANGE",
+                f"{month_key} doit être entre 1 et 12.",
+                details={month_key: month},
+            )
+        from_ym = month_start_zurich_utc(year, month)
+
+    iso_dt = normalize_effective_to_month_start(_parse_iso_dt(data.get(iso_key)))
+    if from_ym is not None and iso_dt is not None and from_ym != iso_dt:
+        raise BillingInvariantError(
+            "EFFECTIVE_DATE_CONFLICT",
+            f"{year_key}/{month_key} et {iso_key} sont contradictoires.",
+            details={
+                year_key: year_raw,
+                month_key: month_raw,
+                iso_key: data.get(iso_key),
+                "from_year_month": from_ym.isoformat(),
+                "from_iso": iso_dt.isoformat(),
+            },
+        )
+    return from_ym if from_ym is not None else iso_dt
+
+
 def serialize_contract(cfg: CompanyPlatformBillingConfig) -> dict[str, Any]:
+    ef_year, ef_month = calendar_year_month_zurich(cfg.effective_from)
+    et_year, et_month = calendar_year_month_zurich(cfg.effective_to)
     return {
         "id": cfg.id,
         "company_id": cfg.company_id,
@@ -228,10 +298,15 @@ def serialize_contract(cfg: CompanyPlatformBillingConfig) -> dict[str, Any]:
         "support_hourly_rate_default": decimal_to_str(
             cfg.support_hourly_rate_default
         ),
+        "effective_year": ef_year,
+        "effective_month": ef_month,
         "effective_from": cfg.effective_from.isoformat()
         if cfg.effective_from
         else None,
+        "effective_to_year": et_year,
+        "effective_to_month": et_month,
         "effective_to": cfg.effective_to.isoformat() if cfg.effective_to else None,
+        "effective_timezone": "Europe/Zurich",
         "is_active": cfg.is_active,
         "notes": cfg.notes,
         "commercially_frozen": _is_commercially_frozen(cfg.id),
@@ -282,11 +357,17 @@ def create_contract_version(
     company_id: int, data: dict[str, Any]
 ) -> CompanyPlatformBillingConfig:
     """Crée une nouvelle version de contrat (jamais d'écrasement silencieux)."""
-    effective_from = normalize_effective_to_month_start(
-        _parse_iso_dt(data.get("effective_from"))
+    effective_from = resolve_effective_instant_from_payload(
+        data,
+        year_key="effective_year",
+        month_key="effective_month",
+        iso_key="effective_from",
     )
-    effective_to = normalize_effective_to_month_start(
-        _parse_iso_dt(data.get("effective_to"))
+    effective_to = resolve_effective_instant_from_payload(
+        data,
+        year_key="effective_to_year",
+        month_key="effective_to_month",
+        iso_key="effective_to",
     )
     if effective_from and effective_to and effective_to <= effective_from:
         raise ValueError("effective_to doit être strictement après effective_from")
@@ -361,10 +442,22 @@ def create_contract_version(
 
     assert_no_overlap(company_id, effective_from, effective_to)
 
-    is_billing = bool(data.get("is_billing_enabled", True))
-    own = bool(data.get("own_portfolio_billing_enabled", is_billing))
-    comm = bool(data.get("lirie_commission_enabled", is_billing))
-    support = bool(data.get("support_enabled", is_billing))
+    # Défauts sécurisés : inactif tant que non explicitement demandé
+    is_billing = bool(data.get("is_billing_enabled", False))
+    own = bool(data.get("own_portfolio_billing_enabled", False))
+    comm = bool(data.get("lirie_commission_enabled", False))
+    support = bool(data.get("support_enabled", False))
+    if is_billing and not (own or comm or support):
+        raise BillingInvariantError(
+            "BILLING_PRODUCTS_REQUIRED",
+            "Sélectionnez au moins un produit avant d’activer la facturation.",
+            details={
+                "is_billing_enabled": is_billing,
+                "own_portfolio_billing_enabled": own,
+                "lirie_commission_enabled": comm,
+                "support_enabled": support,
+            },
+        )
 
     from services.platform_billing.dunning_policy import parse_dunning_fields
 
@@ -402,15 +495,34 @@ def create_contract_version(
     return cfg
 
 
-def close_contract(contract_id: int, effective_to: datetime | None = None) -> CompanyPlatformBillingConfig:
+def close_contract(
+    contract_id: int,
+    effective_to: datetime | None = None,
+    *,
+    data: dict[str, Any] | None = None,
+) -> CompanyPlatformBillingConfig:
     """Clôture un contrat (effective_to = début du mois suivant par défaut / fourni).
 
-    Interdit si un accord juridique est envoyé/signé : la clôture temporelle
-    passe alors uniquement par create_contract_version / supersede.
+    Interdit si déjà clôturé, ou si un accord juridique est envoyé/signé :
+    la clôture temporelle passe alors uniquement par create_contract_version / supersede.
     """
     cfg = db.session.get(CompanyPlatformBillingConfig, contract_id)
     if not cfg:
-        raise ValueError("Contrat introuvable")
+        raise BillingInvariantError(
+            "CONTRACT_NOT_FOUND",
+            "Contrat introuvable",
+            status_code=404,
+            details={"contract_id": contract_id},
+        )
+    if cfg.effective_to is not None:
+        raise BillingInvariantError(
+            "CONTRACT_ALREADY_CLOSED",
+            "Cette version contractuelle est déjà clôturée.",
+            details={
+                "contract_id": contract_id,
+                "effective_to": cfg.effective_to.isoformat(),
+            },
+        )
     from services.platform_billing.partner_agreement import (
         PartnerAgreementError,
         assert_config_mutable,
@@ -422,7 +534,25 @@ def close_contract(contract_id: int, effective_to: datetime | None = None) -> Co
         raise ValueError(exc.message) from exc
     rows = lock_company_contracts_for_update(cfg.company_id)
     cfg = next((r for r in rows if r.id == contract_id), cfg)
-    to = normalize_effective_to_month_start(effective_to)
+    if cfg.effective_to is not None:
+        raise BillingInvariantError(
+            "CONTRACT_ALREADY_CLOSED",
+            "Cette version contractuelle est déjà clôturée.",
+            details={
+                "contract_id": contract_id,
+                "effective_to": cfg.effective_to.isoformat(),
+            },
+        )
+
+    to = effective_to
+    if data:
+        to = resolve_effective_instant_from_payload(
+            data,
+            year_key="effective_to_year",
+            month_key="effective_to_month",
+            iso_key="effective_to",
+        )
+    to = normalize_effective_to_month_start(to)
     if to is None:
         # Clôture immédiate au début du mois Zurich courant
         now_local = datetime.now(_ZURICH)

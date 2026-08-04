@@ -3,9 +3,12 @@ import { BrowserRouter, MemoryRouter } from 'react-router-dom';
 import { Provider } from 'react-redux';
 import configureStore from 'redux-mock-store';
 import Login from './Login';
-import apiClient, { setCurrentAuthEnv } from '../../utils/apiClient';
+import apiClient from '../../utils/apiClient';
 import { jwtDecode } from 'jwt-decode';
 import { setPendingActivationSession } from '../../utils/activationSessionStore';
+
+const mockHydrateFromLogin = jest.fn();
+const mockNavigate = jest.fn();
 
 jest.mock('../../utils/apiClient', () => ({
   __esModule: true,
@@ -28,8 +31,19 @@ jest.mock('../../utils/activationSessionStore', () => ({
   removePendingActivationByEmail: jest.fn(),
   setPendingActivationSession: jest.fn(),
 }));
+jest.mock('../../contexts/SessionBootstrapContext', () => ({
+  useSessionBootstrap: () => ({
+    status: 'anonymous',
+    isAuthenticated: false,
+    user: null,
+    refreshBootstrap: jest.fn(),
+    hydrateFromLogin: (...args) => mockHydrateFromLogin(...args),
+  }),
+}));
+jest.mock('../../services/companySocket', () => ({
+  disconnectCompanySocket: jest.fn(),
+}));
 
-const mockNavigate = jest.fn();
 jest.mock('react-router-dom', () => ({
   ...jest.requireActual('react-router-dom'),
   useNavigate: () => mockNavigate,
@@ -112,7 +126,7 @@ describe('Login Page', () => {
         expect.objectContaining({ skipCsrf: true })
       );
     });
-    expect(setCurrentAuthEnv).toHaveBeenCalledWith('app');
+    expect(mockHydrateFromLogin).toHaveBeenCalled();
     expect(mockNavigate).toHaveBeenCalledWith('/app/dashboard/company/user-123', { replace: true });
   });
 

@@ -105,3 +105,54 @@ def test_session_mismatch_goes_to_dlq(monkeypatch):
     )
     assert ok is True
     assert dlq_calls == ["session_generation_mismatch"]
+
+
+def test_sequence_duplicate_skip_commits_offset(monkeypatch):
+    """Conflit session/sequence traité en duplicate → offset avance (dépoison)."""
+    consumer = TrackingIngestConsumer()
+    commit_calls: list[int] = []
+    monkeypatch.setattr(
+        "services.tracking.ingest_consumer.TRACKING_PERSIST_WITH_OUTBOX", True
+    )
+    monkeypatch.setattr(
+        "services.tracking.ingest_consumer.TRACKING_INGEST_PERSIST_ENABLED", False
+    )
+
+    def _persist(message_obj, *, driver_id: int):
+        return (
+            {**message_obj, "location_event_id": "e-new"},
+            {
+                "status": "duplicate",
+                "location_event_id": "e-new",
+                "reason": "session_sequence_already_persisted",
+            },
+        )
+
+    monkeypatch.setattr(
+        "services.tracking.persist_kafka_outbox.persist_driver_location_with_outbox_from_kafka",
+        _persist,
+    )
+    monkeypatch.setattr(
+        consumer, "_commit_record", lambda record: commit_calls.append(record.offset)
+    )
+    monkeypatch.setattr(consumer, "_observe_e2e_latency", lambda _m: None)
+    monkeypatch.setattr(consumer, "_is_valid", lambda _m: True)
+
+    ok = consumer._process_record(
+        _record(
+            {
+                "driver_id": 3,
+                "company_id": 1,
+                "source": "http",
+                "payload": {
+                    "latitude": 46.1,
+                    "longitude": 6.1,
+                    "tracking_session_id": "http-legacy-3",
+                    "sequence_id": 3,
+                    "location_event_id": "e-new",
+                },
+            }
+        )
+    )
+    assert ok is True
+    assert commit_calls == [42]

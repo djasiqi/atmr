@@ -4,12 +4,20 @@ import styles from './ClientsTable.module.css';
 import ClientTableRowActions from './ClientTableRowActions';
 import { getClientDisplayName } from '../../../../utils/clientSearchUtils';
 
-const ClientsTable = ({ clients, onSelect, onEdit, onDelete, selectedClientId, onRefresh: _onRefresh }) => {
+const ClientsTable = ({
+  clients,
+  onSelect,
+  onEdit,
+  onDelete,
+  selectedClientId,
+  onRefresh: _onRefresh,
+  compact = false,
+}) => {
   if (!clients || clients.length === 0) {
     return (
       <div className={styles.empty}>
         <FiInbox size={48} className={styles.emptyIcon} />
-        <h3>Aucun client trouve</h3>
+        <h3>Aucun client trouvé</h3>
         <p>Modifiez vos filtres ou ajoutez un client</p>
       </div>
     );
@@ -48,17 +56,19 @@ const ClientsTable = ({ clients, onSelect, onEdit, onDelete, selectedClientId, o
   };
 
   return (
-    <div className={styles.tableContainer}>
+    <div
+      className={`${styles.tableContainer} ${compact ? styles.tableCompact : ''}`}
+    >
       <div className={styles.tableScroll}>
         <table className={styles.table}>
           <thead>
             <tr>
-              <th>Client</th>
-              <th>Contact</th>
-              <th>Adresse</th>
-              <th>Statut</th>
-              <th>Cree le</th>
-              <th>Actions</th>
+              <th className={styles.colClient}>Client</th>
+              <th className={styles.colContact}>Contact</th>
+              <th className={`${styles.colAddress} ${styles.colSecondary}`}>Adresse</th>
+              <th className={styles.colStatus}>Statut</th>
+              <th className={`${styles.colDate} ${styles.colSecondary}`}>Créé le</th>
+              <th className={styles.colActionsHead}>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -81,7 +91,8 @@ const ClientsTable = ({ clients, onSelect, onEdit, onDelete, selectedClientId, o
                     onSelect && onSelect(client);
                   }
                 }}
-                aria-label={`Voir les details de ${displayName}`}
+                aria-label={`Voir les détails de ${displayName}`}
+                aria-selected={isSelected}
               >
                 <td>
                   <div className={styles.clientName}>
@@ -99,7 +110,7 @@ const ClientsTable = ({ clients, onSelect, onEdit, onDelete, selectedClientId, o
                     <span>{contact.value}</span>
                   </div>
                 </td>
-                <td>
+                <td className={styles.colSecondary}>
                   <div className={styles.addressCell} title={address.full || undefined}>
                     {address.short}
                   </div>
@@ -113,7 +124,9 @@ const ClientsTable = ({ clients, onSelect, onEdit, onDelete, selectedClientId, o
                     {client.is_active ? 'Actif' : 'Inactif'}
                   </span>
                 </td>
-                <td className={styles.dateCell}>{formatDate(client.created_at)}</td>
+                <td className={`${styles.dateCell} ${styles.colSecondary}`}>
+                  {formatDate(client.created_at)}
+                </td>
                 <td className={styles.tdActions} onClick={(e) => e.stopPropagation()}>
                   <ClientTableRowActions
                     client={client}

@@ -130,3 +130,30 @@
   padding: 0.4rem 0.9rem;
   cursor: pointer;
 }
+
+.section select {
+  display: block;
+  width: 100%;
+  margin: 0.35rem 0 0.75rem;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--border-primary, #e5e7eb);
+  border-radius: 6px;
+  background: var(--bg-primary, #fff);
+  font: inherit;
+}
+
+.section label {
+  display: block;
+  margin-top: 0.35rem;
+}
+
+.section .footerClose {
+  margin-top: 0.5rem;
+}
+
+.billingActions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+}

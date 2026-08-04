@@ -1,11 +1,12 @@
-"""control_plane_cp_pr1_and_drop_uq_company_user_id
+"""control_plane_cp_pr1
 
 Revision ID: d0e04085600f
-Revises: 26fb555b0eb1
+Revises: e4f273565844
 Create Date: 2026-08-03 22:01:05.839030
 
 CP-PR1 : tables control plane + colonnes data_origin User.
-Retire uq_company_user_id (incompatible avec les coquilles cliniques).
+Ne crée / ne retire aucune contrainte UNIQUE sur company.user_id
+(coquilles cliniques partagent volontairement le propriétaire).
 """
 
 from __future__ import annotations
@@ -15,15 +16,13 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision = "d0e04085600f"
-down_revision = "26fb555b0eb1"
+down_revision = "e4f273565844"
 branch_labels = None
 depends_on = None
 
 
 def upgrade() -> None:
     op.execute("CREATE EXTENSION IF NOT EXISTS pgcrypto")
-
-    op.drop_constraint("uq_company_user_id", "company", type_="unique")
 
     op.create_table(
         "permission_catalog",
@@ -557,5 +556,3 @@ def downgrade() -> None:
     op.drop_table("service_catalog")
     op.drop_table("role_template")
     op.drop_table("permission_catalog")
-
-    op.create_unique_constraint("uq_company_user_id", "company", ["user_id"])

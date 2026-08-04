@@ -81,16 +81,11 @@ def test_classify_driver_makes_transport_tenant(db_session, seeded):
     assert decision.kind == CompanyProjectionKind.TRANSPORT_TENANT
 
 
-def test_classify_clinic_shell_company_owner(db_session, seeded):
+def test_classify_clinic_shell_company_owner_is_ambiguous(db_session, seeded):
+    """clinic + 0 driver + owner COMPANY → AMBIGUOUS (fail-closed)."""
     owner = _user(role=UserRole.COMPANY)
     tenant = _company(owner, name="Tenant")
     shell = _company(owner, name="Clinic Shell")
-    # mapping clinique sans driver
-    m = ClinicBillingPartyMapping()
-    m.company_id = tenant.id
-    m.clinic_company_id = shell.id
-    # billing_party_id requis — créer un faux via skip si FK stricte
-    # Utiliser un BillingParty minimal
     from models.billing_party import BillingParty
     from models.enums import BillingPartyType
 
@@ -101,6 +96,34 @@ def test_classify_clinic_shell_company_owner(db_session, seeded):
     bp.external_ref = f"clinic_company:{shell.id}"
     db.session.add(bp)
     db.session.flush()
+    m = ClinicBillingPartyMapping()
+    m.company_id = tenant.id
+    m.clinic_company_id = shell.id
+    m.billing_party_id = bp.id
+    db.session.add(m)
+    db.session.flush()
+
+    decision = classify_company_for_control_plane(shell)
+    assert decision.kind == CompanyProjectionKind.AMBIGUOUS
+
+
+def test_classify_clinic_shell_non_company_owner(db_session, seeded):
+    """clinic + 0 driver + owner non-COMPANY → BILLING_SHELL."""
+    owner = _user(role=UserRole.CLIENT)
+    shell = _company(owner, name="Clinic Shell")
+    from models.billing_party import BillingParty
+    from models.enums import BillingPartyType
+
+    bp = BillingParty()
+    bp.company_id = shell.id
+    bp.type = BillingPartyType.CLINIC
+    bp.display_name = "Clinic BP"
+    bp.external_ref = f"clinic_company:{shell.id}"
+    db.session.add(bp)
+    db.session.flush()
+    m = ClinicBillingPartyMapping()
+    m.company_id = shell.id
+    m.clinic_company_id = shell.id
     m.billing_party_id = bp.id
     db.session.add(m)
     db.session.flush()
@@ -177,6 +200,49 @@ def test_effective_access_shadow(db_session, seeded):
     assert payload["decision_mode"] == "shadow"
     assert payload["permissions_enforced"] == []
     assert payload["subject_state"] in ("eligible", "blocked", "needs_review")
+
+
+def test_effective_access_invited_membership_blocked(db_session, seeded):
+    inst = Institution()
+    inst.name = "Clinique Invite"
+    inst.contact_email = "c@invite.ch"
+    db.session.add(inst)
+    db.session.flush()
+
+    invited = _user(
+        role=UserRole.INSTITUTION,
+        username="invited_u",
+        email="invited@test.ch",
+        institution_id=inst.id,
+        institution_role=InstitutionRole.READER.value,
+        account_status="active",
+    )
+    proj = ControlPlaneProjector()
+    proj.ensure_institution_organization(inst)
+    membership = proj.sync_institution_user(invited)
+    assert membership is not None
+    membership.membership_status = "invited"
+    db.session.flush()
+
+    payload = compute_effective_access(invited.id)
+    assert payload["subject_state"] == "blocked"
+    codes = [
+        *payload["blocking_reasons"],
+        *[r for m in payload["memberships"] for r in m["blocking_reasons"]],
+    ]
+    assert any(b["code"] == "MEMBERSHIP_INVITED" for b in codes)
+
+
+def test_effective_access_no_membership_blocked(db_session, seeded):
+    lone = _user(
+        role=UserRole.INSTITUTION,
+        username="lone_u",
+        email="lone@test.ch",
+        account_status="active",
+    )
+    payload = compute_effective_access(lone.id)
+    assert payload["subject_state"] == "blocked"
+    assert any(b["code"] == "NO_ACTIVE_MEMBERSHIP" for b in payload["blocking_reasons"])
 
 
 def test_no_org_for_orphan_company_account(db_session, seeded):

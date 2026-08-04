@@ -21,20 +21,20 @@ import { adminPaths } from '../routing/adminRoutePaths';
 import AdminActionDialog from '../components/AdminActionDialog';
 
 const emptyContract = {
-  is_billing_enabled: true,
-  own_portfolio_billing_enabled: true,
-  lirie_commission_enabled: true,
+  is_billing_enabled: false,
+  own_portfolio_billing_enabled: false,
+  lirie_commission_enabled: false,
   support_enabled: false,
   subscription_pricing_mode: 'volume',
   custom_subscription_amount: '',
   use_global_pricing_grid: true,
-  commission_rate: '0.030000',
+  commission_rate: '',
   commission_cancellation_policy: 'exclude',
-  free_license_max_months: '60',
+  free_license_max_months: '',
   statement_dispute_days: '10',
   support_hourly_rate_default: '',
   payment_terms_days: '30',
-  automated_dunning_enabled: true,
+  automated_dunning_enabled: false,
   reminder_delay_days_after_due: '0',
   reminder_grace_days: '10',
   full_suspend_days_after_due: '30',
@@ -111,18 +111,19 @@ const isLikelyTestCompany = (name) => {
   );
 };
 
-/** Décimal API "0.030000" → pourcentage affichable "3". */
+/** Décimal API → pourcentage affichable (vide si absent). */
 const rateToPercent = (rate) => {
-  if (rate == null || rate === '') return '3';
+  if (rate == null || rate === '') return '';
   const n = Number(String(rate).replace(',', '.'));
-  if (Number.isNaN(n)) return '3';
+  if (Number.isNaN(n)) return '';
   return String(Number((n * 100).toFixed(4)));
 };
 
 /** Pourcentage UI → décimal API. */
 const percentToRate = (percent) => {
+  if (percent == null || percent === '') return null;
   const n = Number(String(percent).replace(',', '.'));
-  if (Number.isNaN(n)) return '0.030000';
+  if (Number.isNaN(n)) return null;
   return (n / 100).toFixed(6);
 };
 
@@ -135,10 +136,12 @@ const isoToMonth = (iso) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 };
 
-/** Mois calendaire → début de période Zurich (ISO). */
-const monthToIso = (ym) => {
+/** Mois calendaire YYYY-MM → { effective_year, effective_month }. */
+const monthToYearMonth = (ym) => {
   if (!ym || !/^\d{4}-\d{2}$/.test(ym)) return null;
-  return `${ym}-01T00:00:00+02:00`;
+  const [y, m] = ym.split('-').map(Number);
+  if (!y || !m || m < 1 || m > 12) return null;
+  return { effective_year: y, effective_month: m };
 };
 
 const fmtPeriod = (from, to) => {
@@ -146,6 +149,43 @@ const fmtPeriod = (from, to) => {
   const b = isoToMonth(to) || '∞';
   return `${a} → ${b}`;
 };
+
+const isContractOpen = (c) => c && (c.effective_to == null || c.effective_to === '');
+
+const contractFromRow = (c) => ({
+  ...emptyContract,
+  is_billing_enabled: !!c?.is_billing_enabled,
+  own_portfolio_billing_enabled: !!c?.own_portfolio_billing_enabled,
+  lirie_commission_enabled: !!c?.lirie_commission_enabled,
+  support_enabled: !!c?.support_enabled,
+  subscription_pricing_mode: c?.subscription_pricing_mode || 'volume',
+  custom_subscription_amount: c?.custom_subscription_amount || '',
+  commission_rate: c?.commission_rate || '',
+  commission_cancellation_policy: c?.commission_cancellation_policy || 'exclude',
+  free_license_max_months:
+    c?.free_license_max_months != null ? String(c.free_license_max_months) : '',
+  statement_dispute_days:
+    c?.statement_dispute_days != null ? String(c.statement_dispute_days) : '10',
+  support_hourly_rate_default: c?.support_hourly_rate_default || '',
+  payment_terms_days:
+    c?.payment_terms_days != null ? String(c.payment_terms_days) : '30',
+  automated_dunning_enabled: !!c?.automated_dunning_enabled,
+  reminder_delay_days_after_due: String(c?.reminder_delay_days_after_due ?? 0),
+  reminder_grace_days: String(c?.reminder_grace_days ?? 10),
+  full_suspend_days_after_due: String(c?.full_suspend_days_after_due ?? 30),
+  full_suspend_overdue_invoice_count: String(
+    c?.full_suspend_overdue_invoice_count ?? 2
+  ),
+  termination_notice_days: String(c?.termination_notice_days ?? 10),
+  partial_block_marketplace_offers: c?.partial_block_marketplace_offers !== false,
+  partial_block_marketplace_acceptance:
+    c?.partial_block_marketplace_acceptance !== false,
+  partial_block_billable_support: c?.partial_block_billable_support !== false,
+  partial_block_billable_configuration:
+    c?.partial_block_billable_configuration !== false,
+  effective_from: c?.effective_from || '',
+  notes: c?.notes || '',
+});
 
 /** Affiche uniquement les points encore à compléter (masque les « Prêt »). */
 const ReadinessItem = ({ ok, label, hint, errors }) => {
@@ -193,13 +233,15 @@ const AdminBillingDualProductConfig = () => {
   const [readiness, setReadiness] = useState(null);
   const [debtorForm, setDebtorForm] = useState(emptyDebtor);
   const [form, setForm] = useState(emptyContract);
-  const [commissionPercent, setCommissionPercent] = useState('3');
+  const [commissionPercent, setCommissionPercent] = useState('');
   const [effectiveMonth, setEffectiveMonth] = useState('');
   const [saving, setSaving] = useState(false);
   const [modalError, setModalError] = useState(null);
   const [partnerIdentity, setPartnerIdentity] = useState(null);
   const [selectedContractId, setSelectedContractId] = useState(null);
   const [savedSnapshot, setSavedSnapshot] = useState('');
+  const [initialDebtorSnapshot, setInitialDebtorSnapshot] = useState('');
+  const [initialCommercialSnapshot, setInitialCommercialSnapshot] = useState('');
   const [signedOn, setSignedOn] = useState('');
   const [docBusy, setDocBusy] = useState(false);
   const [actionDialog, setActionDialog] = useState(null);
@@ -238,74 +280,57 @@ const AdminBillingDualProductConfig = () => {
     });
   }, [items, search, showTestCompanies]);
 
-  const closeModal = useCallback(() => {
+  const buildSnapshot = (f, d, pct, month) =>
+    JSON.stringify({ f, d, pct, month });
+
+  const requestCloseModal = useCallback(() => {
+    const dirty =
+      Boolean(savedSnapshot) &&
+      buildSnapshot(form, debtorForm, commissionPercent, effectiveMonth) !==
+        savedSnapshot;
+    if (dirty) {
+      setActionDialog({
+        title: 'Modifications non enregistrées',
+        description:
+          'Des modifications ne sont pas enregistrées. Abandonner les modifications ?',
+        confirmationLabel: 'Abandonner les modifications',
+        danger: true,
+        onConfirm: async () => {
+          setModalCompany(null);
+          setModalError(null);
+          setContracts([]);
+          setReadiness(null);
+          setActionDialog(null);
+        },
+      });
+      return;
+    }
     setModalCompany(null);
     setModalError(null);
     setContracts([]);
     setReadiness(null);
-  }, []);
+  }, [savedSnapshot, form, debtorForm, commissionPercent, effectiveMonth]);
+
+  const closeModal = requestCloseModal;
 
   useEffect(() => {
     if (!modalCompany) return undefined;
     const onKey = (e) => {
-      if (e.key === 'Escape') closeModal();
+      if (e.key === 'Escape') requestCloseModal();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [modalCompany, closeModal]);
-
-  const buildSnapshot = (f, d, pct, month) =>
-    JSON.stringify({ f, d, pct, month });
+  }, [modalCompany, requestCloseModal]);
 
   const openCompany = async (row) => {
     setModalCompany(row);
     setModalError(null);
     setSignedOn('');
     const c = row.config;
-    const nextForm = {
-      ...emptyContract,
-      is_billing_enabled: c?.is_billing_enabled ?? true,
-      own_portfolio_billing_enabled: c?.own_portfolio_billing_enabled ?? true,
-      lirie_commission_enabled: c?.lirie_commission_enabled ?? true,
-      support_enabled: c?.support_enabled ?? false,
-      subscription_pricing_mode: c?.subscription_pricing_mode || 'volume',
-      custom_subscription_amount: c?.custom_subscription_amount || '',
-      commission_rate: c?.commission_rate || '0.030000',
-      commission_cancellation_policy:
-        c?.commission_cancellation_policy || 'exclude',
-      free_license_max_months:
-        c?.free_license_max_months != null
-          ? String(c.free_license_max_months)
-          : '60',
-      statement_dispute_days:
-        c?.statement_dispute_days != null
-          ? String(c.statement_dispute_days)
-          : '10',
-      support_hourly_rate_default: c?.support_hourly_rate_default || '',
-      payment_terms_days:
-        c?.payment_terms_days != null ? String(c.payment_terms_days) : '30',
-      automated_dunning_enabled: c?.automated_dunning_enabled !== false,
-      reminder_delay_days_after_due: String(
-        c?.reminder_delay_days_after_due ?? 0
-      ),
-      reminder_grace_days: String(c?.reminder_grace_days ?? 10),
-      full_suspend_days_after_due: String(c?.full_suspend_days_after_due ?? 30),
-      full_suspend_overdue_invoice_count: String(
-        c?.full_suspend_overdue_invoice_count ?? 2
-      ),
-      termination_notice_days: String(c?.termination_notice_days ?? 10),
-      partial_block_marketplace_offers:
-        c?.partial_block_marketplace_offers !== false,
-      partial_block_marketplace_acceptance:
-        c?.partial_block_marketplace_acceptance !== false,
-      partial_block_billable_support:
-        c?.partial_block_billable_support !== false,
-      partial_block_billable_configuration:
-        c?.partial_block_billable_configuration !== false,
-      effective_from: c?.effective_from || '',
-      notes: c?.notes || '',
-    };
-    const pct = rateToPercent(c?.commission_rate);
+    let nextForm = contractFromRow(c);
+    // Entreprise sans config : défauts inactifs (emptyContract)
+    if (!c) nextForm = { ...emptyContract };
+    const pct = rateToPercent(nextForm.commission_rate);
     const month = isoToMonth(c?.effective_from);
     setForm(nextForm);
     setCommissionPercent(pct);
@@ -318,7 +343,9 @@ const AdminBillingDualProductConfig = () => {
       const res = await fetchPlatformBillingContracts(row.company_id);
       const list = res?.contracts || [];
       setContracts(list);
-      setSelectedContractId(list[0]?.id ?? null);
+      const active =
+        list.find((x) => isContractOpen(x)) || list[0] || null;
+      setSelectedContractId(active?.id ?? null);
       setReadiness(res?.readiness || null);
       setPartnerIdentity(res?.partner_identity || null);
       const addr = res?.debtor_address;
@@ -335,35 +362,29 @@ const AdminBillingDualProductConfig = () => {
         signatory_name: cf.signatory_name || '',
         signatory_title: cf.signatory_title || '',
       };
-      if (list[0]) {
-        nextForm.commission_cancellation_policy =
-          list[0].commission_cancellation_policy || 'exclude';
-        nextForm.free_license_max_months =
-          list[0].free_license_max_months != null
-            ? String(list[0].free_license_max_months)
-            : nextForm.free_license_max_months;
-        nextForm.statement_dispute_days =
-          list[0].statement_dispute_days != null
-            ? String(list[0].statement_dispute_days)
-            : nextForm.statement_dispute_days;
-        setForm({ ...nextForm });
-        setCommissionPercent(rateToPercent(list[0].commission_rate));
-        setEffectiveMonth(isoToMonth(list[0].effective_from));
+      if (active) {
+        nextForm = contractFromRow(active);
+        setForm(nextForm);
+        setCommissionPercent(rateToPercent(active.commission_rate));
+        setEffectiveMonth(
+          active.effective_year && active.effective_month
+            ? `${active.effective_year}-${String(active.effective_month).padStart(2, '0')}`
+            : isoToMonth(active.effective_from)
+        );
       }
       setDebtorForm(nextDebtor);
-      setSavedSnapshot(
-        buildSnapshot(
-          list[0]
-            ? {
-                ...nextForm,
-                commission_cancellation_policy:
-                  list[0].commission_cancellation_policy || 'exclude',
-              }
-            : nextForm,
-          nextDebtor,
-          list[0] ? rateToPercent(list[0].commission_rate) : pct,
-          list[0] ? isoToMonth(list[0].effective_from) : month
-        )
+      const snapPct = active
+        ? rateToPercent(active.commission_rate)
+        : pct;
+      const snapMonth = active
+        ? active.effective_year && active.effective_month
+          ? `${active.effective_year}-${String(active.effective_month).padStart(2, '0')}`
+          : isoToMonth(active.effective_from)
+        : month;
+      setSavedSnapshot(buildSnapshot(nextForm, nextDebtor, snapPct, snapMonth));
+      setInitialDebtorSnapshot(JSON.stringify(nextDebtor));
+      setInitialCommercialSnapshot(
+        JSON.stringify({ f: nextForm, pct: snapPct, month: snapMonth })
       );
     } catch (e) {
       setModalError(e?.message || 'Erreur contrats');
@@ -378,76 +399,171 @@ const AdminBillingDualProductConfig = () => {
     );
   }, [form, debtorForm, commissionPercent, effectiveMonth, savedSnapshot]);
 
-  const selectedContract = useMemo(
-    () => contracts.find((c) => c.id === selectedContractId) || contracts[0] || null,
-    [contracts, selectedContractId]
+  const isDebtorDirty = useMemo(
+    () =>
+      Boolean(initialDebtorSnapshot) &&
+      JSON.stringify(debtorForm) !== initialDebtorSnapshot,
+    [debtorForm, initialDebtorSnapshot]
   );
 
-  const activeAgreement = selectedContract?.active_agreement || null;
+  const isCommercialDirty = useMemo(
+    () =>
+      Boolean(initialCommercialSnapshot) &&
+      JSON.stringify({ f: form, pct: commissionPercent, month: effectiveMonth }) !==
+        initialCommercialSnapshot,
+    [form, commissionPercent, effectiveMonth, initialCommercialSnapshot]
+  );
 
-  const saveContract = async () => {
+  const activeContract = useMemo(
+    () => contracts.find((c) => isContractOpen(c)) || null,
+    [contracts]
+  );
+
+  const selectedContract = useMemo(
+    () => contracts.find((c) => c.id === selectedContractId) || activeContract,
+    [contracts, selectedContractId, activeContract]
+  );
+
+  const isHistoricalSelection = Boolean(
+    selectedContract && !isContractOpen(selectedContract)
+  );
+
+  const formReadOnly = isHistoricalSelection;
+
+  const activeAgreement = selectedContract?.active_agreement || null;
+  const dunningReady = selectedContract?.dunning_automation_ready || null;
+
+  const selectContractVersion = (c) => {
+    setSelectedContractId(c.id);
+    setModalError(null);
+    if (!isContractOpen(c) && activeContract && c.id !== activeContract.id) {
+      // Historique : affichage lecture seule hydraté depuis la version
+      const hist = contractFromRow(c);
+      setForm(hist);
+      setCommissionPercent(rateToPercent(c.commission_rate));
+      setEffectiveMonth(
+        c.effective_year && c.effective_month
+          ? `${c.effective_year}-${String(c.effective_month).padStart(2, '0')}`
+          : isoToMonth(c.effective_from)
+      );
+      return;
+    }
+    // Version active : formulaire d'édition (nouvelle version basée sur l'active)
+    const next = contractFromRow(c);
+    setForm(next);
+    setCommissionPercent(rateToPercent(c.commission_rate));
+    setEffectiveMonth(
+      c.effective_year && c.effective_month
+        ? `${c.effective_year}-${String(c.effective_month).padStart(2, '0')}`
+        : isoToMonth(c.effective_from)
+    );
+  };
+
+  const performSave = async ({ saveAddress, saveCommercial }) => {
     if (!modalCompany) return;
     setSaving(true);
     setModalError(null);
     try {
-      if (debtorForm.street_name?.trim() && debtorForm.postal_code?.trim()) {
+      if (saveAddress) {
+        if (!debtorForm.street_name?.trim() || !debtorForm.postal_code?.trim()) {
+          throw new Error(
+            'Adresse incomplète : rue et NPA requis pour enregistrer l’adresse.'
+          );
+        }
         await putPlatformBillingDebtorAddress(modalCompany.company_id, debtorForm);
       }
-      const now = new Date();
-      const month =
-        effectiveMonth ||
-        `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-      const created = await createPlatformBillingContract(modalCompany.company_id, {
-        ...form,
-        commission_rate: percentToRate(commissionPercent),
-        commission_cancellation_policy: form.commission_cancellation_policy,
-        free_license_max_months:
-          form.subscription_pricing_mode === 'free'
-            ? Number(form.free_license_max_months || 60)
+      if (saveCommercial) {
+        const now = new Date();
+        const month =
+          effectiveMonth ||
+          `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        const ym = monthToYearMonth(month);
+        if (!ym) throw new Error('Mois d’effet invalide');
+        const rate = percentToRate(commissionPercent);
+        const created = await createPlatformBillingContract(modalCompany.company_id, {
+          ...form,
+          commission_rate: rate,
+          commission_cancellation_policy: form.commission_cancellation_policy,
+          free_license_max_months:
+            form.subscription_pricing_mode === 'free'
+              ? Number(form.free_license_max_months || 60)
+              : null,
+          statement_dispute_days: Number(form.statement_dispute_days || 10),
+          custom_subscription_amount: form.custom_subscription_amount || null,
+          support_hourly_rate_default: form.support_hourly_rate_default || null,
+          payment_terms_days: form.payment_terms_days
+            ? Number(form.payment_terms_days)
             : null,
-        statement_dispute_days: Number(form.statement_dispute_days || 10),
-        custom_subscription_amount: form.custom_subscription_amount || null,
-        support_hourly_rate_default: form.support_hourly_rate_default || null,
-        payment_terms_days: form.payment_terms_days
-          ? Number(form.payment_terms_days)
-          : null,
-        automated_dunning_enabled: !!form.automated_dunning_enabled,
-        reminder_delay_days_after_due: Number(
-          form.reminder_delay_days_after_due || 0
-        ),
-        reminder_grace_days: Number(form.reminder_grace_days || 10),
-        full_suspend_days_after_due: Number(
-          form.full_suspend_days_after_due || 30
-        ),
-        full_suspend_overdue_invoice_count: Number(
-          form.full_suspend_overdue_invoice_count || 2
-        ),
-        termination_notice_days: Number(form.termination_notice_days || 10),
-        partial_block_marketplace_offers: !!form.partial_block_marketplace_offers,
-        partial_block_marketplace_acceptance:
-          !!form.partial_block_marketplace_acceptance,
-        partial_block_billable_support: !!form.partial_block_billable_support,
-        partial_block_billable_configuration:
-          !!form.partial_block_billable_configuration,
-        effective_from: monthToIso(month),
-        auto_close_overlapping: true,
-      });
-      setEffectiveMonth(month);
-      if (created?.contract?.id) {
-        setSelectedContractId(created.contract.id);
+          automated_dunning_enabled: !!form.automated_dunning_enabled,
+          reminder_delay_days_after_due: Number(
+            form.reminder_delay_days_after_due || 0
+          ),
+          reminder_grace_days: Number(form.reminder_grace_days || 10),
+          full_suspend_days_after_due: Number(
+            form.full_suspend_days_after_due || 30
+          ),
+          full_suspend_overdue_invoice_count: Number(
+            form.full_suspend_overdue_invoice_count || 2
+          ),
+          termination_notice_days: Number(form.termination_notice_days || 10),
+          partial_block_marketplace_offers: !!form.partial_block_marketplace_offers,
+          partial_block_marketplace_acceptance:
+            !!form.partial_block_marketplace_acceptance,
+          partial_block_billable_support: !!form.partial_block_billable_support,
+          partial_block_billable_configuration:
+            !!form.partial_block_billable_configuration,
+          effective_year: ym.effective_year,
+          effective_month: ym.effective_month,
+          auto_close_overlapping: true,
+        });
+        setEffectiveMonth(month);
+        if (created?.contract?.id) {
+          setSelectedContractId(created.contract.id);
+        }
       }
       await openCompany(modalCompany);
       await load();
+      setActionDialog(null);
     } catch (e) {
       setModalError(
-        e?.response?.data?.error ||
-          e?.response?.data?.message ||
+        e?.response?.data?.message ||
+          e?.response?.data?.error ||
           e?.message ||
           'Erreur sauvegarde'
       );
     } finally {
       setSaving(false);
     }
+  };
+
+  const saveContract = async () => {
+    if (!modalCompany || formReadOnly) return;
+    const saveAddress = isDebtorDirty;
+    const saveCommercial = isCommercialDirty || (!contracts.length && isDirty);
+    if (!saveAddress && !saveCommercial) {
+      setModalError('Aucune modification à enregistrer.');
+      return;
+    }
+    const lines = [];
+    if (saveAddress) lines.push('✓ modifier l’adresse de facturation');
+    if (saveCommercial) {
+      lines.push('✓ créer une nouvelle version commerciale');
+      if (activeContract) {
+        lines.push(
+          `✓ clôturer la version active nº ${activeContract.id} à l’effet de la nouvelle version`
+        );
+      }
+    }
+    setActionDialog({
+      title: 'Confirmer l’enregistrement',
+      description: `Cette opération va :\n${lines.join('\n')}`,
+      confirmationLabel: saveCommercial
+        ? 'Créer la version / enregistrer'
+        : 'Enregistrer l’adresse',
+      onConfirm: async () => {
+        await performSave({ saveAddress, saveCommercial });
+      },
+    });
   };
 
   const refreshContractsOnly = async () => {
@@ -459,7 +575,7 @@ const AdminBillingDualProductConfig = () => {
   };
 
   const onGenerateAgreement = async () => {
-    if (!selectedContract || isDirty) return;
+    if (!selectedContract || isDirty || formReadOnly) return;
     setDocBusy(true);
     setModalError(null);
     try {
@@ -528,18 +644,50 @@ const AdminBillingDualProductConfig = () => {
     }
   };
 
-  const closeLatest = async () => {
-    const latest = contracts[0];
-    if (!latest) return;
-    setSaving(true);
-    try {
-      await closePlatformBillingContract(latest.id, {});
-      await openCompany(modalCompany);
-    } catch (e) {
-      setModalError(e?.response?.data?.message || e?.message || 'Erreur clôture');
-    } finally {
-      setSaving(false);
-    }
+  const closeActiveContract = () => {
+    if (!activeContract) return;
+    if (selectedContract?.id !== activeContract.id) return;
+    const now = new Date();
+    const defaultMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const ym = monthToYearMonth(effectiveMonth || defaultMonth);
+    setActionDialog({
+      title: `Clôturer la version active nº ${activeContract.id}`,
+      description: [
+        `Version active nº ${activeContract.id}`,
+        `Période actuelle : ${fmtPeriod(activeContract.effective_from, activeContract.effective_to)}`,
+        ym
+          ? `Fin prévue : ${String(ym.effective_month).padStart(2, '0')}/${ym.effective_year}`
+          : 'Fin : début du mois courant (Zurich)',
+        'Après cette date, aucune configuration de facturation ne sera applicable, sauf si une nouvelle version prend le relais.',
+      ].join('\n'),
+      confirmationLabel: 'Clôturer la version active',
+      danger: true,
+      onConfirm: async () => {
+        setSaving(true);
+        try {
+          await closePlatformBillingContract(
+            activeContract.id,
+            ym
+              ? {
+                  effective_to_year: ym.effective_year,
+                  effective_to_month: ym.effective_month,
+                }
+              : {}
+          );
+          await openCompany(modalCompany);
+          setActionDialog(null);
+        } catch (e) {
+          setModalError(
+            e?.response?.data?.message ||
+              e?.response?.data?.error ||
+              e?.message ||
+              'Erreur clôture'
+          );
+        } finally {
+          setSaving(false);
+        }
+      },
+    });
   };
 
   const defaultGrid = grids.find((g) => g.grid_key === 'default') || grids[0];
@@ -725,6 +873,30 @@ const AdminBillingDualProductConfig = () => {
             </header>
 
             <div className={styles.modalBody}>
+              {formReadOnly ? (
+                <section className={styles.readinessBlock} aria-label="Version historique">
+                  <p className={styles.readinessHint}>
+                    Version historique nº {selectedContract?.id} — lecture seule.
+                    Revenez à la version active nº {activeContract?.id} pour créer
+                    une nouvelle version commerciale.
+                  </p>
+                  {activeContract ? (
+                    <button
+                      type="button"
+                      className={styles.btn}
+                      onClick={() => selectContractVersion(activeContract)}
+                    >
+                      Revenir à la version active
+                    </button>
+                  ) : null}
+                </section>
+              ) : (
+                <p className={styles.readinessHint}>
+                  Formulaire d’édition : nouvelle version basée sur la version
+                  active
+                  {activeContract ? ` nº ${activeContract.id}` : ''}.
+                </p>
+              )}
               {readiness && (() => {
                 const calcOk = Boolean(readiness.contract_calculation_ready);
                 const debtorOk = Boolean(readiness.debtor_identity_ready);
@@ -1136,10 +1308,20 @@ const AdminBillingDualProductConfig = () => {
                   restriction commerciale complète. Les courses déjà engagées,
                   GPS, factures, paiement et export restent toujours disponibles.
                 </p>
+                <p className={styles.readinessHint}>
+                  Configuration :{' '}
+                  {form.automated_dunning_enabled ? 'activée' : 'désactivée'}
+                  {' · '}
+                  Exécution : {dunningReady?.ready ? 'autorisée' : 'inactive'}
+                  {!dunningReady?.ready && (dunningReady?.reasons || []).length
+                    ? ` — ${(dunningReady.reasons || []).join(' · ')}`
+                    : ''}
+                </p>
                 <label className={styles.productToggle}>
                   <input
                     type="checkbox"
                     checked={!!form.automated_dunning_enabled}
+                    disabled={formReadOnly}
                     onChange={(e) =>
                       setForm((f) => ({
                         ...f,
@@ -1446,7 +1628,7 @@ const AdminBillingDualProductConfig = () => {
                         <button
                           type="button"
                           className={styles.btn}
-                          onClick={() => setSelectedContractId(c.id)}
+                          onClick={() => selectContractVersion(c)}
                           style={{
                             fontWeight:
                               c.id === selectedContract?.id ? 700 : 400,
@@ -1455,6 +1637,7 @@ const AdminBillingDualProductConfig = () => {
                           <span className={styles.versionId}>#{c.id}</span>
                           <span className={styles.versionMeta}>
                             {fmtPeriod(c.effective_from, c.effective_to)}
+                            {!isContractOpen(c) ? ' · remplacée' : ' · active'}
                           </span>
                           <span>
                             {portfolioLabel(c)} · {commissionLabel(c)}
@@ -1471,14 +1654,20 @@ const AdminBillingDualProductConfig = () => {
             </div>
 
             <footer className={styles.modalFooter}>
-              <button
-                type="button"
-                className={`${styles.btn} ${styles.btnGhost}`}
-                onClick={closeLatest}
-                disabled={saving || !contracts.length}
-              >
-                Clôturer la version
-              </button>
+              {activeContract &&
+              selectedContract?.id === activeContract.id &&
+              !formReadOnly ? (
+                <button
+                  type="button"
+                  className={`${styles.btn} ${styles.btnGhost}`}
+                  onClick={closeActiveContract}
+                  disabled={saving}
+                >
+                  {`Clôturer la version active nº ${activeContract.id}`}
+                </button>
+              ) : (
+                <span />
+              )}
               <div className={styles.footerRight}>
                 <button
                   type="button"
@@ -1492,9 +1681,18 @@ const AdminBillingDualProductConfig = () => {
                   type="button"
                   className={`${styles.btn} ${styles.btnPrimary}`}
                   onClick={saveContract}
-                  disabled={saving}
+                  disabled={saving || formReadOnly}
+                  title={
+                    formReadOnly
+                      ? 'Version historique en lecture seule — revenez à la version active pour éditer'
+                      : undefined
+                  }
                 >
-                  {saving ? 'Enregistrement…' : 'Enregistrer'}
+                  {saving
+                    ? 'Enregistrement…'
+                    : formReadOnly
+                      ? 'Lecture seule'
+                      : 'Enregistrer'}
                 </button>
               </div>
             </footer>

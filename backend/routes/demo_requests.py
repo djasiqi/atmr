@@ -14,6 +14,7 @@ from flask_jwt_extended import (
 )
 from flask_restx import Namespace, Resource, fields
 from marshmallow import ValidationError
+from sqlalchemy import func, select
 
 from ext import db, limiter, role_required
 from middleware.trace_id import get_trace_id
@@ -21,7 +22,9 @@ from models import DemoAccess, DemoRequest, User, UserRole
 from models.enums import InstitutionRole
 from schemas.demo_request_schemas import DemoRequestSchema
 from schemas.validation_utils import handle_validation_error, validate_request
+from services.admin_authz import CAP_PARTNERS_READ, require_admin_capability
 from services.demo.access_service import (
+    DEMO_ACCESS_DURATION_HOURS,
     DemoAccessError,
     consume_magic_link,
     provision_demo_access,
@@ -412,24 +415,62 @@ class AdminUpdateDemoRequestStatus(Resource):
 class AdminDemoRequestsList(Resource):
     @jwt_required()
     @role_required(UserRole.admin)
+    @require_admin_capability(CAP_PARTNERS_READ)
     def get(self):
+        from datetime import UTC, datetime
+
         rows = (
             DemoRequest.query.order_by(DemoRequest.created_at.desc()).limit(100).all()
         )
+        request_ids = [row.id for row in rows]
+        latest_by_request: dict[int, DemoAccess] = {}
+        if request_ids:
+            windowed = db.session.execute(
+                select(
+                    DemoAccess.id,
+                    DemoAccess.demo_request_id,
+                    func.row_number()
+                    .over(
+                        partition_by=DemoAccess.demo_request_id,
+                        order_by=DemoAccess.created_at.desc(),
+                    )
+                    .label("rn"),
+                ).where(DemoAccess.demo_request_id.in_(request_ids))
+            ).all()
+            latest_ids = [int(r.id) for r in windowed if int(r.rn) == 1]
+            if latest_ids:
+                for access in db.session.scalars(
+                    select(DemoAccess).where(DemoAccess.id.in_(latest_ids))
+                ).all():
+                    latest_by_request[int(access.demo_request_id)] = access
+
+        now = datetime.now(UTC)
         output = []
         for row in rows:
-            latest_access = (
-                DemoAccess.query.filter_by(demo_request_id=row.id)
-                .order_by(DemoAccess.created_at.desc())
-                .first()
-            )
+            latest_access = latest_by_request.get(row.id)
+            latest_payload = None
+            if latest_access is not None:
+                stored = latest_access.status
+                effective = stored
+                expires = latest_access.demo_expires_at
+                if stored == "active" and expires is not None and expires <= now:
+                    effective = "expired"
+                latest_payload = {
+                    **latest_access.serialize,
+                    "stored_status": stored,
+                    "effective_status": effective,
+                }
             output.append(
                 {
                     **row.serialize,
-                    "latest_access": latest_access.serialize if latest_access else None,
+                    "latest_access": latest_payload,
                 }
             )
-        return {"ok": True, "items": output}, 200
+        return {
+            "ok": True,
+            "items": output,
+            "policy": {"access_duration_hours": DEMO_ACCESS_DURATION_HOURS},
+        }, 200
 
 
 @admin_demo_accesses_ns.route("/<int:access_id>/resend")

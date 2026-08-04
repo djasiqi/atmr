@@ -1,67 +1,85 @@
 // frontend/src/hooks/useSocketStatus.js
 
-import { useEffect, useState } from 'react';
-import { COMPANY_SOCKET_STATE_EVENT, getCompanySocket } from '../services/companySocket';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  COMPANY_SOCKET_STATE_EVENT,
+  getCompanySocket,
+  getCompanySocketStatusSnapshot,
+  retryCompanySocket,
+} from '../services/companySocket';
 
 /**
  * Hook pour exposer l'état de connexion Socket.IO
- * @returns {Object} { connected, reconnecting, latency, lastConnected }
+ * @returns {{ connected: boolean, reconnecting: boolean, latency: null, lastConnected: Date|null, reasonCode: string|null, reasonLabel: string|null, retry: Function }}
  */
 export function useSocketStatus() {
-  const [connected, setConnected] = useState(false);
-  const [reconnecting, setReconnecting] = useState(false);
-  const [latency] = useState(null); // Réservé pour usage futur
+  const snapshot = getCompanySocketStatusSnapshot();
+  const [connected, setConnected] = useState(() => Boolean(snapshot.connected));
+  const [reconnecting, setReconnecting] = useState(() => Boolean(snapshot.reconnecting));
+  const [latency] = useState(null);
   const [lastConnected, setLastConnected] = useState(null);
+  const [reasonCode, setReasonCode] = useState(() => snapshot.reasonCode || null);
+  const [reasonLabel, setReasonLabel] = useState(() => snapshot.reasonLabel || null);
+
+  const applyDetail = useCallback((d) => {
+    if (!d || typeof d !== 'object') return;
+    if (typeof d.connected === 'boolean') {
+      setConnected(d.connected);
+      if (d.connected) {
+        setLastConnected(new Date());
+        setReasonCode(null);
+        setReasonLabel(null);
+      }
+    }
+    if (typeof d.reconnecting === 'boolean') {
+      setReconnecting(d.reconnecting);
+    }
+    if (!d.connected) {
+      if (Object.prototype.hasOwnProperty.call(d, 'reasonCode')) {
+        setReasonCode(d.reasonCode || null);
+      }
+      if (Object.prototype.hasOwnProperty.call(d, 'reasonLabel')) {
+        setReasonLabel(d.reasonLabel || null);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     const socket = getCompanySocket();
-    // État initial (instance courante peut être remplacée plus tard sans remonter le hook)
-    if (!socket) {
-      setConnected(false);
-      setReconnecting(false);
-    } else {
-      setConnected(Boolean(socket.connected));
-      setReconnecting(false);
-      if (socket.connected) {
-        setLastConnected(new Date());
-      }
+    const snap = getCompanySocketStatusSnapshot();
+    applyDetail(snap);
+
+    if (socket?.connected) {
+      setConnected(true);
+      setLastConnected(new Date());
+      setReasonCode(null);
+      setReasonLabel(null);
     }
 
     const handleDocumentState = (e) => {
-      const d = e.detail || {};
-      if (typeof d.connected === 'boolean') {
-        setConnected(d.connected);
-        if (d.connected) {
-          setLastConnected(new Date());
-        }
-      }
-      if (typeof d.reconnecting === 'boolean') {
-        setReconnecting(d.reconnecting);
-      }
+      applyDetail(e.detail || {});
     };
 
     window.addEventListener(COMPANY_SOCKET_STATE_EVENT, handleDocumentState);
 
-    // Les handlers socket ci-dessous ne survivent pas à disposeCompanySocketInstance() ;
-    // l’événement document assure la synchro après recréation de l’instance.
     let s = socket;
     const handleConnect = () => {
       setConnected(true);
       setReconnecting(false);
       setLastConnected(new Date());
+      setReasonCode(null);
+      setReasonLabel(null);
     };
     const handleDisconnect = () => {
       setConnected(false);
       setReconnecting(false);
     };
     const handleReconnect = () => setReconnecting(true);
-    const handlePong = () => {};
 
     if (s) {
       s.on('connect', handleConnect);
       s.on('disconnect', handleDisconnect);
       s.on('reconnect', handleReconnect);
-      s.on('pong', handlePong);
     }
 
     return () => {
@@ -70,16 +88,22 @@ export function useSocketStatus() {
         s.off('connect', handleConnect);
         s.off('disconnect', handleDisconnect);
         s.off('reconnect', handleReconnect);
-        s.off('pong', handlePong);
       }
     };
+  }, [applyDetail]);
+
+  const retry = useCallback(() => {
+    setReconnecting(true);
+    retryCompanySocket();
   }, []);
 
   return {
     connected,
     reconnecting,
-    latency, // null pour l'instant, peut être enrichi plus tard
+    latency,
     lastConnected,
+    reasonCode,
+    reasonLabel,
+    retry,
   };
 }
-

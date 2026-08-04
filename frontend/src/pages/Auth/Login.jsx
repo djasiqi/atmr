@@ -19,6 +19,7 @@ import {
   setPendingActivationSession,
 } from '../../utils/activationSessionStore';
 import useAuthToken from '../../hooks/useAuthToken';
+import { useSessionBootstrap } from '../../contexts/SessionBootstrapContext';
 import AddressAutocomplete from '../../components/common/AddressAutocomplete';
 import styles from './Login.module.css';
 import institutionStyles from '../institution/Requests/InstitutionRequestForm.module.css';
@@ -122,6 +123,7 @@ const Login = () => {
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const { hydrateFromLogin } = useSessionBootstrap();
   const navigate = useNavigate();
   const civilityDropdownRef = useRef(null);
   const hasSafeNext = Boolean(nextFromQuery || safeReturnFromState);
@@ -384,6 +386,12 @@ const Login = () => {
 
       cleanLocalSession();
       try {
+        const { disconnectCompanySocket } = await import('../../services/companySocket');
+        disconnectCompanySocket();
+      } catch {
+        // ignore
+      }
+      try {
         const { clearTenantScopedClientCaches } = await import('../../utils/clearTenantScopedClientCaches');
         clearTenantScopedClientCaches();
       } catch {
@@ -399,13 +407,16 @@ const Login = () => {
         roleSegment = normalizeAuthRole(user.role);
       }
 
-      writeAuthSession({
+      const session = writeAuthSession({
         env: target_env,
         user,
         role: roleSegment,
         accessToken: token,
         refreshToken: refresh_token,
       });
+      // Synchronise immédiatement le bootstrap : sinon ProtectedRoute voit encore
+      // l'ancienne session (admin/autre) et redirige vers /unauthorized.
+      hydrateFromLogin(session?.user || { ...user, role: roleSegment });
       try {
         const { resumeSessionKeepAlive } = await import('../../utils/sessionKeepAlive');
         resumeSessionKeepAlive();

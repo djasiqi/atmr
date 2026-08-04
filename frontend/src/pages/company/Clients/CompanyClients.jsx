@@ -586,7 +586,7 @@ const CompanyClients = () => {
             <div className={styles.header}>
               <div className={styles.headerLeft}>
                 <h1 className={styles.title}>Clients</h1>
-                <p className={styles.subtitle}>Gerez vos clients et institutions</p>
+                <p className={styles.subtitle}>Gérez vos clients et institutions</p>
               </div>
               <button
                 onClick={() => setShowNewClientModal(true)}
@@ -764,6 +764,7 @@ const CompanyClients = () => {
                     onDelete={handleDeleteClick}
                     selectedClientId={selectedClientId}
                     onRefresh={loadClients}
+                    compact={panelOpen}
                   />
                 </div>
 
@@ -803,38 +804,46 @@ const CompanyClients = () => {
 
           {/* Side Panel (inline, same pattern as CompanyDriver) */}
           {panelOpen && (
-            <aside className={styles.sidePanel}>
-              <div className={styles.sidePanelInner}>
-                {loadingDetails && !clientDetailsForPanel ? (
-                  <div className={styles.sidePanelLoading}>Chargement de la fiche client…</div>
-                ) : isEditMode && clientDetailsForPanel ? (
-                  <ClientEditForm
-                    key={selectedClientId}
-                    client={clientDetailsForPanel}
-                    onSave={handleSaveInDrawer}
-                    onCancel={handleCancelEdit}
-                    onClose={handleCloseDrawer}
-                    loading={loadingDetails}
-                    hasUnsavedChanges={hasUnsavedChanges}
-                    onUnsavedChangesChange={setHasUnsavedChanges}
-                    onReloadClient={() => {
-                      if (selectedClientId) {
-                        clientCache.delete(selectedClientId);
-                        loadClientDetails(selectedClientId, true);
-                      }
-                    }}
-                  />
-                ) : !isEditMode && clientDetailsForPanel ? (
-                  <ClientReadView
-                    key={selectedClientId}
-                    client={clientDetailsForPanel}
-                    onEdit={handleEditInDrawer}
-                    onClose={handleCloseDrawer}
-                    loading={loadingDetails}
-                  />
-                ) : null}
-              </div>
-            </aside>
+            <>
+              <button
+                type="button"
+                className={styles.panelBackdrop}
+                aria-label="Fermer le panneau client"
+                onClick={handleCloseDrawer}
+              />
+              <aside className={styles.sidePanel}>
+                <div className={styles.sidePanelInner}>
+                  {loadingDetails && !clientDetailsForPanel ? (
+                    <div className={styles.sidePanelLoading}>Chargement de la fiche client…</div>
+                  ) : isEditMode && clientDetailsForPanel ? (
+                    <ClientEditForm
+                      key={selectedClientId}
+                      client={clientDetailsForPanel}
+                      onSave={handleSaveInDrawer}
+                      onCancel={handleCancelEdit}
+                      onClose={handleCloseDrawer}
+                      loading={loadingDetails}
+                      hasUnsavedChanges={hasUnsavedChanges}
+                      onUnsavedChangesChange={setHasUnsavedChanges}
+                      onReloadClient={() => {
+                        if (selectedClientId) {
+                          clientCache.delete(selectedClientId);
+                          loadClientDetails(selectedClientId, true);
+                        }
+                      }}
+                    />
+                  ) : !isEditMode && clientDetailsForPanel ? (
+                    <ClientReadView
+                      key={selectedClientId}
+                      client={clientDetailsForPanel}
+                      onEdit={handleEditInDrawer}
+                      onClose={handleCloseDrawer}
+                      loading={loadingDetails}
+                    />
+                  ) : null}
+                </div>
+              </aside>
+            </>
           )}
       </div>
 

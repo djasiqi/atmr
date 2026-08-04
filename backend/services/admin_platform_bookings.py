@@ -4,14 +4,13 @@ from __future__ import annotations
 
 import csv
 import io
-import json
 import logging
 import re
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Any
 
 from marshmallow import ValidationError
-from sqlalchemy import and_, exists, func, not_, or_, select
+from sqlalchemy import and_, exists, not_, or_, select
 from sqlalchemy.orm import joinedload
 
 from ext import db
@@ -19,9 +18,16 @@ from models import Booking, BookingStatus, Client, Company, Institution
 from models.booking_transfer import BookingTransfer
 from models.enums import TransferStatus
 from schemas.validation_utils import ISO8601_DATE_REGEX
-from security.audit_log import AuditLog
 from services.admin_booking_billing_kernel import build_pilotage_payload_for_booking
+from services.admin_booking_investigation import (
+    build_investigation_reasons,
+    compute_needs_investigation_booking,
+    evaluate_incomplete,
+    incomplete_data_sql_condition,
+    needs_investigation_sql_condition,
+)
 from services.admin_booking_labels import booking_status_label_fr
+from services.admin_booking_support_detail import build_admin_support_detail_payload
 
 logger = logging.getLogger(__name__)
 
@@ -133,12 +139,7 @@ def _unassigned_condition():
 
 
 def _incomplete_data_condition():
-    return or_(
-        Booking.scheduled_time.is_(None),
-        func.coalesce(func.trim(Booking.customer_name), "") == "",
-        func.coalesce(func.trim(Booking.pickup_location), "") == "",
-        func.coalesce(func.trim(Booking.dropoff_location), "") == "",
-    )
+    return incomplete_data_sql_condition()
 
 
 def _transfer_accepted_or_completed_exists():
@@ -154,28 +155,8 @@ def _transfer_accepted_or_completed_exists():
     )
 
 
-def _transfer_pending_blocked_exists():
-    return exists(
-        select(BookingTransfer.id).where(
-            and_(
-                BookingTransfer.booking_id == Booking.id,
-                BookingTransfer.status == TransferStatus.PENDING,
-            )
-        )
-    )
-
-
 def _needs_investigation_condition(now: datetime):
-    stale_threshold = now - timedelta(hours=24)
-    return or_(
-        _incomplete_data_condition(),
-        and_(
-            Booking.status == BookingStatus.PENDING,
-            Booking.scheduled_time.isnot(None),
-            Booking.scheduled_time < stale_threshold,
-        ),
-        _transfer_pending_blocked_exists(),
-    )
+    return needs_investigation_sql_condition(now)
 
 
 def build_admin_bookings_query(
@@ -424,49 +405,8 @@ def admin_booking_list_item(
         "dropoff_label": (booking.dropoff_location or "")[:120],
         "created_by": _serialize_created_by(booking),
         "cancelled_by": _serialize_cancelled_by(booking),
-        "incomplete_data": _evaluate_incomplete(booking),
+        "incomplete_data": evaluate_incomplete(booking),
     }
-
-
-def _evaluate_incomplete(booking: Booking) -> bool:
-    if booking.scheduled_time is None:
-        return True
-    if not (booking.customer_name or "").strip():
-        return True
-    if not (booking.pickup_location or "").strip():
-        return True
-    return not (booking.dropoff_location or "").strip()
-
-
-def _compute_needs_investigation_booking(
-    booking: Booking,
-    *,
-    has_pending_transfer: bool | None = None,
-) -> bool:
-    now = datetime.now(UTC)
-    if _evaluate_incomplete(booking):
-        return True
-    if booking.status == BookingStatus.PENDING and booking.scheduled_time:
-        st = booking.scheduled_time
-        if st.tzinfo is None:
-            st = st.replace(tzinfo=UTC)
-        if st < now - timedelta(hours=24):
-            return True
-    if has_pending_transfer is True:
-        return True
-    if has_pending_transfer is False:
-        return False
-    try:
-        pending_tr = (
-            BookingTransfer.query.filter_by(booking_id=booking.id)
-            .filter_by(status=TransferStatus.PENDING)
-            .first()
-        )
-        if pending_tr:
-            return True
-    except Exception:
-        pass
-    return False
 
 
 def admin_booking_list_item_fixed(
@@ -475,15 +415,24 @@ def admin_booking_list_item_fixed(
     has_transfer: bool | None = None,
     has_pending_transfer: bool | None = None,
 ) -> dict[str, Any]:
-    """Item liste avec `needs_investigation` calculé en Python."""
+    """Item liste avec `needs_investigation` et reasons calculés en Python."""
     base = admin_booking_list_item(booking, has_transfer=has_transfer)
-    base["needs_investigation"] = _compute_needs_investigation_booking(
-        booking, has_pending_transfer=has_pending_transfer
-    )
-    ht = bool(booking._is_transferred()) if has_transfer is None else has_transfer
+    created_by = base.get("created_by")
     hp = has_pending_transfer
     if hp is None:
         hp = _batch_list_transfer_flags([booking]).get(booking.id, (False, False))[1]
+    reasons = build_investigation_reasons(
+        booking,
+        created_by=created_by,
+        has_pending_transfer=bool(hp),
+    )
+    base["investigation_reasons"] = reasons
+    base["needs_investigation"] = compute_needs_investigation_booking(
+        booking,
+        has_pending_transfer=bool(hp),
+        created_by=created_by,
+    )
+    ht = bool(booking._is_transferred()) if has_transfer is None else has_transfer
     base["pilotage"] = build_pilotage_payload_for_booking(
         booking, has_transfer=ht, has_pending_transfer=bool(hp)
     )
@@ -597,116 +546,20 @@ def _previous_company_from_transfers(booking_id: int) -> dict[str, Any] | None:
     return {"id": owner.id, "name": owner.name}
 
 
-def build_admin_booking_detail(
-    booking: Booking, *, admin_public_id: str
-) -> dict[str, Any]:
-    """Payload GET /admin/bookings/:id."""
-    full = booking.serialize
-    status_val = booking.status
-    key = status_val.value if hasattr(status_val, "value") else str(status_val).upper()
-
-    current = booking.executing_company or booking.company
+def build_admin_booking_detail(booking: Booking) -> dict[str, Any]:
+    """Payload GET /admin/bookings/:id — console support lecture seule."""
+    created_by = _serialize_created_by(booking)
+    cancelled_by = _serialize_cancelled_by(booking)
     previous = _previous_company_from_transfers(booking.id)
-
-    timeline: list[dict[str, Any]] = []
-
-    created_at = getattr(booking, "created_at", None)
-    if created_at is not None:
-        timeline.append(
-            {
-                "type": "booking_created",
-                "at": created_at.isoformat(),
-                "label": "Réservation créée",
-            }
-        )
-    tl_inst = None
-    try:
-        tl_inst = booking._get_institution_timeline()
-    except Exception:
-        tl_inst = None
-    if tl_inst:
-        if tl_inst.get("sent_at"):
-            timeline.append(
-                {
-                    "type": "request_sent",
-                    "at": tl_inst["sent_at"],
-                    "label": "Demande envoyée (institution)",
-                }
-            )
-        if tl_inst.get("accepted_at"):
-            timeline.append(
-                {
-                    "type": "request_accepted",
-                    "at": tl_inst["accepted_at"],
-                    "label": "Acceptée par entreprise",
-                    "detail": tl_inst.get("accepted_by_company_name"),
-                }
-            )
-
-    cancelled_at = getattr(booking, "cancelled_at", None)
-    if cancelled_at is not None:
-        timeline.append(
-            {
-                "type": "cancelled",
-                "at": cancelled_at.isoformat(),
-                "label": "Annulation",
-                "detail": booking.cancelled_by_role,
-            }
-        )
-
-    audit_rows = (
-        AuditLog.query.filter_by(booking_id=booking.id)
-        .order_by(AuditLog.created_at.asc())
-        .limit(200)
-        .all()
+    transfer_flags = _batch_list_transfer_flags([booking])
+    _has_transfer, has_pending = transfer_flags.get(booking.id, (False, False))
+    return build_admin_support_detail_payload(
+        booking,
+        created_by=created_by,
+        cancelled_by=cancelled_by,
+        previous_company=previous,
+        has_pending_transfer=has_pending,
     )
-    for row in audit_rows:
-        try:
-            details = json.loads(row.action_details or "{}")
-        except json.JSONDecodeError:
-            details = {}
-        timeline.append(
-            {
-                "type": f"audit:{row.action_type}",
-                "at": row.created_at.isoformat() if row.created_at else None,
-                "label": row.action_type,
-                "category": row.action_category,
-                "user_type": row.user_type,
-                "details": details,
-            }
-        )
-
-    timeline.sort(key=lambda x: (x.get("at") or "",))
-
-    base_path = f"/dashboard/admin/{admin_public_id}"
-    links = {
-        "admin_home": base_path,
-        "platform_ops": f"{base_path}/platform-ops/overview",
-    }
-    if current:
-        links["company"] = f"{base_path}/users"
-    inst_id = None
-    if booking.client and booking.client.linked_institution_id:
-        inst_id = booking.client.linked_institution_id
-        links["institution"] = f"{base_path}/platform-ops/overview"
-
-    return {
-        "id": booking.id,
-        "client_name": booking.customer_full_name,
-        "institution_name": full.get("client", {}).get("institution_name"),
-        "status": key.lower(),
-        "status_label": booking_status_label_fr(status_val),
-        "created_by": _serialize_created_by(booking),
-        "current_company": (
-            {"id": current.id, "name": current.name} if current else None
-        ),
-        "previous_company": previous,
-        "cancelled_by": _serialize_cancelled_by(booking),
-        "booking": full,
-        "timeline": timeline,
-        "links": links,
-        "linked_institution_id": inst_id,
-    }
 
 
 def export_admin_bookings_csv(**filter_kwargs: Any) -> tuple[bytes, str]:

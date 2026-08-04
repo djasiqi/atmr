@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { jwtDecode } from 'jwt-decode';
 import {
   getAuthEnv,
+  getCompanyScopedAccessToken,
   getEnvAccessToken,
   getEnvRefreshToken,
   getEnvUser,
@@ -101,25 +102,38 @@ const useAuthToken = () => {
 
 export default useAuthToken;
 
-// ✅ Fonction d'accès directe au token brut
-export function getAccessToken() {
-  const env = getAuthEnv();
-  const token = getEnvAccessToken(env, { allowLegacy: true });
-  if (!token) return null;
+const isTokenUsable = (token) => {
+  if (!token) return false;
   try {
     const decoded = jwtDecode(token);
     const currentTime = Date.now() / 1000;
     if (decoded?.exp && decoded.exp < currentTime) {
-      // Token expiré => l'effacer pour basculer sur le mode cookies httpOnly si présent.
-      removeLegacyGlobalTokens();
-      return null;
+      return false;
     }
+    return true;
   } catch {
-    // Token illisible => éviter de le réutiliser.
-    removeLegacyGlobalTokens();
-    return null;
+    return false;
   }
-  return token;
+};
+
+// ✅ Fonction d'accès directe au token brut
+export function getAccessToken() {
+  const env = getAuthEnv();
+  const envToken = getEnvAccessToken(env, { allowLegacy: true });
+  if (isTokenUsable(envToken)) {
+    return envToken;
+  }
+  // Fallback company : writeAuthSession pose aussi company_access_token.
+  // Sans ça, le socket company démarre avec has_token=0 juste après login.
+  const companyToken = getCompanyScopedAccessToken(env);
+  if (isTokenUsable(companyToken)) {
+    return companyToken;
+  }
+  if (envToken || companyToken) {
+    // Token présent mais expiré / illisible → bascule cookies httpOnly si possible.
+    removeLegacyGlobalTokens();
+  }
+  return null;
 }
 
 export function getRefreshToken() {

@@ -21,11 +21,19 @@ const SessionBootstrapContext = createContext({
   isAuthenticated: false,
   user: null,
   refreshBootstrap: () => {},
+  hydrateFromLogin: () => {},
 });
 
 export function SessionBootstrapProvider({ children }) {
   const [status, setStatus] = useState('idle');
   const [user, setUser] = useState(null);
+
+  /** Applique immédiatement la session écrite par le login (évite Unauthorized). */
+  const hydrateFromLogin = useCallback((nextUser) => {
+    if (!nextUser) return;
+    setUser(nextUser);
+    setStatus('authenticated');
+  }, []);
 
   const refreshBootstrap = useCallback(async () => {
     if (isExplicitLogoutInProgress()) {
@@ -111,8 +119,9 @@ export function SessionBootstrapProvider({ children }) {
       isAuthenticated: status === 'authenticated',
       user,
       refreshBootstrap,
+      hydrateFromLogin,
     }),
-    [status, user, refreshBootstrap]
+    [status, user, refreshBootstrap, hydrateFromLogin]
   );
 
   return (

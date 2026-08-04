@@ -17,8 +17,9 @@
 
 .headerTop {
   display: flex;
-  align-items: center;
-  gap: 12px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 10px 12px;
 }
 
 .closeButton {
@@ -50,7 +51,7 @@
 }
 
 .headerTitle {
-  flex: 1;
+  flex: 1 1 140px;
   min-width: 0;
 }
 
@@ -62,6 +63,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  line-height: 1.3;
 }
 
 .clientId {
@@ -121,6 +123,7 @@
 
 .editButton {
   flex-shrink: 0;
+  margin-left: auto;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -212,8 +215,14 @@
 
 .infoGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: 1fr;
   gap: 8px;
+}
+
+@media (min-width: 420px) {
+  .infoGrid {
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  }
 }
 
 .infoItem {
@@ -277,6 +286,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .reservationDate {
@@ -332,7 +342,8 @@
 }
 
 .reservationRow {
-  display: flex;
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
   align-items: baseline;
   gap: 8px;
 }
@@ -343,13 +354,13 @@
   color: var(--text-tertiary, #6b7280);
   text-transform: uppercase;
   letter-spacing: 0.3px;
-  min-width: 56px;
 }
 
 .reservationValue {
   font-size: 13px;
   color: var(--text-primary, #111827);
   word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .mutedText {
@@ -366,11 +377,30 @@
 
 /* Responsive */
 @media (max-width: 768px) {
+  .header {
+    padding: 14px 16px;
+  }
+
+  .content {
+    padding: 14px 16px;
+  }
+
   .infoGrid {
     grid-template-columns: 1fr;
   }
 
   .headerTop {
     flex-wrap: wrap;
+  }
+
+  .editButton,
+  .returnButton {
+    margin-left: 0;
+  }
+
+  .clientName {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
   }
 }

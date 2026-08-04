@@ -117,34 +117,6 @@ const UnifiedDispatchRefactored = () => {
   // Panel lateral de details
   const [selectedDispatch, setSelectedDispatch] = useState(null);
 
-  // ✅ Fonction pour charger les paramètres avancés (définie en dehors du useEffect pour être réutilisable)
-  const loadAdvancedSettings = React.useCallback(async () => {
-    console.log('🔍 [Dispatch] Début chargement paramètres avancés...');
-    try {
-      const apiClient = (await import('../../../utils/apiClient')).default;
-      console.log('✅ [Dispatch] apiClient chargé, appel API en cours...');
-      const { data } = await apiClient.get('/company_dispatch/advanced_settings');
-      console.log('📦 [Dispatch] Réponse API reçue:', data);
-
-      if (data.dispatch_overrides) {
-        setOverrides(data.dispatch_overrides);
-        console.log(
-          '🔄 [Dispatch] Paramètres avancés chargés depuis la DB:',
-          data.dispatch_overrides
-        );
-      } else {
-        setOverrides(null); // ✅ Réinitialiser si pas de paramètres
-        console.log('📌 [Dispatch] Aucun paramètre avancé configuré (utilise valeurs par défaut)');
-      }
-    } catch (err) {
-      console.error('❌ [Dispatch] Erreur chargement paramètres avancés:', err);
-      console.error('❌ [Dispatch] Détails erreur:', err.response?.status, err.response?.data);
-    } finally {
-      setLoadingOverrides(false);
-      console.log('✅ [Dispatch] Chargement paramètres terminé');
-    }
-  }, []);
-
   // États pour les modals (conservé pour compatibilité, mais maintenant géré par assignModal)
   // const [selectedReservationForAssignment, setSelectedReservationForAssignment] = useState(null);
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
@@ -181,6 +153,38 @@ const UnifiedDispatchRefactored = () => {
   // Rôle utilisateur : delays/live réservé COMPANY/ADMIN — lecture company_user uniquement (évite 403 si token DRIVER)
   const { user, isCompanyAuthReady } = useCompanyAuthToken();
   const isCompanyOrAdmin = user && (user.isCompany || String(user.role || '').toLowerCase() === 'admin');
+
+  // ✅ Fonction pour charger les paramètres avancés (définie en dehors du useEffect pour être réutilisable)
+  const loadAdvancedSettings = React.useCallback(async () => {
+    if (!isCompanyAuthReady) {
+      setLoadingOverrides(false);
+      return;
+    }
+    console.log('🔍 [Dispatch] Début chargement paramètres avancés...');
+    try {
+      const apiClient = (await import('../../../utils/apiClient')).default;
+      console.log('✅ [Dispatch] apiClient chargé, appel API en cours...');
+      const { data } = await apiClient.get('/company_dispatch/advanced_settings');
+      console.log('📦 [Dispatch] Réponse API reçue:', data);
+
+      if (data.dispatch_overrides) {
+        setOverrides(data.dispatch_overrides);
+        console.log(
+          '🔄 [Dispatch] Paramètres avancés chargés depuis la DB:',
+          data.dispatch_overrides
+        );
+      } else {
+        setOverrides(null); // ✅ Réinitialiser si pas de paramètres
+        console.log('📌 [Dispatch] Aucun paramètre avancé configuré (utilise valeurs par défaut)');
+      }
+    } catch (err) {
+      console.error('❌ [Dispatch] Erreur chargement paramètres avancés:', err);
+      console.error('❌ [Dispatch] Détails erreur:', err.response?.status, err.response?.data);
+    } finally {
+      setLoadingOverrides(false);
+      console.log('✅ [Dispatch] Chargement paramètres terminé');
+    }
+  }, [isCompanyAuthReady]);
 
   /** P3 : socket avant useLiveDelays pour écouter delay_live_invalidate */
   const socket = useCompanySocket();
@@ -940,7 +944,7 @@ const UnifiedDispatchRefactored = () => {
     }
   };
 
-  // Charger les paramètres avancés depuis la DB au montage
+  // Charger les paramètres avancés depuis la DB au montage (après auth company)
   useEffect(() => {
     loadAdvancedSettings();
   }, [loadAdvancedSettings]);

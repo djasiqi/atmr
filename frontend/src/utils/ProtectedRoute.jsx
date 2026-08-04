@@ -46,6 +46,15 @@ export const resolveOnboardingRedirect = (u, pathname) => {
   return null;
 };
 
+const readJsonUser = (storageKey) => {
+  try {
+    const raw = localStorage.getItem(storageKey);
+    return raw ? JSON.parse(raw) : null;
+  } catch (_) {
+    return null;
+  }
+};
+
 const ProtectedRoute = ({ allowedRoles, children }) => {
   const location = useLocation();
   const keys = getStorageKeys(allowedRoles);
@@ -81,19 +90,21 @@ const ProtectedRoute = ({ allowedRoles, children }) => {
     );
   }
 
-  let scopedUser = bootstrapUser;
-  if (!scopedUser) {
-    try {
-      const scopedRaw = localStorage.getItem(keys.user);
-      scopedUser = scopedRaw ? JSON.parse(scopedRaw) : null;
-    } catch (_) {
-      scopedUser = null;
-    }
-  }
-  const user = scopedUser || getEnvUser(env);
+  const storageScopedUser = readJsonUser(keys.user);
+  const envUser = getEnvUser(env);
+  // Priorité bootstrap, puis storage scopé (company_user…), puis env.
+  // Si le bootstrap est encore l'ancienne session (race juste après login),
+  // on préfère le storage scopé quand son rôle matche la route.
+  let user = bootstrapUser || storageScopedUser || envUser;
 
   if (status === 'anonymous') {
-    return <Navigate to="/login" replace state={{ from: location }} />;
+    // Login vient d'écrire la session en localStorage avant que le bootstrap
+    // bascule : ne pas renvoyer au login si une session scopée est déjà là.
+    if (storageScopedUser || envUser) {
+      user = storageScopedUser || envUser;
+    } else {
+      return <Navigate to="/login" replace state={{ from: location }} />;
+    }
   }
 
   if (status === 'error' && !user) {
@@ -118,12 +129,23 @@ const ProtectedRoute = ({ allowedRoles, children }) => {
     );
   }
 
-  const role = normalizeRole(user?.role ?? '');
+  let role = normalizeRole(user?.role ?? '');
 
   if (Array.isArray(allowedRoles) && allowedRoles.length > 0) {
     const allowed = allowedRoles.map((r) => normalizeRole(r));
     if (!allowed.includes(role)) {
-      return <Navigate to="/unauthorized" replace />;
+      // Race login : bootstrap encore sur l'ancien rôle (ex. admin) alors que
+      // writeAuthSession a déjà posé company_user / app_user corrects.
+      const fallbackCandidates = [storageScopedUser, envUser].filter(Boolean);
+      const matching = fallbackCandidates.find((candidate) =>
+        allowed.includes(normalizeRole(candidate?.role ?? ''))
+      );
+      if (matching) {
+        user = matching;
+        role = normalizeRole(matching.role ?? '');
+      } else {
+        return <Navigate to="/unauthorized" replace />;
+      }
     }
   }
 

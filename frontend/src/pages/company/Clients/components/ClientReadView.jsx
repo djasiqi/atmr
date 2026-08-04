@@ -124,14 +124,14 @@ const ClientReadView = ({ client, onEdit, onClose, loading }) => {
     const normalized = String(status || '').toLowerCase();
     const labels = {
       pending: 'En attente',
-      assigned: 'Assignee',
-      accepted: 'Acceptee',
+      assigned: 'Assignée',
+      accepted: 'Acceptée',
       in_progress: 'En cours',
-      completed: 'Terminee',
-      canceled: 'Annulee',
-      cancelled: 'Annulee',
-      rejected: 'Refusee',
-      confirmed: 'Confirmee',
+      completed: 'Terminée',
+      canceled: 'Annulée',
+      cancelled: 'Annulée',
+      rejected: 'Refusée',
+      confirmed: 'Confirmée',
     };
     return labels[normalized] || (status ? String(status) : 'Statut inconnu');
   };
@@ -257,7 +257,7 @@ const ClientReadView = ({ client, onEdit, onClose, loading }) => {
             <button
               onClick={() => window.location.assign(returnTo)}
               className={styles.returnButton}
-              title="Retour au controle facturation"
+              title="Retour au contrôle facturation"
             >
               <FiCornerUpLeft size={14} />
               Retour
@@ -279,8 +279,8 @@ const ClientReadView = ({ client, onEdit, onClose, loading }) => {
               {!client.is_institution && (
                 <>
                   <Field label="Date de naissance">{birthDate}</Field>
-                  {hasGender && <Field label="Civilite">{getGenderLabel()}</Field>}
-                  {hasAvs && <Field label="Numero AVS">{client.avs_number}</Field>}
+                  {hasGender && <Field label="Civilité">{getGenderLabel()}</Field>}
+                  {hasAvs && <Field label="Numéro AVS">{client.avs_number}</Field>}
                 </>
               )}
               {hasEmail && (
@@ -289,7 +289,7 @@ const ClientReadView = ({ client, onEdit, onClose, loading }) => {
                 </Field>
               )}
               {hasPhone && (
-                <Field label="Telephone">
+                <Field label="Téléphone">
                   <a href={`tel:${client.contact_phone || client.phone}`}>
                     {client.contact_phone || client.phone}
                   </a>
@@ -308,7 +308,7 @@ const ClientReadView = ({ client, onEdit, onClose, loading }) => {
             </h3>
             <div className={styles.infoGrid}>
               {hasFacility && (
-                <Field label="Etablissement de residence">{client.residence_facility}</Field>
+                <Field label="Établissement de résidence">{client.residence_facility}</Field>
               )}
               {hasAddress && (
                 <Field label="Adresse de domicile">{addressText}</Field>
@@ -326,7 +326,7 @@ const ClientReadView = ({ client, onEdit, onClose, loading }) => {
             </h3>
             <div className={styles.infoGrid}>
               {hasPreferentialRate && (
-                <Field label="Tarif preferentiel">
+                <Field label="Tarif préférentiel">
                   {parseFloat(client.preferential_rate).toFixed(2)} CHF / trajet
                 </Field>
               )}
@@ -356,14 +356,14 @@ const ClientReadView = ({ client, onEdit, onClose, loading }) => {
                     </Field>
                   )}
                   {client.default_billing.billed_to_company.contact_phone && (
-                    <Field label="Telephone entreprise">
+                    <Field label="Téléphone entreprise">
                       <a href={`tel:${client.default_billing.billed_to_company.contact_phone}`}>
                         {client.default_billing.billed_to_company.contact_phone}
                       </a>
                     </Field>
                   )}
                   {client.default_billing.billed_to_company.preferential_rate && (
-                    <Field label="Tarif preferentiel entreprise">
+                    <Field label="Tarif préférentiel entreprise">
                       {parseFloat(client.default_billing.billed_to_company.preferential_rate).toFixed(2)} CHF / trajet
                     </Field>
                   )}
@@ -397,19 +397,19 @@ const ClientReadView = ({ client, onEdit, onClose, loading }) => {
           <ClientStaysSection clientId={client.id} />
         )}
 
-        {/* Dernieres courses (uniquement pour clients) */}
+        {/* Dernières courses (uniquement pour clients) */}
         {!client.is_institution && (
           <section className={styles.section}>
             <h3 className={styles.sectionTitle}>
               <FiClock size={14} className={styles.sectionIcon} />
-              Dernieres courses (3)
+              Dernières courses ({recentReservations.length || 0})
             </h3>
             {reservationsLoading ? (
-              <div className={styles.mutedText}>Chargement des courses...</div>
+              <div className={styles.mutedText}>Chargement des courses…</div>
             ) : reservationsError ? (
               <div className={styles.errorText}>{reservationsError}</div>
             ) : recentReservations.length === 0 ? (
-              <div className={styles.mutedText}>Aucune course recente.</div>
+              <div className={styles.mutedText}>Aucune course récente.</div>
             ) : (
               <div className={styles.reservationsList}>
                 {recentReservations.map((reservation) => {
@@ -426,13 +426,13 @@ const ClientReadView = ({ client, onEdit, onClose, loading }) => {
                       </div>
                       <div className={styles.reservationRoute}>
                         <div className={styles.reservationRow}>
-                          <span className={styles.reservationLabel}>Depart</span>
+                          <span className={styles.reservationLabel}>Départ</span>
                           <span className={styles.reservationValue}>
                             {getLocationValue(reservation, 'pickup')}
                           </span>
                         </div>
                         <div className={styles.reservationRow}>
-                          <span className={styles.reservationLabel}>Arrivee</span>
+                          <span className={styles.reservationLabel}>Arrivée</span>
                           <span className={styles.reservationValue}>
                             {getLocationValue(reservation, 'dropoff')}
                           </span>

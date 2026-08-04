@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom';
 import { FiChevronDown, FiDownload, FiRotateCcw, FiSearch, FiTag, FiX } from 'react-icons/fi';
 import InlineDatePicker from '../../../components/ui/InlineDatePicker';
 import { fetchAdminBookings, downloadAdminBookingsExport } from '../../../services/adminService';
@@ -131,6 +131,7 @@ function buildParamsFromSearch(searchParams) {
 
 const AdminReservations = () => {
   const { public_id: adminId } = useParams();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -169,6 +170,9 @@ const AdminReservations = () => {
   };
 
   const resetFilters = () => {
+    setQDraft('');
+    setInstitutionDraft('');
+    setCompanyDraft('');
     setSearchParams(new URLSearchParams({ page: '1', per_page: String(DEFAULT_PER_PAGE) }));
   };
 
@@ -201,169 +205,255 @@ const AdminReservations = () => {
   }, [statusParam, statusCustomUrl]);
 
   const qFromUrl = searchParams.get('q') || '';
+  const institutionFromUrl = searchParams.get('institution_q') || '';
+  const companyFromUrl = searchParams.get('company_q') || '';
   const [qDraft, setQDraft] = useState(qFromUrl);
+  const [institutionDraft, setInstitutionDraft] = useState(institutionFromUrl);
+  const [companyDraft, setCompanyDraft] = useState(companyFromUrl);
   useEffect(() => {
     setQDraft(qFromUrl);
   }, [qFromUrl]);
+  useEffect(() => {
+    setInstitutionDraft(institutionFromUrl);
+  }, [institutionFromUrl]);
+  useEffect(() => {
+    setCompanyDraft(companyFromUrl);
+  }, [companyFromUrl]);
+
+  const activeFilterCount = useMemo(() => {
+    const keys = [
+      'q',
+      'status',
+      'created_from',
+      'created_to',
+      'scheduled_from',
+      'scheduled_to',
+      'institution_q',
+      'institution_id',
+      'company_q',
+      'company_id',
+    ];
+    let n = 0;
+    keys.forEach((k) => {
+      if ((searchParams.get(k) || '').trim()) n += 1;
+    });
+    [
+      'cancelled_only',
+      'exclude_cancelled',
+      'with_transfer',
+      'unassigned',
+      'incomplete_data',
+      'needs_investigation',
+    ].forEach((k) => {
+      const v = searchParams.get(k);
+      if (v === 'true' || v === '1' || v === 'false' || v === '0') n += 1;
+    });
+    return n;
+  }, [searchParams]);
 
   return (
     <main className={shell.content}>
       <header className={styles.pageHeader}>
         <div className={styles.pageHeaderLeft}>
           <span className={styles.pageEyebrow}>Supervision plateforme</span>
-          <h1 className={styles.pageTitle}>Réservations</h1>
+          <h1 className={styles.pageTitle}>Transports</h1>
           <p className={styles.pageLead}>
-            Recherche, filtres et synthèse côté serveur. Les libellés de statut proviennent de
-            l&apos;API.
+            Recherche, filtres et synthèse côté serveur. Ouvrez un transport pour le diagnostic
+            support.
           </p>
         </div>
       </header>
 
       <section className={styles.toolbarCard} aria-labelledby="admin-res-filters-title">
         <div className={styles.toolbarHead}>
-          <h2 id="admin-res-filters-title" className={styles.toolbarTitle}>
-            Filtres
-          </h2>
-        </div>
-
-        <div className={styles.toolbarRow}>
-          <div className={`${styles.field} ${styles.fieldSearch}`}>
-            <span>Recherche</span>
-            <div className={rfChipStyles.searchWrap}>
-              <FiSearch className={rfChipStyles.searchIcon} size={14} aria-hidden />
-              <input
-                type="text"
-                className={rfChipStyles.searchInput}
-                placeholder="ID, nom, lieu…"
-                value={qDraft}
-                onChange={(e) => setQDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    setFacet({ q: qDraft.trim() });
-                  }
-                }}
-                aria-label="Recherche (Entrée pour filtrer)"
-              />
-              {qDraft ? (
-                <button
-                  type="button"
-                  className={rfChipStyles.clearBtn}
-                  onClick={() => {
-                    setQDraft('');
-                    setFacet({ q: '' });
-                  }}
-                  title="Effacer"
-                  aria-label="Effacer la recherche"
-                >
-                  <FiX size={12} />
-                </button>
+          <div className={styles.toolbarHeadText}>
+            <div className={styles.toolbarTitleRow}>
+              <h2 id="admin-res-filters-title" className={styles.toolbarTitle}>
+                Critères de recherche
+              </h2>
+              {activeFilterCount > 0 ? (
+                <span className={styles.toolbarBadge} aria-live="polite">
+                  {activeFilterCount} actif{activeFilterCount > 1 ? 's' : ''}
+                </span>
               ) : null}
             </div>
+            <p className={styles.toolbarHint}>
+              Validez la recherche textuelle avec Entrée. Les dates et le statut s&apos;appliquent
+              immédiatement.
+            </p>
           </div>
-          <div className={styles.field}>
-            <span>Statut</span>
-            <ChipDropdown
-              icon={<FiTag size={12} aria-hidden />}
-              value={statusParam}
-              options={statusChipOptions}
-              onChange={(v) => setFacet({ status: v })}
-              activeWhen={(v) => v !== ''}
-            />
-          </div>
-          <label className={`${styles.field} ${styles.fieldDate}`}>
-            <span>Création du</span>
-            <InlineDatePicker
-              value={searchParams.get('created_from') || ''}
-              onChange={(iso) => setFacet({ created_from: iso })}
-            />
-          </label>
-          <label className={`${styles.field} ${styles.fieldDate}`}>
-            <span>Création au</span>
-            <InlineDatePicker
-              value={searchParams.get('created_to') || ''}
-              onChange={(iso) => setFacet({ created_to: iso })}
-            />
-          </label>
-        </div>
-
-        <div className={styles.toolbarDivider} aria-hidden />
-
-        <div className={styles.toolbarRow}>
-          <label className={`${styles.field} ${styles.fieldDate}`}>
-            <span>Transport du</span>
-            <InlineDatePicker
-              value={searchParams.get('scheduled_from') || ''}
-              onChange={(iso) => setFacet({ scheduled_from: iso })}
-            />
-          </label>
-          <label className={`${styles.field} ${styles.fieldDate}`}>
-            <span>Transport au</span>
-            <InlineDatePicker
-              value={searchParams.get('scheduled_to') || ''}
-              onChange={(iso) => setFacet({ scheduled_to: iso })}
-            />
-          </label>
-          <label className={styles.field}>
-            <span>Institution</span>
-            <input
-              type="search"
-              enterKeyHint="search"
-              placeholder="Nom de l'institution…"
-              defaultValue={searchParams.get('institution_q') || ''}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  setFacet({
-                    institution_q: e.target.value.trim(),
-                    institution_id: '',
-                  });
+          <div className={styles.toolbarActions}>
+            <button
+              type="button"
+              className={styles.btnReset}
+              onClick={resetFilters}
+              disabled={activeFilterCount === 0}
+            >
+              <FiRotateCcw size={15} aria-hidden />
+              Réinitialiser
+            </button>
+            <button
+              type="button"
+              className={styles.btnExport}
+              disabled={exporting}
+              onClick={async () => {
+                setExporting(true);
+                try {
+                  await downloadAdminBookingsExport(apiParams);
+                } catch {
+                  setError('Export impossible.');
+                } finally {
+                  setExporting(false);
                 }
               }}
-              aria-label="Filtrer par nom d'institution (partie du libellé)"
-            />
-          </label>
-          <label className={styles.field}>
-            <span>Entreprise</span>
-            <input
-              type="search"
-              enterKeyHint="search"
-              placeholder="Nom de l'entreprise…"
-              defaultValue={searchParams.get('company_q') || ''}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  setFacet({
-                    company_q: e.target.value.trim(),
-                    company_id: '',
-                  });
-                }
-              }}
-              aria-label="Filtrer par nom d'entreprise porteuse ou exécutante"
-            />
-          </label>
+            >
+              <FiDownload size={15} aria-hidden />
+              {exporting ? 'Export…' : 'Export CSV'}
+            </button>
+          </div>
         </div>
 
-        <div className={styles.toolbarActions}>
-          <button type="button" className={styles.btnReset} onClick={resetFilters}>
-            <FiRotateCcw size={15} aria-hidden />
-            Réinitialiser
-          </button>
-          <button
-            type="button"
-            className={styles.btnExport}
-            disabled={exporting}
-            onClick={async () => {
-              setExporting(true);
-              try {
-                await downloadAdminBookingsExport(apiParams);
-              } catch {
-                setError("Export impossible.");
-              } finally {
-                setExporting(false);
-              }
-            }}
-          >
-            <FiDownload size={15} aria-hidden />
-            {exporting ? 'Export…' : 'Export CSV'}
-          </button>
+        <div className={styles.toolbarBody}>
+          <div className={styles.filterGroup} role="group" aria-labelledby="admin-res-grp-criteria">
+            <p id="admin-res-grp-criteria" className={styles.filterGroupTitle}>
+              Identification
+            </p>
+            <div className={styles.toolbarRow}>
+              <div className={`${styles.field} ${styles.fieldSearch}`}>
+                <span>Recherche</span>
+                <div className={rfChipStyles.searchWrap}>
+                  <FiSearch className={rfChipStyles.searchIcon} size={14} aria-hidden />
+                  <input
+                    type="text"
+                    className={rfChipStyles.searchInput}
+                    placeholder="ID, nom, lieu…"
+                    value={qDraft}
+                    onChange={(e) => setQDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        setFacet({ q: qDraft.trim() });
+                      }
+                    }}
+                    aria-label="Recherche (Entrée pour filtrer)"
+                  />
+                  {qDraft ? (
+                    <button
+                      type="button"
+                      className={rfChipStyles.clearBtn}
+                      onClick={() => {
+                        setQDraft('');
+                        setFacet({ q: '' });
+                      }}
+                      title="Effacer"
+                      aria-label="Effacer la recherche"
+                    >
+                      <FiX size={12} />
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+              <div className={`${styles.field} ${styles.fieldStatus}`}>
+                <span>Statut</span>
+                <ChipDropdown
+                  icon={<FiTag size={12} aria-hidden />}
+                  value={statusParam}
+                  options={statusChipOptions}
+                  onChange={(v) => setFacet({ status: v })}
+                  activeWhen={(v) => v !== ''}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className={styles.filterGroup} role="group" aria-labelledby="admin-res-grp-created">
+            <p id="admin-res-grp-created" className={styles.filterGroupTitle}>
+              Date de création
+            </p>
+            <div className={styles.toolbarRow}>
+              <label className={`${styles.field} ${styles.fieldDate}`}>
+                <span>Du</span>
+                <InlineDatePicker
+                  value={searchParams.get('created_from') || ''}
+                  onChange={(iso) => setFacet({ created_from: iso })}
+                />
+              </label>
+              <label className={`${styles.field} ${styles.fieldDate}`}>
+                <span>Au</span>
+                <InlineDatePicker
+                  value={searchParams.get('created_to') || ''}
+                  onChange={(iso) => setFacet({ created_to: iso })}
+                />
+              </label>
+            </div>
+          </div>
+
+          <div className={styles.filterGroup} role="group" aria-labelledby="admin-res-grp-transport">
+            <p id="admin-res-grp-transport" className={styles.filterGroupTitle}>
+              Date de transport
+            </p>
+            <div className={styles.toolbarRow}>
+              <label className={`${styles.field} ${styles.fieldDate}`}>
+                <span>Du</span>
+                <InlineDatePicker
+                  value={searchParams.get('scheduled_from') || ''}
+                  onChange={(iso) => setFacet({ scheduled_from: iso })}
+                />
+              </label>
+              <label className={`${styles.field} ${styles.fieldDate}`}>
+                <span>Au</span>
+                <InlineDatePicker
+                  value={searchParams.get('scheduled_to') || ''}
+                  onChange={(iso) => setFacet({ scheduled_to: iso })}
+                />
+              </label>
+            </div>
+          </div>
+
+          <div className={styles.filterGroup} role="group" aria-labelledby="admin-res-grp-org">
+            <p id="admin-res-grp-org" className={styles.filterGroupTitle}>
+              Organisation
+            </p>
+            <div className={styles.toolbarRow}>
+              <label className={`${styles.field} ${styles.fieldOrg}`}>
+                <span>Institution</span>
+                <input
+                  type="search"
+                  enterKeyHint="search"
+                  placeholder="Nom de l'institution…"
+                  value={institutionDraft}
+                  onChange={(e) => setInstitutionDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      setFacet({
+                        institution_q: institutionDraft.trim(),
+                        institution_id: '',
+                      });
+                    }
+                  }}
+                  aria-label="Filtrer par nom d'institution (partie du libellé)"
+                />
+              </label>
+              <label className={`${styles.field} ${styles.fieldOrg}`}>
+                <span>Entreprise</span>
+                <input
+                  type="search"
+                  enterKeyHint="search"
+                  placeholder="Nom de l'entreprise…"
+                  value={companyDraft}
+                  onChange={(e) => setCompanyDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      setFacet({
+                        company_q: companyDraft.trim(),
+                        company_id: '',
+                      });
+                    }
+                  }}
+                  aria-label="Filtrer par nom d'entreprise porteuse ou exécutante"
+                />
+              </label>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -458,7 +548,7 @@ const AdminReservations = () => {
               {items.length === 0 ? (
                 <tr>
                   <td colSpan="10" className={styles.empty}>
-                    Aucune réservation pour ces critères.
+                    Aucun transport pour ces critères.
                   </td>
                 </tr>
               ) : (
@@ -489,6 +579,9 @@ const AdminReservations = () => {
                       <Link
                         className={styles.detailLink}
                         to={adminPaths.operationsBooking(adminId, row.id)}
+                        state={{
+                          from: `${location.pathname}${location.search}`,
+                        }}
                       >
                         Détail
                       </Link>

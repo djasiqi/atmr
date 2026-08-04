@@ -16,6 +16,7 @@
 .table {
   width: 100%;
   border-collapse: collapse;
+  table-layout: fixed;
 }
 
 .table thead {
@@ -35,6 +36,79 @@
   top: 0;
   z-index: 10;
   background-color: var(--bg-tertiary, #f8fafc);
+}
+
+.colClient {
+  width: 28%;
+}
+
+.colContact {
+  width: 26%;
+}
+
+.colAddress {
+  width: 18%;
+}
+
+.colStatus {
+  width: 12%;
+}
+
+.colDate {
+  width: 12%;
+}
+
+.colActionsHead {
+  width: 4%;
+}
+
+/* Mode panneau ouvert : masquer colonnes secondaires */
+.tableCompact .colSecondary {
+  display: none;
+}
+
+.tableCompact .colClient {
+  width: 44%;
+}
+
+.tableCompact .colContact {
+  width: 38%;
+}
+
+.tableCompact .colStatus {
+  width: 12%;
+}
+
+.tableCompact .colActionsHead {
+  width: 6%;
+}
+
+.tableCompact .clientName,
+.tableCompact .contactCell {
+  max-width: none;
+}
+
+/* En overlay (<=1280), le tableau récupère la largeur : réafficher les colonnes secondaires */
+@media (max-width: 1280px) {
+  .tableCompact .colSecondary {
+    display: table-cell;
+  }
+
+  .tableCompact .colClient {
+    width: 28%;
+  }
+
+  .tableCompact .colContact {
+    width: 26%;
+  }
+
+  .tableCompact .colStatus {
+    width: 12%;
+  }
+
+  .tableCompact .colActionsHead {
+    width: 4%;
+  }
 }
 
 .table tbody tr {

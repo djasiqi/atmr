@@ -226,6 +226,47 @@ class CreateManualBookingUseCase:
         cid = company_id
         client_id = validated_data["client_id"]
 
+        # Restriction commerciale LIRIE (full) : bloquer nouvelles courses portefeuille
+        from services.platform_billing.capabilities import (
+            BillingAccessRestricted,
+            BillingCapability,
+            assert_billing_capability_allowed,
+            billing_access_error_payload,
+        )
+
+        try:
+            assert_billing_capability_allowed(
+                cid, BillingCapability.CREATE_OWN_PORTFOLIO_BOOKING
+            )
+        except BillingAccessRestricted as exc:
+            payload = billing_access_error_payload(exc)
+            state = str(payload.get("billing_access_state") or "full").lower()
+            contact = "Support LIRIE : 022 512 02 03 · info@lirie.ch"
+            if state == "full":
+                message = (
+                    "Nouvelle course impossible : restriction commerciale liée au "
+                    "recouvrement de la facturation plateforme LIRIE. "
+                    f"{contact}."
+                )
+            elif state == "partial":
+                message = (
+                    "Fonction indisponible : restriction commerciale partielle liée "
+                    "au recouvrement LIRIE (marketplace / services facturables). "
+                    f"{contact}."
+                )
+            else:
+                message = (
+                    "Action indisponible : restriction commerciale liée au "
+                    "recouvrement LIRIE. "
+                    f"{contact}."
+                )
+            raise CreateManualBookingError(
+                message,
+                status_code=403,
+                error_code=payload.get("error_code") or "billing_access_restricted",
+                details=payload,
+            ) from exc
+
         def _norm_str(x: Any, default: str | None = None) -> str | None:
             if isinstance(x, str):
                 return x.strip()
@@ -309,6 +350,19 @@ class CreateManualBookingUseCase:
                     f"Société payeuse {billed_to_company_id} introuvable",
                     status_code=404,
                 )
+
+        # Destinataire V2 : tiers configuré OU BillingParty PATIENT technique
+        billing_party_id = None
+        if billed_to_type == "patient":
+            from services.billing.billing_party_linker import (
+                resolve_billing_party_for_portfolio_patient,
+            )
+
+            billing_party = resolve_billing_party_for_portfolio_patient(
+                company_id=int(cid),
+                client=client,
+            )
+            billing_party_id = int(billing_party.id)
 
         # ---------- 1) Parse des dates + Récurrence ----------
         try:
@@ -807,6 +861,7 @@ class CreateManualBookingUseCase:
             outbound.billed_to_type = billed_to_type
             outbound.billed_to_company_id = billed_to_company_id
             outbound.billed_to_contact = billed_to_contact
+            outbound.billing_party_id = billing_party_id
 
             if active_stay:
                 if bill_to_patient_override:
@@ -888,6 +943,7 @@ class CreateManualBookingUseCase:
                 return_booking.billed_to_type = billed_to_type
                 return_booking.billed_to_company_id = billed_to_company_id
                 return_booking.billed_to_contact = billed_to_contact
+                return_booking.billing_party_id = billing_party_id
                 return_booking.billing_source = outbound.billing_source
                 return_booking.billing_source_ref = outbound.billing_source_ref
 

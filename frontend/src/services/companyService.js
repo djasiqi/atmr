@@ -1214,6 +1214,11 @@ const toYMD = (isoString) => {
 export const fetchAssignedReservations = async (forDate, { reservations: prefetchedReservations } = {}) => {
   console.log(`[Dispatch] Fetching assigned reservations for date: ${forDate}`);
 
+  const { hasCompanyScopedAccessToken } = await import('../utils/webAuthSession');
+  if (!hasCompanyScopedAccessToken()) {
+    return [];
+  }
+
   try {
     const hasPrefetched = Array.isArray(prefetchedReservations);
     let reservations = hasPrefetched ? prefetchedReservations : [];
@@ -1452,6 +1457,10 @@ export const fetchAssignedReservations = async (forDate, { reservations: prefetc
  * ⏱️ Retards courants (monté sous /company_dispatch/delays)
  */
 export const fetchDispatchDelays = async (date) => {
+  const { hasCompanyScopedAccessToken } = await import('../utils/webAuthSession');
+  if (!hasCompanyScopedAccessToken()) {
+    return [];
+  }
   try {
     const { data } = await apiClient.get('/company_dispatch/delays', {
       params: { date },

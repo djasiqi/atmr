@@ -6,12 +6,13 @@
 .content {
   flex: 1 1 auto;
   min-width: 0;
+  width: auto;
+  max-width: 100%;
   padding: var(--spacing-lg);
   background-color: var(--admin-surface, var(--bg-primary));
   border-radius: var(--radius-lg);
   margin: var(--spacing-lg);
   margin-top: var(--spacing-lg);
-  max-width: none;
   box-shadow: var(--shadow-md);
   overflow-x: hidden;
   overflow-y: auto;

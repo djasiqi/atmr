@@ -74,5 +74,31 @@ def test_enforced_allows_granted_capability(monkeypatch):
         assert user_has_admin_capability(1, CAP_LABS_EXECUTE) is False
 
 
+def test_enforced_partners_alias_expands_effective(monkeypatch):
+    """Grant partners.read ⇒ organizations/accounts présents dans capabilities_effective."""
+    monkeypatch.setenv("ADMIN_CAPABILITIES_ENFORCED", "true")
+    from models.enums import UserRole
+    from services.admin_authz import (
+        CAP_ACCOUNTS_READ,
+        CAP_ORGANIZATIONS_READ,
+        CAP_PARTNERS_READ,
+    )
+
+    with (
+        patch("services.admin_authz.db.session.get") as get_user,
+        patch(
+            "services.admin_authz._admin_capability_grants",
+            return_value=frozenset({CAP_PARTNERS_READ}),
+        ),
+    ):
+        get_user.return_value = type("U", (), {"role": UserRole.ADMIN})()
+        effective = user_effective_admin_capabilities(1)
+        assert CAP_PARTNERS_READ in effective
+        assert CAP_ORGANIZATIONS_READ in effective
+        assert CAP_ACCOUNTS_READ in effective
+        assert user_has_admin_capability(1, CAP_ORGANIZATIONS_READ) is True
+        assert user_has_admin_capability(1, CAP_ACCOUNTS_READ) is True
+
+
 def test_none_user_denied():
     assert user_has_admin_capability(None, CAP_LABS_EXECUTE) is False

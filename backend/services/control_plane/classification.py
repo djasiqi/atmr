@@ -92,7 +92,7 @@ def _override_value(entity_type: str, entity_id: int, override_key: str) -> str 
 
 
 def classify_company_for_control_plane(company: Company) -> CompanyProjectionDecision:
-    """Ordre fail-closed : override → drivers → clinic shell → unique tenant → ambiguous."""
+    """Ordre fail-closed : override → drivers → shell (owner non-COMPANY) → unique tenant → ambiguous."""
     override = _override_value("company", int(company.id), "company_projection_kind")
     if override in {k.value for k in CompanyProjectionKind}:
         return CompanyProjectionDecision(
@@ -109,54 +109,59 @@ def classify_company_for_control_plane(company: Company) -> CompanyProjectionDec
             evidence={"drivers_count": drivers},
         )
 
-    clinic_ref = _is_clinic_referenced(int(company.id))
-    if clinic_ref and drivers == 0:
-        return CompanyProjectionDecision(
-            kind=CompanyProjectionKind.BILLING_SHELL,
-            reason="clinic_reference_without_drivers",
-            evidence={"clinic_referenced": True},
-        )
-
     owner = db.session.get(User, company.user_id) if company.user_id else None
     owner_role = getattr(owner, "role", None) if owner else None
-    owner_is_company = owner_role in (UserRole.COMPANY, UserRole.COMPANY.value, "COMPANY", "company")
+    owner_is_company = owner_role in (
+        UserRole.COMPANY,
+        UserRole.COMPANY.value,
+        "COMPANY",
+        "company",
+    )
+
+    clinic_ref = _is_clinic_referenced(int(company.id))
+    # Shell certain uniquement si clinic + 0 driver + owner NON-COMPANY
+    if clinic_ref and drivers == 0 and not owner_is_company:
+        return CompanyProjectionDecision(
+            kind=CompanyProjectionKind.BILLING_SHELL,
+            reason="clinic_reference_non_company_owner",
+            evidence={
+                "clinic_referenced": True,
+                "owner_role": str(owner_role) if owner_role is not None else None,
+            },
+        )
+
+    # Clinic + owner COMPANY + 0 driver → ambiguous (ne pas exclure un tenant silencieux)
+    if clinic_ref and drivers == 0 and owner_is_company:
+        return CompanyProjectionDecision(
+            kind=CompanyProjectionKind.AMBIGUOUS,
+            reason="clinic_reference_company_owner_no_drivers",
+            evidence={
+                "clinic_referenced": True,
+                "owner_id": owner.id if owner else None,
+            },
+        )
 
     if owner_is_company and owner is not None:
-        siblings = (
+        siblings = list(
             db.session.scalars(select(Company).where(Company.user_id == owner.id)).all()
         )
-        non_shell_candidates: list[Company] = []
-        for sib in siblings:
-            if int(sib.id) == int(company.id):
-                if not clinic_ref:
-                    non_shell_candidates.append(sib)
+        # Candidats non-shell : pas de clinic_ref (owner COMPANY clinic = ambiguous ailleurs)
+        unique_tenants = []
+        for c in siblings:
+            if _driver_count(int(c.id)) > 0:
                 continue
-            sib_drivers = _driver_count(int(sib.id))
-            sib_clinic = _is_clinic_referenced(int(sib.id))
-            if sib_drivers > 0:
-                continue  # autre tenant déjà clair
-            if sib_clinic and sib_drivers == 0:
-                continue  # shell
-            non_shell_candidates.append(sib)
-
-        # Recompte pour cette company : si elle n'est pas clinic et owner COMPANY
-        if not clinic_ref:
-            # Candidates = this company + other non-shell without drivers uniqueness
-            unique_tenants = [
-                c
-                for c in siblings
-                if _driver_count(int(c.id)) == 0 and not _is_clinic_referenced(int(c.id))
-            ]
-            # Also include siblings that have drivers as resolved tenants (exclude from ambiguity pool)
-            if len(unique_tenants) == 1 and int(unique_tenants[0].id) == int(company.id):
-                return CompanyProjectionDecision(
-                    kind=CompanyProjectionKind.TRANSPORT_TENANT,
-                    reason="unique_company_owner_candidate",
-                    evidence={
-                        "owner_id": owner.id,
-                        "sibling_count": len(siblings),
-                    },
-                )
+            if _is_clinic_referenced(int(c.id)):
+                continue
+            unique_tenants.append(c)
+        if len(unique_tenants) == 1 and int(unique_tenants[0].id) == int(company.id):
+            return CompanyProjectionDecision(
+                kind=CompanyProjectionKind.TRANSPORT_TENANT,
+                reason="unique_company_owner_candidate",
+                evidence={
+                    "owner_id": owner.id,
+                    "sibling_count": len(siblings),
+                },
+            )
 
     return CompanyProjectionDecision(
         kind=CompanyProjectionKind.AMBIGUOUS,

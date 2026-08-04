@@ -320,6 +320,7 @@ def list_partner_organizations(
     organization_type: str | None = None,
     configuration_status: str | None = None,
     search: str | None = None,
+    real_organizations_only: bool = False,
 ) -> dict[str, Any]:
     """Liste paginée des organisations partenaires."""
     page = max(page, 1)
@@ -329,6 +330,8 @@ def list_partner_organizations(
     filters = []
     if not include_synthetic:
         filters.append(sq.c.data_scope != "inferred_synthetic")
+    if real_organizations_only:
+        filters.append(sq.c.organization_type.in_(("company", "institution")))
     if organization_type:
         filters.append(sq.c.organization_type == organization_type.strip())
     if configuration_status:
@@ -354,7 +357,10 @@ def list_partner_organizations(
     ).all()
 
     items = [_row_to_dict(r) for r in rows]
-    summary = build_partners_summary(include_synthetic=include_synthetic)
+    summary = build_partners_summary(
+        include_synthetic=include_synthetic,
+        real_organizations_only=real_organizations_only,
+    )
 
     return {
         "items": items,
@@ -369,12 +375,18 @@ def list_partner_organizations(
     }
 
 
-def build_partners_summary(*, include_synthetic: bool = False) -> dict[str, Any]:
+def build_partners_summary(
+    *,
+    include_synthetic: bool = False,
+    real_organizations_only: bool = False,
+) -> dict[str, Any]:
     """KPI Partenaires (définitions PR1)."""
     sq = _organizations_subquery()
     org_filters = []
     if not include_synthetic:
         org_filters.append(sq.c.data_scope != "inferred_synthetic")
+    if real_organizations_only:
+        org_filters.append(sq.c.organization_type.in_(("company", "institution")))
 
     configured_q = (
         select(func.count())

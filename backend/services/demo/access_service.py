@@ -446,6 +446,14 @@ def _apply_demo_profile(
                 company.address = org_address
             db.session.add(company)
             db.session.flush()
+            try:
+                from services.control_plane.legacy_hooks import project_company_tenant
+
+                project_company_tenant(company)
+            except Exception:
+                logger.exception(
+                    "[demo] projection control plane company après création échouée"
+                )
         else:
             company.name = (
                 org_name or company.name or f"Demo Transport {demo_request.id}"
@@ -456,6 +464,14 @@ def _apply_demo_profile(
             company.dispatch_enabled = True
             if org_address:
                 company.address = org_address
+            try:
+                from services.control_plane.legacy_hooks import project_company_tenant
+
+                project_company_tenant(company)
+            except Exception:
+                logger.exception(
+                    "[demo] projection control plane company après maj échouée"
+                )
         company.dispatch_mode = DispatchMode.MANUAL
         return journey
 

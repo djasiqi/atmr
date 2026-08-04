@@ -127,11 +127,9 @@ const getStoredRoleFromEnv = (env) => {
 };
 
 const getScopedCompanyAccessToken = (env) => {
-  if (env === DEMO_ENV_KEY) {
-    // En demo, utiliser strictement le token demo pour éviter les mélanges app<->demo.
-    return getStorageTokenByEnv(DEMO_ENV_KEY);
-  }
-  return getCompanyScopedAccessToken(APP_ENV_KEY) || getStorageTokenByEnv(APP_ENV_KEY);
+  // Même résolution que hasCompanyScopedAccessToken / useCompanyAuthToken
+  // (évite app vs demo et company_access_token vs *_access_token incohérents).
+  return getCompanyScopedAccessToken(env) || getStorageTokenByEnv(env);
 };
 
 const resolveApiBase = (url) => {
@@ -300,6 +298,8 @@ const addAuthHeader = async (cfg = {}) => {
 
 // ✅ Garde anti-régression dashboard company : company_dispatch/* => uniquement company_access_token (jamais driver_access_token)
 const COMPANY_ACCESS_TOKEN_KEY = 'company_access_token';
+export const COMPANY_DISPATCH_MISSING_TOKEN =
+  'Session entreprise manquante pour le dispatch. Reconnectez-vous (Support LIRIE : 022 512 02 03 · info@lirie.ch).';
 
 apiRest.interceptors.request.use((config) => {
   const base = config.baseURL ?? '';
@@ -335,9 +335,7 @@ apiRest.interceptors.request.use((config) => {
       return config;
     }
     // ✅ Fail fast : impossible de réintroduire le bug 401 sur company_dispatch
-    return Promise.reject(
-      new Error('Company dispatch called without company_access_token')
-    );
+    return Promise.reject(new Error(COMPANY_DISPATCH_MISSING_TOKEN));
   }
   return config;
 });
@@ -573,6 +571,12 @@ export const cleanLocalSession = () => {
     delete apiRest.defaults.headers.common.Authorization;
     delete apiRest.defaults.headers.common.authorization;
   }
+  // Couper le socket company sans attendre le logout serveur (login / switch compte).
+  void import('../services/companySocket')
+    .then(({ disconnectCompanySocket }) => {
+      disconnectCompanySocket();
+    })
+    .catch(() => {});
 };
 
 const LOGOUT_SERVER_TIMEOUT_MS = 8000;

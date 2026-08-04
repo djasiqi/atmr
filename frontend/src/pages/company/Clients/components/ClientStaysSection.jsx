@@ -210,7 +210,7 @@ const ClientStaysSection = ({ clientId }) => {
             title="Ajouter un nouveau séjour d'hospitalisation"
           >
             <FiPlus size={14} />
-            Nouveau sejour
+            Nouveau séjour
           </button>
         )}
       </div>
@@ -219,9 +219,9 @@ const ClientStaysSection = ({ clientId }) => {
         <div className={styles.activeStayBadge}>
           <FiActivity size={20} className={styles.badgeIcon} />
           <div className={styles.badgeContent}>
-            <strong>Client actuellement hospitalise</strong>
+            <strong>Client actuellement hospitalisé</strong>
             <div className={styles.badgeDetails}>
-              {activeStay.company_name} \u2014 Depuis le{' '}
+              {activeStay.company_name} — Depuis le{' '}
               {new Date(activeStay.start_date).toLocaleDateString('fr-FR')}
             </div>
           </div>
@@ -232,7 +232,7 @@ const ClientStaysSection = ({ clientId }) => {
         <div className={styles.form}>
           <div className={styles.formGroup}>
             <label htmlFor="company_id" className={styles.label}>
-              Clinique / Etablissement *
+              Clinique / Établissement *
             </label>
             <ClinicChipDropdown
               clinics={clinics}
@@ -243,7 +243,7 @@ const ClientStaysSection = ({ clientId }) => {
 
           <div className={styles.formRow}>
             <div className={styles.formGroup}>
-              <label className={styles.label}>Date de debut *</label>
+              <label className={styles.label}>Date de début *</label>
               <InlineDatePicker
                 value={formData.start_date}
                 onChange={(v) => setFormData({ ...formData, start_date: v })}
@@ -259,7 +259,7 @@ const ClientStaysSection = ({ clientId }) => {
                 placeholder="Fin"
               />
               <small className={styles.hint}>
-                Laisser vide si le sejour est en cours
+                Laisser vide si le séjour est en cours
               </small>
             </div>
           </div>
@@ -274,7 +274,7 @@ const ClientStaysSection = ({ clientId }) => {
               onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
               className={styles.textarea}
               rows={3}
-              placeholder="Informations complementaires sur le sejour..."
+              placeholder="Informations complémentaires sur le séjour…"
             />
           </div>
 
@@ -302,7 +302,7 @@ const ClientStaysSection = ({ clientId }) => {
               onClick={handleSubmit}
               className={styles.saveButton}
             >
-              {editingStay ? 'Modifier' : 'Creer'} le sejour
+              {editingStay ? 'Modifier' : 'Créer'} le séjour
             </button>
           </div>
         </div>
@@ -311,10 +311,10 @@ const ClientStaysSection = ({ clientId }) => {
       {!showForm && (
         <>
           {loading ? (
-            <div className={styles.loading}>Chargement des sejours...</div>
+            <div className={styles.loading}>Chargement des séjours…</div>
           ) : stays.length === 0 ? (
             <div className={styles.emptyState}>
-              Aucun sejour enregistre. Cliquez sur &laquo; Nouveau sejour &raquo; pour en ajouter un.
+              Aucun séjour enregistré. Cliquez sur « Nouveau séjour » pour en ajouter un.
             </div>
           ) : (
             <div className={styles.staysList}>
@@ -336,7 +336,7 @@ const ClientStaysSection = ({ clientId }) => {
                           type="button"
                           onClick={() => handleClose(stay.id)}
                           className={styles.closeStayButton}
-                          title="Fermer le sejour"
+                          title="Fermer le séjour"
                         >
                           <FiCheck size={12} />
                           Fermer

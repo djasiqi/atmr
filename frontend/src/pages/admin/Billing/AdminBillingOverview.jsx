@@ -154,24 +154,49 @@ const AdminBillingOverview = () => {
   }, [companies, invByCompany, showTests]);
 
   const kpis = useMemo(() => {
-    let ready = 0;
+    let expected = 0;
+    let calculated = 0;
     let toReview = 0;
-    let forecast = 0;
+    let validated = 0;
+    let calculatedAmount = 0;
+    let issuedAmount = 0;
+    let issuedCount = 0;
     for (let i = 0; i < rows.length; i += 1) {
       const r = rows[i];
-      if (r.state === 'Prête' || r.state === 'Calculée') ready += 1;
-      if (r.state === 'À contrôler' || r.state === 'Config. incomplète') toReview += 1;
-      forecast += r.amountNum;
+      expected += 1;
+      const status = String(r.invoice?.statement_status || '').toUpperCase();
+      if (status === 'CALCULATED') calculated += 1;
+      if (status === 'NEEDS_REVIEW' || r.state === 'À contrôler' || r.state === 'Config. incomplète') {
+        toReview += 1;
+      }
+      if (status === 'VALIDATED' || status === 'LOCKED') validated += 1;
+      calculatedAmount += r.amountNum;
+      const issued = r.invoice?.issued_invoice;
+      if (issued && String(issued.status || '').toLowerCase() !== 'cancelled') {
+        issuedCount += 1;
+        const n = Number(String(issued.total_amount ?? r.amount ?? '0').replace(',', '.'));
+        if (Number.isFinite(n)) issuedAmount += n;
+      }
     }
     return {
-      companies: rows.length,
-      ready,
+      expected,
+      calculated,
       toReview,
-      forecast: forecast.toFixed(2),
+      validated,
+      calculatedAmount: calculatedAmount.toFixed(2),
+      issuedAmount: issuedAmount.toFixed(2),
+      issuedCount,
     };
   }, [rows]);
 
   const periodLabel = `${MONTHS_FR[Number(month) - 1] || month} ${year}`;
+
+  const calcButtonLabel = () => {
+    if (busy) return 'Calcul…';
+    if (!period) return 'Ouvrir et calculer la période';
+    if (period.status === 'locked') return 'Période verrouillée';
+    return 'Recalculer les relevés';
+  };
 
   const periodChip = () => {
     if (!period) {
@@ -257,7 +282,7 @@ const AdminBillingOverview = () => {
             disabled={busy || period?.status === 'locked'}
             onClick={ensurePeriodAndRecalculate}
           >
-            {busy ? 'Calcul…' : 'Calculer les relevés'}
+            {calcButtonLabel()}
           </button>
         </div>
       </div>
@@ -273,23 +298,37 @@ const AdminBillingOverview = () => {
         </div>
       ) : null}
 
-      <section className={styles.kpiRow} aria-label="Synthèse mensuelle">
+      <section className={styles.kpiRow} aria-label="Synthèse opérationnelle">
         <div className={styles.kpi}>
-          <span className={styles.kpiLabel}>Entreprises</span>
-          <span className={styles.kpiValue}>{loading ? '—' : kpis.companies}</span>
+          <span className={styles.kpiLabel}>Relevés attendus</span>
+          <span className={styles.kpiValue}>{loading ? '—' : kpis.expected}</span>
         </div>
         <div className={styles.kpi}>
-          <span className={styles.kpiLabel}>Relevés prêts</span>
-          <span className={styles.kpiValue}>{loading ? '—' : kpis.ready}</span>
+          <span className={styles.kpiLabel}>Calculés</span>
+          <span className={styles.kpiValue}>{loading ? '—' : kpis.calculated}</span>
         </div>
         <div className={`${styles.kpi} ${kpis.toReview ? styles.kpiWarn : ''}`}>
-          <span className={styles.kpiLabel}>À traiter</span>
+          <span className={styles.kpiLabel}>À contrôler</span>
           <span className={styles.kpiValue}>{loading ? '—' : kpis.toReview}</span>
         </div>
+        <div className={styles.kpi}>
+          <span className={styles.kpiLabel}>Validés</span>
+          <span className={styles.kpiValue}>{loading ? '—' : kpis.validated}</span>
+        </div>
+      </section>
+      <section className={styles.kpiRow} aria-label="Synthèse financière">
         <div className={`${styles.kpi} ${styles.kpiAccent}`}>
-          <span className={styles.kpiLabel}>Total prévisionnel</span>
+          <span className={styles.kpiLabel}>Montant calculé</span>
           <span className={styles.kpiValue}>
-            {loading ? '—' : fmtMoney(kpis.forecast)}
+            {loading ? '—' : fmtMoney(kpis.calculatedAmount)}
+          </span>
+        </div>
+        <div className={styles.kpi}>
+          <span className={styles.kpiLabel}>Factures émises</span>
+          <span className={styles.kpiValue}>
+            {loading
+              ? '—'
+              : `${kpis.issuedCount} · ${fmtMoney(kpis.issuedAmount)}`}
           </span>
         </div>
       </section>

@@ -1,4 +1,4 @@
-import { getServiceUnavailableMessage } from '../constants/platformSupport';
+import { getServiceUnavailableMessage, getLirieSupportContactLine } from '../constants/platformSupport';
 
 const SERVICE_UNAVAILABLE_HTTP_STATUSES = new Set([404, 502, 503, 504]);
 const SERVICE_UNAVAILABLE_NETWORK_CODES = new Set([
@@ -128,6 +128,43 @@ export function getApiErrorMessage(error, fallback = 'Une erreur est survenue.')
       return 'Un champ obligatoire est manquant.';
     }
     return msg;
+  }
+
+  // Restriction commerciale LIRIE (recouvrement)
+  const billingCode =
+    (typeof d.error_code === 'string' && d.error_code.trim()) ||
+    (typeof d.details?.error_code === 'string' && d.details.error_code.trim()) ||
+    '';
+  if (billingCode === 'billing_access_restricted') {
+    const state = String(
+      d.details?.billing_access_state || d.billing_access_state || ''
+    ).toLowerCase();
+    const capability = String(
+      d.details?.capability || d.capability || ''
+    ).toUpperCase();
+    const contact = getLirieSupportContactLine();
+    if (
+      state === 'full' ||
+      capability === 'CREATE_OWN_PORTFOLIO_BOOKING'
+    ) {
+      return (
+        'Nouvelle course impossible : restriction commerciale liée au ' +
+        `recouvrement de la facturation plateforme LIRIE. ${contact}.`
+      );
+    }
+    if (state === 'partial') {
+      return (
+        'Fonction indisponible : restriction commerciale partielle liée au ' +
+        `recouvrement LIRIE (marketplace / services facturables). ${contact}.`
+      );
+    }
+    if (typeof d.error === 'string' && d.error.trim() && !/^Accès billing/i.test(d.error)) {
+      return d.error.trim();
+    }
+    return (
+      'Action indisponible : restriction commerciale liée au recouvrement LIRIE. ' +
+      `${contact}.`
+    );
   }
 
   // Réponses legacy : message utilisateur dans `error` + `error_code` (ex. validation 400)

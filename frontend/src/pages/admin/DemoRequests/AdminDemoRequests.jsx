@@ -134,6 +134,7 @@ const AdminDemoRequests = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [items, setItems] = useState([]);
+  const [policy, setPolicy] = useState(null);
   const [busyKey, setBusyKey] = useState('');
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [provisionForm, setProvisionForm] = useState(null);
@@ -152,7 +153,8 @@ const AdminDemoRequests = () => {
     }
     try {
       const data = await fetchAdminDemoRequests();
-      setItems(data);
+      setItems(data.items || []);
+      setPolicy(data.policy || null);
     } catch (err) {
       if (showLoading) {
         setError("Impossible de charger les demandes de demonstration.");
@@ -188,7 +190,8 @@ const AdminDemoRequests = () => {
 
   const metrics = items.reduce(
     (acc, item) => {
-      const accessStatus = item.latest_access?.status || 'pending';
+      const accessStatus =
+        item.latest_access?.effective_status || item.latest_access?.status || 'pending';
       acc.total += 1;
       if (item.status === 'new') acc.newCount += 1;
       if (accessStatus === 'active') acc.activeCount += 1;
@@ -303,7 +306,9 @@ const AdminDemoRequests = () => {
             <div>
               <h1>Demandes de demonstration</h1>
               <p className={styles.subtext}>
-                Gestion des acces demo 24h : provision, renvoi et revocation.
+                {policy?.access_duration_hours
+                  ? `Durée d'accès configurée : ${policy.access_duration_hours} h. L'expiration réelle de chaque accès fait foi.`
+                  : "Gestion des accès démo : provision, renvoi et révocation. L'expiration réelle de chaque accès fait foi."}
               </p>
             </div>
             <button
@@ -317,7 +322,7 @@ const AdminDemoRequests = () => {
             </button>
           </header>
 
-          {!loading && !error && (
+          {!loading && !error && items.length > 0 && (
             <section className={styles.metricsGrid} aria-label="Synthese demandes demo">
               <article className={styles.metricCard}>
                 <span>Total</span>
@@ -349,8 +354,11 @@ const AdminDemoRequests = () => {
             <div className={styles.tableWrap}>
               {items.length === 0 ? (
                 <div className={styles.emptyState}>
-                  <h2>Aucune demande</h2>
-                  <p>Aucune demande de demonstration n est disponible pour le moment.</p>
+                  <h2>Aucune demande en attente</h2>
+                  <p>
+                    Les nouvelles demandes reçues depuis le site LIRIE apparaîtront ici
+                    automatiquement.
+                  </p>
                 </div>
               ) : displayItems.length === 0 ? (
                 <div className={styles.emptyState}>
@@ -373,7 +381,8 @@ const AdminDemoRequests = () => {
                   <tbody>
                     {displayItems.map((item) => {
                       const access = item.latest_access;
-                      const accessStatus = access?.status || 'pending';
+                      const accessStatus =
+                        access?.effective_status || access?.status || 'pending';
                       const hasActiveAccess = accessStatus === 'active';
                       const requestMeta = getRequestStatusMeta(item.status);
                       const accessMeta = getAccessStatusMeta(accessStatus);

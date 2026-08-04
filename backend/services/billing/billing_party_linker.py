@@ -75,6 +75,171 @@ def _best_effort_contacts_from_client(client: Client) -> tuple[str | None, str |
     return email, (phone or None)
 
 
+def _direct_patient_external_ref(client_id: int) -> str:
+    return f"patient_client:{int(client_id)}"
+
+
+def _display_name_for_direct_patient(client: Client) -> str:
+    """Nom affiché pour un destinataire PATIENT portefeuille."""
+    institution = (getattr(client, "institution_name", None) or "").strip()
+    if institution and bool(getattr(client, "is_institution", False)):
+        return institution
+
+    user = getattr(client, "user", None)
+    if user is not None:
+        first = (getattr(user, "first_name", None) or "").strip()
+        last = (getattr(user, "last_name", None) or "").strip()
+        full = f"{first} {last}".strip()
+        if full:
+            return full
+        username = (getattr(user, "username", None) or "").strip()
+        if username:
+            return username
+
+    first = (getattr(client, "first_name", None) or "").strip()
+    last = (getattr(client, "last_name", None) or "").strip()
+    full = f"{first} {last}".strip()
+    if full:
+        return full
+
+    return f"Patient #{getattr(client, 'id', '?')}"
+
+
+def _domicile_address_for_direct_patient(client: Client) -> str | None:
+    """Adresse domicile best-effort ; vide autorisé pour BillingParty PATIENT."""
+    domicile = (getattr(client, "domicile_address", None) or "").strip()
+    postal = (getattr(client, "domicile_zip", None) or "").strip()
+    city = (getattr(client, "domicile_city", None) or "").strip()
+    parts: list[str] = []
+    if domicile:
+        parts.append(domicile)
+    postal_city = " ".join(p for p in [postal, city] if p).strip()
+    if postal_city:
+        parts.append(postal_city)
+    if parts:
+        return "\n".join(parts)
+
+    # Fallback billing / user — sans placeholder « Adresse non renseignée »
+    try:
+        billing = (getattr(client, "billing_address_secure", None) or "").strip()
+    except Exception:
+        billing = (getattr(client, "billing_address", None) or "").strip()
+    if billing:
+        return billing
+
+    user = getattr(client, "user", None)
+    if user is not None:
+        user_addr = (getattr(user, "address", None) or "").strip()
+        if user_addr:
+            return user_addr
+    return None
+
+
+def get_or_create_billing_party_for_direct_patient(
+    *,
+    company_id: int,
+    client: Client,
+) -> BillingParty:
+    """Crée ou met à jour le destinataire technique PATIENT pour un client portefeuille.
+
+    Ce BillingParty n'est **pas** un tiers payeur : aucune ligne ClientBillingParty
+    n'est créée. L'UI peut donc continuer d'afficher « Aucun tiers payeur configuré ».
+
+    Idempotence via ``external_ref = patient_client:{client.id}`` (scopé company_id).
+    """
+    if client is None or getattr(client, "id", None) is None:
+        raise ValueError("client requis pour get_or_create_billing_party_for_direct_patient")
+
+    client_id = int(client.id)
+    if int(getattr(client, "company_id", 0) or 0) != int(company_id):
+        raise ValueError(
+            "client.company_id ne correspond pas à company_id "
+            f"(client={client_id}, company={company_id})"
+        )
+
+    external_ref = _direct_patient_external_ref(client_id)
+    display_name = _display_name_for_direct_patient(client)
+    address = _domicile_address_for_direct_patient(client)
+    email, phone = _best_effort_contacts_from_client(client)
+
+    existing = BillingParty.query.filter_by(
+        company_id=company_id, external_ref=external_ref
+    ).first()
+    if existing:
+        changed = False
+        if display_name and existing.display_name != display_name:
+            existing.display_name = display_name
+            changed = True
+        if address and existing.billing_address != address:
+            existing.billing_address = address
+            changed = True
+        if email and existing.contact_email != email:
+            existing.contact_email = email
+            changed = True
+        if phone and existing.contact_phone != phone:
+            existing.contact_phone = phone
+            changed = True
+        if existing.type != BillingPartyType.PATIENT:
+            existing.type = BillingPartyType.PATIENT
+            changed = True
+        if not existing.is_active:
+            existing.is_active = True
+            changed = True
+        if changed:
+            db.session.flush()
+        return existing
+
+    billing_party = BillingParty()
+    billing_party.company_id = company_id
+    billing_party.type = BillingPartyType.PATIENT
+    billing_party.display_name = display_name
+    billing_party.billing_address = address
+    billing_party.contact_email = email
+    billing_party.contact_phone = phone
+    billing_party.external_ref = external_ref
+    billing_party.is_active = True
+
+    db.session.add(billing_party)
+    db.session.flush()
+
+    logger.info(
+        "[billing_party_linker] Created PATIENT BillingParty id=%s "
+        "(external_ref=%s, company_id=%s, client_id=%s)",
+        billing_party.id,
+        external_ref,
+        company_id,
+        client_id,
+    )
+    return billing_party
+
+
+def resolve_billing_party_for_portfolio_patient(
+    *,
+    company_id: int,
+    client: Client,
+) -> BillingParty:
+    """Résout le destinataire V2 pour une course portefeuille ``billed_to_type=patient``.
+
+    Ordre :
+    1. Tiers payeur actif (``ClientBillingParty``) s'il existe
+    2. Sinon BillingParty PATIENT technique (pas de lien ClientBillingParty)
+    """
+    from services.billing.client_stay_resolver import (
+        resolve_default_billing_party_for_client,
+    )
+
+    third_party = resolve_default_billing_party_for_client(
+        client_id=int(client.id),
+        company_id=int(company_id),
+    )
+    if third_party is not None:
+        return third_party
+    return get_or_create_billing_party_for_direct_patient(
+        company_id=int(company_id),
+        client=client,
+    )
+
+
 def get_or_create_billing_party_for_legacy_bill_to_client(
     *,
     company_id: int,

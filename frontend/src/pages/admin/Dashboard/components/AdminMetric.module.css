@@ -1,0 +1,32 @@
+.metric {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--admin-border, #dfe7e4);
+  border-radius: 10px;
+  background: var(--admin-surface, #fff);
+  box-sizing: border-box;
+}
+
+.label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--admin-text-secondary, #5f716d);
+}
+
+.value {
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  color: var(--admin-text, #18302c);
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--admin-text-secondary, #5f716d);
+}

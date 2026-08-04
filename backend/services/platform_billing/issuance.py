@@ -14,7 +14,11 @@ from sqlalchemy import text
 from ext import db
 from models import Company
 from models.billing_profile import CompanyBillingProfile
-from models.enums import PlatformIssuedInvoiceStatus, PlatformStatementStatus
+from models.enums import (
+    PlatformBillingPeriodStatus,
+    PlatformIssuedInvoiceStatus,
+    PlatformStatementStatus,
+)
 from models.platform_billing import (
     CompanyPlatformBillingConfig,
     PlatformBillingCreditor,
@@ -22,6 +26,7 @@ from models.platform_billing import (
     PlatformInvoice,
     PlatformSupportEntry,
 )
+from services.platform_billing.errors import BillingInvariantError
 from services.platform_billing.invoice_pdf import (
     build_platform_qrr_reference,
     generate_platform_invoice_pdf_bytes,
@@ -38,6 +43,10 @@ from services.platform_billing.swiss_qr import (
     platform_qr_amount,
     render_swiss_qr_bill,
     resolve_platform_reference_mode,
+)
+from services.platform_billing.time_bounds import (
+    billing_period_has_ended,
+    next_month_start_zurich_utc,
 )
 
 logger = logging.getLogger(__name__)
@@ -139,15 +148,29 @@ def _creditor_party(
 
 
 def statement_issuance_ready(statement: PlatformInvoice) -> tuple[bool, list[str]]:
+    """Diagnostic d'émission (raisons textuelles ; n'élève pas d'exception)."""
     errors: list[str] = []
     status = statement.statement_status or PlatformStatementStatus.DRAFT.value
-    if status not in (
-        PlatformStatementStatus.LOCKED.value,
-        PlatformStatementStatus.VALIDATED.value,
-    ):
+    if status != PlatformStatementStatus.LOCKED.value:
         errors.append(
-            "Relevé non validé (passez par « Valider » avant d’émettre la QR-facture)"
+            "Le relevé doit être verrouillé avant l’émission "
+            "(clôturez d’abord la période)."
         )
+    period = statement.period
+    if period is None:
+        errors.append("Période introuvable pour ce relevé")
+    else:
+        if period.status != PlatformBillingPeriodStatus.LOCKED.value:
+            errors.append(
+                "La période doit être verrouillée avant l’émission."
+            )
+        year, month = int(period.billing_year), int(period.billing_month)
+        if not billing_period_has_ended(year, month):
+            ends_at = next_month_start_zurich_utc(year, month)
+            errors.append(
+                f"La période {month:02d}/{year} n’est pas terminée "
+                f"(fin : {ends_at.isoformat()})."
+            )
     company = db.session.get(Company, statement.company_id)
     profile = CompanyBillingProfile.query.filter_by(
         company_id=statement.company_id
@@ -396,35 +419,77 @@ def _build_and_store_pdf(
     inv.pdf_checksum = checksum
 
 
-def issue_platform_invoice(statement_id: int) -> PlatformIssuedInvoice:
+def issue_platform_invoice(
+    statement_id: int,
+    *,
+    now_utc: datetime | None = None,
+) -> PlatformIssuedInvoice:
+    from services.platform_billing.engine import assert_billing_period_has_ended
+
     statement = db.session.get(PlatformInvoice, statement_id)
     if not statement:
-        raise ValueError("Relevé introuvable")
+        raise BillingInvariantError(
+            "STATEMENT_NOT_FOUND",
+            "Relevé introuvable",
+            status_code=404,
+            details={"statement_id": statement_id},
+        )
     existing = PlatformIssuedInvoice.query.filter_by(statement_id=statement_id).first()
     if existing and existing.status not in (
         PlatformIssuedInvoiceStatus.DRAFT.value,
         PlatformIssuedInvoiceStatus.CANCELLED.value,
     ):
-        raise ValueError("Facture déjà émise pour ce relevé")
+        raise BillingInvariantError(
+            "INVOICE_ALREADY_ISSUED",
+            "Facture déjà émise pour ce relevé",
+            details={"statement_id": statement_id, "issued_id": existing.id},
+        )
     if existing and existing.status == PlatformIssuedInvoiceStatus.CANCELLED.value:
         # Libère le lien pour une nouvelle émission après correction
         existing.statement_id = None
         db.session.flush()
         existing = None
 
+    period = statement.period
+    if period is None:
+        raise BillingInvariantError(
+            "PERIOD_NOT_FOUND",
+            "Période introuvable pour ce relevé",
+            status_code=404,
+            details={"statement_id": statement_id},
+        )
+    assert_billing_period_has_ended(
+        int(period.billing_year),
+        int(period.billing_month),
+        now_utc=now_utc,
+    )
+    if period.status != PlatformBillingPeriodStatus.LOCKED.value:
+        raise BillingInvariantError(
+            "PERIOD_NOT_LOCKED",
+            "La période doit être verrouillée avant l’émission.",
+            details={
+                "period_id": period.id,
+                "period_status": period.status,
+            },
+        )
     status = statement.statement_status or PlatformStatementStatus.DRAFT.value
-    if status == PlatformStatementStatus.VALIDATED.value:
-        statement.statement_status = PlatformStatementStatus.LOCKED.value
-        db.session.flush()
-    elif status != PlatformStatementStatus.LOCKED.value:
-        raise ValueError(
-            "Émission QR impossible: relevé non validé "
-            f"(état actuel: {status}). Cliquez d’abord sur « Valider »."
+    if status != PlatformStatementStatus.LOCKED.value:
+        raise BillingInvariantError(
+            "STATEMENT_NOT_LOCKED",
+            "Le relevé doit être verrouillé avant l’émission.",
+            details={
+                "statement_id": statement_id,
+                "statement_status": status,
+            },
         )
 
     qr_ok, qr_errors = statement_qr_ready(statement)
     if not qr_ok:
-        raise ValueError("Émission QR impossible: " + "; ".join(qr_errors))
+        raise BillingInvariantError(
+            "STATEMENT_QR_NOT_READY",
+            "Émission QR impossible: " + "; ".join(qr_errors),
+            details={"errors": qr_errors},
+        )
 
     company = db.session.get(Company, statement.company_id)
     if not company:
@@ -434,7 +499,6 @@ def issue_platform_invoice(statement_id: int) -> PlatformIssuedInvoice:
     if not creditor:
         raise ValueError("Créancier LIRIE manquant")
 
-    period = statement.period
     year, month = period.billing_year, period.billing_month
     invoice_number = _next_invoice_number(year, month)
 

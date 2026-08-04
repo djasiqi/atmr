@@ -6,7 +6,7 @@ import os
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 
 from ext import db
 from models.company import Company
@@ -15,6 +15,7 @@ from models.control_plane import (
     OrganizationMembership,
     OrganizationServiceEntitlement,
     PlatformOrganization,
+    RoleTemplate,
     ServiceCatalog,
 )
 from models.institution import Institution
@@ -23,6 +24,7 @@ from models.user import User
 from services.admin_partners_organizations import (
     list_partner_organizations,
 )
+from services.control_plane.cutover import assert_control_plane_read_cutover_ready
 
 
 def organizations_read_mode() -> str:
@@ -47,7 +49,11 @@ def _contains_non_production(org_id: int) -> bool:
 
 def _services_detected(org_id: int) -> list[dict[str, Any]]:
     rows = db.session.execute(
-        select(ServiceCatalog.service_key, ServiceCatalog.label, OrganizationServiceEntitlement.enforcement_mode)
+        select(
+            ServiceCatalog.service_key,
+            ServiceCatalog.label,
+            OrganizationServiceEntitlement.enforcement_mode,
+        )
         .join(
             OrganizationServiceEntitlement,
             OrganizationServiceEntitlement.service_catalog_id == ServiceCatalog.id,
@@ -156,6 +162,33 @@ def list_control_plane_organizations(
     if data_origin:
         query = query.where(PlatformOrganization.data_origin == data_origin)
 
+    if search and search.strip():
+        term = f"%{search.strip().lower()}%"
+        query = query.where(
+            or_(
+                PlatformOrganization.company_id.in_(
+                    select(Company.id).where(
+                        or_(
+                            func.lower(func.coalesce(Company.name, "")).like(term),
+                            func.lower(func.coalesce(Company.contact_email, "")).like(
+                                term
+                            ),
+                        )
+                    )
+                ),
+                PlatformOrganization.institution_id.in_(
+                    select(Institution.id).where(
+                        or_(
+                            func.lower(func.coalesce(Institution.name, "")).like(term),
+                            func.lower(
+                                func.coalesce(Institution.contact_email, "")
+                            ).like(term),
+                        )
+                    )
+                ),
+            )
+        )
+
     total = db.session.scalar(select(func.count()).select_from(query.subquery())) or 0
     rows = db.session.scalars(
         query.order_by(PlatformOrganization.id.desc())
@@ -164,14 +197,6 @@ def list_control_plane_organizations(
     ).all()
 
     items = [_serialize_cp_org(o) for o in rows]
-    if search:
-        ql = search.strip().lower()
-        items = [
-            i
-            for i in items
-            if (i.get("name") or "").lower().find(ql) >= 0
-            or (i.get("contact_email") or "").lower().find(ql) >= 0
-        ]
 
     summary = {
         "organizations_production": db.session.scalar(
@@ -254,9 +279,10 @@ def _cp_public_id_for_legacy(org_type: str, org_id: int | None) -> str | None:
 def list_organizations_with_read_mode(**kwargs: Any) -> dict[str, Any]:
     mode = organizations_read_mode()
     if mode == "control_plane":
+        assert_control_plane_read_cutover_ready()
         return list_control_plane_organizations(**kwargs)
 
-    # legacy (+ compare)
+    # legacy (+ compare) — filtre orphelins en SQL avant COUNT/pagination/KPI
     legacy = list_partner_organizations(
         page=kwargs.get("page", 1),
         per_page=kwargs.get("per_page", 25),
@@ -264,13 +290,8 @@ def list_organizations_with_read_mode(**kwargs: Any) -> dict[str, Any]:
         organization_type=kwargs.get("organization_type"),
         configuration_status=kwargs.get("configuration_status"),
         search=kwargs.get("search"),
+        real_organizations_only=True,
     )
-    # Exclure orphelins de la liste « organisations »
-    legacy["items"] = [
-        i
-        for i in legacy["items"]
-        if i.get("organization_type") in ("company", "institution")
-    ]
     if mode == "compare":
         for item in legacy["items"]:
             otype = item.get("organization_type")
@@ -287,6 +308,76 @@ def list_organizations_with_read_mode(**kwargs: Any) -> dict[str, Any]:
     return legacy
 
 
+def _role_key_for_membership(m: OrganizationMembership) -> str | None:
+    if not m.role_template_id:
+        return None
+    role = db.session.get(RoleTemplate, m.role_template_id)
+    return role.role_key if role else None
+
+
+def _account_active(user: User | None) -> bool:
+    if user is None:
+        return False
+    if getattr(user, "archived_at", None) is not None:
+        return False
+    if getattr(user, "disabled_at", None) is not None:
+        return False
+    if getattr(user, "account_status", None) == "disabled":
+        return False
+    return True
+
+
+def _compute_readiness(
+    org: PlatformOrganization,
+    memberships: list[OrganizationMembership],
+    anomalies: list[ControlPlaneAnomaly],
+    *,
+    name: str | None,
+    contact_email: str | None,
+) -> dict[str, Any]:
+    identity_ready = bool(name and contact_email)
+    has_critical = any(a.severity == "critical" for a in anomalies)
+    access_ready = False
+
+    if has_critical:
+        access_ready = False
+    elif org.organization_type == "company":
+        owner_ok = False
+        for m in memberships:
+            if m.membership_status != "active":
+                continue
+            if _role_key_for_membership(m) != "company_owner":
+                continue
+            user = db.session.get(User, m.user_id)
+            if _account_active(user):
+                owner_ok = True
+                break
+        access_ready = owner_ok and identity_ready and not has_critical
+    elif org.organization_type == "institution":
+        admin_ok = False
+        has_unresolved = False
+        for m in memberships:
+            role_key = _role_key_for_membership(m)
+            if role_key == "legacy_unresolved" or m.membership_status == "needs_review":
+                has_unresolved = True
+            if m.membership_status != "active":
+                continue
+            if role_key != "institution_admin":
+                continue
+            user = db.session.get(User, m.user_id)
+            if _account_active(user):
+                admin_ok = True
+        access_ready = (
+            admin_ok and identity_ready and not has_unresolved and not has_critical
+        )
+
+    return {
+        "identity_ready": identity_ready,
+        "access_ready": access_ready,
+        "services_confirmed": False,
+    }
+
+
 def get_organization_by_public_id(public_id: str) -> dict[str, Any] | None:
     try:
         uid = UUID(public_id)
@@ -298,12 +389,14 @@ def get_organization_by_public_id(public_id: str) -> dict[str, Any] | None:
     if org is None:
         return None
     payload = _serialize_cp_org(org)
-    memberships = db.session.scalars(
-        select(OrganizationMembership).where(
-            OrganizationMembership.organization_id == org.id,
-            OrganizationMembership.membership_status != "removed",
-        )
-    ).all()
+    memberships = list(
+        db.session.scalars(
+            select(OrganizationMembership).where(
+                OrganizationMembership.organization_id == org.id,
+                OrganizationMembership.membership_status != "removed",
+            )
+        ).all()
+    )
     users = []
     for m in memberships:
         u = db.session.get(User, m.user_id)
@@ -317,14 +410,17 @@ def get_organization_by_public_id(public_id: str) -> dict[str, Any] | None:
                 "email": u.email,
                 "membership_status": m.membership_status,
                 "role_template_id": m.role_template_id,
+                "role_key": _role_key_for_membership(m),
             }
         )
-    anomalies = db.session.scalars(
-        select(ControlPlaneAnomaly).where(
-            ControlPlaneAnomaly.organization_id == org.id,
-            ControlPlaneAnomaly.resolved_at.is_(None),
-        )
-    ).all()
+    anomalies = list(
+        db.session.scalars(
+            select(ControlPlaneAnomaly).where(
+                ControlPlaneAnomaly.organization_id == org.id,
+                ControlPlaneAnomaly.resolved_at.is_(None),
+            )
+        ).all()
+    )
     payload["users_detected"] = users
     payload["anomalies"] = [
         {
@@ -337,13 +433,13 @@ def get_organization_by_public_id(public_id: str) -> dict[str, Any] | None:
         }
         for a in anomalies
     ]
-    payload["readiness"] = {
-        "identity_ready": bool(payload.get("name") and payload.get("contact_email")),
-        "access_ready": any(
-            m.membership_status == "active" for m in memberships
-        ),
-        "services_confirmed": False,
-    }
+    payload["readiness"] = _compute_readiness(
+        org,
+        memberships,
+        anomalies,
+        name=payload.get("name"),
+        contact_email=payload.get("contact_email"),
+    )
     return payload
 
 

@@ -4,7 +4,8 @@ Matrice P0 (fail-stop durcie) :
 - OperationalError / InterfaceError / DisconnectionError / Timeout → infra (retry puis fail-stop)
 - ProgrammingError → fail-stop immédiat (schéma / SQL cassé)
 - DataError exacte connue attribuable au payload → DLQ
-- Toute IntegrityError → fail-stop (zéro DLQ ; duplicate nominal via ON CONFLICT seulement)
+- Toute IntegrityError → fail-stop (zéro DLQ ; duplicate nominal via ON CONFLICT DO NOTHING seulement,
+  y compris ``uq_tracking_ingest_session_sequence``)
 - Erreur inconnue (hors SQLAlchemy classifiée) → None → fail-stop côté consumer
 """
 

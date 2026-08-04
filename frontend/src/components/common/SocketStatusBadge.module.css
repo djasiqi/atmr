@@ -1,5 +1,11 @@
 /* frontend/src/components/common/SocketStatusBadge.module.css */
 
+.root {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
 .badge {
   display: inline-flex;
   align-items: center;
@@ -14,10 +20,11 @@
   font-weight: 600;
   line-height: 1;
   transition: all 0.2s ease;
-  cursor: default;
+  cursor: pointer;
   user-select: none;
   min-width: 100px;
   justify-content: center;
+  font-family: inherit;
 }
 
 .icon {
@@ -30,6 +37,70 @@
   font-size: 12px;
   white-space: nowrap;
   line-height: 1;
+}
+
+.detail {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: var(--z-popover, 1200);
+  width: min(280px, calc(100vw - 24px));
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--bg-primary, #fff);
+  border: 1px solid var(--border-primary, #e2e8f0);
+  box-shadow:
+    0 10px 28px rgba(15, 23, 42, 0.14),
+    0 2px 8px rgba(15, 23, 42, 0.06);
+  text-align: left;
+}
+
+.detailTitle {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary, #0f172a);
+}
+
+.detailReason {
+  margin: 0 0 8px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-secondary, #475569);
+  font-weight: 500;
+}
+
+.detailCode {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: #64748b;
+}
+
+.detailMeta {
+  margin: 0 0 10px;
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.retryBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border-primary, #e2e8f0);
+  background: var(--bg-secondary, #f8fafc);
+  color: var(--text-primary, #0f172a);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.retryBtn:hover {
+  background: var(--bg-hover, #f1f5f9);
 }
 
 /* États alignés sur tokens.css — contrastes WCAG AA sur fond pastel */
@@ -77,10 +148,10 @@
 
 @keyframes spin {
   from {
-    transform: rotate(0deg);
+    transform: rotate(360deg);
   }
   to {
-    transform: rotate(360deg);
+    transform: rotate(0deg);
   }
 }
 
@@ -88,19 +159,18 @@
 @media (max-width: 768px) {
   .badge {
     min-width: auto;
-    padding: 4px 8px;
-  }
-
-  .text {
-    display: none; /* Masquer le texte sur mobile, garder juste l'icône */
-  }
-
-  .badge {
     width: 24px;
     height: 24px;
     border-radius: 50%;
     justify-content: center;
     padding: 0;
   }
-}
 
+  .text {
+    display: none;
+  }
+
+  .detail {
+    right: -8px;
+  }
+}

@@ -98,9 +98,29 @@ const statementBadge = (s) => {
   return styles.badgeMuted;
 };
 
+/** True si le mois calendaire Europe/Zurich est terminé. */
+const billingPeriodHasEnded = (year, month) => {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Zurich',
+    year: 'numeric',
+    month: '2-digit',
+  }).formatToParts(new Date());
+  const cy = Number(parts.find((p) => p.type === 'year')?.value);
+  const cm = Number(parts.find((p) => p.type === 'month')?.value);
+  if (!cy || !cm) return false;
+  return Number(year) < cy || (Number(year) === cy && Number(month) < cm);
+};
+
+const apiErrorMessage = (e) =>
+  e?.response?.data?.message ||
+  e?.response?.data?.error ||
+  e?.message ||
+  'Erreur';
+
 const AdminPlatformBilling = () => {
   const location = useLocation();
-  const { canBillingLock, canBillingIssue } = useAdminCapabilities();
+  const { canBillingLock, canBillingIssue, canBillingValidate } =
+    useAdminCapabilities();
   const focusFromOverview = location.state || {};
   const openedFocusRef = useRef(null);
   const didAutoSelectRef = useRef(false);
@@ -837,59 +857,133 @@ const AdminPlatformBilling = () => {
                     type="button"
                     className={styles.btn}
                     disabled={
-                      modalInvoice.statement_status === 'VALIDATED' ||
-                      modalInvoice.statement_status === 'LOCKED'
+                      modalInvoice.statement_status !== 'CALCULATED' ||
+                      !canBillingValidate ||
+                      !billingPeriodHasEnded(
+                        selectedPeriod?.billing_year,
+                        selectedPeriod?.billing_month
+                      )
                     }
-                    onClick={async () => {
-                      try {
-                        await validatePlatformBillingInvoice(modalInvoice.id);
-                        setInfo('Relevé validé — vous pouvez générer le PDF/QR.');
-                        openInvoiceModal(modalInvoice.id);
-                        if (selectedId) loadInvoices(selectedId);
-                      } catch (e) {
+                    title={
+                      !canBillingValidate
+                        ? 'Capacité admin.billing.validate requise'
+                        : modalInvoice.statement_status === 'NEEDS_REVIEW'
+                          ? 'Corrigez les données sources puis recalculez avant de valider'
+                          : !billingPeriodHasEnded(
+                                selectedPeriod?.billing_year,
+                                selectedPeriod?.billing_month
+                              )
+                            ? 'Le mois n’est pas terminé — validation finale interdite'
+                            : undefined
+                    }
+                    onClick={() => {
+                      if (modalInvoice.statement_status === 'NEEDS_REVIEW') {
                         setError(
-                          e?.response?.data?.error ||
-                            e?.response?.data?.message ||
-                            e?.message
+                          'Ce relevé contient des éléments non résolus. Corrigez les données sources puis recalculez.'
                         );
+                        return;
                       }
+                      setActionDialog({
+                        title: 'Valider le relevé',
+                        description: `Confirmer la validation du relevé ${resolveCompanyName(modalInvoice)} pour ${periodLabel} ?`,
+                        confirmationLabel: 'Valider le relevé',
+                        onConfirm: async () => {
+                          try {
+                            await validatePlatformBillingInvoice(modalInvoice.id);
+                            setInfo(
+                              'Relevé validé. Clôturez la période lorsque tous les relevés sont validés, puis émettez la facture.'
+                            );
+                            openInvoiceModal(modalInvoice.id);
+                            if (selectedId) loadInvoices(selectedId);
+                            setActionDialog(null);
+                          } catch (e) {
+                            setError(apiErrorMessage(e));
+                          }
+                        },
+                      });
                     }}
                   >
                     Valider
                   </button>
-                  <button
-                    type="button"
-                    className={`${styles.btn} ${styles.btnPrimary}`}
-                    disabled={
-                      Boolean(modalInvoice.issued_invoice) ||
-                      (modalInvoice.statement_status !== 'VALIDATED' &&
-                        modalInvoice.statement_status !== 'LOCKED') ||
-                      !canBillingIssue
+                  {(() => {
+                    const periodLocked = selectedPeriod?.status === 'locked';
+                    const statementLocked =
+                      modalInvoice.statement_status === 'LOCKED';
+                    const monthEnded = billingPeriodHasEnded(
+                      selectedPeriod?.billing_year,
+                      selectedPeriod?.billing_month
+                    );
+                    const alreadyIssued = Boolean(
+                      modalInvoice.issued_invoice &&
+                        modalInvoice.issued_invoice.status !== 'cancelled'
+                    );
+                    const canIssue =
+                      statementLocked &&
+                      periodLocked &&
+                      monthEnded &&
+                      canBillingIssue &&
+                      !alreadyIssued;
+                    let nextStep = null;
+                    if (alreadyIssued) {
+                      nextStep = null;
+                    } else if (!monthEnded) {
+                      nextStep =
+                        'Le mois est encore en cours. Calcul provisoire uniquement — pas d’émission.';
+                    } else if (!statementLocked || !periodLocked) {
+                      nextStep =
+                        'Validez tous les relevés, puis clôturez la période avant d’émettre les factures.';
+                    } else if (!canBillingIssue) {
+                      nextStep = 'Capacité admin.billing.issue requise.';
                     }
-                    title={
-                      !canBillingIssue
-                        ? 'Capacité admin.billing.issue requise'
-                        : undefined
-                    }
-                    onClick={async () => {
-                      try {
-                        const res = await issuePlatformBillingInvoice(modalInvoice.id);
-                        setInfo(
-                          `Facture ${res?.issued_invoice?.invoice_number || ''} émise.`
-                        );
-                        openInvoiceModal(modalInvoice.id);
-                        if (selectedId) loadInvoices(selectedId);
-                      } catch (e) {
-                        setError(
-                          e?.response?.data?.error ||
-                            e?.response?.data?.message ||
-                            e?.message
-                        );
-                      }
-                    }}
-                  >
-                    Générer PDF/QR
-                  </button>
+                    return (
+                      <>
+                        <button
+                          type="button"
+                          className={`${styles.btn} ${styles.btnPrimary}`}
+                          disabled={!canIssue}
+                          title={
+                            !canBillingIssue
+                              ? 'Capacité admin.billing.issue requise'
+                              : undefined
+                          }
+                          onClick={() => {
+                            setActionDialog({
+                              title: 'Émettre la facture',
+                              description: [
+                                `Entreprise : ${resolveCompanyName(modalInvoice)}`,
+                                `Période : ${periodLabel}`,
+                                `Montant : ${fmtMoney(modalInvoice.total_amount)}`,
+                                'Cette action attribue un numéro définitif et crée une facture légale.',
+                              ].join('\n'),
+                              confirmationLabel: 'Émettre la facture',
+                              onConfirm: async () => {
+                                try {
+                                  const res = await issuePlatformBillingInvoice(
+                                    modalInvoice.id
+                                  );
+                                  setInfo(
+                                    `Facture ${res?.issued_invoice?.invoice_number || ''} émise.`
+                                  );
+                                  openInvoiceModal(modalInvoice.id);
+                                  if (selectedId) loadInvoices(selectedId);
+                                  setActionDialog(null);
+                                } catch (e) {
+                                  setError(apiErrorMessage(e));
+                                }
+                              },
+                            });
+                          }}
+                        >
+                          Émettre la facture
+                        </button>
+                        {nextStep ? (
+                          <p className={styles.subtitle} style={{ flexBasis: '100%' }}>
+                            {nextStep}
+                          </p>
+                        ) : null}
+                      </>
+                    );
+                  })()}
                   {modalInvoice.issued_invoice?.id ? (
                     <button
                       type="button"
@@ -904,10 +998,7 @@ const AdminPlatformBilling = () => {
                           );
                         } catch (e) {
                           setError(
-                            e?.response?.data?.error ||
-                              e?.response?.data?.message ||
-                              e?.message ||
-                              'Téléchargement impossible'
+                            apiErrorMessage(e) || 'Téléchargement impossible'
                           );
                         }
                       }}

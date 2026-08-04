@@ -14,6 +14,14 @@ import {
 import { companyReconnectCircuitBreaker } from './reconnectCircuitBreaker';
 import { bindUrgentAlertSoundListeners } from '../utils/urgentAlertSound';
 import { setSubscribedCursor } from '../utils/companyRealtimeSequenceGate';
+import {
+  labelForConnectError,
+  labelForDisabled,
+  labelForDisconnectReason,
+  labelForMissingToken,
+  labelForOffline,
+  labelForReconnectFailed,
+} from './socketStatusReasons';
 
 const isDevelopment = process.env.NODE_ENV === 'development';
 
@@ -33,15 +41,45 @@ let networkListenersSetup = false;
 let onOnlineHandler = null;
 let onOfflineHandler = null;
 
+/** Dernier état notifié (badge / hooks). */
+let lastSocketStatus = {
+  connected: false,
+  reconnecting: false,
+  reasonCode: null,
+  reasonLabel: null,
+};
+
 export const COMPANY_SOCKET_STATE_EVENT = 'company_socket_state';
 
 function notifyCompanySocketState(detail) {
+  const next = {
+    connected: false,
+    reconnecting: false,
+    reasonCode: null,
+    reasonLabel: null,
+    ...lastSocketStatus,
+    ...detail,
+  };
+  if (next.connected) {
+    next.reasonCode = null;
+    next.reasonLabel = null;
+  }
+  lastSocketStatus = {
+    connected: Boolean(next.connected),
+    reconnecting: Boolean(next.reconnecting),
+    reasonCode: next.reasonCode || null,
+    reasonLabel: next.reasonLabel || null,
+  };
   if (typeof window === 'undefined') return;
   window.dispatchEvent(
     new CustomEvent(COMPANY_SOCKET_STATE_EVENT, {
-      detail: { reconnecting: false, ...detail },
+      detail: { ...lastSocketStatus },
     })
   );
+}
+
+export function getCompanySocketStatusSnapshot() {
+  return { ...lastSocketStatus };
 }
 
 function nextSocketGeneration() {
@@ -136,6 +174,13 @@ function setupNetworkListeners(generation) {
 
   onOfflineHandler = () => {
     if (!isSocketGenerationActive(generation)) return;
+    const { reasonCode, reasonLabel } = labelForOffline();
+    notifyCompanySocketState({
+      connected: false,
+      reconnecting: false,
+      reasonCode,
+      reasonLabel,
+    });
   };
 
   window.addEventListener('online', onOnlineHandler);
@@ -163,7 +208,12 @@ function disposeCompanySocketInstance() {
     socket = null;
   }
 
-  notifyCompanySocketState({ connected: false, reconnecting: false });
+  notifyCompanySocketState({
+    connected: false,
+    reconnecting: false,
+    reasonCode: 'DISPOSED',
+    reasonLabel: 'Connexion temps réel arrêtée',
+  });
 }
 
 const getSocketUrl = () => {
@@ -276,14 +326,25 @@ function attachSocketHandlers(targetSocket, generation, { onFirstConnectError } 
   targetSocket.io.on('reconnect_failed', () => {
     if (!isSocketGenerationActive(generation)) return;
     recordReconnectFailure();
-    notifyCompanySocketState({ connected: false, reconnecting: false });
+    const { reasonCode, reasonLabel } = labelForReconnectFailed();
+    notifyCompanySocketState({
+      connected: false,
+      reconnecting: false,
+      reasonCode,
+      reasonLabel,
+    });
   });
 
   targetSocket.on('connect', () => {
     if (!isSocketGenerationActive(generation)) return;
     companyReconnectCircuitBreaker.recordSuccess();
     recordConnectReady();
-    notifyCompanySocketState({ connected: true, reconnecting: false });
+    notifyCompanySocketState({
+      connected: true,
+      reconnecting: false,
+      reasonCode: null,
+      reasonLabel: null,
+    });
 
     if (currentCompanyId) {
       try {
@@ -327,7 +388,13 @@ function attachSocketHandlers(targetSocket, generation, { onFirstConnectError } 
 
   targetSocket.on('disconnect', (reason) => {
     if (!isSocketGenerationActive(generation)) return;
-    notifyCompanySocketState({ connected: false, reconnecting: false });
+    const mapped = labelForDisconnectReason(reason);
+    notifyCompanySocketState({
+      connected: false,
+      reconnecting: false,
+      reasonCode: mapped.reasonCode,
+      reasonLabel: mapped.reasonLabel,
+    });
 
     const hasLocalToken = !!getAccessToken();
     if (reason === 'io server disconnect' || (reason === 'unauthorized' && hasLocalToken)) {
@@ -340,8 +407,14 @@ function attachSocketHandlers(targetSocket, generation, { onFirstConnectError } 
   targetSocket.on('connect_error', (err) => {
     if (!isSocketGenerationActive(generation)) return;
     recordReconnectFailure();
-    notifyCompanySocketState({ connected: false, reconnecting: false });
     const msg = err?.message || err?.description || String(err || '');
+    const mapped = labelForConnectError(msg);
+    notifyCompanySocketState({
+      connected: false,
+      reconnecting: false,
+      reasonCode: mapped.reasonCode,
+      reasonLabel: mapped.reasonLabel,
+    });
     if (typeof onFirstConnectError === 'function') {
       onFirstConnectError(err);
     }
@@ -366,14 +439,24 @@ function attachSocketHandlers(targetSocket, generation, { onFirstConnectError } 
       if (isAuthLike) {
         window.dispatchEvent(
           new CustomEvent('socket_connection_rejected', {
-            detail: { message: msg, code: msg, originalError: err },
+            detail: {
+              message: msg,
+              code: mapped.reasonCode || msg,
+              reasonLabel: mapped.reasonLabel,
+              originalError: err,
+            },
           })
         );
       } else {
         // Événement séparé pour la télémétrie / debugging sans déclencher de toast utilisateur.
         window.dispatchEvent(
           new CustomEvent('socket_connect_transport_error', {
-            detail: { message: msg, code: msg, originalError: err },
+            detail: {
+              message: msg,
+              code: mapped.reasonCode || msg,
+              reasonLabel: mapped.reasonLabel,
+              originalError: err,
+            },
           })
         );
       }
@@ -430,10 +513,40 @@ function attachSocketHandlers(targetSocket, generation, { onFirstConnectError } 
 export function getCompanySocket() {
   const socketEnabled = process.env.REACT_APP_SOCKET_ENABLED !== 'false';
   if (!socketEnabled) {
+    const { reasonCode, reasonLabel } = labelForDisabled();
+    notifyCompanySocketState({
+      connected: false,
+      reconnecting: false,
+      reasonCode,
+      reasonLabel,
+    });
     return null;
   }
 
   if (socket && socket.connected) return socket;
+
+  // Ne pas ouvrir un handshake sans JWT : le cookie stale d'un autre rôle
+  // (admin…) provoquait AUTH_FORBIDDEN + cascade Unauthorized.
+  if (!getAccessToken()) {
+    const { reasonCode, reasonLabel } = labelForMissingToken();
+    notifyCompanySocketState({
+      connected: false,
+      reconnecting: false,
+      reasonCode,
+      reasonLabel,
+    });
+    return socket || null;
+  }
+
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    const { reasonCode, reasonLabel } = labelForOffline();
+    notifyCompanySocketState({
+      connected: false,
+      reconnecting: false,
+      reasonCode,
+      reasonLabel,
+    });
+  }
 
   if (!connectPromise) {
     recordConnectStarted();
@@ -659,5 +772,35 @@ export function disconnectCompanySocket() {
       error: err?.message || String(err),
       timestamp: new Date().toISOString(),
     }));
+  }
+}
+
+/** Relance manuelle depuis le badge (après échec / session rétablie). */
+export function retryCompanySocket() {
+  try {
+    if (socket && !socket.connected) {
+      if (socket.io?.opts) {
+        socket.io.opts.reconnection = true;
+      }
+      socket.connect();
+      notifyCompanySocketState({
+        connected: false,
+        reconnecting: true,
+        reasonCode: 'RETRY',
+        reasonLabel: 'Nouvelle tentative de connexion…',
+      });
+      return socket;
+    }
+    disconnectCompanySocket();
+    return getCompanySocket();
+  } catch (err) {
+    const mapped = labelForConnectError(err?.message || String(err));
+    notifyCompanySocketState({
+      connected: false,
+      reconnecting: false,
+      reasonCode: mapped.reasonCode,
+      reasonLabel: mapped.reasonLabel,
+    });
+    return null;
   }
 }

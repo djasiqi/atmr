@@ -3425,7 +3425,7 @@ class TestSchemaValidationE2E:
             json={"role": "driver", "company_id": 1},
             headers=admin_headers,
         )
-        assert response.status_code in [200, 400, 404]  # 400 si company_id invalide
+        assert response.status_code in [200, 400, 404, 409]  # 409 = gel PR1 transitions
 
     def test_update_user_role_invalid_schema(self, client, db):
         """Test PUT /api/admin/users/<id>/role avec payload invalide (rôle invalide)."""

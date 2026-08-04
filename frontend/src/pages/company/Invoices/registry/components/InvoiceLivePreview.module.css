@@ -81,6 +81,43 @@
   .headerRight {
     text-align: left;
   }
+
+  .headerGrid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .sheet {
+    padding: 14px 12px 12px;
+    border-radius: 6px;
+  }
+
+  .root {
+    padding: 4px;
+  }
+
+  .section {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .table {
+    min-width: 420px;
+  }
+
+  .table th,
+  .table td {
+    padding: 6px 8px;
+    font-size: 12px;
+  }
+
+  .colDate {
+    width: 4.5rem;
+  }
+
+  .colNum {
+    width: 3.75rem;
+  }
 }
 
 .partyName {

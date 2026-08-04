@@ -14,7 +14,7 @@ from models.platform_billing import (
 DUNNING_POLICY_VERSION = 1
 
 _DUNNING_FIELD_DEFAULTS = {
-    "automated_dunning_enabled": True,
+    "automated_dunning_enabled": False,
     "reminder_delay_days_after_due": 0,
     "reminder_grace_days": 10,
     "full_suspend_days_after_due": 30,
@@ -31,7 +31,7 @@ def parse_dunning_fields(data: dict[str, Any]) -> dict[str, Any]:
     """Valide et normalise les champs dunning depuis un payload API."""
     enabled = data.get("automated_dunning_enabled")
     if enabled is None:
-        enabled = True
+        enabled = False
     enabled = bool(enabled)
 
     def _int(name: str, default: int, lo: int, hi: int) -> int:
@@ -104,7 +104,7 @@ def build_dunning_policy_snapshot(
 def serialize_dunning_fields(cfg: CompanyPlatformBillingConfig) -> dict[str, Any]:
     return {
         "automated_dunning_enabled": bool(
-            getattr(cfg, "automated_dunning_enabled", True)
+            getattr(cfg, "automated_dunning_enabled", False)
         ),
         "reminder_delay_days_after_due": int(
             getattr(cfg, "reminder_delay_days_after_due", 0) or 0

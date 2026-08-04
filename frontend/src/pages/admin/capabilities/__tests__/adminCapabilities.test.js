@@ -25,4 +25,25 @@ describe('adminCapabilities', () => {
     expect(hasAdminCapability([], ADMIN_CAP.LABS_READ, { enforced: true })).toBe(false);
     expect(hasAdminCapability(null, ADMIN_CAP.LABS_READ, { enforced: true })).toBe(false);
   });
+
+  it('enforced=true : alias partners déjà développé côté backend dans capabilities_effective', () => {
+    // Le backend développe CAPABILITY_ALIASES dans capabilities_effective ;
+    // le frontend vérifie une correspondance exacte sur la liste reçue.
+    const fromBackend = [
+      ADMIN_CAP.PARTNERS_READ,
+      ADMIN_CAP.ORGANIZATIONS_READ,
+      ADMIN_CAP.ACCOUNTS_READ,
+    ];
+    expect(
+      hasAdminCapability(fromBackend, ADMIN_CAP.ORGANIZATIONS_READ, { enforced: true })
+    ).toBe(true);
+    expect(
+      hasAdminCapability(fromBackend, ADMIN_CAP.ACCOUNTS_READ, { enforced: true })
+    ).toBe(true);
+    expect(
+      hasAdminCapability([ADMIN_CAP.PARTNERS_READ], ADMIN_CAP.ORGANIZATIONS_READ, {
+        enforced: true,
+      })
+    ).toBe(false);
+  });
 });

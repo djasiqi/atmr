@@ -3,10 +3,9 @@ import { useSearchParams } from 'react-router-dom';
 import { FiSearch } from 'react-icons/fi';
 import {
   fetchUsers,
-  fetchAccountIntegrity,
   fetchControlPlaneAnomalies,
 } from '../../../services/adminService';
-import AdminAccountIntegrityDrawer from '../Organizations/AdminAccountIntegrityDrawer';
+import AdminAccountManageDrawer from '../Organizations/AdminAccountManageDrawer';
 import styles from './AdminUsers.module.css';
 import adminShell from '../adminShell.module.css';
 
@@ -45,7 +44,7 @@ const organizationLabel = (user) => {
 };
 
 /**
- * Comptes et accès — surface lecture seule (CP-PR1).
+ * Comptes et accès — gestion sécurisée (MDP, rôle) + diagnostic.
  */
 const AdminUsers = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -56,6 +55,9 @@ const AdminUsers = () => {
   const [search, setSearch] = useState((searchParams.get('search') || '').trim());
   const [debouncedSearch, setDebouncedSearch] = useState(search);
   const [roleFilter, setRoleFilter] = useState(searchParams.get('role') || '');
+  const [companyFilter, setCompanyFilter] = useState(
+    searchParams.get('company_id') || ''
+  );
   const [includeSynthetic, setIncludeSynthetic] = useState(
     searchParams.get('include_synthetic') === 'true'
   );
@@ -65,6 +67,7 @@ const AdminUsers = () => {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const [integrityAccountId, setIntegrityAccountId] = useState(null);
+  const [reloadToken, setReloadToken] = useState(0);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search.trim()), 300);
@@ -76,10 +79,19 @@ const AdminUsers = () => {
     if (tab && tab !== 'all') next.set('tab', tab);
     if (debouncedSearch) next.set('search', debouncedSearch);
     if (roleFilter) next.set('role', roleFilter);
+    if (companyFilter) next.set('company_id', companyFilter);
     if (includeSynthetic) next.set('include_synthetic', 'true');
     if (page > 1) next.set('page', String(page));
     setSearchParams(next, { replace: true });
-  }, [tab, debouncedSearch, roleFilter, includeSynthetic, page, setSearchParams]);
+  }, [
+    tab,
+    debouncedSearch,
+    roleFilter,
+    companyFilter,
+    includeSynthetic,
+    page,
+    setSearchParams,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -103,6 +115,7 @@ const AdminUsers = () => {
             per_page: 50,
             search: debouncedSearch,
             role: roleFilter,
+            company_id: companyFilter || undefined,
             include_synthetic: includeSynthetic,
             paginate: true,
           });
@@ -132,15 +145,18 @@ const AdminUsers = () => {
     return () => {
       cancelled = true;
     };
-  }, [page, debouncedSearch, roleFilter, includeSynthetic, tab]);
+  }, [
+    page,
+    debouncedSearch,
+    roleFilter,
+    companyFilter,
+    includeSynthetic,
+    tab,
+    reloadToken,
+  ]);
 
-  const openAccount = async (user) => {
-    try {
-      await fetchAccountIntegrity(user.id);
-      setIntegrityAccountId(user.id);
-    } catch {
-      setIntegrityAccountId(user.id);
-    }
+  const openAccount = (user) => {
+    setIntegrityAccountId(user.id);
   };
 
   return (
@@ -150,7 +166,7 @@ const AdminUsers = () => {
           <p className={styles.pageEyebrow}>Partenaires</p>
           <h1 className={styles.pageTitle}>Comptes et accès</h1>
           <p className={styles.pageSubtitle}>
-            Lecture seule — {totalUsers} compte{totalUsers === 1 ? '' : 's'}
+            {totalUsers} compte{totalUsers === 1 ? '' : 's'}
             {includeSynthetic ? '' : ' (hors techniques/démo)'}. {anomalyTotal} anomalie
             {anomalyTotal === 1 ? '' : 's'} à traiter.
           </p>
@@ -227,19 +243,19 @@ const AdminUsers = () => {
           <ul>
             {anomalies.slice(0, 5).map((a) => (
               <li key={a.id}>
-                [{a.severity}] {a.code} — {a.entity_key}
                 {a.user_id ? (
+                  <button
+                    type="button"
+                    className={styles.inlineLink}
+                    onClick={() => setIntegrityAccountId(a.user_id)}
+                  >
+                    [{a.severity}] {a.code} — {a.entity_key}
+                  </button>
+                ) : (
                   <>
-                    {' '}
-                    <button
-                      type="button"
-                      className={styles.actionBtn}
-                      onClick={() => setIntegrityAccountId(a.user_id)}
-                    >
-                      Ouvrir
-                    </button>
+                    [{a.severity}] {a.code} — {a.entity_key}
                   </>
-                ) : null}
+                )}
               </li>
             ))}
           </ul>
@@ -262,36 +278,36 @@ const AdminUsers = () => {
                 <th>Sévérité</th>
                 <th>Entité</th>
                 <th>Dernière détection</th>
-                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {anomalies.length === 0 ? (
                 <tr>
-                  <td colSpan={5}>Aucune anomalie ouverte.</td>
+                  <td colSpan={4}>Aucune anomalie ouverte.</td>
                 </tr>
               ) : (
                 anomalies.map((a) => (
-                  <tr key={a.id}>
+                  <tr
+                    key={a.id}
+                    className={a.user_id ? styles.clickableRow : undefined}
+                    tabIndex={a.user_id ? 0 : undefined}
+                    onClick={() => {
+                      if (a.user_id) setIntegrityAccountId(a.user_id);
+                    }}
+                    onKeyDown={(e) => {
+                      if (!a.user_id) return;
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setIntegrityAccountId(a.user_id);
+                      }
+                    }}
+                  >
                     <td>{a.code}</td>
                     <td>{a.severity}</td>
                     <td>
                       {a.entity_type} / {a.entity_key}
                     </td>
                     <td>{formatDate(a.last_seen_at)}</td>
-                    <td>
-                      {a.user_id ? (
-                        <button
-                          type="button"
-                          className={styles.actionBtn}
-                          onClick={() => setIntegrityAccountId(a.user_id)}
-                        >
-                          Ouvrir
-                        </button>
-                      ) : (
-                        '—'
-                      )}
-                    </td>
                   </tr>
                 ))
               )}
@@ -310,17 +326,27 @@ const AdminUsers = () => {
                 <th>Rôle actuel</th>
                 <th>Organisation liée</th>
                 <th>Inscription</th>
-                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {users.length === 0 ? (
                 <tr>
-                  <td colSpan={6}>Aucun compte trouvé.</td>
+                  <td colSpan={5}>Aucun compte trouvé.</td>
                 </tr>
               ) : (
                 users.map((user) => (
-                  <tr key={user.id}>
+                  <tr
+                    key={user.id}
+                    className={styles.clickableRow}
+                    tabIndex={0}
+                    onClick={() => openAccount(user)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        openAccount(user);
+                      }
+                    }}
+                  >
                     <td>{user.username || '—'}</td>
                     <td>{user.email || '—'}</td>
                     <td>
@@ -328,15 +354,6 @@ const AdminUsers = () => {
                     </td>
                     <td>{organizationLabel(user)}</td>
                     <td>{formatDate(user.created_at)}</td>
-                    <td>
-                      <button
-                        type="button"
-                        className={styles.actionBtn}
-                        onClick={() => openAccount(user)}
-                      >
-                        Ouvrir
-                      </button>
-                    </td>
                   </tr>
                 ))
               )}
@@ -361,12 +378,12 @@ const AdminUsers = () => {
         </button>
       </div>
 
-      {integrityAccountId ? (
-        <AdminAccountIntegrityDrawer
-          accountId={integrityAccountId}
-          onClose={() => setIntegrityAccountId(null)}
-        />
-      ) : null}
+      <AdminAccountManageDrawer
+        isOpen={Boolean(integrityAccountId)}
+        accountId={integrityAccountId}
+        onClose={() => setIntegrityAccountId(null)}
+        onChanged={() => setReloadToken((t) => t + 1)}
+      />
     </main>
   );
 };

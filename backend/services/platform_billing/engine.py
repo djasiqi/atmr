@@ -46,8 +46,13 @@ from services.platform_billing.contracts import (
     month_start_zurich_utc,
 )
 from services.platform_billing.eligibility import is_commissionable_platform
+from services.platform_billing.errors import BillingInvariantError
 from services.platform_billing.money import money_round_chf
-from services.platform_billing.time_bounds import zurich_month_bounds_utc
+from services.platform_billing.time_bounds import (
+    billing_period_has_ended,
+    next_month_start_zurich_utc,
+    zurich_month_bounds_utc,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -79,14 +84,202 @@ def _active_config(
     return effective_config_for_period(company_id, at)
 
 
+def _product_flags_explicit(
+    cfg: CompanyPlatformBillingConfig,
+) -> tuple[bool, bool, bool]:
+    """Flags produits tels que stockés (sans inférence legacy)."""
+    return (
+        bool(getattr(cfg, "own_portfolio_billing_enabled", False)),
+        bool(getattr(cfg, "lirie_commission_enabled", False)),
+        bool(getattr(cfg, "support_enabled", False)),
+    )
+
+
+def _is_legacy_product_flags_inferred(cfg: CompanyPlatformBillingConfig) -> bool:
+    """True si billing actif sans aucun flag produit (compat V1)."""
+    own, comm, support = _product_flags_explicit(cfg)
+    return bool(cfg.is_billing_enabled) and not own and not comm and not support
+
+
 def _product_flags(cfg: CompanyPlatformBillingConfig) -> tuple[bool, bool, bool]:
     """Compat V1 : si aucun flag produit mais billing enabled → tous activés."""
-    own = bool(getattr(cfg, "own_portfolio_billing_enabled", False))
-    comm = bool(getattr(cfg, "lirie_commission_enabled", False))
-    support = bool(getattr(cfg, "support_enabled", False))
-    if not own and not comm and not support and cfg.is_billing_enabled:
+    own, comm, support = _product_flags_explicit(cfg)
+    if _is_legacy_product_flags_inferred(cfg):
         return True, True, True
     return own, comm, support
+
+
+def assert_billing_period_has_ended(
+    year: int,
+    month: int,
+    *,
+    now_utc: datetime | None = None,
+) -> None:
+    """Refuse validate / lock / issue tant que le mois Zurich n'est pas terminé."""
+    if billing_period_has_ended(year, month, now_utc=now_utc):
+        return
+    ends_at = next_month_start_zurich_utc(year, month)
+    raise BillingInvariantError(
+        "PERIOD_STILL_OPEN",
+        f"La période {month:02d}/{year} n’est pas terminée.",
+        details={
+            "billing_year": year,
+            "billing_month": month,
+            "period_ends_at": ends_at.isoformat(),
+        },
+    )
+
+
+def build_platform_billing_period_readiness(
+    period_id: int,
+    *,
+    now_utc: datetime | None = None,
+) -> dict[str, Any]:
+    """Readiness canonique pour clôturer une période (SSOT du lock)."""
+    period = db.session.get(PlatformBillingPeriod, period_id)
+    if not period:
+        raise BillingInvariantError(
+            "PERIOD_NOT_FOUND",
+            "Période introuvable",
+            status_code=404,
+            details={"period_id": period_id},
+        )
+
+    year, month = int(period.billing_year), int(period.billing_month)
+    period_ended = billing_period_has_ended(year, month, now_utc=now_utc)
+    period_start = month_start_zurich_utc(year, month)
+    invoices = PlatformInvoice.query.filter_by(period_id=period_id).all()
+
+    counts = {
+        "draft": 0,
+        "calculated": 0,
+        "needs_review": 0,
+        "validated": 0,
+        "locked": 0,
+        "other": 0,
+    }
+    not_validated_company_ids: list[int] = []
+    for inv in invoices:
+        status = inv.statement_status or PlatformStatementStatus.DRAFT.value
+        if status == PlatformStatementStatus.DRAFT.value:
+            counts["draft"] += 1
+            not_validated_company_ids.append(inv.company_id)
+        elif status == PlatformStatementStatus.CALCULATED.value:
+            counts["calculated"] += 1
+            not_validated_company_ids.append(inv.company_id)
+        elif status == PlatformStatementStatus.NEEDS_REVIEW.value:
+            counts["needs_review"] += 1
+            not_validated_company_ids.append(inv.company_id)
+        elif status == PlatformStatementStatus.VALIDATED.value:
+            counts["validated"] += 1
+        elif status == PlatformStatementStatus.LOCKED.value:
+            counts["locked"] += 1
+        else:
+            counts["other"] += 1
+            not_validated_company_ids.append(inv.company_id)
+
+    review_item_count = (
+        db.session.query(func.count(PlatformBillingStatementItem.id))
+        .join(
+            PlatformInvoice,
+            PlatformBillingStatementItem.statement_id == PlatformInvoice.id,
+        )
+        .filter(
+            PlatformInvoice.period_id == period_id,
+            PlatformBillingStatementItem.eligibility_status == "needs_review",
+        )
+        .scalar()
+    )
+    review_item_count = int(review_item_count or 0)
+
+    invoice_company_ids = {inv.company_id for inv in invoices}
+    missing_statement_company_ids: list[int] = []
+    legacy_inferred_company_ids: list[int] = []
+    warnings: list[dict[str, Any]] = []
+
+    for company_id in distinct_billable_company_ids():
+        cfg = effective_config_for_period(company_id, period_start)
+        if cfg is None or not cfg.is_billing_enabled:
+            continue
+        if _is_legacy_product_flags_inferred(cfg):
+            legacy_inferred_company_ids.append(company_id)
+        own, comm, support = _product_flags_explicit(cfg)
+        # Manquant bloquant : config enabled avec produits explicites, sans relevé
+        if (own or comm or support) and company_id not in invoice_company_ids:
+            missing_statement_company_ids.append(company_id)
+
+    if legacy_inferred_company_ids:
+        warnings.append(
+            {
+                "code": "LEGACY_PRODUCT_FLAGS_INFERRED",
+                "company_ids": sorted(legacy_inferred_company_ids),
+                "message": (
+                    "Certaines configurations actives n’ont aucun produit "
+                    "explicite (compatibilité V1)."
+                ),
+            }
+        )
+
+    blocking_reasons: list[dict[str, Any]] = []
+    if not period_ended:
+        blocking_reasons.append(
+            {
+                "code": "PERIOD_STILL_OPEN",
+                "message": f"La période {month:02d}/{year} n’est pas terminée.",
+                "details": {
+                    "billing_year": year,
+                    "billing_month": month,
+                    "period_ends_at": next_month_start_zurich_utc(
+                        year, month
+                    ).isoformat(),
+                },
+            }
+        )
+    if not invoices:
+        blocking_reasons.append(
+            {
+                "code": "NO_STATEMENTS",
+                "message": "Aucun relevé à verrouiller",
+            }
+        )
+    if not_validated_company_ids:
+        blocking_reasons.append(
+            {
+                "code": "STATEMENTS_NOT_VALIDATED",
+                "company_ids": sorted(set(not_validated_company_ids)),
+                "message": "Tous les relevés doivent être VALIDATED avant clôture.",
+            }
+        )
+    if review_item_count > 0:
+        blocking_reasons.append(
+            {
+                "code": "STATEMENT_ITEMS_NEED_REVIEW",
+                "count": review_item_count,
+                "message": "Des éléments de relevé sont encore à contrôler.",
+            }
+        )
+    if missing_statement_company_ids:
+        blocking_reasons.append(
+            {
+                "code": "MISSING_EXPECTED_STATEMENTS",
+                "company_ids": sorted(missing_statement_company_ids),
+                "message": (
+                    "Des entreprises facturables n’ont pas de relevé pour cette période."
+                ),
+            }
+        )
+
+    return {
+        "ready_to_lock": len(blocking_reasons) == 0,
+        "period_has_ended": period_ended,
+        "period_id": period_id,
+        "billing_year": year,
+        "billing_month": month,
+        "period_status": period.status,
+        "statement_counts": counts,
+        "blocking_reasons": blocking_reasons,
+        "warnings": warnings,
+    }
 
 
 def subscription_volume_count(
@@ -624,17 +817,48 @@ def _build_invoice_for_company(
     return inv
 
 
-def validate_statement(statement_id: int) -> PlatformInvoice:
-    """Passe CALCULATED ou NEEDS_REVIEW (après contrôle) → VALIDATED."""
+def validate_statement(
+    statement_id: int,
+    *,
+    now_utc: datetime | None = None,
+) -> PlatformInvoice:
+    """Passe CALCULATED → VALIDATED (NEEDS_REVIEW / DRAFT interdits)."""
     inv = db.session.get(PlatformInvoice, statement_id)
     if not inv:
-        raise ValueError("Relevé introuvable")
-    if inv.statement_status not in (
-        PlatformStatementStatus.CALCULATED.value,
-        PlatformStatementStatus.DRAFT.value,
-        PlatformStatementStatus.NEEDS_REVIEW.value,
-    ):
-        raise ValueError(f"Transition interdite depuis {inv.statement_status}")
+        raise BillingInvariantError(
+            "STATEMENT_NOT_FOUND",
+            "Relevé introuvable",
+            status_code=404,
+            details={"statement_id": statement_id},
+        )
+    period = inv.period
+    if period is None:
+        raise BillingInvariantError(
+            "PERIOD_NOT_FOUND",
+            "Période introuvable pour ce relevé",
+            status_code=404,
+            details={"statement_id": statement_id},
+        )
+    assert_billing_period_has_ended(
+        int(period.billing_year),
+        int(period.billing_month),
+        now_utc=now_utc,
+    )
+    status = inv.statement_status or PlatformStatementStatus.DRAFT.value
+    if status == PlatformStatementStatus.NEEDS_REVIEW.value:
+        raise BillingInvariantError(
+            "STATEMENT_REVIEW_REQUIRED",
+            "Ce relevé contient des éléments non résolus. "
+            "Corrigez les données sources puis recalculez le relevé.",
+            details={"statement_id": statement_id, "statement_status": status},
+        )
+    if status != PlatformStatementStatus.CALCULATED.value:
+        raise BillingInvariantError(
+            "INVALID_STATEMENT_TRANSITION",
+            f"Validation autorisée uniquement depuis CALCULATED "
+            f"(état actuel: {status}).",
+            details={"statement_id": statement_id, "statement_status": status},
+        )
     inv.statement_status = PlatformStatementStatus.VALIDATED.value
     db.session.commit()
     return inv
@@ -705,27 +929,27 @@ def reopen_statement_for_correction(statement_id: int) -> dict[str, Any]:
     }
 
 
-def lock_platform_billing_period(period_id: int) -> PlatformBillingPeriod:
-    """Verrouille la période seulement si tous les relevés sont VALIDATED."""
+def lock_platform_billing_period(
+    period_id: int,
+    *,
+    now_utc: datetime | None = None,
+) -> PlatformBillingPeriod:
+    """Verrouille la période seulement si readiness.ready_to_lock."""
+    readiness = build_platform_billing_period_readiness(
+        period_id, now_utc=now_utc
+    )
+    if not readiness["ready_to_lock"]:
+        first = (readiness.get("blocking_reasons") or [{}])[0]
+        raise BillingInvariantError(
+            str(first.get("code") or "PERIOD_NOT_READY_TO_LOCK"),
+            str(
+                first.get("message")
+                or "La période ne peut pas être verrouillée."
+            ),
+            details={"readiness": readiness},
+        )
     period = db.session.get(PlatformBillingPeriod, period_id)
-    if not period:
-        raise ValueError("Période introuvable")
     invoices = PlatformInvoice.query.filter_by(period_id=period_id).all()
-    if not invoices:
-        raise ValueError("Aucun relevé à verrouiller")
-    for inv in invoices:
-        status = inv.statement_status or PlatformStatementStatus.DRAFT.value
-        if status == PlatformStatementStatus.NEEDS_REVIEW.value:
-            raise ValueError(
-                f"Relevé company_id={inv.company_id} encore à contrôler"
-            )
-        if status not in (
-            PlatformStatementStatus.VALIDATED.value,
-            PlatformStatementStatus.CALCULATED.value,
-        ):
-            raise ValueError(
-                f"Relevé company_id={inv.company_id} non prêt ({status})"
-            )
     for inv in invoices:
         inv.statement_status = PlatformStatementStatus.LOCKED.value
     period.status = PlatformBillingPeriodStatus.LOCKED.value

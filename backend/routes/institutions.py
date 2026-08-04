@@ -1398,6 +1398,9 @@ class InstitutionUserRole(Resource):
                     }, 400
 
             target_user.institution_role = new_role
+            from services.control_plane.legacy_hooks import project_institution_user
+
+            project_institution_user(target_user)
             db.session.commit()
 
             # Audit log
@@ -1425,6 +1428,7 @@ class InstitutionUserRole(Resource):
             }, 200
 
         except Exception as e:
+            db.session.rollback()
             sentry_sdk.capture_exception(e)
             logger.error("[Institution] Erreur PUT /users/%s/role: %s", user_id, e)
             return APIErrorHandler.handle_exception(e, logger)
@@ -1654,6 +1658,9 @@ class InstitutionUserRemove(Resource):
             target_user.disabled_at = now
             target_user.invite_token_hash = None
 
+            from services.control_plane.legacy_hooks import project_user_account_state
+
+            project_user_account_state(target_user)
             db.session.commit()
 
             _record_institution_user_audit(
@@ -2073,6 +2080,9 @@ class InstitutionUserDisable(Resource):
                 logger.warning(
                     "Échec disable_user_sessions institution: %s", disable_exc
                 )
+            from services.control_plane.legacy_hooks import project_user_account_state
+
+            project_user_account_state(target_user)
             db.session.commit()
 
             _record_institution_user_audit(
@@ -2445,6 +2455,11 @@ class PermissionRequestResolve(Resource):
                 target_user = User.query.get(pr["user_id"])
                 if target_user:
                     target_user.institution_role = pr["requested_role"]
+                    from services.control_plane.legacy_hooks import (
+                        project_institution_user,
+                    )
+
+                    project_institution_user(target_user)
                     db.session.commit()
                     logger.info(
                         "[Institution] Permission request approved: user %s -> %s",

@@ -277,12 +277,11 @@ const AdminOrganizations = () => {
         </button>
       </div>
 
-      {selectedOrg ? (
-        <AdminOrganizationDetailDrawer
-          organization={selectedOrg}
-          onClose={() => setSelectedOrg(null)}
-        />
-      ) : null}
+      <AdminOrganizationDetailDrawer
+        isOpen={Boolean(selectedOrg)}
+        organization={selectedOrg}
+        onClose={() => setSelectedOrg(null)}
+      />
     </main>
   );
 };

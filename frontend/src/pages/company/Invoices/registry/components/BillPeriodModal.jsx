@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef, useId } from 'react';
+import { createPortal } from 'react-dom';
 import {
   FiX,
   FiEye,
@@ -576,6 +577,20 @@ const BillPeriodModal = ({
   /** Aligné facturation entreprise : colonnes TVA/TTC dans l’aperçu HTML. */
   companyVatApplicable = true,
 }) => {
+  /** Conteneur portal dédié sur body — au-dessus de la sidebar, hors stacking context layout. */
+  const [portalTarget, setPortalTarget] = useState(null);
+  useEffect(() => {
+    if (typeof document === 'undefined' || !document.body) return undefined;
+    const el = document.createElement('div');
+    el.setAttribute('data-portal', 'bill-period-modal');
+    document.body.appendChild(el);
+    setPortalTarget(el);
+    return () => {
+      setPortalTarget(null);
+      if (el.parentNode) el.parentNode.removeChild(el);
+    };
+  }, []);
+
   /** form = sélection payeur/lignes ; draft = préparation dans la même modale. */
   const [composerPhase, setComposerPhase] = useState('form');
   const [draftInvoiceStub, setDraftInvoiceStub] = useState(null);
@@ -1591,11 +1606,17 @@ const BillPeriodModal = ({
     preview.preview_lines.length > 0 &&
     preview.preview_lines.every((l) => l.is_locked);
 
-  if (!open) return null;
+  if (!open || !portalTarget) return null;
 
-  return (
-    <div className={styles.overlay} onClick={onClose}>
-      <div className={styles.panel} onClick={(e) => e.stopPropagation()}>
+  return createPortal(
+    <div className={styles.overlay} onClick={onClose} role="presentation">
+      <div
+        className={styles.panel}
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="bill-period-modal-title"
+      >
         {composerPhase === 'draft' && draftInvoiceStub ? (
           <>
             <div className={styles.head}>
@@ -1621,7 +1642,7 @@ const BillPeriodModal = ({
           <>
             <div className={styles.head}>
               <div className={styles.headText}>
-                <h2 className={styles.title}>Nouvelle facture</h2>
+                <h2 className={styles.title} id="bill-period-modal-title">Nouvelle facture</h2>
               </div>
               <button type="button" className={styles.close} onClick={onClose} aria-label="Fermer">
                 <FiX size={18} />
@@ -2862,7 +2883,8 @@ const BillPeriodModal = ({
           </>
         )}
       </div>
-    </div>
+    </div>,
+    portalTarget
   );
 };
 

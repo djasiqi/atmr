@@ -3,17 +3,22 @@ import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import ProtectedRoute, { resolveOnboardingRedirect } from '../ProtectedRoute';
 
+const bootstrapState = {
+  status: 'authenticated',
+  isAuthenticated: true,
+  user: null,
+};
+
 jest.mock('../../contexts/SessionBootstrapContext', () => ({
-  useSessionBootstrap: () => ({
-    status: 'authenticated',
-    isAuthenticated: true,
-    user: null,
-  }),
+  useSessionBootstrap: () => bootstrapState,
 }));
 
 describe('ProtectedRoute onboarding', () => {
   beforeEach(() => {
     localStorage.clear();
+    bootstrapState.status = 'authenticated';
+    bootstrapState.isAuthenticated = true;
+    bootstrapState.user = null;
     jest.spyOn(console, 'warn').mockImplementation(() => {});
   });
 
@@ -24,6 +29,7 @@ describe('ProtectedRoute onboarding', () => {
 
   const renderProtected = (user, initialPath = '/dashboard') => {
     localStorage.setItem('company_user', JSON.stringify({ ...user, role: user.role || 'company' }));
+    localStorage.setItem('app_user', JSON.stringify({ ...user, role: user.role || 'company' }));
 
     return render(
       <MemoryRouter initialEntries={[initialPath]}>
@@ -36,6 +42,7 @@ describe('ProtectedRoute onboarding', () => {
               </ProtectedRoute>
             }
           />
+          <Route path="/unauthorized" element={<div>Unauthorized page</div>} />
           <Route
             path="/force-reset-password"
             element={<div>Reset password page</div>}
@@ -86,5 +93,41 @@ describe('ProtectedRoute onboarding', () => {
       '/dashboard'
     );
     expect(destination).toBeNull();
+  });
+
+  it('utilise company_user si le bootstrap est encore sur un ancien rôle admin', () => {
+    bootstrapState.user = { public_id: 'admin-1', role: 'admin' };
+    renderProtected({
+      public_id: 'company-1',
+      role: 'company',
+      force_password_change: false,
+    });
+
+    expect(screen.getByText('Dashboard content')).toBeInTheDocument();
+    expect(screen.queryByText('Unauthorized page')).not.toBeInTheDocument();
+  });
+
+  it('redirige unauthorized si ni bootstrap ni storage ne matchent company', () => {
+    bootstrapState.user = { public_id: 'admin-1', role: 'admin' };
+    localStorage.setItem('company_user', JSON.stringify({ public_id: 'admin-1', role: 'admin' }));
+    localStorage.setItem('app_user', JSON.stringify({ public_id: 'admin-1', role: 'admin' }));
+
+    render(
+      <MemoryRouter initialEntries={['/dashboard']}>
+        <Routes>
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute allowedRoles={['company']}>
+                <div>Dashboard content</div>
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/unauthorized" element={<div>Unauthorized page</div>} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText('Unauthorized page')).toBeInTheDocument();
   });
 });

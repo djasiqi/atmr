@@ -238,3 +238,8 @@ data/kafka-dlq/
 # DonnÃ©es cluster PostgreSQL locales (docker volume)
 postgres/
 backend/.gunicorn/
+
+# Windows reserved device names (entrées fantômes untracked)
+**/NUL
+**/nul
+

@@ -10,7 +10,10 @@ const APP_ADMIN_REQUEST_CONFIG = {
 
 export const fetchAdminDemoRequests = async () => {
   const response = await apiClient.get('/admin/demo_requests', APP_ADMIN_REQUEST_CONFIG);
-  return response.data?.items || [];
+  return {
+    items: response.data?.items || [],
+    policy: response.data?.policy || null,
+  };
 };
 
 export const provisionDemoAccess = async (demoRequestId, provisionProfile) => {

@@ -77,7 +77,29 @@ class BillingOpportunitiesResult:
     patient_items: list[PatientOpportunity]
     clinic_items: list[ClinicOpportunity]
     total_draft_would_create: int
+    ignored_missing_billing_party_count: int = 0
 
+
+def _inc_ignored_missing_billing_party_metric(count: int = 1) -> None:
+    """Métrique Prometheus optionnelle (no-op si client absent)."""
+    if count <= 0:
+        return
+    try:
+        from prometheus_client import Counter  # type: ignore
+
+        counter = getattr(_inc_ignored_missing_billing_party_metric, "_counter", None)
+        if counter is None:
+            counter = Counter(
+                "billing_opportunities_ignored_missing_billing_party_total",
+                "Sujets patient ignorés faute de billing_party_id (registre V2)",
+            )
+            _inc_ignored_missing_billing_party_metric._counter = counter  # type: ignore[attr-defined]
+        counter.inc(count)
+    except Exception:
+        logger.debug(
+            "billing_opportunities metric ignored_missing_billing_party indisponible",
+            exc_info=True,
+        )
 
 def _period_bounds(period_year: int, period_month: int) -> tuple[datetime, datetime]:
     start_date = datetime(period_year, period_month, 1)
@@ -454,6 +476,7 @@ def list_billing_opportunities(
     patient_items: list[PatientOpportunity] = []
     ip_cache: dict[int, InstitutionPatient] = {}
     bp_cache: dict[int, BillingParty] = {}
+    ignored_missing_billing_party_count = 0
 
     for subject_key, bookings in groups.items():
         if not bookings:
@@ -550,6 +573,7 @@ def list_billing_opportunities(
         total = float(sum((u.amount_ht for u in units), Decimal("0")))
         segments = sum(len(u.booking_ids) for u in units)
         if bp_id is None:
+            ignored_missing_billing_party_count += 1
             logger.warning(
                 "billing_opportunities: sujet %s sans billing_party_id ignoré",
                 subject_key,
@@ -627,12 +651,16 @@ def list_billing_opportunities(
     would_patient = sum(1 for p in patient_items if p.can_generate and p.segments_count > 0)
     would_clinic = sum(1 for c in clinic_items if c.transports_count > 0)
 
+    if ignored_missing_billing_party_count:
+        _inc_ignored_missing_billing_party_metric(ignored_missing_billing_party_count)
+
     return BillingOpportunitiesResult(
         period_year=period_year,
         period_month=period_month,
         patient_items=sorted(patient_items, key=lambda x: x.display_name.lower()),
         clinic_items=sorted(clinic_items, key=lambda x: (x.name or "").lower()),
         total_draft_would_create=would_patient + would_clinic,
+        ignored_missing_billing_party_count=ignored_missing_billing_party_count,
     )
 
 
@@ -694,4 +722,5 @@ def opportunities_to_dict(res: BillingOpportunitiesResult) -> dict[str, Any]:
             for c in res.clinic_items
         ],
         "total_draft_would_create": res.total_draft_would_create,
+        "ignored_missing_billing_party_count": res.ignored_missing_billing_party_count,
     }

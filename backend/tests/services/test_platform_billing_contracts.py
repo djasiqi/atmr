@@ -54,6 +54,117 @@ def test_month_start_zurich_utc():
     assert dt.day == 30
 
 
+def test_month_start_zurich_january_winter():
+    dt = month_start_zurich_utc(2027, 1)
+    # 2027-01-01 00:00 Zurich = 2026-12-31 23:00 UTC (CET)
+    assert dt.year == 2026
+    assert dt.month == 12
+    assert dt.day == 31
+    assert dt.hour == 23
+
+
+def test_resolve_effective_year_month_january_2027():
+    from services.platform_billing.contracts import resolve_effective_instant_from_payload
+
+    dt = resolve_effective_instant_from_payload(
+        {"effective_year": 2027, "effective_month": 1},
+        year_key="effective_year",
+        month_key="effective_month",
+        iso_key="effective_from",
+    )
+    assert dt == month_start_zurich_utc(2027, 1)
+
+
+def test_resolve_effective_conflict_raises():
+    from services.platform_billing.contracts import resolve_effective_instant_from_payload
+    from services.platform_billing.errors import BillingInvariantError
+
+    with pytest.raises(BillingInvariantError) as ei:
+        resolve_effective_instant_from_payload(
+            {
+                "effective_year": 2027,
+                "effective_month": 1,
+                "effective_from": "2027-02-01T00:00:00+01:00",
+            },
+            year_key="effective_year",
+            month_key="effective_month",
+            iso_key="effective_from",
+        )
+    assert ei.value.code == "EFFECTIVE_DATE_CONFLICT"
+
+
+def test_create_contract_defaults_inactive_and_requires_products():
+    from services.platform_billing.contracts import create_contract_version
+    from services.platform_billing.errors import BillingInvariantError
+
+    with (
+        patch(
+            "services.platform_billing.contracts.supersede_overlapping_contracts"
+        ),
+        patch("services.platform_billing.contracts.assert_no_overlap"),
+        patch("services.platform_billing.contracts.db.session") as session,
+        pytest.raises(BillingInvariantError) as ei,
+    ):
+        create_contract_version(
+            1,
+            {
+                "is_billing_enabled": True,
+                "effective_year": 2026,
+                "effective_month": 8,
+            },
+        )
+    assert ei.value.code == "BILLING_PRODUCTS_REQUIRED"
+    session.add.assert_not_called()
+
+
+def test_create_contract_incomplete_payload_stays_inactive():
+    from services.platform_billing.contracts import create_contract_version
+
+    captured = {}
+
+    def _add(obj):
+        captured["cfg"] = obj
+
+    with (
+        patch(
+            "services.platform_billing.contracts.supersede_overlapping_contracts"
+        ),
+        patch("services.platform_billing.contracts.assert_no_overlap"),
+        patch("services.platform_billing.contracts.db.session") as session,
+    ):
+        session.add.side_effect = _add
+        session.commit = MagicMock()
+        session.refresh = MagicMock()
+        create_contract_version(
+            1,
+            {"effective_year": 2026, "effective_month": 8},
+        )
+    cfg = captured["cfg"]
+    assert cfg.is_billing_enabled is False
+    assert cfg.own_portfolio_billing_enabled is False
+    assert cfg.lirie_commission_enabled is False
+    assert cfg.support_enabled is False
+    assert cfg.automated_dunning_enabled is False
+
+
+def test_close_contract_refuses_already_closed():
+    from services.platform_billing.contracts import close_contract
+    from services.platform_billing.errors import BillingInvariantError
+
+    cfg = MagicMock()
+    cfg.id = 5
+    cfg.effective_to = datetime(2026, 9, 1, tzinfo=UTC)
+    with (
+        patch(
+            "services.platform_billing.contracts.db.session.get",
+            return_value=cfg,
+        ),
+        pytest.raises(BillingInvariantError) as ei,
+    ):
+        close_contract(5)
+    assert ei.value.code == "CONTRACT_ALREADY_CLOSED"
+
+
 def test_effective_config_for_period_picks_matching_window():
     period_start = month_start_zurich_utc(2026, 7)
     cfg_old = MagicMock()

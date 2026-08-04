@@ -1,4 +1,4 @@
-import React, { useId, useState } from 'react';
+import React, { useEffect, useId, useState } from 'react';
 import styles from './AdminTempPasswordDialog.module.css';
 
 /**
@@ -19,6 +19,12 @@ export default function AdminTempPasswordDialog({
   const titleId = useId();
   const [visible, setVisible] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setVisible(false);
+    setCopied(false);
+  }, [open, temporaryPassword]);
 
   if (!open) return null;
 

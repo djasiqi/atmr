@@ -96,6 +96,28 @@ h1,
   font-weight: 600;
 }
 
+.clickableRow {
+  cursor: pointer;
+}
+
+.clickableRow:hover,
+.clickableRow:focus-visible {
+  background: var(--bg-secondary, #f7f8fa);
+  outline: none;
+}
+
+.inlineLink {
+  border: none;
+  background: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .actionBtn {
   border: 1px solid var(--border-primary, #e5e7eb);
   background: var(--bg-primary, #fff);

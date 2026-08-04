@@ -1,4 +1,4 @@
-"""Tests d'intégration : GET /api/v1/admin/dashboard/summary."""
+"""Tests d'intégration : GET /api/v1/admin/dashboard-summary."""
 
 from __future__ import annotations
 
@@ -26,6 +26,8 @@ class TestAdminDashboardSummaryEndpoint:
         data = response.get_json()
         assert data is not None
 
+        assert "generated_at" in data
+
         assert "priorities" in data
         p = data["priorities"]
         for key in (
@@ -33,6 +35,8 @@ class TestAdminDashboardSummaryEndpoint:
             "demo_requests_open",
             "tenants_suspended",
             "platform_alerts_open",
+            "billing_to_review",
+            "critical_attention_count",
         ):
             assert key in p
             assert isinstance(p[key], int)
@@ -44,12 +48,18 @@ class TestAdminDashboardSummaryEndpoint:
             "bookings_created_7d",
             "bookings_completed_7d",
             "bookings_canceled_7d",
+            "bookings_canceled_from_created_7d",
+            "cancellation_rate_7d",
             "active_users_30d",
             "invoices_current_month",
             "revenue_current_month_chf",
+            "platform_invoiced_current_month_chf",
         ):
             assert key in k
         assert isinstance(k["revenue_current_month_chf"], (int, float))
+        assert isinstance(k["platform_invoiced_current_month_chf"], (int, float))
+        assert isinstance(k["cancellation_rate_7d"], (int, float))
+        assert 0.0 <= float(k["cancellation_rate_7d"]) <= 1.0
 
         assert "platform_snippet" in data
         s = data["platform_snippet"]
@@ -58,27 +68,32 @@ class TestAdminDashboardSummaryEndpoint:
             "open_alerts",
             "runbooks_today",
             "tenants_in_drift",
+            "critical_attention_count",
         ):
             assert key in s
         assert s["overall_status"] in ("ok", "degraded", "unknown")
 
+        # Déprécié : toujours une liste vide (plus de série 12 mois).
         assert "booking_trends" in data
-        assert isinstance(data["booking_trends"], list)
-        assert len(data["booking_trends"]) == 12
+        assert data["booking_trends"] == []
 
         assert "recent_activity" in data
         assert isinstance(data["recent_activity"], list)
+        assert len(data["recent_activity"]) <= 5
         for item in data["recent_activity"]:
             assert set(item.keys()) >= {
                 "type",
+                "entity_id",
                 "label",
                 "status",
                 "occurred_at",
-                "href",
+                "action",
             }
+            assert "href" not in item
             assert item["type"] in (
                 "booking",
                 "demo_request",
                 "tenant_governance",
                 "runbook",
             )
+            assert item["action"] == "open_booking"

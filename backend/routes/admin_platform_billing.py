@@ -36,6 +36,8 @@ from security.ip_whitelist import ip_whitelist_required
 from services.admin_authz import (
     CAP_BILLING_ISSUE,
     CAP_BILLING_LOCK,
+    CAP_BILLING_VALIDATE,
+    CAP_CONFIGURATION_MANAGE,
     require_admin_capability,
 )
 
@@ -48,6 +50,7 @@ from services.platform_billing.contracts import (
     close_contract,
     create_contract_version,
     list_contracts,
+    resolve_effective_instant_from_payload,
     serialize_contract,
 )
 from services.platform_billing.decimal_json import (
@@ -62,6 +65,7 @@ from services.platform_billing.engine import (
     reopen_statement_for_correction,
     validate_statement,
 )
+from services.platform_billing.errors import BillingInvariantError
 from services.platform_billing.issuance import (
     issue_platform_invoice,
     read_issued_invoice_pdf,
@@ -358,6 +362,8 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
             try:
                 p = lock_platform_billing_period(period_id)
                 return _serialize_period(p), 200
+            except BillingInvariantError as e:
+                return e.to_response()
             except ValueError as e:
                 return {"error": str(e)}, 400
 
@@ -608,22 +614,37 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                 cfg.is_active = bool(data["is_active"])
             if "notes" in data:
                 cfg.notes = data.get("notes")
-            if "effective_from" in data:
-                v = data.get("effective_from")
-                if v:
-                    cfg.effective_from = datetime.fromisoformat(
-                        str(v).replace("Z", "+00:00")
+            try:
+                if any(
+                    k in data
+                    for k in (
+                        "effective_year",
+                        "effective_month",
+                        "effective_from",
                     )
-                else:
-                    cfg.effective_from = None
-            if "effective_to" in data:
-                v = data.get("effective_to")
-                if v:
-                    cfg.effective_to = datetime.fromisoformat(
-                        str(v).replace("Z", "+00:00")
+                ):
+                    cfg.effective_from = resolve_effective_instant_from_payload(
+                        data,
+                        year_key="effective_year",
+                        month_key="effective_month",
+                        iso_key="effective_from",
                     )
-                else:
-                    cfg.effective_to = None
+                if any(
+                    k in data
+                    for k in (
+                        "effective_to_year",
+                        "effective_to_month",
+                        "effective_to",
+                    )
+                ):
+                    cfg.effective_to = resolve_effective_instant_from_payload(
+                        data,
+                        year_key="effective_to_year",
+                        month_key="effective_to_month",
+                        iso_key="effective_to",
+                    )
+            except BillingInvariantError as e:
+                return e.to_response()
             db.session.commit()
             db.session.refresh(cfg)
             return {
@@ -862,6 +883,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
         @jwt_required()
         @role_required(UserRole.admin)
         @ip_whitelist_required()
+        @require_admin_capability(CAP_CONFIGURATION_MANAGE)
         @limiter.limit(_RL_ADMIN_READ)
         def post(self, company_id: int):
             if not _dual_product_config_ui_enabled():
@@ -872,6 +894,8 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
             data = request.get_json(silent=True) or {}
             try:
                 cfg = create_contract_version(company_id, data)
+            except BillingInvariantError as e:
+                return e.to_response()
             except ValueError as e:
                 return APIErrorHandler.handle_validation_error(
                     str(e), logger_instance=logger
@@ -887,6 +911,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
         @jwt_required()
         @role_required(UserRole.admin)
         @ip_whitelist_required()
+        @require_admin_capability(CAP_CONFIGURATION_MANAGE)
         @limiter.limit(_RL_ADMIN_READ)
         def put(self, company_id: int):
             company = db.session.get(Company, company_id)
@@ -996,17 +1021,14 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
         @jwt_required()
         @role_required(UserRole.admin)
         @ip_whitelist_required()
+        @require_admin_capability(CAP_CONFIGURATION_MANAGE)
         @limiter.limit(_RL_ADMIN_READ)
         def post(self, contract_id: int):
             data = request.get_json(silent=True) or {}
             try:
-                to = data.get("effective_to")
-                dt = (
-                    datetime.fromisoformat(str(to).replace("Z", "+00:00"))
-                    if to
-                    else None
-                )
-                cfg = close_contract(contract_id, dt)
+                cfg = close_contract(contract_id, data=data)
+            except BillingInvariantError as e:
+                return e.to_response()
             except ValueError as e:
                 msg = str(e)
                 if "gelée" in msg.lower() or "gelé" in msg.lower():
@@ -1042,6 +1064,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
         @jwt_required()
         @role_required(UserRole.admin)
         @ip_whitelist_required()
+        @require_admin_capability(CAP_CONFIGURATION_MANAGE)
         @limiter.limit(_RL_ADMIN_WRITE)
         def post(self, contract_id: int):
             """Génère ou régénère le DOCX (brouillon)."""
@@ -1122,6 +1145,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
         @jwt_required()
         @role_required(UserRole.admin)
         @ip_whitelist_required()
+        @require_admin_capability(CAP_CONFIGURATION_MANAGE)
         @limiter.limit(_RL_ADMIN_WRITE)
         def post(self, agreement_id: int):
             from services.platform_billing.partner_agreement import (
@@ -1146,6 +1170,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
         @jwt_required()
         @role_required(UserRole.admin)
         @ip_whitelist_required()
+        @require_admin_capability(CAP_CONFIGURATION_MANAGE)
         @limiter.limit(_RL_ADMIN_WRITE)
         def post(self, agreement_id: int):
             from services.platform_billing.partner_agreement import (
@@ -1172,6 +1197,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
         @jwt_required()
         @role_required(UserRole.admin)
         @ip_whitelist_required()
+        @require_admin_capability(CAP_CONFIGURATION_MANAGE)
         @limiter.limit(_RL_ADMIN_WRITE)
         def post(self, agreement_id: int):
             from datetime import date as date_cls
@@ -1394,9 +1420,12 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
         @jwt_required()
         @role_required(UserRole.admin)
         @ip_whitelist_required()
+        @require_admin_capability(CAP_BILLING_VALIDATE)
         def post(self, invoice_id: int):
             try:
                 inv = validate_statement(invoice_id)
+            except BillingInvariantError as e:
+                return e.to_response()
             except ValueError as e:
                 return APIErrorHandler.handle_validation_error(
                     str(e), logger_instance=logger
@@ -1466,6 +1495,8 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
         def post(self, invoice_id: int):
             try:
                 issued = issue_platform_invoice(invoice_id)
+            except BillingInvariantError as e:
+                return e.to_response()
             except ValueError as e:
                 return APIErrorHandler.handle_validation_error(
                     str(e), logger_instance=logger
@@ -1652,6 +1683,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
     class PlatformBillingDunningPause(Resource):
         @jwt_required()
         @role_required(UserRole.admin)
+        @require_admin_capability(CAP_BILLING_LOCK)
         @ip_whitelist_required()
         @limiter.limit(_RL_ADMIN_WRITE)
         def post(self, company_id: int):
@@ -1663,9 +1695,34 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
             if not company:
                 admin_ns.abort(404, "Entreprise introuvable")
             data = request.get_json(silent=True) or {}
-            days = int(data.get("days") or 14)
-            reason = (data.get("reason") or "pause_admin").strip()
-            until = datetime.now(timezone.utc) + timedelta(days=max(1, days))
+            reason = (data.get("reason") or "").strip()
+            if len(reason) < 5:
+                return APIErrorHandler.handle_validation_error(
+                    "Une raison d'au moins 5 caractères est requise.",
+                    logger_instance=logger,
+                )
+            until = None
+            paused_until_raw = data.get("paused_until")
+            if paused_until_raw:
+                try:
+                    until = datetime.fromisoformat(
+                        str(paused_until_raw).replace("Z", "+00:00")
+                    )
+                except ValueError:
+                    return APIErrorHandler.handle_validation_error(
+                        "paused_until invalide (ISO 8601 attendu).",
+                        logger_instance=logger,
+                    )
+                if until.tzinfo is None:
+                    until = until.replace(tzinfo=timezone.utc)
+            else:
+                days = int(data.get("days") or 14)
+                until = datetime.now(timezone.utc) + timedelta(days=max(1, days))
+            if until <= datetime.now(timezone.utc):
+                return APIErrorHandler.handle_validation_error(
+                    "paused_until doit être dans le futur.",
+                    logger_instance=logger,
+                )
             pause_dunning(
                 company_id,
                 until=until,
@@ -1680,11 +1737,43 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
             }, 200
 
     @admin_ns.route(
+        "/platform-billing/companies/<int:company_id>/dunning/resume"
+    )
+    class PlatformBillingDunningResume(Resource):
+        @jwt_required()
+        @role_required(UserRole.admin)
+        @require_admin_capability(CAP_BILLING_LOCK)
+        @ip_whitelist_required()
+        @limiter.limit(_RL_ADMIN_WRITE)
+        def post(self, company_id: int):
+            from services.platform_billing.capabilities import clear_dunning_pause
+
+            company = db.session.get(Company, company_id)
+            if not company:
+                admin_ns.abort(404, "Entreprise introuvable")
+            data = request.get_json(silent=True) or {}
+            reason = (data.get("reason") or "").strip()
+            if len(reason) < 5:
+                return APIErrorHandler.handle_validation_error(
+                    "Une raison d'au moins 5 caractères est requise.",
+                    logger_instance=logger,
+                )
+            clear_dunning_pause(company_id)
+            db.session.commit()
+            return {
+                "ok": True,
+                "dunning_paused_until": None,
+                "dunning_pause_reason": None,
+                "reason": reason,
+            }, 200
+
+    @admin_ns.route(
         "/platform-billing/companies/<int:company_id>/billing-access"
     )
     class PlatformBillingAccessStateResource(Resource):
         @jwt_required()
         @role_required(UserRole.admin)
+        @require_admin_capability(CAP_BILLING_LOCK)
         @ip_whitelist_required()
         @limiter.limit(_RL_ADMIN_WRITE)
         def put(self, company_id: int):
@@ -1704,15 +1793,18 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                 admin_ns.abort(404, "Entreprise introuvable")
             data = request.get_json(silent=True) or {}
             state = (data.get("state") or "").strip()
-            reason = (data.get("reason_code") or "admin_manual").strip()
+            reason = (data.get("reason_code") or data.get("reason") or "").strip()
+            if len(reason) < 5:
+                return APIErrorHandler.handle_validation_error(
+                    "Une raison d'au moins 5 caractères est requise.",
+                    logger_instance=logger,
+                )
             pause_days = data.get("pause_days_after_lift")
             try:
                 set_billing_access_state(
                     company_id,
                     state,
-                    source=PlatformBillingStateSource.ADMIN_MANUAL.value
-                    if state != PlatformBillingAccessState.ACTIVE.value
-                    else PlatformBillingStateSource.ADMIN_MANUAL.value,
+                    source=PlatformBillingStateSource.ADMIN_MANUAL.value,
                     reason_code=reason
                     if state != PlatformBillingAccessState.ACTIVE.value
                     else "admin_lift",

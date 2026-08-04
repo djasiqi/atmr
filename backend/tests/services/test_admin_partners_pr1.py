@@ -5,7 +5,6 @@ from __future__ import annotations
 import uuid
 
 import pytest
-from sqlalchemy.exc import IntegrityError
 
 from models import Company, User
 from models.enums import UserRole
@@ -72,17 +71,22 @@ def test_update_user_role_same_role_noop(client, admin_headers, db_session, app)
 
     response = client.put(
         f"/api/v1/admin/users/{user_id}/role",
-        json={"role": "client"},
+        json={
+            "role": "client",
+            "expected_current_role": "client",
+            "reason": "No-op de vérification API",
+        },
         headers=admin_headers,
     )
     assert response.status_code == 200
 
 
-def test_update_user_role_real_change_returns_409(client, admin_headers, db_session, app):
+def test_update_user_role_apply_requires_reason(client, admin_headers, db_session, app):
+    """Apply sans reason → 400 (schema durci)."""
     with app.app_context():
         target = _make_user(
-            username=f"role_block_{uuid.uuid4().hex[:8]}",
-            email=f"role_block_{uuid.uuid4().hex[:8]}@example.com",
+            username=f"role_ok_{uuid.uuid4().hex[:8]}",
+            email=f"role_ok_{uuid.uuid4().hex[:8]}@example.com",
             role=UserRole.CLIENT,
         )
         db_session.session.add(target)
@@ -91,11 +95,10 @@ def test_update_user_role_real_change_returns_409(client, admin_headers, db_sess
 
     response = client.put(
         f"/api/v1/admin/users/{user_id}/role",
-        json={"role": "admin"},
+        json={"role": "client", "expected_current_role": "client"},
         headers=admin_headers,
     )
-    assert response.status_code == 409
-    assert response.get_json().get("error") == "role_transition_requires_assistant"
+    assert response.status_code == 400
 
 
 def test_delete_user_blocked_when_not_testing(client, admin_headers, db_session, app):
@@ -167,19 +170,75 @@ def test_account_integrity_orphan_company(client, admin_headers, db_session, app
     assert codes.get("COMPANY_PROFILE_LINKED") == "failed"
 
 
-def test_company_user_id_unique_constraint(app, db_session):
+def test_company_user_id_shared_shell_not_unique(app, db_session):
+    """Plusieurs Company peuvent partager un user_id (clinic shells).
+
+    Une seule peut être tenant ; la shell n'est pas projetée ; owner COMPANY
+    + clinic sans chauffeur → ambiguous (fail-closed).
+    """
+    from models.billing_party import BillingParty
+    from models.clinic_billing_party_mapping import ClinicBillingPartyMapping
+    from models.driver import Driver
+    from models.enums import BillingPartyType
+    from services.control_plane.classification import (
+        CompanyProjectionKind,
+        classify_company_for_control_plane,
+    )
+    from services.control_plane.projector import ControlPlaneProjector
+    from services.control_plane.seed import seed_control_plane_catalogs
+
     with app.app_context():
+        seed_control_plane_catalogs(commit=False)
         owner = _make_user(
-            username=f"uniq_owner_{uuid.uuid4().hex[:8]}",
-            email=f"uniq_owner_{uuid.uuid4().hex[:8]}@example.com",
+            username=f"share_owner_{uuid.uuid4().hex[:8]}",
+            email=f"share_owner_{uuid.uuid4().hex[:8]}@example.com",
             role=UserRole.COMPANY,
         )
         db_session.session.add(owner)
         db_session.session.flush()
-        db_session.session.add(Company(user_id=owner.id, name="Uniq A"))
-        db_session.session.commit()
 
-        with pytest.raises(IntegrityError):
-            db_session.session.add(Company(user_id=owner.id, name="Uniq B"))
-            db_session.session.commit()
-        db_session.session.rollback()
+        tenant = Company(user_id=owner.id, name="Tenant Transport")
+        shell = Company(user_id=owner.id, name="Clinic Shell")
+        db_session.session.add_all([tenant, shell])
+        db_session.session.flush()
+
+        driver_user = _make_user(
+            username=f"drv_share_{uuid.uuid4().hex[:8]}",
+            email=f"drv_share_{uuid.uuid4().hex[:8]}@example.com",
+            role=UserRole.DRIVER,
+        )
+        db_session.session.add(driver_user)
+        db_session.session.flush()
+        d = Driver()
+        d.user_id = driver_user.id
+        d.company_id = tenant.id
+        d.is_active = True
+        db_session.session.add(d)
+        db_session.session.flush()
+
+        bp = BillingParty()
+        bp.company_id = tenant.id
+        bp.type = BillingPartyType.CLINIC
+        bp.display_name = "Clinic BP"
+        bp.external_ref = f"clinic_company:{shell.id}"
+        db_session.session.add(bp)
+        db_session.session.flush()
+        mapping = ClinicBillingPartyMapping()
+        mapping.company_id = tenant.id
+        mapping.clinic_company_id = shell.id
+        mapping.billing_party_id = bp.id
+        db_session.session.add(mapping)
+        db_session.session.flush()
+
+        assert classify_company_for_control_plane(tenant).kind == (
+            CompanyProjectionKind.TRANSPORT_TENANT
+        )
+        # Owner COMPANY + clinic + 0 driver → ambiguous (pas shell silencieuse)
+        assert classify_company_for_control_plane(shell).kind == (
+            CompanyProjectionKind.AMBIGUOUS
+        )
+
+        proj = ControlPlaneProjector()
+        assert proj.ensure_company_organization(tenant) is not None
+        assert proj.ensure_company_organization(shell) is None
+        db_session.session.commit()
