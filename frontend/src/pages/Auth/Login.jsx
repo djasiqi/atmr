@@ -8,10 +8,13 @@ import { buildSafeAppPath, pathFromNextQueryParam } from '../../utils/safeReturn
 import { hasActiveSession, normalizeAuthRole, writeAuthSession } from '../../utils/webAuthSession';
 import {
   beginLoginSession,
+  clearCrossTabLogoutMarker,
   clearExplicitLogoutMarker,
+  consumeAuthLogoutReason,
   endLoginSession,
   hasRecentExplicitLogout,
 } from '../../utils/sessionLogoutState';
+import { toast } from 'sonner';
 import { linkMobilityProfileToUser, saveMobilityProfileForEmail } from '../../utils/clientMobilityProfile';
 import {
   getPendingActivationByEmail,
@@ -192,6 +195,15 @@ const Login = () => {
       setLoginFormData((prev) => ({ ...prev, email: location.state.prefillEmail }));
     }
   }, [justActivated, location.state]);
+
+  useEffect(() => {
+    const reason = consumeAuthLogoutReason();
+    if (reason === 'session_expired') {
+      toast.warning('Votre session a expiré. Veuillez vous reconnecter.');
+    } else if (reason === 'idle_timeout') {
+      toast.warning('Vous avez été déconnecté après une période d\'inactivité.');
+    }
+  }, []);
 
   useEffect(() => {
     if (hasRecentExplicitLogout()) return;
@@ -398,6 +410,7 @@ const Login = () => {
         queryClient.clear();
       }
       clearExplicitLogoutMarker();
+      clearCrossTabLogoutMarker();
 
       let roleSegment;
       if (token && typeof token === 'string') {

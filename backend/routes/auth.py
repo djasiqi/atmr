@@ -1579,7 +1579,12 @@ def _resolve_company_id(user: User) -> int | None:
 
     Le modèle User n'a pas de colonne company_id directe ;
     la relation est Company.user_id -> User.id.
+
+    Les comptes ADMIN plateforme n'obtiennent jamais de company_id JWT :
+    ils restent strictement sur le périmètre admin.
     """
+    if getattr(user, "role", None) == UserRole.ADMIN:
+        return None
     company = getattr(user, "company", None)
     return company.id if company else None
 
@@ -1814,7 +1819,20 @@ def _build_available_contexts(user: User) -> list[dict[str, object]]:
             is_default=True,
         )
 
-    # Contextes additionnels (multi-contexte)
+    elif role == UserRole.ADMIN:
+        add_context(
+            context_id=f"admin:{user.public_id}",
+            context_type="admin",
+            label="Administration LIRIE",
+            organization_id=None,
+            organization_name=None,
+            is_default=True,
+        )
+
+    # Contextes additionnels (multi-contexte) — jamais pour ADMIN plateforme
+    if role == UserRole.ADMIN:
+        return contexts
+
     if getattr(user, "clients", None):
         add_context(
             context_id="client:self",
@@ -3444,6 +3462,18 @@ class AuthSwitchContext(Resource):
             }, 401
 
         user = _prepare_user_for_bootstrap(user)
+
+        if getattr(user, "role", None) == UserRole.ADMIN:
+            return {
+                "error_code": "admin_context_locked",
+                "error_message": (
+                    "Compte administrateur plateforme : bascule vers un "
+                    "contexte entreprise interdite."
+                ),
+                "action_hint": "logout",
+                "retryable": False,
+                "request_id": request_id,
+            }, 403
 
         data = request.get_json(silent=True) or {}
         target_context_id = str(
@@ -6146,9 +6176,8 @@ class TOTPChallenge(Resource):
                 "role": user.role.value if user.role else "unknown",
                 "aud": "atmr-api",
                 "token_version": _user_token_version(db_user),
+                "company_id": _resolve_company_id(db_user),
             }
-            if user.company:
-                additional_claims["company_id"] = user.company.id
 
             access_token = create_access_token(
                 identity=user.public_id,

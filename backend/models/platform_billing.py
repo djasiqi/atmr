@@ -555,6 +555,17 @@ class PlatformIssuedInvoice(db.Model):
         UniqueConstraint(
             "qr_reference", name="uq_platform_issued_invoice_qr_ref"
         ),
+        Index(
+            "uq_platform_issued_credit_of",
+            "credit_of_invoice_id",
+            unique=True,
+            postgresql_where=text("credit_of_invoice_id IS NOT NULL"),
+        ),
+        Index(
+            "ix_platform_issued_billing_period",
+            "billing_year",
+            "billing_month",
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -567,6 +578,9 @@ class PlatformIssuedInvoice(db.Model):
         Integer, ForeignKey("company.id", ondelete="CASCADE"), nullable=False
     )
     invoice_number: Mapped[str] = mapped_column(String(64), nullable=False)
+    document_type: Mapped[str] = mapped_column(
+        String(16), nullable=False, server_default="INVOICE"
+    )
     status: Mapped[str] = mapped_column(
         String(32), nullable=False, server_default="DRAFT"
     )
@@ -601,6 +615,22 @@ class PlatformIssuedInvoice(db.Model):
         Integer,
         ForeignKey("platform_issued_invoice.id", ondelete="SET NULL"),
         nullable=True,
+    )
+    replaces_issued_invoice_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("platform_issued_invoice.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    billing_year: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    billing_month: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    period_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("platform_billing_period.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    credit_reason: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    credit_created_by_user_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("user.id", ondelete="SET NULL"), nullable=True
     )
     pdf_storage_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
     pdf_checksum: Mapped[str | None] = mapped_column(String(128), nullable=True)
@@ -646,14 +676,50 @@ class PlatformIssuedInvoice(db.Model):
         "PlatformInvoicePayment",
         back_populates="issued_invoice",
         cascade="all, delete-orphan",
+        foreign_keys="PlatformInvoicePayment.issued_invoice_id",
+    )
+    credit_of_invoice = relationship(
+        "PlatformIssuedInvoice",
+        remote_side="PlatformIssuedInvoice.id",
+        foreign_keys=[credit_of_invoice_id],
+        backref=db.backref("credit_note", uselist=False),
+    )
+    due_date_changes = relationship(
+        "PlatformInvoiceDueDateChange",
+        back_populates="issued_invoice",
+        cascade="all, delete-orphan",
+        order_by="PlatformInvoiceDueDateChange.created_at",
     )
 
 
 class PlatformInvoicePayment(db.Model):
-    """Paiement enregistré sur une facture légale plateforme."""
+    """Écriture du journal de paiements (PAYMENT ou REVERSAL)."""
 
     __tablename__ = "platform_invoice_payment"
-    __table_args__ = (Index("ix_plat_inv_payment_invoice", "issued_invoice_id"),)
+    __table_args__ = (
+        Index("ix_plat_inv_payment_invoice", "issued_invoice_id"),
+        Index(
+            "uq_plat_inv_payment_idempotency",
+            "issued_invoice_id",
+            "idempotency_key",
+            unique=True,
+            postgresql_where=text("idempotency_key IS NOT NULL"),
+        ),
+        Index(
+            "uq_plat_inv_payment_reverses",
+            "reverses_payment_id",
+            unique=True,
+            postgresql_where=text("reverses_payment_id IS NOT NULL"),
+        ),
+        CheckConstraint(
+            "("
+            "(entry_type = 'PAYMENT' AND amount > 0 AND reverses_payment_id IS NULL)"
+            " OR "
+            "(entry_type = 'REVERSAL' AND amount < 0 AND reverses_payment_id IS NOT NULL)"
+            ")",
+            name="ck_plat_inv_payment_entry_type",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     issued_invoice_id: Mapped[int] = mapped_column(
@@ -661,11 +727,21 @@ class PlatformInvoicePayment(db.Model):
         ForeignKey("platform_issued_invoice.id", ondelete="CASCADE"),
         nullable=False,
     )
+    entry_type: Mapped[str] = mapped_column(
+        String(16), nullable=False, server_default="PAYMENT"
+    )
     amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     paid_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     method: Mapped[str | None] = mapped_column(String(32), nullable=True)
     reference: Mapped[str | None] = mapped_column(String(128), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    idempotency_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    reverses_payment_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("platform_invoice_payment.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    reversal_reason: Mapped[str | None] = mapped_column(String(512), nullable=True)
     created_by_user_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("user.id", ondelete="SET NULL"), nullable=True
     )
@@ -673,7 +749,68 @@ class PlatformInvoicePayment(db.Model):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
-    issued_invoice = relationship("PlatformIssuedInvoice", back_populates="payments")
+    issued_invoice = relationship(
+        "PlatformIssuedInvoice",
+        back_populates="payments",
+        foreign_keys=[issued_invoice_id],
+    )
+    reverses_payment = relationship(
+        "PlatformInvoicePayment",
+        remote_side="PlatformInvoicePayment.id",
+        foreign_keys=[reverses_payment_id],
+    )
+
+
+class PlatformInvoiceDueDateChange(db.Model):
+    """Audit des changements d'échéance d'une facture légale plateforme."""
+
+    __tablename__ = "platform_invoice_due_date_change"
+    __table_args__ = (
+        Index("ix_plat_due_change_invoice", "issued_invoice_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    issued_invoice_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("platform_issued_invoice.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    old_due_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    new_due_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    reason: Mapped[str] = mapped_column(String(512), nullable=False)
+    change_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    admin_user_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("user.id", ondelete="SET NULL"), nullable=True
+    )
+    old_pdf_checksum: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    new_pdf_checksum: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    issued_invoice = relationship(
+        "PlatformIssuedInvoice", back_populates="due_date_changes"
+    )
+
+
+class PlatformInvoiceNumberSequence(db.Model):
+    """Séquence mensuelle atomique LIRIE-YYYY-MM-NNNN."""
+
+    __tablename__ = "platform_invoice_number_sequence"
+
+    billing_year: Mapped[int] = mapped_column(Integer, primary_key=True)
+    billing_month: Mapped[int] = mapped_column(Integer, primary_key=True)
+    next_value: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
 
 
 class BookingBillingOriginAudit(db.Model):
@@ -889,17 +1026,19 @@ class PlatformDunningEvent(db.Model):
             "event_type",
             "policy_version",
             unique=True,
-            postgresql_where=text("invoice_id IS NOT NULL"),
+            postgresql_where=text(
+                "invoice_id IS NOT NULL AND status <> 'cancelled'"
+            ),
         ),
         Index(
             "uq_platform_dunning_event_case_type",
             "dunning_case_id",
             "event_type",
             unique=True,
-            postgresql_where=text("invoice_id IS NULL"),
+            postgresql_where=text("invoice_id IS NULL AND status <> 'cancelled'"),
         ),
         CheckConstraint(
-            "status IN ('pending', 'sent', 'failed', 'applied')",
+            "status IN ('pending', 'sent', 'failed', 'applied', 'cancelled')",
             name="ck_platform_dunning_event_status",
         ),
     )

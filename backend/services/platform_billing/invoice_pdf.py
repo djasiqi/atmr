@@ -583,10 +583,35 @@ def generate_platform_invoice_pdf_bytes(
 def store_platform_invoice_pdf(
     invoice_number: str, pdf_bytes: bytes
 ) -> tuple[str, str]:
-    """Écrit le PDF sur disque et retourne (chemin, checksum sha256)."""
+    """Écrit le PDF (legacy) — préférer publish_platform_invoice_pdf."""
+    return publish_platform_invoice_pdf(invoice_number, pdf_bytes)
+
+
+def publish_platform_invoice_pdf(
+    invoice_number: str,
+    pdf_bytes: bytes,
+    *,
+    previous_path: str | None = None,
+) -> tuple[str, str]:
+    """Publie un PDF sous clé immuable {number}_{checksum}.pdf.
+
+    N'écrase pas l'ancien fichier : le pointeur DB est mis à jour par l'appelant
+    après commit ; l'ancien fichier est supprimé en best-effort.
+    """
     _PDF_ROOT.mkdir(parents=True, exist_ok=True)
-    filename = f"{invoice_number.replace('/', '_')}.pdf"
-    path = _PDF_ROOT / filename
-    path.write_bytes(pdf_bytes)
     checksum = hashlib.sha256(pdf_bytes).hexdigest()
+    safe_number = invoice_number.replace("/", "_").replace("\\", "_")
+    filename = f"{safe_number}_{checksum[:16]}.pdf"
+    path = _PDF_ROOT / filename
+    if not path.exists():
+        tmp = path.with_suffix(".pdf.tmp")
+        tmp.write_bytes(pdf_bytes)
+        tmp.replace(path)
+    if previous_path and previous_path != str(path):
+        try:
+            old = Path(previous_path)
+            if old.is_file() and old.resolve() != path.resolve():
+                old.unlink(missing_ok=True)
+        except OSError:
+            pass
     return str(path), checksum

@@ -16,6 +16,7 @@ from models import Company
 from models.billing_profile import CompanyBillingProfile
 from models.enums import (
     PlatformBillingPeriodStatus,
+    PlatformIssuedDocumentType,
     PlatformIssuedInvoiceStatus,
     PlatformStatementStatus,
 )
@@ -30,7 +31,7 @@ from services.platform_billing.errors import BillingInvariantError
 from services.platform_billing.invoice_pdf import (
     build_platform_qrr_reference,
     generate_platform_invoice_pdf_bytes,
-    store_platform_invoice_pdf,
+    publish_platform_invoice_pdf,
 )
 from services.platform_billing.money import money_round_chf
 from services.platform_billing.readiness import (
@@ -53,24 +54,24 @@ logger = logging.getLogger(__name__)
 
 
 def _next_invoice_number(year: int, month: int) -> str:
-    """Numérotation atomique LIRIE-YYYY-MM-NNNN."""
-    prefix = f"LIRIE-{year:04d}-{month:02d}-"
-    row = db.session.execute(
+    """Numérotation atomique LIRIE-YYYY-MM-NNNN via séquence dédiée."""
+    result = db.session.execute(
         text(
-            "SELECT invoice_number FROM platform_issued_invoice "
-            "WHERE invoice_number LIKE :pfx ORDER BY invoice_number DESC LIMIT 1 "
-            "FOR UPDATE"
+            """
+            INSERT INTO platform_invoice_number_sequence
+                (billing_year, billing_month, next_value)
+            VALUES (:year, :month, 1)
+            ON CONFLICT (billing_year, billing_month)
+            DO UPDATE SET
+                next_value = platform_invoice_number_sequence.next_value + 1,
+                updated_at = NOW()
+            RETURNING next_value
+            """
         ),
-        {"pfx": f"{prefix}%"},
-    ).first()
-    if row and row[0]:
-        try:
-            seq = int(str(row[0]).rsplit("-", 1)[-1]) + 1
-        except ValueError:
-            seq = 1
-    else:
-        seq = 1
-    return f"{prefix}{seq:04d}"
+        {"year": int(year), "month": int(month)},
+    )
+    seq = int(result.scalar_one())
+    return f"LIRIE-{year:04d}-{month:02d}-{seq:04d}"
 
 
 def _debtor_party(
@@ -414,7 +415,11 @@ def _build_and_store_pdf(
         iban=iban,
         payment_terms_days=payment_terms_days,
     )
-    pdf_key, checksum = store_platform_invoice_pdf(inv.invoice_number, pdf_bytes)
+    pdf_key, checksum = publish_platform_invoice_pdf(
+        inv.invoice_number,
+        pdf_bytes,
+        previous_path=inv.pdf_storage_key,
+    )
     inv.pdf_storage_key = pdf_key
     inv.pdf_checksum = checksum
 
@@ -446,9 +451,12 @@ def issue_platform_invoice(
         )
     if existing and existing.status == PlatformIssuedInvoiceStatus.CANCELLED.value:
         # Libère le lien pour une nouvelle émission après correction
+        replaces_id = existing.id
         existing.statement_id = None
         db.session.flush()
         existing = None
+    else:
+        replaces_id = None
 
     period = statement.period
     if period is None:
@@ -551,6 +559,7 @@ def issue_platform_invoice(
     # Colonnes NOT NULL : tout doit être renseigné avant le premier flush/INSERT.
     issued_fields = {
         "invoice_number": invoice_number,
+        "document_type": PlatformIssuedDocumentType.INVOICE.value,
         "status": PlatformIssuedInvoiceStatus.ISSUED.value,
         "currency": "CHF",
         "subtotal_amount": subtotal,
@@ -566,6 +575,10 @@ def issue_platform_invoice(
         "partner_agreement_id": agreement.id if agreement else None,
         "dunning_policy_snapshot": dunning_snap,
         "dunning_automation_authorized_at_issuance": dunning_authorized,
+        "billing_year": int(year),
+        "billing_month": int(month),
+        "period_id": period.id,
+        "replaces_issued_invoice_id": replaces_id,
     }
 
     if existing:
@@ -629,11 +642,20 @@ def issue_platform_invoice(
     return inv
 
 
-def regenerate_issued_invoice_pdf(issued_id: int) -> PlatformIssuedInvoice:
-    """Régénère le PDF d'une facture déjà émise (vrai template + QR)."""
+def regenerate_issued_invoice_pdf(
+    issued_id: int, *, commit: bool = True
+) -> PlatformIssuedInvoice:
+    """Régénère le PDF d'une facture déjà émise (vrai template + QR).
+
+    Interdit après envoi (PDF immuable).
+    """
     inv = db.session.get(PlatformIssuedInvoice, issued_id)
     if not inv:
         raise ValueError("Facture émise introuvable")
+    if inv.sent_at is not None:
+        raise ValueError(
+            "PDF immuable après envoi — prolongation d'échéance sans régénération"
+        )
     statement = (
         db.session.get(PlatformInvoice, inv.statement_id) if inv.statement_id else None
     )
@@ -678,13 +700,16 @@ def regenerate_issued_invoice_pdf(issued_id: int) -> PlatformIssuedInvoice:
         iban=iban,
         payment_terms_days=int(days),
     )
-    db.session.commit()
-    db.session.refresh(inv)
+    if commit:
+        db.session.commit()
+        db.session.refresh(inv)
+    else:
+        db.session.flush()
     return inv
 
 
 def read_issued_invoice_pdf(issued_id: int) -> tuple[bytes, str]:
-    """Lit le PDF stocké ; régénère le vrai template si stub / manquant."""
+    """Lit le PDF stocké ; régénère avant envoi si stub / manquant."""
     inv = db.session.get(PlatformIssuedInvoice, issued_id)
     if not inv:
         raise ValueError("Facture émise introuvable")
@@ -699,8 +724,16 @@ def read_issued_invoice_pdf(issued_id: int) -> tuple[bytes, str]:
         or path.stat().st_size < 15000  # stub / PDF sans page QR
     )
     if needs_regen:
-        inv = regenerate_issued_invoice_pdf(issued_id)
-        path = Path(inv.pdf_storage_key)
-        filename = path.name
+        if inv.sent_at is not None:
+            if path is None or not path.exists():
+                raise ValueError(
+                    "PDF introuvable — document immuable après envoi, "
+                    "régénération interdite"
+                )
+        else:
+            inv = regenerate_issued_invoice_pdf(issued_id)
+            path = Path(inv.pdf_storage_key)
+            filename = path.name
 
+    assert path is not None
     return path.read_bytes(), filename

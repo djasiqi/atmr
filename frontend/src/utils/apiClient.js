@@ -11,18 +11,15 @@ import {
   removeLegacyGlobalTokens,
   setAuthEnv as setSessionAuthEnv,
 } from './webAuthSession';
-import { notifySessionReauthRequired } from './deferredSessionLogout';
 import { requestAuthNavigate } from './authNavigation';
 import {
   beginExplicitLogout,
   endExplicitLogout,
   isExplicitLogoutInProgress,
   isLoginSessionInProgress,
+  markCrossTabLogout,
+  setAuthLogoutReason,
 } from './sessionLogoutState';
-import {
-  isUserRecentlyActive,
-  SESSION_WORKING_LOOKBACK_MS,
-} from './userActivityTracker';
 
 let baseApiRest = process.env.REACT_APP_API_BASE_URL || process.env.REACT_APP_API_URL || '/api/v1';
 
@@ -407,30 +404,27 @@ export const isMissingTokenErrorPayload = (errorData = {}) => {
   );
 };
 
-const requestDeferredSessionLogout = (cfg = {}, { allowRefresh = true } = {}) => {
+/** Échec de refresh réellement terminal (auth morte) — pas réseau / 5xx / 429. */
+const isTerminalRefreshFailure = (error) => {
+  const status = error?.response?.status;
+  if (status == null) {
+    return false;
+  }
+  if (status === 429 || status >= 500) {
+    return false;
+  }
+  return status === 401 || status === 400 || status === 403;
+};
+
+const requestTerminalSessionLogout = (cfg = {}) => {
   if (cfg.skipFreshTokenLogout || cfg.skipAuthRedirect || isLoginSessionInProgress()) {
     return;
   }
-
-  void (async () => {
-    // Un refresh access/refresh ne peut jamais produire un JWT fresh (fresh=True) :
-    // seuls login et /auth/fresh-token (mot de passe) le peuvent. Tenter un refresh
-    // ici est inutile et peut aggraver l'état de session.
-    if (allowRefresh) {
-      try {
-        const { tryRefreshSessionIfNeeded } = await import('./sessionKeepAlive');
-        if (await tryRefreshSessionIfNeeded({ force: true })) {
-          return;
-        }
-      } catch (_) {
-        // ignore
-      }
-    }
-
-    notifySessionReauthRequired({
-      silentUntilIdle: isUserRecentlyActive(SESSION_WORKING_LOOKBACK_MS),
-    });
-  })();
+  void logoutUser({
+    immediate: true,
+    reason: 'session_expired',
+    preserveNext: true,
+  });
 };
 
 /** Renouvelle access + refresh token (cookies httpOnly + miroir localStorage). */
@@ -497,15 +491,13 @@ export async function refreshSessionTokens(targetEnv = getCurrentAuthEnv()) {
   }
 };
 
-const rejectFreshTokenRequired = (error, cfg = {}) => {
-  requestDeferredSessionLogout(cfg, { allowRefresh: false });
-  return Promise.reject({
+const rejectFreshTokenRequired = (error, _cfg = {}) =>
+  Promise.reject({
     ...error,
     code: AUTH_TOKEN_NOT_FRESH,
     isFreshTokenRequired: true,
     message: FRESH_TOKEN_REQUIRED_MESSAGE,
   });
-};
 
 const SESSION_EXPIRED_MESSAGE = 'Session expirée. Veuillez vous reconnecter.';
 
@@ -519,7 +511,11 @@ const requestImmediateSessionLogout = (cfg = {}) => {
   ) {
     return;
   }
-  void logoutUser({ preserveNext: true });
+  void logoutUser({
+    immediate: true,
+    reason: 'session_expired',
+    preserveNext: true,
+  });
 };
 
 const rejectSessionExpired = (error, cfg = {}) => {
@@ -591,29 +587,85 @@ const withTimeout = (promise, timeoutMs, label = 'operation') =>
     }),
   ]);
 
+const finalizeLocalLogout = ({ redirect, preserveNext, reason }) => {
+  csrfToken = null;
+  csrfTokenExpiry = null;
+  cleanLocalSession();
+
+  try {
+    const { disconnectCompanySocket } = require('../services/companySocket');
+    disconnectCompanySocket();
+  } catch (_) {
+    // ignore
+  }
+
+  try {
+    const { clearTenantScopedClientCaches } = require('./clearTenantScopedClientCaches');
+    clearTenantScopedClientCaches();
+  } catch (_) {
+    // Silencieux si modules pas encore chargés
+  }
+
+  markCrossTabLogout();
+  if (reason) {
+    setAuthLogoutReason(reason);
+  }
+
+  window.dispatchEvent(new Event('auth-changed'));
+  endExplicitLogout();
+
+  if (redirect !== false) {
+    const path = `${window.location.pathname}${window.location.search || ''}`;
+    const isAlreadyLogin = window.location.pathname === '/login';
+    const loginPath =
+      preserveNext && !isAlreadyLogin && path && path !== '/'
+        ? `/login?next=${encodeURIComponent(path)}`
+        : '/login';
+    requestAuthNavigate(loginPath, { replace: true });
+  }
+};
+
+const fireAndForgetStopGuards = () => {
+  void import('./deferredSessionLogout')
+    .then(({ stopSessionIdleGuard }) => {
+      stopSessionIdleGuard();
+    })
+    .catch(() => {});
+  void import('./sessionKeepAlive')
+    .then(({ suspendSessionKeepAlive }) => {
+      suspendSessionKeepAlive();
+    })
+    .catch(() => {});
+};
+
 export const logoutUser = async (options = {}) => {
-  const { redirect = true, preserveNext = false } = options;
+  const {
+    redirect = true,
+    preserveNext = false,
+    immediate = false,
+    reason = null,
+  } = options;
+
+  const postLogout = () =>
+    apiClient.post(
+      '/auth/logout',
+      {},
+      { skipAuthRedirect: true, skipFreshTokenLogout: true }
+    );
+
+  if (immediate) {
+    beginExplicitLogout();
+    fireAndForgetStopGuards();
+    void postLogout().catch(() => {});
+    finalizeLocalLogout({ redirect, preserveNext, reason });
+    return;
+  }
 
   await waitForAuthRefreshIdle();
   beginExplicitLogout();
 
   try {
-    try {
-      const { cancelDeferredLogout } = await import('./deferredSessionLogout');
-      cancelDeferredLogout();
-    } catch (_) {
-      // ignore
-    }
-
-    try {
-      const { suspendSessionKeepAlive } = await import('./sessionKeepAlive');
-      suspendSessionKeepAlive();
-    } catch (_) {
-      // ignore
-    }
-
-    const postLogout = () =>
-      apiClient.post('/auth/logout', {}, { skipAuthRedirect: true });
+    fireAndForgetStopGuards();
 
     const serverCleanup = (async () => {
       try {
@@ -622,8 +674,6 @@ export const logoutUser = async (options = {}) => {
         // et reconnecte l'utilisateur immédiatement après le nettoyage local.
         await postLogout();
       } catch (error) {
-        // Ne pas relancer refreshSessionTokens ici : peut bloquer indéfiniment si un refresh
-        // est déjà en cours. Le nettoyage local dans finally reste la source de vérité UI.
         console.warn(
           '⚠️ Déconnexion serveur impossible (session locale nettoyée quand même):',
           error?.response?.data || error?.message || error
@@ -640,37 +690,7 @@ export const logoutUser = async (options = {}) => {
       );
     }
   } finally {
-    csrfToken = null;
-    csrfTokenExpiry = null;
-    cleanLocalSession();
-
-    try {
-      const { disconnectCompanySocket } = await import('../services/companySocket');
-      disconnectCompanySocket();
-    } catch (_) {
-      // ignore
-    }
-
-    // Vider le cache React Query + autocomplete pour éviter les fuites multi-tenant
-    try {
-      const { clearTenantScopedClientCaches } = require('./clearTenantScopedClientCaches');
-      clearTenantScopedClientCaches();
-    } catch (_) {
-      // Silencieux si modules pas encore chargés
-    }
-
-    window.dispatchEvent(new Event('auth-changed'));
-    endExplicitLogout();
-
-    if (redirect !== false) {
-      const path = `${window.location.pathname}${window.location.search || ''}`;
-      const isAlreadyLogin = window.location.pathname === '/login';
-      const loginPath =
-        preserveNext && !isAlreadyLogin && path && path !== '/'
-          ? `/login?next=${encodeURIComponent(path)}`
-          : '/login';
-      requestAuthNavigate(loginPath, { replace: true });
-    }
+    finalizeLocalLogout({ redirect, preserveNext, reason });
   }
 };
 
@@ -702,7 +722,9 @@ apiClient.interceptors.response.use(
       
       // Si déjà en train de refresh une requête /auth/refresh-token, éviter boucle
       if (requestUrl.includes('/auth/refresh-token')) {
-        requestDeferredSessionLogout(cfg);
+        if (isTerminalRefreshFailure(error) || isMissingTokenErrorPayload(error?.response?.data)) {
+          requestTerminalSessionLogout(cfg);
+        }
         return Promise.reject(error);
       }
 
@@ -762,14 +784,14 @@ apiClient.interceptors.response.use(
         const currentEnv = getCurrentAuthEnv();
         const isCrossEnvError = requestEnv && requestEnv !== currentEnv;
         if (!isCrossEnvError) {
-          // missing_token = JWT absent : déconnexion immédiate, pas de toast d'erreur fugace.
+          // missing_token / 401 auth = session morte. Réseau / 5xx / 429 = pas de logout.
           if (
             isMissingTokenErrorPayload(refreshError?.response?.data) ||
-            isMissingTokenErrorPayload(error?.response?.data)
+            isMissingTokenErrorPayload(error?.response?.data) ||
+            isTerminalRefreshFailure(refreshError)
           ) {
             return rejectSessionExpired(refreshError || error, cfg);
           }
-          requestDeferredSessionLogout(cfg);
         }
         return Promise.reject(refreshError);
       } finally {

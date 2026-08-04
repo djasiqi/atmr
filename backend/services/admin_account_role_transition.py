@@ -779,6 +779,15 @@ class AdminAccountRoleTransitionService:
             _resolve_target_company_owner(user, company_id)
 
         elif new_role_s == "ADMIN":
+            # Admin plateforme : détacher toute ownership entreprise
+            # (évite JWT company_id / login espace transport)
+            for owned in _owned_companies(user.id):
+                owned.user_id = None
+                logger.info(
+                    "ADMIN transition: détaché ownership company_id=%s user_id=%s",
+                    owned.id,
+                    user.id,
+                )
             user.institution_id = None
             user.institution_role = None
             drv = _driver_for_user(user)

@@ -98,16 +98,39 @@
   clôture refusée si déjà clôturée ; FE adresse seule ≠ nouvelle version ; versions
   historiques lecture seule ; KPIs Overview séparés.
 
+### PR6 — Paiements / registre factures émises — ✅ Implémenté (PR1–PR3)
+
+- ✅ **Implémenté** : ledger paiements (`entry_type` PAYMENT/REVERSAL, idempotence
+  par facture, `FOR UPDATE`, `amount_paid = SUM`, trop-perçu interdit,
+  contre-écriture unique) — `payments.py` ; migration
+  `e1ae4a70c23a_platform_issued_invoice_registry_ledger.py`.
+- ✅ **Implémenté** : statuts dérivés `payment_state` / `is_overdue` / `ui_status`
+  (priorité OVERDUE > PARTIALLY_PAID) — `issued_status.py`.
+- ✅ **Implémenté** : `document_type` INVOICE|CREDIT_NOTE ; soldes/KPIs avoirs
+  exclus des créances ; avoir total uniquement si `amount_paid == 0` ;
+  numéro `{source}-AV-01` + UNIQUE `credit_of_invoice_id`.
+- ✅ **Implémenté** : séquence atomique `platform_invoice_number_sequence` ;
+  snapshots `billing_year`/`billing_month`/`period_id` à l’émission.
+- ✅ **Implémenté** : échéance auditée (`platform_invoice_due_date_change`) ;
+  PDF immuable après `sent_at` ; publication PDF clé `{number}_{checksum}` ;
+  reconcile dunning (événements `cancelled`, unique partiel) —
+  `due_date.py`, `dunning.py`.
+- ✅ **Implémenté** : API registre `GET/export/detail` issued-invoices,
+  PATCH due-date, reverse payment ; caps
+  `admin.billing.send|payment|due_date|cancel|credit|read` (sans backfill large).
+- ✅ **Implémenté** : UI admin `finance/factures` —
+  `AdminPlatformInvoicesRegistry` + fiche `AdminPlatformInvoiceSheet` ;
+  colonnes enrichies sur Relevés ; nav Finance.
+
 ### PR5 — Émission PDF/QR
 
 - `platform_issued_invoice`
 - `SwissQrBillPayload` + `render_swiss_qr_bill` (0.01)
 - Snapshots débiteur/créancier + checksum
 
-### PR6 — Paiements
+### PR6 legacy note
 
-- `platform_invoice_payment`
-- Envoi / paiement / retard / annulation / note de crédit
+- Cycle envoi / paiement / retard / annulation / note de crédit (durci ci-dessus)
 
 ### PR7 — Accords partenaires Word
 

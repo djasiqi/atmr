@@ -143,13 +143,17 @@ export const setEnvUser = (user, env = getAuthEnv(), { mirrorLegacy = true } = {
 export const getActiveUser = (env = getAuthEnv()) => {
   const scoped = getEnvUser(env);
   if (scoped) return scoped;
-  const rawCompanyUser = safeGet('company_user');
-  if (!rawCompanyUser) return null;
-  try {
-    return JSON.parse(rawCompanyUser);
-  } catch (_) {
-    return null;
+  // Ordre : admin dédié avant company (évite qu'un admin lise company_user)
+  for (const key of ['admin_user', 'company_user', 'driver_user', 'institution_user']) {
+    const raw = safeGet(key);
+    if (!raw) continue;
+    try {
+      return JSON.parse(raw);
+    } catch (_) {
+      // continue
+    }
   }
+  return null;
 };
 
 export const getActivePublicId = (env = getAuthEnv()) => {
@@ -204,9 +208,14 @@ const clearRoleScopedSession = (scope) => {
   }
 };
 
+/**
+ * Scope de stockage par rôle.
+ * IMPORTANT : admin ≠ company — ne jamais partager company_user avec un admin.
+ */
 const resolveRoleScope = (role) => {
   const normalized = normalizeAuthRole(role);
-  if (normalized === 'company' || normalized === 'admin') return 'company';
+  if (normalized === 'admin') return 'admin';
+  if (normalized === 'company') return 'company';
   if (normalized === 'driver') return 'driver';
   if (normalized === 'institution') return 'institution';
   return null;
@@ -221,27 +230,30 @@ export const writeAuthSession = ({
 } = {}) => {
   const normalizedEnv = env === DEMO_ENV_KEY ? DEMO_ENV_KEY : APP_ENV_KEY;
   setAuthEnv(normalizedEnv);
-  const resolvedRole = resolveRoleScope(role ?? user?.role);
-  const userPayload =
-    user && resolvedRole ? { ...user, role: resolvedRole } : user ? { ...user } : null;
+  const canonicalRole = normalizeAuthRole(role ?? user?.role);
+  const resolvedScope = resolveRoleScope(canonicalRole);
+  // Conserver le rôle métier réel (admin reste admin — jamais réécrit en company)
+  const userPayload = user
+    ? { ...user, role: canonicalRole || user.role }
+    : null;
 
   setEnvUser(userPayload, normalizedEnv, { mirrorLegacy: true });
   setEnvPublicId(userPayload?.public_id ?? null, normalizedEnv, { mirrorLegacy: true });
   setEnvAccessToken(accessToken, normalizedEnv, { mirrorLegacy: true });
   setEnvRefreshToken(refreshToken, normalizedEnv, { mirrorLegacy: true });
 
-  ['company', 'driver', 'institution']
-    .filter((scope) => scope !== resolvedRole)
+  ['admin', 'company', 'driver', 'institution']
+    .filter((scope) => scope !== resolvedScope)
     .forEach((scope) => clearRoleScopedSession(scope));
 
-  if (resolvedRole) {
-    setEnvUser(userPayload, resolvedRole, { mirrorLegacy: false });
-    setEnvPublicId(userPayload?.public_id ?? null, resolvedRole, { mirrorLegacy: false });
-    setEnvAccessToken(accessToken, resolvedRole, { mirrorLegacy: false });
-    setEnvRefreshToken(refreshToken, resolvedRole, { mirrorLegacy: false });
+  if (resolvedScope) {
+    setEnvUser(userPayload, resolvedScope, { mirrorLegacy: false });
+    setEnvPublicId(userPayload?.public_id ?? null, resolvedScope, { mirrorLegacy: false });
+    setEnvAccessToken(accessToken, resolvedScope, { mirrorLegacy: false });
+    setEnvRefreshToken(refreshToken, resolvedScope, { mirrorLegacy: false });
   }
 
-  return { env: normalizedEnv, roleScope: resolvedRole, user: userPayload };
+  return { env: normalizedEnv, roleScope: resolvedScope, user: userPayload };
 };
 
 export const setDemoRecommendedJourney = (

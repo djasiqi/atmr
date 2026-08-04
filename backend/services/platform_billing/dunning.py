@@ -17,6 +17,7 @@ from models.enums import (
     PlatformDunningCaseStatus,
     PlatformDunningEventStatus,
     PlatformDunningEventType,
+    PlatformIssuedDocumentType,
     PlatformIssuedInvoiceStatus,
 )
 from models.platform_billing import (
@@ -28,6 +29,10 @@ from models.platform_billing import (
 from services.platform_billing.capabilities import (
     is_dunning_effectively_paused,
     set_billing_access_state,
+)
+from services.platform_billing.issued_status import (
+    balance_due_for_registry,
+    is_credit_note,
 )
 from services.platform_billing.money import money_round_chf
 from services.platform_billing.payments import refresh_overdue_statuses
@@ -42,9 +47,7 @@ _TERMINAL = {
 
 
 def balance_due(inv: PlatformIssuedInvoice) -> Decimal:
-    total = Decimal(str(inv.total_amount or 0))
-    paid = Decimal(str(inv.amount_paid or 0))
-    return money_round_chf(total - paid)
+    return balance_due_for_registry(inv)
 
 
 def disputed_amount_active(
@@ -77,6 +80,10 @@ def is_invoice_overdue_enforceable(
     inv: PlatformIssuedInvoice, *, now: datetime | None = None
 ) -> bool:
     now = now or datetime.now(UTC)
+    if is_credit_note(inv):
+        return False
+    if getattr(inv, "document_type", None) == PlatformIssuedDocumentType.CREDIT_NOTE.value:
+        return False
     if inv.status in _TERMINAL:
         return False
     if inv.sent_at is None or inv.due_at is None:
@@ -85,6 +92,60 @@ def is_invoice_overdue_enforceable(
     if due >= now:
         return False
     return enforceable_balance(inv, now=now) > 0
+
+
+def reconcile_invoice_dunning_after_due_date_change(
+    invoice_id: int, *, now: datetime | None = None
+) -> dict[str, Any]:
+    """Annule les événements PENDING/FAILED non envoyés après prolongation.
+
+    Préserve SENT/APPLIED. Recrée possible grâce à l'index unique excluant cancelled.
+    """
+    now = now or datetime.now(UTC)
+    from services.platform_billing.payments import recompute_invoice_payment_state
+
+    inv = db.session.get(PlatformIssuedInvoice, int(invoice_id))
+    if inv is None:
+        raise ValueError("Facture introuvable")
+    recompute_invoice_payment_state(inv, now=now)
+
+    events = (
+        PlatformDunningEvent.query.filter_by(invoice_id=int(invoice_id))
+        .filter(
+            PlatformDunningEvent.status.in_(
+                (
+                    PlatformDunningEventStatus.PENDING.value,
+                    PlatformDunningEventStatus.FAILED.value,
+                )
+            )
+        )
+        .all()
+    )
+    cancelled = 0
+    for evt in events:
+        evt.status = PlatformDunningEventStatus.CANCELLED.value
+        cancelled += 1
+
+    company = db.session.get(Company, inv.company_id)
+    if company is not None:
+        cases = (
+            PlatformDunningCase.query.filter_by(company_id=inv.company_id)
+            .filter(
+                PlatformDunningCase.status.in_(
+                    (
+                        PlatformDunningCaseStatus.OPEN.value,
+                        PlatformDunningCaseStatus.PARTIAL.value,
+                        PlatformDunningCaseStatus.FULL.value,
+                    )
+                )
+            )
+            .all()
+        )
+        for case in cases:
+            _try_resolve(case, company, now=now)
+
+    db.session.flush()
+    return {"cancelled_events": cancelled, "invoice_status": inv.status}
 
 
 def list_auto_overdue_invoices(
@@ -254,12 +315,20 @@ def process_pending_notification_events(*, limit: int = 50) -> int:
     )
     sent = 0
     for evt in rows:
+        if evt.status == PlatformDunningEventStatus.CANCELLED.value:
+            continue
         case = db.session.get(PlatformDunningCase, evt.dunning_case_id)
         if case is None:
             continue
         company = db.session.get(Company, case.company_id)
         if company is None:
             continue
+        # Garde défensive : ne pas envoyer si la facture n'est plus exécutoire
+        if evt.invoice_id:
+            inv = db.session.get(PlatformIssuedInvoice, evt.invoice_id)
+            if inv is not None and not is_invoice_overdue_enforceable(inv):
+                evt.status = PlatformDunningEventStatus.CANCELLED.value
+                continue
         subject = f"[LIRIE] Recouvrement — {evt.event_type}"
         body = (
             f"Événement {evt.event_type} pour le dossier {case.id}. "

@@ -1129,6 +1129,98 @@ export const payPlatformIssuedInvoice = async (issuedId, payload) => {
 };
 
 /**
+ * Registre des factures LIRIE émises (liste + stats + pagination + filtres).
+ * @param {object} [params] q, status, payment_state, year, month, with_balance,
+ *   overdue_only, with_dunning, document_type, page, per_page, sort_by, sort_order
+ */
+export const fetchPlatformIssuedInvoices = async (params = {}) => {
+  const response = await apiClient.get('/admin/platform-billing/issued-invoices', {
+    headers: _adminAuthHeaders(),
+    params,
+    timeout: 60000,
+  });
+  return response.data;
+};
+
+/** Détail d'une facture LIRIE émise (lignes, paiements, historique échéance, relance). */
+export const fetchPlatformIssuedInvoice = async (issuedId) => {
+  const response = await apiClient.get(
+    `/admin/platform-billing/issued-invoices/${issuedId}`,
+    { headers: _adminAuthHeaders() }
+  );
+  return response.data;
+};
+
+/** Export CSV UTF-8 du registre des factures LIRIE émises (mêmes filtres que la liste). */
+export const exportPlatformIssuedInvoices = async (params = {}) => {
+  const response = await apiClient.get(
+    '/admin/platform-billing/issued-invoices/export',
+    {
+      headers: _adminAuthHeaders(),
+      params,
+      responseType: 'blob',
+      timeout: 120000,
+    }
+  );
+  const disposition = response.headers['content-disposition'];
+  let filename = 'factures-lirie-emises.csv';
+  if (disposition && disposition.includes('filename=')) {
+    const m = disposition.match(/filename="?([^";]+)"?/);
+    if (m && m[1]) filename = m[1];
+  }
+  const url = window.URL.createObjectURL(
+    new Blob([response.data], { type: 'text/csv;charset=utf-8' })
+  );
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+};
+
+/** Modifie l'échéance d'une facture LIRIE émise (motif obligatoire). */
+export const updatePlatformIssuedDueDate = async (issuedId, payload) => {
+  const response = await apiClient.patch(
+    `/admin/platform-billing/issued-invoices/${issuedId}/due-date`,
+    payload,
+    { headers: _adminAuthHeaders() }
+  );
+  return response.data;
+};
+
+/** Contre-passe (annule) un paiement enregistré sur une facture LIRIE émise. */
+export const reversePlatformIssuedPayment = async (issuedId, paymentId, payload = {}) => {
+  const response = await apiClient.post(
+    `/admin/platform-billing/issued-invoices/${issuedId}/payments/${paymentId}/reverse`,
+    payload,
+    { headers: _adminAuthHeaders() }
+  );
+  return response.data;
+};
+
+/** Annule une facture LIRIE émise (uniquement avant envoi, sans paiement). */
+export const cancelPlatformIssuedInvoice = async (issuedId) => {
+  const response = await apiClient.post(
+    `/admin/platform-billing/issued-invoices/${issuedId}/cancel`,
+    {},
+    { headers: _adminAuthHeaders() }
+  );
+  return response.data;
+};
+
+/** Crée une note de crédit (avoir) totale pour une facture LIRIE émise (motif obligatoire). */
+export const createPlatformIssuedCreditNote = async (issuedId, payload) => {
+  const response = await apiClient.post(
+    `/admin/platform-billing/issued-invoices/${issuedId}/credit-note`,
+    payload,
+    { headers: _adminAuthHeaders() }
+  );
+  return response.data;
+};
+
+/**
  * Met à jour l'état d'accès commercial billing d'une entreprise (active|partial|full).
  * Distinct de platform_suspended (gouvernance).
  */

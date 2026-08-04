@@ -51,11 +51,28 @@ class GetCurrentCompanyUseCase:
             GetCurrentCompanyResult avec l'entreprise si trouvée
         """
         try:
-            # ✅ Vérifier d'abord le claim company_id du token JWT
-            # (priorité pour les switchs)
-            # Cela permet aux tokens créés lors d'un switch
-            # (driver <-> company) de fonctionner
-            # même si l'utilisateur dans la DB a un user_id différent
+            user = self.get_current_user_fn()
+            if not user:
+                return GetCurrentCompanyResult(
+                    found=False,
+                    error={"error": "Utilisateur non authentifié"},
+                    status_code=401,
+                )
+
+            # Compte ADMIN plateforme : jamais d'espace entreprise
+            role = getattr(user, "role", None)
+            role_value = getattr(role, "value", role)
+            if str(role_value or "").upper() == "ADMIN":
+                return GetCurrentCompanyResult(
+                    found=False,
+                    error={
+                        "error": "Compte administrateur plateforme — "
+                        "accès entreprise refusé"
+                    },
+                    status_code=403,
+                )
+
+            # Priorité claim JWT company_id (switchs) pour non-admin seulement
             company = None
             try:
                 from flask_jwt_extended import get_jwt
@@ -66,23 +83,9 @@ class GetCurrentCompanyUseCase:
                     if company_id:
                         company = self.company_repo.find_model_by_id(int(company_id))
             except Exception:
-                # Si on ne peut pas récupérer le claim, continuer avec
-                # la recherche par user_id
                 pass
 
-            # Si le claim du token n'a pas fonctionné, utiliser la méthode
-            # classique (recherche par user_id)
             if not company:
-                # 1. Récupérer l'utilisateur authentifié
-                user = self.get_current_user_fn()
-                if not user:
-                    return GetCurrentCompanyResult(
-                        found=False,
-                        error={"error": "Utilisateur non authentifié"},
-                        status_code=401,
-                    )
-
-                # 2. Trouver l'entreprise associée à l'utilisateur
                 company = self.company_repo.find_model_by_user_id(user.id)
 
             if not company:

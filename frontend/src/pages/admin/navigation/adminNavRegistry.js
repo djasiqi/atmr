@@ -43,6 +43,7 @@ export const ADMIN_WORKSPACES = [
     children: [
       { id: 'finance-overview', label: 'Vue d’ensemble', path: 'finance', end: true },
       { id: 'releves', label: 'Relevés', path: 'finance/releves' },
+      { id: 'factures', label: 'Factures émises', path: 'finance/factures' },
       { id: 'config', label: 'Entreprises', path: 'finance/config' },
     ],
   },

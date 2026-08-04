@@ -630,6 +630,28 @@ class PlatformDunningEventStatus(str, PyEnum):
     SENT = "sent"
     FAILED = "failed"
     APPLIED = "applied"
+    CANCELLED = "cancelled"
+
+
+class PlatformIssuedDocumentType(str, PyEnum):
+    """Type de document légal plateforme."""
+
+    INVOICE = "INVOICE"
+    CREDIT_NOTE = "CREDIT_NOTE"
+
+
+class PlatformPaymentEntryType(str, PyEnum):
+    """Type d'écriture du journal de paiements plateforme."""
+
+    PAYMENT = "PAYMENT"
+    REVERSAL = "REVERSAL"
+
+
+class PlatformDueDateChangeType(str, PyEnum):
+    """Type de changement d'échéance facture plateforme."""
+
+    CORRECTION_BEFORE_SEND = "CORRECTION_BEFORE_SEND"
+    EXTENSION_AFTER_SEND = "EXTENSION_AFTER_SEND"
 
 
 class TransferModel(str, PyEnum):

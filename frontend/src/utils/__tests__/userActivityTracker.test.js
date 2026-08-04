@@ -1,39 +1,68 @@
 import {
+  applyRemoteUserActivity,
+  getUserActivityStorageKey,
+  onUserActivity,
   recordUserActivity,
-  getMsSinceLastUserActivity,
-  isUserRecentlyActive,
-  USER_ACTIVE_WINDOW_MS,
+  resetUserActivityTrackerForTests,
   startUserActivityTracking,
 } from '../userActivityTracker';
 
-describe('userActivityTracker', () => {
+jest.mock('../webAuthSession', () => ({
+  getAuthEnv: jest.fn(() => 'app'),
+  getActivePublicId: jest.fn(() => 'user-1'),
+}));
+
+describe('userActivityTracker cross-tab', () => {
   beforeEach(() => {
     jest.useFakeTimers();
-    recordUserActivity();
-    jest.advanceTimersByTime(5000);
+    resetUserActivityTrackerForTests();
+    localStorage.clear();
   });
 
   afterEach(() => {
+    resetUserActivityTrackerForTests();
     jest.useRealTimers();
+    localStorage.clear();
   });
 
-  it('considère l’utilisateur actif juste après une interaction', () => {
+  it('notifie source local sur recordUserActivity', () => {
+    const listener = jest.fn();
+    onUserActivity(listener);
     recordUserActivity();
-    expect(isUserRecentlyActive(USER_ACTIVE_WINDOW_MS)).toBe(true);
-    expect(getMsSinceLastUserActivity()).toBeLessThan(2000);
+    expect(listener).toHaveBeenCalledWith(expect.any(Number), { source: 'local' });
   });
 
-  it('considère l’utilisateur inactif après la fenêtre d’activité', () => {
+  it('écrit une clé scopée env+publicId', () => {
     recordUserActivity();
-    jest.advanceTimersByTime(USER_ACTIVE_WINDOW_MS + 1000);
-    expect(isUserRecentlyActive(USER_ACTIVE_WINDOW_MS)).toBe(false);
+    expect(localStorage.getItem(getUserActivityStorageKey())).toBeTruthy();
   });
 
-  it('démarre le suivi des événements DOM', () => {
-    const addSpy = jest.spyOn(window, 'addEventListener');
+  it('applique une activité distante valide avec source remote', () => {
+    const listener = jest.fn();
+    onUserActivity(listener);
+    jest.advanceTimersByTime(1000);
+    const ok = applyRemoteUserActivity(Date.now());
+    expect(ok).toBe(true);
+    expect(listener).toHaveBeenCalledWith(expect.any(Number), { source: 'remote' });
+  });
+
+  it('ignore timestamp distant invalide ou futur', () => {
+    expect(applyRemoteUserActivity('abc')).toBe(false);
+    expect(applyRemoteUserActivity(Date.now() + 60_000)).toBe(false);
+  });
+
+  it('ignore une clé storage d’un autre public_id', () => {
     const cleanup = startUserActivityTracking();
-    expect(addSpy).toHaveBeenCalledWith('click', expect.any(Function), expect.any(Object));
+    const listener = jest.fn();
+    onUserActivity(listener);
+    window.dispatchEvent(
+      new StorageEvent('storage', {
+        key: 'lirie_last_user_activity:app:other-user',
+        newValue: String(Date.now()),
+        storageArea: localStorage,
+      })
+    );
+    expect(listener).not.toHaveBeenCalled();
     cleanup();
-    addSpy.mockRestore();
   });
 });

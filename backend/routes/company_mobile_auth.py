@@ -326,8 +326,6 @@ def _issue_tokens(
     session_id: str | None = None,
 ) -> Dict[str, Any]:
     scopes = list(DEFAULT_SCOPES)
-    if user.role == UserRole.ADMIN:
-        scopes.append("enterprise.dispatch:admin")
     if extra_scopes:
         for scope in extra_scopes:
             if scope not in scopes:
@@ -438,10 +436,11 @@ def _find_company_user_by_email(email: str) -> Tuple[User | None, Company | None
     from repositories.user_repository import UserRepository
 
     user_repo = UserRepository()
-    user = user_repo.find_by_email_with_role_filter(
-        email, (UserRole.COMPANY, UserRole.ADMIN)
-    )
+    # ADMIN plateforme exclu : ne peut pas se connecter à l'espace entreprise
+    user = user_repo.find_by_email_with_role_filter(email, (UserRole.COMPANY,))
     if not user:
+        return None, None
+    if user.role == UserRole.ADMIN:
         return None, None
     company = user.company
     if not company:
@@ -883,7 +882,7 @@ class EnterpriseMobileRefresh(Resource):
                 user_repo = UserRepository()
 
                 user = user_repo.find_by_public_id(str(public_id))
-                if not user or user.role not in (UserRole.COMPANY, UserRole.ADMIN):
+                if not user or user.role != UserRole.COMPANY:
                     result = _refresh_reject("tenant_access_revoked", 403)
                 else:
                     # Récupérer l'entreprise via le modèle User directement car user est un DTO
@@ -1267,7 +1266,7 @@ class EnterpriseMobileSession(Resource):
                 user = get_current_user_via_use_case()
             except Exception:
                 raise
-            if not user or user.role not in (UserRole.COMPANY, UserRole.ADMIN):
+            if not user or user.role != UserRole.COMPANY:
                 return APIErrorHandler.handle_permission_error(
                     "Accès refusé.",
                     logger_instance=logger,
@@ -1287,19 +1286,8 @@ class EnterpriseMobileSession(Resource):
             else:
                 # user est un UserDTO, récupérer via repository
                 company = company_repo.find_model_by_user_id(user.id)
-            # Pour ADMIN, si pas de relation directe, récupérer la première entreprise
-            if user.role == UserRole.ADMIN and not company:
-                from repositories.company_repository import CompanyRepository
-
-                company_repo = CompanyRepository()
-                company = company_repo.find_first_model()
             # Valider que l'entreprise existe
             if not company:
-                error_msg = (
-                    "Aucune entreprise trouvée."
-                    if user.role == UserRole.ADMIN
-                    else "Entreprise introuvable."
-                )
                 return APIErrorHandler.handle_not_found(
                     "User",
                     None,

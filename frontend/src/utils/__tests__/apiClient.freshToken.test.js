@@ -4,15 +4,12 @@
 
 jest.mock('../deferredSessionLogout', () => ({
   notifySessionReauthRequired: jest.fn(),
+  stopSessionIdleGuard: jest.fn(),
 }));
 
 jest.mock('../sessionKeepAlive', () => ({
-  tryRefreshSessionIfNeeded: jest.fn(() => Promise.resolve(false)),
-}));
-
-jest.mock('../userActivityTracker', () => ({
-  isUserRecentlyActive: jest.fn(() => false),
-  SESSION_WORKING_LOOKBACK_MS: 30 * 60 * 1000,
+  tryRefreshSessionIfNeeded: jest.fn(() => Promise.resolve({ status: 'skipped' })),
+  suspendSessionKeepAlive: jest.fn(),
 }));
 
 const {
@@ -47,7 +44,7 @@ describe('apiClient — séparation Fresh vs Expired', () => {
     localStorage.clear();
   });
 
-  it('401 token non fresh → déclenche une déconnexion différée', async () => {
+  it('401 token non fresh → reject AUTH_TOKEN_NOT_FRESH sans logout idle', async () => {
     tryRefreshSessionIfNeeded.mockClear();
     await expect(
       apiClient.get('/companies/me', {
@@ -60,13 +57,7 @@ describe('apiClient — séparation Fresh vs Expired', () => {
 
     await new Promise((resolve) => setTimeout(resolve, 50));
 
-    // Un refresh ne peut pas produire un JWT fresh : ne pas tenter /auth/refresh-token.
     expect(tryRefreshSessionIfNeeded).not.toHaveBeenCalled();
-    expect(notifySessionReauthRequired).toHaveBeenCalled();
+    expect(notifySessionReauthRequired).not.toHaveBeenCalled();
   });
 });
-
-/**
- * Échec refresh + inactivité → deferred logout :
- * voir deferredSessionLogout.test.js et sessionKeepAlive.integration.test.js
- */

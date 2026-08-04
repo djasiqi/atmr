@@ -34,9 +34,9 @@ describe('sessionLogoutState', () => {
     beginExplicitLogout();
     suspendSessionKeepAlive();
 
-    const ok = await tryRefreshSessionIfNeeded({ force: true });
+    const result = await tryRefreshSessionIfNeeded({ force: true });
 
-    expect(ok).toBe(false);
+    expect(result).toEqual({ status: 'skipped' });
     expect(refreshSessionTokens).not.toHaveBeenCalled();
   });
 

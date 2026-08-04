@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import {
   createPlatformBillingPeriod,
   createPlatformSupportEntry,
@@ -20,6 +20,7 @@ import {
 } from '../../../services/adminService';
 import AdminActionDialog from '../components/AdminActionDialog';
 import { useAdminCapabilities } from '../../../hooks/useAdminCapabilities';
+import { STATUS_LABELS, statusBadgeClass, fmtDate } from './issuedInvoiceUi';
 import styles from './AdminPlatformBilling.module.css';
 
 const MONTHS_FR = [
@@ -680,6 +681,7 @@ const AdminPlatformBilling = () => {
                 <col className={styles.colCount} />
                 <col className={styles.colState} />
                 <col className={styles.colAmount} />
+                <col className={styles.colInvoice} />
                 <col className={styles.colAction} />
               </colgroup>
               <thead>
@@ -700,13 +702,19 @@ const AdminPlatformBilling = () => {
                     <span className={styles.thMain}>Montant</span>
                     <span className={styles.thSub}>total TTC</span>
                   </th>
+                  <th scope="col" className={styles.colHead}>
+                    <span className={styles.thMain}>Facture LIRIE</span>
+                    <span className={styles.thSub}>n°, échéance, solde</span>
+                  </th>
                   <th scope="col" className={styles.colHeadAction}>
                     <span className={styles.srOnly}>Action</span>
                   </th>
                 </tr>
               </thead>
               <tbody>
-                {invoices.map((inv) => (
+                {invoices.map((inv) => {
+                  const issued = inv.issued_invoice;
+                  return (
                   <tr key={inv.id}>
                     <td className={styles.companyName}>{resolveCompanyName(inv)}</td>
                     <td className={styles.cellCount}>
@@ -731,6 +739,29 @@ const AdminPlatformBilling = () => {
                       </span>
                     </td>
                     <td className={styles.cellAmount}>{fmtMoney(inv.total_amount)}</td>
+                    <td className={styles.cellInvoice}>
+                      {issued ? (
+                        <div className={styles.invoiceCell}>
+                          <span className={styles.invoiceNumberRow}>
+                            <span className={styles.mono}>{issued.invoice_number}</span>
+                            <span
+                              className={`${styles.badge} ${statusBadgeClass(issued.ui_status, styles)}`}
+                            >
+                              {STATUS_LABELS[issued.ui_status] || issued.ui_status}
+                            </span>
+                          </span>
+                          <span className={styles.invoiceMeta}>
+                            Échéance : {fmtDate(issued.due_at)}
+                          </span>
+                          <span className={styles.invoiceMeta}>
+                            Payé : {fmtMoney(issued.amount_paid)} · Solde :{' '}
+                            {fmtMoney(issued.balance_due)}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className={styles.invoiceMeta}>Non émise</span>
+                      )}
+                    </td>
                     <td className={styles.cellAction}>
                       <button
                         type="button"
@@ -739,9 +770,18 @@ const AdminPlatformBilling = () => {
                       >
                         Ouvrir
                       </button>
+                      {issued ? (
+                        <Link
+                          to={`../factures?issued_id=${issued.id}`}
+                          className={styles.rowAction}
+                        >
+                          Voir la facture
+                        </Link>
+                      ) : null}
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -1011,7 +1051,15 @@ const AdminPlatformBilling = () => {
                 {modalInvoice.issued_invoice ? (
                   <p className={styles.subtitle}>
                     Facture <strong>{modalInvoice.issued_invoice.invoice_number}</strong> —{' '}
-                    {modalInvoice.issued_invoice.status}
+                    <span
+                      className={`${styles.badge} ${statusBadgeClass(
+                        modalInvoice.issued_invoice.ui_status,
+                        styles
+                      )}`}
+                    >
+                      {STATUS_LABELS[modalInvoice.issued_invoice.ui_status] ||
+                        modalInvoice.issued_invoice.ui_status}
+                    </span>
                   </p>
                 ) : null}
 

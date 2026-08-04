@@ -67,6 +67,9 @@ const AdminReservations = lazy(() => import('./pages/admin/Reservations/AdminRes
 const AdminBookingDetail = lazy(() => import('./pages/admin/Reservations/AdminBookingDetail'));
 const AdminBillingOverview = lazy(() => import('./pages/admin/Billing/AdminBillingOverview'));
 const AdminPlatformBilling = lazy(() => import('./pages/admin/PlatformBilling/AdminPlatformBilling'));
+const AdminPlatformInvoicesRegistry = lazy(() =>
+  import('./pages/admin/PlatformBilling/registry/AdminPlatformInvoicesRegistry')
+);
 const AdminBillingHub = lazy(() => import('./pages/admin/Billing/AdminBillingHub'));
 const AdminBillingTransportConfig = lazy(() =>
   import('./pages/admin/Billing/AdminBillingTransportConfig')
@@ -613,6 +616,7 @@ const App = () => {
               <Route path="finance" element={<AdminBillingHub />}>
                 <Route index element={<AdminBillingOverview />} />
                 <Route path="releves" element={<AdminPlatformBilling />} />
+                <Route path="factures" element={<AdminPlatformInvoicesRegistry />} />
                 <Route path="config" element={<AdminBillingTransportConfig />} />
               </Route>
 

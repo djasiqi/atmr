@@ -6,6 +6,49 @@
 
 export const EXPLICIT_LOGOUT_SESSION_KEY = 'lirie_explicit_logout';
 
+/** Signal multi-onglets (localStorage) — visible par tous les onglets. */
+export const AUTH_LOGOUT_AT_KEY = 'lirie_auth_logout_at';
+
+/** Raison affichée sur /login (sessionStorage, onglet courant). */
+export const AUTH_LOGOUT_REASON_KEY = 'lirie_auth_logout_reason';
+
+export const markCrossTabLogout = () => {
+  try {
+    localStorage.setItem(AUTH_LOGOUT_AT_KEY, String(Date.now()));
+  } catch (_) {
+    // ignore
+  }
+};
+
+export const clearCrossTabLogoutMarker = () => {
+  try {
+    localStorage.removeItem(AUTH_LOGOUT_AT_KEY);
+  } catch (_) {
+    // ignore
+  }
+};
+
+export const setAuthLogoutReason = (reason) => {
+  if (!reason) return;
+  try {
+    sessionStorage.setItem(AUTH_LOGOUT_REASON_KEY, reason);
+  } catch (_) {
+    // ignore
+  }
+};
+
+export const consumeAuthLogoutReason = () => {
+  try {
+    const reason = sessionStorage.getItem(AUTH_LOGOUT_REASON_KEY);
+    if (reason) {
+      sessionStorage.removeItem(AUTH_LOGOUT_REASON_KEY);
+    }
+    return reason;
+  } catch (_) {
+    return null;
+  }
+};
+
 let explicitLogoutInProgress = false;
 
 export const beginExplicitLogout = () => {

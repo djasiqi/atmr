@@ -5,6 +5,10 @@ import { useSessionBootstrap } from '../contexts/SessionBootstrapContext';
 
 // Clés localStorage : snake_case (nouveau) + fallback camelCase pendant migration.
 const STORAGE_KEYS = {
+  admin: {
+    user: 'admin_user',
+    publicId: 'admin_public_id',
+  },
   company: {
     user: 'company_user',
     publicId: 'company_public_id',
@@ -23,7 +27,9 @@ const STORAGE_KEYS = {
 const getStorageKeys = (allowedRoles) => {
   if (!Array.isArray(allowedRoles) || allowedRoles.length === 0) return STORAGE_KEYS.legacy;
   const roles = allowedRoles.map((r) => String(r).toLowerCase());
-  if (roles.includes('company') || roles.includes('admin')) return STORAGE_KEYS.company;
+  // Admin et entreprise : scopes séparés (un admin ne lit jamais company_user pour l'admin shell)
+  if (roles.includes('admin') && !roles.includes('company')) return STORAGE_KEYS.admin;
+  if (roles.includes('company')) return STORAGE_KEYS.company;
   if (roles.includes('driver')) return STORAGE_KEYS.driver;
   if (roles.includes('institution')) return STORAGE_KEYS.institution;
   return STORAGE_KEYS.legacy;
@@ -33,6 +39,7 @@ const normalizeRole = (rawRole) => {
   const role = String(rawRole || '').trim().toLowerCase();
   if (!role) return '';
   if (role.startsWith('institution')) return 'institution';
+  if (role === 'admin') return 'admin';
   if (role.startsWith('company') || role.startsWith('transport_company')) return 'company';
   return role;
 };
@@ -133,13 +140,67 @@ const ProtectedRoute = ({ allowedRoles, children }) => {
 
   if (Array.isArray(allowedRoles) && allowedRoles.length > 0) {
     const allowed = allowedRoles.map((r) => normalizeRole(r));
-    if (!allowed.includes(role)) {
-      // Race login : bootstrap encore sur l'ancien rôle (ex. admin) alors que
-      // writeAuthSession a déjà posé company_user / app_user corrects.
-      const fallbackCandidates = [storageScopedUser, envUser].filter(Boolean);
-      const matching = fallbackCandidates.find((candidate) =>
-        allowed.includes(normalizeRole(candidate?.role ?? ''))
+    const companyOnlyRoute =
+      allowed.includes('company') && !allowed.includes('admin');
+
+    // Verrouillage : un compte ADMIN plateforme n'accède jamais à l'UI entreprise.
+    if (companyOnlyRoute) {
+      const adminScopedUser = readJsonUser(STORAGE_KEYS.admin.user);
+      // Session admin active (admin_user) → jamais l'espace entreprise
+      if (normalizeRole(adminScopedUser?.role ?? '') === 'admin') {
+        return <Navigate to="/unauthorized" replace />;
+      }
+
+      const adminIdentities = [bootstrapUser, adminScopedUser]
+        .filter(Boolean)
+        .filter((u) => normalizeRole(u?.role ?? '') === 'admin');
+      const companyCandidate = [storageScopedUser, envUser].find(
+        (candidate) => normalizeRole(candidate?.role ?? '') === 'company'
       );
+
+      // Pollution legacy : même public_id stocké en « company » alors que
+      // le compte est admin → bloquer (ne pas confondre avec un vrai switch de compte).
+      if (
+        companyCandidate &&
+        adminIdentities.some(
+          (adminUser) =>
+            adminUser?.public_id &&
+            companyCandidate?.public_id &&
+            String(adminUser.public_id) === String(companyCandidate.public_id)
+        )
+      ) {
+        return <Navigate to="/unauthorized" replace />;
+      }
+
+      const authoritativeRoles = [bootstrapUser, storageScopedUser, envUser]
+        .filter(Boolean)
+        .map((u) => normalizeRole(u?.role ?? ''));
+      const hasAdminIdentity = authoritativeRoles.includes('admin');
+      const hasCompanyIdentity = authoritativeRoles.includes('company');
+      // Session admin pure (pas de session company distincte) → bloquer
+      if (hasAdminIdentity && !hasCompanyIdentity) {
+        return <Navigate to="/unauthorized" replace />;
+      }
+      // Race post-login : bootstrap encore admin, storage company = autre compte
+      if (hasAdminIdentity && hasCompanyIdentity && role === 'admin') {
+        if (companyCandidate) {
+          user = companyCandidate;
+          role = 'company';
+        } else {
+          return <Navigate to="/unauthorized" replace />;
+        }
+      }
+    }
+
+    if (!allowed.includes(role)) {
+      // Race login : bootstrap encore sur l'ancien rôle alors que
+      // writeAuthSession a déjà posé le storage scopé correct.
+      const fallbackCandidates = [storageScopedUser, envUser].filter(Boolean);
+      const matching = fallbackCandidates.find((candidate) => {
+        const candidateRole = normalizeRole(candidate?.role ?? '');
+        if (companyOnlyRoute && candidateRole === 'admin') return false;
+        return allowed.includes(candidateRole);
+      });
       if (matching) {
         user = matching;
         role = normalizeRole(matching.role ?? '');
@@ -147,6 +208,16 @@ const ProtectedRoute = ({ allowedRoles, children }) => {
         return <Navigate to="/unauthorized" replace />;
       }
     }
+  }
+
+  // Double verrou : rôle effectif admin sur route company-only
+  if (
+    Array.isArray(allowedRoles) &&
+    allowedRoles.map((r) => normalizeRole(r)).includes('company') &&
+    !allowedRoles.map((r) => normalizeRole(r)).includes('admin') &&
+    role === 'admin'
+  ) {
+    return <Navigate to="/unauthorized" replace />;
   }
 
   return children;

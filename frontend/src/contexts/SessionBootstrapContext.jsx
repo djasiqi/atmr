@@ -14,6 +14,7 @@ import {
   hasRecentExplicitLogout,
   isExplicitLogoutInProgress,
   isLoginSessionInProgress,
+  AUTH_LOGOUT_AT_KEY,
 } from '../utils/sessionLogoutState';
 
 const SessionBootstrapContext = createContext({
@@ -109,8 +110,36 @@ export function SessionBootstrapProvider({ children }) {
     const onAuthChanged = () => {
       void refreshBootstrap();
     };
+
+    const onStorage = (event) => {
+      if (event.key === AUTH_LOGOUT_AT_KEY) {
+        setUser(null);
+        setStatus('anonymous');
+        void import('../utils/deferredSessionLogout')
+          .then(({ stopSessionIdleGuard }) => {
+            stopSessionIdleGuard();
+          })
+          .catch(() => {});
+        return;
+      }
+      if (
+        event.key === null ||
+        event.key?.endsWith('_user') ||
+        event.key?.endsWith('_access_token') ||
+        event.key === 'user' ||
+        event.key === 'authToken' ||
+        event.key === 'lirie_auth_env'
+      ) {
+        void refreshBootstrap();
+      }
+    };
+
     window.addEventListener('auth-changed', onAuthChanged);
-    return () => window.removeEventListener('auth-changed', onAuthChanged);
+    window.addEventListener('storage', onStorage);
+    return () => {
+      window.removeEventListener('auth-changed', onAuthChanged);
+      window.removeEventListener('storage', onStorage);
+    };
   }, [refreshBootstrap]);
 
   const value = useMemo(

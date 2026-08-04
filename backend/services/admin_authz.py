@@ -43,6 +43,11 @@ CAP_BILLING_READ = "admin.billing.read"
 CAP_BILLING_LOCK = "admin.billing.lock"
 CAP_BILLING_ISSUE = "admin.billing.issue"
 CAP_BILLING_VALIDATE = "admin.billing.validate"
+CAP_BILLING_SEND = "admin.billing.send"
+CAP_BILLING_PAYMENT = "admin.billing.payment"
+CAP_BILLING_DUE_DATE = "admin.billing.due_date"
+CAP_BILLING_CANCEL = "admin.billing.cancel"
+CAP_BILLING_CREDIT = "admin.billing.credit"
 CAP_CONFIGURATION_MANAGE = "admin.configuration.manage"
 CAP_LABS_READ = "admin.labs.read"
 CAP_LABS_EXECUTE = "admin.labs.execute"
@@ -61,6 +66,11 @@ ALL_ADMIN_CAPABILITIES: frozenset[str] = frozenset(
         CAP_BILLING_LOCK,
         CAP_BILLING_ISSUE,
         CAP_BILLING_VALIDATE,
+        CAP_BILLING_SEND,
+        CAP_BILLING_PAYMENT,
+        CAP_BILLING_DUE_DATE,
+        CAP_BILLING_CANCEL,
+        CAP_BILLING_CREDIT,
         CAP_CONFIGURATION_MANAGE,
         CAP_LABS_READ,
         CAP_LABS_EXECUTE,

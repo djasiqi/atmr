@@ -23,8 +23,8 @@ export const fetchClient = async (publicIdOverride = null) => {
 
 /**
  * Change le mot de passe du compte client connecté.
- * Le backend exige un JWT « fresh » : en cas d’échec, l’intercepteur global
- * planifie une déconnexion différée (après inactivité) au lieu d’une modale.
+ * Le backend exige un JWT « fresh » : en cas d’échec, l’intercepteur renvoie
+ * AUTH_TOKEN_NOT_FRESH (sans déconnexion idle) pour que l’UI gère la reconnexion.
  */
 export const changeClientPassword = async (publicId, { oldPassword, newPassword, confirmPassword }) => {
   const pid = String(publicId || '').trim();

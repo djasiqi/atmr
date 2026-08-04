@@ -213,23 +213,27 @@
 }
 
 .colCompany {
-  width: 28%;
+  width: 20%;
 }
 
 .colCount {
-  width: 16%;
+  width: 11%;
 }
 
 .colState {
-  width: 14%;
+  width: 9%;
 }
 
 .colAmount {
-  width: 16%;
+  width: 12%;
+}
+
+.colInvoice {
+  width: 21%;
 }
 
 .colAction {
-  width: 10%;
+  width: 16%;
 }
 
 .colHead {
@@ -303,6 +307,67 @@
 
 .cellAction {
   text-align: right;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.3rem;
+}
+
+.cellInvoice {
+  vertical-align: top;
+}
+
+.invoiceCell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.invoiceNumberRow {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.invoiceMeta {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+
+.badgeIssued {
+  background: rgba(100, 116, 139, 0.12);
+  color: #475569;
+}
+
+.badgeSent {
+  background: rgba(59, 130, 246, 0.12);
+  color: #1d4ed8;
+}
+
+.badgePartiallyPaid {
+  background: rgba(245, 158, 11, 0.15);
+  color: #b45309;
+}
+
+.badgePaid {
+  background: rgba(16, 185, 129, 0.12);
+  color: #047857;
+}
+
+.badgeOverdue {
+  background: rgba(185, 28, 28, 0.12);
+  color: #b91c1c;
+}
+
+.badgeCancelled {
+  background: rgba(100, 116, 139, 0.15);
+  color: #334155;
+}
+
+.badgeCredited {
+  background: rgba(139, 92, 246, 0.12);
+  color: #6d28d9;
 }
 
 .srOnly {
@@ -360,6 +425,7 @@
   padding: 0;
   cursor: pointer;
   white-space: nowrap;
+  text-decoration: none;
 }
 
 .rowAction:hover {

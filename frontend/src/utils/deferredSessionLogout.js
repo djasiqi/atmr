@@ -1,67 +1,94 @@
 /**
- * Déconnexion différée lorsqu'une reconnexion JWT est requise :
- * - utilisateur actif → pas de déconnexion immédiate ;
- * - inactivité → compte à rebours visible → déconnexion + redirection login.
+ * Garde d'inactivité bancaire :
+ * ACTIVE → IDLE_WARNING (préavis 60s) → Rester connecté / Se déconnecter / timeout.
+ * SESSION_INVALID est gérée ailleurs (logout immédiat).
  */
 
 import { toast } from 'sonner';
+import { hasActiveSession } from './webAuthSession';
 import {
-  isUserRecentlyActive,
+  getMsSinceLastUserActivity,
   onUserActivity,
-  USER_ACTIVE_WINDOW_MS,
+  recordUserActivity,
+  SESSION_WORKING_LOOKBACK_MS,
 } from './userActivityTracker';
+
+/** Seuil d'inactivité avant préavis (= lookback keep-alive). */
+export const SESSION_IDLE_TIMEOUT_MS = SESSION_WORKING_LOOKBACK_MS;
+
+/** Durée du compte à rebours avant déconnexion. */
+export const SESSION_IDLE_WARNING_MS = 60 * 1000;
+
+/** @deprecated Utiliser SESSION_IDLE_WARNING_MS */
+export const SESSION_LOGOUT_COUNTDOWN_MS = SESSION_IDLE_WARNING_MS;
 
 export const SESSION_REAUTH_REQUIRED_EVENT = 'session-reauth-required';
 
-/** Durée du compte à rebours avant déconnexion (utilisateur inactif). */
-export const SESSION_LOGOUT_COUNTDOWN_MS = 60 * 1000;
-
-const TOAST_ID = 'deferred-session-logout';
+const IDLE_WARNING_TOAST_ID = 'session-idle-warning';
+const TRANSIENT_TOAST_ID = 'session-idle-transient';
 const POLL_MS = 1000;
 
-/** idle | waiting_activity | counting */
-let phase = 'idle';
+/** STOPPED | ACTIVE | IDLE_WARNING | RENEWING */
+let phase = 'STOPPED';
 let pollTimer = null;
 let countdownTimer = null;
-let countdownEndsAt = null;
+let warningEndsAt = null;
 let unsubscribeActivity = null;
 let initialized = false;
-let pendingSchedule = false;
-let pendingScheduleOptions = {};
 
-const clearTimers = () => {
-  if (pollTimer) {
-    clearInterval(pollTimer);
-    pollTimer = null;
-  }
+const clearCountdownTimer = () => {
   if (countdownTimer) {
     clearInterval(countdownTimer);
     countdownTimer = null;
   }
 };
 
-const dismissToast = () => {
-  toast.dismiss(TOAST_ID);
+const clearPollTimer = () => {
+  if (pollTimer) {
+    clearInterval(pollTimer);
+    pollTimer = null;
+  }
 };
 
-const showWaitingToast = () => {
-  toast.warning(
-    'Votre session nécessite une reconnexion. La déconnexion aura lieu après une période d\'inactivité.',
-    { id: TOAST_ID, duration: Infinity }
-  );
+const dismissIdleToast = () => {
+  toast.dismiss(IDLE_WARNING_TOAST_ID);
 };
 
-const showCountdownToast = (secondsLeft) => {
-  toast.warning(
-    `Session expirée. Déconnexion automatique dans ${secondsLeft} s…`,
-    { id: TOAST_ID, duration: Infinity }
-  );
+const idleWarningMessage = (secondsLeft) =>
+  `Votre session expirera dans ${secondsLeft} secondes en raison de votre inactivité.`;
+
+const showIdleWarningToast = (secondsLeft, { renewing = false } = {}) => {
+  toast.warning(idleWarningMessage(secondsLeft), {
+    id: IDLE_WARNING_TOAST_ID,
+    duration: Infinity,
+    closeButton: false,
+    dismissible: false,
+    action: {
+      label: renewing ? 'Renouvellement…' : 'Rester connecté',
+      onClick: (event) => {
+        event?.preventDefault?.();
+        if (renewing) {
+          return undefined;
+        }
+        return handleStayConnected();
+      },
+    },
+    cancel: {
+      label: 'Se déconnecter',
+      onClick: () => {
+        if (renewing) {
+          return undefined;
+        }
+        return handleUserLogout();
+      },
+    },
+  });
 };
 
-const executeLogout = () => {
-  cancelDeferredLogout();
+const executeLogout = (options) => {
+  stopSessionIdleGuard();
   import('./apiClient')
-    .then(({ logoutUser }) => logoutUser({ preserveNext: true }))
+    .then(({ logoutUser }) => logoutUser(options))
     .catch(() => {
       import('./authNavigation').then(({ requestAuthNavigate }) => {
         requestAuthNavigate('/login', { replace: true });
@@ -69,102 +96,191 @@ const executeLogout = () => {
     });
 };
 
-const startCountdown = () => {
-  if (phase === 'counting') {
-    return;
-  }
-  if (pollTimer) {
-    clearInterval(pollTimer);
-    pollTimer = null;
-  }
-  phase = 'counting';
-  countdownEndsAt = Date.now() + SESSION_LOGOUT_COUNTDOWN_MS;
-
-  const tick = () => {
-    if (isUserRecentlyActive(USER_ACTIVE_WINDOW_MS)) {
-      phase = 'waiting_activity';
-      countdownEndsAt = null;
-      if (countdownTimer) {
-        clearInterval(countdownTimer);
-        countdownTimer = null;
-      }
-      showWaitingToast();
-      return;
-    }
-
-    const remainingMs = (countdownEndsAt || 0) - Date.now();
-    if (remainingMs <= 0) {
-      executeLogout();
-      return;
-    }
-    showCountdownToast(Math.max(1, Math.ceil(remainingMs / 1000)));
-  };
-
-  tick();
-  countdownTimer = setInterval(tick, POLL_MS);
+const handleUserLogout = () => {
+  executeLogout({
+    immediate: true,
+    reason: 'user_logout',
+    preserveNext: false,
+  });
 };
 
+const handleIdleTimeout = () => {
+  executeLogout({
+    immediate: true,
+    reason: 'idle_timeout',
+    preserveNext: true,
+  });
+};
+
+const handleStayConnected = async () => {
+  if (phase !== 'IDLE_WARNING') {
+    return;
+  }
+  phase = 'RENEWING';
+  const remainingMs = (warningEndsAt || 0) - Date.now();
+  showIdleWarningToast(Math.max(1, Math.ceil(remainingMs / 1000)), { renewing: true });
+
+  try {
+    const { tryRefreshSessionIfNeeded } = await import('./sessionKeepAlive');
+    const result = await tryRefreshSessionIfNeeded({ force: true });
+
+    if (result?.status === 'refreshed') {
+      recordUserActivity();
+      resolveIdleWarning();
+      return;
+    }
+
+    if (result?.status === 'terminal_failure') {
+      executeLogout({
+        immediate: true,
+        reason: 'session_expired',
+        preserveNext: true,
+      });
+      return;
+    }
+
+    // transient / skipped
+    if (phase === 'RENEWING') {
+      phase = 'IDLE_WARNING';
+    }
+    toast.error('Impossible de prolonger la session.', {
+      id: TRANSIENT_TOAST_ID,
+      duration: 4000,
+    });
+    const secondsLeft = Math.max(1, Math.ceil(((warningEndsAt || 0) - Date.now()) / 1000));
+    showIdleWarningToast(secondsLeft, { renewing: false });
+  } catch (_) {
+    if (phase === 'RENEWING') {
+      phase = 'IDLE_WARNING';
+    }
+    toast.error('Impossible de prolonger la session.', {
+      id: TRANSIENT_TOAST_ID,
+      duration: 4000,
+    });
+    const secondsLeft = Math.max(1, Math.ceil(((warningEndsAt || 0) - Date.now()) / 1000));
+    showIdleWarningToast(secondsLeft, { renewing: false });
+  }
+};
+
+const tickWarning = () => {
+  if (phase !== 'IDLE_WARNING' && phase !== 'RENEWING') {
+    return;
+  }
+  const remainingMs = (warningEndsAt || 0) - Date.now();
+  if (remainingMs <= 0) {
+    handleIdleTimeout();
+    return;
+  }
+  if (phase === 'IDLE_WARNING') {
+    showIdleWarningToast(Math.max(1, Math.ceil(remainingMs / 1000)), { renewing: false });
+  }
+};
+
+const enterIdleWarning = () => {
+  if (phase === 'IDLE_WARNING' || phase === 'RENEWING') {
+    return;
+  }
+  phase = 'IDLE_WARNING';
+  warningEndsAt = Date.now() + SESSION_IDLE_WARNING_MS;
+  tickWarning();
+  clearCountdownTimer();
+  countdownTimer = setInterval(tickWarning, POLL_MS);
+};
+
+export const resolveIdleWarning = () => {
+  if (phase !== 'IDLE_WARNING' && phase !== 'RENEWING') {
+    return;
+  }
+  clearCountdownTimer();
+  warningEndsAt = null;
+  dismissIdleToast();
+  toast.dismiss(TRANSIENT_TOAST_ID);
+  if (phase !== 'STOPPED') {
+    phase = 'ACTIVE';
+  }
+};
+
+export const isSessionIdleWarningActive = () =>
+  phase === 'IDLE_WARNING' || phase === 'RENEWING';
+
 const ensurePollLoop = () => {
-  if (pollTimer) {
+  if (pollTimer || phase === 'STOPPED') {
     return;
   }
   pollTimer = setInterval(() => {
-    if (phase === 'idle') {
+    if (phase !== 'ACTIVE') {
       return;
     }
-    if (phase === 'waiting_activity' && !isUserRecentlyActive(USER_ACTIVE_WINDOW_MS)) {
-      startCountdown();
+    if (getMsSinceLastUserActivity() >= SESSION_IDLE_TIMEOUT_MS) {
+      enterIdleWarning();
     }
   }, POLL_MS);
 };
 
-export const scheduleDeferredLogout = ({ silentUntilIdle = false } = {}) => {
-  if (phase !== 'idle') {
+export const startSessionIdleGuard = () => {
+  if (typeof window === 'undefined') {
     return;
   }
-
-  phase = 'waiting_activity';
-  if (!silentUntilIdle) {
-    showWaitingToast();
+  if (phase === 'STOPPED') {
+    phase = 'ACTIVE';
+  } else if (phase === 'ACTIVE' || phase === 'IDLE_WARNING' || phase === 'RENEWING') {
+    // déjà en cours
+  } else {
+    phase = 'ACTIVE';
   }
 
-  unsubscribeActivity = onUserActivity(() => {
-    if (phase === 'counting') {
-      phase = 'waiting_activity';
-      countdownEndsAt = null;
-      if (countdownTimer) {
-        clearInterval(countdownTimer);
-        countdownTimer = null;
+  if (!unsubscribeActivity) {
+    unsubscribeActivity = onUserActivity((_ts, meta = {}) => {
+      if (meta.source === 'remote' && (phase === 'IDLE_WARNING' || phase === 'RENEWING')) {
+        resolveIdleWarning();
       }
-      showWaitingToast();
-      ensurePollLoop();
-    }
-  });
+    });
+  }
 
   ensurePollLoop();
 
-  if (!isUserRecentlyActive(USER_ACTIVE_WINDOW_MS)) {
-    startCountdown();
+  if (phase === 'ACTIVE' && getMsSinceLastUserActivity() >= SESSION_IDLE_TIMEOUT_MS) {
+    enterIdleWarning();
   }
 };
 
-export const cancelDeferredLogout = () => {
-  phase = 'idle';
-  countdownEndsAt = null;
-  clearTimers();
-  dismissToast();
+export const stopSessionIdleGuard = () => {
+  phase = 'STOPPED';
+  warningEndsAt = null;
+  clearCountdownTimer();
+  clearPollTimer();
+  dismissIdleToast();
+  toast.dismiss(TRANSIENT_TOAST_ID);
   if (unsubscribeActivity) {
     unsubscribeActivity();
     unsubscribeActivity = null;
   }
 };
 
+/** Alias déprécié : ne stoppe plus la garde, ferme seulement le préavis. */
+export const cancelDeferredLogout = () => {
+  resolveIdleWarning();
+};
+
+const syncGuardWithAuth = () => {
+  if (hasActiveSession()) {
+    recordUserActivity();
+    startSessionIdleGuard();
+  } else {
+    stopSessionIdleGuard();
+  }
+};
+
+/** @deprecated Plus de déconnexion différée post-401 ; no-op. */
+export const scheduleDeferredLogout = () => {};
+
+/** @deprecated Plus de déconnexion différée post-401 ; no-op. */
+export const notifySessionReauthRequired = () => {};
+
 /** Réinitialise l'état interne (tests uniquement). */
 export const resetDeferredSessionLogoutForTests = () => {
-  cancelDeferredLogout();
+  stopSessionIdleGuard();
   initialized = false;
-  pendingSchedule = false;
-  pendingScheduleOptions = {};
 };
 
 export const initDeferredSessionLogout = () => {
@@ -173,36 +289,15 @@ export const initDeferredSessionLogout = () => {
   }
   initialized = true;
 
-  const onReauthRequired = (event) => {
-    scheduleDeferredLogout(event?.detail || {});
-  };
-  const onAuthChanged = () => cancelDeferredLogout();
-
-  window.addEventListener(SESSION_REAUTH_REQUIRED_EVENT, onReauthRequired);
+  const onAuthChanged = () => syncGuardWithAuth();
   window.addEventListener('auth-changed', onAuthChanged);
 
-  if (pendingSchedule) {
-    pendingSchedule = false;
-    scheduleDeferredLogout(pendingScheduleOptions);
-    pendingScheduleOptions = {};
-  }
+  // Reload : session déjà présente sans nouvel auth-changed.
+  syncGuardWithAuth();
 
   return () => {
     initialized = false;
-    window.removeEventListener(SESSION_REAUTH_REQUIRED_EVENT, onReauthRequired);
     window.removeEventListener('auth-changed', onAuthChanged);
-    cancelDeferredLogout();
+    stopSessionIdleGuard();
   };
-};
-
-export const notifySessionReauthRequired = (options = {}) => {
-  if (typeof window === 'undefined') {
-    return;
-  }
-  if (!initialized) {
-    pendingSchedule = true;
-    pendingScheduleOptions = options;
-    return;
-  }
-  scheduleDeferredLogout(options);
 };

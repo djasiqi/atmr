@@ -4,7 +4,7 @@
  */
 
 import { refreshSessionTokens } from './apiClient';
-import { cancelDeferredLogout } from './deferredSessionLogout';
+import { isSessionIdleWarningActive } from './deferredSessionLogout';
 import { isExplicitLogoutInProgress, isLoginSessionInProgress } from './sessionLogoutState';
 import { hasActiveSession } from './webAuthSession';
 import {
@@ -17,14 +17,18 @@ import {
 export const SESSION_KEEPALIVE_INTERVAL_MS = 45 * 60 * 1000;
 
 /**
- * Écart minimum entre deux refresh non forcés.
+ * Écart minimum entre deux refresh réussis non forcés.
  * Doit rester proche de l'intervalle keep-alive : un refresh trop tôt après
  * login remplace le JWT « fresh » (fresh=True) par un access token non-fresh,
  * ce qui casse les actions protégées (ex. PUT /companies/me).
  */
 export const MIN_REFRESH_GAP_MS = SESSION_KEEPALIVE_INTERVAL_MS;
 
-let lastRefreshAttemptAt = 0;
+/** Backoff après un échec transitoire (réseau / 5xx / 429). */
+export const REFRESH_FAILURE_BACKOFF_MS = 30 * 1000;
+
+let lastRefreshSuccessAt = 0;
+let lastRefreshFailureAt = 0;
 let intervalId = null;
 let activityUnsub = null;
 let keepAliveStarted = false;
@@ -36,7 +40,8 @@ export function suspendSessionKeepAlive() {
 
 /** Marque la session comme venant d'être établie / renouvelée (évite un refresh immédiat). */
 export function noteAuthTokensRenewed() {
-  lastRefreshAttemptAt = Date.now();
+  lastRefreshSuccessAt = Date.now();
+  lastRefreshFailureAt = 0;
 }
 
 export function resumeSessionKeepAlive() {
@@ -45,36 +50,68 @@ export function resumeSessionKeepAlive() {
   noteAuthTokensRenewed();
 }
 
+/**
+ * Classe une erreur de refresh : terminale (auth morte) vs transitoire (réseau / surcharge).
+ * @returns {'terminal_failure' | 'transient_failure'}
+ */
+export function classifyRefreshFailure(error) {
+  const status = error?.response?.status;
+  if (status == null && (error?.code === 'ECONNABORTED' || error?.message === 'Network Error' || !error?.response)) {
+    return 'transient_failure';
+  }
+  if (status === 429 || (status != null && status >= 500)) {
+    return 'transient_failure';
+  }
+  if (status === 401 || status === 400 || status === 403) {
+    return 'terminal_failure';
+  }
+  // Pas de réponse HTTP typique → transitoire
+  if (status == null) {
+    return 'transient_failure';
+  }
+  return 'terminal_failure';
+}
+
+/**
+ * @returns {Promise<{ status: 'refreshed' | 'terminal_failure' | 'transient_failure' | 'skipped', error?: unknown }>}
+ */
 export async function tryRefreshSessionIfNeeded({ force = false } = {}) {
   if (
     keepAliveSuspended ||
     isExplicitLogoutInProgress() ||
     isLoginSessionInProgress()
   ) {
-    return false;
+    return { status: 'skipped' };
   }
   if (!hasActiveSession()) {
-    return false;
+    return { status: 'skipped' };
+  }
+  if (!force && isSessionIdleWarningActive()) {
+    return { status: 'skipped' };
   }
   if (!force && !isUserRecentlyActive(SESSION_WORKING_LOOKBACK_MS)) {
-    return false;
+    return { status: 'skipped' };
   }
 
   const now = Date.now();
-  if (!force && now - lastRefreshAttemptAt < MIN_REFRESH_GAP_MS) {
-    return false;
+  if (!force && now - lastRefreshSuccessAt < MIN_REFRESH_GAP_MS) {
+    return { status: 'skipped' };
+  }
+  if (!force && lastRefreshFailureAt > 0 && now - lastRefreshFailureAt < REFRESH_FAILURE_BACKOFF_MS) {
+    return { status: 'skipped' };
   }
 
-  lastRefreshAttemptAt = now;
   try {
     await refreshSessionTokens();
     if (isExplicitLogoutInProgress()) {
-      return false;
+      return { status: 'skipped' };
     }
-    cancelDeferredLogout();
-    return true;
-  } catch {
-    return false;
+    noteAuthTokensRenewed();
+    return { status: 'refreshed' };
+  } catch (error) {
+    const kind = classifyRefreshFailure(error);
+    lastRefreshFailureAt = Date.now();
+    return { status: kind, error };
   }
 }
 
@@ -118,5 +155,6 @@ export function resetSessionKeepAliveForTests() {
   }
   keepAliveStarted = false;
   keepAliveSuspended = false;
-  lastRefreshAttemptAt = 0;
+  lastRefreshSuccessAt = 0;
+  lastRefreshFailureAt = 0;
 }

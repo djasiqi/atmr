@@ -107,6 +107,70 @@ describe('ProtectedRoute onboarding', () => {
     expect(screen.queryByText('Unauthorized page')).not.toBeInTheDocument();
   });
 
+  it('bloque un admin pollué (même public_id en company_user)', () => {
+    bootstrapState.user = { public_id: 'admin-1', role: 'admin' };
+    localStorage.setItem(
+      'company_user',
+      JSON.stringify({ public_id: 'admin-1', role: 'company' })
+    );
+    localStorage.setItem(
+      'app_user',
+      JSON.stringify({ public_id: 'admin-1', role: 'admin' })
+    );
+
+    render(
+      <MemoryRouter initialEntries={['/dashboard']}>
+        <Routes>
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute allowedRoles={['company']}>
+                <div>Dashboard content</div>
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/unauthorized" element={<div>Unauthorized page</div>} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText('Unauthorized page')).toBeInTheDocument();
+  });
+
+  it('bloque les routes company si admin_user est présent', () => {
+    bootstrapState.user = { public_id: 'company-1', role: 'company' };
+    localStorage.setItem(
+      'admin_user',
+      JSON.stringify({ public_id: 'admin-1', role: 'admin' })
+    );
+    localStorage.setItem(
+      'company_user',
+      JSON.stringify({ public_id: 'company-1', role: 'company' })
+    );
+    localStorage.setItem(
+      'app_user',
+      JSON.stringify({ public_id: 'company-1', role: 'company' })
+    );
+
+    render(
+      <MemoryRouter initialEntries={['/dashboard']}>
+        <Routes>
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute allowedRoles={['company']}>
+                <div>Dashboard content</div>
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/unauthorized" element={<div>Unauthorized page</div>} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText('Unauthorized page')).toBeInTheDocument();
+  });
+
   it('redirige unauthorized si ni bootstrap ni storage ne matchent company', () => {
     bootstrapState.user = { public_id: 'admin-1', role: 'admin' };
     localStorage.setItem('company_user', JSON.stringify({ public_id: 'admin-1', role: 'admin' }));

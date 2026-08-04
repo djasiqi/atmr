@@ -34,8 +34,14 @@ from models.platform_billing import (
 )
 from security.ip_whitelist import ip_whitelist_required
 from services.admin_authz import (
+    CAP_BILLING_CANCEL,
+    CAP_BILLING_CREDIT,
+    CAP_BILLING_DUE_DATE,
     CAP_BILLING_ISSUE,
     CAP_BILLING_LOCK,
+    CAP_BILLING_PAYMENT,
+    CAP_BILLING_READ,
+    CAP_BILLING_SEND,
     CAP_BILLING_VALIDATE,
     CAP_CONFIGURATION_MANAGE,
     require_admin_capability,
@@ -78,6 +84,14 @@ from services.platform_billing.payments import (
     mark_sent,
     record_payment,
     refresh_overdue_statuses,
+    reverse_payment,
+)
+from services.platform_billing.due_date import update_issued_invoice_due_date
+from services.platform_billing.issued_registry import (
+    export_issued_invoices_csv,
+    get_issued_invoice_detail,
+    list_issued_invoices,
+    serialize_issued_invoice,
 )
 from services.platform_billing.readiness import build_company_readiness
 from shared.error_handlers import APIErrorHandler
@@ -259,27 +273,7 @@ def _serialize_debtor_address(
 
 
 def _serialize_issued(inv: PlatformIssuedInvoice) -> dict[str, Any]:
-    return {
-        "id": inv.id,
-        "statement_id": inv.statement_id,
-        "company_id": inv.company_id,
-        "invoice_number": inv.invoice_number,
-        "status": inv.status,
-        "currency": inv.currency,
-        "subtotal_amount": decimal_to_str(inv.subtotal_amount),
-        "tax_rate": decimal_to_str(inv.tax_rate, places=4),
-        "tax_amount": decimal_to_str(inv.tax_amount),
-        "total_amount": decimal_to_str(inv.total_amount),
-        "qr_amount": decimal_to_str(inv.qr_amount),
-        "qr_reference": inv.qr_reference,
-        "issued_at": inv.issued_at.isoformat() if inv.issued_at else None,
-        "due_at": inv.due_at.isoformat() if inv.due_at else None,
-        "sent_at": inv.sent_at.isoformat() if inv.sent_at else None,
-        "paid_at": inv.paid_at.isoformat() if inv.paid_at else None,
-        "pdf_storage_key": inv.pdf_storage_key,
-        "pdf_checksum": inv.pdf_checksum,
-        "amount_paid": decimal_to_str(inv.amount_paid),
-    }
+    return serialize_issued_invoice(inv)
 
 
 def register_platform_billing_routes(admin_ns: Namespace) -> None:
@@ -1503,6 +1497,136 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                 )
             return {"ok": True, "issued_invoice": _serialize_issued(issued)}, 201
 
+    @admin_ns.route("/platform-billing/issued-invoices")
+    class PlatformIssuedInvoicesList(Resource):
+        @jwt_required()
+        @role_required(UserRole.admin)
+        @require_admin_capability(CAP_BILLING_READ)
+        @ip_whitelist_required()
+        @limiter.limit(_RL_ADMIN_READ)
+        def get(self):
+            args = request.args
+            try:
+                company_id = (
+                    int(args["company_id"]) if args.get("company_id") else None
+                )
+                year = int(args["year"]) if args.get("year") else None
+                month = int(args["month"]) if args.get("month") else None
+                page = int(args.get("page") or 1)
+                per_page = int(args.get("per_page") or 20)
+            except (TypeError, ValueError):
+                return APIErrorHandler.handle_validation_error(
+                    "Paramètres de pagination/filtre invalides",
+                    logger_instance=logger,
+                )
+            return list_issued_invoices(
+                q=args.get("q"),
+                company_id=company_id,
+                status=args.get("status"),
+                payment_state=args.get("payment_state"),
+                year=year,
+                month=month,
+                with_balance=args.get("with_balance") in ("1", "true", "yes"),
+                overdue_only=args.get("overdue_only") in ("1", "true", "yes"),
+                with_dunning=args.get("with_dunning") in ("1", "true", "yes"),
+                document_type=args.get("document_type"),
+                page=page,
+                per_page=per_page,
+                sort_by=args.get("sort_by") or "issued_at",
+                sort_order=args.get("sort_order") or "desc",
+            ), 200
+
+    @admin_ns.route("/platform-billing/issued-invoices/export")
+    class PlatformIssuedInvoicesExport(Resource):
+        @jwt_required()
+        @role_required(UserRole.admin)
+        @require_admin_capability(CAP_BILLING_READ)
+        @ip_whitelist_required()
+        @limiter.limit(_RL_ADMIN_READ)
+        def get(self):
+            args = request.args
+            try:
+                company_id = (
+                    int(args["company_id"]) if args.get("company_id") else None
+                )
+                year = int(args["year"]) if args.get("year") else None
+                month = int(args["month"]) if args.get("month") else None
+            except (TypeError, ValueError):
+                return APIErrorHandler.handle_validation_error(
+                    "Paramètres de filtre invalides",
+                    logger_instance=logger,
+                )
+            csv_text, filename = export_issued_invoices_csv(
+                q=args.get("q"),
+                company_id=company_id,
+                status=args.get("status"),
+                payment_state=args.get("payment_state"),
+                year=year,
+                month=month,
+                with_balance=args.get("with_balance") in ("1", "true", "yes"),
+                overdue_only=args.get("overdue_only") in ("1", "true", "yes"),
+                with_dunning=args.get("with_dunning") in ("1", "true", "yes"),
+                document_type=args.get("document_type"),
+                sort_by=args.get("sort_by") or "issued_at",
+                sort_order=args.get("sort_order") or "desc",
+            )
+            return Response(
+                csv_text,
+                mimetype="text/csv; charset=utf-8",
+                headers={
+                    "Content-Disposition": f'attachment; filename="{filename}"',
+                },
+            )
+
+    @admin_ns.route("/platform-billing/issued-invoices/<int:issued_id>")
+    class PlatformIssuedInvoiceDetail(Resource):
+        @jwt_required()
+        @role_required(UserRole.admin)
+        @require_admin_capability(CAP_BILLING_READ)
+        @ip_whitelist_required()
+        @limiter.limit(_RL_ADMIN_READ)
+        def get(self, issued_id: int):
+            try:
+                return get_issued_invoice_detail(issued_id), 200
+            except ValueError as e:
+                return APIErrorHandler.handle_validation_error(
+                    str(e), logger_instance=logger
+                )
+
+    @admin_ns.route(
+        "/platform-billing/issued-invoices/<int:issued_id>/due-date"
+    )
+    class PlatformIssuedDueDate(Resource):
+        @jwt_required()
+        @role_required(UserRole.admin)
+        @require_admin_capability(CAP_BILLING_DUE_DATE)
+        @ip_whitelist_required()
+        @limiter.limit(_RL_ADMIN_WRITE)
+        def patch(self, issued_id: int):
+            data = request.get_json(silent=True) or {}
+            reason = (data.get("reason") or "").strip()
+            due_raw = data.get("due_at")
+            if not due_raw:
+                return APIErrorHandler.handle_validation_error(
+                    "due_at est requis",
+                    logger_instance=logger,
+                )
+            try:
+                new_due = datetime.fromisoformat(
+                    str(due_raw).replace("Z", "+00:00")
+                )
+                inv = update_issued_invoice_due_date(
+                    issued_id,
+                    new_due_at=new_due,
+                    reason=reason,
+                    admin_user_id=_admin_user_id_from_jwt(),
+                )
+            except ValueError as e:
+                return APIErrorHandler.handle_validation_error(
+                    str(e), logger_instance=logger
+                )
+            return {"ok": True, "issued_invoice": _serialize_issued(inv)}, 200
+
     @admin_ns.route(
         "/platform-billing/issued-invoices/<int:issued_id>/pdf"
     )
@@ -1554,6 +1678,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
     class PlatformIssuedSend(Resource):
         @jwt_required()
         @role_required(UserRole.admin)
+        @require_admin_capability(CAP_BILLING_SEND)
         @ip_whitelist_required()
         def post(self, issued_id: int):
             try:
@@ -1570,6 +1695,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
     class PlatformIssuedPayments(Resource):
         @jwt_required()
         @role_required(UserRole.admin)
+        @require_admin_capability(CAP_BILLING_PAYMENT)
         @ip_whitelist_required()
         def post(self, issued_id: int):
             data = request.get_json(silent=True) or {}
@@ -1595,6 +1721,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                     reference=data.get("reference"),
                     notes=data.get("notes"),
                     created_by_user_id=user_id,
+                    idempotency_key=data.get("idempotency_key"),
                 )
             except ValueError as e:
                 return APIErrorHandler.handle_validation_error(
@@ -1603,11 +1730,36 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
             return {"ok": True, "issued_invoice": _serialize_issued(inv)}, 201
 
     @admin_ns.route(
+        "/platform-billing/issued-invoices/<int:issued_id>/payments/"
+        "<int:payment_id>/reverse"
+    )
+    class PlatformIssuedPaymentReverse(Resource):
+        @jwt_required()
+        @role_required(UserRole.admin)
+        @require_admin_capability(CAP_BILLING_PAYMENT)
+        @ip_whitelist_required()
+        def post(self, issued_id: int, payment_id: int):
+            data = request.get_json(silent=True) or {}
+            try:
+                inv = reverse_payment(
+                    issued_id,
+                    payment_id,
+                    reason=str(data.get("reason") or ""),
+                    created_by_user_id=_admin_user_id_from_jwt(),
+                )
+            except ValueError as e:
+                return APIErrorHandler.handle_validation_error(
+                    str(e), logger_instance=logger
+                )
+            return {"ok": True, "issued_invoice": _serialize_issued(inv)}, 200
+
+    @admin_ns.route(
         "/platform-billing/issued-invoices/<int:issued_id>/cancel"
     )
     class PlatformIssuedCancel(Resource):
         @jwt_required()
         @role_required(UserRole.admin)
+        @require_admin_capability(CAP_BILLING_CANCEL)
         @ip_whitelist_required()
         def post(self, issued_id: int):
             try:
@@ -1624,10 +1776,16 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
     class PlatformIssuedCredit(Resource):
         @jwt_required()
         @role_required(UserRole.admin)
+        @require_admin_capability(CAP_BILLING_CREDIT)
         @ip_whitelist_required()
         def post(self, issued_id: int):
+            data = request.get_json(silent=True) or {}
             try:
-                inv = create_credit_note(issued_id)
+                inv = create_credit_note(
+                    issued_id,
+                    reason=str(data.get("reason") or ""),
+                    created_by_user_id=_admin_user_id_from_jwt(),
+                )
             except ValueError as e:
                 return APIErrorHandler.handle_validation_error(
                     str(e), logger_instance=logger

@@ -5,10 +5,11 @@
 jest.mock('../deferredSessionLogout', () => ({
   notifySessionReauthRequired: jest.fn(),
   cancelDeferredLogout: jest.fn(),
+  stopSessionIdleGuard: jest.fn(),
 }));
 
 jest.mock('../sessionKeepAlive', () => ({
-  tryRefreshSessionIfNeeded: jest.fn(() => Promise.resolve(false)),
+  tryRefreshSessionIfNeeded: jest.fn(() => Promise.resolve({ status: 'skipped' })),
   suspendSessionKeepAlive: jest.fn(),
 }));
 
@@ -32,6 +33,7 @@ const {
 } = require('../apiClient');
 const { notifySessionReauthRequired } = require('../deferredSessionLogout');
 const { requestAuthNavigate } = require('../authNavigation');
+const { AUTH_LOGOUT_AT_KEY, AUTH_LOGOUT_REASON_KEY } = require('../sessionLogoutState');
 
 const missingTokenBody = {
   error: 'missing_token',
@@ -64,6 +66,7 @@ describe('apiClient — missing_token', () => {
       JSON.stringify({ role: 'company', public_id: 'u-test' })
     );
     localStorage.setItem('app_access_token', 'stale-token');
+    sessionStorage.clear();
 
     previousAdapter = apiClient.defaults.adapter;
     apiClient.defaults.adapter = (config) => {
@@ -74,6 +77,19 @@ describe('apiClient — missing_token', () => {
           status: 200,
           statusText: 'OK',
           headers: {},
+          config,
+        });
+      }
+      if (url.includes('/auth/refresh-token')) {
+        return Promise.reject({
+          isAxiosError: true,
+          message: 'Request failed with status code 401',
+          response: {
+            status: 401,
+            data: missingTokenBody,
+            headers: {},
+            config,
+          },
           config,
         });
       }
@@ -94,6 +110,7 @@ describe('apiClient — missing_token', () => {
   afterEach(() => {
     apiClient.defaults.adapter = previousAdapter;
     localStorage.clear();
+    sessionStorage.clear();
   });
 
   it('401 missing_token après échec refresh → session expirée + redirect login', async () => {
@@ -108,5 +125,7 @@ describe('apiClient — missing_token', () => {
     expect(notifySessionReauthRequired).not.toHaveBeenCalled();
     expect(requestAuthNavigate).toHaveBeenCalled();
     expect(localStorage.getItem('app_access_token')).toBeNull();
+    expect(localStorage.getItem(AUTH_LOGOUT_AT_KEY)).toBeTruthy();
+    expect(sessionStorage.getItem(AUTH_LOGOUT_REASON_KEY)).toBe('session_expired');
   });
 });
