@@ -168,17 +168,19 @@
     "uuid": "14.0.0",
     "postcss": "8.5.23",
     "@tootallnate/once": "3.0.1",
-    "fast-uri": ">=3.1.4",
+    "fast-uri": ">=4.1.2",
     "js-yaml": "^4.3.0",
     "shell-quote": ">=1.9.0",
     "ws": "8.21.0",
     "@grpc/grpc-js": ">=1.9.16",
     "tar": ">=7.5.19",
     "form-data": ">=4.0.6",
-    "undici": ">=6.27.0",
+    "undici": ">=7.29.0",
+    "socket.io-parser": "4.2.7",
     "websocket-driver": ">=0.7.5",
     "minimatch": "10.2.5",
-    "brace-expansion": "5.0.8",
+    "brace-expansion": "5.0.9",
     "@isaacs/brace-expansion": ">=5.0.1"
   }
 }
+
