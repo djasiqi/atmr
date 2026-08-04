@@ -104,7 +104,6 @@ const AdminPlatformInvoiceSheet = ({
   capabilities,
 }) => {
   const {
-    canBillingSend,
     canBillingPayment,
     canBillingDueDate,
     canBillingCancel,

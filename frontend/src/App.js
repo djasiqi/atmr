@@ -65,8 +65,6 @@ const AdminOrganizationDetail = lazy(
 );
 const AdminReservations = lazy(() => import('./pages/admin/Reservations/AdminReservations'));
 const AdminBookingDetail = lazy(() => import('./pages/admin/Reservations/AdminBookingDetail'));
-const AdminBillingOverview = lazy(() => import('./pages/admin/Billing/AdminBillingOverview'));
-const AdminPlatformBilling = lazy(() => import('./pages/admin/PlatformBilling/AdminPlatformBilling'));
 const AdminPlatformInvoicesRegistry = lazy(() =>
   import('./pages/admin/PlatformBilling/registry/AdminPlatformInvoicesRegistry')
 );

@@ -72,7 +72,7 @@ const CONTRACT_TABS = [
   { id: 'identity', label: 'Identité' },
   { id: 'products', label: 'Produits' },
   { id: 'dunning', label: 'Recouvrement' },
-  { id: 'document', label: 'Document' },
+  { id: 'document', label: 'Contrat' },
 ];
 
 const agreementStatusClass = (status) => {
@@ -1720,236 +1720,230 @@ const AdminBillingDualProductConfig = () => {
               {modalTab === 'document' ? (
               <div className={styles.tabPanel}>
               {selectedContract ? (
-                <section className={styles.formSection}>
-                  <div className={styles.sectionHead}>
-                    <h3 className={styles.formSectionTitle}>Document Word</h3>
+                <section className={`${styles.formSection} ${styles.docPanel}`}>
+                  <div className={styles.docHeader}>
+                    <div className={styles.docHeaderMain}>
+                      <h3 className={styles.formSectionTitle}>
+                        Contrat partenaire
+                      </h3>
+                      {activeAgreement?.reference ? (
+                        <p className={styles.docReference}>
+                          {activeAgreement.reference}
+                        </p>
+                      ) : (
+                        <p className={styles.formSectionLead}>
+                          Aucun document généré pour cette version
+                        </p>
+                      )}
+                    </div>
                     <span
-                      className={`${styles.docBadge} ${styles[agreementStatusClass(activeAgreement?.status)]}`}
+                      className={`${styles.docStatus} ${styles[agreementStatusClass(activeAgreement?.status)]}`}
                     >
                       {statusLabel(activeAgreement?.status)}
                     </span>
                   </div>
-                  <p className={styles.formSectionLead}>
-                    Contrat commercial n°{selectedContract.id} · applicable{' '}
-                    {fmtPeriod(
-                      selectedContract.effective_from,
-                      selectedContract.effective_to
-                    )}{' '}
-                    · {portfolioLabel(selectedContract)} ·{' '}
-                    {commissionLabel(selectedContract)}
-                    {selectedContract.commercially_frozen
-                      ? ' · conditions gelées (accord envoyé/signé)'
-                      : ''}
-                  </p>
-                  {activeAgreement?.reference ? (
-                    <p className={styles.docReference}>{activeAgreement.reference}</p>
-                  ) : null}
 
-                  <div className={styles.readinessBox}>
-                    <h4 className={styles.formSectionTitle}>
-                      Document qui sera généré (v1.20)
-                    </h4>
-                    <ul className={styles.readinessList}>
-                      <li>
-                        Commission :{' '}
+                  <dl className={styles.docMeta}>
+                    <div>
+                      <dt>Version commerciale</dt>
+                      <dd>n°{selectedContract.id}</dd>
+                    </div>
+                    <div>
+                      <dt>Période</dt>
+                      <dd>
+                        {fmtPeriod(
+                          selectedContract.effective_from,
+                          selectedContract.effective_to
+                        )}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Commission</dt>
+                      <dd>
                         {form.lirie_commission_enabled
                           ? `${commissionPercent || '—'} %`
                           : 'désactivée'}
-                      </li>
-                      <li>
-                        Abonnement : {form.subscription_pricing_mode}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Licence</dt>
+                      <dd>
                         {form.subscription_pricing_mode === 'free'
-                          ? ` · gratuité ${form.free_license_max_months || 60} mois (sans bascule auto)`
-                          : ''}
-                      </li>
-                      <li>
-                        Support :{' '}
+                          ? `Gratuit · ${form.free_license_max_months || 60} mois`
+                          : form.subscription_pricing_mode || '—'}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Support</dt>
+                      <dd>
                         {form.support_enabled
                           ? `${form.support_hourly_rate_default || '—'} CHF/h`
                           : 'désactivé'}
-                      </li>
-                      <li>
-                        Pénalité : commissions éludées + max(2×, CHF 1&apos;000)
-                      </li>
-                      <li>Modèle : lirie-partner-v1.20 · annexes B + C</li>
-                      <li>
-                        Date d&apos;effet : {effectiveMonth || '—'}
-                      </li>
-                    </ul>
-                  </div>
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Effet</dt>
+                      <dd>{effectiveMonth || '—'}</dd>
+                    </div>
+                  </dl>
+                  {selectedContract.commercially_frozen ? (
+                    <p className={styles.docNote}>
+                      Conditions commerciales gelées (accord envoyé ou signé).
+                    </p>
+                  ) : null}
 
-                  <label className={styles.field}>
-                    Conditions particulières (annexe B)
-                    <textarea
-                      rows={3}
-                      value={form.contract_special_conditions || ''}
-                      disabled={formReadOnly}
-                      onChange={(e) =>
-                        setForm((f) => ({
-                          ...f,
-                          contract_special_conditions: e.target.value,
-                        }))
-                      }
-                      placeholder="Texte contractuel optionnel — jamais confondu avec les notes internes"
-                    />
-                  </label>
-
-                  <div className={styles.formGridTwo}>
+                  <div className={styles.docBlock}>
+                    <h4 className={styles.docBlockTitle}>Conditions &amp; pouvoir</h4>
                     <label className={styles.field}>
-                      Mode de signature (RC)
-                      <select
-                        value={rcSignatureMode}
-                        onChange={(e) => setRcSignatureMode(e.target.value)}
-                      >
-                        <option value="individual">Individuelle</option>
-                        <option value="collective">Collective à deux</option>
-                      </select>
-                    </label>
-                    <label className={styles.field}>
-                      Registre consulté
-                      <input
-                        type="text"
-                        value={rcRegisterName}
-                        onChange={(e) => setRcRegisterName(e.target.value)}
+                      Conditions particulières
+                      <textarea
+                        rows={2}
+                        value={form.contract_special_conditions || ''}
+                        disabled={formReadOnly}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            contract_special_conditions: e.target.value,
+                          }))
+                        }
+                        placeholder="Texte optionnel — distinct des notes internes"
                       />
                     </label>
-                  </div>
-                  {rcSignatureMode === 'collective' ? (
                     <div className={styles.formGridTwo}>
                       <label className={styles.field}>
-                        Co-signataire (nom)
-                        <input
-                          type="text"
-                          value={rcCoSignatoryName}
-                          onChange={(e) => setRcCoSignatoryName(e.target.value)}
-                        />
+                        Mode de signature
+                        <select
+                          value={rcSignatureMode}
+                          onChange={(e) => setRcSignatureMode(e.target.value)}
+                        >
+                          <option value="individual">Individuelle</option>
+                          <option value="collective">Collective à deux</option>
+                        </select>
                       </label>
                       <label className={styles.field}>
-                        Co-signataire (fonction)
+                        Registre consulté
                         <input
                           type="text"
-                          value={rcCoSignatoryFunction}
-                          onChange={(e) =>
-                            setRcCoSignatoryFunction(e.target.value)
-                          }
+                          value={rcRegisterName}
+                          onChange={(e) => setRcRegisterName(e.target.value)}
                         />
                       </label>
                     </div>
-                  ) : null}
-                  <label className={styles.checkRow}>
-                    <input
-                      type="checkbox"
-                      checked={rcAttested}
-                      onChange={(e) => setRcAttested(e.target.checked)}
-                    />
-                    Pouvoir de signature vérifié exclusivement au Registre du
-                    commerce
-                  </label>
+                    {rcSignatureMode === 'collective' ? (
+                      <div className={styles.formGridTwo}>
+                        <label className={styles.field}>
+                          Co-signataire (nom)
+                          <input
+                            type="text"
+                            value={rcCoSignatoryName}
+                            onChange={(e) =>
+                              setRcCoSignatoryName(e.target.value)
+                            }
+                          />
+                        </label>
+                        <label className={styles.field}>
+                          Co-signataire (fonction)
+                          <input
+                            type="text"
+                            value={rcCoSignatoryFunction}
+                            onChange={(e) =>
+                              setRcCoSignatoryFunction(e.target.value)
+                            }
+                          />
+                        </label>
+                      </div>
+                    ) : null}
+                    <label className={styles.checkRow}>
+                      <input
+                        type="checkbox"
+                        checked={rcAttested}
+                        onChange={(e) => setRcAttested(e.target.checked)}
+                      />
+                      Pouvoir de signature vérifié au Registre du commerce
+                    </label>
+                  </div>
 
                   {isDirty ? (
-                    <p className={styles.readinessHint}>
-                      Enregistrez d’abord la version commerciale avant de générer le
-                      document.
+                    <p className={styles.docNote}>
+                      Enregistrez d’abord la version commerciale avant de générer
+                      le contrat.
                     </p>
                   ) : null}
-                  <div className={styles.docActions}>
-                    <button
-                      type="button"
-                      className={`${styles.btn} ${styles.btnPrimary}`}
-                      disabled={
-                        docBusy ||
-                        isDirty ||
-                        !selectedContract ||
-                        formReadOnly ||
-                        !rcAttested
-                      }
-                      onClick={onGenerateAgreement}
-                    >
-                      Générer le contrat
-                    </button>
-                    {activeAgreement?.needs_v120_migration ? (
+
+                  <div className={styles.docBlock}>
+                    <h4 className={styles.docBlockTitle}>1. Génération</h4>
+                    <div className={styles.docActions}>
                       <button
                         type="button"
                         className={`${styles.btn} ${styles.btnPrimary}`}
-                        disabled={docBusy || !rcAttested}
-                        onClick={onMigrateAgreementV120}
+                        disabled={
+                          docBusy ||
+                          isDirty ||
+                          !selectedContract ||
+                          formReadOnly ||
+                          !rcAttested
+                        }
+                        onClick={onGenerateAgreement}
                       >
-                        Migrer vers le pack partenaire
+                        Générer
                       </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      className={styles.btn}
-                      disabled={
-                        docBusy ||
-                        !activeAgreement?.has_generated_particular_pdf ||
-                        activeAgreement?.status !== 'draft'
-                      }
-                      onClick={() =>
-                        downloadPartnerAgreementFile(
-                          downloadPartnerAgreementPreviewUrl(activeAgreement.id),
-                          `${(activeAgreement.reference || 'contrat').replaceAll('/', '_')}_BROUILLON.pdf`
-                        )
-                      }
-                    >
-                      Prévisualiser le contrat
-                    </button>
-                    <button
-                      type="button"
-                      className={styles.btn}
-                      disabled={
-                        docBusy ||
-                        !(
-                          activeAgreement?.has_internal_docx ||
-                          activeAgreement?.has_generated_docx
-                        )
-                      }
-                      onClick={() =>
-                        downloadPartnerAgreementFile(
-                          downloadPartnerAgreementDocxUrl(activeAgreement.id),
-                          `${(activeAgreement.reference || 'contrat').replaceAll('/', '_')}_interne.docx`
-                        )
-                      }
-                    >
-                      Télécharger DOCX interne
-                    </button>
-                    <button
-                      type="button"
-                      className={`${styles.btn} ${styles.btnPrimary}`}
-                      disabled={
-                        docBusy ||
-                        !activeAgreement?.particular_pdf_available_for_signature
-                      }
-                      onClick={() =>
-                        downloadPartnerAgreementFile(
-                          downloadPartnerAgreementParticularPdfUrl(
-                            activeAgreement.id
-                          ),
-                          `${(activeAgreement.reference || 'contrat').replaceAll('/', '_')}_contrat-particulier.pdf`
-                        )
-                      }
-                    >
-                      Télécharger le contrat à signer
-                    </button>
-                    <button
-                      type="button"
-                      className={styles.btn}
-                      disabled={
-                        docBusy || !activeAgreement?.has_delivery_package
-                      }
-                      onClick={() =>
-                        downloadPartnerAgreementFile(
-                          downloadPartnerAgreementPackageUrl(activeAgreement.id),
-                          `${(activeAgreement.reference || 'dossier').replaceAll('/', '_')}_Dossier-remise.zip`
-                        )
-                      }
-                    >
-                      Télécharger le dossier complet
-                    </button>
+                      {activeAgreement?.needs_v120_migration ? (
+                        <button
+                          type="button"
+                          className={styles.btn}
+                          disabled={docBusy || !rcAttested}
+                          onClick={onMigrateAgreementV120}
+                        >
+                          Migrer vers le pack
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        className={styles.btn}
+                        disabled={
+                          docBusy ||
+                          !activeAgreement?.has_generated_particular_pdf ||
+                          activeAgreement?.status !== 'draft'
+                        }
+                        onClick={() =>
+                          downloadPartnerAgreementFile(
+                            downloadPartnerAgreementPreviewUrl(
+                              activeAgreement.id
+                            ),
+                            `${(activeAgreement.reference || 'contrat').replaceAll('/', '_')}_BROUILLON.pdf`
+                          )
+                        }
+                      >
+                        Prévisualiser
+                      </button>
+                      <button
+                        type="button"
+                        className={`${styles.btn} ${styles.btnGhost}`}
+                        disabled={
+                          docBusy ||
+                          !(
+                            activeAgreement?.has_internal_docx ||
+                            activeAgreement?.has_generated_docx
+                          )
+                        }
+                        onClick={() =>
+                          downloadPartnerAgreementFile(
+                            downloadPartnerAgreementDocxUrl(activeAgreement.id),
+                            `${(activeAgreement.reference || 'contrat').replaceAll('/', '_')}_interne.docx`
+                          )
+                        }
+                      >
+                        DOCX interne
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className={styles.docBlock}>
+                    <h4 className={styles.docBlockTitle}>2. Remise</h4>
                     {activeAgreement?.status === 'draft' ? (
                       <div className={styles.formGridTwo}>
                         <label className={styles.field}>
-                          Canal de remise
+                          Canal
                           <select
                             value={deliveryChannel}
                             onChange={(e) => setDeliveryChannel(e.target.value)}
@@ -1962,110 +1956,168 @@ const AdminBillingDualProductConfig = () => {
                           </select>
                         </label>
                         <label className={styles.field}>
-                          Destinataire déclaré
+                          Destinataire
                           <input
                             type="text"
                             value={deliveryRecipient}
-                            onChange={(e) => setDeliveryRecipient(e.target.value)}
+                            onChange={(e) =>
+                              setDeliveryRecipient(e.target.value)
+                            }
                             placeholder="ex. contact@partenaire.ch"
                           />
                         </label>
                       </div>
                     ) : null}
-                    <button
-                      type="button"
-                      className={styles.btn}
-                      disabled={
-                        docBusy ||
-                        !activeAgreement ||
-                        activeAgreement.status !== 'draft'
-                      }
-                      onClick={onMarkSent}
-                    >
-                      Marquer envoyé (finaliser le dossier)
-                    </button>
-                    <button
-                      type="button"
-                      className={`${styles.btn} ${styles.btnGhost}`}
-                      disabled={
-                        docBusy ||
-                        !activeAgreement ||
-                        !['draft', 'sent'].includes(activeAgreement.status)
-                      }
-                      onClick={onVoidAgreement}
-                    >
-                      Annuler le document
-                    </button>
+                    <div className={styles.docActions}>
+                      <button
+                        type="button"
+                        className={`${styles.btn} ${styles.btnPrimary}`}
+                        disabled={
+                          docBusy ||
+                          !activeAgreement ||
+                          activeAgreement.status !== 'draft'
+                        }
+                        onClick={onMarkSent}
+                      >
+                        Marquer envoyé
+                      </button>
+                      <button
+                        type="button"
+                        className={styles.btn}
+                        disabled={
+                          docBusy ||
+                          !activeAgreement?.particular_pdf_available_for_signature
+                        }
+                        onClick={() =>
+                          downloadPartnerAgreementFile(
+                            downloadPartnerAgreementParticularPdfUrl(
+                              activeAgreement.id
+                            ),
+                            `${(activeAgreement.reference || 'contrat').replaceAll('/', '_')}_contrat-particulier.pdf`
+                          )
+                        }
+                      >
+                        PDF à signer
+                      </button>
+                      <button
+                        type="button"
+                        className={styles.btn}
+                        disabled={
+                          docBusy || !activeAgreement?.has_delivery_package
+                        }
+                        onClick={() =>
+                          downloadPartnerAgreementFile(
+                            downloadPartnerAgreementPackageUrl(
+                              activeAgreement.id
+                            ),
+                            `${(activeAgreement.reference || 'dossier').replaceAll('/', '_')}_Dossier-remise.zip`
+                          )
+                        }
+                      >
+                        Dossier ZIP
+                      </button>
+                      <button
+                        type="button"
+                        className={`${styles.btn} ${styles.btnGhost}`}
+                        disabled={
+                          docBusy ||
+                          !activeAgreement ||
+                          !['draft', 'sent'].includes(activeAgreement.status)
+                        }
+                        onClick={onVoidAgreement}
+                      >
+                        Annuler
+                      </button>
+                    </div>
+                    {activeAgreement?.status === 'draft' ? (
+                      <p className={styles.docNote}>
+                        Le PDF à signer et le dossier ZIP s’activent après «
+                        Marquer envoyé ».
+                      </p>
+                    ) : null}
                   </div>
-                  {activeAgreement?.status === 'sent' ? (
-                    <>
-                      <div className={styles.formGridTwo}>
-                        <label className={styles.field}>
-                          Date de signature
-                          <input
-                            type="date"
-                            value={signedOn}
-                            onChange={(e) => setSignedOn(e.target.value)}
-                          />
-                        </label>
-                        <label className={styles.field}>
-                          Téléverser le contrat particulier signé
-                          <input
-                            type="file"
-                            accept="application/pdf,.pdf"
-                            disabled={docBusy || !signedOn}
-                            onChange={(e) => {
-                              const file = e.target.files?.[0];
-                              if (file) onUploadSigned(file);
-                              e.target.value = '';
-                            }}
-                          />
-                        </label>
-                      </div>
-                      <label className={styles.field}>
-                        <input
-                          type="checkbox"
-                          checked={signedAdditionalPagesConfirmed}
-                          onChange={(e) =>
-                            setSignedAdditionalPagesConfirmed(e.target.checked)
-                          }
-                        />{' '}
-                        Pages supplémentaires = certificat / journal de signature
-                        électronique
-                      </label>
-                    </>
+
+                  {(activeAgreement?.status === 'sent' ||
+                    activeAgreement?.has_signed_pdf) ? (
+                    <div className={styles.docBlock}>
+                      <h4 className={styles.docBlockTitle}>3. Signature</h4>
+                      {activeAgreement?.status === 'sent' ? (
+                        <>
+                          <div className={styles.formGridTwo}>
+                            <label className={styles.field}>
+                              Date de signature
+                              <input
+                                type="date"
+                                value={signedOn}
+                                onChange={(e) => setSignedOn(e.target.value)}
+                              />
+                            </label>
+                            <label className={styles.field}>
+                              PDF signé
+                              <input
+                                type="file"
+                                accept="application/pdf,.pdf"
+                                disabled={docBusy || !signedOn}
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) onUploadSigned(file);
+                                  e.target.value = '';
+                                }}
+                              />
+                            </label>
+                          </div>
+                          <label className={styles.checkRow}>
+                            <input
+                              type="checkbox"
+                              checked={signedAdditionalPagesConfirmed}
+                              onChange={(e) =>
+                                setSignedAdditionalPagesConfirmed(
+                                  e.target.checked
+                                )
+                              }
+                            />
+                            Pages supplémentaires = certificat / journal de
+                            signature
+                          </label>
+                        </>
+                      ) : null}
+                      {activeAgreement?.has_signed_pdf ? (
+                        <div className={styles.docActions}>
+                          <button
+                            type="button"
+                            className={styles.btn}
+                            onClick={() =>
+                              downloadPartnerAgreementFile(
+                                downloadPartnerAgreementSignedUrl(
+                                  activeAgreement.id
+                                ),
+                                activeAgreement.signed_original_filename ||
+                                  'contrat-signe.pdf'
+                              )
+                            }
+                          >
+                            Télécharger le PDF signé
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
                   ) : null}
-                  {activeAgreement?.has_signed_pdf ? (
-                    <button
-                      type="button"
-                      className={styles.btn}
-                      onClick={() =>
-                        downloadPartnerAgreementFile(
-                          downloadPartnerAgreementSignedUrl(activeAgreement.id),
-                          activeAgreement.signed_original_filename ||
-                            'contrat-signe.pdf'
-                        )
-                      }
-                    >
-                      Télécharger le PDF signé
-                    </button>
-                  ) : null}
-                  <p className={styles.readinessHint}>
-                    Document généré à titre opérationnel — validation juridique externe
-                    recommandée avant signature.
+
+                  <p className={styles.docFootnote}>
+                    Validation juridique externe recommandée avant signature.
                   </p>
                 </section>
               ) : (
-                <p className={styles.readinessHint}>
+                <p className={styles.docNote}>
                   Enregistrez une première version commerciale pour générer le
-                  document.
+                  contrat.
                 </p>
               )}
 
               {contracts.length > 0 ? (
-                <section className={styles.formSection}>
+                <section className={`${styles.formSection} ${styles.docVersions}`}>
                   <h3 className={styles.formSectionTitle}>
-                    Versions ({contracts.length})
+                    Historique commercial
                   </h3>
                   <ul className={styles.versionsList}>
                     {contracts.map((c) => {

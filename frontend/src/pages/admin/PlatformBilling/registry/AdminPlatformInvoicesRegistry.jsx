@@ -167,7 +167,10 @@ const AdminPlatformInvoicesRegistry = () => {
     );
   }, [periods, filters.year, filters.month]);
 
-  const items = dossiersQuery.data?.items || [];
+  const items = useMemo(
+    () => dossiersQuery.data?.items || [],
+    [dossiersQuery.data?.items]
+  );
   const stats = dossiersQuery.data?.stats || {};
   const pagination = dossiersQuery.data?.pagination || {};
 

@@ -55,9 +55,7 @@ const AdminUsers = () => {
   const [search, setSearch] = useState((searchParams.get('search') || '').trim());
   const [debouncedSearch, setDebouncedSearch] = useState(search);
   const [roleFilter, setRoleFilter] = useState(searchParams.get('role') || '');
-  const [companyFilter, setCompanyFilter] = useState(
-    searchParams.get('company_id') || ''
-  );
+  const [companyFilter] = useState(searchParams.get('company_id') || '');
   const [includeSynthetic, setIncludeSynthetic] = useState(
     searchParams.get('include_synthetic') === 'true'
   );

@@ -92,7 +92,7 @@ const ClientsTable = ({
                   }
                 }}
                 aria-label={`Voir les détails de ${displayName}`}
-                aria-selected={isSelected}
+                aria-current={isSelected ? 'true' : undefined}
               >
                 <td>
                   <div className={styles.clientName}>
