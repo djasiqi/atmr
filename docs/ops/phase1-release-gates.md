@@ -13,7 +13,7 @@
 
 ### `deployment-critical` (compose dry-run)
 
-✅ **Implémenté** : le dry-run `docker compose … config` fournit des valeurs factices pour les variables `:?required` (`POSTGRES_PASSWORD`, `REDIS_PASSWORD`, `SECRET_KEY`, `JWT_SECRET_KEY`, `APP_ENCRYPTION_KEY_B64`, `INTERNAL_SERVICE_TOKEN`) afin de valider l'interpolation sans secrets réels.
+✅ **Implémenté** : le dry-run `docker compose … config` injecte des variables d'environnement pour les `:?required` (pas de fichier `.env`). Les `env_file: .env.production` du compose prod sont `required: false` pour que le dry-run CI ne dépende pas d'un fichier absent.
 
 ## Artefacts
 

@@ -179,7 +179,8 @@ services:
     restart: unless-stopped
     # Charger les variables depuis .env.production (créé par le workflow GitHub Actions)
     env_file:
-      - .env.production
+      - path: .env.production
+        required: false
     # Variables d'environnement chargées depuis GitHub Secrets via workflow
     environment:
       # Configuration Flask
@@ -421,7 +422,8 @@ services:
     container_name: atmr-ws-service
     restart: unless-stopped
     env_file:
-      - .env.production
+      - path: .env.production
+        required: false
     environment:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY is required}
@@ -520,7 +522,8 @@ services:
     restart: unless-stopped
     # Charger les variables depuis .env.production (créé par le workflow GitHub Actions)
     env_file:
-      - .env.production
+      - path: .env.production
+        required: false
     command: celery -A celery_app.celery worker --loglevel=info --concurrency=${CELERY_CONCURRENCY:-4} -Q default,dispatch,realtime,notifications,billing,rl,geocoding,dlq
     healthcheck:
       test: ["CMD", "celery", "-A", "celery_app.celery", "inspect", "ping"]
@@ -620,7 +623,8 @@ services:
     # Pas de container_name : requis pour `docker compose up --scale tracking-kafka-consumer=3` (Compose classique, 3 processus / partitions).
     restart: unless-stopped
     env_file:
-      - .env.production
+      - path: .env.production
+        required: false
     command: python -m services.tracking.ingest_consumer
     environment:
       FLASK_ENV: production
@@ -704,7 +708,8 @@ services:
     image: ${BACKEND_IMAGE_REF:-${DOCKER_IMAGE:-docker.io/djasiqi/atmr-backend}:${DOCKER_TAG:-latest}}
     restart: unless-stopped
     env_file:
-      - .env.production
+      - path: .env.production
+        required: false
     command: python -m services.tracking.outbox_publisher
     environment:
       FLASK_ENV: production
@@ -765,7 +770,8 @@ services:
     # Pas de container_name : incompatible avec deploy.replicas > 1 (noms de conteneurs uniques par instance).
     restart: unless-stopped
     env_file:
-      - .env.production
+      - path: .env.production
+        required: false
     command: python -m services.tracking.processed_fanout_consumer
     environment:
       FLASK_ENV: production
@@ -835,7 +841,8 @@ services:
     container_name: atmr-kafka-dlq-consumer
     restart: unless-stopped
     env_file:
-      - .env.production
+      - path: .env.production
+        required: false
     command: python -m services.kafka.dlq_consumer
     environment:
       FLASK_ENV: production
@@ -901,7 +908,8 @@ services:
     restart: unless-stopped
     # Charger les variables depuis .env.production (créé par le workflow GitHub Actions)
     env_file:
-      - .env.production
+      - path: .env.production
+        required: false
     command:
       [
         "celery",
@@ -985,7 +993,8 @@ services:
     restart: unless-stopped
     # Charger les variables depuis .env.production (créé par le workflow GitHub Actions)
     env_file:
-      - .env.production
+      - path: .env.production
+        required: false
     command:
       [
         "celery",

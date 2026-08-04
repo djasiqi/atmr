@@ -139,14 +139,18 @@ jobs:
           shellcheck -x scripts/release/verify_image_digest.sh
       - name: Compose config dry-run
         env:
-          # Valeurs factices CI — valide l'interpolation, pas un déploiement réel
+          # Interpolation uniquement (pas de fichier .env) — secrets réels uniquement au deploy
           DOCKER_IMAGE: docker.io/example/atmr-backend
           DOCKER_TAG: sha-test
+          POSTGRES_USER: atmr
+          POSTGRES_DB: atmr
           POSTGRES_PASSWORD: ci-dummy-postgres
           REDIS_PASSWORD: ci-dummy-redis
+          REDIS_URL: redis://:ci-dummy-redis@redis:6379/0
           SECRET_KEY: ci-dummy-secret-key
           JWT_SECRET_KEY: ci-dummy-jwt-secret
           APP_ENCRYPTION_KEY_B64: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY
+          MASTER_ENCRYPTION_KEY: ci-dummy-master-encryption-key
           INTERNAL_SERVICE_TOKEN: ci-dummy-internal-service-token
         run: |
           BACKEND_IMAGE_REF="docker.io/example/atmr-backend@sha256:$(printf '0%.0s' {1..64})" \
