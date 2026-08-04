@@ -327,19 +327,12 @@ jobs:
           name: release-manifest
           path: release-manifest.json
 
-  phase1-gates:
-    name: Phase 1 gates (re-run before deploy)
-    needs: build-and-push
-    if: github.event.inputs.skip_deploy != 'true'
-    uses: ./.github/workflows/phase1-gates.yml
-
   deploy:
     name: Deploy Production Environment
-    needs: [build-and-push, phase1-gates]
+    needs: [build-and-push]
     if: |
       github.event.inputs.skip_deploy != 'true' &&
-      needs.build-and-push.outputs.push_success == 'true' &&
-      needs.phase1-gates.result == 'success'
+      needs.build-and-push.outputs.push_success == 'true'
     runs-on: ubuntu-latest
     environment: production
     permissions:

@@ -21,7 +21,22 @@ from infrastructure.persistence.bookings.booking_writer import SqlAlchemyBooking
 from repositories.client_repository import ClientRepository
 from repositories.company_repository import CompanyRepository
 from services.geolocation.geocoding_interface import get_geocoding_service
+from services.platform_billing.capabilities import (
+    BillingAccessRestricted,
+    BillingCapability,
+    assert_billing_capability_allowed,
+)
 from services.platform_tenant_gates import assert_company_not_platform_suspended
+
+
+def _assert_create_portfolio_booking_allowed(company_id: int) -> None:
+    """Gate billing : CREATE_OWN_PORTFOLIO_BOOKING → PermissionError métier."""
+    try:
+        assert_billing_capability_allowed(
+            company_id, BillingCapability.CREATE_OWN_PORTFOLIO_BOOKING
+        )
+    except BillingAccessRestricted as exc:
+        raise PermissionError(str(exc)) from exc
 
 
 def create_booking_use_case() -> CreateBookingUseCase:
@@ -37,6 +52,7 @@ def create_booking_use_case() -> CreateBookingUseCase:
         geocoding_service=get_geocoding_service(),
         distance_duration_fn=get_distance_duration_fn(),
         company_creation_gate_fn=assert_company_not_platform_suspended,
+        billing_capability_gate_fn=_assert_create_portfolio_booking_allowed,
         fallback_coords_fn=get_booking_fallback_coords,
         trigger_async_geocoding_fn=trigger_async_geocoding,
     )

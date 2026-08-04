@@ -131,6 +131,8 @@ def _build_uc(
         geocoding_service=geocoding or _FakeGeocoding(),  # type: ignore[arg-type]
         distance_duration_fn=_distance,
         company_creation_gate_fn=gate_fn or (lambda _cid: None),
+        # No-op : ces tests unitaires tournent hors contexte Flask/DB
+        billing_capability_gate_fn=lambda _cid: None,
         fallback_coords_fn=lambda _company: (46.2044, 6.1432),
         trigger_async_geocoding_fn=trigger_async,
     )
@@ -655,6 +657,7 @@ def test_adapter_injects_platform_suspension_gate() -> None:
 
     src = Path(adapter_mod.__file__).read_text(encoding="utf-8")
     assert "company_creation_gate_fn=assert_company_not_platform_suspended" in src
+    assert "billing_capability_gate_fn=_assert_create_portfolio_booking_allowed" in src
     assert adapter_mod.assert_company_not_platform_suspended is (
         assert_company_not_platform_suspended
     )

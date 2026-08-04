@@ -153,6 +153,7 @@ class CreateBookingUseCase:
         ...     geocoding_service=get_geocoding_service(),  # doctest: +SKIP
         ...     distance_duration_fn=get_distance_duration,  # doctest: +SKIP
         ...     company_creation_gate_fn=assert_company_not_platform_suspended,  # doctest: +SKIP
+        ...     billing_capability_gate_fn=lambda _cid: None,  # doctest: +SKIP
         ... )
         >>> booking = uc.execute(
         ...     CreateBookingCommand(user_id=1, client_id=2, data={...})
@@ -168,6 +169,7 @@ class CreateBookingUseCase:
         geocoding_service: GeocodingPort,
         distance_duration_fn: Callable[[str, str], tuple[int, int]],
         company_creation_gate_fn: Callable[[int], None],
+        billing_capability_gate_fn: Callable[[int], None],
         fallback_coords_fn: Callable[[Any | None], tuple[float, float]] | None = None,
         trigger_async_geocoding_fn: Callable[[int, str, str], None] | None = None,
     ) -> None:
@@ -181,6 +183,9 @@ class CreateBookingUseCase:
                 -> (duration_s, distance_m).
             company_creation_gate_fn: Gate fail-closed (ex. suspension plateforme).
                 Obligatoire — aucun défaut no-op.
+            billing_capability_gate_fn: Gate fail-closed accès billing
+                (ex. CREATE_OWN_PORTFOLIO_BOOKING). Obligatoire — injecter un
+                no-op en tests unitaires hors contexte Flask/DB.
             fallback_coords_fn: Fonction fallback (company -> (lat, lon))
                 utilisée quand le géocodage manque.
             trigger_async_geocoding_fn: Hook optionnel pour déclencher
@@ -192,6 +197,7 @@ class CreateBookingUseCase:
         self.geocoding_service = geocoding_service
         self.distance_duration_fn = distance_duration_fn
         self.company_creation_gate_fn = company_creation_gate_fn
+        self.billing_capability_gate_fn = billing_capability_gate_fn
         self.fallback_coords_fn = fallback_coords_fn
         self.trigger_async_geocoding_fn = trigger_async_geocoding_fn
 
@@ -252,18 +258,7 @@ class CreateBookingUseCase:
         company_id = resolve_booking_owner_company_id_for_create(client_dto)
         if company_id is not None and company_id > 0:
             self.company_creation_gate_fn(company_id)
-            from services.platform_billing.capabilities import (
-                BillingAccessRestricted,
-                BillingCapability,
-                assert_billing_capability_allowed,
-            )
-
-            try:
-                assert_billing_capability_allowed(
-                    company_id, BillingCapability.CREATE_OWN_PORTFOLIO_BOOKING
-                )
-            except BillingAccessRestricted as exc:
-                raise PermissionError(str(exc)) from exc
+            self.billing_capability_gate_fn(company_id)
 
         # ✅ Détecter si le client est hospitalisé et utiliser l'adresse de la clinique
         from services.billing.client_stay_resolver import (

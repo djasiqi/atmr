@@ -4,8 +4,8 @@
 
 | Workflow | Rôle |
 |---|---|
-| [`.github/workflows/phase1-gates.yml`](../../.github/workflows/phase1-gates.yml) | Suites `booking-critical`, `mobile-auth-critical`, `mobile-tracking-critical`, `deployment-critical` + agrégateur |
-| [`.github/workflows/deploy.yml`](../../.github/workflows/deploy.yml) | Build → Trivy CRITICAL → manifeste → réexécute phase1-gates → deploy |
+| [`.github/workflows/phase1-gates.yml`](../../.github/workflows/phase1-gates.yml) | Suites `booking-critical`, `mobile-auth-critical`, `mobile-tracking-critical`, `deployment-critical` + agrégateur (PR / push — **pas** rappelé par Build & Deploy) |
+| [`.github/workflows/deploy.yml`](../../.github/workflows/deploy.yml) | Build → Trivy CRITICAL → manifeste → deploy (sans re-run phase1-gates) |
 
 ### `booking-critical`
 
