@@ -243,3 +243,6 @@ backend/.gunicorn/
 **/NUL
 **/nul
 
+# Artefacts CI deploy (env + manifeste) — jamais committer
+deploy-staging/
+

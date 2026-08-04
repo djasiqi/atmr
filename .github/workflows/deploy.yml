@@ -514,8 +514,9 @@ jobs:
         run: |
           set -euo pipefail
           umask 077
-          mkdir -p /tmp/atmr-deploy
-          ENV_FILE=/tmp/atmr-deploy/.env.production
+          # Chemins relatifs au workspace : scp-action (Docker) ne voit pas /tmp du runner
+          mkdir -p deploy-staging
+          ENV_FILE=deploy-staging/.env.production
           {
             echo "APP_ENCRYPTION_KEY_B64=${{ secrets.APP_ENCRYPTION_KEY_B64 }}"
             echo "SECRET_KEY=${{ secrets.SECRET_KEY }}"
@@ -577,7 +578,24 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: release-manifest
-          path: /tmp/atmr-deploy
+          path: deploy-staging
+
+      - name: Verify deploy-staging artifacts
+        run: |
+          set -euo pipefail
+          test -s deploy-staging/.env.production
+          test -s deploy-staging/release-manifest.json
+          ls -la deploy-staging
+
+      - name: Ensure remote release directory
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ env.SSH_HOST }}
+          username: ${{ env.SSH_USER }}
+          key: ${{ env.SSH_KEY }}
+          port: ${{ env.SSH_PORT }}
+          script: |
+            mkdir -p "/srv/atmr/releases/${{ needs.build-and-push.outputs.source_sha }}"
 
       - name: Copy env-file and manifest to server
         uses: appleboy/scp-action@v0.1.7
@@ -586,8 +604,10 @@ jobs:
           username: ${{ env.SSH_USER }}
           key: ${{ env.SSH_KEY }}
           port: ${{ env.SSH_PORT }}
-          source: "/tmp/atmr-deploy/*"
+          # Chemins workspace explicites (pas de glob * : ignore les dotfiles)
+          source: "deploy-staging/.env.production,deploy-staging/release-manifest.json"
           target: "/srv/atmr/releases/${{ needs.build-and-push.outputs.source_sha }}"
+          strip_components: 1
 
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.2.2
