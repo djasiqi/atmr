@@ -1065,7 +1065,11 @@ const DraftInvoiceEditorPanel = ({
 
   if (!open || !initialInvoice) return null;
 
-  const isRide = (t) => String(t || '').toLowerCase() === 'ride';
+  /** Aligné sur periodAssemblyInvoiceSync : transport + livraison matière. */
+  const isRideLike = (t) => {
+    const typ = String(t || '').toLowerCase();
+    return typ === 'ride' || typ === 'material_delivery';
+  };
   const isCustom = (t) => String(t || '').toLowerCase() === 'custom';
   const isRemiseLine = (line) =>
     isCustom(line.type) && line.line_total != null && Number(line.line_total) < 0;
@@ -1095,12 +1099,16 @@ const DraftInvoiceEditorPanel = ({
   const lineCategoryLabel = (line) => {
     const t = String(line?.type || '').toLowerCase();
     if (t === 'ride') return 'Transport';
+    if (t === 'material_delivery') return 'Livraison';
     if (t !== 'custom') return t ? line.type : 'Ligne';
     if (line?.line_meta?.per_line_discount_line === true) return 'Remise par ligne';
     if (line?.line_meta?.manual_discount === true) return 'Déduction fixe';
     if (line.line_total != null && Number(line.line_total) < 0) return 'Remise';
     return 'Prestation';
   };
+
+  const rideLikeNoun = (line) =>
+    String(line?.type || '').toLowerCase() === 'material_delivery' ? 'livraison' : 'transport';
 
   const showLinesToolbar = lines.length >= 8;
   const rangeStart =
@@ -1123,9 +1131,9 @@ const DraftInvoiceEditorPanel = ({
     if (!allowsLineEditing) return;
     const rn = isRemiseLine(line);
     const lec = isCustom(line.type) && (!rn || isManualDiscountLine(line));
-    const dEd = isRide(line.type) || lec;
-    const aEd = isRide(line.type) || lec;
-    const nEd = line.type === 'ride' || lec;
+    const dEd = isRideLike(line.type) || lec;
+    const aEd = isRideLike(line.type) || lec;
+    const nEd = isRideLike(line.type) || lec;
     if (!dEd && !aEd && !nEd) return;
 
     const body = { ...draftConcurrencyPayload };
@@ -1176,11 +1184,12 @@ const DraftInvoiceEditorPanel = ({
   const handleRemoveLine = async (line) => {
     if (!allowsLineEditing) return;
     const ar = isAnyRoundTripLine(line);
+    const noun = rideLikeNoun(line);
     if (
       !window.confirm(
         ar
-          ? 'Exclure ce transport de la facture ? L’autre jambe aller-retour restera facturée séparément si elle existe.'
-          : 'Exclure ce transport de la facture ? Le montant sera retiré du brouillon et le transport redeviendra facturable.'
+          ? `Exclure ce ${noun} de la facture ? L’autre jambe aller-retour restera facturée séparément si elle existe.`
+          : `Exclure ce ${noun} de la facture ? Le montant sera retiré du brouillon et le ${noun} redeviendra facturable.`
       )
     ) {
       return;
@@ -1932,9 +1941,9 @@ const DraftInvoiceEditorPanel = ({
                 const remiseNeg = isRemiseLine(line);
                 const lineEditCustom =
                   isCustom(line.type) && (!remiseNeg || isManualDiscountLine(line));
-                const descEditable = allowsLineEditing && (isRide(line.type) || lineEditCustom);
-                const amountEditable = allowsLineEditing && (isRide(line.type) || lineEditCustom);
-                const noteEditable = allowsLineEditing && (line.type === 'ride' || lineEditCustom);
+                const descEditable = allowsLineEditing && (isRideLike(line.type) || lineEditCustom);
+                const amountEditable = allowsLineEditing && (isRideLike(line.type) || lineEditCustom);
+                const noteEditable = allowsLineEditing && (isRideLike(line.type) || lineEditCustom);
                 const descId = `inv-line-desc-${line.id}`;
                 const htId = `inv-line-ht-${line.id}`;
                 const noteId = `inv-line-note-${line.id}`;
@@ -1967,7 +1976,7 @@ const DraftInvoiceEditorPanel = ({
                           styles={styles}
                           legActions={
                             allowsLineEditing &&
-                            isRide(line.type) &&
+                            isRideLike(line.type) &&
                             line.reservation_id &&
                             showArLegExclude
                               ? {
@@ -2069,7 +2078,7 @@ const DraftInvoiceEditorPanel = ({
                             <FiCheck size={14} aria-hidden />
                           </button>
                         ) : null}
-                        {allowsLineEditing && isRide(line.type) && line.reservation_id && (
+                        {allowsLineEditing && isRideLike(line.type) && line.reservation_id && (
                           <button
                             type="button"
                             className={`${styles.btnTrashXs} ${styles.danger}`}
@@ -2077,7 +2086,7 @@ const DraftInvoiceEditorPanel = ({
                             title={
                               showArLegExclude
                                 ? 'Retirer l’aller-retour complet de la facture'
-                                : 'Exclure ce transport de la facture'
+                                : `Exclure ce ${rideLikeNoun(line)} de la facture`
                             }
                             aria-label={`Exclure ligne ${line.id}`}
                             onClick={() => handleRemoveLine(line)}
