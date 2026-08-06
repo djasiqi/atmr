@@ -78,7 +78,6 @@ def get_persisted_watermark(
             SELECT contiguous_persisted_through, max_seen_sequence, session_generation
             FROM tracking_session_state
             WHERE driver_id = :driver_id AND tracking_session_id = :sid
-            FOR UPDATE
             """
             ),
             {"driver_id": driver_id, "sid": sid},
@@ -93,6 +92,9 @@ def get_persisted_watermark(
     )
 
     cursor_data = _verify_cursor(cursor) or {"after_sequence": contiguous}
+    cursor_sid = cursor_data.get("tracking_session_id")
+    if cursor_sid not in (None, sid):
+        raise ValueError("watermark_cursor_session_mismatch")
     after_seq = int(cursor_data.get("after_sequence") or contiguous)
 
     ooo_rows = (

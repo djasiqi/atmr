@@ -149,12 +149,27 @@ Statuts terminaux (`COMPLETED`, `CANCELLED`, `NO_SHOW`, `EXPIRED`) : `resolveMis
 
 ### Mitigation incident GPS (Phase 0 ops)
 
-Si les positions ne persistent pas malgré des HTTP 202 :
+✅ **Implémenté** (stabilisation P0 — DEPLOY-A) :
 
-1. `TRACKING_INGEST_ASYNC_ENABLED=false` dans `.env.production` (path sync immédiat).
+Ne **pas** désactiver seulement l'async : Flask-Limiter bloque avant le chemin sync.
+Fenêtre atomique obligatoire :
+
+1. Déployer le limiteur métier Lua dual-fenêtre + `@limiter.exempt` GPS ([`driver_location_http.py`](../../backend/services/geolocation/driver_location_http.py), [`driver.py`](../../backend/routes/driver.py)).
+2. `TRACKING_INGEST_ASYNC_ENABLED=false` dans `.env.production`.
+3. Rolling restart backend ; purge ciblée des clés `*driver_driver_location*`.
+4. Scripts : [`scripts/ops-gps-phase0-capture.sh`](../../scripts/ops-gps-phase0-capture.sh), [`scripts/ops-gps-deploy-a.sh`](../../scripts/ops-gps-deploy-a.sh).
+5. Canary Gate 1 : `200` + `durability=persisted_sync`, Redis canonical, **0 × 429** GPS.
+
+Si les positions ne persistent pas malgré des HTTP 202 (historique) :
+
+1. `TRACKING_INGEST_ASYNC_ENABLED=false` **avec** limiteur GPS corrigé (même fenêtre).
 2. Noter l'état des **5 flags** Kafka (`KAFKA_ENABLED`, `ASYNC`, `PROCESSED_FANOUT`, `WS_KAFKA`, `PERSIST`) — `PERSIST=true` sans `ASYNC=true` est un **no-op** (consumer exit).
-3. Valider : PUT location → **200** (pas 202), `trip_tracking` alimenté.
+3. Valider : PUT location → **200** + `durability=persisted_sync`, `trip_tracking` alimenté.
 4. Gap historique : les positions perdues avant mitigation ne sont pas récupérables automatiquement.
+
+Fanout/DLQ (async OFF) : [`scripts/ops-gps-pr2-fanout-dlq.sh`](../../scripts/ops-gps-pr2-fanout-dlq.sh) — manifests prod réels via `compose config`.
+
+Circuit breaker async (avant réactivation) : heartbeat Redis `tracking:consumer:ingest:heartbeat` + circuit partagé `tracking:consumer:ingest:circuit` ([`async_circuit.py`](../../backend/services/tracking/async_circuit.py)).
 
 ### Activation Kafka avec persistance (post-patch)
 

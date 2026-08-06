@@ -262,33 +262,71 @@ export async function sendDriverLocation(payload: DriverLocationPayload): Promis
       ack_status?: unknown;
       accept_status?: unknown;
       accept_reason?: unknown;
+      durability?: unknown;
       queued?: unknown;
       tracking_event_id?: unknown;
+      location_event_id?: unknown;
       trace_id?: unknown;
       ingested_event_ids?: unknown;
       retry_event_ids?: unknown;
     };
     const ingestedEventIds = asAckStringArray(ackBody.ingested_event_ids);
     const retryEventIds = asAckStringArray(ackBody.retry_event_ids);
+    const durabilityRaw =
+      typeof ackBody.durability === "string" ? ackBody.durability : null;
+    const durability =
+      durabilityRaw === "persisted_sync" || durabilityRaw === "queued_async"
+        ? durabilityRaw
+        : null;
+    const locationEventId =
+      typeof ackBody.location_event_id === "string"
+        ? ackBody.location_event_id
+        : typeof ackBody.tracking_event_id === "string"
+          ? ackBody.tracking_event_id
+          : null;
     const acceptStatus =
       typeof ackBody.accept_status === "string" ? ackBody.accept_status : null;
-    if (acceptStatus === "accepted_async" || ackBody.queued === true) {
+
+    // 202 / queued_async → non final (conservation SQLite + watermark)
+    if (
+      durability === "queued_async" ||
+      acceptStatus === "accepted_async" ||
+      ackBody.queued === true ||
+      ackBody.ack_status === "ingested_non_persisted"
+    ) {
       return {
-        ack_status: "queued",
+        ack_status: "ingested_non_persisted",
+        durability: "queued_async",
         accept_reason:
           typeof ackBody.accept_reason === "string" ? ackBody.accept_reason : "queued_kafka",
-        tracking_event_id:
-          typeof ackBody.tracking_event_id === "string"
-            ? String(ackBody.tracking_event_id)
-            : null,
+        tracking_event_id: locationEventId,
+        location_event_id: locationEventId,
         trace_id: typeof ackBody.trace_id === "string" ? String(ackBody.trace_id) : null,
         ingested_event_ids: ingestedEventIds,
         retry_event_ids: retryEventIds,
       };
     }
+
+    // Sync durable explicite
+    if (durability === "persisted_sync" || ackBody.ack_status === "persisted") {
+      return {
+        ack_status: "persisted",
+        durability: "persisted_sync",
+        accept_reason:
+          typeof ackBody.accept_reason === "string" ? String(ackBody.accept_reason) : null,
+        tracking_event_id: locationEventId,
+        location_event_id: locationEventId,
+        trace_id: typeof ackBody.trace_id === "string" ? String(ackBody.trace_id) : null,
+        ingested_event_ids: ingestedEventIds,
+        retry_event_ids: retryEventIds,
+      };
+    }
+
     // Phase 0A : absence / valeur inconnue → erreur (retry), jamais « accepted » artificiel
+    // 200 sans durability : ne pas tombstoner (compat backend ancien)
     const rawStatus = ackBody.ack_status;
     if (rawStatus == null || rawStatus === "") {
+      // Ancien backend sans ack_status ni durability : conserver en file (retry)
       throw new Error("ack_status_missing");
     }
     const status = String(rawStatus);
@@ -300,21 +338,22 @@ export async function sendDriverLocation(payload: DriverLocationPayload): Promis
       status === "ignored" ||
       status === "rejected" ||
       status === "ingested" ||
+      status === "ingested_non_persisted" ||
       status === "partially_ingested" ||
       status === "persisted"
         ? (status as DriverLocationAck["ack_status"])
         : (() => {
             throw new Error(`ack_status_unknown:${status}`);
           })();
+    // "accepted" sans durability → ne pas traiter comme persisted_sync
     return {
-      ack_status: ackStatus,
+      ack_status: ackStatus === "accepted" ? "ingested" : ackStatus,
+      durability: null,
       accept_reason: typeof ackBody.accept_reason === "string"
         ? String(ackBody.accept_reason)
         : null,
-      tracking_event_id:
-        typeof ackBody.tracking_event_id === "string"
-          ? String(ackBody.tracking_event_id)
-          : null,
+      tracking_event_id: locationEventId,
+      location_event_id: locationEventId,
       trace_id: typeof ackBody.trace_id === "string" ? String(ackBody.trace_id) : null,
       ingested_event_ids: ingestedEventIds,
       retry_event_ids: retryEventIds,

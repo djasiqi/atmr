@@ -262,7 +262,7 @@ def get_rate_limit_config_hash() -> str:
     # Récupérer la version depuis la config ou l'environnement
     version = os.getenv("RATELIMIT_CONFIG_VERSION", "v1")
     environment = os.getenv("ENVIRONMENT", "development")
-    default_limits = os.getenv("RATELIMIT_DEFAULT_LIMITS", "1000 per hour")
+    default_limits = os.getenv("RATELIMIT_DEFAULT_LIMITS", "100000 per hour")
 
     config_str = f"{version}:{environment}:{default_limits}"
     # MD5 utilisé uniquement pour générer une clé de cache (non cryptographique)

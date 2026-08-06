@@ -108,6 +108,11 @@ class DriverTrackingWatermark(Resource):
             return result, 200
         except PermissionError:
             return {"error": "tracking_session_forbidden"}, 403
+        except ValueError as exc:
+            if "watermark_cursor_session_mismatch" in str(exc):
+                return {"error": "watermark_cursor_session_mismatch"}, 400
+            logger.exception("[tracking_watermark] value error")
+            return {"error": "invalid_request"}, 400
         except Exception:
             logger.exception("[tracking_watermark] failed")
             return {"error": "internal_error"}, 500

@@ -99,6 +99,7 @@ _TRACKING_KAFKA_PERSIST = None
 _TRACKING_SHADOW_DIVERGENCE = None
 _TRACKING_SHADOW_PUBLISH_FAILED = None
 _TRACKING_INVALID_CONFIG = None
+_TRACKING_RATE_LIMIT_FALLBACK = None
 _STALE_FIX_WATCHDOG_KICK = None
 
 _VALID_TRANSPORTS = frozenset({"http", "socket", "socket_batch", "kafka"})
@@ -295,6 +296,10 @@ if Counter is not None:
         "tracking_invalid_config_total",
         "Démarrages refusés du consumer ingest (configuration incohérente)",
         ["reason"],
+    )
+    _TRACKING_RATE_LIMIT_FALLBACK = Counter(
+        "tracking_rate_limit_fallback_total",
+        "Rate limit GPS HTTP en mode mémoire (Redis indisponible)",
     )
     _STALE_FIX_WATCHDOG_KICK = Counter(
         "tracking_stale_fix_watchdog_kick_total",
@@ -970,6 +975,13 @@ def inc_tracking_invalid_config(*, reason: str) -> None:
         else "async_without_persist"
     )
     _TRACKING_INVALID_CONFIG.labels(reason=r).inc()
+
+
+def inc_tracking_rate_limit_fallback() -> None:
+    """Compteur : limiteur GPS HTTP basculé en mémoire (Redis KO)."""
+    if not _metrics_enabled() or _TRACKING_RATE_LIMIT_FALLBACK is None:
+        return
+    _TRACKING_RATE_LIMIT_FALLBACK.inc()
 
 
 _STALE_FIX_WATCHDOG_KICK_REASONS = frozenset(

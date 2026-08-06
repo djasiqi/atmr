@@ -54,11 +54,23 @@ export function formatTrackingSendError(error: unknown): TrackingSendErrorMeta {
     const transportCode = typeof error.code === "string" ? error.code : null;
     const status = error.response?.status ?? null;
     const data = error.response?.data as Record<string, unknown> | undefined;
+    const headerRetry = error.response?.headers?.["retry-after"]
+      ?? error.response?.headers?.["Retry-After"];
+    let headerRetrySeconds: number | null = null;
+    if (typeof headerRetry === "string" && headerRetry.trim()) {
+      const asInt = Number.parseInt(headerRetry.trim(), 10);
+      if (Number.isFinite(asInt) && asInt >= 0) {
+        headerRetrySeconds = asInt;
+      }
+    } else if (typeof headerRetry === "number" && Number.isFinite(headerRetry)) {
+      headerRetrySeconds = Math.max(0, Math.floor(headerRetry));
+    }
     const retryAfterRaw = data?.retry_after_seconds;
-    const retryAfterSeconds =
+    const bodyRetrySeconds =
       typeof retryAfterRaw === "number" && Number.isFinite(retryAfterRaw)
         ? retryAfterRaw
         : null;
+    const retryAfterSeconds = bodyRetrySeconds ?? headerRetrySeconds;
     const apiCode =
       typeof data?.error_code === "string"
         ? data.error_code

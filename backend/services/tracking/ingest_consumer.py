@@ -541,6 +541,17 @@ class TrackingIngestConsumer:
                         )
                     self._commit_record(record)
                     self._observe_e2e_latency(message_obj)
+                    try:
+                        from services.tracking.async_circuit import (
+                            mark_consumer_persist_success,
+                        )
+
+                        mark_consumer_persist_success()
+                    except Exception:
+                        logger.debug(
+                            "[tracking_consumer] persist heartbeat failed",
+                            exc_info=True,
+                        )
                     return True
 
                 # Legacy : persist use-case + publish processed (avant bascule Phase 1)
@@ -698,6 +709,19 @@ class TrackingIngestConsumer:
         try:
             while self._running:
                 polled = self._consumer.poll(timeout_ms=1000)
+                try:
+                    from services.tracking.async_circuit import (
+                        evaluate_and_store_circuit,
+                        write_consumer_heartbeat,
+                    )
+
+                    write_consumer_heartbeat()
+                    evaluate_and_store_circuit()
+                except Exception:
+                    logger.debug(
+                        "[tracking_consumer] heartbeat/circuit write failed",
+                        exc_info=True,
+                    )
                 for _tp, records in polled.items():
                     for record in records:
                         try:

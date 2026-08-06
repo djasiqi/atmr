@@ -52,7 +52,7 @@ def test_put_me_location_stale_header_calls_inc_socket_stale_fallback(
     with (
         patch(
             "routes.driver.check_http_driver_location_rate_limit",
-            return_value=(True, None),
+            return_value=(True, None, None),
         ),
         patch(
             "services.monitoring.driver_location_metrics.inc_socket_stale_fallback",

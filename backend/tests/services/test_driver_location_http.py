@@ -27,14 +27,23 @@ def test_idempotent_store_then_get(monkeypatch: pytest.MonkeyPatch) -> None:
     key = "idem-key-abc"
     assert dlh.get_idempotent_response(driver_id, key) is None
 
-    payload = {"ok": True, "accept_status": "accepted_canonical"}
+    payload = {
+        "ok": True,
+        "ack_status": "persisted",
+        "durability": "persisted_sync",
+    }
     dlh.store_idempotent_response(driver_id, key, payload)
     out = dlh.get_idempotent_response(driver_id, key)
     assert out == payload
 
 
-def test_rate_limit_fail_open_without_redis(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_rate_limit_memory_fallback_without_redis(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(dlh, "redis_client", None)
-    allowed, retry = dlh.check_http_driver_location_rate_limit(1)
+    monkeypatch.setattr(dlh, "_MEMORY_FALLBACK_LIMIT", 300)
+    monkeypatch.setattr(dlh, "_memory_hits", {})
+    allowed, retry, reason = dlh.check_http_driver_location_rate_limit(1)
     assert allowed is True
     assert retry is None
+    assert reason is None

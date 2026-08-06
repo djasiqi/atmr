@@ -79,13 +79,18 @@ export type DriverLocationAckStatus =
   | "ignored"
   | "rejected"
   | "ingested"
+  | "ingested_non_persisted"
   | "partially_ingested"
   | "persisted";
 
+export type DriverLocationDurability = "persisted_sync" | "queued_async" | null;
+
 export type DriverLocationAck = {
   ack_status: DriverLocationAckStatus;
+  durability?: DriverLocationDurability;
   accept_reason?: string | null;
   tracking_event_id?: string | null;
+  location_event_id?: string | null;
   trace_id?: string | null;
   ingested_event_ids?: string[] | null;
   retry_event_ids?: string[] | null;

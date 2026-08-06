@@ -28,7 +28,7 @@ from constants.driver_api_errors import (
     BOOKING_ASSIGNED_TO_OTHER_DRIVER,
     BOOKING_COMPANY_FORBIDDEN,
 )
-from ext import db, redis_client, role_required, socketio
+from ext import db, limiter, redis_client, role_required, socketio
 from middleware.trace_id import get_trace_id
 from models import DelayEvent, Driver
 from models.enums import BookingStatus, DriverType, UserRole
@@ -1626,15 +1626,18 @@ class DriverBookingsETA(Resource):
 
 @driver_ns.route("/me/location")
 class DriverLocation(Resource):
+    @limiter.exempt
     @jwt_required()
     @role_required(UserRole.driver)
     @driver_ns.expect(location_model, validate=False)
     def put(self):
         """Tracking temps réel : enregistre la dernière position.
 
+        Exempté du limiteur Flask global : plafonds métier atomiques par
+        ``driver_id`` (Lua dual-fenêtre, ``HTTP_DRIVER_LOCATION_*``).
+
         En-têtes optionnels :
         - ``Idempotency-Key`` / ``X-Idempotency-Key`` : déduplication des retries HTTP (TTL 300 s par défaut).
-        Rate limit HTTP : par chauffeur, fenêtre configurable (``HTTP_DRIVER_LOCATION_*``), plus permissif que le socket mais borné.
         Contrat par mode : voir ``backend/docs/DRIVER_LOCATION_CONTRACT.md``.
         """
         driver, error_response, status_code = get_driver_from_token()
@@ -1746,15 +1749,22 @@ class DriverLocation(Resource):
                                 cached = get_idempotent_response(driver.id, idem_hdr)
                                 if cached is not None:
                                     return cached, 200
-                            allowed_rl, retry_rl = (
+                            allowed_rl, retry_rl, rl_reason = (
                                 check_http_driver_location_rate_limit(driver.id)
                             )
                             if not allowed_rl:
-                                return {
+                                from flask import make_response
+
+                                body_429 = {
                                     "error": "rate_limit_exceeded",
                                     "message": "Trop de mises à jour de position (HTTP). Réessayez plus tard.",
                                     "retry_after_seconds": retry_rl,
-                                }, 429
+                                    "rate_limit_reason": rl_reason,
+                                }
+                                resp = make_response(body_429, 429)
+                                if retry_rl:
+                                    resp.headers["Retry-After"] = str(int(retry_rl))
+                                return resp
 
                             if (
                                 request.headers.get("X-ATMR-Location-Fallback") or ""
@@ -1803,6 +1813,23 @@ class DriverLocation(Resource):
                             )
 
                             if TRACKING_INGEST_ASYNC_ENABLED:
+                                use_async = True
+                                try:
+                                    from services.tracking.async_circuit import (
+                                        should_use_async_ingest,
+                                    )
+
+                                    use_async = should_use_async_ingest()
+                                except Exception:
+                                    logger.warning(
+                                        "[DriverLocation] circuit check failed → sync",
+                                        exc_info=True,
+                                    )
+                                    use_async = False
+                            else:
+                                use_async = False
+
+                            if use_async:
                                 ingest_payload = {
                                     "latitude": lat,
                                     "longitude": lon,
@@ -1866,13 +1893,20 @@ class DriverLocation(Resource):
                                             "[DriverLocation] async accepted metric unavailable",
                                             exc_info=True,
                                         )
+                                    # Ne pas cacher comme réponse idempotente durable
                                     return {
                                         "ok": True,
                                         "queued": True,
                                         "trace_id": ingest_result.get("trace_id"),
                                         "accept_status": "accepted_async",
                                         "accept_reason": "queued_kafka",
+                                        "ack_status": "ingested_non_persisted",
+                                        "durability": "queued_async",
                                         "location_event_id": location_event_id,
+                                        "tracking_session_id": ingest_payload.get(
+                                            "tracking_session_id"
+                                        ),
+                                        "sequence_id": ingest_payload.get("sequence_id"),
                                     }, 202
 
                             from application.drivers.update_driver_location import (
@@ -2087,6 +2121,15 @@ class DriverLocation(Resource):
                                     )
 
                             if result is None:
+                                tracking_session_id_out = (
+                                    p.get("tracking_session_id")
+                                    if isinstance(p, dict)
+                                    else None
+                                )
+                                sequence_id_out = (
+                                    p.get("sequence_id") if isinstance(p, dict) else None
+                                )
+                                persisted_at = datetime.now(UTC).isoformat()
                                 result = {
                                     "ok": True,
                                     "source": source,
@@ -2095,6 +2138,14 @@ class DriverLocation(Resource):
                                     "accept_status": accept_status,
                                     "accept_reason": accept_reason,
                                     "received_at": received_at,
+                                    "ack_status": "persisted",
+                                    "durability": "persisted_sync",
+                                    "location_event_id": location_event_id,
+                                    "tracking_session_id": tracking_session_id_out,
+                                    "sequence_id": sequence_id_out,
+                                    "canonical_updated": accept_status
+                                    == "accepted_canonical",
+                                    "persisted_at": persisted_at,
                                 }
                                 if idem_hdr:
                                     store_idempotent_response(
@@ -2127,14 +2178,26 @@ class DriverLocation(Resource):
                 tracking_event_id = body.get("tracking_event_id") or body.get(
                     "location_event_id"
                 )
+            if not result_payload.get("location_event_id"):
+                result_payload["location_event_id"] = (
+                    str(tracking_event_id) if tracking_event_id else None
+                )
             result_payload["tracking_event_id"] = (
                 str(tracking_event_id) if tracking_event_id else None
             )
-            result_payload["ack_status"] = _resolve_tracking_ack_status(
-                accept_status=accept_status_value,
-                accept_reason=accept_reason_value,
-                skipped=bool(result.get("skipped", False)),
-            )
+            # Contrat P0 : sync durable → ack_status=persisted + durability
+            if result_payload.get("durability") == "persisted_sync":
+                result_payload["ack_status"] = "persisted"
+            elif result_payload.get("ack_status") is None:
+                result_payload["ack_status"] = _resolve_tracking_ack_status(
+                    accept_status=accept_status_value,
+                    accept_reason=accept_reason_value,
+                    skipped=bool(result.get("skipped", False)),
+                )
+                if result_payload["ack_status"] in ("accepted", "duplicate"):
+                    result_payload["durability"] = "persisted_sync"
+                    if result_payload["ack_status"] == "accepted":
+                        result_payload["ack_status"] = "persisted"
             result_payload["trace_id"] = get_trace_id()
             from services.monitoring.driver_location_metrics import (
                 inc_tracking_delivery_result,
@@ -2142,7 +2205,7 @@ class DriverLocation(Resource):
 
             loc_mode = str(body.get("location_mode") or "mission_live")
             ack_status_value = str(result_payload.get("ack_status") or "")
-            if ack_status_value in ("accepted", "duplicate"):
+            if ack_status_value in ("accepted", "duplicate", "persisted"):
                 inc_tracking_delivery_result(
                     mode=loc_mode, transport="http", result="success"
                 )

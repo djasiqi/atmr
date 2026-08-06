@@ -476,6 +476,20 @@ groups:
           description: "Lag Kafka ingest élevé ({{ $value }}) — risque de saturation du pipeline GPS."
           runbook_url: "https://grafana/d/driver-tracking-health"
 
+      - alert: TrackingGpsRateLimitFallback
+        expr: |
+          increase(tracking_rate_limit_fallback_total[5m]) > 0
+        for: 2m
+        labels:
+          severity: warning
+          component: tracking
+          team: backend-platform
+          service: tracking
+        annotations:
+          summary: "Limiteur GPS HTTP en fallback mémoire"
+          description: "Redis indisponible pour le rate limit GPS — fallback mémoire worker actif."
+          runbook_url: "https://grafana/d/driver-tracking-health"
+
       - alert: TrackingKafkaFanoutLagHigh
         expr: |
           max(tracking_kafka_consumer_lag{group="tracking-processed-fanout-group"}) > 100

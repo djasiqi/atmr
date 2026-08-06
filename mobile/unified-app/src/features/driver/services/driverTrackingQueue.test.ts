@@ -74,7 +74,10 @@ describe("driverTrackingQueue", () => {
 
     mockAsyncStorageGetItem.mockResolvedValue(null);
     mockAsyncStorageSetItem.mockResolvedValue(undefined);
-    mockSendDriverLocation.mockResolvedValue({ ack_status: "accepted" });
+    mockSendDriverLocation.mockResolvedValue({
+      ack_status: "persisted",
+      durability: "persisted_sync",
+    });
     mockSendDriverLocationBatch.mockReturnValue(false);
     await driverTrackingQueue.resetForTests();
   });
@@ -174,7 +177,16 @@ describe("driverTrackingQueue", () => {
 
   it("availability_presence n'utilise jamais le socket", async () => {
     mockSendDriverLocationBatch.mockReturnValue(true);
-    mockSendDriverLocation.mockResolvedValue({ ack_status: "accepted" });
+    mockSendDriverLocation.mockImplementation(async (payload: unknown) => {
+      const p = payload as { trackingEventId?: string };
+      const id = p.trackingEventId ?? "x";
+      return {
+        ack_status: "persisted",
+        durability: "persisted_sync",
+        location_event_id: id,
+        tracking_event_id: id,
+      };
+    });
     while ((await driverTrackingQueue.getSnapshot()).queueDepth > 0) {
       await driverTrackingQueue.flush({
         ackStaleMs: 60_000,
@@ -209,7 +221,16 @@ describe("driverTrackingQueue", () => {
 
   it("force HTTP drain when socket dead and backlog exceeds threshold", async () => {
     mockIsDriverSocketReady.mockReturnValue(false);
-    mockSendDriverLocation.mockResolvedValue({ ack_status: "accepted" });
+    mockSendDriverLocation.mockImplementation(async (payload: unknown) => {
+      const p = payload as { trackingEventId?: string };
+      const id = p.trackingEventId ?? "x";
+      return {
+        ack_status: "persisted",
+        durability: "persisted_sync",
+        location_event_id: id,
+        tracking_event_id: id,
+      };
+    });
     for (let index = 0; index < 35; index += 1) {
       await driverTrackingQueue.enqueue({
         missionId: 31770,
