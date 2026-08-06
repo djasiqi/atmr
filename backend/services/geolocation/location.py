@@ -116,6 +116,9 @@ class LocationUpdateResult:
     should_persist_db: bool = True
     received_at: str | None = None
     degraded_context: bool = False
+    # P0.1 — vérité durable : Redis et PG doivent être reportés séparément
+    canonical_updated: bool = False
+    db_persisted: bool | None = None
 
 
 # Sentinel : None explicite = pas de Redis (observability-only) ; défaut = client global.
@@ -378,7 +381,13 @@ class LocationService:
                 logger.debug("[LocationService] Map-matching failed")
 
         # 4. Stockage Redis + DB
-        accept_status, accept_reason, received_at = self._store_location(
+        (
+            accept_status,
+            accept_reason,
+            received_at,
+            canonical_updated,
+            db_persisted,
+        ) = self._store_location(
             driver_id=driver_id,
             latitude=snapped_lat,
             longitude=snapped_lon,
@@ -397,7 +406,7 @@ class LocationService:
             company_id=company_id,
             transport=transport,
         )
-        should_fanout = accept_status == "accepted_canonical"
+        should_fanout = accept_status == "accepted_canonical" and canonical_updated
         should_persist_db = accept_status == "accepted_canonical"
 
         # 5. Détection geofencing (pickup/dropoff)
@@ -480,6 +489,8 @@ class LocationService:
             should_persist_db=should_persist_db,
             received_at=received_at,
             degraded_context=degraded_context,
+            canonical_updated=canonical_updated,
+            db_persisted=db_persisted,
         )
 
     def _snap_to_road(
@@ -615,25 +626,20 @@ class LocationService:
         degraded_context: bool = False,
         company_id: int | None = None,
         transport: str = "http",
-    ) -> tuple[str, str, str]:
+    ) -> tuple[str, str, str, bool, bool | None]:
         """Stocke la position dans Redis et DB.
 
-        Args:
-            driver_id: ID du chauffeur
-            latitude: Latitude snapée
-            longitude: Longitude snapée
-            speed: Vitesse (m/s)
-            heading: Cap (degrés)
-            accuracy: Précision GPS (mètres)
-            source: Source de la position
-            timestamp: Timestamp
-            db_session: Session DB (optionnel)
+        Returns:
+            (accept_status, accept_reason, received_at, canonical_updated, db_persisted)
+            ``db_persisted`` est ``None`` si aucune écriture PG n'a été tentée,
+            ``True`` si commit OK, ``False`` si échec (rollback).
         """
         ts_iso = timestamp.isoformat()
         recorded_iso = recorded_at.isoformat()
         sent_iso = sent_at.isoformat()
         received_dt = datetime.now(UTC)
         received_iso = received_dt.isoformat()
+        canonical_updated = False
         try:
             from services.monitoring.driver_location_metrics import (
                 MAX_CLOCK_SKEW_RECORD_SEC,
@@ -770,6 +776,7 @@ class LocationService:
                     # Compatibilité transitoire: maintenir l'ancienne clé.
                     self.redis_client.hset(legacy_key, mapping=canonical_mapping)
                     self.redis_client.expire(legacy_key, DEFAULT_DRIVER_LOC_TTL_SEC)
+                    canonical_updated = True
                     try:
                         from services.monitoring.driver_location_metrics import (
                             inc_canonical_redis_write,
@@ -869,49 +876,69 @@ class LocationService:
                 company_id,
             )
 
-        # DB — accéder à db.session uniquement si persistance canonique
-        # (évite RuntimeError hors app_context pour accepted_observability_only).
+        # DB — uniquement si persistance canonique (évite RuntimeError hors app_context).
+        # P0.1 : ne jamais avaler un échec PG en laissant croire à une persistance durable.
         if accept_status != "accepted_canonical":
-            return accept_status, accept_reason, received_iso
+            return accept_status, accept_reason, received_iso, False, None
 
         session = db_session or db.session
+        db_persisted: bool | None = False
         try:
-            # ✅ Utilisation du repository pour découpler de SQLAlchemy
             driver_repo = DriverRepository()
             driver_dto = driver_repo.find_by_id(driver_id)
-            if driver_dto:
-                # Récupérer le modèle SQLAlchemy depuis le DTO pour la compatibilité
+            if not driver_dto:
+                db_persisted = False
+                logger.warning(
+                    "[LocationService] DB store skipped: driver_id=%s introuvable",
+                    driver_id,
+                )
+            else:
                 driver = Driver.query.get(driver_dto.id)
-                if driver:
+                if not driver:
+                    db_persisted = False
+                    logger.warning(
+                        "[LocationService] DB store skipped: driver ORM absent id=%s",
+                        driver_id,
+                    )
+                else:
                     driver.latitude = latitude
                     driver.longitude = longitude
                     driver.last_position_update = timestamp
                     session.add(driver)
-                if not db_session:
-                    session.commit()
+                    if not db_session:
+                        session.commit()
+                    # db_session fourni : le caller commit ; on signale staging OK
+                    db_persisted = True
         except (OperationalError, DBAPIError) as e:
-            # Erreurs DB attendues : connexion, timeout
             if not db_session:
                 session.rollback()
+            db_persisted = False
             logger.warning(
                 "[LocationService] DB store failed (DB error: %s): %s",
                 type(e).__name__,
                 str(e),
             )
         except (ValueError, TypeError, AttributeError) as e:
-            # Erreurs de validation attendues : données invalides
             if not db_session:
                 session.rollback()
+            db_persisted = False
             logger.warning(
                 "[LocationService] DB store failed (validation error: %s): %s",
                 type(e).__name__,
                 str(e),
             )
         except Exception:
-            # Erreur inattendue lors du stockage DB
             if not db_session:
                 session.rollback()
-        return accept_status, accept_reason, received_iso
+            db_persisted = False
+            logger.warning("[LocationService] DB store failed (unexpected)", exc_info=True)
+        return (
+            accept_status,
+            accept_reason,
+            received_iso,
+            bool(canonical_updated),
+            db_persisted,
+        )
 
     def _is_v21_enabled_for_company(self, company_id: int | None) -> bool:
         if not LOCATION_V21_ENABLED:

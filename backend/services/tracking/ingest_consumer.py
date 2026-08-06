@@ -222,6 +222,7 @@ class TrackingIngestConsumer:
         self._running = False
         self._initialized = False
         self._last_lag_publish_ts = 0.0
+        self._last_total_lag = 0
         signal.signal(signal.SIGTERM, self._shutdown_signal)
         signal.signal(signal.SIGINT, self._shutdown_signal)
         if KAFKA_ENABLED and TRACKING_INGEST_ASYNC_ENABLED:
@@ -715,7 +716,8 @@ class TrackingIngestConsumer:
                         write_consumer_heartbeat,
                     )
 
-                    write_consumer_heartbeat()
+                    total_lag = self._compute_total_lag()
+                    write_consumer_heartbeat(lag=total_lag)
                     evaluate_and_store_circuit()
                 except Exception:
                     logger.debug(
@@ -739,6 +741,17 @@ class TrackingIngestConsumer:
                                 exc_info=True,
                             )
                             self._running = False
+                            try:
+                                from services.tracking.async_circuit import (
+                                    open_circuit_immediate,
+                                )
+
+                                open_circuit_immediate(reason="consumer_fail_stop")
+                            except Exception:
+                                logger.debug(
+                                    "[tracking_consumer] open_circuit on fatal failed",
+                                    exc_info=True,
+                                )
                             raise
                         except Exception as exc:
                             logger.exception("[tracking_consumer] processing error")
@@ -762,7 +775,38 @@ class TrackingIngestConsumer:
             logger.exception("[tracking_consumer] poll loop failed")
             raise
         finally:
+            try:
+                from services.tracking.async_circuit import open_circuit_immediate
+
+                open_circuit_immediate(reason="consumer_loop_exit")
+            except Exception:
+                logger.debug(
+                    "[tracking_consumer] open_circuit on loop exit failed",
+                    exc_info=True,
+                )
             self.close()
+
+    def _compute_total_lag(self) -> int:
+        """Lag total (somme partitions) pour heartbeat Redis — best-effort."""
+        if self._consumer is None:
+            return int(self._last_total_lag)
+        try:
+            assignment = self._consumer.assignment()
+            if not assignment:
+                return int(self._last_total_lag)
+            end_offsets = self._consumer.end_offsets(list(assignment))
+            total = 0
+            for tp in assignment:
+                position = self._consumer.position(tp)
+                end_offset = end_offsets.get(tp)
+                if position is None or end_offset is None:
+                    continue
+                total += max(0, int(end_offset) - int(position))
+            self._last_total_lag = total
+            return total
+        except Exception:
+            logger.debug("[tracking_consumer] lag compute failed", exc_info=True)
+            return int(self._last_total_lag)
 
     def _maybe_publish_lag(self) -> None:
         """Publie le lag consumer par partition (P1-1a), throttlé ~15 s.
@@ -799,8 +843,26 @@ class TrackingIngestConsumer:
     def _shutdown_signal(self, signum, _frame) -> None:
         logger.info("[tracking_consumer] shutdown signal=%s", signum)
         self._running = False
+        try:
+            from services.tracking.async_circuit import open_circuit_immediate
+
+            open_circuit_immediate(reason="consumer_shutdown_signal")
+        except Exception:
+            logger.debug(
+                "[tracking_consumer] open_circuit on signal failed",
+                exc_info=True,
+            )
 
     def close(self) -> None:
+        try:
+            from services.tracking.async_circuit import open_circuit_immediate
+
+            open_circuit_immediate(reason="consumer_close")
+        except Exception:
+            logger.debug(
+                "[tracking_consumer] open_circuit on close failed",
+                exc_info=True,
+            )
         if self._consumer is not None:
             self._consumer.close()
         if self._producer is not None:

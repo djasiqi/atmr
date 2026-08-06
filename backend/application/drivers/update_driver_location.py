@@ -42,6 +42,8 @@ class UpdateDriverLocationResult:
     received_at: str | None
     dedup_skipped: bool = False
     dedup_reason: str | None = None
+    canonical_updated: bool = False
+    db_persisted: bool | None = None
 
 
 class UpdateDriverLocationUseCase:
@@ -94,6 +96,8 @@ class UpdateDriverLocationUseCase:
                 received_at=None,
                 dedup_skipped=True,
                 dedup_reason=skip_reason,
+                canonical_updated=False,
+                db_persisted=None,
             )
 
         # On garde la signature la plus permissive possible (typage runtime via attrs).
@@ -136,6 +140,14 @@ class UpdateDriverLocationUseCase:
                 geofence_events=geofence_events,
             )
 
+        canonical_updated = bool(getattr(res, "canonical_updated", False))
+        db_persisted_raw = getattr(res, "db_persisted", None)
+        db_persisted: bool | None
+        if db_persisted_raw is None:
+            db_persisted = None
+        else:
+            db_persisted = bool(db_persisted_raw)
+
         return UpdateDriverLocationResult(
             snapped_lat=float(snapped_lat),
             snapped_lon=float(snapped_lon),
@@ -146,6 +158,8 @@ class UpdateDriverLocationUseCase:
             received_at=received_at_str,
             dedup_skipped=False,
             dedup_reason=None,
+            canonical_updated=canonical_updated,
+            db_persisted=db_persisted,
         )
 
     def _parse_ts(self, ts: str | None) -> datetime:

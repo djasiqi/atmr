@@ -44,6 +44,8 @@ def test_put_me_location_stale_header_calls_inc_socket_stale_fallback(
         accept_status="accepted_canonical",
         accept_reason="",
         received_at="2026-03-18T10:00:01Z",
+        canonical_updated=True,
+        db_persisted=True,
     )
 
     mock_uc_instance = MagicMock()

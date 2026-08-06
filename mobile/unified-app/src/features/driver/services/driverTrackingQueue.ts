@@ -1386,11 +1386,13 @@ class DriverTrackingQueue {
             continue;
           }
 
-          if (
+          // P0.1 — tombstone UNIQUEMENT si contrat durable exact
+          const isFinalDurableAck =
             ack.ack_status === "persisted" &&
             ack.durability === "persisted_sync" &&
-            (!ack.location_event_id || ack.location_event_id === item.id || ack.tracking_event_id === item.id)
-          ) {
+            ack.location_event_id === item.id;
+
+          if (isFinalDurableAck) {
             if (ack.ingested_event_ids?.length) {
               await this.applyIngestedEventIds(ack.ingested_event_ids);
             }
@@ -1424,7 +1426,12 @@ class DriverTrackingQueue {
             continue;
           }
 
-          if (ack.ack_status === "duplicate") {
+          // duplicate avec event id exact → déjà durable
+          if (
+            ack.ack_status === "duplicate" &&
+            ack.durability === "persisted_sync" &&
+            ack.location_event_id === item.id
+          ) {
             item.persistState = "persisted";
             item.deliveryState = "backend_acked";
             item.ackedAt = nowMs();
@@ -1441,67 +1448,46 @@ class DriverTrackingQueue {
             continue;
           }
 
-          // 202 / queued_async / ingested* → conserver SQLite, attendre watermark
+          // Tout le reste (202, persisted sans durability, mauvais id, accepted…) → conserver
           if (
             ack.ack_status === "queued" ||
             ack.ack_status === "ingested" ||
             ack.ack_status === "ingested_non_persisted" ||
+            ack.ack_status === "persisted" ||
+            ack.ack_status === "accepted" ||
+            ack.ack_status === "duplicate" ||
             ack.durability === "queued_async"
           ) {
             if (ack.ingested_event_ids?.length) {
               await this.applyIngestedEventIds(ack.ingested_event_ids);
-            } else {
+            } else if (
+              ack.ack_status === "queued" ||
+              ack.ack_status === "ingested" ||
+              ack.ack_status === "ingested_non_persisted" ||
+              ack.durability === "queued_async"
+            ) {
               await this.applyIngestedEventIds([item.id]);
             }
             item.persistState = "ingested_non_persisted";
             item.deliveryState = "retry_pending";
-            item.lastError = "awaiting_watermark";
+            item.lastError =
+              ack.ack_status === "persisted" && ack.durability !== "persisted_sync"
+                ? "persisted_without_durability"
+                : ack.location_event_id && ack.location_event_id !== item.id
+                  ? "location_event_id_mismatch"
+                  : "awaiting_durable_ack";
             remaining.push(item);
             emitDriverTelemetry("tracking.ingest.ack", {
               source: "driver.tracking.queue",
               mission_id: item.missionId,
               flush_path: "http_fallback",
               queue_item_id: item.id,
-              ack_status: "ingested_non_persisted",
-              durability: "queued_async",
+              ack_status: ack.ack_status,
+              durability: ack.durability ?? null,
               accept_reason: ack.accept_reason ?? null,
               trace_id: ack.trace_id ?? null,
             });
             void this.scheduleWatermarkReconcile();
-            continue;
-          }
-
-          // accepted sans durability : ne pas tombstoner (compat backend ancien)
-          if (ack.ack_status === "accepted" && ack.durability !== "persisted_sync") {
-            item.persistState = "ingested_non_persisted";
-            item.deliveryState = "retry_pending";
-            item.lastError = "accepted_without_durability";
-            remaining.push(item);
-            continue;
-          }
-
-          if (ack.ack_status === "persisted") {
-            // persisted sans durability explicite : exiger location_event_id match
-            if (
-              ack.location_event_id &&
-              ack.location_event_id !== item.id &&
-              ack.tracking_event_id !== item.id
-            ) {
-              remaining.push(item);
-              continue;
-            }
-            item.persistState = "persisted";
-            item.deliveryState = "backend_acked";
-            item.ackedAt = nowMs();
-            backendAcked += 1;
-            try {
-              await trackingQueueStore.markState([item.id], "persisted", {
-                ackedAt: nowMs(),
-                deliveryState: "backend_acked",
-              });
-            } catch {
-              /* best-effort */
-            }
             continue;
           }
 

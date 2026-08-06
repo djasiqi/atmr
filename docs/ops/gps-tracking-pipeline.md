@@ -160,6 +160,13 @@ Fenêtre atomique obligatoire :
 4. Scripts : [`scripts/ops-gps-phase0-capture.sh`](../../scripts/ops-gps-phase0-capture.sh), [`scripts/ops-gps-deploy-a.sh`](../../scripts/ops-gps-deploy-a.sh).
 5. Canary Gate 1 : `200` + `durability=persisted_sync`, Redis canonical, **0 × 429** GPS.
 
+✅ **Implémenté** (P0.1 — vérité ACK + circuit Redis + deploy digest) :
+
+1. `persisted_sync` uniquement si PG commit OK (`db_persisted=True`) ; Redis OK + PG KO → **503** `db_persist_failed` (mobile conserve SQLite) — [`location.py`](../../backend/services/geolocation/location.py), [`driver.py`](../../backend/routes/driver.py).
+2. Tombstone mobile strict : `ack_status=persisted` + `durability=persisted_sync` + `location_event_id === item.id` ; `api.ts` n’invente jamais `persisted_sync`.
+3. Circuit async : compteurs + état entièrement dans Redis ; route = GET only ; `open_circuit_immediate` au shutdown consumer ; lag dans heartbeat — [`async_circuit.py`](../../backend/services/tracking/async_circuit.py).
+4. [`ops-gps-deploy-a.sh`](../../scripts/ops-gps-deploy-a.sh) : `BACKEND_IMAGE_REF` obligatoire (digest) + vérif post-deploy ; purge Redis avec `REDISCLI_AUTH`.
+
 Si les positions ne persistent pas malgré des HTTP 202 (historique) :
 
 1. `TRACKING_INGEST_ASYNC_ENABLED=false` **avec** limiteur GPS corrigé (même fenêtre).

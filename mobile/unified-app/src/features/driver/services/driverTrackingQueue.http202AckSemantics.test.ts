@@ -193,4 +193,73 @@ describe("driverTrackingQueue http202AckSemantics + session", () => {
     const snap = await driverTrackingQueue.getSnapshot();
     expect(snap.suspendReason).toBe("rate_limit");
   });
+
+  it("persisted + durability null → conserve la file", async () => {
+    mockSendDriverLocation.mockImplementation(async (payload: unknown) => {
+      const p = payload as { trackingEventId?: string };
+      return {
+        ack_status: "persisted",
+        durability: null,
+        location_event_id: p.trackingEventId ?? null,
+        tracking_event_id: p.trackingEventId ?? null,
+      };
+    });
+    await driverTrackingQueue.beginNewTrackingSession();
+    await driverTrackingQueue.enqueue({
+      missionId: null,
+      appState: "active",
+      locationMode: "availability_presence",
+      payload: { latitude: 46.5, longitude: 6.6, locationMode: "availability_presence" },
+    });
+    const flush = await driverTrackingQueue.flush({
+      forceHttpFallback: true,
+      networkProfile: "normal",
+    });
+    expect(flush.backendAcked).toBe(0);
+    expect(flush.queueDepth).toBeGreaterThanOrEqual(1);
+  });
+
+  it("persisted_sync + location_event_id null → conserve", async () => {
+    mockSendDriverLocation.mockResolvedValue({
+      ack_status: "persisted",
+      durability: "persisted_sync",
+      location_event_id: null,
+      tracking_event_id: null,
+    });
+    await driverTrackingQueue.beginNewTrackingSession();
+    await driverTrackingQueue.enqueue({
+      missionId: null,
+      appState: "active",
+      locationMode: "availability_presence",
+      payload: { latitude: 46.5, longitude: 6.6, locationMode: "availability_presence" },
+    });
+    const flush = await driverTrackingQueue.flush({
+      forceHttpFallback: true,
+      networkProfile: "normal",
+    });
+    expect(flush.backendAcked).toBe(0);
+    expect(flush.queueDepth).toBeGreaterThanOrEqual(1);
+  });
+
+  it("persisted_sync + mauvais event id → conserve", async () => {
+    mockSendDriverLocation.mockResolvedValue({
+      ack_status: "persisted",
+      durability: "persisted_sync",
+      location_event_id: "other_event",
+      tracking_event_id: "other_event",
+    });
+    await driverTrackingQueue.beginNewTrackingSession();
+    await driverTrackingQueue.enqueue({
+      missionId: null,
+      appState: "active",
+      locationMode: "availability_presence",
+      payload: { latitude: 46.5, longitude: 6.6, locationMode: "availability_presence" },
+    });
+    const flush = await driverTrackingQueue.flush({
+      forceHttpFallback: true,
+      networkProfile: "normal",
+    });
+    expect(flush.backendAcked).toBe(0);
+    expect(flush.queueDepth).toBeGreaterThanOrEqual(1);
+  });
 });

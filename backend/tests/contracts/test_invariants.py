@@ -13,7 +13,11 @@ def test_inv3_mission_live_missing_mission_id_logs_and_metrics() -> None:
     svc = LocationService(redis_client_instance=None)
     with (
         patch("services.geolocation.location.DriverRepository") as mock_repo_cls,
-        patch.object(svc, "_store_location", return_value=("accepted", "", None)),
+        patch.object(
+            svc,
+            "_store_location",
+            return_value=("accepted", "", None, False, None),
+        ),
         patch.object(svc, "_is_v21_enabled_for_company", return_value=True),
         patch(
             "services.monitoring.driver_location_metrics.inc_tracking_mission_live_missing_mission_id"

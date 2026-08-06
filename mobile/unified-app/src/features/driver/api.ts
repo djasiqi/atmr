@@ -307,8 +307,8 @@ export async function sendDriverLocation(payload: DriverLocationPayload): Promis
       };
     }
 
-    // Sync durable explicite
-    if (durability === "persisted_sync" || ackBody.ack_status === "persisted") {
+    // Sync durable explicite — ne JAMAIS inventer persisted_sync
+    if (durability === "persisted_sync" && ackBody.ack_status === "persisted") {
       return {
         ack_status: "persisted",
         durability: "persisted_sync",

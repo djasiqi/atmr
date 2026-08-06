@@ -21,7 +21,13 @@ def test_store_location_marks_non_canonical_when_redis_unavailable() -> None:
     service = LocationService(redis_client_instance=_FailingRedis())
     now = datetime.now(UTC)
 
-    accept_status, accept_reason, _received_at = service._store_location(
+    (
+        accept_status,
+        accept_reason,
+        _received_at,
+        canonical_updated,
+        db_persisted,
+    ) = service._store_location(
         driver_id=42,
         latitude=46.2,
         longitude=6.1,
@@ -40,6 +46,8 @@ def test_store_location_marks_non_canonical_when_redis_unavailable() -> None:
 
     assert accept_status == "accepted_observability_only"
     assert accept_reason == "redis_unavailable_no_arbitration"
+    assert canonical_updated is False
+    assert db_persisted is None
 
 
 def test_update_driver_location_disables_canonical_outputs_when_non_canonical(

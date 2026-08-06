@@ -1938,6 +1938,8 @@ class DriverLocation(Resource):
                             accept_status = "accepted_observability_only"
                             accept_reason = "location_update_not_attempted"
                             received_at = datetime.now(UTC).isoformat()
+                            sync_canonical_updated = False
+                            sync_db_persisted: bool | None = None
                             try:
                                 # ✅ DDD: Utilise adapter au lieu de service directement
                                 uc = UpdateDriverLocationUseCase(
@@ -1972,7 +1974,34 @@ class DriverLocation(Resource):
                                         or uc_result.accept_reason,
                                         "accept_status": uc_result.accept_status,
                                         "accept_reason": uc_result.accept_reason,
+                                        "ack_status": "duplicate",
+                                        "durability": "persisted_sync",
+                                        "location_event_id": location_event_id,
+                                        "canonical_updated": False,
+                                        "db_persisted": True,
                                     }
+                                elif (
+                                    uc_result.accept_status == "accepted_canonical"
+                                    and uc_result.db_persisted is False
+                                ):
+                                    # P0.1 : Redis peut être frais, mais PG KO → pas de persisted_sync
+                                    lat = uc_result.snapped_lat
+                                    lon = uc_result.snapped_lon
+                                    result = {
+                                        "error": "db_persist_failed",
+                                        "error_code": "db_persist_failed",
+                                        "message": "Position live enregistrée mais persistance durable échouée. Réessayez.",
+                                        "retryable": True,
+                                        "accept_status": uc_result.accept_status,
+                                        "accept_reason": "db_persist_failed",
+                                        "canonical_updated": bool(
+                                            uc_result.canonical_updated
+                                        ),
+                                        "db_persisted": False,
+                                        "location_event_id": location_event_id,
+                                        "ack_status": "ingested_non_persisted",
+                                    }
+                                    status_code = 503
                                 else:
                                     inc_received(
                                         transport="http", location_mode=norm_mode_http
@@ -1985,6 +2014,10 @@ class DriverLocation(Resource):
                                     received_at = uc_result.received_at or received_at
                                     accept_status = uc_result.accept_status
                                     accept_reason = uc_result.accept_reason
+                                    sync_canonical_updated = bool(
+                                        uc_result.canonical_updated
+                                    )
+                                    sync_db_persisted = uc_result.db_persisted
 
                                     log_driver_location_processed(
                                         driver_id=driver.id,
@@ -2130,27 +2163,51 @@ class DriverLocation(Resource):
                                     p.get("sequence_id") if isinstance(p, dict) else None
                                 )
                                 persisted_at = datetime.now(UTC).isoformat()
-                                result = {
-                                    "ok": True,
-                                    "source": source,
-                                    "message": "Location updated",
-                                    "location_mode": location_mode,
-                                    "accept_status": accept_status,
-                                    "accept_reason": accept_reason,
-                                    "received_at": received_at,
-                                    "ack_status": "persisted",
-                                    "durability": "persisted_sync",
-                                    "location_event_id": location_event_id,
-                                    "tracking_session_id": tracking_session_id_out,
-                                    "sequence_id": sequence_id_out,
-                                    "canonical_updated": accept_status
-                                    == "accepted_canonical",
-                                    "persisted_at": persisted_at,
-                                }
-                                if idem_hdr:
-                                    store_idempotent_response(
-                                        driver.id, idem_hdr, result
-                                    )
+                                # P0.1 : persisted_sync uniquement si PG a réellement commit
+                                durable_ok = (
+                                    accept_status == "accepted_canonical"
+                                    and sync_db_persisted is True
+                                )
+                                if durable_ok:
+                                    result = {
+                                        "ok": True,
+                                        "source": source,
+                                        "message": "Location updated",
+                                        "location_mode": location_mode,
+                                        "accept_status": accept_status,
+                                        "accept_reason": accept_reason,
+                                        "received_at": received_at,
+                                        "ack_status": "persisted",
+                                        "durability": "persisted_sync",
+                                        "location_event_id": location_event_id,
+                                        "tracking_session_id": tracking_session_id_out,
+                                        "sequence_id": sequence_id_out,
+                                        "canonical_updated": sync_canonical_updated,
+                                        "db_persisted": True,
+                                        "persisted_at": persisted_at,
+                                    }
+                                    if idem_hdr:
+                                        store_idempotent_response(
+                                            driver.id, idem_hdr, result
+                                        )
+                                else:
+                                    # Observabilité seule ou DB non confirmée → pas de tombstone mobile
+                                    result = {
+                                        "ok": True,
+                                        "source": source,
+                                        "message": "Location accepted without durable persist",
+                                        "location_mode": location_mode,
+                                        "accept_status": accept_status,
+                                        "accept_reason": accept_reason,
+                                        "received_at": received_at,
+                                        "ack_status": "ingested_non_persisted",
+                                        "durability": None,
+                                        "location_event_id": location_event_id,
+                                        "tracking_session_id": tracking_session_id_out,
+                                        "sequence_id": sequence_id_out,
+                                        "canonical_updated": sync_canonical_updated,
+                                        "db_persisted": sync_db_persisted,
+                                    }
                 except (ValueError, TypeError):
                     result = {"error": "Invalid coordinate format"}
                     status_code = 400
@@ -2185,7 +2242,7 @@ class DriverLocation(Resource):
             result_payload["tracking_event_id"] = (
                 str(tracking_event_id) if tracking_event_id else None
             )
-            # Contrat P0 : sync durable → ack_status=persisted + durability
+            # Contrat P0.1 : ne jamais inventer persisted_sync ici
             if result_payload.get("durability") == "persisted_sync":
                 result_payload["ack_status"] = "persisted"
             elif result_payload.get("ack_status") is None:
@@ -2194,10 +2251,6 @@ class DriverLocation(Resource):
                     accept_reason=accept_reason_value,
                     skipped=bool(result.get("skipped", False)),
                 )
-                if result_payload["ack_status"] in ("accepted", "duplicate"):
-                    result_payload["durability"] = "persisted_sync"
-                    if result_payload["ack_status"] == "accepted":
-                        result_payload["ack_status"] = "persisted"
             result_payload["trace_id"] = get_trace_id()
             from services.monitoring.driver_location_metrics import (
                 inc_tracking_delivery_result,

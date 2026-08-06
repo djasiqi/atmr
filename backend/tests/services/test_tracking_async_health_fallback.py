@@ -1,9 +1,8 @@
-"""Tests circuit breaker async tracking (heartbeat Redis + décision sync)."""
+"""Tests circuit breaker async tracking (état Redis partagé, route GET only)."""
 
 from __future__ import annotations
 
 import json
-from unittest.mock import MagicMock
 
 import pytest
 
@@ -19,6 +18,9 @@ class _FakeRedis:
 
     def setex(self, key: str, _ttl: int, value: str):
         self.store[key] = value if isinstance(value, str) else value.decode("utf-8")
+
+    def delete(self, key: str):
+        self.store.pop(key, None)
 
 
 def test_should_use_async_when_circuit_closed(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -53,27 +55,53 @@ def test_should_use_sync_when_redis_unavailable(monkeypatch: pytest.MonkeyPatch)
     assert ac.should_use_async_ingest() is False
 
 
-def test_evaluate_opens_after_fail_threshold(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_get_circuit_state_is_read_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    """La route ne doit pas évaluer / écrire le circuit."""
+    fake = _FakeRedis()
+    monkeypatch.setattr(ac, "redis_client", fake)
+    called = {"n": 0}
+
+    def boom(**_kwargs):
+        called["n"] += 1
+        raise AssertionError("evaluate must not be called from get_circuit_state")
+
+    monkeypatch.setattr(ac, "evaluate_and_store_circuit", boom)
+    assert ac.get_circuit_state()["state"] == "open"
+    assert ac.get_circuit_state()["reason"] == "circuit_absent"
+    assert called["n"] == 0
+
+
+def test_evaluate_persists_counters_in_redis(monkeypatch: pytest.MonkeyPatch) -> None:
     fake = _FakeRedis()
     monkeypatch.setattr(ac, "redis_client", fake)
     monkeypatch.setattr(ac, "HEALTH_GATE_ENABLED", True)
     monkeypatch.setattr(ac, "CIRCUIT_FAIL_THRESHOLD", 2)
-    monkeypatch.setattr(ac, "_consecutive_fail", 0)
-    monkeypatch.setattr(ac, "_consecutive_ok", 0)
-    monkeypatch.setattr(ac, "_last_eval_at", 0.0)
     # Pas de heartbeat → unhealthy
-    for _ in range(2):
-        monkeypatch.setattr(ac, "_last_eval_at", 0.0)
-        payload = ac.evaluate_and_store_circuit(force=True)
-    assert payload["state"] == "open"
-    assert payload["reason"] == "heartbeat_absent"
+    p1 = ac.evaluate_and_store_circuit(force=True)
+    assert p1["consecutive_fail"] == 1
+    p2 = ac.evaluate_and_store_circuit(force=True)
+    assert p2["state"] == "open"
+    assert p2["consecutive_fail"] == 2
+    stored = json.loads(fake.get(ac.CIRCUIT_KEY))
+    assert stored["consecutive_fail"] == 2
 
 
-def test_write_heartbeat_even_without_messages(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_open_circuit_immediate_deletes_heartbeat(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     fake = _FakeRedis()
     monkeypatch.setattr(ac, "redis_client", fake)
-    ac.write_consumer_heartbeat()
-    raw = fake.get(ac.HEARTBEAT_KEY)
-    assert raw is not None
-    data = json.loads(raw)
-    assert "last_poll_at" in data
+    ac.write_consumer_heartbeat(lag=12)
+    assert fake.get(ac.HEARTBEAT_KEY) is not None
+    payload = ac.open_circuit_immediate(reason="consumer_down")
+    assert payload["state"] == "open"
+    assert payload["reason"] == "consumer_down"
+    assert fake.get(ac.HEARTBEAT_KEY) is None
+
+
+def test_heartbeat_carries_lag(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake = _FakeRedis()
+    monkeypatch.setattr(ac, "redis_client", fake)
+    ac.write_consumer_heartbeat(lag=777)
+    data = json.loads(fake.get(ac.HEARTBEAT_KEY))
+    assert data["lag"] == 777
