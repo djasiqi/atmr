@@ -212,12 +212,12 @@ def evaluate_and_store_circuit(*, force: bool = False) -> dict[str, Any]:
             opened_at = _utcnow_iso()
             healthy_since = None
     elif prev_state == "open":
+        # P0.2 : rester open pendant OPEN_MIN ; jamais sauter direct vers closed
         open_age = _parse_iso_age_seconds(opened_at) or 0.0
-        if open_age >= CIRCUIT_OPEN_MIN_SEC and consecutive_ok >= 1:
+        if open_age < CIRCUIT_OPEN_MIN_SEC:
+            state = "open"
+        elif consecutive_ok >= 1:
             state = "half_open"
-        elif consecutive_ok >= CIRCUIT_OK_THRESHOLD:
-            state = "closed"
-            healthy_since = _utcnow_iso()
     elif prev_state == "half_open":
         if consecutive_fail >= 1:
             state = "open"
@@ -257,14 +257,22 @@ def get_circuit_state() -> dict[str, Any]:
 
 
 def should_use_async_ingest() -> bool:
-    """True uniquement si le circuit est closed. Indéterminé → False (sync)."""
+    """True seulement si circuit closed ET heartbeat frais (lecture seule Redis).
+
+    P0.2 : après kill -9 / OOM, un circuit ``closed`` stale ne doit pas envoyer
+    de 202 vers un consumer mort — le heartbeat absent/stale force le sync.
+    """
     if not HEALTH_GATE_ENABLED:
         return True
     if os.getenv("TRACKING_INGEST_ASYNC_ENABLED", "false").lower() != "true":
         return False
     try:
         state = str(get_circuit_state().get("state") or "open")
-        return state == "closed"
+        if state != "closed":
+            return False
+        hb = _read_json(HEARTBEAT_KEY)
+        healthy, _reason, _age, _lag = _heartbeat_healthy(hb)
+        return bool(healthy)
     except Exception:
-        logger.warning("circuit read failed → sync", exc_info=True)
+        logger.warning("circuit/heartbeat read failed → sync", exc_info=True)
         return False

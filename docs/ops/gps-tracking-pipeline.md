@@ -167,6 +167,13 @@ Fenêtre atomique obligatoire :
 3. Circuit async : compteurs + état entièrement dans Redis ; route = GET only ; `open_circuit_immediate` au shutdown consumer ; lag dans heartbeat — [`async_circuit.py`](../../backend/services/tracking/async_circuit.py).
 4. [`ops-gps-deploy-a.sh`](../../scripts/ops-gps-deploy-a.sh) : `BACKEND_IMAGE_REF` obligatoire (digest) + vérif post-deploy ; purge Redis avec `REDISCLI_AUTH`.
 
+✅ **Implémenté** (P0.2 — dédup retry + digest réel + circuit conservateur) :
+
+1. Mobile envoie `Idempotency-Key` = `X-Location-Event-Id` ; cache durable écrit sous ces clés uniquement après `persisted_sync`.
+2. PG KO → `release_location_event_id` ; `duplicate_event_id` → `persisted_sync` **seulement** si cache durable hit ; sinon claim libéré + pas de tombstone ; `duplicate_proximity` → `ignored` sans `persisted_sync`.
+3. DEPLOY-A : exige `repo@sha256:…` ; la vérif digests ne teste que `docker inspect` (plus de faux positif via concat).
+4. Circuit : `OPEN_MIN` respecté (pas de saut open→closed) ; `should_use_async_ingest` lit aussi le heartbeat (stale/absent → sync).
+
 Si les positions ne persistent pas malgré des HTTP 202 (historique) :
 
 1. `TRACKING_INGEST_ASYNC_ENABLED=false` **avec** limiteur GPS corrigé (même fenêtre).

@@ -254,7 +254,12 @@ export async function sendDriverLocation(payload: DriverLocationPayload): Promis
       headers: {
         "X-Allow-Offline-Attempt": "1",
         ...(payload.trackingEventId
-          ? { "X-Location-Event-Id": payload.trackingEventId }
+          ? {
+              "X-Location-Event-Id": payload.trackingEventId,
+              // P0.2 : même clé que l'event → cache durable + retry sans faux duplicate
+              "Idempotency-Key": payload.trackingEventId,
+              "X-Idempotency-Key": payload.trackingEventId,
+            }
           : {}),
       },
     });

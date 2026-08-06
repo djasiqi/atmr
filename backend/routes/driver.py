@@ -1812,6 +1812,17 @@ class DriverLocation(Resource):
                                 raw_id=loc_event_id_raw,
                             )
 
+                            # P0.2 : cache durable aussi sous location_event_id
+                            # (Idempotency-Key mobile = event id)
+                            for _idem_key in (idem_hdr, location_event_id):
+                                if not _idem_key:
+                                    continue
+                                cached_ev = get_idempotent_response(
+                                    driver.id, str(_idem_key)
+                                )
+                                if cached_ev is not None:
+                                    return cached_ev, 200
+
                             if TRACKING_INGEST_ASYNC_ENABLED:
                                 use_async = True
                                 try:
@@ -1967,24 +1978,93 @@ class DriverLocation(Resource):
                                 )
 
                                 if getattr(uc_result, "dedup_skipped", False):
-                                    result = {
-                                        "ok": True,
-                                        "skipped": True,
-                                        "reason": uc_result.dedup_reason
-                                        or uc_result.accept_reason,
-                                        "accept_status": uc_result.accept_status,
-                                        "accept_reason": uc_result.accept_reason,
-                                        "ack_status": "duplicate",
-                                        "durability": "persisted_sync",
-                                        "location_event_id": location_event_id,
-                                        "canonical_updated": False,
-                                        "db_persisted": True,
-                                    }
+                                    dedup_reason = (
+                                        uc_result.dedup_reason
+                                        or uc_result.accept_reason
+                                        or ""
+                                    )
+                                    if dedup_reason == "duplicate_event_id":
+                                        # persisted_sync uniquement si cache durable prouvé
+                                        proven = None
+                                        for _k in (idem_hdr, location_event_id):
+                                            if not _k:
+                                                continue
+                                            proven = get_idempotent_response(
+                                                driver.id, str(_k)
+                                            )
+                                            if proven is not None:
+                                                break
+                                        if (
+                                            proven
+                                            and str(proven.get("durability") or "")
+                                            == "persisted_sync"
+                                        ):
+                                            result = {
+                                                "ok": True,
+                                                "skipped": True,
+                                                "reason": "duplicate_event_id",
+                                                "accept_status": "skipped",
+                                                "accept_reason": "duplicate_event_id",
+                                                "ack_status": "duplicate",
+                                                "durability": "persisted_sync",
+                                                "location_event_id": location_event_id,
+                                                "canonical_updated": bool(
+                                                    proven.get("canonical_updated")
+                                                ),
+                                                "db_persisted": True,
+                                            }
+                                        else:
+                                            # Claim orphelin (ex. PG KO avant release) → libérer
+                                            from services.geolocation.driver_location_dedup import (
+                                                release_location_event_id,
+                                            )
+
+                                            release_location_event_id(
+                                                driver.id, location_event_id
+                                            )
+                                            result = {
+                                                "ok": True,
+                                                "skipped": True,
+                                                "reason": "duplicate_event_id",
+                                                "accept_status": "skipped",
+                                                "accept_reason": (
+                                                    "duplicate_event_id_unproven"
+                                                ),
+                                                "ack_status": "duplicate",
+                                                "durability": None,
+                                                "location_event_id": location_event_id,
+                                                "canonical_updated": False,
+                                                "db_persisted": False,
+                                                "retryable": True,
+                                            }
+                                    else:
+                                        # duplicate_proximity : jamais persisted_sync
+                                        result = {
+                                            "ok": True,
+                                            "skipped": True,
+                                            "reason": dedup_reason
+                                            or "duplicate_proximity",
+                                            "accept_status": "skipped",
+                                            "accept_reason": dedup_reason
+                                            or "duplicate_proximity",
+                                            "ack_status": "ignored",
+                                            "durability": None,
+                                            "location_event_id": location_event_id,
+                                            "canonical_updated": False,
+                                            "db_persisted": False,
+                                        }
                                 elif (
                                     uc_result.accept_status == "accepted_canonical"
                                     and uc_result.db_persisted is False
                                 ):
-                                    # P0.1 : Redis peut être frais, mais PG KO → pas de persisted_sync
+                                    # P0.1/P0.2 : PG KO → pas de persisted_sync + release claim
+                                    from services.geolocation.driver_location_dedup import (
+                                        release_location_event_id,
+                                    )
+
+                                    release_location_event_id(
+                                        driver.id, location_event_id
+                                    )
                                     lat = uc_result.snapped_lat
                                     lon = uc_result.snapped_lon
                                     result = {
@@ -2186,10 +2266,12 @@ class DriverLocation(Resource):
                                         "db_persisted": True,
                                         "persisted_at": persisted_at,
                                     }
-                                    if idem_hdr:
-                                        store_idempotent_response(
-                                            driver.id, idem_hdr, result
-                                        )
+                                    # P0.2 : cache durable sous Idempotency-Key et event id
+                                    for _store_key in (idem_hdr, location_event_id):
+                                        if _store_key:
+                                            store_idempotent_response(
+                                                driver.id, str(_store_key), result
+                                            )
                                 else:
                                     # Observabilité seule ou DB non confirmée → pas de tombstone mobile
                                     result = {

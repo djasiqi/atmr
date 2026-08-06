@@ -33,6 +33,7 @@ def test_should_use_async_when_circuit_closed(monkeypatch: pytest.MonkeyPatch) -
         60,
         json.dumps({"state": "closed", "evaluated_at": ac._utcnow_iso()}),
     )
+    ac.write_consumer_heartbeat(lag=0)
     assert ac.should_use_async_ingest() is True
 
 
@@ -105,3 +106,51 @@ def test_heartbeat_carries_lag(monkeypatch: pytest.MonkeyPatch) -> None:
     ac.write_consumer_heartbeat(lag=777)
     data = json.loads(fake.get(ac.HEARTBEAT_KEY))
     assert data["lag"] == 777
+
+
+def test_open_state_respects_open_min_before_half_open(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake = _FakeRedis()
+    monkeypatch.setattr(ac, "redis_client", fake)
+    monkeypatch.setattr(ac, "HEALTH_GATE_ENABLED", True)
+    monkeypatch.setattr(ac, "CIRCUIT_OPEN_MIN_SEC", 30)
+    monkeypatch.setattr(ac, "CIRCUIT_OK_THRESHOLD", 3)
+    # Circuit open récent + heartbeat sain → doit rester open (pas closed)
+    fake.setex(
+        ac.CIRCUIT_KEY,
+        60,
+        json.dumps(
+            {
+                "state": "open",
+                "opened_at": ac._utcnow_iso(),
+                "evaluated_at": ac._utcnow_iso(),
+                "consecutive_fail": 3,
+                "consecutive_ok": 0,
+            }
+        ),
+    )
+    ac.write_consumer_heartbeat(lag=0)
+    # 3 évaluations saines en < OPEN_MIN
+    for _ in range(3):
+        p = ac.evaluate_and_store_circuit(force=True)
+    assert p["state"] == "open"
+    assert p["consecutive_ok"] >= 1
+
+
+def test_should_use_async_false_when_heartbeat_stale_even_if_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake = _FakeRedis()
+    monkeypatch.setattr(ac, "redis_client", fake)
+    monkeypatch.setattr(ac, "HEALTH_GATE_ENABLED", True)
+    monkeypatch.setenv("TRACKING_INGEST_ASYNC_ENABLED", "true")
+    fake.setex(
+        ac.CIRCUIT_KEY,
+        60,
+        json.dumps({"state": "closed", "evaluated_at": ac._utcnow_iso()}),
+    )
+    # Pas de heartbeat → sync (protecte kill -9)
+    assert ac.should_use_async_ingest() is False
+    ac.write_consumer_heartbeat(lag=0)
+    assert ac.should_use_async_ingest() is True

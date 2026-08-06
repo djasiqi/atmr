@@ -18,13 +18,13 @@ if [[ ! -f "$ENV_FILE" ]]; then
   exit 1
 fi
 
-# Image digest obligatoire — empêche de redéployer un ancien sha/latest par erreur
+# Image digest obligatoire (@sha256:...) — refuse tag :sha- / latest
 if [[ -z "${BACKEND_IMAGE_REF:-}" ]]; then
   echo "REFUS: BACKEND_IMAGE_REF obligatoire (ex: registry/atmr-backend@sha256:...)" >&2
   exit 1
 fi
-if [[ "$BACKEND_IMAGE_REF" != *"@sha256:"* && "$BACKEND_IMAGE_REF" != *":sha-"* ]]; then
-  echo "REFUS: BACKEND_IMAGE_REF doit contenir un digest (@sha256:...) ou tag sha- explicite" >&2
+if [[ "$BACKEND_IMAGE_REF" != *"@sha256:"* ]]; then
+  echo "REFUS: BACKEND_IMAGE_REF doit être une ref digest (repo@sha256:...)" >&2
   echo "reçu: $BACKEND_IMAGE_REF" >&2
   exit 1
 fi
@@ -61,15 +61,18 @@ if [[ -z "$cid" ]]; then
 fi
 inspect_ref="$(docker inspect --format '{{json .Image}} {{index .Config.Image}} {{range .RepoDigests}}{{.}} {{end}}' "$cid" 2>/dev/null || true)"
 echo "Image inspectée: $inspect_ref"
-expected_token="$(echo "$BACKEND_IMAGE_REF" | grep -oE 'sha256:[a-f0-9]+|sha-[A-Za-z0-9]+' | head -1 || true)"
-if [[ -z "$expected_token" ]] || ! echo "$inspect_ref $BACKEND_IMAGE_REF" | grep -Fq "$expected_token"; then
-  # Fallback: match littéral de la ref complète
-  if ! echo "$inspect_ref" | grep -Fq "$BACKEND_IMAGE_REF"; then
-    echo "ABORT: image déployée ≠ BACKEND_IMAGE_REF attendu ($BACKEND_IMAGE_REF)" >&2
-    exit 1
-  fi
+# P0.2 : ne tester QUE inspect_ref (jamais concaténer BACKEND_IMAGE_REF → faux positif)
+expected_token="$(echo "$BACKEND_IMAGE_REF" | grep -oE 'sha256:[a-f0-9]+' | head -1 || true)"
+if [[ -z "$expected_token" ]]; then
+  echo "ABORT: impossible d'extraire sha256:… depuis BACKEND_IMAGE_REF" >&2
+  exit 1
 fi
-echo "OK: image backend correspond à BACKEND_IMAGE_REF"
+if ! echo "$inspect_ref" | grep -Fq "$expected_token"; then
+  echo "ABORT: digest déployé incorrect (attendu $expected_token)" >&2
+  echo "inspect_ref=$inspect_ref" >&2
+  exit 1
+fi
+echo "OK: image backend correspond au digest $expected_token"
 
 # 4) Purge ciblée buckets Flask-Limiter GPS (auth Redis si requirepass)
 echo "Purge ciblée LIMITS…driver_driver_location…"

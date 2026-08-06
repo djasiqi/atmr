@@ -70,6 +70,23 @@ def claim_location_event_id(driver_id: int, event_id: str | None) -> bool:
         return True
 
 
+def release_location_event_id(driver_id: int, event_id: str | None) -> None:
+    """Libère le claim Redis pour permettre un retry après échec de persistance durable.
+
+    P0.2 : sans release, un 503 PG puis retry reçoit un faux ``duplicate_event_id``.
+    """
+    if not event_id or not str(event_id).strip():
+        return
+    rc = _redis()
+    if not rc:
+        return
+    key = _event_key(driver_id, str(event_id).strip())
+    try:
+        rc.delete(key)
+    except Exception as e:
+        logger.warning("release_location_event_id failed: %s", e)
+
+
 def _haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     r = 6371000.0
     p1 = math.radians(lat1)
