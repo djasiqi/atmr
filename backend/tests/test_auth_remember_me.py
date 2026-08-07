@@ -4,16 +4,18 @@ Ces tests valident le comportement attendu côté serveur :
 
 * ``remember_me=true`` (web) : refresh token JWT et cookie persistants
   (Max-Age aligné sur le TTL serveur, ~30 jours par défaut).
-* ``remember_me=false`` ou absent (web) : refresh token JWT court (~1h par
+* ``remember_me=false`` ou absent (web) : refresh token JWT court (~8h par
   défaut) et cookie de session côté navigateur (pas de Max-Age/Expires
   positif).
 * Les clients mobiles ne sont pas impactés (TTL par défaut conservé).
+* Réponses web exposent ``access_expires_at`` / ``access_expires_in`` sans JWT.
 """
 
 from __future__ import annotations
 
+import os
 import re
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from flask import current_app
@@ -28,10 +30,21 @@ def _post_login(client, sample_user, *, remember_me=None, mobile=False):
 
 
 def _refresh_cookie_header(response) -> str | None:
+    """Retourne le Set-Cookie refresh utile (ignore les cookies de suppression)."""
+    candidates = []
     for raw in response.headers.getlist("Set-Cookie"):
-        if raw.startswith("refresh_token="):
-            return raw
-    return None
+        if not raw.startswith("refresh_token="):
+            continue
+        value = raw.split("=", 1)[1].split(";", 1)[0]
+        # _clear_web_auth_cookies pose refresh_token=; Max-Age=0 avant le vrai cookie.
+        if not value:
+            continue
+        candidates.append(raw)
+    return candidates[-1] if candidates else None
+
+
+def _cookie_value(cookie_header: str) -> str:
+    return cookie_header.split("=", 1)[1].split(";", 1)[0]
 
 
 def _refresh_max_age(cookie_header: str) -> int | None:
@@ -46,6 +59,50 @@ def _is_session_cookie(cookie_header: str) -> bool:
     return "expires=" not in cookie_header.lower()
 
 
+def _short_refresh_ttl_seconds() -> int:
+    return int(os.getenv("JWT_REFRESH_TOKEN_SHORT_EXPIRES_SECONDS", str(8 * 60 * 60)))
+
+
+def _long_refresh_ttl_seconds() -> int:
+    return int(
+        os.getenv("JWT_REFRESH_TOKEN_LONG_EXPIRES_SECONDS", str(30 * 24 * 3600))
+    )
+
+
+def _decode_refresh_ttl(refresh_token: str) -> int:
+    from flask_jwt_extended import decode_token
+
+    with current_app.app_context():
+        decoded = decode_token(refresh_token)
+    return int(decoded["exp"]) - int(decoded["iat"])
+
+
+def _assert_access_expiry_metadata(data: dict, *, mobile: bool = False) -> None:
+    assert "access_expires_in" in data
+    assert "access_expires_at" in data
+    assert "expires_in" in data
+    assert data["access_expires_in"] == data["expires_in"]
+    assert isinstance(data["access_expires_in"], int)
+    assert data["access_expires_in"] > 0
+    raw = str(data["access_expires_at"]).replace("Z", "+00:00")
+    expires_at = datetime.fromisoformat(raw)
+    assert expires_at.tzinfo is not None
+    now = datetime.now(timezone.utc)
+    # Cohérence : expires_at ≈ now + access_expires_in (±30s)
+    expected = now + timedelta(seconds=int(data["access_expires_in"]))
+    assert abs((expires_at - expected).total_seconds()) <= 30
+    if mobile:
+        assert data["access_expires_in"] >= 3600
+    else:
+        assert 50 * 60 <= data["access_expires_in"] <= 2 * 3600
+
+
+def _assert_no_web_jwt_in_json(data: dict) -> None:
+    assert not data.get("token")
+    assert not data.get("access_token")
+    assert not data.get("refresh_token")
+
+
 class TestLoginRememberMe:
     def test_login_remember_me_true_uses_long_refresh_cookie(self, client, sample_user):
         response = _post_login(client, sample_user, remember_me=True)
@@ -56,9 +113,17 @@ class TestLoginRememberMe:
 
         max_age = _refresh_max_age(cookie)
         assert max_age is not None, "Max-Age requis pour remember_me=True"
-        # 30 jours par défaut, mais on accepte tout TTL >= 7 jours pour rester
-        # tolérant aux overrides d'env.
-        assert max_age >= 7 * 24 * 3600, f"TTL trop court: {max_age}"
+        long_ttl = _long_refresh_ttl_seconds()
+        assert abs(max_age - long_ttl) <= 5, (
+            f"Max-Age attendu ~{long_ttl}s, reçu {max_age}"
+        )
+
+        data = response.get_json()
+        _assert_no_web_jwt_in_json(data)
+        _assert_access_expiry_metadata(data)
+
+        ttl = _decode_refresh_ttl(_cookie_value(cookie))
+        assert abs(ttl - long_ttl) <= 5, f"TTL JWT long attendu ~{long_ttl}s, reçu {ttl}"
 
     def test_login_remember_me_false_uses_session_cookie_and_short_ttl(
         self, client, sample_user
@@ -69,35 +134,33 @@ class TestLoginRememberMe:
         cookie = _refresh_cookie_header(response)
         assert cookie is not None, "Cookie refresh_token manquant"
 
-        # Cookie navigateur : pas de Max-Age ni Expires => session cookie
         assert _is_session_cookie(cookie), (
             "remember_me=False doit produire un cookie de session "
             f"(pas de Max-Age/Expires); reçu: {cookie}"
         )
 
-        # TTL serveur court : on vérifie que le JWT lui-même est court
         data = response.get_json()
-        refresh_token = data.get("refresh_token")
-        assert refresh_token, "refresh_token doit rester en JSON pour les clients API"
+        _assert_no_web_jwt_in_json(data)
+        _assert_access_expiry_metadata(data)
 
-        from flask_jwt_extended import decode_token
-
-        with current_app.app_context():
-            decoded = decode_token(refresh_token)
-        ttl = decoded["exp"] - decoded["iat"]
-        # Court : <= 24h. Par défaut 1h.
-        assert ttl <= 24 * 3600, (
-            f"Refresh token devrait être court (<=24h), reçu {ttl}s"
+        short_ttl = _short_refresh_ttl_seconds()
+        assert short_ttl == 8 * 60 * 60 or abs(short_ttl - 8 * 60 * 60) <= 0
+        ttl = _decode_refresh_ttl(_cookie_value(cookie))
+        assert abs(ttl - short_ttl) <= 5, (
+            f"Refresh token court attendu ~{short_ttl}s (8h), reçu {ttl}s"
         )
 
     def test_login_default_behaviour_when_remember_me_absent(self, client, sample_user):
-        # Pas de champ remember_me => équivalent à False (cookie de session, TTL court)
         response = _post_login(client, sample_user, remember_me=None)
         assert response.status_code == 200
 
         cookie = _refresh_cookie_header(response)
         assert cookie is not None
         assert _is_session_cookie(cookie)
+
+        data = response.get_json()
+        _assert_no_web_jwt_in_json(data)
+        _assert_access_expiry_metadata(data)
 
     def test_login_invalid_remember_me_type_returns_400(self, client, sample_user):
         response = client.post(
@@ -115,11 +178,11 @@ class TestLoginRememberMe:
         response = _post_login(client, sample_user, remember_me=False, mobile=True)
         assert response.status_code == 200
 
-        # Les cookies ne sont pas posés pour mobile, mais le JSON contient le
-        # refresh token et son TTL doit rester long (par défaut config).
         data = response.get_json()
         refresh_token = data.get("refresh_token")
         assert refresh_token
+        assert data.get("access_token") or data.get("token")
+        _assert_access_expiry_metadata(data, mobile=True)
 
         from flask_jwt_extended import decode_token
 
@@ -127,7 +190,6 @@ class TestLoginRememberMe:
             decoded = decode_token(refresh_token)
         ttl = decoded["exp"] - decoded["iat"]
         default_delta: timedelta = current_app.config["JWT_REFRESH_TOKEN_EXPIRES"]
-        # Doit correspondre au TTL par défaut (avec petite marge de tolérance)
         assert abs(ttl - int(default_delta.total_seconds())) <= 5, (
             f"TTL mobile attendu {int(default_delta.total_seconds())}s, reçu {ttl}s"
         )
@@ -143,26 +205,6 @@ def test_login_response_still_returns_user_payload(client, sample_user, remember
 
 def _post_refresh(client):
     return client.post("/api/v1/auth/refresh-token", json={})
-
-
-def _decode_refresh_ttl(refresh_token: str) -> int:
-    from flask_jwt_extended import decode_token
-
-    with current_app.app_context():
-        decoded = decode_token(refresh_token)
-    return int(decoded["exp"]) - int(decoded["iat"])
-
-
-def _short_refresh_ttl_seconds() -> int:
-    import os
-
-    return int(os.getenv("JWT_REFRESH_TOKEN_SHORT_EXPIRES_SECONDS", str(60 * 60)))
-
-
-def _long_refresh_ttl_seconds() -> int:
-    import os
-
-    return int(os.getenv("JWT_REFRESH_TOKEN_LONG_EXPIRES_SECONDS", str(30 * 24 * 3600)))
 
 
 class TestRefreshRotationRememberMe:
@@ -185,18 +227,14 @@ class TestRefreshRotationRememberMe:
             "Après rotation remember_me=false, cookie session attendu"
         )
 
-        set_cookie_headers = refresh_response.headers.getlist("Set-Cookie")
-        refresh_jwt = None
-        for header in set_cookie_headers:
-            if header.startswith("refresh_token="):
-                refresh_jwt = header.split("=", 1)[1].split(";", 1)[0]
-                break
-        assert refresh_jwt
+        data = refresh_response.get_json()
+        _assert_no_web_jwt_in_json(data)
+        _assert_access_expiry_metadata(data)
 
-        ttl = _decode_refresh_ttl(refresh_jwt)
+        ttl = _decode_refresh_ttl(_cookie_value(rotated_cookie))
         short_ttl = _short_refresh_ttl_seconds()
-        assert ttl <= short_ttl * 2, (
-            f"TTL refresh après rotation devrait rester court (~{short_ttl}s), reçu {ttl}s"
+        assert abs(ttl - short_ttl) <= 5, (
+            f"TTL refresh après rotation devrait rester ~{short_ttl}s, reçu {ttl}s"
         )
 
     def test_refresh_rotation_preserves_remember_me_true(self, client, sample_user):
@@ -207,7 +245,8 @@ class TestRefreshRotationRememberMe:
         assert login_cookie is not None
         login_max_age = _refresh_max_age(login_cookie)
         assert login_max_age is not None
-        assert login_max_age >= 7 * 24 * 3600
+        long_ttl = _long_refresh_ttl_seconds()
+        assert abs(login_max_age - long_ttl) <= 5
 
         refresh_response = _post_refresh(client)
         assert refresh_response.status_code == 200, refresh_response.get_data(
@@ -218,22 +257,17 @@ class TestRefreshRotationRememberMe:
         assert rotated_cookie is not None
         rotated_max_age = _refresh_max_age(rotated_cookie)
         assert rotated_max_age is not None
-        assert rotated_max_age >= 7 * 24 * 3600, (
+        assert abs(rotated_max_age - long_ttl) <= 5, (
             "Après rotation remember_me=true, Max-Age long attendu"
         )
 
-        set_cookie_headers = refresh_response.headers.getlist("Set-Cookie")
-        refresh_jwt = None
-        for header in set_cookie_headers:
-            if header.startswith("refresh_token="):
-                refresh_jwt = header.split("=", 1)[1].split(";", 1)[0]
-                break
-        assert refresh_jwt
+        data = refresh_response.get_json()
+        _assert_no_web_jwt_in_json(data)
+        _assert_access_expiry_metadata(data)
 
-        ttl = _decode_refresh_ttl(refresh_jwt)
-        long_ttl = _long_refresh_ttl_seconds()
-        assert ttl >= long_ttl // 2, (
-            f"TTL refresh après rotation devrait rester long (~{long_ttl}s), reçu {ttl}s"
+        ttl = _decode_refresh_ttl(_cookie_value(rotated_cookie))
+        assert abs(ttl - long_ttl) <= 5, (
+            f"TTL refresh après rotation devrait rester ~{long_ttl}s, reçu {ttl}s"
         )
 
     def test_no_involuntary_ttl_conversion(self, app, sample_user):
@@ -252,25 +286,12 @@ class TestRefreshRotationRememberMe:
                 login_cookie = _refresh_cookie_header(login_response)
                 assert _is_session_cookie(login_cookie or "")
 
-            refresh_response = isolated.post("/api/v1/auth/refresh-token", json={})
+            refresh_response = _post_refresh(isolated)
             assert refresh_response.status_code == 200
 
-            set_cookie_headers = refresh_response.headers.getlist("Set-Cookie")
-            refresh_jwt = None
-            for header in set_cookie_headers:
-                if header.startswith("refresh_token="):
-                    refresh_jwt = header.split("=", 1)[1].split(";", 1)[0]
-                    break
-            assert refresh_jwt
-            rotated_ttl = _decode_refresh_ttl(refresh_jwt)
-
-            if remember_me:
-                assert rotated_ttl >= login_ttl // 2
-                assert not _is_session_cookie(
-                    _refresh_cookie_header(refresh_response) or ""
-                )
-            else:
-                assert rotated_ttl <= login_ttl * 2
-                assert _is_session_cookie(
-                    _refresh_cookie_header(refresh_response) or ""
-                )
+            rotated_cookie = _refresh_cookie_header(refresh_response)
+            assert rotated_cookie is not None
+            ttl = _decode_refresh_ttl(_cookie_value(rotated_cookie))
+            assert abs(ttl - login_ttl) <= 5, (
+                f"remember_me={remember_me}: TTL attendu ~{login_ttl}s, reçu {ttl}s"
+            )

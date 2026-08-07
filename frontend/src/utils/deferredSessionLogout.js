@@ -128,7 +128,10 @@ const handleStayConnected = async () => {
 
   try {
     const { tryRefreshSessionIfNeeded } = await import('./sessionKeepAlive');
-    const result = await tryRefreshSessionIfNeeded({ force: true });
+    const result = await tryRefreshSessionIfNeeded({
+      force: true,
+      reason: 'idle_stay_connected',
+    });
 
     if (result?.status === 'refreshed') {
       recordUserActivity();
@@ -208,6 +211,16 @@ export const resolveIdleWarning = () => {
 
 export const isSessionIdleWarningActive = () =>
   phase === 'IDLE_WARNING' || phase === 'RENEWING';
+
+/** Évalue immédiatement le seuil idle (ex. après resume focus/visibility). */
+export const ensureIdleGuardEvaluated = () => {
+  if (phase !== 'ACTIVE') {
+    return;
+  }
+  if (getMsSinceLastUserActivity() >= SESSION_IDLE_TIMEOUT_MS) {
+    enterIdleWarning();
+  }
+};
 
 const ensurePollLoop = () => {
   if (pollTimer || phase === 'STOPPED') {

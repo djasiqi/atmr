@@ -293,9 +293,10 @@ async function recoverAuthAndReconnect(targetSocket, generation) {
   }
   authRecoveryPromise = (async () => {
     try {
-      const { ensureUsableAccessToken } = await import('../utils/ensureUsableAccessToken');
-      const token = await ensureUsableAccessToken();
-      if (!token || !isSocketGenerationActive(generation)) {
+      // Cookie-only web : refresh HTTP 200 suffit (pas de JWT lisible en JS).
+      const { ensureWebAuthReady } = await import('../utils/ensureUsableAccessToken');
+      const ready = await ensureWebAuthReady();
+      if (!ready || !isSocketGenerationActive(generation)) {
         return false;
       }
       if (targetSocket?.io?.opts) {
@@ -319,7 +320,7 @@ async function recoverAuthAndReconnect(targetSocket, generation) {
 function buildSocketOptions() {
   const jitterDelay = Math.random() * 100;
   const jitterMax = Math.random() * 500;
-  const hasAccessToken = Boolean(getAccessToken());
+  const bearerToken = getAccessToken();
 
   return {
     ...SOCKET_CONFIG,
@@ -328,31 +329,21 @@ function buildSocketOptions() {
     reconnectionDelayMax: SOCKET_CONFIG.reconnectionDelayMax + jitterMax,
     transports: getSocketTransports(),
     auth: (cb) => {
-      // Refresh JWT si access expiré mais session UI encore active (évite auth: {}).
-      void import('../utils/ensureUsableAccessToken')
-        .then(({ ensureUsableAccessToken }) => ensureUsableAccessToken())
-        .then((token) => {
-          if (token) {
-            cb({ token });
-          } else {
-            cb({});
-          }
-        })
-        .catch(() => {
-          const fallback = getAccessToken();
-          if (fallback) {
-            cb({ token: fallback });
-          } else {
-            cb({});
-          }
-        });
+      // Web cookie-only : cb({}) est normal — le cookie HttpOnly part via withCredentials.
+      // Bearer JS uniquement pour mobile bridge / legacy.
+      const token = getAccessToken();
+      if (token) {
+        cb({ token });
+      } else {
+        cb({});
+      }
     },
     // Dev-only metadata sent by Socket.IO's query string. This makes it easy to
     // identify whether the browser even starts the Engine.IO handshake.
     query: isDevelopment
       ? {
           client: 'company-web',
-          has_token: hasAccessToken ? '1' : '0',
+          has_token: bearerToken ? '1' : '0',
         }
       : undefined,
   };
@@ -559,26 +550,25 @@ export function getCompanySocket() {
 
   if (socket && socket.connected) return socket;
 
-  // Ne pas ouvrir un handshake sans JWT : le cookie stale d'un autre rôle
-  // (admin…) provoquait AUTH_FORBIDDEN + cascade Unauthorized.
-  // Si la session UI est encore active, tenter un refresh puis reconnecter.
+  // Web cookie-only : absence de JWT en localStorage est normale.
+  // Le handshake part avec withCredentials (cookie HttpOnly).
+  // AUTH_REQUIRED client uniquement si aucune session UI récupérable.
   if (!getAccessToken()) {
-    const { reasonCode, reasonLabel } = labelForMissingToken();
-    notifyCompanySocketState({
-      connected: false,
-      reconnecting: false,
-      reasonCode,
-      reasonLabel,
-    });
-    void import('../utils/ensureUsableAccessToken')
-      .then(({ ensureUsableAccessToken }) => ensureUsableAccessToken())
-      .then((token) => {
-        if (token) {
-          retryCompanySocket();
-        }
-      })
-      .catch(() => {});
-    return socket || null;
+    try {
+      const { hasActiveSession } = require('../utils/webAuthSession');
+      if (!hasActiveSession()) {
+        const { reasonCode, reasonLabel } = labelForMissingToken();
+        notifyCompanySocketState({
+          connected: false,
+          reconnecting: false,
+          reasonCode,
+          reasonLabel,
+        });
+        return socket || null;
+      }
+    } catch (_) {
+      // Continuer le handshake cookie-only
+    }
   }
 
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {

@@ -25,6 +25,7 @@ let throttleTimeout = null;
 let lastCrossTabWriteAt = 0;
 let trackingStarted = false;
 const activitySubscribers = new Set();
+const resumeSubscribers = new Set();
 
 export const getUserActivityStorageKey = (
   env = getAuthEnv(),
@@ -35,6 +36,16 @@ const notifyActivity = (source = 'local') => {
   activitySubscribers.forEach((listener) => {
     try {
       listener(lastActivityAt, { source });
+    } catch (_) {
+      // ignore
+    }
+  });
+};
+
+const notifySessionResume = () => {
+  resumeSubscribers.forEach((listener) => {
+    try {
+      listener({ lastActivityAt, msSinceActivity: Date.now() - lastActivityAt });
     } catch (_) {
       // ignore
     }
@@ -109,6 +120,12 @@ export const onUserActivity = (listener) => {
   return () => activitySubscribers.delete(listener);
 };
 
+/** Resume onglet/fenêtre — n'est PAS une activité utilisateur (idle souverain). */
+export const onSessionResume = (listener) => {
+  resumeSubscribers.add(listener);
+  return () => resumeSubscribers.delete(listener);
+};
+
 const onStorageActivity = (event) => {
   if (!event || event.storageArea !== localStorage) {
     return;
@@ -134,12 +151,19 @@ export const startUserActivityTracking = () => {
   });
   window.addEventListener('storage', onStorageActivity);
 
-  // Retour sur l'onglet / focus fenêtre = travail (évite un idle artificiel en arrière-plan).
+  // P0-D : focus / visibility = resume, PAS recordUserActivity.
+  let resumeDedupUntil = 0;
   const onFocusOrVisible = () => {
     if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
       return;
     }
-    recordUserActivity();
+    const now = Date.now();
+    // Dédup focus + visibilitychange déclenchés ensemble.
+    if (now < resumeDedupUntil) {
+      return;
+    }
+    resumeDedupUntil = now + 500;
+    notifySessionResume();
   };
   window.addEventListener('focus', onFocusOrVisible);
   document.addEventListener('visibilitychange', onFocusOrVisible);
@@ -169,4 +193,5 @@ export const resetUserActivityTrackerForTests = () => {
   }
   trackingStarted = false;
   activitySubscribers.clear();
+  resumeSubscribers.clear();
 };

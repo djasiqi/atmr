@@ -376,7 +376,8 @@ const Login = () => {
         },
         { skipCsrf: true },
       );
-      const { token, user, refresh_token, target_env, redirect_to } = response.data;
+      const { token, user, refresh_token, target_env, redirect_to, access_expires_at, access_expires_in, expires_in } =
+        response.data;
 
       if (!user || !user.role || !user.public_id) {
         throw new Error('Aucune information utilisateur reçue.');
@@ -427,6 +428,16 @@ const Login = () => {
         accessToken: token,
         refreshToken: refresh_token,
       });
+      try {
+        const { noteAccessExpiryFromResponse } = await import('../../utils/accessExpiry');
+        noteAccessExpiryFromResponse({
+          access_expires_at,
+          access_expires_in,
+          expires_in,
+        });
+      } catch {
+        // ignore
+      }
       // Synchronise immédiatement le bootstrap : sinon ProtectedRoute voit encore
       // l'ancienne session (admin/autre) et redirige vers /unauthorized.
       hydrateFromLogin(session?.user || { ...user, role: roleSegment });

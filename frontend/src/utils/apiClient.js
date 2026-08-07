@@ -405,7 +405,7 @@ export const isMissingTokenErrorPayload = (errorData = {}) => {
 };
 
 /** Échec de refresh réellement terminal (auth morte) — pas réseau / 5xx / 429. */
-const isTerminalRefreshFailure = (error) => {
+export const isTerminalRefreshFailure = (error) => {
   const status = error?.response?.status;
   if (status == null) {
     return false;
@@ -427,6 +427,34 @@ const requestTerminalSessionLogout = (cfg = {}) => {
   });
 };
 
+/**
+ * Invalidation unique de session web (refresh terminal, recovery socket morte).
+ * Ne pas appeler pour réseau / 429 / 5xx.
+ */
+export function expireCurrentWebSession({ reason = 'session_expired' } = {}) {
+  if (isLoginSessionInProgress() || isExplicitLogoutInProgress()) {
+    return;
+  }
+  void logoutUser({
+    immediate: true,
+    reason,
+    preserveNext: true,
+  });
+}
+
+const AUTH_REFRESH_LOCK_NAME = 'lirie-auth-refresh';
+
+const withAuthRefreshLock = async (fn) => {
+  if (typeof navigator !== 'undefined' && navigator.locks?.request) {
+    try {
+      return await navigator.locks.request(AUTH_REFRESH_LOCK_NAME, { mode: 'exclusive' }, fn);
+    } catch (_) {
+      // Fallback si Web Locks échoue (navigateur / contexte)
+    }
+  }
+  return fn();
+};
+
 /** Renouvelle access + refresh token (cookies httpOnly + miroir localStorage). */
 export async function refreshSessionTokens(targetEnv = getCurrentAuthEnv()) {
   if (isRefreshing) {
@@ -442,66 +470,93 @@ export async function refreshSessionTokens(targetEnv = getCurrentAuthEnv()) {
     });
   }
 
-  isRefreshing = true;
-  try {
-    const refreshToken = getEnvRefreshToken(targetEnv, { allowLegacy: true });
-    const refreshBase = isUnifiedGatewayHost()
-      ? targetEnv === DEMO_ENV_KEY
-        ? API_BASES.demo
-        : API_BASES.app
-      : undefined;
-
-    const refreshResponse = await apiClient.post(
-      '/auth/refresh-token',
-      refreshToken ? { refresh_token: refreshToken } : {},
-      {
-        skipAuthRedirect: true,
-        _targetEnv: targetEnv,
-        ...(refreshBase ? { baseURL: refreshBase } : {}),
+  return withAuthRefreshLock(async () => {
+    if (isRefreshing) {
+      if (isExplicitLogoutInProgress()) {
+        return false;
       }
-    );
-
-    const refreshed = refreshResponse?.data || {};
-    const nextAccessToken = refreshed.access_token || refreshed.token;
-    const nextRefreshToken = refreshed.refresh_token;
-    if (!isExplicitLogoutInProgress()) {
-      if (nextAccessToken) {
-        if (targetEnv === DEMO_ENV_KEY) {
-          localStorage.setItem('demo_access_token', nextAccessToken);
-        } else {
-          localStorage.setItem('app_access_token', nextAccessToken);
-        }
-        // Miroir handshake company (Socket.IO / company_dispatch) si session entreprise.
-        try {
-          const hasCompanyMirror =
-            Boolean(localStorage.getItem(COMPANY_ACCESS_TOKEN_KEY)) ||
-            Boolean(localStorage.getItem('company_authToken')) ||
-            Boolean(localStorage.getItem('company_user'));
-          if (hasCompanyMirror) {
-            localStorage.setItem(COMPANY_ACCESS_TOKEN_KEY, nextAccessToken);
-          }
-        } catch (_) {
-          // no-op (mode privé, quota…)
-        }
-      }
-      if (nextRefreshToken) {
-        if (targetEnv === DEMO_ENV_KEY) {
-          localStorage.setItem('demo_refresh_token', nextRefreshToken);
-        } else {
-          localStorage.setItem('app_refresh_token', nextRefreshToken);
-        }
-      }
-      removeLegacyGlobalTokens();
+      return new Promise((resolve, reject) => {
+        failedQueue.push({
+          resolve: () => resolve(true),
+          reject,
+        });
+      });
     }
-    processQueue(null, null);
-    return true;
-  } catch (error) {
-    processQueue(error, null);
-    throw error;
-  } finally {
-    isRefreshing = false;
-  }
-};
+
+    isRefreshing = true;
+    try {
+      const refreshToken = getEnvRefreshToken(targetEnv, { allowLegacy: true });
+      const refreshBase = isUnifiedGatewayHost()
+        ? targetEnv === DEMO_ENV_KEY
+          ? API_BASES.demo
+          : API_BASES.app
+        : undefined;
+
+      const refreshResponse = await apiClient.post(
+        '/auth/refresh-token',
+        refreshToken ? { refresh_token: refreshToken } : {},
+        {
+          skipAuthRedirect: true,
+          _targetEnv: targetEnv,
+          ...(refreshBase ? { baseURL: refreshBase } : {}),
+        }
+      );
+
+      const refreshed = refreshResponse?.data || {};
+      const nextAccessToken = refreshed.access_token || refreshed.token;
+      const nextRefreshToken = refreshed.refresh_token;
+      if (!isExplicitLogoutInProgress()) {
+        try {
+          const { noteAccessExpiryFromResponse } = require('./accessExpiry');
+          noteAccessExpiryFromResponse(refreshed);
+        } catch (_) {
+          // ignore
+        }
+        try {
+          const { noteAuthTokensRenewed, scheduleRefreshFromExp } = require('./sessionKeepAlive');
+          noteAuthTokensRenewed();
+          scheduleRefreshFromExp();
+        } catch (_) {
+          // ignore
+        }
+        if (nextAccessToken) {
+          if (targetEnv === DEMO_ENV_KEY) {
+            localStorage.setItem('demo_access_token', nextAccessToken);
+          } else {
+            localStorage.setItem('app_access_token', nextAccessToken);
+          }
+          // Miroir handshake company (Socket.IO / company_dispatch) si session entreprise.
+          try {
+            const hasCompanyMirror =
+              Boolean(localStorage.getItem(COMPANY_ACCESS_TOKEN_KEY)) ||
+              Boolean(localStorage.getItem('company_authToken')) ||
+              Boolean(localStorage.getItem('company_user'));
+            if (hasCompanyMirror) {
+              localStorage.setItem(COMPANY_ACCESS_TOKEN_KEY, nextAccessToken);
+            }
+          } catch (_) {
+            // no-op (mode privé, quota…)
+          }
+        }
+        if (nextRefreshToken) {
+          if (targetEnv === DEMO_ENV_KEY) {
+            localStorage.setItem('demo_refresh_token', nextRefreshToken);
+          } else {
+            localStorage.setItem('app_refresh_token', nextRefreshToken);
+          }
+        }
+        removeLegacyGlobalTokens();
+      }
+      processQueue(null, null);
+      return true;
+    } catch (error) {
+      processQueue(error, null);
+      throw error;
+    } finally {
+      isRefreshing = false;
+    }
+  });
+}
 
 const rejectFreshTokenRequired = (error, _cfg = {}) =>
   Promise.reject({
@@ -547,6 +602,7 @@ export const cleanLocalSession = () => {
   localStorage.removeItem('app_public_id');
   localStorage.removeItem('app_access_token');
   localStorage.removeItem('app_refresh_token');
+  localStorage.removeItem('app_access_expires_at');
   localStorage.removeItem('demo_user');
   localStorage.removeItem('demo_public_id');
   localStorage.removeItem('demo_access_token');
@@ -575,6 +631,12 @@ export const cleanLocalSession = () => {
   localStorage.removeItem('institution_public_id');
   localStorage.removeItem('institution_access_token');
   localStorage.removeItem('institution_refresh_token');
+  try {
+    const { clearStoredAccessExpiry } = require('./accessExpiry');
+    clearStoredAccessExpiry();
+  } catch (_) {
+    // ignore
+  }
   if (apiRest.defaults?.headers?.common) {
     delete apiRest.defaults.headers.common.Authorization;
     delete apiRest.defaults.headers.common.authorization;

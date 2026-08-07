@@ -1,6 +1,7 @@
 import {
   applyRemoteUserActivity,
   getUserActivityStorageKey,
+  onSessionResume,
   onUserActivity,
   recordUserActivity,
   resetUserActivityTrackerForTests,
@@ -66,12 +67,18 @@ describe('userActivityTracker cross-tab', () => {
     cleanup();
   });
 
-  it('compte le focus / retour visible comme activité', () => {
+  it('focus / visibility = resume, pas activité (P0-D)', () => {
     const cleanup = startUserActivityTracking();
-    const listener = jest.fn();
-    onUserActivity(listener);
+    const activityListener = jest.fn();
+    const resumeListener = jest.fn();
+    onUserActivity(activityListener);
+    onSessionResume(resumeListener);
     window.dispatchEvent(new Event('focus'));
-    expect(listener).toHaveBeenCalledWith(expect.any(Number), { source: 'local' });
+    expect(activityListener).not.toHaveBeenCalled();
+    expect(resumeListener).toHaveBeenCalledTimes(1);
+    document.dispatchEvent(new Event('visibilitychange'));
+    // Dédup 500ms : un seul resume pour focus+visibility proches
+    expect(resumeListener).toHaveBeenCalledTimes(1);
     cleanup();
   });
 });

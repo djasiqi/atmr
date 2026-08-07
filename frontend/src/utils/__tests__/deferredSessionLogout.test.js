@@ -116,7 +116,10 @@ describe('deferredSessionLogout (garde idle)', () => {
       await Promise.resolve();
     }
 
-    expect(mockTryRefreshSessionIfNeeded).toHaveBeenCalledWith({ force: true });
+    expect(mockTryRefreshSessionIfNeeded).toHaveBeenCalledWith({
+      force: true,
+      reason: 'idle_stay_connected',
+    });
     expect(isSessionIdleWarningActive()).toBe(false);
   });
 
@@ -157,7 +160,10 @@ describe('deferredSessionLogout (garde idle)', () => {
     expect(props.onStay).toBeTruthy();
     await props.onStay();
 
-    expect(mockTryRefreshSessionIfNeeded).toHaveBeenCalledWith({ force: true });
+    expect(mockTryRefreshSessionIfNeeded).toHaveBeenCalledWith({
+      force: true,
+      reason: 'idle_stay_connected',
+    });
     expect(isSessionIdleWarningActive()).toBe(false);
     expect(mockLogoutUser).not.toHaveBeenCalled();
   });

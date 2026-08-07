@@ -62,6 +62,10 @@ jest.mock('../hooks/useAuthToken', () => ({
   getAccessToken: jest.fn(() => 'token'),
 }));
 
+jest.mock('../utils/webAuthSession', () => ({
+  hasActiveSession: jest.fn(() => true),
+}));
+
 jest.mock('../config/socketConfig', () => ({
   SOCKET_CONFIG: {
     reconnection: true,
@@ -69,6 +73,7 @@ jest.mock('../config/socketConfig', () => ({
     reconnectionDelay: 100,
     reconnectionDelayMax: 500,
     timeout: 5000,
+    withCredentials: true,
   },
   SOCKET_PATH: '/socket.io',
   getSocketTransports: () => ['websocket'],
@@ -102,6 +107,20 @@ describe('companySocket', () => {
 
     expect(first).toHaveBeenCalledWith({ driver_id: 1 });
     expect(second).toHaveBeenCalledWith({ driver_id: 1 });
+  });
+
+  it('cookie-only web : handshake sans JWT local si session UI active', async () => {
+    const { getAccessToken } = require('../hooks/useAuthToken');
+    getAccessToken.mockReturnValue(null);
+    const { io, __mockSocket: mockSocket } = require('socket.io-client');
+    const { ensureCompanySocket, getCompanySocketStatusSnapshot } = require('./companySocket');
+
+    const connectPromise = ensureCompanySocket();
+    expect(io).toHaveBeenCalled();
+    mockSocket.connect();
+    await connectPromise;
+    expect(getCompanySocketStatusSnapshot().connected).toBe(true);
+    expect(getCompanySocketStatusSnapshot().reasonCode).not.toBe('AUTH_REQUIRED');
   });
 
   it('waitUntilConnected resolves on connect without busy polling', async () => {

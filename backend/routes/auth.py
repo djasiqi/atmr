@@ -272,7 +272,7 @@ def _resolve_refresh_token_expires(
     - Clients mobile/API: durée par défaut (``JWT_REFRESH_TOKEN_EXPIRES``) pour
       ne pas casser les flux existants. Le flag ``remember_me`` est ignoré.
     - Web sans remember_me: durée courte (``JWT_REFRESH_TOKEN_SHORT_EXPIRES_SECONDS``,
-      défaut 1h). Combiné à un cookie de session (Max-Age=None) côté navigateur.
+      défaut 8h). Combiné à un cookie de session (Max-Age=None) côté navigateur.
     - Web avec remember_me: durée longue (``JWT_REFRESH_TOKEN_LONG_EXPIRES_SECONDS``,
       défaut 30j). Cookie persistant.
     """
@@ -287,7 +287,7 @@ def _resolve_refresh_token_expires(
         return timedelta(seconds=long_seconds)
 
     short_seconds = int(
-        os.getenv("JWT_REFRESH_TOKEN_SHORT_EXPIRES_SECONDS", str(60 * 60))
+        os.getenv("JWT_REFRESH_TOKEN_SHORT_EXPIRES_SECONDS", str(8 * 60 * 60))
     )
     return timedelta(seconds=short_seconds)
 
@@ -314,7 +314,7 @@ def _resolve_remember_me_from_refresh_token(
 
     ttl = int(decoded.get("exp", 0)) - int(decoded.get("iat", 0))
     short_seconds = int(
-        os.getenv("JWT_REFRESH_TOKEN_SHORT_EXPIRES_SECONDS", str(60 * 60))
+        os.getenv("JWT_REFRESH_TOKEN_SHORT_EXPIRES_SECONDS", str(8 * 60 * 60))
     )
     long_seconds = int(
         os.getenv("JWT_REFRESH_TOKEN_LONG_EXPIRES_SECONDS", str(30 * 24 * 3600))
@@ -331,6 +331,17 @@ def _refresh_cookie_max_age(
     if remember_me:
         return int(refresh_expires_delta.total_seconds())
     return None
+
+
+def _access_expiry_metadata(access_expires_delta: timedelta) -> dict[str, object]:
+    """Métadonnées non sensibles pour le scheduler web (pas de JWT exposé)."""
+    expires_in = int(access_expires_delta.total_seconds())
+    access_expires_at = datetime.now(UTC) + access_expires_delta
+    return {
+        "access_expires_in": expires_in,
+        "access_expires_at": access_expires_at.isoformat().replace("+00:00", "Z"),
+        "expires_in": expires_in,
+    }
 
 
 ACTIVATION_EMAIL_TTL_MINUTES = int(os.getenv("ACTIVATION_EMAIL_TTL_MINUTES", "30"))
@@ -887,6 +898,18 @@ login_success_model = auth_ns.model(
             description="ID de traçage pour le support",
             example="a1b2c3d4",
         ),
+        "access_expires_in": fields.Integer(
+            required=False,
+            description="Durée de vie de l'access token (secondes)",
+        ),
+        "access_expires_at": fields.String(
+            required=False,
+            description="Instant d'expiration de l'access token (ISO UTC)",
+        ),
+        "expires_in": fields.Integer(
+            required=False,
+            description="Alias de access_expires_in (compat)",
+        ),
     },
 )
 
@@ -1299,11 +1322,12 @@ def _login_post_body():
         )
         # Compat clients legacy
         claims["session_generation"] = claims["session_epoch"]
+    access_expires_delta = _resolve_access_token_expires(is_mobile_request)
     access_token = create_access_token(
         identity=str(user.public_id),
         # ⚠️ ID numérique attendu par dispatch_routes
         additional_claims=claims,
-        expires_delta=_resolve_access_token_expires(is_mobile_request),
+        expires_delta=access_expires_delta,
         fresh=True,  # ✅ Token fresh lors de la connexion initiale
     )
 
@@ -1442,6 +1466,8 @@ def _login_post_body():
         },
         "trace_id": trace_id,
     }
+    # Métadonnée scheduler (web + mobile) : pas de JWT dans le JSON web.
+    response_data.update(_access_expiry_metadata(access_expires_delta))
 
     # Lot 1-E : web = cookies only (pas de tokens JSON) ; mobile = Bearer/JSON
     if is_mobile_request:
@@ -2263,10 +2289,11 @@ refresh_token_response_model = auth_ns.model(
     "RefreshTokenResponse",
     {
         "access_token": fields.String(
-            required=True, description="Nouveau token d'accès JWT"
+            required=False, description="Nouveau token d'accès JWT (mobile uniquement)"
         ),
         "refresh_token": fields.String(
-            required=True, description="Nouveau refresh token (rotation automatique)"
+            required=False,
+            description="Nouveau refresh token (rotation ; mobile uniquement)",
         ),
         "user": fields.Nested(
             auth_ns.model(
@@ -2293,6 +2320,18 @@ refresh_token_response_model = auth_ns.model(
             required=False,
             description="ID de traçage pour le support",
             example="a1b2c3d4",
+        ),
+        "access_expires_in": fields.Integer(
+            required=False,
+            description="Durée de vie de l'access token (secondes)",
+        ),
+        "access_expires_at": fields.String(
+            required=False,
+            description="Instant d'expiration de l'access token (ISO UTC)",
+        ),
+        "expires_in": fields.Integer(
+            required=False,
+            description="Alias de access_expires_in (compat)",
         ),
     },
 )
@@ -2840,13 +2879,14 @@ class RefreshToken(Resource):
                 },
                 "trace_id": trace_id,
             }
+            # Métadonnée scheduler (web + mobile) sans exposer le JWT web.
+            response_data.update(_access_expiry_metadata(access_expires_delta))
 
             # Lot 1-E : tokens JSON uniquement pour mobile ; web = cookies only
             if is_mobile_request:
                 response_data["access_token"] = new_access_token
                 response_data["refresh_token"] = new_refresh_token
                 response_data["token_type"] = "Bearer"
-                response_data["expires_in"] = int(access_expires_delta.total_seconds())
                 if mobile_session_for_rotation is not None:
                     response_data["session_id"] = str(
                         mobile_session_for_rotation.session_id
