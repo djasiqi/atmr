@@ -121,8 +121,20 @@ describe("driverTrackingQueue", () => {
     await driverTrackingQueue.flush({ ackStaleMs: 1, networkProfile: "poor" });
 
     await new Promise((resolve) => setTimeout(resolve, 2));
-    mockSendDriverLocation.mockResolvedValueOnce({ ack_status: "duplicate" });
-    const secondFlush = await driverTrackingQueue.flush({ ackStaleMs: 1, networkProfile: "poor" });
+    mockSendDriverLocation.mockImplementation(async (payload: unknown) => {
+      const p = payload as { trackingEventId?: string };
+      return {
+        ack_status: "persisted",
+        durability: "persisted_sync",
+        location_event_id: p.trackingEventId ?? null,
+        tracking_event_id: p.trackingEventId ?? null,
+      };
+    });
+    const secondFlush = await driverTrackingQueue.flush({
+      ackStaleMs: 1,
+      networkProfile: "poor",
+      forceHttpFallback: true,
+    });
 
     expect(secondFlush.backendAcked).toBe(1);
     expect(secondFlush.queueDepth).toBe(0);

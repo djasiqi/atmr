@@ -110,10 +110,10 @@ const COMPACTION_HIGH_SPACING_MS = 45_000;
 const SPEED_DELTA_PIVOT_MS = 4;
 const HEADING_DELTA_PIVOT_DEG = 30;
 const SOCKET_BATCH_MAX_POINTS = Number(process.env.EXPO_PUBLIC_DRIVER_SOCKET_BATCH_MAX_POINTS ?? "20");
-const DRAIN_BATCH_SIZE = Number(process.env.EXPO_PUBLIC_DRIVER_TRACKING_DRAIN_BATCH_SIZE ?? "50");
-const DRAIN_INTERVAL_MS = Number(process.env.EXPO_PUBLIC_DRIVER_TRACKING_DRAIN_INTERVAL_MS ?? "2000");
+const DRAIN_BATCH_SIZE = Number(process.env.EXPO_PUBLIC_DRIVER_TRACKING_DRAIN_BATCH_SIZE ?? "3");
+const DRAIN_INTERVAL_MS = Number(process.env.EXPO_PUBLIC_DRIVER_TRACKING_DRAIN_INTERVAL_MS ?? "3000");
 const MAX_DRAIN_POSITIONS_PER_MINUTE = Number(
-  process.env.EXPO_PUBLIC_DRIVER_TRACKING_MAX_DRAIN_POSITIONS_PER_MINUTE ?? "1200"
+  process.env.EXPO_PUBLIC_DRIVER_TRACKING_MAX_DRAIN_POSITIONS_PER_MINUTE ?? "60"
 );
 /** Au-delà de ce seuil, bascule HTTP immédiate (évite la famine socket_emitted). */
 const BACKLOG_FORCE_HTTP_THRESHOLD = Number(
@@ -492,9 +492,13 @@ class DriverTrackingQueue {
       parsed.untilMs > nowMs()
     ) {
       this.queueSuspend = parsed;
-    } else {
-      this.queueSuspend = null;
+      return;
     }
+    // P0.3 : ne pas effacer une suspension mémoire encore active (miss AsyncStorage)
+    if (this.suspendActive()) {
+      return;
+    }
+    this.queueSuspend = null;
   }
 
   private async persistSuspendState() {
@@ -1143,6 +1147,10 @@ class DriverTrackingQueue {
 
       const enableRealAck = isFeatureEnabled("tracking_real_ack_semantics_enabled");
       const remaining: DriverTrackingQueueItem[] = [];
+      /** P0.3 : premier 429/suspension → aucun autre PUT dans ce flush. */
+      let stopHttpDrain = false;
+      /** Tentatives HTTP/socket comptées dans ce flush (budget batch). */
+      let drainedThisFlush = 0;
       this.items.sort((a, b) => {
         const ga = a.sessionGeneration ?? 0;
         const gb = b.sessionGeneration ?? 0;
@@ -1227,7 +1235,12 @@ class DriverTrackingQueue {
       }
 
       for (const item of this.items) {
-        if (sent >= maxDrainNow) {
+        // P0.3 : conserver tous les éléments non traités (pas de break qui les perd)
+        if (stopHttpDrain || this.suspendActive()) {
+          remaining.push(item);
+          continue;
+        }
+        if (drainedThisFlush >= maxDrainNow) {
           remaining.push(item);
           continue;
         }
@@ -1253,6 +1266,7 @@ class DriverTrackingQueue {
           if (canTrySocket && canEmitSocketBatchNow()) {
             if (this.tryEmitSocketBatch([item])) {
               sent += 1;
+              drainedThisFlush += 1;
               this.drainedInCurrentMinute += 1;
               socketEmitted += 1;
               flushPathUsed = "socket_batch";
@@ -1294,6 +1308,9 @@ class DriverTrackingQueue {
 
           item.deliveryState = "retry_pending";
           item.lastAttemptAt = nowMs();
+          // Compte chaque tentative HTTP dans le budget batch + minute (y compris 429)
+          drainedThisFlush += 1;
+          this.drainedInCurrentMinute += 1;
           const ack = await sendDriverLocation({
             ...item.payload,
             locationMode: item.locationMode,
@@ -1523,6 +1540,7 @@ class DriverTrackingQueue {
           const suspendPlan = resolveQueueSuspendMs(meta, meta.retry_after_seconds);
           if (suspendPlan) {
             await this.activateSuspension(suspendPlan.suspendMs, suspendPlan.reason);
+            stopHttpDrain = true;
             item.deliveryState = "retry_pending";
             item.lastError = suspendPlan.reason;
             remaining.push(item);
@@ -1596,6 +1614,7 @@ class DriverTrackingQueue {
       const pendingFlush = this.pendingFlushOptions;
       this.pendingFlushOptions = null;
       if (pendingFlush) {
+        // Respecte la suspension (0 HTTP immédiat) ; le flush interne replanifie si besoin
         void this.flush(pendingFlush);
       }
     }
@@ -1730,7 +1749,13 @@ class DriverTrackingQueue {
     this.sessionGeneration = null;
     this.sequenceCounter = 0;
     this.sessionCreatedAt = 0;
+    this.drainedInCurrentMinute = 0;
+    this.drainMinuteBucket = 0;
     this.watermarkInFlight = false;
+    if (this.drainTimer) {
+      clearTimeout(this.drainTimer);
+      this.drainTimer = null;
+    }
     if (this.watermarkTimer) {
       clearTimeout(this.watermarkTimer);
       this.watermarkTimer = null;

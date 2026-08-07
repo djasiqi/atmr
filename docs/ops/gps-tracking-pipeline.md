@@ -174,6 +174,13 @@ Fenêtre atomique obligatoire :
 3. DEPLOY-A : exige `repo@sha256:…` ; la vérif digests ne teste que `docker inspect` (plus de faux positif via concat).
 4. Circuit : `OPEN_MIN` respecté (pas de saut open→closed) ; `should_use_async_ingest` lit aussi le heartbeat (stale/absent → sync).
 
+✅ **Implémenté** (P0.3 — drain mobile aligné serveur) :
+
+1. Premier `429` → `stopHttpDrain` : aucun autre PUT dans le même flush ; tous les items restants conservés en SQLite.
+2. Défauts : `MAX_DRAIN=60/min`, `BATCH=3`, `INTERVAL=3000ms` (marge vs limiteur `30/10s` + `120/60s`).
+3. Budget minute compté aussi sur les tentatives HTTP (pas seulement socket).
+4. Tests : [`driverTrackingQueue.p03DrainGuard.test.ts`](../../mobile/unified-app/src/features/driver/services/driverTrackingQueue.p03DrainGuard.test.ts).
+
 Si les positions ne persistent pas malgré des HTTP 202 (historique) :
 
 1. `TRACKING_INGEST_ASYNC_ENABLED=false` **avec** limiteur GPS corrigé (même fenêtre).
