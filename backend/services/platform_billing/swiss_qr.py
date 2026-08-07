@@ -1,4 +1,4 @@
-"""Payload QR-facture suisse générique (plateforme : arrondi 0.01, pas 0.05)."""
+"""Payload QR-facture suisse générique (plateforme : arrondi 0,05 CHF)."""
 
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ class SwissQrBillPayload:
 
 
 def platform_qr_amount(total_ttc: Decimal) -> Decimal:
-    """Montant QR plateforme = total TTC figé exact (0.01), sans round_to_5_cents."""
+    """Montant QR plateforme = total TTC figé (même arrondi 0,05 que money_round_chf)."""
     return money_round_chf(total_ttc)
 
 
@@ -67,7 +67,7 @@ def resolve_platform_reference_mode(iban: str | None, requested_mode: str | None
 
 
 def render_swiss_qr_bill(payload: SwissQrBillPayload) -> dict[str, Any]:
-    """Construit les données prêtes pour la lib qrbill (sans arrondi 0.05)."""
+    """Construit les données prêtes pour la lib qrbill (montant via money_round_chf)."""
     from qrbill import QRBill
 
     amount = platform_qr_amount(payload.amount)

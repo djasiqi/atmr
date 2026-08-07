@@ -43,8 +43,11 @@ def test_commission_total_is_sum_of_per_booking_rounded_amounts():
 
 
 def test_money_round_chf_half_up_edge_cases():
-    assert money_round_chf(Decimal("1.005")) == Decimal("1.01")
+    # Arrondi plateforme = multiples de 0,05 CHF
+    assert money_round_chf(Decimal("1.005")) == Decimal("1.00")
     assert money_round_chf(Decimal("1.004")) == Decimal("1.00")
+    assert money_round_chf(Decimal("1.025")) == Decimal("1.05")
+    assert money_round_chf(Decimal("1687.14")) == Decimal("1687.15")
 
 
 def test_assert_period_still_open_raises():

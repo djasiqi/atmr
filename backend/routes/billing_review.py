@@ -31,7 +31,7 @@ from sqlalchemy import and_, or_
 from sqlalchemy.orm import joinedload
 
 from ext import db, role_required
-from models import BillingAuditLog, Booking, Client, ClientStay
+from models import BillingAuditLog, BillingParty, Booking, Client, ClientStay
 from models.enums import BillingReviewStatus, BookingStatus, UserRole
 from routes.api_error_models import (
     create_api_error_model,
@@ -64,6 +64,39 @@ def _round_chf_005(value: float | None) -> float:
     d = Decimal(str(v))
     quant = Decimal("0.05")
     return float((d / quant).quantize(Decimal("1"), rounding=ROUND_HALF_UP) * quant)
+
+
+def _align_billing_party_after_payer_change(booking: Booking) -> None:
+    """Aligne billing_party_id après set_payer (patient ↔ clinique)."""
+    from services.billing.billing_party_linker import (
+        ensure_patient_destination_billing_party,
+        is_establishment_billing_party,
+        resolve_billing_party_for_clinic,
+    )
+
+    btype = str(getattr(booking, "billed_to_type", None) or "").lower().strip()
+    company_id = getattr(booking, "company_id", None)
+    if company_id is None:
+        return
+
+    if btype == "patient":
+        ensure_patient_destination_billing_party(booking)
+        return
+
+    if btype == "clinic":
+        clinic_id = getattr(booking, "billed_to_company_id", None)
+        if clinic_id is None:
+            return
+        bp_id = getattr(booking, "billing_party_id", None)
+        current = db.session.get(BillingParty, int(bp_id)) if bp_id is not None else None
+        if current is not None and is_establishment_billing_party(current):
+            return
+        bp = resolve_billing_party_for_clinic(
+            company_id=int(company_id),
+            clinic_company_id=int(clinic_id),
+        )
+        if bp is not None:
+            booking.billing_party_id = int(bp.id)
 
 
 logger = logging.getLogger(__name__)
@@ -458,6 +491,7 @@ class SetBookingPayer(Resource):
             booking.billing_party_id = validated.get("billing_party_id")
             booking.billed_to_company_id = validated.get("billed_to_company_id")
             booking.billing_override_reason = validated["reason"]
+            _align_billing_party_after_payer_change(booking)
             # Réinitialiser la source car c'est une modification manuelle
             booking.billing_source = None
             booking.billing_source_ref = None
@@ -1037,6 +1071,7 @@ class BatchSetBookingPayer(Resource):
                 booking.billing_party_id = validated.get("billing_party_id")
                 booking.billed_to_company_id = validated.get("billed_to_company_id")
                 booking.billing_override_reason = validated["reason"]
+                _align_billing_party_after_payer_change(booking)
                 # Réinitialiser la source car c'est une modification manuelle
                 booking.billing_source = None
                 booking.billing_source_ref = None

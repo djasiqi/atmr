@@ -1,0 +1,157 @@
+.card {
+  --idle-accent: #b45309;
+  --idle-accent-soft: #fff7ed;
+  --idle-border: #fed7aa;
+  --idle-text: #1c1917;
+  --idle-muted: #78716c;
+  --idle-danger: #9f1239;
+
+  box-sizing: border-box;
+  width: min(360px, calc(100vw - 32px));
+  padding: 14px 14px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--idle-border);
+  background: #fffefb;
+  box-shadow:
+    0 10px 28px rgba(28, 25, 23, 0.12),
+    0 1px 0 rgba(255, 255, 255, 0.7) inset;
+  color: var(--idle-text);
+  font-family: inherit;
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.iconWrap {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--idle-accent-soft);
+  color: var(--idle-accent);
+}
+
+.copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+}
+
+.desc {
+  margin: 4px 0 0;
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--idle-muted);
+}
+
+.countdown {
+  flex-shrink: 0;
+  min-width: 52px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.seconds {
+  display: block;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--idle-accent);
+}
+
+.secondsUnit {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--idle-muted);
+}
+
+.progressTrack {
+  margin-top: 12px;
+  height: 4px;
+  border-radius: 999px;
+  background: #f5f5f4;
+  overflow: hidden;
+}
+
+.progressBar {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #f59e0b, #d97706);
+  transition: width 0.9s linear;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.btn {
+  appearance: none;
+  flex: 1;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.btn:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.btnGhost {
+  background: transparent;
+  border-color: #e7e5e4;
+  color: var(--idle-danger);
+}
+
+.btnGhost:hover:not(:disabled) {
+  background: #fff1f2;
+  border-color: #fecdd3;
+}
+
+.btnPrimary {
+  background: var(--idle-accent);
+  border-color: var(--idle-accent);
+  color: #fffefb;
+}
+
+.btnPrimary:hover:not(:disabled) {
+  background: #92400e;
+  border-color: #92400e;
+}
+
+/* Hôte Sonner : retirer le chrome par défaut autour du custom toast */
+.sonnerHost {
+  padding: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}

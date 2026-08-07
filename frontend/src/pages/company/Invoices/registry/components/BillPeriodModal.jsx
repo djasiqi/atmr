@@ -1965,8 +1965,8 @@ const BillPeriodModal = ({
                       type="button"
                       className={`${draftEditorStyles.draftPdfToolBtn} ${draftEditorStyles.draftPdfToolBtnIconOnly}`}
                       disabled={previewLoading || generateLoading || !canPreview()}
-                      title="Recharger la facture depuis le serveur"
-                      aria-label="Actualiser les données depuis le serveur"
+                      title="Actualiser l’aperçu HTML de la période (pas de régénération PDF)"
+                      aria-label="Actualiser l’aperçu HTML depuis le serveur"
                       onClick={() => void runPreview()}
                     >
                       <FiRefreshCw

@@ -261,12 +261,34 @@ def pick_canonical_billing_party_id(bookings: list[Booking]) -> int | None:
     Un même patient peut porter plusieurs ``BillingParty`` historiques (créés avant
     la déduplication par ``external_ref``). On retient le plus fréquent, puis le plus
     ancien, pour que le sujet ne produise qu'une seule opportunité.
+
+    Guérit aussi les courses ``billed_to_type=patient`` encore liées à un BP
+    établissement (clinique / EMS / hôpital).
     """
+    from services.billing.billing_party_linker import (
+        ensure_patient_destination_billing_party,
+        is_establishment_billing_party,
+    )
+
+    for booking in bookings:
+        btype = str(getattr(booking, "billed_to_type", None) or "").lower().strip()
+        if btype != "patient":
+            continue
+        bp_id = getattr(booking, "billing_party_id", None)
+        bp = db.session.get(BillingParty, int(bp_id)) if bp_id is not None else None
+        if bp is None or is_establishment_billing_party(bp):
+            ensure_patient_destination_billing_party(booking)
+
     counts: dict[int, int] = defaultdict(int)
     for booking in bookings:
         bp_id = getattr(booking, "billing_party_id", None)
-        if bp_id is not None:
-            counts[int(bp_id)] += 1
+        if bp_id is None:
+            continue
+        bp = db.session.get(BillingParty, int(bp_id))
+        # Ne pas élire un BP établissement pour une opportunité patient.
+        if bp is not None and is_establishment_billing_party(bp):
+            continue
+        counts[int(bp_id)] += 1
     if not counts:
         return None
     return min(counts, key=lambda bp_id: (-counts[bp_id], bp_id))
@@ -452,7 +474,10 @@ def list_billing_opportunities(
 
     canceled_ok = and_canceled_billable()
     patient_bookings = (
-        Booking.query.options(joinedload(Booking.client))
+        Booking.query.options(
+            joinedload(Booking.client).joinedload(Client.user),
+            joinedload(Booking.institution_patient),
+        )
         .filter(
             Booking.company_id == company_id,
             Booking.billed_to_type == "patient",
@@ -476,6 +501,8 @@ def list_billing_opportunities(
     patient_items: list[PatientOpportunity] = []
     ip_cache: dict[int, InstitutionPatient] = {}
     bp_cache: dict[int, BillingParty] = {}
+    # Clients déjà eager-loadés via Booking.client (vérif multi-tenant en mémoire).
+    carrier_ok: dict[int, bool] = {}
     ignored_missing_billing_party_count = 0
 
     for subject_key, bookings in groups.items():
@@ -485,14 +512,28 @@ def list_billing_opportunities(
         sample = bookings[0]
         subj = resolve_subject_identity(sample)
         carrier = int(sample.client_id) if sample.client_id is not None else 0
-        if carrier and not crepo.find_model_by_id_and_company(carrier, company_id):
-            continue
+        if carrier:
+            if carrier not in carrier_ok:
+                sample_client = getattr(sample, "client", None)
+                if (
+                    sample_client is not None
+                    and int(getattr(sample_client, "company_id", 0) or 0) == company_id
+                ):
+                    carrier_ok[carrier] = True
+                else:
+                    # Fallback rare si relation absente / hors session
+                    carrier_ok[carrier] = bool(
+                        crepo.find_model_by_id_and_company(carrier, company_id)
+                    )
+            if not carrier_ok[carrier]:
+                continue
 
         patient: InstitutionPatient | None = None
         if subj.subject_type == "institution_patient" and subj.subject_id is not None:
             if subj.subject_id not in ip_cache:
-                ip_cache[subj.subject_id] = db.session.get(
-                    InstitutionPatient, subj.subject_id
+                ip_cache[subj.subject_id] = (
+                    getattr(sample, "institution_patient", None)
+                    or db.session.get(InstitutionPatient, subj.subject_id)
                 )
             patient = ip_cache.get(subj.subject_id)
 
@@ -507,18 +548,23 @@ def list_billing_opportunities(
                 patient, getattr(sample, "customer_name", None) or subject_key
             )
         elif subj.subject_type == "client":
-            client = (
-                Client.query.options(joinedload(Client.user))
-                .filter_by(id=carrier)
-                .first()
-            )
+            client = getattr(sample, "client", None)
             display = _client_display_name(client) if client else f"Client #{carrier}"
         else:
             display = (
                 getattr(sample, "customer_name", None) or subject_key or "Booking"
             )
 
-        payer_name = (bp.display_name if bp else None) or None
+        bp_type_raw = (
+            (getattr(bp.type, "value", None) or str(bp.type)).lower().strip()
+            if bp is not None
+            else ""
+        )
+        # BP PATIENT : pas de « facturé à {patient} » redondant (ni clinique obsolète).
+        if bp_type_raw == "patient":
+            payer_name = None
+        else:
+            payer_name = (bp.display_name if bp else None) or None
         recipient_status = _recipient_status_for_party(bp, patient=patient)
         identity_status: IdentityStatus = subj.status  # type: ignore[assignment]
 
@@ -633,6 +679,7 @@ def list_billing_opportunities(
             period_month=period_month,
             client_id=None,
             clinic_company_id=ccid,
+            include_line_details=False,
         )
         if prev.transports_count < 1:
             continue
@@ -653,6 +700,10 @@ def list_billing_opportunities(
 
     if ignored_missing_billing_party_count:
         _inc_ignored_missing_billing_party_metric(ignored_missing_billing_party_count)
+
+    # Persister les guérisons BP patient←établissement (sinon rollback fin de requête).
+    if db.session.new or db.session.dirty:
+        db.session.commit()
 
     return BillingOpportunitiesResult(
         period_year=period_year,

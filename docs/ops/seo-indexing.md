@@ -22,7 +22,7 @@ Source de vérité : artefacts dans `frontend/build/`, puis HTML réellement ser
 
 ## Fichiers clés
 
-- [`frontend/public/robots.txt`](../../frontend/public/robots.txt)
+- [`frontend/public/robots.txt`](../../frontend/public/robots.txt) — un seul groupe `User-agent: *` avec les `Disallow` privés (+ `GPTBot` bloqué). ✅ **Implémenté** : suppression des blocs Googlebot/Bingbot/IA avec `Allow: /` seul (ils ignoraient les `Disallow` de `*`, d’où l’indexation de `/login`)
 - [`frontend/public/sitemap.xml`](../../frontend/public/sitemap.xml) — 10 URLs
 - [`frontend/public/llms.txt`](../../frontend/public/llms.txt)
 - [`frontend/public/index.html`](../../frontend/public/index.html) — `noindex` par défaut

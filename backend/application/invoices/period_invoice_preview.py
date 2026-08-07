@@ -257,10 +257,14 @@ def build_period_invoice_preview(
     clinic_company_id: int | None = None,
     institution_patient_id: int | None = None,
     billing_party_id: int | None = None,
+    include_line_details: bool = True,
 ) -> PeriodPreviewResult:
     """Aperçu read-only : exactement un de client_id (patient direct) ou clinic_company_id (S2).
 
     Filtres optionnels patient institutionnel : ``institution_patient_id`` / ``billing_party_id``.
+
+    ``include_line_details=False`` : agrégats seuls (registre opportunités) — pas de
+    résolution nominative par ligne (évite le N+1 clients).
     """
     if bool(client_id) == bool(clinic_company_id):
         raise ValueError(
@@ -322,8 +326,19 @@ def build_period_invoice_preview(
                 if getattr(b, "billing_party_id", None) == int(billing_party_id)
             ]
         client = crepo.find_model_by_id_with_user(int(client_id), company_id)
-        patient_name = resolve_patient_name_for_invoice(client, bookings)
+        patient_name = (
+            resolve_patient_name_for_invoice(client, bookings)
+            if include_line_details
+            else None
+        )
         rt_map = _round_trip_leg_by_booking_id(bookings)
+        # Une seule requête pour tous les clients des lignes (évite N+1).
+        clients_by_id: dict[int, Any] = {}
+        if include_line_details:
+            clients_by_id = crepo.find_models_by_ids_and_company_with_user(
+                {int(b.client_id) for b in bookings if b.client_id is not None},
+                company_id,
+            )
 
         gross = Decimal("0.00")
         vat_sum = Decimal("0.00")
@@ -343,6 +358,9 @@ def build_period_invoice_preview(
             vat_sum += va
             tw_sum += tw
 
+            if not include_line_details:
+                continue
+
             desc = build_invoice_line_description(
                 b,
                 patient_name=patient_name,
@@ -354,9 +372,7 @@ def build_period_invoice_preview(
             )
             locked = bool(getattr(b, "invoice_line_id", None))
             b_client = (
-                crepo.find_model_by_id_with_user(int(b.client_id), company_id)
-                if b.client_id
-                else None
+                clients_by_id.get(int(b.client_id)) if b.client_id is not None else None
             )
             row_patient = resolve_patient_name_for_invoice(b_client, [b])
             if not row_patient:
@@ -376,9 +392,10 @@ def build_period_invoice_preview(
                 )
             )
 
-        preview_lines_out = _consolidate_period_preview_round_trip_rows(
-            preview_lines_out, bookings, billing_settings_dto
-        )
+        if include_line_details:
+            preview_lines_out = _consolidate_period_preview_round_trip_rows(
+                preview_lines_out, bookings, billing_settings_dto
+            )
 
         if len(bookings) == 0:
             warnings.insert(
@@ -473,6 +490,17 @@ def build_period_invoice_preview(
     eligible_bookings = eligible_query.order_by(Booking.scheduled_time.asc()).all()
     rt_map_s2 = _round_trip_leg_by_booking_id(eligible_bookings)
     crepo = ClientRepository()
+    # Batch : une requête client (+ user) pour toute la période clinique (Sentry N+1).
+    clients_by_id_s2: dict[int, Any] = {}
+    if include_line_details:
+        clients_by_id_s2 = crepo.find_models_by_ids_and_company_with_user(
+            {
+                int(b.client_id)
+                for b in eligible_bookings
+                if b.client_id is not None
+            },
+            company_id,
+        )
 
     gross_s2 = Decimal("0.00")
     vat_sum_s2 = Decimal("0.00")
@@ -492,14 +520,17 @@ def build_period_invoice_preview(
         vat_sum_s2 += va
         tw_sum_s2 += tw
 
+        if not include_line_details:
+            continue
+
         desc = build_invoice_line_description_clinic_monthly(
             b, description_builder=None
         )
 
         locked = bool(getattr(b, "invoice_line_id", None))
         b_client = (
-            crepo.find_model_by_id_with_user(int(b.client_id), company_id)
-            if b.client_id
+            clients_by_id_s2.get(int(b.client_id))
+            if b.client_id is not None
             else None
         )
         from application.invoices.invoice_line_description import (
@@ -522,9 +553,10 @@ def build_period_invoice_preview(
             )
         )
 
-    preview_lines_out = _consolidate_period_preview_round_trip_rows(
-        preview_lines_out, eligible_bookings, billing_settings_dto
-    )
+    if include_line_details:
+        preview_lines_out = _consolidate_period_preview_round_trip_rows(
+            preview_lines_out, eligible_bookings, billing_settings_dto
+        )
 
     if len(eligible_bookings) == 0:
         warnings.insert(

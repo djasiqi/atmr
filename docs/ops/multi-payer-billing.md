@@ -50,6 +50,25 @@ Les courses manuelles « Direct patient » (sans tiers payeur / curatelle) reço
 
 Le registre V2 (`billing-opportunities`) exige ce `billing_party_id` ; sans lui le patient est ignoré (compteur `ignored_missing_billing_party_count`).
 
+## Ajustement transporteur (après course)
+
+✅ **Implémenté** : bascule patient ↔ clinique depuis le panneau Facturation (courses dispatch + institution, non verrouillées) ; propagation aller → retour ; retour seul = indépendant.
+
+Depuis le panneau **Facturation** (détail réservation entreprise), le transporteur peut basculer le destinataire (`patient` ↔ `clinique`) sur une course **dispatch** ou **institution** non verrouillée (pas encore sur facture).
+
+Règle aller-retour :
+
+- Changement sur l’**aller** → le **retour** non verrouillé reprend le même destinataire / `billing_party` (montants inchangés).
+- Changement **uniquement sur le retour** → l’aller n’est pas modifié (payeurs différés / indépendants).
+
+API : `PATCH /companies/me/reservations/<id>/billing-adjustment`  
+Use case : `backend/application/companies/reservations/billing_adjustment.py`  
+UI : `frontend/src/pages/company/Reservations/components/ReservationDetailPanel.jsx`
+
+✅ **Implémenté** : `ensure_patient_destination_billing_party` aligne `billing_party_id` lors d’une bascule clinique → patient (remplace un BP établissement par un BP `PATIENT` institution ou portefeuille). Branché sur `billing_adjustment`, `billing_review` (set_payer / batch), et guérison à la lecture du registre (`pick_canonical_billing_party_id` + commit dans `list_billing_opportunities`). Fichiers : `backend/services/billing/billing_party_linker.py`, `billing_opportunities.py`.
+
+✅ **Implémenté** : correction N+1 Sentry `PYTHON-FLASK-DQ` sur `GET …/billing-opportunities` — le preview clinique S2 chargeait 1 client (+ user) par booking. Batch `ClientRepository.find_models_by_ids_and_company_with_user`, flag `include_line_details=False` pour le registre (agrégats seuls), eager-load `Booking.client.user` / `institution_patient` côté opportunités patient. Tests : `backend/tests/application/test_period_invoice_preview_n1.py`.
+
 ## Checklist manuelle post-déploiement
 
 - [ ] Création demande multi-destination avec override sur une destination

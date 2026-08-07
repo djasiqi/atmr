@@ -49,6 +49,9 @@ let lastSocketStatus = {
   reasonLabel: null,
 };
 
+/** Évite une tempête de refresh sur AUTH_REQUIRED / token manquant. */
+let authRecoveryPromise = null;
+
 export const COMPANY_SOCKET_STATE_EVENT = 'company_socket_state';
 
 function notifyCompanySocketState(detail) {
@@ -284,6 +287,35 @@ if (process.env.NODE_ENV === 'production' && typeof window !== 'undefined') {
   }
 }
 
+async function recoverAuthAndReconnect(targetSocket, generation) {
+  if (authRecoveryPromise) {
+    return authRecoveryPromise;
+  }
+  authRecoveryPromise = (async () => {
+    try {
+      const { ensureUsableAccessToken } = await import('../utils/ensureUsableAccessToken');
+      const token = await ensureUsableAccessToken();
+      if (!token || !isSocketGenerationActive(generation)) {
+        return false;
+      }
+      if (targetSocket?.io?.opts) {
+        targetSocket.io.opts.reconnection = true;
+      }
+      if (targetSocket && !targetSocket.connected) {
+        targetSocket.connect();
+      } else if (!targetSocket) {
+        retryCompanySocket();
+      }
+      return true;
+    } catch {
+      return false;
+    } finally {
+      authRecoveryPromise = null;
+    }
+  })();
+  return authRecoveryPromise;
+}
+
 function buildSocketOptions() {
   const jitterDelay = Math.random() * 100;
   const jitterMax = Math.random() * 500;
@@ -296,12 +328,24 @@ function buildSocketOptions() {
     reconnectionDelayMax: SOCKET_CONFIG.reconnectionDelayMax + jitterMax,
     transports: getSocketTransports(),
     auth: (cb) => {
-      const token = getAccessToken();
-      if (token) {
-        cb({ token });
-      } else {
-        cb({});
-      }
+      // Refresh JWT si access expiré mais session UI encore active (évite auth: {}).
+      void import('../utils/ensureUsableAccessToken')
+        .then(({ ensureUsableAccessToken }) => ensureUsableAccessToken())
+        .then((token) => {
+          if (token) {
+            cb({ token });
+          } else {
+            cb({});
+          }
+        })
+        .catch(() => {
+          const fallback = getAccessToken();
+          if (fallback) {
+            cb({ token: fallback });
+          } else {
+            cb({});
+          }
+        });
     },
     // Dev-only metadata sent by Socket.IO's query string. This makes it easy to
     // identify whether the browser even starts the Engine.IO handshake.
@@ -436,6 +480,29 @@ function attachSocketHandlers(targetSocket, generation, { onFirstConnectError } 
         'RATE_LIMIT',
       ];
       const isAuthLike = authCodes.some((c) => msg.includes(c));
+      const recoverableAuth = ['AUTH_REQUIRED', 'AUTH_INVALID', 'TOKEN_EXPIRED'].some((c) =>
+        msg.includes(c)
+      );
+      if (recoverableAuth) {
+        // Ne pas dispatcher `socket_connection_rejected` tout de suite :
+        // le dashboard company logout sur AUTH_REQUIRED, ce qui empêche le refresh JWT.
+        void recoverAuthAndReconnect(targetSocket, generation).then((ok) => {
+          if (ok || !isSocketGenerationActive(generation) || typeof window === 'undefined') {
+            return;
+          }
+          window.dispatchEvent(
+            new CustomEvent('socket_connection_rejected', {
+              detail: {
+                message: msg,
+                code: mapped.reasonCode || msg,
+                reasonLabel: mapped.reasonLabel,
+                originalError: err,
+              },
+            })
+          );
+        });
+        return;
+      }
       if (isAuthLike) {
         window.dispatchEvent(
           new CustomEvent('socket_connection_rejected', {
@@ -466,43 +533,10 @@ function attachSocketHandlers(targetSocket, generation, { onFirstConnectError } 
   targetSocket.on('unauthorized', (err) => {
     if (!isSocketGenerationActive(generation)) return;
     const reason = err?.reason || err?.data?.reason;
-    if (reason !== 'token_expired') return;
+    if (reason !== 'token_expired' && reason !== 'AUTH_REQUIRED') return;
 
-    // ⚠️ Ancien comportement (cassé): on supprimait `authToken`/`refreshToken`
-    // puis on reconnectait. Conséquence: handshake suivant avec `auth: {}`,
-    // backend rejette AUTH_REQUIRED, boucle d'échec, badge reste sur
-    // "Jamais connecté" même après que l'utilisateur ait rafraîchi son token
-    // via une requête REST.
-    //
-    // Nouveau comportement: déléguer le rafraîchissement à l'intercepteur
-    // axios (apiClient) via un ping authentifié léger. L'intercepteur 401
-    // sait gérer la rotation /auth/refresh-token et stocke le nouveau token
-    // dans les bonnes clés scopées. Au succès, on relance la connexion socket
-    // avec le nouveau token via le callback `auth` de buildSocketOptions().
-    void (async () => {
-      let refreshed = false;
-      try {
-        // Import paresseux pour éviter une dépendance circulaire au chargement.
-        const mod = await import('../utils/apiClient');
-        const apiClient = mod?.default;
-        if (apiClient && typeof apiClient.get === 'function') {
-          // GET très léger. Si le token est expiré, l'intercepteur axios
-          // déclenche le refresh puis rejoue la requête; sinon il propage.
-          await apiClient.get('/companies/me');
-          refreshed = true;
-        }
-      } catch {
-        refreshed = false;
-      }
-      if (!isSocketGenerationActive(generation)) return;
-      if (!refreshed) return;
-      try {
-        if (targetSocket.io?.opts) {
-          targetSocket.io.opts.reconnection = true;
-        }
-        targetSocket.connect();
-      } catch {}
-    })();
+    // Refresh JWT puis reconnecte (évite handshake auth: {} → AUTH_REQUIRED en boucle).
+    void recoverAuthAndReconnect(targetSocket, generation);
   });
 
   eventSubscribers.forEach((_, event) => {
@@ -527,6 +561,7 @@ export function getCompanySocket() {
 
   // Ne pas ouvrir un handshake sans JWT : le cookie stale d'un autre rôle
   // (admin…) provoquait AUTH_FORBIDDEN + cascade Unauthorized.
+  // Si la session UI est encore active, tenter un refresh puis reconnecter.
   if (!getAccessToken()) {
     const { reasonCode, reasonLabel } = labelForMissingToken();
     notifyCompanySocketState({
@@ -535,6 +570,14 @@ export function getCompanySocket() {
       reasonCode,
       reasonLabel,
     });
+    void import('../utils/ensureUsableAccessToken')
+      .then(({ ensureUsableAccessToken }) => ensureUsableAccessToken())
+      .then((token) => {
+        if (token) {
+          retryCompanySocket();
+        }
+      })
+      .catch(() => {});
     return socket || null;
   }
 

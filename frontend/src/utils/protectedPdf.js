@@ -26,15 +26,47 @@ function toPdfBlob(raw, filename) {
 }
 
 /**
+ * Contourne le cache HTTP (même chemin API après régénération PDF).
+ * @param {string} apiPath
+ * @param {string|number} [bustToken]
+ * @returns {string}
+ */
+export function withPdfCacheBust(apiPath, bustToken) {
+  if (!apiPath || typeof apiPath !== 'string') return apiPath;
+  const token =
+    bustToken != null && String(bustToken).trim() !== ''
+      ? String(bustToken)
+      : String(Date.now());
+  const sep = apiPath.includes('?') ? '&' : '?';
+  return `${apiPath}${sep}_cb=${encodeURIComponent(token)}`;
+}
+
+/**
  * Télécharge un PDF via une route API JWT et retourne les octets bruts.
  * Plus rapide pour l’impression (évite blob URL + re-fetch).
  *
  * @param {string} apiPath
+ * @param {{ cacheBust?: string|number|boolean }} [options]
  * @returns {Promise<Uint8Array|null>}
  */
-export async function fetchProtectedPdfBytes(apiPath) {
+export async function fetchProtectedPdfBytes(apiPath, options = {}) {
   if (!apiPath || typeof apiPath !== 'string') return null;
-  const response = await apiClient.get(apiPath, { responseType: 'blob' });
+  const bust =
+    options.cacheBust === false
+      ? apiPath
+      : withPdfCacheBust(
+          apiPath,
+          options.cacheBust === true || options.cacheBust == null
+            ? Date.now()
+            : options.cacheBust
+        );
+  const response = await apiClient.get(bust, {
+    responseType: 'blob',
+    headers: {
+      'Cache-Control': 'no-cache',
+      Pragma: 'no-cache',
+    },
+  });
   const raw = response?.data;
   if (!raw) return null;
   const blob = toPdfBlob(raw);
@@ -57,12 +89,14 @@ export async function fetchProtectedPdfBytes(apiPath) {
  * (sauf ouverture dans un nouvel onglet où le navigateur garde la référence).
  *
  * @param {string} apiPath - Chemin relatif à apiClient.baseURL (ex. `/invoices/companies/1/invoices/2/pdf`)
- * @param {{ filename?: string }} [options]
+ * @param {{ filename?: string, cacheBust?: string|number|boolean }} [options]
  * @returns {Promise<string|null>}
  */
 export async function fetchProtectedPdfObjectUrl(apiPath, options = {}) {
   if (!apiPath || typeof apiPath !== 'string') return null;
-  const bytes = await fetchProtectedPdfBytes(apiPath);
+  const bytes = await fetchProtectedPdfBytes(apiPath, {
+    cacheBust: options.cacheBust,
+  });
   if (!bytes) return null;
   const blob = toPdfBlob(new Blob([bytes], { type: 'application/pdf' }), options.filename);
   return URL.createObjectURL(blob);
@@ -74,7 +108,7 @@ export async function fetchProtectedPdfObjectUrl(apiPath, options = {}) {
  *
  * @param {string|null|undefined} apiPath
  * @param {string|null|undefined} [fallbackUrl]
- * @param {{ filename?: string }} [options]
+ * @param {{ filename?: string, cacheBust?: string|number|boolean }} [options]
  * @returns {Promise<boolean>}
  */
 export async function openProtectedPdfInNewTab(apiPath, fallbackUrl, options = {}) {
@@ -101,16 +135,32 @@ export async function openProtectedPdfInNewTab(apiPath, fallbackUrl, options = {
  *
  * @param {string} apiPath
  * @param {string} suggestedFilename
+ * @param {{ cacheBust?: string|number|boolean }} [options]
  * @returns {Promise<boolean>}
  */
-export async function downloadProtectedPdfAsFile(apiPath, suggestedFilename) {
+export async function downloadProtectedPdfAsFile(apiPath, suggestedFilename, options = {}) {
   if (!apiPath || typeof apiPath !== 'string') return false;
   const name =
     typeof suggestedFilename === 'string' && suggestedFilename.trim()
       ? suggestedFilename.trim()
       : 'document.pdf';
   try {
-    const response = await apiClient.get(apiPath, { responseType: 'blob' });
+    const bust =
+      options.cacheBust === false
+        ? apiPath
+        : withPdfCacheBust(
+            apiPath,
+            options.cacheBust === true || options.cacheBust == null
+              ? Date.now()
+              : options.cacheBust
+          );
+    const response = await apiClient.get(bust, {
+      responseType: 'blob',
+      headers: {
+        'Cache-Control': 'no-cache',
+        Pragma: 'no-cache',
+      },
+    });
     const raw = response?.data;
     if (!raw) return false;
     const blob = toPdfBlob(raw, name);

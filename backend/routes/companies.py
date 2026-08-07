@@ -3493,6 +3493,7 @@ class ReservationBillingAdjustment(Resource):
             return {
                 "message": "Facturation mise à jour",
                 "reservation": booking.serialize,
+                "propagated_return_ids": list(uc_result.propagated_return_ids or []),
             }, 200
         except Exception as e:
             db.session.rollback()

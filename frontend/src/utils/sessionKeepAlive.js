@@ -107,6 +107,19 @@ export async function tryRefreshSessionIfNeeded({ force = false } = {}) {
       return { status: 'skipped' };
     }
     noteAuthTokensRenewed();
+    // Après renouvellement JWT : relancer le temps réel s'il était coupé (AUTH_REQUIRED).
+    try {
+      const {
+        getCompanySocketStatusSnapshot,
+        retryCompanySocket,
+      } = await import('../services/companySocket');
+      const status = getCompanySocketStatusSnapshot();
+      if (!status?.connected) {
+        retryCompanySocket();
+      }
+    } catch (_) {
+      // Socket optionnel / non chargé
+    }
     return { status: 'refreshed' };
   } catch (error) {
     const kind = classifyRefreshFailure(error);

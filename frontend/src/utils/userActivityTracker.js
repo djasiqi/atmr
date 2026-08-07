@@ -15,8 +15,8 @@ const FUTURE_SKEW_MS = 5 * 1000;
 /** Fenêtre courte : interaction en cours. */
 export const USER_ACTIVE_WINDOW_MS = 30 * 1000;
 
-/** Fenêtre longue : l'utilisateur est encore « en session de travail » (keep-alive JWT). */
-export const SESSION_WORKING_LOOKBACK_MS = 55 * 60 * 1000;
+/** Fenêtre longue : session de travail / garde idle (8 h sans interaction réelle). */
+export const SESSION_WORKING_LOOKBACK_MS = 8 * 60 * 60 * 1000;
 
 export const ACTIVITY_STORAGE_KEY_PREFIX = 'lirie_last_user_activity';
 
@@ -134,11 +134,23 @@ export const startUserActivityTracking = () => {
   });
   window.addEventListener('storage', onStorageActivity);
 
+  // Retour sur l'onglet / focus fenêtre = travail (évite un idle artificiel en arrière-plan).
+  const onFocusOrVisible = () => {
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+      return;
+    }
+    recordUserActivity();
+  };
+  window.addEventListener('focus', onFocusOrVisible);
+  document.addEventListener('visibilitychange', onFocusOrVisible);
+
   return () => {
     events.forEach((eventName) => {
       window.removeEventListener(eventName, recordUserActivity, options);
     });
     window.removeEventListener('storage', onStorageActivity);
+    window.removeEventListener('focus', onFocusOrVisible);
+    document.removeEventListener('visibilitychange', onFocusOrVisible);
     trackingStarted = false;
     if (throttleTimeout) {
       clearTimeout(throttleTimeout);

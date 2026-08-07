@@ -31,13 +31,15 @@ initDeferredSessionLogout() → garde idle bancaire (ACTIVE / IDLE_WARNING / REN
 | État | Comportement |
 |------|----------------|
 | ACTIVE | keep-alive silencieux ; aucun toast |
-| IDLE_WARNING | toast 60 s non dismissible ; Rester connecté / Se déconnecter ; activité locale ne ferme pas |
+| IDLE_WARNING | toast 2 min non dismissible ; Rester connecté / Se déconnecter ; activité locale → prolongement auto |
 | RENEWING | refresh forcé en cours ; boutons gelés |
 | SESSION_INVALID | `logoutUser({ immediate, reason: session_expired })` + message sur `/login` |
 
 Multi-onglets : activité partagée via `localStorage` (`lirie_last_user_activity:…`) ; logout via `lirie_auth_logout_at` (écouté par SessionBootstrap).
 
 ✅ **Implémenté** : garde idle bancaire + invalidation terminale vs erreurs transitoires — fichiers `frontend/src/utils/deferredSessionLogout.js`, `sessionKeepAlive.js`, `userActivityTracker.js`, `apiClient.js`, `sessionLogoutState.js`, `SessionBootstrapContext.jsx`, `Login.jsx`.
+
+✅ **Implémenté** : badge Socket.IO `AUTH_REQUIRED` (JWT access expiré / handshake `auth: {}`) — idle **8 h** + préavis **2 min** avec prolongement auto sur activité locale ; `ensureUsableAccessToken` + refresh `company_access_token` ; reconnexion temps réel après keep-alive — fichiers `frontend/src/utils/ensureUsableAccessToken.js`, `companySocket.js`, `sessionKeepAlive.js`, `apiClient.js`, `userActivityTracker.js`, `deferredSessionLogout.js`.
 
 Le backend ne connaît pas l'activité : il valide access / refresh / fresh uniquement.
 
@@ -54,7 +56,7 @@ Répéter pour **institution**, **company**, **admin**.
 | T0 | Login → cookies `access_token` + `refresh_token` (refresh = cookie session) | ☐ |
 | T+45–50 min | `POST /auth/refresh-token` → **200** + `Set-Cookie` access **et** refresh | ☐ |
 | T+110 min, T+170 min | Toujours connecté, listes/API OK | ☐ |
-| Inactivité 55+ min sans interaction | Toast préavis 60 s puis `/login` (idle_timeout) | ☐ |
+| Inactivité 8 h+ sans interaction | Toast préavis 2 min puis `/login` (idle_timeout) | ☐ |
 
 **DevTools** : URL exacte, corps 401 éventuel, rotation cookie refresh, TTL JWT décodé.
 

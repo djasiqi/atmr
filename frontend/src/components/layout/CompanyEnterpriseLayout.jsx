@@ -33,33 +33,93 @@ function CompanyOutletFallback() {
   );
 }
 
+/** Chunk webpack introuvable après déploiement (hash obsolète en cache navigateur). */
+function isChunkLoadError(error) {
+  if (!error) return false;
+  if (error.name === 'ChunkLoadError') return true;
+  const msg = String(error.message || error || '');
+  return (
+    /Loading chunk [\w.-]+ failed/i.test(msg) ||
+    /Failed to fetch dynamically imported module/i.test(msg) ||
+    /Importing a module script failed/i.test(msg)
+  );
+}
+
+function reloadOnceFromChunkError() {
+  if (typeof window === 'undefined') return;
+  if (window.__RELOADING_FROM_CHUNK_ERROR__) return;
+  window.__RELOADING_FROM_CHUNK_ERROR__ = true;
+  window.location.reload();
+}
+
 class CompanyOutletErrorBoundary extends Component {
   constructor(props) {
     super(props);
-    this.state = { hasError: false };
+    this.state = { hasError: false, error: null };
   }
 
-  static getDerivedStateFromError() {
-    return { hasError: true };
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
   }
 
-  componentDidCatch(error) {
-    if (process.env.NODE_ENV === 'development') {
-      console.error('[CompanyEnterpriseLayout] erreur contenu central', error?.message || error);
+  componentDidCatch(error, errorInfo) {
+    // Toujours logger : nécessaire pour diagnostiquer le fallback « Impossible d’afficher ».
+    console.error(
+      '[CompanyEnterpriseLayout] erreur contenu central',
+      error?.message || error,
+      errorInfo?.componentStack || '',
+    );
+    // lazy() rejette dans React → ce boundary masque le reload global de index.js.
+    if (isChunkLoadError(error)) {
+      reloadOnceFromChunkError();
     }
   }
 
   render() {
     if (this.state.hasError) {
+      const chunkStale = isChunkLoadError(this.state.error);
+      const detail =
+        this.state.error?.message ||
+        (typeof this.state.error === 'string' ? this.state.error : null);
       return (
         <main className={shellStyles.content} role="alert">
-          <h1 style={{ fontSize: '1.25rem', marginBottom: 8 }}>Impossible d’afficher cette page</h1>
+          <h1 style={{ fontSize: '1.25rem', marginBottom: 8 }}>
+            {chunkStale
+              ? 'Nouvelle version disponible'
+              : 'Impossible d’afficher cette page'}
+          </h1>
           <p style={{ color: '#64748b' }}>
-            Une erreur est survenue. Le menu reste disponible — essayez une autre section ou rechargez.
+            {chunkStale
+              ? 'L’application a été mise à jour. Rechargez pour charger les derniers modules.'
+              : 'Une erreur est survenue. Le menu reste disponible — essayez une autre section ou rechargez.'}
           </p>
+          {!chunkStale && detail ? (
+            <pre
+              style={{
+                marginTop: 12,
+                padding: 12,
+                borderRadius: 8,
+                background: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                color: '#334155',
+                fontSize: 12,
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+                maxWidth: '48rem',
+              }}
+            >
+              {detail}
+            </pre>
+          ) : null}
           <button
             type="button"
-            onClick={() => this.setState({ hasError: false })}
+            onClick={() => {
+              if (chunkStale) {
+                reloadOnceFromChunkError();
+                return;
+              }
+              this.setState({ hasError: false, error: null });
+            }}
             style={{
               marginTop: 12,
               padding: '8px 14px',
@@ -69,7 +129,7 @@ class CompanyOutletErrorBoundary extends Component {
               cursor: 'pointer',
             }}
           >
-            Réessayer
+            {chunkStale ? 'Recharger la page' : 'Réessayer'}
           </button>
         </main>
       );

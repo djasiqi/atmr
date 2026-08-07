@@ -103,8 +103,8 @@ function parseInvoiceMeta(raw) {
 }
 
 /**
- * True si le PDF brouillon doit être régénéré avant impression / téléchargement.
- * Évite un POST regenerate-pdf coûteux quand meta.pdf est déjà « ready ».
+ * True si meta.pdf indique un PDF absent / périmé / en échec (hint UI).
+ * Pour les factures éditables, download/open/print forcent toujours une regen.
  */
 function invoiceDraftPdfNeedsRefresh(inv) {
   if (!String(inv?.pdf_url || '').trim()) return true;
@@ -413,6 +413,7 @@ const DraftInvoiceEditorPanel = ({
   const syncInvoiceAfterDraftMutation = useCallback(async () => {
     if (!companyId || !inv?.id) return;
     try {
+      printPdfBytesCacheRef.current = { key: '', bytes: null };
       const res = await getInvoice(companyId, inv.id, { cacheBust: true });
       const data = unwrapInvoicePayload(res) ?? res?.data ?? res;
       if (data && typeof data === 'object' && data.id != null) {
@@ -427,6 +428,7 @@ const DraftInvoiceEditorPanel = ({
   /** Réponse mutation contient déjà ``invoice`` → pas de GET redondant. */
   const afterDraftMutation = useCallback(
     async (payload) => {
+      printPdfBytesCacheRef.current = { key: '', bytes: null };
       if (applyInvoiceFromPayload(payload)) return;
       await syncInvoiceAfterDraftMutation();
     },
@@ -733,7 +735,9 @@ const DraftInvoiceEditorPanel = ({
     let cancelled = false;
     (async () => {
       try {
-        const bytes = await fetchProtectedPdfBytes(apiPath);
+        const bytes = await fetchProtectedPdfBytes(apiPath, {
+          cacheBust: cacheKey,
+        });
         if (cancelled || !bytes || bytes.byteLength < 5) return;
         printPdfBytesCacheRef.current = { key: cacheKey, bytes: bytes.slice() };
       } catch {
@@ -762,6 +766,7 @@ const DraftInvoiceEditorPanel = ({
       try {
         const url = await fetchProtectedPdfObjectUrl(invoicePdfApiPath, {
           filename: pdfDownloadName,
+          cacheBust: `${inv?.updated_at || ''}:${pdfNonce}`,
         });
         if (cancelled) {
           if (url) URL.revokeObjectURL(url);
@@ -920,22 +925,27 @@ const DraftInvoiceEditorPanel = ({
           : null;
 
       if (!bytes) {
-        bytes = await fetchProtectedPdfBytes(apiPath);
+        bytes = await fetchProtectedPdfBytes(apiPath, {
+          cacheBust: `${inv?.updated_at || ''}:${pdfStatus}`,
+        });
       }
 
-      // PDF absent / périmé / vide → régénérer puis re-télécharger (avec courts retries).
+      // Facture éditable → toujours régénérer pour coller aux lignes DB (HTML).
       const needsRegen =
-        allowsLineEditing &&
-        (invoiceDraftPdfNeedsRefresh(inv) || !bytes || bytes.byteLength < 5);
+        allowsLineEditing || !bytes || bytes.byteLength < 5;
 
       if (needsRegen) {
-        await invoiceService.regenerateInvoicePdf(companyId, inv.id);
+        if (allowsLineEditing) {
+          await invoiceService.regenerateInvoicePdf(companyId, inv.id);
+        }
         printPdfBytesCacheRef.current = { key: '', bytes: null };
         void reloadPdfPreviewFromServer().catch(() => {});
 
         bytes = null;
         for (let attempt = 0; attempt < 6; attempt += 1) {
-          bytes = await fetchProtectedPdfBytes(apiPath);
+          bytes = await fetchProtectedPdfBytes(apiPath, {
+            cacheBust: `${Date.now()}:${attempt}`,
+          });
           if (bytes && bytes.byteLength >= 5) break;
           await new Promise((r) => {
             window.setTimeout(r, 350);
@@ -985,11 +995,11 @@ const DraftInvoiceEditorPanel = ({
   const handlePdfDownload = useCallback(async () => {
     if (!companyId || !inv?.id) return;
     setError('');
-    const needsRegen = allowsLineEditing && invoiceDraftPdfNeedsRefresh(inv);
     setSaving(true);
     try {
-      if (needsRegen) {
+      if (allowsLineEditing) {
         await invoiceService.regenerateInvoicePdf(companyId, inv.id);
+        printPdfBytesCacheRef.current = { key: '', bytes: null };
         // Recharge l’aperçu en arrière-plan : le téléchargement n’attend pas le GET détail.
         void reloadPdfPreviewFromServer().catch(() => {});
       }
@@ -1001,7 +1011,9 @@ const DraftInvoiceEditorPanel = ({
         if (mountedRef.current) setError('Aucun PDF disponible.');
         return;
       }
-      const ok = await downloadProtectedPdfAsFile(apiPath, pdfDownloadName);
+      const ok = await downloadProtectedPdfAsFile(apiPath, pdfDownloadName, {
+        cacheBust: Date.now(),
+      });
       if (!mountedRef.current) return;
       if (!ok) {
         setError('Téléchargement du PDF impossible.');
@@ -1022,22 +1034,44 @@ const DraftInvoiceEditorPanel = ({
   ]);
 
   const handleOpenPdfInNewTab = useCallback(async () => {
+    if (!companyId || !inv?.id) return;
     const apiPath = buildInvoicePdfApiUrl({
-      id: inv?.id,
-      company_id: companyId || inv?.company_id,
+      id: inv.id,
+      company_id: companyId || inv.company_id,
     });
     if (!apiPath) {
       if (mountedRef.current) setError('Aucun PDF disponible.');
       return;
     }
     setError('');
-    const ok = await openProtectedPdfInNewTab(apiPath, null, {
-      filename: pdfDownloadName,
-    });
-    if (!ok && mountedRef.current) {
-      setError('Impossible d’ouvrir le PDF.');
+    setSaving(true);
+    try {
+      if (allowsLineEditing) {
+        await invoiceService.regenerateInvoicePdf(companyId, inv.id);
+        printPdfBytesCacheRef.current = { key: '', bytes: null };
+        void reloadPdfPreviewFromServer().catch(() => {});
+      }
+      const ok = await openProtectedPdfInNewTab(apiPath, null, {
+        filename: pdfDownloadName,
+        cacheBust: Date.now(),
+      });
+      if (!ok && mountedRef.current) {
+        setError('Impossible d’ouvrir le PDF.');
+      }
+    } catch (e) {
+      if (mountedRef.current) {
+        setError(getApiErrorMessage(e, 'Impossible d’ouvrir le PDF.'));
+      }
+    } finally {
+      if (mountedRef.current) setSaving(false);
     }
-  }, [inv?.id, inv?.company_id, companyId, pdfDownloadName]);
+  }, [
+    companyId,
+    inv,
+    allowsLineEditing,
+    pdfDownloadName,
+    reloadPdfPreviewFromServer,
+  ]);
 
   /** Barre PDF : si édition lignes possible, régénère le fichier puis recharge ; sinon GET détail seulement. */
   const handleToolbarPdfRefresh = useCallback(async () => {
@@ -1046,8 +1080,30 @@ const DraftInvoiceEditorPanel = ({
     setSaving(true);
     setError('');
     try {
+      // Invalide le cache mémoire + HTTP : même route `/pdf` sert un nouveau fichier après regen.
+      printPdfBytesCacheRef.current = { key: '', bytes: null };
       if (allowsLineEditing) {
-        await invoiceService.regenerateInvoicePdf(companyId, id);
+        const regen = await invoiceService.regenerateInvoicePdf(companyId, id);
+        const regenUrl = regen?.pdf_url || regen?.data?.pdf_url || null;
+        if (regenUrl) {
+          setInv((prev) => {
+            if (!prev || prev.id !== id) return prev;
+            const prevMeta = parseInvoiceMeta(prev.meta) || {};
+            const prevPdf =
+              prevMeta.pdf && typeof prevMeta.pdf === 'object' ? prevMeta.pdf : {};
+            return {
+              ...prev,
+              pdf_url: regenUrl,
+              meta: {
+                ...prevMeta,
+                pdf: {
+                  ...prevPdf,
+                  status: 'ready',
+                },
+              },
+            };
+          });
+        }
       }
       await reloadPdfPreviewFromServer();
     } catch (e) {
@@ -2243,8 +2299,8 @@ const DraftInvoiceEditorPanel = ({
                             type="button"
                             className={`${styles.draftPdfToolBtn} ${styles.draftPdfToolBtnIconOnly}`}
                             disabled={saving || loading || !inv?.id}
-                            title="Recharger la facture depuis le serveur"
-                            aria-label="Actualiser les données depuis le serveur"
+                            title="Régénérer le PDF (impression / téléchargement) et recharger les données"
+                            aria-label="Régénérer le PDF et actualiser les données depuis le serveur"
                             onClick={() => void handleToolbarPdfRefresh()}
                           >
                             <FiRefreshCw size={16} aria-hidden />

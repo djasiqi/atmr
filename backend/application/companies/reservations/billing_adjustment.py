@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from ext import db
@@ -49,7 +49,10 @@ def booking_billing_is_locked(booking: Booking) -> tuple[bool, str | None]:
 
 
 def _company_may_adjust_billing_by_origin(booking: Any) -> tuple[bool, str | None]:
-    """Ajustement patient/clinique : réservé aux saisies entreprise (dispatch), pas invité / portail / API."""
+    """Ajustement patient/clinique : dispatch + courses institution acceptées.
+
+    Bloqué pour invité / portail client / API partenaire (déjà payés ou hors périmètre).
+    """
     raw = getattr(booking, "created_via", None)
     if raw is None:
         return True, None
@@ -58,18 +61,117 @@ def _company_may_adjust_billing_by_origin(booking: Any) -> tuple[bool, str | Non
         BookingCreatedVia.PUBLIC_GUEST.value,
         BookingCreatedVia.CLIENT_APP.value,
         BookingCreatedVia.API_PARTNER.value,
-        BookingCreatedVia.INSTITUTION_PORTAL.value,
     }
     if v in blocked:
         return (
             False,
             (
                 "L'ajustement du destinataire de facture n'est disponible que pour les courses "
-                "créées manuellement par l'entreprise (saisie dispatch). Les demandes invité, "
-                "portail client, institution ou partenaire API ne sont pas modifiables ici."
+                "créées par l'entreprise (dispatch) ou acceptées depuis une institution. "
+                "Les demandes invité, portail client ou partenaire API ne sont pas modifiables ici."
             ),
         )
     return True, None
+
+
+def _billed_to_type_to_billing_intent(billed_to_type: str) -> str:
+    """Mappe billed_to_type booking → billing_intent institution."""
+    t = (billed_to_type or "patient").lower().strip()
+    if t == "clinic":
+        return "institution"
+    if t == "insurance":
+        return "insurance"
+    return "patient"
+
+
+def _apply_billing_party_resolution(
+    booking: Booking,
+    *,
+    target_btype: str,
+) -> None:
+    """Ré-attache billing_party_id après changement de destinataire."""
+    company_id = getattr(booking, "company_id", None)
+    if company_id is None:
+        return
+
+    from services.billing.billing_party_linker import (
+        ensure_patient_destination_billing_party,
+        resolve_billing_party_for_clinic,
+    )
+
+    resolve_fn = getattr(booking, "_resolve_source_transport_request", None)
+    transport_request = resolve_fn() if callable(resolve_fn) else None
+    if transport_request is not None:
+        from services.billing.institution_billing_resolver import (
+            resolve_billing_party_for_institution_booking,
+        )
+
+        resolve_billing_party_for_institution_booking(
+            booking=booking,
+            transport_request=transport_request,
+            company_id=int(company_id),
+            billing_intent_override=_billed_to_type_to_billing_intent(target_btype),
+        )
+        # Filet : bascule patient ne doit jamais laisser un BP établissement.
+        if target_btype == "patient":
+            ensure_patient_destination_billing_party(booking)
+        return
+
+    if target_btype == "patient":
+        ensure_patient_destination_billing_party(booking)
+        return
+
+    if target_btype == "clinic":
+        clinic_id = getattr(booking, "billed_to_company_id", None)
+        if clinic_id is None:
+            return
+        bp = resolve_billing_party_for_clinic(
+            company_id=int(company_id),
+            clinic_company_id=int(clinic_id),
+        )
+        if bp is not None:
+            booking.billing_party_id = int(bp.id)
+
+
+def _copy_payer_fields(source: Booking, target: Booking, *, reason: str) -> None:
+    """Copie destinataire / BP / motif (pas le montant) d'un booking vers un autre."""
+    target.billed_to_type = source.billed_to_type
+    target.billed_to_company_id = source.billed_to_company_id
+    target.billing_party_id = source.billing_party_id
+    target.billing_override_reason = reason
+
+
+def _propagate_payer_to_return_legs(
+    outbound: Booking,
+    *,
+    reason: str,
+    terminal_exclude: frozenset[str],
+) -> list[int]:
+    """Si ajustement sur l'aller : propage le payeur aux retours non verrouillés.
+
+    Ajustement uniquement sur un retour : aucun effet sur l'aller (indépendant / différé).
+    """
+    if bool(getattr(outbound, "is_return", False)):
+        return []
+    if getattr(outbound, "id", None) is None:
+        return []
+
+    children = (
+        Booking.query.filter_by(parent_booking_id=int(outbound.id))
+        .order_by(Booking.id.asc())
+        .all()
+    )
+    propagated: list[int] = []
+    for child in children:
+        st = status_value(getattr(child, "status", None)).lower()
+        if st in terminal_exclude:
+            continue
+        locked, _ = booking_billing_is_locked(child)
+        if locked:
+            continue
+        _copy_payer_fields(outbound, child, reason=reason)
+        propagated.append(int(child.id))
+    return propagated
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,6 +182,7 @@ class BookingBillingAdjustmentResult:
     # Pour audit côté route
     before: dict[str, Any] | None = None
     after: dict[str, Any] | None = None
+    propagated_return_ids: list[int] = field(default_factory=list)
 
 
 class CompanyBookingBillingAdjustmentUseCase:
@@ -161,6 +264,7 @@ class CompanyBookingBillingAdjustmentUseCase:
             "amount": float(booking.amount),
             "billed_to_type": old_type_str,
             "billed_to_company_id": getattr(booking, "billed_to_company_id", None),
+            "billing_party_id": getattr(booking, "billing_party_id", None),
         }
 
         if has_btype and data.get("billed_to_type") is not None:
@@ -240,8 +344,26 @@ class CompanyBookingBillingAdjustmentUseCase:
                     status_code=400,
                 )
             booking.amount = round(amt, 2)
+
+        # Propagation A/R et re-résolution BP uniquement si le destinataire change réellement
+        # (le formulaire envoie toujours billed_to_type même pour un simple changement de montant).
+        payer_changed = target_btype != old_type_str or target_bcomp != old[
+            "billed_to_company_id"
+        ]
+
         booking.billed_to_type = target_btype
         booking.billed_to_company_id = target_bcomp
+        booking.billing_override_reason = override
+
+        if payer_changed:
+            _apply_billing_party_resolution(booking, target_btype=target_btype)
+            propagated_ids = _propagate_payer_to_return_legs(
+                booking,
+                reason=override,
+                terminal_exclude=self._TERMINAL_EXCLUDE,
+            )
+        else:
+            propagated_ids = []
 
         after = {
             "amount": float(booking.amount),
@@ -249,6 +371,8 @@ class CompanyBookingBillingAdjustmentUseCase:
             .lower()
             .strip(),
             "billed_to_company_id": getattr(booking, "billed_to_company_id", None),
+            "billing_party_id": getattr(booking, "billing_party_id", None),
+            "propagated_return_ids": propagated_ids,
         }
 
         return BookingBillingAdjustmentResult(
@@ -256,4 +380,5 @@ class CompanyBookingBillingAdjustmentUseCase:
             before=old,
             after=after,
             status_code=200,
+            propagated_return_ids=propagated_ids,
         )

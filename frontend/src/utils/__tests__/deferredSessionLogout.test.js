@@ -17,11 +17,29 @@ import {
 
 jest.mock('sonner', () => ({
   toast: {
+    custom: jest.fn(),
     warning: jest.fn(),
     error: jest.fn(),
     dismiss: jest.fn(),
   },
 }));
+
+jest.mock('../../components/auth/SessionIdleWarningToast', () => {
+  const React = require('react');
+  const MockToast = (props) => React.createElement('div', { 'data-testid': 'idle-toast', ...props });
+  return {
+    __esModule: true,
+    default: MockToast,
+    sessionIdleWarningToastStyles: { sonnerHost: 'sonner-host-mock' },
+  };
+});
+
+const lastIdleToastProps = () => {
+  const renderFn = toast.custom.mock.calls.at(-1)?.[0];
+  expect(typeof renderFn).toBe('function');
+  const element = renderFn();
+  return element.props;
+};
 
 const mockLogoutUser = jest.fn(() => Promise.resolve());
 const mockTryRefreshSessionIfNeeded = jest.fn();
@@ -49,6 +67,7 @@ describe('deferredSessionLogout (garde idle)', () => {
     resetDeferredSessionLogoutForTests();
     mockLogoutUser.mockClear();
     mockTryRefreshSessionIfNeeded.mockReset();
+    toast.custom.mockClear();
     toast.warning.mockClear();
     toast.error.mockClear();
     toast.dismiss.mockClear();
@@ -70,28 +89,35 @@ describe('deferredSessionLogout (garde idle)', () => {
     recordUserActivity();
     jest.advanceTimersByTime(SESSION_IDLE_TIMEOUT_MS + POLL_BUFFER_MS);
     expect(isSessionIdleWarningActive()).toBe(true);
-    expect(toast.warning).toHaveBeenCalledWith(
-      expect.stringContaining('Votre session expirera dans'),
+    expect(toast.custom).toHaveBeenCalledWith(
+      expect.any(Function),
       expect.objectContaining({
         dismissible: false,
-        closeButton: false,
+        duration: Infinity,
       })
     );
+    const props = lastIdleToastProps();
+    expect(props.secondsLeft).toBeGreaterThan(0);
+    expect(props.renewing).toBe(false);
   });
 
-  it('affiche le préavis après inactivité, pas sur activité locale pendant le warning', () => {
+  it('activité locale pendant le préavis → prolongement auto (refresh)', async () => {
+    mockTryRefreshSessionIfNeeded.mockResolvedValue({ status: 'refreshed' });
     startSessionIdleGuard();
     recordUserActivity();
     jest.advanceTimersByTime(SESSION_IDLE_TIMEOUT_MS + 1000);
 
     expect(isSessionIdleWarningActive()).toBe(true);
-    const callsBefore = toast.warning.mock.calls.length;
 
     recordUserActivity();
-    jest.advanceTimersByTime(2000);
+    // handleStayConnected est async (import dynamique sessionKeepAlive).
+    for (let i = 0; i < 20 && isSessionIdleWarningActive(); i += 1) {
+      // eslint-disable-next-line no-await-in-loop
+      await Promise.resolve();
+    }
 
-    expect(isSessionIdleWarningActive()).toBe(true);
-    expect(toast.warning.mock.calls.length).toBeGreaterThanOrEqual(callsBefore);
+    expect(mockTryRefreshSessionIfNeeded).toHaveBeenCalledWith({ force: true });
+    expect(isSessionIdleWarningActive()).toBe(false);
   });
 
   it('résout le warning sur activité distante (même session)', () => {
@@ -127,9 +153,9 @@ describe('deferredSessionLogout (garde idle)', () => {
     recordUserActivity();
     jest.advanceTimersByTime(SESSION_IDLE_TIMEOUT_MS + 1000);
 
-    const action = toast.warning.mock.calls.at(-1)?.[1]?.action;
-    expect(action).toBeTruthy();
-    await action.onClick({ preventDefault: jest.fn() });
+    const props = lastIdleToastProps();
+    expect(props.onStay).toBeTruthy();
+    await props.onStay();
 
     expect(mockTryRefreshSessionIfNeeded).toHaveBeenCalledWith({ force: true });
     expect(isSessionIdleWarningActive()).toBe(false);
@@ -142,8 +168,7 @@ describe('deferredSessionLogout (garde idle)', () => {
     recordUserActivity();
     jest.advanceTimersByTime(SESSION_IDLE_TIMEOUT_MS + 1000);
 
-    const action = toast.warning.mock.calls.at(-1)?.[1]?.action;
-    await action.onClick({ preventDefault: jest.fn() });
+    await lastIdleToastProps().onStay();
 
     expect(mockLogoutUser).not.toHaveBeenCalled();
     expect(isSessionIdleWarningActive()).toBe(true);
@@ -159,8 +184,7 @@ describe('deferredSessionLogout (garde idle)', () => {
     recordUserActivity();
     jest.advanceTimersByTime(SESSION_IDLE_TIMEOUT_MS + 1000);
 
-    const action = toast.warning.mock.calls.at(-1)?.[1]?.action;
-    await action.onClick({ preventDefault: jest.fn() });
+    await lastIdleToastProps().onStay();
     // logout via import dynamique apiClient
     await Promise.resolve();
     await Promise.resolve();
@@ -180,10 +204,10 @@ describe('deferredSessionLogout (garde idle)', () => {
     recordUserActivity();
     jest.advanceTimersByTime(SESSION_IDLE_TIMEOUT_MS + 1000);
 
-    const action = toast.warning.mock.calls.at(-1)?.[1]?.action;
-    void action.onClick({ preventDefault: jest.fn() });
+    void lastIdleToastProps().onStay();
     await Promise.resolve();
-    void action.onClick({ preventDefault: jest.fn() });
+    // Pendant RENEWING, le toast est réaffiché avec renewing=true → onStay no-op
+    void lastIdleToastProps().onStay();
     await Promise.resolve();
 
     expect(mockTryRefreshSessionIfNeeded).toHaveBeenCalledTimes(1);
@@ -206,6 +230,6 @@ describe('deferredSessionLogout (garde idle)', () => {
     expect(isSessionIdleWarningActive()).toBe(false);
 
     jest.advanceTimersByTime(SESSION_IDLE_TIMEOUT_MS + 2000);
-    expect(toast.warning).toHaveBeenCalled();
+    expect(toast.custom).toHaveBeenCalled();
   });
 });

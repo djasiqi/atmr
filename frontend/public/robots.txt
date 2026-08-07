@@ -1,22 +1,7 @@
 # https://www.robotstxt.org/robotstxt.html
-
-User-agent: Googlebot
-Allow: /
-
-User-agent: Bingbot
-Allow: /
-
-User-agent: OAI-SearchBot
-Allow: /
-
-User-agent: ChatGPT-User
-Allow: /
-
-User-agent: ClaudeBot
-Allow: /
-
-User-agent: Claude-SearchBot
-Allow: /
+#
+# Ne pas ajouter de blocs User-agent (Googlebot, Bingbot, etc.) avec seulement
+# « Allow: / » : le crawler ignore alors les Disallow du groupe « * ».
 
 User-agent: GPTBot
 Disallow: /

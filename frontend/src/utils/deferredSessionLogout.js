@@ -1,10 +1,15 @@
 /**
  * Garde d'inactivité bancaire :
- * ACTIVE → IDLE_WARNING (préavis 60s) → Rester connecté / Se déconnecter / timeout.
+ * ACTIVE → IDLE_WARNING (préavis 2 min) → Rester connecté / Se déconnecter / timeout.
+ * Activité locale (clic/frappe) pendant le préavis → prolongement auto (refresh).
  * SESSION_INVALID est gérée ailleurs (logout immédiat).
  */
 
+import React from 'react';
 import { toast } from 'sonner';
+import SessionIdleWarningToast, {
+  sessionIdleWarningToastStyles,
+} from '../components/auth/SessionIdleWarningToast';
 import { hasActiveSession } from './webAuthSession';
 import {
   getMsSinceLastUserActivity,
@@ -17,7 +22,7 @@ import {
 export const SESSION_IDLE_TIMEOUT_MS = SESSION_WORKING_LOOKBACK_MS;
 
 /** Durée du compte à rebours avant déconnexion. */
-export const SESSION_IDLE_WARNING_MS = 60 * 1000;
+export const SESSION_IDLE_WARNING_MS = 2 * 60 * 1000;
 
 /** @deprecated Utiliser SESSION_IDLE_WARNING_MS */
 export const SESSION_LOGOUT_COUNTDOWN_MS = SESSION_IDLE_WARNING_MS;
@@ -54,35 +59,36 @@ const dismissIdleToast = () => {
   toast.dismiss(IDLE_WARNING_TOAST_ID);
 };
 
-const idleWarningMessage = (secondsLeft) =>
-  `Votre session expirera dans ${secondsLeft} secondes en raison de votre inactivité.`;
+const WARNING_TOTAL_SECONDS = Math.round(SESSION_IDLE_WARNING_MS / 1000);
 
 const showIdleWarningToast = (secondsLeft, { renewing = false } = {}) => {
-  toast.warning(idleWarningMessage(secondsLeft), {
-    id: IDLE_WARNING_TOAST_ID,
-    duration: Infinity,
-    closeButton: false,
-    dismissible: false,
-    action: {
-      label: renewing ? 'Renouvellement…' : 'Rester connecté',
-      onClick: (event) => {
-        event?.preventDefault?.();
-        if (renewing) {
+  toast.custom(
+    () =>
+      React.createElement(SessionIdleWarningToast, {
+        secondsLeft,
+        totalSeconds: WARNING_TOTAL_SECONDS,
+        renewing,
+        onStay: () => {
+          if (!renewing) {
+            return handleStayConnected();
+          }
           return undefined;
-        }
-        return handleStayConnected();
-      },
-    },
-    cancel: {
-      label: 'Se déconnecter',
-      onClick: () => {
-        if (renewing) {
+        },
+        onLogout: () => {
+          if (!renewing) {
+            return handleUserLogout();
+          }
           return undefined;
-        }
-        return handleUserLogout();
-      },
-    },
-  });
+        },
+      }),
+    {
+      id: IDLE_WARNING_TOAST_ID,
+      duration: Infinity,
+      dismissible: false,
+      className: sessionIdleWarningToastStyles.sonnerHost,
+      unstyled: true,
+    }
+  );
 };
 
 const executeLogout = (options) => {
@@ -231,8 +237,17 @@ export const startSessionIdleGuard = () => {
 
   if (!unsubscribeActivity) {
     unsubscribeActivity = onUserActivity((_ts, meta = {}) => {
-      if (meta.source === 'remote' && (phase === 'IDLE_WARNING' || phase === 'RENEWING')) {
+      if (phase !== 'IDLE_WARNING' && phase !== 'RENEWING') {
+        return;
+      }
+      // Autre onglet déjà actif → ferme le préavis sans refresh local.
+      if (meta.source === 'remote') {
         resolveIdleWarning();
+        return;
+      }
+      // Clic / frappe / focus pendant le préavis → prolongement (refresh JWT).
+      if (meta.source === 'local' && phase === 'IDLE_WARNING') {
+        void handleStayConnected();
       }
     });
   }

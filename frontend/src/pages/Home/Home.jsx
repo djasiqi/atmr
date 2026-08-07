@@ -203,6 +203,28 @@ const LIRIE_ROLE_NO = [
   "N'intervient pas en qualité de transporteur",
   'Ne remplace pas le jugement clinique ni la prise en charge médicale',
 ];
+
+const DEFINITION_PILLARS = [
+  {
+    id: 'share',
+    title: 'Une demande partagée',
+    description:
+      'Patients, établissements de santé et transporteurs s’appuient sur le même dossier.',
+    icon: 'share',
+  },
+  {
+    id: 'follow',
+    title: 'Un suivi commun',
+    description: 'Chacun suit l’avancement de la mission selon ses droits d’accès.',
+    icon: 'follow',
+  },
+  {
+    id: 'history',
+    title: 'Un historique conservé',
+    description: 'Les échanges restent traçables pour la coordination et le suivi.',
+    icon: 'history',
+  },
+];
 const formatIsoDate = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 const formatHhMm = (d) => `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
 const normalizeText = (v) =>
@@ -1147,17 +1169,58 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── Définition LIRIE (moteurs / IA) ── */}
-      <section className={styles.valueBridge} aria-labelledby="home-definition-title">
-        <h2 id="home-definition-title" className={styles.sectionTag}>
-          Qu&apos;est-ce que LIRIE ?
-        </h2>
-        <p className={styles.valueBridgeText}>
-          LIRIE est une plateforme suisse de coordination des transports. Elle permet aux patients, aux établissements
-          de santé et aux entreprises de transport de partager une même demande, de suivre son avancement et de conserver
-          un historique des échanges. LIRIE fournit l&apos;outil de coordination, mais n&apos;exécute pas elle-même les
-          prestations de transport.
-        </p>
+      {/* ── Définition Lirie (moteurs / IA) ── */}
+      <section className={styles.definitionSection} aria-labelledby="home-definition-title">
+        <div className={styles.definitionInner}>
+          <span className={styles.sectionTag}>À propos</span>
+          <h2 id="home-definition-title" className={styles.definitionTitle}>
+            Qu&apos;est-ce que Lirie ?
+          </h2>
+          <p className={styles.definitionSubtitle}>
+            Une plateforme suisse de coordination des transports médicaux.
+          </p>
+          <p className={styles.definitionText}>
+            LIRIE relie patients, établissements de santé et entreprises de transport autour d&apos;une même
+            demande. Chacun partage l&apos;information utile, suit l&apos;avancement et conserve un historique
+            des échanges — sans multiplier les appels ni les canaux.
+          </p>
+
+          <div className={styles.definitionGrid}>
+            {DEFINITION_PILLARS.map((pillar) => (
+              <div key={pillar.id} className={styles.definitionPillar}>
+                <div className={styles.definitionPillarIcon} aria-hidden>
+                  {pillar.icon === 'share' && (
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--brand-primary)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="18" cy="5" r="3" />
+                      <circle cx="6" cy="12" r="3" />
+                      <circle cx="18" cy="19" r="3" />
+                      <path d="M8.59 13.51 15.42 17.49M15.41 6.51 8.59 10.49" />
+                    </svg>
+                  )}
+                  {pillar.icon === 'follow' && (
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--brand-primary)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="9" />
+                      <polyline points="12 7 12 12 15.5 14" />
+                    </svg>
+                  )}
+                  {pillar.icon === 'history' && (
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--brand-primary)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M3 12a9 9 0 1 0 3-6.7" />
+                      <polyline points="3 4 3 9 8 9" />
+                      <path d="M12 7v5l3 2" />
+                    </svg>
+                  )}
+                </div>
+                <h3 className={styles.definitionPillarTitle}>{pillar.title}</h3>
+                <p className={styles.definitionPillarDesc}>{pillar.description}</p>
+              </div>
+            ))}
+          </div>
+
+          <p className={styles.definitionNote}>
+            Lirie fournit l&apos;outil de coordination — elle n&apos;exécute pas elle-même les prestations de transport.
+          </p>
+        </div>
       </section>
 
       {/* ── Pour qui ── */}

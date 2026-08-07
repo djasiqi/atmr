@@ -65,4 +65,13 @@ describe('userActivityTracker cross-tab', () => {
     expect(listener).not.toHaveBeenCalled();
     cleanup();
   });
+
+  it('compte le focus / retour visible comme activité', () => {
+    const cleanup = startUserActivityTracking();
+    const listener = jest.fn();
+    onUserActivity(listener);
+    window.dispatchEvent(new Event('focus'));
+    expect(listener).toHaveBeenCalledWith(expect.any(Number), { source: 'local' });
+    cleanup();
+  });
 });

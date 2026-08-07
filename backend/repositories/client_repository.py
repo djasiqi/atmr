@@ -558,6 +558,30 @@ class ClientRepository:
             .first()
         )
 
+    def find_models_by_ids_and_company_with_user(
+        self, client_ids: set[int] | list[int], company_id: int
+    ) -> dict[int, Client]:
+        """Charge plusieurs clients (user eager) en une requête — évite le N+1.
+
+        Args:
+            client_ids: IDs clients à charger
+            company_id: ID de l'entreprise (filtre multi-tenant)
+
+        Returns:
+            Dict ``client_id -> Client`` (ids absents ou hors company omis)
+        """
+        from sqlalchemy.orm import joinedload
+
+        ids = {int(cid) for cid in client_ids if cid is not None}
+        if not ids:
+            return {}
+        rows = (
+            Client.query.options(joinedload(Client.user))
+            .filter(Client.id.in_(ids), Client.company_id == company_id)
+            .all()
+        )
+        return {int(c.id): c for c in rows}
+
     def find_by_public_id_with_user(self, public_id: str) -> Client | None:
         """Trouve un client par l'ID public de son utilisateur avec eager loading de user.
 

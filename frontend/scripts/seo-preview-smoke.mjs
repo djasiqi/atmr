@@ -91,6 +91,15 @@ async function main() {
     assert(robots.status === 200, 'robots.txt non accessible');
     assert(/Sitemap:\s*https:\/\/www\.lirie\.ch\/sitemap\.xml/i.test(robots.text), 'Sitemap non déclaré');
     assert(/Disallow:\s*\/dashboard\//i.test(robots.text), 'Disallow dashboard manquant');
+    assert(/Disallow:\s*\/login/i.test(robots.text), 'Disallow /login manquant');
+    // Un bloc nommé (Googlebot, etc.) avec Allow: / sans Disallow ignore les règles de « * ».
+    for (const group of robots.text.split(/(?=User-agent:)/i)) {
+      if (!/User-agent:/i.test(group) || /User-agent:\s*GPTBot/i.test(group)) continue;
+      assert(
+        !(/Allow:\s*\//i.test(group) && !/Disallow:/i.test(group)),
+        `bloc robots sans Disallow: ${group.split('\n')[0]}`
+      );
+    }
 
     const slash = await fetchHead('/professionnel/');
     // Suivi manuel : 308/301 vers sans slash, ou déjà sans slash selon CDN.

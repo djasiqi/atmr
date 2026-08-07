@@ -471,6 +471,18 @@ export async function refreshSessionTokens(targetEnv = getCurrentAuthEnv()) {
         } else {
           localStorage.setItem('app_access_token', nextAccessToken);
         }
+        // Miroir handshake company (Socket.IO / company_dispatch) si session entreprise.
+        try {
+          const hasCompanyMirror =
+            Boolean(localStorage.getItem(COMPANY_ACCESS_TOKEN_KEY)) ||
+            Boolean(localStorage.getItem('company_authToken')) ||
+            Boolean(localStorage.getItem('company_user'));
+          if (hasCompanyMirror) {
+            localStorage.setItem(COMPANY_ACCESS_TOKEN_KEY, nextAccessToken);
+          }
+        } catch (_) {
+          // no-op (mode privé, quota…)
+        }
       }
       if (nextRefreshToken) {
         if (targetEnv === DEMO_ENV_KEY) {

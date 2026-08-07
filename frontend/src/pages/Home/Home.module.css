@@ -1965,6 +1965,106 @@
   color: var(--text-secondary);
 }
 
+/* ── Définition Lirie ───────────────────────────────────── */
+
+.definitionSection {
+  background: linear-gradient(180deg, #ffffff 0%, #f7f9f8 100%);
+  border-top: 1px solid rgba(15, 23, 42, 0.05);
+  content-visibility: auto;
+  contain-intrinsic-size: 640px;
+}
+
+.definitionInner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 72px var(--spacing-lg) 80px;
+  text-align: center;
+}
+
+.definitionTitle {
+  font-size: var(--font-3xl);
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 12px;
+  letter-spacing: -0.3px;
+  line-height: var(--line-height-tight);
+}
+
+.definitionSubtitle {
+  font-size: var(--font-md);
+  color: var(--text-tertiary);
+  line-height: 1.6;
+  margin: 0 auto 20px;
+  max-width: 560px;
+}
+
+.definitionText {
+  max-width: 680px;
+  margin: 0 auto 40px;
+  font-size: var(--font-md);
+  color: var(--text-secondary);
+  line-height: 1.65;
+}
+
+.definitionGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+  text-align: left;
+  margin-bottom: 32px;
+}
+
+.definitionPillar {
+  background: linear-gradient(180deg, #ffffff 0%, #fcfdfd 100%);
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 18px;
+  padding: 26px 22px;
+  transition:
+    box-shadow var(--transition-base),
+    transform var(--transition-base),
+    border-color var(--transition-base);
+}
+
+.definitionPillar:hover {
+  box-shadow: 0 14px 26px -18px rgba(15, 23, 42, 0.35);
+  transform: translateY(-1px);
+  border-color: rgba(13, 127, 114, 0.22);
+}
+
+.definitionPillarIcon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--brand-primary-lightest);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.definitionPillarTitle {
+  font-size: var(--font-lg);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 8px;
+}
+
+.definitionPillarDesc {
+  font-size: var(--font-sm);
+  color: var(--text-tertiary);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.definitionNote {
+  margin: 0 auto;
+  max-width: 560px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--brand-primary);
+  line-height: 1.5;
+}
+
 /* ── CTA Section ───────────────────────────────────────── */
 
 .ctaSection {
@@ -2185,6 +2285,11 @@ a.ctaSecondary:focus-visible {
     gap: 20px;
   }
 
+  .definitionGrid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
   .audienceGrid {
     grid-template-columns: 1fr;
   }
@@ -2320,6 +2425,22 @@ a.ctaSecondary:focus-visible {
 
   .howTitle {
     font-size: var(--font-2xl);
+  }
+
+  .definitionInner {
+    padding: 48px var(--spacing-md) 56px;
+  }
+
+  .definitionTitle {
+    font-size: var(--font-2xl);
+  }
+
+  .definitionText {
+    margin-bottom: 28px;
+  }
+
+  .definitionGrid {
+    margin-bottom: 24px;
   }
 
   .audienceInner {

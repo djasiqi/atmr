@@ -133,7 +133,9 @@ def build_file_response(
         "Content-Length": str(len(data)),
         "Content-Disposition": f'{disposition}; filename="{safe_name}"',
         "X-Content-Type-Options": "nosniff",
-        "Cache-Control": "private, max-age=300",
+        # Pas de cache navigateur : même URL API sert un fichier régénéré (ex. facture PDF).
+        "Cache-Control": "private, no-store, must-revalidate",
+        "Pragma": "no-cache",
     }
     return Response(data, mimetype=mimetype, headers=headers)
 

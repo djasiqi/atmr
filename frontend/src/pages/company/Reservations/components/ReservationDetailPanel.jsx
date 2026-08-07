@@ -269,14 +269,14 @@ function inferTripStatusForUi(res) {
 }
 
 /**
- * Ajustement facturation (patient / clinique) : uniquement saisies manuelles **entreprise** (dispatch),
- * pas invité (Lirie, déjà payé) ni portail client / institution / API.
+ * Ajustement facturation (patient / clinique) : saisies manuelles entreprise (dispatch)
+ * et courses acceptées depuis une institution. Pas invité (Lirie) ni portail client / API.
  * `created_via` : voir `BookingCreatedVia` côté API (serialize).
  */
 function allowBillingAdjustByCreatedVia(res) {
   if (res == null) return false;
   const v = String(res.created_via ?? 'legacy').toLowerCase();
-  return v === 'dispatcher' || v === 'legacy';
+  return v === 'dispatcher' || v === 'legacy' || v === 'institution_portal';
 }
 
 const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onReservationUpdated }) => {
@@ -695,7 +695,16 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onRese
         billed_to_company_id: btype === 'patient' ? null : bcomp,
       };
       const data = await patchBillingAdjustment(reservation.id, payload);
-      toast.success('Facturation mise à jour');
+      const propagated = Array.isArray(data?.propagated_return_ids)
+        ? data.propagated_return_ids
+        : [];
+      if (propagated.length > 0) {
+        toast.success(
+          `Facturation mise à jour (également appliquée au retour · ${propagated.map((id) => `#${id}`).join(', ')})`,
+        );
+      } else {
+        toast.success('Facturation mise à jour');
+      }
       onReservationUpdated?.(data?.reservation || data);
     } catch (e) {
       const err = e?.response?.data || e;
@@ -715,9 +724,11 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onRese
   const meta = reservation.metadata_json || {};
   const billedToType = reservation.billed_to_type
     || reservation.billing?.billed_to_type
+    || null;
+  // billed_to_type (ajustement transporteur) prime sur l’intent institution d’origine.
+  const billingIntent = billedToType
     || meta.billing_resolution_intent
     || null;
-  const billingIntent = meta.billing_resolution_intent || billedToType;
   const billingStatusVal = meta.billing_resolution_status;
   const isFailed = billingStatusVal && billingStatusVal.startsWith('failed');
   const isInstitutionBooking = !!meta.institution_id || !!reservation.institution_timeline;
@@ -1648,6 +1659,18 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onRese
                   )}
                   <p className={`${s.billingMuted} ${s.billingHelpText}`}>
                     Ajustez le montant (CHF) et le payeur. Pour « Clinique », choisissez l’établissement. Toute modification exige un bref motif.
+                    {reservation?.has_return && !reservation?.is_return ? (
+                      <>
+                        {' '}
+                        Changer le destinataire sur l’aller applique aussi le retour (montants inchangés).
+                      </>
+                    ) : null}
+                    {reservation?.is_return ? (
+                      <>
+                        {' '}
+                        Retour : le destinataire peut différer de l’aller (pas de propagation inverse).
+                      </>
+                    ) : null}
                   </p>
                   <div className={s.billingClinicRoster}>
                     <div className={s.billingClinicRosterTitle}>

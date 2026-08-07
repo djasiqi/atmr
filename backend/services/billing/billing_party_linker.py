@@ -213,6 +213,91 @@ def get_or_create_billing_party_for_direct_patient(
     return billing_party
 
 
+_ESTABLISHMENT_BP_TYPES = frozenset(
+    {
+        BillingPartyType.CLINIC,
+        BillingPartyType.EMS,
+        BillingPartyType.HOSPITAL,
+    }
+)
+
+
+def is_establishment_billing_party(billing_party: BillingParty | None) -> bool:
+    """True si le BP est un établissement (clinique / EMS / hôpital)."""
+    if billing_party is None:
+        return False
+    bp_type = getattr(billing_party, "type", None)
+    if bp_type in _ESTABLISHMENT_BP_TYPES:
+        return True
+    raw = getattr(bp_type, "value", None) or str(bp_type or "")
+    return str(raw).lower().strip() in {"clinic", "ems", "hospital"}
+
+
+def get_or_create_billing_party_for_institution_patient(
+    *,
+    company_id: int,
+    institution_patient,
+) -> BillingParty:
+    """BillingParty PATIENT pour un InstitutionPatient (external_ref patient:{id})."""
+    from models.institution_patient import InstitutionPatient
+
+    if not isinstance(institution_patient, InstitutionPatient):
+        raise ValueError(
+            "institution_patient requis pour get_or_create_billing_party_for_institution_patient"
+        )
+
+    patient_id = int(institution_patient.id)
+    external_ref = f"patient:{patient_id}"
+    existing = BillingParty.query.filter_by(
+        company_id=company_id, external_ref=external_ref
+    ).first()
+
+    first = (getattr(institution_patient, "first_name", None) or "").strip()
+    last = (getattr(institution_patient, "last_name", None) or "").strip()
+    display_name = f"{first} {last}".strip() or f"Patient #{patient_id}"
+
+    addr_parts: list[str] = []
+    street = (getattr(institution_patient, "address", None) or "").strip()
+    if street:
+        addr_parts.append(street)
+    postal = (getattr(institution_patient, "postal_code", None) or "").strip()
+    city = (getattr(institution_patient, "city", None) or "").strip()
+    if postal or city:
+        addr_parts.append(f"{postal} {city}".strip())
+    address = "\n".join(addr_parts) or None
+    phone = (getattr(institution_patient, "phone", None) or "").strip() or None
+
+    if existing:
+        if existing.type != BillingPartyType.PATIENT:
+            existing.type = BillingPartyType.PATIENT
+        if display_name and existing.display_name != display_name:
+            existing.display_name = display_name
+        if address and existing.billing_address != address:
+            existing.billing_address = address
+        if phone and not (existing.contact_phone or "").strip():
+            existing.contact_phone = phone
+        return existing
+
+    billing_party = BillingParty()
+    billing_party.company_id = company_id
+    billing_party.type = BillingPartyType.PATIENT
+    billing_party.display_name = display_name
+    billing_party.billing_address = address
+    billing_party.contact_phone = phone
+    billing_party.external_ref = external_ref
+    billing_party.is_active = True
+    db.session.add(billing_party)
+    db.session.flush()
+    logger.info(
+        "[billing_party_linker] Created PATIENT BillingParty id=%s "
+        "external_ref=%s company_id=%s",
+        billing_party.id,
+        external_ref,
+        company_id,
+    )
+    return billing_party
+
+
 def resolve_billing_party_for_portfolio_patient(
     *,
     company_id: int,
@@ -221,7 +306,7 @@ def resolve_billing_party_for_portfolio_patient(
     """Résout le destinataire V2 pour une course portefeuille ``billed_to_type=patient``.
 
     Ordre :
-    1. Tiers payeur actif (``ClientBillingParty``) s'il existe
+    1. Tiers payeur actif non-établissement (``ClientBillingParty``)
     2. Sinon BillingParty PATIENT technique (pas de lien ClientBillingParty)
     """
     from services.billing.client_stay_resolver import (
@@ -232,12 +317,72 @@ def resolve_billing_party_for_portfolio_patient(
         client_id=int(client.id),
         company_id=int(company_id),
     )
-    if third_party is not None:
+    # Ne pas réutiliser un BP clinique/EMS/hôpital via ClientBillingParty
+    if third_party is not None and not is_establishment_billing_party(third_party):
         return third_party
     return get_or_create_billing_party_for_direct_patient(
         company_id=int(company_id),
         client=client,
     )
+
+
+def ensure_patient_destination_billing_party(booking) -> BillingParty | None:
+    """Quand ``billed_to_type=patient``, aligne ``billing_party_id`` sur un BP patient.
+
+    - Conserve un BP non-établissement (patient, curatelle, famille…).
+    - Remplace un BP clinique/EMS/hôpital (ou absent) par un BP PATIENT
+      (InstitutionPatient ou portefeuille).
+    - Force ``billed_to_company_id = NULL``.
+    """
+    btype = str(getattr(booking, "billed_to_type", None) or "").lower().strip()
+    if btype != "patient":
+        return None
+
+    company_id = getattr(booking, "company_id", None)
+    if company_id is None:
+        return None
+
+    booking.billed_to_company_id = None
+
+    current_bp: BillingParty | None = None
+    bp_id = getattr(booking, "billing_party_id", None)
+    if bp_id is not None:
+        current_bp = db.session.get(BillingParty, int(bp_id))
+
+    if current_bp is not None and not is_establishment_billing_party(current_bp):
+        return current_bp
+
+    ip_id = getattr(booking, "institution_patient_id", None)
+    if ip_id is not None:
+        from models.institution_patient import InstitutionPatient
+
+        patient = db.session.get(InstitutionPatient, int(ip_id))
+        if patient is not None:
+            bp = get_or_create_billing_party_for_institution_patient(
+                company_id=int(company_id),
+                institution_patient=patient,
+            )
+            booking.billing_party_id = int(bp.id)
+            return bp
+
+    client = getattr(booking, "client", None)
+    if client is None and getattr(booking, "client_id", None):
+        client = db.session.get(Client, int(booking.client_id))
+    if client is not None:
+        bp = resolve_billing_party_for_portfolio_patient(
+            company_id=int(company_id),
+            client=client,
+        )
+        booking.billing_party_id = int(bp.id)
+        return bp
+
+    logger.warning(
+        "[billing_party_linker] Impossible d'assurer un BP patient "
+        "(booking_id=%s company_id=%s)",
+        getattr(booking, "id", None),
+        company_id,
+    )
+    return None
 
 
 def get_or_create_billing_party_for_legacy_bill_to_client(

@@ -6,6 +6,11 @@ jest.mock('../apiClient', () => ({
   refreshSessionTokens: jest.fn(),
 }));
 
+jest.mock('../../services/companySocket', () => ({
+  getCompanySocketStatusSnapshot: jest.fn(() => ({ connected: true })),
+  retryCompanySocket: jest.fn(),
+}));
+
 const mockIsSessionIdleWarningActive = jest.fn(() => false);
 
 jest.mock('../deferredSessionLogout', () => ({
