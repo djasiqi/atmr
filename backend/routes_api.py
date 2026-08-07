@@ -537,9 +537,58 @@ def init_namespaces(app):
     else:
         app.logger.info("[api] ℹ️  API legacy désactivée (API_LEGACY_ENABLED=false)")
 
+    # P0.4-A : exempter la vraie view Flask-RESTX (pas seulement Resource.put)
+    exempt_driver_location_registered_views(app)
+
     app.logger.info(
         "[api] Documentation: v1=%s, v2=%s, legacy=%s",
         API_DOCS if API_DOCS else "disabled",
         API_DOCS if API_DOCS else "disabled",
         API_DOCS if (API_DOCS and api_legacy) else "disabled",
     )
+
+
+def exempt_driver_location_registered_views(
+    app: Any, limiter_instance: Any = None
+) -> list[tuple[str, str]]:
+    """Exempte Flask-Limiter sur les views Flask réellement enregistrées pour PUT GPS.
+
+    Flask-RESTX enregistre ``View.as_view.<locals>.view``, pas ``DriverLocation.put``.
+    Un ``@limiter.exempt`` sur la méthode Resource n'atteint donc pas le limiteur global.
+    On exempte uniquement ``PUT */driver/me/location`` (v1 et legacy si présents).
+
+    Returns:
+        Liste ``(rule, endpoint)`` exemptés.
+
+    Raises:
+        RuntimeError: aucune view PUT ``/driver/me/location`` trouvée.
+    """
+    if limiter_instance is None:
+        from ext import limiter as limiter_instance
+
+    matched: list[tuple[str, str]] = []
+
+    for rule in app.url_map.iter_rules():
+        methods = rule.methods or set()
+        if "PUT" not in methods:
+            continue
+        if not str(rule.rule).endswith("/driver/me/location"):
+            continue
+
+        view = app.view_functions.get(rule.endpoint)
+        if view is None:
+            continue
+
+        limiter_instance.exempt(view)
+        matched.append((str(rule.rule), str(rule.endpoint)))
+
+    if not matched:
+        raise RuntimeError(
+            "PUT /driver/me/location registered view not found for limiter exemption"
+        )
+
+    app.logger.info(
+        "[Rate Limit] GPS Flask global exemption registered: %s",
+        matched,
+    )
+    return matched

@@ -181,6 +181,14 @@ Fenêtre atomique obligatoire :
 3. Budget minute compté aussi sur les tentatives HTTP (pas seulement socket).
 4. Tests : [`driverTrackingQueue.p03DrainGuard.test.ts`](../../mobile/unified-app/src/features/driver/services/driverTrackingQueue.p03DrainGuard.test.ts).
 
+✅ **Implémenté** (P0.4-A — exemption Flask-Limiter sur la vraie view RESTX) :
+
+1. Cause : `@limiter.exempt` sur `DriverLocation.put` n’exempte pas la view Flask enregistrée par RESTX (`View.as_view.<locals>.view`, endpoint `driver_driver_location`).
+2. Correctif : `exempt_driver_location_registered_views(app)` dans [`routes_api.py`](../../backend/routes_api.py) — après `add_namespace`, exempte uniquement `PUT */driver/me/location`.
+3. Limiteur métier Lua (`HTTP_DRIVER_LOCATION_*`) reste autoritaire.
+4. Tests : [`test_driver_location_flask_limiter_p04a.py`](../../backend/tests/test_driver_location_flask_limiter_p04a.py) (A/B/C/D + preuve RESTX isolée).
+5. Déploiement : backend only + `TRACKING_INGEST_ASYNC_ENABLED=false` + purge ciblée `LIMITS:*driver_driver_location*` **après** image en service — Kafka inchangé.
+
 Si les positions ne persistent pas malgré des HTTP 202 (historique) :
 
 1. `TRACKING_INGEST_ASYNC_ENABLED=false` **avec** limiteur GPS corrigé (même fenêtre).

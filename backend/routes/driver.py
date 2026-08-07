@@ -1626,6 +1626,9 @@ class DriverBookingsETA(Resource):
 
 @driver_ns.route("/me/location")
 class DriverLocation(Resource):
+    # Note P0.4-A : @limiter.exempt sur Resource.put n'atteint pas la view
+    # Flask-RESTX enregistrée (View.as_view). L'exemption réelle est appliquée
+    # post-enregistrement via routes_api.exempt_driver_location_registered_views.
     @limiter.exempt
     @jwt_required()
     @role_required(UserRole.driver)
@@ -1633,8 +1636,9 @@ class DriverLocation(Resource):
     def put(self):
         """Tracking temps réel : enregistre la dernière position.
 
-        Exempté du limiteur Flask global : plafonds métier atomiques par
-        ``driver_id`` (Lua dual-fenêtre, ``HTTP_DRIVER_LOCATION_*``).
+        Exempté du limiteur Flask global (view RESTX enregistrée, P0.4-A) :
+        plafonds métier atomiques par ``driver_id`` (Lua dual-fenêtre,
+        ``HTTP_DRIVER_LOCATION_*``).
 
         En-têtes optionnels :
         - ``Idempotency-Key`` / ``X-Idempotency-Key`` : déduplication des retries HTTP (TTL 300 s par défaut).
