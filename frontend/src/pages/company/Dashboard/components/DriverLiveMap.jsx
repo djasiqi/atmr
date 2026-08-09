@@ -73,7 +73,6 @@ const MAP_DEBUG =
   typeof window !== 'undefined' &&
   (window.__MAP_DEBUG === true || sessionStorage.getItem('MAP_DEBUG') === '1');
 const AVAILABLE_LIGHT_GREEN = '#4ade80';
-const STALE_SECONDS_THRESHOLD = 120;
 /** Au-delà, interpolation désactivée (clustering / perf). */
 const MARKER_SMOOTH_MOTION_MAX_DRIVERS = 48;
 const STATUS_TITLE_LABELS = {
