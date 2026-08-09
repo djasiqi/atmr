@@ -33,7 +33,8 @@ jest.mock("expo-router", () => ({
 
 jest.mock("expo-notifications", () => ({
   setNotificationHandler: jest.fn(),
-  requestPermissionsAsync: jest.fn().mockResolvedValue({ granted: true }),
+  getPermissionsAsync: jest.fn().mockResolvedValue({ granted: true, status: "granted" }),
+  requestPermissionsAsync: jest.fn().mockResolvedValue({ granted: true, status: "granted" }),
   addNotificationReceivedListener: jest.fn(() => ({ remove: jest.fn() })),
   addNotificationResponseReceivedListener: jest.fn((cb: (response: any) => void) => {
     mockNotificationResponseHandler = cb;
@@ -55,7 +56,21 @@ jest.mock("expo-notifications", () => ({
 
 jest.mock("../../core/notifications/notificationDisclosurePersistence", () => ({
   readNotificationDisclosureAccepted: jest.fn(async () => true),
+  ensureNotificationDisclosureSyncedWithOsPermission: jest.fn(async () => true),
   subscribeNotificationDisclosureAccepted: jest.fn(() => () => undefined),
+}));
+
+jest.mock("../../core/notifications/getStableDeviceId", () => ({
+  getStableDeviceId: jest.fn(async () => "device-integration"),
+  resetStableDeviceIdCacheForTests: jest.fn(),
+}));
+
+jest.mock("./services/backgroundLocationTask", () => ({
+  getNativeTaskLifecycleStatus: jest.fn(async () => ({
+    started: false,
+    available: false,
+  })),
+  readNativeLocationUpdatesStarted: jest.fn(async () => false),
 }));
 
 jest.mock("./notificationActions", () => ({

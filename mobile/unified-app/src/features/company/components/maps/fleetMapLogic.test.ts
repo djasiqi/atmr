@@ -72,8 +72,9 @@ describe("fleetMapLogic", () => {
   });
 
   it("stale ne force plus le statut offline", () => {
+    const { timestamp: _timestamp, ...base } = baseDriver(1, 46.2, 6.14, 10);
     const driver: CompanyDriverLiveLocation = {
-      ...baseDriver(1, 46.2, 6.14, 10),
+      ...base,
       last_seen_seconds: 500,
       location_status: "stale",
       status: "busy",
@@ -84,6 +85,7 @@ describe("fleetMapLogic", () => {
       driver_id: 1,
     };
     expect(resolveFleetOperationalStatus(driver, mission)).toBe("busy");
+    // Sans recorded_at/timestamp frais, le statut serveur `stale` pilote le blend carte.
     expect(isFleetDriverMarkerStale(driver)).toBe(true);
   });
 

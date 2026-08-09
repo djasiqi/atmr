@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Echoue si requestPermissionsAsync apparait ailleurs que registerPushToken.ts (prod).
+# Echoue si requestPermissionsAsync apparait ailleurs que requestNotificationOsPermissions.ts (prod).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -17,10 +17,10 @@ if [[ "$COUNT" -ne 1 ]]; then
   exit 1
 fi
 
-if ! echo "$MATCHES" | grep -q "registerPushToken.ts"; then
-  echo "FAIL: requestPermissionsAsync doit etre dans registerPushToken.ts uniquement" >&2
+if ! echo "$MATCHES" | grep -q "requestNotificationOsPermissions.ts"; then
+  echo "FAIL: requestPermissionsAsync doit etre dans requestNotificationOsPermissions.ts uniquement" >&2
   echo "$MATCHES" >&2
   exit 1
 fi
 
-echo "OK: requestPermissionsAsync - 1 site prod (registerPushToken.ts)"
+echo "OK: requestPermissionsAsync - 1 site prod (requestNotificationOsPermissions.ts)"

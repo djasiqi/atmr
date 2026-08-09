@@ -40,6 +40,15 @@ type TrackingState = {
   isTracking: boolean;
   mode: "mission_live" | "availability_presence" | "idle";
   lastUpdate?: number;
+  lastAckAt?: number;
+  lastAckIsQueued?: boolean;
+  lastAckStatus?: string | null;
+  lastAckError?: string | null;
+  currentAttemptSeq?: number;
+  lastAckAttemptSeq?: number | null;
+  currentAttemptEventId?: string | null;
+  lastAckEventId?: string | null;
+  queueDepth?: number;
   accuracy?: number;
 };
 type SocketStatus = {
@@ -214,6 +223,15 @@ describe("driver runtime hooks", () => {
       isTracking: false,
       mode: "idle",
       lastUpdate: undefined,
+      lastAckAt: undefined,
+      lastAckIsQueued: false,
+      lastAckStatus: undefined,
+      lastAckError: undefined,
+      currentAttemptSeq: undefined,
+      lastAckAttemptSeq: undefined,
+      currentAttemptEventId: undefined,
+      lastAckEventId: undefined,
+      queueDepth: undefined,
       accuracy: undefined,
     });
 

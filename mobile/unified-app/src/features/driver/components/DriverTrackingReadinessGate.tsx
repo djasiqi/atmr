@@ -25,7 +25,7 @@ import {
   resolveLocationAccuracy,
 } from "../../../core/location/locationPermissionState";
 import { markNotificationDisclosureAccepted } from "../../../core/notifications/notificationDisclosurePersistence";
-import { requestNotificationOsPermissionsAsync } from "../../../core/notifications/registerPushToken";
+import { requestNotificationOsPermissionsAsync } from "../../../core/notifications/requestNotificationOsPermissions";
 import { emitDriverTelemetry } from "../../../core/observability/driverTelemetry";
 import { useAccessibilityScale } from "../../../design/responsive/useAccessibilityScale";
 import {

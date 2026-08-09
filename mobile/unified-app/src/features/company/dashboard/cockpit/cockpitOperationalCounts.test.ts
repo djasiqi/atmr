@@ -30,7 +30,8 @@ describe("computeCockpitOperationalCounts", () => {
       missions: [
         {
           mission_id: 10,
-          status: "in_progress",
+          // Phase pré-pickup : le retard pickup peut encore marquer incident.
+          status: "en_route",
           driver_id: 1,
           assignment_pickup_delay_minutes: 20,
         },

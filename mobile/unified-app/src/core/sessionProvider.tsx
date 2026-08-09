@@ -40,6 +40,14 @@ import {
   type SessionGenerationId,
 } from "./auth/authCredentialStore";
 import {
+  clearContextSwitchOperationIfCurrent,
+  isCurrentContextSwitchOperation,
+} from "./auth/contextSwitchOperation";
+import {
+  emitTrackingAuthTerminalEvent,
+  setTrackingAuthAvailability,
+} from "./auth/sessionAuthDecision";
+import {
   newLifecycleOperationId,
   shouldAcceptBootstrapTrigger,
   type BootstrapTrigger,
@@ -613,10 +621,6 @@ export function SessionProvider({ children }: PropsWithChildren) {
       const response = await switchContext(targetContextId, {
         sourceContextId: previousContextId,
       });
-      const {
-        isCurrentContextSwitchOperation,
-        clearContextSwitchOperationIfCurrent,
-      } = await import("./auth/contextSwitchOperation");
       const opId = (response as { contextSwitchOperationId?: string })
         .contextSwitchOperationId;
       if (opId && !isCurrentContextSwitchOperation(opId)) {
@@ -767,22 +771,15 @@ export function SessionProvider({ children }: PropsWithChildren) {
       onLogoutClaimed: () => {
         setAutoBootstrapAllowedSync(false);
         setMobileSessionStatus("logging_out");
-        void import("./auth/sessionAuthDecision").then(
-          ({
-            emitTrackingAuthTerminalEvent,
-            setTrackingAuthAvailability,
-          }) => {
-            setTrackingAuthAvailability({ kind: "TRACKING_IDENTITY_UNAVAILABLE" });
-            emitTrackingAuthTerminalEvent({
-              kind: "EXPLICIT_LOGOUT",
-              sourceSessionGenerationId: sourceGeneration,
-              operationId: lifecycleOperationId,
-              trackingIdentityId: trackingIdentity
-                ? `${trackingIdentity.user_id}:${trackingIdentity.driver_id}:${trackingIdentity.company_id}`
-                : null,
-            });
-          }
-        );
+        setTrackingAuthAvailability({ kind: "TRACKING_IDENTITY_UNAVAILABLE" });
+        emitTrackingAuthTerminalEvent({
+          kind: "EXPLICIT_LOGOUT",
+          sourceSessionGenerationId: sourceGeneration,
+          operationId: lifecycleOperationId,
+          trackingIdentityId: trackingIdentity
+            ? `${trackingIdentity.user_id}:${trackingIdentity.driver_id}:${trackingIdentity.company_id}`
+            : null,
+        });
       },
       runQuarantine: runDriverQuarantine,
       clearQuarantineIfOperationMatches: async (opId) => {

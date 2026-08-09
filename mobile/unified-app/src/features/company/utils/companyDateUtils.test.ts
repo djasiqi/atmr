@@ -3,6 +3,7 @@ import {
   dateFromZurichWallParts,
   formatNaiveIsoInZurich,
   getTodayIsoDateInZurich,
+  getTodayStartInZurich,
   isoDateInZurichFromIso,
   mergeZurichDayAndTime,
   missionBelongsToSelectedDay,
@@ -70,9 +71,23 @@ describe("companyDateUtils", () => {
     expect(formatNaiveIsoInZurich(mergeZurichDayAndTime(tomorrow, current))).toBe(
       "2026-06-22T23:42:00",
     );
-    const localStripDay = new Date(2026, 5, 22);
-    expect(formatNaiveIsoInZurich(buildGenevaScheduleFromLocalCalendarDay(localStripDay, current))).toBe(
-      "2026-06-22T23:42:00",
+  });
+
+  it("clamp un jour local passé vers aujourd'hui Genève", () => {
+    const current = parseScheduledTimeInstant("2026-06-21T23:42:00")!;
+    const pastLocal = new Date(2020, 0, 1);
+    const result = formatNaiveIsoInZurich(
+      buildGenevaScheduleFromLocalCalendarDay(pastLocal, current),
     );
+    const todayZurich = formatNaiveIsoInZurich(getTodayStartInZurich()).slice(0, 10);
+    expect(result).toBe(`${todayZurich}T23:42:00`);
+  });
+
+  it("conserve un jour local futur en calendrier Genève", () => {
+    const current = parseScheduledTimeInstant("2026-06-21T23:42:00")!;
+    const futureLocal = new Date(2030, 5, 22);
+    expect(
+      formatNaiveIsoInZurich(buildGenevaScheduleFromLocalCalendarDay(futureLocal, current)),
+    ).toBe("2030-06-22T23:42:00");
   });
 });

@@ -25,7 +25,7 @@ import {
   readNotificationDisclosureAccepted,
 } from "../../../core/notifications/notificationDisclosurePersistence";
 import { requestNotificationDisclosure } from "../../../core/notifications/pushRegistrationState";
-import { requestNotificationOsPermissionsAsync } from "../../../core/notifications/registerPushToken";
+import { requestNotificationOsPermissionsAsync } from "../../../core/notifications/requestNotificationOsPermissions";
 import { useSession } from "../../../core/sessionProvider";
 import type { AuthContext } from "../../../core/contracts/auth";
 import { AppSwitch } from "../../../design/ui/AppSwitch";
