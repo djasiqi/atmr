@@ -74,8 +74,10 @@ jobs:
             exit 0
           fi
 
-          # Créer le nom du fichier de rapport basé sur le fichier requirements
-          REPORT_FILE="audit-report-$(basename ${{ matrix.requirements-file }} .txt).json"
+          # Créer le nom du fichier / artefact (sans "/" — interdit dans les noms d'artefacts)
+          ARTIFACT_SLUG="$(echo "${{ matrix.requirements-file }}" | tr '/.' '-')"
+          REPORT_FILE="audit-report-${ARTIFACT_SLUG}.json"
+          echo "artifact_slug=$ARTIFACT_SLUG" >> $GITHUB_OUTPUT
 
           # Scanner avec pip-audit
           # Utiliser --desc pour avoir les descriptions des vulnérabilités
@@ -142,7 +144,7 @@ jobs:
         if: steps.scan.outputs.report_file != ''
         uses: actions/upload-artifact@v4
         with:
-          name: audit-report-${{ matrix.requirements-file }}
+          name: audit-report-${{ steps.scan.outputs.artifact_slug }}
           path: ${{ steps.scan.outputs.report_file }}
           retention-days: 30
           if-no-files-found: ignore
