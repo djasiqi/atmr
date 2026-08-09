@@ -20,12 +20,12 @@ import {
   shouldShowCompanyDriverContextSwitch,
 } from "../../../core/contextSwitchPolicy";
 import { isFeatureEnabled } from "../../../core/featureFlags/registry";
-import { getExpoNotificationsModule } from "../../../core/notifications/expoNotificationsCompat";
 import {
   ensureNotificationDisclosureSyncedWithOsPermission,
   readNotificationDisclosureAccepted,
 } from "../../../core/notifications/notificationDisclosurePersistence";
 import { requestNotificationDisclosure } from "../../../core/notifications/pushRegistrationState";
+import { requestNotificationOsPermissionsAsync } from "../../../core/notifications/registerPushToken";
 import { useSession } from "../../../core/sessionProvider";
 import type { AuthContext } from "../../../core/contracts/auth";
 import { AppSwitch } from "../../../design/ui/AppSwitch";
@@ -276,12 +276,11 @@ export function CompanySettingsScreenContent() {
           });
           return;
         }
-        const Notifications = getExpoNotificationsModule();
-        if (!Notifications) {
+        const perm = await requestNotificationOsPermissionsAsync();
+        if (perm.status === "unavailable") {
           setFeedback({ text: "Notifications indisponibles sur cet appareil.", tone: "error" });
           return;
         }
-        const perm = await Notifications.requestPermissionsAsync();
         if (!perm.granted) {
           setFeedback({
             text: "Autorisez les notifications dans les réglages de votre téléphone.",

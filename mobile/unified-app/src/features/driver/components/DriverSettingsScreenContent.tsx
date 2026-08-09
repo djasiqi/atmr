@@ -16,12 +16,12 @@ import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
 import { useRouter } from "expo-router";
 import { useRevealFallback } from "../../../core/boot/useRevealFallback";
-import { getExpoNotificationsModule } from "../../../core/notifications/expoNotificationsCompat";
 import {
   ensureNotificationDisclosureSyncedWithOsPermission,
   readNotificationDisclosureAccepted,
 } from "../../../core/notifications/notificationDisclosurePersistence";
 import { requestNotificationDisclosure } from "../../../core/notifications/pushRegistrationState";
+import { requestNotificationOsPermissionsAsync } from "../../../core/notifications/registerPushToken";
 import { useSession } from "../../../core/sessionProvider";
 import { AppSwitch } from "../../../design/ui/AppSwitch";
 import { authenticateDriverBiometric, isDriverBiometricAvailable } from "../biometricAuth";
@@ -297,12 +297,11 @@ export function DriverSettingsScreenContent() {
           });
           return;
         }
-        const Notifications = getExpoNotificationsModule();
-        if (!Notifications) {
+        const perm = await requestNotificationOsPermissionsAsync();
+        if (perm.status === "unavailable") {
           setFeedback({ text: "Notifications indisponibles sur cet appareil.", tone: "error" });
           return;
         }
-        const perm = await Notifications.requestPermissionsAsync();
         if (!perm.granted) {
           setFeedback({
             text: "Autorisez les notifications dans les réglages de votre téléphone.",

@@ -101,6 +101,30 @@ async function hasAcceptedNotificationDisclosure(telemetrySource: string): Promi
   return disclosureAccepted;
 }
 
+export type NotificationOsPermissionResult = {
+  granted: boolean;
+  status?: string;
+  canAskAgain?: boolean;
+};
+
+/**
+ * Seul site prod autorisé à appeler Notifications.requestPermissionsAsync
+ * (gate Play `check:play-compliance`). UI settings / readiness doivent passer ici.
+ */
+export async function requestNotificationOsPermissionsAsync(): Promise<NotificationOsPermissionResult> {
+  const Notifications = getExpoNotificationsModule();
+  if (!Notifications?.requestPermissionsAsync) {
+    return { granted: false, status: "unavailable" };
+  }
+  const perm = await Notifications.requestPermissionsAsync();
+  const granted = Boolean(perm?.granted || perm?.status === "granted");
+  return {
+    granted,
+    status: typeof perm?.status === "string" ? perm.status : undefined,
+    canAskAgain: typeof perm?.canAskAgain === "boolean" ? perm.canAskAgain : undefined,
+  };
+}
+
 /**
  * Enregistre Expo + FCM avec device_id stable et listeners de rotation.
  */
@@ -120,7 +144,7 @@ export function useRegisterPushTokenEffect(options: RegisterPushTokenOptions): v
       try {
         if (!(await hasAcceptedNotificationDisclosure(telemetrySource))) return;
 
-        const perm = await Notifications.requestPermissionsAsync();
+        const perm = await requestNotificationOsPermissionsAsync();
         if (!perm.granted) {
           emitDriverTelemetry("push.token.permission_denied", {
             source: telemetrySource,

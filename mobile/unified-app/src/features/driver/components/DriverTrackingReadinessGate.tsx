@@ -25,6 +25,7 @@ import {
   resolveLocationAccuracy,
 } from "../../../core/location/locationPermissionState";
 import { markNotificationDisclosureAccepted } from "../../../core/notifications/notificationDisclosurePersistence";
+import { requestNotificationOsPermissionsAsync } from "../../../core/notifications/registerPushToken";
 import { emitDriverTelemetry } from "../../../core/observability/driverTelemetry";
 import { useAccessibilityScale } from "../../../design/responsive/useAccessibilityScale";
 import {
@@ -307,11 +308,7 @@ export function DriverTrackingReadinessGate(props: Props) {
       try {
         await markNotificationDisclosureAccepted();
         if (Platform.OS !== "web") {
-          // eslint-disable-next-line @typescript-eslint/no-require-imports -- module optionnel runtime
-          const Notifications = require("expo-notifications") as {
-            requestPermissionsAsync: () => Promise<unknown>;
-          };
-          await Notifications.requestPermissionsAsync();
+          await requestNotificationOsPermissionsAsync();
         }
       } catch {
         /* best-effort — l'utilisateur peut passer par Ouvrir réglages */
