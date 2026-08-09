@@ -193,31 +193,78 @@ describe("P0 file GPS — preuve durable + restart", () => {
     expect(row?.state).not.toBe("persisted");
   });
 
-  it("compaction/expire → kill → restart : terminaux absents de listActive", async () => {
+  it.each([
+    ["rejected", "rejected"],
+    ["ignored", "tombstone"],
+    ["stale", "tombstone"],
+  ] as const)(
+    "ACK HTTP %s → finalizeTerminal ; kill→restart ne ressuscite pas",
+    async (ackStatus, expectedTerminalAbsentFromActive) => {
+      void expectedTerminalAbsentFromActive;
+      const item = await driverTrackingQueue.enqueue({
+        missionId: 14,
+        appState: "active",
+        locationMode: "mission_live",
+        payload: {
+          latitude: 46.4,
+          longitude: 6.4,
+          missionId: 14,
+          locationMode: "mission_live",
+        },
+      });
+      mockSendDriverLocation.mockResolvedValue({
+        ack_status: ackStatus,
+        location_event_id: item.id,
+        tracking_event_id: item.id,
+      });
+      const flush = await driverTrackingQueue.flush({
+        forceHttpFallback: true,
+        networkProfile: "normal",
+      });
+      expect(flush.dropped).toBe(1);
+      expect(flush.queueDepth).toBe(0);
+      expect((await trackingQueueStore.listActive()).length).toBe(0);
+      if (ackStatus === "stale" || ackStatus === "ignored") {
+        expect(
+          trackingQueueStore._listGapsForTests().some((g) => g.reason === `ack_${ackStatus}`)
+        ).toBe(true);
+      }
+
+      await driverTrackingQueue.resetForTests({ keepStore: true });
+      const active = await trackingQueueStore.listActive();
+      expect(active.find((r) => r.locationEventId === item.id)).toBeUndefined();
+      expect((await driverTrackingQueue.getSnapshot()).queueDepth).toBe(0);
+    }
+  );
+
+  it("ACK HTTP inattendu → retry_pending (pas de drop mémoire-only)", async () => {
     const item = await driverTrackingQueue.enqueue({
-      missionId: 14,
+      missionId: 15,
       appState: "active",
       locationMode: "mission_live",
       payload: {
-        latitude: 46.4,
-        longitude: 6.4,
-        missionId: 14,
+        latitude: 46.5,
+        longitude: 6.5,
+        missionId: 15,
         locationMode: "mission_live",
       },
     });
     mockSendDriverLocation.mockResolvedValue({
-      ack_status: "persisted",
-      durability: "persisted_sync",
+      // Statut hors contrat pour forcer la branche unexpected (pas de drop mémoire-only).
+      ack_status: "totally_unknown" as unknown as "accepted",
       location_event_id: item.id,
-      tracking_event_id: item.id,
     });
-    await driverTrackingQueue.flush({
+    const flush = await driverTrackingQueue.flush({
       forceHttpFallback: true,
       networkProfile: "normal",
     });
-    await driverTrackingQueue.resetForTests({ keepStore: true });
-    const active = await trackingQueueStore.listActive();
-    expect(active.find((r) => r.locationEventId === item.id)).toBeUndefined();
-    expect((await driverTrackingQueue.getSnapshot()).queueDepth).toBe(0);
+    expect(flush.dropped).toBe(0);
+    expect(flush.retried).toBe(1);
+    expect(flush.queueDepth).toBe(1);
+    const row = (await trackingQueueStore.listActive()).find(
+      (r) => r.locationEventId === item.id
+    );
+    expect(row?.state).toBe("non_ingested");
+    expect(row?.deliveryState).toBe("retry_pending");
   });
 });

@@ -797,6 +797,9 @@ export const trackingQueueStore = {
     if (locationEventIds.length === 0) return;
     return runSerialized(async () => {
       const mode = await ensureBackendMode();
+      if (mode === "unavailable") {
+        throw new Error("durable_unavailable");
+      }
       if (mode === "sqlite") {
         await runSqliteOperation((db) =>
           withExclusiveOrFallbackTransaction(db, async (txn) => {
@@ -807,8 +810,6 @@ export const trackingQueueStore = {
         );
         return;
       }
-      // Backend mémoire OU durable indisponible : comportement historique conservé
-      // (écriture mémoire best-effort, jamais de perte silencieuse de la file locale).
       for (const id of locationEventIds) {
         markStateMemory(id, state, extras);
       }
@@ -830,6 +831,9 @@ export const trackingQueueStore = {
     if (gaps.length === 0 && ids.length === 0) return;
     return runSerialized(async () => {
       const mode = await ensureBackendMode();
+      if (mode === "unavailable") {
+        throw new Error("durable_unavailable");
+      }
       if (mode === "sqlite") {
         await runSqliteOperation((db) =>
           withExclusiveOrFallbackTransaction(db, async (txn) => {
@@ -863,6 +867,9 @@ export const trackingQueueStore = {
     if (locationEventIds.length === 0) return;
     return runSerialized(async () => {
       const mode = await ensureBackendMode();
+      if (mode === "unavailable") {
+        throw new Error("durable_unavailable");
+      }
       if (mode === "sqlite") {
         await runSqliteOperation((db) =>
           withExclusiveOrFallbackTransaction(db, async (txn) => {

@@ -118,6 +118,28 @@ describe("trackingQueueStore (Annexe A.4)", () => {
     expect(trackingQueueStore.isDurableBackendAvailable()).toBe(false);
   });
 
+  it("markState / transitionWithGaps / patchDeliveryState refusent mode unavailable", async () => {
+    trackingQueueStore._setForceNativeSqliteForTests(true);
+    trackingQueueStore._forceDurableUnavailableForTests();
+    try {
+      await expect(
+        trackingQueueStore.markState(["x"], "ingested_non_persisted")
+      ).rejects.toThrow("durable_unavailable");
+      await expect(
+        trackingQueueStore.transitionWithGaps({
+          gaps: [],
+          locationEventIds: ["x"],
+          state: "tombstone",
+        })
+      ).rejects.toThrow("durable_unavailable");
+      await expect(
+        trackingQueueStore.patchDeliveryState(["x"], { deliveryState: "retry_pending" })
+      ).rejects.toThrow("durable_unavailable");
+    } finally {
+      trackingQueueStore._setForceNativeSqliteForTests(false);
+    }
+  });
+
   it("transitionWithGaps applique gaps + état terminal ensemble", async () => {
     await trackingQueueStore.upsert({
       locationEventId: "tx1",
@@ -389,5 +411,65 @@ describe("trackingQueueStore — backend SQLite natif mocké", () => {
 
     const next = await trackingQueueStore.initAndHealthcheckHeadless();
     expect(next.recovered).toBe(false);
+  });
+
+  it("transitionWithGaps : échec markState rollbacks la TX (gaps non commités)", async () => {
+    const committedGaps: string[] = [];
+    const stagedGaps: string[] = [];
+    let inTx = false;
+
+    const { db } = createFakeDb({
+      runAsyncImpl: async (sql: string, ...params: unknown[]) => {
+        if (String(sql).includes("INSERT INTO tracking_local_gaps")) {
+          const reason = String(params[3] ?? "");
+          if (inTx) stagedGaps.push(reason);
+          else committedGaps.push(reason);
+          return undefined;
+        }
+        if (String(sql).includes("UPDATE tracking_queue SET")) {
+          throw new Error("mark_state_boom");
+        }
+        return undefined;
+      },
+    });
+
+    const exclusive = db.withExclusiveTransactionAsync as jest.Mock;
+    exclusive.mockImplementation(async (fn: (txn: unknown) => Promise<void>) => {
+      inTx = true;
+      stagedGaps.length = 0;
+      try {
+        await fn(db);
+        committedGaps.push(...stagedGaps);
+      } catch (err) {
+        stagedGaps.length = 0;
+        throw err;
+      } finally {
+        inTx = false;
+      }
+    });
+
+    mockOpenDatabaseAsync.mockResolvedValue(db);
+    await trackingQueueStore.init();
+
+    await expect(
+      trackingQueueStore.transitionWithGaps({
+        gaps: [
+          {
+            trackingSessionId: "s1",
+            sequenceFrom: 1,
+            sequenceTo: 1,
+            reason: "ack_stale",
+            createdAt: Date.now(),
+          },
+        ],
+        locationEventIds: ["row-1"],
+        state: "tombstone",
+        extras: { deliveryState: "expired", ackedAt: Date.now() },
+      })
+    ).rejects.toThrow("mark_state_boom");
+
+    expect(committedGaps).toEqual([]);
+    expect(stagedGaps).toEqual([]);
+    expect(exclusive).toHaveBeenCalled();
   });
 });

@@ -1753,16 +1753,77 @@ class DriverTrackingQueue {
             continue;
           }
 
-          item.deliveryState = ack.ack_status === "stale" ? "expired" : "dropped";
-          if (ack.ack_status === "rejected" || ack.ack_status === "ignored") {
-            item.persistState = ack.ack_status === "rejected" ? "rejected" : "tombstone";
+          // Terminaux HTTP : SQLite d'abord (finalizeTerminal), sinon l'item
+          // disparaît de la mémoire mais réapparaît au restart depuis listActive.
+          if (ack.ack_status === "rejected") {
+            try {
+              await this.finalizeTerminal([item.id], "rejected", {
+                deliveryState: "dropped",
+                ackedAt: nowMs(),
+                removeFromMemory: false,
+              });
+              dropped += 1;
+              emitDriverTelemetry("tracking.queue.dropped", {
+                source: "driver.tracking.queue",
+                mission_id: item.missionId,
+                reason: "ack_rejected",
+                queue_item_id: item.id,
+                accept_reason: ack.accept_reason ?? null,
+                trace_id: ack.trace_id ?? null,
+              });
+            } catch {
+              this.scheduleDurableWriteRetry();
+              remaining.push(item);
+            }
+            continue;
           }
-          dropped += 1;
-          emitDriverTelemetry("tracking.queue.dropped", {
+          if (ack.ack_status === "stale" || ack.ack_status === "ignored") {
+            try {
+              await this.finalizeTerminal([item.id], "tombstone", {
+                deliveryState: ack.ack_status === "stale" ? "expired" : "dropped",
+                ackedAt: nowMs(),
+                removeFromMemory: false,
+                gaps: [
+                  {
+                    trackingSessionId: item.trackingSessionId,
+                    sequenceFrom: item.sequenceId,
+                    sequenceTo: item.sequenceId,
+                    reason: `ack_${ack.ack_status}`,
+                  },
+                ],
+              });
+              dropped += 1;
+              emitDriverTelemetry("tracking.queue.dropped", {
+                source: "driver.tracking.queue",
+                mission_id: item.missionId,
+                reason: `ack_${ack.ack_status}`,
+                queue_item_id: item.id,
+                accept_reason: ack.accept_reason ?? null,
+                trace_id: ack.trace_id ?? null,
+              });
+            } catch {
+              this.scheduleDurableWriteRetry();
+              remaining.push(item);
+            }
+            continue;
+          }
+
+          // ACK inattendu : conserver pour retry (pas de drop mémoire-only).
+          item.deliveryState = "retry_pending";
+          item.lastError = `unexpected_ack_${String(ack.ack_status)}`;
+          retried += 1;
+          retryEventIds.push(item.id);
+          await this.syncDelivery([item.id], {
+            deliveryState: "retry_pending",
+            lastError: item.lastError,
+            retryCount: item.retryCount,
+          });
+          remaining.push(item);
+          emitDriverTelemetry("tracking.queue.unexpected_ack", {
             source: "driver.tracking.queue",
             mission_id: item.missionId,
-            reason: `ack_${ack.ack_status}`,
             queue_item_id: item.id,
+            ack_status: ack.ack_status,
             accept_reason: ack.accept_reason ?? null,
             trace_id: ack.trace_id ?? null,
           });
