@@ -3,7 +3,6 @@ import { filterThreadsForMobileTab } from "./inboxThreadPolicy";
 
 export type InboxTab = "all" | "missions" | "contacts";
 
-const MISSION_SECTIONS = new Set(["mission_active", "archives", "urgent"]);
 const CONTACT_SECTIONS = new Set(["dispatch", "team", "support", "colleagues", "drivers"]);
 
 export function countUnreadForTab(threads: MessageHubThread[], tab: InboxTab): number {

@@ -131,7 +131,7 @@ jest.mock("./driverTrackingBridge", () => ({
   getDriverTrackingPresenceWindowActive: () => mockGetDriverTrackingPresenceWindowActive(),
 }));
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+ 
 const heartbeat = require("./deviceHealthHeartbeat") as typeof import("./deviceHealthHeartbeat");
 
 function setHappyPathDefaults() {

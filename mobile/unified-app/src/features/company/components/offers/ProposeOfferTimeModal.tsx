@@ -73,7 +73,7 @@ export function PlanOfferTimeModal({
     return () => {
       cancelled = true;
     };
-  }, [visible, offer?.id, req?.id]);
+  }, [visible, offer?.id, req]);
 
   const scheduleLabel = buildInstitutionScheduleLabel(req);
   const routeLabel = formatOutboundRouteLabel(req);

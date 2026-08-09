@@ -7,7 +7,6 @@
  */
 import { Platform } from "react-native";
 // API legacy stable (downloadAsync / cacheDirectory) — le package racine throw en runtime.
-// eslint-disable-next-line import/no-extraneous-dependencies -- fourni par le package expo
 import {
   cacheDirectory,
   deleteAsync,

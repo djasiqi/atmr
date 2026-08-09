@@ -500,6 +500,26 @@ async function markStateWithExecutor(
   );
 }
 
+async function recordGapWithExecutor(
+  executor: SqliteExecutor,
+  gap: LocalGapRecord
+): Promise<void> {
+  await executor.runAsync(
+    `INSERT INTO tracking_local_gaps
+      (tracking_session_id, sequence_from, sequence_to, reason, created_at)
+     VALUES (?, ?, ?, ?, ?)`,
+    gap.trackingSessionId,
+    gap.sequenceFrom,
+    gap.sequenceTo,
+    gap.reason,
+    gap.createdAt
+  );
+}
+
+function recordGapMemory(gap: LocalGapRecord): void {
+  memory.gaps.push(gap);
+}
+
 function markStateMemory(
   id: string,
   state: TrackingQueueRowState,
@@ -796,6 +816,43 @@ export const trackingQueueStore = {
   },
 
   /**
+   * Transition terminale atomique : gaps + markState dans une seule transaction.
+   * Évite N× recordGap + 1× markState (fenêtre de crash entre les deux).
+   */
+  async transitionWithGaps(args: {
+    gaps: LocalGapRecord[];
+    locationEventIds: string[];
+    state: TrackingQueueRowState;
+    extras?: TrackingQueueStateExtras;
+  }): Promise<void> {
+    const gaps = args.gaps ?? [];
+    const ids = args.locationEventIds ?? [];
+    if (gaps.length === 0 && ids.length === 0) return;
+    return runSerialized(async () => {
+      const mode = await ensureBackendMode();
+      if (mode === "sqlite") {
+        await runSqliteOperation((db) =>
+          withExclusiveOrFallbackTransaction(db, async (txn) => {
+            for (const gap of gaps) {
+              await recordGapWithExecutor(txn, gap);
+            }
+            for (const id of ids) {
+              await markStateWithExecutor(txn, id, args.state, args.extras);
+            }
+          })
+        );
+        return;
+      }
+      for (const gap of gaps) {
+        recordGapMemory(gap);
+      }
+      for (const id of ids) {
+        markStateMemory(id, args.state, args.extras);
+      }
+    });
+  },
+
+  /**
    * Met à jour uniquement le transport (`delivery_state` + métadonnées),
    * sans changer l'état de durabilité (`state`).
    */
@@ -910,22 +967,16 @@ export const trackingQueueStore = {
     return runSerialized(async () => {
       const mode = await ensureBackendMode();
       if (mode === "sqlite") {
-        await runSqliteOperation((db) =>
-          db.runAsync(
-            `INSERT INTO tracking_local_gaps
-              (tracking_session_id, sequence_from, sequence_to, reason, created_at)
-             VALUES (?, ?, ?, ?, ?)`,
-            gap.trackingSessionId,
-            gap.sequenceFrom,
-            gap.sequenceTo,
-            gap.reason,
-            gap.createdAt
-          )
-        );
+        await runSqliteOperation((db) => recordGapWithExecutor(db, gap));
         return;
       }
-      memory.gaps.push(gap);
+      recordGapMemory(gap);
     });
+  },
+
+  /** Tests : gaps enregistrés (backend mémoire). */
+  _listGapsForTests(): LocalGapRecord[] {
+    return [...memory.gaps];
   },
 
   async getCursor(trackingSessionId: string): Promise<ContiguousCursor> {

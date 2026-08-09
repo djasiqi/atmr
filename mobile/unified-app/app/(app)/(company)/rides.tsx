@@ -50,7 +50,7 @@ import {
   getTodayIsoDateInZurich,
   missionBelongsToSelectedDay,
 } from "../../../src/features/company/utils/companyDateUtils";
-import { canMarkRideUrgent, hasConfirmedPickupTime, missionHasRenderableSchedule } from "../../../src/features/company/utils/pickupSentinel";
+import { hasConfirmedPickupTime, missionHasRenderableSchedule } from "../../../src/features/company/utils/pickupSentinel";
 import { TransferRideModal } from "../../../src/features/company/components/transfers/TransferRideModal";
 import {
   cancelCompanyRide,
@@ -598,13 +598,7 @@ export default function CompanyRidesScreen() {
       scheduledAt: missionBeingEdited.scheduled_at ?? null,
       notes: null,
     };
-  }, [
-    missionBeingEdited?.client_name,
-    missionBeingEdited?.dropoff_label,
-    missionBeingEdited?.pickup_label,
-    missionBeingEdited?.scheduled_at,
-    missionBeingEdited,
-  ]);
+  }, [missionBeingEdited]);
   const allMissions = useMemo(() => {
     const raw = allMissionsForCountsQuery.data?.missions ?? [];
     return raw.filter((mission) => missionBelongsToSelectedDay(mission, selectedDate));

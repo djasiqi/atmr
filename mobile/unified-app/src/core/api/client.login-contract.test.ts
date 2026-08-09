@@ -171,7 +171,7 @@ describe("login contrat session durable P0", () => {
 
   it("n'envoie pas POST /auth/login si getStableDeviceId échoue", async () => {
     mockGetStableDeviceId.mockRejectedValue(new Error("device_identity_storage_unavailable"));
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+     
     const { login } = require("./client") as typeof import("./client");
     await expect(login("a@b.ch", "x")).rejects.toMatchObject({
       code: "DEVICE_ID_UNAVAILABLE",
@@ -182,7 +182,7 @@ describe("login contrat session durable P0", () => {
 
   it("erreur locale sans texte VPN/DNS/TLS", async () => {
     mockGetStableDeviceId.mockRejectedValue(new Error("device_identity_storage_unavailable"));
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+     
     const { login } = require("./client") as typeof import("./client");
     try {
       await login("a@b.ch", "x");
@@ -201,7 +201,7 @@ describe("login contrat session durable P0", () => {
         config: { baseURL: "https://api.test/api/v1", url: "/auth/login" },
       })
     );
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+     
     const { login } = require("./client") as typeof import("./client");
     try {
       await login("a@b.ch", "x");
@@ -221,7 +221,7 @@ describe("login contrat session durable P0", () => {
         // recovery_credential manquant
       },
     });
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+     
     const { login } = require("./client") as typeof import("./client");
     try {
       await login("a@b.ch", "x");
@@ -249,7 +249,7 @@ describe("login contrat session durable P0", () => {
       },
     });
     mockWriteRefreshToken.mockResolvedValue({ status: "temporarily_unavailable" });
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+     
     const { login } = require("./client") as typeof import("./client");
     await expect(login("a@b.ch", "x")).rejects.toMatchObject({
       code: "STORAGE_UNAVAILABLE",
@@ -269,7 +269,7 @@ describe("login contrat session durable P0", () => {
         user: { public_id: "u1", role: "driver" },
       },
     });
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+     
     const { login } = require("./client") as typeof import("./client");
     await login("a@b.ch", "x");
     expect(mockPost).toHaveBeenCalledWith(

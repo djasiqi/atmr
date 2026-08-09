@@ -323,7 +323,7 @@ export function useRegisterPushTokenEffect(options: RegisterPushTokenOptions): v
       unsubscribeDisclosure();
       appStateSubscription.remove();
     };
-  }, [androidNativeFcmMode, callbacks, enabled, fcmEnabled, telemetrySource]);
+  }, [Notifications, androidNativeFcmMode, callbacks, enabled, fcmEnabled, telemetrySource]);
 
   useEffect(() => {
     if (!enabled || Platform.OS === "web") return;

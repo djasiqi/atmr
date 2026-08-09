@@ -1,7 +1,9 @@
-import { LIRIE_DRIVER_MARKER_DISPLAY_WIDTH_PX } from "./fleetLirieMarkerSizing";
+import {
+  LIRIE_DRIVER_MARKER_DISPLAY_WIDTH_PX,
+  resolveClusterMarkerSizePx,
+} from "./fleetLirieMarkerSizing";
 import type { FleetDriverMapItem } from "./fleetMapTypes";
 import type { FleetOperationalStatus } from "./mapStatusTheme";
-import { resolveClusterMarkerSizePx } from "./fleetLirieMarkerSizing";
 
 /** Statut le plus urgent parmi les chauffeurs du cluster (couleur du disque). */
 const CLUSTER_STATUS_PRIORITY: FleetOperationalStatus[] = [

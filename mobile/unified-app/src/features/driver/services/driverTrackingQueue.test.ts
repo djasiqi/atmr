@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { isFeatureEnabled } from "../../../core/featureFlags/registry";
+import { trackingQueueStore } from "./trackingQueueStore";
 
 const mockSendDriverLocation = jest.fn<
   (payload: unknown) => Promise<{
@@ -54,7 +55,7 @@ jest.mock("./socketBatchPacing", () => ({
   recordSocketBatchRateLimited: jest.fn(),
 }));
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+ 
 const { driverTrackingQueue } = require("./driverTrackingQueue") as typeof import("./driverTrackingQueue");
 
 describe("driverTrackingQueue", () => {
@@ -83,6 +84,7 @@ describe("driverTrackingQueue", () => {
       durability: "persisted_sync",
     });
     mockSendDriverLocationBatch.mockReturnValue(false);
+    trackingQueueStore._resetMemoryForTests();
     await driverTrackingQueue.resetForTests();
   });
 

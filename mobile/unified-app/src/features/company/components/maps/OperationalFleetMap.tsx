@@ -251,14 +251,12 @@ function FleetMapSurface({
 
 }: FleetMapSurfaceProps) {
 
-  const defaultInsets = { top: 52, right: 52, bottom: 52, left: 52 };
-  const fitEdgePadding = useMemo(
-    () =>
-      computeFleetMapFitEdgePadding(cameraInsets ?? defaultInsets, {
-        immersive: isCockpit && cockpitImmersive,
-      }),
-    [cameraInsets, isCockpit, cockpitImmersive]
-  );
+  const fitEdgePadding = useMemo(() => {
+    const defaultInsets = { top: 52, right: 52, bottom: 52, left: 52 };
+    return computeFleetMapFitEdgePadding(cameraInsets ?? defaultInsets, {
+      immersive: isCockpit && cockpitImmersive,
+    });
+  }, [cameraInsets, isCockpit, cockpitImmersive]);
 
   return (
 

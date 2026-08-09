@@ -29,6 +29,22 @@ export { resolveRealtimeFlushMs as REALTIME_FLUSH_MS_RESOLVED };
 export const MAP_SILENCE_RESYNC_MS = 25_000;
 const STALE_SECONDS_THRESHOLD = 120;
 
+/**
+ * Watchdog carte : true si aucune preuve de fraîcheur (socket OU snapshot)
+ * depuis `silenceMs` — déclenche un refetch même sans event Socket.IO.
+ */
+export function shouldTriggerMapSilenceResync(args: {
+  nowMs: number;
+  lastRealtimeEventAtMs: number;
+  lastWatchdogSuccessAtMs: number;
+  silenceMs?: number;
+}): boolean {
+  const silence = args.silenceMs ?? MAP_SILENCE_RESYNC_MS;
+  if (args.nowMs - args.lastRealtimeEventAtMs < silence) return false;
+  if (args.nowMs - args.lastWatchdogSuccessAtMs < silence) return false;
+  return true;
+}
+
 function toEpoch(value: string | null | undefined): number {
   if (!value) return 0;
   const parsed = Date.parse(value);
@@ -486,8 +502,15 @@ export function useCompanyDriverLiveTracking() {
     const interval = setInterval(() => {
       if (AppState.currentState !== "active") return;
       const now = Date.now();
-      if (now - lastRealtimeEventAtRef.current < MAP_SILENCE_RESYNC_MS) return;
-      if (now - lastWatchdogSuccessAtRef.current < MAP_SILENCE_RESYNC_MS) return;
+      if (
+        !shouldTriggerMapSilenceResync({
+          nowMs: now,
+          lastRealtimeEventAtMs: lastRealtimeEventAtRef.current,
+          lastWatchdogSuccessAtMs: lastWatchdogSuccessAtRef.current,
+        })
+      ) {
+        return;
+      }
       void refetchSnapshot().then((result) => {
         if (result.status === "success") {
           lastWatchdogSuccessAtRef.current = Date.now();
@@ -523,6 +546,8 @@ export function useCompanyDriverLiveTracking() {
 
   const sortedDriversRef = useRef<CompanyDriverLiveLocation[]>([]);
   const drivers = useMemo(() => {
+    // freshnessTick force le recalcul d'âge local même si driversMap est stable.
+    void freshnessTick;
     const nowMs = Date.now();
     const next = Object.values(driversMap)
       .map((driver) => applyLocalLocationFreshness(driver, nowMs))

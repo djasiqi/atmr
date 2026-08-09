@@ -61,6 +61,9 @@ import {
   type TrackingRuntimeIdentity,
 } from "./trackingRuntimeRegistry";
 import { getTrackingAuthAvailability } from "../../../core/auth/sessionAuthDecision";
+import { computeFixAgeMs, WATCH_STALE_MS } from "./driverTrackingFixAge";
+
+export { computeFixAgeMs, WATCH_STALE_MS } from "./driverTrackingFixAge";
 
 const FOREGROUND_INTERVAL_MS = Number(process.env.EXPO_PUBLIC_DRIVER_GPS_FOREGROUND_INTERVAL_MS ?? "8000");
 const AGGRESSIVE_FOREGROUND_INTERVAL_MS = Number(
@@ -71,7 +74,6 @@ const MAX_BACKOFF_MS = 60_000;
 /** Dernière exception du tick tracking (pour logs __DEV__ / télémétrie, sans PII). */
 let lastTrackingTickFailure: unknown = null;
 
-const WATCH_STALE_MS = 25_000;
 const WATCH_DISTANCE_METERS = Number(process.env.EXPO_PUBLIC_DRIVER_GPS_WATCH_DISTANCE_METERS ?? "10");
 const AGGRESSIVE_WATCH_DISTANCE_METERS = Number(
   process.env.EXPO_PUBLIC_DRIVER_GPS_AGGRESSIVE_WATCH_DISTANCE_METERS ?? "5"
@@ -292,16 +294,6 @@ const state: TrackingBridgeState = {
 };
 
 const trackingBridgeListeners = new Set<DriverTrackingBridgeListener>();
-
-function computeFixAgeMs(position: Location.LocationObject, watchAtMs: number | null): number {
-  const now = Date.now();
-  const fromTimestamp =
-    typeof position.timestamp === "number" && Number.isFinite(position.timestamp)
-      ? now - position.timestamp
-      : 0;
-  const fromWatch = watchAtMs != null ? now - watchAtMs : 0;
-  return Math.max(fromTimestamp, fromWatch);
-}
 
 function readDriverLastKnownPosition(): DriverTrackingPosition | null {
   if (!state.lastWatchedPosition || state.lastWatchAtMs == null) return null;

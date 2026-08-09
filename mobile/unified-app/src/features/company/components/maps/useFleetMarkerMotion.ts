@@ -126,8 +126,7 @@ export function useFleetMarkerMotion({
     recordedAt,
     runJsInterpolation,
     snapTo,
-    target.latitude,
-    target.longitude,
+    target,
   ]);
 
   return { displayCoordinate, primaryMarkerRef };

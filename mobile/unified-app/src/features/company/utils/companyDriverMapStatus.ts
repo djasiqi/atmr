@@ -1,4 +1,5 @@
 import type { CompanyDriverLiveLocation } from "../api/contracts";
+import { FLEET_WEB_STATUS_COLORS } from "../components/maps/fleetMapStatusContract";
 import { resolveLocalLocationFreshnessStatus } from "./localDriverLocationFreshness";
 
 export const STALE_SECONDS_THRESHOLD = 120;
@@ -7,8 +8,6 @@ export const STALE_SECONDS_THRESHOLD = 120;
 export const FLEET_DRIVER_MARKER_DISC_DP = 28;
 
 export type CompanyDriverMapCategory = "available" | "en_mission" | "last_known" | "offline";
-
-import { FLEET_WEB_STATUS_COLORS } from "../components/maps/fleetMapStatusContract";
 
 /** Pastilles carte flotte — alignées sur la charte Lirie web. */
 export const DRIVER_FLEET_MARKER_PALETTE: Record<

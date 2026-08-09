@@ -8,7 +8,7 @@ import { StatusBar } from "expo-status-bar";
 import { DriverContextGuard, PermissionGuard } from "../../../../src/core/guards";
 import { realtimeManager } from "../../../../src/core/realtime/realtimeManager";
 import { useSession } from "../../../../src/core/sessionProvider";
-import { Screen, AppText, useAppViewport } from "../../../../src/design/responsive";
+import { Screen, useAppViewport } from "../../../../src/design/responsive";
 import {
   ChatComposer,
   ChatComposerError,

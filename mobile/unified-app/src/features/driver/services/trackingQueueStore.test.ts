@@ -118,6 +118,46 @@ describe("trackingQueueStore (Annexe A.4)", () => {
     expect(trackingQueueStore.isDurableBackendAvailable()).toBe(false);
   });
 
+  it("transitionWithGaps applique gaps + état terminal ensemble", async () => {
+    await trackingQueueStore.upsert({
+      locationEventId: "tx1",
+      trackingSessionId: "s-tx",
+      sessionGeneration: 1,
+      sequenceId: 1,
+      payloadJson: "{}",
+      state: "non_ingested",
+      queuedAt: Date.now(),
+      lastAttemptAt: null,
+      retryCount: 0,
+      deliveryState: "queued",
+      missionId: 1,
+      locationMode: "mission_live",
+      batchId: "b",
+      positionId: "p",
+      appState: "active",
+      lastError: null,
+      ackedAt: null,
+    });
+    await trackingQueueStore.transitionWithGaps({
+      gaps: [
+        {
+          trackingSessionId: "s-tx",
+          sequenceFrom: 1,
+          sequenceTo: 1,
+          reason: "compacted",
+          createdAt: Date.now(),
+        },
+      ],
+      locationEventIds: ["tx1"],
+      state: "tombstone",
+      extras: { deliveryState: "dropped", ackedAt: Date.now() },
+    });
+    expect(await trackingQueueStore.listActive()).toEqual([]);
+    expect(
+      trackingQueueStore._listGapsForTests().some((g) => g.reason === "compacted")
+    ).toBe(true);
+  });
+
   it("importLegacyOnce conserve les lignes déjà importées (mémoire Jest)", async () => {
     await trackingQueueStore.importLegacyOnce([
       {

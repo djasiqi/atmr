@@ -38,7 +38,7 @@ export async function runTrackingRecoveryCascade(
   }
   lastCascadeAtMs = now;
 
-  const steps: Array<{ step: RecoveryStep; run: () => Promise<void> }> = [
+  const steps: { step: RecoveryStep; run: () => Promise<void> }[] = [
     { step: "restart_watch", run: () => handlers.restartWatch(reason) },
     { step: "restart_fgs", run: () => handlers.restartFgs(reason) },
     {

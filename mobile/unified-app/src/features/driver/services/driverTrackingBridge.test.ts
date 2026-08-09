@@ -44,6 +44,10 @@ jest.mock("expo-battery", () => ({
   getBatteryLevelAsync: jest.fn().mockResolvedValue(0.85),
 }));
 
+jest.mock("../../../core/observability/gpsFidelityTrace", () => ({
+  emitBatteryBaselineIfTracing: jest.fn(),
+}));
+
 jest.mock("expo-location", () => ({
   requestForegroundPermissionsAsync: () => mockRequestForegroundPermissionsAsync(),
   requestBackgroundPermissionsAsync: () => mockRequestBackgroundPermissionsAsync(),

@@ -83,11 +83,11 @@ jest.mock("expo-task-manager", () => ({
   isTaskRegisteredAsync: () => mockIsTaskRegistered(),
 }));
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+ 
 const bgTask = require("./backgroundLocationTask") as typeof import("./backgroundLocationTask");
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+ 
 const trackingRuntime = require("./trackingRuntime") as typeof import("./trackingRuntime");
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+ 
 const { driverTrackingQueue } = require("./driverTrackingQueue") as {
   driverTrackingQueue: {
     enqueue: jest.Mock;
@@ -113,7 +113,7 @@ function getDefinedTaskHandler(): TaskHandler {
 }
 
 async function seedEligibleMissionContext(): Promise<void> {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
+   
   const asyncStorage = require("@react-native-async-storage/async-storage") as {
     getItem: jest.Mock;
   };
@@ -178,7 +178,7 @@ describe("backgroundLocationTask", () => {
     mockIsTaskRegistered.mockResolvedValue(false);
     mockStart.mockResolvedValue(undefined);
     mockStop.mockResolvedValue(undefined);
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+     
     const asyncStorage = require("@react-native-async-storage/async-storage") as {
       getItem: jest.Mock;
       setItem: jest.Mock;
@@ -232,7 +232,7 @@ describe("backgroundLocationTask", () => {
 
   it("restartNativeTrackingFromWake emits wake_restart telemetry for mission context", async () => {
     bgTask.initializeBackgroundLocationTask();
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+     
     const asyncStorage = require("@react-native-async-storage/async-storage") as {
       getItem: jest.Mock;
     };
@@ -278,7 +278,7 @@ describe("backgroundLocationTask", () => {
   it("refresh mission context when native task is already started", async () => {
     bgTask.initializeBackgroundLocationTask();
     mockHasStarted.mockResolvedValue(true);
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+     
     const asyncStorage = require("@react-native-async-storage/async-storage") as {
       setItem: jest.Mock;
     };

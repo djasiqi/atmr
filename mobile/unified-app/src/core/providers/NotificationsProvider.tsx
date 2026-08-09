@@ -13,7 +13,6 @@ import {
   ensureBaseNotificationChannels,
   ensureDriverNotificationChannels,
   getRegisteredNotificationChannelCount,
-  resolveDriverNotificationContract,
 } from "../../features/driver/notificationChannels";
 import { ensureDriverNotificationActions } from "../../features/driver/notificationActions";
 import { ensureDriverNotificationGrouping } from "../../features/driver/notificationGrouping";

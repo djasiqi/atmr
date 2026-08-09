@@ -99,7 +99,7 @@ function resolveLicenseCategories(profile: DriverProfile): string | null {
   return labels.length > 0 ? labels.join(", ") : null;
 }
 
-function buildRows(entries: Array<[string, string | null, boolean?]>): DriverProfileRow[] {
+function buildRows(entries: [string, string | null, boolean?][]): DriverProfileRow[] {
   return entries
     .filter(([, value]) => value != null && value.trim().length > 0)
     .map(([label, value, fullWidth]) => ({

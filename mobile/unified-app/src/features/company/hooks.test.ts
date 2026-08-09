@@ -31,7 +31,7 @@ jest.mock("./realtime/companyRealtimeBridge", () => ({
 }));
 
  
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+ 
 const { invalidateCompanyQueriesForEvent, resetCompanyInvalidationDedupStateForTests } = require("./hooks");
 
 describe("company query invalidation policy", () => {

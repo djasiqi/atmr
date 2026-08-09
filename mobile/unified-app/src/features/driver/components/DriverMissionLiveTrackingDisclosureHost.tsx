@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Linking, Platform, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 
 import {
   cancelMissionLiveTrackingDisclosure,

@@ -270,7 +270,7 @@ function readBool(payload: Record<string, unknown>, key: string): boolean | null
   return null;
 }
 
-function buildRows(entries: Array<[string, string | null, boolean?]>): CompanyProfileRow[] {
+function buildRows(entries: [string, string | null, boolean?][]): CompanyProfileRow[] {
   return entries
     .filter(([, value]) => value != null && value.trim().length > 0)
     .map(([label, value, fullWidth]) => ({

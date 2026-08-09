@@ -40,7 +40,7 @@ jest.mock("./socketBatchPacing", () => ({
   recordSocketBatchRateLimited: jest.fn(),
 }));
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+ 
 const { driverTrackingQueue } = require("./driverTrackingQueue") as typeof import("./driverTrackingQueue");
 
 describe("P0 file GPS — preuve durable + restart", () => {
@@ -57,6 +57,7 @@ describe("P0 file GPS — preuve durable + restart", () => {
   });
 
   afterEach(async () => {
+    trackingQueueStore._resetMemoryForTests();
     await driverTrackingQueue.resetForTests();
     jest.clearAllTimers();
     jest.useRealTimers();
@@ -118,5 +119,105 @@ describe("P0 file GPS — preuve durable + restart", () => {
     expect((await driverTrackingQueue.getSnapshot()).queueDepth).toBe(1);
     const rows = await trackingQueueStore.listActive();
     expect(rows.some((r) => r.locationEventId === item.id)).toBe(true);
+  });
+
+  it("applyIngested : échec markState ne mute pas la mémoire et planifie un retry", async () => {
+    const item = await driverTrackingQueue.enqueue({
+      missionId: 11,
+      appState: "active",
+      locationMode: "mission_live",
+      payload: {
+        latitude: 46.1,
+        longitude: 6.1,
+        missionId: 11,
+        locationMode: "mission_live",
+      },
+    });
+    const spy = jest
+      .spyOn(trackingQueueStore, "markState")
+      .mockRejectedValueOnce(new Error("sqlite_busy"));
+    await expect(driverTrackingQueue.applyIngestedEventIds([item.id])).rejects.toThrow(
+      "sqlite_busy"
+    );
+    expect(item.persistState ?? "non_ingested").toBe("non_ingested");
+    const row = (await trackingQueueStore.listActive()).find(
+      (r) => r.locationEventId === item.id
+    );
+    expect(row?.state).toBe("non_ingested");
+    spy.mockRestore();
+  });
+
+  it("tombstone + gap atomiques via transitionWithGaps (store)", async () => {
+    const item = await driverTrackingQueue.enqueue({
+      missionId: 12,
+      appState: "active",
+      locationMode: "mission_live",
+      payload: {
+        latitude: 46.2,
+        longitude: 6.2,
+        missionId: 12,
+        locationMode: "mission_live",
+      },
+    });
+    const n = await driverTrackingQueue.tombstoneByIds([item.id], "session_conflict");
+    expect(n).toBe(1);
+    expect((await trackingQueueStore.listActive()).length).toBe(0);
+    const gaps = trackingQueueStore._listGapsForTests();
+    expect(gaps.some((g) => g.reason === "session_conflict")).toBe(true);
+  });
+
+  it("kill→restart : store mémoire conserve ingested ; rehydrate sans faux persisted", async () => {
+    const item = await driverTrackingQueue.enqueue({
+      missionId: 13,
+      appState: "active",
+      locationMode: "mission_live",
+      payload: {
+        latitude: 46.3,
+        longitude: 6.3,
+        missionId: 13,
+        locationMode: "mission_live",
+      },
+    });
+    await driverTrackingQueue.applyIngestedEventIds([item.id]);
+    const before = await trackingQueueStore.listActive();
+    expect(before.find((r) => r.locationEventId === item.id)?.state).toBe(
+      "ingested_non_persisted"
+    );
+
+    // Kill process : vide le miroir mémoire, conserve le store.
+    await driverTrackingQueue.resetForTests({ keepStore: true });
+    expect((await driverTrackingQueue.getSnapshot()).queueDepth).toBe(1);
+    const after = await trackingQueueStore.listActive();
+    const row = after.find((r) => r.locationEventId === item.id);
+    expect(row?.state).toBe("ingested_non_persisted");
+    expect(row?.state).not.toBe("persisted");
+  });
+
+  it("compaction/expire → kill → restart : terminaux absents de listActive", async () => {
+    const item = await driverTrackingQueue.enqueue({
+      missionId: 14,
+      appState: "active",
+      locationMode: "mission_live",
+      payload: {
+        latitude: 46.4,
+        longitude: 6.4,
+        missionId: 14,
+        locationMode: "mission_live",
+      },
+    });
+    mockSendDriverLocation.mockResolvedValue({
+      ack_status: "persisted",
+      durability: "persisted_sync",
+      location_event_id: item.id,
+      tracking_event_id: item.id,
+    });
+    await driverTrackingQueue.flush({
+      forceHttpFallback: true,
+      networkProfile: "normal",
+    });
+    await driverTrackingQueue.resetForTests({ keepStore: true });
+    const active = await trackingQueueStore.listActive();
+    expect(active.find((r) => r.locationEventId === item.id)).toBeUndefined();
+    expect((await driverTrackingQueue.getSnapshot()).queueDepth).toBe(0);
   });
 });

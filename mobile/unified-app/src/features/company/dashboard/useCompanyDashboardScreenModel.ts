@@ -7,7 +7,6 @@ import { useSession } from "../../../core/sessionProvider";
 import { contextRealtimeRouter } from "../../../core/realtime/contextRealtimeRouter";
 import { normalizeCompanyEventType } from "../../../core/realtime/eventContracts";
 import {
-  useActiveCompanyContextId,
   useCompanyFallbackPolling,
   useCompanyDashboardQuery,
   useCompanyDispatchMissionsQuery,
@@ -57,7 +56,6 @@ function resolveMissionIdFromEvent(payload: {
 export function useCompanyDashboardScreenModel() {
   const { activeContext } = useSession();
   const activeContextId = activeContext?.context_id ?? null;
-  const contextId = useActiveCompanyContextId();
 
   const [selectedDate, setSelectedDate] = useState(() => getTodayIsoDate());
   const [dateSheetOpen, setDateSheetOpen] = useState(false);

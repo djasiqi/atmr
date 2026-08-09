@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useFocusEffect } from "@react-navigation/native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSession } from "../../core/sessionProvider";
@@ -348,14 +348,14 @@ export function useDriverTracking(mission: DriverMission | null | undefined) {
   const contextId = useActiveDriverContextId();
   const missionId = mission?.id ?? null;
   const normalized = normalizeDriverMissionStatus(mission?.status);
-  const scheduling =
-    mission != null
-      ? {
-          scheduled_time: mission.scheduled_time,
-          time_confirmed: mission.time_confirmed,
-          scheduling: mission.scheduling,
-        }
-      : null;
+  const scheduling = useMemo(() => {
+    if (mission == null) return null;
+    return {
+      scheduled_time: mission.scheduled_time,
+      time_confirmed: mission.time_confirmed,
+      scheduling: mission.scheduling,
+    };
+  }, [mission]);
   useEffect(() => {
     if (contextId) {
       void reconcileTrackingRuntime({
@@ -376,7 +376,7 @@ export function useDriverTracking(mission: DriverMission | null | undefined) {
     return () => {
       stopDriverTracking();
     };
-  }, [contextId, missionId, normalized, scheduling?.scheduled_time, scheduling?.time_confirmed]);
+  }, [contextId, missionId, normalized, scheduling]);
 
   /**
    * Self-heal cold-start : tick léger qui re-arme le runtime tracking quand
@@ -412,7 +412,7 @@ export function useDriverTracking(mission: DriverMission | null | undefined) {
     };
     const interval = setInterval(tick, COLD_START_REARM_INTERVAL_MS);
     return () => clearInterval(interval);
-  }, [missionId, normalized, scheduling?.scheduled_time, scheduling?.time_confirmed]);
+  }, [missionId, normalized, scheduling]);
 }
 
 /**

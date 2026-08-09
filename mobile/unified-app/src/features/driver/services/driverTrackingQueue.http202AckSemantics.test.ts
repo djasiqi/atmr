@@ -59,7 +59,7 @@ jest.mock("./socketBatchPacing", () => ({
   recordSocketBatchRateLimited: jest.fn(),
 }));
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { trackingQueueStore } = require("./trackingQueueStore") as typeof import("./trackingQueueStore");
 const { driverTrackingQueue } = require("./driverTrackingQueue") as typeof import("./driverTrackingQueue");
 
 describe("driverTrackingQueue http202AckSemantics + session", () => {
@@ -78,6 +78,7 @@ describe("driverTrackingQueue http202AckSemantics + session", () => {
       first_sequence_id: 1,
       status: "active",
     });
+    trackingQueueStore._resetMemoryForTests();
     await driverTrackingQueue.resetForTests();
   });
 

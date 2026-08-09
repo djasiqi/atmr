@@ -17,7 +17,7 @@ const mockFlushTrackingQueue = jest.fn();
 const mockEmitDriverTelemetry = jest.fn();
 const mockIsFeatureEnabled = jest.fn();
 
-let mockAppStateHandlers: Array<(state: "active" | "inactive" | "background") => void> = [];
+let mockAppStateHandlers: ((state: "active" | "inactive" | "background") => void)[] = [];
 let mockNotificationResponseHandler: ((response: any) => void) | null = null;
 let mockSessionState: {
   status: "ready" | "idle" | "error";

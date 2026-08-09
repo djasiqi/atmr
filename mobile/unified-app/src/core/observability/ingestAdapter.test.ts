@@ -26,7 +26,7 @@ describe("ingestAdapter", () => {
     mockFetch.mockResolvedValue(new Response("ok", { status: 200 }));
     delete process.env.EXPO_PUBLIC_DISABLE_INGEST;
 
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+     
     const mod = require("./ingestAdapter");
     sendIngestEvent = mod.sendIngestEvent;
     resetIngestAdapterForTests = mod.resetIngestAdapterForTests;
@@ -56,7 +56,7 @@ describe("ingestAdapter", () => {
     jest.resetModules();
     process.env.EXPO_PUBLIC_DISABLE_INGEST = "1";
 
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+     
     const mod = require("./ingestAdapter");
     mod.resetIngestAdapterForTests();
     mod.sendIngestEvent("any.event", {});
@@ -110,7 +110,7 @@ describe("ingestAdapter", () => {
       default: { isDevice: false, deviceName: "Android Emulator" },
     }));
 
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+     
     const mod = require("./ingestAdapter");
     mod.resetIngestAdapterForTests();
     mod.sendIngestEvent("test.event", {});

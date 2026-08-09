@@ -122,7 +122,7 @@ describe("refreshAuthTokenNow", () => {
 
   it("returns false and skips network call when no refresh token exists", async () => {
     mockGetItemAsync.mockResolvedValue(null);
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+     
     const { refreshAuthTokenNow } = require("./client");
 
     const refreshed = await refreshAuthTokenNow();
@@ -140,7 +140,7 @@ describe("refreshAuthTokenNow", () => {
       },
     });
     mockGetItemAsync.mockImplementation(async () => "refresh-token-next");
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+     
     const { hasAuthToken, refreshAuthTokenNow } = require("./client");
 
     const first = refreshAuthTokenNow();

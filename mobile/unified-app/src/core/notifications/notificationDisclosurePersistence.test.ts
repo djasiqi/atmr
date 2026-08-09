@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import {
   ensureNotificationDisclosureSyncedWithOsPermission,
   markNotificationDisclosureAccepted,
-  readNotificationDisclosureAccepted,
   resetNotificationDisclosureAccepted,
 } from "./notificationDisclosurePersistence";
 

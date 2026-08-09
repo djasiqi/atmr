@@ -4,10 +4,10 @@ jest.mock("@sentry/react-native", () => ({
   setTag: jest.fn(),
 }));
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+ 
 const Sentry = require("@sentry/react-native") as { setTag: jest.Mock };
  
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+ 
 const { observeConnectionAuthority, getConnectionAuthorityMetricsSnapshot, resetConnectionAuthorityMetricsForTests } = require("./connectionAuthority");
 
 const setTagMock = Sentry.setTag;

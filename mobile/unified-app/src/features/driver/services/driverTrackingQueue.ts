@@ -16,7 +16,6 @@ import { isFeatureEnabled } from "../../../core/featureFlags/registry";
 import {
   canEmitSocketBatchNow,
   getSocketBatchCooldownRemainingMs,
-  recordSocketBatchRateLimited,
   recordSocketBatchSent,
 } from "./socketBatchPacing";
 import { trackingQueueStore } from "./trackingQueueStore";
@@ -193,6 +192,10 @@ class DriverTrackingQueue {
   private watermarkTimer: ReturnType<typeof setTimeout> | null = null;
   private watermarkInFlight = false;
   private static readonly WATERMARK_POLL_MS = 4_000;
+  /** IDs HTTP-ackés dont le markState ingested a échoué — retry sans mute mémoire anticipée. */
+  private pendingIngestMarks = new Set<string>();
+  private durableRetryTimer: ReturnType<typeof setTimeout> | null = null;
+  private static readonly DURABLE_WRITE_RETRY_MS = 2_000;
 
   private clearDrainTimer(): void {
     if (this.drainTimer) {
@@ -501,7 +504,7 @@ class DriverTrackingQueue {
   }
 
   /**
-   * Terminal atomique : SQLite d'abord (+ gap), puis retrait mémoire.
+   * Terminal atomique : SQLite d'abord (gaps + état, une TX), puis retrait mémoire.
    * Pas de best-effort silencieux — l'échec propage pour conserver l'item.
    * `removeFromMemory: false` pendant une boucle flush (le caller exclut via `remaining`).
    */
@@ -512,30 +515,73 @@ class DriverTrackingQueue {
       deliveryState?: TrackingDeliveryState;
       ackedAt?: number | null;
       removeFromMemory?: boolean;
-      gaps?: Array<{
+      gaps?: {
         trackingSessionId: string;
         sequenceFrom: number;
         sequenceTo: number;
         reason: string;
-      }>;
+      }[];
     }
   ): Promise<void> {
     if (ids.length === 0) return;
-    if (extras?.gaps) {
-      for (const gap of extras.gaps) {
-        await trackingQueueStore.recordGap({
-          ...gap,
-          createdAt: nowMs(),
-        });
-      }
-    }
-    await trackingQueueStore.markState(ids, state, {
-      deliveryState: extras?.deliveryState,
-      ackedAt: extras?.ackedAt ?? nowMs(),
+    const ackedAt = extras?.ackedAt ?? nowMs();
+    const gaps = (extras?.gaps ?? []).map((gap) => ({
+      ...gap,
+      createdAt: nowMs(),
+    }));
+    await trackingQueueStore.transitionWithGaps({
+      gaps,
+      locationEventIds: ids,
+      state,
+      extras: {
+        deliveryState: extras?.deliveryState,
+        ackedAt,
+      },
     });
     if (extras?.removeFromMemory === false) return;
     const idSet = new Set(ids);
     this.items = this.items.filter((item) => !idSet.has(item.id));
+  }
+
+  private scheduleDurableWriteRetry(): void {
+    if (this.durableRetryTimer) return;
+    this.durableRetryTimer = setTimeout(() => {
+      this.durableRetryTimer = null;
+      void this.retryPendingDurableWrites();
+    }, DriverTrackingQueue.DURABLE_WRITE_RETRY_MS);
+  }
+
+  /** Réessaie markState ingested échoué ; relance watermark si besoin. */
+  private async retryPendingDurableWrites(): Promise<void> {
+    if (this.pendingIngestMarks.size > 0) {
+      const ids = [...this.pendingIngestMarks];
+      try {
+        await trackingQueueStore.markState(ids, "ingested_non_persisted");
+        for (const id of ids) {
+          this.pendingIngestMarks.delete(id);
+          this.ingestedEventIds.add(id);
+          const item = this.items.find((i) => i.id === id);
+          if (item && (item.persistState ?? "non_ingested") === "non_ingested") {
+            item.persistState = "ingested_non_persisted";
+          }
+        }
+        await this.persist();
+      } catch {
+        emitDriverTelemetry("tracking.queue.mark_state_retry_failed", {
+          source: "driver.tracking.queue",
+          state: "ingested_non_persisted",
+          count: ids.length,
+        });
+        this.scheduleDurableWriteRetry();
+        return;
+      }
+    }
+    const stillPending = this.items.some(
+      (i) => (i.persistState ?? "non_ingested") === "ingested_non_persisted"
+    );
+    if (stillPending || this.pendingIngestMarks.size > 0) {
+      this.scheduleWatermarkReconcile();
+    }
   }
 
   private emptyFlushIdLists() {
@@ -858,27 +904,35 @@ class DriverTrackingQueue {
           const inContiguous = item.sequenceId > 0 && item.sequenceId <= contiguous;
           const inOoo = oooIds.has(item.id);
           if (inContiguous || inOoo) {
-            item.persistState = "persisted";
-            item.deliveryState = "backend_acked";
-            item.ackedAt = nowMs();
-            item.lastError = null;
+            // SQLite d'abord via finalizeTerminal — pas de mute mémoire anticipée.
             toPersist.push(item.id);
           }
         }
       }
       if (toPersist.length > 0) {
-        await this.finalizeTerminal(toPersist, "persisted", {
-          deliveryState: "backend_acked",
-          ackedAt: nowMs(),
-        });
-        await this.persist();
+        try {
+          await this.finalizeTerminal(toPersist, "persisted", {
+            deliveryState: "backend_acked",
+            ackedAt: nowMs(),
+          });
+          await this.persist();
+        } catch (err) {
+          emitDriverTelemetry("tracking.queue.watermark_persist_failed", {
+            source: "driver.tracking.queue",
+            count: toPersist.length,
+            error_message: err instanceof Error ? err.message : "mark_state_failed",
+          });
+          this.scheduleDurableWriteRetry();
+        }
       }
     } finally {
       this.watermarkInFlight = false;
       const stillPending = this.items.some(
         (i) => (i.persistState ?? "non_ingested") === "ingested_non_persisted"
       );
-      if (stillPending) this.scheduleWatermarkReconcile();
+      if (stillPending || this.pendingIngestMarks.size > 0) {
+        this.scheduleWatermarkReconcile();
+      }
     }
   }
 
@@ -898,54 +952,68 @@ class DriverTrackingQueue {
     });
   }
 
-  /** Contigu ingested local (serveur ne maintient pas cet état). */
+  /**
+   * Contigu ingested local (serveur ne maintient pas cet état).
+   * SQLite markState avant toute mutation mémoire ; échec → retry, pas d'absorption.
+   */
   async applyIngestedEventIds(eventIds: string[]): Promise<number> {
     await this.ensureLoaded();
-    let marked = 0;
     const toMark: string[] = [];
     for (const id of eventIds) {
-      this.ingestedEventIds.add(id);
       const item = this.items.find((i) => i.id === id);
       if (item && (item.persistState ?? "non_ingested") === "non_ingested") {
-        item.persistState = "ingested_non_persisted";
         toMark.push(id);
-        marked += 1;
+      } else if (item && item.persistState === "ingested_non_persisted") {
+        this.ingestedEventIds.add(id);
       }
     }
-    if (marked > 0) {
-      try {
-        await trackingQueueStore.markState(toMark, "ingested_non_persisted");
-      } catch {
-        emitDriverTelemetry("tracking.queue.mark_state_failed", {
-          source: "driver.tracking.queue",
-          state: "ingested_non_persisted",
-          count: toMark.length,
-        });
-      }
-      await this.persist();
-      const sessionItems = this.items
-        .filter(
-          (i) =>
-            i.trackingSessionId === this.trackingSessionId &&
-            (i.persistState === "ingested_non_persisted" ||
-              i.persistState === "persisted" ||
-              this.ingestedEventIds.has(i.id))
-        )
-        .map((i) => i.sequenceId)
-        .sort((a, b) => a - b);
-      let contiguous = 0;
-      for (const seq of sessionItems) {
-        if (seq === contiguous + 1) contiguous = seq;
-        else break;
-      }
-      if (contiguous > 0) {
-        await trackingQueueStore.setContiguousIngested(
-          this.trackingSessionId,
-          contiguous
-        );
+    if (toMark.length === 0) return 0;
+
+    try {
+      await trackingQueueStore.markState(toMark, "ingested_non_persisted");
+    } catch (err) {
+      for (const id of toMark) this.pendingIngestMarks.add(id);
+      emitDriverTelemetry("tracking.queue.mark_state_failed", {
+        source: "driver.tracking.queue",
+        state: "ingested_non_persisted",
+        count: toMark.length,
+        error_message: err instanceof Error ? err.message : "mark_state_failed",
+      });
+      this.scheduleDurableWriteRetry();
+      throw err;
+    }
+
+    for (const id of toMark) {
+      this.pendingIngestMarks.delete(id);
+      this.ingestedEventIds.add(id);
+      const item = this.items.find((i) => i.id === id);
+      if (item) {
+        item.persistState = "ingested_non_persisted";
       }
     }
-    return marked;
+    await this.persist();
+    const sessionItems = this.items
+      .filter(
+        (i) =>
+          i.trackingSessionId === this.trackingSessionId &&
+          (i.persistState === "ingested_non_persisted" ||
+            i.persistState === "persisted" ||
+            this.ingestedEventIds.has(i.id))
+      )
+      .map((i) => i.sequenceId)
+      .sort((a, b) => a - b);
+    let contiguous = 0;
+    for (const seq of sessionItems) {
+      if (seq === contiguous + 1) contiguous = seq;
+      else break;
+    }
+    if (contiguous > 0) {
+      await trackingQueueStore.setContiguousIngested(
+        this.trackingSessionId,
+        contiguous
+      );
+    }
+    return toMark.length;
   }
 
   private isExpired(item: DriverTrackingQueueItem): boolean {
@@ -1513,15 +1581,25 @@ class DriverTrackingQueue {
               continue;
             }
             if (ingestedSet.size > 0) {
-              await this.applyIngestedEventIds([...ingestedSet]);
+              try {
+                await this.applyIngestedEventIds([...ingestedSet]);
+              } catch {
+                remaining.push(item);
+                continue;
+              }
             }
             const currentIngested = ingestedSet.has(item.id);
             const currentRetry = retrySet.has(item.id);
             if (currentIngested) {
-              item.persistState = "ingested_non_persisted";
+              // applyIngested a déjà persisté l'état durable ; sync transport seulement.
               item.deliveryState = "backend_acked";
               item.ackedAt = nowMs();
               item.lastError = null;
+              await this.syncDelivery([item.id], {
+                deliveryState: "backend_acked",
+                ackedAt: item.ackedAt,
+                clearLastError: true,
+              });
               backendAcked += 1;
               ingestedEventIds.push(item.id);
               remaining.push(item);
@@ -1558,33 +1636,43 @@ class DriverTrackingQueue {
             ack.location_event_id === item.id;
 
           if (isFinalDurableAck) {
-            if (ack.ingested_event_ids?.length) {
-              await this.applyIngestedEventIds(ack.ingested_event_ids);
-              for (const id of ack.ingested_event_ids) {
-                if (!ingestedEventIds.includes(id)) ingestedEventIds.push(id);
+            const ackedAt = nowMs();
+            try {
+              if (ack.ingested_event_ids?.length) {
+                try {
+                  await this.applyIngestedEventIds(ack.ingested_event_ids);
+                  for (const id of ack.ingested_event_ids) {
+                    if (!ingestedEventIds.includes(id)) ingestedEventIds.push(id);
+                  }
+                } catch {
+                  /* mark ingest différé ; on finalise quand même l'id courant */
+                }
               }
+              await this.finalizeTerminal([item.id], "persisted", {
+                deliveryState: "backend_acked",
+                ackedAt,
+                removeFromMemory: false,
+              });
+              item.persistState = "persisted";
+              item.deliveryState = "backend_acked";
+              item.ackedAt = ackedAt;
+              item.lastError = null;
+              backendAcked += 1;
+              persistedEventIds.push(item.id);
+              emitDriverTelemetry("tracking.ingest.ack", {
+                source: "driver.tracking.queue",
+                mission_id: item.missionId,
+                flush_path: "http_fallback",
+                queue_item_id: item.id,
+                ack_status: ack.ack_status,
+                durability: ack.durability ?? null,
+                accept_reason: ack.accept_reason ?? null,
+                trace_id: ack.trace_id ?? null,
+              });
+            } catch {
+              this.scheduleDurableWriteRetry();
+              remaining.push(item);
             }
-            item.persistState = "persisted";
-            item.deliveryState = "backend_acked";
-            item.ackedAt = nowMs();
-            item.lastError = null;
-            await this.finalizeTerminal([item.id], "persisted", {
-              deliveryState: "backend_acked",
-              ackedAt: item.ackedAt,
-              removeFromMemory: false,
-            });
-            backendAcked += 1;
-            persistedEventIds.push(item.id);
-            emitDriverTelemetry("tracking.ingest.ack", {
-              source: "driver.tracking.queue",
-              mission_id: item.missionId,
-              flush_path: "http_fallback",
-              queue_item_id: item.id,
-              ack_status: ack.ack_status,
-              durability: ack.durability ?? null,
-              accept_reason: ack.accept_reason ?? null,
-              trace_id: ack.trace_id ?? null,
-            });
             continue;
           }
 
@@ -1594,17 +1682,23 @@ class DriverTrackingQueue {
             ack.durability === "persisted_sync" &&
             ack.location_event_id === item.id
           ) {
-            item.persistState = "persisted";
-            item.deliveryState = "backend_acked";
-            item.ackedAt = nowMs();
-            item.lastError = null;
-            await this.finalizeTerminal([item.id], "persisted", {
-              deliveryState: "backend_acked",
-              ackedAt: item.ackedAt,
-              removeFromMemory: false,
-            });
-            backendAcked += 1;
-            persistedEventIds.push(item.id);
+            const ackedAt = nowMs();
+            try {
+              await this.finalizeTerminal([item.id], "persisted", {
+                deliveryState: "backend_acked",
+                ackedAt,
+                removeFromMemory: false,
+              });
+              item.persistState = "persisted";
+              item.deliveryState = "backend_acked";
+              item.ackedAt = ackedAt;
+              item.lastError = null;
+              backendAcked += 1;
+              persistedEventIds.push(item.id);
+            } catch {
+              this.scheduleDurableWriteRetry();
+              remaining.push(item);
+            }
             continue;
           }
 
@@ -1618,17 +1712,21 @@ class DriverTrackingQueue {
             ack.ack_status === "duplicate" ||
             ack.durability === "queued_async"
           ) {
-            if (ack.ingested_event_ids?.length) {
-              await this.applyIngestedEventIds(ack.ingested_event_ids);
-            } else if (
-              ack.ack_status === "queued" ||
-              ack.ack_status === "ingested" ||
-              ack.ack_status === "ingested_non_persisted" ||
-              ack.durability === "queued_async"
-            ) {
-              await this.applyIngestedEventIds([item.id]);
+            try {
+              if (ack.ingested_event_ids?.length) {
+                await this.applyIngestedEventIds(ack.ingested_event_ids);
+              } else if (
+                ack.ack_status === "queued" ||
+                ack.ack_status === "ingested" ||
+                ack.ack_status === "ingested_non_persisted" ||
+                ack.durability === "queued_async"
+              ) {
+                await this.applyIngestedEventIds([item.id]);
+              }
+            } catch {
+              remaining.push(item);
+              continue;
             }
-            item.persistState = "ingested_non_persisted";
             item.deliveryState = "retry_pending";
             item.lastError =
               ack.ack_status === "persisted" && ack.durability !== "persisted_sync"
@@ -1636,6 +1734,10 @@ class DriverTrackingQueue {
                 : ack.location_event_id && ack.location_event_id !== item.id
                   ? "location_event_id_mismatch"
                   : "awaiting_durable_ack";
+            await this.syncDelivery([item.id], {
+              deliveryState: "retry_pending",
+              lastError: item.lastError,
+            });
             remaining.push(item);
             emitDriverTelemetry("tracking.ingest.ack", {
               source: "driver.tracking.queue",
@@ -1955,12 +2057,17 @@ class DriverTrackingQueue {
     return 0;
   }
 
-  /** Réservé aux tests unitaires — vide la file en mémoire. */
-  async resetForTests(): Promise<void> {
+  /**
+   * Réservé aux tests unitaires — vide la file en mémoire.
+   * `keepStore: true` simule un kill process : le store (SQLite/mémoire) reste,
+   * `loaded=false` force une rehydratation via listActive au prochain accès.
+   */
+  async resetForTests(options?: { keepStore?: boolean }): Promise<void> {
     this.items = [];
     this.isFlushing = false;
     this.pendingFlushOptions = null;
     this.ingestedEventIds.clear();
+    this.pendingIngestMarks.clear();
     this.queueSuspend = null;
     this.trackingSessionId = "";
     this.sessionGeneration = null;
@@ -1977,6 +2084,15 @@ class DriverTrackingQueue {
       clearTimeout(this.watermarkTimer);
       this.watermarkTimer = null;
     }
+    if (this.durableRetryTimer) {
+      clearTimeout(this.durableRetryTimer);
+      this.durableRetryTimer = null;
+    }
+    if (options?.keepStore) {
+      this.loaded = false;
+      return;
+    }
+    this.loaded = false;
     await this.persist();
   }
 

@@ -10,7 +10,7 @@ import { contextRealtimeRouter } from "../../../../src/core/realtime/contextReal
 import { normalizeCompanyEventType } from "../../../../src/core/realtime/eventContracts";
 import { isFeatureEnabled } from "../../../../src/core/featureFlags/registry";
 import { useSession } from "../../../../src/core/sessionProvider";
-import { Screen, AppText, useAppViewport } from "../../../../src/design/responsive";
+import { Screen, useAppViewport } from "../../../../src/design/responsive";
 import {
   ChatComposer,
   ChatComposerError,

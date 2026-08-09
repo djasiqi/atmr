@@ -89,7 +89,6 @@ export function DriverSettingsScreenContent() {
     notificationsEnabled,
     locationEnabled,
     batteryOptimizationDisabled,
-    batteryStatus,
     refresh: refreshDeviceStatus,
   } = useDriverSettingsDeviceStatus();
 

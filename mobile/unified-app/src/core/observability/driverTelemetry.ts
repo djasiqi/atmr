@@ -30,6 +30,8 @@ export type DriverTelemetryEventName =
   | "tracking.queue.resume_after_auth"
   | "tracking.queue.new_session_begun"
   | "tracking.queue.mark_state_failed"
+  | "tracking.queue.mark_state_retry_failed"
+  | "tracking.queue.watermark_persist_failed"
   | "tracking.queue.saturation_alert"
   | "tracking.queue.durable_unavailable"
   | "tracking.queue.suspend_wait"

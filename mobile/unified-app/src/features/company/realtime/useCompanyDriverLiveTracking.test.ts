@@ -17,8 +17,16 @@ jest.mock("../../../core/realtime/contextRealtimeRouter", () => ({
 }));
 
  
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const { normalizeRealtimeLocation, shouldReplaceDriverLocation, applyPendingDriverUpdates, REALTIME_FLUSH_MS, MAX_BATCH_AGE_MS } = require("./useCompanyDriverLiveTracking");
+ 
+const {
+  normalizeRealtimeLocation,
+  shouldReplaceDriverLocation,
+  applyPendingDriverUpdates,
+  REALTIME_FLUSH_MS,
+  MAX_BATCH_AGE_MS,
+  MAP_SILENCE_RESYNC_MS,
+  shouldTriggerMapSilenceResync,
+} = require("./useCompanyDriverLiveTracking");
 
 describe("company live drivers merge policy", () => {
   it("exposes bounded batch flush windows", () => {
@@ -261,5 +269,30 @@ describe("company live drivers merge policy", () => {
     expect(next).not.toBe(currentMap);
     expect(next[1]).toBe(d1);
     expect(next[2].latitude).toBe(46.8);
+  });
+
+  it("watchdog silence : refetch si aucun event socket ni succès snapshot depuis 25 s", () => {
+    const now = 500_000;
+    expect(
+      shouldTriggerMapSilenceResync({
+        nowMs: now,
+        lastRealtimeEventAtMs: now - 10_000,
+        lastWatchdogSuccessAtMs: now - 10_000,
+      })
+    ).toBe(false);
+    expect(
+      shouldTriggerMapSilenceResync({
+        nowMs: now,
+        lastRealtimeEventAtMs: now - MAP_SILENCE_RESYNC_MS - 1,
+        lastWatchdogSuccessAtMs: now - 1_000,
+      })
+    ).toBe(false);
+    expect(
+      shouldTriggerMapSilenceResync({
+        nowMs: now,
+        lastRealtimeEventAtMs: now - MAP_SILENCE_RESYNC_MS - 1,
+        lastWatchdogSuccessAtMs: now - MAP_SILENCE_RESYNC_MS - 1,
+      })
+    ).toBe(true);
   });
 });

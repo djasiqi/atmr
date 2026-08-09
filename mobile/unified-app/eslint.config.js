@@ -8,6 +8,21 @@ module.exports = defineConfig([
     ignores: ["dist/*"],
   },
   {
+    // require() / imports après jest.mock : patterns Jest intentionnels.
+    files: ["**/*.{test,spec}.{ts,tsx}", "**/__tests__/**/*.{ts,tsx}"],
+    rules: {
+      "@typescript-eslint/no-require-imports": "off",
+      "import/first": "off",
+    },
+  },
+  {
+    // Chargements lazy pour casser les cycles de dépendances runtime.
+    files: ["src/core/api/client.ts"],
+    rules: {
+      "@typescript-eslint/no-require-imports": "off",
+    },
+  },
+  {
     files: ["app/**/*.{ts,tsx}"],
     rules: {
       "no-restricted-imports": [

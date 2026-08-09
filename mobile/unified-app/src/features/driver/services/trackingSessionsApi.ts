@@ -29,11 +29,11 @@ export type TrackingWatermarkResponse = {
   tracking_session_id: string;
   session_generation: number;
   contiguous_persisted_through: number;
-  out_of_order_persisted: Array<{
+  out_of_order_persisted: {
     sequence_id: number;
     location_event_id: string;
-  }>;
-  missing_ranges: Array<[number, number]>;
+  }[];
+  missing_ranges: [number, number][];
   next_cursor: string | null;
 };
 

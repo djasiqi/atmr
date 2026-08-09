@@ -11,7 +11,7 @@ describe("socketBatchPacing", () => {
   });
 
   it("blocks socket emit within min interval", () => {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+     
     const mod = require("./socketBatchPacing") as typeof import("./socketBatchPacing");
     mod.__resetSocketBatchPacingForTests();
     expect(mod.canEmitSocketBatchNow()).toBe(true);
@@ -23,7 +23,7 @@ describe("socketBatchPacing", () => {
   });
 
   it("extends cooldown after server rate limit", () => {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+     
     const mod = require("./socketBatchPacing") as typeof import("./socketBatchPacing");
     mod.__resetSocketBatchPacingForTests();
     mod.recordSocketBatchRateLimited(8_000);

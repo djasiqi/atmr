@@ -1,5 +1,5 @@
 import { Platform } from "react-native";
-import type { CompanyDispatchMission, CompanyDriverLiveLocation } from "../../api/contracts";
+import type { CompanyDriverLiveLocation } from "../../api/contracts";
 import {
   buildFleetClusterMarkerImageSource,
   buildFleetDriverMarkerImageSource,

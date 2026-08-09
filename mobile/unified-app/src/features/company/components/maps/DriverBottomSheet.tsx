@@ -22,7 +22,7 @@ import {
   formatMissionScheduleTimeLabel,
   resolveMissionUiStatus,
 } from "../../dashboard/companyDashboardMissionUi";
-import { hasConfirmedPickupTime, hasScheduledPickupTime } from "../../utils/pickupSentinel";
+import { hasScheduledPickupTime } from "../../utils/pickupSentinel";
 import { resolveGoogleMapsNativeApiKey } from "../../../../config/googleMapsKeys";
 
 import { FLEET_UI, fleetGlassPanel } from "./fleetMapUiTokens";

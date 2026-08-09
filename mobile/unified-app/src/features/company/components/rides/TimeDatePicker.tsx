@@ -784,12 +784,6 @@ function computeStripFirstDay(selected: Date, todayStart: Date): Date {
   return candidate < minVisible ? minVisible : candidate;
 }
 
-function clampDayToToday(d: Date, todayStart: Date): Date {
-  const sd = startOfDay(d);
-  const t = startOfDay(todayStart);
-  return sd < t ? new Date(t) : sd;
-}
-
 /** Le mois contient au moins un jour ≥ aujourd’hui. */
 function monthHasSelectableDay(monthFirst: Date, todayStart: Date): boolean {
   const end = new Date(monthFirst.getFullYear(), monthFirst.getMonth() + 1, 0);

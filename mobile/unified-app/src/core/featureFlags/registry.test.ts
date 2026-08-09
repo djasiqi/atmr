@@ -30,7 +30,7 @@ describe("feature flags registry", () => {
     process.env.EXPO_PUBLIC_ENABLE_COMPANY_DISPATCH_SCREEN = "0";
     let registry: typeof import("./registry");
     jest.isolateModules(() => {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
+       
       registry = require("./registry");
     });
 
@@ -48,7 +48,7 @@ describe("feature flags registry", () => {
     process.env.EXPO_PUBLIC_ENABLE_COMPANY_DISPATCH = "1";
     let registry: typeof import("./registry");
     jest.isolateModules(() => {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
+       
       registry = require("./registry");
     });
     expect(registry!.isFeatureEnabled("company_dispatch_enabled")).toBe(true);
@@ -59,7 +59,7 @@ describe("feature flags registry", () => {
     delete process.env.EXPO_PUBLIC_ENABLE_COMPANY_REALTIME;
     let registry: typeof import("./registry");
     jest.isolateModules(() => {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
+       
       registry = require("./registry");
     });
     expect(registry!.isFeatureEnabled("company_realtime_enabled")).toBe(true);
@@ -70,7 +70,7 @@ describe("feature flags registry", () => {
     process.env.EXPO_PUBLIC_ENABLE_COMPANY_DISPATCH_SCREEN = "1";
     let registry: typeof import("./registry");
     jest.isolateModules(() => {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
+       
       registry = require("./registry");
     });
     expect(registry!.isFeatureEnabled("company_dispatch_screen_enabled")).toBe(true);
@@ -79,7 +79,7 @@ describe("feature flags registry", () => {
   it("enables driver_unified (espace chauffeur) by default in unified app", () => {
     let registry: typeof import("./registry");
     jest.isolateModules(() => {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
+       
       registry = require("./registry");
     });
     expect(registry!.isFeatureEnabled("driver_unified_enabled")).toBe(true);

@@ -28,7 +28,7 @@
     "typecheck:session-lifecycle": "node ./scripts/typecheckSessionLifecycle.cjs",
     "typecheck:tracking": "node ./scripts/typecheckTracking.cjs",
     "test": "jest --watchAll=false",
-    "test:gps-critical": "jest --watchAll=false --runInBand --forceExit --testPathPattern=\"(driverTrackingQueue(\\.|\\.p0|\\.http|\\.p03)|driverRealtimeBridge|localDriverLocationFreshness|fleetMapStale|trackingRuntimeRegistry|trackingQueueStore)\"",
+    "test:gps-critical": "jest --watchAll=false --runInBand --forceExit --testPathPattern=\"(driverTrackingQueue(\\.|\\.p0|\\.http|\\.p03)|driverTrackingBridge|driverTrackingFixAge|driverRealtimeBridge|localDriverLocationFreshness|fleetMapStale|useCompanyDriverLiveTracking|trackingRuntimeRegistry|trackingQueueStore)\"",
     "sync:fleet-markers": "node scripts/syncFleetLirieMarkerPngs.mjs",
     "check:fleet-map-no-runtime-resolve": "node scripts/checkFleetMapNoRuntimeResolve.mjs",
     "preflight:ota-fleet-map": "npm run check:fleet-map-no-runtime-resolve && npm test -- --watchAll=false --testPathPattern=resolveMetroAssetSource && npm test -- --watchAll=false --testPathPattern=fleetNativeMarkerImage",
@@ -82,6 +82,7 @@
     "expo-dev-client": "~6.0.21",
     "expo-device": "~8.0.10",
     "expo-document-picker": "~14.0.8",
+    "expo-file-system": "~19.0.23",
     "expo-font": "~14.0.12",
     "expo-haptics": "~15.0.8",
     "expo-image-manipulator": "~14.0.8",
@@ -185,4 +186,3 @@
     "@isaacs/brace-expansion": ">=5.0.1"
   }
 }
-

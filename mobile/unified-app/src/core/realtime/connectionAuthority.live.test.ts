@@ -17,14 +17,14 @@ jest.mock("@sentry/react-native", () => ({
   setTag: jest.fn(),
 }));
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+ 
 const { io } = require("socket.io-client");
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+ 
 const nodeCrypto = require("crypto");
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+ 
 const Sentry = require("@sentry/react-native") as { setTag: jest.Mock };
  
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+ 
 const { observeConnectionAuthority, getConnectionAuthorityMetricsSnapshot, resetConnectionAuthorityMetricsForTests } = require("./connectionAuthority");
 
 const WS_URL = process.env.LIVE_WS_URL ?? "http://127.0.0.1:8001";
