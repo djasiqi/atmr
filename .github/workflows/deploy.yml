@@ -38,7 +38,7 @@ jobs:
       run:
         working-directory: mobile/unified-app
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
           node-version: "20"
@@ -69,7 +69,7 @@ jobs:
       ws_service_image_digest: ${{ steps.build_ws.outputs.digest }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Compute canonical tag + validate additional_tag
         id: meta
@@ -399,7 +399,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Validate required secrets
         run: |
