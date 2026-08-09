@@ -62,5 +62,5 @@ jobs:
         run: npm run check:play-compliance
       - name: Unit tests
         run: npm test -- --watchAll=false
-      - name: Phase 2 close authorization (strict)
-        run: npm run phase2:close-auth:strict
+      # Phase 2 close-auth (preuves device Android/iOS) : workflow séparé
+      # `.github/workflows/mobile-phase2-close-auth.yml` (workflow_dispatch).

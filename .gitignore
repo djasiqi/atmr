@@ -152,6 +152,18 @@ backend/celerybeat-schedule*
 # Exception: journal pilote requis par CI (prefill-pilot-log)
 !mobile/unified-app/docs/
 !mobile/unified-app/docs/PILOT_EXECUTION_LOG.md
+# Exception: contrats + matrice preuves Phase 2 (workflow mobile-phase2-close-auth)
+!mobile/unified-app/docs/contracts/
+!mobile/unified-app/docs/contracts/**
+!mobile/unified-app/docs/runtime/notification_contract.md
+!mobile/unified-app/docs/runtime/ota_policy.md
+!mobile/unified-app/docs/runtime/runtime_navigation_contract.md
+!mobile/unified-app/docs/runtime/quick_actions_contract.md
+!mobile/unified-app/docs/runtime/phase2_runtime_rollback.md
+!mobile/unified-app/docs/runtime/phase2_runtime_observability.md
+!mobile/unified-app/docs/runtime/cold_start_routing_matrix.md
+!mobile/unified-app/docs/migration/PHASE2_DEVICE_PROOF_MATRIX.md
+!mobile/unified-app/docs/migration/PHASE2_IMPLEMENTATION_OWNERS.md
 *_AUDIT*.md
 *_CHECKLIST*.md
 *_RAPPORT*.md

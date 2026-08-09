@@ -1,0 +1,41 @@
+name: Mobile Phase 2 close authorization
+
+# Certification device (Android/iOS) — volontairement hors du gate Lint+Jest canary.
+# Échoue tant que PHASE2_DEVICE_PROOF_MATRIX.md contient des lignes `pending`.
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "mobile/unified-app/docs/migration/PHASE2_DEVICE_PROOF_MATRIX.md"
+      - "mobile/unified-app/docs/runtime/**"
+      - "mobile/unified-app/docs/contracts/**"
+      - "mobile/unified-app/scripts/phase2CloseAuthorization.cjs"
+      - ".github/workflows/mobile-phase2-close-auth.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  phase2-close-auth:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile/unified-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: mobile/unified-app/package-lock.json
+      - name: Install
+        run: npm ci
+      - name: Phase 2 close authorization (strict)
+        run: npm run phase2:close-auth:strict
+      - name: Upload close-auth report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase2-close-authorization
+          path: mobile/unified-app/docs/migration/PHASE2_CLOSE_AUTHORIZATION.md
+          if-no-files-found: ignore
