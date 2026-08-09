@@ -83,9 +83,24 @@ export type TrackingQueueHealth = {
   recovered: boolean;
 };
 
-type TrackingQueueStateExtras = Partial<
+export type TrackingQueueStateExtras = Partial<
   Pick<TrackingQueueRow, "ackedAt" | "deliveryState" | "lastError" | "retryCount" | "lastAttemptAt">
->;
+> & {
+  /** Force last_attempt_at = NULL (ignore COALESCE). */
+  clearLastAttemptAt?: boolean;
+  /** Force last_error = NULL (ignore COALESCE). */
+  clearLastError?: boolean;
+};
+
+export type TrackingDeliveryPatch = {
+  deliveryState?: string;
+  retryCount?: number;
+  lastAttemptAt?: number | null;
+  lastError?: string | null;
+  ackedAt?: number | null;
+  clearLastAttemptAt?: boolean;
+  clearLastError?: boolean;
+};
 
 type MemoryDb = {
   rows: Map<string, TrackingQueueRow>;
@@ -462,20 +477,24 @@ async function markStateWithExecutor(
   state: TrackingQueueRowState,
   extras?: TrackingQueueStateExtras
 ): Promise<void> {
+  const clearAttempt = extras?.clearLastAttemptAt === true;
+  const clearError = extras?.clearLastError === true;
   await executor.runAsync(
     `UPDATE tracking_queue SET
       state = ?,
       delivery_state = COALESCE(?, delivery_state),
       acked_at = COALESCE(?, acked_at),
-      last_error = COALESCE(?, last_error),
+      last_error = CASE WHEN ? = 1 THEN NULL ELSE COALESCE(?, last_error) END,
       retry_count = COALESCE(?, retry_count),
-      last_attempt_at = COALESCE(?, last_attempt_at)
+      last_attempt_at = CASE WHEN ? = 1 THEN NULL ELSE COALESCE(?, last_attempt_at) END
      WHERE location_event_id = ?`,
     state,
     extras?.deliveryState ?? null,
     extras?.ackedAt ?? null,
+    clearError ? 1 : 0,
     extras?.lastError ?? null,
     extras?.retryCount ?? null,
+    clearAttempt ? 1 : 0,
     extras?.lastAttemptAt ?? null,
     id
   );
@@ -493,9 +512,56 @@ function markStateMemory(
     state,
     deliveryState: extras?.deliveryState ?? existing.deliveryState,
     ackedAt: extras?.ackedAt ?? existing.ackedAt,
-    lastError: extras?.lastError ?? existing.lastError,
+    lastError:
+      extras?.clearLastError === true ? null : (extras?.lastError ?? existing.lastError),
     retryCount: extras?.retryCount ?? existing.retryCount,
-    lastAttemptAt: extras?.lastAttemptAt ?? existing.lastAttemptAt,
+    lastAttemptAt:
+      extras?.clearLastAttemptAt === true
+        ? null
+        : (extras?.lastAttemptAt ?? existing.lastAttemptAt),
+  });
+}
+
+async function patchDeliveryWithExecutor(
+  executor: SqliteExecutor,
+  id: string,
+  patch: TrackingDeliveryPatch
+): Promise<void> {
+  const clearAttempt = patch.clearLastAttemptAt === true;
+  const clearError = patch.clearLastError === true;
+  await executor.runAsync(
+    `UPDATE tracking_queue SET
+      delivery_state = COALESCE(?, delivery_state),
+      acked_at = COALESCE(?, acked_at),
+      last_error = CASE WHEN ? = 1 THEN NULL ELSE COALESCE(?, last_error) END,
+      retry_count = COALESCE(?, retry_count),
+      last_attempt_at = CASE WHEN ? = 1 THEN NULL ELSE COALESCE(?, last_attempt_at) END
+     WHERE location_event_id = ?`,
+    patch.deliveryState ?? null,
+    patch.ackedAt ?? null,
+    clearError ? 1 : 0,
+    patch.lastError ?? null,
+    patch.retryCount ?? null,
+    clearAttempt ? 1 : 0,
+    patch.lastAttemptAt ?? null,
+    id
+  );
+}
+
+function patchDeliveryMemory(id: string, patch: TrackingDeliveryPatch): void {
+  const existing = memory.rows.get(id);
+  if (!existing) return;
+  memory.rows.set(id, {
+    ...existing,
+    deliveryState: patch.deliveryState ?? existing.deliveryState,
+    ackedAt: patch.ackedAt ?? existing.ackedAt,
+    lastError:
+      patch.clearLastError === true ? null : (patch.lastError ?? existing.lastError),
+    retryCount: patch.retryCount ?? existing.retryCount,
+    lastAttemptAt:
+      patch.clearLastAttemptAt === true
+        ? null
+        : (patch.lastAttemptAt ?? existing.lastAttemptAt),
   });
 }
 
@@ -726,6 +792,99 @@ export const trackingQueueStore = {
       for (const id of locationEventIds) {
         markStateMemory(id, state, extras);
       }
+    });
+  },
+
+  /**
+   * Met à jour uniquement le transport (`delivery_state` + métadonnées),
+   * sans changer l'état de durabilité (`state`).
+   */
+  async patchDeliveryState(
+    locationEventIds: string[],
+    patch: TrackingDeliveryPatch
+  ): Promise<void> {
+    if (locationEventIds.length === 0) return;
+    return runSerialized(async () => {
+      const mode = await ensureBackendMode();
+      if (mode === "sqlite") {
+        await runSqliteOperation((db) =>
+          withExclusiveOrFallbackTransaction(db, async (txn) => {
+            for (const id of locationEventIds) {
+              await patchDeliveryWithExecutor(txn, id, patch);
+            }
+          })
+        );
+        return;
+      }
+      for (const id of locationEventIds) {
+        patchDeliveryMemory(id, patch);
+      }
+    });
+  },
+
+  async setSessionGeneration(
+    trackingSessionId: string,
+    sessionGeneration: number
+  ): Promise<void> {
+    return runSerialized(async () => {
+      const mode = await ensureBackendMode();
+      if (mode === "sqlite") {
+        await runSqliteOperation((db) =>
+          db.runAsync(
+            `UPDATE tracking_queue SET session_generation = ?
+             WHERE tracking_session_id = ?`,
+            sessionGeneration,
+            trackingSessionId
+          )
+        );
+        return;
+      }
+      for (const [id, row] of memory.rows) {
+        if (row.trackingSessionId === trackingSessionId) {
+          memory.rows.set(id, { ...row, sessionGeneration });
+        }
+      }
+    });
+  },
+
+  /**
+   * Purge les lignes terminales au-delà de la rétention (évite croissance illimitée).
+   * Retourne le nombre de lignes supprimées.
+   */
+  async purgeTerminalRows(olderThanMs: number, nowMs: number = Date.now()): Promise<number> {
+    const cutoff = nowMs - Math.max(0, olderThanMs);
+    return runSerialized(async () => {
+      const mode = await ensureBackendMode();
+      if (mode === "sqlite") {
+        return runSqliteOperation(async (db) => {
+          const before = await db.getFirstAsync<{ c: number }>(
+            `SELECT COUNT(*) AS c FROM tracking_queue
+             WHERE state IN ('persisted', 'tombstone', 'rejected')
+               AND COALESCE(acked_at, queued_at) < ?`,
+            cutoff
+          );
+          await db.runAsync(
+            `DELETE FROM tracking_queue
+             WHERE state IN ('persisted', 'tombstone', 'rejected')
+               AND COALESCE(acked_at, queued_at) < ?`,
+            cutoff
+          );
+          return Number(before?.c ?? 0);
+        });
+      }
+      let removed = 0;
+      for (const [id, row] of [...memory.rows.entries()]) {
+        if (
+          (row.state === "persisted" ||
+            row.state === "tombstone" ||
+            row.state === "rejected") &&
+          (row.ackedAt ?? row.queuedAt) < cutoff
+        ) {
+          memory.rows.delete(id);
+          removed += 1;
+        }
+      }
+      return removed;
     });
   },
 

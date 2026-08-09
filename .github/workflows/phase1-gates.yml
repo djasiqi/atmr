@@ -125,7 +125,8 @@ jobs:
           cache: npm
           cache-dependency-path: mobile/unified-app/package-lock.json
       - run: npm ci
-      - run: npx jest src/features/driver/services/trackingRuntimeRegistry.test.ts --no-coverage
+      - run: npm run typecheck:tracking
+      - run: npm run test:gps-critical
 
   deployment-critical:
     name: deployment-critical

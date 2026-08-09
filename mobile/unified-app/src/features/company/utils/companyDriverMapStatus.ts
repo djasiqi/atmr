@@ -1,4 +1,5 @@
 import type { CompanyDriverLiveLocation } from "../api/contracts";
+import { resolveLocalLocationFreshnessStatus } from "./localDriverLocationFreshness";
 
 export const STALE_SECONDS_THRESHOLD = 120;
 
@@ -112,6 +113,12 @@ export function driverFleetMarkerDescription(driver: CompanyDriverLiveLocation):
 
 export function isDriverPositionStale(driver: CompanyDriverLiveLocation): boolean {
   if (driver.location_status === "last_known") return false;
+  const localStatus = resolveLocalLocationFreshnessStatus(
+    driver.recorded_at ?? driver.timestamp ?? null
+  );
+  if (localStatus === "stale" || localStatus === "offline" || localStatus === "offline_unknown") {
+    return true;
+  }
   const lastSeen = Number(driver.last_seen_seconds);
   const byAge = Number.isFinite(lastSeen) && lastSeen > STALE_SECONDS_THRESHOLD;
   const byStatus = driver.location_status === "stale" || driver.location_status === "offline";

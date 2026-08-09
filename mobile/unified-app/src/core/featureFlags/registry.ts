@@ -95,6 +95,18 @@ export const featureFlags = {
     enabled: envFlag(process.env.EXPO_PUBLIC_ENABLE_TRACKING_HTTP_FALLBACK),
     description: "Allow HTTP fallback path when socket/ack transport is unavailable.",
   } satisfies FeatureFlagDefinition,
+  /**
+   * Ingest GPS via Socket.IO batch. Défaut OFF (HTTP only) — kill-switch build.
+   * Réactiver uniquement avec EXPO_PUBLIC_ENABLE_TRACKING_SOCKET_GPS_INGEST=1
+   * une fois le contrat ACK durable validé. Le fanout cartes reste indépendant.
+   */
+  tracking_socket_gps_ingest_enabled: {
+    key: "tracking_socket_gps_ingest_enabled",
+    source: "env",
+    enabled: envFlag(process.env.EXPO_PUBLIC_ENABLE_TRACKING_SOCKET_GPS_INGEST),
+    description:
+      "Autorise l'émission d'ingest GPS via Socket.IO batch. Défaut off → HTTP. Kill-switch build (complété par SOCKET_GPS_INGEST_ENABLED runtime backend).",
+  } satisfies FeatureFlagDefinition,
   tracking_resume_resync_enabled: {
     key: "tracking_resume_resync_enabled",
     source: "env",

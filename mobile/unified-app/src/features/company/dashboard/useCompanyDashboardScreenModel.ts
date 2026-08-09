@@ -88,6 +88,13 @@ export function useCompanyDashboardScreenModel() {
     if (now - dispatchStatusQuery.dataUpdatedAt > STALE_DATA_MS) {
       tasks.push(dispatchStatusRefetch());
     }
+    // GPS flotte : refetch si snapshot absent ou trop vieux (secours sans event socket).
+    const snapshotAgeMs = liveDrivers.snapshotRefreshedAt
+      ? now - Date.parse(liveDrivers.snapshotRefreshedAt)
+      : Number.POSITIVE_INFINITY;
+    if (!Number.isFinite(snapshotAgeMs) || snapshotAgeMs > STALE_DATA_MS) {
+      tasks.push(liveDriversRefetch());
+    }
     if (tasks.length === 0) return;
     await Promise.all(tasks);
   }, [
@@ -95,6 +102,8 @@ export function useCompanyDashboardScreenModel() {
     dashboardRefetch,
     dispatchStatusQuery.dataUpdatedAt,
     dispatchStatusRefetch,
+    liveDrivers.snapshotRefreshedAt,
+    liveDriversRefetch,
     missionsQuery.dataUpdatedAt,
     missionsRefetch,
   ]);

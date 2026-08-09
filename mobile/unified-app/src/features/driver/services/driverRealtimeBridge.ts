@@ -61,7 +61,7 @@ function resolveRateLimitRetryAfterMs(raw: unknown): number {
     : 5_000;
 }
 
-/** ACK session stale : draine le batch mort puis repart avec une nouvelle session tracking. */
+/** ACK session stale : tombstone le batch mort puis repart avec une nouvelle session tracking. */
 function handleSessionConflictAck(
   contextId: string,
   trackingEventIds: string[],
@@ -69,11 +69,10 @@ function handleSessionConflictAck(
 ): void {
   void (async () => {
     if (trackingEventIds.length > 0) {
-      await driverTrackingQueue.markBackendAckedByIds(trackingEventIds);
+      await driverTrackingQueue.tombstoneByIds(trackingEventIds, "session_conflict");
     }
-    if (ackLastSequenceId != null && Number.isFinite(ackLastSequenceId)) {
-      await driverTrackingQueue.markBackendAckedByWatermark(ackLastSequenceId);
-    }
+    // ack_last_sequence_id Socket.IO n'est pas une preuve durable — ignoré.
+    void ackLastSequenceId;
     await driverTrackingQueue.reconcileAfterSessionConflict();
     await syncBridgeQueueDepthFromPersistence();
     await flushTrackingQueue();
@@ -83,6 +82,28 @@ function handleSessionConflictAck(
     context_id: contextId,
     stale_acked_count: trackingEventIds.length,
     ack_last_sequence_id: ackLastSequenceId,
+  });
+}
+
+/** Kill-switch backend : libère vers HTTP, aucune purge durable. */
+function handleIngestDisabledAck(
+  contextId: string,
+  retryEventIds: string[]
+): void {
+  void (async () => {
+    if (retryEventIds.length > 0) {
+      // Les ids restent actifs ; on force le chemin HTTP pour tous les socket_*.
+      await driverTrackingQueue.releaseSocketEmittedForHttpRetry();
+    } else {
+      await driverTrackingQueue.releaseSocketEmittedForHttpRetry();
+    }
+    await syncBridgeQueueDepthFromPersistence();
+    await flushTrackingQueue();
+  })();
+  emitDriverTelemetry("tracking.batch.ingest_disabled", {
+    source: "driver.realtime.bridge",
+    context_id: contextId,
+    retry_event_ids_count: retryEventIds.length,
   });
 }
 
@@ -248,11 +269,20 @@ export function startDriverRealtimeBridge(
             ack_last_sequence_id?: unknown;
             rate_limited?: unknown;
             session_conflict?: unknown;
+            ingest_disabled?: unknown;
+            retry_event_ids?: unknown;
             positions_count?: unknown;
             retry_after?: unknown;
             retry_after_seconds?: unknown;
           }
         | undefined;
+      if (payload?.ingest_disabled === true) {
+        const retryEventIds = Array.isArray(payload?.retry_event_ids)
+          ? payload.retry_event_ids.filter((value): value is string => typeof value === "string")
+          : [];
+        handleIngestDisabledAck(contextId, retryEventIds);
+        return;
+      }
       if (payload?.rate_limited === true) {
         /* ACK anti-tempête backend : positions NON ingérées (positions_count=0).
          * Ne pas drainer la queue ici — sinon famine permanente du canonical Redis. */
@@ -274,27 +304,25 @@ export function startDriverRealtimeBridge(
             ? Number(payload.ack_last_sequence_id)
             : null;
       if (payload?.session_conflict === true) {
-        /* Batch d'une session périmée : positions NON ingérées — drainer puis rebinder. */
+        /* Batch d'une session périmée : positions NON ingérées — tombstone puis rebinder. */
         handleSessionConflictAck(contextId, trackingEventIds, ackLastSequenceId);
         return;
       }
+      // ACK socket = transport seulement (socket_acked), jamais sortie de file active.
       if (trackingEventIds.length > 0) {
         void driverTrackingQueue.markBackendAckedByIds(trackingEventIds).then(() =>
           syncBridgeQueueDepthFromPersistence()
         );
       }
+      // ack_last_sequence_id Socket.IO volontairement ignoré (pas de preuve durable).
       const ackLastSequenceIdResolved =
         ackLastSequenceId && Number.isFinite(ackLastSequenceId) ? ackLastSequenceId : null;
-      if (ackLastSequenceIdResolved != null) {
-        void driverTrackingQueue
-          .markBackendAckedByWatermark(ackLastSequenceIdResolved)
-          .then(() => syncBridgeQueueDepthFromPersistence());
-      }
       emitDriverTelemetry("tracking.batch.ack", {
         source: "driver.realtime.bridge",
         context_id: contextId,
-        backend_acked_count: trackingEventIds.length,
+        socket_acked_count: trackingEventIds.length,
         ack_last_sequence_id: ackLastSequenceIdResolved,
+        durable_purge: false,
       });
       return;
     }

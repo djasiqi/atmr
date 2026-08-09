@@ -68,32 +68,32 @@ export function useCompanyDriversLiveOverlay(companyId) {
     let lastLocationSocketEventAt = Date.now();
     let lastWatchdogInvalidateAt = 0;
 
-    const bumpSocketActivity = (payload) => {
-      if (hasExploitableCoords(payload)) {
-        lastLocationSocketEventAt = Date.now();
-      }
-    };
-
     const applyDelta = (payload, fromLiveState) => {
       const accepted = shouldAcceptRealtimeEvent({
         eventId: payload?.event_id,
         entityKey: payload?.driver_id != null ? `driver:${String(payload.driver_id)}` : null,
         canonicalTimeMs: canonicalRealtimeTimeMs(payload),
       });
-      if (!accepted) return;
+      if (!accepted) return false;
 
-      queryClient.setQueryData(lirieKeys.companyDrivers(), (prev) =>
-        mergeOrUpdateDriverInList(prev || [], payload, fromLiveState, companyId ?? null)
-      );
+      let merged = false;
+      queryClient.setQueryData(lirieKeys.companyDrivers(), (prev) => {
+        const next = mergeOrUpdateDriverInList(prev || [], payload, fromLiveState, companyId ?? null);
+        merged = next !== prev;
+        return next;
+      });
+      // Réarmer le watchdog seulement après coords valides effectivement fusionnées.
+      if (merged && hasExploitableCoords(payload)) {
+        lastLocationSocketEventAt = Date.now();
+      }
+      return merged;
     };
 
     const onLiveState = (payload) => {
-      bumpSocketActivity(payload);
       recordGpsEvent();
       applyDelta(payload, true);
     };
     const onLocationUpdate = (payload) => {
-      bumpSocketActivity(payload);
       recordGpsEvent();
       applyDelta(payload, false);
     };

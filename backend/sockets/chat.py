@@ -74,6 +74,7 @@ from services.realtime.live_driver_status import (
 )
 
 # from services.notifications.push import send_push_message  # Unused, using fanout now
+from services.infrastructure.runtime_flags import is_socket_gps_ingest_enabled
 from services.security.spam import can_send_message
 
 # Constantes pour éviter les valeurs magiques
@@ -2269,6 +2270,16 @@ def init_chat_socket(socketio: SocketIO):
                     },
                 )
                 return
+            if not is_socket_gps_ingest_enabled():
+                emit(
+                    "error",
+                    {
+                        "error": "socket GPS ingest disabled",
+                        "reason": "ingest_disabled",
+                        "ingest_disabled": True,
+                    },
+                )
+                return
             if location_mode == "availability_presence":
                 inc_tracking_delivery_result(
                     mode="availability_presence",
@@ -2590,6 +2601,33 @@ def init_chat_socket(socketio: SocketIO):
             if company_id_val is None:
                 emit("error", {"error": "Chauffeur non lié à une entreprise."})
                 return {"success": False, "error": "Chauffeur non lié à une entreprise"}
+
+            # Kill-switch runtime : pas d'ingestion GPS Socket.IO (HTTP obligatoire).
+            # Ne jamais renvoyer tracking_event_ids / ack_last_sequence_id (pas de preuve durable).
+            if not is_socket_gps_ingest_enabled():
+                raw_positions = (
+                    data.get("positions") if isinstance(data, dict) else None
+                )
+                retry_event_ids: list[str] = []
+                total_positions = 0
+                if isinstance(raw_positions, list):
+                    total_positions = len(raw_positions)
+                    for _pos in raw_positions:
+                        if not isinstance(_pos, dict):
+                            continue
+                        _teid = _pos.get("tracking_event_id")
+                        if isinstance(_teid, str) and _teid.strip():
+                            retry_event_ids.append(_teid)
+                disabled_ack: dict[str, Any] = {
+                    "success": False,
+                    "ingest_disabled": True,
+                    "retry_event_ids": retry_event_ids,
+                    "positions_count": 0,
+                    "total_positions": total_positions,
+                    "driver_id": driver.id,
+                }
+                emit("driver_location_batch_ack", disabled_ack)
+                return disabled_ack
 
             # ✅ Rate limiting
             client_ip = request.environ.get("REMOTE_ADDR", "unknown")

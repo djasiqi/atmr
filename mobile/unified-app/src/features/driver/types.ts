@@ -69,6 +69,9 @@ export type DriverLocationPayload = {
   trackingSessionId?: string | null;
   sessionGeneration?: number | null;
   sequenceId?: number | null;
+  trackingGenerationId?: string | null;
+  missionContextVersion?: number | null;
+  trackingIdentityId?: string | null;
 };
 
 export type DriverLocationAckStatus =

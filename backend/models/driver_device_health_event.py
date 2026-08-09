@@ -50,6 +50,12 @@ class DriverDeviceHealthEvent(db.Model):
     ios_accuracy_authorization = db.Column(db.String(16), nullable=True)
     ios_low_power_mode = db.Column(db.Boolean, nullable=True)
     ios_background_refresh_status = db.Column(db.String(16), nullable=True)
+    # Adoption P0 : build natif + OTA (mesurer canary / rollout)
+    native_build_version = db.Column(db.String(32), nullable=True)
+    expo_runtime_version = db.Column(db.String(32), nullable=True)
+    ota_update_id = db.Column(db.String(128), nullable=True)
+    release_channel = db.Column(db.String(64), nullable=True)
+    release_sha = db.Column(db.String(64), nullable=True)
 
     driver = db.relationship(
         "Driver", backref=db.backref("device_health_events", lazy="dynamic")
@@ -84,4 +90,9 @@ class DriverDeviceHealthEvent(db.Model):
             "ios_accuracy_authorization": self.ios_accuracy_authorization,
             "ios_low_power_mode": self.ios_low_power_mode,
             "ios_background_refresh_status": self.ios_background_refresh_status,
+            "native_build_version": self.native_build_version,
+            "expo_runtime_version": self.expo_runtime_version,
+            "ota_update_id": self.ota_update_id,
+            "release_channel": self.release_channel,
+            "release_sha": self.release_sha,
         }

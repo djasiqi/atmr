@@ -1,6 +1,6 @@
 import type { CompanyDriverLiveLocation } from "../../api/contracts";
 
-import { STALE_SECONDS_THRESHOLD } from "../../utils/companyDriverMapStatus";
+import { resolveLocalLocationFreshnessStatus } from "../../utils/localDriverLocationFreshness";
 
 const STALE_LOCATION_STATUSES = new Set([
   "stale",
@@ -9,31 +9,19 @@ const STALE_LOCATION_STATUSES = new Set([
   "offline_unknown",
 ]);
 
-const BACKEND_LOCATION_STATUSES = new Set([
-  "stale",
-  "offline",
-  "live",
-  "recent",
-  "last_known",
-  "degraded_constrained",
-  "offline_unknown",
-]);
-
 /**
- * Signal visuel stale carte — parité web DriverLiveMap (blend gris + opacity).
- * Distinct du statut opérationnel `offline`.
+ * Signal visuel stale carte — âge local depuis recorded_at écrase un `live` serveur figé.
+ * Si recorded_at absent/invalide, repli sur le statut serveur explicite.
  */
 export function isFleetDriverMarkerStale(driver: CompanyDriverLiveLocation): boolean {
-  const lastSeenSecondsNumber = Number(driver.last_seen_seconds);
+  if (driver.location_status === "last_known") return true;
+  const recordedAt = driver.recorded_at ?? driver.timestamp ?? null;
+  const localStatus = resolveLocalLocationFreshnessStatus(recordedAt);
+  if (recordedAt && localStatus !== "offline_unknown") {
+    return localStatus === "stale" || localStatus === "offline";
+  }
   const locStat = String(
     driver.tracking_display_status || driver.location_status || ""
   ).toLowerCase();
-  const hasBackendStatus = BACKEND_LOCATION_STATUSES.has(locStat);
-  const staleByAge =
-    !driver.location_status &&
-    !driver.tracking_display_status &&
-    Number.isFinite(lastSeenSecondsNumber) &&
-    lastSeenSecondsNumber > STALE_SECONDS_THRESHOLD;
-  const staleByStatus = STALE_LOCATION_STATUSES.has(locStat);
-  return hasBackendStatus ? staleByStatus : staleByAge;
+  return STALE_LOCATION_STATUSES.has(locStat);
 }

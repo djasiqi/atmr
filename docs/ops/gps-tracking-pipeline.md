@@ -14,7 +14,18 @@ Le correctif PR1/PR2 est **JS** mais requiert un **build store** pour :
 | Submit | `npm run submit:prod:android` puis `npm run submit:prod:ios` |
 | OTA post-store | `npm run update:prod:all` (runtime aligné sur la version store) |
 
-**Version cible** : > `1.0.8` (`runtimeVersion` aligné). Le binaire 1.0.8 conserve un mode dégradé mémoire/AsyncStorage si ExpoSQLite est absent.
+**Version cible** : `1.0.11` (`runtimeVersion` aligné). Les numéros natifs (`versionCode` / `buildNumber`) sont l’autorité **EAS autoIncrement** après build store.
+
+### ✅ **Implémenté** : stabilisation GPS P0 (ACK / file / fraîcheur / cartes / gates)
+
+- **Lot 0** : ACK Socket.IO ≠ preuve durable ; kill-switch dual (`tracking_socket_gps_ingest_enabled` défaut off + `SOCKET_GPS_INGEST_ENABLED` runtime) ; ACK `ingest_disabled` + `retry_event_ids` ; flush expose `socketEmittedEventIds` / `ingestedEventIds` / `persistedEventIds` / `retryEventIds`.
+- **Lot 1** : `patchDeliveryState` ≠ `markState` ; terminaux atomiques SQLite→mémoire ; compaction `droppedIds`→tombstone ; purge rétention ; reconcile watermark au boot.
+- **Lot 2** : âge fix `max(position.timestamp, lastWatchAtMs)` ; plus d’exemption `availability_presence` ; `lastSentAt` seulement si eventId courant traité.
+- **Lot 3** : watchdog carte mobile dès snapshot (25 s, écran actif) ; `driversLocations` en recovery ; vieillissement local mobile+web (live≤30s / recent≤120s / sinon stale|offline_unknown).
+- **Lot 4** : `npm run test:gps-critical` + `typecheck:tracking` ; préflight EAS et job `gps-mobile-critical` dans `deploy.yml`.
+- **Lot 5** : device health enrichi (build/OTA) + migration `4490a30d6a68` ; version marketing `1.0.11`.
+
+**Reste (ops)** : canary 2–5 téléphones 48 h → rollout 10–25 % → 50 % → 100 % ; charge HTTP-only anti-429 ; critères GO généraux (zéro suppression sans preuve PG, zéro live >30 s sans fix, file &lt;2 min, mission p99 &lt;20 s).
 
 ### ✅ **Implémenté** : sémantique ACK UI (bridge)
 

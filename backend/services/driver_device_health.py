@@ -300,6 +300,16 @@ def ingest_driver_device_health(
     if os_version:
         os_version = os_version[:32]
 
+    def _optional_str(key: str, max_len: int) -> str | None:
+        raw = str(payload.get(key) or "").strip() or None
+        return raw[:max_len] if raw else None
+
+    native_build_version = _optional_str("native_build_version", 32)
+    expo_runtime_version = _optional_str("expo_runtime_version", 32)
+    ota_update_id = _optional_str("ota_update_id", 128)
+    release_channel = _optional_str("release_channel", 64)
+    release_sha = _optional_str("release_sha", 64)
+
     native_last_fix_age = payload.get("native_last_fix_age_seconds")
     try:
         native_last_fix_age_seconds = (
@@ -351,6 +361,11 @@ def ingest_driver_device_health(
         ios_accuracy_authorization=ios_accuracy_authorization,
         ios_low_power_mode=ios_low_power_mode,
         ios_background_refresh_status=ios_background_refresh_status,
+        native_build_version=native_build_version,
+        expo_runtime_version=expo_runtime_version,
+        ota_update_id=ota_update_id,
+        release_channel=release_channel,
+        release_sha=release_sha,
     )
 
     db.session.add(event)
@@ -377,6 +392,11 @@ def ingest_driver_device_health(
         "native_started_after": _bool_to_redis(native_started_after),
         "app_version": app_version or "",
         "os_version": os_version or "",
+        "native_build_version": native_build_version or "",
+        "expo_runtime_version": expo_runtime_version or "",
+        "ota_update_id": ota_update_id or "",
+        "release_channel": release_channel or "",
+        "release_sha": release_sha or "",
         "native_last_fix_age_seconds": str(
             native_last_fix_age_seconds
             if native_last_fix_age_seconds is not None

@@ -16,6 +16,7 @@ const mockConnect = jest.fn();
 const mockDisconnect = jest.fn();
 const mockMarkByIds = jest.fn<() => Promise<number>>().mockResolvedValue(0);
 const mockMarkByWatermark = jest.fn<() => Promise<number>>().mockResolvedValue(0);
+const mockTombstoneByIds = jest.fn<() => Promise<number>>().mockResolvedValue(0);
 const mockReleaseSocketForHttp = jest.fn<() => Promise<number>>().mockResolvedValue(0);
 const mockReconcileSession = jest.fn<() => Promise<string>>().mockResolvedValue("trk_sess_new");
 const mockSyncBridgeQueueDepth = jest.fn<() => Promise<void>>().mockResolvedValue(undefined);
@@ -32,6 +33,7 @@ jest.mock("./driverTrackingQueue", () => ({
   driverTrackingQueue: {
     markBackendAckedByIds: (...args: unknown[]) => mockMarkByIds(...args),
     markBackendAckedByWatermark: (...args: unknown[]) => mockMarkByWatermark(...args),
+    tombstoneByIds: (...args: unknown[]) => mockTombstoneByIds(...args),
     releaseSocketEmittedForHttpRetry: (...args: unknown[]) => mockReleaseSocketForHttp(...args),
     reconcileAfterSessionConflict: (...args: unknown[]) => mockReconcileSession(...args),
   },
@@ -67,10 +69,12 @@ describe("driverRealtimeBridge ack handling", () => {
     mockDisconnect.mockReset();
     mockMarkByIds.mockReset();
     mockMarkByWatermark.mockReset();
+    mockTombstoneByIds.mockReset();
     mockReleaseSocketForHttp.mockReset();
     mockReconcileSession.mockReset();
     mockMarkByIds.mockResolvedValue(0);
     mockMarkByWatermark.mockResolvedValue(0);
+    mockTombstoneByIds.mockResolvedValue(0);
     mockReleaseSocketForHttp.mockResolvedValue(0);
     mockReconcileSession.mockResolvedValue("trk_sess_new");
     mockFlushTrackingQueue.mockReset();
@@ -93,16 +97,41 @@ describe("driverRealtimeBridge ack handling", () => {
     });
   });
 
-  it("handles batch ack ids, watermark and resyncs bridge queue depth", async () => {
+  it("handles batch ack ids as socket_acked without durable watermark purge", async () => {
     const queryClient = new QueryClient();
     const dispose = startDriverRealtimeBridge(queryClient, "driver:1", {
       enableSocket: true,
     });
     expect(mockMarkByIds).toHaveBeenCalledWith(["a", "b"]);
-    expect(mockMarkByWatermark).toHaveBeenCalledWith(15);
+    expect(mockMarkByWatermark).not.toHaveBeenCalled();
     await Promise.resolve();
     await Promise.resolve();
     expect(mockSyncBridgeQueueDepth).toHaveBeenCalled();
+    dispose();
+  });
+
+  it("releases to HTTP on ingest_disabled without durable purge", async () => {
+    mockSubscribeDriverEvents.mockImplementation((cb: (event: unknown) => void) => {
+      cb({
+        event_type: "driver_location_batch_ack",
+        payload: {
+          ingest_disabled: true,
+          retry_event_ids: ["trk_1", "trk_2"],
+          positions_count: 0,
+        },
+      });
+      return () => undefined;
+    });
+    const queryClient = new QueryClient();
+    const dispose = startDriverRealtimeBridge(queryClient, "driver:1", {
+      enableSocket: true,
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(mockMarkByIds).not.toHaveBeenCalled();
+    expect(mockMarkByWatermark).not.toHaveBeenCalled();
+    expect(mockReleaseSocketForHttp).toHaveBeenCalled();
+    expect(mockFlushTrackingQueue).toHaveBeenCalled();
     dispose();
   });
 
@@ -152,8 +181,9 @@ describe("driverRealtimeBridge ack handling", () => {
     await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
-    expect(mockMarkByIds).toHaveBeenCalledWith(["trk_stale"]);
-    expect(mockMarkByWatermark).toHaveBeenCalledWith(42);
+    expect(mockTombstoneByIds).toHaveBeenCalledWith(["trk_stale"], "session_conflict");
+    expect(mockMarkByIds).not.toHaveBeenCalled();
+    expect(mockMarkByWatermark).not.toHaveBeenCalled();
     expect(mockReconcileSession).toHaveBeenCalled();
     await Promise.resolve();
     expect(mockFlushTrackingQueue).toHaveBeenCalled();

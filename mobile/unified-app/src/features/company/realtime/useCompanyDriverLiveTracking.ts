@@ -19,11 +19,14 @@ import {
 } from "./gpsFlushScheduler";
 import { REALTIME_FLUSH_MS } from "./gpsFlushConstants";
 import { resolveRealtimeFlushMs } from "./companyMapRuntimeConfig";
+import { AppState } from "react-native";
+import { applyLocalLocationFreshness } from "../utils/localDriverLocationFreshness";
 
 export { REALTIME_FLUSH_MS };
 export const MAX_BATCH_AGE_MS = 1_000;
 export { resolveRealtimeFlushMs as REALTIME_FLUSH_MS_RESOLVED };
-export const MAP_SILENCE_RESYNC_MS = 120_000;
+/** Resync silence carte (écran actif) — fourchette plan 20–30 s. */
+export const MAP_SILENCE_RESYNC_MS = 25_000;
 const STALE_SECONDS_THRESHOLD = 120;
 
 function toEpoch(value: string | null | undefined): number {
@@ -245,7 +248,9 @@ export function useCompanyDriverLiveTracking() {
   const snapshotQuery = useCompanyDriversLocationsSnapshotQuery();
   const refetchSnapshot = snapshotQuery.refetch;
   const [driversMap, setDriversMap] = useState<Record<number, CompanyDriverLiveLocation>>({});
-  const lastRealtimeEventAtRef = useRef<number>(0);
+  /** Armé dès le mount ; réarmé seulement après merge coords valide. */
+  const lastRealtimeEventAtRef = useRef<number>(Date.now());
+  const lastWatchdogSuccessAtRef = useRef<number>(0);
   const pendingRef = useRef<Map<number, CompanyDriverLiveLocation>>(new Map());
   const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const maxAgeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -255,6 +260,7 @@ export function useCompanyDriverLiveTracking() {
   const firstGpsAfterReconnectRef = useRef(false);
   const driversMapRef = useRef(driversMap);
   driversMapRef.current = driversMap;
+  const [freshnessTick, setFreshnessTick] = useState(0);
 
   useEffect(() => {
     configureGpsMetricsSampling(5);
@@ -373,8 +379,11 @@ export function useCompanyDriverLiveTracking() {
   useEffect(() => {
     const snapshotLocations = snapshotQuery.data?.locations ?? [];
     if (snapshotLocations.length === 0) return;
+    // Snapshot chargé : arme le watchdog (même sans event socket).
+    lastRealtimeEventAtRef.current = Date.now();
     setDriversMap((currentMap) => {
       let changed = false;
+      let mergedValidCoords = false;
       const nextMap = { ...currentMap };
       snapshotLocations.forEach((driver) => {
         const currentDriver = nextMap[driver.driver_id];
@@ -388,7 +397,17 @@ export function useCompanyDriverLiveTracking() {
         if (resolved === currentDriver) return;
         nextMap[driver.driver_id] = resolved;
         changed = true;
+        if (
+          Number.isFinite(resolved.latitude) &&
+          Number.isFinite(resolved.longitude) &&
+          toEpoch(resolved.recorded_at) > toEpoch(currentDriver?.recorded_at)
+        ) {
+          mergedValidCoords = true;
+        }
       });
+      if (mergedValidCoords) {
+        lastRealtimeEventAtRef.current = Date.now();
+      }
       return changed ? nextMap : currentMap;
     });
   }, [snapshotQuery.data]);
@@ -417,7 +436,6 @@ export function useCompanyDriverLiveTracking() {
       }
 
       const isCriticalStateEvent = payload.event_type === "driver_live_state_update";
-      lastRealtimeEventAtRef.current = Date.now();
 
       if (isCriticalStateEvent && pendingRef.current.size > 0) {
         flushPending();
@@ -427,6 +445,22 @@ export function useCompanyDriverLiveTracking() {
       if (!normalized) return;
 
       const isLocationUpdate = payload.event_type === "driver_location_update";
+      // Réarmer le watchdog uniquement après coords valides (pas live_state seul).
+      if (
+        isLocationUpdate &&
+        Number.isFinite(normalized.latitude) &&
+        Number.isFinite(normalized.longitude)
+      ) {
+        const prev = driversMapRef.current[normalized.driver_id];
+        if (
+          !prev ||
+          shouldReplaceDriverLocation(prev, normalized) ||
+          toEpoch(normalized.recorded_at) >= toEpoch(prev.recorded_at)
+        ) {
+          lastRealtimeEventAtRef.current = Date.now();
+        }
+      }
+
       const immediate =
         isCriticalStateEvent ||
         isLocationUpdate ||
@@ -450,13 +484,24 @@ export function useCompanyDriverLiveTracking() {
   useEffect(() => {
     if (!contextId) return;
     const interval = setInterval(() => {
-      if (lastRealtimeEventAtRef.current === 0) return;
-      if (Date.now() - lastRealtimeEventAtRef.current < MAP_SILENCE_RESYNC_MS) return;
-      void refetchSnapshot();
-      lastRealtimeEventAtRef.current = Date.now();
+      if (AppState.currentState !== "active") return;
+      const now = Date.now();
+      if (now - lastRealtimeEventAtRef.current < MAP_SILENCE_RESYNC_MS) return;
+      if (now - lastWatchdogSuccessAtRef.current < MAP_SILENCE_RESYNC_MS) return;
+      void refetchSnapshot().then((result) => {
+        if (result.status === "success") {
+          lastWatchdogSuccessAtRef.current = Date.now();
+          lastRealtimeEventAtRef.current = Date.now();
+        }
+      });
     }, 10_000);
     return () => clearInterval(interval);
   }, [contextId, refetchSnapshot]);
+
+  useEffect(() => {
+    const id = setInterval(() => setFreshnessTick((t) => t + 1), 5_000);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -478,17 +523,27 @@ export function useCompanyDriverLiveTracking() {
 
   const sortedDriversRef = useRef<CompanyDriverLiveLocation[]>([]);
   const drivers = useMemo(() => {
-    const next = Object.values(driversMap).sort((a, b) => a.driver_id - b.driver_id);
+    const nowMs = Date.now();
+    const next = Object.values(driversMap)
+      .map((driver) => applyLocalLocationFreshness(driver, nowMs))
+      .sort((a, b) => a.driver_id - b.driver_id);
     const prev = sortedDriversRef.current;
     if (
       prev.length === next.length &&
-      prev.every((driver, index) => driver === next[index])
+      prev.every(
+        (driver, index) =>
+          driver === next[index] ||
+          (driver.driver_id === next[index]?.driver_id &&
+            driver.last_seen_seconds === next[index]?.last_seen_seconds &&
+            driver.location_status === next[index]?.location_status &&
+            driver.recorded_at === next[index]?.recorded_at)
+      )
     ) {
       return prev;
     }
     sortedDriversRef.current = next;
     return next;
-  }, [driversMap]);
+  }, [driversMap, freshnessTick]);
 
   return {
     drivers,

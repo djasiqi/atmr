@@ -99,6 +99,17 @@ export function performCompanyRecoveryResync(
       await queryClient.invalidateQueries({ queryKey: institutionOffersKey, exact: false });
     }
   );
+  const driversLocationsKey = contextScopedKey(
+    contextId,
+    [...companyQueryKeys.driversLocations(contextId)] as unknown[]
+  );
+  void traceInvalidateQueries(
+    driversLocationsKey,
+    `recovery_resync_${trigger}_drivers_locations`,
+    async () => {
+      await queryClient.invalidateQueries({ queryKey: driversLocationsKey, exact: false });
+    }
+  );
 }
 
 export function useCompanyRecoveryListener(contextId: string | null): void {

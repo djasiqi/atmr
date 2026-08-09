@@ -41,7 +41,9 @@ jest.mock("../../../core/observability/driverTelemetry", () => ({
 // Fabrique autonome (ne pas capter de const du fichier : ordre d’exécution Jest)
 jest.mock("../../../core/featureFlags/registry", () => ({
   isFeatureEnabled: jest.fn((key: unknown) =>
-    key === "tracking_real_ack_semantics_enabled" || key === "tracking_queue_compaction_enabled"
+    key === "tracking_real_ack_semantics_enabled" ||
+    key === "tracking_queue_compaction_enabled" ||
+    key === "tracking_socket_gps_ingest_enabled"
   ),
 }));
 
@@ -69,7 +71,9 @@ describe("driverTrackingQueue", () => {
     mockFF.mockClear();
     mockFF.mockImplementation(
       (key) =>
-        key === "tracking_real_ack_semantics_enabled" || key === "tracking_queue_compaction_enabled"
+        key === "tracking_real_ack_semantics_enabled" ||
+        key === "tracking_queue_compaction_enabled" ||
+        key === "tracking_socket_gps_ingest_enabled"
     );
 
     mockAsyncStorageGetItem.mockResolvedValue(null);
@@ -82,7 +86,7 @@ describe("driverTrackingQueue", () => {
     await driverTrackingQueue.resetForTests();
   });
 
-  it("keeps socket emitted item until backend ack", async () => {
+  it("keeps socket emitted item until durable proof (socket ACK ne retire pas)", async () => {
     await driverTrackingQueue.enqueue({
       missionId: 42,
       appState: "active",
@@ -98,15 +102,16 @@ describe("driverTrackingQueue", () => {
     expect(firstFlush.socketEmitted).toBe(1);
     expect(firstFlush.backendAcked).toBe(0);
     expect(firstFlush.queueDepth).toBe(1);
+    expect(firstFlush.socketEmittedEventIds).toHaveLength(1);
 
     const queued = await driverTrackingQueue.getSnapshot();
     expect(queued.queueDepth).toBe(1);
 
-    const itemRaw = mockAsyncStorageSetItem.mock.calls.at(-1)?.[1] as string;
-    const itemId = (JSON.parse(itemRaw) as { id: string }[])[0].id;
+    const itemId = firstFlush.socketEmittedEventIds[0]!;
     const ackedCount = await driverTrackingQueue.markBackendAckedByIds([itemId]);
     expect(ackedCount).toBe(1);
-    expect((await driverTrackingQueue.getSnapshot()).queueDepth).toBe(0);
+    // ACK socket = socket_acked, toujours actif jusqu'à preuve durable
+    expect((await driverTrackingQueue.getSnapshot()).queueDepth).toBe(1);
   });
 
   it("falls back to http when socket ack is stale", async () => {
@@ -151,7 +156,7 @@ describe("driverTrackingQueue", () => {
     expect(mockAsyncStorageSetItem).toHaveBeenCalled();
   });
 
-  it("purges only items with sequence_id <= ack_last_sequence_id", async () => {
+  it("ignore ack_last_sequence_id Socket.IO (pas de preuve durable)", async () => {
     await driverTrackingQueue.enqueue({
       missionId: 1,
       appState: "active",
@@ -164,17 +169,11 @@ describe("driverTrackingQueue", () => {
       locationMode: "mission_live",
       payload: { latitude: 2, longitude: 2, missionId: 1, locationMode: "mission_live" },
     });
-    const queueWrite = [...mockAsyncStorageSetItem.mock.calls]
-      .reverse()
-      .find((call) => String(call[0]).includes("driver_tracking_delivery_queue_v1"));
-    const persistedRaw = (queueWrite?.[1] as string) ?? "[]";
-    const persisted = JSON.parse(persistedRaw) as { sequenceId: number }[];
-    const ackWatermark = Math.min(...persisted.map((item) => item.sequenceId));
     const before = await driverTrackingQueue.getSnapshot();
-    const acked = await driverTrackingQueue.markBackendAckedByWatermark(ackWatermark);
-    expect(acked).toBe(1);
+    const acked = await driverTrackingQueue.markBackendAckedByWatermark(1);
+    expect(acked).toBe(0);
     const snapshot = await driverTrackingQueue.getSnapshot();
-    expect(snapshot.queueDepth).toBe(before.queueDepth - 1);
+    expect(snapshot.queueDepth).toBe(before.queueDepth);
   });
 
   it("downgrade mission_live sans missionId vers availability_presence", async () => {

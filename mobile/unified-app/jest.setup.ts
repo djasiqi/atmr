@@ -51,6 +51,14 @@ jest.mock("@react-native-async-storage/async-storage", () =>
   jest.requireActual("@react-native-async-storage/async-storage/jest/async-storage-mock")
 );
 
+jest.mock("expo-secure-store", () => ({
+  __esModule: true,
+  getItemAsync: jest.fn(async () => null),
+  setItemAsync: jest.fn(async () => undefined),
+  deleteItemAsync: jest.fn(async () => undefined),
+  WHEN_UNLOCKED: "WHEN_UNLOCKED",
+}));
+
 jest.mock("lottie-react-native", () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports -- jest.mock factory
   const React = require("react");

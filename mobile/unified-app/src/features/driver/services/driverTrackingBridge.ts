@@ -178,6 +178,11 @@ type TrackingBridgeState = {
    */
   presenceWindowActive: boolean;
   lastSentAt: string | null;
+  lastCapturedAt: string | null;
+  lastEnqueuedAt: string | null;
+  lastTransportAttemptAt: string | null;
+  lastIngestedAt: string | null;
+  lastPersistedAt: string | null;
   lastAckAt: string | null;
   lastAckIsQueued: boolean;
   lastAckStatus: DriverLocationAckStatus | null;
@@ -220,6 +225,11 @@ export type DriverTrackingBridgeSnapshot = {
   isRunning: boolean;
   permission: "unknown" | "granted" | "denied";
   lastSentAt: string | null;
+  lastCapturedAt: string | null;
+  lastEnqueuedAt: string | null;
+  lastTransportAttemptAt: string | null;
+  lastIngestedAt: string | null;
+  lastPersistedAt: string | null;
   lastAckAt: string | null;
   lastAckIsQueued: boolean;
   lastAckStatus: DriverLocationAckStatus | null;
@@ -246,6 +256,11 @@ const state: TrackingBridgeState = {
   missionScheduling: null,
   presenceWindowActive: false,
   lastSentAt: null,
+  lastCapturedAt: null,
+  lastEnqueuedAt: null,
+  lastTransportAttemptAt: null,
+  lastIngestedAt: null,
+  lastPersistedAt: null,
   lastAckAt: null,
   lastAckIsQueued: false,
   lastAckStatus: null,
@@ -278,9 +293,21 @@ const state: TrackingBridgeState = {
 
 const trackingBridgeListeners = new Set<DriverTrackingBridgeListener>();
 
+function computeFixAgeMs(position: Location.LocationObject, watchAtMs: number | null): number {
+  const now = Date.now();
+  const fromTimestamp =
+    typeof position.timestamp === "number" && Number.isFinite(position.timestamp)
+      ? now - position.timestamp
+      : 0;
+  const fromWatch = watchAtMs != null ? now - watchAtMs : 0;
+  return Math.max(fromTimestamp, fromWatch);
+}
+
 function readDriverLastKnownPosition(): DriverTrackingPosition | null {
   if (!state.lastWatchedPosition || state.lastWatchAtMs == null) return null;
-  if (Date.now() - state.lastWatchAtMs > WATCH_STALE_MS) return null;
+  if (computeFixAgeMs(state.lastWatchedPosition, state.lastWatchAtMs) > WATCH_STALE_MS) {
+    return null;
+  }
   const { latitude, longitude } = state.lastWatchedPosition.coords;
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
   return { lat: latitude, lng: longitude };
@@ -295,6 +322,11 @@ function buildTrackingBridgeSnapshot(): DriverTrackingBridgeSnapshot {
     isRunning: managerSnapshot.isRunning,
     permission: state.permission,
     lastSentAt: state.lastSentAt,
+    lastCapturedAt: state.lastCapturedAt,
+    lastEnqueuedAt: state.lastEnqueuedAt,
+    lastTransportAttemptAt: state.lastTransportAttemptAt,
+    lastIngestedAt: state.lastIngestedAt,
+    lastPersistedAt: state.lastPersistedAt,
     lastAckAt: state.lastAckAt,
     lastAckIsQueued: state.lastAckIsQueued,
     lastAckStatus: state.lastAckStatus,
@@ -326,6 +358,7 @@ function beginBridgeAttempt(eventId: string): number {
   state.currentAttemptSeq = attemptSeq;
   state.currentAttemptEventId = eventId;
   state.bridgeLastAttemptAt = new Date().toISOString();
+  state.lastTransportAttemptAt = state.bridgeLastAttemptAt;
   state.lastAckError = null;
   return attemptSeq;
 }
@@ -717,8 +750,13 @@ async function flushPoint(appState: AppStateStatus) {
     return;
   }
   if (identitySnapshot && !isRuntimeActive(identitySnapshot)) return;
-  const nowIso = new Date(position.timestamp ?? Date.now()).toISOString();
-  state.lastFixProducedAtMs = Date.now();
+  const fixTs =
+    typeof position.timestamp === "number" && Number.isFinite(position.timestamp)
+      ? position.timestamp
+      : Date.now();
+  const nowIso = new Date(fixTs).toISOString();
+  state.lastFixProducedAtMs = fixTs;
+  state.lastCapturedAt = nowIso;
   recordTrackingCircuitSuccess();
   const cadence = getCadenceForTick(appState, mode);
   const enqueuedItem = await driverTrackingQueue.enqueue({
@@ -740,6 +778,7 @@ async function flushPoint(appState: AppStateStatus) {
       trackingIdentityId: identitySnapshot?.trackingIdentityId,
     },
   });
+  state.lastEnqueuedAt = new Date().toISOString();
   const attemptSeq = beginBridgeAttempt(enqueuedItem.id);
   const flushResult = await driverTrackingQueue.flush({
     ackStaleMs: cadence.ackStaleMs,
@@ -752,6 +791,12 @@ async function flushPoint(appState: AppStateStatus) {
   }
   state.queueDepth = flushResult.queueDepth;
   state.flushPathUsed = flushResult.flushPathUsed;
+  if (flushResult.ingestedEventIds.includes(enqueuedItem.id)) {
+    state.lastIngestedAt = new Date().toISOString();
+  }
+  if (flushResult.persistedEventIds.includes(enqueuedItem.id)) {
+    state.lastPersistedAt = new Date().toISOString();
+  }
   const ackMatchesCurrentPoint =
     flushResult.lastBackendAckRequestEventId === enqueuedItem.id;
   if (
@@ -845,8 +890,18 @@ async function flushPoint(appState: AppStateStatus) {
     state.lastHttpFallbackTrackingEventId = fallbackTrackingEventId;
     state.flushPathUsed = "http_fallback";
   }
-  if (isEligible()) {
-    state.lastSentAt = nowIso;
+  // lastSentAt seulement si le point COURANT a réellement été émis ou confirmé.
+  const currentId = enqueuedItem.id;
+  const currentHandled =
+    flushResult.socketEmittedEventIds.includes(currentId) ||
+    flushResult.ingestedEventIds.includes(currentId) ||
+    flushResult.persistedEventIds.includes(currentId) ||
+    (shouldFallback &&
+      !shouldSkipDuplicateFallback &&
+      state.lastHttpFallbackTrackingEventId === fallbackTrackingEventId &&
+      state.lastAckError == null);
+  if (isEligible() && currentHandled) {
+    state.lastSentAt = new Date().toISOString();
   }
   emitDriverTelemetry("tracking.bridge.health", {
     source: "driver.tracking.bridge",
@@ -863,13 +918,17 @@ async function flushPoint(appState: AppStateStatus) {
 
 async function resolvePositionFromWatchOrFallback(
   appState: AppStateStatus,
-  mode: DriverTrackingMode
+  _mode: DriverTrackingMode
 ) {
   const hasWatch =
     state.lastWatchedPosition !== null && state.lastWatchAtMs !== null;
-  if (hasWatch) {
-    const ageMs = Date.now() - (state.lastWatchAtMs as number);
-    if (ageMs < WATCH_STALE_MS || mode === "availability_presence") {
+  if (hasWatch && state.lastWatchedPosition) {
+    const fixAgeMs = computeFixAgeMs(
+      state.lastWatchedPosition,
+      state.lastWatchAtMs
+    );
+    // Même seuil pour tous les modes (plus d'exemption availability_presence).
+    if (fixAgeMs < WATCH_STALE_MS) {
       return state.lastWatchedPosition;
     }
   }
@@ -924,6 +983,13 @@ async function ensureLocationWatch() {
       (position) => {
         state.lastWatchedPosition = position;
         state.lastWatchAtMs = Date.now();
+        if (
+          typeof position.timestamp === "number" &&
+          Number.isFinite(position.timestamp)
+        ) {
+          state.lastFixProducedAtMs = position.timestamp;
+          state.lastCapturedAt = new Date(position.timestamp).toISOString();
+        }
         notifyTrackingBridgeListeners();
       }
     );
@@ -1154,6 +1220,11 @@ async function stopMissionTrackingBridge(expectedGeneration?: number): Promise<v
   state.missionStatus = null;
   state.missionScheduling = null;
   state.lastSentAt = null;
+  state.lastCapturedAt = null;
+  state.lastEnqueuedAt = null;
+  state.lastTransportAttemptAt = null;
+  state.lastIngestedAt = null;
+  state.lastPersistedAt = null;
   state.lastAckAt = null;
   state.lastAckIsQueued = false;
   state.lastAckStatus = null;

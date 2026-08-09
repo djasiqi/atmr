@@ -42,6 +42,10 @@ import {
   iconAnchorToAdvancedMarkerCss,
 } from '../../../../utils/mapUtils';
 import {
+  applyLocalLocationFreshness,
+  resolveLocalLocationFreshnessStatus,
+} from '../../../../utils/localDriverLocationFreshness';
+import {
   interpolateMarkerPosition,
   projectPositionAlongVelocity,
   resolveMarkerMotionDurationMs,
@@ -962,29 +966,25 @@ function DriverLiveMap({ drivers: propDrivers }) {
       const isLocated = !isFallback && !isNonLiveGpsPosition(d, { isFallback });
       if (isLocated) newLocatedIds.add(d.id);
 
-      const lastSeenSecondsNumber = Number(d.last_seen_seconds);
-      const locStat = String(d.tracking_display_status || d.location_status || '').toLowerCase();
+      const agedDriver = applyLocalLocationFreshness(d);
+      const localStatus = resolveLocalLocationFreshnessStatus(
+        agedDriver.recorded_at ?? agedDriver.timestamp ?? null
+      );
       const positionSource = String(d.position_source || '').toLowerCase();
-      const hasBackendStatus = locStat === 'stale' || locStat === 'offline'
-        || locStat === 'live' || locStat === 'recent'
-        || locStat === 'last_known'
-        || locStat === 'degraded_constrained' || locStat === 'offline_unknown'
-        || positionSource === 'db_fallback';
-      const staleByAge = !d.location_status && !d.tracking_display_status
-        && Number.isFinite(lastSeenSecondsNumber)
-        && lastSeenSecondsNumber > STALE_SECONDS_THRESHOLD;
-      const staleByStatus = locStat === 'stale' || locStat === 'offline'
-        || locStat === 'last_known'
-        || locStat === 'degraded_constrained' || locStat === 'offline_unknown'
-        || positionSource === 'db_fallback'
-        || projection.visualTreatment === 'gps_stale'
+      const staleByLocal =
+        localStatus === 'stale' ||
+        localStatus === 'offline' ||
+        localStatus === 'offline_unknown';
+      const staleByProjection =
+        projection.visualTreatment === 'gps_stale'
         || projection.visualTreatment === 'gps_stale_constrained'
-        || projection.visualTreatment === 'gps_offline';
-      const isStaleMarker = isFallback
-        || (hasBackendStatus ? staleByStatus : staleByAge);
+        || projection.visualTreatment === 'gps_offline'
+        || positionSource === 'db_fallback'
+        || String(d.location_status || '').toLowerCase() === 'last_known';
+      const isStaleMarker = isFallback || staleByLocal || staleByProjection;
       if (isStaleMarker) staleMarkersCount += 1;
 
-      const gpsLabel = getDriverFreshnessLabel(d);
+      const gpsLabel = getDriverFreshnessLabel(agedDriver);
       const tooltipOpts = isFallback
         ? {
             status: 'offline',

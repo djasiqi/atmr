@@ -4519,6 +4519,11 @@ device_health_model = driver_ns.model(
         "ios_accuracy_authorization": fields.String,
         "ios_low_power_mode": fields.Boolean,
         "ios_background_refresh_status": fields.String,
+        "native_build_version": fields.String,
+        "expo_runtime_version": fields.String,
+        "ota_update_id": fields.String,
+        "release_channel": fields.String,
+        "release_sha": fields.String,
     },
 )
 

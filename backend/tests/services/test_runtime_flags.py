@@ -2,6 +2,7 @@ from services.infrastructure.runtime_flags import (
     env_truthy,
     is_ios_startup_fatal_recovery_disabled,
     is_skip_socketio,
+    is_socket_gps_ingest_enabled,
 )
 
 
@@ -26,3 +27,15 @@ def test_ios_startup_fatal_recovery_disabled(monkeypatch):
     assert is_ios_startup_fatal_recovery_disabled() is False
     monkeypatch.setenv("IOS_STARTUP_FATAL_RECOVERY_DISABLED", "true")
     assert is_ios_startup_fatal_recovery_disabled() is True
+
+
+def test_socket_gps_ingest_enabled_default_true(monkeypatch):
+    monkeypatch.delenv("SOCKET_GPS_INGEST_ENABLED", raising=False)
+    assert is_socket_gps_ingest_enabled() is True
+
+
+def test_socket_gps_ingest_enabled_kill_switch(monkeypatch):
+    monkeypatch.setenv("SOCKET_GPS_INGEST_ENABLED", "false")
+    assert is_socket_gps_ingest_enabled() is False
+    monkeypatch.setenv("SOCKET_GPS_INGEST_ENABLED", "0")
+    assert is_socket_gps_ingest_enabled() is False
