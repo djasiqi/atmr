@@ -1,0 +1,56 @@
+diff --git a/node_modules/image-size/dist/types/icns.js b/node_modules/image-size/dist/types/icns.js
+index f2bfafe..552cf7f 100644
+--- a/node_modules/image-size/dist/types/icns.js
++++ b/node_modules/image-size/dist/types/icns.js
+@@ -82,6 +82,9 @@ exports.ICNS = {
+         let imageOffset = SIZE_HEADER;
+         let imageHeader = readImageHeader(input, imageOffset);
+         let imageSize = getImageSize(imageHeader[0]);
++        if (!imageHeader[1] || imageHeader[1] < 8) {
++            throw new TypeError('Invalid ICNS, bad entry length');
++        }
+         imageOffset += imageHeader[1];
+         if (imageOffset === fileLength)
+             return imageSize;
+@@ -93,6 +96,9 @@ exports.ICNS = {
+         while (imageOffset < fileLength && imageOffset < inputLength) {
+             imageHeader = readImageHeader(input, imageOffset);
+             imageSize = getImageSize(imageHeader[0]);
++            if (!imageHeader[1] || imageHeader[1] < 8) {
++                break;
++            }
+             imageOffset += imageHeader[1];
+             result.images.push(imageSize);
+         }
+diff --git a/node_modules/image-size/dist/types/jxl.js b/node_modules/image-size/dist/types/jxl.js
+index f557b0a..91c2b9c 100644
+--- a/node_modules/image-size/dist/types/jxl.js
++++ b/node_modules/image-size/dist/types/jxl.js
+@@ -23,6 +23,9 @@ function extractPartialStreams(input) {
+         const jxlpBox = (0, utils_1.findBox)(input, 'jxlp', offset);
+         if (!jxlpBox)
+             break;
++        // size <= 8 cannot contain a jxlp payload and would not advance (DoS)
++        if (!jxlpBox.size || jxlpBox.size <= 8)
++            break;
+         partialStreams.push(input.slice(jxlpBox.offset + 12, jxlpBox.offset + jxlpBox.size));
+         offset = jxlpBox.offset + jxlpBox.size;
+     }
+diff --git a/node_modules/image-size/dist/types/utils.js b/node_modules/image-size/dist/types/utils.js
+index 5224bba..f18c516 100644
+--- a/node_modules/image-size/dist/types/utils.js
++++ b/node_modules/image-size/dist/types/utils.js
+@@ -49,9 +49,12 @@ function readUInt(input, bits, offset, isBigEndian) {
+ }
+ exports.readUInt = readUInt;
+ function readBox(input, offset) {
+-    if (input.length - offset < 4)
++    if (input.length - offset < 8)
+         return;
+     const boxSize = (0, exports.readUInt32BE)(input, offset);
++    // size 0 / undersized boxes must not be returned (DoS / invalid containers)
++    if (!boxSize || boxSize < 8)
++        return;
+     if (input.length - offset < boxSize)
+         return;
+     return {
