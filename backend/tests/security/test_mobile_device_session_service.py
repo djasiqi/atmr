@@ -45,7 +45,9 @@ def test_encrypt_decrypt_rotation_response_roundtrip():
         "refresh_token": "b" * 20,
         "session_id": str(uuid.uuid4()),
     }
-    with patch.object(svc, "_get_encryption_key", return_value=(b"0" * 32, "v1")):
+    with patch.object(
+        svc, "_get_encryption_key_for_id", return_value=(b"0" * 32, "v1")
+    ):
         ct, key_id = svc.encrypt_rotation_response(payload)
         assert key_id == "v1"
         assert isinstance(ct, (bytes, bytearray))
@@ -223,7 +225,9 @@ def test_store_and_load_rotation_result_roundtrip(app, session_user):
         db.session.commit()
 
         payload = {"access_token": "a" * 10, "refresh_token": "b" * 10}
-        with patch.object(svc, "_get_encryption_key", return_value=(b"1" * 32, "v1")):
+        with patch.object(
+            svc, "_get_encryption_key_for_id", return_value=(b"1" * 32, "v1")
+        ):
             row = svc.store_rotation_result(
                 session=session,
                 idempotency_key="idem-key-1",
@@ -235,6 +239,7 @@ def test_store_and_load_rotation_result_roundtrip(app, session_user):
 
             fetched = svc.get_rotation_result(session.session_id, "idem-key-1")
             assert fetched is not None
+            assert row is not None
             assert fetched.id == row.id
 
             restored = svc.load_rotation_response(fetched)

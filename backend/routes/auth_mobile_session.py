@@ -14,16 +14,20 @@ from flask_jwt_extended import (
     jwt_required,
 )
 from flask_restx import Resource
+from sqlalchemy.exc import IntegrityError
 
 from ext import db, limiter
 from models import User
 from models.mobile_device_session import MobileDeviceSessionStatus
 from security.mobile_device_session_service import (
+    RotationProof,
     auth_capabilities,
-    get_rotation_result,
     get_session_by_id,
+    hash_credential,
+    http_response_for_idempotency,
+    is_rotation_idempotency_conflict,
     list_active_sessions,
-    load_rotation_response,
+    resolve_rotation_idempotency,
     revoke_all_user_sessions,
     revoke_pending_idempotent,
     revoke_session,
@@ -105,6 +109,20 @@ def _issue_token_pair(user: User, session) -> dict:
     }
 
 
+def _session_resume_proof(
+    *,
+    recovery_credential: str,
+    device_installation_id: str,
+    request_generation: int | None = None,
+) -> RotationProof:
+    return RotationProof(
+        proof_hash=hash_credential(str(recovery_credential)),
+        device_installation_id=str(device_installation_id),
+        operation_type="session_resume",
+        request_generation=request_generation,
+    )
+
+
 def register_mobile_session_routes(auth_ns) -> None:
     """Enregistre /session-resume, /logout-all, revoke-pending, device-sessions."""
 
@@ -137,13 +155,6 @@ def register_mobile_session_routes(auth_ns) -> None:
                     "error_code": "session_revoked",
                 }, 401
 
-            if idempotency_key:
-                existing = get_rotation_result(session.session_id, str(idempotency_key))
-                if existing is not None:
-                    cached = load_rotation_response(existing)
-                    if cached is not None:
-                        return {**cached, "error_code": "refresh_duplicate"}, 200
-
             if not session.is_active():
                 return {
                     "error": "session_revoquee",
@@ -156,28 +167,10 @@ def register_mobile_session_routes(auth_ns) -> None:
                     "error_code": "refresh_replay_detected",
                 }, 401
 
-            if not verify_recovery_credential(session, str(recovery_credential)):
-                return {
-                    "error": "credential_invalide",
-                    "error_code": "session_revoked",
-                }, 401
-
-            if client_generation is not None:
-                try:
-                    cg = int(client_generation)
-                except (TypeError, ValueError):
-                    cg = None
-                if cg is not None and cg < int(session.generation) - 1:
-                    return {
-                        "error": "generation_obsolete",
-                        "error_code": "rotation_recovery_required",
-                    }, 401
-
             user = User.query.get(session.user_id)
             if user is None:
                 return {"error": "utilisateur_introuvable"}, 404
 
-            # Compte / profil actif (même règle que refresh-token)
             from routes.auth import _check_user_profile_active
 
             profile_ok, profile_msg = _check_user_profile_active(user)
@@ -187,22 +180,112 @@ def register_mobile_session_routes(auth_ns) -> None:
                     "error_code": "account_disabled",
                 }, 403
 
-            request_generation = int(session.generation)
+            proof = _session_resume_proof(
+                recovery_credential=str(recovery_credential),
+                device_installation_id=str(device_installation_id),
+            )
+
+            # Receipt authentifie le retry (pas le credential courant / grâce).
+            if idempotency_key:
+                resolution = resolve_rotation_idempotency(
+                    session.session_id, str(idempotency_key), proof=proof
+                )
+                mapped = http_response_for_idempotency(resolution)
+                if mapped is not None:
+                    return mapped
+
+            # --- MISS : nouvelle rotation ---
+            if not verify_recovery_credential(session, str(recovery_credential)):
+                return {
+                    "error": "credential_invalide",
+                    "error_code": "session_revoked",
+                }, 401
+
+            cred_gen = int(
+                getattr(session, "credential_generation", session.generation) or 1
+            )
+            if client_generation is not None:
+                try:
+                    cg = int(client_generation)
+                except (TypeError, ValueError):
+                    cg = None
+                if cg is not None and cg < cred_gen - 1:
+                    return {
+                        "error": "generation_obsolete",
+                        "error_code": "rotation_recovery_required",
+                    }, 401
+
+            request_generation = cred_gen
             new_recovery = rotate_recovery_credential(session)
             tokens = _issue_token_pair(user, session)
             tokens["recovery_credential"] = new_recovery
 
             if idempotency_key:
-                store_rotation_result(
+                proof = _session_resume_proof(
+                    recovery_credential=str(recovery_credential),
+                    device_installation_id=str(device_installation_id),
+                    request_generation=request_generation,
+                )
+                inserted = store_rotation_result(
                     session=session,
                     idempotency_key=str(idempotency_key),
                     request_generation=request_generation,
                     successor_generation=int(session.generation),
                     response_payload=tokens,
                     operation_type="session_resume",
+                    proof=proof,
                 )
+                if inserted is None:
+                    # Collision : rollback TX perdante, reload gagnant
+                    db.session.rollback()
+                    session = get_session_by_id(session_id, for_update=True)
+                    if session is None:
+                        return {
+                            "error": "session_introuvable",
+                            "error_code": "session_revoked",
+                        }, 401
+                    resolution = resolve_rotation_idempotency(
+                        session.session_id, str(idempotency_key), proof=proof
+                    )
+                    mapped = http_response_for_idempotency(resolution)
+                    if mapped is not None:
+                        return mapped
+                    return {
+                        "error": "rotation_idempotency_conflict",
+                        "error_code": "rotation_recovery_required",
+                        "retryable": False,
+                    }, 401
 
-            db.session.commit()
+            try:
+                db.session.commit()
+            except IntegrityError as exc:
+                if not is_rotation_idempotency_conflict(exc):
+                    db.session.rollback()
+                    raise
+                logger.warning(
+                    "session-resume idempotency IntegrityError recovered session_id=%s",
+                    session_id,
+                )
+                db.session.rollback()
+                session = get_session_by_id(session_id, for_update=True)
+                if session is None or not idempotency_key:
+                    return {
+                        "error": "rotation_idempotency_conflict",
+                        "error_code": "rotation_recovery_required",
+                        "retryable": False,
+                    }, 401
+                resolution = resolve_rotation_idempotency(
+                    session.session_id, str(idempotency_key), proof=proof
+                )
+                mapped = http_response_for_idempotency(resolution)
+                if mapped is not None:
+                    return mapped
+                return {
+                    "error": "rotation_idempotency_conflict",
+                    "error_code": "rotation_recovery_required",
+                    "retryable": False,
+                }, 401
+
             return tokens, 200
 
     @auth_ns.route("/logout-all")

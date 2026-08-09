@@ -430,7 +430,13 @@ export type SessionEnvelope = {
   driver_id: number | null;
   role: string;
   active_context_id: string | null;
+  /** Compteur JWT refresh — ne jamais le confondre avec credential_generation. */
   refresh_generation: number;
+  /**
+   * Compteur recovery credential (session-resume).
+   * Absent/undefined sur anciennes envelopes — ne jamais initialiser depuis refresh_generation.
+   */
+  credential_generation?: number | null;
   last_authenticated_at: string;
   /** Secret local (jamais transmis sauf via revoke-pending) pour la révocation hors-ligne. */
   revocation_secret?: string | null;
@@ -485,12 +491,13 @@ export const bumpSessionGeneration = bumpAuthEpoch;
 export const getSessionGenerationId = getAuthEpoch;
 export const isCurrentSessionGeneration = isCurrentAuthEpoch;
 
-async function clearPendingRefreshOperationMarker(): Promise<void> {
+async function clearPendingAuthOperationMarkers(): Promise<void> {
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- évite import() dynamique sous Jest
     const AsyncStorage = require("@react-native-async-storage/async-storage")
       .default as { removeItem: (key: string) => Promise<void> };
     await AsyncStorage.removeItem("@atmr/auth/pending_refresh_operation");
+    await AsyncStorage.removeItem("@atmr/auth/pending_resume_operation");
   } catch {
     /* ignore */
   }
@@ -501,7 +508,7 @@ export async function clearLocalAuthCredentialsLocked(): Promise<void> {
   await deleteRefreshToken();
   await deleteRecoveryCredential();
   await deleteSessionEnvelope();
-  await clearPendingRefreshOperationMarker();
+  await clearPendingAuthOperationMarkers();
 }
 
 /**
@@ -514,7 +521,7 @@ export async function persistTerminalRevocationEvidenceLocked(
   await invalidateRefreshToken(reason);
   await invalidateRecoveryCredential(reason);
   await deleteSessionEnvelope();
-  await clearPendingRefreshOperationMarker();
+  await clearPendingAuthOperationMarkers();
 }
 
 /** Réservé aux tests. */

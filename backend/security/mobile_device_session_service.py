@@ -11,8 +11,12 @@ import logging
 import os
 import secrets
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from enum import Enum
 from typing import Any
+
+from sqlalchemy.exc import IntegrityError
 
 from ext import db
 from models.mobile_device_session import (
@@ -29,10 +33,15 @@ PREVIOUS_CREDENTIAL_GRACE_SECONDS = int(
 )
 DEFAULT_DEVICE_SESSION_LIMIT = int(os.getenv("MAX_MOBILE_DEVICE_SESSIONS_DRIVER", "5"))
 ROTATION_RESULT_TTL_SECONDS = int(os.getenv("AUTH_ROTATION_RESULT_TTL_SECONDS", "600"))
+SESSION_RESUME_RESULT_TTL_SECONDS = int(
+    os.getenv("AUTH_SESSION_RESUME_RESULT_TTL_SECONDS", "86400")
+)
 SESSION_CACHE_TTL_SECONDS = int(os.getenv("MOBILE_SESSION_CACHE_TTL_SECONDS", "5"))
 SESSION_NEGATIVE_CACHE_TTL_SECONDS = int(
     os.getenv("MOBILE_SESSION_NEGATIVE_CACHE_TTL_SECONDS", "30")
 )
+ROTATION_META_KEY = "_rotation_meta"
+ROTATION_IDEMPOTENCY_CONSTRAINT = "uq_auth_rotation_result_session_idempotency"
 
 
 def auth_capabilities() -> dict[str, Any]:
@@ -566,13 +575,77 @@ def validate_mobile_session(
 
 # --- Idempotence rotation (AuthRotationResult) ---
 
-def _get_encryption_key() -> tuple[bytes, str]:
-    """Clé AEAD hors logique métier — réutilise APP_ENCRYPTION_KEY_B64."""
+
+class RotationIdempotencyStatus(str, Enum):
+    MISS = "miss"
+    REPLAY = "replay"
+    EXPIRED = "expired"
+    UNREADABLE = "unreadable"
+    MISMATCH = "mismatch"
+
+
+@dataclass(frozen=True)
+class RotationIdempotencyResolution:
+    status: RotationIdempotencyStatus
+    payload: dict[str, Any] | None = None
+    row: AuthRotationResult | None = None
+
+
+@dataclass(frozen=True)
+class RotationProof:
+    """Preuve liée au receipt — authentifie un retry sans exiger le credential courant."""
+
+    proof_hash: str
+    device_installation_id: str
+    operation_type: str
+    request_generation: int | None = None
+
+
+def rotation_result_ttl_seconds(operation_type: str) -> int:
+    if operation_type == "session_resume":
+        return SESSION_RESUME_RESULT_TTL_SECONDS
+    return ROTATION_RESULT_TTL_SECONDS
+
+
+def _normalize_aes_key(key: bytes) -> bytes:
+    if len(key) not in (16, 24, 32):
+        return hashlib.sha256(key).digest()
+    return key
+
+
+def _get_encryption_key_for_id(key_id: str | None = None) -> tuple[bytes, str]:
+    """Résout une clé AEAD par encryption_key_id (keyring minimal).
+
+    - Clé courante : APP_ENCRYPTION_KEY_B64 + AUTH_ROTATION_ENCRYPTION_KEY_ID (défaut v1)
+    - Clés historiques : AUTH_ROTATION_ENCRYPTION_KEY_<ID>_B64 (ex. AUTH_ROTATION_ENCRYPTION_KEY_V1_B64)
+    """
     from models.base import _load_encryption_key
 
-    key = _load_encryption_key()
-    key_id = (os.getenv("AUTH_ROTATION_ENCRYPTION_KEY_ID") or "v1").strip()
-    return key, key_id
+    current_id = (os.getenv("AUTH_ROTATION_ENCRYPTION_KEY_ID") or "v1").strip()
+    requested = (key_id or current_id).strip() or current_id
+
+    if requested == current_id:
+        return _normalize_aes_key(_load_encryption_key()), current_id
+
+    env_name = f"AUTH_ROTATION_ENCRYPTION_KEY_{requested.upper()}_B64"
+    b64 = (os.getenv(env_name) or "").strip()
+    if not b64:
+        raise KeyError(f"clé historique absente: {requested} ({env_name})")
+
+    import base64
+    import binascii
+
+    padded = b64 + "=" * (-len(b64) % 4)
+    try:
+        key = base64.urlsafe_b64decode(padded.encode())
+    except (binascii.Error, ValueError) as exc:
+        raise RuntimeError(f"{env_name} invalide (Base64)") from exc
+    return _normalize_aes_key(key), requested
+
+
+def _get_encryption_key() -> tuple[bytes, str]:
+    """Clé AEAD courante (écriture)."""
+    return _get_encryption_key_for_id(None)
 
 
 def encrypt_rotation_response(payload: dict[str, Any]) -> tuple[bytes, str]:
@@ -580,9 +653,6 @@ def encrypt_rotation_response(payload: dict[str, Any]) -> tuple[bytes, str]:
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
     key, key_id = _get_encryption_key()
-    # AESGCM exige 16/24/32 ; tronquer/hasher si besoin
-    if len(key) not in (16, 24, 32):
-        key = hashlib.sha256(key).digest()
     aesgcm = AESGCM(key)
     nonce = secrets.token_bytes(12)
     plaintext = json.dumps(payload).encode("utf-8")
@@ -594,38 +664,75 @@ def decrypt_rotation_response(ciphertext: bytes, key_id: str) -> dict[str, Any]:
     import json
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-    key, _ = _get_encryption_key()
-    if len(key) not in (16, 24, 32):
-        key = hashlib.sha256(key).digest()
+    key, _ = _get_encryption_key_for_id(key_id)
     aesgcm = AESGCM(key)
     nonce, ct = ciphertext[:12], ciphertext[12:]
     plaintext = aesgcm.decrypt(nonce, ct, None)
     return json.loads(plaintext.decode("utf-8"))
 
 
-def store_rotation_result(
-    *,
-    session: MobileDeviceSession,
-    idempotency_key: str,
-    request_generation: int,
-    successor_generation: int,
+def strip_rotation_meta(payload: dict[str, Any]) -> dict[str, Any]:
+    """Retire les métadonnées internes avant réponse HTTP."""
+    return {k: v for k, v in payload.items() if k != ROTATION_META_KEY}
+
+
+def build_rotation_storage_payload(
     response_payload: dict[str, Any],
-    operation_type: str = "refresh",
-) -> AuthRotationResult:
-    ciphertext, key_id = encrypt_rotation_response(response_payload)
-    row = AuthRotationResult(
-        id=uuid.uuid4(),
-        session_id=session.session_id,
-        idempotency_key_hash=hash_idempotency_key(idempotency_key),
-        request_generation=request_generation,
-        successor_generation=successor_generation,
-        response_ciphertext=ciphertext,
-        encryption_key_id=key_id,
-        operation_type=operation_type,
-        expires_at=_now() + timedelta(seconds=ROTATION_RESULT_TTL_SECONDS),
-    )
-    db.session.add(row)
-    return row
+    *,
+    proof: RotationProof,
+) -> dict[str, Any]:
+    stored = dict(response_payload)
+    stored[ROTATION_META_KEY] = {
+        "proof_hash": proof.proof_hash,
+        "device_installation_id": proof.device_installation_id,
+        "operation_type": proof.operation_type,
+        "request_generation": proof.request_generation,
+    }
+    return stored
+
+
+def _proof_matches(
+    meta: dict[str, Any] | None,
+    proof: RotationProof | None,
+    *,
+    stored_payload: dict[str, Any] | None = None,
+) -> bool:
+    if proof is None:
+        return True
+    if not isinstance(meta, dict):
+        # Anciens receipts sans meta : incompatibles avec replay authentifié
+        return False
+    if str(meta.get("device_installation_id") or "") != str(
+        proof.device_installation_id
+    ):
+        return False
+    if str(meta.get("operation_type") or "") != str(proof.operation_type):
+        return False
+
+    stored_proof = str(meta.get("proof_hash") or "")
+    try:
+        if stored_proof and secrets.compare_digest(stored_proof, proof.proof_hash):
+            return True
+    except (TypeError, ValueError):
+        pass
+
+    # Crash-safe : le client a pu déjà persister le secret successeur du reçu
+    # et retente avec ce secret (hash ≠ proof d'origine).
+    if stored_payload:
+        successor: str | None = None
+        if proof.operation_type == "session_resume":
+            raw = stored_payload.get("recovery_credential")
+            successor = raw if isinstance(raw, str) else None
+        elif proof.operation_type == "refresh":
+            raw = stored_payload.get("refresh_token")
+            successor = raw if isinstance(raw, str) else None
+        if successor:
+            try:
+                if secrets.compare_digest(hash_credential(successor), proof.proof_hash):
+                    return True
+            except (TypeError, ValueError):
+                return False
+    return False
 
 
 def get_rotation_result(
@@ -637,11 +744,198 @@ def get_rotation_result(
     ).first()
 
 
+def resolve_rotation_idempotency(
+    session_id: uuid.UUID,
+    idempotency_key: str,
+    *,
+    proof: RotationProof | None = None,
+) -> RotationIdempotencyResolution:
+    """Résout un reçu d'idempotence sans ambiguïté expiration / decrypt / mismatch."""
+    row = get_rotation_result(session_id, idempotency_key)
+    if row is None:
+        return RotationIdempotencyResolution(status=RotationIdempotencyStatus.MISS)
+
+    if row.expires_at and row.expires_at < _now():
+        return RotationIdempotencyResolution(
+            status=RotationIdempotencyStatus.EXPIRED, row=row
+        )
+
+    try:
+        stored = decrypt_rotation_response(row.response_ciphertext, row.encryption_key_id)
+    except Exception as exc:
+        logger.error(
+            "AuthRotationResult UNREADABLE session_id=%s key_id=%s: %s",
+            session_id,
+            row.encryption_key_id,
+            exc,
+        )
+        return RotationIdempotencyResolution(
+            status=RotationIdempotencyStatus.UNREADABLE, row=row
+        )
+
+    meta = stored.get(ROTATION_META_KEY) if isinstance(stored, dict) else None
+    public_payload = strip_rotation_meta(stored) if isinstance(stored, dict) else {}
+    if proof is not None and not _proof_matches(
+        meta if isinstance(meta, dict) else None,
+        proof,
+        stored_payload=public_payload if isinstance(public_payload, dict) else None,
+    ):
+        return RotationIdempotencyResolution(
+            status=RotationIdempotencyStatus.MISMATCH, row=row
+        )
+
+    return RotationIdempotencyResolution(
+        status=RotationIdempotencyStatus.REPLAY,
+        payload=public_payload if isinstance(public_payload, dict) else {},
+        row=row,
+    )
+
+
 def load_rotation_response(row: AuthRotationResult) -> dict[str, Any] | None:
+    """Compat : rejoue si déchiffrable et non expiré (sans vérification de proof)."""
     if row.expires_at and row.expires_at < _now():
         return None
     try:
-        return decrypt_rotation_response(row.response_ciphertext, row.encryption_key_id)
+        stored = decrypt_rotation_response(row.response_ciphertext, row.encryption_key_id)
     except Exception as exc:
         logger.warning("decrypt AuthRotationResult failed: %s", exc)
         return None
+    if not isinstance(stored, dict):
+        return None
+    return strip_rotation_meta(stored)
+
+
+def is_rotation_idempotency_conflict(exc: BaseException) -> bool:
+    """True uniquement pour uq_auth_rotation_result_session_idempotency (pas tout 23505)."""
+    integrity: IntegrityError | None = None
+    if isinstance(exc, IntegrityError):
+        integrity = exc
+    else:
+        cause = getattr(exc, "__cause__", None)
+        if isinstance(cause, IntegrityError):
+            integrity = cause
+    if integrity is None:
+        return False
+
+    orig = getattr(integrity, "orig", None)
+    pgcode = getattr(orig, "pgcode", None) if orig is not None else None
+    if pgcode is not None and str(pgcode) != "23505":
+        return False
+
+    diag = getattr(orig, "diag", None) if orig is not None else None
+    constraint = getattr(diag, "constraint_name", None) if diag is not None else None
+    if constraint:
+        return str(constraint) == ROTATION_IDEMPOTENCY_CONSTRAINT
+
+    msg = str(integrity).lower()
+    return ROTATION_IDEMPOTENCY_CONSTRAINT in msg or (
+        str(pgcode) == "23505" and "idempotency" in msg
+    )
+
+
+def store_rotation_result(
+    *,
+    session: MobileDeviceSession,
+    idempotency_key: str,
+    request_generation: int,
+    successor_generation: int,
+    response_payload: dict[str, Any],
+    operation_type: str = "refresh",
+    proof: RotationProof | None = None,
+) -> AuthRotationResult | None:
+    """Persiste le reçu. Retourne la ligne si insert gagnant, None si conflit (ON CONFLICT).
+
+    En cas de conflit PostgreSQL (DO NOTHING), ne lève pas IntegrityError.
+    """
+    effective_proof = proof or RotationProof(
+        proof_hash="",
+        device_installation_id=str(session.device_installation_id or ""),
+        operation_type=operation_type,
+        request_generation=request_generation,
+    )
+    stored_payload = build_rotation_storage_payload(
+        response_payload, proof=effective_proof
+    )
+    ciphertext, key_id = encrypt_rotation_response(stored_payload)
+    row_id = uuid.uuid4()
+    expires_at = _now() + timedelta(seconds=rotation_result_ttl_seconds(operation_type))
+    key_hash = hash_idempotency_key(idempotency_key)
+
+    bind = db.session.get_bind()
+    dialect = getattr(getattr(bind, "dialect", None), "name", "") or ""
+
+    if dialect == "postgresql":
+        from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+        stmt = (
+            pg_insert(AuthRotationResult.__table__)
+            .values(
+                id=row_id,
+                session_id=session.session_id,
+                idempotency_key_hash=key_hash,
+                request_generation=request_generation,
+                successor_generation=successor_generation,
+                response_ciphertext=ciphertext,
+                encryption_key_id=key_id,
+                operation_type=operation_type,
+                expires_at=expires_at,
+            )
+            .on_conflict_do_nothing(constraint=ROTATION_IDEMPOTENCY_CONSTRAINT)
+            .returning(AuthRotationResult.__table__.c.id)
+        )
+        result = db.session.execute(stmt)
+        inserted_id = result.scalar_one_or_none()
+        if inserted_id is None:
+            return None
+        return db.session.get(AuthRotationResult, inserted_id)
+
+    row = AuthRotationResult(
+        id=row_id,
+        session_id=session.session_id,
+        idempotency_key_hash=key_hash,
+        request_generation=request_generation,
+        successor_generation=successor_generation,
+        response_ciphertext=ciphertext,
+        encryption_key_id=key_id,
+        operation_type=operation_type,
+        expires_at=expires_at,
+    )
+    try:
+        with db.session.begin_nested():
+            db.session.add(row)
+            db.session.flush()
+        return row
+    except IntegrityError as exc:
+        if is_rotation_idempotency_conflict(exc):
+            return None
+        raise
+
+
+def http_response_for_idempotency(
+    resolution: RotationIdempotencyResolution,
+) -> tuple[dict[str, Any], int] | None:
+    """Mappe EXPIRED/UNREADABLE/MISMATCH/REPLAY vers une réponse HTTP. None si MISS."""
+    if resolution.status == RotationIdempotencyStatus.MISS:
+        return None
+    if resolution.status == RotationIdempotencyStatus.REPLAY:
+        payload = dict(resolution.payload or {})
+        payload["error_code"] = "refresh_duplicate"
+        return payload, 200
+    if resolution.status == RotationIdempotencyStatus.EXPIRED:
+        return {
+            "error": "idempotency_result_expired",
+            "error_code": "idempotency_result_expired",
+            "retryable": False,
+        }, 401
+    if resolution.status == RotationIdempotencyStatus.UNREADABLE:
+        return {
+            "error": "rotation_result_unavailable",
+            "error_code": "rotation_result_unavailable",
+            "retryable": True,
+        }, 503
+    # MISMATCH
+    return {
+        "error": "idempotency_proof_mismatch",
+        "error_code": "refresh_replay_detected",
+        "retryable": False,
+    }, 401

@@ -98,6 +98,83 @@ def _log_event_message(event: dict[str, Any]) -> str:
     return message
 
 
+_SENSITIVE_BODY_KEYS = frozenset(
+    {
+        "recovery_credential",
+        "refresh_token",
+        "access_token",
+        "token",
+        "revocation_secret",
+        "password",
+        "password_hash",
+        "new_password",
+        "old_password",
+    }
+)
+_SENSITIVE_HEADER_KEYS = frozenset(
+    {
+        "authorization",
+        "cookie",
+        "x-refresh-token",
+        "x-access-token",
+    }
+)
+_REDACTED = "[Filtered]"
+
+
+def _scrub_mapping(data: Any) -> Any:
+    """Masque récursivement les clés sensibles dans dict/list."""
+    if isinstance(data, dict):
+        scrubbed: dict[Any, Any] = {}
+        for key, value in data.items():
+            key_str = str(key)
+            if key_str.lower() in _SENSITIVE_BODY_KEYS or key_str.lower() in {
+                "authorization",
+                "cookie",
+            }:
+                scrubbed[key] = _REDACTED
+            else:
+                scrubbed[key] = _scrub_mapping(value)
+        return scrubbed
+    if isinstance(data, list):
+        return [_scrub_mapping(item) for item in data]
+    return data
+
+
+def _scrub_request_headers(headers: Any) -> Any:
+    if not isinstance(headers, dict):
+        return headers
+    out: dict[Any, Any] = {}
+    for key, value in headers.items():
+        if str(key).lower() in _SENSITIVE_HEADER_KEYS:
+            out[key] = _REDACTED
+        else:
+            out[key] = value
+    return out
+
+
+def scrub_sensitive_event_data(event: dict[str, Any]) -> dict[str, Any]:
+    """Retire credentials / tokens des payloads Sentry (request, extra, contexts)."""
+    request = event.get("request")
+    if isinstance(request, dict):
+        if "data" in request:
+            request["data"] = _scrub_mapping(request["data"])
+        if "headers" in request:
+            request["headers"] = _scrub_request_headers(request["headers"])
+        if "cookies" in request:
+            request["cookies"] = _REDACTED
+        event["request"] = request
+
+    if "extra" in event:
+        event["extra"] = _scrub_mapping(event["extra"])
+
+    contexts = event.get("contexts")
+    if isinstance(contexts, dict):
+        event["contexts"] = _scrub_mapping(contexts)
+
+    return event
+
+
 def before_send(
     event: dict[str, Any], hint: dict[str, Any] | None
 ) -> dict[str, Any] | None:
@@ -147,7 +224,7 @@ def before_send(
     if _is_gevent_infrastructure_noise(event, None, message):
         return None
 
-    return event
+    return scrub_sensitive_event_data(event)
 
 
 def init_sentry(

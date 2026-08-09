@@ -1,4 +1,4 @@
-import axios, { AxiosError } from "axios";
+import axios, { AxiosError, isAxiosError } from "axios";
 import Constants from "expo-constants";
 import * as SecureStore from "../storage/secureStoreCompat";
 import { NativeModules, Platform } from "react-native";
@@ -267,7 +267,7 @@ function sleepMs(ms: number): Promise<void> {
 }
 
 async function resolveDeviceName(): Promise<string> {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
+   
   const Application = require("expo-application") as {
     applicationName?: string | null;
   };
@@ -289,7 +289,7 @@ async function buildAuthDeviceHeaders(): Promise<Record<string, string>> {
 
 /** Headers appareil obligatoires pour login / refresh contrat v1. */
 async function buildRequiredAuthDeviceHeaders(): Promise<Record<string, string>> {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
+   
   const { getStableDeviceId } = require("../notifications/getStableDeviceId") as {
     getStableDeviceId: () => Promise<string>;
   };
@@ -615,7 +615,7 @@ export async function refreshAuthTokenNow(): Promise<boolean> {
 
 apiClient.interceptors.request.use(async (config) => {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+     
     const { recordHttpRequest } = require("../observability/perfInstrumentation") as {
       recordHttpRequest: (url: string) => void;
     };
@@ -776,7 +776,7 @@ function toApiError(error: unknown): ApiCallError {
     };
   }
 
-  if (!axios.isAxiosError(error)) {
+  if (!isAxiosError(error)) {
     if (error instanceof Error) {
       const code =
         error.message === "storage_locked" ? "STORAGE_UNAVAILABLE" : "CLIENT_RUNTIME_ERROR";
@@ -1009,6 +1009,16 @@ export async function login(email: string, password: string): Promise<void> {
       );
     }
 
+    const credentialGenerationRaw = responseObj.credential_generation;
+    const credentialGeneration =
+      typeof credentialGenerationRaw === "number"
+        ? credentialGenerationRaw
+        : typeof credentialGenerationRaw === "string" &&
+            credentialGenerationRaw.trim() !== "" &&
+            Number.isFinite(Number(credentialGenerationRaw))
+          ? Number(credentialGenerationRaw)
+          : null;
+
     const envelopePayload = {
       schema_version: 1,
       session_id: sessionId,
@@ -1020,13 +1030,25 @@ export async function login(email: string, password: string): Promise<void> {
       refresh_generation: Number(
         responseObj.refresh_generation ?? responseObj.session_generation ?? 1
       ),
+      // Autorité serveur uniquement — jamais copier refresh_generation.
+      credential_generation: credentialGeneration,
       last_authenticated_at: new Date().toISOString(),
       revocation_secret: typeof revocationSecret === "string" ? revocationSecret : null,
     };
 
     const persistResult = await withSessionCredentialMutation(loginGeneration, async () => {
+      // Recovery d'abord (secret successeur le plus critique), puis refresh, puis envelope.
+      const recoveryWrite = await store.writeRecoveryCredential(recovery);
+      if (recoveryWrite.status !== "ok") {
+        throw new AuthContractError(
+          "STORAGE_UNAVAILABLE",
+          "Stockage sécurisé temporairement indisponible. Fermez puis rouvrez l'application et réessayez."
+        );
+      }
+
       const refreshWrite = await store.writeRefreshToken(refreshToken);
       if (refreshWrite.status !== "ok") {
+        await store.deleteRecoveryCredential();
         throw new AuthContractError(
           "STORAGE_UNAVAILABLE",
           "Stockage sécurisé temporairement indisponible. Fermez puis rouvrez l'application et réessayez."
@@ -1036,15 +1058,6 @@ export async function login(email: string, password: string): Promise<void> {
         await SecureStore.setItemAsync(REFRESH_TOKEN_STORAGE_KEY, refreshToken);
       } catch {
         /* ignore */
-      }
-
-      const recoveryWrite = await store.writeRecoveryCredential(recovery);
-      if (recoveryWrite.status !== "ok") {
-        await store.deleteRefreshToken();
-        throw new AuthContractError(
-          "STORAGE_UNAVAILABLE",
-          "Stockage sécurisé temporairement indisponible. Fermez puis rouvrez l'application et réessayez."
-        );
       }
 
       const envelopeWrite = await store.writeSessionEnvelope(envelopePayload);
@@ -1250,55 +1263,105 @@ export async function sessionResumeRequest(): Promise<{
 }> {
   try {
     const store = require("../auth/authCredentialStore") as typeof import("../auth/authCredentialStore");
+    const {
+      ensurePendingResumeOperation,
+      clearPendingResumeOperation,
+    } = require("../auth/pendingResumeOperation") as typeof import("../auth/pendingResumeOperation");
+    const { withSessionCredentialMutation } =
+      require("../auth/sessionCredentialMutex") as typeof import("../auth/sessionCredentialMutex");
+
     const envelope = await store.readSessionEnvelope();
     const recovery = await store.readRecoveryCredential();
     if (envelope.status !== "found" || recovery.status !== "found") {
       return { ok: false, code: "missing_recovery", retryable: false };
     }
+
+    const sourceCredGen =
+      typeof envelope.value.credential_generation === "number"
+        ? envelope.value.credential_generation
+        : null;
+
+    const pending = await ensurePendingResumeOperation({
+      sessionId: envelope.value.session_id,
+      sourceCredentialGeneration: sourceCredGen,
+    });
+
     const deviceHeaders = await buildAuthDeviceHeaders();
-    const idempotencyKey = `resume_${envelope.value.session_id}_${envelope.value.refresh_generation}`;
-    const { data } = await apiClient.post(
-      "/auth/session-resume",
-      {
-        session_id: envelope.value.session_id,
-        device_installation_id: envelope.value.device_installation_id,
-        recovery_credential: recovery.value,
-        idempotency_key: idempotencyKey,
-        client_generation: envelope.value.refresh_generation,
-      },
-      { headers: { ...deviceHeaders, "Idempotency-Key": idempotencyKey } }
-    );
+    const body: Record<string, unknown> = {
+      session_id: envelope.value.session_id,
+      device_installation_id: envelope.value.device_installation_id,
+      recovery_credential: recovery.value,
+      idempotency_key: pending.operationId,
+    };
+    // Ne pas envoyer client_generation tant que credential_generation n'est pas autoritaire.
+    if (sourceCredGen !== null) {
+      body.client_generation = sourceCredGen;
+    }
+
+    const { data } = await apiClient.post("/auth/session-resume", body, {
+      headers: { ...deviceHeaders, "Idempotency-Key": pending.operationId },
+    });
+
     const token = extractToken(data);
     const refreshToken = extractRefreshToken(data);
-    const nextRecovery =
-      data && typeof data === "object"
-        ? (data as Record<string, unknown>).recovery_credential
-        : null;
-    if (refreshToken) {
-      await writeRefreshToken(refreshToken);
+    const dataObj =
+      data && typeof data === "object" ? (data as Record<string, unknown>) : null;
+    const nextRecovery = dataObj?.recovery_credential;
+    const sessionId = dataObj?.session_id;
+    const nextCredGen = dataObj?.credential_generation;
+    const nextRefreshGen = dataObj?.refresh_generation;
+
+    if (
+      typeof nextRecovery !== "string" ||
+      nextRecovery.length === 0 ||
+      !refreshToken ||
+      typeof sessionId !== "string"
+    ) {
+      return { ok: false, code: "incomplete_resume_response", retryable: true };
     }
-    if (typeof nextRecovery === "string" && nextRecovery.length > 0) {
-      await store.writeRecoveryCredential(nextRecovery);
-    }
-    if (token) {
-      setAuthToken(token);
-    }
-    const sessionId =
-      data && typeof data === "object"
-        ? (data as Record<string, unknown>).session_id
-        : null;
-    const generation =
-      data && typeof data === "object"
-        ? (data as Record<string, unknown>).session_generation
-        : null;
-    if (typeof sessionId === "string") {
-      await store.writeSessionEnvelope({
+
+    const epochAtStart = store.getSessionGenerationId();
+    const applyResult = await withSessionCredentialMutation(epochAtStart, async () => {
+      const recoveryWrite = await store.writeRecoveryCredential(nextRecovery);
+      if (recoveryWrite.status !== "ok") {
+        throw new Error("recovery_write_failed");
+      }
+      const refreshWrite = await store.writeRefreshToken(refreshToken);
+      if (refreshWrite.status !== "ok") {
+        throw new Error("refresh_write_failed");
+      }
+      try {
+        await SecureStore.setItemAsync(REFRESH_TOKEN_STORAGE_KEY, refreshToken);
+      } catch {
+        /* compat legacy — ignore */
+      }
+      const envelopeWrite = await store.writeSessionEnvelope({
         ...envelope.value,
         session_id: sessionId,
+        credential_generation:
+          typeof nextCredGen === "number"
+            ? nextCredGen
+            : envelope.value.credential_generation ?? null,
         refresh_generation:
-          typeof generation === "number" ? generation : envelope.value.refresh_generation + 1,
+          typeof nextRefreshGen === "number"
+            ? nextRefreshGen
+            : envelope.value.refresh_generation,
         last_authenticated_at: new Date().toISOString(),
       });
+      if (envelopeWrite.status !== "ok") {
+        throw new Error("envelope_write_failed");
+      }
+      await clearPendingResumeOperation();
+      return true;
+    });
+
+    if (applyResult.status !== "applied") {
+      // Pending conservé — retry avec le même operationId.
+      return { ok: false, code: "storage_stale", retryable: true };
+    }
+
+    if (token) {
+      setAuthToken(token);
     }
     lastRefreshErrorCode = null;
     markBootstrapAuthFresh();
@@ -1311,12 +1374,18 @@ export async function sessionResumeRequest(): Promise<{
     const code =
       (typeof data?.error_code === "string" && data.error_code) ||
       (typeof data?.error === "string" && data.error) ||
-      null;
+      (error instanceof Error && error.message.includes("_write_failed")
+        ? "storage_unavailable"
+        : null);
     lastRefreshErrorCode = code;
     return {
       ok: false,
       code,
-      retryable: Boolean(data?.retryable) || err.response?.status === 503,
+      retryable:
+        Boolean(data?.retryable) ||
+        err.response?.status === 503 ||
+        code === "storage_unavailable" ||
+        code === "storage_stale",
     };
   }
 }

@@ -18,6 +18,10 @@ Chaque PR F1a / F1b / F2 / F3 déclare son SHA parent.
 - [ ] F3 mergé (`expo-background-task`, `processing` iOS, CI)
 - [ ] Migration Alembic appliquée via Docker
 - [ ] Builds Android / iOS OK (EAS — OTA insuffisant pour native)
+- ✅ **Implémenté** : fermeture fallthrough `AuthRotationResult` (états `MISS|REPLAY|EXPIRED|UNREADABLE|MISMATCH`, proof binding, `ON CONFLICT DO NOTHING`, TTL `session_resume` 24h) — [`backend/security/mobile_device_session_service.py`](../backend/security/mobile_device_session_service.py), [`backend/routes/auth_mobile_session.py`](../backend/routes/auth_mobile_session.py), [`backend/routes/auth.py`](../backend/routes/auth.py)
+- ✅ **Implémenté** : mobile compteurs séparés (`credential_generation` ≠ `refresh_generation`), `PendingResumeOperation` opaque, commit crash-safe (recovery→refresh→envelope), reconcile pending avant refresh — [`mobile/unified-app/src/core/api/client.ts`](../mobile/unified-app/src/core/api/client.ts), [`pendingResumeOperation.ts`](../mobile/unified-app/src/core/auth/pendingResumeOperation.ts), [`authRecoveryCoordinator.ts`](../mobile/unified-app/src/core/auth/authRecoveryCoordinator.ts)
+- ✅ **Implémenté** : scrubbing Sentry secrets auth (`recovery_credential`, tokens, etc.) — [`backend/shared/sentry_init.py`](../backend/shared/sentry_init.py)
+- Ops post-incident : révoquer la session `c8719aae-…` (fuite télémétrie Sentry) après déploiement scrubbing ; déployer **backend d’abord**, puis mobile ; surveiller `idempotency_result_expired` / `rotation_result_unavailable`
 
 ### GO pilote chauffeur (matrice physique exécutée)
 

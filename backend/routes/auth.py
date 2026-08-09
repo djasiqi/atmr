@@ -79,11 +79,14 @@ from schemas.validation_utils import handle_validation_error, validate_request
 from security.audit_log import AuditLogger
 from security.mobile_device_session_service import (
     DeviceSessionLimitReached,
+    RotationProof,
     auth_capabilities,
     create_or_reuse_session,
-    get_rotation_result,
     get_session_by_id,
-    load_rotation_response,
+    hash_credential,
+    http_response_for_idempotency,
+    is_rotation_idempotency_conflict,
+    resolve_rotation_idempotency,
     revoke_session as revoke_mobile_device_session,
     store_rotation_result,
     validate_mobile_session,
@@ -2610,21 +2613,64 @@ class RefreshToken(Resource):
                 }, 400
             mobile_session_for_rotation = None
             rotation_request_generation = None
+            refresh_rotation_proof = None
             if old_session_id:
                 mobile_session_for_rotation = get_session_by_id(
                     old_session_id, for_update=True
                 )
 
-                # ✅ Idempotence : rejoue la réponse déjà émise pour cette clé
-                # (retry HTTP côté mobile) sans re-rotationner la session.
+                # Gates session avant replay (session active / installation).
+                if (
+                    mobile_session_for_rotation is not None
+                    and not mobile_session_for_rotation.is_active()
+                ):
+                    return {
+                        "error": "session_revoked",
+                        "error_code": "session_revoked",
+                        "retryable": False,
+                    }, 401
+
+                device_installation_id = (
+                    request.headers.get("X-Device-ID")
+                    or request.headers.get("X-Device-Installation-Id")
+                    or ""
+                )
+                if (
+                    mobile_session_for_rotation is not None
+                    and device_installation_id
+                    and mobile_session_for_rotation.device_installation_id
+                    != str(device_installation_id)
+                ):
+                    return {
+                        "error": "installation_mismatch",
+                        "error_code": "refresh_replay_detected",
+                        "retryable": False,
+                    }, 401
+
+                refresh_rotation_proof = RotationProof(
+                    proof_hash=hash_credential(str(refresh_token)),
+                    device_installation_id=str(
+                        device_installation_id
+                        or getattr(
+                            mobile_session_for_rotation,
+                            "device_installation_id",
+                            "",
+                        )
+                        or ""
+                    ),
+                    operation_type="refresh",
+                )
+
+                # Receipt authentifie le retry — pas de re-rotation.
                 if idempotency_key and mobile_session_for_rotation is not None:
-                    existing_rotation = get_rotation_result(
-                        mobile_session_for_rotation.session_id, str(idempotency_key)
+                    resolution = resolve_rotation_idempotency(
+                        mobile_session_for_rotation.session_id,
+                        str(idempotency_key),
+                        proof=refresh_rotation_proof,
                     )
-                    if existing_rotation is not None:
-                        cached = load_rotation_response(existing_rotation)
-                        if cached is not None:
-                            return {**cached, "error_code": "refresh_duplicate"}, 200
+                    mapped = http_response_for_idempotency(resolution)
+                    if mapped is not None:
+                        return mapped
 
                 err_code, retryable = validate_mobile_session(
                     session_id=str(old_session_id),
@@ -2795,14 +2841,44 @@ class RefreshToken(Resource):
                     and mobile_session_for_rotation is not None
                     and rotation_request_generation is not None
                 ):
-                    store_rotation_result(
+                    proof = refresh_rotation_proof or RotationProof(
+                        proof_hash=hash_credential(str(refresh_token)),
+                        device_installation_id=str(
+                            getattr(
+                                mobile_session_for_rotation,
+                                "device_installation_id",
+                                "",
+                            )
+                            or ""
+                        ),
+                        operation_type="refresh",
+                        request_generation=int(rotation_request_generation),
+                    )
+                    inserted = store_rotation_result(
                         session=mobile_session_for_rotation,
                         idempotency_key=str(idempotency_key),
                         request_generation=int(rotation_request_generation),
                         successor_generation=int(new_refresh_gen),
                         response_payload=rotation_response_preview,
                         operation_type="refresh",
+                        proof=proof,
                     )
+                    if inserted is None:
+                        # Collision ON CONFLICT : rollback TX perdante, reload gagnant
+                        db.session.rollback()
+                        winner = resolve_rotation_idempotency(
+                            mobile_session_for_rotation.session_id,
+                            str(idempotency_key),
+                            proof=proof,
+                        )
+                        mapped = http_response_for_idempotency(winner)
+                        if mapped is not None:
+                            return mapped
+                        return {
+                            "error": "rotation_idempotency_conflict",
+                            "error_code": "rotation_recovery_required",
+                            "retryable": False,
+                        }, 401
 
                 db.session.commit()
 
@@ -2818,6 +2894,29 @@ class RefreshToken(Resource):
                     max_active_tokens = _resolve_max_active_refresh_tokens(user)
                     token_service.limit_active_tokens(user.id, max_active_tokens)
             except Exception as store_error:
+                if is_rotation_idempotency_conflict(store_error):
+                    logger.warning(
+                        "refresh-token idempotency IntegrityError recovered"
+                    )
+                    db.session.rollback()
+                    if (
+                        idempotency_key
+                        and mobile_session_for_rotation is not None
+                        and refresh_rotation_proof is not None
+                    ):
+                        winner = resolve_rotation_idempotency(
+                            mobile_session_for_rotation.session_id,
+                            str(idempotency_key),
+                            proof=refresh_rotation_proof,
+                        )
+                        mapped = http_response_for_idempotency(winner)
+                        if mapped is not None:
+                            return mapped
+                    return {
+                        "error": "rotation_idempotency_conflict",
+                        "error_code": "rotation_recovery_required",
+                        "retryable": False,
+                    }, 401
                 logger.error(
                     "Soft rotation storage failed: %s",
                     str(store_error),

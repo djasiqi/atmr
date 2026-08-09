@@ -36,13 +36,20 @@ import {
   setAuthToken,
 } from "../api/client";
 import { getNetworkSnapshot } from "../network/networkState";
+import { readPendingResumeOperation } from "./pendingResumeOperation";
 
 const TERMINAL_ERROR_CODES = new Set(["session_revoked", "refresh_replay_detected", "account_disabled"]);
 const KEEP_LOCAL_ERROR_CODES = new Set([
   "refresh_store_unavailable",
   "session_validation_unavailable",
+  "rotation_result_unavailable",
+  "storage_unavailable",
+  "storage_stale",
 ]);
-const ROTATION_RECOVERY_CODE = "rotation_recovery_required";
+const ROTATION_RECOVERY_CODES = new Set([
+  "rotation_recovery_required",
+  "idempotency_result_expired",
+]);
 
 export type AuthErrorClass = "terminal" | "keep_local" | "rotation_recovery" | "unknown";
 
@@ -50,7 +57,7 @@ export function classifyAuthErrorCode(code: string | null | undefined): AuthErro
   if (!code) return "unknown";
   if (TERMINAL_ERROR_CODES.has(code)) return "terminal";
   if (KEEP_LOCAL_ERROR_CODES.has(code)) return "keep_local";
-  if (code === ROTATION_RECOVERY_CODE) return "rotation_recovery";
+  if (ROTATION_RECOVERY_CODES.has(code)) return "rotation_recovery";
   return "unknown";
 }
 
@@ -58,6 +65,43 @@ export type RecoveryOutcome = "recovered" | "terminal" | "keep_local" | "no_acti
 
 export async function attemptRestRecovery(reason: string): Promise<RecoveryOutcome> {
   void appendSessionJournalEvent("auth.recovery.attempt", { reason });
+
+  // Une reprise commencée doit être réconciliée avant tout refresh normal.
+  const pendingResume = await readPendingResumeOperation();
+  if (pendingResume) {
+    const resumeFirst = await sessionResumeRequest();
+    if (resumeFirst.ok) {
+      void appendSessionJournalEvent("auth.recovery.success", {
+        reason,
+        via: "pending_session_resume",
+      });
+      return "recovered";
+    }
+    const resumeFirstClass = classifyAuthErrorCode(resumeFirst.code);
+    if (resumeFirstClass === "terminal") {
+      void appendSessionJournalEvent("auth.recovery.terminal", {
+        reason,
+        code: resumeFirst.code,
+      });
+      return "terminal";
+    }
+    if (resumeFirst.retryable || resumeFirstClass === "keep_local") {
+      void appendSessionJournalEvent("auth.recovery.keep_local", {
+        reason,
+        code: resumeFirst.code,
+        via: "pending_session_resume",
+      });
+      return "keep_local";
+    }
+    // Pending non récupérable : ne pas « réussir » via refresh avec recovery périmé.
+    void appendSessionJournalEvent("auth.recovery.failed", {
+      reason,
+      code: resumeFirst.code,
+      via: "pending_session_resume",
+    });
+    return "no_action";
+  }
+
   const refreshed = await refreshAuthTokenNow();
   if (refreshed) {
     void appendSessionJournalEvent("auth.recovery.success", { reason, via: "refresh" });

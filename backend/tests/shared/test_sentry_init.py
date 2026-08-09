@@ -218,3 +218,44 @@ def test_before_send_keeps_non_kafka_runtime_error():
         "logger": "app.errors",
     }
     assert before_send(event, None) == event
+
+
+def test_before_send_scrubs_recovery_credential_from_request_body():
+    event = {
+        "request": {
+            "url": "http://api.lirie.ch/api/v1/auth/session-resume",
+            "data": {
+                "session_id": "c8719aae-8bb1-4f40-a19a-fce783882ba3",
+                "recovery_credential": "Y4fsfzk00Uy_L8BA5Oa_pAXIwg77YPERHbCCno1ZFgg",
+                "refresh_token": "rt-secret",
+                "access_token": "at-secret",
+                "token": "legacy-secret",
+                "revocation_secret": "rev-secret",
+                "password": "pwd",
+                "device_installation_id": "atmr-device",
+            },
+            "headers": {
+                "Authorization": "Bearer secret-jwt",
+                "Cookie": "session=abc",
+                "Content-Type": "application/json",
+            },
+            "cookies": {"session": "abc"},
+        },
+        "extra": {"refresh_token": "also-secret"},
+    }
+    out = before_send(event, None)
+    assert out is not None
+    data = out["request"]["data"]
+    assert data["recovery_credential"] == "[Filtered]"
+    assert data["refresh_token"] == "[Filtered]"
+    assert data["access_token"] == "[Filtered]"
+    assert data["token"] == "[Filtered]"
+    assert data["revocation_secret"] == "[Filtered]"
+    assert data["password"] == "[Filtered]"
+    assert data["session_id"] == "c8719aae-8bb1-4f40-a19a-fce783882ba3"
+    assert data["device_installation_id"] == "atmr-device"
+    assert out["request"]["headers"]["Authorization"] == "[Filtered]"
+    assert out["request"]["headers"]["Cookie"] == "[Filtered]"
+    assert out["request"]["headers"]["Content-Type"] == "application/json"
+    assert out["request"]["cookies"] == "[Filtered]"
+    assert out["extra"]["refresh_token"] == "[Filtered]"
