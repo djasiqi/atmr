@@ -404,6 +404,8 @@ def revoke_active_tokens_for_device(
     user_id: int,
     device_id: str,
     reason: str | None = None,
+    *,
+    commit: bool = True,
 ) -> int:
     """Révoque les refresh tokens actifs d'un utilisateur pour un appareil donné."""
     if not device_id or not str(device_id).strip():
@@ -427,7 +429,10 @@ def revoke_active_tokens_for_device(
             token.is_revoked = True
             token.revoked_at = now
             token.revoked_reason = revoked_reason
-        db.session.commit()
+        if commit:
+            db.session.commit()
+        else:
+            db.session.flush()
         logger.info(
             "%d refresh token(s) révoqué(s) pour user_id=%d device_id=%s",
             count,

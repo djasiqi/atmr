@@ -14,6 +14,7 @@ import secrets
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from enum import Enum
 from typing import Any
 
 from sqlalchemy.exc import IntegrityError
@@ -659,6 +660,8 @@ def replace_device_session(
     from models import User
 
     User.query.filter_by(id=user_id).with_for_update().one()
+    # Libère d'abord les slots provisional expirés sous le même verrou.
+    reap_expired_provisional_sessions(user_id, commit=False)
 
     target = get_session_by_id(session_to_revoke)
     if target is None or target.user_id != user_id:

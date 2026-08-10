@@ -316,3 +316,142 @@ def test_challenge_issued_claimed_consumed_and_reclaim(app, session_user):
                 )
                 assert again["operation_id"] == claimed["operation_id"]
                 svc.consume_device_session_resolution_token(token=token)
+
+
+def test_reuse_confirmed_installation_keeps_same_session_id(app, session_user, monkeypatch):
+    monkeypatch.setattr(svc, "PROVISIONAL_CONFIRMATION_ENABLED", True)
+    with app.app_context():
+        install = f"stable-{uuid.uuid4()}"
+        s1, _, _ = svc.create_or_reuse_session(
+            user_id=session_user.id,
+            device_installation_id=install,
+            role="driver",
+        )
+        svc.mark_session_confirmed(s1)
+        db.session.commit()
+        confirmed_at = s1.confirmed_at
+        s2, _, _ = svc.create_or_reuse_session(
+            user_id=session_user.id,
+            device_installation_id=install,
+            role="driver",
+        )
+        db.session.commit()
+        assert s1.session_id == s2.session_id
+        assert s2.confirmed_at is not None
+        assert s2.provisional_expires_at is None
+        assert s2.confirmed_at == confirmed_at or s2.confirmed_at >= confirmed_at
+
+
+def test_replace_then_validate_old_session_refused(app, session_user):
+    with app.app_context():
+        with patch.object(svc, "get_device_session_limit", return_value=2):
+            filled = _fill_sessions(session_user.id, 2)
+            old = filled[0]
+            allowed = [str(s.session_id) for s in filled]
+            fake_redis = MagicMock()
+            store: dict[str, str] = {}
+
+            def _setex(key, ttl, value):
+                store[key] = value
+                return True
+
+            def _get(key):
+                return store.get(key)
+
+            fake_redis.setex.side_effect = _setex
+            fake_redis.get.side_effect = _get
+
+            new_s, _, _, revoked_id = svc.replace_device_session(
+                user_id=session_user.id,
+                session_to_revoke=str(old.session_id),
+                device_installation_id=f"phone-{uuid.uuid4()}",
+                allowed_session_ids=allowed,
+                role="driver",
+            )
+            db.session.commit()
+            with patch.object(svc, "_get_redis", return_value=fake_redis):
+                svc.publish_session_revoked(revoked_id)
+                err, _ = svc.validate_mobile_session(
+                    session_id=str(old.session_id),
+                    session_epoch=int(old.session_epoch or 1),
+                    user_id=session_user.id,
+                )
+            assert err == "session_revoked"
+            assert new_s.is_active()
+
+
+def test_limit_invariant_after_two_creates_at_capacity(app, session_user):
+    """INV-AUTH-DEVICE-01 : à la limite, un 2e create distinct échoue sans dépasser."""
+    with app.app_context():
+        with patch.object(svc, "get_device_session_limit", return_value=2):
+            _fill_sessions(session_user.id, 2)
+            with pytest.raises(svc.DeviceSessionLimitReached):
+                svc.create_or_reuse_session(
+                    user_id=session_user.id,
+                    device_installation_id=f"overflow-{uuid.uuid4()}",
+                    role="driver",
+                )
+            assert len(svc.list_active_sessions(session_user.id)) == 2
+
+
+def test_replace_reaps_expired_provisional_under_lock(app, session_user, monkeypatch):
+    monkeypatch.setattr(svc, "PROVISIONAL_CONFIRMATION_ENABLED", True)
+    with app.app_context():
+        with patch.object(svc, "get_device_session_limit", return_value=2):
+            # 1 confirmed + 1 expired provisional = 2 actives avant reap
+            a, _, _ = svc.create_or_reuse_session(
+                user_id=session_user.id,
+                device_installation_id="keep-me",
+                role="driver",
+            )
+            svc.mark_session_confirmed(a)
+            b, _, _ = svc.create_or_reuse_session(
+                user_id=session_user.id,
+                device_installation_id="expired-slot",
+                role="driver",
+            )
+            b.provisional_expires_at = datetime.now(UTC) - timedelta(minutes=1)
+            db.session.commit()
+
+            # Replace de A : le reap doit libérer B avant create
+            new_s, _, _, revoked_id = svc.replace_device_session(
+                user_id=session_user.id,
+                session_to_revoke=str(a.session_id),
+                device_installation_id=f"incoming-{uuid.uuid4()}",
+                allowed_session_ids=[str(a.session_id), str(b.session_id)],
+                role="driver",
+            )
+            db.session.commit()
+            active = svc.list_active_sessions(session_user.id)
+            assert len(active) == 1
+            assert active[0].session_id == new_s.session_id
+            assert revoked_id == a.session_id
+            db.session.refresh(b)
+            assert b.status == MobileDeviceSessionStatus.revoked
+
+
+def test_cross_user_replace_target_rejected(app, session_user, db_session):
+    with app.app_context():
+        other = User(
+            username=f"other_{uuid.uuid4().hex[:6]}",
+            email=f"other_{uuid.uuid4().hex[:6]}@test.local",
+            public_id=str(uuid.uuid4()),
+            role=UserRole.driver,
+        )
+        other.set_password("password123", force_change=False)
+        db.session.add(other)
+        db.session.commit()
+
+        own = _fill_sessions(session_user.id, 1)[0]
+        foreign = _fill_sessions(other.id, 1)[0]
+        with pytest.raises(svc.DeviceSessionResolutionError) as exc:
+            svc.replace_device_session(
+                user_id=session_user.id,
+                session_to_revoke=str(foreign.session_id),
+                device_installation_id=f"attacker-{uuid.uuid4()}",
+                allowed_session_ids=[str(own.session_id), str(foreign.session_id)],
+                role="driver",
+            )
+        assert exc.value.code == "session_not_found"
+        db.session.refresh(foreign)
+        assert foreign.is_active()
