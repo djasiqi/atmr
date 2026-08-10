@@ -46,6 +46,13 @@ import {
   computeFleetMaxRegionDelta,
   type MapEdgePadding,
 } from "./maps/fleetMapFitPadding";
+import {
+  IOS_MAP_DRIVER_MARKERS_SETTLE_MS,
+  isIosNativeMapPlatform,
+  resolveMountDriverMarkers,
+  resolveMountDynamicOverlays,
+} from "./maps/fleetMapOverlayMount";
+import { markBootMilestone } from "../../../core/observability/bootMilestones";
 
 export type FleetMapCameraControl = {
   clearUserCameraLock: () => void;
@@ -163,6 +170,8 @@ export function EnterpriseDriversMap({
   const mapRef = useRef<MapView | null>(null);
   const mapReadyRef = useRef(false);
   const [mapReady, setMapReady] = useState(false);
+  /** iOS : sticky une fois true — indépendant du transport Socket. */
+  const [iosNativeMapSettled, setIosNativeMapSettled] = useState(() => !isIosNativeMapPlatform());
   const pendingFitRef = useRef(false);
   const userCameraLockedRef = useRef(false);
   const programmaticCameraRef = useRef(false);
@@ -218,11 +227,28 @@ export function EnterpriseDriversMap({
   const mapDims = { height: mapHeight, width: "100%" as const };
   const mapType = resolveMapType(layers);
   const mapsApiKey = resolveGoogleMapsNativeApiKey();
-  const mountNativeOverlays = nativeOverlaysEnabled && mapReady;
+
+  useEffect(() => {
+    if (!mapReady || !isIosNativeMapPlatform()) {
+      if (mapReady && !isIosNativeMapPlatform()) {
+        setIosNativeMapSettled(true);
+      }
+      return;
+    }
+    if (iosNativeMapSettled) return;
+    const timer = setTimeout(() => {
+      setIosNativeMapSettled(true);
+    }, IOS_MAP_DRIVER_MARKERS_SETTLE_MS);
+    return () => clearTimeout(timer);
+  }, [iosNativeMapSettled, mapReady]);
+
+  const mountDriverMarkers = resolveMountDriverMarkers(mapReady, iosNativeMapSettled);
+  const mountDynamicOverlays = resolveMountDynamicOverlays(mapReady, nativeOverlaysEnabled);
+
   const { routedPathsByMissionId, routedStateByMissionId } = useFleetMissionRoutedPaths(
-    mountNativeOverlays ? missionOverlays : [],
+    mountDynamicOverlays ? missionOverlays : [],
     mapsApiKey,
-    { enabled: mountNativeOverlays }
+    { enabled: mountDynamicOverlays }
   );
 
   const fitAllDrivers = useCallback(() => {
@@ -311,6 +337,7 @@ export function EnterpriseDriversMap({
   const onMapReady = useCallback(() => {
     mapReadyRef.current = true;
     setMapReady(true);
+    markBootMilestone("MAP_READY");
     if (pendingFitRef.current) {
       pendingFitRef.current = false;
       applyExplicitRecenter();
@@ -533,6 +560,16 @@ export function EnterpriseDriversMap({
     selectedMissionId,
   ]);
 
+  useEffect(() => {
+    if (!mountDriverMarkers || markers.length === 0) return;
+    markBootMilestone("DRIVER_MARKERS_MOUNTED", { marker_count: markers.length });
+  }, [markers.length, mountDriverMarkers]);
+
+  useEffect(() => {
+    if (!mountDynamicOverlays) return;
+    markBootMilestone("DYNAMIC_OVERLAYS_ENABLED");
+  }, [mountDynamicOverlays]);
+
   const mapPadding = logoClipFill
     ? Platform.select({
         android: {
@@ -586,7 +623,7 @@ export function EnterpriseDriversMap({
 
   const mapNode = (
     <MapView {...mapProps}>
-      {mountNativeOverlays ? (
+      {mountDynamicOverlays ? (
         <>
           {heatmapNodes}
           {imminentDepartures.length > 0 ? (
@@ -618,11 +655,11 @@ export function EnterpriseDriversMap({
             />
           ) : null}
           {missionAnchorNodes}
-          {markerNodes}
           {missionEtaBubble}
           {etaBubble}
         </>
       ) : null}
+      {mountDriverMarkers ? markerNodes : null}
     </MapView>
   );
 

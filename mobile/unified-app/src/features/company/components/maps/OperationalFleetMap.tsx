@@ -42,6 +42,7 @@ import { ClusterDriversSheet } from "./ClusterDriversSheet";
 
 import { useOperationalFleetMap } from "./useOperationalFleetMap";
 import { useCompanyMapNativeOverlayGate } from "./companyMapNativeOverlayGate";
+import { shouldEnableFleetClustering } from "./fleetMapOverlayMount";
 
 import { FleetMapErrorBoundary } from "./FleetMapErrorBoundary";
 import { ALL_LIRIE_DRIVER_MARKER_MODULES } from "./fleetLirieDriverMarkerModules";
@@ -590,8 +591,8 @@ export function OperationalFleetMap({
 
   const cockpitExpandable = isCockpit && typeof onToggleCockpitExpand === "function";
 
-  /** simplifyClustering : désactive le regroupement (marqueurs individuels). */
-  const clusteringEnabled = !simplifyClustering;
+  /** iOS : clustering off (évite ClusterMarker data-URI New Arch) ; sinon simplifyClustering. */
+  const clusteringEnabled = shouldEnableFleetClustering(simplifyClustering);
 
   const fleetMapCameraControlRef = useRef<FleetMapCameraControl | null>(null);
 

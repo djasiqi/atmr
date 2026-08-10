@@ -5,6 +5,7 @@
 
 export type PerfKpiEventName =
   | "perf.page_load"
+  | "perf.boot.milestone"
   | "perf.context_switch"
   | "perf.context_switch.phase"
   | "perf.react_query_refetch"

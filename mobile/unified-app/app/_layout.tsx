@@ -9,6 +9,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { QueryProvider } from "../src/core/QueryProvider";
 import { PerfInstrumentationProvider } from "../src/core/observability/PerfInstrumentationProvider";
+import { markBootMilestone } from "../src/core/observability/bootMilestones";
 import { BootSplashGate } from "../src/core/boot/BootSplashGate";
 import { SessionProvider } from "../src/core/sessionProvider";
 import { MonitoringProvider } from "../src/core/providers/MonitoringProvider";
@@ -38,6 +39,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (fontsLoaded) {
+      markBootMilestone("APP_JS_READY");
       void SplashScreen.hideAsync().catch(() => {
         // no-op
       });

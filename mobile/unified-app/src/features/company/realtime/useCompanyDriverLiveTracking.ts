@@ -21,6 +21,7 @@ import { REALTIME_FLUSH_MS } from "./gpsFlushConstants";
 import { resolveRealtimeFlushMs } from "./companyMapRuntimeConfig";
 import { AppState } from "react-native";
 import { applyLocalLocationFreshness } from "../utils/localDriverLocationFreshness";
+import { markBootMilestone } from "../../../core/observability/bootMilestones";
 
 export { REALTIME_FLUSH_MS };
 export const MAX_BATCH_AGE_MS = 1_000;
@@ -395,6 +396,9 @@ export function useCompanyDriverLiveTracking() {
   useEffect(() => {
     const snapshotLocations = snapshotQuery.data?.locations ?? [];
     if (snapshotLocations.length === 0) return;
+    markBootMilestone("SNAPSHOT_DRIVERS_READY", {
+      location_count: snapshotLocations.length,
+    });
     // Snapshot chargé : arme le watchdog (même sans event socket).
     lastRealtimeEventAtRef.current = Date.now();
     setDriversMap((currentMap) => {

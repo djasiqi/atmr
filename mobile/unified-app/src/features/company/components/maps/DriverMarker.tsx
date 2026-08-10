@@ -7,7 +7,8 @@ import { FleetMapRasterMarker } from "./FleetMapRasterMarker";
 import { FleetDriverMarkerVisual } from "./FleetDriverMarkerVisual";
 import { FLEET_STATUS_THEME } from "./mapStatusTheme";
 import { driverFleetMarkerTitle } from "../../utils/companyDriverMapStatus";
-import { buildFleetDriverMarkerImageSource } from "./fleetNativeMarkerImage";
+import { buildLirieDriverMarkerImageSource } from "./fleetLirieDriverMarkerAssets";
+import { FLEET_NATIVE_DRIVER_MARKER_SIZE_PX } from "./fleetLirieMarkerSizing";
 import { resolveFleetMarkerAnchor } from "./resolveFleetMarkerAnchor";
 import { countDriverMarkerRender } from "./fleetMapDevInstrumentation";
 import { recordDriverMarkerRender } from "../../../../core/observability/perfInstrumentation";
@@ -45,9 +46,10 @@ function DriverMarkerComponent({
   const theme = FLEET_STATUS_THEME[status];
   const isStale = useMemo(() => isFleetDriverMarkerStale(item), [item]);
 
+  // iOS : PNG Metro (`assetModule` → `icon`) — pas de data-URI / `image`.
   const imageSource = useMemo(
-    () => buildFleetDriverMarkerImageSource(status, item, { isStale }),
-    [isStale, item, status]
+    () => buildLirieDriverMarkerImageSource(status, FLEET_NATIVE_DRIVER_MARKER_SIZE_PX, selected),
+    [selected, status]
   );
   const markerAnchor = useMemo(
     () => resolveFleetMarkerAnchor(imageSource),

@@ -21,6 +21,7 @@ import { getDispatchApiErrorMessage } from "../api/companyApi";
 import { resolveDriverStatus } from "../utils/companyDriverMapStatus";
 import { emitCompanyDispatchTelemetry } from "../telemetry/companyTelemetry";
 import { endPageLoad, startPageLoad } from "../../../core/observability/perfKpi";
+import { markBootMilestone } from "../../../core/observability/bootMilestones";
 import {
   buildDashboardPresentation,
   getDashboardModeConfig,
@@ -138,6 +139,7 @@ export function useCompanyDashboardScreenModel() {
 
   useEffect(() => {
     startPageLoad("company.dashboard");
+    markBootMilestone("DASHBOARD_MOUNTED");
     emitCompanyDispatchTelemetry(
       "company.dispatch.opened",
       {
@@ -152,7 +154,13 @@ export function useCompanyDashboardScreenModel() {
   useEffect(() => {
     if (!dashboardQuery.isSuccess || dashboardQuery.isFetching) return;
     endPageLoad("company.dashboard", "company.dashboard.data_ready");
+    markBootMilestone("DASHBOARD_DATA_READY");
   }, [dashboardQuery.isFetching, dashboardQuery.isSuccess]);
+
+  useEffect(() => {
+    if (realtime.transportStatus !== "healthy") return;
+    markBootMilestone("SOCKET_HEALTHY", { transport_status: realtime.transportStatus });
+  }, [realtime.transportStatus]);
 
   useFocusEffect(
     useCallback(() => {

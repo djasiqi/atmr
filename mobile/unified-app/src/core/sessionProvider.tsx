@@ -6,6 +6,7 @@ import {
 } from "./cache/contextCache";
 import { prefetchContextTarget } from "./cache/prefetchContextTarget";
 import { emitContextSwitchKpi } from "./observability/perfKpi";
+import { markBootMilestone } from "./observability/bootMilestones";
 import { recordContextSwitchPhase } from "./observability/perfInstrumentation";
 import {
   AuthContext,
@@ -298,6 +299,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
       return;
     }
     if (offline.kind === "restored") {
+      markBootMilestone("SESSION_RESTORED");
       setMobileSessionStatus("authenticated_offline");
       if (offline.bootstrap) setBootstrap(offline.bootstrap);
       if (offline.activeContext) {
@@ -518,6 +520,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
       setActiveContextIdForApi(resolved?.context_id ?? null);
       contextRealtimeRouter.setActiveContext(resolved?.context_type ?? null);
       setStatus("ready");
+      markBootMilestone("SESSION_READY");
       setMobileSessionStatus(
         data.is_authenticated ? "authenticated_online" : "anonymous"
       );
