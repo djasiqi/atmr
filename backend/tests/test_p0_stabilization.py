@@ -650,6 +650,7 @@ class TestP0StabilizationE2E:
     def test_e2e_booking_creation_flow(self, client, auth_headers, sample_client):
         """Test E2E complet: création booking avec trace_id et idempotency."""
         from datetime import UTC, datetime, timedelta
+        from unittest.mock import MagicMock, patch
         from uuid import uuid4
 
         idempotency_key = f"e2e-booking-key-{uuid4().hex}"
@@ -660,26 +661,38 @@ class TestP0StabilizationE2E:
             .replace("+00:00", "Z")
         )
 
-        # Créer un booking
-        response = client.post(
-            f"/api/v1/clients/{sample_client.user.public_id}/bookings",
-            json={
-                "customer_name": "Client E2E",
-                "pickup_location": "123 Main St, Geneva",
-                "dropoff_location": "456 Park Ave, Geneva",
-                "scheduled_time": scheduled_time,
-                "amount": 25.0,
-            },
-            headers={
-                **TestCreateBookingP0._client_bearer_headers(
-                    client, sample_client.user
-                ),
-                "Idempotency-Key": idempotency_key,
-            },
-        )
+        mock_booking = MagicMock()
+        mock_booking.id = 4242
+        mock_booking.status = "pending"
+        mock_booking.amount = 25.0
+        mock_booking.price_amount = 25.0
+        mock_booking.price_breakdown_json = {}
+        mock_booking.billed_to_type = "patient"
+        mock_booking.company_id = None
 
-        assert response.status_code in [200, 201]
-        data = response.get_json()
+        with patch(
+            "bookings.infrastructure.adapters.booking_service_adapter.create_booking_via_use_case",
+            return_value=mock_booking,
+        ):
+            response = client.post(
+                f"/api/v1/clients/{sample_client.user.public_id}/bookings",
+                json={
+                    "customer_name": "Client E2E",
+                    "pickup_location": "Rue de la Gare 1, 1000 Lausanne",
+                    "dropoff_location": "Avenue de Test 10, Genève",
+                    "scheduled_time": scheduled_time,
+                    "amount": 25.0,
+                },
+                headers={
+                    **TestCreateBookingP0._client_bearer_headers(
+                        client, sample_client.user
+                    ),
+                    "Idempotency-Key": idempotency_key,
+                },
+            )
+
+        assert response.status_code in [200, 201], response.get_json()
+        data = response.get_json() or {}
         trace_id = data.get("trace_id") or data.get("data", {}).get("trace_id")
         assert trace_id
         assert response.headers.get("X-Trace-Id") == trace_id

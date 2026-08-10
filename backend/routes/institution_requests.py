@@ -440,11 +440,10 @@ def _billing_details_equivalent(existing: Any, incoming: Any) -> bool:
     """Compare billing_details en ignorant l'ordre des clés JSON."""
     if existing == incoming:
         return True
-    if existing is None and incoming in (None, {}):
-        return True
-    if incoming is None and existing in (None, {}):
-        return True
-    return False
+    return bool(
+        (existing is None and incoming in (None, {}))
+        or (incoming is None and existing in (None, {}))
+    )
 
 
 def _guard_requester_billing_on_update(

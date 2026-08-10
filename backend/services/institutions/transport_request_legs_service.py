@@ -367,7 +367,7 @@ def preserve_billing_overrides_from_existing(
     opérationnelle (adresse/horaire) qui reconstruit les legs.
     """
     sorted_existing = sorted(
-        list(existing_legs or []),
+        existing_legs or [],
         key=lambda leg: int(getattr(leg, "sequence_index", 0) or 0),
     )
     if not sorted_existing:
