@@ -7,10 +7,10 @@ import logging
 import re
 from datetime import datetime
 from decimal import Decimal
+from html import escape as _html_escape
 from io import BytesIO, StringIO
 from pathlib import Path
 from typing import Any
-from xml.sax.saxutils import escape as xml_escape
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
@@ -68,6 +68,11 @@ _MONTHS_FR = (
     "novembre",
     "décembre",
 )
+
+
+def xml_escape(value: str) -> str:
+    """Échappe & < > pour du contenu ReportLab Paragraph (équivalent xml.sax, quote=False)."""
+    return _html_escape(value or "", quote=False)
 
 
 def _qrr_check_digit(reference_base: str) -> int:
