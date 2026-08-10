@@ -157,11 +157,55 @@ def _is_driver_location_events_partition(name: str | None) -> bool:
     return name.startswith("driver_location_events_")
 
 
+# Tables PostGIS tiger/topology (extension) — hors metadata applicatif.
+_POSTGIS_EXTENSION_TABLES = frozenset(
+    {
+        "spatial_ref_sys",
+        "topology",
+        "layer",
+        "featnames",
+        "addr",
+        "addrfeat",
+        "bg",
+        "county",
+        "county_lookup",
+        "countysub_lookup",
+        "cousub",
+        "direction_lookup",
+        "edges",
+        "faces",
+        "geocode_settings",
+        "geocode_settings_default",
+        "loader_lookuptables",
+        "loader_platform",
+        "loader_variables",
+        "pagc_gaz",
+        "pagc_lex",
+        "pagc_rules",
+        "place",
+        "place_lookup",
+        "secondary_unit_lookup",
+        "state",
+        "state_lookup",
+        "street_type_lookup",
+        "tabblock",
+        "tabblock20",
+        "tract",
+        "zcta5",
+        "zip_lookup",
+        "zip_lookup_all",
+        "zip_lookup_base",
+        "zip_state",
+        "zip_state_loc",
+    }
+)
+
+
 def include_object(obj, name, type_, reflected, compare_to):
     """Filtre autogenerate : PostGIS, partitions GPS, dérive index/contraintes."""
     del compare_to
     del obj
-    if type_ == "table" and name in {"spatial_ref_sys"}:
+    if type_ == "table" and name in _POSTGIS_EXTENSION_TABLES:
         return False
     # Partitions créées en SQL / Celery — absentes du metadata SQLAlchemy
     if type_ == "table" and reflected and _is_driver_location_events_partition(name):

@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any, Dict, List
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     Column,
     DateTime,
     Enum,
@@ -58,6 +59,28 @@ class Company(db.Model):
     __tablename__ = "company"
     # CP-PR1 : pas de UNIQUE(user_id) — les coquilles cliniques partagent
     # volontairement le user_id du transporteur / client.
+    __table_args__ = (
+        CheckConstraint(
+            "platform_billing_access_state::text = ANY "
+            "(ARRAY['active'::character varying, 'partial'::character varying, "
+            "'full'::character varying]::text[])",
+            name="ck_company_billing_access_state",
+        ),
+        CheckConstraint(
+            "platform_billing_access_state::text = 'active'::text OR "
+            "(platform_billing_state_source IS NOT NULL AND "
+            "platform_billing_state_reason_code IS NOT NULL AND "
+            "platform_billing_state_since IS NOT NULL)",
+            name="ck_company_billing_state_fields",
+        ),
+        CheckConstraint(
+            "platform_billing_state_source IS NULL OR "
+            "(platform_billing_state_source::text = ANY "
+            "(ARRAY['automatic_dunning'::character varying, "
+            "'admin_manual'::character varying]::text[]))",
+            name="ck_company_billing_state_source",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False)

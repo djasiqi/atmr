@@ -109,6 +109,11 @@ class Booking(db.Model):
             "status != 'ASSIGNED' OR driver_id IS NOT NULL",
             name="chk_booking_assigned_requires_driver",
         ),
+        # Aligné DB (migration institution) : description requise pour livraison matériel
+        CheckConstraint(
+            "mission_type::text <> 'material_delivery'::text OR delivery_description IS NOT NULL",
+            name="ck_booking_material_delivery_description",
+        ),
         Index("ix_booking_company_scheduled", "company_id", "scheduled_time"),
         Index("ix_booking_status_scheduled", "status", "scheduled_time"),
         Index("ix_booking_driver_status", "driver_id", "status"),

@@ -139,6 +139,19 @@ class TransportRequest(db.Model):
             "mission_type = 'patient_transport' OR delivery_description IS NOT NULL",
             name="chk_delivery_description_required",
         ),
+        # Aligné DB (types de lieu pickup/dropoff)
+        CheckConstraint(
+            "pickup_type IS NULL OR (pickup_type::text = ANY "
+            "(ARRAY['institution'::character varying, 'domicile'::character varying, "
+            "'other'::character varying]::text[]))",
+            name="chk_pickup_type_valid",
+        ),
+        CheckConstraint(
+            "dropoff_type IS NULL OR (dropoff_type::text = ANY "
+            "(ARRAY['institution'::character varying, 'domicile'::character varying, "
+            "'other'::character varying]::text[]))",
+            name="chk_dropoff_type_valid",
+        ),
     )
 
     # Identifiant
