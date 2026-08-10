@@ -107,9 +107,7 @@ def classify_push_result(
 
     out: dict[str, Any] = {
         "delivery_status": FAILED,
-        "provider_receipt_status": (
-            RECEIPT_NOT_APPLICABLE if provider_l == "fcm" else RECEIPT_NOT_APPLICABLE
-        ),
+        "provider_receipt_status": RECEIPT_NOT_APPLICABLE,
         "failure_reason": None,
         "provider_message_id": None,
         "provider_ticket_id": None,

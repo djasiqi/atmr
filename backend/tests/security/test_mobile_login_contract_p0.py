@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-
 CONTRACT_V1 = "mobile-device-session-v1"
 MOBILE_HEADERS = {
     "X-Requested-With": "Expo",

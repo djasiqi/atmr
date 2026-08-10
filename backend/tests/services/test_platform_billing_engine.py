@@ -150,10 +150,10 @@ def test_issue_refuses_validated_without_lock():
         ),
         patch("services.platform_billing.issuance.PlatformIssuedInvoice") as Issued,
         patch("services.platform_billing.engine.assert_billing_period_has_ended"),
-        pytest.raises(BillingInvariantError) as ei,
     ):
         Issued.query = mock_q
-        issue_platform_invoice(12)
+        with pytest.raises(BillingInvariantError) as ei:
+            issue_platform_invoice(12)
     assert ei.value.code == "PERIOD_NOT_LOCKED"
 
 
@@ -177,8 +177,8 @@ def test_issue_refuses_validated_even_if_period_locked():
         ),
         patch("services.platform_billing.issuance.PlatformIssuedInvoice") as Issued,
         patch("services.platform_billing.engine.assert_billing_period_has_ended"),
-        pytest.raises(BillingInvariantError) as ei,
     ):
         Issued.query = mock_q
-        issue_platform_invoice(12)
+        with pytest.raises(BillingInvariantError) as ei:
+            issue_platform_invoice(12)
     assert ei.value.code == "STATEMENT_NOT_LOCKED"

@@ -101,9 +101,9 @@ def render_swiss_qr_bill(payload: SwissQrBillPayload) -> dict[str, Any]:
         "language": "fr",
     }
     # QRR uniquement avec QR-IBAN + référence 27 chiffres
-    if ref_type == "QRR" and payload.reference:
-        kwargs["reference_number"] = payload.reference
-    elif ref_type == "SCOR" and payload.reference:
+    if (ref_type == "QRR" and payload.reference) or (
+        ref_type == "SCOR" and payload.reference
+    ):
         kwargs["reference_number"] = payload.reference
     if payload.additional_information:
         kwargs["additional_information"] = payload.additional_information[:140]

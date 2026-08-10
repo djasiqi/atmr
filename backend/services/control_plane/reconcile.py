@@ -3,20 +3,17 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import logging
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 
 from ext import db
 from models.company import Company
 from models.control_plane import (
     ControlPlaneAnomaly,
-    OrganizationMembership,
     PlatformOrganization,
-    RoleTemplate,
 )
 from models.driver import Driver
 from models.enums import InstitutionRole, UserRole

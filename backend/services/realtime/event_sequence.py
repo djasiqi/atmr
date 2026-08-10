@@ -8,7 +8,7 @@ Fail-closed pour le curseur de snapshot : Redis indisponible → ``None`` + heal
 from __future__ import annotations
 
 import logging
-from typing import Literal, Optional
+from typing import Literal
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +44,7 @@ def next_event_seq(company_id: int | None) -> int:
 
 def get_snapshot_cursor_status(
     company_id: int,
-) -> tuple[Optional[int], Literal["ok", "degraded"]]:
+) -> tuple[int | None, Literal["ok", "degraded"]]:
     """Lit le curseur courant.
 
     Returns:
@@ -69,7 +69,7 @@ def get_snapshot_cursor_status(
         return None, "degraded"
 
 
-def current_snapshot_cursor(company_id: int) -> Optional[int]:
+def current_snapshot_cursor(company_id: int) -> int | None:
     """Valeur courante du curseur pour le bootstrap, ou ``None`` si Redis dégradé."""
     cursor, _status = get_snapshot_cursor_status(company_id)
     return cursor

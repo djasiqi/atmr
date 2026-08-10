@@ -23,8 +23,8 @@ def _booking(**kwargs):
     defaults = {
         "scheduled_time": datetime(2026, 8, 1, 10, 0, tzinfo=UTC),
         "customer_name": "Sofia",
-        "pickup_location": "A",
-        "dropoff_location": "B",
+        "pickup_location": "HUG",
+        "dropoff_location": "Chemin 9",
         "status": BookingStatus.ACCEPTED,
         "driver_id": None,
         "client": None,
@@ -37,8 +37,6 @@ def _booking(**kwargs):
         "updated_at": datetime(2026, 7, 31, tzinfo=UTC),
         "cancelled_at": None,
         "edit_version": 1,
-        "pickup_location": "HUG",
-        "dropoff_location": "Chemin 9",
         "customer_full_name": "Sofia GIUSEPPA",
     }
     defaults.update(kwargs)

@@ -47,13 +47,12 @@ def resolve_billing_origin_for_create(
             BillingOriginSource.EXPLICIT_AT_CREATION.value,
             "INSTITUTION_OR_PORTAL",
         )
-    if is_admin or via is None:
-        if is_admin:
-            return (
-                BookingBillingOrigin.ADMIN_CREATED.value,
-                BillingOriginSource.EXPLICIT_AT_CREATION.value,
-                "ADMIN_DEFAULT",
-            )
+    if (is_admin or via is None) and is_admin:
+        return (
+            BookingBillingOrigin.ADMIN_CREATED.value,
+            BillingOriginSource.EXPLICIT_AT_CREATION.value,
+            "ADMIN_DEFAULT",
+        )
     if via in (
         BookingCreatedVia.DISPATCHER.value,
         BookingCreatedVia.CLIENT_APP.value,

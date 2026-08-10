@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 from pathlib import Path
@@ -42,10 +43,8 @@ def write_upload_bytes(filepath: Path, data: bytes) -> None:
             os.geteuid() if hasattr(os, "geteuid") else "n/a",
         )
         # Seconde tentative après chmod agressif (bind mounts Windows/NFS).
-        try:
+        with contextlib.suppress(OSError):
             directory.chmod(0o777)
-        except OSError:
-            pass
         try:
             with filepath.open("wb") as handle:
                 handle.write(data)

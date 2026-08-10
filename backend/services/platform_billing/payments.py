@@ -340,7 +340,7 @@ def _create_credit_note_no_commit(
         )
 
         build_and_store_credit_note_pdf(credit, source)
-    except Exception as exc:  # noqa: BLE001 — avoir DB valide même si PDF échoue
+    except Exception as exc:
         import logging
 
         logging.getLogger(__name__).warning(

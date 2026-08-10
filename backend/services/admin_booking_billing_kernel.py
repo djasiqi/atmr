@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from models import Booking, BookingStatus
+from models import Booking
 from models.enums import UserRole
 from services.admin_booking_investigation import (
     compute_needs_investigation_booking,

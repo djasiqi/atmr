@@ -16,7 +16,6 @@ import json
 import re
 import sys
 from io import BytesIO
-from pathlib import Path
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT
@@ -108,12 +107,11 @@ def _escape(text: str) -> str:
 def _inline_md(text: str) -> str:
     text = _escape(text)
     text = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", text)
-    text = re.sub(
+    return re.sub(
         r"`([^`]+)`",
         r"<font face='Courier' size='7'>\1</font>",
         text,
     )
-    return text
 
 
 def markdown_to_flowables(md: str) -> list:

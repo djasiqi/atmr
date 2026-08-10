@@ -144,7 +144,7 @@ def collect_explicit_peer_ids_to_load(bookings: list[Any]) -> set[int]:
     present = {_bid(b) for b in bookings if getattr(b, "id", None) is not None}
     for b in bookings:
         try:
-            bid = _bid(b)
+            _bid(b)
         except Exception:
             continue
         pid = getattr(b, "parent_booking_id", None)

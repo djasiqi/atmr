@@ -229,6 +229,8 @@ class GenerateInvoiceUseCase:
         """
         generated_pdf_url: str | None = None
         try:
+            from sqlalchemy import and_
+
             from application.invoices.billing_opportunities import (
                 build_billing_subject_snapshot,
                 build_recipient_snapshot,
@@ -238,7 +240,6 @@ class GenerateInvoiceUseCase:
             )
             from application.invoices.subject_identity import resolve_subject_identity
             from models.institution_patient import InstitutionPatient
-            from sqlalchemy import and_
 
             HTTP_409_CONFLICT = 409
             HTTP_422_UNPROCESSABLE = 422
@@ -499,20 +500,19 @@ class GenerateInvoiceUseCase:
                     # (sera fait plus tard dans le code après récupération des reservations)
                 else:
                     billing_party_id = bp.id
-            else:
-                # Facturation directe au client : si le client a un tiers payeur par défaut, l'utiliser
-                # (PDF affichera "Client c/o Tiers payeur" + adresse du tiers)
-                if effective_client_id is not None:
-                    from services.billing.client_stay_resolver import (
-                        resolve_default_billing_party_for_client,
-                    )
+            # Facturation directe au client : si le client a un tiers payeur par défaut, l'utiliser
+            # (PDF affichera "Client c/o Tiers payeur" + adresse du tiers)
+            elif effective_client_id is not None:
+                from services.billing.client_stay_resolver import (
+                    resolve_default_billing_party_for_client,
+                )
 
-                    bp = resolve_default_billing_party_for_client(
-                        client_id=effective_client_id,
-                        company_id=input_data.company_id,
-                    )
-                    if bp is not None:
-                        billing_party_id = bp.id
+                bp = resolve_default_billing_party_for_client(
+                    client_id=effective_client_id,
+                    company_id=input_data.company_id,
+                )
+                if bp is not None:
+                    billing_party_id = bp.id
 
             # 4. Récupérer les réservations
             target_statuses = ["COMPLETED", "RETURN_COMPLETED", "CANCELED"]

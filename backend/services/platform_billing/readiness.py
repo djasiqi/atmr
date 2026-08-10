@@ -111,11 +111,14 @@ def contract_calculation_ready(
     if not (own or comm or support or cfg.is_billing_enabled):
         errors.append("Aucun produit facturable activé")
     if (
-        getattr(cfg, "lirie_commission_enabled", False)
-        or (cfg.is_billing_enabled and cfg.commission_rate is not None)
-    ) and cfg.commission_rate is not None:
-        if cfg.commission_rate < 0:
-            errors.append("Taux de commission invalide")
+        (
+            getattr(cfg, "lirie_commission_enabled", False)
+            or (cfg.is_billing_enabled and cfg.commission_rate is not None)
+        )
+        and cfg.commission_rate is not None
+        and cfg.commission_rate < 0
+    ):
+        errors.append("Taux de commission invalide")
     return len(errors) == 0, errors
 
 

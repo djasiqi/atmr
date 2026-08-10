@@ -322,9 +322,7 @@ def _account_active(user: User | None) -> bool:
         return False
     if getattr(user, "disabled_at", None) is not None:
         return False
-    if getattr(user, "account_status", None) == "disabled":
-        return False
-    return True
+    return getattr(user, "account_status", None) != "disabled"
 
 
 def _compute_readiness(

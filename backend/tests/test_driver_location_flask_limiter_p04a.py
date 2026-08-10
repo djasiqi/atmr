@@ -78,9 +78,7 @@ def _is_flask_global_429(response: Any) -> bool:
     if response.status_code != 429:
         return False
     body = response.get_json(silent=True) or {}
-    if isinstance(body, dict) and body.get("error") == "rate_limit_exceeded":
-        return False
-    return True
+    return not (isinstance(body, dict) and body.get("error") == "rate_limit_exceeded")
 
 
 def _has_location_route(app: Flask) -> bool:
@@ -185,9 +183,8 @@ def test_b_business_limiter_still_active(
             statuses.append(resp.status_code)
             bodies.append(resp.get_json(silent=True))
 
-    assert statuses[0] != 429 and statuses[1] != 429, (
-        f"Les 2 premiers appels ne doivent pas être 429: {statuses} {bodies}"
-    )
+    assert statuses[0] != 429, f"1er appel ne doit pas être 429: {statuses} {bodies}"
+    assert statuses[1] != 429, f"2e appel ne doit pas être 429: {statuses} {bodies}"
     assert statuses[2] == 429, f"3e appel = 429 métier, got={statuses} {bodies}"
     body_429 = bodies[2] or {}
     assert body_429.get("error") == "rate_limit_exceeded"

@@ -8,7 +8,6 @@ from pypdf import PdfReader, PdfWriter
 from reportlab.lib.colors import Color
 from reportlab.pdfgen import canvas
 
-
 WATERMARK_TEXT = "BROUILLON — NE PAS SIGNER"
 
 

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import pytest
 
-
 _PII_FORBIDDEN_KEYS = {
     "birth_date",
     "notes_medical",

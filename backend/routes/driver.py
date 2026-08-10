@@ -512,6 +512,7 @@ def get_driver_from_token() -> tuple[Driver | None, dict[str, Any] | None, int |
     # F1b : tout JWT avec session_id doit être validé (fail-closed si PG dispo)
     try:
         from flask_jwt_extended import get_jwt
+
         from security.mobile_session_guard import check_mobile_session_from_claims
 
         claims = get_jwt() or {}
@@ -1652,13 +1653,14 @@ class DriverLocation(Resource):
         # Validation session durable mobile (compat : pas de session_id = legacy OK)
         try:
             from flask_jwt_extended import get_jwt
+
             from security.mobile_session_guard import check_mobile_session_from_claims
 
             claims = get_jwt() or {}
             user_id = getattr(getattr(driver, "user", None), "id", None) or getattr(
                 driver, "user_id", None
             )
-            err_code, retryable = check_mobile_session_from_claims(
+            err_code, _retryable = check_mobile_session_from_claims(
                 claims, user_id=user_id
             )
             if err_code == "session_validation_unavailable":
@@ -3489,7 +3491,7 @@ class DriverCompanyBookingsToday(Resource):
             return error_response, status_code
         driver = cast("Driver", driver)
 
-        from sqlalchemy import case  # noqa: I001
+        from sqlalchemy import case
 
         from models.booking import Booking as BookingModel
         from routes.companies import _reservations_base_query_for_company_day
@@ -4256,9 +4258,10 @@ class TestPushNotification(Resource):
 
             driver = cast("Driver", driver)
 
+            import uuid as _uuid
+
             from ext import redis_client
             from models.device_token import DeviceToken
-            import uuid as _uuid
 
             MAX_TEST_PUSH_PER_MIN = 3
             body = request.get_json(silent=True) or {}

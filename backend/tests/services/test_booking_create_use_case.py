@@ -414,7 +414,7 @@ def test_clinic_preferential_rate_wins_over_client_and_computed_price(
 
 
 @pytest.mark.parametrize(
-    "forbidden_field,forbidden_value",
+    ("forbidden_field", "forbidden_value"),
     [
         ("bill_to_patient", True),
         ("amount_source", "manual"),

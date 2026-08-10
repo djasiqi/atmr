@@ -25,26 +25,26 @@ from services.platform_billing.payments import (
 
 
 def _make_invoice(**kwargs):
-    defaults = dict(
-        id=1,
-        company_id=1,
-        invoice_number="LIRIE-2026-08-0001",
-        document_type=PlatformIssuedDocumentType.INVOICE.value,
-        status=PlatformIssuedInvoiceStatus.SENT.value,
-        currency="CHF",
-        subtotal_amount=Decimal("100.00"),
-        tax_rate=Decimal("0"),
-        tax_amount=Decimal("0.00"),
-        total_amount=Decimal("100.00"),
-        qr_amount=Decimal("100.00"),
-        amount_paid=Decimal("0.00"),
-        issued_at=datetime(2026, 8, 1, tzinfo=UTC),
-        due_at=datetime(2026, 8, 31, tzinfo=UTC),
-        sent_at=datetime(2026, 8, 2, tzinfo=UTC),
-        paid_at=None,
-        billing_year=2026,
-        billing_month=8,
-    )
+    defaults = {
+        "id": 1,
+        "company_id": 1,
+        "invoice_number": "LIRIE-2026-08-0001",
+        "document_type": PlatformIssuedDocumentType.INVOICE.value,
+        "status": PlatformIssuedInvoiceStatus.SENT.value,
+        "currency": "CHF",
+        "subtotal_amount": Decimal("100.00"),
+        "tax_rate": Decimal("0"),
+        "tax_amount": Decimal("0.00"),
+        "total_amount": Decimal("100.00"),
+        "qr_amount": Decimal("100.00"),
+        "amount_paid": Decimal("0.00"),
+        "issued_at": datetime(2026, 8, 1, tzinfo=UTC),
+        "due_at": datetime(2026, 8, 31, tzinfo=UTC),
+        "sent_at": datetime(2026, 8, 2, tzinfo=UTC),
+        "paid_at": None,
+        "billing_year": 2026,
+        "billing_month": 8,
+    }
     defaults.update(kwargs)
     return SimpleNamespace(**defaults)
 
@@ -117,13 +117,17 @@ def test_recompute_overdue_after_reverse():
 
 def test_credit_note_rejects_when_paid():
     inv = _make_invoice(amount_paid=Decimal("10.00"))
-    with patch("services.platform_billing.payments._lock_invoice", return_value=inv):
-        with pytest.raises(ValueError, match="paiement"):
-            create_credit_note(1, reason="Erreur de facturation")
+    with (
+        patch("services.platform_billing.payments._lock_invoice", return_value=inv),
+        pytest.raises(ValueError, match="paiement"),
+    ):
+        create_credit_note(1, reason="Erreur de facturation")
 
 
 def test_credit_note_requires_reason():
     inv = _make_invoice(amount_paid=Decimal("0.00"))
-    with patch("services.platform_billing.payments._lock_invoice", return_value=inv):
-        with pytest.raises(ValueError, match="Motif"):
-            create_credit_note(1, reason="  ")
+    with (
+        patch("services.platform_billing.payments._lock_invoice", return_value=inv),
+        pytest.raises(ValueError, match="Motif"),
+    ):
+        create_credit_note(1, reason="  ")

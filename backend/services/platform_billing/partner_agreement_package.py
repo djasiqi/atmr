@@ -6,7 +6,6 @@ import hashlib
 import zipfile
 from io import BytesIO
 
-
 # Horodatage ZIP fixe (epoch DOS) pour un SHA stable.
 _FIXED_DATE_TIME = (2020, 1, 1, 0, 0, 0)
 _FIXED_EXTERNAL_ATTR = 0o644 << 16

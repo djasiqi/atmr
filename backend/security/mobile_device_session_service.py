@@ -6,6 +6,7 @@ indépendamment du temps écoulé, tant que la session n'est pas révoquée.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import logging
 import os
@@ -258,14 +259,12 @@ def verify_recovery_credential(session: MobileDeviceSession, credential: str) ->
     h = hash_credential(credential)
     if secrets.compare_digest(h, session.credential_hash):
         return True
-    if (
+    return bool(
         session.previous_credential_hash
         and session.previous_credential_valid_until
         and session.previous_credential_valid_until > _now()
         and secrets.compare_digest(h, session.previous_credential_hash)
-    ):
-        return True
-    return False
+    )
 
 
 def rotate_recovery_credential(
@@ -510,10 +509,8 @@ def _invalidate_session_cache(session_id: uuid.UUID) -> None:
     r = _get_redis()
     if not r:
         return
-    try:
+    with contextlib.suppress(Exception):
         r.delete(_cache_key(session_id))
-    except Exception:
-        pass
 
 
 def validate_mobile_session(
@@ -665,6 +662,7 @@ def _get_encryption_key() -> tuple[bytes, str]:
 
 def encrypt_rotation_response(payload: dict[str, Any]) -> tuple[bytes, str]:
     import json
+
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
     key, key_id = _get_encryption_key()
@@ -677,6 +675,7 @@ def encrypt_rotation_response(payload: dict[str, Any]) -> tuple[bytes, str]:
 
 def decrypt_rotation_response(ciphertext: bytes, key_id: str) -> dict[str, Any]:
     import json
+
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
     key, _ = _get_encryption_key_for_id(key_id)

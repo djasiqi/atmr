@@ -414,11 +414,11 @@ def build_admin_support_detail_payload(
     transport = serialize_admin_support_transport(booking, now=now)
     institution_present = False
     cli = booking.client
-    if cli is not None:
-        if getattr(cli, "linked_institution_id", None) or getattr(
-            cli, "linked_institution", None
-        ):
-            institution_present = True
+    if cli is not None and (
+        getattr(cli, "linked_institution_id", None)
+        or getattr(cli, "linked_institution", None)
+    ):
+        institution_present = True
 
     reasons = build_investigation_reasons(
         booking,

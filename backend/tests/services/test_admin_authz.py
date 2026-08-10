@@ -25,9 +25,7 @@ def test_admin_capabilities_enforced_true(monkeypatch):
 
 def test_compat_allows_even_with_partial_policy(monkeypatch):
     monkeypatch.setenv("ADMIN_CAPABILITIES_ENFORCED", "false")
-    fake_user = type(
-        "U", (), {"role": type("R", (), {"__eq__": lambda s, o: True})()}
-    )()
+    type("U", (), {"role": type("R", (), {"__eq__": lambda s, o: True})()})()
     # Simplify: patch role check path
     with (
         patch("services.admin_authz.db.session.get") as get_user,

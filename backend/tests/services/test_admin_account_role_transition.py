@@ -54,7 +54,7 @@ def _company(owner: User, **kwargs) -> Company:
     return c
 
 
-@pytest.fixture()
+@pytest.fixture
 def seeded(db_session):
     seed_control_plane_catalogs(commit=False)
     db.session.flush()

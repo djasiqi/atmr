@@ -89,7 +89,8 @@ class TestCompanyDashboardBootstrap:
 
         # Enveloppe attendue par le frontend (CompanyDashboard critical path).
         assert data["schema_version"] == 1
-        assert isinstance(data["generated_at"], str) and data["generated_at"]
+        assert isinstance(data["generated_at"], str)
+        assert data["generated_at"]
         assert data["date"] == day_str
         assert data["company_id"] == bootstrap_company.id
 
@@ -455,7 +456,8 @@ class TestCompanyDashboardBootstrapReliability:
         assert data["schema_version"] == 2
 
         # v1 reste inchangé (additif uniquement).
-        assert "kpi" in data and "bookings" in data
+        assert "kpi" in data
+        assert "bookings" in data
 
         assert "action_queue" in data
         assert isinstance(data["action_queue"], list)

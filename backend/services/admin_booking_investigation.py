@@ -215,11 +215,11 @@ def build_investigation_reasons(
     if institution_present is None:
         institution_present = False
         cli = getattr(booking, "client", None)
-        if cli is not None:
-            if getattr(cli, "linked_institution_id", None):
-                institution_present = True
-            elif getattr(cli, "linked_institution", None) is not None:
-                institution_present = True
+        if cli is not None and (
+            getattr(cli, "linked_institution_id", None)
+            or getattr(cli, "linked_institution", None) is not None
+        ):
+            institution_present = True
 
     if source == "institution_request" and not institution_present:
         reasons.append(

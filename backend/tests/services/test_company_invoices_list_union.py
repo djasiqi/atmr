@@ -72,5 +72,7 @@ def test_unified_list_orders_regular_by_issued_at(db, sample_company, sample_use
         company_id=sample_company.id, page=2, per_page=1
     )
     assert total1 == total2 == 2
-    assert len(page1) == 1 and page1[0]["invoice_number"] == "INV-NEW"
-    assert len(page2) == 1 and page2[0]["invoice_number"] == "INV-OLD"
+    assert len(page1) == 1
+    assert page1[0]["invoice_number"] == "INV-NEW"
+    assert len(page2) == 1
+    assert page2[0]["invoice_number"] == "INV-OLD"

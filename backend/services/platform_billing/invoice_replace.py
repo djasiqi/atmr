@@ -13,20 +13,20 @@ from models.enums import (
 )
 from models.platform_billing import (
     PlatformBillingCreditor,
-    PlatformIssuedInvoice,
     PlatformInvoice,
+    PlatformIssuedInvoice,
 )
 from services.platform_billing.decimal_json import decimal_to_str
+from services.platform_billing.invoice_pdf import (
+    build_platform_qrr_reference,
+    build_platform_scor_reference,
+    generate_platform_invoice_pdf_bytes,
+)
 from services.platform_billing.issuance import (
     _build_and_store_pdf,
     _creditor_party,
     _debtor_party,
     _next_invoice_number,
-)
-from services.platform_billing.invoice_pdf import (
-    build_platform_qrr_reference,
-    build_platform_scor_reference,
-    generate_platform_invoice_pdf_bytes,
 )
 from services.platform_billing.money import money_round_chf
 from services.platform_billing.payments import (

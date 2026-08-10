@@ -62,9 +62,7 @@ def window_contains(
     et = _as_aware(effective_to)
     if ef is not None and at < ef:
         return False
-    if et is not None and at >= et:
-        return False
-    return True
+    return not (et is not None and at >= et)
 
 
 def windows_overlap(

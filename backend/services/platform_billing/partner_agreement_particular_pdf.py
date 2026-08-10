@@ -400,7 +400,7 @@ def count_pdf_pages(pdf_bytes: bytes) -> int:
 def build_particular_pdf_bytes(content: ParticularAgreementContent) -> bytes:
     buffer = BytesIO()
 
-    def _on_page(canvas, doc) -> None:  # noqa: ANN001
+    def _on_page(canvas, doc) -> None:
         canvas.saveState()
         canvas.setStrokeColor(colors.HexColor("#AAAAAA"))
         canvas.setLineWidth(0.4)

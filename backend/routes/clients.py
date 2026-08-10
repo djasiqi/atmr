@@ -2316,7 +2316,6 @@ class DeleteAccount(Resource):
                     logger_instance=logger,
                 )
             client_model.is_active = False
-            user_id = current_user.id
             try:
                 from security.mobile_device_session_service import disable_user_sessions
                 from security.token_blacklist import revoke_token

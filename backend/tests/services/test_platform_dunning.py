@@ -10,6 +10,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from models.enums import (
+    LegalForm,
     PlatformBillingAccessState,
     PlatformBillingStateSource,
     PlatformDunningCaseStatus,
@@ -31,7 +32,6 @@ from services.platform_billing.dunning_policy import (
     compute_dunning_automation_ready,
     parse_dunning_fields,
 )
-from models.enums import LegalForm
 from services.platform_billing.partner_agreement_versions import (
     PACK_SCHEMA_VERSION,
     PARTICULAR_VERSION,
@@ -98,7 +98,7 @@ def test_enforceable_balance_minus_dispute():
         assert enforceable_balance(inv) == Decimal("70.00")
 
 
-def test_set_billing_access_admin_priority(app_ctx=None):
+def test_set_billing_access_admin_priority():
     """admin_manual ne doit pas être écrasé par automatic_dunning."""
     company = MagicMock()
     company.platform_billing_access_state = PlatformBillingAccessState.FULL.value
@@ -110,21 +110,23 @@ def test_set_billing_access_admin_priority(app_ctx=None):
     company.platform_billing_state_config_id = None
     company.platform_billing_state_updated_at = None
 
-    with patch(
-        "services.platform_billing.capabilities.db.session.get",
-        return_value=company,
+    with (
+        patch(
+            "services.platform_billing.capabilities.db.session.get",
+            return_value=company,
+        ),
+        patch("services.platform_billing.capabilities.db.session.flush"),
     ):
-        with patch("services.platform_billing.capabilities.db.session.flush"):
-            result = set_billing_access_state(
-                1,
-                PlatformBillingAccessState.ACTIVE.value,
-                source=PlatformBillingStateSource.AUTOMATIC_DUNNING.value,
-                reason_code="auto",
-            )
-            assert (
-                result.platform_billing_access_state
-                == PlatformBillingAccessState.FULL.value
-            )
+        result = set_billing_access_state(
+            1,
+            PlatformBillingAccessState.ACTIVE.value,
+            source=PlatformBillingStateSource.AUTOMATIC_DUNNING.value,
+            reason_code="auto",
+        )
+        assert (
+            result.platform_billing_access_state
+            == PlatformBillingAccessState.FULL.value
+        )
 
 
 def test_particular_mentions_progressive_suspension():

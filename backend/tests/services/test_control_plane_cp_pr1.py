@@ -59,7 +59,7 @@ def _company(owner: User, **kwargs) -> Company:
     return c
 
 
-@pytest.fixture()
+@pytest.fixture
 def seeded(db_session):
     seed_control_plane_catalogs(commit=False)
     db.session.flush()
@@ -251,6 +251,6 @@ def test_no_org_for_orphan_company_account(db_session, seeded):
     orgs = PlatformOrganization.query.filter_by(company_id=None).count()
     _ = orphan
     _ = orgs
-    proj = ControlPlaneProjector()
+    ControlPlaneProjector()
     # ensure_company_organization nécessite une Company ; orphan n'en a pas
     assert Company.query.filter_by(user_id=orphan.id).first() is None

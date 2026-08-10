@@ -13,6 +13,9 @@ from models.enums import (
     PlatformStatementStatus,
 )
 from services.platform_billing.dossier_status import (
+    ACTION_ISSUE,
+    ACTION_RECALCULATE_DOSSIER,
+    ACTION_VIEW,
     STATUS_A_CALCULER,
     STATUS_A_CONTROLER,
     STATUS_A_ENCAISSER,
@@ -21,9 +24,6 @@ from services.platform_billing.dossier_status import (
     STATUS_PARTIALLY_PAID,
     STATUS_PRETE_A_CLOTURER,
     STATUS_PRETE_A_EMETTRE,
-    ACTION_ISSUE,
-    ACTION_RECALCULATE_DOSSIER,
-    ACTION_VIEW,
     dossier_key,
     operational_status,
     resolve_actions,
@@ -32,33 +32,33 @@ from services.platform_billing.dossier_status import (
 
 
 def _period(**kwargs):
-    defaults = dict(id=42, status=PlatformBillingPeriodStatus.DRAFT.value)
+    defaults = {"id": 42, "status": PlatformBillingPeriodStatus.DRAFT.value}
     defaults.update(kwargs)
     return SimpleNamespace(**defaults)
 
 
 def _statement(**kwargs):
-    defaults = dict(
-        id=91,
-        company_id=18,
-        statement_status=PlatformStatementStatus.DRAFT.value,
-        total_amount=Decimal("94.00"),
-    )
+    defaults = {
+        "id": 91,
+        "company_id": 18,
+        "statement_status": PlatformStatementStatus.DRAFT.value,
+        "total_amount": Decimal("94.00"),
+    }
     defaults.update(kwargs)
     return SimpleNamespace(**defaults)
 
 
 def _issued(**kwargs):
-    defaults = dict(
-        id=8,
-        document_type=PlatformIssuedDocumentType.INVOICE.value,
-        status=PlatformIssuedInvoiceStatus.ISSUED.value,
-        total_amount=Decimal("94.00"),
-        amount_paid=Decimal("0.00"),
-        sent_at=None,
-        due_at=datetime(2026, 9, 1, tzinfo=UTC),
-        paid_at=None,
-    )
+    defaults = {
+        "id": 8,
+        "document_type": PlatformIssuedDocumentType.INVOICE.value,
+        "status": PlatformIssuedInvoiceStatus.ISSUED.value,
+        "total_amount": Decimal("94.00"),
+        "amount_paid": Decimal("0.00"),
+        "sent_at": None,
+        "due_at": datetime(2026, 9, 1, tzinfo=UTC),
+        "paid_at": None,
+    }
     defaults.update(kwargs)
     return SimpleNamespace(**defaults)
 

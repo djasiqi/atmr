@@ -10,8 +10,7 @@ def decimal_to_str(value: Decimal | None, places: int = 2) -> str | None:
     if value is None:
         return None
     q = Decimal("1").scaleb(-places)
-    text = str(value.quantize(q))
-    return text
+    return str(value.quantize(q))
 
 
 def decimal_to_str_trim(value: Decimal | None, places: int = 4) -> str | None:

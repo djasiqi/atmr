@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 from typing import Any
@@ -88,10 +89,10 @@ def apply_expo_receipts(
     max_tickets: int = 100,
 ) -> dict[str, Any]:
     """Récupère et applique les receipts Expo (invalidation DeviceNotRegistered seulement)."""
+    from ext import db
     from services.notifications.device_token_lifecycle import (
         apply_push_result_to_device_token,
     )
-    from ext import db
 
     ids = list(ticket_ids or [])
     if not ids and redis_client:
@@ -185,14 +186,12 @@ def apply_expo_receipts(
         meta["provider_receipt_status"] = classified["provider_receipt_status"]
         meta["delivery_status"] = classified["delivery_status"]
         if redis_client:
-            try:
+            with contextlib.suppress(Exception):
                 redis_client.setex(
                     f"{EXPO_RECEIPT_REDIS_PREFIX}{tid}",
                     EXPO_RECEIPT_TTL_SEC,
                     json.dumps(meta, default=str),
                 )
-            except Exception:
-                pass
         updated += 1
 
     return {

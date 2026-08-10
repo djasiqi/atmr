@@ -62,7 +62,7 @@ class RegisterSchema(Schema):
     profile_image = fields.Str(load_default=None)
 
     @pre_load
-    def _normalize_optional_contact(self, data, **kwargs):
+    def _normalize_optional_contact(self, data, **_kwargs):
         if not isinstance(data, dict):
             return data
         out = dict(data)
@@ -72,7 +72,7 @@ class RegisterSchema(Schema):
         return out
 
     @validates_schema
-    def _require_email_or_phone(self, data, **kwargs):
+    def _require_email_or_phone(self, data, **_kwargs):
         email = (data.get("email") or "").strip() if data.get("email") else ""
         phone = (data.get("phone") or "").strip() if data.get("phone") else ""
         password = (data.get("password") or "").strip() if data.get("password") else ""

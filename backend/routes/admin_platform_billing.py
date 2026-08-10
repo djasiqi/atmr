@@ -46,12 +46,6 @@ from services.admin_authz import (
     CAP_CONFIGURATION_MANAGE,
     require_admin_capability,
 )
-
-# Admin déjà protégé (JWT + rôle + IP) : plafonds adaptés à l’UI interactive
-# (rechargements modal / recalculs), pas aux endpoints publics.
-_RL_ADMIN_READ = "300 per hour"
-_RL_ADMIN_WRITE = "200 per hour"
-_RL_ADMIN_HEAVY = "60 per hour"
 from services.platform_billing.contracts import (
     close_contract,
     create_contract_version,
@@ -64,6 +58,12 @@ from services.platform_billing.decimal_json import (
     decimal_to_str_trim,
     parse_decimal,
 )
+from services.platform_billing.dossier_registry import (
+    export_dossiers_csv,
+    get_dossier,
+    list_dossiers,
+)
+from services.platform_billing.due_date import update_issued_invoice_due_date
 from services.platform_billing.engine import (
     get_or_create_period,
     lock_platform_billing_period,
@@ -80,6 +80,12 @@ from services.platform_billing.issuance import (
     statement_issuance_ready,
     statement_qr_ready,
 )
+from services.platform_billing.issued_registry import (
+    export_issued_invoices_csv,
+    get_issued_invoice_detail,
+    list_issued_invoices,
+    serialize_issued_invoice,
+)
 from services.platform_billing.payments import (
     cancel_issued_invoice,
     create_credit_note,
@@ -89,20 +95,14 @@ from services.platform_billing.payments import (
     refresh_overdue_statuses,
     reverse_payment,
 )
-from services.platform_billing.due_date import update_issued_invoice_due_date
-from services.platform_billing.dossier_registry import (
-    export_dossiers_csv,
-    get_dossier,
-    list_dossiers,
-)
-from services.platform_billing.issued_registry import (
-    export_issued_invoices_csv,
-    get_issued_invoice_detail,
-    list_issued_invoices,
-    serialize_issued_invoice,
-)
 from services.platform_billing.readiness import build_company_readiness
 from shared.error_handlers import APIErrorHandler
+
+# Admin déjà protégé (JWT + rôle + IP) : plafonds adaptés à l’UI interactive
+# (rechargements modal / recalculs), pas aux endpoints publics.
+_RL_ADMIN_READ = "300 per hour"
+_RL_ADMIN_WRITE = "200 per hour"
+_RL_ADMIN_HEAVY = "60 per hour"
 
 logger = logging.getLogger(__name__)
 _MAX_CALENDAR_MONTH = 12
@@ -2153,12 +2153,12 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
         @ip_whitelist_required()
         @limiter.limit(_RL_ADMIN_WRITE)
         def post(self, issued_id: int):
+            from models.platform_billing import PlatformIssuedInvoice as PII
             from services.platform_billing.invoice_replace import (
                 InvoiceReplaceError,
                 editor_mode_for,
                 preview_editor_pdf,
             )
-            from models.platform_billing import PlatformIssuedInvoice as PII
 
             inv = db.session.get(PII, issued_id)
             if not inv:
@@ -2214,14 +2214,14 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
         @ip_whitelist_required()
         @limiter.limit(_RL_ADMIN_WRITE)
         def post(self, issued_id: int):
+            from models.platform_billing import PlatformIssuedInvoice as PII
+            from services.admin_authz import user_has_admin_capability
             from services.platform_billing.invoice_replace import (
                 InvoiceReplaceConflict,
                 InvoiceReplaceError,
                 editor_mode_for,
                 replace_issued_invoice,
             )
-            from models.platform_billing import PlatformIssuedInvoice as PII
-            from services.admin_authz import user_has_admin_capability
             from shared.infrastructure.adapters.auth_adapter import (
                 get_current_user_via_use_case,
             )
@@ -2323,7 +2323,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
         @ip_whitelist_required()
         @limiter.limit(_RL_ADMIN_WRITE)
         def post(self, company_id: int):
-            from datetime import datetime, timedelta, timezone
+            from datetime import datetime, timedelta
 
             from services.platform_billing.capabilities import pause_dunning
 
@@ -2350,11 +2350,11 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                         logger_instance=logger,
                     )
                 if until.tzinfo is None:
-                    until = until.replace(tzinfo=timezone.utc)
+                    until = until.replace(tzinfo=UTC)
             else:
                 days = int(data.get("days") or 14)
-                until = datetime.now(timezone.utc) + timedelta(days=max(1, days))
-            if until <= datetime.now(timezone.utc):
+                until = datetime.now(UTC) + timedelta(days=max(1, days))
+            if until <= datetime.now(UTC):
                 return APIErrorHandler.handle_validation_error(
                     "paused_until doit être dans le futur.",
                     logger_instance=logger,
@@ -2409,7 +2409,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
         @ip_whitelist_required()
         @limiter.limit(_RL_ADMIN_WRITE)
         def put(self, company_id: int):
-            from datetime import datetime, timedelta, timezone
+            from datetime import datetime, timedelta
 
             from models.enums import (
                 PlatformBillingAccessState,
@@ -2446,9 +2446,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                     state == PlatformBillingAccessState.ACTIVE.value
                     and pause_days is not None
                 ):
-                    until = datetime.now(timezone.utc) + timedelta(
-                        days=max(1, int(pause_days))
-                    )
+                    until = datetime.now(UTC) + timedelta(days=max(1, int(pause_days)))
                     pause_dunning(
                         company_id,
                         until=until,

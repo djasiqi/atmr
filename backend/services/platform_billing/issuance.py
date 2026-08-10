@@ -24,8 +24,8 @@ from models.platform_billing import (
     CompanyPlatformBillingConfig,
     PlatformBillingCreditor,
     PlatformBillingPeriod,
-    PlatformIssuedInvoice,
     PlatformInvoice,
+    PlatformIssuedInvoice,
     PlatformSupportEntry,
 )
 from services.platform_billing.errors import BillingInvariantError
@@ -952,7 +952,7 @@ def issue_ready_for_period(period_id: int) -> dict[str, Any]:
                     "message": e.message,
                 }
             )
-        except Exception as e:  # noqa: BLE001 — batch isolé
+        except Exception as e:
             logger.exception("issue-ready failed for %s", key)
             failed.append(
                 {

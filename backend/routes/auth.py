@@ -56,6 +56,7 @@ from models import (
     User,
 )  # Client utilisé pour création directe, User pour type annotations
 from models.enums import ClientType, UserRole
+from models.mobile_device_session import MobileDeviceSessionStatus
 from repositories.user_repository import UserRepository
 from routes.api_error_models import (
     create_api_error_model,
@@ -87,12 +88,12 @@ from security.mobile_device_session_service import (
     http_response_for_idempotency,
     is_rotation_idempotency_conflict,
     resolve_rotation_idempotency,
-    revoke_session as revoke_mobile_device_session,
     store_rotation_result,
     validate_mobile_session,
 )
-from models.mobile_device_session import MobileDeviceSessionStatus
-from security.mobile_session_guard import extract_mobile_session_claims
+from security.mobile_device_session_service import (
+    revoke_session as revoke_mobile_device_session,
+)
 from security.refresh_token_service import (
     RefreshStoreUnavailableError,
     _hash_refresh_token,
@@ -1240,45 +1241,44 @@ def _login_post_body():
     mobile_session = None
     mobile_recovery_credential = None
     mobile_revocation_secret = None
-    if is_mobile_request:
-        if device_installation_id:
-            driver_id_for_session = getattr(user, "driver_id", None)
-            if driver_id_for_session is None:
-                driver_obj = getattr(user, "driver", None)
-                driver_id_for_session = getattr(driver_obj, "id", None)
-            try:
-                mobile_session, mobile_recovery_credential, mobile_revocation_secret = (
-                    create_or_reuse_session(
-                        user_id=user.id,
-                        device_installation_id=str(device_installation_id),
-                        device_name=request.headers.get("X-Device-Name"),
-                        driver_id=driver_id_for_session,
-                        role=user.role.value if user.role else None,
-                        platform=request.headers.get("X-Platform"),
-                        app_version=request.headers.get("X-App-Version"),
-                        context_id=request.headers.get("X-Active-Context-Id"),
-                    )
+    if is_mobile_request and device_installation_id:
+        driver_id_for_session = getattr(user, "driver_id", None)
+        if driver_id_for_session is None:
+            driver_obj = getattr(user, "driver", None)
+            driver_id_for_session = getattr(driver_obj, "id", None)
+        try:
+            mobile_session, mobile_recovery_credential, mobile_revocation_secret = (
+                create_or_reuse_session(
+                    user_id=user.id,
+                    device_installation_id=str(device_installation_id),
+                    device_name=request.headers.get("X-Device-Name"),
+                    driver_id=driver_id_for_session,
+                    role=user.role.value if user.role else None,
+                    platform=request.headers.get("X-Platform"),
+                    app_version=request.headers.get("X-App-Version"),
+                    context_id=request.headers.get("X-Active-Context-Id"),
                 )
-            except DeviceSessionLimitReached as limit_exc:
+            )
+        except DeviceSessionLimitReached as limit_exc:
+            db.session.rollback()
+            return {
+                "error": "device_session_limit_reached",
+                "error_code": "device_session_limit_reached",
+                "sessions": [s.serialize() for s in limit_exc.sessions],
+                "trace_id": get_trace_id(),
+            }, 409
+        except Exception as mds_exc:
+            # F1b : login mobile v1 fail-closed — pas de session orpheline
+            logger.error("MobileDeviceSession login failed: %s", mds_exc)
+            if contract == "mobile-device-session-v1" or is_mobile_request:
                 db.session.rollback()
                 return {
-                    "error": "device_session_limit_reached",
-                    "error_code": "device_session_limit_reached",
-                    "sessions": [s.serialize() for s in limit_exc.sessions],
+                    "error": "session_create_failed",
+                    "error_code": "session_create_failed",
+                    "retryable": True,
                     "trace_id": get_trace_id(),
-                }, 409
-            except Exception as mds_exc:
-                # F1b : login mobile v1 fail-closed — pas de session orpheline
-                logger.error("MobileDeviceSession login failed: %s", mds_exc)
-                if contract == "mobile-device-session-v1" or is_mobile_request:
-                    db.session.rollback()
-                    return {
-                        "error": "session_create_failed",
-                        "error_code": "session_create_failed",
-                        "retryable": True,
-                        "trace_id": get_trace_id(),
-                    }, 503
-                mobile_session = None
+                }, 503
+            mobile_session = None
 
     # P0 : contrat v1 — aucun HTTP 200 sans session durable complète
     if contract == "mobile-device-session-v1" and (
@@ -2674,7 +2674,7 @@ class RefreshToken(Resource):
                     if mapped is not None:
                         return mapped
 
-                err_code, retryable = validate_mobile_session(
+                err_code, _retryable = validate_mobile_session(
                     session_id=str(old_session_id),
                     session_epoch=(
                         int(old_session_epoch)
@@ -3253,13 +3253,11 @@ class Logout(Resource):
                     return True
                 # Même utilisateur si identity connue
                 refresh_sub = decoded.get("sub")
-                if (
+                return not (
                     current_user_id
                     and refresh_sub
                     and str(refresh_sub) != str(current_user_id)
-                ):
-                    return False
-                return True
+                )
 
             try:
                 if session_id:

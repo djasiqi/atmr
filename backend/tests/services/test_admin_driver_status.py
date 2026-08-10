@@ -51,7 +51,7 @@ def _company(owner: User) -> Company:
     return c
 
 
-@pytest.fixture()
+@pytest.fixture
 def seeded(db_session):
     seed_control_plane_catalogs(commit=False)
     db.session.flush()
@@ -153,7 +153,7 @@ def test_reactivate_keeps_available_false(db_session, seeded):
 
 
 def test_noop_same_status(db_session, seeded):
-    u, d, _c, admin = _make_driver_tenant(seeded)
+    u, _d, _c, admin = _make_driver_tenant(seeded)
     with patch(
         "security.mobile_device_session_service.revoke_user_security_sessions"
     ) as revoke_mock:
@@ -186,17 +186,19 @@ def test_expected_mismatch_409(db_session, seeded):
 def test_revoke_fail_closed_rolls_back(db_session, seeded):
     u, d, _c, admin = _make_driver_tenant(seeded)
     driver_id = d.id
-    with patch(
-        "security.mobile_device_session_service.revoke_user_security_sessions",
-        side_effect=RuntimeError("boom"),
+    with (
+        patch(
+            "security.mobile_device_session_service.revoke_user_security_sessions",
+            side_effect=RuntimeError("boom"),
+        ),
+        pytest.raises(AdminDriverStatusError) as exc,
     ):
-        with pytest.raises(AdminDriverStatusError) as exc:
-            set_driver_status(
-                user_id=u.id,
-                is_active=False,
-                reason="Échec revoke attendu",
-                actor_admin_id=admin.id,
-            )
+        set_driver_status(
+            user_id=u.id,
+            is_active=False,
+            reason="Échec revoke attendu",
+            actor_admin_id=admin.id,
+        )
     assert exc.value.status_code == 503
     refreshed = db.session.get(Driver, driver_id)
     assert refreshed is not None

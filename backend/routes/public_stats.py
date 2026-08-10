@@ -6,7 +6,8 @@ import json
 import re
 import time
 import unicodedata
-from datetime import datetime, time as dt_time
+from datetime import datetime
+from datetime import time as dt_time
 from threading import Lock
 from urllib.parse import unquote
 

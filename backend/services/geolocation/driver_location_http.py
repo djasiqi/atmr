@@ -215,9 +215,12 @@ def get_idempotent_response(
             durability = str(payload.get("durability") or "")
             if durability == "queued_async" or payload.get("queued") is True:
                 return None
-            if durability and durability != "persisted_sync":
-                if payload.get("ack_status") != "persisted":
-                    return None
+            if (
+                durability
+                and durability != "persisted_sync"
+                and payload.get("ack_status") != "persisted"
+            ):
+                return None
         return payload
     except Exception as e:
         logger.debug("idem get failed: %s", e)

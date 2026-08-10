@@ -4,11 +4,6 @@ from decimal import Decimal
 
 import pytest
 
-from services.platform_billing.invoice_replace import (
-    InvoiceReplaceError,
-    compute_totals,
-    normalize_editor_lines,
-)
 from services.platform_billing.dossier_status import (
     ACTION_CORRECT_INVOICE,
     ACTION_CREDIT,
@@ -16,6 +11,11 @@ from services.platform_billing.dossier_status import (
     STATUS_A_ENVOYER,
     STATUS_PAID,
     resolve_actions,
+)
+from services.platform_billing.invoice_replace import (
+    InvoiceReplaceError,
+    compute_totals,
+    normalize_editor_lines,
 )
 
 

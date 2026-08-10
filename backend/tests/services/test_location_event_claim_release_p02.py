@@ -35,7 +35,7 @@ def test_should_skip_after_release_is_false(monkeypatch) -> None:
     monkeypatch.setattr(d, "_redis", lambda: fake)
     monkeypatch.setattr(d, "should_skip_proximity_duplicate", lambda *_a, **_k: False)
     now = datetime.now(UTC)
-    skip1, reason1 = d.should_skip_location_ingest(
+    skip1, _reason1 = d.should_skip_location_ingest(
         1, 46.0, 6.0, now, "availability_presence", "evt-1"
     )
     assert skip1 is False

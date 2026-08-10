@@ -330,7 +330,7 @@ class ControlPlaneProjector:
         self,
         user: User,
         *,
-        old_role: str,
+        _old_role: str,
         old_company_id: int | None,
         old_institution_id: int | None,
         old_driver_id: int | None,
@@ -371,9 +371,8 @@ class ControlPlaneProjector:
             if driver_role_id is not None and role_id == driver_role_id:
                 if new_role != "DRIVER":
                     should_remove = True
-            elif role_id in set(inst_role_ids):
-                if new_role != "INSTITUTION":
-                    should_remove = True
+            elif role_id in set(inst_role_ids) and new_role != "INSTITUTION":
+                should_remove = True
 
             if should_remove:
                 m.membership_status = "removed"

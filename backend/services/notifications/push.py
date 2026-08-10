@@ -48,11 +48,11 @@ def _parse_retry_delays() -> tuple[float, ...]:
     if not raw:
         return _DEFAULT_RETRY_DELAYS
     parts: list[float] = []
-    for p in raw.split(","):
-        p = p.strip()
-        if not p:
+    for raw_part in raw.split(","):
+        part = raw_part.strip()
+        if not part:
             continue
-        parts.append(float(p))
+        parts.append(float(part))
     return tuple(parts) if parts else _DEFAULT_RETRY_DELAYS
 
 

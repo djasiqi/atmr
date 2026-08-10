@@ -10,7 +10,7 @@ from __future__ import annotations  # noqa: I001
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from decimal import Decimal, InvalidOperation
 from typing import Any, cast
 
 from sqlalchemy import and_, exists, or_
@@ -476,13 +476,13 @@ class GenerateClinicMonthlyInvoiceUseCase:
                 # enfants déjà facturés bloquent le parent ouvert
                 blocked_by_child = False
                 for other in by_id.values():
-                    if getattr(other, "parent_booking_id", None) == b.id:
-                        if (
-                            other.invoice_line_id is not None
-                            and booking_has_blocking_invoice_line(other)
-                        ):
-                            blocked_by_child = True
-                            break
+                    if (
+                        getattr(other, "parent_booking_id", None) == b.id
+                        and other.invoice_line_id is not None
+                        and booking_has_blocking_invoice_line(other)
+                    ):
+                        blocked_by_child = True
+                        break
                 if blocked_by_child:
                     continue
                 # période : ancre = principal (non-retour ou parent) dans le mois
@@ -493,16 +493,17 @@ class GenerateClinicMonthlyInvoiceUseCase:
                 if is_return and pid is not None and int(pid) in by_id:
                     anchor = by_id[int(pid)]
                     ast = getattr(anchor, "scheduled_time", None)
-                    if ast is None or not (start_date <= ast < end_date):
+                    if (
+                        (ast is None or not (start_date <= ast < end_date))
+                        and (st is None or not (start_date <= st < end_date))
+                        and int(b.id)
+                        not in ({int(x) for x in (input_data.reservation_ids or [])})
+                    ):
                         # retour hors mois dont l'aller n'est pas ancré manuellement
-                        if st is None or not (start_date <= st < end_date):
-                            if int(b.id) not in (
-                                set(int(x) for x in (input_data.reservation_ids or []))
-                            ):
-                                continue
+                        continue
                 elif st is None or not (start_date <= st < end_date):
                     if int(b.id) not in (
-                        set(int(x) for x in (input_data.reservation_ids or []))
+                        {int(x) for x in (input_data.reservation_ids or [])}
                     ):
                         # pair hors période chargé pour l'unité uniquement
                         pass

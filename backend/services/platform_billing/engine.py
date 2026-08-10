@@ -517,33 +517,32 @@ def _build_invoice_for_company(
                 Decimal(str(cfg.custom_subscription_amount or 0))
             )
             tier_label = "Montant fixe"
-        else:
-            # volume : grille versionnée si dispo, sinon legacy dispatch
-            if getattr(cfg, "use_global_pricing_grid", True) or grid_id:
-                grid = None
-                if grid_id:
-                    grid = db.session.get(PlatformSubscriptionPricingGrid, grid_id)
-                if grid is None:
-                    grid = _active_default_grid(period_start)
-                if grid is not None:
-                    grid_id = grid.id
-                    tier = _select_tier_from_grid(grid.id, vol)
-                    sub_amount = (
-                        money_round_chf(tier.price_monthly) if tier else Decimal("0.00")
-                    )
-                    tier_label = tier.label if tier else None
-                else:
-                    tier = select_subscription_tier(dm, vol)
-                    sub_amount = (
-                        money_round_chf(tier.price_monthly) if tier else Decimal("0.00")
-                    )
-                    tier_label = tier.label if tier else None
+        # volume : grille versionnée si dispo, sinon legacy dispatch
+        elif getattr(cfg, "use_global_pricing_grid", True) or grid_id:
+            grid = None
+            if grid_id:
+                grid = db.session.get(PlatformSubscriptionPricingGrid, grid_id)
+            if grid is None:
+                grid = _active_default_grid(period_start)
+            if grid is not None:
+                grid_id = grid.id
+                tier = _select_tier_from_grid(grid.id, vol)
+                sub_amount = (
+                    money_round_chf(tier.price_monthly) if tier else Decimal("0.00")
+                )
+                tier_label = tier.label if tier else None
             else:
                 tier = select_subscription_tier(dm, vol)
                 sub_amount = (
                     money_round_chf(tier.price_monthly) if tier else Decimal("0.00")
                 )
                 tier_label = tier.label if tier else None
+        else:
+            tier = select_subscription_tier(dm, vol)
+            sub_amount = (
+                money_round_chf(tier.price_monthly) if tier else Decimal("0.00")
+            )
+            tier_label = tier.label if tier else None
 
         sub_snap = {
             "rule": "subscription_own_portfolio_created_at_excluding_cancelled",

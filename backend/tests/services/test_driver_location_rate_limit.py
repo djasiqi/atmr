@@ -54,13 +54,16 @@ def test_rate_limit_memory_fallback_when_redis_unavailable(
     monkeypatch.setattr(dlh, "redis_client", None)
     monkeypatch.setattr(dlh, "_MEMORY_FALLBACK_LIMIT", 2)
     monkeypatch.setattr(dlh, "_memory_hits", {})
-    a1, r1, reason1 = dlh.check_http_driver_location_rate_limit(42)
-    a2, r2, reason2 = dlh.check_http_driver_location_rate_limit(42)
+    a1, _r1, reason1 = dlh.check_http_driver_location_rate_limit(42)
+    a2, _r2, reason2 = dlh.check_http_driver_location_rate_limit(42)
     a3, r3, reason3 = dlh.check_http_driver_location_rate_limit(42)
-    assert a1 is True and reason1 is None
-    assert a2 is True and reason2 is None
+    assert a1 is True
+    assert reason1 is None
+    assert a2 is True
+    assert reason2 is None
     assert a3 is False
-    assert r3 is not None and r3 >= 1
+    assert r3 is not None
+    assert r3 >= 1
     assert reason3 == "memory_fallback"
 
 

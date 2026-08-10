@@ -15,7 +15,6 @@ from sqlalchemy.orm import joinedload
 from ext import db
 from models.company import Company
 from models.enums import (
-    PlatformIssuedDocumentType,
     PlatformIssuedInvoiceStatus,
 )
 from models.platform_billing import (
@@ -140,7 +139,7 @@ def build_dossier_row(
     if zc and status == "PRETE_A_EMETTRE":
         issuable = False
         if "Montant total doit être > 0 pour QR" not in qr_errors:
-            qr_errors = list(qr_errors) + ["Montant total doit être > 0 pour QR"]
+            qr_errors = [*list(qr_errors), "Montant total doit être > 0 pour QR"]
 
     credit_id = _credit_note_id(primary)
     replaced_id = (
@@ -431,11 +430,11 @@ def _compute_stats(dossiers: list[dict[str, Any]]) -> dict[str, Any]:
     # Avoirs liés : somme des credit_note totals si IDs présents
     credit_ids = [d["credit_note_id"] for d in dossiers if d.get("credit_note_id")]
     if credit_ids:
-        credits = PlatformIssuedInvoice.query.filter(
+        credit_invoices = PlatformIssuedInvoice.query.filter(
             PlatformIssuedInvoice.id.in_(credit_ids)
         ).all()
         avoirs = Decimal("0.00")
-        for c in credits:
+        for c in credit_invoices:
             avoirs += money_round_chf(abs(Decimal(str(c.total_amount or 0))))
 
     facture_net = money_round_chf(facture_brut - avoirs)

@@ -143,10 +143,7 @@ class UpdateDriverLocationUseCase:
         canonical_updated = bool(getattr(res, "canonical_updated", False))
         db_persisted_raw = getattr(res, "db_persisted", None)
         db_persisted: bool | None
-        if db_persisted_raw is None:
-            db_persisted = None
-        else:
-            db_persisted = bool(db_persisted_raw)
+        db_persisted = None if db_persisted_raw is None else bool(db_persisted_raw)
 
         return UpdateDriverLocationResult(
             snapped_lat=float(snapped_lat),

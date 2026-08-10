@@ -50,7 +50,6 @@ from services.platform_billing.partner_agreement_particular_docx import (
 from services.platform_billing.partner_agreement_particular_pdf import (
     PartnerAgreementLayoutError,
     build_particular_pdf_bytes,
-    count_pdf_pages,
 )
 from services.platform_billing.partner_agreement_preview import (
     apply_draft_watermark,
@@ -69,7 +68,6 @@ from services.platform_billing.partner_agreement_versions import (
     RETENTION_POLICY_VERSION,
     SPECIAL_CONDITIONS_MAX_LENGTH,
     SUBPROCESSORS_VERSION,
-    TEMPLATE_VERSION,
 )
 from services.platform_billing.partner_identity import (
     resolve_operator_contract_identity,
@@ -122,7 +120,7 @@ def write_upload_bytes_atomic(filepath: Path, data: bytes) -> None:
             handle.write(data)
             handle.flush()
             os.fsync(handle.fileno())
-        os.replace(tmp_path, filepath)
+        tmp_path.replace(filepath)
     except Exception:
         try:
             if tmp_path.exists():

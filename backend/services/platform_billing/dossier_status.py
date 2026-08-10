@@ -249,7 +249,7 @@ def operational_status(
 def resolve_actions(
     *,
     status: str,
-    statement: PlatformInvoice | None,
+    _statement: PlatformInvoice | None,
     primary_invoice: PlatformIssuedInvoice | None,
     credit_note_id: int | None,
     issuable: bool,
@@ -353,10 +353,7 @@ def resolve_actions(
         _block(ACTION_CANCEL, "Facture déjà envoyée")
     elif status == STATUS_OVERDUE:
         # Pas d'API rappel unitaire fiable en V1 → paiement en principal
-        if _can(ACTION_RECORD_PAYMENT):
-            primary = ACTION_RECORD_PAYMENT
-        else:
-            primary = ACTION_VIEW
+        primary = ACTION_RECORD_PAYMENT if _can(ACTION_RECORD_PAYMENT) else ACTION_VIEW
         _add(ACTION_RECORD_PAYMENT)
         _add(ACTION_VIEW_PAYMENTS)
         _add(ACTION_DOWNLOAD_PDF)
@@ -401,13 +398,17 @@ def resolve_actions(
     else:
         primary = ACTION_VIEW
 
-    if inv is not None and ACTION_DOWNLOAD_PDF not in allowed:
-        if status not in (
+    if (
+        inv is not None
+        and ACTION_DOWNLOAD_PDF not in allowed
+        and status
+        not in (
             STATUS_A_CALCULER,
             STATUS_A_CONTROLER,
             STATUS_PRETE_A_CLOTURER,
-        ):
-            _add(ACTION_DOWNLOAD_PDF)
+        )
+    ):
+        _add(ACTION_DOWNLOAD_PDF)
 
     # Filtrer allowed par caps si fournis
     if caps:

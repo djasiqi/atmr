@@ -22,36 +22,36 @@ from services.platform_billing.partner_identity import (
 
 
 def _company(**kwargs):
-    base = dict(
-        id=1,
-        name="Emmenez-moi Sàrl",
-        uid_ide="CHE-273.048.653",
-        domicile_address_line1="Route de Chevrens 145",
-        domicile_address_line2=None,
-        domicile_zip="1247",
-        domicile_city="Anières",
-        domicile_country="CH",
-        legal_form=LegalForm.SARL.value,
-        signatory_name="Khalid ALAOUI",
-        signatory_title="Gérant",
-        billing_email=None,
-        contact_email=None,
-    )
+    base = {
+        "id": 1,
+        "name": "Emmenez-moi Sàrl",
+        "uid_ide": "CHE-273.048.653",
+        "domicile_address_line1": "Route de Chevrens 145",
+        "domicile_address_line2": None,
+        "domicile_zip": "1247",
+        "domicile_city": "Anières",
+        "domicile_country": "CH",
+        "legal_form": LegalForm.SARL.value,
+        "signatory_name": "Khalid ALAOUI",
+        "signatory_title": "Gérant",
+        "billing_email": None,
+        "contact_email": None,
+    }
     base.update(kwargs)
     return SimpleNamespace(**base)
 
 
 def _profile(**kwargs):
-    base = dict(
-        id=42,
-        legal_name="Emmenez-moi Sàrl",
-        uid_ide="CHE-273.048.653",
-        street_name="Route de Chevrens",
-        building_number="145",
-        postal_code="1247",
-        city="Anières",
-        country_code="CH",
-    )
+    base = {
+        "id": 42,
+        "legal_name": "Emmenez-moi Sàrl",
+        "uid_ide": "CHE-273.048.653",
+        "street_name": "Route de Chevrens",
+        "building_number": "145",
+        "postal_code": "1247",
+        "city": "Anières",
+        "country_code": "CH",
+    }
     base.update(kwargs)
     return SimpleNamespace(**base)
 
@@ -321,8 +321,9 @@ def test_delivery_zip_deterministic_and_manifest_without_zip_sha():
         retention_policy_version="lirie-retention-v1",
         subprocessors_version="lirie-subprocessors-v2",
     )
-    from pypdf import PdfReader
     from io import BytesIO
+
+    from pypdf import PdfReader
 
     manifest_text = "\n".join(
         (p.extract_text() or "") for p in PdfReader(BytesIO(manifest)).pages

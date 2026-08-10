@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import os
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
 from flask import current_app
@@ -85,7 +85,7 @@ def _assert_access_expiry_metadata(data: dict, *, mobile: bool = False) -> None:
     raw = str(data["access_expires_at"]).replace("Z", "+00:00")
     expires_at = datetime.fromisoformat(raw)
     assert expires_at.tzinfo is not None
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     # Cohérence : expires_at ≈ now + access_expires_in (±30s)
     expected = now + timedelta(seconds=int(data["access_expires_in"]))
     assert abs((expires_at - expected).total_seconds()) <= 30

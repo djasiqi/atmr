@@ -15,7 +15,6 @@ from ext import db
 from models.company import Company
 from models.control_plane import (
     OrganizationMembership,
-    PlatformOrganization,
     RoleTemplate,
 )
 from models.driver import Driver
@@ -655,13 +654,16 @@ class AdminAccountRoleTransitionService:
         old_role_s = normalized_role_value(user.role)
 
         # Quitter COMPANY avec ownership
-        if old_role_s == "COMPANY" and new_role_s != "COMPANY":
-            if _is_active_company_owner(user):
-                raise RoleTransitionError(
-                    "Transition hors ownership Company requiert l'assistant CP-PR3.",
-                    status_code=409,
-                    error="company_ownership_transition_required",
-                )
+        if (
+            old_role_s == "COMPANY"
+            and new_role_s != "COMPANY"
+            and _is_active_company_owner(user)
+        ):
+            raise RoleTransitionError(
+                "Transition hors ownership Company requiert l'assistant CP-PR3.",
+                status_code=409,
+                error="company_ownership_transition_required",
+            )
 
         if new_role_s == "DRIVER":
             _resolve_company_for_driver(company_id)
@@ -735,16 +737,19 @@ class AdminAccountRoleTransitionService:
                     status_code=409,
                     error="last_platform_admin_protected",
                 )
-            if not for_preview and actor_admin_id is not None:
-                if not (
+            if (
+                not for_preview
+                and actor_admin_id is not None
+                and not (
                     user_has_admin_capability(actor_admin_id, CAP_USERS_MANAGE)
                     and user_has_admin_capability(actor_admin_id, CAP_USERS_SECURITY)
-                ):
-                    raise RoleTransitionError(
-                        "Dual capacité manage+security requise pour rétrograder un ADMIN.",
-                        status_code=403,
-                        error="capability_denied",
-                    )
+                )
+            ):
+                raise RoleTransitionError(
+                    "Dual capacité manage+security requise pour rétrograder un ADMIN.",
+                    status_code=403,
+                    error="capability_denied",
+                )
 
     def _apply_legacy_mutations(
         self,

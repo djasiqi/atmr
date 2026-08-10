@@ -41,7 +41,7 @@ def format_invoice_amount_for_filename(amount: Any) -> str:
         return "0CHF"
     rounded = round(value * 100) / 100
     if abs(rounded - round(rounded)) < 1e-9:
-        return f"{int(round(rounded))}CHF"
+        return f"{round(rounded)}CHF"
     return f"{rounded:.2f}".replace(".", "_") + "CHF"
 
 
@@ -103,7 +103,7 @@ def resolve_invoice_filename_client_label(invoice: Any) -> str:
 
     # Repli via sérialisation légère si relations absentes
     try:
-        serialized = invoice._serialize_client()  # noqa: SLF001
+        serialized = invoice._serialize_client()
         label = _client_label_from_mapping(serialized)
         if label:
             return label

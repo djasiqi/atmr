@@ -40,10 +40,6 @@ from repositories.invoice_repository import InvoiceRepository
 from repositories.user_repository import UserRepository
 from routes.admin_platform_billing import register_platform_billing_routes
 from security.ip_whitelist import ip_whitelist_required
-from services.admin_partners_organizations import (
-    build_account_integrity,
-    list_partner_organizations,
-)
 from services.admin_authz import (
     CAP_ACCOUNTS_READ,
     CAP_LABS_EXECUTE,
@@ -54,24 +50,27 @@ from services.admin_authz import (
     capabilities_payload_for_user,
     require_admin_capability,
 )
-from services.control_plane.effective_access import compute_effective_access
-from services.control_plane.organizations_read import (
-    get_organization_by_public_id,
-    list_anomalies,
-    list_organizations_with_read_mode,
-)
-from services.admin_role_utils import normalized_role_value
 from services.admin_dashboard_summary import build_admin_dashboard_summary
+from services.admin_partners_organizations import (
+    build_account_integrity,
+)
 from services.admin_platform_bookings import (
     build_admin_booking_detail,
     export_admin_bookings_csv,
     list_admin_platform_bookings,
     parse_admin_booking_request_args,
 )
+from services.admin_role_utils import normalized_role_value
 from services.client_surface.indicative_fare import (
     IndicativeFareValidationError,
     config_to_public_dict,
     merge_admin_update,
+)
+from services.control_plane.effective_access import compute_effective_access
+from services.control_plane.organizations_read import (
+    get_organization_by_public_id,
+    list_anomalies,
+    list_organizations_with_read_mode,
 )
 from services.monitoring.websocket_metrics import ws_metrics
 from shared.error_handlers import APIErrorHandler

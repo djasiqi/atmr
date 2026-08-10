@@ -84,7 +84,7 @@ def mobile_session_required(fn: F) -> F:
         except Exception as exc:
             logger.debug("mobile_session user resolve: %s", exc)
 
-        error_code, retryable = validate_mobile_session(
+        error_code, _retryable = validate_mobile_session(
             session_id=session_id,
             session_epoch=session_epoch,
             user_id=user_id,

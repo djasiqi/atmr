@@ -130,7 +130,8 @@ def test_post_clients_me_bookings_ignores_forbidden_fields(
     assert response.status_code == 201, response.get_json()
     body = response.get_json()
     assert body is not None
-    assert published and len(published) == 1
+    assert published
+    assert len(published) == 1
     assert "bill_to_patient" not in published[0]["data"]
     assert "amount_source" not in published[0]["data"]
 

@@ -95,26 +95,24 @@ class TestBookingTrendsDeprecated:
         exec_result = MagicMock()
         exec_result.scalar_one.return_value = 0
 
-        with app.app_context():
-            with (
-                patch.object(summary_mod, "datetime") as mock_dt,
-                patch.object(summary_mod.db.session, "scalar", return_value=0),
-                patch.object(
-                    summary_mod.db.session, "execute", return_value=exec_result
-                ),
-                patch.object(summary_mod.Booking, "query", query_chain),
-                patch(
-                    "repositories.booking_repository.BookingRepository.get_monthly_booking_counts"
-                ) as monthly,
-            ):
-                mock_dt.now.return_value = fixed_now
-                data = summary_mod.build_admin_dashboard_summary()
-                monthly.assert_not_called()
-                assert data["booking_trends"] == []
-                assert "generated_at" in data
-                assert data["priorities"]["critical_attention_count"] == 0
-                assert "platform_invoiced_current_month_chf" in data["kpi_business"]
-                assert "bookings_canceled_from_created_7d" in data["kpi_business"]
+        with (
+            app.app_context(),
+            patch.object(summary_mod, "datetime") as mock_dt,
+            patch.object(summary_mod.db.session, "scalar", return_value=0),
+            patch.object(summary_mod.db.session, "execute", return_value=exec_result),
+            patch.object(summary_mod.Booking, "query", query_chain),
+            patch(
+                "repositories.booking_repository.BookingRepository.get_monthly_booking_counts"
+            ) as monthly,
+        ):
+            mock_dt.now.return_value = fixed_now
+            data = summary_mod.build_admin_dashboard_summary()
+            monthly.assert_not_called()
+            assert data["booking_trends"] == []
+            assert "generated_at" in data
+            assert data["priorities"]["critical_attention_count"] == 0
+            assert "platform_invoiced_current_month_chf" in data["kpi_business"]
+            assert "bookings_canceled_from_created_7d" in data["kpi_business"]
 
 
 class TestIssuedExcluded:

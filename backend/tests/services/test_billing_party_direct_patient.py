@@ -126,7 +126,8 @@ def test_get_or_create_patient_bp_creates_without_client_billing_party(
     assert bp.type == BillingPartyType.PATIENT
     assert bp.external_ref == f"patient_client:{portfolio_client.id}"
     assert "Drin" in bp.display_name
-    assert bp.billing_address and "1203" in bp.billing_address
+    assert bp.billing_address
+    assert "1203" in bp.billing_address
     assert (
         ClientBillingParty.query.filter_by(
             client_id=portfolio_client.id, billing_party_id=bp.id

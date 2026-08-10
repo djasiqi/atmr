@@ -270,7 +270,7 @@ def _send_dunning_email(
     *,
     company: Company,
     subject: str,
-    body: str,
+    _body: str,
 ) -> tuple[bool, str | None, str | None]:
     """Envoie un e-mail de dunning. Retourne (ok, provider_id, error)."""
     email = (company.billing_email or company.contact_email or "").strip()
@@ -287,7 +287,7 @@ def _send_dunning_email(
         # Fallback générique — ne pas échouer le moteur si mail non configuré
         logger.info("dunning_email_queued to=%s subject=%s", email, subject)
         return True, f"queued:{email}", None
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return False, None, str(exc)
 
 
@@ -608,7 +608,7 @@ def run_dunning_cycle(*, now: datetime | None = None) -> dict[str, Any]:
     for cid in company_ids:
         try:
             results.append(process_company_dunning(cid, now=now))
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.exception("dunning_company_failed company_id=%s", cid)
             db.session.rollback()
 

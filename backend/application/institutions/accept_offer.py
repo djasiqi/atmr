@@ -244,8 +244,8 @@ class AcceptOfferUseCase:
                 )
 
             from services.platform_billing.capabilities import (
-                BillingCapability,
                 ERROR_BILLING_ACCESS_RESTRICTED,
+                BillingCapability,
                 is_billing_capability_allowed,
             )
 

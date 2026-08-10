@@ -34,8 +34,5 @@ def billing_period_has_ended(
 ) -> bool:
     """True si le mois calendaire Zurich est terminé (now >= début du mois suivant)."""
     now = now_utc if now_utc is not None else datetime.now(UTC)
-    if now.tzinfo is None:
-        now = now.replace(tzinfo=UTC)
-    else:
-        now = now.astimezone(UTC)
+    now = now.replace(tzinfo=UTC) if now.tzinfo is None else now.astimezone(UTC)
     return now >= next_month_start_zurich_utc(year, month)

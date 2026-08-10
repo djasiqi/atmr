@@ -1013,15 +1013,14 @@ def _inset_swiss_qrbill_svg_text(
                     new_x = min(x + delta, sep_x - 6.0 * pt_per_mm)
                 else:
                     new_x = x + delta
-        else:
-            # Partie paiement : si trop proche du bord droit, reculer
-            if not anchor_end and x > right_limit - 40.0 * pt_per_mm:
-                # colonne info (~148 mm à droite) : garder une marge droite
-                overflow = (x + 55.0 * pt_per_mm) - right_limit
-                if overflow > 0:
-                    new_x = x - overflow
-            elif anchor_end and x > right_limit:
-                new_x = right_limit
+        # Partie paiement : si trop proche du bord droit, reculer
+        elif not anchor_end and x > right_limit - 40.0 * pt_per_mm:
+            # colonne info (~148 mm à droite) : garder une marge droite
+            overflow = (x + 55.0 * pt_per_mm) - right_limit
+            if overflow > 0:
+                new_x = x - overflow
+        elif anchor_end and x > right_limit:
+            new_x = right_limit
         if abs(new_x - x) < 0.01:
             return match.group(0)
         new_attrs = re.sub(
@@ -5089,11 +5088,9 @@ class PDFService:
         self.invoices_dir = Path(self.uploads_dir, "invoices")
 
         # Créer les dossiers s'ils n'existent pas (best-effort sur volumes Docker)
-        try:
-            ensure_writable_dir(self.invoices_dir)
-        except OSError:
+        with contextlib.suppress(OSError):
             # L'écriture réelle tentera à nouveau et remontera une erreur claire.
-            pass
+            ensure_writable_dir(self.invoices_dir)
 
         # Builder pour templates HTML
         self.template_builder = InvoiceTemplateBuilder()

@@ -22,7 +22,7 @@ def _make_user(*, username: str, email: str, role: UserRole) -> User:
 
 
 @pytest.mark.parametrize(
-    "role,expected",
+    ("role", "expected"),
     [
         (UserRole.COMPANY, "COMPANY"),
         (UserRole.company, "COMPANY"),
