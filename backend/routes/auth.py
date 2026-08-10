@@ -1303,20 +1303,24 @@ def _login_post_body():
     mobile_session = None
     mobile_recovery_credential = None
     mobile_revocation_secret = None
+    mobile_reaped_session_ids: list = []
     if is_mobile_request and device_installation_id:
         driver_id_for_session = getattr(user, "driver_id", None)
         if driver_id_for_session is None:
             driver_obj = getattr(user, "driver", None)
             driver_id_for_session = getattr(driver_obj, "id", None)
         try:
-            mobile_session, mobile_recovery_credential, mobile_revocation_secret = (
-                create_or_reuse_session(
-                    user_id=user.id,
-                    device_installation_id=str(device_installation_id),
-                    driver_id=driver_id_for_session,
-                    role=user.role.value if user.role else None,
-                    meta=_resolve_device_session_metadata(),
-                )
+            (
+                mobile_session,
+                mobile_recovery_credential,
+                mobile_revocation_secret,
+                mobile_reaped_session_ids,
+            ) = create_or_reuse_session(
+                user_id=user.id,
+                device_installation_id=str(device_installation_id),
+                driver_id=driver_id_for_session,
+                role=user.role.value if user.role else None,
+                meta=_resolve_device_session_metadata(),
             )
         except DeviceSessionLimitReached as limit_exc:
             db.session.rollback()
@@ -1483,6 +1487,14 @@ def _login_post_body():
                 refresh_token,
                 ttl_seconds=int(refresh_expires_delta.total_seconds()),
             )
+
+        # Sessions provisional reaped pendant create/reuse → marqueur négatif post-commit
+        if mobile_reaped_session_ids:
+            with suppress(Exception):
+                from security.mobile_device_session_service import publish_session_revoked
+
+                for _sid in mobile_reaped_session_ids:
+                    publish_session_revoked(_sid)
 
         if not is_mobile_request:
             max_active_tokens = _resolve_max_active_refresh_tokens(user)

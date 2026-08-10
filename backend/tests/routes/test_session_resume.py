@@ -37,7 +37,7 @@ def resume_user(db):
 def resume_session(client, resume_user):
     device_installation_id = f"device-{uuid.uuid4()}"
     with client.application.app_context():
-        session, recovery, revocation = create_or_reuse_session(
+        session, recovery, revocation, _ = create_or_reuse_session(
             user_id=resume_user.id,
             device_installation_id=device_installation_id,
             role="driver",

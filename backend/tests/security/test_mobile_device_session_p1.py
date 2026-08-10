@@ -34,7 +34,7 @@ def session_user(db_session):
 def _fill_sessions(user_id: int, n: int, *, role: str = "driver") -> list:
     out = []
     for i in range(n):
-        s, _r, _v = svc.create_or_reuse_session(
+        s, _r, _v, _ = svc.create_or_reuse_session(
             user_id=user_id,
             device_installation_id=f"install-{user_id}-{i}-{uuid.uuid4().hex[:6]}",
             role=role,
@@ -56,11 +56,43 @@ def test_auth_capabilities_include_replace_and_provisional():
     assert caps["device_session_management"] is True
     assert "device_session_replace" in caps
     assert "provisional_session_confirmation" in caps
+    # Defaults fail-closed : activation runtime explicite
+    assert caps["device_session_replace"] is False
+    assert caps["provisional_session_confirmation"] is False
+
+
+def test_create_returns_reaped_ids_for_post_commit_publish(
+    app, session_user, monkeypatch
+):
+    monkeypatch.setattr(svc, "PROVISIONAL_CONFIRMATION_ENABLED", True)
+    with app.app_context():
+        with patch.object(svc, "get_device_session_limit", return_value=1):
+            old, _, _, _ = svc.create_or_reuse_session(
+                user_id=session_user.id,
+                device_installation_id="old-slot",
+                role="driver",
+            )
+            old.provisional_expires_at = datetime.now(UTC) - timedelta(minutes=1)
+            db.session.commit()
+            new_s, _, _, reaped = svc.create_or_reuse_session(
+                user_id=session_user.id,
+                device_installation_id="new-slot",
+                role="driver",
+            )
+            db.session.commit()
+            assert old.session_id in reaped
+            assert new_s.is_active()
+            fake_redis = MagicMock()
+            with patch.object(svc, "_get_redis", return_value=fake_redis):
+                for sid in reaped:
+                    svc.publish_session_revoked(sid)
+            assert fake_redis.setex.called
+            assert not fake_redis.delete.called
 
 
 def test_serialize_exposes_model_and_hides_installation(app, session_user):
     with app.app_context():
-        session, _, _ = svc.create_or_reuse_session(
+        session, _, _, _ = svc.create_or_reuse_session(
             user_id=session_user.id,
             device_installation_id="secret-install",
             role="driver",
@@ -87,7 +119,7 @@ def test_serialize_exposes_model_and_hides_installation(app, session_user):
 def test_new_session_is_provisional_when_enabled(app, session_user, monkeypatch):
     monkeypatch.setattr(svc, "PROVISIONAL_CONFIRMATION_ENABLED", True)
     with app.app_context():
-        session, _, _ = svc.create_or_reuse_session(
+        session, _, _, _ = svc.create_or_reuse_session(
             user_id=session_user.id,
             device_installation_id=f"prov-{uuid.uuid4()}",
             role="driver",
@@ -107,7 +139,7 @@ def test_new_session_is_provisional_when_enabled(app, session_user, monkeypatch)
 def test_refresh_implicitly_confirms_provisional(app, session_user, monkeypatch):
     monkeypatch.setattr(svc, "PROVISIONAL_CONFIRMATION_ENABLED", True)
     with app.app_context():
-        session, _, _ = svc.create_or_reuse_session(
+        session, _, _, _ = svc.create_or_reuse_session(
             user_id=session_user.id,
             device_installation_id=f"impl-{uuid.uuid4()}",
             role="driver",
@@ -125,12 +157,12 @@ def test_reap_expired_provisional_before_count(app, session_user, monkeypatch):
     # reload limit via env already read at import — patch getter
     with app.app_context():
         with patch.object(svc, "get_device_session_limit", return_value=2):
-            s1, _, _ = svc.create_or_reuse_session(
+            s1, _, _, _ = svc.create_or_reuse_session(
                 user_id=session_user.id,
                 device_installation_id="slot-a",
                 role="driver",
             )
-            s2, _, _ = svc.create_or_reuse_session(
+            s2, _, _, _ = svc.create_or_reuse_session(
                 user_id=session_user.id,
                 device_installation_id="slot-b",
                 role="driver",
@@ -142,7 +174,7 @@ def test_reap_expired_provisional_before_count(app, session_user, monkeypatch):
             db.session.commit()
 
             # Nouveau device doit réussir après reap sync
-            s3, _, _ = svc.create_or_reuse_session(
+            s3, _, _, _ = svc.create_or_reuse_session(
                 user_id=session_user.id,
                 device_installation_id="slot-c",
                 role="driver",
@@ -160,7 +192,7 @@ def test_replace_keeps_exact_limit(app, session_user, monkeypatch):
             filled = _fill_sessions(session_user.id, 3)
             target = filled[1]
             allowed = [str(s.session_id) for s in filled]
-            new_s, _, _, revoked_id = svc.replace_device_session(
+            new_s, _, _, publish_ids = svc.replace_device_session(
                 user_id=session_user.id,
                 session_to_revoke=str(target.session_id),
                 device_installation_id=f"new-phone-{uuid.uuid4()}",
@@ -171,10 +203,11 @@ def test_replace_keeps_exact_limit(app, session_user, monkeypatch):
                 ),
             )
             db.session.commit()
-            svc.publish_session_revoked(revoked_id)
+            for _sid in publish_ids:
+                svc.publish_session_revoked(_sid)
             active = svc.list_active_sessions(session_user.id)
             assert len(active) == 3
-            assert revoked_id == target.session_id
+            assert target.session_id in publish_ids
             assert str(new_s.session_id) in {str(a.session_id) for a in active}
             db.session.refresh(target)
             assert target.status == MobileDeviceSessionStatus.revoked
@@ -183,7 +216,7 @@ def test_replace_keeps_exact_limit(app, session_user, monkeypatch):
 def test_replace_rejects_session_not_in_challenge(app, session_user):
     with app.app_context():
         filled = _fill_sessions(session_user.id, 2)
-        outsider, _, _ = svc.create_or_reuse_session(
+        outsider, _, _, _ = svc.create_or_reuse_session(
             user_id=session_user.id,
             device_installation_id=f"outsider-{uuid.uuid4()}",
             role="driver",
@@ -244,7 +277,7 @@ def test_publish_session_revoked_sets_negative_cache_without_delete(app):
 
 def test_revoke_session_no_longer_invalidates_after_cache(app, session_user):
     with app.app_context():
-        session, _, _ = svc.create_or_reuse_session(
+        session, _, _, _ = svc.create_or_reuse_session(
             user_id=session_user.id,
             device_installation_id=f"cache-{uuid.uuid4()}",
             role="driver",
@@ -322,7 +355,7 @@ def test_reuse_confirmed_installation_keeps_same_session_id(app, session_user, m
     monkeypatch.setattr(svc, "PROVISIONAL_CONFIRMATION_ENABLED", True)
     with app.app_context():
         install = f"stable-{uuid.uuid4()}"
-        s1, _, _ = svc.create_or_reuse_session(
+        s1, _, _, _ = svc.create_or_reuse_session(
             user_id=session_user.id,
             device_installation_id=install,
             role="driver",
@@ -330,7 +363,7 @@ def test_reuse_confirmed_installation_keeps_same_session_id(app, session_user, m
         svc.mark_session_confirmed(s1)
         db.session.commit()
         confirmed_at = s1.confirmed_at
-        s2, _, _ = svc.create_or_reuse_session(
+        s2, _, _, _ = svc.create_or_reuse_session(
             user_id=session_user.id,
             device_installation_id=install,
             role="driver",
@@ -361,7 +394,7 @@ def test_replace_then_validate_old_session_refused(app, session_user):
             fake_redis.setex.side_effect = _setex
             fake_redis.get.side_effect = _get
 
-            new_s, _, _, revoked_id = svc.replace_device_session(
+            new_s, _, _, publish_ids = svc.replace_device_session(
                 user_id=session_user.id,
                 session_to_revoke=str(old.session_id),
                 device_installation_id=f"phone-{uuid.uuid4()}",
@@ -370,7 +403,8 @@ def test_replace_then_validate_old_session_refused(app, session_user):
             )
             db.session.commit()
             with patch.object(svc, "_get_redis", return_value=fake_redis):
-                svc.publish_session_revoked(revoked_id)
+                for _sid in publish_ids:
+                    svc.publish_session_revoked(_sid)
                 err, _ = svc.validate_mobile_session(
                     session_id=str(old.session_id),
                     session_epoch=int(old.session_epoch or 1),
@@ -399,13 +433,13 @@ def test_replace_reaps_expired_provisional_under_lock(app, session_user, monkeyp
     with app.app_context():
         with patch.object(svc, "get_device_session_limit", return_value=2):
             # 1 confirmed + 1 expired provisional = 2 actives avant reap
-            a, _, _ = svc.create_or_reuse_session(
+            a, _, _, _ = svc.create_or_reuse_session(
                 user_id=session_user.id,
                 device_installation_id="keep-me",
                 role="driver",
             )
             svc.mark_session_confirmed(a)
-            b, _, _ = svc.create_or_reuse_session(
+            b, _, _, _ = svc.create_or_reuse_session(
                 user_id=session_user.id,
                 device_installation_id="expired-slot",
                 role="driver",
@@ -414,7 +448,7 @@ def test_replace_reaps_expired_provisional_under_lock(app, session_user, monkeyp
             db.session.commit()
 
             # Replace de A : le reap doit libérer B avant create
-            new_s, _, _, revoked_id = svc.replace_device_session(
+            new_s, _, _, publish_ids = svc.replace_device_session(
                 user_id=session_user.id,
                 session_to_revoke=str(a.session_id),
                 device_installation_id=f"incoming-{uuid.uuid4()}",
@@ -425,7 +459,7 @@ def test_replace_reaps_expired_provisional_under_lock(app, session_user, monkeyp
             active = svc.list_active_sessions(session_user.id)
             assert len(active) == 1
             assert active[0].session_id == new_s.session_id
-            assert revoked_id == a.session_id
+            assert a.session_id in publish_ids
             db.session.refresh(b)
             assert b.status == MobileDeviceSessionStatus.revoked
 

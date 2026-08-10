@@ -86,21 +86,19 @@ def _issue_token_pair(user: User, session) -> dict:
         },
     )
     expires_at = datetime.now(UTC) + timedelta(days=90)
-    try:
-        row = store_refresh_token(
-            token=refresh,
-            user_id=user.id,
-            expires_at=expires_at,
-            device_id=session.device_installation_id,
-            device_name=session.device_name,
-            commit=False,
-        )
-        if hasattr(row, "session_id"):
-            row.session_id = str(session.session_id)
-            row.session_generation = epoch
-            db.session.add(row)
-    except Exception as exc:
-        logger.warning("store_refresh_token session-resume: %s", exc)
+    # Fail-closed : jamais remettre un refresh JWT sans ligne DB garantie.
+    row = store_refresh_token(
+        token=refresh,
+        user_id=user.id,
+        expires_at=expires_at,
+        device_id=session.device_installation_id,
+        device_name=session.device_name,
+        commit=False,
+    )
+    if hasattr(row, "session_id"):
+        row.session_id = str(session.session_id)
+        row.session_generation = epoch
+        db.session.add(row)
 
     return {
         "token": access,
@@ -549,7 +547,7 @@ def register_mobile_session_routes(auth_ns) -> None:
             from routes.auth import _resolve_device_session_metadata
 
             try:
-                mobile_session, recovery, revocation, revoked_id = (
+                mobile_session, recovery, revocation, publish_ids = (
                     replace_device_session(
                         user_id=user.id,
                         session_to_revoke=str(session_to_revoke),
@@ -582,8 +580,9 @@ def register_mobile_session_routes(auth_ns) -> None:
                     "retryable": True,
                 }, 503
 
-            # Post-commit : cache revoked + challenge consumed
-            publish_session_revoked(revoked_id)
+            # Post-commit : cache revoked (cible + reaped) + challenge consumed
+            for sid in publish_ids:
+                publish_session_revoked(sid)
             consume_device_session_resolution_token(token=resolution_token)
 
             return {

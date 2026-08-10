@@ -83,7 +83,7 @@ def test_serialize_public_payload_hides_installation_id_and_exposes_metadata(
     app, session_user
 ):
     with app.app_context():
-        session, _recovery, _revocation = svc.create_or_reuse_session(
+        session, _recovery, _revocation, _ = svc.create_or_reuse_session(
             user_id=session_user.id,
             device_installation_id="install-secret-xyz",
             device_name="Lirie",
@@ -108,7 +108,7 @@ def test_serialize_public_payload_hides_installation_id_and_exposes_metadata(
 
 def test_serialize_legacy_session_without_metadata(app, session_user):
     with app.app_context():
-        session, _recovery, _revocation = svc.create_or_reuse_session(
+        session, _recovery, _revocation, _ = svc.create_or_reuse_session(
             user_id=session_user.id,
             device_installation_id=f"device-{uuid.uuid4()}",
             device_name="Lirie",
@@ -135,7 +135,7 @@ def test_auth_capabilities_contract():
 
 def test_create_or_reuse_session_creates_new(app, session_user):
     with app.app_context():
-        session, recovery, revocation = svc.create_or_reuse_session(
+        session, recovery, revocation, _ = svc.create_or_reuse_session(
             user_id=session_user.id,
             device_installation_id=f"device-{uuid.uuid4()}",
             role="driver",
@@ -153,14 +153,14 @@ def test_create_or_reuse_session_reuses_same_installation(app, session_user):
     with app.app_context():
         installation_id = f"device-{uuid.uuid4()}"
 
-        session1, recovery1, _revocation1 = svc.create_or_reuse_session(
+        session1, recovery1, _revocation1, _ = svc.create_or_reuse_session(
             user_id=session_user.id,
             device_installation_id=installation_id,
             role="driver",
         )
         db.session.commit()
 
-        session2, recovery2, _revocation2 = svc.create_or_reuse_session(
+        session2, recovery2, _revocation2, _ = svc.create_or_reuse_session(
             user_id=session_user.id,
             device_installation_id=installation_id,
             role="driver",
@@ -199,7 +199,7 @@ def test_create_or_reuse_session_limit_reached(app, session_user, monkeypatch):
 
 def test_validate_mobile_session_active_session_ok(app, session_user):
     with app.app_context():
-        session, _recovery, _revocation = svc.create_or_reuse_session(
+        session, _recovery, _revocation, _ = svc.create_or_reuse_session(
             user_id=session_user.id,
             device_installation_id=f"device-{uuid.uuid4()}",
             role="driver",
@@ -228,7 +228,7 @@ def test_validate_mobile_session_generation_mismatch(app):
 
 def test_validate_mobile_session_after_revocation(app, session_user):
     with app.app_context():
-        session, _recovery, _revocation = svc.create_or_reuse_session(
+        session, _recovery, _revocation, _ = svc.create_or_reuse_session(
             user_id=session_user.id,
             device_installation_id=f"device-{uuid.uuid4()}",
             role="driver",
@@ -249,7 +249,7 @@ def test_validate_mobile_session_after_revocation(app, session_user):
 
 def test_consume_revocation_secret_revokes_session(app, session_user):
     with app.app_context():
-        session, _recovery, revocation = svc.create_or_reuse_session(
+        session, _recovery, revocation, _ = svc.create_or_reuse_session(
             user_id=session_user.id,
             device_installation_id=f"device-{uuid.uuid4()}",
             role="driver",
@@ -266,7 +266,7 @@ def test_consume_revocation_secret_revokes_session(app, session_user):
 
 def test_store_and_load_rotation_result_roundtrip(app, session_user):
     with app.app_context():
-        session, _recovery, _revocation = svc.create_or_reuse_session(
+        session, _recovery, _revocation, _ = svc.create_or_reuse_session(
             user_id=session_user.id,
             device_installation_id=f"device-{uuid.uuid4()}",
             role="driver",

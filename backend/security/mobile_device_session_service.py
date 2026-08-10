@@ -50,12 +50,12 @@ RESOLUTION_CLAIM_TTL_SECONDS = int(
 PROVISIONAL_SESSION_TTL_SECONDS = int(
     os.getenv("MOBILE_DEVICE_PROVISIONAL_TTL_SECONDS", "900")
 )
-# P1 : replace + provisional activés côté contrat (mobile gated sur capabilities)
+# P1 : replace + provisional — defaults false (activation runtime explicite)
 DEVICE_SESSION_REPLACE_ENABLED = os.getenv(
-    "MOBILE_DEVICE_SESSION_REPLACE_ENABLED", "true"
+    "MOBILE_DEVICE_SESSION_REPLACE_ENABLED", "false"
 ).lower() in {"1", "true", "yes", "on"}
 PROVISIONAL_CONFIRMATION_ENABLED = os.getenv(
-    "MOBILE_DEVICE_PROVISIONAL_CONFIRMATION_ENABLED", "true"
+    "MOBILE_DEVICE_PROVISIONAL_CONFIRMATION_ENABLED", "false"
 ).lower() in {"1", "true", "yes", "on"}
 ROTATION_META_KEY = "_rotation_meta"
 ROTATION_IDEMPOTENCY_CONSTRAINT = "uq_auth_rotation_result_session_idempotency"
@@ -492,8 +492,13 @@ def _create_or_reuse_session_locked(
     driver_id: int | None = None,
     role: str | None = None,
     meta: DeviceSessionMetadata | None = None,
-) -> tuple[MobileDeviceSession, str, str]:
-    """Primitive interne : suppose User FOR UPDATE déjà détenu."""
+) -> tuple[MobileDeviceSession, str, str, list[uuid.UUID]]:
+    """Primitive interne : suppose User FOR UPDATE déjà détenu.
+
+    Retourne (session, recovery, revocation, reaped_session_ids) —
+    les IDs révoqués doivent être publiés Redis **après COMMIT** appelant.
+    """
+    reaped_ids: list[uuid.UUID] = []
     for _attempt in range(2):
         recovery = generate_opaque_secret()
         revocation = generate_opaque_secret()
@@ -508,6 +513,7 @@ def _create_or_reuse_session_locked(
                     reason="provisional_expired_reuse",
                     status=MobileDeviceSessionStatus.revoked,
                 )
+                reaped_ids.append(existing.session_id)
                 try:
                     from security.refresh_token_service import revoke_tokens_for_session
 
@@ -547,10 +553,10 @@ def _create_or_reuse_session_locked(
             db.session.add(existing)
             db.session.flush()
             _invalidate_session_cache(existing.session_id)
-            return existing, recovery, revocation
+            return existing, recovery, revocation, reaped_ids
 
         # Reap sync avant count (INV-AUTH-DEVICE-01)
-        reap_expired_provisional_sessions(user_id, commit=False)
+        reaped_ids.extend(reap_expired_provisional_sessions(user_id, commit=False))
 
         active = list_active_sessions(user_id)
         limit = get_device_session_limit(role)
@@ -584,7 +590,7 @@ def _create_or_reuse_session_locked(
         try:
             with db.session.begin_nested():
                 db.session.flush()
-            return session, recovery, revocation
+            return session, recovery, revocation, reaped_ids
         except IntegrityError:
             continue
 
@@ -604,7 +610,7 @@ def _create_or_reuse_session_locked(
         apply_session_metadata(existing, meta, touch_seen=True)
         db.session.add(existing)
         db.session.flush()
-        return existing, recovery, revocation
+        return existing, recovery, revocation, reaped_ids
     raise DeviceSessionLimitReached([])
 
 
@@ -619,10 +625,11 @@ def create_or_reuse_session(
     platform: str | None = None,
     context_id: str | None = None,
     meta: DeviceSessionMetadata | None = None,
-) -> tuple[MobileDeviceSession, str, str]:
+) -> tuple[MobileDeviceSession, str, str, list[uuid.UUID]]:
     """Crée ou tourne les credentials d'une session active pour une installation.
 
     Prend User FOR UPDATE puis délègue à _create_or_reuse_session_locked.
+    Retourne aussi les session_ids révoqués (reap) à publier après COMMIT.
     """
     from models import User
 
@@ -651,17 +658,16 @@ def replace_device_session(
     driver_id: int | None = None,
     role: str | None = None,
     meta: DeviceSessionMetadata | None = None,
-) -> tuple[MobileDeviceSession, str, str, uuid.UUID]:
+) -> tuple[MobileDeviceSession, str, str, list[uuid.UUID]]:
     """Révoque une session puis crée/reprend sous verrou (SQL only, sans Redis).
 
-    Retourne (new_session, recovery, revocation, revoked_session_id).
-    Publication Redis + consume challenge : après COMMIT appelant.
+    Retourne (new_session, recovery, revocation, session_ids_to_publish_after_commit).
     """
     from models import User
 
     User.query.filter_by(id=user_id).with_for_update().one()
     # Libère d'abord les slots provisional expirés sous le même verrou.
-    reap_expired_provisional_sessions(user_id, commit=False)
+    publish_ids = list(reap_expired_provisional_sessions(user_id, commit=False))
 
     target = get_session_by_id(session_to_revoke)
     if target is None or target.user_id != user_id:
@@ -678,7 +684,6 @@ def replace_device_session(
                 "Cet appareil n'était pas dans la liste au moment du challenge.",
             )
 
-    revoked_id = target.session_id
     if target.is_active():
         revoke_session_state(
             target,
@@ -686,6 +691,7 @@ def replace_device_session(
             revoked_by_user_id=user_id,
             status=MobileDeviceSessionStatus.revoked,
         )
+        publish_ids.append(target.session_id)
         try:
             from security.refresh_token_service import revoke_tokens_for_session
 
@@ -697,14 +703,22 @@ def replace_device_session(
         except Exception as exc:
             logger.warning("revoke_tokens_for_session during replace: %s", exc)
 
-    new_session, recovery, revocation = _create_or_reuse_session_locked(
+    new_session, recovery, revocation, more_reaped = _create_or_reuse_session_locked(
         user_id=user_id,
         device_installation_id=device_installation_id,
         driver_id=driver_id,
         role=role,
         meta=meta,
     )
-    return new_session, recovery, revocation, revoked_id
+    publish_ids.extend(more_reaped)
+    # Dédupliquer en préservant l'ordre
+    seen: set[uuid.UUID] = set()
+    unique_publish: list[uuid.UUID] = []
+    for sid in publish_ids:
+        if sid not in seen:
+            seen.add(sid)
+            unique_publish.append(sid)
+    return new_session, recovery, revocation, unique_publish
 
 
 def revoke_session_state(
@@ -742,12 +756,12 @@ def revoke_session(
     reason: str,
     revoked_by_user_id: int | None = None,
     status: MobileDeviceSessionStatus = MobileDeviceSessionStatus.revoked,
-    publish_cache: bool = True,
+    publish_cache: bool = False,
 ) -> None:
-    """Révocation session. publish_cache=True uniquement si COMMIT immédiat suit.
+    """Révocation session. Redis désactivé par défaut (après COMMIT uniquement).
 
-    Pour les flux transactionnels (replace), préférer revoke_session_state +
-    publish_session_revoked après COMMIT.
+    publish_cache=True uniquement si l'appelant commit immédiatement après.
+    Préférer revoke_session_state + publish_session_revoked après COMMIT.
     """
     revoke_session_state(
         session,

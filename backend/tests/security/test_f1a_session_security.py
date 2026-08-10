@@ -31,7 +31,7 @@ def session_user(db_session):
 
 def test_revoke_pending_idempotent_replay(app, session_user):
     with app.app_context():
-        session, _rec, secret = svc.create_or_reuse_session(
+        session, _rec, secret, _ = svc.create_or_reuse_session(
             user_id=session_user.id,
             device_installation_id=f"dev-{uuid.uuid4()}",
             role="driver",
@@ -59,7 +59,7 @@ def test_revoke_pending_idempotent_replay(app, session_user):
 
 def test_revoke_user_security_sessions_marks_security_revoked(app, session_user):
     with app.app_context():
-        session, _rec, _sec = svc.create_or_reuse_session(
+        session, _rec, _sec, _ = svc.create_or_reuse_session(
             user_id=session_user.id,
             device_installation_id=f"dev-{uuid.uuid4()}",
             role="driver",
@@ -85,7 +85,7 @@ def test_revoke_user_security_sessions_marks_security_revoked(app, session_user)
 def test_create_or_reuse_does_not_reactivate_terminal(app, session_user):
     with app.app_context():
         installation = f"dev-{uuid.uuid4()}"
-        session1, _r1, _s1 = svc.create_or_reuse_session(
+        session1, _r1, _s1, _ = svc.create_or_reuse_session(
             user_id=session_user.id,
             device_installation_id=installation,
             role="driver",
@@ -99,7 +99,7 @@ def test_create_or_reuse_does_not_reactivate_terminal(app, session_user):
         db.session.commit()
         old_id = session1.session_id
 
-        session2, _r2, _s2 = svc.create_or_reuse_session(
+        session2, _r2, _s2, _ = svc.create_or_reuse_session(
             user_id=session_user.id,
             device_installation_id=installation,
             role="driver",
@@ -114,7 +114,7 @@ def test_create_or_reuse_does_not_reactivate_terminal(app, session_user):
 
 def test_logout_without_proof_rejected(client, app, session_user):
     with app.app_context():
-        session, _r, _s = svc.create_or_reuse_session(
+        session, _r, _s, _ = svc.create_or_reuse_session(
             user_id=session_user.id,
             device_installation_id=f"dev-{uuid.uuid4()}",
             role="driver",

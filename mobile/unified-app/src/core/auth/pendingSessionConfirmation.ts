@@ -49,8 +49,15 @@ export async function clearPendingSessionConfirmation(): Promise<void> {
 
 /**
  * POST confirm best-effort si une confirmation est en attente.
- * Nettoie le pending uniquement en cas de succès.
+ * Nettoie le pending en succès, ou sur erreurs terminales (session morte).
+ * Conserve le pending pour panne réseau / 5xx / timeout.
  */
+const TERMINAL_CONFIRM_CODES = new Set([
+  "session_revoked",
+  "session_not_found",
+  "session_mismatch",
+]);
+
 export async function flushPendingSessionConfirmation(): Promise<boolean> {
   const pending = await readPendingSessionConfirmation();
   if (!pending) return false;
@@ -62,7 +69,14 @@ export async function flushPendingSessionConfirmation(): Promise<boolean> {
     await confirmDeviceSession(pending.sessionId);
     await clearPendingSessionConfirmation();
     return true;
-  } catch {
+  } catch (error) {
+    const code =
+      error && typeof error === "object" && "code" in error
+        ? String((error as { code?: unknown }).code ?? "")
+        : "";
+    if (TERMINAL_CONFIRM_CODES.has(code)) {
+      await clearPendingSessionConfirmation();
+    }
     return false;
   }
 }

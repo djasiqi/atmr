@@ -861,17 +861,14 @@ function toApiError(error: unknown): ApiCallError {
   };
 }
 
-/** Remplacement multi-appareils autorisé si token présent et capability non désactivée. */
+/** Remplacement multi-appareils : token + capability strictement true. */
 export function canReplaceDeviceSession(details?: Record<string, unknown> | null): boolean {
   if (!details) return false;
   const token = details.resolution_token;
   if (typeof token !== "string" || !token.trim()) return false;
   const caps = details.capabilities;
-  if (caps && typeof caps === "object") {
-    const replaceCap = (caps as Record<string, unknown>).device_session_replace;
-    if (replaceCap === false) return false;
-  }
-  return true;
+  if (!caps || typeof caps !== "object") return false;
+  return (caps as Record<string, unknown>).device_session_replace === true;
 }
 
 export type DeviceSessionInfo = {

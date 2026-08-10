@@ -16,7 +16,16 @@ Réponse login / device-sessions :
 }
 ```
 
-Le mobile n'affiche le remplacement d'appareil que si `device_session_replace` est vrai **et** qu'un `resolution_token` est présent dans le 409.
+Le mobile n'affiche le remplacement d'appareil que si `device_session_replace` est **strictement** `true` **et** qu'un `resolution_token` est présent dans le 409.
+
+## Flags runtime (defaults `false`)
+
+| Variable | Défaut | Effet |
+|----------|--------|--------|
+| `MOBILE_DEVICE_SESSION_REPLACE_ENABLED` | `false` | Replace + `resolution_token` / capability |
+| `MOBILE_DEVICE_PROVISIONAL_CONFIRMATION_ENABLED` | `false` | Sessions provisional + confirm |
+
+Rollout recommandé : P0 (tous false) → canary replace → P1 complet.
 
 ## Headers appareil
 
@@ -34,7 +43,7 @@ Le mobile n'affiche le remplacement d'appareil que si `device_session_replace` e
 ## Flux 409 / replace (P1)
 
 1. Login valide + quota atteint → `409` + `sessions` + `resolution_token` (snapshot `allowed_session_ids`).
-2. `POST /auth/device-sessions/replace` : claim Redis → transaction PG unique (`commit=False` tokens) → COMMIT → `publish_session_revoked` + consume challenge.
+2. `POST /auth/device-sessions/replace` : claim Redis → transaction PG unique (`commit=False` tokens) → COMMIT → `publish_session_revoked` (cible + reaped) + consume challenge.
 3. Nouvelle session provisional → SecureStore OK → `pending_session_confirmation` → `POST .../confirm` (idempotent). Refresh / session-resume confirment aussi implicitement.
 
 ## Ops
