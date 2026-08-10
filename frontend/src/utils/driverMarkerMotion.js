@@ -7,9 +7,21 @@ export const MARKER_MOTION_MAX_MS = 20000;
 export const MARKER_MOTION_DEFAULT_MS = 10000;
 /** Étire légèrement l'animation sur l'intervalle entre deux fixes GPS. */
 export const MARKER_MOTION_DURATION_STRETCH = 1.42;
-/** Fraction de l'intervalle GPS utilisée pour la phase de projection (dead reckoning). */
-export const MARKER_MOTION_PROJECT_FRACTION = 0.55;
-export const MARKER_MOTION_PROJECT_VELOCITY_DECAY = 0.88;
+/**
+ * Dead reckoning désactivé pour le canary vérité GPS.
+ * Conservé à 0 pour ne pas casser d’imports ; ne plus utiliser pour extrapoler.
+ */
+export const MARKER_MOTION_PROJECT_FRACTION = 0;
+export const MARKER_MOTION_PROJECT_VELOCITY_DECAY = 0;
+
+/** Seuil (mètres) au-delà duquel la position est affichée comme approximative. */
+export const GPS_ACCURACY_APPROXIMATE_METERS = 50;
+
+/** True si accuracy GPS indique une position approximative (sans modifier lat/lon). */
+export function isApproximateGpsAccuracy(accuracyMeters) {
+  const n = Number(accuracyMeters);
+  return Number.isFinite(n) && n > GPS_ACCURACY_APPROXIMATE_METERS;
+}
 
 /**
  * Courbe smoothstep — accélération / décélération douce (plus naturelle que linéaire).

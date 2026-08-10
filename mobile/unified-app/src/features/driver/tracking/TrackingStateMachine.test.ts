@@ -6,7 +6,7 @@ describe("TrackingStateMachine", () => {
     expect(
       resolveTrackingFsmState({
         hasMission: true,
-        presenceWindow: false,
+        presenceEligible: false,
         appForeground: true,
         missionLive: true,
         fixStale: false,
@@ -20,7 +20,7 @@ describe("TrackingStateMachine", () => {
     expect(
       resolveTrackingFsmState({
         hasMission: true,
-        presenceWindow: false,
+        presenceEligible: false,
         appForeground: true,
         missionLive: true,
         fixStale: true,
@@ -28,5 +28,19 @@ describe("TrackingStateMachine", () => {
         missionTerminal: false,
       })
     ).toBe("MISSION_RECOVERING");
+  });
+
+  it("returns PRESENCE when presenceEligible without mission (hors fenêtre FG)", () => {
+    expect(
+      resolveTrackingFsmState({
+        hasMission: false,
+        presenceEligible: true,
+        appForeground: true,
+        missionLive: false,
+        fixStale: false,
+        circuitOpen: false,
+        missionTerminal: false,
+      })
+    ).toBe("PRESENCE");
   });
 });

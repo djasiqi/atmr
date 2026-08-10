@@ -69,6 +69,7 @@ export type DriverTelemetryEventName =
   | "tracking.anti_zombie.triggered"
   | "tracking.no_location_callback"
   | "tracking.presence_window.toggled"
+  | "tracking.presence_context.updated"
   | "tracking.session.register_stale_ignored"
   | "tracking.session.register_deferred"
   | "tracking.session.reconciled"

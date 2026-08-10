@@ -2,9 +2,10 @@
  * P5 — Audit fusion socket vs GET canonique (avant staleTime Infinity sur companyDrivers).
  *
  * Couvert par `mergeDriverLiveUpdate` / `mergeOrUpdateDriverInList` :
- * coords (lat/lon), `location_mode`, `last_seen_seconds`, `location_status`, `presence_status`,
- * `status`, `mission_status`, `recorded_at` / `received_at`, `mission_id`, champs upsert minimal
- * (`first_name`, `last_name`, `company_id`, `is_active`) si ligne créée depuis le socket seul.
+ * coords (lat/lon), `accuracy`, `speed`, `heading`, `location_mode`, `last_seen_seconds`,
+ * `location_status`, `presence_status`, `status`, `mission_status`, `recorded_at` / `received_at`,
+ * `mission_id`, champs upsert minimal (`first_name`, `last_name`, `company_id`, `is_active`)
+ * si ligne créée depuis le socket seul.
  *
  * Non couverts (restent sur snapshot HTTP ou invalidations métier ailleurs) : objet `user` imbriqué,
  * véhicule, préférences, disponibilité métier hors événements live, etc.
@@ -79,6 +80,9 @@ export function mergeDriverLiveUpdate(driver, update, fromLiveState) {
     ...driver,
     latitude,
     longitude,
+    accuracy: update.accuracy ?? driver.accuracy ?? null,
+    speed: update.speed ?? driver.speed ?? null,
+    heading: update.heading ?? driver.heading ?? null,
     location_mode: update.location_mode ?? driver.location_mode ?? null,
     last_seen_seconds: update.last_seen_seconds ?? driver.last_seen_seconds ?? null,
     location_status: locationStatus,

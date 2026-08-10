@@ -47,13 +47,11 @@ import {
 } from '../../../../utils/localDriverLocationFreshness';
 import {
   interpolateMarkerPosition,
-  projectPositionAlongVelocity,
   resolveMarkerMotionDurationMs,
   resolveMotionDurationFromDistance,
   haversineDistanceMeters,
+  isApproximateGpsAccuracy,
   MARKER_MOTION_DEFAULT_MS,
-  MARKER_MOTION_PROJECT_FRACTION,
-  MARKER_MOTION_PROJECT_VELOCITY_DECAY,
 } from '../../../../utils/driverMarkerMotion';
 
 /**
@@ -308,6 +306,8 @@ const createStyledTooltip = (driver, opts = {}) => {
   if (noGps) conf.label = 'Sans GPS';
 
   const displayName = getDriverDisplayName(driver);
+  const isApproximate = Boolean(opts.isApproximate)
+    || isApproximateGpsAccuracy(driver?.accuracy);
 
   // Ligne meta
   let metaLine = '';
@@ -332,6 +332,9 @@ const createStyledTooltip = (driver, opts = {}) => {
   }
   if ((biz === 'busy' || biz === 'assigned') && (status === 'offline' || isStale) && !noGps) {
     chips.push(conf.label === 'En course' || conf.label === 'Assigné' ? 'GPS hors ligne' : conf.label);
+  }
+  if (isApproximate && !noGps) {
+    chips.push('Position approximative');
   }
 
   return `<div class="lirie-popup">
@@ -441,8 +444,6 @@ function DriverLiveMap({ drivers: propDrivers }) {
     markerMotionRafRef.current = null;
     const motions = markerMotionRef.current;
     const now = performance.now();
-    const prevFrame = markerMotionLastFrameRef.current;
-    const deltaMs = prevFrame != null ? Math.min(48, now - prevFrame) : 16;
     markerMotionLastFrameRef.current = now;
     let anyActive = false;
 
@@ -454,54 +455,21 @@ function DriverLiveMap({ drivers: propDrivers }) {
         return;
       }
 
+      // Canary : zéro dead reckoning — à l’arrivée sur le fix réel B, on s’arrête.
       if (motion.phase === 'project') {
-        if (now >= motion.projectUntilMs) {
-          delete motions[key];
-          return;
-        }
-        const projected = projectPositionAlongVelocity(
-          motion.currentLat,
-          motion.currentLng,
-          motion.velLatPerMs,
-          motion.velLngPerMs,
-          deltaMs
-        );
-        motion.currentLat = projected.lat;
-        motion.currentLng = projected.lng;
-        setMarkerLatLng(marker, projected);
-        anyActive = true;
+        setMarkerLatLng(marker, {
+          lat: motion.currentLat,
+          lng: motion.currentLng,
+        });
+        delete motions[key];
+        recordMarkerPositionUpdate();
         return;
       }
 
       const progress = (now - motion.startMs) / motion.durationMs;
       if (progress >= 1) {
         setMarkerLatLng(marker, motion.to);
-        const velLat =
-          ((motion.to.lat - motion.from.lat) / motion.durationMs) *
-          MARKER_MOTION_PROJECT_VELOCITY_DECAY;
-        const velLng =
-          ((motion.to.lng - motion.from.lng) / motion.durationMs) *
-          MARKER_MOTION_PROJECT_VELOCITY_DECAY;
-        const speed = Math.hypot(velLat, velLng);
-        const intervalMs = motion.expectedIntervalMs || MARKER_MOTION_DEFAULT_MS;
-        const projectUntilMs =
-          motion.startMs +
-          motion.durationMs +
-          intervalMs * MARKER_MOTION_PROJECT_FRACTION;
-
-        if (speed > 1e-9 && projectUntilMs > now) {
-          motions[key] = {
-            phase: 'project',
-            currentLat: motion.to.lat,
-            currentLng: motion.to.lng,
-            velLatPerMs: velLat,
-            velLngPerMs: velLng,
-            projectUntilMs,
-          };
-          anyActive = true;
-        } else {
-          delete motions[key];
-        }
+        delete motions[key];
         recordMarkerPositionUpdate();
         return;
       }
@@ -642,10 +610,13 @@ function DriverLiveMap({ drivers: propDrivers }) {
     // pleine intensité même si `last_seen_seconds` dépasse le seuil "stale" — c'est précisément
     // l'information visuelle : la position N'EST PAS rafraîchie côté chauffeur.
     const isConstrainedMarker = status === 'constrained';
+    const isApproximate = Boolean(tooltipOpts?.isApproximate)
+      || isApproximateGpsAccuracy(driver?.accuracy);
     const color = isStale && !isConstrainedMarker
       ? blendHexColors(baseColor, '#94A3B8', 0.55)
       : baseColor;
-    const opacity = isStale && !isConstrainedMarker ? 0.88 : 1;
+    let opacity = isStale && !isConstrainedMarker ? 0.88 : 1;
+    if (isApproximate && !isStale) opacity = 0.78;
     const markerLabel = getDriverMarkerLabel(driver);
     const titleStatus = status === 'constrained'
       ? resolveConstraintBadgeLabel(getDriverConstraintReason(driver))
@@ -653,13 +624,14 @@ function DriverLiveMap({ drivers: propDrivers }) {
     const businessLabel = STATUS_TITLE_LABELS[tooltipOpts?.businessStatus]
       || tooltipOpts?.businessStatus
       || null;
+    const approxSuffix = isApproximate && !tooltipOpts?.noGps ? ' · position approximative' : '';
     const markerTitle = businessLabel && status === 'offline' && !tooltipOpts?.noGps
       ? `${getDriverDisplayName(driver)} · ${businessLabel} · GPS hors ligne`
-      : `${getDriverDisplayName(driver)} · ${titleStatus}${isStale ? ' · signal ancien' : ''}`;
+      : `${getDriverDisplayName(driver)} · ${titleStatus}${isStale ? ' · signal ancien' : ''}${approxSuffix}`;
     const iconUrl = makeCircleMarkerIcon(color, opacity, {
       label: markerLabel,
       textColor: '#ffffff',
-      ringColor: '#ffffff',
+      ringColor: isApproximate ? '#F59E0B' : '#ffffff',
     });
 
     if (GOOGLE_MAPS_USE_JS_STYLES) {
@@ -984,6 +956,7 @@ function DriverLiveMap({ drivers: propDrivers }) {
       if (isStaleMarker) staleMarkersCount += 1;
 
       const gpsLabel = getDriverFreshnessLabel(agedDriver);
+      const isApproximate = isApproximateGpsAccuracy(d.accuracy);
       const tooltipOpts = isFallback
         ? {
             status: 'offline',
@@ -1002,7 +975,9 @@ function DriverLiveMap({ drivers: propDrivers }) {
             isConstrained,
             constraintReason,
             gpsLabel,
+            isApproximate,
           };
+      // accuracy > 50 m → rendu approximatif uniquement ; coords jamais corrigées.
       upsertMarker(d.id, coords, visualStatus, isStaleMarker, d, tooltipOpts);
     });
 

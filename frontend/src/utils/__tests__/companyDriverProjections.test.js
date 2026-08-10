@@ -36,6 +36,10 @@ describe('companyDriverProjections', () => {
       location_status: 'last_known',
       position_source: 'db_fallback',
       recorded_at: '2026-07-29T09:47:47Z',
+      accuracy: 80,
+      speed: 4.5,
+      heading: 120,
+      location_mode: 'mission_live',
     });
     expect(projected).toMatchObject({
       id: 5,
@@ -47,6 +51,10 @@ describe('companyDriverProjections', () => {
       recorded_at: '2026-07-29T09:47:47Z',
       businessStatus: 'busy',
       visualTreatment: 'gps_stale',
+      accuracy: 80,
+      speed: 4.5,
+      heading: 120,
+      location_mode: 'mission_live',
     });
     expect(projected.notes).toBeUndefined();
     expect(projected.lastPositionAt).toBe('2026-07-29T09:47:47Z');

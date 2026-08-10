@@ -5,6 +5,7 @@ import {
   resolveMarkerMotionDurationMs,
   resolveMotionDurationFromDistance,
   haversineDistanceMeters,
+  isApproximateGpsAccuracy,
   MARKER_MOTION_DEFAULT_MS,
   MARKER_MOTION_MIN_MS,
   MARKER_MOTION_MAX_MS,
@@ -13,6 +14,16 @@ import {
 } from '../driverMarkerMotion';
 
 describe('driverMarkerMotion', () => {
+  it('canary : dead reckoning désactivé (fraction 0)', () => {
+    expect(MARKER_MOTION_PROJECT_FRACTION).toBe(0);
+  });
+
+  it('accuracy 80 => approximatif ; 8 => précis (coords inchangées côté helper)', () => {
+    expect(isApproximateGpsAccuracy(80)).toBe(true);
+    expect(isApproximateGpsAccuracy(8)).toBe(false);
+    expect(isApproximateGpsAccuracy(null)).toBe(false);
+  });
+
   it('resolveMarkerMotionDurationMs borne et étire l intervalle', () => {
     const now = 1_000_000;
     expect(resolveMarkerMotionDurationMs(null, now)).toBe(MARKER_MOTION_DEFAULT_MS);

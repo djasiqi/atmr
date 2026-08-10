@@ -99,6 +99,36 @@ describe('mergeDriverLiveUpdate', () => {
     expect(out.longitude).toBe(6.11);
   });
 
+  it('conserve accuracy/speed/heading/location_mode depuis le socket', () => {
+    const driver = {
+      id: 1,
+      latitude: 46.2,
+      longitude: 6.1,
+      accuracy: 12,
+      speed: 3,
+      heading: 90,
+      location_mode: 'availability_presence',
+    };
+    const out = mergeDriverLiveUpdate(
+      driver,
+      {
+        lat: 46.21,
+        lon: 6.11,
+        accuracy: 80,
+        speed: 8,
+        heading: 180,
+        location_mode: 'mission_live',
+      },
+      false
+    );
+    expect(out.latitude).toBe(46.21);
+    expect(out.longitude).toBe(6.11);
+    expect(out.accuracy).toBe(80);
+    expect(out.speed).toBe(8);
+    expect(out.heading).toBe(180);
+    expect(out.location_mode).toBe('mission_live');
+  });
+
   it('met à jour location_status/presence_status depuis driver_location_update même si le snapshot était offline', () => {
     const driver = {
       id: 1,

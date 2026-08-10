@@ -2,16 +2,21 @@ import {
   disposeDriverTrackingBridge,
   flushDriverTrackingQueueNow,
   getDriverTrackingBridgeSnapshot,
+  getDriverTrackingPresenceContext,
   getDriverTrackingPresenceWindowActive,
   getDriverTrackingQueueSnapshot,
+  setDriverTrackingPresenceContext,
   setDriverTrackingPresenceWindow,
   syncBridgeQueueDepthFromPersistence,
   subscribeDriverTrackingBridge,
   startDriverTrackingBridge,
   stopDriverTrackingBridge,
   updateDriverTrackingBridgeStatus,
+  type DriverPresenceContext,
 } from "./services/driverTrackingBridge";
 import { DriverMissionStatus, type DriverMission } from "./types";
+
+export type { DriverPresenceContext };
 
 export type DriverMissionSchedulingContext = Pick<
   DriverMission,
@@ -59,8 +64,15 @@ export function disposeDriverTracking() {
 }
 
 /**
- * Pilote le mode présence par fenêtre horaire (07h–19h). Quand actif sans
- * mission, l'app envoie des points GPS de présence (locationMode = availability_presence).
+ * Pilote les signaux présence (disponibilité + fenêtre 07h–19h).
+ * La décision start/stop passe par `resolveTrackingEligibility`.
+ */
+export function setDriverPresenceContext(ctx: DriverPresenceContext) {
+  setDriverTrackingPresenceContext(ctx);
+}
+
+/**
+ * @deprecated Préférer `setDriverPresenceContext`.
  */
 export function setDriverPresenceWindowActive(active: boolean) {
   setDriverTrackingPresenceWindow(active);
@@ -68,5 +80,9 @@ export function setDriverPresenceWindowActive(active: boolean) {
 
 export function isDriverPresenceWindowActive(): boolean {
   return getDriverTrackingPresenceWindowActive();
+}
+
+export function getDriverPresenceContext(): DriverPresenceContext {
+  return getDriverTrackingPresenceContext();
 }
 

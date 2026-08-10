@@ -10,16 +10,22 @@ export type TrackingFsmState =
 
 export type TrackingFsmInput = {
   hasMission: boolean;
-  presenceWindow: boolean;
+  /** Présence FG ou BG éligible (pas seulement la fenêtre horaire). */
+  presenceEligible: boolean;
   appForeground: boolean;
   missionLive: boolean;
   fixStale: boolean;
   circuitOpen: boolean;
   missionTerminal: boolean;
+  /**
+   * @deprecated Utiliser `presenceEligible`. Conservé pour compat tests/anciens appels.
+   */
+  presenceWindow?: boolean;
 };
 
 export function resolveTrackingFsmState(input: TrackingFsmInput): TrackingFsmState {
-  if (input.missionTerminal || (!input.hasMission && !input.presenceWindow)) {
+  const presenceEligible = input.presenceEligible ?? Boolean(input.presenceWindow);
+  if (input.missionTerminal || (!input.hasMission && !presenceEligible)) {
     return "IDLE";
   }
   if (input.circuitOpen || input.fixStale) {
@@ -34,7 +40,7 @@ export function resolveTrackingFsmState(input: TrackingFsmInput): TrackingFsmSta
   if (input.hasMission && !input.missionLive) {
     return "MISSION_PREPARE";
   }
-  if (input.presenceWindow && input.appForeground) {
+  if (presenceEligible) {
     return "PRESENCE";
   }
   return "IDLE";

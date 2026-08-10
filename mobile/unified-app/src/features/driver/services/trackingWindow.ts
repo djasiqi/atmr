@@ -3,16 +3,15 @@ import { useEffect, useMemo, useState } from "react";
 /**
  * Fenêtre horaire « heures de travail » du chauffeur (heure locale du téléphone).
  *
- * Règle métier validée par les opérations :
- *  - Pendant 07h00 → 19h00 : tracking actif en mode présence (sans mission requise).
- *  - En dehors de cette plage : tracking actif uniquement si une mission éligible
- *    est en cours (ASSIGNED / EN_ROUTE / ON_BOARD / ARRIVED). Une mission qui
- *    démarre à 19h30 doit donc continuer à émettre des coordonnées jusqu'à sa
- *    fin, peu importe l'heure.
+ * Règle métier (présence) :
+ *  - 07h00 → 19h00 : limite uniquement la **présence en arrière-plan**
+ *    (disponible + hors premier plan + disclosure).
+ *  - Hors plage : la présence en **premier plan** reste possible si le chauffeur
+ *    est disponible + disclosure acceptée ; hors premier plan sans mission → OFF.
+ *  - Une mission éligible track toujours, indépendamment de la fenêtre.
  *
- * Cette logique vit côté client : c'est l'app driver qui décide d'allumer ou
- * non son foreground service, l'envoi des points GPS, etc. Le backend ne fait
- * que recevoir ce qu'il reçoit.
+ * Cette logique vit côté client (resolver `resolveTrackingEligibility`).
+ * Le backend ne fait que recevoir ce qu'il reçoit.
  */
 
 const DEFAULT_WORK_START_HOUR = 7;

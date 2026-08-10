@@ -17,7 +17,7 @@ import {
   getDriverAvailabilityActive,
   subscribeDriverAvailability,
 } from "../../../src/features/driver/services/driverAvailabilityBridge";
-import { setDriverPresenceWindowActive } from "../../../src/features/driver/tracking";
+import { setDriverPresenceContext } from "../../../src/features/driver/tracking";
 import {
   startBackgroundTrackingHealthMonitor,
   stopBackgroundTrackingHealthMonitor,
@@ -54,11 +54,10 @@ function selectTrackingMission(missions: DriverMission[] | undefined): DriverMis
  * qu'à l'ouverture de l'écran détail mission, ce qui empêchait toute
  * remontée GPS quand le chauffeur restait sur le dashboard.
  *
- * En complément, on pilote ici la « fenêtre horaire 07h–19h » de présence :
- *   - dans la fenêtre  → tracking GPS actif même sans mission (présence pure)
- *   - hors fenêtre     → tracking GPS uniquement si mission éligible
- * Une mission qui démarre à 19h30 continue donc bien jusqu'à sa fin grâce
- * au pipeline mission existant.
+ * En complément, on pousse le contexte présence (disponibilité + fenêtre 07h–19h) :
+ *   - FG + disponible + disclosure → tracking même hors fenêtre
+ *   - BG + disponible → tracking seulement si fenêtre ouverte
+ *   - mission → toujours tracking
  */
 function DriverTrackingHost() {
   const missionsQuery = useDriverMissionsQuery();
@@ -77,9 +76,10 @@ function DriverTrackingHost() {
   }), []);
 
   useEffect(() => {
-    setDriverPresenceWindowActive(
-      driverAvailable && workWindowEnabled && window.isOpen
-    );
+    setDriverPresenceContext({
+      available: driverAvailable,
+      windowOpen: workWindowEnabled && window.isOpen,
+    });
   }, [driverAvailable, workWindowEnabled, window.isOpen]);
 
   useEffect(() => {

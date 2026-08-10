@@ -47,6 +47,11 @@ import {
   resolveTrackingFsmState,
   type TrackingFsmState,
 } from "../tracking/TrackingStateMachine";
+import {
+  resolvePresenceGpsAccuracy,
+  resolveTrackingEligibility,
+  type TrackingEligibilityResult,
+} from "../tracking/trackingEligibility";
 import { runTrackingRecoveryCascade } from "../tracking/TrackingRecoveryOrchestrator";
 import {
   captureActiveRuntime,
@@ -131,6 +136,11 @@ function ensureNativeTrackingAppStateListener(): void {
     });
   });
   AppState.addEventListener("change", (next) => {
+    // Toute transition active ↔ background/inactive : recalcul d’éligibilité
+    // puis start / update mode / stop (une seule runtime GPS).
+    ensureManagerState(next);
+    notifyTrackingBridgeListeners();
+
     if (next === "active") {
       const runtime = captureActiveRuntime();
       if (!runtime) {
@@ -153,7 +163,8 @@ function ensureNativeTrackingAppStateListener(): void {
           "app_resume"
         );
       } else if (
-        state.presenceWindowActive &&
+        state.driverAvailable &&
+        state.presenceWindowOpen &&
         isPresenceDisclosureAccepted()
       ) {
         void ensureNativeTrackingWhileForeground(
@@ -173,12 +184,15 @@ type TrackingBridgeState = {
   missionId: number | null;
   missionStatus: DriverMissionStatus | null;
   missionScheduling: MissionSchedulingSnapshot | null;
+  /** Toggle disponibilité chauffeur (signal séparé de la fenêtre horaire). */
+  driverAvailable: boolean;
   /**
-   * True quand on track « par fenêtre horaire » (07h–19h) sans mission active.
-   * Permet d'émettre des points GPS de présence pour les opérations même quand
-   * aucune mission n'est en cours.
+   * Fenêtre horaire 07h–19h ouverte (présence arrière-plan uniquement).
+   * Ne décide pas seule du start/stop GPS — passer par resolveTrackingEligibility.
    */
-  presenceWindowActive: boolean;
+  presenceWindowOpen: boolean;
+  /** Accuracy du watch GPS courant (pour redémarrer High ↔ Balanced). */
+  watchAccuracy: number | null;
   lastSentAt: string | null;
   lastCapturedAt: string | null;
   lastEnqueuedAt: string | null;
@@ -256,7 +270,9 @@ const state: TrackingBridgeState = {
   missionId: null,
   missionStatus: null,
   missionScheduling: null,
-  presenceWindowActive: false,
+  driverAvailable: false,
+  presenceWindowOpen: false,
+  watchAccuracy: null,
   lastSentAt: null,
   lastCapturedAt: null,
   lastEnqueuedAt: null,
@@ -537,9 +553,12 @@ function refreshFsmState(appState: AppStateStatus, fixStale: boolean) {
   if (!isFeatureEnabled("tracking_state_machine_enabled")) {
     return;
   }
+  const eligibility = resolveBridgeEligibility(appState);
   state.fsmState = resolveTrackingFsmState({
     hasMission: hasActiveMission(),
-    presenceWindow: state.presenceWindowActive,
+    presenceEligible:
+      eligibility.foregroundPresenceEligible ||
+      eligibility.backgroundPresenceEligible,
     appForeground: appState === "active",
     missionLive: resolveTrackingMode(appState) === "mission_live",
     fixStale,
@@ -552,8 +571,30 @@ function hasActiveMission(): boolean {
   return state.missionId !== null && isTrackingActiveStatus(state.missionStatus);
 }
 
-function isEligible() {
-  return hasActiveMission() || state.presenceWindowActive;
+function resolveBridgeEligibility(
+  appState: AppStateStatus = trackingManager.getSnapshot().appState
+): TrackingEligibilityResult {
+  return resolveTrackingEligibility({
+    driverAvailable: state.driverAvailable,
+    presenceWindowOpen: state.presenceWindowOpen,
+    appForeground: appState === "active",
+    presenceDisclosureAccepted: isPresenceDisclosureAccepted(),
+    hasActiveMission: hasActiveMission(),
+  });
+}
+
+function isEligible(
+  appState: AppStateStatus = trackingManager.getSnapshot().appState
+) {
+  return resolveBridgeEligibility(appState).trackingEligible;
+}
+
+function resolveExpoLocationAccuracy(appState: AppStateStatus): number {
+  const tier = resolvePresenceGpsAccuracy({
+    hasActiveMission: hasActiveMission(),
+    appForeground: appState === "active",
+  });
+  return tier === "high" ? Location.Accuracy.High : Location.Accuracy.Balanced;
 }
 
 async function ensurePermission(appState: AppStateStatus) {
@@ -636,10 +677,8 @@ function getCadenceForTick(appState: AppStateStatus, mode: DriverTrackingMode) {
 async function getCurrentPositionWithTimeout(
   appState: AppStateStatus
 ): Promise<Location.LocationObject | null> {
-  // mission_live = navigation active → GPS précis (High) ; sinon coarse (Balanced) pour la batterie.
-  const positionAccuracy = hasActiveMission()
-    ? Location.Accuracy.High
-    : Location.Accuracy.Balanced;
+  // Mission / présence foreground → High ; présence background → Balanced.
+  const positionAccuracy = resolveExpoLocationAccuracy(appState);
   if (!isFeatureEnabled("tracking_safe_stale_fallback_enabled")) {
     return Location.getCurrentPositionAsync({
       accuracy: positionAccuracy,
@@ -939,8 +978,12 @@ function buildActiveMissionSnapshot(): DriverMission | null {
 }
 
 function resolveTrackingMode(appState: AppStateStatus): DriverTrackingMode {
-  /* Pas de mission ET fenêtre 07h–19h ouverte = présence pure. */
-  if (!hasActiveMission() && state.presenceWindowActive) {
+  const eligibility = resolveBridgeEligibility(appState);
+  if (
+    !eligibility.missionEligible &&
+    (eligibility.foregroundPresenceEligible ||
+      eligibility.backgroundPresenceEligible)
+  ) {
     return "availability_presence";
   }
   const mission = buildActiveMissionSnapshot();
@@ -954,20 +997,20 @@ function resolveTrackingMode(appState: AppStateStatus): DriverTrackingMode {
   return "mission_live";
 }
 
-async function ensureLocationWatch() {
+async function ensureLocationWatch(appStateOverride?: AppStateStatus) {
   if (Platform.OS === "web") {
     /* Sur web, expo-location brise le cleanup (LocationEventEmitter.removeSubscription n'existe pas). */
     return;
   }
-  if (!isEligible() || state.watchSubscription) return;
-  const appState = trackingManager.getSnapshot().appState;
+  const appState = appStateOverride ?? trackingManager.getSnapshot().appState;
+  if (!isEligible(appState) || state.watchSubscription) return;
   const granted = await ensurePermission(appState);
   if (!granted) return;
+  const accuracy = resolveExpoLocationAccuracy(appState);
   try {
     state.watchSubscription = await Location.watchPositionAsync(
       {
-        // mission_live = navigation active → GPS précis (High) ; présence → Balanced (batterie).
-        accuracy: hasActiveMission() ? Location.Accuracy.High : Location.Accuracy.Balanced,
+        accuracy,
         distanceInterval: resolveWatchDistanceMeters(),
         timeInterval: appState === "active" ? resolveForegroundIntervalMs() : BACKGROUND_INTERVAL_MS,
         mayShowUserSettingsDialog: true,
@@ -985,11 +1028,17 @@ async function ensureLocationWatch() {
         notifyTrackingBridgeListeners();
       }
     );
+    state.watchAccuracy = accuracy;
     emitDriverTelemetry("tracking.watch.started", {
       source: "driver.tracking.bridge",
       mission_id: state.missionId,
       app_state: appState,
       distance_m: resolveWatchDistanceMeters(),
+      accuracy_tier:
+        resolvePresenceGpsAccuracy({
+          hasActiveMission: hasActiveMission(),
+          appForeground: appState === "active",
+        }),
     });
   } catch (error) {
     emitDriverTelemetry("tracking.watch.unavailable", {
@@ -1012,6 +1061,7 @@ function stopLocationWatch() {
       /* ex. web ou impl incomplete : ignorer le cleanup d'ecoute */
     }
   }
+  state.watchAccuracy = null;
   state.lastWatchAtMs = null;
   state.lastWatchedPosition = null;
   notifyTrackingBridgeListeners();
@@ -1063,7 +1113,7 @@ async function sendLegacyPoint(appState: AppStateStatus, nowIso: string) {
   if (!position) return;
   state.lastWatchedPosition = position;
   state.lastWatchAtMs = Date.now();
-  if (state.missionId === null && !state.presenceWindowActive) return;
+  if (state.missionId === null && !isEligible(appState)) return;
   const legacyEventId = `bridge_legacy_${state.missionId ?? "presence"}_${Date.now()}`;
   const attemptSeq = beginBridgeAttempt(legacyEventId);
   try {
@@ -1143,7 +1193,8 @@ const trackingManager = new TrackingManager({
       tracking_tick_path: persistentQueue ? "persistent_queue" : "legacy_http",
       flush_path_last: state.flushPathUsed,
       network_profile: state.networkProfile,
-      presence_window_active: state.presenceWindowActive,
+      presence_window_active: state.presenceWindowOpen,
+      driver_available: state.driverAvailable,
       driver_socket_ready: realtimeManager.isDriverSocketReady(),
     });
     emitDriverTelemetry("tracking.send.backoff", {
@@ -1242,8 +1293,11 @@ async function stopTrackingRuntime(): Promise<void> {
   notifyTrackingBridgeListeners();
 }
 
-function ensureManagerState() {
-  if (!isEligible()) {
+function ensureManagerState(appStateOverride?: AppStateStatus) {
+  const appState = appStateOverride ?? trackingManager.getSnapshot().appState;
+  const eligibility = resolveBridgeEligibility(appState);
+
+  if (!eligibility.trackingEligible) {
     void syncBridgeQueueDepthFromPersistence();
     void stopBackgroundLocationTask("ineligible_tracking_state");
     trackingManager.stop();
@@ -1252,14 +1306,16 @@ function ensureManagerState() {
     void setBackgroundTrackingMissionContext(null, null);
     return;
   }
-  if (state.missionId != null) {
+
+  ensureNativeTrackingAppStateListener();
+
+  if (eligibility.missionEligible && state.missionId != null) {
     void setBackgroundTrackingMissionContext(
       state.missionId,
       state.missionStatus,
       "mission",
       state.missionScheduling
     );
-    ensureNativeTrackingAppStateListener();
     if (isFeatureEnabled("tracking_background_enabled")) {
       void ensureNativeTrackingWhileForeground(
         state.missionId,
@@ -1268,9 +1324,8 @@ function ensureManagerState() {
         "ensure_manager_state"
       );
     }
-  } else if (state.presenceWindowActive && isPresenceDisclosureAccepted()) {
+  } else if (eligibility.backgroundPresenceEligible) {
     void setBackgroundTrackingMissionContext(null, null, "presence_window");
-    ensureNativeTrackingAppStateListener();
     if (isFeatureEnabled("tracking_background_enabled")) {
       void ensureNativeTrackingWhileForeground(
         null,
@@ -1279,10 +1334,33 @@ function ensureManagerState() {
         "ensure_manager_presence"
       );
     }
+  } else if (eligibility.foregroundPresenceEligible) {
+    // Présence FG : watch High ; FGS uniquement si fenêtre ouverte (prépare le BG).
+    if (state.presenceWindowOpen && isFeatureEnabled("tracking_background_enabled")) {
+      void setBackgroundTrackingMissionContext(null, null, "presence_window");
+      void ensureNativeTrackingWhileForeground(
+        null,
+        null,
+        { presenceWindow: true },
+        "ensure_manager_presence_fg"
+      );
+    } else {
+      void stopBackgroundLocationTask("presence_fg_outside_window");
+      void setBackgroundTrackingMissionContext(null, null);
+    }
   }
-  void ensureLocationWatch();
+
+  const desiredAccuracy = resolveExpoLocationAccuracy(appState);
+  if (
+    state.watchSubscription &&
+    state.watchAccuracy != null &&
+    state.watchAccuracy !== desiredAccuracy
+  ) {
+    stopLocationWatch();
+  }
+  void ensureLocationWatch(appState);
   void syncBridgeQueueDepthFromPersistence();
-  const mode = resolveTrackingMode(trackingManager.getSnapshot().appState);
+  const mode = resolveTrackingMode(appState);
   const snapshot = trackingManager.getSnapshot();
   if (!snapshot.isRunning) {
     state.trackingStartedAtMs = Date.now();
@@ -1435,7 +1513,7 @@ export async function stopDriverTrackingBridge(opts?: {
       return;
     }
 
-    if (state.presenceWindowActive) {
+    if (resolveBridgeEligibility().trackingEligible) {
       await ensurePresenceTrackingState();
     } else {
       await stopTrackingRuntime();
@@ -1449,36 +1527,56 @@ export async function stopDriverTrackingBridge(opts?: {
   }
 }
 
+export type DriverPresenceContext = {
+  available: boolean;
+  windowOpen: boolean;
+};
+
 /**
- * Active ou désactive le mode présence par fenêtre horaire (07h–19h).
- * Quand actif sans mission, l'app continue d'envoyer des points GPS de
- * présence avec `missionId = null` et `locationMode = availability_presence`.
- * Quand inactif, le tracking ne tourne que si une mission est éligible.
+ * Met à jour les signaux présence (disponibilité + fenêtre horaire), puis
+ * réconcilie via le resolver central. Jamais de stop direct sur window=false.
  */
-export function setDriverTrackingPresenceWindow(active: boolean) {
-  if (state.presenceWindowActive === active) return;
-  state.presenceWindowActive = active;
-  emitDriverTelemetry("tracking.presence_window.toggled", {
-    source: "driver.tracking.bridge",
-    presence_window_active: active,
-    mission_id: state.missionId,
-  });
-  if (!active && state.missionId === null) {
-    /* Window vient de se fermer et pas de mission active : on coupe tout. */
-    void setBackgroundTrackingMissionContext(null, null);
-    void stopBackgroundLocationTask("presence_window_closed");
-    stopLocationWatch();
-    trackingManager.stop();
-    state.trackingStartedAtMs = null;
-    notifyTrackingBridgeListeners();
+export function setDriverTrackingPresenceContext(ctx: DriverPresenceContext) {
+  const available = Boolean(ctx.available);
+  const windowOpen = Boolean(ctx.windowOpen);
+  if (
+    state.driverAvailable === available &&
+    state.presenceWindowOpen === windowOpen
+  ) {
     return;
   }
+  state.driverAvailable = available;
+  state.presenceWindowOpen = windowOpen;
+  emitDriverTelemetry("tracking.presence_context.updated", {
+    source: "driver.tracking.bridge",
+    driver_available: available,
+    presence_window_open: windowOpen,
+    mission_id: state.missionId,
+  });
   ensureManagerState();
   notifyTrackingBridgeListeners();
 }
 
+/**
+ * @deprecated Préférer `setDriverTrackingPresenceContext`.
+ * Conserve un mapping approximatif pour d’éventuels call sites hérités.
+ */
+export function setDriverTrackingPresenceWindow(active: boolean) {
+  setDriverTrackingPresenceContext({
+    available: active,
+    windowOpen: active,
+  });
+}
+
 export function getDriverTrackingPresenceWindowActive(): boolean {
-  return state.presenceWindowActive;
+  return state.presenceWindowOpen;
+}
+
+export function getDriverTrackingPresenceContext(): DriverPresenceContext {
+  return {
+    available: state.driverAvailable,
+    windowOpen: state.presenceWindowOpen,
+  };
 }
 
 /** Re-applique le pipeline natif après acceptation disclosure présence. */
